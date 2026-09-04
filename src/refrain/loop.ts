@@ -39,6 +39,19 @@ export function nextStep(record: IterationRecord, policy: LoopPolicy = CONSERVAT
   if (record.status === "awaiting_human" || policy.autonomy === "ask_every_iteration") {
     return { kind: "ask_human", about: record.id };
   }
+  // A ceiling that is not a count cannot be compared against one, and every
+  // comparison with `NaN` is false -- so an unusable bound would read as "no
+  // bound reached yet", every time, forever. `Infinity` and a fractional limit
+  // are the same problem more quietly. `LoopPolicy.maxIterations` is a plain
+  // `number` because that is what a caller writes; this is where the type's
+  // looseness is answered, and it is answered by stopping and asking, which is
+  // what the loop does whenever it does not know.
+  if (!Number.isSafeInteger(policy.maxIterations) || policy.maxIterations < 0) {
+    return { kind: "ask_human", about: record.id };
+  }
+  if (!Number.isSafeInteger(record.attempts) || record.attempts < 0) {
+    return { kind: "ask_human", about: record.id };
+  }
   // The ceiling is the policy's *other* bound, and it has to be read here or it
   // is not a bound at all -- a policy that says `maxIterations: 0` and still
   // authorises an iteration is worse than one that never claimed a ceiling.

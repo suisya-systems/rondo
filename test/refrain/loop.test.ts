@@ -80,6 +80,29 @@ test("a ceiling of zero authorises nothing", () => {
   });
 });
 
+test("a ceiling that is not a whole count stops the loop rather than freeing it", () => {
+  // Every comparison with NaN is false, so an unusable ceiling would otherwise
+  // read as "not reached yet" on every iteration, forever. Infinity and a
+  // fractional limit are the same problem, quieter. All of them ask a human.
+  for (const maxIterations of [Number.NaN, Number.POSITIVE_INFINITY, 1.5, -1]) {
+    expect(nextStep(recordWith("running", 1), permissive(maxIterations))).toEqual({
+      kind: "ask_human",
+      about: "i-0001",
+    });
+  }
+});
+
+test("an attempt count that is not a whole number stops the loop too", () => {
+  // The same hole from the record's side: a corrupted count must not read as
+  // "below the ceiling".
+  for (const attempts of [Number.NaN, Number.POSITIVE_INFINITY, 0.5, -1]) {
+    expect(nextStep(recordWith("running", attempts), permissive(5))).toEqual({
+      kind: "ask_human",
+      about: "i-0001",
+    });
+  }
+});
+
 test("the conservative default's own ceiling is one attempt", () => {
   // Its autonomy stops it first, so this pins the ceiling independently of
   // that: with autonomy relaxed and nothing else changed, one attempt is all
