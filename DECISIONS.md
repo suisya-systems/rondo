@@ -546,6 +546,16 @@ tree walk does not traverse. Teaching the sweep to read JSDoc would close the se
 file closes both, and whatever the next JavaScript-only affordance turns out to be. Nothing is
 lost, because the tree has no such module and no reason to grow one.
 
+**What this check does not claim, stated because three review rounds went looking for it.** It is a
+sweep over syntax, so its guarantee is over what a module *says*. One residual is known and left
+open on purpose: a capability reached through an identifier-keyed index --
+`const k = "getBuiltinModule"; const load = process[k]` -- cannot be seen here, because deciding
+what `k` holds is scope analysis. Refusing every computed index instead would refuse every array
+subscript in the tree, which is the worse trade. The line drawn is between a member name that is
+*indexed* (`row[key]`, allowed) and one that is *assembled* (`process["get" + "X"]`, refused). The
+result stops mistakes and records intent; it does not stop an author set on getting around it, and
+no syntax sweep does.
+
 **Why allowlists.** A denylist answers "no" only for what it was told about. `src/refrain/`'s
 external allowance is empty, which refuses `node:http`, a browser driver, an agent SDK, continuo's
 internals, and the next thing nobody has thought of, in one line. The same shape closes the routes

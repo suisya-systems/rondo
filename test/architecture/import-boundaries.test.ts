@@ -41,6 +41,20 @@
  * off a node `forEachChild` does not traverse. Refusing the file closes that
  * without teaching the sweep to read JSDoc.
  *
+ * **What this sweep does not claim.** It is a check over syntax, so its
+ * guarantee is over what a module *says*, not over what it could be made to do
+ * at runtime. One residual is known and is left open deliberately: a capability
+ * reached through an identifier-keyed index --
+ * `const k = "getBuiltinModule"; const load = process[k]` -- is invisible here,
+ * because deciding what `k` holds is scope analysis, which is a type checker's
+ * job. Closing it by refusing every computed index would refuse every array
+ * subscript in the tree, which is a worse trade. The line drawn instead is
+ * between a name that is *indexed* (`row[key]`, allowed) and a name that is
+ * *assembled* (`process["get" + "X"]`, refused): obfuscation is refused,
+ * ordinary code is not. What remains is a check that stops mistakes and
+ * documents intent, not one that stops an author who is determined to get
+ * around it -- and no syntax sweep is the latter.
+ *
  * **What keeps this from passing vacuously.** The per-module cases are
  * generated from a directory walk, and a walk that found nothing would generate
  * nothing -- and a suite of zero assertions is green. Three things stop that:
@@ -392,13 +406,14 @@ function calleeName(expression: ts.Expression): string | null {
   }
   if (ts.isElementAccessExpression(expression)) {
     const argument = expression.argumentExpression;
-    // A computed member name -- `process["get" + "BuiltinModule"]` -- cannot be
-    // read, and reading it as "no capability here" is how the check would be
-    // stepped around. It gets its own answer so the caller fails closed rather
-    // than falling through to `null`.
-    return ts.isStringLiteral(argument) || ts.isNoSubstitutionTemplateLiteral(argument)
-      ? argument.text
-      : COMPUTED_MEMBER;
+    if (ts.isStringLiteral(argument) || ts.isNoSubstitutionTemplateLiteral(argument)) {
+      return argument.text;
+    }
+    // Ordinary indexing -- `row[key]`, `items[i]` -- is not a member name at
+    // all, and reporting it would refuse every array subscript in the tree. A
+    // name that is *assembled*, though (`process["get" + "BuiltinModule"]`), is
+    // a name deliberately made unreadable, and that is the shape this refuses.
+    return ts.isIdentifier(argument) || ts.isNumericLiteral(argument) ? null : COMPUTED_MEMBER;
   }
   return null;
 }
@@ -531,12 +546,26 @@ function importsIn(source: string, from: string): ImportRef[] {
       if (callee !== null && CODE_FROM_TEXT_CALLS.has(callee)) {
         record(COMPUTED_SPECIFIER, [WHOLE_MODULE]);
       }
-    } else if (ts.isPropertyAccessExpression(node) && !calleesJudged.has(node)) {
+    } else if (
+      (ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node)) &&
+      !calleesJudged.has(node)
+    ) {
       // A capability that is READ rather than called. `const load =
       // process.getBuiltinModule` hands the whole loader to a local name, and
       // at the later call site the callee is only `load` -- which is why the
       // read, not the call, is where this one has to be caught.
-      if (CAPABILITY_NAMES.has(node.name.text)) {
+      //
+      // Both member syntaxes, because they are the same access:
+      // `process["getBuiltinModule"]` is the dotted form with different
+      // punctuation, and closing only the dotted one would be closing a
+      // spelling rather than a route.
+      const member = calleeName(node);
+      if (member !== null && (member === COMPUTED_MEMBER || CAPABILITY_NAMES.has(member))) {
+        // A member name assembled rather than written -- `obj["get" + "X"]` --
+        // is refused too. `calleeName` reports it as COMPUTED_MEMBER only for a
+        // name that is *built*; ordinary indexing (`row[key]`, `items[i]`) is
+        // reported as null and passes, which is what keeps this from refusing
+        // every array subscript in the tree.
         record(COMPUTED_SPECIFIER, [WHOLE_MODULE]);
       }
     } else if (ts.isIdentifier(node) && !calleesJudged.has(node)) {
@@ -1059,6 +1088,31 @@ const PLANTED: ReadonlyArray<
     "cannot read",
   ],
   [
+    // The same capability read through brackets rather than a dot, and then
+    // aliased -- so the call site shows only `load`. The read is where it has
+    // to be caught, in both member syntaxes.
+    "a-bracket-read-capability-fails-closed",
+    "src/refrain/probe.ts",
+    'const load = process["getBuiltinModule"];\nexport const x = load("node:http");\n',
+    "cannot read",
+  ],
+  [
+    "a-computed-member-read-then-aliased-fails-closed",
+    "src/refrain/probe.ts",
+    'const load = process["get" + "BuiltinModule"];\nexport const x = load("node:http");\n',
+    "cannot read",
+  ],
+  [
+    // Ordinary indexing must stay ordinary: if a computed member read were
+    // refused outright, every array subscript in the tree would be a
+    // violation. This is the case that pins the line between "assembled name"
+    // and "index".
+    "control-ordinary-indexing-is-not-a-capability-read",
+    "src/refrain/probe.ts",
+    "export const at = (rows: readonly string[], i: number, key: string): unknown =>\n  rows[i] ?? ({ a: 1 } as Record<string, unknown>)[key];\n",
+    null,
+  ],
+  [
     // `Function` is in CODE_FROM_TEXT_CALLS but not in BARE_CAPABILITY_NAMES,
     // and this is the case that pins the difference: a type annotation is not
     // a capability, and refusing it would be a false positive.
@@ -1074,8 +1128,8 @@ test("the planted corpus exercises the detector in both directions", () => {
   const clean = PLANTED.filter(([, , , expected]) => expected === null);
   // A corpus that lost its controls, or lost its violations, would still pass
   // every case below by agreeing with itself.
-  expect(caught.length).toBeGreaterThanOrEqual(36);
-  expect(clean.length).toBeGreaterThanOrEqual(5);
+  expect(caught.length).toBeGreaterThanOrEqual(38);
+  expect(clean.length).toBeGreaterThanOrEqual(6);
   expect(new Set(PLANTED.map(([id]) => id)).size).toBe(PLANTED.length);
 });
 
