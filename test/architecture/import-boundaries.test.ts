@@ -41,9 +41,22 @@
  * off a node `forEachChild` does not traverse. Refusing the file closes that
  * without teaching the sweep to read JSDoc.
  *
+ * **And some capabilities are not modules at all.** `fetch("https://...")` is
+ * HTTP, needs no import, and is not a module reference, so an allowlist over
+ * module references has nothing to consult about it -- enforcing Issue #1's
+ * "the loop must not import HTTP" against `import` alone would have enforced
+ * its letter and missed the likeliest way a loop would really make a request.
+ * `FORBIDDEN_GLOBALS` refuses that small, closed set of ambient names across
+ * all of `src/`. It is an enumeration rather than an allowlist, which is a
+ * weakness and is admitted as one: there is no "everything ambient" to invert.
+ *
  * **What this sweep does not claim.** It is a check over syntax, so its
  * guarantee is over what a module *says*, not over what it could be made to do
- * at runtime. One residual is known and is left open deliberately: a capability
+ * at runtime. Two residuals are known and left open deliberately. Ambient
+ * capability beyond the enumerated globals -- a Node API that reaches the world
+ * without naming a module and is not in that list -- is not seen at all; the
+ * list covers what Issue #1 named and is extended when something else earns a
+ * place. And a capability
  * reached through an identifier-keyed index --
  * `const k = "getBuiltinModule"; const load = process[k]` -- is invisible here,
  * because deciding what `k` holds is scope analysis, which is a type checker's
@@ -396,6 +409,35 @@ const BARE_CAPABILITY_NAMES: ReadonlySet<string> = new Set([
   "runInThisContext",
 ]);
 
+/**
+ * Ambient globals that reach the network without naming a module.
+ *
+ * A different category from everything above, and the one the import allowlist
+ * structurally cannot see: `fetch("https://...")` is HTTP, needs no import, and
+ * is not a module reference at all, so a check over module references has
+ * nothing to consult. Issue #1's first rule is that the loop cannot reach HTTP
+ * or a browser; enforcing that only against `import` would have enforced the
+ * letter of it and missed the single most likely way a loop would actually make
+ * a request today.
+ *
+ * This one is an enumeration, unlike the allowlists elsewhere in this file, and
+ * that is a real weakness rather than a preference -- there is no "everything
+ * ambient" to invert. It is a closed, small, slow-moving set of standard names,
+ * which is what makes enumerating them tolerable here and not for module
+ * loaders. The file header says what that does and does not buy.
+ *
+ * Refused across all of `src/`, not only the loop: an access point that wants
+ * `fetch` should say so, the way `src/store/sqlite.ts` says it wants
+ * `node:sqlite`, and adding that grant is the decision D-0006 asks for.
+ */
+const FORBIDDEN_GLOBALS: ReadonlySet<string> = new Set([
+  "fetch",
+  "WebSocket",
+  "EventSource",
+  "XMLHttpRequest",
+  "navigator",
+]);
+
 /** The last name segment of a callee expression, or null when there is none. */
 function calleeName(expression: ts.Expression): string | null {
   if (ts.isIdentifier(expression)) {
@@ -436,9 +478,22 @@ interface ImportRef {
  * triple-slash reference -- which TypeScript records on the SourceFile rather
  * than in the tree, so the walk below would never see it.
  */
-function importsIn(source: string, from: string): ImportRef[] {
+/** What one module says it depends on, and which forbidden globals it names. */
+interface ModuleScan {
+  readonly refs: readonly ImportRef[];
+  /** Names from `FORBIDDEN_GLOBALS`, in source order, with duplicates kept. */
+  readonly globals: readonly string[];
+}
+
+/** Just the module references, for callers that only ask about those. */
+function importsIn(source: string, from: string): readonly ImportRef[] {
+  return scanModule(source, from).refs;
+}
+
+function scanModule(source: string, from: string): ModuleScan {
   const tree = parseSourceFile(parseNameOf(from), source);
   const found: ImportRef[] = [];
+  const problemsFromGlobals: string[] = [];
   const directory = dirname(from);
   /**
    * Callee expressions already judged by the call branches.
@@ -476,6 +531,18 @@ function importsIn(source: string, from: string): ImportRef[] {
   };
 
   const visit = (node: ts.Node): void => {
+    // Checked before the chain below rather than inside it, and independently
+    // of `calleesJudged`. A bare `fetch(...)` is a call whose callee is the
+    // very identifier being looked for, so a check that ran only on callees
+    // the call branch had *not* judged would skip the commonest spelling of
+    // all. Duplicates are expected (`globalThis.fetch` matches twice) and the
+    // reader dedupes.
+    if (ts.isIdentifier(node) && FORBIDDEN_GLOBALS.has(node.text)) {
+      problemsFromGlobals.push(node.text);
+    } else if (ts.isPropertyAccessExpression(node) && FORBIDDEN_GLOBALS.has(node.name.text)) {
+      problemsFromGlobals.push(node.name.text);
+    }
+
     if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier)) {
       record(node.moduleSpecifier.text, clauseNames(node.importClause));
     } else if (
@@ -603,7 +670,7 @@ function importsIn(source: string, from: string): ImportRef[] {
     record(reference.fileName, [WHOLE_MODULE]);
   }
 
-  return found;
+  return { refs: found, globals: problemsFromGlobals };
 }
 
 /**
@@ -681,7 +748,16 @@ function violationsIn(module: string, source: string): string[] {
         : [];
   const allowedExternal = ALLOWED_EXTERNALS_BY_MODULE[module] ?? {};
 
-  for (const ref of importsIn(source, module)) {
+  const scan = scanModule(source, module);
+  for (const name of new Set(scan.globals)) {
+    problems.push(
+      `${module} names the ambient global ${name}, which reaches the network without ` +
+        "importing anything. No module under src/ is granted it; an access point that needs " +
+        "it says so in FORBIDDEN_GLOBALS' exception, which is a decision (D-0006).",
+    );
+  }
+
+  for (const ref of scan.refs) {
     if (ref.specifier === COMPUTED_SPECIFIER) {
       problems.push(
         `${module} loads a module through a specifier this scan cannot read. ` +
@@ -1081,6 +1157,26 @@ const PLANTED: ReadonlyArray<
     "is a JavaScript module under src/",
   ],
   [
+    // HTTP with no module at all. The whole import allowlist has nothing to say
+    // about this line, which is why the globals check exists beside it.
+    "the-loop-cannot-fetch",
+    "src/refrain/probe.ts",
+    'export const get = async (): Promise<Response> => fetch("https://example.com");\n',
+    "names the ambient global fetch",
+  ],
+  [
+    "the-loop-cannot-fetch-through-globalThis",
+    "src/refrain/probe.ts",
+    'export const get = async (): Promise<Response> => globalThis.fetch("https://example.com");\n',
+    "names the ambient global fetch",
+  ],
+  [
+    "an-access-point-cannot-fetch-either-without-saying-so",
+    "src/access/probe.ts",
+    'export const socket = (): WebSocket => new WebSocket("wss://example.com");\n',
+    "names the ambient global WebSocket",
+  ],
+  [
     // The evasion the computed-member sentinel exists for.
     "a-computed-capability-member-fails-closed",
     "src/refrain/probe.ts",
@@ -1128,7 +1224,7 @@ test("the planted corpus exercises the detector in both directions", () => {
   const clean = PLANTED.filter(([, , , expected]) => expected === null);
   // A corpus that lost its controls, or lost its violations, would still pass
   // every case below by agreeing with itself.
-  expect(caught.length).toBeGreaterThanOrEqual(38);
+  expect(caught.length).toBeGreaterThanOrEqual(41);
   expect(clean.length).toBeGreaterThanOrEqual(6);
   expect(new Set(PLANTED.map(([id]) => id)).size).toBe(PLANTED.length);
 });

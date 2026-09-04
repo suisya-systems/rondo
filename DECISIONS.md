@@ -557,7 +557,16 @@ tree walk does not traverse. Teaching the sweep to read JSDoc would close the se
 file closes both, and whatever the next JavaScript-only affordance turns out to be. Nothing is
 lost, because the tree has no such module and no reason to grow one.
 
-**What this check does not claim, stated because three review rounds went looking for it.** It is a
+**Some capabilities are not modules.** `fetch("https://...")` is HTTP, needs no import, and is not
+a module reference, so the allowlist has nothing to consult about it. Enforcing "the loop must not
+import HTTP" against `import` alone would enforce the letter of the rule and miss the likeliest way
+a loop would really make a request, so a small closed set of ambient names -- `fetch`, `WebSocket`,
+`EventSource`, `XMLHttpRequest`, `navigator` -- is refused across all of `src/`. This one is an
+enumeration rather than an allowlist, which is a weakness and is recorded as one: there is no
+"everything ambient" to invert. An access point that needs `fetch` gets an explicit exception, and
+adding it is a decision.
+
+**What this check does not claim, stated because five review rounds went looking for it.** It is a
 sweep over syntax, so its guarantee is over what a module *says*. One residual is known and left
 open on purpose: a capability reached through an identifier-keyed index --
 `const k = "getBuiltinModule"; const load = process[k]` -- cannot be seen here, because deciding
@@ -565,7 +574,8 @@ what `k` holds is scope analysis. Refusing every computed index instead would re
 subscript in the tree, which is the worse trade. The line drawn is between a member name that is
 *indexed* (`row[key]`, allowed) and one that is *assembled* (`process["get" + "X"]`, refused). The
 result stops mistakes and records intent; it does not stop an author set on getting around it, and
-no syntax sweep does.
+no syntax sweep does. The second residual is the ambient one above: a capability that reaches the
+world without naming a module and is not in the enumerated set is invisible here.
 
 **Why allowlists.** A denylist answers "no" only for what it was told about. `src/refrain/`'s
 external allowance is empty, which refuses `node:http`, a browser driver, an agent SDK, continuo's
