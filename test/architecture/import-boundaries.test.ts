@@ -407,6 +407,13 @@ const BARE_CAPABILITY_NAMES: ReadonlySet<string> = new Set([
   "createRequire",
   "eval",
   "runInThisContext",
+  // `Function` is here, and the walk below is what makes that safe: the check
+  // runs in **value position only**, so `let handler: Function` is ordinary and
+  // `const compile = Function` is not. Exempting the name everywhere -- which
+  // is what an earlier version did, on the true-but-too-wide ground that it is
+  // an ordinary type annotation -- left `compile("return ...")()` as a plain
+  // way through the code-from-text boundary.
+  "Function",
 ]);
 
 /**
@@ -530,7 +537,13 @@ function scanModule(source: string, from: string): ModuleScan {
     return names.length === 0 ? [SIDE_EFFECT] : names;
   };
 
-  const visit = (node: ts.Node): void => {
+  const visit = (node: ts.Node, inTypePosition: boolean): void => {
+    // A type annotation names something without reaching it: `let h: Function`
+    // and `const h = Function` are the same identifier and opposite facts. The
+    // flag is carried down rather than looked up, because the decoded tree has
+    // no parent pointers to look up with.
+    const inType = inTypePosition || ts.isTypeNode(node);
+
     // Checked before the chain below rather than inside it, and independently
     // of `calleesJudged`. A bare `fetch(...)` is a call whose callee is the
     // very identifier being looked for, so a check that ran only on callees
@@ -592,7 +605,9 @@ function scanModule(source: string, from: string): ModuleScan {
         // The callee names something this scan cannot read. Whether it was a
         // capability is exactly the question, so the answer is no.
         record(COMPUTED_SPECIFIER, [WHOLE_MODULE]);
-        node.forEachChild(visit);
+        node.forEachChild((child) => {
+          visit(child, inType);
+        });
         return;
       }
       const reachesAModule =
@@ -645,14 +660,16 @@ function scanModule(source: string, from: string): ModuleScan {
       // The same thing one step plainer: `const e = eval`. Only the names that
       // cannot appear innocently are listed -- `Function` is deliberately not
       // among them, because it is a perfectly ordinary type annotation.
-      if (BARE_CAPABILITY_NAMES.has(node.text)) {
+      if (!inType && BARE_CAPABILITY_NAMES.has(node.text)) {
         record(COMPUTED_SPECIFIER, [WHOLE_MODULE]);
       }
     }
-    node.forEachChild(visit);
+    node.forEachChild((child) => {
+      visit(child, inType);
+    });
   };
 
-  visit(tree);
+  visit(tree, false);
 
   // Triple-slash directives are dependencies TypeScript records on the
   // SourceFile, not in the tree, so `forEachChild` never reaches them. A
@@ -1221,9 +1238,15 @@ const PLANTED: ReadonlyArray<
     null,
   ],
   [
-    // `Function` is in CODE_FROM_TEXT_CALLS but not in BARE_CAPABILITY_NAMES,
-    // and this is the case that pins the difference: a type annotation is not
-    // a capability, and refusing it would be a false positive.
+    // The value-position half of the `Function` rule.
+    "an-aliased-Function-constructor-fails-closed",
+    "src/refrain/probe.ts",
+    'const compile = Function;\nexport const x = compile("return 1")();\n',
+    "cannot read",
+  ],
+  [
+    // And the type-position half: the same identifier, the opposite answer.
+    // This pair is the whole reason the walk carries a type-position flag.
     "control-Function-as-a-type-annotation-is-not-a-capability",
     "src/refrain/probe.ts",
     "export function take(handler: Function): Function {\n  return handler;\n}\n",
@@ -1236,7 +1259,7 @@ test("the planted corpus exercises the detector in both directions", () => {
   const clean = PLANTED.filter(([, , , expected]) => expected === null);
   // A corpus that lost its controls, or lost its violations, would still pass
   // every case below by agreeing with itself.
-  expect(caught.length).toBeGreaterThanOrEqual(42);
+  expect(caught.length).toBeGreaterThanOrEqual(43);
   expect(clean.length).toBeGreaterThanOrEqual(6);
   expect(new Set(PLANTED.map(([id]) => id)).size).toBe(PLANTED.length);
 });

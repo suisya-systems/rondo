@@ -546,7 +546,10 @@ reads calls that return a module (`require`, `getBuiltinModule`, `createRequire`
 callee's *last name segment* so a member expression does not evade it) and calls that turn text
 into code (`eval`, the `Function` constructor), and runs both through the same allowance -- and
 refuses a bare *read* of those names, because `const load = process.getBuiltinModule` moves the
-call out of reach of any check on callees. A member name that is computed rather than written
+call out of reach of any check on callees. The read check runs in **value position only**, which is
+what lets `Function` be refused as `const compile = Function` and allowed as `let handler:
+Function`: a type annotation names something without reaching it, and the walk carries a
+type-position flag so that the same identifier can have opposite answers. A member name that is computed rather than written
 (`process["get" + "BuiltinModule"]`) is refused for the same reason: whether it named a capability
 is exactly the question, so the answer is no.
 
