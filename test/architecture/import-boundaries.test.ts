@@ -30,9 +30,12 @@
  * an allowlist consulted only on imports would never be consulted. So the sweep
  * also reads *calls* that hand back a module (`MODULE_RETURNING_CALLS`) and
  * calls that turn text into code (`CODE_FROM_TEXT_CALLS`), and puts both
- * through the same allowance. The walk covers JavaScript spellings under `src/`
- * for the same reason: `allowJs` is off, so a `.mjs` module there is
- * type-checked by nothing and this sweep is the only thing that reaches it.
+ * through the same allowance -- and refuses a bare *read* of those names
+ * (`CAPABILITY_NAMES`), because `const load = process.getBuiltinModule` moves
+ * the call beyond the reach of any check on callees. The walk covers JavaScript
+ * spellings under `src/` for a sibling reason: `allowJs` is off, so a `.mjs`
+ * module there is type-checked by nothing and this sweep is the only thing that
+ * reaches it.
  *
  * **What keeps this from passing vacuously.** The per-module cases are
  * generated from a directory walk, and a walk that found nothing would generate
@@ -228,11 +231,21 @@ function parseNameOf(module: string): string {
   return module;
 }
 
-/** Relative specifiers must carry one of these; NodeNext requires the suffix. */
+/**
+ * Relative specifiers must carry one of these; NodeNext requires the suffix.
+ *
+ * Each runtime suffix lists every on-disk spelling that can satisfy it. The
+ * JavaScript spellings are here for the same reason they are in
+ * `MODULE_EXTENSIONS`: the walk discovers `.js`/`.mjs`/`.cjs` modules under
+ * `src/`, so one of them importing another is a legitimate internal
+ * dependency. Listing only the TypeScript spellings would have made the sweep
+ * report "no module of that name exists" for a file sitting right beside the
+ * importer -- refusing the very modules it went out of its way to discover.
+ */
 const RUNTIME_SUFFIXES: ReadonlyArray<readonly [string, readonly string[]]> = [
-  [".js", [".ts", ".tsx"]],
-  [".mjs", [".mts"]],
-  [".cjs", [".cts"]],
+  [".js", [".ts", ".tsx", ".js", ".jsx"]],
+  [".mjs", [".mts", ".mjs"]],
+  [".cjs", [".cts", ".cjs"]],
 ];
 
 // --- the walk ---------------------------------------------------------------
@@ -282,12 +295,18 @@ const COMPUTED_SPECIFIER = "<computed specifier>";
  * (`node:module` is not in any allowance).
  *
  * The match is on the **last name segment** of the callee, so
- * `process.getBuiltinModule(...)`, `globalThis.process.getBuiltinModule(...)`
- * and a destructured-then-renamed `const g = process.getBuiltinModule` all
- * reduce to the same answer for the first two shapes. The third — a call
- * through a local alias — is scope analysis and is not attempted; what closes
- * it is that the alias has to be *written*, and writing
- * `process.getBuiltinModule` at all is caught here at the point of the read.
+ * `process.getBuiltinModule(...)` and `globalThis.process.getBuiltinModule(...)`
+ * are the same answer.
+ *
+ * A call through a **local alias** — `const load = process.getBuiltinModule;
+ * load("node:http")` — is a different problem: at the call site the callee is
+ * just `load`, and following it back is scope analysis, which is a type
+ * checker's job rather than a sweep's. It is closed from the other end
+ * instead. The alias has to be written, so the *read* is refused as well as the
+ * call: naming any of these capabilities anywhere in an expression is a
+ * violation on its own (`capabilityReads` below), whether or not it is
+ * immediately called. That costs nothing here, because nothing under `src/` has
+ * any business naming them at all.
  */
 const MODULE_RETURNING_CALLS: ReadonlySet<string> = new Set([
   "require",
@@ -303,6 +322,38 @@ const MODULE_RETURNING_CALLS: ReadonlySet<string> = new Set([
  * specifier so they fail with the message that says so.
  */
 const CODE_FROM_TEXT_CALLS: ReadonlySet<string> = new Set(["eval", "Function", "runInThisContext"]);
+
+/**
+ * Capability names that may not even be *read* through a property access.
+ *
+ * Reading one is how a call escapes the callee check: `const load =
+ * process.getBuiltinModule` moves the loader to a local name, and the call
+ * that follows is `load(...)`, which names nothing this sweep can follow.
+ * Refusing the read closes that without scope analysis, and costs nothing —
+ * no module under `src/` has any reason to name any of these.
+ */
+const CAPABILITY_NAMES: ReadonlySet<string> = new Set([
+  ...MODULE_RETURNING_CALLS,
+  ...CODE_FROM_TEXT_CALLS,
+]);
+
+/**
+ * The same, for a bare identifier: `const e = eval`.
+ *
+ * A strict subset, and the exclusion is the point. `Function` is in
+ * `CODE_FROM_TEXT_CALLS` but not here, because `Function` as a bare identifier
+ * is an ordinary type annotation (`let handler: Function`) and refusing it
+ * would be a false positive rather than a boundary. Reached through a property
+ * access (`globalThis.Function`) it is still caught above, and `new Function`
+ * is caught at the call.
+ */
+const BARE_CAPABILITY_NAMES: ReadonlySet<string> = new Set([
+  "require",
+  "getBuiltinModule",
+  "createRequire",
+  "eval",
+  "runInThisContext",
+]);
 
 /** The last name segment of a callee expression, or null when there is none. */
 function calleeName(expression: ts.Expression): string | null {
@@ -343,6 +394,15 @@ function importsIn(source: string, from: string): ImportRef[] {
   const tree = parseSourceFile(parseNameOf(from), source);
   const found: ImportRef[] = [];
   const directory = dirname(from);
+  /**
+   * Callee expressions already judged by the call branches.
+   *
+   * The walk reaches a callee twice -- once as part of its call, once on its
+   * own as a child -- and the capability-read branches must not re-judge it.
+   * Populated before `forEachChild` descends, so the child visit always sees
+   * it.
+   */
+  const calleesJudged = new Set<ts.Node>();
 
   const record = (specifier: string, names: readonly string[]): void => {
     found.push({ specifier, resolved: resolveRelative(specifier, directory), names });
@@ -404,6 +464,11 @@ function importsIn(source: string, from: string): ImportRef[] {
     } else if (ts.isCallExpression(node)) {
       const argument = node.arguments[0];
       const callee = calleeName(node.expression);
+      // The callee is about to be judged here, so the capability-read branch
+      // below must not judge it a second time when the walk reaches it as a
+      // child. Without this, every direct `process.getBuiltinModule("x")` would
+      // report twice: once naming the module, once as an unreadable specifier.
+      calleesJudged.add(node.expression);
       const reachesAModule =
         node.expression.kind === ts.SyntaxKind.ImportKeyword ||
         (callee !== null && MODULE_RETURNING_CALLS.has(callee));
@@ -424,7 +489,23 @@ function importsIn(source: string, from: string): ImportRef[] {
       }
     } else if (ts.isNewExpression(node)) {
       const callee = calleeName(node.expression);
+      calleesJudged.add(node.expression);
       if (callee !== null && CODE_FROM_TEXT_CALLS.has(callee)) {
+        record(COMPUTED_SPECIFIER, [WHOLE_MODULE]);
+      }
+    } else if (ts.isPropertyAccessExpression(node) && !calleesJudged.has(node)) {
+      // A capability that is READ rather than called. `const load =
+      // process.getBuiltinModule` hands the whole loader to a local name, and
+      // at the later call site the callee is only `load` -- which is why the
+      // read, not the call, is where this one has to be caught.
+      if (CAPABILITY_NAMES.has(node.name.text)) {
+        record(COMPUTED_SPECIFIER, [WHOLE_MODULE]);
+      }
+    } else if (ts.isIdentifier(node) && !calleesJudged.has(node)) {
+      // The same thing one step plainer: `const e = eval`. Only the names that
+      // cannot appear innocently are listed -- `Function` is deliberately not
+      // among them, because it is a perfectly ordinary type annotation.
+      if (BARE_CAPABILITY_NAMES.has(node.text)) {
         record(COMPUTED_SPECIFIER, [WHOLE_MODULE]);
       }
     }
@@ -821,6 +902,26 @@ const PLANTED: ReadonlyArray<
     "cannot read",
   ],
   [
+    // The alias bypass: at the call site the callee is only `load`, so the
+    // read is where this has to be caught.
+    "an-aliased-loader-fails-closed",
+    "src/refrain/probe.ts",
+    'const load = process.getBuiltinModule;\nexport const x = load("node:http");\n',
+    "cannot read",
+  ],
+  [
+    "an-aliased-eval-fails-closed",
+    "src/refrain/probe.ts",
+    'const e = eval;\nexport const x = e("1 + 1");\n',
+    "cannot read",
+  ],
+  [
+    "an-aliased-createRequire-fails-closed",
+    "src/refrain/probe.ts",
+    "declare const m: { createRequire: (u: string) => (id: string) => unknown };\nconst make = m.createRequire;\nexport const load = make(import.meta.url);\n",
+    "cannot read",
+  ],
+  [
     "a-lib-reference-still-counts",
     "src/refrain/probe.ts",
     '/// <reference lib="dom" />\nexport const x = 1;\n',
@@ -896,6 +997,25 @@ const PLANTED: ReadonlyArray<
     null,
   ],
   ["control-a-module-that-imports-nothing", "src/refrain/probe.ts", "export const x = 1;\n", null],
+  [
+    // The other half of the JavaScript-module story. The sweep goes out of its
+    // way to discover `.mjs` under `src/`, so one importing a real neighbour
+    // has to resolve rather than be reported missing. `src/store/records.ts`
+    // exists, and `.js` is the suffix a NodeNext import of it carries.
+    "control-a-javascript-module-may-import-a-real-neighbour",
+    "src/refrain/helper.mjs",
+    'import type { IterationRecord } from "../store/records.js";\nexport const idOf = (r: IterationRecord): string => r.id;\n',
+    null,
+  ],
+  [
+    // `Function` is in CODE_FROM_TEXT_CALLS but not in BARE_CAPABILITY_NAMES,
+    // and this is the case that pins the difference: a type annotation is not
+    // a capability, and refusing it would be a false positive.
+    "control-Function-as-a-type-annotation-is-not-a-capability",
+    "src/refrain/probe.ts",
+    "export function take(handler: Function): Function {\n  return handler;\n}\n",
+    null,
+  ],
 ];
 
 test("the planted corpus exercises the detector in both directions", () => {
@@ -903,8 +1023,8 @@ test("the planted corpus exercises the detector in both directions", () => {
   const clean = PLANTED.filter(([, , , expected]) => expected === null);
   // A corpus that lost its controls, or lost its violations, would still pass
   // every case below by agreeing with itself.
-  expect(caught.length).toBeGreaterThanOrEqual(30);
-  expect(clean.length).toBeGreaterThanOrEqual(4);
+  expect(caught.length).toBeGreaterThanOrEqual(33);
+  expect(clean.length).toBeGreaterThanOrEqual(6);
   expect(new Set(PLANTED.map(([id]) => id)).size).toBe(PLANTED.length);
 });
 
