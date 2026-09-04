@@ -19,6 +19,15 @@ export interface IterationRecord {
   readonly id: string;
   readonly status: IterationStatus;
   /**
+   * How many attempts this iteration has already had.
+   *
+   * Persisted rather than counted in memory, because the loop is not the only
+   * thing that can stop: a host that restarted mid-iteration and began counting
+   * from zero would have no ceiling at all. `LoopPolicy.maxIterations` is
+   * checked against this, and `src/refrain/loop.ts` is where that happens.
+   */
+  readonly attempts: number;
+  /**
    * Milliseconds since the epoch, as the caller observed them.
    *
    * The store does not read the clock: a record whose timestamp came from

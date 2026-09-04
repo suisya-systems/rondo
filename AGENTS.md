@@ -85,6 +85,11 @@ Three things about it are not obvious:
   replayable from your scrollback: `RONDO_TEST_SEED=<the printed number>`.
 - **`npm run lint` is `biome check`, which includes formatting.** A formatting
   difference is a red gate, not a warning. `npm run lint:fix` writes it.
+- **A green type-check does not mean the API exists on Node 22.** `@types/node`
+  is pinned at `26.3.0` to match continuo and cadenza (D-0002), which is ahead
+  of both supported runtimes. If you reach for a recent Node API, check its
+  availability yourself; the Node 22 cell is what catches it, and it catches it
+  at runtime rather than at the type-check.
 
 ## 5. The boundary test is the point of the build (D-0006)
 

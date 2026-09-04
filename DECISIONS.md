@@ -402,9 +402,20 @@ protocol does. rondo will do both.
 of it. Adding an emitting configuration now would mean maintaining a build that nothing checks and
 nothing installs. The day rondo ships a binary is the day it earns an entry of its own.
 
+**One known hole, kept deliberately.** `@types/node` is pinned at `26.3.0`, which is newer than
+either runtime rondo supports, so a Node 26-only API — `crypto.randomUUIDv7()` is the example —
+type-checks here and is `undefined` on Node 22. Typing against the *oldest* supported runtime would
+close that. It is not done, because continuo and cadenza both pin `26.3.0` and three repositories
+that disagree about their Node types is a worse problem than one shared hole: a type that resolves
+differently in the host and the library it consumes is exactly the class of bug the module settings
+above exist to avoid. The mitigation is that the Windows and Node 22 cells *run* the suite, so an
+API that does not exist on 22 fails there. Revisit when the siblings do, and revisit sooner if any
+`src/` module starts calling a Node API that is not obviously ancient.
+
 **What would falsify it.** rondo becoming something another package imports — which would mean
 `C-17` had been re-decided — or the sibling packages settling on a different resolution mode when
-they are published.
+they are published. Or the `@types/node` hole above biting for real, in which case the answer is
+the oldest-runtime pin and a note in the siblings' repositories.
 
 ---
 

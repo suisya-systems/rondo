@@ -29,7 +29,8 @@ export type Step =
  * A total function of its two arguments: no clock, no filesystem, no network.
  * That is what lets the loop be tested without standing anything up, and it is
  * the reason the boundary is drawn around this directory rather than asserted
- * in review.
+ * in review. Both of the policy's bounds are read here -- the autonomy setting
+ * and the iteration ceiling -- because a bound nothing consults is not a bound.
  */
 export function nextStep(record: IterationRecord, policy: LoopPolicy = CONSERVATIVE_POLICY): Step {
   if (record.status === "closed") {
@@ -38,5 +39,13 @@ export function nextStep(record: IterationRecord, policy: LoopPolicy = CONSERVAT
   if (record.status === "awaiting_human" || policy.autonomy === "ask_every_iteration") {
     return { kind: "ask_human", about: record.id };
   }
-  return { kind: "iterate", attempt: 1 };
+  // The ceiling is the policy's *other* bound, and it has to be read here or it
+  // is not a bound at all -- a policy that says `maxIterations: 0` and still
+  // authorises an iteration is worse than one that never claimed a ceiling.
+  // Reaching it is not an error: it is the loop doing what it exists to do,
+  // which is stop and ask.
+  if (record.attempts >= policy.maxIterations) {
+    return { kind: "ask_human", about: record.id };
+  }
+  return { kind: "iterate", attempt: record.attempts + 1 };
 }
