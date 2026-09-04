@@ -1,0 +1,241 @@
+name: ci
+
+# rondo's merge gate.
+#
+# Read `gate` at the bottom first: everything above it exists to give it
+# something to aggregate. The single stable check name is what a branch ruleset
+# should require, so that adding a matrix cell is a change to this file alone.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  double-green:
+    # Matrix leg names embed the matrix values, so this name is NOT the one a
+    # ruleset references -- see `gate`.
+    name: double-green (${{ matrix.os }}, node ${{ matrix.node }})
+    runs-on: ${{ matrix.os }}
+    # The suite parses every module under `src/` through a compiler child
+    # process and is under a second of test time. The cap is a floor under
+    # runner variance and install time, not a budget to grow into.
+    timeout-minutes: 15
+    strategy:
+      # A red cell must not hide the state of the others: which cells failed is
+      # the diagnosis, and cancelling them destroys it.
+      fail-fast: false
+      matrix:
+        # Issue #1 names ubuntu and windows, and windows is a required cell from
+        # day one rather than a nightly extra. Two things here are only observed
+        # there: the cp932 console, where a non-ASCII character in program
+        # output crashes the writer rather than printing badly (D-0004), and
+        # backslash path separators, where the boundary sweep's one
+        # normalisation site is the difference between a green cell and a cell
+        # in which every relative import in the tree reads as a violation.
+        os: [ubuntu-latest, windows-latest]
+        # Node 22 (Maintenance LTS) and Node 24 (Active LTS), matching the
+        # `engines` range in package.json.
+        node: ["22", "24"]
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      - name: Install from the lockfile
+        # `npm ci`, never `npm install`: it fails when package.json and
+        # package-lock.json disagree, so a dependency cannot drift into a run
+        # without appearing in a diff. `--ignore-scripts` is the standing rule
+        # (D-0007), not a reaction to a particular package.
+        run: npm ci --ignore-scripts
+
+      - name: Type-check
+        run: npm run typecheck
+
+      - name: Derive two distinct seeds for this cell
+        id: seeds
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Derived from the run id, the attempt, and the cell coordinates, so
+          # that (a) every cell uses different seeds, (b) a re-run of the same
+          # commit exercises different orders rather than replaying the one that
+          # happened to be green, and (c) both seeds are printed and therefore
+          # replayable.
+          cell="${{ matrix.os }}-${{ matrix.node }}"
+          mix=$(printf '%s' "$cell" | cksum | cut -d' ' -f1)
+          run_id="${{ github.run_id }}"
+          attempt="${{ github.run_attempt }}"
+          seed_a=$(( (run_id + mix + attempt * 7919) % 2147483647 ))
+          seed_b=$(( (seed_a * 31 + 1013904223) % 2147483647 ))
+          # The rule is *distinct* seeds. Equality is astronomically unlikely
+          # and is still handled, because "two runs at the same seed" is exactly
+          # the degenerate case that would void the double-green guarantee.
+          if [ "$seed_a" -eq "$seed_b" ]; then
+            seed_b=$(( (seed_b + 1) % 2147483647 ))
+          fi
+          echo "seed_a=$seed_a" >> "$GITHUB_OUTPUT"
+          echo "seed_b=$seed_b" >> "$GITHUB_OUTPUT"
+          echo "cell=$cell seed_a=$seed_a seed_b=$seed_b"
+
+      - name: Green 1 of 2 (seed ${{ steps.seeds.outputs.seed_a }})
+        env:
+          RONDO_TEST_SEED: ${{ steps.seeds.outputs.seed_a }}
+        # Shuffle itself is configured in vitest.config.ts and is NOT passed on
+        # the command line: a CLI flag can be dropped by an edit to this file
+        # without any test turning red, which would silently retire the rule
+        # (D-0003). CI injects the seed and nothing else.
+        run: npm test
+
+      - name: Green 2 of 2 (seed ${{ steps.seeds.outputs.seed_b }})
+        # No `if:` guard -- this step is reached only when the first run passed,
+        # which is the serial half of the rule. Two green runs at two distinct
+        # seeds in the same cell is what "green twice under random ordering"
+        # means here.
+        env:
+          RONDO_TEST_SEED: ${{ steps.seeds.outputs.seed_b }}
+        run: npm test
+
+  checks:
+    # Lint and dead-export analysis are platform-independent text checks, so one
+    # cell is enough; running them in every matrix cell would only multiply an
+    # identical answer. The result still gates the merge -- see `gate`.
+    name: checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+
+      - run: npm ci --ignore-scripts
+
+      - name: Lint and format
+        run: npm run lint
+
+      - name: Unused exports and dependencies
+        run: npm run knip
+
+      - name: Import boundary check
+        # Named separately because this file is what the build exists to defend
+        # while rondo has no behaviour yet. It has already run in `double-green`
+        # -- twice per cell, under the shuffle -- so this step is visibility,
+        # not coverage: it fails loudly and by name if the sweep is ever emptied
+        # or moved, rather than passing as one line among many in `npm test`.
+        #
+        # The seed is explicit because `CI` is set here and an unset seed under
+        # CI is a hard error by design (D-0003). A fixed value is right for this
+        # step and wrong for the suite: these cases share no state, so ordering
+        # proves nothing about them, and `double-green` is where order is
+        # actually exercised.
+        env:
+          RONDO_TEST_SEED: "1"
+        run: npx vitest run test/architecture/import-boundaries.test.ts
+
+  boundary-is-not-vacuous:
+    # The sweep generates its cases from a directory walk, so the way it fails
+    # is by finding nothing and reporting a clean tree. Its own suite guards
+    # that from the inside (`PLANTED`, and the walk's floor); this job guards it
+    # from the outside, which is the only place a mistake in that machinery can
+    # be caught.
+    #
+    # It plants a real module that breaks two rules at once -- an access-point
+    # import from inside the loop, and an HTTP import in a layer granted no
+    # externals -- and requires the suite to go RED **with both of those
+    # violations named in its output**. A green run here is the failure, and so
+    # is a red run that failed for some other reason.
+    name: a planted violation makes the boundary test fail
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+
+      - run: npm ci --ignore-scripts
+
+      - name: Plant a violation and require a red suite
+        shell: bash
+        env:
+          RONDO_TEST_SEED: "1"
+        run: |
+          set -uo pipefail
+          cat > src/refrain/planted-violation.ts <<'PLANTED'
+          import { createServer } from "node:http";
+          import { describeNextStep } from "../access/local.js";
+          export const planted = [createServer, describeNextStep];
+          PLANTED
+          set +e
+          npx vitest run test/architecture/import-boundaries.test.ts 2>&1 | tee planted.log
+          status=${PIPESTATUS[0]}
+          set -e
+          rm -f src/refrain/planted-violation.ts
+          if [ "$status" -eq 0 ]; then
+            rm -f planted.log
+            echo "::error::The boundary test passed with a planted violation in src/refrain/. The sweep is vacuous."
+            exit 1
+          fi
+          # The exit status alone is not the assertion, and treating it as one
+          # is how this job would come to certify nothing. A suite that went
+          # red for any other reason -- a syntax error, a missing dependency,
+          # the parser failing to start -- satisfies `status != 0` while
+          # proving nothing about the sweep. So both of the rules the planted
+          # module breaks have to appear, by name, in the output.
+          missing=0
+          grep -q "planted-violation.ts imports the external module node:http" planted.log || missing=1
+          grep -q "planted-violation.ts imports ../access/local.js" planted.log || missing=1
+          rm -f planted.log
+          if [ "$missing" -ne 0 ]; then
+            echo "::error::The suite went red, but not with the two violations the planted module contains. Something else is failing, and this job has proved nothing about the sweep."
+            exit 1
+          fi
+          echo "The planted violation was caught, with both expected messages (vitest exited $status)."
+
+  gate:
+    # The single stable check name, and the one a branch ruleset should require.
+    # It exists so that adding a matrix cell does not require editing the
+    # ruleset, and so that a SKIPPED or CANCELLED upstream job fails the gate
+    # rather than passing it -- `needs` alone treats a skipped dependency as
+    # satisfied.
+    name: gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: always()
+    needs: [double-green, checks, boundary-is-not-vacuous]
+    steps:
+      - name: Every upstream job must have succeeded
+        shell: python
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          import json, os, sys
+
+          results = json.loads(os.environ["RESULTS"])
+          # An allowlist, not a denylist: any result other than `success` --
+          # `failure`, `cancelled`, `skipped`, or one GitHub adds later -- is a
+          # red gate. `needs` alone would treat a skipped dependency as
+          # satisfied, which is the case this job exists to catch.
+          bad = {name: job["result"] for name, job in results.items() if job["result"] != "success"}
+          for name, result in sorted(bad.items()):
+              print(f"gate: {name} finished as {result}", file=sys.stderr)
+          if bad:
+              sys.exit(1)
+          print(f"gate: all {len(results)} upstream job(s) succeeded")
