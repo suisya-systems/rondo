@@ -21,6 +21,28 @@ const SEED_ENV = "RONDO_TEST_SEED";
 const SEED_MAX = 2_147_483_647;
 
 /**
+ * `value` as a quoted, printable, ASCII-only string.
+ *
+ * The value being quoted is whatever an operator put in the environment, and
+ * this message is printed on the way to refusing it -- including on the Windows
+ * cell, where the console may be cp932 and a character it cannot encode crashes
+ * the writer rather than printing badly (DECISIONS.md D-0004). `JSON.stringify`
+ * alone escapes the quotes and passes the character through, so
+ * `RONDO_TEST_SEED=<an emoji>` would replace a clear validation error with a
+ * crash inside the error path. Escaping first means the diagnostic survives to
+ * be read.
+ */
+function asciiOnly(value: string): string {
+  // Quote first, then escape what is left: doing it the other way round hands
+  // `JSON.stringify` a string full of backslashes and it escapes those too, so
+  // the reader is shown `\\ud83d` for a character that is really `\ud83d`.
+  return JSON.stringify(value).replace(
+    /[^\x20-\x7E]/gu,
+    (character) => `\\u${(character.codePointAt(0) ?? 0).toString(16).padStart(4, "0")}`,
+  );
+}
+
+/**
  * Whether this is a CI run.
  *
  * `CI` unset, empty, `"false"` or `"0"` all mean "not CI". Testing only for
@@ -54,11 +76,16 @@ function resolveSeed(): number {
   }
 
   if (!/^\d+$/.test(raw)) {
-    throw new Error(`${SEED_ENV} must be a non-negative integer, got ${JSON.stringify(raw)}.`);
+    throw new Error(`${SEED_ENV} must be a non-negative integer, got ${asciiOnly(raw)}.`);
   }
   const seed = Number(raw);
   if (!Number.isSafeInteger(seed) || seed > SEED_MAX) {
-    throw new Error(`${SEED_ENV} must be a non-negative integer <= ${SEED_MAX}, got ${raw}.`);
+    // `raw` matched /^\d+$/ above, so it is already ASCII; quoted through the
+    // same helper anyway, so that neither branch has to be re-reasoned about
+    // if that guard ever moves.
+    throw new Error(
+      `${SEED_ENV} must be a non-negative integer <= ${SEED_MAX}, got ${asciiOnly(raw)}.`,
+    );
   }
   return seed;
 }

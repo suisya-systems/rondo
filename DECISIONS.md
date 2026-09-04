@@ -533,10 +533,18 @@ see none of them — and would also run it.
 and the loop's "empty allowance" would have been empty in the wrong sense. The sweep therefore also
 reads calls that return a module (`require`, `getBuiltinModule`, `createRequire`, matched on the
 callee's *last name segment* so a member expression does not evade it) and calls that turn text
-into code (`eval`, the `Function` constructor), and runs both through the same allowance. The walk
-covers `.js`, `.mjs` and `.cjs` under `src/` for a sibling reason: `allowJs` is off, so a
-JavaScript module there is type-checked by nothing, and this sweep is the only check that reaches
-it.
+into code (`eval`, the `Function` constructor), and runs both through the same allowance -- and
+refuses a bare *read* of those names, because `const load = process.getBuiltinModule` moves the
+call out of reach of any check on callees. A member name that is computed rather than written
+(`process["get" + "BuiltinModule"]`) is refused for the same reason: whether it named a capability
+is exactly the question, so the answer is no.
+
+**And `src/` is TypeScript, enforced.** The walk finds `.js`, `.mjs` and `.cjs` modules there in
+order to refuse them. Two things are wrong with one: `allowJs` is off, so nothing type-checks it;
+and a JSDoc `@type {import("node:http").Server}` in it is a real dependency hanging off a node the
+tree walk does not traverse. Teaching the sweep to read JSDoc would close the second; refusing the
+file closes both, and whatever the next JavaScript-only affordance turns out to be. Nothing is
+lost, because the tree has no such module and no reason to grow one.
 
 **Why allowlists.** A denylist answers "no" only for what it was told about. `src/refrain/`'s
 external allowance is empty, which refuses `node:http`, a browser driver, an agent SDK, continuo's

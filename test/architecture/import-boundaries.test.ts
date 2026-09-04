@@ -32,10 +32,14 @@
  * calls that turn text into code (`CODE_FROM_TEXT_CALLS`), and puts both
  * through the same allowance -- and refuses a bare *read* of those names
  * (`CAPABILITY_NAMES`), because `const load = process.getBuiltinModule` moves
- * the call beyond the reach of any check on callees. The walk covers JavaScript
- * spellings under `src/` for a sibling reason: `allowJs` is off, so a `.mjs`
- * module there is type-checked by nothing and this sweep is the only thing that
- * reaches it.
+ * the call beyond the reach of any check on callees. A member name that is
+ * computed rather than written (`process["get" + "BuiltinModule"]`) is refused
+ * for the same reason: whether it was a capability is exactly the question, so
+ * the answer is no. And the walk covers JavaScript spellings under `src/` in
+ * order to **refuse** them: `allowJs` is off, so such a module is type-checked
+ * by nothing, and a JSDoc `@type {import(...)}` in one is a dependency hanging
+ * off a node `forEachChild` does not traverse. Refusing the file closes that
+ * without teaching the sweep to read JSDoc.
  *
  * **What keeps this from passing vacuously.** The per-module cases are
  * generated from a directory walk, and a walk that found nothing would generate
@@ -198,13 +202,28 @@ const EXPECTED_MODULES: readonly string[] = [
  * Extensions the walk treats as modules.
  *
  * JavaScript spellings are here as well as TypeScript ones, and they are the
- * interesting half. `tsconfig.json` has `allowJs` off, so a hand-written
- * `src/refrain/helper.mjs` would be type-checked by nothing — and if the walk
- * skipped it too, it would be the one file in the tree that could import
- * anything at all, in the layer whose whole point is that it cannot. The walk
- * is the only check that reaches it, so it has to.
+ * interesting half -- not because such modules are supported, but because they
+ * are refused. `tsconfig.json` has `allowJs` off, so a hand-written
+ * `src/refrain/helper.mjs` is type-checked by nothing; if the walk skipped it
+ * too, it would be the one file in the tree checked by nothing at all, in the
+ * layer whose whole point is that it cannot reach anything. So the walk finds
+ * it, and `JS_EXTENSIONS` refuses it.
  */
 const MODULE_EXTENSIONS = [".ts", ".mts", ".cts", ".tsx", ".js", ".mjs", ".cjs", ".jsx"];
+
+/**
+ * The spellings that make a discovered module a violation by existing.
+ *
+ * `src/` is TypeScript. A JavaScript module there sits outside the type checker
+ * (`allowJs` is off), and it is also where a dependency can hide somewhere a
+ * syntax walk does not go: `@type {import("node:http").Server}` in a JSDoc
+ * comment is a real type dependency in a `.js` file, attached to a JSDoc node
+ * that `forEachChild` does not traverse. Teaching the sweep to read JSDoc would
+ * close that one route; refusing the file closes the route, the type-checking
+ * gap, and whatever the next JavaScript-only affordance turns out to be.
+ * Nothing is lost: the tree has no such module and no reason to grow one.
+ */
+const JS_EXTENSIONS = [".js", ".mjs", ".cjs", ".jsx"];
 
 /**
  * How a discovered module is presented to the parser.
@@ -234,18 +253,15 @@ function parseNameOf(module: string): string {
 /**
  * Relative specifiers must carry one of these; NodeNext requires the suffix.
  *
- * Each runtime suffix lists every on-disk spelling that can satisfy it. The
- * JavaScript spellings are here for the same reason they are in
- * `MODULE_EXTENSIONS`: the walk discovers `.js`/`.mjs`/`.cjs` modules under
- * `src/`, so one of them importing another is a legitimate internal
- * dependency. Listing only the TypeScript spellings would have made the sweep
- * report "no module of that name exists" for a file sitting right beside the
- * importer -- refusing the very modules it went out of its way to discover.
+ * Each runtime suffix lists the TypeScript spellings that can satisfy it, and
+ * only those: `JS_EXTENSIONS` makes a JavaScript module under `src/` a
+ * violation in its own right, so an import that resolved to one would be an
+ * import of a module this tree is not allowed to contain.
  */
 const RUNTIME_SUFFIXES: ReadonlyArray<readonly [string, readonly string[]]> = [
-  [".js", [".ts", ".tsx", ".js", ".jsx"]],
-  [".mjs", [".mts", ".mjs"]],
-  [".cjs", [".cts", ".cjs"]],
+  [".js", [".ts", ".tsx"]],
+  [".mjs", [".mts"]],
+  [".cjs", [".cts"]],
 ];
 
 // --- the walk ---------------------------------------------------------------
@@ -281,6 +297,17 @@ const DEFAULT_BINDING = "<default import>";
 const SIDE_EFFECT = "<side-effect import>";
 const WHOLE_MODULE = "<whole module>";
 const COMPUTED_SPECIFIER = "<computed specifier>";
+
+/**
+ * A member name that is computed rather than written.
+ *
+ * `process["get" + "BuiltinModule"]` names a capability without spelling it,
+ * so the name cannot be compared against anything. It is distinct from "this
+ * callee has no name at all", because the two deserve opposite answers: an
+ * unnamed callee is ordinary code, and an unreadable member name on a call is
+ * the shape of an evasion. Anything matched to this fails closed.
+ */
+const COMPUTED_MEMBER = "<computed member>";
 
 /**
  * Calls that hand back a module, whatever they are spelled through.
@@ -365,9 +392,13 @@ function calleeName(expression: ts.Expression): string | null {
   }
   if (ts.isElementAccessExpression(expression)) {
     const argument = expression.argumentExpression;
+    // A computed member name -- `process["get" + "BuiltinModule"]` -- cannot be
+    // read, and reading it as "no capability here" is how the check would be
+    // stepped around. It gets its own answer so the caller fails closed rather
+    // than falling through to `null`.
     return ts.isStringLiteral(argument) || ts.isNoSubstitutionTemplateLiteral(argument)
       ? argument.text
-      : null;
+      : COMPUTED_MEMBER;
   }
   return null;
 }
@@ -469,6 +500,13 @@ function importsIn(source: string, from: string): ImportRef[] {
       // child. Without this, every direct `process.getBuiltinModule("x")` would
       // report twice: once naming the module, once as an unreadable specifier.
       calleesJudged.add(node.expression);
+      if (callee === COMPUTED_MEMBER) {
+        // The callee names something this scan cannot read. Whether it was a
+        // capability is exactly the question, so the answer is no.
+        record(COMPUTED_SPECIFIER, [WHOLE_MODULE]);
+        node.forEachChild(visit);
+        return;
+      }
       const reachesAModule =
         node.expression.kind === ts.SyntaxKind.ImportKeyword ||
         (callee !== null && MODULE_RETURNING_CALLS.has(callee));
@@ -596,6 +634,14 @@ function violationsIn(module: string, source: string): string[] {
     );
     // Still swept below, under the tightest allowance there is, so an
     // unclassified module cannot also smuggle an import through.
+  }
+
+  if (JS_EXTENSIONS.some((extension) => module.endsWith(extension))) {
+    problems.push(
+      `${module} is a JavaScript module under ${SRC_ROOT}/. This tree is TypeScript: ` +
+        "`allowJs` is off, so nothing type-checks it, and a JSDoc `@type {import(...)}` " +
+        "in it is a dependency no syntax walk can see. Write it as TypeScript.",
+    );
   }
 
   const allowedInternal =
@@ -938,13 +984,13 @@ const PLANTED: ReadonlyArray<
     "takes <side-effect import> from node:sqlite",
   ],
   [
-    // A JavaScript module under src/ is type-checked by nothing, so the sweep
-    // is the only thing that reaches it. It is parsed under a TypeScript
-    // grammar and reported under its real path.
-    "a-javascript-module-under-src-is-swept-too",
+    // A JavaScript module under src/ is refused for existing, and its imports
+    // are still read: the file is parsed under a TypeScript grammar and
+    // reported under its real path, so both problems are named at once.
+    "a-javascript-module-under-src-is-refused",
     "src/refrain/helper.mjs",
     'import { createServer } from "node:http";\nexport const x = createServer;\n',
-    "src/refrain/helper.mjs imports the external module node:http",
+    "is a JavaScript module under src/",
   ],
   [
     "a-computed-specifier-fails-closed",
@@ -998,14 +1044,19 @@ const PLANTED: ReadonlyArray<
   ],
   ["control-a-module-that-imports-nothing", "src/refrain/probe.ts", "export const x = 1;\n", null],
   [
-    // The other half of the JavaScript-module story. The sweep goes out of its
-    // way to discover `.mjs` under `src/`, so one importing a real neighbour
-    // has to resolve rather than be reported missing. `src/store/records.ts`
-    // exists, and `.js` is the suffix a NodeNext import of it carries.
-    "control-a-javascript-module-may-import-a-real-neighbour",
+    // Refused for its extension even when everything else about it is fine:
+    // the rule is about the file existing, not about what it imports.
+    "an-otherwise-clean-javascript-module-is-still-refused",
     "src/refrain/helper.mjs",
     'import type { IterationRecord } from "../store/records.js";\nexport const idOf = (r: IterationRecord): string => r.id;\n',
-    null,
+    "is a JavaScript module under src/",
+  ],
+  [
+    // The evasion the computed-member sentinel exists for.
+    "a-computed-capability-member-fails-closed",
+    "src/refrain/probe.ts",
+    'export const x = process["get" + "BuiltinModule"]("node:http");\n',
+    "cannot read",
   ],
   [
     // `Function` is in CODE_FROM_TEXT_CALLS but not in BARE_CAPABILITY_NAMES,
@@ -1023,8 +1074,8 @@ test("the planted corpus exercises the detector in both directions", () => {
   const clean = PLANTED.filter(([, , , expected]) => expected === null);
   // A corpus that lost its controls, or lost its violations, would still pass
   // every case below by agreeing with itself.
-  expect(caught.length).toBeGreaterThanOrEqual(33);
-  expect(clean.length).toBeGreaterThanOrEqual(6);
+  expect(caught.length).toBeGreaterThanOrEqual(36);
+  expect(clean.length).toBeGreaterThanOrEqual(5);
   expect(new Set(PLANTED.map(([id]) => id)).size).toBe(PLANTED.length);
 });
 
