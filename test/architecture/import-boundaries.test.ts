@@ -56,15 +56,14 @@
  * capability beyond the enumerated globals -- a Node API that reaches the world
  * without naming a module and is not in that list -- is not seen at all; the
  * list covers what Issue #1 named and is extended when something else earns a
- * place. And a capability
- * reached through an identifier-keyed index --
+ * place. And a capability reached through an identifier-keyed index --
  * `const k = "getBuiltinModule"; const load = process[k]` -- is invisible here,
  * because deciding what `k` holds is scope analysis, which is a type checker's
- * job. Closing it by refusing every computed index would refuse every array
- * subscript in the tree, which is a worse trade. The line drawn instead is
- * between a name that is *indexed* (`row[key]`, allowed) and a name that is
- * *assembled* (`process["get" + "X"]`, refused): obfuscation is refused,
- * ordinary code is not. What remains is a check that stops mistakes and
+ * job. Closing it by refusing every computed index would refuse `rows[i + 1]`
+ * along with it, which is a worse trade and was briefly made: the line drawn
+ * instead is between a name that is *indexed* (`row[key]`, `rows[i + 1]`,
+ * allowed) and a name *assembled from text* (`process["get" + "X"]`, refused).
+ * Obfuscation is refused, arithmetic is not. What remains is a check that stops mistakes and
  * documents intent, not one that stops an author who is determined to get
  * around it -- and no syntax sweep is the latter.
  *
@@ -445,6 +444,35 @@ const FORBIDDEN_GLOBALS: ReadonlySet<string> = new Set([
   "navigator",
 ]);
 
+/**
+ * Whether an expression builds a string out of parts.
+ *
+ * This is the line between an evasion and ordinary code. `"get" + "BuiltinModule"`
+ * and a template with a hole in it are names written so as not to look like
+ * names; `i + 1` is arithmetic. Deciding by *shape* -- concatenation involving
+ * a string literal, or a template with substitutions -- keeps it a syntax
+ * question and keeps `rows[i + 1]` out of it.
+ */
+function assemblesAString(expression: ts.Expression): boolean {
+  if (ts.isTemplateExpression(expression)) {
+    return true;
+  }
+  if (ts.isParenthesizedExpression(expression)) {
+    return assemblesAString(expression.expression);
+  }
+  if (
+    ts.isBinaryExpression(expression) &&
+    expression.operatorToken.kind === ts.SyntaxKind.PlusToken
+  ) {
+    const stringy = (side: ts.Expression): boolean =>
+      ts.isStringLiteral(side) ||
+      ts.isNoSubstitutionTemplateLiteral(side) ||
+      assemblesAString(side);
+    return stringy(expression.left) || stringy(expression.right);
+  }
+  return false;
+}
+
 /** The last name segment of a callee expression, or null when there is none. */
 function calleeName(expression: ts.Expression): string | null {
   if (ts.isIdentifier(expression)) {
@@ -458,11 +486,12 @@ function calleeName(expression: ts.Expression): string | null {
     if (ts.isStringLiteral(argument) || ts.isNoSubstitutionTemplateLiteral(argument)) {
       return argument.text;
     }
-    // Ordinary indexing -- `row[key]`, `items[i]` -- is not a member name at
-    // all, and reporting it would refuse every array subscript in the tree. A
-    // name that is *assembled*, though (`process["get" + "BuiltinModule"]`), is
-    // a name deliberately made unreadable, and that is the shape this refuses.
-    return ts.isIdentifier(argument) || ts.isNumericLiteral(argument) ? null : COMPUTED_MEMBER;
+    // Ordinary indexing -- `row[key]`, `items[i]`, `rows[i + 1]` -- is not a
+    // member name at all, and reporting it would refuse every subscript in the
+    // tree. A name *assembled* from text, though
+    // (`process["get" + "BuiltinModule"]`), is a name deliberately written so
+    // as not to look like one, and that is the only shape this refuses.
+    return assemblesAString(argument) ? COMPUTED_MEMBER : null;
   }
   return null;
 }
@@ -631,7 +660,12 @@ function scanModule(source: string, from: string): ModuleScan {
     } else if (ts.isNewExpression(node)) {
       const callee = calleeName(node.expression);
       calleesJudged.add(node.expression);
-      if (callee !== null && CODE_FROM_TEXT_CALLS.has(callee)) {
+      // `COMPUTED_MEMBER` is handled here for the reason the call branch
+      // handles it: `new g["Fun" + "ction"](...)` is the code-from-text route
+      // with the constructor's name written so as not to be read. The callee is
+      // marked judged either way, so if this branch stayed silent nothing else
+      // would speak for it.
+      if (callee === COMPUTED_MEMBER || (callee !== null && CODE_FROM_TEXT_CALLS.has(callee))) {
         record(COMPUTED_SPECIFIER, [WHOLE_MODULE]);
       }
     } else if (
@@ -1228,14 +1262,21 @@ const PLANTED: ReadonlyArray<
     "cannot read",
   ],
   [
-    // Ordinary indexing must stay ordinary: if a computed member read were
-    // refused outright, every array subscript in the tree would be a
-    // violation. This is the case that pins the line between "assembled name"
-    // and "index".
+    // Ordinary indexing must stay ordinary. An earlier version refused every
+    // subscript whose argument was not an identifier or a number, which made
+    // `rows[i + 1]` a boundary violation -- a false positive that contradicted
+    // this file's own stated rule. The arithmetic shapes are here because that
+    // is what regressed.
     "control-ordinary-indexing-is-not-a-capability-read",
     "src/refrain/probe.ts",
-    "export const at = (rows: readonly string[], i: number, key: string): unknown =>\n  rows[i] ?? ({ a: 1 } as Record<string, unknown>)[key];\n",
+    "export const at = (rows: readonly (readonly string[])[], i: number, j: number, key: string): unknown =>\n  rows[i + 1]?.[j] ?? rows[i]?.[j - 1] ?? ({ a: 1 } as Record<string, unknown>)[key];\n",
     null,
+  ],
+  [
+    "a-computed-constructor-name-fails-closed",
+    "src/refrain/probe.ts",
+    'declare const g: Record<string, new (body: string) => () => unknown>;\nexport const x = new g["Fun" + "ction"]("return 1")();\n',
+    "cannot read",
   ],
   [
     // The value-position half of the `Function` rule.
@@ -1259,7 +1300,7 @@ test("the planted corpus exercises the detector in both directions", () => {
   const clean = PLANTED.filter(([, , , expected]) => expected === null);
   // A corpus that lost its controls, or lost its violations, would still pass
   // every case below by agreeing with itself.
-  expect(caught.length).toBeGreaterThanOrEqual(43);
+  expect(caught.length).toBeGreaterThanOrEqual(44);
   expect(clean.length).toBeGreaterThanOrEqual(6);
   expect(new Set(PLANTED.map(([id]) => id)).size).toBe(PLANTED.length);
 });
