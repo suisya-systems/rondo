@@ -71,7 +71,7 @@ Add the ID to the index table at the top of the file as well as to the body.
 `npm run verify` is the whole of it: `lint`, `knip`, `typecheck`, `test`. Run it
 before reporting anything as done. It takes a few seconds.
 
-Three things about it are not obvious:
+Four things about it are not obvious:
 
 - **`npm ci`, never `npm install`** (D-0007). On npm 10.9.2 a fresh
   `npm install` in this repository fails outright with
