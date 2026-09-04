@@ -1,0 +1,701 @@
+/**
+ * The dependency direction of rondo's `src/` tree, enforced here rather than in
+ * review.
+ *
+ * Issue #1 states three claims about a repository that is otherwise empty:
+ *
+ *  1. `src/refrain/`, the directory that will hold the loop, must not import
+ *     HTTP, browser, session-provider or continuo-internal modules.
+ *  2. Access points (`src/access/*`) may import the loop; the loop may never
+ *     import an access point.
+ *  3. One durable store module owns SQLite.
+ *
+ * All three are stated below as **allowlists**, not as lists of forbidden
+ * names. A denylist answers "no" only for what it was told about, so it admits
+ * every hazard nobody has thought of yet -- and on a repository this young,
+ * that is most of them. `src/refrain/`'s external allowance is empty, which
+ * refuses `node:http`, a browser driver, an agent SDK and continuo's internals
+ * in one line, together with the next thing that would have needed adding.
+ *
+ * **Modules are parsed, never imported.** An import inside a function body, in
+ * type position, or through a re-export is still an import for the purpose of a
+ * boundary, and importing the tree would see none of them -- and would run it.
+ * `scripts/lib/ts-ast.mjs` is the parser; DECISIONS.md D-0006 records why the
+ * check is a test over the syntax tree rather than a lint rule.
+ *
+ * **What keeps this from passing vacuously.** The per-module cases are
+ * generated from a directory walk, and a walk that found nothing would generate
+ * nothing -- and a suite of zero assertions is green. Three things stop that:
+ *
+ *  - the walk has its own case, asserting it still finds every module in
+ *    `EXPECTED_MODULES`, so deleting or renaming one is a red test rather than
+ *    a quietly smaller sweep;
+ *  - every discovered module must be classified into a layer or named in
+ *    `UNLAYERED_MODULES`, so a new top-level directory is an offender until
+ *    somebody decides what it is;
+ *  - the detector is run against `PLANTED`, a corpus of hand-written violations
+ *    attributed to modules that do not exist on disk. Each one must be caught,
+ *    and the clean controls beside them must not be, so a detector that had
+ *    stopped detecting -- or started refusing everything -- fails here before
+ *    it can report a clean tree.
+ */
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import * as ts from "typescript/unstable/ast";
+import { afterAll, expect, test } from "vitest";
+
+import { disposeParser, parseSourceFile } from "../../scripts/lib/ts-ast.mjs";
+
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
+
+// The parser is a compiler child process shared by every case below. Vitest
+// would otherwise sit waiting for it after the last assertion has passed.
+afterAll(disposeParser);
+
+/** The tree this file guards. */
+const SRC_ROOT = "src";
+
+/** Repo-relative paths are spelled with forward slashes on every platform. */
+const slash = (path: string): string => path.split("\\").join("/");
+
+const sourceOf = (module: string): string => readFileSync(join(ROOT, module), "utf8");
+
+/**
+ * What each layer may import from inside `src/`.
+ *
+ * Read the table as the arrows of Issue #1's item 3. `src/access` names
+ * `src/refrain`; `src/refrain` does not name `src/access`, and that asymmetry
+ * *is* claim 2 -- an access point may reach the loop, and the loop may never
+ * reach back. `src/store` names only itself, so the durable layer cannot come
+ * to depend on the loop it persists for.
+ *
+ * Stated as an allowlist for the reason the file header gives, and with one
+ * consequence worth naming: a module that imports something in no layer at all
+ * -- the barrel, a file under `test/`, a stray sibling directory -- matches no
+ * entry and is an offender. A denylist would have let all three through.
+ */
+const ALLOWED_INTERNAL_BY_LAYER: Readonly<Record<string, readonly string[]>> = {
+  // The durable layer. Depends on nothing else in the tree, so it can be
+  // replaced without the loop noticing.
+  "src/store": ["src/store"],
+  // The loop. May persist, may not be reached into from an access point's side
+  // of the boundary.
+  "src/refrain": ["src/refrain", "src/store"],
+  // The access points: the web UI and the localhost MCP surface, when they
+  // exist. They compose the other two and are composed by nobody.
+  "src/access": ["src/access", "src/refrain", "src/store"],
+};
+
+/**
+ * Modules that belong to no layer, and are therefore constrained by nothing
+ * except the entry below.
+ *
+ * Exactly one: the public barrel, whose whole job is to re-export across
+ * layers. Naming it explicitly is what keeps "no layer" from being a way to opt
+ * out -- a new top-level module under `src/` is an offender until somebody
+ * classifies it.
+ */
+const UNLAYERED_MODULES: readonly string[] = ["src/index.ts"];
+
+/**
+ * What a module in no layer may reach: the layer roots, and nothing else.
+ *
+ * Re-exporting across layers is the barrel's job. What it may not do is reach
+ * somewhere that is not a layer at all -- `../test/support.js` re-exported from
+ * the barrel would be a package reaching out of itself, and it is the case this
+ * entry exists to refuse.
+ */
+const ALLOWED_FOR_UNLAYERED: readonly string[] = Object.keys(ALLOWED_INTERNAL_BY_LAYER);
+
+/**
+ * Every external dependency each module may have, and under exactly which
+ * named bindings.
+ *
+ * Keyed by **module**, not by layer, because Issue #1's claim 3 is about a
+ * module: one durable store module owns SQLite. Granting `node:sqlite` to the
+ * `src/store` layer would let a second file in that directory open its own
+ * connection, which is the thing the claim forbids. Keying by module also makes
+ * the future arrivals honest -- when the HTTP access point lands, `node:http`
+ * is granted to that one file and to nothing else, including the rest of
+ * `src/access`.
+ *
+ * A module absent from this table may import no external at all. That is the
+ * state of every module in the tree but one, and it is what makes
+ * `src/refrain/`'s boundary total rather than a list of names.
+ *
+ * Bindings are named one by one, and the sentinels in `Binding` below are
+ * deliberately unspellable here: a namespace import, a default import, a
+ * side-effect import, a `require`, a dynamic `import()` and a computed
+ * specifier all reduce to a sentinel, none of which can appear in an
+ * allowlist, so all six fail closed. The reason is that none of them can be
+ * checked binding by binding -- `import * as fs from "node:fs"` grants the
+ * whole module under a name this scan cannot follow.
+ */
+const ALLOWED_EXTERNALS_BY_MODULE: Readonly<
+  Record<string, Readonly<Record<string, readonly string[]>>>
+> = {
+  "src/store/sqlite.ts": { "node:sqlite": ["DatabaseSync"] },
+};
+
+/**
+ * The specifiers that mean "this module is talking to SQLite".
+ *
+ * Both the standard-library driver rondo uses today and the native package the
+ * sibling repositories use, because claim 3 is about the database, not about
+ * which library reaches it: swapping drivers must not be a way to acquire a
+ * second owner. Any addition here is a decision, and D-0005 is where it gets
+ * taken.
+ */
+const SQLITE_DRIVERS: ReadonlySet<string> = new Set([
+  "node:sqlite",
+  "sqlite",
+  "better-sqlite3",
+  "node-sqlite3-wasm",
+  "sqlite3",
+  "@libsql/client",
+]);
+
+/** The one module allowed to name any of them. */
+const SQLITE_OWNER = "src/store/sqlite.ts";
+
+/**
+ * The modules the sweep must still be finding.
+ *
+ * A floor, not an inventory: new modules are expected and are covered by the
+ * classification case rather than by this list. What it catches is the
+ * failure this whole file is most exposed to -- a walk that stops discovering
+ * things and therefore stops asserting them. Deleting `src/refrain/loop.ts`
+ * without deleting this entry is a red test; deleting both is a diff a reviewer
+ * can see.
+ */
+const EXPECTED_MODULES: readonly string[] = [
+  "src/access/local.ts",
+  "src/index.ts",
+  "src/refrain/loop.ts",
+  "src/refrain/policy.ts",
+  "src/store/records.ts",
+  "src/store/sqlite.ts",
+];
+
+/** Extensions the walk treats as modules. */
+const MODULE_EXTENSIONS = [".ts", ".mts", ".cts", ".tsx"];
+
+/** Relative specifiers must carry one of these; NodeNext requires the suffix. */
+const RUNTIME_SUFFIXES: ReadonlyArray<readonly [string, readonly string[]]> = [
+  [".js", [".ts", ".tsx"]],
+  [".mjs", [".mts"]],
+  [".cjs", [".cts"]],
+];
+
+// --- the walk ---------------------------------------------------------------
+
+/** Every module under `src/`, repo-relative, sorted. */
+function walkModules(): string[] {
+  const found: string[] = [];
+  const visit = (directory: string): void => {
+    for (const entry of readdirSync(join(ROOT, directory)).sort()) {
+      const child = `${directory}/${entry}`;
+      if (statSync(join(ROOT, child)).isDirectory()) {
+        visit(child);
+      } else if (MODULE_EXTENSIONS.some((extension) => entry.endsWith(extension))) {
+        found.push(child);
+      }
+    }
+  };
+  visit(SRC_ROOT);
+  return found.sort();
+}
+
+const MODULES = walkModules();
+
+// --- reading the imports out of a module ------------------------------------
+
+/**
+ * The sentinels standing in for a binding this scan cannot check one name at a
+ * time. None of them is spellable in `ALLOWED_EXTERNALS_BY_MODULE`, so each one
+ * refuses the import it describes.
+ */
+const NAMESPACE = "<namespace import>";
+const DEFAULT_BINDING = "<default import>";
+const SIDE_EFFECT = "<side-effect import>";
+const WHOLE_MODULE = "<whole module>";
+const COMPUTED_SPECIFIER = "<computed specifier>";
+
+interface ImportRef {
+  /** As written in the source. */
+  readonly specifier: string;
+  /** Repo-relative target, for a relative specifier; null for a bare one. */
+  readonly resolved: string | null;
+  /** The bindings taken, or one of the sentinels above. */
+  readonly names: readonly string[];
+}
+
+/**
+ * Every module `source` depends on, however it says so.
+ *
+ * The routes covered are the ones that reach a module without being written
+ * `import x from "y"`: a re-export, an `import type`, an `import x = require()`,
+ * an `import("...")` type node, a dynamic `import()`, a `require()` call, and a
+ * triple-slash reference -- which TypeScript records on the SourceFile rather
+ * than in the tree, so the walk below would never see it.
+ */
+function importsIn(source: string, from: string): ImportRef[] {
+  const tree = parseSourceFile(from, source);
+  const found: ImportRef[] = [];
+  const directory = dirname(from);
+
+  const record = (specifier: string, names: readonly string[]): void => {
+    found.push({ specifier, resolved: resolveRelative(specifier, directory), names });
+  };
+
+  const clauseNames = (clause: ts.ImportClause | undefined): string[] => {
+    if (clause === undefined) {
+      return [SIDE_EFFECT];
+    }
+    const names: string[] = [];
+    if (clause.name !== undefined) {
+      names.push(DEFAULT_BINDING);
+    }
+    const bindings = clause.namedBindings;
+    if (bindings !== undefined) {
+      if (ts.isNamespaceImport(bindings)) {
+        names.push(NAMESPACE);
+      } else {
+        for (const element of bindings.elements) {
+          names.push(element.propertyName?.text ?? element.name.text);
+        }
+      }
+    }
+    return names.length === 0 ? [SIDE_EFFECT] : names;
+  };
+
+  const visit = (node: ts.Node): void => {
+    if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier)) {
+      record(node.moduleSpecifier.text, clauseNames(node.importClause));
+    } else if (
+      ts.isExportDeclaration(node) &&
+      node.moduleSpecifier !== undefined &&
+      ts.isStringLiteral(node.moduleSpecifier)
+    ) {
+      // `export * from` and `export * as ns from` take the whole module; a
+      // named re-export takes exactly what it names.
+      const clause = node.exportClause;
+      const names =
+        clause !== undefined && ts.isNamedExports(clause)
+          ? clause.elements.map((element) => element.propertyName?.text ?? element.name.text)
+          : [WHOLE_MODULE];
+      record(node.moduleSpecifier.text, names);
+    } else if (
+      ts.isImportEqualsDeclaration(node) &&
+      ts.isExternalModuleReference(node.moduleReference) &&
+      ts.isStringLiteral(node.moduleReference.expression)
+    ) {
+      record(node.moduleReference.expression.text, [WHOLE_MODULE]);
+    } else if (
+      ts.isImportTypeNode(node) &&
+      ts.isLiteralTypeNode(node.argument) &&
+      ts.isStringLiteral(node.argument.literal)
+    ) {
+      record(node.argument.literal.text, [WHOLE_MODULE]);
+    } else if (ts.isCallExpression(node)) {
+      const callee = node.expression;
+      const argument = node.arguments[0];
+      const reachesAModule =
+        callee.kind === ts.SyntaxKind.ImportKeyword ||
+        (ts.isIdentifier(callee) && callee.text === "require");
+      if (reachesAModule) {
+        // A no-substitution template is a literal with different quotes and is
+        // read as one. Anything else -- a variable, a concatenation, a template
+        // with a hole in it -- cannot be read at all and fails closed.
+        const literal =
+          argument !== undefined &&
+          (ts.isStringLiteral(argument) || ts.isNoSubstitutionTemplateLiteral(argument))
+            ? argument.text
+            : COMPUTED_SPECIFIER;
+        record(literal, [WHOLE_MODULE]);
+      }
+    }
+    node.forEachChild(visit);
+  };
+
+  visit(tree);
+
+  // Triple-slash directives are dependencies TypeScript records on the
+  // SourceFile, not in the tree, so `forEachChild` never reaches them. A
+  // `reference path=` naming a module in another layer crosses a boundary by
+  // the one route a tree walk cannot see.
+  //
+  // Both directive kinds are spelled without their leading slashes in this
+  // comment on purpose: written out in full, a comment about a directive is
+  // read as one by tools that scan text rather than syntax.
+  for (const directive of tree.typeReferenceDirectives) {
+    record(directive.fileName, [WHOLE_MODULE]);
+  }
+  for (const reference of tree.referencedFiles) {
+    record(reference.fileName, [WHOLE_MODULE]);
+  }
+
+  return found;
+}
+
+/** A relative specifier as a repo-relative path, or null when it is bare. */
+function resolveRelative(specifier: string, directory: string): string | null {
+  if (!specifier.startsWith(".")) {
+    return null;
+  }
+  return slash(resolve("/", directory, specifier)).replace(/^\//, "");
+}
+
+// --- the detector -----------------------------------------------------------
+
+/** The layer a module is in, or null when it is in none. */
+function layerOf(module: string): string | null {
+  return (
+    Object.keys(ALLOWED_INTERNAL_BY_LAYER).find((layer) => module.startsWith(`${layer}/`)) ?? null
+  );
+}
+
+/** Whether `target` is inside one of `allowed`, as a directory prefix. */
+const withinAny = (target: string, allowed: readonly string[]): boolean =>
+  allowed.some((directory) => target.startsWith(`${directory}/`));
+
+/**
+ * Every way `module` breaks the boundary, as sentences.
+ *
+ * An empty array is the whole of "this module is fine". The messages are what a
+ * reader sees when the gate goes red, so each one says which rule was broken
+ * rather than only which line broke it.
+ */
+function violationsIn(module: string, source: string): string[] {
+  const problems: string[] = [];
+  const layer = layerOf(module);
+  const unlayered = UNLAYERED_MODULES.includes(module);
+
+  if (layer === null && !unlayered) {
+    problems.push(
+      `${module} is in no layer and is not named in UNLAYERED_MODULES. ` +
+        "A new module under src/ has to be classified before it can be checked.",
+    );
+    // Still swept below, under the tightest allowance there is, so an
+    // unclassified module cannot also smuggle an import through.
+  }
+
+  const allowedInternal =
+    layer !== null
+      ? (ALLOWED_INTERNAL_BY_LAYER[layer] ?? [])
+      : unlayered
+        ? ALLOWED_FOR_UNLAYERED
+        : [];
+  const allowedExternal = ALLOWED_EXTERNALS_BY_MODULE[module] ?? {};
+
+  for (const ref of importsIn(source, module)) {
+    if (ref.specifier === COMPUTED_SPECIFIER) {
+      problems.push(
+        `${module} loads a module through a specifier this scan cannot read. ` +
+          "A boundary that can be stepped over by computing the name is not a boundary.",
+      );
+      continue;
+    }
+
+    if (ref.resolved !== null) {
+      if (!withinAny(ref.resolved, allowedInternal)) {
+        problems.push(
+          `${module} imports ${ref.specifier} (-> ${ref.resolved}), which is outside its ` +
+            `allowance [${allowedInternal.join(", ")}].`,
+        );
+        continue;
+      }
+      const suffix = RUNTIME_SUFFIXES.find(([runtime]) => ref.specifier.endsWith(runtime));
+      if (suffix === undefined) {
+        problems.push(
+          `${module} imports ${ref.specifier} without a runtime extension. ` +
+            "NodeNext resolution requires the emitted suffix on a relative specifier.",
+        );
+        continue;
+      }
+      const [runtime, sources] = suffix;
+      const base = ref.resolved.slice(0, -runtime.length);
+      if (!sources.some((extension) => existsSync(join(ROOT, base + extension)))) {
+        problems.push(
+          `${module} imports ${ref.specifier}, which resolves to ${ref.resolved} -- ` +
+            "and no module of that name exists.",
+        );
+      }
+      continue;
+    }
+
+    if (SQLITE_DRIVERS.has(ref.specifier) && module !== SQLITE_OWNER) {
+      problems.push(
+        `${module} imports the SQLite driver ${ref.specifier}. ` +
+          `${SQLITE_OWNER} is the one module that owns durable state.`,
+      );
+      continue;
+    }
+
+    const granted = allowedExternal[ref.specifier];
+    if (granted === undefined) {
+      problems.push(
+        `${module} imports the external module ${ref.specifier}, which it is not granted. ` +
+          "Externals are allowed per module, by name, in ALLOWED_EXTERNALS_BY_MODULE.",
+      );
+      continue;
+    }
+    for (const name of ref.names) {
+      if (!granted.includes(name)) {
+        problems.push(
+          `${module} takes ${name} from ${ref.specifier}; it is granted only ` +
+            `[${granted.join(", ")}].`,
+        );
+      }
+    }
+  }
+
+  return problems;
+}
+
+// --- what keeps the sweep honest --------------------------------------------
+
+test("the walk still finds every module this file claims to guard", () => {
+  expect(MODULES).toEqual(expect.arrayContaining([...EXPECTED_MODULES]));
+  expect(MODULES.length).toBeGreaterThanOrEqual(EXPECTED_MODULES.length);
+});
+
+test("every module under src/ is in a layer or is named as unlayered", () => {
+  const unclassified = MODULES.filter(
+    (module) => layerOf(module) === null && !UNLAYERED_MODULES.includes(module),
+  );
+  expect(unclassified).toEqual([]);
+});
+
+test("exactly one module owns SQLite, and it is the durable store", () => {
+  const owners = MODULES.filter((module) =>
+    importsIn(sourceOf(module), module).some((ref) => SQLITE_DRIVERS.has(ref.specifier)),
+  );
+  // Equality, not `toContain`: a second owner is the failure this case exists
+  // for, and it is also what makes the assertion non-vacuous -- the tree has a
+  // real importer of `node:sqlite` today, so "no module imports a driver" would
+  // fail here rather than pass quietly.
+  expect(owners).toEqual([SQLITE_OWNER]);
+});
+
+// --- the sweep --------------------------------------------------------------
+
+for (const module of MODULES) {
+  test(`${module} stays inside its boundary`, () => {
+    expect(violationsIn(module, sourceOf(module))).toEqual([]);
+  });
+}
+
+// --- the detector's own cases (anti-vacuity) --------------------------------
+
+/**
+ * Hand-written modules, attributed to paths that mostly do not exist, each of
+ * which the detector must judge correctly.
+ *
+ * `expected` is a substring of the message the detector has to produce, or
+ * `null` for a control that must come back clean. The controls are half the
+ * point: a detector that refuses everything would satisfy every violation case
+ * here and report a tree in which nothing is allowed to import anything, and
+ * these are what catch it.
+ *
+ * The paths are attributed rather than real (`src/refrain/probe.ts` has never
+ * existed) so that adding a case costs no file on disk, and so that a case can
+ * describe a module the tree must never contain.
+ */
+const PLANTED: ReadonlyArray<
+  readonly [id: string, module: string, source: string, expected: string | null]
+> = [
+  [
+    "loop-reaches-an-access-point",
+    "src/refrain/probe.ts",
+    'import { describeNextStep } from "../access/local.js";\nexport const x = describeNextStep;\n',
+    "outside its allowance",
+  ],
+  [
+    "loop-opens-an-http-server",
+    "src/refrain/probe.ts",
+    'import { createServer } from "node:http";\nexport const x = createServer;\n',
+    "which it is not granted",
+  ],
+  [
+    "loop-takes-a-browser",
+    "src/refrain/probe.ts",
+    'import { chromium } from "playwright";\nexport const x = chromium;\n',
+    "which it is not granted",
+  ],
+  [
+    "loop-takes-a-session-provider",
+    "src/refrain/probe.ts",
+    'import { query } from "@anthropic-ai/claude-agent-sdk";\nexport const x = query;\n',
+    "which it is not granted",
+  ],
+  [
+    "loop-reaches-continuo-internals",
+    "src/refrain/probe.ts",
+    'import { renewLease } from "@suisya-systems/continuo/dist/lap/lease.js";\nexport const x = renewLease;\n',
+    "which it is not granted",
+  ],
+  [
+    "loop-reaches-continuo-at-all",
+    "src/refrain/probe.ts",
+    'import { about } from "@suisya-systems/continuo";\nexport const x = about;\n',
+    "which it is not granted",
+  ],
+  [
+    "second-module-opens-sqlite",
+    "src/store/journal.ts",
+    'import { DatabaseSync } from "node:sqlite";\nexport const x = DatabaseSync;\n',
+    "is the one module that owns durable state",
+  ],
+  [
+    "an-access-point-opens-sqlite",
+    "src/access/probe.ts",
+    'import Database from "better-sqlite3";\nexport const x = Database;\n',
+    "is the one module that owns durable state",
+  ],
+  [
+    "the-owner-takes-a-binding-it-was-not-granted",
+    "src/store/sqlite.ts",
+    'import { DatabaseSync, StatementSync } from "node:sqlite";\nexport const x = [DatabaseSync, StatementSync];\n',
+    "takes StatementSync from node:sqlite",
+  ],
+  [
+    "a-namespace-import-of-an-allowed-module",
+    "src/store/sqlite.ts",
+    'import * as sqlite from "node:sqlite";\nexport const x = sqlite;\n',
+    "takes <namespace import> from node:sqlite",
+  ],
+  [
+    "a-default-import-of-an-allowed-module",
+    "src/store/sqlite.ts",
+    'import sqlite from "node:sqlite";\nexport const x = sqlite;\n',
+    "takes <default import> from node:sqlite",
+  ],
+  [
+    "a-side-effect-import-of-an-allowed-module",
+    "src/store/sqlite.ts",
+    'import "node:sqlite";\nexport const x = 1;\n',
+    "takes <side-effect import> from node:sqlite",
+  ],
+  [
+    "a-type-only-import-still-counts",
+    "src/refrain/probe.ts",
+    'import type { Server } from "node:http";\nexport type X = Server;\n',
+    "which it is not granted",
+  ],
+  [
+    "a-re-export-still-counts",
+    "src/refrain/probe.ts",
+    'export { createServer } from "node:http";\n',
+    "which it is not granted",
+  ],
+  [
+    "a-star-re-export-still-counts",
+    "src/refrain/probe.ts",
+    'export * from "../access/local.js";\n',
+    "outside its allowance",
+  ],
+  [
+    "an-import-inside-a-function-body-still-counts",
+    "src/refrain/probe.ts",
+    'export async function go(): Promise<unknown> {\n  return await import("node:http");\n}\n',
+    "which it is not granted",
+  ],
+  [
+    "a-require-still-counts",
+    "src/refrain/probe.ts",
+    'declare function require(id: string): unknown;\nexport const x = require("node:http");\n',
+    "which it is not granted",
+  ],
+  [
+    "an-import-equals-still-counts",
+    "src/refrain/probe.ts",
+    'import http = require("node:http");\nexport const x = http;\n',
+    "which it is not granted",
+  ],
+  [
+    "an-import-type-node-still-counts",
+    "src/refrain/probe.ts",
+    'export type X = import("node:http").Server;\n',
+    "which it is not granted",
+  ],
+  [
+    "a-triple-slash-reference-still-counts",
+    "src/refrain/probe.ts",
+    '/// <reference types="node:http" />\nexport const x = 1;\n',
+    "which it is not granted",
+  ],
+  [
+    "a-computed-specifier-fails-closed",
+    "src/refrain/probe.ts",
+    'const name = "node:" + "http";\nexport const x = await import(name);\n',
+    "cannot read",
+  ],
+  ["an-unclassified-top-level-module", "src/rogue.ts", "export const x = 1;\n", "is in no layer"],
+  [
+    "a-relative-import-that-leaves-src",
+    "src/index.ts",
+    'export { support } from "../test/support.js";\n',
+    "outside its allowance",
+  ],
+  [
+    "a-relative-import-of-a-module-that-does-not-exist",
+    "src/refrain/probe.ts",
+    'export { gone } from "./gone.js";\n',
+    "no module of that name exists",
+  ],
+  [
+    "a-relative-import-without-its-runtime-suffix",
+    "src/refrain/probe.ts",
+    'export { nextStep } from "./loop";\n',
+    "without a runtime extension",
+  ],
+  // --- controls: these must come back clean --------------------------------
+  [
+    "control-the-loop-may-persist",
+    "src/refrain/probe.ts",
+    'import type { IterationRecord } from "../store/records.js";\nexport type X = IterationRecord;\n',
+    null,
+  ],
+  [
+    "control-an-access-point-may-reach-the-loop",
+    "src/access/probe.ts",
+    'import { nextStep } from "../refrain/loop.js";\nexport const x = nextStep;\n',
+    null,
+  ],
+  [
+    "control-the-owner-may-open-sqlite",
+    "src/store/sqlite.ts",
+    'import type { DatabaseSync } from "node:sqlite";\nexport type X = DatabaseSync;\n',
+    null,
+  ],
+  [
+    "control-the-barrel-may-cross-layers",
+    "src/index.ts",
+    'export { nextStep } from "./refrain/loop.js";\nexport { iterationStore } from "./store/sqlite.js";\n',
+    null,
+  ],
+  ["control-a-module-that-imports-nothing", "src/refrain/probe.ts", "export const x = 1;\n", null],
+];
+
+test("the planted corpus exercises the detector in both directions", () => {
+  const caught = PLANTED.filter(([, , , expected]) => expected !== null);
+  const clean = PLANTED.filter(([, , , expected]) => expected === null);
+  // A corpus that lost its controls, or lost its violations, would still pass
+  // every case below by agreeing with itself.
+  expect(caught.length).toBeGreaterThanOrEqual(20);
+  expect(clean.length).toBeGreaterThanOrEqual(4);
+  expect(new Set(PLANTED.map(([id]) => id)).size).toBe(PLANTED.length);
+});
+
+for (const [id, module, source, expected] of PLANTED) {
+  test(`the detector judges ${id}`, () => {
+    const problems = violationsIn(module, source);
+    if (expected === null) {
+      expect(problems).toEqual([]);
+    } else {
+      expect(problems.join("\n")).toContain(expected);
+    }
+  });
+}
