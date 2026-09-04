@@ -20,9 +20,23 @@ const SEED_ENV = "RONDO_TEST_SEED";
 /** Largest seed accepted. Keeps the value printable and shell-safe. */
 const SEED_MAX = 2_147_483_647;
 
+/**
+ * Whether this is a CI run.
+ *
+ * `CI` unset, empty, `"false"` or `"0"` all mean "not CI". Testing only for
+ * presence is the obvious spelling and the wrong one: `CI=false` is an
+ * established way of saying "do not behave as CI" -- several hosts and editor
+ * integrations export it -- and under a presence test that value would turn the
+ * seed from optional into mandatory and refuse to run the suite at all.
+ */
+function inContinuousIntegration(): boolean {
+  const raw = process.env.CI;
+  return raw !== undefined && raw !== "" && raw !== "false" && raw !== "0";
+}
+
 function resolveSeed(): number {
   const raw = process.env[SEED_ENV];
-  const inCI = process.env.CI !== undefined && process.env.CI !== "";
+  const inCI = inContinuousIntegration();
 
   if (raw === undefined || raw === "") {
     if (inCI) {

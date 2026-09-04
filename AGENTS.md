@@ -18,8 +18,10 @@ in, deliberately.
 So the thing to check before starting is not "does this fit the architecture" —
 it is **"has the decision this depends on been taken?"** Most of rondo's design
 lives in cadenza's `docs/design/conductor.md` section 11 as open rows (`C-1` …
-`C-17`), and a row that is still open is not a licence to choose. Ask on the
-issue rather than choosing.
+`C-16`), and a row that is still open is not a licence to choose. Ask on the
+issue rather than choosing. `C-17` is the one row there that is *not* open: it
+was decided at cadenza's human gate on 2026-09-05 (cadenza `D-0029`), and it is
+why this repository exists.
 
 ## 2. rondo consumes continuo and cadenza — and today it consumes neither (D-0001)
 
@@ -102,10 +104,14 @@ rondo has no behaviour. Two habits keep it worth its runtime:
 The sweep generates its cases from a directory walk, so its failure mode is
 finding nothing and reporting a clean tree. `PLANTED` inside the file guards
 that from the inside, and the `boundary-is-not-vacuous` CI job guards it from
-the outside by writing a real violating module and requiring the suite to go
-red. **If you change how modules are discovered, run that job's steps by hand
-before pushing** — a green suite over an empty walk looks exactly like a green
-suite.
+the outside by writing a real violating module and requiring the suite to go red
+*with both of that module's violations named in the output* — a red run for some
+other reason fails the job too, because it would certify nothing.
+`boundary-is-not-vacuous` is the YAML job id; the check name GitHub shows, and
+the string a required-checks ruleset would name, is
+`a planted violation makes the boundary test fail`. **If you change how modules
+are discovered, run its steps by hand before pushing** — a green suite over an
+empty walk looks exactly like a green suite.
 
 ## 6. Anything rondo prints is ASCII (D-0004)
 

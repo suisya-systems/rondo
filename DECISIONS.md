@@ -168,14 +168,25 @@ runs (`ok via .js specifier: 70 exports`), so cadenza is not *impossible* to con
 consumable only by compiling a dependency's source, through an unversioned internal path, behind a
 runtime loader. That is a dependency rondo declines to take, not one it cannot take.
 
-**The one-line diagnosis, and why it is an escalation.** On a throwaway clone of continuo in
+**The one-line diagnosis — and why it is not an escalation.** On a throwaway clone of continuo in
 scratch — the real checkout untouched — adding `"prepare": "npm run build"` and installing that
 copy as a git dep produced `dist/`, a resolvable bare import with 814 named exports,
-`dist/index.d.ts`, and a linked `node_modules/.bin/continuo`. **That change is not made here.** It
-belongs to continuo's gate, and is raised there.
+`dist/index.d.ts`, and a linked `node_modules/.bin/continuo`. So the diagnosis is exact and the fix
+is one line.
 
-It also carries a property rondo would inherit and should not want. Measured independently for this
-entry, on a minimal package built for the purpose:
+**continuo's gate has already refused that line, and for this reason.** `continuo D-0045` rejects
+the git-dependency shape outright and chooses `prepack` over `prepare` in its own words:
+
+> `prepack` is deliberately **not** `prepare`: `prepare` is what npm runs when a *consumer*
+> installs a git dependency, and adding it would collide with `D-0009`'s `--ignore-scripts` install
+> policy.
+
+That is a decision taken before this measurement existed, and the measurement below independently
+reproduces the fact it rests on. Asking continuo for `prepare` would be asking it to reverse a
+decision on evidence it already has, so it is **not** on the escalation list; option (a) is closed
+at continuo's end, not merely unimplemented at rondo's.
+
+Here is that fact, measured for this entry on a minimal package built for the purpose:
 
 ```
 npm install --ignore-scripts "git+file://<scratch>/lib#4bfbce7"   ->  added 1 package in 600ms
@@ -186,7 +197,8 @@ node -e 'import("prepare-probe-lib")...'                          ->  import ok:
 **`--ignore-scripts` does not suppress a git dependency's `prepare` on npm 10.9.2.** The upstream
 build ran and produced `dist/` under the flag whose entire purpose is to stop upstream code
 executing on install (D-0007). A git dependency on continuo would therefore run continuo's build in
-rondo's CI *despite* rondo's install policy. The fix and the hazard are the same line.
+rondo's CI *despite* rondo's install policy. The fix and the hazard are the same line — which is
+what `continuo D-0045` says, reached from continuo's side and confirmed here from rondo's.
 
 ### Option (b) — a workspace or `file:` link to the sibling checkouts: **partial for continuo, fails for cadenza**
 
@@ -214,11 +226,13 @@ Two refinements were tried, and neither saves the option:
   three files. The install prints `added 6 packages ... found 0 vulnerabilities` and the import
   still dies on `dist/index.js` — a nastier failure than the symlink form, because it looks
   correct.
-- **npm workspaces** crashes npm 10.9.2 during fresh resolution
-  (`Cannot read properties of null (reading 'edgesOut')` in arborist `#loadPeerSet`) but installs
-  fine from a committed lockfile, and works under npm 12.0.2. The crash is therefore not the
-  blocker; the blocker is that workspaces require the sibling sources to live *inside* the rondo
-  checkout.
+- **npm workspaces** hit `Cannot read properties of null (reading 'edgesOut')` in arborist
+  `#loadPeerSet` on npm 10.9.2, installed fine from a committed lockfile, and worked under npm
+  12.0.2. That crash is **not a property of the workspace form**: it is the same arborist bug that
+  any fresh `npm install` of rondo's own manifest hits on that npm (D-0007 records it from the
+  other side), so it is a toolchain fact that happened to be met here rather than evidence about
+  workspaces. The actual blocker is structural: workspaces require the sibling sources to live
+  *inside* the rondo checkout.
 
 The decisive property is the lockfile. A `file:` dependency records a path and nothing else —
 `"resolved": "../../../../home/happy_ryo/work/org/workers/continuo", "link": true` — with no
@@ -301,9 +315,11 @@ weak evidence but not zero.
 ### What (c) costs, stated plainly
 
 - **No types across the seam.** rondo gets prose on stdout and an exit code, not `Run`, `Gate` or
-  `Fence` types. `--json` exists on `attention scan`, `settings generate` and `settings show` and
-  nowhere else, so `run`, `lap`, `gate`, `db` and `measure` answer in English sentences. Only the
-  exit-code convention (0 success, 2 refusal) is dependable.
+  `Fence` types. At the pinned sha, `--json` is declared in exactly three places —
+  `src/attention/cli.ts` (`attention scan`), and twice in `src/settings/cli.ts`, on
+  `settings show --explain` and on `sandbox doctor`. Not on `settings generate`. So every verb a
+  host would actually drive — `run`, `lap`, `gate`, `db`, `measure` — answers in English
+  sentences, and only the exit-code convention (0 success, 2 refusal) is dependable.
 - **Provenance is rondo's problem.** `continuo --version` prints the compile-time literal `0.0.0`
   (`src/about.ts`) for every revision on `main`, so the seam is silent about which continuo this
   is. rondo records the checkout's sha itself. This is `cadenza C-14`, owned in full rather than
@@ -336,9 +352,9 @@ continuo's own gates can weigh them:
   `{".": {"types": "./dist/index.d.ts", "default": "./dist/index.js"}}`), a `"build"` script, a
   `"files"` list, and a new `tsconfig.build.json` with `noEmit: false`. Today cadenza has no entry
   point of any kind, which is why every option fails for it.
-- **continuo** `package.json`: `"prepare": "npm run build"` — the single line that makes the git
-  dependency work — **and** the reason not to want it, since `--ignore-scripts` does not suppress
-  it (measured above).
+- **continuo**: *nothing about `prepare`.* It is the one change that would make option (a) work and
+  `continuo D-0045` has already refused it, on the ground this entry independently measured. The
+  escalation would be a request to un-decide something, which is not what an escalation is for.
 - **continuo** `src/about.ts` / `src/cli.ts`: make `--version` carry the build's git revision, or
   add a `build-info --json` subcommand, so `cadenza C-14` is answerable across the seam rather than
   out of band.
@@ -510,6 +526,17 @@ independent ways.
 re-export, via `require`, via `import x = require()`, in an `import("...")` type node, or in a
 triple-slash directive is still an import for the purpose of a boundary. Importing the tree would
 see none of them — and would also run it.
+
+**Why an allowlist over imports is not sufficient on its own.**
+`process.getBuiltinModule("node:http")` takes a module without importing anything, because
+`process` is a global — so an allowlist consulted only on imports would never be consulted at all,
+and the loop's "empty allowance" would have been empty in the wrong sense. The sweep therefore also
+reads calls that return a module (`require`, `getBuiltinModule`, `createRequire`, matched on the
+callee's *last name segment* so a member expression does not evade it) and calls that turn text
+into code (`eval`, the `Function` constructor), and runs both through the same allowance. The walk
+covers `.js`, `.mjs` and `.cjs` under `src/` for a sibling reason: `allowJs` is off, so a
+JavaScript module there is type-checked by nothing, and this sweep is the only check that reaches
+it.
 
 **Why allowlists.** A denylist answers "no" only for what it was told about. `src/refrain/`'s
 external allowance is empty, which refuses `node:http`, a browser driver, an agent SDK, continuo's

@@ -23,6 +23,17 @@
  * `scripts/lib/ts-ast.mjs` is the parser; DECISIONS.md D-0006 records why the
  * check is a test over the syntax tree rather than a lint rule.
  *
+ * **An allowlist over imports is not by itself enough**, and the reason is
+ * worth stating because it is not obvious: `process.getBuiltinModule("node:http")`
+ * needs no import at all. `process` is a global, so a module could take
+ * `node:http`, `node:vm` or `node:child_process` while importing nothing, and
+ * an allowlist consulted only on imports would never be consulted. So the sweep
+ * also reads *calls* that hand back a module (`MODULE_RETURNING_CALLS`) and
+ * calls that turn text into code (`CODE_FROM_TEXT_CALLS`), and puts both
+ * through the same allowance. The walk covers JavaScript spellings under `src/`
+ * for the same reason: `allowJs` is off, so a `.mjs` module there is
+ * type-checked by nothing and this sweep is the only thing that reaches it.
+ *
  * **What keeps this from passing vacuously.** The per-module cases are
  * generated from a directory walk, and a walk that found nothing would generate
  * nothing -- and a suite of zero assertions is green. Three things stop that:
@@ -34,7 +45,9 @@
  *    `UNLAYERED_MODULES`, so a new top-level directory is an offender until
  *    somebody decides what it is;
  *  - the detector is run against `PLANTED`, a corpus of hand-written violations
- *    attributed to modules that do not exist on disk. Each one must be caught,
+ *    attributed to module paths -- mostly ones that do not exist on disk, and
+ *    a few real ones, where the case needs that module's actual allowance to be
+ *    in play. Each one must be caught,
  *    and the clean controls beside them must not be, so a detector that had
  *    stopped detecting -- or started refusing everything -- fails here before
  *    it can report a clean tree.
@@ -64,7 +77,7 @@ const sourceOf = (module: string): string => readFileSync(join(ROOT, module), "u
 /**
  * What each layer may import from inside `src/`.
  *
- * Read the table as the arrows of Issue #1's item 3. `src/access` names
+ * Read the table as the arrows of Issue #1's item 2. `src/access` names
  * `src/refrain`; `src/refrain` does not name `src/access`, and that asymmetry
  * *is* claim 2 -- an access point may reach the loop, and the loop may never
  * reach back. `src/store` names only itself, so the durable layer cannot come
@@ -124,13 +137,13 @@ const ALLOWED_FOR_UNLAYERED: readonly string[] = Object.keys(ALLOWED_INTERNAL_BY
  * state of every module in the tree but one, and it is what makes
  * `src/refrain/`'s boundary total rather than a list of names.
  *
- * Bindings are named one by one, and the sentinels in `Binding` below are
+ * Bindings are named one by one, and the sentinels defined below are
  * deliberately unspellable here: a namespace import, a default import, a
- * side-effect import, a `require`, a dynamic `import()` and a computed
- * specifier all reduce to a sentinel, none of which can appear in an
- * allowlist, so all six fail closed. The reason is that none of them can be
- * checked binding by binding -- `import * as fs from "node:fs"` grants the
- * whole module under a name this scan cannot follow.
+ * side-effect import, a whole-module re-export, a `require`, a dynamic
+ * `import()` and a computed specifier all reduce to a sentinel, and no sentinel
+ * can appear in an allowlist, so every one of them fails closed. The reason is
+ * that none of them can be checked binding by binding -- `import * as fs from
+ * "node:fs"` grants the whole module under a name this scan cannot follow.
  */
 const ALLOWED_EXTERNALS_BY_MODULE: Readonly<
   Record<string, Readonly<Record<string, readonly string[]>>>
@@ -178,8 +191,42 @@ const EXPECTED_MODULES: readonly string[] = [
   "src/store/sqlite.ts",
 ];
 
-/** Extensions the walk treats as modules. */
-const MODULE_EXTENSIONS = [".ts", ".mts", ".cts", ".tsx"];
+/**
+ * Extensions the walk treats as modules.
+ *
+ * JavaScript spellings are here as well as TypeScript ones, and they are the
+ * interesting half. `tsconfig.json` has `allowJs` off, so a hand-written
+ * `src/refrain/helper.mjs` would be type-checked by nothing — and if the walk
+ * skipped it too, it would be the one file in the tree that could import
+ * anything at all, in the layer whose whole point is that it cannot. The walk
+ * is the only check that reaches it, so it has to.
+ */
+const MODULE_EXTENSIONS = [".ts", ".mts", ".cts", ".tsx", ".js", ".mjs", ".cjs", ".jsx"];
+
+/**
+ * How a discovered module is presented to the parser.
+ *
+ * The parser takes its grammar from the extension, and a `.mjs` file is ESM
+ * TypeScript-superset source for the purpose of reading its imports, so it is
+ * parsed as `.mts`. The mapping is only about which grammar to use; the module
+ * keeps its real path everywhere else, including in every message.
+ */
+const PARSE_AS: Readonly<Record<string, string>> = {
+  ".js": ".ts",
+  ".jsx": ".tsx",
+  ".mjs": ".mts",
+  ".cjs": ".cts",
+};
+
+/** The name to parse `module` under, so the right grammar is chosen. */
+function parseNameOf(module: string): string {
+  for (const [actual, grammar] of Object.entries(PARSE_AS)) {
+    if (module.endsWith(actual)) {
+      return `${module.slice(0, -actual.length)}${grammar}`;
+    }
+  }
+  return module;
+}
 
 /** Relative specifiers must carry one of these; NodeNext requires the suffix. */
 const RUNTIME_SUFFIXES: ReadonlyArray<readonly [string, readonly string[]]> = [
@@ -222,6 +269,58 @@ const SIDE_EFFECT = "<side-effect import>";
 const WHOLE_MODULE = "<whole module>";
 const COMPUTED_SPECIFIER = "<computed specifier>";
 
+/**
+ * Calls that hand back a module, whatever they are spelled through.
+ *
+ * `require` is the obvious one. `getBuiltinModule` is the one that made this a
+ * set rather than a string comparison: `process.getBuiltinModule("node:http")`
+ * needs **no import at all** — `process` is a global — so a module under
+ * `src/refrain/` could take `node:http`, `node:vm` or `node:child_process`
+ * while importing nothing, and an allowlist over imports would have had nothing
+ * to be consulted about. `createRequire` manufactures a `require` under any
+ * name the caller likes, which is why it is here as well as being unimportable
+ * (`node:module` is not in any allowance).
+ *
+ * The match is on the **last name segment** of the callee, so
+ * `process.getBuiltinModule(...)`, `globalThis.process.getBuiltinModule(...)`
+ * and a destructured-then-renamed `const g = process.getBuiltinModule` all
+ * reduce to the same answer for the first two shapes. The third — a call
+ * through a local alias — is scope analysis and is not attempted; what closes
+ * it is that the alias has to be *written*, and writing
+ * `process.getBuiltinModule` at all is caught here at the point of the read.
+ */
+const MODULE_RETURNING_CALLS: ReadonlySet<string> = new Set([
+  "require",
+  "getBuiltinModule",
+  "createRequire",
+]);
+
+/**
+ * Calls that turn text into code.
+ *
+ * They name no module, which is the point: whatever they evaluate can name any
+ * module, and no scan over syntax can see it. They are recorded as a computed
+ * specifier so they fail with the message that says so.
+ */
+const CODE_FROM_TEXT_CALLS: ReadonlySet<string> = new Set(["eval", "Function", "runInThisContext"]);
+
+/** The last name segment of a callee expression, or null when there is none. */
+function calleeName(expression: ts.Expression): string | null {
+  if (ts.isIdentifier(expression)) {
+    return expression.text;
+  }
+  if (ts.isPropertyAccessExpression(expression)) {
+    return expression.name.text;
+  }
+  if (ts.isElementAccessExpression(expression)) {
+    const argument = expression.argumentExpression;
+    return ts.isStringLiteral(argument) || ts.isNoSubstitutionTemplateLiteral(argument)
+      ? argument.text
+      : null;
+  }
+  return null;
+}
+
 interface ImportRef {
   /** As written in the source. */
   readonly specifier: string;
@@ -241,7 +340,7 @@ interface ImportRef {
  * than in the tree, so the walk below would never see it.
  */
 function importsIn(source: string, from: string): ImportRef[] {
-  const tree = parseSourceFile(from, source);
+  const tree = parseSourceFile(parseNameOf(from), source);
   const found: ImportRef[] = [];
   const directory = dirname(from);
 
@@ -281,11 +380,15 @@ function importsIn(source: string, from: string): ImportRef[] {
       // `export * from` and `export * as ns from` take the whole module; a
       // named re-export takes exactly what it names.
       const clause = node.exportClause;
-      const names =
+      const named =
         clause !== undefined && ts.isNamedExports(clause)
           ? clause.elements.map((element) => element.propertyName?.text ?? element.name.text)
           : [WHOLE_MODULE];
-      record(node.moduleSpecifier.text, names);
+      // `export {} from "m"` binds nothing and still executes the module, the
+      // same as `import {} from "m"`. Without this fallback an empty element
+      // list produces an empty name list, the per-name loop below runs zero
+      // times, and the import passes with no allowance consulted at all.
+      record(node.moduleSpecifier.text, named.length === 0 ? [SIDE_EFFECT] : named);
     } else if (
       ts.isImportEqualsDeclaration(node) &&
       ts.isExternalModuleReference(node.moduleReference) &&
@@ -299,11 +402,11 @@ function importsIn(source: string, from: string): ImportRef[] {
     ) {
       record(node.argument.literal.text, [WHOLE_MODULE]);
     } else if (ts.isCallExpression(node)) {
-      const callee = node.expression;
       const argument = node.arguments[0];
+      const callee = calleeName(node.expression);
       const reachesAModule =
-        callee.kind === ts.SyntaxKind.ImportKeyword ||
-        (ts.isIdentifier(callee) && callee.text === "require");
+        node.expression.kind === ts.SyntaxKind.ImportKeyword ||
+        (callee !== null && MODULE_RETURNING_CALLS.has(callee));
       if (reachesAModule) {
         // A no-substitution template is a literal with different quotes and is
         // read as one. Anything else -- a variable, a concatenation, a template
@@ -314,6 +417,15 @@ function importsIn(source: string, from: string): ImportRef[] {
             ? argument.text
             : COMPUTED_SPECIFIER;
         record(literal, [WHOLE_MODULE]);
+      } else if (callee !== null && CODE_FROM_TEXT_CALLS.has(callee)) {
+        // `eval` and friends do not name a module, which is exactly the
+        // problem: they turn a string into code that can name anything.
+        record(COMPUTED_SPECIFIER, [WHOLE_MODULE]);
+      }
+    } else if (ts.isNewExpression(node)) {
+      const callee = calleeName(node.expression);
+      if (callee !== null && CODE_FROM_TEXT_CALLS.has(callee)) {
+        record(COMPUTED_SPECIFIER, [WHOLE_MODULE]);
       }
     }
     node.forEachChild(visit);
@@ -335,16 +447,40 @@ function importsIn(source: string, from: string): ImportRef[] {
   for (const reference of tree.referencedFiles) {
     record(reference.fileName, [WHOLE_MODULE]);
   }
+  // The third of the three reference arrays, and the one that is easy to miss:
+  // `reference lib="dom"` pulls the entire browser type surface into a module
+  // without naming a package, which is precisely the hazard `src/refrain/`'s
+  // empty allowance exists to refuse.
+  for (const reference of tree.libReferenceDirectives) {
+    record(reference.fileName, [WHOLE_MODULE]);
+  }
 
   return found;
 }
 
-/** A relative specifier as a repo-relative path, or null when it is bare. */
+/**
+ * A relative specifier as a repo-relative path, or null when it is bare.
+ *
+ * `join`, not `resolve`. `resolve` makes the result absolute, and on Windows
+ * "absolute" means a drive letter: `resolve("/", "src/refrain",
+ * "../store/records.js")` is `C:\src\store\records.js` there and
+ * `/src/store/records.js` here. Normalising slashes and stripping a leading
+ * `/` cleans up the second and leaves the first as `C:/src/store/records.js`,
+ * which starts with no layer prefix -- so **every relative import in the tree
+ * would be reported as outside its allowance, and only on the Windows cell**.
+ * `join` stays relative and gives the same string on both platforms.
+ *
+ * A specifier that climbs out of the tree lands in no layer and so matches no
+ * allowance, which is the right answer. It does not necessarily keep a visible
+ * `..`: `join` normalises, so from `src/refrain` the specifier
+ * `../../elsewhere.js` is simply `elsewhere.js` -- at the repository root, in no
+ * layer, refused. Only a climb past the root keeps one.
+ */
 function resolveRelative(specifier: string, directory: string): string | null {
   if (!specifier.startsWith(".")) {
     return null;
   }
-  return slash(resolve("/", directory, specifier)).replace(/^\//, "");
+  return slash(join(directory, specifier));
 }
 
 // --- the detector -----------------------------------------------------------
@@ -459,6 +595,25 @@ function violationsIn(module: string, source: string): string[] {
 test("the walk still finds every module this file claims to guard", () => {
   expect(MODULES).toEqual(expect.arrayContaining([...EXPECTED_MODULES]));
   expect(MODULES.length).toBeGreaterThanOrEqual(EXPECTED_MODULES.length);
+});
+
+test("a resolved specifier is a repo-relative posix path on every platform", () => {
+  // The regression this pins is invisible on Linux and fatal on Windows: an
+  // absolute resolution there carries a drive letter, and a drive letter makes
+  // every relative import in the tree fail its allowance check at once. The
+  // Windows cell is required (D-0004's neighbours in ci.yml), so this case is
+  // the local half of a guarantee only CI can finish.
+  const resolved = resolveRelative("../store/records.js", "src/refrain");
+  expect(resolved).toBe("src/store/records.js");
+  expect(resolved).not.toMatch(/[\\:]/);
+  // Bare specifiers are not paths and must stay null, or the external
+  // allowlist below would never be consulted.
+  expect(resolveRelative("node:sqlite", "src/store")).toBeNull();
+  // Climbing out of the tree lands in no layer and so matches no allowance --
+  // normalised to a bare name at the repository root, or to a real `..` beyond
+  // it. Both are refused; neither is asserted to look like the other.
+  expect(resolveRelative("../../elsewhere.js", "src/refrain")).toBe("elsewhere.js");
+  expect(resolveRelative("../../../elsewhere.js", "src/refrain")).toBe("../elsewhere.js");
 });
 
 test("every module under src/ is in a layer or is named as unlayered", () => {
@@ -627,6 +782,70 @@ const PLANTED: ReadonlyArray<
     "which it is not granted",
   ],
   [
+    // The route that needs no import at all: `process` is a global, so an
+    // allowlist over imports has nothing to be consulted about. This is the
+    // case `MODULE_RETURNING_CALLS` exists for.
+    "process-getBuiltinModule-still-counts",
+    "src/refrain/probe.ts",
+    'export const server = process.getBuiltinModule("node:http");\n',
+    "which it is not granted",
+  ],
+  [
+    "process-getBuiltinModule-cannot-launder-sqlite",
+    "src/access/probe.ts",
+    'export const db = process.getBuiltinModule("node:sqlite");\n',
+    "is the one module that owns durable state",
+  ],
+  [
+    "a-require-through-a-member-expression-still-counts",
+    "src/refrain/probe.ts",
+    'export const x = globalThis.require("node:http");\n',
+    "which it is not granted",
+  ],
+  [
+    "createRequire-manufacturing-a-loader-fails-closed",
+    "src/refrain/probe.ts",
+    "declare const m: { createRequire(u: string): (id: string) => unknown };\nexport const load = m.createRequire(import.meta.url);\n",
+    "cannot read",
+  ],
+  [
+    "eval-fails-closed",
+    "src/refrain/probe.ts",
+    "export const x = eval(\"require('node:http')\");\n",
+    "cannot read",
+  ],
+  [
+    "the-Function-constructor-fails-closed",
+    "src/refrain/probe.ts",
+    "export const x = new Function(\"return process.getBuiltinModule('node:http')\");\n",
+    "cannot read",
+  ],
+  [
+    "a-lib-reference-still-counts",
+    "src/refrain/probe.ts",
+    '/// <reference lib="dom" />\nexport const x = 1;\n',
+    "which it is not granted",
+  ],
+  [
+    // Attributed to the SQLite owner on purpose: it is the one module with a
+    // non-empty allowance, so the ungranted-external check does not fire first
+    // and the empty binding list is what actually has to be caught. Pointed at
+    // any other module this case would have passed for the wrong reason.
+    "an-empty-named-re-export-still-counts",
+    "src/store/sqlite.ts",
+    'export {} from "node:sqlite";\n',
+    "takes <side-effect import> from node:sqlite",
+  ],
+  [
+    // A JavaScript module under src/ is type-checked by nothing, so the sweep
+    // is the only thing that reaches it. It is parsed under a TypeScript
+    // grammar and reported under its real path.
+    "a-javascript-module-under-src-is-swept-too",
+    "src/refrain/helper.mjs",
+    'import { createServer } from "node:http";\nexport const x = createServer;\n',
+    "src/refrain/helper.mjs imports the external module node:http",
+  ],
+  [
     "a-computed-specifier-fails-closed",
     "src/refrain/probe.ts",
     'const name = "node:" + "http";\nexport const x = await import(name);\n',
@@ -684,7 +903,7 @@ test("the planted corpus exercises the detector in both directions", () => {
   const clean = PLANTED.filter(([, , , expected]) => expected === null);
   // A corpus that lost its controls, or lost its violations, would still pass
   // every case below by agreeing with itself.
-  expect(caught.length).toBeGreaterThanOrEqual(20);
+  expect(caught.length).toBeGreaterThanOrEqual(30);
   expect(clean.length).toBeGreaterThanOrEqual(4);
   expect(new Set(PLANTED.map(([id]) => id)).size).toBe(PLANTED.length);
 });

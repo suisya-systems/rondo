@@ -20,8 +20,11 @@ currently held in two places that already exist and are maintained:
 
 - **cadenza's `docs/design/conductor.md`** is the design of the loop rondo will
   host. Its section 11 is the open-decision table; `C-17` is the row that
-  created this repository, and `C-8`, `C-9` and `C-14` are the rows
-  [`D-0001`](../DECISIONS.md) answers for rondo's side of the seam.
+  created this repository (decided at cadenza's human gate on 2026-09-05,
+  cadenza `D-0029`), and `C-8` and `C-14` are the rows
+  [`D-0001`](../DECISIONS.md) answers for rondo's side of the seam. `C-9` is
+  deliberately not in that list: it asks what it would cost *cadenza* to take
+  the npm dependency, and `C-17` removed its antecedent.
 - **continuo's `DECISIONS.md`** owns the control plane rondo drives, including
   `continuo D-0045` (publication), which is the event that would supersede
   D-0001.
@@ -38,6 +41,6 @@ it fails rather than being read:
 
 | Rule | Where it is enforced |
 |---|---|
-| The loop imports no HTTP, browser, session provider or continuo internals; access points may import the loop and never the reverse; one module owns SQLite | [`../test/architecture/import-boundaries.test.ts`](../test/architecture/import-boundaries.test.ts), and `boundary-is-not-vacuous` in [`../.github/workflows/ci.yml`](../.github/workflows/ci.yml) |
+| The loop imports no HTTP, browser, session provider or continuo internals; access points may import the loop and never the reverse; exactly one module under `src/` owns SQLite | [`../test/architecture/import-boundaries.test.ts`](../test/architecture/import-boundaries.test.ts), and the `boundary-is-not-vacuous` job — check name "a planted violation makes the boundary test fail" — in [`../.github/workflows/ci.yml`](../.github/workflows/ci.yml) |
 | The suite is green twice per cell under two distinct random orders | `double-green` in the CI workflow, configured in [`../vitest.config.ts`](../vitest.config.ts) |
 | Nothing is installed except from the lockfile, with `--ignore-scripts` | `npm ci --ignore-scripts` in every CI job |

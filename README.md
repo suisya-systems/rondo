@@ -24,8 +24,10 @@ Most of those wait on open rows in cadenza's `docs/design/conductor.md` section
 document's `C-17`, taken in cadenza#40 on 2026-09-05, and it is why this
 repository exists.
 
-`npm ci --ignore-scripts && npm run verify` is green, on Linux, macOS and
-Windows, on Node 22 and Node 24.
+`npm ci --ignore-scripts && npm run verify` is the whole of verification. CI
+runs it on ubuntu and windows, on Node 22 and Node 24 — macOS is deliberately
+not in the matrix, because nothing here is platform-specific in a way the
+Windows cell does not already exercise harder.
 
 ## How it relates to continuo and cadenza
 
@@ -53,8 +55,8 @@ For **lap 1**:
   change inside cadenza — a build script, an `exports` map, a `files` list — or
   rondo compiling cadenza's source through a deep, unversioned internal path
   with a TypeScript loader at runtime. The first belongs to cadenza's gate and
-  has been raised there rather than patched here; the second is not a dependency
-  rondo will take on. Until then, the parts of cadenza rondo needs are reached
+  is escalated rather than patched here — D-0001 names the exact fields; the
+  second is not a dependency rondo will take on. Until then, the parts of cadenza rondo needs are reached
   through continuo or restated at rondo's own boundary.
 
 What changes this: **publication**. When continuo is published to a registry
@@ -68,7 +70,7 @@ consumer — and D-0001 is superseded rather than amended.
 |---|---|
 | `src/refrain/` | The loop. Imports nothing external, ever — that is the boundary. |
 | `src/access/` | Access points: the web UI and the localhost MCP surface, when they exist. May reach the loop; the loop may not reach back. |
-| `src/store/` | Durable state. `sqlite.ts` is the one module in the repository allowed to name a SQLite driver. |
+| `src/store/` | Durable state. `sqlite.ts` is the one module under `src/` allowed to name a SQLite driver, which is the scope the test enforces. |
 | `test/architecture/` | The test that enforces the three sentences above. |
 | `DECISIONS.md` | The append-only design record. Cite by ID. |
 | `AGENTS.md` | How work here is done. |
