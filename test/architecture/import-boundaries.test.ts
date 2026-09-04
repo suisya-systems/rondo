@@ -539,8 +539,14 @@ function scanModule(source: string, from: string): ModuleScan {
     // reader dedupes.
     if (ts.isIdentifier(node) && FORBIDDEN_GLOBALS.has(node.text)) {
       problemsFromGlobals.push(node.text);
-    } else if (ts.isPropertyAccessExpression(node) && FORBIDDEN_GLOBALS.has(node.name.text)) {
-      problemsFromGlobals.push(node.name.text);
+    } else if (ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node)) {
+      // Through `calleeName`, so both member syntaxes are one answer:
+      // `globalThis.fetch` and `globalThis["fetch"]` are the same access, and
+      // covering only the dotted one would be covering a spelling.
+      const member = calleeName(node);
+      if (member !== null && FORBIDDEN_GLOBALS.has(member)) {
+        problemsFromGlobals.push(member);
+      }
     }
 
     if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier)) {
@@ -1171,6 +1177,12 @@ const PLANTED: ReadonlyArray<
     "names the ambient global fetch",
   ],
   [
+    "the-loop-cannot-fetch-through-a-bracket",
+    "src/refrain/probe.ts",
+    'export const get = async (): Promise<Response> => globalThis["fetch"]("https://example.com");\n',
+    "names the ambient global fetch",
+  ],
+  [
     "an-access-point-cannot-fetch-either-without-saying-so",
     "src/access/probe.ts",
     'export const socket = (): WebSocket => new WebSocket("wss://example.com");\n',
@@ -1224,7 +1236,7 @@ test("the planted corpus exercises the detector in both directions", () => {
   const clean = PLANTED.filter(([, , , expected]) => expected === null);
   // A corpus that lost its controls, or lost its violations, would still pass
   // every case below by agreeing with itself.
-  expect(caught.length).toBeGreaterThanOrEqual(41);
+  expect(caught.length).toBeGreaterThanOrEqual(42);
   expect(clean.length).toBeGreaterThanOrEqual(6);
   expect(new Set(PLANTED.map(([id]) => id)).size).toBe(PLANTED.length);
 });
