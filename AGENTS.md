@@ -90,6 +90,12 @@ Consequences for anyone adding code here:
   by `report_kind`. **`gate close` has no `--json` at all** and rejects the flag
   at the top level — drive it as an opaque exit code and confirm with
   `gate show --json`; never parse its prose (D-0015 rule 5).
+- **Relaying continuo's prose is not relaying continuo's bytes** (D-0015 rule
+  7). Pass its words through unedited, but escape them to ASCII before printing:
+  continuo echoes `--db` verbatim and unconstrained, so a non-ASCII path or gate
+  id arrives as non-ASCII on stderr, and section 6 below is what that would
+  break. Escaping is transport; parsing is meaning. Do the first, never the
+  second.
 
 ## 3. Decisions go in `DECISIONS.md`
 

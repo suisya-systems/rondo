@@ -1241,7 +1241,8 @@ correction to an old one.
    proceed, not a value to coerce.
 3. **The host contract is three-valued, and rondo implements all three.** Exit 0: parse stdout.
    Exit 2: stderr holds the reason, which is *either* an envelope *or* argparse prose, so the
-   decoder must tolerate a non-document and fall back to surfacing the bytes verbatim. Any other
+   decoder must tolerate a non-document and fall back to surfacing continuo's own words under rule
+   7 rather than inventing a diagnosis of its own. Any other
    status: continuo was called wrong or the process failed, stderr is text, and rondo treats it as
    its own defect.
 4. **`measure report` is special-cased by name.** Exit 0 plus stdout is an unwrapped report
@@ -1255,6 +1256,22 @@ correction to an old one.
    driven verb, and persists the *observed* revision per run. A mismatch against the pin, the
    literal `unknown`, or a `-dirty` suffix is a startup refusal — never silently replaced with the
    expected sha.
+7. **Upstream bytes are relayed unedited in content, but escaped before rondo prints them.**
+   continuo's prose — an argparse refusal, `gate close`'s `error:` line, an exit-1 stack — is
+   passed through without interpretation, summary or reword; rondo adds nothing and drops nothing.
+   It is *not* passed through without encoding. Anything rondo writes to a terminal is ASCII
+   (D-0004), and D-0004's reason bites hardest exactly here: the Windows cell's console may be
+   cp932, where an unencodable character crashes the writer rather than printing badly, and
+   vitest's UTF-8 capture means no test of rondo's own would catch it.
+
+   This is not hypothetical. continuo echoes `--db` **verbatim and deliberately unconstrained** —
+   `continuo D-0090` says so, and it is why continuo wrote an ASCII encoder for the JSON path. That
+   encoder covers the envelope only. The prose paths rule 3 and rule 5 fall back to have no such
+   guard, so a non-ASCII database path, workspace, gate id or operator-typed value reaches rondo as
+   non-ASCII bytes on stderr. So rondo escapes non-ASCII to a printable form on the way out. The
+   distinction the rule turns on is that **escaping is a property of the transport and parsing is a
+   property of the meaning**: rondo may re-encode continuo's characters, and may not decide what
+   they say.
 
 ### What was measured, and how
 
@@ -1473,11 +1490,12 @@ separate read.** Not by parsing `error: no gate 'nope'`. Three reasons, in order
   close that succeeds and a close that silently does nothing.
 - **A person is already at this call site.** D-0013 puts the verb on the operating surface
   precisely because `closeOpenGate` hard-codes `actorKind: "human"`. The refusal prose is addressed
-  to the operator standing there, and rondo's job is to surface those bytes verbatim, not to
-  interpret them.
+  to the operator standing there, and rondo's job is to relay those words unedited — escaped for
+  the console under rule 7 — not to interpret them.
 
 So: exit 0 means the close was accepted and rondo confirms with `gate show --json`; exit 2 means
-refused and rondo shows the operator continuo's stderr unaltered; any other status is rule 3's
+refused and rondo shows the operator continuo's stderr unedited, escaped under rule 7; any other
+status is rule 3's
 third branch. **The named follow-up for continuo is `--json` on `gate close`** — the verb a host's
 own design drives, excluded from the envelope that every other driven verb carries. rondo does not
 file it; that is the secretary's, and the request is identified here by what it asks for rather
@@ -1541,6 +1559,11 @@ the literal for, so rondo's verification duty follows the artefact rather than t
   the second would widen the exception rule 5 treats as a single named case.
 - **An exit-1 caller defect reaching a human as a stack trace in practice**, which would mean
   rondo's own pre-spawn validation is not covering what rule 3 assumes it covers.
+- **continuo constraining what it echoes**, or growing an ASCII guarantee on its prose paths as it
+  has on the envelope. Rule 7's escaping would then be belt over braces, and the rule should say so
+  rather than continue to imply the hazard is live. The converse also falsifies it: rondo printing
+  an escaped form so mangled that an operator cannot act on continuo's message means the rule
+  bought D-0004 at too high a price and needs a better rendering, not a weaker rule.
 - **`--version` reporting `unknown` or `-dirty` from a build rondo made**, which would mean rule 6's
   build-time guarantee (`CONTINUO_REQUIRE_REVISION=1` on a clean pinned clone) does not hold on some
   machine or CI runner in the matrix — the Windows cell being the one this was not measured on.
