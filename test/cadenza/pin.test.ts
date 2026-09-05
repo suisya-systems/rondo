@@ -161,15 +161,21 @@ describe("the two digests describe the bytes that are committed", () => {
     // `node vendor/pin.mjs check` is the ONLY thing enforcing rule 4 in CI, and
     // a helper that had come to exit 0 unconditionally would satisfy every
     // text assertion above while certifying nothing.
-    const run = (cwd: string): { status: number | null; stderr: string } => {
+    const run = (cwd: string): { status: number | null; stdout: string; stderr: string } => {
       const result = spawnSync(process.execPath, [join("vendor", "pin.mjs"), "check"], {
         cwd,
         encoding: "utf8",
       });
-      return { status: result.status, stderr: result.stderr };
+      return { status: result.status, stdout: result.stdout, stderr: result.stderr };
     };
 
-    expect(run(ROOT).status).toBe(0);
+    const passing = run(ROOT);
+    expect(passing.status).toBe(0);
+    // A pass names the digest it verified, so that by hand it is not a no-op
+    // (lap-1 dogfood F-10). On stdout and not stderr: it is an answer, not a
+    // diagnostic, and a CI log that greps stderr for trouble should stay quiet.
+    expect(passing.stdout).toContain(sha256);
+    expect(passing.stderr).toBe("");
 
     // The same helper, the same tarball, and a digest file that says something
     // else -- which is exactly the drift a warm npm cache would install through
@@ -188,6 +194,9 @@ describe("the two digests describe the bytes that are committed", () => {
     // Both digests, so the diagnosis is readable where npm's EINTEGRITY is not.
     expect(drifted.stderr).toContain(wrong);
     expect(drifted.stderr).toContain(sha256);
+    // And no "is the pinned artifact" line beside the refusal: a drift must not
+    // print the sentence a pass prints.
+    expect(drifted.stdout).toBe("");
 
     // And `record` writes the digest `check` then accepts, so the two halves of
     // the helper cannot drift apart either.

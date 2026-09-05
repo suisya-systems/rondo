@@ -12,9 +12,15 @@
 // else it fails with ENOENT, which is the right direction to fail in: a check
 // that cannot find the tarball must not report that the tarball is fine.
 //
-// ASCII only (D-0004): the diagnostic below is printed on the Windows cell,
+// ASCII only (D-0004): both lines below are printed on the Windows cell,
 // where the console may be cp932 and a character it cannot encode crashes the
 // writer rather than printing badly.
+//
+// A passing check says which digest it verified, on stdout. The exit code is
+// what CI reads and it is unchanged; the line is for a person running the
+// script by hand, to whom a silent exit 0 was indistinguishable from a no-op
+// (docs/operations/lap-1-dogfood.md, F-10). The one fact worth printing is the
+// digest that was checked, because it is the one fact the check established.
 import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
 
@@ -32,4 +38,5 @@ if (process.argv[2] === "record") {
     );
     process.exit(1);
   }
+  console.log(`${TARBALL} is the pinned artifact: sha256 ${actual}`);
 }
