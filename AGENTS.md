@@ -67,11 +67,18 @@ Consequences for anyone adding code here:
   are not: cadenza's `exports` map means a deep path into `src/` is refused
   outright (`ERR_PACKAGE_PATH_NOT_EXPORTED`), and `npm pack` succeeding on a
   built tree says nothing about what a git specifier delivers.
-- **Do not fix a sibling to make rondo's life easier.** If a lap needs
-  `@suisya-systems/cadenza` to be importable, the change belongs in cadenza,
-  through cadenza's own gate. Escalate; do not patch. D-0001's escalation list
-  is largely spent: three of its four requests were carried out at the siblings'
-  gates on 2026-09-05, and the fourth was a request to un-decide something.
+- **If a lap needs something from cadenza, the decision to revisit is D-0016,
+  not D-0001, and it is rondo's gate rather than cadenza's.** cadenza is already
+  importable from a built tarball — that was measured, and 70 values are on the
+  exported surface — so needing one of them requires **no sibling change at
+  all**; what it requires is a decision about delivery, which is D-0016's
+  subject. Take it there. Only a value that is *not* exported (the agent-type
+  record is the known one) is cadenza's question, and D-0016 names it.
+- **Do not fix a sibling to make rondo's life easier.** Where a sibling change
+  genuinely is needed, it goes through that sibling's own gate — escalate, do
+  not patch. D-0001's escalation list is largely spent: three of its four
+  requests were carried out at the siblings' gates on 2026-09-05, and the fourth
+  was a request to un-decide something.
 - When continuo is driven, it is driven as a **subprocess whose revision rondo
   verifies and records** (cadenza `C-14`, D-0015 rule 6). `--version` now
   reports the build's git revision, so provenance is no longer rondo inventing
@@ -80,13 +87,17 @@ Consequences for anyone adding code here:
   literal `unknown`, or a `-dirty` suffix is a startup refusal. Build the pinned
   checkout with `CONTINUO_REQUIRE_REVISION=1` so an unidentifiable build fails
   at build time.
-- **`--json` is a wire protocol, not types.** Ten of continuo's fifteen driven
-  verbs carry it; rondo owns the runtime decoders and converts validated
-  documents into rondo's own records. Three things it does not reach, all of
-  which rondo's callers must handle: parser-level refusals are exit 2 with
-  *prose* rather than a document; an operator-typed bad value (a relative
-  `--workspace`, an empty `--run-id`) escapes as **exit 1 with a raw stack**, so
-  validate before spawning; and `measure report` answers unwrapped, identified
+- **`--json` is a wire protocol, not types.** rondo drives eleven continuo verbs
+  and ten of them carry it. (continuo has fifteen in the surveyed set; the other
+  four — `gate present`, `deliver`, `ack`, `reconcile` — are human-only and
+  rondo drives none of them, so their lack of `--json` is not rondo's gap.)
+  rondo owns the runtime decoders and converts validated documents into rondo's
+  own records. Three things the flag does not reach, all of which rondo's
+  callers must handle: parser-level refusals are exit 2 with *prose* rather than
+  a document; a malformed operator value escapes as **exit 1 with a raw stack**,
+  so validate **every** operator-supplied value before spawning — `--run-id`,
+  `--workspace`, `--base-branch`, `--topic-branch`, `--lease-claimant-id` and
+  `--actor-id` are the known ones; and `measure report` answers unwrapped, identified
   by `report_kind`. **`gate close` has no `--json` at all** and rejects the flag
   at the top level — drive it as an opaque exit code and confirm with
   `gate show --json`; never parse its prose (D-0015 rule 5).

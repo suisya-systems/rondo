@@ -1414,10 +1414,20 @@ introduced it:
 | `gate list`, `gate show`, `gate answer` | yes |
 | `lap perform` | yes |
 | `measure report` | yes (unwrapped) |
-| `gate close`, `gate present`, `gate deliver`, `gate ack`, `gate reconcile` | **no** |
+| `gate close` | **no** — and rondo drives it (rule 5) |
+| `gate present`, `gate deliver`, `gate ack`, `gate reconcile` | **no** — and rondo does not drive them |
 
-Ten of the fifteen. That is D-0090's stated scope reproduced exactly, which is worth having as a
-measurement because rule 5 turns on the one row that is not in it.
+Ten of the fifteen surveyed, which reproduces D-0090's stated scope exactly.
+
+**Fifteen is the surveyed set, not rondo's set, and the difference is load-bearing.** *rondo drives
+eleven*: the ten that carry the flag, plus `gate close` under rule 5. The last four rows are
+human-only by `continuo D-0090` and rondo drives none of them — `gate present`, `deliver` and `ack`
+are the relay path an operator works through a dropbox directory (`continuo D-0076`), and
+`gate reconcile` runs continuo's own `subject_gone` sweep, which rondo D-0013 already records as
+*not* the conductor's to invoke. So the absence of `--json` on those four is not a gap in rondo's
+seam and is not part of the follow-up this entry names; only `gate close` is. Reading the table as
+"fifteen verbs rondo drives, ten of them cleanly" would widen the subprocess adapter to four human
+workflows that D-0009 and D-0013 deliberately keep out of it.
 
 **The three exceptions, each reproduced rather than cited:**
 
@@ -1448,9 +1458,19 @@ node dist/cli.js measure report --db <db> --period-start-ms 0 --period-end-ms 1 
 
 Exception 2 is the one with a consequence rondo must build for, and it is worth stating in rondo's
 own terms: **an operator's typo reaches rondo as an exit 1 and a stack trace, not as a refusal
-document.** A relative `--workspace` and an empty `--run-id` both produce it. So rondo validates
-those values at its own boundary *before* spawning, and treats an exit 1 as a rondo defect to
+document.** A relative `--workspace` and an empty `--run-id` both produce it, measured above. So
+rondo validates at its own boundary *before* spawning, and treats an exit 1 as a rondo defect to
 report rather than an operator error to relay. Rule 3's third branch exists for this.
+
+**The rule is every operator-supplied value on these verbs, not the two that were measured.** The
+two probes are evidence that the class is reachable from the command line, not an enumeration of
+it. `continuo D-0090` records the same uncaught path for `LapRunIntentUsageError`,
+`RunAdmissionUsageError` and `RunCloseUsageError`, which between them cover `--run-id`,
+`--workspace`, `--base-branch`, `--topic-branch` and `--lease-claimant-id` on `run admit`, and
+`--actor-id` on `run close`. Any of those reaching continuo malformed produces exit 1 and a stack.
+Naming only the two that were probed would leave the other four to be discovered by an operator, so
+what this entry requires is the general form: **rondo validates every operator-supplied value it
+puts on a continuo command line, and a new flag on a driven verb is validated when it is adopted.**
 
 **Latency, re-measured** over 10 runs of `db verify --json` on the built tree: **101 ms** mean.
 D-0001 measured ~103 ms for the same verb without the flag. The flag costs nothing measurable, and
