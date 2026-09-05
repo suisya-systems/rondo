@@ -123,7 +123,6 @@ const MAX_TRANSITIONS = 12;
  */
 export async function admit(
   ports: ConductorPorts,
-  request: string,
   plan: RunPlan,
   policy: LoopPolicy,
   id: string,
@@ -144,7 +143,14 @@ export async function admit(
 
   const reservation = await ports.store.reserve({
     id,
-    request,
+    // **The row's request text is the plan's own `prompt`, and there is no
+    // second way to supply it.** This used to take a `request` argument beside
+    // the plan, which meant the durable row could record what a person asked
+    // for while `run admit` sent something else to continuo -- an audit record
+    // describing different work from the work the worker did, with nothing in
+    // the type system or the store able to notice. One source of truth beats a
+    // check that both callers have to remember to satisfy.
+    request: plan.prompt,
     plan: planPayload(plan),
     nowMs: ports.now(),
   });
@@ -342,6 +348,21 @@ export async function abandon(
       break;
   }
   const record = found.record;
+  if (beingDriven.has(record.id)) {
+    // See {@link beingDriven}. Refused rather than queued: there is nothing to
+    // wait for that would make the answer different, and the caller needs to
+    // know now that the row was not settled.
+    lines.push(
+      `Iteration ${record.id} is being driven by this process right now, so it was not ` +
+        "abandoned.",
+      "Abandoning it here would release the single-flight lock while an invocation of rondo's " +
+        "own is still awaiting an answer, which would let a second iteration be reserved against " +
+        "a worker that is still running.",
+      "Wait for the call in flight to return -- it suspends at the gate or reports -- and then " +
+        "abandon the row if its outcome still cannot be established.",
+    );
+    return finish(record, lines);
+  }
   if (isTerminal(record.status)) {
     lines.push(
       `Iteration ${record.id} is already terminal at '${record.status}'; nothing was written.`,
@@ -443,7 +464,47 @@ async function settleUnreadable(
  * not passed: D-0019 rule 9 gives it one reader, at admission, and `nextStep`
  * does not consult it for a record that exists.
  */
+/**
+ * The iterations this **process** is driving right now.
+ *
+ * The one piece of process-local state in the module, and the exception is
+ * narrow enough to state exactly: it is a fact about *this process*, not about
+ * the iteration, so it is not a conductor state, is not persisted, and
+ * deliberately does not survive a restart.
+ *
+ * It exists because {@link abandon} is otherwise unsafe against a lap that is
+ * still being awaited here. D-0019 rule 11 gives `abandon()` to a `performing`
+ * row **with no answer** -- a row a restart found, or one whose invocation gave
+ * up -- and in that case releasing the single-flight lock is the operator's
+ * assertion that nothing of theirs is running. But an operator calling
+ * `abandon()` while `performLap` is still awaited *in this process* is asserting
+ * something rondo can see is false: the row would go terminal at once, a second
+ * iteration could be reserved against a worker that is still writing to the same
+ * worktree, and the later `performing -> awaiting_human` write would find
+ * `unexpectedStatus` with no way to put the lock back.
+ *
+ * After a restart the set is empty, which is exactly right: that is when the row
+ * really is a `performing` row with no answer, and `abandon()` must work.
+ */
+const beingDriven = new Set<string>();
+
 async function drive(
+  ports: ConductorPorts,
+  from: IterationRecord,
+  lines: string[],
+): Promise<ConductorReport> {
+  beingDriven.add(from.id);
+  try {
+    return await driveSteps(ports, from, lines);
+  } finally {
+    // `finally`, so a rejection anywhere below cannot leave an iteration marked
+    // as driven forever -- which would turn a transient fault into the same
+    // wedged conductor this guard exists to prevent, only harder to see.
+    beingDriven.delete(from.id);
+  }
+}
+
+async function driveSteps(
   ports: ConductorPorts,
   from: IterationRecord,
   lines: string[],

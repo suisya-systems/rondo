@@ -435,7 +435,7 @@ const PLAN: RunPlan = (() => {
 
 /** One admission, with the fixture plan and a policy that permits it. */
 function admitOnce(h: Harness, id = "i-0001"): Promise<ConductorReport> {
-  return admit(h.ports, "do the thing", PLAN, PERMISSIVE, id);
+  return admit(h.ports, PLAN, PERMISSIVE, id);
 }
 
 /**
@@ -1127,7 +1127,7 @@ test("the two no-answer rows of that table hold their status on purpose", async 
 
 test("a policy stop takes no lock and writes no row", async () => {
   const h = harness();
-  const report = await admit(h.ports, "do the thing", PLAN, CONSERVATIVE_POLICY, "i-0001");
+  const report = await admit(h.ports, PLAN, CONSERVATIVE_POLICY, "i-0001");
 
   expect(report.iterationId).toBeNull();
   expect(report.status).toBeNull();
@@ -1197,4 +1197,65 @@ test("resume on an iteration that does not exist says so and writes nothing", as
   expect(report.iterationId).toBe("i-0404");
   expect(report.status).toBeNull();
   expect(h.store.rows.size).toBe(0);
+});
+
+test("the row's request text is the plan's prompt, with no second way to supply it", async () => {
+  // `admit` used to take a `request` argument beside the plan, so the durable
+  // row could record what a person asked for while `run admit` sent the plan's
+  // prompt to continuo -- an audit record describing different work from the
+  // work the worker did, with nothing able to notice. There is one source now,
+  // and this pins it: the column and the argv come from the same field.
+  const h = harness();
+  await admitOnce(h);
+  const row = await readRow(h.store, "i-0001");
+  expect(row?.request).toBe(PLAN.prompt);
+});
+
+test("abandon() refuses while this process is still driving the iteration", async () => {
+  // D-0019 rule 11 gives abandon() a `performing` row **with no answer** -- one
+  // a restart found, or one whose invocation gave up -- and there releasing the
+  // lock is the operator's assertion that nothing of theirs is running. An
+  // operator calling it while `performLap` is still awaited HERE is asserting
+  // something rondo can see is false: the row would go terminal at once, a
+  // second iteration could be reserved against a worker still writing to the
+  // same worktree, and the later `performing -> awaiting_human` write would
+  // find `unexpectedStatus` with no way to put the lock back.
+  let releaseLap: (() => void) | null = null;
+  const lapIsWalking = new Promise<void>((resolve) => {
+    releaseLap = resolve;
+  });
+  const base = harness();
+  const answered = base.answers.performLap;
+  // The ports are readonly, so the slow lap is substituted by building a new
+  // record around the harness's rather than by assigning into it: the store,
+  // the call log and every other answer stay the harness's own, which is what
+  // keeps the case about the guard and not about a second fake.
+  const h: Harness = {
+    ...base,
+    ports: {
+      ...base.ports,
+      performLap: async () => {
+        base.calls.push("performLap");
+        releaseLap?.();
+        // Slow rather than never-resolving: the window is what the case is
+        // about, and the second half needs the call to finish.
+        await new Promise((resolve) => setTimeout(resolve, 25));
+        return answered;
+      },
+    },
+  };
+
+  const walking = admitOnce(h);
+  await lapIsWalking;
+
+  const refused = await abandon(h.ports, "i-0001", "an operator gave up");
+  expect(refused.status).toBe("performing");
+  expect(refused.lines.join(" ")).toContain("being driven by this process");
+  expect((await readRow(h.store, "i-0001"))?.status).toBe("performing");
+
+  // And once the call in flight has returned, the row is settleable again --
+  // the guard is a window, not a new way for a row to become unreachable.
+  await walking;
+  const settled = await abandon(h.ports, "i-0001", "an operator gave up");
+  expect(settled.status).toBe("abandoned");
 });

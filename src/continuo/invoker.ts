@@ -684,8 +684,19 @@ export async function admitRun(
       requireNotOptionShaped("baseBranch", request.baseBranch),
       "--topic-branch",
       requireNotOptionShaped("topicBranch", request.topicBranch),
-      "--prompt",
-      requireText("prompt", request.prompt),
+      // **`--prompt=<value>`, joined, and every other flag stays separate.**
+      // The prompt is the one argument here that is arbitrary prose a person
+      // typed, so it is the one that can legitimately look like an option. As a
+      // separate token, a prompt of `--help` would be read by continuo's
+      // argparse-compatible parser as a flag rather than as this flag's value,
+      // and a prompt of exactly `--json` would be deleted outright by {@link run}'s
+      // own de-duplication of that flag -- in both cases admitting something
+      // other than what the person asked for, silently. argparse's explicit-value
+      // form takes everything after the first `=` as the value, whatever it looks
+      // like, which is why it is used here and only here: the other values are
+      // identifiers and paths that are already refused when they are
+      // option-shaped, and joining them would hide that check behind a spelling.
+      `--prompt=${requireText("prompt", request.prompt)}`,
     ];
   } catch (error) {
     if (error instanceof ArgumentRefusal) {

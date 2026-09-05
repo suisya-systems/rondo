@@ -264,12 +264,11 @@ export async function openConductor(
  */
 export async function admit(
   ports: ConductorPorts,
-  request: string,
   plan: RunPlan,
   policy: LoopPolicy,
   id: string,
 ): Promise<ConductorReport> {
-  return await admitIteration(ports, request, plan, policy, id);
+  return await admitIteration(ports, plan, policy, id);
 }
 
 /**

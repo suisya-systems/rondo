@@ -195,6 +195,23 @@ describe("run admit's own fields", () => {
     expect(outcome.continuoRole).toBeNull();
   });
 
+  test("an option-shaped prompt is carried rather than refused, because prose may look like one", async () => {
+    // The prompt is the one argument here that is arbitrary prose a person
+    // typed, so unlike a branch or an identifier it may legitimately begin with
+    // a dash and must not be refused for it. What makes that safe is the
+    // spelling: `admitRun` joins it as `--prompt=<value>`, argparse's
+    // explicit-value form, which takes everything after the first `=` whatever
+    // it looks like. As a separate token, `--help` would be read as a flag and
+    // `--json` would be deleted outright by `run()`'s de-duplication of that
+    // flag -- both admitting something other than what was asked, silently.
+    // Reaching `run()` is as far as a test without a build can see; the argv
+    // itself is what `scripts/dogfood-lap.md` walks.
+    for (const prompt of ["--help", "--json", "-x"]) {
+      const outcome = await admitRun(unissued, admitRequest({ prompt }));
+      expect(defectReason(outcome.result)).toContain(REACHED_RUN);
+    }
+  });
+
   test("a valid admission reaches the drive and reports the role it used", async () => {
     const outcome = await admitRun(unissued, admitRequest());
     expect(defectReason(outcome.result)).toContain(REACHED_RUN);
