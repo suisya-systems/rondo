@@ -162,9 +162,18 @@ costs on this machine, and that `resume` sees the outcome after a human answers.
 
    ```sh
    # DIST is step 3's emitted tree -- the `outDir` of your tsconfig.dogfood.json,
-   # resolved, and the same tree the driver in step 2 imports from.
+   # resolved, and the same tree the driver in step 2 imports from. PLAN is the
+   # module holding the plan you are about to run.
    DIST=/absolute/path/to/dist
-   node -e "import('file://$DIST/continuo/roles.js').then(m => console.log(m.mapModelTier('standard')))"
+   PLAN=/absolute/path/to/plan.mjs
+
+   # The tier is read out of the plan rather than typed here on purpose: a
+   # preflight that checks a tier the run will not use is a preflight that passes
+   # and then lets the run fail.
+   node -e "
+   Promise.all([import('file://$DIST/continuo/roles.js'), import('file://$PLAN')]).then(
+     ([roles, plan]) => console.log(roles.mapModelTier(plan.PLAN_INPUT.agentTypeInput.executorPolicy.modelTier)));
+   "
    # { kind: 'selected', model: 'claude-opus-5' }   -- 'unknown' means stop and fix the agent type
    ```
 
