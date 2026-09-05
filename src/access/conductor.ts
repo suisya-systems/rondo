@@ -212,6 +212,10 @@ export function conductorPorts(
     },
     performLap: async (plan): Promise<EffectOutcome<LapPerformance>> =>
       asEffect(await performLap(continuo, lapRequestOf(plan)), (payload) => ({
+        // Kept rather than dropped: it is the only identity a lap's answer
+        // carries that the conductor can check, and the check is the
+        // interpreter's (see `LapPerformance.runId`).
+        runId: payload.runId,
         gateId: payload.gateId,
         sessionId: payload.sessionId,
         sessionPath: payload.sessionPath,

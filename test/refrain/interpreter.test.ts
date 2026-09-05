@@ -303,6 +303,7 @@ function successfulAnswers(): Answers {
     performLap: {
       kind: "answered",
       value: {
+        runId: "run-1",
         gateId: "gate-1",
         sessionId: "session-1",
         sessionPath: "started",
@@ -510,6 +511,7 @@ test("what a lap reported that the row has no column for is not lost", async () 
     performLap: {
       kind: "answered",
       value: {
+        runId: "run-1",
         gateId: "gate-1",
         sessionId: "session-1",
         sessionPath: "resumed",
@@ -935,6 +937,7 @@ test("a withdrawal keeps what the lap already recorded on the row", async () => 
     performLap: {
       kind: "answered",
       value: {
+        runId: "run-1",
         gateId: "gate-1",
         sessionId: "session-1",
         sessionPath: "started",
@@ -1258,4 +1261,76 @@ test("abandon() refuses while this process is still driving the iteration", asyn
   await walking;
   const settled = await abandon(h.ports, "i-0001", "an operator gave up");
   expect(settled.status).toBe("abandoned");
+});
+
+test("an invalid plan is refused before a row exists, so it takes no lock", async () => {
+  // `RunPlan` is a structural interface and `Object.freeze` is shallow, so a
+  // caller can hand over something that never passed `runPlan()`. Caught only
+  // by the post-commit re-read, such a plan would stall an iteration that then
+  // holds the single-flight lock until a person abandoned it -- for an input
+  // error knowable before any row existed. Refused here it costs nothing, and
+  // the very next admission with a good plan must succeed.
+  const h = harness();
+  const report = await admit(
+    h.ports,
+    { ...PLAN, workspace: "relative/path" },
+    PERMISSIVE,
+    "i-0001",
+  );
+  expect(report.iterationId).toBeNull();
+  expect(report.lines.join(" ")).toContain("before an iteration was reserved");
+  expect(h.calls).toEqual([]);
+  expect(await readRow(h.store, "i-0001")).toBeNull();
+
+  expect((await admitOnce(h)).status).toBe("awaiting_human");
+});
+
+test("a lap answering for another run stalls rather than adopting its gate", async () => {
+  // The check `admitStep` makes on `run admit`'s answer, applied where it
+  // matters most: this answer is what supplies the gate the iteration suspends
+  // on, so adopting another run's would mean a later resume() closing this
+  // iteration on an outcome that was never about it.
+  const h = harness({
+    performLap: {
+      kind: "answered",
+      value: {
+        runId: "run-9",
+        gateId: "gate-9",
+        sessionId: "session-1",
+        sessionPath: "started",
+        endpointLeaseFailure: null,
+        elapsedDeadlineAtMs: null,
+      },
+    },
+  });
+  const report = await admitOnce(h);
+  expect(report.status).toBe("stalled");
+  expect(report.lines.join(" ")).toContain("run-9");
+  expect((await readRow(h.store, "i-0001"))?.gateId).toBeNull();
+});
+
+test("a reason contained in an earlier one is still recorded", async () => {
+  // The dedup compares whole entries, not substrings: an operator's "timeout"
+  // must not be swallowed by an existing "endpoint lease failure: timeout after
+  // 60 seconds". The reason column is the one place a person reconstructs what
+  // happened afterwards, so silently dropping what they said is the failure
+  // worth avoiding.
+  const h = harness({
+    performLap: {
+      kind: "answered",
+      value: {
+        runId: "run-1",
+        gateId: "gate-1",
+        sessionId: "session-1",
+        sessionPath: "started",
+        endpointLeaseFailure: "timeout after 60 seconds",
+        elapsedDeadlineAtMs: null,
+      },
+    },
+  });
+  await admitOnce(h);
+  await abandon(h.ports, "i-0001", "timeout");
+  const reason = (await readRow(h.store, "i-0001"))?.reason ?? "";
+  expect(reason).toContain("timeout after 60 seconds");
+  expect(reason.split("; ")).toContain("timeout");
 });

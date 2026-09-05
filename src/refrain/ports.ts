@@ -68,6 +68,17 @@ export interface RunAdmission {
  * that named it a path would mislead every reader downstream.
  */
 export interface LapPerformance {
+  /**
+   * The run the lap says it walked.
+   *
+   * Carried so the interpreter can check it against the run the plan named,
+   * exactly as it checks `run admit`'s answer and `gate show`'s. Without it the
+   * gate id would be the only thing to come back from the one step that takes
+   * minutes, with no identity to compare -- and a schema-valid payload about a
+   * different run would attach *that* run's gate to this iteration, which a
+   * later `resume()` would then close on.
+   */
+  readonly runId: string;
   readonly gateId: string;
   readonly sessionId: string;
   readonly sessionPath: string;

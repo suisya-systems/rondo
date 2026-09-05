@@ -81,6 +81,19 @@ describe("a request continuo would accept", () => {
     expect(defectReason(await performLap(unissued, lapRequest()))).toContain(REACHED_RUN);
   });
 
+  test("an option-shaped gate label is carried rather than refused", async () => {
+    // Gate options are labels an operator wrote for a person to choose between,
+    // so like the prompt they may legitimately begin with a dash and must not be
+    // refused for it. `--gate-option=<value>` is what makes that safe: as a
+    // separate token one would be read as a flag, and an option spelled exactly
+    // `--json` would be removed by `run()`'s de-duplication of that flag,
+    // leaving a dangling `--gate-option` to swallow whichever flag came next.
+    for (const option of ["--json", "--help", "-y"]) {
+      const outcome = await performLap(unissued, lapRequest({ gateOptions: [option] }));
+      expect(defectReason(outcome)).toContain(REACHED_RUN);
+    }
+  });
+
   test("every optional field may be null, and a null one is simply not passed", async () => {
     // continuo's own default applies to an omitted flag; an empty string in its
     // place would be a value rondo invented. The default request above already

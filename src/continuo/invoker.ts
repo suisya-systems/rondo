@@ -849,10 +849,16 @@ function claudeCommandFlags(tokens: readonly string[]): readonly string[] {
 
 /** `--gate-option`, repeated. Prose an operator wrote, so only non-empty. */
 function gateOptionFlags(options: readonly string[]): readonly string[] {
-  return options.flatMap((option, index) => [
-    "--gate-option",
-    requireText(`gateOptions[${String(index)}]`, option),
-  ]);
+  // Attached-value form, for the reason `--prompt` uses it: a gate option is a
+  // label an operator wrote for a person to choose between, so it may
+  // legitimately begin with a dash. As a separate token one would be read as a
+  // flag, and an option spelled exactly `--json` would be removed by {@link run}'s
+  // de-duplication of that flag -- leaving a dangling `--gate-option` that would
+  // then swallow whichever flag came next, which is a worse failure than the one
+  // it started as.
+  return options.map(
+    (option, index) => `--gate-option=${requireText(`gateOptions[${String(index)}]`, option)}`,
+  );
 }
 
 /** What `gate show` needs. One observation, and it mutates nothing. */

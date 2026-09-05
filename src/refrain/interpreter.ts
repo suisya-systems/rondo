@@ -49,7 +49,7 @@ import type { IterationFields, IterationRecord, IterationStatus } from "../store
 import { isTerminal } from "../store/records.js";
 
 import { nextStep, type Step } from "./loop.js";
-import { planPayload, type RunPlan, readPlan } from "./plan.js";
+import { planPayload, type RunPlan, readPlan, runPlan } from "./plan.js";
 import type { LoopPolicy } from "./policy.js";
 import type {
   ClassificationRecord,
@@ -141,6 +141,24 @@ export async function admit(
     return { iterationId: null, status: null, lines: Object.freeze(lines) };
   }
 
+  // **Validated before the lock, not after it.** `RunPlan` is a structural
+  // interface, so a caller can hand over an object literal that never passed
+  // through `runPlan()`, and `Object.freeze` is shallow, so a nested field can
+  // move after it did. Either way the first check would otherwise be `planOf`'s
+  // re-read *after* the row is committed -- and the iteration would then stall
+  // holding the single-flight lock until a person abandoned it, for an input
+  // error that was knowable before any row existed. This is the same argument
+  // the policy stop above makes, applied to the other thing a caller can get
+  // wrong: refused before reservation it costs nothing, no row and no lock.
+  const validated = runPlan(plan);
+  if (validated.kind === "refused") {
+    lines.push(
+      `The plan was refused before an iteration was reserved: ${validated.reason}`,
+      "No row was written and no lock was taken, so nothing has to be settled by a person.",
+    );
+    return { iterationId: null, status: null, lines: Object.freeze(lines) };
+  }
+
   const reservation = await ports.store.reserve({
     id,
     // **The row's request text is the plan's own `prompt`, and there is no
@@ -150,8 +168,8 @@ export async function admit(
     // describing different work from the work the worker did, with nothing in
     // the type system or the store able to notice. One source of truth beats a
     // check that both callers have to remember to satisfy.
-    request: plan.prompt,
-    plan: planPayload(plan),
+    request: validated.plan.prompt,
+    plan: planPayload(validated.plan),
     nowMs: ports.now(),
   });
   switch (reservation.kind) {
@@ -955,6 +973,24 @@ async function performStep(
   switch (walked.kind) {
     case "answered": {
       const lap = walked.value;
+      if (lap.runId !== plan.plan.runId) {
+        // The same check `admitStep` makes on `run admit`'s answer and
+        // `gateSeen` makes on the gate's, and it belongs here most of all: this
+        // is the one step that takes minutes, and its answer is what supplies
+        // the gate id the iteration then suspends on. Attaching another run's
+        // gate to this row would mean a later `resume()` closing this iteration
+        // on an outcome that was never about it.
+        return {
+          kind: "finished",
+          report: await stall(
+            ports,
+            lines,
+            performing.record,
+            `continuo walked a lap for run '${lap.runId}' where the plan named ` +
+              `'${plan.plan.runId}', so the gate it named is not this iteration's to suspend on`,
+          ),
+        };
+      }
       // **Said before it is committed, on purpose.** A blocked commit -- an
       // operator who called abandon() while the lap was walking -- drops these
       // facts from the row, and the gate id is the one thing only a person can
@@ -1355,7 +1391,15 @@ function appendReason(existing: string | null, addition: string): string {
   if (existing === null || existing === "") {
     return addition;
   }
-  return existing.includes(addition) ? existing : `${existing}; ${addition}`;
+  // **Whole entries, not substrings.** `includes()` would drop a new reason
+  // merely *contained* in an old one -- an operator's `timeout` swallowed by an
+  // existing `endpoint lease failure: timeout after 60 seconds` -- and the
+  // reason column is the one place a person can reconstruct afterwards what
+  // happened, so silently losing what they said is the failure worth avoiding.
+  // The separator is what an entry is delimited by, so it is what an entry is
+  // compared as.
+  const entries = existing.split("; ");
+  return entries.includes(addition) ? existing : `${existing}; ${addition}`;
 }
 
 /** {@link appendReason} as the field a transition writes. */
