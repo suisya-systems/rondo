@@ -57,6 +57,13 @@ before. The rule the paragraph above states is what keeps that from becoming an
 excuse to restate a sibling: a document that copied cadenza's contract or
 continuo's control plane would be a second copy with no rule for which copy wins.
 
+## Operations
+
+| File | What it is |
+|---|---|
+| [`operations/lap-1-dogfood.md`](operations/lap-1-dogfood.md) | What happened when one real request was driven through the lap-1 loop on 2026-09-06, at the pinned revisions: the 31-field `RunPlan` and where each field came from, the wall clock, eleven findings, and six proposed issues. **The lap did not complete**, and the record says exactly where and why. |
+| [`../scripts/dogfood-lap.md`](../scripts/dogfood-lap.md) | The procedure that record was produced by. `R-16`'s answer to "where does a real lap run": a documented manual script, deliberately not a `vitest` suite. |
+
 ## Where the enforced rules are
 
 Some of what a design document would normally assert is instead a test, so that
