@@ -621,8 +621,9 @@ whether `resume` sees an answered gate; and whether `ANTHROPIC_MODEL` reaches th
 
 > **One conclusion above has since been overtaken.** This section says "single-flight is not what is
 > limiting throughput today. Nothing has completed once." Laps now complete, and the re-run measured
-> what single-flight costs: the lock is held across the human suspend, which was **83% of an
-> iteration's life** even with a program answering the gate. See [10.9, F-13](#f-13-single-flight-holds-the-lock-for-the-whole-human-suspend).
+> what single-flight costs: **the lock is held for `lap + human`, and only the first term is rondo's**
+> -- 18-21 s of lap against a wait on a person that nothing bounds. See
+> [10.9, F-13](#f-13-single-flight-holds-the-lock-for-the-whole-human-suspend).
 
 ## 8. How to run this again
 
@@ -786,7 +787,7 @@ where a number here contradicts one above, the one above was true of the older p
   `node vendor/pin.mjs check`).
 - Machine: WSL2 (`Linux 6.18.33.2-microsoft-standard-WSL2`), Node v22.17.0, worker CLI
   `claude` 2.1.261. The same machine as the first run.
-- **The lap completed, three times.** All seven steps of the script were walked: the arc suspended at
+- **The lap completed, five times.** All seven steps of the script were walked: the arc suspended at
   `awaiting_human` with a real gate open at `received`, a human answered it through continuo's own
   verbs, and `resume` took the iteration to `closed`. The worker was a real `claude -p` in every
   case, and it did the work it was asked to do -- commit `e075b60` on `dogfood/lap1-dogfood-003`
@@ -794,9 +795,10 @@ where a number here contradicts one above, the one above was true of the older p
 - **Every unknown section 7 left open is now a number**, in 10.7. The one that mattered most is the
   ceiling: a lap answered in **17.9 to 20.9 seconds**, against an `invocationCeilingMs` of 1 800 000,
   so the ceiling was used to about **1.2%**.
-- Five new findings, F-12 to F-16, and the honest headline among them is F-13: **single-flight holds
-  the lock for the whole human suspend**, so 83% of the first iteration's life was spent blocking on
-  a person rather than on a lap. That is the number rondo#8 asked for.
+- Five new findings, F-12 to F-16, and the headline among them is F-13: **single-flight holds the
+  lock for the whole human suspend**, so an iteration's life under the lock is `lap + human` with
+  nothing bounding the second term. That is the shape rondo#8 asked for, and it makes the lap's
+  18-21 s the cheap half.
 - No `src/` change was made. `scripts/dogfood-lap.md` is corrected in the same change as this record,
   as it was the first time.
 
@@ -908,9 +910,12 @@ here" is the arc reaching `awaiting_human`. The process did exit, and the gate s
 | `lap1-dogfood-003` | **20 883 ms** | `a3ebe804` | the full walk: answered through the verbs |
 | `lap1-dogfood-004` | **17 991 ms** | `10ccdc28` | a second timing; closed `withdrawn` |
 | `lap1-dogfood-005` | (not timed) | `a26638ce` | the single-flight probe (F-13); closed `unanswerable` |
+| `lap1-dogfood-007` | **18 804 ms** | `8b645d36` | the first `expired` attempt, which the plan could not reach; closed `withdrawn` |
+| `lap1-dogfood-008` | **19 452 ms** | `d8fa6d30` | `gateDeadlineAtMs` set 45 s ahead; closed `expired` |
 
-**It is as deterministic as the failure was.** Three laps, three spawns, three gates, no flake and no
-retry. `stderr-000.log` is zero bytes for all three.
+**It is as deterministic as the failure was.** Five laps, five spawns, five gates, no flake and no
+retry. `stderr-000.log` is zero bytes for all five, and the four that were timed span 17 991 to
+20 883 ms -- a 16% spread.
 
 #### 10.4.1 The stages, in wall clock
 
@@ -1039,14 +1044,36 @@ revision, and says plainly that publishing is the operator's. The idempotence st
 in all three directions -- before the answer nothing is written, after it the iteration closes once,
 and a second call changes nothing and says so in a millisecond.
 
-`resume` was exercised against all three terminal outcomes a gate can reach here, and read each one
-correctly:
+**`resume` was exercised against all four terminal outcomes a gate can reach**, and read each one
+correctly. Each cost a real lap, because a gate exists only where one has run:
 
 | Iteration | Gate outcome | Reached by | `resume` said |
 |---|---|---|---|
 | `iter-003` | `answered_and_forwarded` | the forward relay's ack | `closed`, outcome named |
 | `iter-004` | `withdrawn` | `gate close` from `received` | `closed`, outcome named |
 | `iter-005` | `unanswerable` | `gate close` from `presented` | `closed`, outcome named |
+| `iter-008` | `expired` | `gate close` from `presented`, after a deadline that had passed | `closed`, outcome named |
+
+`expired` is the one that takes setting up, and getting it wrong is instructive (F-16). A plan with
+`gateDeadlineAtMs: null` **cannot reach it at all**:
+
+```
+$ node "$CLI" gate close ... --outcome expired          # gateDeadlineAtMs was null
+{"error":{"class":"DeadlineNotPassed","message":"gate ... has no deadline; it does not close as 'expired'"}}
+```
+
+So `iter-008` was run with `gateDeadlineAtMs` set 45 seconds ahead. That is necessary and not
+sufficient -- from `received` it is still refused, because like `unanswerable` it means a person saw
+the question:
+
+```
+$ node "$CLI" gate close ... --outcome expired          # deadline passed, gate at 'received'
+{"error":{"class":"InadmissibleTransitionRefused",
+          "message":"outcome 'expired' is reached from ['answered', 'presented'], not from 'received'"}}
+```
+
+`present` -> `deliver` -> `ack` first, and then it closes. **Two independent preconditions, each
+discoverable only by tripping over it**, which is what F-16 proposes documenting.
 
 ### 10.7. The row, and section 7's unknowns
 
@@ -1185,14 +1212,22 @@ means in wall clock is the finding. For `iter-003`:
 | `awaiting_human` -- gate open, **still `live=1`** | 104 520 ms | 83% |
 | **Iteration lifetime under the lock** | **125 400 ms** | 100% |
 
-And the 104.5 s was a fast human: the operator was a program that answered as soon as it looked. A
-real person answering a real escalation in ten minutes holds the lock for ten minutes, during which
-**no unrelated lap can be admitted at all**. The row confirms the lock is held rather than released
-across the suspend -- `live` is `1` in the row read at `awaiting_human`, and `null` only after
-`resume`.
+**The 104.5 s is not a floor and must not be read as one.** The operator here was this document's
+author working interactively, and section 10.5's transitions show where the time went: the gate
+opened at `1788650204703` and was not presented until `1788650287318`, so **82.6 of the 104.5 seconds
+was the operator reading `--help` between commands.** A scripted answer would be far quicker, and a
+real person deciding a real escalation far slower. The 83% is what this particular walk cost, not a
+prediction.
+
+**What is structural, and is the finding, is the shape rather than the ratio**: the lock is held for
+`lap + human`, the second term is unbounded, and rondo has no say in it. The row confirms the holding
+rather than any particular duration -- `live` is `1` in the row read at `awaiting_human` and `null`
+only after `resume`, so for however long a person takes, **no unrelated lap can be admitted at all**.
+On these laps the first term is 18-21 seconds, which is the part rondo#8 could otherwise have assumed
+was the expensive one.
 
 **The lap is not the contended resource; the human is.** Whatever rondo#8 decides, it should be
-decided against this ratio rather than against the lap's 20 seconds.
+decided against that shape rather than against the lap's 20 seconds.
 
 ### F-14. The row does not say what stage the gate is at while it is suspended
 
@@ -1205,7 +1240,8 @@ Read at `awaiting_human`, with continuo's `gate list` simultaneously reporting `
 ```
 
 `gate_stage` is filled only when `resume` reads the gate, so during the entire window in which
-somebody might want to know -- the suspend, which F-13 measures at 83% of the iteration -- the row
+somebody might want to know -- the suspend, which F-13 shows is the open-ended half of an
+iteration's life -- the row
 names the gate but not where it has got to. A surface built on the row alone cannot tell `received`
 from `presented` without calling continuo, and the whole point of `gate_id` being in the row is to
 save that call. Small, and it costs one write at the point the gate id is already being written.
@@ -1226,10 +1262,22 @@ Both readings share a cause worth naming: the sentence predicts a duration that 
 ### F-16. Which outcomes `gate close` accepts depends on the stage, and the caller learns it by being refused
 
 Recorded under 10.5. `--outcome` advertises `withdrawn`, `expired` and `unanswerable` in its
-`--help`, and then refuses `unanswerable` from `received` because it is reachable only from
-`presented`. Both messages are clear and neither is wrong; the gap is that the stage-dependence is
-invisible until it fires, and `gate show` already prints the stage that would answer it. This is
-continuo's surface and is recorded here because a person walking step 4 will hit it.
+`--help`, and then applies preconditions the help does not mention. Reaching all four outcomes took
+**three refusals and one extra lap**:
+
+| Attempt | Answer |
+|---|---|
+| `--outcome answered_and_forwarded` | `invalid choice` -- it is the forward ack's to write, and the help does say so |
+| `--outcome unanswerable`, gate at `received` | `reached from ['presented'], not from 'received'` |
+| `--outcome expired`, `gateDeadlineAtMs: null` | `has no deadline; it does not close as 'expired'` |
+| `--outcome expired`, deadline passed, gate at `received` | `reached from ['answered', 'presented'], not from 'received'` |
+
+Every message is clear and none is wrong. **The gap is that none of it is knowable before it fires**:
+`expired` has *two* independent preconditions, one of which is a field of the `RunPlan` chosen
+minutes earlier and one of which is a stage, and a caller discovers each by tripping over it. Both
+facts are already in the data -- `gate show` prints the stage and the deadline -- so this is a help
+text that could name the reachable-from stages and the deadline requirement beside each outcome.
+continuo's surface, recorded here because a person walking step 4 will hit it.
 
 ### 10.10. Cost
 
@@ -1240,9 +1288,11 @@ Three real laps, from the terminal `result` event of each session:
 | `003` | **0.173145** | 20 649 | 10 614 | 90 226 | 833 |
 | `004` | **0.184422** | 16 166 | 10 734 | 110 460 | 831 |
 | `005` | **0.167619** | -- | -- | -- | -- |
+| `007` | **0.170924** | -- | -- | -- | -- |
+| `008` | **0.171765** | -- | -- | -- | -- |
 
-**About 17 to 18 cents per lap, for a one-line edit and a commit.** The three agree within 10%, so
-this is a unit cost rather than a sample.
+**About 17 to 18 cents per lap, for a one-line edit and a commit.** Five laps spanning 0.1676 to
+0.1844 -- a 10% spread around 0.174 -- so this is a unit cost rather than a sample.
 
 Set against the first run's probe -- `0.0989` for a one-word reply with no tool use -- the arithmetic
 is that **the fence's preamble is most of the bill**. Cache creation is 10 600 tokens in both laps and
@@ -1273,11 +1323,11 @@ terminal status a run reached is a fact, and a wrong fact is corrected by openin
 than by re-closing this one
 ```
 
-All three runs are settled: `003` `completed`, `004` and `005` `cancelled` (their gates were closed
-without an answer, so `completed` would have been a wrong fact). **The re-close refusal is worth
+All five runs are settled: `003` `completed`, and `004`, `005`, `007` and `008` `cancelled` (their
+gates were closed without an answer, so `completed` would have been a wrong fact). **The re-close refusal is worth
 keeping in mind while cleaning up** -- it is not idempotent, on purpose.
 
-Left behind on purpose, exactly as D-0010 says: three workspaces under `$S/workspace-*`, and three
+Left behind on purpose, exactly as D-0010 says: five workspaces under `$S/workspace-*`, and five
 topic branches, each shown by `git branch -a` with a `+` because its workspace still has it checked
 out:
 
@@ -1285,10 +1335,12 @@ out:
 + dogfood/lap1-dogfood-003
 + dogfood/lap1-dogfood-004
 + dogfood/lap1-dogfood-005
++ dogfood/lap1-dogfood-007
++ dogfood/lap1-dogfood-008
 * main
 ```
 
-No orphaned worker processes: `pgrep -af claude` found none after all three laps, which matches the
+No orphaned worker processes: `pgrep -af claude` found none after the laps, which matches the
 report's claim that an answer arriving means the `lap perform` process is over.
 
 ### 10.12. Proposed issues
@@ -1303,10 +1355,12 @@ by this section** and should be replaced by issue 6 below.
 **6. (rondo) Single-flight holds the lock across the human suspend, and that -- not the lap -- is the
 throughput limit.** With one iteration at `awaiting_human`, `admit()` refuses any other in 1 ms:
 *"iteration iter-005 is still live, and at most one iteration may be non-terminal at a time."* The
-refusal is correct and cheap. The cost is the window: for `iter-003`, 20 883 ms of lap and 104 520 ms
-of waiting for a person, so **83% of the iteration's life under the lock was spent blocking on a
-human who was answering as fast as a program can** -- a real escalation answered in ten minutes holds
-it for ten minutes. rondo#8 / continuo#167 weigh single-flight against throughput; this is the
+refusal is correct and cheap. The cost is the window: an iteration holds the lock for **`lap +
+human`**, and rondo owns only the first term. For `iter-003` that was 20 883 ms of lap against
+104 520 ms of suspend -- though that 104.5 s is this walk's interactive pace and not a floor (10.9,
+F-13), so the number to carry forward is the **shape**: the lap is bounded and measured at 18-21 s,
+and the wait on a person is bounded by nothing. A real escalation answered in ten minutes holds the
+lock for ten minutes. rondo#8 / continuo#167 weigh single-flight against throughput; this is the
 measurement they were waiting on, and it says the contended resource is the operator's attention
 rather than the lap. Proposed: decide whether `awaiting_human` should hold the lock at all, given
 that the `lap perform` process has exited, no worker of the iteration is running, and the row is
@@ -1326,7 +1380,8 @@ the status and report what it says. Verified against a real close in section 10.
 **8. (rondo) The row names the gate but not the stage it is at, for the whole time it is suspended.**
 At `awaiting_human` the row has `gate_id` set and `gate_stage`/`gate_outcome` `NULL`, while continuo's
 `gate list` reports `stage=received`; `gate_stage` is written only when `resume` reads the gate. So
-during the suspend -- 83% of an iteration's life by issue 6's measurement -- a surface reading the row
+during the suspend -- the open-ended half of an iteration's life by issue 6's measurement -- a
+surface reading the row
 cannot tell `received` from `presented` without a call to continuo, which is the call `gate_id` in the
 row exists to save. Proposed: persist the stage `LAP_PERFORM` already reports, at the same write that
 persists `gate_id`. Small; one column already exists.
@@ -1338,12 +1393,15 @@ makes a healthy lap look hung and a hung lap look healthy, and rondo has no basi
 the lap's cost depends on the request, the machine and the model. Proposed: drop the unit ("this is
 the slow step"), or say what the ceiling is, which rondo does know because the operator declared it.
 
-**10. (continuo) `gate close`'s accepted outcomes depend on the gate's stage, and `--help` does not
-say so.** `--outcome` advertises `withdrawn`, `expired` and `unanswerable`; from `received` the third
-is refused with *"outcome 'unanswerable' is reached from ['presented'], not from 'received'"*. Both
-the refusal and the exclusion of `answered_and_forwarded` are right. The gap is discoverability: the
-stage-dependence is invisible until it fires, and `gate show` already prints the stage that predicts
-it. Proposed: name the reachable-from stage beside each outcome in the flag's help. Minor.
+**10. (continuo) `gate close`'s preconditions are invisible until they fire.** `--outcome` advertises
+`withdrawn`, `expired` and `unanswerable` and then applies two kinds of precondition its help does
+not mention: a reachable-from stage (`unanswerable` and `expired` both require `presented`, refused
+from `received`) and, for `expired` alone, that the gate was given a deadline at all -- a
+`RunPlan.gateDeadlineAtMs` chosen before the lap ran. Walking all four outcomes cost three refusals
+and one extra lap (10.9, F-16). Every message is correct and well worded; the gap is purely that a
+caller cannot plan around them. Both facts are already printed by `gate show`. Proposed: name the
+reachable-from stages beside each outcome in the flag's help, and say that `expired` requires a
+deadline. Minor, and cheap.
 
 **Not proposed: `scripts/dogfood-lap.md` was still wrong in four places and is fixed in the same
 change as this record**, on the first run's precedent. The script now says that `invocationCeilingMs`
