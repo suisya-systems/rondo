@@ -40,6 +40,15 @@ import {
   type VerbContract,
 } from "./protocol.js";
 
+/**
+ * The flag that turns a continuo verb into a document rondo can decode.
+ *
+ * Spelled once, here, because eleven call sites spelling it is eleven chances
+ * to forget it -- which is continuo's own reason for declaring it in one module
+ * on its side of the seam.
+ */
+const JSON_FLAG = "--json";
+
 /** The environment variable that locates a built continuo. Never the pin. */
 export const CLI_PATH_ENV = "RONDO_CONTINUO_CLI";
 
@@ -197,7 +206,19 @@ export async function run<T>(
         "operator-supplied value is validated before it reaches a continuo command line.",
     };
   }
-  const output = await runProcess(continuo.cliPath, [...contract.command, ...argv]);
+  // `--json` is put on by the invoker, not by the caller. Every verb this layer
+  // decodes answers in the envelope only when the flag is present, and a caller
+  // that forgot it would run continuo in human-output mode: a MUTATING verb
+  // would succeed, its prose would fail to decode, and rondo would report its
+  // own defect for a command that had already taken effect -- an invitation to
+  // retry a write that did not need retrying. So the flag is a property of
+  // driving continuo rather than a convention every call site must remember. A
+  // caller that passes it anyway is not punished; it is spelled once.
+  const output = await runProcess(continuo.cliPath, [
+    ...contract.command,
+    ...argv.filter((argument) => argument !== JSON_FLAG),
+    JSON_FLAG,
+  ]);
   if (output.kind === "failed") {
     return { kind: "invokerDefect", reason: output.reason };
   }

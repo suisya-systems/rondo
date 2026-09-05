@@ -54,12 +54,12 @@ describe("the manifest and the module say the same thing", () => {
   test("CI provisions from the manifest rather than from a second copy of the sha", () => {
     const workflow = readFileSync(join(ROOT, ".github", "workflows", "ci.yml"), "utf8");
     expect(workflow).toContain("continuo.pin.json");
-    // Any full sha written into the workflow would be a second pin. There must
-    // be none, or it must be this one -- otherwise CI can build a continuo the
-    // suite then refuses, with the diagnosis split across two files.
-    for (const sha of workflow.match(/\b[0-9a-f]{40}\b/g) ?? []) {
-      expect(sha).toBe(CONTINUO_REVISION);
-    }
+    // NO full sha, not even the right one. A duplicate that happens to agree
+    // today is still a second pin, and the whole failure this guards against is
+    // the manifest moving while the copy does not -- which a test that accepted
+    // the matching value would wave through on exactly the commit that
+    // introduced it.
+    expect(workflow.match(/\b[0-9a-f]{40}\b/g) ?? []).toEqual([]);
   });
 });
 

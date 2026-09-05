@@ -1888,7 +1888,14 @@ passing: which layer the seam is, which module may start a process, and where th
    repository: not in rondo's checkout, where a `node_modules/` and a `dist/` would contaminate the
    boundary sweep's directory walk, and not in a sibling checkout, which does not exist on a runner.
 
-7. **What the decoder promises, in rondo's own words.** Validate `schema` first, then `ok`, then the
+7. **`--json` is put on the command line by the invoker, not by its callers.** Every verb this
+   layer decodes answers in the envelope only when the flag is present, and a caller that forgot it
+   would run continuo in human-output mode: a *mutating* verb would succeed, its prose would fail to
+   decode, and rondo would report its own defect for a command that had already taken effect — an
+   invitation to retry a write that did not need retrying. continuo declares the flag in one module
+   on its side for the same reason; rondo spells it once on this one.
+
+8. **What the decoder promises, in rondo's own words.** Validate `schema` first, then `ok`, then the
    envelope's common fields, then the verb's payload. **Unknown keys are accepted everywhere** —
    continuo's `/1` is explicit that an added field does not move the version, so a decoder that
    refused them would break on continuo's next additive release for nothing. An unrecognised
@@ -1916,7 +1923,7 @@ passing: which layer the seam is, which module may start a process, and where th
    decoder says so; an earlier draft of it invented a `continuo.measure.report/1` refusal document,
    which does not exist.
 
-8. **Two argument shapes are refused before the spawn, and a document's silence is not an answer.**
+9. **Two argument shapes are refused before the spawn, and a document's silence is not an answer.**
    An empty argument reaches continuo as an exit 1 and a raw stack (D-0015's exception 2); an
    argument containing a NUL never reaches continuo at all, because `spawn` throws *synchronously*
    rather than reporting through the event the invoker handles. Both are refused as rondo defects
@@ -1927,7 +1934,7 @@ passing: which layer the seam is, which module may start a process, and where th
    document that does not match the pinned shape, and folding absence into null would be the
    decoder declining to validate in the one place it looks like it validates.
 
-9. **The escaping stays exactly where D-0015 rule 7 put it, and is now a module.**
+10. **The escaping stays exactly where D-0015 rule 7 put it, and is now a module.**
    `src/access/console.ts` escapes to ASCII once, at the boundary where characters become output
    (D-0004). Decoded messages are unchanged inside rondo, so a value rondo holds is still the value
    continuo sent.

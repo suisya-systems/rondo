@@ -101,7 +101,10 @@ test.skipIf(!available)(
     const workspace = scratch();
     const database = join(scratch(), "control-plane.sqlite3");
 
-    const created = await run(continuo, DB_CREATE, ["--db", database, "--json"]);
+    // No `--json` on any of these: the invoker puts it on, because a caller
+    // that forgot it would run a mutating verb in human-output mode and then be
+    // told its own decode was a defect.
+    const created = await run(continuo, DB_CREATE, ["--db", database]);
     if (created.kind !== "answered") {
       expect.unreachable(`db create did not answer: ${JSON.stringify(created)}`);
     }
@@ -129,7 +132,6 @@ test.skipIf(!available)(
       "feat/rondo-smoke",
       "--prompt",
       "a one-line request, from rondo's smoke",
-      "--json",
     ]);
     expect(admitted).toEqual({
       kind: "answered",
@@ -141,19 +143,13 @@ test.skipIf(!available)(
       },
     });
 
-    const gates = await run(continuo, GATE_LIST, ["--db", database, "--json"]);
+    const gates = await run(continuo, GATE_LIST, ["--db", database]);
     // An admitted run has opened no gate, so the empty list is the answer -- and
     // it is a decoded success rather than an absence, which is the distinction
     // a host that read exit codes alone could not make.
     expect(gates).toEqual({ kind: "answered", db: database, payload: [] });
 
-    const missing = await run(continuo, GATE_SHOW, [
-      "--db",
-      database,
-      "--gate-id",
-      "no-such-gate",
-      "--json",
-    ]);
+    const missing = await run(continuo, GATE_SHOW, ["--db", database, "--gate-id", "no-such-gate"]);
     expect(missing).toEqual({
       kind: "refused",
       db: database,
@@ -203,6 +199,26 @@ test("a CLI path that does not exist is a defect, not a rejected promise", async
     cliPath: "/nowhere/at/all/dist/cli.js",
     revision: CONTINUO_REVISION,
   };
-  const result = await run(missing, GATE_LIST, ["--db", "/tmp/x", "--json"]);
+  const result = await run(missing, GATE_LIST, ["--db", "/tmp/x"]);
   expect(result.kind).toBe("invokerDefect");
 });
+
+test.skipIf(!available)(
+  `the invoker adds --json itself, and a caller that passes it too is not punished${skipNote}`,
+  async () => {
+    // The proof that the flag is the invoker's job: the same call, once without
+    // the flag and once with it twice over, decodes to the same document. A
+    // caller that omitted it would otherwise get human prose at exit 0 and be
+    // told rondo had a defect -- after the verb had already run.
+    const started = await startContinuo(process.env);
+    if (started.kind !== "ready") {
+      expect.unreachable(`continuo did not verify: ${started.reason}`);
+    }
+    const database = join(scratch(), "control-plane.sqlite3");
+    const created = await run(started.continuo, DB_CREATE, ["--db", database]);
+    expect(created.kind).toBe("answered");
+    const listed = await run(started.continuo, GATE_LIST, ["--db", database, "--json"]);
+    expect(listed).toEqual({ kind: "answered", db: database, payload: [] });
+  },
+  120_000,
+);
