@@ -57,11 +57,19 @@ costs on this machine, and that `resume` sees the outcome after a human answers.
    `node --experimental-strip-types` does *not* substitute for it: relative
    imports are spelled `.js` and Node does not remap them to `.ts`.
 
+   The install comes first and is the repository's own (`AGENTS.md`): the emit
+   cannot resolve `@suisya-systems/cadenza` until the vendored tarball is
+   installed, and the compiler is the pinned one in `node_modules/.bin` rather
+   than whatever `npx` would fetch.
+
    ```sh
+   node vendor/pin.mjs check          # the digest check, before every install
+   npm ci --ignore-scripts            # never `npm install` (D-0007)
+
    # A throwaway config beside the run, not a build the repository keeps.
    # extends ../tsconfig.json with:
    #   "noEmit": false, "outDir": "dist", "rootDir": "../src", "include": ["../src"]
-   npx tsc -p /absolute/path/to/tsconfig.dogfood.json
+   ./node_modules/.bin/tsc -p /absolute/path/to/tsconfig.dogfood.json
    ```
 
 4. **rondo's own iteration store, which is a second database and is not the one

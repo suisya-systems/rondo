@@ -20,8 +20,9 @@ expects.
 - Everything upstream of the spawn **did** work, and was measured: plan validation, cadenza's
   classification, the pin check, `run admit`, worktree materialisation, fence render, and the store's
   write order. The row that survives the failure is complete enough to reconstruct the run (F-9).
-- No `src/` change was made. Two defects found here are continuo's and one is cadenza-adjacent;
-  section 9 proposes them as issues rather than fixing them.
+- No `src/` change was made, and the defects this found are proposed as issues in section 9 rather
+  than fixed. The one exception is `scripts/dogfood-lap.md` itself, which fixing was in scope: F-3,
+  F-4 and F-5 are corrected in the same change as this record.
 
 ---
 
@@ -85,7 +86,9 @@ composition root from a plain `node` process. The dogfood used a throwaway confi
 ```sh
 # .worker-scratch/tsconfig.dogfood.json extends ../tsconfig.json with
 #   noEmit:false, outDir:"dist", rootDir:"../src", include:["../src"]
-npx tsc -p .worker-scratch/tsconfig.dogfood.json    # 1 s, exit 0
+./node_modules/.bin/tsc -p .worker-scratch/tsconfig.dogfood.json    # 1 s, exit 0
+# (run here as `npx tsc`; the script now says the local binary, so the compiler
+#  is the pinned one rather than whatever npx would fetch)
 ```
 
 Total provisioning: **about 13 seconds**, plus the compile.
@@ -588,6 +591,11 @@ whether `resume` sees an answered gate; and whether `ANTHROPIC_MODEL` reaches th
 
 ## 8. How to run this again
 
+**Nothing in this section is committed.** `.worker-scratch/` is excluded from git, so the two files
+below are yours to create before the command works; they are reproduced in full here, and together
+with section 2's provisioning and section 3's plan they are the whole of what this run was. Write
+them into `.worker-scratch/`, then:
+
 ```sh
 S=<worktree>/.worker-scratch
 export npm_config_cache=$S/npm-cache
@@ -595,8 +603,19 @@ export RONDO_CONTINUO_CLI=$S/continuo-44f62336108b86cab5da791111ffa0e5b73cd01a/d
 node --experimental-sqlite .worker-scratch/drive.mjs <validate|classify|admit|resume|abandon|row>
 ```
 
-The driver is thirty lines and is reproduced here so this record does not depend on a file outside
-git:
+`.worker-scratch/plan.mjs` is section 3's `PLAN_INPUT` under this header, which is what supplies
+`S`, `RUN_ID` and `ITERATION_ID` to both files:
+
+```js
+// The RunPlan for the lap-1 dogfood, filled by hand (R-3: the caller packages it).
+const S = "<worktree>/.worker-scratch";
+export const RUN_ID = process.env.DOGFOOD_RUN_ID ?? "lap1-dogfood-001";
+export const ITERATION_ID = process.env.DOGFOOD_ITERATION_ID ?? "iter-001";
+
+export const PLAN_INPUT = { /* section 3, verbatim */ };
+```
+
+`.worker-scratch/drive.mjs` is thirty lines:
 
 ```js
 import { DatabaseSync } from "node:sqlite";
@@ -606,8 +625,8 @@ import { iterationStore } from "./dist/store/sqlite.js";
 import { classifyPlan } from "./dist/refrain/classification.js";
 import { PLAN_INPUT, ITERATION_ID } from "./plan.mjs";
 
-// The scratch root, spelled here because the shell variable above is the
-// shell's and not this module's.
+// Spelled again here: `plan.mjs`'s `S` is that module's own and is not exported,
+// and the shell variable above is the shell's.
 const S = "<worktree>/.worker-scratch";
 const POLICY = Object.freeze({ autonomy: "ask_before_landing", maxIterations: 1 });
 const mode = process.argv[2];
@@ -671,19 +690,14 @@ Proposed: decide where model selection lives -- most plausibly `modelTier` final
 in rondo's role adapter alongside `mapNeutralRole`, and passed to a new `lap perform` flag -- and
 record the decision. Until then the cost of a lap is not a number this stack chooses.
 
-**3. (rondo) `scripts/dogfood-lap.md` cannot be followed as written.**
-Three defects, each of which stops a reader. Its step 2 says `admit(request, plan, policy)`; the real
-signature is `admit(ports, plan, policy, id)`, with `ports` from `openConductor(store, env)` and the
-iteration id as the caller's own fourth argument. Its *Before you start* lists one database; rondo
-has a second, its own iteration store, which the caller opens as a `node:sqlite` `DatabaseSync` at a
-path the script never mentions and which needs `--experimental-sqlite` on Node 22. And it does not
-say that rondo has no build (D-0002, `tsconfig.json` is `noEmit`), so the composition root cannot be
-imported at all until the caller writes an emitting `tsconfig` and runs `tsc` --
-`--experimental-strip-types` does not work, because relative imports are spelled `.js`. Proposed:
-correct the signature, add the store and the compile to *Before you start*, and name the policy value
-that actually starts a run (see the next issue).
+**Not proposed: `scripts/dogfood-lap.md` was wrong and is fixed in the same change as this record.**
+F-3, F-4 and F-5 are defects in the procedure itself, and fixing the dogfood script was in scope for
+this run: the script now carries `admit`'s real signature, the second database rondo opens for its
+own iteration store, the install-then-compile step D-0002 leaves to the caller, the policy value that
+actually starts a run, and the two cross-field rules `runPlan()` does not check. They are recorded as
+findings because they are what this run cost, not because anything is owed to the secretary.
 
-**4. (rondo) The plan's three undocumented cross-field rules, and where each is discovered.**
+**3. (rondo) The plan's three undocumented cross-field rules, and where each is discovered.**
 Filling a first `RunPlan` costs three findings that `runPlan()` could have named and does not.
 (a) `CONSERVATIVE_POLICY` refuses before a row exists, by design (D-0019 rule 9), and neither the
 script nor `policy.ts` says the value that does start a run is
@@ -700,7 +714,7 @@ declaring layer. The working shape is currently recoverable only from
 `test/cadenza/smoke.test.ts` and from cadenza's refusals. Proposed: check (b) in `runPlan()`, and
 document (a) and (c) where a caller filling a plan will meet them.
 
-**5. (rondo) Two refusals speak the wrong vocabulary, and the row loses the session path.**
+**4. (rondo) Two refusals speak the wrong vocabulary, and the row loses the session path.**
 Small, and cheap. A duplicate iteration id surfaces as `The store could not reserve an iteration:
 UNIQUE constraint failed: iteration.id` -- a driver's phrasing and a column name, where every other
 refusal in the loop names a field and a rule. And a failed lap's session id reaches the row only
@@ -711,7 +725,7 @@ refusal in rondo's own vocabulary, and persist the session id in a column of its
 get from the row to the evidence without regex. `node vendor/pin.mjs check` printing the digest it
 verified, rather than nothing, belongs in the same change.
 
-**6. (rondo) The lap-1 loop has never completed, and the parallelism discussion should say so.**
+**5. (rondo) The lap-1 loop has never completed, and the parallelism discussion should say so.**
 rondo#8 / continuo#167 weigh single-flight against throughput. This run is the measurement that was
 asked for first, and its result is that **no lap has completed end to end on this machine**: the arc
 stops at the spawn (issue 1), so the suspend at `awaiting_human`, the human answer through
