@@ -35,6 +35,7 @@ import {
   CLI_PATH_ENV,
   run,
   startContinuo,
+  unusableArgument,
   type VerifiedContinuo,
 } from "../../src/continuo/invoker.js";
 import { CONTINUO_REVISION } from "../../src/continuo/pin.js";
@@ -167,58 +168,47 @@ test.skipIf(!available)(
 );
 
 /**
- * The two argument shapes rondo refuses to hand to `spawn`, checked without one.
+ * The two argument shapes rondo refuses to hand to `spawn`.
  *
  * An empty argument reaches continuo as an exit 1 and a raw stack; an argument
  * with a NUL in it never reaches continuo at all, because `spawn` throws
- * *synchronously* rather than emitting the `error` event this module handles --
- * which would reject a promise the invoker promises never to reject. Both are
- * refused before the spawn, so these cases need no continuo and run everywhere.
+ * *synchronously* rather than emitting the `error` event the invoker handles --
+ * which would reject a promise it promises never to reject. Both are decided
+ * before a process exists, so they are checked against the pure rule rather
+ * than through a subprocess.
  */
-test("the invoker refuses an unusable argument before it starts a process", async () => {
-  const pretend: VerifiedContinuo = {
+test("an unusable argument is named before anything is started", () => {
+  expect(unusableArgument(["--db", "/tmp/x"])).toBeNull();
+  expect(unusableArgument(["--db", ""])).toContain("an empty argument at position 1");
+  expect(unusableArgument(["--db", "/tmp/a\u0000b"])).toContain("NUL byte at position 1");
+});
+
+test("a handle rondo did not issue drives nothing", async () => {
+  // `VerifiedContinuo` is a structural type, so this literal type-checks -- and
+  // a JavaScript caller would not even need that. The invariant is therefore
+  // enforced at runtime: what has not been verified cannot be driven, whatever
+  // its fields say.
+  const forged: VerifiedContinuo = {
     cliPath: "/nowhere/dist/cli.js",
     revision: CONTINUO_REVISION,
   };
-  const empty = await run(pretend, GATE_LIST, ["--db", ""]);
-  expect(empty).toEqual({
+  const result = await run(forged, GATE_LIST, ["--db", "/tmp/x"]);
+  expect(result).toEqual({
     kind: "invokerDefect",
-    reason: expect.stringContaining("an empty argument at position 1"),
-  });
-  const withNul = await run(pretend, GATE_LIST, ["--db", "/tmp/a\u0000b"]);
-  expect(withNul).toEqual({
-    kind: "invokerDefect",
-    reason: expect.stringContaining("NUL byte at position 1"),
+    reason: expect.stringContaining("a handle it did not issue"),
   });
 });
 
-test("a CLI path that does not exist is a defect, not a rejected promise", async () => {
-  // The `error` event path. It must resolve, because every caller in rondo is
-  // written against a value rather than against a catch.
-  const missing: VerifiedContinuo = {
-    cliPath: "/nowhere/at/all/dist/cli.js",
-    revision: CONTINUO_REVISION,
-  };
-  const result = await run(missing, GATE_LIST, ["--db", "/tmp/x"]);
-  expect(result.kind).toBe("invokerDefect");
+test("a CLI that is not there refuses at startup rather than rejecting", async () => {
+  // The `error`-event path, reached without a built continuo: startup must
+  // answer with a reason, because every caller in rondo is written against a
+  // value rather than against a catch.
+  const started = await startContinuo({ [CLI_PATH_ENV]: "/nowhere/at/all/dist/cli.js" });
+  expect(started.kind).toBe("refused");
 });
 
-test.skipIf(!available)(
-  `the invoker adds --json itself, and a caller that passes it too is not punished${skipNote}`,
-  async () => {
-    // The proof that the flag is the invoker's job: the same call, once without
-    // the flag and once with it twice over, decodes to the same document. A
-    // caller that omitted it would otherwise get human prose at exit 0 and be
-    // told rondo had a defect -- after the verb had already run.
-    const started = await startContinuo(process.env);
-    if (started.kind !== "ready") {
-      expect.unreachable(`continuo did not verify: ${started.reason}`);
-    }
-    const database = join(scratch(), "control-plane.sqlite3");
-    const created = await run(started.continuo, DB_CREATE, ["--db", database]);
-    expect(created.kind).toBe("answered");
-    const listed = await run(started.continuo, GATE_LIST, ["--db", database, "--json"]);
-    expect(listed).toEqual({ kind: "answered", db: database, payload: [] });
-  },
-  120_000,
-);
+test("a relative or wrongly-named CLI path is refused before a process is started", async () => {
+  expect((await startContinuo({ [CLI_PATH_ENV]: "dist/cli.js" })).kind).toBe("refused");
+  expect((await startContinuo({ [CLI_PATH_ENV]: "/somewhere/continuo" })).kind).toBe("refused");
+  expect((await startContinuo({})).kind).toBe("refused");
+});

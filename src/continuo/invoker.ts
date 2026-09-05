@@ -70,6 +70,22 @@ export interface VerifiedContinuo {
   readonly revision: string;
 }
 
+/**
+ * The handles this module actually issued.
+ *
+ * `VerifiedContinuo` is a structural type, so `{ cliPath, revision }` written
+ * by hand satisfies it — and a caller who wrote one would be driving an
+ * arbitrary executable while holding a value whose name says rondo checked it.
+ * The type cannot prevent that (a JavaScript caller has no types at all), so
+ * the check is a runtime one: {@link startContinuo} registers what it verified,
+ * and {@link run} drives nothing that is not in here. A `WeakSet` because the
+ * registry must not be the reason a handle outlives its use.
+ *
+ * This is the same shape of argument as the layer's `spawn` grant: the boundary
+ * is worth nothing if the thing it protects can be reached another way.
+ */
+const verifiedHandles = new WeakSet<VerifiedContinuo>();
+
 /** Whether rondo may start at all. */
 export type StartupResult =
   | { readonly kind: "ready"; readonly continuo: VerifiedContinuo }
@@ -173,10 +189,9 @@ export async function startContinuo(
   if (verdict.kind === "refused") {
     return { kind: "refused", reason: verdict.reason };
   }
-  return {
-    kind: "ready",
-    continuo: { cliPath: located.path, revision: verdict.revision },
-  };
+  const continuo: VerifiedContinuo = { cliPath: located.path, revision: verdict.revision };
+  verifiedHandles.add(continuo);
+  return { kind: "ready", continuo };
 }
 
 /**
@@ -191,6 +206,20 @@ export async function run<T>(
   contract: VerbContract<T>,
   argv: readonly string[],
 ): Promise<ContinuoResult<T>> {
+  if (!verifiedHandles.has(continuo)) {
+    // Checked before the arguments and before the spawn, because it is the
+    // invariant the other two exist inside: rondo drives a build whose revision
+    // it read from the build itself and compared with the committed pin. A
+    // handle this module did not issue has had none of that done to it,
+    // whatever its fields say.
+    return {
+      kind: "invokerDefect",
+      reason:
+        `rondo was asked to drive continuo ${contract.command.join(" ")} through a handle it ` +
+        "did not issue. A VerifiedContinuo comes from startContinuo, which reads --version and " +
+        "checks it against the pin; one written by hand has been verified by nobody.",
+    };
+  }
   const unusable = unusableArgument(argv);
   if (unusable !== null) {
     // Before the spawn on purpose, and for two different hazards. An
@@ -234,7 +263,7 @@ export async function run<T>(
  * than returned, because the message is the whole point -- an index alone sends
  * a reader back to count arguments.
  */
-function unusableArgument(argv: readonly string[]): string | null {
+export function unusableArgument(argv: readonly string[]): string | null {
   for (const [index, argument] of argv.entries()) {
     if (argument === "") {
       return `an empty argument at position ${String(index)}`;

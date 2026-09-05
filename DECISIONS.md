@@ -1923,7 +1923,15 @@ passing: which layer the seam is, which module may start a process, and where th
    decoder says so; an earlier draft of it invented a `continuo.measure.report/1` refusal document,
    which does not exist.
 
-9. **Two argument shapes are refused before the spawn, and a document's silence is not an answer.**
+9. **A continuo rondo has not verified cannot be driven, and the check is at runtime.** The record
+   `startContinuo` hands back is a structural type, so a caller could write one by hand — and a
+   JavaScript caller needs no type at all — which would mean driving an arbitrary executable while
+   holding a value whose name says rondo checked it. So the invoker issues the handles it verified
+   and refuses any other, before it looks at the arguments and before it starts a process. A
+   boundary that can be reached around is worth what the `spawn` grant would be worth if any module
+   could import `node:child_process`.
+
+10. **Two argument shapes are refused before the spawn, and a document's silence is not an answer.**
    An empty argument reaches continuo as an exit 1 and a raw stack (D-0015's exception 2); an
    argument containing a NUL never reaches continuo at all, because `spawn` throws *synchronously*
    rather than reporting through the event the invoker handles. Both are refused as rondo defects
@@ -1934,7 +1942,7 @@ passing: which layer the seam is, which module may start a process, and where th
    document that does not match the pinned shape, and folding absence into null would be the
    decoder declining to validate in the one place it looks like it validates.
 
-10. **The escaping stays exactly where D-0015 rule 7 put it, and is now a module.**
+11. **The escaping stays exactly where D-0015 rule 7 put it, and is now a module.**
    `src/access/console.ts` escapes to ASCII once, at the boundary where characters become output
    (D-0004). Decoded messages are unchanged inside rondo, so a value rondo holds is still the value
    continuo sent.
