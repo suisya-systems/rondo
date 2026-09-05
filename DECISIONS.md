@@ -38,7 +38,7 @@ C-NN`, so the spaces can never be read as one.
 
 | ID | Title | Status |
 |---|---|---|
-| D-0001 | How rondo consumes continuo and cadenza in lap 1: a CLI process boundary for continuo, and nothing at all for cadenza | accepted |
+| D-0001 | How rondo consumes continuo and cadenza in lap 1: a CLI process boundary for continuo, and nothing at all for cadenza | superseded by D-0018 |
 | D-0002 | The TypeScript configuration: ESM, NodeNext, strictness beyond `strict`, and no build output yet | accepted |
 | D-0003 | The double-green rule, and where it is enforced | accepted |
 | D-0004 | ASCII-only for anything rondo prints | accepted |
@@ -53,14 +53,23 @@ C-NN`, so the spaces can never be read as one.
 | D-0013 | An aborted iteration's open gate is closed `withdrawn` by the operating surface, not by the conductor (cadenza `C-13`) | accepted |
 | D-0014 | The agent type's role name is mapped in the continuo-invocation adapter, which refuses an unmapped name before admission (cadenza `C-15`) | accepted |
 | D-0015 | continuo's machine-readable seam, re-argued on its merits: the CLI boundary stands, `--json` is a wire protocol rather than types, and provenance becomes a verification duty | accepted |
-| D-0016 | cadenza is still not consumed in lap 1, now for a different and narrower reason: the entry point exists, the artefact does not, and the record rondo needs is not exported | accepted |
+| D-0016 | cadenza is still not consumed in lap 1, now for a different and narrower reason: the entry point exists, the artefact does not, and the record rondo needs is not exported | superseded by D-0018 |
 | D-0017 | The first working seam to continuo: a `src/continuo/` layer, a build rondo verifies before it drives, and `gate close` rejoining the envelope | accepted |
+| D-0018 | cadenza becomes a library rondo consumes: a vendored tarball under cadenza's delivery bridge, one facade, and a smoke that runs in every cell | accepted |
 
 ---
 
 ## D-0001 — How rondo consumes continuo and cadenza in lap 1: a CLI process boundary for continuo, and nothing at all for cadenza
 
-**Status:** accepted (2026-09-05, rondo#1)
+**Status:** superseded by D-0018 (2026-09-06). Accepted 2026-09-05 (rondo#1).
+
+> **Supersession note.** Item 1 wrote its own rule — a dependency on either sibling "in any
+> specifier form" supersedes this entry — and D-0018 takes one on cadenza, which also retires item
+> 3. Supersession here is whole-entry, per "How to use this file", so **items 2 and 4 are not
+> retired with it**: continuo across a CLI process boundary and the duty to record which continuo
+> revision drove a run are re-argued in **D-0015** and implemented in **D-0017**, which are where
+> those two claims now live. Nothing below is edited, including the 2026-09-05 annotation from
+> D-0015 and D-0016 that follows this note.
 
 > **Annotation (2026-09-05, from D-0015 and D-0016).** Added after this entry was accepted, under
 > the annotation rule in "How to use this file". Nothing below it was removed or rewritten: every
@@ -1609,7 +1618,12 @@ the literal for, so rondo's verification duty follows the artefact rather than t
 
 ## D-0016 — cadenza is still not consumed in lap 1, now for a different and narrower reason: the entry point exists, the artefact does not, and the record rondo needs is not exported
 
-**Status:** accepted (2026-09-05, rondo's human gate)
+**Status:** superseded by D-0018 (2026-09-06). Accepted 2026-09-05 (rondo's human gate).
+
+> **Supersession note.** Two of the falsifiers below fired within the day: `cadenza D-0035`
+> accepted a delivery route for an `--ignore-scripts` consumer, and `cadenza D-0034` put the
+> agent-type record on the exported surface. **D-0018** is the entry that answers both. The
+> measurements below are of `4b53ecaec7ce2d8bcd3e4ac74cdaec27a232ca83` and are kept as taken.
 
 D-0001 named this too: *"cadenza acquires an entry point. Then rondo has a decision to take about
 cadenza that it does not have today, and it is a new entry rather than an edit to this one."*
@@ -2107,3 +2121,198 @@ npx vitest run test/continuo/smoke.test.ts           (variable unset, not CI)
   the answer is a provisioned or cached artefact, not a skip.
 - Any measurement above failing to reproduce. Toolchain `node v22.17.0` / `npm 10.9.2`; continuo at
   `44f62336108b86cab5da791111ffa0e5b73cd01a`.
+
+---
+
+## D-0018 — cadenza becomes a library rondo consumes: a vendored tarball under cadenza's delivery bridge, one facade, and a smoke that runs in every cell
+
+**Status:** accepted (2026-09-06, rondo's human gate)
+
+**This entry supersedes D-0001 and D-0016.** Both keep their IDs and their text; both gain
+`Status: superseded by D-0018`. Two entries rather than one, because the change falsifies a claim in
+each and the claims are not independent:
+
+- **D-0001 item 1** — "rondo takes no npm dependency on either sibling ... adding one for
+  `@suisya-systems/continuo` or `@suisya-systems/cadenza`, *in any specifier form*, supersedes this
+  entry rather than merely extending it." A committed tarball referenced as
+  `file:vendor/suisya-systems-cadenza-0.0.0.tgz` is an npm dependency, and the absence of a
+  `dependencies` block was part of what that entry decided. D-0001 wrote its own supersession rule
+  and this is it being obeyed, not stretched.
+- **D-0001 item 3 and the whole of D-0016** — "cadenza is not consumed at all in lap 1". D-0016
+  rested that on two facts, and **both have changed** — though not in the same way, and the
+  difference is worth stating precisely:
+  - `cadenza D-0034` put the agent-type record on the exported surface. That is **D-0016's second
+    falsifier, fired by name**.
+  - `cadenza D-0035` accepted a delivery route for a consumer that installs with
+    `--ignore-scripts`. That is **not** one of D-0016's five falsifiers, and reading it as one would
+    misread it: D-0035 leaves publication untaken and refuses `prepare` deliberately, and those are
+    the two D-0016 listed. What D-0035 changes is the *cost* half of D-0016's argument — "any route
+    would make rondo responsible for building or hosting a dependency it does not own" — because the
+    route is now a documented procedure cadenza owns and answers for rather than one rondo would
+    have invented. The falsifier that fired and D-0001 item 1's own rule are what carry the
+    supersession; D-0035 is why the answer this time is yes rather than merely possible.
+
+**What survives, unchanged and unmoved.** D-0001 items 2 and 4 are not touched by this entry:
+continuo is still consumed across a **CLI process boundary**, and rondo still **records which
+continuo revision it drove**. Both were re-argued at the current sibling revisions in **D-0015** and
+implemented in **D-0017**, which are where those two claims now live; superseding D-0001 as a whole
+does not retire them, and nothing in this entry is a licence to reopen them. The single change here
+is about cadenza.
+
+### Decision
+
+1. **rondo consumes cadenza as a library in lap 1.** It is a runtime dependency, imported by package
+   name, and the values rondo takes from it are G1 project resolution, the agent-type record, the
+   delegation contract's initial issuance, and classification.
+2. **Delivery is cadenza's accepted bridge (`cadenza D-0035`, `docs/artifact-delivery-bridge.md`),
+   form 2a**: the tarball is built once by a person in a scratch clone and **committed**, and
+   nothing is rebuilt afterwards. What is committed is the list that page calls its contract —
+   `vendor/suisya-systems-cadenza-0.0.0.tgz`, `vendor/cadenza.tgz.sha256`, `vendor/pin.mjs`, the
+   source pin, `package.json` and `package-lock.json`. `@suisya-systems/cadenza` is rondo's **first
+   runtime dependency**; the `dependencies` block did not exist before this entry.
+   Form 2b — rebuilding in CI to avoid a vendored binary — is refused: it requires `npm pack` to be
+   byte-identical on the runner, which cadenza measured on one Linux machine and explicitly did not
+   measure across platforms, and rondo's matrix has a Windows cell.
+3. **Three different facts are pinned in three different places, and none of them stands in for
+   another.**
+   - `cadenza.pin.json` — repository plus the **full commit sha**: what was *meant* to be built.
+   - `vendor/cadenza.tgz.sha256` — which **bytes rondo carries**.
+   - `package-lock.json`'s sha512 `integrity` — which **bytes npm installs**.
+   `test/cadenza/pin.test.ts` requires all three to describe one file. **No cadenza version is
+   recorded**, and its absence is asserted: cadenza has no `--version` and every build of every
+   revision is `0.0.0`, so a version line here would be a fact rondo invented. This is the one place
+   this entry differs in shape from D-0017's continuo pin, whose seam *does* report a revision rondo
+   can verify at startup.
+4. **The digest check runs immediately before every install** — `node vendor/pin.mjs check` before
+   each `npm ci --ignore-scripts`, in all three of CI's installing jobs and in the local sequence
+   README and AGENTS document. Not as a test afterwards: npm enforces integrity against its cache,
+   so a drifted tarball is `EINTEGRITY` on a cold cache and a **silent install of the previously
+   pinned bytes** on a warm one. The check is cache-independent and names both digests. It is Node
+   rather than `sha256sum`, which is GNU coreutils and absent on the Windows cell.
+5. **One new layer, `src/cadenza/`, self-only, with exactly one module granted the package.**
+   `src/cadenza/facade.ts` imports `@suisya-systems/cadenza` and is granted it **binding by
+   binding** in `test/architecture/import-boundaries.test.ts`; a second module in the layer is not
+   granted it, no other layer is granted it at all, and a deep path into the package is not granted
+   even to the facade. `src/refrain -> src/cadenza` is **not** added: the arrow arrives when
+   conductor code consumes the facade, as that change's decision. Planted cases prove each refusal.
+   The grant is per binding for a reason larger than convention: cadenza exports 80 values,
+   including `delegate` and `adopt`, and a grant of "the package" would have been a grant of those.
+6. **The smoke goes through the facade, with in-memory fixtures, in the ordinary suite.**
+   `test/cadenza/smoke.test.ts` resolves a G1 project fixture, builds the agent-type record, issues
+   an initial contract through `contractInputForAgentType` + `delegationContract`, and classifies one
+   deterministic action, asserting the exact outcome, reason and `contract_digest`. It imports the
+   package nowhere: a test that did would exercise the tarball and not rondo's boundary. Because it
+   needs no filesystem, clock or process, it runs in **both seeded runs of every matrix cell** —
+   which is what makes it the check that the vendored artifact works on Windows and on Node 22 and
+   24. The vocabulary is read off the record's `vocabularyVersion`, never off a "latest version"
+   constant: cadenza classifies against the vocabulary the contract pinned (`cadenza D-0027`), and a
+   smoke hard-coded to `VOCABULARY_VERSION_1` would test the fixture instead of the mapping.
+7. **`classify()` is an answer rondo reads, and never a second enforcement mechanism.** It is pure
+   and total; it stops nothing (`cadenza D-0026` section 2). **Initial issuance is in scope;
+   approval-driven supersession is not**: `delegate` and `adopt` are deliberately not imported, and
+   the smoke answers `needs_approval` by reading it and stopping. Composing a widening successor is
+   how rondo would come to answer its own gate, which **D-0009** forbids and this entry does not
+   relax.
+
+### What was measured, and how
+
+**2026-09-06**, toolchain `node v22.17.0` / `npm 10.9.2`, against cadenza
+`e56d7e71981232d19120d20ba6b920a5c4d762dc` — the commit that implements and exports the agent-type
+record (`cadenza D-0034`). The sibling checkouts at `<workers>/cadenza` and `<workers>/continuo`
+were strictly read-only and verified untouched afterwards; the bootstrap happened in a **scratch
+clone outside the repository**, which is not committed.
+
+Phase 1 of the bridge, run once:
+
+```
+git clone https://github.com/suisya-systems/cadenza.git <scratch>
+git -C <scratch> checkout e56d7e71981232d19120d20ba6b920a5c4d762dc
+git -C <scratch> rev-parse HEAD     ->  e56d7e71981232d19120d20ba6b920a5c4d762dc
+npm --prefix <scratch> ci --ignore-scripts   ->  added 133 packages
+npm --prefix <scratch> run build             ->  exit 0  (clean, then tsc -p tsconfig.build.json)
+git -C <scratch> status --porcelain          ->  (empty)
+npm pack <scratch> --pack-destination vendor ->  suisya-systems-cadenza-0.0.0.tgz
+                                                 128 files, 131683 bytes
+node vendor/pin.mjs record
+npm install --ignore-scripts ./vendor/suisya-systems-cadenza-0.0.0.tgz   ->  added 1 package
+```
+
+What that wrote and what rondo now carries:
+
+```
+package.json    "@suisya-systems/cadenza": "file:vendor/suisya-systems-cadenza-0.0.0.tgz"
+lockfile        resolved  file:vendor/suisya-systems-cadenza-0.0.0.tgz
+                integrity sha512-fopGJqOvjAfoTggFEghY8JSvg+cjup3HMKtPz9YBrc4Zd00Xqu0iAaq0tvHB+lZI7RBk8oJL3tFtccAJLz6MTg==
+vendor/cadenza.tgz.sha256
+                30233f2ff0ca9f2e406f1c5ce9a946ed2e67c5726dda32b8520591c87308a3c2
+```
+
+The sha512 in the lockfile is the sha512 of the committed tarball, and the sha256 file is its
+sha256; both are recomputed from the bytes on every test run rather than compared to each other's
+copy. `smol-toml@1.8.0` — cadenza's one dependency — moves from a development dependency to a
+runtime one in the lockfile, which is the whole of the transitive cost.
+
+**The surface, re-inventoried.** D-0016 measured **70 exports** and recorded that the record rondo's
+own entries lean on was not among them. At this revision the same measurement — the runtime values
+an `import()` of the package hands back — answers **80**. Six of them are the agent-type record and
+its renderer: `agentType`, `agentTypeDigest`, `agentTypePayload`, `isAgentType`, `requireAgentType`
+and `contractInputForAgentType`, beside the types `AgentType`, `AgentTypeInput` and
+`IssuanceParties`, which are erased at runtime and are therefore in neither count. That is D-0016's
+second falsifier, fired by name.
+
+**What the smoke observed** against the installed tarball, and what it now asserts as literals:
+
+```
+resolveProject(...)        configDigest   sha256:1f8cf5916c3a68f63700bc9fb5a99f8f1ce94b336468843459019095590a1427
+delegationContract(...)    contractDigest sha256:15475d4c7a5fe2436f9f35ad70155f7e06ef5d20cb59b9dc1a6c079d8145b39c
+classify(command.run)      -> { outcome: "allowed",        reason: "granted" }
+classify(branch.push)      -> { outcome: "needs_approval", reason: "askable" }
+```
+
+`npm ci --ignore-scripts && npm run verify` is green.
+
+### What this buys, and what it does not
+
+**It buys the thing D-0016 said was missing.** rondo's D-0009 … D-0014 restate cadenza's rows in
+rondo's own words, and D-0016's third falsifier was rondo needing a value it cannot restate. The
+agent-type record and `contract_digest` are exactly that: a digest is only worth persisting if it is
+the digest cadenza computes, byte for byte, and a rondo-side reimplementation would be a second
+canonical-JSON encoder with no rule for which one is right. Consuming the library is what makes
+"under what contract did this run" answerable by comparing values rather than by trusting two
+implementations to agree.
+
+**It does not buy provenance, and the bridge says so.** npm proves the installed bytes are the bytes
+rondo committed. Nothing here proves those bytes were built from
+`e56d7e71981232d19120d20ba6b920a5c4d762dc`: the chain from that sha to this tarball is the procedure
+above and the person who ran it. That gap closes with publication and not before, and recording it
+is the honest version of rule 3 — the source pin is a **claim about intent**, the two digests are
+**facts about bytes**, and conflating them would be inventing a guarantee.
+
+**It is not a general licence to import cadenza.** Rule 5 is what keeps that literal: one module, a
+named list of bindings, no arrow from the loop yet. A second consumer is a diff in the boundary
+test, which is where the question "should this layer reach cadenza?" is asked.
+
+### What would falsify it
+
+- **cadenza publishing to a registry.** The bridge is written to be thrown away: publication
+  replaces the vendored tarball, `vendor/pin.mjs`, the sha256 file and the source pin with an
+  ordinary pinned version and a registry-enforced integrity hash, and this entry's rules 2, 3 and 4
+  go with them. Rules 5 to 7 do not.
+- **The vendored tarball failing on a matrix cell** — an install, an import, or a `tsc --noEmit`
+  that resolves the declarations on ubuntu and not on windows, or on Node 22 and not on 24. Rule 6's
+  smoke is what would report it, and the answer would be a delivery decision rather than a patch.
+- **A value rondo needs that is not on the barrel.** `cadenza D-0033` makes the barrel the surface
+  cadenza is answerable for, and `cadenza D-0029`'s own falsifier is a host having to reach past it.
+  A deep path is refused here by the boundary test as well as by cadenza's `exports` map.
+- **rondo needing to compose a successor contract.** Rule 7 scopes this entry to initial issuance.
+  Supersession is a new decision at rondo's gate, and it has to answer D-0009 first, not this entry.
+- **`src/refrain` needing the facade**, which is the arrow rule 5 leaves unbuilt. Expected, and a
+  decision in its own diff rather than a widening of this one.
+- **cadenza acquiring a `prepare` script, changing its `exports` map, or moving what `agentType()`
+  digests.** The first two change what a route delivers; the third moves the literals the smoke
+  asserts, and that failure is the correct one — it says the vendored artifact computes something
+  different.
+- **The digest check ever being moved after an install, or dropped from a job that installs.** Rule
+  4 is a sequence, not a step, and `test/cadenza/pin.test.ts` fails when the sequence breaks.
+- Any measurement above failing to reproduce. Toolchain `node v22.17.0` / `npm 10.9.2`; cadenza at
+  `e56d7e71981232d19120d20ba6b920a5c4d762dc`.

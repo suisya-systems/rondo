@@ -13,6 +13,22 @@
 export { asciiEscape, relayUpstream } from "./access/console.js";
 export { describeNextStep } from "./access/local.js";
 export {
+  type AgentType,
+  type AgentTypeInput,
+  agentTypeRecord,
+  type CatalogLayer,
+  type Classification,
+  type ClassificationContext,
+  classifyAction,
+  type DelegationContract,
+  type IntendedAction,
+  type IssuanceParties,
+  issueInitialContract,
+  type RawTable,
+  type ResolvedProject,
+  resolveProject,
+} from "./cadenza/facade.js";
+export {
   run as runContinuo,
   type StartupResult,
   startContinuo,

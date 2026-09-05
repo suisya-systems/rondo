@@ -133,8 +133,18 @@ const ALLOWED_INTERNAL_BY_LAYER: Readonly<Record<string, readonly string[]>> = {
   // arrow one-way -- rondo's loop must stay testable without a continuo, so
   // `src/refrain` may not reach this layer and this layer may not reach it.
   "src/continuo": ["src/continuo"],
+  // The seam to cadenza (D-0018): the one layer that imports the vendored
+  // cadenza package, through the single facade granted it below. Self-only,
+  // and deliberately so -- `src/refrain -> src/cadenza` is the arrow that will
+  // matter, and it is added when conductor code actually consumes the facade
+  // rather than in advance. An arrow nothing travels along is a permission
+  // granted for a use nobody has yet made.
+  "src/cadenza": ["src/cadenza"],
   // The access points: the web UI and the localhost MCP surface, when they
-  // exist. They compose the other three and are composed by nobody.
+  // exist. They compose the other three and are composed by nobody. cadenza is
+  // NOT among them: an access point that needed a delegation contract would be
+  // an access point taking a domain decision, and D-0018 rule 5 says the arrow
+  // to add first is the loop's.
   "src/access": ["src/access", "src/continuo", "src/refrain", "src/store"],
 };
 
@@ -194,6 +204,37 @@ const ALLOWED_EXTERNALS_BY_MODULE: Readonly<
   // it quietly become a second spawner. The planted corpus proves the
   // distinction is enforced rather than merely intended.
   "src/continuo/invoker.ts": { "node:child_process": ["spawn"] },
+  // The one module allowed to import cadenza, and the whole of what it takes
+  // (D-0018 rule 5). The list is the facade's surface stated twice -- once as
+  // an import and once as a grant -- which is the point: adding a binding to
+  // the facade is a diff here as well, so "what does rondo use cadenza for" is
+  // answered by a reviewable list rather than by a package name.
+  //
+  // The bindings are named one by one for the reason SQLite's and the spawn's
+  // are, and it carries more weight here than for a Node builtin: cadenza
+  // exports 80 values, including `delegate` and `adopt` -- supersession, the
+  // widening successor -- which rondo must not compose (D-0009). A grant of
+  // "the package" would have been a grant of those too.
+  "src/cadenza/facade.ts": {
+    "@suisya-systems/cadenza": [
+      "AgentType",
+      "AgentTypeInput",
+      "Classification",
+      "ClassificationContext",
+      "DelegationContract",
+      "IntendedAction",
+      "IssuanceParties",
+      "RawTable",
+      "ResolvedProject",
+      "agentType",
+      "classify",
+      "composeCatalog",
+      "contractInputForAgentType",
+      "delegationContract",
+      "layerDocument",
+      "resolveProject",
+    ],
+  },
 };
 
 /**
@@ -230,6 +271,7 @@ const SQLITE_OWNER = "src/store/sqlite.ts";
 const EXPECTED_MODULES: readonly string[] = [
   "src/access/console.ts",
   "src/access/local.ts",
+  "src/cadenza/facade.ts",
   "src/continuo/invoker.ts",
   "src/continuo/pin.ts",
   "src/continuo/protocol.ts",
@@ -1256,6 +1298,88 @@ const PLANTED: ReadonlyArray<
     'import { DatabaseSync } from "node:sqlite";\nexport const x = DatabaseSync;\n',
     "is the one module that owns durable state",
   ],
+  [
+    // D-0018 rule 5 grants the package to ONE module, exactly as D-0017 grants
+    // the spawn to one. This is the case that makes it a grant rather than a
+    // licence for the layer: a registry, a mapper or a cache added beside the
+    // facade would be a second place cadenza's surface enters rondo, and the
+    // point of the facade is that there is only one.
+    "a-second-module-in-the-cadenza-layer-cannot-import-cadenza",
+    "src/cadenza/registry.ts",
+    'import { classify } from "@suisya-systems/cadenza";\nexport const x = classify;\n',
+    "which it is not granted",
+  ],
+  [
+    // The arrow D-0018 rule 5 leaves unbuilt, from the wrong end. When the
+    // conductor consumes cadenza it does so through `src/cadenza`, and the
+    // decision is which module it reaches -- not whether the package is
+    // reachable from the loop, which it never is.
+    "the-loop-cannot-import-cadenza-directly",
+    "src/refrain/probe.ts",
+    'import { classify } from "@suisya-systems/cadenza";\nexport const x = classify;\n',
+    "which it is not granted",
+  ],
+  [
+    "an-access-point-cannot-import-cadenza-either",
+    "src/access/probe.ts",
+    'import { resolveProject } from "@suisya-systems/cadenza";\nexport const x = resolveProject;\n',
+    "which it is not granted",
+  ],
+  [
+    // Attributed to the facade itself, which is the only module with a cadenza
+    // allowance -- so the grant is in play and the *specifier* is what has to
+    // be caught. cadenza's `exports` map names `.` and `./package.json` and
+    // nothing else (cadenza D-0033), so a deep path does not resolve at
+    // runtime either; this refuses it one step earlier, and by rondo's own
+    // rule rather than by npm's.
+    "a-deep-cadenza-path-is-not-granted",
+    "src/cadenza/facade.ts",
+    'import { classify } from "@suisya-systems/cadenza/dist/domain/classification.js";\nexport const x = classify;\n',
+    "which it is not granted",
+  ],
+  [
+    // The binding-by-binding half of the grant, on the two values that matter
+    // most: `delegate` and `adopt` compose a widening successor, and rondo
+    // carries a human's answer at a gate without ever composing one (D-0009).
+    "the-facade-cannot-take-supersession-it-was-not-granted",
+    "src/cadenza/facade.ts",
+    'import { classify, delegate } from "@suisya-systems/cadenza";\nexport const x = [classify, delegate];\n',
+    "takes delegate from @suisya-systems/cadenza",
+  ],
+  [
+    // A namespace import takes all 80 exports under a name this scan cannot
+    // follow, which is why no sentinel is spellable in the allowlist. The
+    // package is where that matters most: `delegate` and `adopt` would arrive
+    // with everything else.
+    "a-namespace-import-of-cadenza-fails-closed",
+    "src/cadenza/facade.ts",
+    'import * as cadenza from "@suisya-systems/cadenza";\nexport const x = cadenza;\n',
+    "takes <namespace import> from @suisya-systems/cadenza",
+  ],
+  [
+    "the-loop-cannot-reach-the-cadenza-seam",
+    "src/refrain/probe.ts",
+    'import { classifyAction } from "../cadenza/facade.js";\nexport const x = classifyAction;\n',
+    "outside its allowance",
+  ],
+  [
+    "the-cadenza-seam-cannot-reach-the-loop",
+    "src/cadenza/probe.ts",
+    'import { nextStep } from "../refrain/loop.js";\nexport const x = nextStep;\n',
+    "outside its allowance",
+  ],
+  [
+    "the-cadenza-seam-cannot-reach-the-continuo-seam",
+    "src/cadenza/probe.ts",
+    'import { decode } from "../continuo/protocol.js";\nexport const x = decode;\n',
+    "outside its allowance",
+  ],
+  [
+    "the-cadenza-seam-cannot-open-sqlite",
+    "src/cadenza/probe.ts",
+    'import { DatabaseSync } from "node:sqlite";\nexport const x = DatabaseSync;\n',
+    "is the one module that owns durable state",
+  ],
   // --- controls: these must come back clean --------------------------------
   [
     "control-the-loop-may-persist",
@@ -1270,6 +1394,34 @@ const PLANTED: ReadonlyArray<
     "control-the-invoker-may-spawn",
     "src/continuo/invoker.ts",
     'import { spawn } from "node:child_process";\nexport const child = spawn;\n',
+    null,
+  ],
+  [
+    // The one module that IS granted the package, taking bindings it was
+    // granted. Without this control the cadenza cases above would be satisfied
+    // by a sweep that had simply started refusing `@suisya-systems/cadenza`
+    // everywhere -- which would also be a sweep that refused the facade the
+    // tree really contains.
+    "control-the-facade-may-import-cadenza",
+    "src/cadenza/facade.ts",
+    'import { classify, delegationContract } from "@suisya-systems/cadenza";\nexport const x = [classify, delegationContract];\n',
+    null,
+  ],
+  [
+    // A type-only binding is still a binding and is still granted by name --
+    // the facade re-exports cadenza's types so that a caller need not name the
+    // package to hold one.
+    "control-the-facade-may-take-a-granted-type",
+    "src/cadenza/facade.ts",
+    'import type { ResolvedProject } from "@suisya-systems/cadenza";\nexport type X = ResolvedProject;\n',
+    null,
+  ],
+  [
+    // The layer is self-only, not facade-only: a second module here is refused
+    // the package, and is expected to reach it through the facade instead.
+    "control-a-second-module-in-the-cadenza-layer-may-reach-the-facade",
+    "src/cadenza/registry.ts",
+    'import { classifyAction } from "./facade.js";\nexport const x = classifyAction;\n',
     null,
   ],
   [
@@ -1398,8 +1550,8 @@ test("the planted corpus exercises the detector in both directions", () => {
   const clean = PLANTED.filter(([, , , expected]) => expected === null);
   // A corpus that lost its controls, or lost its violations, would still pass
   // every case below by agreeing with itself.
-  expect(caught.length).toBeGreaterThanOrEqual(52);
-  expect(clean.length).toBeGreaterThanOrEqual(9);
+  expect(caught.length).toBeGreaterThanOrEqual(62);
+  expect(clean.length).toBeGreaterThanOrEqual(12);
   expect(new Set(PLANTED.map(([id]) => id)).size).toBe(PLANTED.length);
 });
 
