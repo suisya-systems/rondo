@@ -91,8 +91,10 @@ For **lap 1**:
   that works today without changing continuo, and it is what cadenza's own
   design recommends for the same seam (`cadenza C-8`). Its cost is real and is
   written down (D-0015 keeps the ledger). `--version` now carries the build's
-  git revision, and of the eleven continuo verbs rondo drives, ten answer
-  `--json`, so two of the costs D-0001 recorded have improved — but that JSON is a versioned
+  git revision, and **all eleven** of the continuo verbs rondo drives answer
+  `--json` — ten of them did when D-0015 was taken, and `gate close` joined them
+  in `continuo D-0092`, which is what D-0017 rule 1 acts on — so two of the costs
+  D-0001 recorded have improved. But that JSON is a versioned
   *wire protocol*, not types across the seam: rondo owns the runtime decoders.
   Recording *which* continuo drove a run is still rondo's job (`cadenza C-14`),
   now by verifying the revision `--version` reports against the pinned sha and
