@@ -4,7 +4,7 @@
 the tree today, proposes a design for the component rondo#9 describes — the thing
 that reads rondo's own records and **proposes** an agent type, a `RunPlan`, a
 contract's candidate key sets, a widening successor — and ends in a table of
-decision rows (`A-1` … `A-16`) for rondo's human gate. Per
+decision rows (`A-1` … `A-17`) for rondo's human gate. Per
 [`../../AGENTS.md`](../../AGENTS.md) section 7 the rows are named rather than
 settled here, and the entry the gate would create is referred to throughout as
 **`D-0022`** — a name for a thing that does not exist, not a citation. Nothing in
@@ -23,13 +23,19 @@ two Minors and one Nit against an earlier sketch. Every one of them is answered
 below, either as a decision row or as a measured refutation, and each is named
 where it is answered. Where the answer is a refutation it says so and shows the
 measurement, because a review finding dismissed without one is a finding
-deferred. A **second Codex review, of this finished document**, found three more
+deferred. A **second Codex review, of this finished document**, found five more
 — two of them structural, and both correct: the widening route this document
 walks has **no continuo gate to answer**, and the two-store write it described
-had a crash window with no recovery. Sections
+had a crash window with no recovery. A **third round** found a third structural
+one: a successor may not change its grantee, and a contract's grantee is the run
+id, so a retry under a *fresh* run id would classify `grantee_mismatch` against
+the successor a human had just approved
+([7.1](#71-the-retry-keeps-the-predecessors-run-id-because-a-successor-cannot-change-its-grantee-a-17),
+`A-17`). Sections
 [5.1](#51-which-approval-and-where-because-a-pre-admission-widening-has-no-gate-a-15),
 [6.4](#64-the-write-order-across-two-stores-and-the-crash-window-a-16) and
-[10](#10-one-proposal-end-to-end) are those answered, as `A-15` and `A-16`.
+[10](#10-one-proposal-end-to-end) are the first two answered, as `A-15` and
+`A-16`.
 
 **The component is not scheduled before lap 1 lands**, and rondo#9 says so. What
 this document adds is that the schedule is not the only constraint: three of its
@@ -405,6 +411,13 @@ thirty-one fields, of which the ten named above plus `db` and `repository` are
 the caller's identifiers and the operator's environment, and the request text is
 one.
 
+**One case escapes the hole list entirely, and it is measured rather than
+excepted**: a retry of a request that was refused *before admission* reuses the
+predecessor's `(run id, topic branch, workspace)`, because nothing was ever
+admitted under it and a successor contract may not change its grantee.
+[7.1](#71-the-retry-keeps-the-predecessors-run-id-because-a-successor-cannot-change-its-grantee-a-17)
+is that argument, and `A-17` is the row.
+
 **What a proposal therefore is, at its most useful**: a `plan_digest` to start
 from, a small diff of prompt, agent type, gate options and timeouts, and an
 explicit list of the fields a person still has to fill. That is materially less
@@ -462,7 +475,7 @@ records, and neither of them invents a gate.**
 | what the human's answer *is* | `gate answer --actor-id <OIDC subject> --body <what they typed>`; the body is continuo's, verbatim | a `HumanDecisionRecord` the surface records under the same OIDC subject, and nothing at continuo |
 | source of truth | continuo's `gate_transition.body` | rondo's `human_decision` row |
 | what bounds who may approve | continuo records `--actor-id` on the word of the caller, so the bound is rondo's approver allowlist (`D-0020` rule 2) | the same allowlist, and **only** it |
-| what issues a successor | the decision record of route S, written after the answer is read | the decision record itself |
+| what issues a successor | **route G's own decision record**, written after the answer has been read back and referencing continuo's transition ([6.4](#64-the-write-order-across-two-stores-and-the-crash-window-a-16)) | the decision record itself |
 
 **Route S is not a weaker route, and it is not a new authority.** `D-0009`
 part 2's rule is *"a widening successor contract is issued only on an answer that
@@ -581,6 +594,26 @@ the row that will explain it is committed."* Here:
 4. Issuance is [6.3](#63-single-use-is-a-transaction-not-a-check-a-9)'s single
    transaction, unchanged.
 
+**Two uniqueness rules make step 3's match a binding rather than a guess**, and
+without them it is neither. `actor_id` and a sequence number do not identify an
+intent: continuo's transition carries no intent id, and an intent cannot know its
+own sequence in advance, so two intents opened over one gate by one person — two
+browser tabs, two successor digests — would both match the same transition and
+either could issue.
+
+- **At most one *unresolved* intent per gate.** A partial unique index over
+  `(gate_id)` where the intent is unresolved, in the shape `D-0019` rule 10
+  already uses for `iteration_one_live`: a generated marker column that is `NULL`
+  once the intent is resolved or withdrawn, and `UNIQUE` while it is not. A
+  second tab is refused at the intent, before anything reaches continuo, which is
+  the only place the refusal is cheap.
+- **At most one decision per transition.** `UNIQUE (gate_id, transition_seq)` on
+  `human_decision`, so even a rule broken above cannot spend one answer twice.
+
+Refusing the second intent rather than merging it is deliberate: two open intents
+over one gate mean two different successors were composed for one question, and
+which one a person meant is not a thing rondo may infer.
+
 **Recovery is then a reconciliation and not a guess.** An intent with no decision
 is exactly the state a restart can resolve: re-read the gate, and either the
 transition is there — in which case step 3 completes, idempotently, because the
@@ -611,18 +644,62 @@ resumed; a new one is linked to it by lineage.**
 2. A proposal about it carries `supersedes_iteration_id`, which is a reference
    and not a claim on the row.
 3. If a human approves, the approval produces a **new** contract (a successor
-   whose `supersedes` is the predecessor's digest), a **new** `RunPlan` — with a
-   fresh `(run id, topic branch, workspace)` triple the caller supplied
-   ([section 4](#4-what-a-proposal-may-say-about-a-runplan-blocker-2)) — and a
-   **new** iteration.
+   whose `supersedes` is the predecessor's digest), a **new** `RunPlan`, and a
+   **new** iteration. **The run id is the predecessor's, and 7.1 is why.**
 4. The chain that answers "why does this run exist" is then
    `iteration -> proposal -> decision -> contract -> iteration`, every link a
    reference, and no row edited after the fact.
 
 **Why not resumption**, stated once: resuming would mean re-entering a terminal
-state, which `D-0019` rule 10's edge relation refuses, and it would mean a second
-lap under a run id that continuo has already admitted. Lineage costs a join;
+state, which `D-0019` rule 10's edge relation refuses. Lineage costs a join;
 revival costs the invariant.
+
+### 7.1 The retry keeps the predecessor's run id, because a successor cannot change its grantee (`A-17`)
+
+**Three measurements that only fit together one way.**
+
+- **A successor may not change the subject.** cadenza's `adopt` refuses it —
+  *"the subject cannot change under a lineage. A successor for another run ... is
+  not a successor at all"* — with `SupersessionSubjectError`
+  (`dist/domain/supersession.js`, at the pinned revision), and
+  `supersedeOnDecision` runs `adopt` unchanged after its four checks
+  (cadenza `D-0036`, `S-3`).
+- **A contract's grantee *is* the run id.** `classify` answers `refused` /
+  `grantee_mismatch` when `context.runId !== contract.grantee`
+  (`dist/domain/classification.js:55-56`), and rondo spells the same rule at its
+  own boundary: `runPlan()` refuses a plan whose `parties.grantee` is not `runId`
+  ([`src/refrain/plan.ts:447-452`](../../src/refrain/plan.ts)).
+- So **a retry under a fresh run id would classify `grantee_mismatch` against the
+  very successor a human had just approved**, and the approval would buy nothing.
+
+**Proposal (`A-17`): on route S the retry reuses the predecessor's `(run id,
+topic branch, workspace)` rather than allocating a fresh one, and that is sound
+precisely because nothing was ever admitted.** `D-0019` rule 15 stops a
+`needs_approval` **before** admission — the iteration never reaches `admitting`,
+`run admit` is never spawned and `lap perform` never runs — so continuo holds no
+run under that id, no branch was created and no workspace was materialised. The
+triple is unused, not spent, and `D-0012`'s "a second attempt needs a fresh
+triple" is a rule about re-attempting an **admitted** run, which this is not.
+
+Two consequences worth stating rather than discovering:
+
+- **This is the one place [section 4](#4-what-a-proposal-may-say-about-a-runplan-blocker-2)'s
+  hole list is empty**, and it is empty for a measured reason rather than by
+  exception: the plan the retry needs is the abandoned row's plan, verbatim
+  (`records.ts:168`), with the diff the proposal names applied. rondo still mints
+  nothing.
+- **A widening over an *admitted* run is out of scope in lap 1**, and that is a
+  reduction. Route G's answer can be recorded and a successor composed and
+  issued, but nothing can then act on it: `lap perform` cannot be re-entered on an
+  admitted run and lap 1 has no back-edge (`D-0019` rule 6). So on route G the
+  successor is a contract a future lap would hold, and `A-17` records that its
+  first *consumer* arrives with the allocator or with a resumable lap, not here.
+
+**The binding that makes this checkable**: the composed successor's `supersedes`
+must equal the abandoned iteration row's `contract_digest`, which rondo already
+persists (`records.ts:197`). A successor that does not is refused before the
+human is shown anything, which is the same "validate before the effect" rule
+`D-0019` rule 14 applies to a spawn.
 
 ---
 
@@ -754,11 +831,15 @@ adds.
    write the delegation row with its lineage, mark the decision consumed, commit
    ([6.3](#63-single-use-is-a-transaction-not-a-check-a-9)). A second attempt is
    refused by the store.
-9. **A new iteration.** The caller supplies the fresh `(run id, topic branch,
-   workspace)` triple and the rest of the plan's holes; `admit` reserves a new
-   row (`conductor.ts:269`), and the lineage of
-   [section 7](#7-after-a-needs_approval-major-6) is what connects it to the lap
-   that stopped.
+9. **A new iteration, under the predecessor's run id.** The plan is the abandoned
+   row's plan with the proposal's diff applied, and the `(run id, topic branch,
+   workspace)` triple is reused rather than allocated — nothing was ever admitted
+   under it, and a fresh run id would classify `grantee_mismatch` against the
+   successor a human had just approved
+   ([7.1](#71-the-retry-keeps-the-predecessors-run-id-because-a-successor-cannot-change-its-grantee-a-17)).
+   `admit` reserves a new row (`conductor.ts:269`), and the lineage of
+   [section 7](#7-after-a-needs_approval-major-6) connects it to the lap that
+   stopped.
 
 **One human contact**, at steps 5-6, and it is the same contact `D-0009` rations.
 Everything before it is data with no authority, and everything after it is a
@@ -807,11 +888,12 @@ somebody, later and in good faith, adds one import.
 - **`D-0012`'s allocator arriving.** [Section 4](#4-what-a-proposal-may-say-about-a-runplan-blocker-2)'s
   hole list shrinks to nothing, and `A-6`'s alternative branch becomes the
   recommendation.
-- **A proposal a human wants to approve without a gate.** The whole of
-  [section 10](#10-one-proposal-end-to-end) routes approval through a continuo
-  gate; a proposal about something that has no gate — an agent type, say, with no
-  run under it — has no place in this arc, and that is a shape this document does
-  not cover.
+- **A proposal whose approval fits neither route.** Route G and route S of
+  [5.1](#51-which-approval-and-where-because-a-pre-admission-widening-has-no-gate-a-15)
+  are exhaustive only because every approval this design knows about either has a
+  gate or does not; an approval that must bind to something else — a second
+  approver, a scope smaller than one successor — is outside both, and cadenza
+  `D-0036` names those two as its own `S-2` falsifier.
 - **continuo growing a gate a host may open for a question no run asked**, or
   `D-0019` rule 15 changing so that a `needs_approval` does open one. Route S of
   [5.1](#51-which-approval-and-where-because-a-pre-admission-widening-has-no-gate-a-15)
@@ -848,8 +930,7 @@ finding, the finding is named.
 | **A-4** | Who may call the successor composer? | **`src/access` gains the `src/cadenza` arrow**, and the facade gains `composeSuccessor`. Not `src/refrain`, not a new layer. The advisory calls neither | The boundary table's objection — an access point needing a contract would be taking a domain decision — is answered by `D-0009` part 2 and `D-0020` rule 2, which both put the **issuer** of a widening at the operating surface. Composing in `src/refrain` is what `D-0018` rule 7 exists to prevent ("one import away from a loop that must not have it"); a new layer removes no import, because the grant is per module. Answers Codex Blocker 3 |
 | **A-5** | The pinned cadenza has no successor API. When does the pin move? | **As its own change**, following `D-0018`'s bridge — tarball, `vendor/cadenza.tgz.sha256`, `cadenza.pin.json`, `package.json`, `package-lock.json` together — after `D-0022` and before the successor path is implemented | Measured: `supersedeOnDecision`, `humanDecisionRecord`, `HumanDecisionRecord` and `DecisionOutcome` appear nowhere in the installed `dist/index.d.ts`; they exist at cadenza `5d5d9f4` and the pin is `e56d7e7`. Folding a pin move into a feature diff is how a warm npm cache installs the previously pinned bytes with exit 0 (`D-0018` rule 4) |
 | **A-6** | What may a proposal say about a `RunPlan`? | **A selection among persisted plans, a diff against a named predecessor, and an explicit list of the fields it will not fill** — `runId`, `topicBranch`, `workspace`, `leaseClaimantId` and the fence roots among them. rondo mints none of them, and `D-0019` rule 3 is unchanged | `D-0012` records that a second attempt needs a fresh `(run id, topic branch, workspace)` triple and that nothing allocates one; continuo requires the fence roots absolute and outside the worktree, so a rondo default would be rondo guessing at a fence's geometry. **The alternative branch is named rather than argued away**: proposals that admit without a human filling a field are an allocator, they change `D-0019` rule 3, and they are rondo#8. Answers Codex Blocker 2 |
-| **A-7** | Are proposals persisted as their own record kind, and with what? | **Yes, immutable and append-only, with no `status` column**, carrying `proposal_id`, `proposal_digest`, the **snapshot verbatim** beside its
-`snapshot_digest`, `kind`, `drafter`, the lineage references, the predecessor plan and contract digests, the three cadenza digests, the observed continuo revision, the cadenza pin, and the caller's timestamp | "What was proposed vs what was approved" is the operator's stated priority, and a row that can be rewritten to `approved` is a record of what somebody wishes had been proposed. `candidate_contract_digest` is **null on a proposal**: a digest there would be the advisory claiming to have composed something. Answers Codex Minor 8 |
+| **A-7** | Are proposals persisted as their own record kind, and with what? | **Yes, immutable and append-only, with no `status` column**, carrying `proposal_id`, `proposal_digest`, the **snapshot verbatim** beside its `snapshot_digest`, `kind`, `drafter`, the lineage references, the predecessor plan and contract digests, the three cadenza digests, the observed continuo revision, the cadenza pin, and the caller's timestamp | "What was proposed vs what was approved" is the operator's stated priority, and a row that can be rewritten to `approved` is a record of what somebody wishes had been proposed. `candidate_contract_digest` is **null on a proposal**: a digest there would be the advisory claiming to have composed something. Answers Codex Minor 8 |
 | **A-8** | What is the single ledger, per fact? | **The table of [6.1](#61-the-table)**: the gate answer is continuo's `gate_transition.body`; the proposal, the decision, the contract lineage, the agent type and the conversation are rondo's store; everything else references them by identifier. A copy is labelled an observation and is never authority | `D-0020` rule 5 already refuses prose in the gate-answer slot, because prose there records as human approval. Copying the answer into a proposal or a chat record would create a second source of truth for the one fact nobody may paraphrase (`D-0009` part 3). Answers Codex Major 4 |
 | **A-9** | Who guarantees that one human decision authorises at most one issuance? | **rondo's store, in one `BEGIN IMMEDIATE` transaction**: assert `consumed_by IS NULL`, issue via `supersedeOnDecision`, write the delegation row, mark consumed, commit | cadenza cannot: it persists nothing and says so, assigning the duty to `S-7` — rondo's row, taken as `D-0020` rule 4 fact 6. `BEGIN IMMEDIATE` for `D-0019` rule 10's reason, quoting continuo's own admission path. An in-process check is the grade of guarantee `D-0036` already said it could not give |
 | **A-10** | What happens to the `needs_approval` iteration a proposal is about? | **Nothing. It stays terminal `abandoned` and is never revived or rewritten**; a new proposal, decision, contract and iteration are linked to it by lineage | `D-0019` rule 15 ends it there and `transition` asserts the status it leaves, so this is a property the store has rather than a rule the advisory keeps. Revival would re-enter a terminal state and would mean a second lap under an admitted run id. Answers Codex Major 6 |
@@ -858,4 +939,5 @@ finding, the finding is named.
 | **A-13** | Is a model-drafted proposal admitted, and does it change the record? | **The record is identical whichever drafter produced it, and `drafter` is a column. The first cut ships the deterministic drafter**; a model draft is a candidate like any other, is never presented unread, and never reaches a gate as anything but material | It keeps `D-0019` rule 7's property — no non-deterministic verdict on the path to the one human contact this design rations — without pretending the operator's actual want (a component that explains and proposes in prose) is out of scope. Making `drafter` a column now is what stops the second drafter from being a schema change |
 | **A-14** | Where is the boundary between the test layers? | **`test/advisory/` on hand-built snapshots and nothing else; store rules in `test/store/` against a real `node:sqlite`; the layer's allowance as a planted case in `test/architecture/`; `composeSuccessor` in `test/cadenza/` once `A-5` lands** | `D-0006`: the boundary test is what CI exists to run, and its failure mode is finding nothing. The planted case is the only row in the table that can fail when somebody later adds one import in good faith, which is the whole reason `A-1` chose a layer over a module |
 | **A-15** | How is a widening approved when the `needs_approval` that asked for it was refused **before admission**, and so has no gate? | **Two routes, named.** Route G (a gate is open) keeps continuo's `gate_transition.body` as the source of truth for the answer; **route S (no gate) is approved at rondo's surface as a `HumanDecisionRecord` and sends nothing to continuo.** rondo never opens a gate of its own to manufacture one | Measured: a `needs_approval` stops the request before admission, so no run was admitted, `lap perform` never ran and no gate was opened (`D-0019` rule 15, `interpreter.ts:756-765`) — `gate answer` would have nothing to name. `D-0009` part 2 requires an answer *the surface recorded*, not a gate. The cost is stated rather than hidden: on route S rondo's approver allowlist (`D-0020` rule 2) is the only bound on who may approve, and rondo's own row is the only audit trail |
-| **A-16** | What keeps a route-G approval recoverable, given it writes to continuo and to rondo and cannot be one transaction? | **`D-0019` rule 10's write order, across the seam**: commit an immutable **decision intent** before `gate answer` is invoked; afterwards drive one `gate show --json`, match the transition on `(gate_id, seq, actor_id)`, and commit the decision referencing it. A restart re-reads the gate and either completes or finds nothing happened | The gate body is prose by design and carries neither the structured outcome nor the approved digest, so a crash between the two writes would leave continuo holding an answer rondo cannot act on. Reconstructing the decision **from the prose** is refused outright — that is composing a human's answer (`D-0009` part 3). Matching on continuo's own identifiers is what makes the completion idempotent |
+| **A-16** | What keeps a route-G approval recoverable, given it writes to continuo and to rondo and cannot be one transaction? | **`D-0019` rule 10's write order, across the seam**: commit an immutable **decision intent** before `gate answer` is invoked; afterwards drive one `gate show --json`, match the transition on `(gate_id, seq, actor_id)`, and commit the decision referencing it. A restart re-reads the gate and either completes or finds nothing happened. **Two uniqueness rules make the match a binding**: at most one *unresolved* intent per gate (a partial unique index in `iteration_one_live`'s shape), and `UNIQUE (gate_id, transition_seq)` on the decision | The gate body is prose by design and carries neither the structured outcome nor the approved digest, so a crash between the two writes would leave continuo holding an answer rondo cannot act on. Reconstructing the decision **from the prose** is refused outright — that is composing a human's answer (`D-0009` part 3). Matching on continuo's own identifiers is what makes the completion idempotent |
+| **A-17** | A successor may not change its grantee, and a contract's grantee is the run id. What run id does the retry use? | **The predecessor's**, on route S: the `(run id, topic branch, workspace)` triple is reused rather than allocated, and the plan is the abandoned row's plan with the proposal's diff applied. **A widening over an *admitted* run is recorded as out of scope in lap 1** | Measured: `adopt` refuses a grantee change (`SupersessionSubjectError`, `dist/domain/supersession.js`), `classify` answers `grantee_mismatch` when `context.runId !== contract.grantee` (`dist/domain/classification.js:55-56`), and `runPlan()` refuses `parties.grantee !== runId` (`plan.ts:447-452`) — so a fresh run id would make the approved successor unusable by the very iteration it was approved for. Reuse is sound because `D-0019` rule 15 stops the request **before** admission: `run admit` was never spawned, so the triple is unused rather than spent, and `D-0012`'s fresh-triple rule is about re-attempting an admitted run. On route G nothing can act on the successor in lap 1: `lap perform` cannot be re-entered and there is no back-edge (`D-0019` rule 6) |
