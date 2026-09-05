@@ -445,8 +445,8 @@ describe("measure report, the one verb whose success is unwrapped", () => {
  * a case removes and plus whatever it changes.
  *
  * A whole document per case rather than a payload fragment, because the
- * eleven fields are read together and the interesting failures are about a
- * single key being wrong while the other ten are right.
+ * twelve fields are read together and the interesting failures are about a
+ * single key being wrong while the other eleven are right.
  */
 function lapPayload(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
@@ -461,12 +461,13 @@ function lapPayload(overrides: Record<string, unknown> = {}): Record<string, unk
     event_seq: 7,
     endpoint_lease_failure: null,
     elapsed_deadline_at_ms: null,
+    model: "claude-opus-5",
     ...overrides,
   };
 }
 
 describe("lap perform, the verb whose document is the only record of a lap", () => {
-  test("a clean lap reads into all eleven fields", () => {
+  test("a clean lap reads into all twelve fields", () => {
     const result = decode(
       LAP_PERFORM,
       output({ stdout: success(LAP_PERFORM.schema, lapPayload()) }),
@@ -488,8 +489,27 @@ describe("lap perform, the verb whose document is the only record of a lap", () 
         eventSeq: 7,
         endpointLeaseFailure: null,
         elapsedDeadlineAtMs: null,
+        // The twelfth field, added under the same `/1` by `continuo D-0099`.
+        model: "claude-opus-5",
       },
     });
+  });
+
+  test("the model is always present, and null is the fact that nobody chose one", () => {
+    // `null` says the choice fell through to the worker CLI's own default,
+    // which is a different statement from any model name -- and an *absent*
+    // key is neither, under this module's absent-is-not-null rule.
+    const chosen = decode(
+      LAP_PERFORM,
+      output({ stdout: success(LAP_PERFORM.schema, lapPayload({ model: null })) }),
+    );
+    expect(chosen).toMatchObject({ kind: "answered", payload: { model: null } });
+
+    const absent = lapPayload();
+    delete absent.model;
+    expect(
+      decode(LAP_PERFORM, output({ stdout: success(LAP_PERFORM.schema, absent) })),
+    ).toMatchObject({ kind: "invokerDefect" });
   });
 
   test("a lease failure is reduced to continuo's message", () => {

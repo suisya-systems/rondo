@@ -733,6 +733,7 @@ async function classifiedBy(
     classification: answer.outcome,
     classificationReason: answer.reason,
     neutralRoleName: answer.neutralRoleName,
+    modelTier: answer.modelTier,
   };
   switch (answer.outcome) {
     case "allowed": {
@@ -963,13 +964,27 @@ async function performStep(
   if (plan.kind === "unreadable") {
     return { kind: "finished", report: plan.report };
   }
+  const modelTier = record.modelTier;
+  if (modelTier === null) {
+    return {
+      kind: "finished",
+      report: await stall(
+        ports,
+        lines,
+        record,
+        "the row is at 'admitted' and carries no model tier, so there is nothing for the " +
+          "continuo layer to price into a model id, and a lap rondo cannot price is a lap it " +
+          "does not start (D-0021)",
+      ),
+    };
+  }
   const performing = await commit(ports, lines, record, "performing", {});
   if (performing.kind === "blocked") {
     return { kind: "finished", report: performing.report };
   }
   lines.push("Sending one lap; this is the step that takes minutes.");
 
-  const walked = await ports.performLap(plan.plan);
+  const walked = await ports.performLap(plan.plan, modelTier);
   switch (walked.kind) {
     case "answered": {
       const lap = walked.value;
@@ -988,6 +1003,30 @@ async function performStep(
             performing.record,
             `continuo walked a lap for run '${lap.runId}' where the plan named ` +
               `'${plan.plan.runId}', so the gate it named is not this iteration's to suspend on`,
+          ),
+        };
+      }
+      if (lap.model !== lap.requestedModel) {
+        // **Named before it is stalled**, for the reason the lines below are
+        // said before they are committed: the lap ran and a gate is open, and a
+        // gate rondo learned about and then never named is an open gate nobody
+        // can find. This is not terminal `failed` either -- that arm is for an
+        // answer that says the lap did not happen, and this one says it happened
+        // on something other than what rondo asked for, which is a person's
+        // question about an open gate rather than a lap to retry.
+        lines.push(
+          `The lap answered. Gate ${lap.gateId} is already open; session ${lap.sessionId} was ` +
+            `${lap.sessionPath}.`,
+        );
+        return {
+          kind: "finished",
+          report: await stall(
+            ports,
+            lines,
+            performing.record,
+            `continuo reports the lap ran on ${spelledModel(lap.model)} where rondo asked for ` +
+              `${spelledModel(lap.requestedModel)}, so what the iteration cost is not what its ` +
+              "agent type declared",
           ),
         };
       }
@@ -1014,6 +1053,11 @@ async function performStep(
         // `respawned`, `resumed` -- and not a filesystem path. The record's
         // field is named after continuo's field so a reader can match them.
         sessionPath: lap.sessionPath,
+        // continuo's own answer rather than rondo's request: the two were just
+        // checked to be the same value, and recording the observation is what
+        // makes that check able to fail (D-0015 rule 6's habit, applied to a
+        // second measured field).
+        model: lap.model,
         ...lapNoteFields(
           performing.record.reason,
           lap.endpointLeaseFailure,
@@ -1342,10 +1386,25 @@ async function planOf(
 }
 
 /**
+ * A model in a sentence a person reads, including the case where there is none.
+ *
+ * `null` is spelled out rather than rendered as an empty quotation, because it
+ * is the one value in this comparison that is a *fact about a choice not being
+ * made*: continuo reports it when nothing named a model and the worker CLI's own
+ * default applied. A reader who saw `''` would look for a configuration mistake
+ * where there is a missing flag.
+ */
+function spelledModel(model: string | null): string {
+  return model === null ? "no model at all (the worker CLI's own default)" : `model '${model}'`;
+}
+
+/**
  * What `lap perform` reported that the row has no column of its own for.
  *
- * `endpoint_lease_failure` and `elapsed_deadline_at_ms` are two of the eleven
+ * `endpoint_lease_failure` and `elapsed_deadline_at_ms` are two of the twelve
  * fields the decoder reads, and neither is a column of D-0019 rule 10's row.
+ * (The twelfth, `model`, *did* get a column of its own under D-0021 -- as its
+ * own decision, recorded there, and not by widening this helper.)
  * Losing them was the wrong answer -- an endpoint lease failure is exactly what
  * a person reading a suspended iteration needs to see -- so they are folded into
  * `reason`, which is the one column that carries free text, and they are in the

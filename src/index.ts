@@ -51,6 +51,7 @@ export {
   type AdmitRunOutcome,
   type AdmitRunRequest,
   admitRun,
+  type PerformLapOutcome,
   type PerformLapRequest,
   performLap,
   SERVED_ENDPOINT_RECIPIENTS,
@@ -75,7 +76,14 @@ export {
   type LapPerformed,
   RUN_ADMIT,
 } from "./continuo/protocol.js";
-export { CONTINUO_ROSTER, mapNeutralRole, mappedNeutralRoleNames } from "./continuo/roles.js";
+export {
+  CONTINUO_ROSTER,
+  type ModelSelection,
+  mapModelTier,
+  mapNeutralRole,
+  mappedModelTiers,
+  mappedNeutralRoleNames,
+} from "./continuo/roles.js";
 export { classifyPlan } from "./refrain/classification.js";
 export { nextStep, type Step } from "./refrain/loop.js";
 export {

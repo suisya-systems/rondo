@@ -73,6 +73,7 @@ const VALID: RunPlan = {
   pollIntervalMs: null,
   turnTimeoutMs: 900_000,
   gitTimeoutMs: 60_000,
+  identityReadbackTimeoutMs: 30_000,
   gateOptions: ["approve", "revise"],
   gateDeadlineAtMs: null,
   invocationCeilingMs: 1_800_000,
@@ -176,12 +177,31 @@ test("the endpoint recipient must be one continuo has a handler for", () => {
   expect(runPlan(withField({ endpointRecipient: "human-gated-effect" })).kind).toBe("planned");
 });
 
-test("the ceiling must be strictly above the two budgets it has to clear", () => {
+test("the ceiling must be strictly above the three budgets it has to clear", () => {
   // Strict, not `>=`: a ceiling equal to the sum leaves the lease, the git
   // commands, the fence render and the gate ingest exactly no time at all.
-  const sum = VALID.turnTimeoutMs + VALID.gitTimeoutMs;
+  const sum = VALID.turnTimeoutMs + VALID.gitTimeoutMs + VALID.identityReadbackTimeoutMs;
   expect(refusalFor({ invocationCeilingMs: sum })).toContain("not above");
   expect(runPlan(withField({ invocationCeilingMs: sum + 1 })).kind).toBe("planned");
+});
+
+test("the read-back budget is counted into the floor, not left out of it", () => {
+  // The case that fails if D-0021's third budget is added to the plan and not
+  // to the sum: a ceiling that clears the first two and not the third would
+  // pass, and rondo's timer could fire while the lap was still inside a window
+  // rondo itself declared.
+  const withoutReadback = VALID.turnTimeoutMs + VALID.gitTimeoutMs + 1;
+  expect(refusalFor({ invocationCeilingMs: withoutReadback })).toContain(
+    "identityReadbackTimeoutMs",
+  );
+});
+
+test("the read-back budget is required and is a positive whole number of milliseconds", () => {
+  // continuo defaults it to 30 s, and rondo states it anyway: the two budgets
+  // beside it are stated for the same reason (D-0019 rule 12, D-0021).
+  for (const value of [0, -1, 1.5, Number.NaN]) {
+    expect(refusalFor({ identityReadbackTimeoutMs: value })).toContain("identityReadbackTimeoutMs");
+  }
 });
 
 test("a ceiling beyond Node's timer range is refused rather than clamped", () => {

@@ -89,6 +89,11 @@ export function classifyPlan(plan: RunPlan): EffectOutcome<ClassificationRecord>
         // roster name (D-0019 rule 13). It is read here and mapped there,
         // because the mapping is continuo's vocabulary and not cadenza's.
         neutralRoleName: record.executorPolicy.roleName,
+        // The other half of the same policy, read here for the same reason and
+        // mapped in the same layer: `roleName` says what the executor is for,
+        // `modelTier` says what it costs, and neither is spelled in continuo's
+        // vocabulary until the invocation adapter spells it (D-0021).
+        modelTier: record.executorPolicy.modelTier,
       },
     };
   } catch (error) {

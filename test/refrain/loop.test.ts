@@ -59,6 +59,8 @@ const recordWith = (status: IterationStatus, attempts = 1): IterationRecord => (
   classificationReason: null,
   neutralRoleName: null,
   continuoRole: null,
+  modelTier: null,
+  model: null,
   gateId: null,
   gateStage: null,
   gateOutcome: null,

@@ -359,10 +359,13 @@ export interface MeasureReport {
 /**
  * `lap perform`: one admitted run walked to an open gate.
  *
- * The eleven fields continuo's `report()` writes under `--json`, read whole
+ * The twelve fields continuo's `report()` writes under `--json`, read whole
  * rather than cut down: this is the one verb whose document is the *only*
  * record of what a lap did, and every field on it is either something the
  * conductor stores against the iteration or the handle on something it does.
+ *
+ * Eleven at the revision D-0019 read (`R-13`); the twelfth is {@link model},
+ * added under the same `/1` by `continuo D-0099` and read here under D-0021.
  */
 export interface LapPerformed {
   readonly runId: string;
@@ -403,6 +406,22 @@ export interface LapPerformed {
   /** A gate deadline that had already passed when the report arrived: continuo
    *  drops it and opens the gate anyway rather than losing the report. */
   readonly elapsedDeadlineAtMs: number | null;
+  /**
+   * The model the lap actually ran on, or null when nobody chose one.
+   *
+   * **Always present under `continuo D-0099`, and `null` is a fact rather than
+   * an absence**: it says the choice fell through to the worker CLI's own
+   * default, which continuo neither decides nor can report. That is a different
+   * statement from any model name, and the `nullableString` reader is what keeps
+   * the two apart -- a key that were merely missing would be read as a refusal
+   * to decode, under the absent-is-not-null rule this module applies everywhere.
+   *
+   * rondo passes `--model` on every lap (D-0021), so a `null` here is continuo
+   * reporting that the flag rondo believes it sent did not take effect, and
+   * `invoker.ts` treats it as such rather than as a lap that merely declined to
+   * say.
+   */
+  readonly model: string | null;
 }
 
 // --- the verb contracts -----------------------------------------------------
@@ -514,6 +533,7 @@ export const LAP_PERFORM: VerbContract<LapPerformed> = {
     eventSeq: requireNumber(payload, "event_seq"),
     endpointLeaseFailure: leaseFailureMessage(payload),
     elapsedDeadlineAtMs: nullableNumber(payload, "elapsed_deadline_at_ms"),
+    model: nullableString(payload, "model"),
   }),
 };
 

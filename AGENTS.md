@@ -146,9 +146,11 @@ Consequences for anyone adding code here:
   at build time.
 - **`--json` is a wire protocol, not types.** rondo drives eleven continuo verbs
   and, since `continuo D-0092`, **all eleven** carry it — D-0015 recorded ten,
-  and `gate close` was the eleventh. (continuo has fifteen in the surveyed set;
-  the other four — `gate present`, `deliver`, `ack`, `reconcile` — are human-only
-  and rondo drives none of them, so their lack of `--json` is not rondo's gap.)
+  and `gate close` was the eleventh. (At the revision pinned today, `gate
+  present`, `deliver` and `ack` carry it too — `continuo D-0097` — and `run show`
+  is a read verb that arrived with it, `continuo D-0096`. rondo drives none of
+  those four. `gate reconcile` is the one verb in the surveyed set still without
+  the flag; it is human-only, so that is not rondo's gap either.)
   rondo owns the runtime decoders and converts validated documents into rondo's
   own records. Three things the flag does not reach, all of which rondo's
   callers must handle: parser-level refusals are exit 2 with *prose* rather than

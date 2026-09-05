@@ -58,6 +58,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0018 | cadenza becomes a library rondo consumes: a vendored tarball under cadenza's delivery bridge, one facade, and a smoke that runs in every cell | accepted |
 | D-0019 | The first working conductor loop: a pure planner, an interpreter over injected ports, a durable single-flight store, and a suspend at the open gate | accepted |
 | D-0020 | The operating surface's rondo-owned rows: gate panes first, the OIDC subject as `--actor-id`, LAN-first, and rondo's store as the home of the delegation record and the operator conversation | accepted |
+| D-0021 | The pin moves to continuo `603843b`: a third explicit budget for the identity read-back, and the model tier priced into `lap perform --model` | accepted |
 
 ---
 
@@ -2350,6 +2351,23 @@ test, which is where the question "should this layer reach cadenza?" is asked.
 
 **Status:** accepted (2026-09-06, rondo's human gate)
 
+> **Annotation (2026-09-06, from D-0021).** Added after this entry was accepted, and additive: no
+> claim, measurement or date below is edited. This entry's falsifier **"continuo's `run admit` or
+> `lap perform` flag set changing" fired**, in the ordinary way rather than the alarming one --
+> `lap perform` grew two optional flags and one answer field, and `run admit` is untouched. Three
+> statements below now read a revision behind, and **D-0021** is where each is answered:
+>
+> - **rule 12 (`R-11`) says rondo passes two budgets explicitly.** It passes **three**:
+>   `--identity-readback-timeout-ms` joined them (`continuo D-0098`), and `invocationCeilingMs`'s
+>   floor is `turnTimeoutMs + gitTimeoutMs + identityReadbackTimeoutMs`. The reasoning is this
+>   rule's, unchanged; the count is one larger.
+> - **rule 14 (`R-13`) says `LAP_PERFORM` reads eleven fields.** It reads **twelve**: `model`, added
+>   under the same `/1` by `continuo D-0099`, always present and nullable. The `/1` policy this rule
+>   states is what made that a decoder addition rather than a break.
+> - **rule 13 (`R-12`)'s neighbour.** The role table is untouched and continuo's roster is still the
+>   same four names; `src/continuo/roles.ts` gains a **second, independent** table -- the model tier
+>   -- and the module is an executor-policy adapter rather than a role adapter.
+
 This entry records the outcome of the sixteen decision rows `R-1` … `R-16` that
 [`docs/design/refrain-lap1.md`](docs/design/refrain-lap1.md) put to the gate. **Every row was taken
 exactly as its recommendation column reads**, so the reasons below are that document's and are
@@ -2632,8 +2650,12 @@ both partial-index shapes and `BEGIN IMMEDIATE`'s cross-connection refusal were 
 - **continuo's `run admit` or `lap perform` flag set changing.** `RunPlan` is a transcription of two
   argument lists at one revision; a required flag added upstream is a plan that no longer admits, and
   the failure would be an exit 1 with a stack rather than a refusal document.
+  *(Annotation, 2026-09-06:* **fired** -- `lap perform` gained the optional `--model` and
+  `--identity-readback-timeout-ms`. Optional, so no plan stopped admitting; both are taken
+  explicitly in **D-0021**.*)*
 - **A `continuo.lap.perform/2`**, or any of rule 14's eleven fields changing meaning without the
-  schema moving. `D-0017`'s accept-extra-keys falsifier applies here unchanged, and rondo cannot
+  schema moving. *(Annotation, 2026-09-06:* a **twelfth** field, `model`, was added under the same
+  `/1` and is decoded in **D-0021**; none of the eleven changed meaning.*)* `D-0017`'s accept-extra-keys falsifier applies here unchanged, and rondo cannot
   detect the second case.
 - **continuo's roster changing, or becoming a runtime input rather than a bundled document**, or an
   agent type whose role name is not one of the four. That is rule 13's table falsified, and it is
@@ -2780,3 +2802,180 @@ to take, and rule 4's sixth fact is written conditionally for exactly that reaso
 - Any measurement above failing to reproduce. The measurements are cadenza's
   `docs/design/operating-surface.md` sections 5 to 7 at cadenza PR #56, against continuo
   `44f62336108b86cab5da791111ffa0e5b73cd01a` and cadenza `e56d7e71981232d19120d20ba6b920a5c4d762dc`.
+
+---
+
+## D-0021 — The pin moves to continuo `603843b`: a third explicit budget for the identity read-back, and the model tier priced into `lap perform --model`
+
+**Status:** accepted (2026-09-06, rondo's human gate)
+
+The lap-1 dogfood ([`docs/operations/lap-1-dogfood.md`](docs/operations/lap-1-dogfood.md)) stopped
+on two facts about continuo rather than about rondo, and recorded both. `F-1` was blocking: the
+post-spawn identity read-back was two hard-coded constants worth **2.5 seconds**, and four measured
+starts of a real worker took **3.5 s, 7.9 s, 9.7 s and 11.3 s** to emit the event that names the
+session — every one over the window, the fastest by 40%. `F-2` was not blocking and is the more
+expensive of the two: nothing anywhere selected the worker's model, so a lap ran on whatever the
+worker CLI defaults to, and cadenza's `executorPolicy.modelTier` was carried, digested, persisted
+and **read by nobody**.
+
+continuo answered both — `continuo D-0098` makes the read-back window a caller-supplied budget
+defaulting to 30 s, and `continuo D-0099` adds `lap perform --model` over the provider's
+`base_cli_args` plus a `model` field on the verb's answer. This entry is rondo taking them: the pin
+moves, and the two new inputs become things rondo **states** rather than inherits.
+
+**It supersedes nothing.** `D-0017`'s eleven rules stand, and its pin is *moved* rather than
+re-argued; `D-0019`'s sixteen stand, two of them one revision behind and annotated on that entry;
+`D-0014`'s three stand, and rule 3's "a second executor is a change to one file" is what rule 3
+below spends. `D-0015` and `D-0018` are untouched.
+
+### Decision
+
+1. **The pin moves to `603843b7c0e91136bc7f7e5c9f91640f7bb970c9`.** `continuo.pin.json`,
+   `src/continuo/pin.ts` and the recorded version line move together, as `D-0017` rule 4 requires,
+   and the line is a **measurement** rather than an assembly: the pinned checkout was built with
+   `CONTINUO_REQUIRE_REVISION=1` and `node dist/cli.js --version` printed
+   `@suisya-systems/continuo 0.0.0 (rev 603843b7c0e91136bc7f7e5c9f91640f7bb970c9)`. Nothing about
+   the verification changes — the build is checked before rondo drives it, so there is no window in
+   which rondo drives a binary it did not pin. What the new revision also carries and rondo does
+   **not** consume: `gate present` / `deliver` / `ack` answering in the shared envelope
+   (`continuo D-0097`) and the `run show` read verb (`continuo D-0096`). Consuming either is its own
+   decision; `AGENTS.md`'s current-state prose is updated to say the flag now reaches them, and
+   `gate reconcile` is the one verb in the surveyed set still without it.
+2. **`identityReadbackTimeoutMs` is a required, explicit `RunPlan` field and rondo's third budget.**
+   It is threaded through `runPlan()`, the persisted plan payload, `PerformLapRequest` and
+   `src/access/conductor.ts` to `lap perform --identity-readback-timeout-ms`, and it is **counted
+   into `invocationCeilingMs`'s floor**: the ceiling must be strictly above
+   `turnTimeoutMs + gitTimeoutMs + identityReadbackTimeoutMs`. `D-0019` rule 12's reasoning is
+   unchanged and is the reason this is not left to continuo's 30 s default — the numbers rondo
+   reasons about must be the numbers in force, and a window a lap can spend in full *before the turn
+   starts* has to be inside the patience the operator declared. rondo sets no value of its own: like
+   the other two, the number is the caller's, and `D-0019` rule 3's "the conductor never invents a
+   field" holds.
+3. **The model tier is priced in the invocation adapter, `--model` is on every lap, and an unpriced
+   tier is refused before the spawn.** `src/continuo/roles.ts` becomes an **executor-policy
+   adapter** with two independent tables — `mapNeutralRole` for `executorPolicy.roleName`, and
+   `mapModelTier` for `executorPolicy.modelTier`. Independent, and **not** a role → model table:
+   `continuo D-0099` states the distinction (a role says what the executor is for, a model says who
+   executes), continuo's `roles.json` carries no model key, and `D-0014` rule 1 confines executor
+   vocabulary to this one module either way. The table, in force from this entry:
+
+   | cadenza `executorPolicy.modelTier` | model id passed as `--model` |
+   |---|---|
+   | `standard` | `claude-opus-5` |
+   | anything else | **refused**, before the spawn, as rondo's own policy gap |
+
+   Three things about that table:
+
+   - **The concrete ids are provisional, pending an operator's ratification.** Which model a tier
+     costs is a quality-and-cost policy, not an implementation detail, and `AGENTS.md` section 7
+     forbids taking one inside an implementation diff. `standard` is the only tier any agent type in
+     this repository uses. What is *not* provisional is the shape: the mapping exists, it lives in
+     one module, and the refusal is unconditional.
+   - **Changing a pair is a new decision entry**, not an edit. A pair replaced silently would be a
+     lap costing something different with nothing on record saying when it changed or who agreed;
+     `test/continuo/roles.test.ts` asserts the table literally so that a change is a deliberate red
+     test.
+   - **The refusal is what makes the omission safe.** Omitting `--model` is a supported continuo
+     call and continuo's own help says it is not a neutral choice — the child then runs on the
+     worker CLI's default, which is the model nobody chose and, per `F-2`, the most expensive one.
+     Unlike an unmapped role, **nothing downstream would catch this**: cadenza validates the tier
+     structurally and continuo never sees a tier at all. So a tier rondo cannot price is a lap rondo
+     does not start.
+4. **`LAP_PERFORM` decodes the twelfth field, and rondo checks it against what it asked for before
+   recording it.** `model` is `string | null`, always present, read with `nullableString` under this
+   layer's absent-is-not-null rule: `null` is continuo saying the choice fell through to the worker
+   CLI's default, which is a different fact from any model name. The invocation adapter answers a
+   pair — continuo's outcome, and the model rondo selected — as `admitRun` already answers one with
+   the role it used, and the interpreter compares the two exactly as it compares the run id it
+   planned against the run id the lap names. **A mismatch is `stalled`, not `failed`**: the lap
+   happened and a gate is open, so this is a person's question about that gate rather than a lap to
+   retry, and the gate id is named in the report **before** the stall so that an open gate rondo
+   learned about is never one nobody can find.
+5. **The iteration row gains two columns, `model_tier` and `model`, and carries both.** The tier is
+   what an agent type declared and the model id is what the lap actually cost, and the pair is the
+   only place a person auditing spend can see what a tier was worth on the day the lap ran. The
+   model column holds what **continuo reported**, never what rondo requested — recording the request
+   in place of the observation would make rule 4's check unable to fail, which is `D-0015` rule 6's
+   habit applied to a second measured field. **The reduction, stated:** lap 1 still has no schema
+   migration, so the two columns arrive by `CREATE TABLE IF NOT EXISTS` and a database created by an
+   earlier rondo does not have them. There is no durable production data in lap 1 and the remedy is
+   to create a new database; a migration path is owed the first time there is data worth keeping,
+   and that is a decision rather than a patch.
+
+### What was measured, and how
+
+**2026-09-06**, toolchain `node v22.17.0`, on Linux. The pinned checkout was cloned at
+`603843b7c0e91136bc7f7e5c9f91640f7bb970c9`, built with `CONTINUO_REQUIRE_REVISION=1`, and asked:
+
+- `node dist/cli.js --version` printed
+  `@suisya-systems/continuo 0.0.0 (rev 603843b7c0e91136bc7f7e5c9f91640f7bb970c9)`, which is the line
+  `src/continuo/pin.ts` records. `test/continuo/smoke.test.ts` was then run against that build with
+  `RONDO_CONTINUO_CLI` and passed, so the new pin is verified against a real binary and not only
+  against itself.
+- `node dist/cli.js lap perform --help` shows `[--model MODEL]` immediately after
+  `--claude-command`, and `[--identity-readback-timeout-ms IDENTITY_READBACK_TIMEOUT_MS]`
+  immediately after `--git-timeout-ms`. `src/continuo/invoker.ts` renders the flags in that order,
+  so `--help` and the function read the same way.
+- `dist/fencing/roles.json` still has exactly `worker, curator, dispatcher, secretary`, and
+  `--endpoint-recipient`'s `choices` are still `external-notify, human-gated-effect`. Both
+  transcriptions in rondo are re-dated to this revision rather than assumed to have survived it.
+- continuo's own rules for the two new inputs, read off its source at that revision:
+  `--model` is refused unless it matches `/^[A-Za-z0-9][A-Za-z0-9._:-]*$/` and is at most 128
+  characters, checked **before** the provider is constructed; `--identity-readback-timeout-ms` must
+  be a whole number of milliseconds of at least 1 and defaults to `DEFAULT_READBACK_BUDGET_MS`,
+  which is `30_000`. `claude-opus-5` satisfies the first, and `test/continuo/roles.test.ts` asserts
+  every model in the table against that pattern so a future pair cannot become a token continuo
+  would refuse.
+
+The `F-1` timing figures quoted above are the dogfood's own measurements, dated 2026-09-05, and are
+not re-measured here: what this entry needed from them is the *size* of the window, and continuo has
+since made the size an argument.
+
+### What this entry does not decide
+
+- **Which model a tier should be.** Rule 3's table is provisional and says so; ratifying or changing
+  it is an operator's decision and a new entry.
+- **Whether the concrete model is worth billing against.** Rule 5 persists it, which is the cheap
+  half. What a spend report is, and who reads it, is not decided here.
+- **Consuming `run show` or the three newly-enveloped `gate` verbs.** They are named in rule 1 as
+  what the pin also carries, and nothing in rondo drives them.
+- **The cadenza artefact.** `cadenza.pin.json` and the vendored tarball are a separate lane and are
+  untouched by this entry.
+
+### Annotations this entry adds to earlier entries
+
+- **`D-0019`** gains a dated annotation on that entry, recording that its "`lap perform` flag set
+  changing" falsifier fired, that rule 12's two explicit budgets are three, and that rule 14's
+  eleven decoded fields are twelve. Its falsifier list gains two inline annotations saying the same.
+- **`D-0017`'s pin** is moved rather than re-argued: rule 1's "the seam is a checkout pinned by
+  commit sha" and rule 6's "the revision is verified rather than assumed" are exactly what made
+  moving it a three-file edit and a test rather than a design question.
+- **`D-0014` rule 3** — "a second executor is a change to one file" — is spent for the first time,
+  and in a shape the rule anticipated: the file is `src/continuo/roles.ts` and the change is a
+  second table beside the first, not a second module.
+
+### What would falsify it
+
+- **cadenza growing a model-tier vocabulary of its own.** The pairs would become cadenza's to state
+  and rondo's to consume, and rule 3's table would be the wrong home rather than the only one.
+- **continuo taking a tier rather than a model id.** The table moves down a layer, and rondo's
+  refusal becomes continuo's.
+- **The operator ratifying different ids**, or declining `claude-opus-5` for `standard`. Rule 3 says
+  the values are provisional; this is that provision being used, and it is a new entry rather than a
+  falsification of the shape.
+- **A second tier arriving in an agent type before the table has a pair for it.** That is not a
+  falsifier — it is rule 3's refusal working — unless the refusal turns out to block work an
+  operator considers routine, in which case "rondo refuses what it cannot price" is the claim to
+  re-argue.
+- **continuo's `lap perform` flag set changing again**, or a `continuo.lap.perform/2`. `D-0019`'s
+  falsifiers on both, unchanged; this entry is what one firing looks like when the change is
+  additive.
+- **continuo's default read-back budget moving**, which would not affect rondo — rondo states its
+  own — but would falsify the sentence in rule 2 that names 30 s as what rondo declines to inherit.
+- **A model id that stops matching continuo's `--model` pattern.** The token would be refused at the
+  seam rather than before it, and the pattern assertion in `test/continuo/roles.test.ts` is what
+  turns that into a red test here instead.
+- **A rondo database with data worth keeping.** Rule 5's reduction is stated on the premise that
+  there is none; the first time there is, the missing migration path is the thing to decide.
+- Any measurement above failing to reproduce. Toolchain `node v22.17.0`; continuo at
+  `603843b7c0e91136bc7f7e5c9f91640f7bb970c9`; cadenza as `cadenza.pin.json` names it.

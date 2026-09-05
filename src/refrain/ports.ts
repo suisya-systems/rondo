@@ -84,6 +84,25 @@ export interface LapPerformance {
   readonly sessionPath: string;
   readonly endpointLeaseFailure: string | null;
   readonly elapsedDeadlineAtMs: number | null;
+  /**
+   * The model the lap **ran on**, as continuo reported it, or null when the
+   * choice fell through to the worker CLI's own default.
+   *
+   * An observation and not rondo's request; {@link requestedModel} is the
+   * request, and the interpreter compares the two.
+   */
+  readonly model: string | null;
+  /**
+   * The model rondo **asked for**: what the executor-policy adapter selected for
+   * the plan's model tier, and null only when the port refused before driving.
+   *
+   * Carried beside the answer for `runId`'s reason, one step further out: an
+   * identity rondo sent back beside the identity that came back is the only way
+   * a caller can tell "the lap ran what I asked for" from "the lap ran, and I do
+   * not know on what". The two values are the interpreter's to compare, exactly
+   * as it compares the run id it planned against the run id the lap names.
+   */
+  readonly requestedModel: string | null;
 }
 
 /** What `gate show` hands back. `outcome` is null exactly while the gate is open. */
@@ -107,6 +126,14 @@ export interface ClassificationRecord {
   readonly configDigest: string;
   readonly contractDigest: string;
   readonly neutralRoleName: string;
+  /**
+   * cadenza's `executorPolicy.modelTier`, neutral and unmapped.
+   *
+   * Read here and mapped in the continuo layer, for `neutralRoleName`'s reason:
+   * a concrete model id is the invocation adapter's vocabulary and not
+   * cadenza's, and the loop never names one (D-0021).
+   */
+  readonly modelTier: string;
 }
 
 /**
@@ -267,6 +294,6 @@ export interface ConductorPorts {
     plan: RunPlan,
     neutralRoleName: string,
   ) => Promise<EffectOutcome<RunAdmission>>;
-  readonly performLap: (plan: RunPlan) => Promise<EffectOutcome<LapPerformance>>;
+  readonly performLap: (plan: RunPlan, modelTier: string) => Promise<EffectOutcome<LapPerformance>>;
   readonly showGate: (plan: RunPlan, gateId: string) => Promise<EffectOutcome<GateObservation>>;
 }
