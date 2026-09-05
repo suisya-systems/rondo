@@ -313,10 +313,27 @@ neither an agent-type registry nor an allocator exists.
 **Proposal: the caller passes a complete `RunPlan`, and rondo gains no allocator
 and no configuration layer in lap 1** (`R-3`).
 
-A `RunPlan` is a frozen record carrying every value above plus the agent-type
-input and the project name, validated once at rondo's boundary
+A `RunPlan` is a frozen record carrying every value above **and every input the
+cadenza facade needs**, validated once at rondo's boundary
 ([section 8.3](#83-validation-happens-before-the-spawn-not-after-major-5)) and
 never edited afterwards. The conductor receives one; it never invents a field.
+
+The cadenza half has to be enumerated rather than gestured at, because none of
+it is derivable from the request text and each function refuses without it:
+
+| plan field | consumed by | why it cannot be derived |
+|---|---|---|
+| `catalogLayers: readonly CatalogLayer[]` | `resolveProject` (`facade.ts:116`) | cadenza reads no catalog of its own (`classification.ts:52-54`), and `CatalogLayer.baseDir` must be absolute in the platform's own spelling (`facade.ts:75-90`). rondo has no catalog on disk and where one would live is its own decision |
+| `projectName: string` | `resolveProject` | the request text names a task, not a G1 project |
+| `agentTypeInput: AgentTypeInput` | `agentTypeRecord` (`facade.ts:136`) | six fields, none defaulted by cadenza (`agent-type.ts:120-127`), and rondo has no agent-type registry to look one up in |
+| `parties: IssuanceParties` | `issueInitialContract` (`facade.ts:155`) | `issuer` and `grantee` name a run and a delegate that are **rondo's** records; cadenza mints neither and says so (`facade.ts:145-153`) |
+| `intendedAction: IntendedAction` | `classifyAction` (`facade.ts:172`) | it is a set of capability keys naming every act the run performs (`classification.ts:38-46`). Deriving one from prose is exactly the inference `D-0009`'s reasoning distrusts, and getting it wrong makes the classification answer the wrong question |
+
+That is the honest size of "a one-line request does not determine a run": five
+values on cadenza's side and eighteen on continuo's, before the prompt.
+`classifyAction` also needs the subject's `configDigest` **now**, which is not a
+plan field — it is read off the `ResolvedProject` at step 2 of section 10, which
+is the whole point of resolving rather than caching (`facade.ts:167-171`).
 
 Why that way round:
 
@@ -483,11 +500,34 @@ and provenance must be written *before* the effect it describes.
 
 ### 7.1 The states
 
-`IterationStatus` grows from four to eight. Non-terminal: `planned`,
-`classified`, `admitting`, `admitted`, `performing`, `awaiting_human`,
-`withdrawal_requested`. Terminal: `closed`, `failed`. (`running` is replaced by
-the three states that say *which* effect is in flight, because "running" is the
-one word that cannot be acted on after a crash.)
+`IterationStatus` grows from four to ten.
+
+**Non-terminal (7)** — `planned`, `classified`, `admitting`, `admitted`,
+`performing`, `awaiting_human`, `withdrawal_requested`.
+
+**Terminal (3)** — `closed`, `abandoned`, `failed`.
+
+`running` is replaced by the three states that say *which* effect is in flight,
+because "running" is the one word that cannot be acted on after a crash
+([7.6](#76-restart-and-where-fail-closed-means-stop)).
+
+Three of the ten need their meaning pinned down, because the invariant in 7.3
+makes every non-terminal status a lock on the whole conductor:
+
+- **`awaiting_human` means a continuo gate is open on this iteration**, and
+  nothing else. It always carries a gate id. It is not the general "a person has
+  to look at this" state, and using it as one is how a design deadlocks itself:
+  a status that is non-terminal and has no event that can end it holds the
+  single-flight lock forever.
+- **`abandoned` is terminal and is not a failure.** It is where a request ends
+  correctly without a run: a `refused` classification, a `needs_approval` lap 1
+  cannot resume ([section 9](#9-classification-and-what-lap-1-leaves-out-major-6)),
+  or an operator abandoning an iteration whose outcome cannot be established.
+  Calling these `failed` would file a working refusal as a defect.
+- **`withdrawal_requested` is reachable only from `awaiting_human`**, because it
+  is defined by the ask it carries — `gate close --outcome withdrawn` on a
+  *named* gate (`D-0013`). A failure with no gate id has nothing to ask about;
+  it goes to `failed` (section 10's abort edge).
 
 ### 7.2 The row
 
@@ -510,7 +550,7 @@ against `node:sqlite`, and **both work**:
 
 ```
 shape A  CREATE UNIQUE INDEX one_live ON iteration(1)
-           WHERE status NOT IN ('closed','failed');
+           WHERE status NOT IN ('closed','abandoned','failed');
 shape B  a VIRTUAL generated column `live` (NULL when terminal, 1 otherwise),
          CREATE UNIQUE INDEX one_live ON iteration(live) WHERE live IS NOT NULL;
 ```
@@ -565,9 +605,9 @@ would leave a run continuo knows about and rondo does not.
 | status found at startup | what happens |
 |---|---|
 | `planned`, `classified` | resume normally: no external effect has been made |
-| `admitting` | **stop and report.** A run may or may not exist under that id. rondo does not re-admit: `run admit` refuses a duplicate run id, and relying on that refusal to discover what happened is guessing with a mutating verb |
+| `admitting` | **stop and report; the row stays `admitting`.** A run may or may not exist under that id. rondo does not re-admit: `run admit` refuses a duplicate run id, and relying on that refusal to discover what happened is guessing with a mutating verb. A person settles it with `abandon()` (section 10) |
 | `admitted` | resume: `lap perform` has not been sent |
-| `performing` | **stop and report.** `lap perform` cannot be re-entered on an admitted run, and a fenced child may still be alive with nobody polling it. Re-running it is the one recovery that can do real damage |
+| `performing` | **stop and report; the row stays `performing`.** `lap perform` cannot be re-entered on an admitted run, and a fenced child may still be alive with nobody polling it. Re-running it is the one recovery that can do real damage. It holds the single-flight lock on purpose until a person settles it with `abandon()` |
 | `awaiting_human` | normal; wait for `resume` (section 5) |
 | `withdrawal_requested` | report the outstanding ask (`D-0013`); do not act |
 
@@ -709,11 +749,21 @@ step that makes the contract load-bearing rather than decorative, and it is the
 only place in the whole arc where rondo can refuse a request before anything
 mutates. Concretely, at the `classify` state:
 
-- `refused` → the iteration ends `failed` with cadenza's own `reason`
+- `refused` → the iteration ends **`abandoned`** with cadenza's own `reason`
   (`classification.ts:29-36` names all seven), and nothing is admitted.
-- `needs_approval` → the iteration transitions to `awaiting_human` **before**
-  admission, with the reason, and stops. It does not admit and then ask.
+- `needs_approval` → the iteration ends **`abandoned`** with the reason, **before**
+  admission. It does not admit and then ask.
 - `allowed` → proceed to `reserve` and `admit`.
+
+**Both stopping branches are terminal, and that is deliberate rather than
+casual.** The tempting spelling for `needs_approval` is `awaiting_human`, and it
+would be wrong twice over: there is no gate — `lap perform` has not run, so no
+`worker_escalation` gate exists and `resume` (section 5) would have nothing to
+observe — and `awaiting_human` is non-terminal, so under 7.3's invariant the
+first askable request would hold the single-flight lock against every later
+reservation, with no event in the design able to release it. A state that cannot
+be left is worse than a request that ends. So the request ends, the human is
+told why, and asking again is a new iteration.
 
 **What lap 1 leaves out, recorded as a reduction rather than omitted.** The
 `needs_approval` branch above is a dead end in lap 1: resuming it requires a
@@ -780,10 +830,36 @@ rations: the request at step 0, and the answer at step 7. Everything between is
 the conductor's, and none of it can advance without a durable row saying it
 happened.
 
-**The abort edge**, from any of steps 5-6: `withdrawal_requested`, with the gate
-id and the reason, and an ask to the operating surface. The conductor never
-writes the outcome (`D-0013`), and a gate whose close has been asked for is not
-thereby closed — that entry says so and this design does not improve on it.
+**The abort edges, and there are two of them**, separated by one question: does
+rondo hold a gate id?
+
+- **After step 6, with a gate id** — the iteration was `awaiting_human` and ends
+  without an answer. It transitions to `withdrawal_requested`, records the gate
+  id and the reason, and **asks** the operating surface for
+  `gate close --outcome withdrawn`. The conductor never writes the outcome
+  (`D-0013`), and a gate whose close has been asked for is not thereby closed —
+  that entry says so and this design does not improve on it.
+- **During step 5, with no gate id** — `lap perform` refused, threw, or hit a
+  timeout. There may be **no gate at all**: on an `isError` turn continuo's
+  ingest refuses the terminal report and `performLap` rethrows, so no gate is
+  opened, which is one of the two cases `D-0013` names as outside itself. Or a
+  gate may exist and rondo never read its id — the orphan case
+  [8.4](#84-the-timeout-which-today-is-wrong-by-an-order-of-magnitude-major-3)
+  describes. rondo cannot tell these apart from the outside, so it must not
+  claim to: the iteration goes to **`failed`** with continuo's own words, and the
+  report says plainly that a gate may or may not exist and that `gate list`
+  (`protocol.ts:319` — a verb rondo does drive) is how a person finds out. A
+  `withdrawal_requested` row here would name a gate id rondo does not have.
+
+The `performing` row a restart finds ([7.6](#76-restart-and-where-fail-closed-means-stop))
+is the third shape of the same question and is deliberately *not* auto-resolved:
+it stays `performing`, which under 7.3 blocks every later reservation until a
+person settles it. That block is the fail-closed behaviour, not an accident —
+a lap whose outcome is unknown is exactly the thing that must not be raced by a
+second one — and the way out is an operator-invoked `abandon(iterationId,
+reason)` on the access point, which writes the terminal `abandoned` row and
+nothing else. It drives no continuo verb, because there is no verb here that is
+rondo's to drive.
 
 ---
 
@@ -872,7 +948,7 @@ them, and `D-0019` is what records the outcome.
 | **R-11** | What bounds a `lap perform` invocation, and what happens on restart while performing? | **Per-verb timeouts on the contract; rondo passes `--turn-timeout-ms` explicitly and sets its own ceiling above it with a teardown margin; no cancellation in lap 1; a `performing` row found at startup stops and reports** | rondo's 60s (`invoker.ts:102`) against continuo's 15-minute default (`lap/cli.ts:204`) would kill every real lap. rondo's timer kills the CLI, not the fenced child — continuo's own timeout is what stops the worker session — so rondo firing first means an orphan, and that is a defect to report rather than a lap that failed |
 | **R-12** | Where does the role mapping live, and what is the table? | **A typed `admitRun()` on the invoker owning the mapping, the refusal and the argv; the identity table over continuo's four roster names, recorded in `D-0019` with its falsifier and a table test** | `D-0014` rule 1 forbids the executor's vocabulary above the adapter, and cadenza's `roleName` is validated structurally only — any identifier is a legal neutral name, and the codomain is four. A mis-mapping onto a *valid* role is undetected at both ends, and `D-0014` already says so |
 | **R-13** | Does `lap perform` get a decoder, and does the lap-1 API carry a `--cli-arg` field? | **Yes to the decoder (`continuo.lap.perform/1`, the eleven fields of 8.2, semantic validation before the spawn); no `--cli-arg` field anywhere** | `D-0011` rule 1 admits with none, and continuo's own allowlist is `{"entries": []}` at the pinned revision — so the field costs nothing to omit and omitting it closes the route permanently. Validation before the spawn because an operator's typo reaches rondo as exit 1 and a stack, not a refusal document (`D-0015`) |
-| **R-14** | Is admission-time classification in lap 1? | **Yes**, with `refused` ending the iteration and `needs_approval` stopping before admission — and the successor-contract path recorded as a lap-1 reduction | It costs one call to a total pure function and it is what makes the contract load-bearing. Resuming a `needs_approval` needs a widening successor rondo may not compose (`D-0009` part 2, `D-0018` rule 7), so that branch is a dead end in lap 1 and the document says so |
+| **R-14** | Is admission-time classification in lap 1? | **Yes**, and **both stopping branches are terminal (`abandoned`)** — `refused` and `needs_approval` alike — with the successor-contract path recorded as a lap-1 reduction | It costs one call to a total pure function and it is what makes the contract load-bearing. Resuming a `needs_approval` needs a widening successor rondo may not compose (`D-0009` part 2, `D-0018` rule 7), so that branch is a dead end in lap 1. Spelling it `awaiting_human` would be the deadlock 7.1 names: non-terminal, no gate to observe, and holding the single-flight lock with no event able to release it |
 | **R-15** | Is the conductor's own verify (cadenza `conductor.md` section 10 step 4) in lap 1? | **No — recorded as a reduction with its trigger named** | The gate is already open before rondo could verify, so a failing verify's only available action is the withdrawal ask a human reading the gate would make anyway. Half-building it would put an untested branch on the path to the human contact |
 | **R-16** | Where is the boundary between the test layers, and where does a real lap run? | **`test/refrain/` on injected fakes only; real cadenza and real continuo confined to the two existing smokes; the full lap a documented manual dogfood, as a script rather than an excluded test file** | `D-0017` rule 6: a test suite is not where an agent session belongs, and the continuo smoke is mandatory in every matrix cell. A test file excluded from `npm test` is a file whose greenness nobody can state |
 
