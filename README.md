@@ -4,8 +4,8 @@ The host application of the successor stack: the one long-running process a pers
 
 ## Status
 
-**A skeleton with its boundaries enforced, two working seams behind them --
-one to each sibling -- and nothing else.**
+**A working conductor for one lap, with its boundaries enforced and a seam to
+each sibling behind them.**
 
 What exists: a TypeScript/ESM package in cadenza's conventions, a CI gate on
 ubuntu and windows across Node 22 and 24, an architecture test that polices the
@@ -20,18 +20,31 @@ once from a pinned cadenza commit and committed under `vendor/`, rondo's first
 runtime dependency, reached through the single facade in `src/cadenza/` and
 exercised in every CI cell with in-memory fixtures.
 
+**As of D-0019 there is a conductor.** `src/refrain/` holds a pure `nextStep`
+planner beside an async interpreter that drives one lap through injected ports,
+`src/store/` holds a real schema whose partial unique index makes single-flight
+the database's invariant rather than a promise, and the arc runs: classify
+against a cadenza contract, admit a run, walk one lap, and **suspend at the gate
+a human has yet to answer**, resuming through `resume(iterationId)` when the
+operating surface says they have. It never composes the answer (D-0009), never
+publishes (D-0010), never closes a gate (D-0013), and runs one iteration at a
+time (D-0012).
+
 What does **not** exist yet, and is not merely unfinished but undecided:
 
-- the loop — `src/refrain/` holds a pure `nextStep` function and no runner;
-- the web UI and the localhost MCP surface — `src/access/` holds one in-process
-  access point that forwards a question and nothing else;
-- the durable store's schema — `src/store/sqlite.ts` names the seam and throws;
+- the web UI and the localhost MCP surface — `src/access/` holds the composition
+  root, an in-process access point and the ASCII escaper. D-0020 takes the five
+  operating-surface rows cadenza sent to rondo's gate and **decides only**: the
+  gate panes, the OIDC adapter and the conversation store are a later diff;
 - the agent-type *registry* — cadenza supplies the record and rondo can now
-  build one (D-0018), and there is nowhere to keep them and nothing that talks
-  to an agent;
-- the durable half of provenance — the seam verifies which continuo it drove and
-  hands back what it observed, and there is no row to write it to yet, which
-  D-0017 rule 5 records rather than glosses.
+  build one (D-0018), and there is nowhere to keep them;
+- an identifier allocator, and with it any second concurrent iteration. D-0019
+  rule 10 records that single-flight is a lap-1 **reduction** rather than the
+  shape rondo is aiming at, and names the route to N — a capacity ledger under
+  D-0012's three conditions;
+- the conductor's own verify, and a resumable `needs_approval`. Both are
+  recorded as lap-1 reductions with their triggers named (D-0019 rules 15
+  and 16) rather than left as holes.
 
 None of those now waits on an open design row. cadenza's
 `docs/design/conductor.md` section 11 sent eight of its seventeen rows to
@@ -134,18 +147,19 @@ written to be thrown away.
 
 | Path | What it is |
 |---|---|
-| `src/refrain/` | The loop. Imports nothing external, ever — that is the boundary. |
-| `src/access/` | Access points: the web UI and the localhost MCP surface, when they exist. May reach the loop and the continuo seam; neither may reach back. `console.ts` is the one place output is escaped to ASCII. |
+| `src/refrain/` | The loop (D-0019): a pure `nextStep` planner, an async interpreter over injected ports, the `RunPlan` and its validation, and the one module that consumes cadenza. Imports nothing external, ever — that is the boundary, and it is why continuo arrives as a port rather than as an import. |
+| `src/access/` | Access points: the web UI and the localhost MCP surface, when they exist. May reach the loop, the store and the continuo seam; none may reach back. `conductor.ts` is the composition root that wires the ports and carries `resume` and `abandon`; `console.ts` is the one place output is escaped to ASCII. |
 | `src/continuo/` | The seam to continuo (D-0017): a pure protocol decoder, the pin and its verification, and `invoker.ts` — the one module under `src/` allowed to start a process. Reaches only itself. |
-| `src/cadenza/` | The seam to cadenza (D-0018): `facade.ts` is the one module under `src/` allowed to import `@suisya-systems/cadenza`, binding by binding. Reaches only itself — no layer reaches it yet, and the arrow from the loop arrives with the code that uses it. |
-| `src/store/` | Durable state. `sqlite.ts` is the one module under `src/` allowed to name a SQLite driver, which is the scope the test enforces. |
+| `src/cadenza/` | The seam to cadenza (D-0018): `facade.ts` is the one module under `src/` allowed to import `@suisya-systems/cadenza`, binding by binding. Reaches only itself; the loop reaches *it*, which is the arrow D-0018 rule 5 left unbuilt and D-0019 took. |
+| `src/store/` | Durable state (D-0019 rule 10): the iteration schema, `reserve`/`transition` under `BEGIN IMMEDIATE`, and the partial unique index that makes single-flight the database's invariant. `sqlite.ts` is the one module allowed to name a SQLite driver and `plan.ts` the one allowed to take a hash. |
 | `test/architecture/` | The test that enforces the arrows above, and the per-module capability grants (SQLite, the spawn, and the cadenza package). |
 | `continuo.pin.json` | Which continuo rondo drives: repository, full sha, and the exact `--version` line that build prints. CI provisions from it; `src/continuo/pin.ts` mirrors it; a test fails if they drift. |
 | `cadenza.pin.json` | Which cadenza rondo carries: repository and full sha — the *source* pin, and no version, because every cadenza build is `0.0.0`. |
 | `vendor/` | The committed cadenza tarball, its sha256, and `pin.mjs` — the portable `record`/`check` helper cadenza's bridge prescribes. `node vendor/pin.mjs check` runs immediately before every install, locally and in all three installing CI jobs. |
 | `DECISIONS.md` | The append-only design record. Cite by ID. |
 | `AGENTS.md` | How work here is done. |
-| `docs/` | Index of the records, and of where the enforced rules live. |
+| `scripts/dogfood-lap.md` | The full lap, end to end, as a manual procedure. Not a test, and D-0019 rule 17 says why. |
+| `docs/` | Index of the records, and of where the enforced rules live. `docs/design/refrain-lap1.md` is the lap-1 conductor design D-0019 decides. |
 
 ## The name
 

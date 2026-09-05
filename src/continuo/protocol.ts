@@ -32,14 +32,15 @@
  * So this module carries the class through as an opaque string for a human to
  * read and never branches on it.
  *
- * **Five outcomes, and the difference between them is who has to act.**
- * {@link ContinuoResult} is closed over exactly the five, because the answer to
+ * **Six outcomes, and the difference between them is who has to act.**
+ * {@link ContinuoResult} is closed over exactly the six, because the answer to
  * "what does rondo do now?" differs for each: an answered call has a payload;
  * an upstream refusal is continuo's answer and belongs to the operator; a prose
  * refusal is the same thing said in words rondo may relay but never parse; a
  * protocol refusal means the seam is not the seam rondo was built against and
- * rondo stops; and a defect is rondo's own bug, which an operator should never
- * have been shown.
+ * rondo stops; a defect is rondo's own bug, which an operator should never have
+ * been shown; and a timeout is rondo's own ceiling firing, which is a fact this
+ * module can *name* but never produce -- only `invoker.ts` owns a timer.
  */
 
 /** The JSON rondo is prepared to see. A wire vocabulary, not a rondo type. */
@@ -93,7 +94,27 @@ export type ContinuoResult<T> =
   | { readonly kind: "protocolRefusal"; readonly reason: string }
   /** rondo called continuo wrong, or the process failed. Never an operator's
    *  fault, and never relayed as though it were continuo's answer. */
-  | { readonly kind: "invokerDefect"; readonly reason: string };
+  | { readonly kind: "invokerDefect"; readonly reason: string }
+  /**
+   * **rondo's own ceiling fired, and nothing came back.**
+   *
+   * A sixth variant rather than a sixth spelling of `invokerDefect`, and the
+   * difference is not cosmetic: rondo's ceiling firing is not the same fact as
+   * a defect diagnosed after the child closed. rondo's timer kills the *CLI*
+   * and not the fenced child continuo started, so a ceiling that fired means a
+   * worker may still be alive with nobody polling it, while every other defect
+   * is a process that is over.
+   *
+   * The conductor's single-flight invariant turns on exactly that difference:
+   * an answer -- even a refusal -- releases the lock, and a silence keeps it
+   * (D-0019 rules 11 and 12). Folding the two together would let the next lap
+   * be admitted while an orphan was still writing to the same worktree, which
+   * is the one race the invariant exists to prevent.
+   *
+   * {@link decode} never produces it. It is a fact about a timer, and the timer
+   * is `invoker.ts`'s.
+   */
+  | { readonly kind: "timedOut"; readonly reason: string };
 
 /**
  * What rondo reads out of one verb's document.
@@ -107,6 +128,22 @@ export type ContinuoResult<T> =
 export interface VerbContract<T> {
   readonly command: readonly string[];
   readonly schema: string;
+  /**
+   * How long rondo will wait for this verb before it gives up.
+   *
+   * **Per verb, because the number bounds a verb and not a seam** (D-0019
+   * rule 12). A single module-level constant was wrong by an order of magnitude
+   * the moment `lap perform` existed: continuo's own default turn timeout is
+   * fifteen minutes, and a sixty-second ceiling would have killed every real
+   * lap at one fifteenth of the time continuo expected to spend. Carried beside
+   * the schema and the reader so the three facts about a verb travel as one
+   * value, which is the same argument `command` is here for.
+   *
+   * The invoker may override it per call; see `LAP_PERFORM`, which is the one
+   * verb whose real bound is the operator's declared patience rather than
+   * anything rondo can write down.
+   */
+  readonly timeoutMs: number;
   readonly read: (payload: JsonObject) => T;
 }
 
@@ -166,6 +203,30 @@ function nullableString(document: JsonObject, key: string): string | null {
   }
   if (typeof value !== "string") {
     throw new PayloadMismatch(`'${key}' is ${describe(value)}, and a string or null was required`);
+  }
+  return value;
+}
+
+/**
+ * A field continuo answers with an object or with `null`, and always answers.
+ *
+ * The third reader under {@link nullableString}'s absent-is-not-null rule, and
+ * it exists for `lap perform`'s `endpoint_lease_failure`: continuo says of that
+ * key, in its own words, that it is "always present, and `null` when there is
+ * nothing to say", and adds that a host which had to tell an absent key from a
+ * null one to learn the lap was clean would be reading the absence of evidence
+ * as evidence. So absence is a defect here exactly as it is there.
+ */
+function nullableObject(document: JsonObject, key: string): JsonObject | null {
+  const value = document[key];
+  if (value === undefined) {
+    throw new PayloadMismatch(`'${key}' is absent, and an object or null was required`);
+  }
+  if (value === null) {
+    return null;
+  }
+  if (!isJsonObject(value)) {
+    throw new PayloadMismatch(`'${key}' is ${describe(value)}, and an object or null was required`);
   }
   return value;
 }
@@ -295,11 +356,76 @@ export interface MeasureReport {
   readonly reportKind: string;
 }
 
+/**
+ * `lap perform`: one admitted run walked to an open gate.
+ *
+ * The eleven fields continuo's `report()` writes under `--json`, read whole
+ * rather than cut down: this is the one verb whose document is the *only*
+ * record of what a lap did, and every field on it is either something the
+ * conductor stores against the iteration or the handle on something it does.
+ */
+export interface LapPerformed {
+  readonly runId: string;
+  /** The worktree the run was materialised into. A real path, unlike the one
+   *  below. */
+  readonly workspace: string;
+  readonly topicBranch: string;
+  readonly baseCommit: string;
+  readonly sessionId: string;
+  /**
+   * **The walk's own name for the road it took, and NOT a filesystem path.**
+   *
+   * `started`, `respawned` or `resumed`. continuo's own header says so where it
+   * writes the field, and the human line beside the session id says it too. The
+   * rondo field is named `sessionPath` because renaming continuo's key on the
+   * way in would hide which key this is, and this comment is the price of that:
+   * a decoder that called it a path -- or a record that let a reader infer one
+   * from the name alone -- would mislead every reader downstream, and the ones
+   * furthest downstream are the ones who would try to open it.
+   */
+  readonly sessionPath: string;
+  /** The gate the conductor then suspends on (D-0019 rule 5). */
+  readonly gateId: string;
+  /** continuo's bookkeeping for the ingested report, and the only handle on
+   *  it. */
+  readonly eventId: string;
+  readonly eventSeq: number;
+  /**
+   * Why the outbox delivery lease could not be taken, or null when it was.
+   *
+   * Reduced to continuo's own message: continuo sends `{ "message": ... }`
+   * because `successLine` takes primitives and an `Error` handed to a JSON
+   * encoder is whatever its enumerable fields happen to be -- for an `Error`,
+   * nothing. rondo carries the one field that object has rather than mirroring
+   * a wrapper with a single key.
+   */
+  readonly endpointLeaseFailure: string | null;
+  /** A gate deadline that had already passed when the report arrived: continuo
+   *  drops it and opens the gate anyway rather than losing the report. */
+  readonly elapsedDeadlineAtMs: number | null;
+}
+
 // --- the verb contracts -----------------------------------------------------
+
+/**
+ * How long a *control-plane* verb may take before rondo gives up.
+ *
+ * A ceiling on a hang rather than a performance budget: the measured cost of a
+ * driven verb is about a tenth of a second (D-0015), so a minute is three
+ * orders of magnitude of headroom and still bounded, which is what a test suite
+ * and an interactive host both need from a subprocess.
+ *
+ * This is the number that used to be `invoker.ts`'s one module-level constant,
+ * and its justification came with it: it is a true statement about these five
+ * verbs and was never true of `lap perform`, which walks a worker. Naming it
+ * here, beside the contracts it bounds, is D-0019 rule 12 part 1.
+ */
+const CONTROL_PLANE_TIMEOUT_MS = 60_000;
 
 export const DB_CREATE: VerbContract<DatabaseCreated> = {
   command: ["db", "create"],
   schema: "continuo.db.create/1",
+  timeoutMs: CONTROL_PLANE_TIMEOUT_MS,
   read: (payload) => ({
     schemaVersion: requireNumber(payload, "schema_version"),
     headVersion: requireNumber(payload, "head_version"),
@@ -309,6 +435,7 @@ export const DB_CREATE: VerbContract<DatabaseCreated> = {
 export const RUN_ADMIT: VerbContract<RunAdmitted> = {
   command: ["run", "admit"],
   schema: "continuo.run.admit/1",
+  timeoutMs: CONTROL_PLANE_TIMEOUT_MS,
   read: (payload) => ({
     runId: requireString(payload, "run_id"),
     status: requireString(payload, "status"),
@@ -319,6 +446,7 @@ export const RUN_ADMIT: VerbContract<RunAdmitted> = {
 export const GATE_LIST: VerbContract<readonly OpenGate[]> = {
   command: ["gate", "list"],
   schema: "continuo.gate.list/1",
+  timeoutMs: CONTROL_PLANE_TIMEOUT_MS,
   read: (payload) =>
     requireObjectArray(payload, "gates").map((gate) => ({
       gateId: requireString(gate, "gate_id"),
@@ -332,6 +460,7 @@ export const GATE_LIST: VerbContract<readonly OpenGate[]> = {
 export const GATE_SHOW: VerbContract<GateDetail> = {
   command: ["gate", "show"],
   schema: "continuo.gate.show/1",
+  timeoutMs: CONTROL_PLANE_TIMEOUT_MS,
   read: (payload) => ({
     gateId: requireString(payload, "gate_id"),
     gateType: requireString(payload, "gate_type"),
@@ -344,6 +473,7 @@ export const GATE_SHOW: VerbContract<GateDetail> = {
 export const GATE_CLOSE: VerbContract<GateClosed> = {
   command: ["gate", "close"],
   schema: "continuo.gate.close/1",
+  timeoutMs: CONTROL_PLANE_TIMEOUT_MS,
   read: (payload) => ({
     gateId: requireString(payload, "gate_id"),
     closed: requireBoolean(payload, "closed"),
@@ -352,6 +482,54 @@ export const GATE_CLOSE: VerbContract<GateClosed> = {
     toStage: nullableString(payload, "to_stage"),
   }),
 };
+
+/**
+ * The floor under `lap perform`'s ceiling, and never the ceiling itself.
+ *
+ * continuo's own default turn timeout is fifteen minutes, and the turn is only
+ * the middle of the invocation: before it, `lap perform` takes the global
+ * delivery lease, materialises a worktree and renders a fence; after it,
+ * ingests the report and opens the gate. So this number is the smallest value
+ * that is not obviously wrong, not an estimate of a lap -- and the invoker
+ * overrides it on every call with the plan's `invocationCeilingMs`, which is
+ * the operator's declared patience (D-0019 rule 12).
+ */
+const LAP_PERFORM_FLOOR_MS = 900_000;
+
+export const LAP_PERFORM: VerbContract<LapPerformed> = {
+  command: ["lap", "perform"],
+  // Read off continuo's `src/lap/cli.ts` at the pinned revision, where it is
+  // declared as `PERFORM_SCHEMA`, rather than assembled from the verb's name.
+  schema: "continuo.lap.perform/1",
+  timeoutMs: LAP_PERFORM_FLOOR_MS,
+  read: (payload) => ({
+    runId: requireString(payload, "run_id"),
+    workspace: requireString(payload, "workspace"),
+    topicBranch: requireString(payload, "topic_branch"),
+    baseCommit: requireString(payload, "base_commit"),
+    sessionId: requireString(payload, "session_id"),
+    sessionPath: requireString(payload, "session_path"),
+    gateId: requireString(payload, "gate_id"),
+    eventId: requireString(payload, "event_id"),
+    eventSeq: requireNumber(payload, "event_seq"),
+    endpointLeaseFailure: leaseFailureMessage(payload),
+    elapsedDeadlineAtMs: nullableNumber(payload, "elapsed_deadline_at_ms"),
+  }),
+};
+
+/**
+ * `endpoint_lease_failure`, reduced to the message inside it.
+ *
+ * A helper rather than an inline expression, because the field is read in two
+ * steps and the second one is easy to get wrong: `nullableObject` decides
+ * whether continuo had anything to say, and only then is there a `message` to
+ * require. Reading it the other way round would turn a clean lap into a
+ * mismatch on a key that was never supposed to be there.
+ */
+function leaseFailureMessage(payload: JsonObject): string | null {
+  const failure = nullableObject(payload, "endpoint_lease_failure");
+  return failure === null ? null : requireString(failure, "message");
+}
 
 /**
  * A deadline continuo answers with `null` for a gate that has none.

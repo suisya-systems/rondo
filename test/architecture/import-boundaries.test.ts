@@ -126,19 +126,31 @@ const ALLOWED_INTERNAL_BY_LAYER: Readonly<Record<string, readonly string[]>> = {
   // replaced without the loop noticing.
   "src/store": ["src/store"],
   // The loop. May persist, may not be reached into from an access point's side
-  // of the boundary.
-  "src/refrain": ["src/refrain", "src/store"],
+  // of the boundary -- and, as of D-0019 rule 1, may reach the cadenza facade.
+  //
+  // The asymmetry between the two seams is measured rather than tasteful. The
+  // cadenza facade owns **no capability**: it reads no file, no clock and no
+  // network, and `classify()` is total and pure, so a loop that imports it is
+  // still a function of what it was handed. The continuo layer owns **a
+  // process**. So the loop takes the cadenza arrow and reaches continuo through
+  // injected ports declared in `src/refrain/ports.ts` -- which keeps D-0017
+  // rule 2's stated purpose exactly, that the loop stays testable on a machine
+  // with no continuo on it. `src/refrain -> src/continuo` is still refused, and
+  // the planted corpus proves it in both of the forms that would be tempting.
+  "src/refrain": ["src/refrain", "src/store", "src/cadenza"],
   // The seam to continuo (D-0017): a pure protocol decoder and the one module
   // that owns a subprocess. It names only itself, which is what keeps the
   // arrow one-way -- rondo's loop must stay testable without a continuo, so
   // `src/refrain` may not reach this layer and this layer may not reach it.
   "src/continuo": ["src/continuo"],
   // The seam to cadenza (D-0018): the one layer that imports the vendored
-  // cadenza package, through the single facade granted it below. Self-only,
-  // and deliberately so -- `src/refrain -> src/cadenza` is the arrow that will
-  // matter, and it is added when conductor code actually consumes the facade
-  // rather than in advance. An arrow nothing travels along is a permission
-  // granted for a use nobody has yet made.
+  // cadenza package, through the single facade granted it below. It still names
+  // only itself -- what changed with D-0019 is the arrow *into* it, from the
+  // loop, which D-0018 rule 5 left unbuilt and whose trigger it named: "the
+  // arrow arrives when conductor code consumes the facade." That code is
+  // `src/refrain/classification.ts`, and the arrow is granted above rather than
+  // here, because an allowance says what a layer may reach and not who may
+  // reach it.
   "src/cadenza": ["src/cadenza"],
   // The access points: the web UI and the localhost MCP surface, when they
   // exist. They compose the other three and are composed by nobody. cadenza is
@@ -197,6 +209,14 @@ const ALLOWED_EXTERNALS_BY_MODULE: Readonly<
   Record<string, Readonly<Record<string, readonly string[]>>>
 > = {
   "src/store/sqlite.ts": { "node:sqlite": ["DatabaseSync"] },
+  // The third per-module capability grant in the tree, and it is here rather
+  // than in `src/refrain/` on purpose (D-0019). `plan_digest` is what makes
+  // "under what plan did this run happen" answerable from rondo's own row, and
+  // taking a digest needs a hash -- but `src/refrain/`'s external allowance is
+  // empty and is the property the whole layer exists to have. So the loop
+  // renders the plan and the store digests the bytes, and the capability lands
+  // on the module that was already the durable layer's own.
+  "src/store/plan.ts": { "node:crypto": ["createHash"] },
   // The one module allowed to start a process, granted the one binding it
   // needs to do it (D-0017 rule 3). Keyed by module rather than by layer for
   // the reason SQLite is: `src/continuo/protocol.ts` sits in the same
@@ -269,15 +289,22 @@ const SQLITE_OWNER = "src/store/sqlite.ts";
  * can see.
  */
 const EXPECTED_MODULES: readonly string[] = [
+  "src/access/conductor.ts",
   "src/access/console.ts",
   "src/access/local.ts",
   "src/cadenza/facade.ts",
   "src/continuo/invoker.ts",
   "src/continuo/pin.ts",
   "src/continuo/protocol.ts",
+  "src/continuo/roles.ts",
   "src/index.ts",
+  "src/refrain/classification.ts",
+  "src/refrain/interpreter.ts",
   "src/refrain/loop.ts",
+  "src/refrain/plan.ts",
   "src/refrain/policy.ts",
+  "src/refrain/ports.ts",
+  "src/store/plan.ts",
   "src/store/records.ts",
   "src/store/sqlite.ts",
 ];
@@ -1045,6 +1072,66 @@ const PLANTED: ReadonlyArray<
     "which it is not granted",
   ],
   [
+    // D-0019 rule 1's arrow, planted from the side that must still be refused.
+    // The package cases above catch a loop that reaches for continuo's own
+    // package; this one catches the likelier mistake by far -- a loop that
+    // reaches rondo's continuo LAYER, which is where the spawn lives. The
+    // conductor's effects arrive as the injected ports of
+    // `src/refrain/ports.ts`, and this case is what keeps that a mechanism
+    // rather than a habit.
+    "loop-reaches-rondos-continuo-layer",
+    "src/refrain/probe.ts",
+    'import { admitRun } from "../continuo/invoker.js";\nexport const x = admitRun;\n',
+    "outside its allowance",
+  ],
+  [
+    // The same arrow through the pure half of the layer. `protocol.ts` spawns
+    // nothing, which is exactly why it would be the easy one to argue for --
+    // and taking it would put continuo's wire vocabulary inside the loop, which
+    // D-0015 rule 2 and D-0017 rule 8 both refuse.
+    "loop-reaches-the-continuo-decoder",
+    "src/refrain/probe.ts",
+    'import type { ContinuoResult } from "../continuo/protocol.js";\nexport type X = ContinuoResult<string>;\n',
+    "outside its allowance",
+  ],
+  [
+    // The control for the arrow D-0019 actually took. Without it the two cases
+    // above would be satisfied by a rule that refused everything, and the table
+    // would say nothing about what the loop may now reach.
+    "loop-reaches-the-cadenza-facade",
+    "src/refrain/probe.ts",
+    'import { classifyAction } from "../cadenza/facade.js";\nexport const x = classifyAction;\n',
+    null,
+  ],
+  [
+    // The arrow is the loop's, and only the loop's. An access point that needed
+    // a delegation contract would be an access point taking a domain decision,
+    // which is the reason D-0018 rule 5 gave for making the loop's arrow the
+    // one to add first.
+    "an-access-point-reaches-cadenza",
+    "src/access/probe.ts",
+    'import { classifyAction } from "../cadenza/facade.js";\nexport const x = classifyAction;\n',
+    "outside its allowance",
+  ],
+  [
+    // The digest capability is one module's, like the driver and the spawn.
+    // A second module in the durable layer taking a hash would be the same
+    // shape of drift the SQLite cases exist for.
+    "a-second-store-module-takes-a-hash",
+    "src/store/journal.ts",
+    'import { createHash } from "node:crypto";\nexport const x = createHash;\n',
+    "which it is not granted",
+  ],
+  [
+    // And the loop may not take one at all. This is the case that keeps
+    // D-0019's reason for putting `plan_digest` in the store honest: if the
+    // loop could hash, the argument for the placement would have been taste.
+    "the-loop-takes-a-hash",
+    "src/refrain/probe.ts",
+    'import { createHash } from "node:crypto";\nexport const x = createHash;\n',
+    "which it is not granted",
+  ],
+  [
     "second-module-opens-sqlite",
     "src/store/journal.ts",
     'import { DatabaseSync } from "node:sqlite";\nexport const x = DatabaseSync;\n',
@@ -1356,12 +1443,14 @@ const PLANTED: ReadonlyArray<
     'import * as cadenza from "@suisya-systems/cadenza";\nexport const x = cadenza;\n',
     "takes <namespace import> from @suisya-systems/cadenza",
   ],
-  [
-    "the-loop-cannot-reach-the-cadenza-seam",
-    "src/refrain/probe.ts",
-    'import { classifyAction } from "../cadenza/facade.js";\nexport const x = classifyAction;\n',
-    "outside its allowance",
-  ],
+  // `the-loop-cannot-reach-the-cadenza-seam` used to sit here, asserting that
+  // this exact module and this exact source were refused. D-0018 rule 5 named
+  // its own trigger -- "the arrow arrives when conductor code consumes the
+  // facade" -- and D-0019 is that code, so the case was deleted rather than
+  // edited: its replacement is `loop-reaches-the-cadenza-facade` above, which
+  // is the same module and the same source with the opposite expectation. Two
+  // entries would have left the corpus contradicting itself about the one arrow
+  // this change added, which is worse than either answer.
   [
     "the-cadenza-seam-cannot-reach-the-loop",
     "src/cadenza/probe.ts",
