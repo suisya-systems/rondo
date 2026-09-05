@@ -99,6 +99,11 @@ rules, from that file's own "How to use this file":
 - **IDs are permanent.** Never reuse, renumber, merge or delete one.
 - **Supersession keeps the ID**: the old entry gains
   `Status: superseded by D-XXXX` and the replacement is appended with a new ID.
+- **Append-only forbids removing and rewriting, not annotating.** A later entry
+  may add a marked, dated note to an earlier one — which falsifier fired, which
+  entry answered it — leaving every original claim readable underneath. Changing
+  what an entry *asserted* is a supersession and takes a new ID. D-0001 carries
+  three such annotations from D-0015 and D-0016.
 - **Cross-reference by ID only** — never by line number or heading order.
 - **Every entry states what would falsify it.** An entry taken on facts that can
   change records the fact and the date it was measured at, so a later reader can

@@ -17,6 +17,14 @@ C-NN`, so the spaces can never be read as one.
   `Status: superseded by D-XXXX`; the replacement gets a new ID at the end of the list.
 - **Cross-reference by ID only.** Never cite this file by line number, heading order, or table
   position.
+- **Append-only means nothing is removed or rewritten — not that an entry is frozen.** The
+  supersession rule above already edits an accepted entry's `Status`, and the same licence extends
+  to a **dated annotation**: a later entry may add a marked, dated note to an earlier one saying
+  which falsifier fired, which entry answered it, or that a request has since been carried out. An
+  annotation is additive and says so; it never edits a claim, a measurement or a date already
+  recorded, and the original text stays readable underneath it. Anything that would change what an
+  entry *asserted* is a supersession and takes a new ID instead. D-0001's annotations from D-0015
+  and D-0016 are the worked example.
 - **Every entry states what would falsify it.** A decision taken on facts that can change records
   the fact, the version, and the date it was measured at, so a later reader can tell "still true"
   from "was true in 2026".
@@ -52,6 +60,11 @@ C-NN`, so the spaces can never be read as one.
 ## D-0001 — How rondo consumes continuo and cadenza in lap 1: a CLI process boundary for continuo, and nothing at all for cadenza
 
 **Status:** accepted (2026-09-05, rondo#1)
+
+> **Annotation (2026-09-05, from D-0015 and D-0016).** Added after this entry was accepted, under
+> the annotation rule in "How to use this file". Nothing below it was removed or rewritten: every
+> measurement, claim and date is as originally taken, and the three marked notes further down —
+> two on the falsifier list, one on the escalation list — are additions of the same kind.
 
 **Re-argued, and still accepted (2026-09-05).** Two of the falsifiers below fired on the day this
 entry was taken, and both have been answered without changing what this entry decides. **D-0015**
@@ -363,14 +376,15 @@ for cadenza — is the same work options (a) and (b) needed. It is not wasted ei
 ### Escalated, not made
 
 Neither sibling was modified. The changes each would need, named precisely so cadenza's and
-continuo's own gates can weigh them.
+continuo's own gates can weigh them:
 
-**Three of the four were carried out at the siblings' own gates on 2026-09-05**, which is recorded
-here so a later reader does not re-escalate them: cadenza's packaging (`cadenza D-0033`, see
-D-0016), and both continuo requests — the revision-carrying `--version` and `--json` on the driven
-subcommands (`continuo D-0090`, see D-0015). `--json` landed on ten of fifteen verbs and **not on
-`gate close`**, which D-0015 measures and decides how to drive. The `prepare` non-escalation below
-stands unchanged.
+> **Annotation (2026-09-05, from D-0015 and D-0016).** Three of the four requests below were
+> carried out at the siblings' own gates the same day, recorded here so a later reader does not
+> re-escalate them: cadenza's packaging (`cadenza D-0033`, see D-0016), and both continuo requests
+> — the revision-carrying `--version` and `--json` on the driven subcommands (`continuo D-0090`,
+> see D-0015). `--json` landed on ten of fifteen verbs and **not on `gate close`**, which D-0015
+> measures and decides how to drive. The `prepare` non-escalation is unaffected and still stands.
+> The list itself is unchanged.
 
 - **cadenza** `package.json`: an `exports` map (continuo's shape:
   `{".": {"types": "./dist/index.d.ts", "default": "./dist/index.js"}}`), a `"build"` script, a
@@ -391,12 +405,13 @@ stands unchanged.
 - **continuo grows a machine-readable surface** — `--json` on the driven subcommands and a
   `--version` that moves — at which point (c)'s two worst costs are gone and the entry should be
   re-argued on its merits rather than superseded by default.
-  **Fired 2026-09-05** (`continuo D-0090`); re-argued in **D-0015**, which finds one of the two
-  costs materially improved rather than gone and this entry's outcome unchanged.
+  *(Annotation, 2026-09-05:* **fired** — `continuo D-0090`; re-argued in **D-0015**, which finds one
+  of the two costs materially improved rather than gone, and this entry's outcome unchanged.*)*
 - **cadenza acquires an entry point.** Then rondo has a decision to take about cadenza that it
   does not have today, and it is a new entry rather than an edit to this one.
-  **Fired 2026-09-05** (`cadenza D-0033`); the new entry is **D-0016**, which re-affirms item 3 on
-  the artefact and the exported surface rather than on the absence of an entry point.
+  *(Annotation, 2026-09-05:* **fired** — `cadenza D-0033`; the new entry is **D-0016**, which
+  re-affirms item 3 on the artefact and the exported surface rather than on the absence of an entry
+  point.*)*
 - Any measurement above failing to reproduce. Every command is here so that it can be re-run; the
   toolchain it was taken on is `node v22.17.0` / `npm 10.9.2`, and npm's behaviour around
   `prepare`, `--install-links` and workspace resolution is version-dependent in ways this entry
