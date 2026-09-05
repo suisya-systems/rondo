@@ -68,8 +68,8 @@ C-NN`, so the spaces can never be read as one.
 > 3. Supersession here is whole-entry, per "How to use this file", so **items 2 and 4 are not
 > retired with it**: continuo across a CLI process boundary and the duty to record which continuo
 > revision drove a run are re-argued in **D-0015** and implemented in **D-0017**, which are where
-> those two claims now live. Nothing below is edited; the annotation above this line is the earlier
-> one, from D-0015 and D-0016.
+> those two claims now live. Nothing below is edited, including the 2026-09-05 annotation from
+> D-0015 and D-0016 that follows this note.
 
 > **Annotation (2026-09-05, from D-0015 and D-0016).** Added after this entry was accepted, under
 > the annotation rule in "How to use this file". Nothing below it was removed or rewritten: every
@@ -2139,10 +2139,18 @@ each and the claims are not independent:
   `dependencies` block was part of what that entry decided. D-0001 wrote its own supersession rule
   and this is it being obeyed, not stretched.
 - **D-0001 item 3 and the whole of D-0016** — "cadenza is not consumed at all in lap 1". D-0016
-  re-affirmed that on two facts, and **both have changed**: `cadenza D-0035` accepted a delivery
-  route for a consumer that installs with `--ignore-scripts`, and `cadenza D-0034` put the
-  agent-type record on the exported surface. D-0016 named each of those as one of its own
-  falsifiers.
+  rested that on two facts, and **both have changed** — though not in the same way, and the
+  difference is worth stating precisely:
+  - `cadenza D-0034` put the agent-type record on the exported surface. That is **D-0016's second
+    falsifier, fired by name**.
+  - `cadenza D-0035` accepted a delivery route for a consumer that installs with
+    `--ignore-scripts`. That is **not** one of D-0016's five falsifiers, and reading it as one would
+    misread it: D-0035 leaves publication untaken and refuses `prepare` deliberately, and those are
+    the two D-0016 listed. What D-0035 changes is the *cost* half of D-0016's argument — "any route
+    would make rondo responsible for building or hosting a dependency it does not own" — because the
+    route is now a documented procedure cadenza owns and answers for rather than one rondo would
+    have invented. The falsifier that fired and D-0001 item 1's own rule are what carry the
+    supersession; D-0035 is why the answer this time is yes rather than merely possible.
 
 **What survives, unchanged and unmoved.** D-0001 items 2 and 4 are not touched by this entry:
 continuo is still consumed across a **CLI process boundary**, and rondo still **records which
@@ -2245,10 +2253,12 @@ copy. `smol-toml@1.8.0` — cadenza's one dependency — moves from a developmen
 runtime one in the lockfile, which is the whole of the transitive cost.
 
 **The surface, re-inventoried.** D-0016 measured **70 exports** and recorded that the record rondo's
-own entries lean on was not among them. At this revision the barrel exports **80**, and the eight
-that matter here are the agent-type record and its renderer:
-`agentType`, `AgentType`, `AgentTypeInput`, `agentTypeDigest`, `agentTypePayload`, `isAgentType`,
-`requireAgentType` and `contractInputForAgentType`. That is D-0016's second falsifier, fired by name.
+own entries lean on was not among them. At this revision the same measurement — the runtime values
+an `import()` of the package hands back — answers **80**. Six of them are the agent-type record and
+its renderer: `agentType`, `agentTypeDigest`, `agentTypePayload`, `isAgentType`, `requireAgentType`
+and `contractInputForAgentType`, beside the types `AgentType`, `AgentTypeInput` and
+`IssuanceParties`, which are erased at runtime and are therefore in neither count. That is D-0016's
+second falsifier, fired by name.
 
 **What the smoke observed** against the installed tarball, and what it now asserts as literals:
 

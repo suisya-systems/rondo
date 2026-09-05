@@ -14,8 +14,10 @@
  * test that imported `@suisya-systems/cadenza` directly would prove the tarball
  * works and nothing about rondo: the production boundary, the one module the
  * import is granted to, and the mapping the facade performs would all be
- * outside the assertion. It also means this file is subject to the same arrow
- * every other consumer is.
+ * outside the assertion. That is a discipline this file keeps, not a rule
+ * enforced on it -- the boundary sweep walks `src/` only, so nothing would stop
+ * a later test from reaching past the facade. It would stop proving what this
+ * header claims, which is the reason to keep it.
  *
  * **The fixtures are in memory.** No catalog on disk, no clock, no process and
  * no network, so this runs in the ordinary suite -- in both seeded runs of
@@ -24,11 +26,12 @@
  * artifact is exercised on Windows and on Node 22 and 24 without anything being
  * provisioned.
  *
- * **Two things are deliberately not asserted, and one is deliberately not
- * done.** The provenance file path is platform-spelled and is only checked for
- * its layer; `config_digest` is not, because the fixture's source is a git URL
- * and carries no path -- a `local_path` project would be anchored to `baseDir`
- * and its digest would differ between the ubuntu and windows cells. And when
+ * **One thing is deliberately not asserted, and one is deliberately not done.**
+ * The provenance file path is platform-spelled, so only its layer is checked.
+ * `config_digest` and `contract_digest`, by contrast, *are* asserted exactly,
+ * and that is safe for the same reason: the fixture's source is a git URL and
+ * carries no path, where a `local_path` project would be anchored to `baseDir`
+ * and would digest differently on the ubuntu and windows cells. And when
  * `classify()` answers `needs_approval`, this file reads the answer and stops:
  * composing a widening successor, or standing in for a human's yes, is the one
  * thing rondo may never do (D-0009, D-0018 rule 7).
@@ -167,8 +170,11 @@ describe("G2: the initial contract an agent type and a project issue", () => {
 
     expect(contract.projectId).toBe(project.projectId);
     expect(contract.configDigest).toBe(project.configDigest);
-    // Read off the record, never off a "latest version" constant: this is the
-    // mapping under test (cadenza D-0027).
+    // Read off the record, never off a "latest version" constant. Today the
+    // vendored build knows one vocabulary version, so this assertion cannot yet
+    // tell the two apart; it is written this way so that it *starts*
+    // discriminating the moment cadenza knows a second one, which is when the
+    // difference (cadenza D-0027) begins to matter.
     expect(contract.vocabularyVersion).toBe(type.vocabularyVersion);
     expect(contract.granted).toEqual(type.granted);
     expect(contract.askable).toEqual(type.askable);

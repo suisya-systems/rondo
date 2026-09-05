@@ -38,7 +38,8 @@ None of those now waits on an open design row. cadenza's
 rondo's gate, and all eight are entries here: `cadenza C-8` and `cadenza C-14`
 in D-0001, and `cadenza C-4`, `cadenza C-5`, `cadenza C-6`, `cadenza C-7`,
 `cadenza C-13` and `cadenza C-15` in D-0009 … D-0014, each taken as the row
-recommends on 2026-09-05 — three of them correcting a reason continuo has since
+recommends on 2026-09-05 (D-0001 is superseded by D-0018; the continuo half of
+`C-8` and `C-14` is unchanged and lives in D-0015 and D-0017) — three of them correcting a reason continuo has since
 overtaken. `cadenza C-11` was settled at continuo's gate (`continuo D-0076`), so
 no row of section 11 is open anywhere. The decision to host this in a third
 repository is that document's `cadenza C-17`, taken on 2026-09-05, and it is why
@@ -51,10 +52,12 @@ carries the build's revision plus `--json` on the verbs a host drives (continuo
 re-measured at their current commits: **D-0015** re-argues the continuo seam on
 its merits and **D-0016** took the new decision about cadenza, and neither
 outcome changed then. **On 2026-09-06 the cadenza half changed**: cadenza
-accepted a delivery route for a consumer that installs with `--ignore-scripts`
-(cadenza `D-0035`) and exported the agent-type record (cadenza `D-0034`), which
-are two of the falsifiers D-0016 named for itself. **D-0018** answers both and
-supersedes D-0001 and D-0016. What D-0018 does *not* touch is D-0001's other
+exported the agent-type record (cadenza `D-0034`) — one of the falsifiers D-0016
+named for itself — and accepted a delivery route for a consumer that installs
+with `--ignore-scripts` (cadenza `D-0035`), which is not on that list and
+instead removes the cost D-0016 weighed, since the route is now cadenza's own
+documented procedure rather than one rondo would have invented. **D-0018**
+answers both and supersedes D-0001 and D-0016. What D-0018 does *not* touch is D-0001's other
 half: continuo across a CLI process boundary, and the duty to record which
 continuo revision drove a run, are unchanged and live in D-0015 and D-0017.
 
@@ -134,7 +137,7 @@ written to be thrown away.
 | `src/continuo/` | The seam to continuo (D-0017): a pure protocol decoder, the pin and its verification, and `invoker.ts` — the one module under `src/` allowed to start a process. Reaches only itself. |
 | `src/cadenza/` | The seam to cadenza (D-0018): `facade.ts` is the one module under `src/` allowed to import `@suisya-systems/cadenza`, binding by binding. Reaches only itself — no layer reaches it yet, and the arrow from the loop arrives with the code that uses it. |
 | `src/store/` | Durable state. `sqlite.ts` is the one module under `src/` allowed to name a SQLite driver, which is the scope the test enforces. |
-| `test/architecture/` | The test that enforces the arrows above, and the per-module capability grants (SQLite, and the spawn). |
+| `test/architecture/` | The test that enforces the arrows above, and the per-module capability grants (SQLite, the spawn, and the cadenza package). |
 | `continuo.pin.json` | Which continuo rondo drives: repository, full sha, and the exact `--version` line that build prints. CI provisions from it; `src/continuo/pin.ts` mirrors it; a test fails if they drift. |
 | `cadenza.pin.json` | Which cadenza rondo carries: repository and full sha — the *source* pin, and no version, because every cadenza build is `0.0.0`. |
 | `vendor/` | The committed cadenza tarball, its sha256, and `pin.mjs` — the portable `record`/`check` helper cadenza's bridge prescribes. `node vendor/pin.mjs check` runs immediately before every install, locally and in all three installing CI jobs. |

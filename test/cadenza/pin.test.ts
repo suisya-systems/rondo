@@ -28,8 +28,17 @@
  * `docs/artifact-delivery-bridge.md` section 4). The check is the one step that
  * reports it either way.
  */
+import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync } from "node:fs";
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
@@ -131,7 +140,7 @@ describe("the two digests describe the bytes that are committed", () => {
     expect(lockfile.packages[`node_modules/${manifest.packageName}`]?.integrity).toBe(sha512);
   });
 
-  test("the helper checks the pinned tarball, portably", () => {
+  test("the helper names the pinned paths and reaches no external command", () => {
     const helper = read("vendor", "pin.mjs");
     expect(helper).toContain(manifest.tarball);
     expect(helper).toContain(manifest.digestFile);
@@ -145,24 +154,90 @@ describe("the two digests describe the bytes that are committed", () => {
     expect(helper).toContain("createHash");
     expect(helper).not.toMatch(/child_process|execSync|execFileSync|spawnSync/);
   });
+
+  test("the helper actually passes on this tree, and actually fails on a drifted one", () => {
+    // Reading the helper's source says what it is written to do; only running
+    // it says what it does. This matters more here than for ordinary code:
+    // `node vendor/pin.mjs check` is the ONLY thing enforcing rule 4 in CI, and
+    // a helper that had come to exit 0 unconditionally would satisfy every
+    // text assertion above while certifying nothing.
+    const run = (cwd: string): { status: number | null; stderr: string } => {
+      const result = spawnSync(process.execPath, [join("vendor", "pin.mjs"), "check"], {
+        cwd,
+        encoding: "utf8",
+      });
+      return { status: result.status, stderr: result.stderr };
+    };
+
+    expect(run(ROOT).status).toBe(0);
+
+    // The same helper, the same tarball, and a digest file that says something
+    // else -- which is exactly the drift a warm npm cache would install through
+    // in silence. Built in a temporary directory so the committed tree is
+    // untouched; the helper's paths are repo-root relative, so the layout it
+    // expects is reproduced rather than configured.
+    const scratch = mkdtempSync(join(tmpdir(), "rondo-pin-"));
+    mkdirSync(join(scratch, "vendor"));
+    copyFileSync(join(ROOT, ...manifest.tarball.split("/")), join(scratch, manifest.tarball));
+    copyFileSync(join(ROOT, "vendor", "pin.mjs"), join(scratch, "vendor", "pin.mjs"));
+    const wrong = "0".repeat(64);
+    writeFileSync(join(scratch, manifest.digestFile), `${wrong}\n`);
+
+    const drifted = run(scratch);
+    expect(drifted.status).not.toBe(0);
+    // Both digests, so the diagnosis is readable where npm's EINTEGRITY is not.
+    expect(drifted.stderr).toContain(wrong);
+    expect(drifted.stderr).toContain(sha256);
+
+    // And `record` writes the digest `check` then accepts, so the two halves of
+    // the helper cannot drift apart either.
+    const recorded = spawnSync(process.execPath, [join("vendor", "pin.mjs"), "record"], {
+      cwd: scratch,
+      encoding: "utf8",
+    });
+    expect(recorded.status).toBe(0);
+    expect(readFileSync(join(scratch, manifest.digestFile), "utf8").trim()).toBe(sha256);
+    expect(run(scratch).status).toBe(0);
+  });
 });
 
 describe("CI checks the digest immediately before every install", () => {
   const workflow = read(".github", "workflows", "ci.yml");
-  const lines = workflow.split("\n");
+  // Comments are dropped before anything below looks at a line. A YAML comment
+  // that quotes either command -- and this workflow's comments quote both, at
+  // length -- would otherwise count as the command itself, and a comment
+  // mentioning the check would let an unchecked install through.
+  const lines = workflow.split("\n").filter((line) => !/^\s*#/.test(line));
 
-  /** `npm ci --ignore-scripts` for RONDO's own tree. */
+  /**
+   * `npm ci` for RONDO's own tree, however the flags are spelled.
+   *
+   * Matched on the command rather than on one exact flag string: an install
+   * written `npm ci --no-audit --ignore-scripts` is the same install and must
+   * not become invisible to the sequence check by being spelled differently.
+   * `--prefix` is what excludes the step that provisions continuo -- that one
+   * installs continuo's tree, not rondo's, and no cadenza tarball is involved.
+   */
   const isRondoInstall = (line: string): boolean =>
-    /(^|\s)npm ci --ignore-scripts(\s|$)/.test(line);
-  /** The portable digest check. */
-  const isPinCheck = (line: string): boolean => line.includes("node vendor/pin.mjs check");
+    /(^|\s)npm ci(\s|$)/.test(line) && !line.includes("--prefix");
+  /** The portable digest check, as a command rather than as a mention of one. */
+  const isPinCheck = (line: string): boolean =>
+    /(^|\s)node vendor\/pin\.mjs check(\s|$)/.test(line);
+
+  test("every install of rondo's own tree still carries --ignore-scripts", () => {
+    // D-0007, asserted here because the predicate above deliberately stopped
+    // requiring the flag in order to see an install spelled any other way.
+    expect(
+      lines.filter(isRondoInstall).filter((line) => !line.includes("--ignore-scripts")),
+    ).toEqual([]);
+  });
 
   test("there are at least three installs, and one check for each", () => {
-    // A floor rather than an equality: adding a job is expected, and a job that
-    // installs without checking is caught by the case below rather than by a
-    // count. The `npm --prefix "$checkout" ci --ignore-scripts` that provisions
-    // continuo is deliberately not matched -- it installs continuo's tree, not
-    // rondo's, and no cadenza tarball is involved.
+    // A floor rather than an equality on the count itself: adding a job is
+    // expected, and a job that installs without checking is caught by the case
+    // below rather than by a count. What the two-sided assertion catches is a
+    // spare check with no install, which would make the pairing below read as
+    // satisfied when it is not.
     expect(lines.filter(isRondoInstall).length).toBeGreaterThanOrEqual(3);
     expect(lines.filter(isRondoInstall).length).toBe(lines.filter(isPinCheck).length);
   });

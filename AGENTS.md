@@ -42,10 +42,11 @@ and continuo's CLI grew a `--version` carrying the build's revision plus `--json
 on the verbs a host drives (continuo `D-0090`). Both were answered the same day,
 against re-measurements at the siblings' current commits: **D-0015** re-argues
 the continuo seam and **D-0016** took the new cadenza decision, and neither
-outcome changed then. On 2026-09-06 the cadenza half moved for real — cadenza
-accepted a delivery bridge (`cadenza D-0035`) and exported the agent-type record
-(`cadenza D-0034`), which are two of D-0016's own falsifiers — and **D-0018
-supersedes both D-0001 and D-0016**.
+outcome changed then. On 2026-09-06 the cadenza half moved for real: cadenza
+exported the agent-type record (`cadenza D-0034`), which is one of D-0016's own
+falsifiers, and accepted a delivery bridge (`cadenza D-0035`), which is not on
+that list but removes the cost D-0016 weighed against consuming cadenza at all.
+**D-0018 supersedes both D-0001 and D-0016**.
 
 Two habits follow. **Read the superseding entry, not the superseded one**, where
 they describe the same fact: D-0001's and D-0016's measurements are of older
