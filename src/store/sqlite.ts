@@ -444,6 +444,20 @@ export function iterationStore(connection: DatabaseSync): IterationStore {
           }
           return { kind: "occupied", liveIterationId: requireText(live, "id") };
         }
+        if (isIdCollision(error)) {
+          // A defect, in rondo's own words. The driver's text names a table
+          // column and a constraint; every other refusal in the loop names a
+          // field and a rule, and a person reading "UNIQUE constraint failed:
+          // iteration.id" has to know the schema to learn what happened. The
+          // fact is that an iteration id is minted once and this one was
+          // minted twice, and that is what the reason says.
+          return {
+            kind: "defect",
+            reason:
+              `an iteration with id '${input.id}' already exists, and an iteration id is ` +
+              "minted once: the store will not reserve a second row under it",
+          };
+        }
         return { kind: "defect", reason: describe(error) };
       }
     },
@@ -632,13 +646,29 @@ function assignmentsFor(fields: IterationFields): {
  * wait for an iteration that has nothing to do with theirs.
  */
 function isLiveIndexViolation(error: unknown): boolean {
-  if (!(error instanceof Error)) {
-    return false;
-  }
   return (
-    error.message.includes("UNIQUE constraint failed") &&
+    isUniqueViolation(error) &&
     (error.message.includes("iteration.live") || error.message.includes("iteration_one_live"))
   );
+}
+
+/**
+ * Whether an error is the primary key refusing a second row under one id.
+ *
+ * Matched the same way as {@link isLiveIndexViolation} and for the same reason:
+ * the driver's message is the only thing that says which constraint refused.
+ * Kept apart from it because the two are different facts with different
+ * answers -- one is a conductor that is busy, the other is rondo minting an id
+ * twice -- and `reserve` words each in the vocabulary its reader needs rather
+ * than relaying the driver's.
+ */
+function isIdCollision(error: unknown): boolean {
+  return isUniqueViolation(error) && error.message.includes("iteration.id");
+}
+
+/** `node:sqlite` reporting any `UNIQUE` constraint, before asking which one. */
+function isUniqueViolation(error: unknown): error is Error {
+  return error instanceof Error && error.message.includes("UNIQUE constraint failed");
 }
 
 /** An error rendered for a `defect` reason, without assuming it is an `Error`. */
