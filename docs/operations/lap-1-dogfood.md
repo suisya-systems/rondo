@@ -606,6 +606,9 @@ import { iterationStore } from "./dist/store/sqlite.js";
 import { classifyPlan } from "./dist/refrain/classification.js";
 import { PLAN_INPUT, ITERATION_ID } from "./plan.mjs";
 
+// The scratch root, spelled here because the shell variable above is the
+// shell's and not this module's.
+const S = "<worktree>/.worker-scratch";
 const POLICY = Object.freeze({ autonomy: "ask_before_landing", maxIterations: 1 });
 const mode = process.argv[2];
 
@@ -625,10 +628,14 @@ if (started.kind !== "ready") { console.log(`REFUSED by openConductor: ${started
 console.log(`continuo verified: ${started.revision}`);
 
 const t0 = Date.now();
-const report =
-  mode === "admit"  ? await admit(started.ports, plan, POLICY, ITERATION_ID) :
-  mode === "resume" ? await resume(started.ports, ITERATION_ID) :
-                      await abandon(started.ports, ITERATION_ID, "dogfood cleanup");
+// Every mode is named. There is deliberately no fallback branch: `abandon` is a
+// terminal write, and a mistyped `resum` falling through to it would settle a
+// live iteration for good.
+let report;
+if (mode === "admit") report = await admit(started.ports, plan, POLICY, ITERATION_ID);
+else if (mode === "resume") report = await resume(started.ports, ITERATION_ID);
+else if (mode === "abandon") report = await abandon(started.ports, ITERATION_ID, process.argv[3] ?? "dogfood cleanup");
+else { console.log(`unknown mode ${mode}`); process.exit(2); }
 console.log(`--- report (${mode}, ${Date.now() - t0} ms) ---`);
 console.log(`iterationId: ${report.iterationId}`);
 console.log(`status: ${report.status}`);
