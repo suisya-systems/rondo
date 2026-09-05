@@ -46,11 +46,43 @@ costs on this machine, and that `resume` sees the outcome after a human answers.
 2. A control-plane database, created by continuo's own verb — rondo drives
    `db create` and does not write DDL into somebody else's schema.
 
-3. **A repository you are willing to have a worker touch**, and a base branch
+   ```sh
+   node "$RONDO_CONTINUO_CLI" db create --db /absolute/path/to/control-plane.sqlite3
+   ```
+
+3. **A compiled rondo**, because there is not one. `tsconfig.json` is `noEmit`
+   and there is no `build` script (D-0002): rondo is a host and nothing consumes
+   a `dist/` of it, which is right for the tree and leaves the one caller who
+   has to `import` the composition root — you — with a step of their own.
+   `node --experimental-strip-types` does *not* substitute for it: relative
+   imports are spelled `.js` and Node does not remap them to `.ts`.
+
+   The install comes first and is the repository's own (`AGENTS.md`): the emit
+   cannot resolve `@suisya-systems/cadenza` until the vendored tarball is
+   installed, and the compiler is the pinned one in `node_modules/.bin` rather
+   than whatever `npx` would fetch.
+
+   ```sh
+   node vendor/pin.mjs check          # the digest check, before every install
+   npm ci --ignore-scripts            # never `npm install` (D-0007)
+
+   # A throwaway config beside the run, not a build the repository keeps.
+   # extends ../tsconfig.json with:
+   #   "noEmit": false, "outDir": "dist", "rootDir": "../src", "include": ["../src"]
+   ./node_modules/.bin/tsc -p /absolute/path/to/tsconfig.dogfood.json
+   ```
+
+4. **rondo's own iteration store, which is a second database and is not the one
+   in step 2.** `iterationStore(connection)` takes a `node:sqlite` `DatabaseSync`
+   the caller opens, so its path is yours to pick and its schema is applied on
+   open. On Node 22 the module is behind a flag, so every command below is
+   `node --experimental-sqlite`.
+
+5. **A repository you are willing to have a worker touch**, and a base branch
    and a topic branch that does not exist yet. Nothing here is a dry run: a lap
    materialises a worktree, renders a fence, and starts an agent session.
 
-4. The paths continuo requires to be absolute and outside the worktree —
+6. The paths continuo requires to be absolute and outside the worktree —
    `--artifact-root`, `--state-root`, `--interlock-root`, `--claude-org-path`,
    `--endpoint-destination-dir`, and every token of `--claude-command`. rondo
    supplies no default for any of them, and D-0019 rule 3 is why: a rondo-side
@@ -68,10 +100,26 @@ costs on this machine, and that `resume` sees the outcome after a human answers.
    leaves an orphaned worker with nobody polling it. If it fires, record what the
    lap actually cost and raise the ceiling — do not treat it as a flake.
 
-2. **Admit.** Call the composition root's `admit(request, plan, policy)` with an
-   explicitly-constructed policy. `CONSERVATIVE_POLICY` refuses before a row
-   exists, on purpose (D-0019 rule 9), so a run started under the default is a
-   run that did not start.
+   Two cross-field rules are not `runPlan()`'s and will not be refused by it.
+   `parties.grantee` must equal `runId` — `classifyPlan` hands cadenza the run id
+   as its classification context, so a grantee that differs comes back
+   `grantee_mismatch`, and that is an *answered* classification which ends the
+   iteration at terminal `abandoned` after the row is reserved. And
+   `catalogLayers[].data` is typed as a free-form table and is not one: cadenza
+   requires `schema_version`, `project.<name>.source`, and — for a `local_path`
+   source — `catalog.allowed_local_roots` on the layer that declares it.
+   `test/cadenza/smoke.test.ts` is the working example.
+
+2. **Admit.** Call the composition root's
+   `admit(ports, plan, policy, iterationId)`, where `ports` comes from
+   `openConductor(store, process.env)` and `iterationId` is yours to allocate
+   like every other identifier in lap 1 (D-0019 rule 3).
+
+   The policy is explicitly constructed and **must not be
+   `CONSERVATIVE_POLICY`**: its `ask_every_iteration` refuses before a row exists,
+   on purpose (D-0019 rule 9), so a run started under the default is a run that
+   did not start. The value that starts one is
+   `{ autonomy: "ask_before_landing", maxIterations: 1 }`.
 
    Expect the arc to stop at `awaiting_human` and the process to be free to
    exit. It is not a failure that nothing further happens: the gate is open, and
@@ -103,7 +151,19 @@ costs on this machine, and that `resume` sees the outcome after a human answers.
 
 7. **Clean up what rondo did not.** rondo abandons; it does not close runs or
    gates it did not open (D-0010, D-0013). A worktree, a fence and a run row are
-   yours to settle.
+   yours to settle. Note that `continuo run` accepts only `admit` and `close`, so
+   there is no `run show` to read the state you are settling; `gate list --db`
+   is the verb that answers for gates.
+
+## What one run of this actually did
+
+[`../docs/operations/lap-1-dogfood.md`](../docs/operations/lap-1-dogfood.md) is
+the record of walking this procedure on 2026-09-06, at the revisions pinned then.
+**It did not get past step 2**, and the reason is a hard-coded 2.5 second window
+in continuo's post-spawn identity read-back against a worker CLI that needs 4 to
+11 seconds to say its own name. Read it before running this: it carries the
+measurements, the eleven findings, and the parts of the procedure that are still
+unwalked.
 
 ## The paths worth walking on purpose, once each
 
