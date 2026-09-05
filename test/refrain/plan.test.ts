@@ -44,7 +44,8 @@ const AGENT_TYPE_INPUT: AgentTypeInput = {
   executorPolicy: { roleName: "worker", modelTier: "standard", reportingDuties: [] },
 };
 
-const PARTIES: IssuanceParties = { issuer: "run-1", grantee: "delegate-1" };
+/** The grantee is the run id spelled a second time; `runPlan` insists on it. */
+const PARTIES: IssuanceParties = { issuer: "rondo-host", grantee: "run-1" };
 const INTENDED_ACTION: IntendedAction = { capabilities: ["command.run"] };
 
 /** One complete, valid plan, as a caller would hand it over. */
@@ -200,6 +201,42 @@ test("a budget that is not a positive whole number of milliseconds is refused", 
   }
 });
 
+test("a grantee that is not the run id is refused here, not answered by cadenza later", () => {
+  // `classifyPlan` hands cadenza `runId` as the classification context, and a
+  // grantee that differs comes back `grantee_mismatch` -- an *answered*
+  // classification that ends the iteration at terminal `abandoned` after a row
+  // was reserved and the single-flight lock taken. The dogfood lost an
+  // iteration to exactly this (F-6), so the refusal is rondo's, before either.
+  const reason = refusalFor({ parties: { issuer: "rondo-host", grantee: "delegate-1" } });
+  expect(reason).toContain("'parties.grantee'");
+  expect(reason).toContain("grantee_mismatch");
+  // The message names the value the field has to take, because the person
+  // reading it has it in the same plan, one field up.
+  expect(reason).toContain("'run-1'");
+  // Equal passes, and equality is against `runId` rather than against a fixed
+  // string: change both and the plan is still a plan.
+  expect(runPlan(withField({ parties: { issuer: "rondo-host", grantee: "run-1" } })).kind).toBe(
+    "planned",
+  );
+  expect(
+    runPlan(
+      withField({
+        runId: "run-2",
+        parties: { issuer: "rondo-host", grantee: "run-2" },
+      }),
+    ).kind,
+  ).toBe("planned");
+});
+
+test("a plan whose parties are not a table is refused, not thrown on", () => {
+  // `RunPlan` is structural, so a caller can hand over a value that never
+  // passed `runPlan()`; the validator's contract is to refuse, and reading
+  // `.grantee` off `null` would be a throw instead.
+  for (const parties of [null, undefined, "run-1"]) {
+    expect(refusalFor({ parties: parties as unknown as IssuanceParties })).toContain("'parties'");
+  }
+});
+
 test("the catalog layers are checked, because cadenza reads no catalog of its own", () => {
   expect(refusalFor({ catalogLayers: [] })).toContain("catalogLayers");
   expect(refusalFor({ catalogLayers: [{ ...CATALOG_LAYER, baseDir: "catalog" }] })).toContain(
@@ -237,6 +274,16 @@ test("a persisted plan that will not read is refused rather than coerced", () =>
   expect(readPlan({ ...payload, run_id: 7 }).kind).toBe("refused");
   expect(readPlan({ ...payload, claude_command: "/usr/bin/node" }).kind).toBe("refused");
   expect(readPlan({ ...payload, catalog_layers: [] }).kind).toBe("refused");
+  // The parties are persisted opaquely, so a row edited by hand can carry a
+  // grantee that is not a string at all, or no table at all; the reader still
+  // refuses rather than throwing, and says what it saw.
+  const noGrantee = readPlan({ ...payload, parties: { issuer: "rondo-host" } });
+  expect(noGrantee.kind).toBe("refused");
+  if (noGrantee.kind === "refused") {
+    expect(noGrantee.reason).toContain("'parties.grantee' is not a string");
+  }
+  expect(readPlan({ ...payload, parties: "run-1" }).kind).toBe("refused");
+  expect(readPlan({ ...payload, parties: ["rondo-host", "run-1"] }).kind).toBe("refused");
 });
 
 test("reading a persisted plan re-runs the whole validation, not just the shapes", () => {

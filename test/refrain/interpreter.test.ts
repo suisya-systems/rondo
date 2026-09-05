@@ -382,7 +382,8 @@ const AGENT_TYPE_INPUT: AgentTypeInput = {
   executorPolicy: { roleName: "worker", modelTier: "standard", reportingDuties: [] },
 };
 
-const PARTIES: IssuanceParties = { issuer: "run-1", grantee: "delegate-1" };
+/** The grantee is the run id: `runPlan` refuses any other value. */
+const PARTIES: IssuanceParties = { issuer: "rondo-host", grantee: "run-1" };
 
 const INTENDED_ACTION: IntendedAction = { capabilities: ["command.run"] };
 
@@ -1261,6 +1262,27 @@ test("abandon() refuses while this process is still driving the iteration", asyn
   await walking;
   const settled = await abandon(h.ports, "i-0001", "an operator gave up");
   expect(settled.status).toBe("abandoned");
+});
+
+test("a grantee that is not the run id is refused before a row exists", async () => {
+  // The one cross-field rule the dogfood paid a whole iteration for (F-6):
+  // cadenza would answer the mismatch as `grantee_mismatch`, an *answered*
+  // classification, only after `reserve` had committed a row and taken the
+  // single-flight lock. Refused at the plan, nothing is reserved and no port
+  // is called, and the very next admission with the grantee corrected succeeds.
+  const h = harness();
+  const report = await admit(
+    h.ports,
+    { ...PLAN, parties: { issuer: "rondo-host", grantee: "delegate-1" } },
+    PERMISSIVE,
+    "i-0001",
+  );
+  expect(report.iterationId).toBeNull();
+  expect(report.lines.join(" ")).toContain("'parties.grantee'");
+  expect(report.lines.join(" ")).toContain("grantee_mismatch");
+  expect(h.calls).toEqual([]);
+  expect(await readRow(h.store, "i-0001")).toBeNull();
+  expect((await admitOnce(h)).status).toBe("awaiting_human");
 });
 
 test("an invalid plan is refused before a row exists, so it takes no lock", async () => {

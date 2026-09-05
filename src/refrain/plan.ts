@@ -66,6 +66,21 @@ export const SERVED_RECIPIENTS = Object.freeze(["external-notify", "human-gated-
  *
  * Frozen on construction and never edited afterwards. The conductor reads it;
  * nothing in `src/refrain/` writes one.
+ *
+ * **Two things a caller meets beside the plan, which {@link runPlan} cannot
+ * refuse for them.** Both were found by filling a first plan
+ * (`docs/operations/lap-1-dogfood.md`, F-5 and F-7).
+ *
+ * - **The policy handed to `admit()` next to the plan must not be
+ *   `CONSERVATIVE_POLICY`.** Its `ask_every_iteration` is refused by `nextStep`
+ *   before a row exists, on purpose (D-0019 rule 9: a policy stop costs no row
+ *   and takes no lock), so a run started under the default is a run that did
+ *   not start. The value that starts one is
+ *   `{ autonomy: "ask_before_landing", maxIterations: 1 }` -- the other
+ *   `Autonomy` value, and the smallest ceiling `admissionStep` in `./loop.ts`
+ *   accepts.
+ * - **`catalogLayers[].data` is typed as a free-form table and is not one.**
+ *   See that field.
  */
 export interface RunPlan {
   // --- continuo: the control plane and the run -----------------------------
@@ -138,10 +153,50 @@ export interface RunPlan {
   readonly invocationCeilingMs: number;
 
   // --- cadenza --------------------------------------------------------------
-  /** The catalog layers, lowest precedence first. `baseDir` absolute. */
+  /**
+   * The catalog layers, lowest precedence first. `baseDir` absolute.
+   *
+   * **`data` is a closed table, and cadenza refuses what {@link runPlan} does
+   * not check.** Observed against the vendored build (`cadenza.pin.json`), in
+   * its `application/compose.ts` and `domain/clone-source.ts`:
+   *
+   * - The top level admits exactly `schema_version`, `catalog` and `project`;
+   *   `schema_version` is required (`'schema_version' is required`) and must
+   *   be an integer this build supports -- `1` at the pinned revision.
+   * - A project is `project.<name>` and admits exactly `aliases`, `source`,
+   *   `base_branch` and `tombstone`. Once the layers are composed, every
+   *   project must have both a `source` and a `base_branch` from some layer
+   *   (`project '<name>' has no source` / `... has no base_branch`). `source`
+   *   is a table whose `kind` is one of `git_url` (with a `url`), `local_path`
+   *   (with a `path`) or `new` (nothing else), and a key its kind does not
+   *   define is refused.
+   * - For a `local_path` source, `catalog.allowed_local_roots` -- a list of
+   *   strings, and the only key `catalog` admits -- must be declared **on the
+   *   layer that declares the source**; it is never merged across layers
+   *   (`a clone source of kind 'local_path' requires the layer that declares it
+   *   to declare its own catalog.allowed_local_roots`).
+   * - Any other key at any of those levels is refused as unknown.
+   *
+   * `test/cadenza/smoke.test.ts` carries a working `git_url` layer. The rules
+   * are cadenza's and are restated here only so a caller has something to write
+   * against; rondo does not check them (D-0018 rule 7). A layer that breaks
+   * one is thrown by `resolveProject` at the conductor's `classify` step,
+   * `classifyPlan` carries the message as a refusal, and the iteration ends at
+   * terminal `abandoned` -- after the row is reserved.
+   */
   readonly catalogLayers: readonly CatalogLayer[];
   readonly projectName: string;
   readonly agentTypeInput: AgentTypeInput;
+  /**
+   * The two identities the contract is issued between.
+   *
+   * **`grantee` is `runId`, spelled a second time.** `classifyPlan` hands
+   * cadenza the run id as its classification context, and cadenza answers a
+   * contract whose grantee differs with `grantee_mismatch` -- an *answered*
+   * classification, not a refusal, which ends the iteration at terminal
+   * `abandoned` (D-0019 rule 15) after the row is reserved and the single-flight
+   * lock taken. {@link runPlan} refuses the mismatch instead, before either.
+   */
   readonly parties: IssuanceParties;
   readonly intendedAction: IntendedAction;
 }
@@ -288,7 +343,7 @@ export function runPlan(input: RunPlan): PlanOutcome {
       catalogLayers: requireCatalogLayers(input.catalogLayers),
       projectName: requireNonEmpty("projectName", input.projectName),
       agentTypeInput: input.agentTypeInput,
-      parties: input.parties,
+      parties: requireParties(input),
       intendedAction: input.intendedAction,
     };
     return { kind: "planned", plan: Object.freeze(plan) };
@@ -364,6 +419,42 @@ function requireCeiling(input: RunPlan): number {
     );
   }
   return ceiling;
+}
+
+/**
+ * The parties, checked against the one other field of the plan the grantee
+ * has to equal.
+ *
+ * The rule is rondo's consequence and not cadenza's restated: `classifyPlan`
+ * passes `plan.runId` as the classification context's `runId`, and cadenza
+ * compares that against the contract's grantee. So the only correct value of
+ * `parties.grantee` is `runId`, and a plan whose two spellings differ would
+ * come back `grantee_mismatch` as an *answered* classification -- terminal
+ * `abandoned` (D-0019 rule 15) after a row was reserved and the single-flight
+ * lock taken, for a field knowable before either. The identities themselves
+ * are not checked here: `delegationContract()` validates them on the way in,
+ * and a second copy of those rules would be the drift D-0016 warned about.
+ */
+function requireParties(input: RunPlan): IssuanceParties {
+  // `RunPlan` is structural and a caller can hand over what never passed this
+  // function, so the container is checked before a field of it is read: a
+  // `TypeError` here would be a throw out of a function whose contract is to
+  // refuse.
+  const parties: unknown = input.parties;
+  if (typeof parties !== "object" || parties === null || Array.isArray(parties)) {
+    return refuse("'parties' is not a table, and cadenza issues a contract between two identities");
+  }
+  const grantee: unknown = (parties as { readonly grantee?: unknown }).grantee;
+  if (grantee !== input.runId) {
+    const spelled = typeof grantee === "string" ? `'${grantee}'` : "not a string";
+    return refuse(
+      `'parties.grantee' is ${spelled}, and it must equal 'runId' ('${input.runId}'): the ` +
+        "conductor classifies under the run id, so cadenza would answer a different grantee " +
+        "with grantee_mismatch -- an answered classification that ends the iteration at " +
+        "'abandoned' after the row is reserved and the single-flight lock taken.",
+    );
+  }
+  return input.parties;
 }
 
 function requireCatalogLayers(layers: readonly CatalogLayer[]): readonly CatalogLayer[] {
