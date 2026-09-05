@@ -15,8 +15,23 @@ decision, so the index starts by saying where the decisions are.
 
 ## Design documents
 
-None yet, and that is deliberate rather than an omission. rondo's design is
-currently held in two places that already exist and are maintained:
+| File | What it is |
+|---|---|
+| [`design/refrain-lap1.md`](design/refrain-lap1.md) | The lap-1 conductor loop in `src/refrain`: how a request becomes a continuo run driven through the cadenza facade and the continuo seam, and stops at a gate a human has yet to answer. **Propose-only** — it takes no decision, and ends in decision rows `R-1` … `R-16` for rondo's gate. |
+
+**This is rondo's first design document of its own, and until it existed this
+section said there were none.** That was accurate rather than modest: every
+design rondo had was a *restatement* of a sibling's, and a second copy of a
+contract with no rule for which copy wins is the drift cadenza's own `D-0001`
+exists to prevent. The loop is the first thing that is not a restatement. cadenza's
+`conductor.md` says what a conductor iteration *is*; what it costs to build one
+against the tree rondo actually has — which module may start a process, what the
+store must guarantee across a restart, where the loop suspends when only another
+surface can close the gate — is rondo's question, and nobody else's document
+answers it.
+
+The two sibling documents below are still where the rest of rondo's design is
+held, and the new document leans on both rather than replacing either:
 
 - **cadenza's `docs/design/conductor.md`** is the design of the loop rondo will
   host. Its section 11 is the open-decision table; `C-17` is the row that
@@ -36,10 +51,11 @@ currently held in two places that already exist and are maintained:
   consumption question; `D-0015` records that it makes the library-versus-
   subprocess choice a real choice rather than superseding D-0001 by itself.
 
-A design document appears here when rondo has a design of its own to state —
-the store schema, the web UI, the MCP surface — and not before. A document that
-restated cadenza's would be a second copy of a contract with no rule for which
-copy wins, which is exactly the drift cadenza's own `D-0001` exists to prevent.
+A design document appears here when rondo has a design of its own to state — the
+loop, and after it the store schema, the web UI and the MCP surface — and not
+before. The rule the paragraph above states is what keeps that from becoming an
+excuse to restate a sibling: a document that copied cadenza's contract or
+continuo's control plane would be a second copy with no rule for which copy wins.
 
 ## Where the enforced rules are
 
