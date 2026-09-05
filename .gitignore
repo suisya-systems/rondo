@@ -17,6 +17,15 @@
 /.zprofile
 /.zshrc
 
+# --- the lap-1 dogfood's scratch root (scripts/dogfood-lap.md) ---
+# A real lap materialises a continuo clone, two SQLite databases, a worktree, a
+# rendered fence and captured session output, and docs/operations/lap-1-dogfood.md
+# tells its reader to put all of it here. Ignored in the repository rather than in
+# one machine's .git/info/exclude, because the reader following that procedure is
+# on a fresh clone and would otherwise be one `git add -A` away from committing a
+# control plane.
+/.worker-scratch/
+
 # --- Node / TypeScript ---
 node_modules/
 dist/
