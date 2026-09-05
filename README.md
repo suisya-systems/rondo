@@ -4,13 +4,17 @@ The host application of the successor stack: the one long-running process a pers
 
 ## Status
 
-**A skeleton with its boundaries enforced, and nothing behind them yet.**
+**A skeleton with its boundaries enforced, one seam behind them that works,
+and nothing else.**
 
 What exists: a TypeScript/ESM package in cadenza's conventions, a CI gate on
 ubuntu and windows across Node 22 and 24, an architecture test that polices the
-dependency direction of `src/`, and `DECISIONS.md` with the measured decisions
-about how rondo consumes its two siblings (D-0001, re-argued in D-0015 and
-D-0016).
+dependency direction of `src/`, `DECISIONS.md` with the measured decisions about
+how rondo consumes its two siblings (D-0001, re-argued in D-0015 and D-0016),
+and — new — **a working seam to continuo** (D-0017): `src/continuo/` decodes
+continuo's `--json` envelope, verifies the pinned build's revision before it
+drives anything, and is exercised end to end against a real continuo in every
+CI cell.
 
 What does **not** exist yet, and is not merely unfinished but undecided:
 
@@ -18,7 +22,10 @@ What does **not** exist yet, and is not merely unfinished but undecided:
 - the web UI and the localhost MCP surface — `src/access/` holds one in-process
   access point that forwards a question and nothing else;
 - the durable store's schema — `src/store/sqlite.ts` names the seam and throws;
-- the agent-type registry, and any code at all that talks to an agent.
+- the agent-type registry, and any code at all that talks to an agent;
+- the durable half of provenance — the seam verifies which continuo it drove and
+  hands back what it observed, and there is no row to write it to yet, which
+  D-0017 rule 5 records rather than glosses.
 
 None of those now waits on an open design row. cadenza's
 `docs/design/conductor.md` section 11 sent eight of its seventeen rows to
@@ -71,9 +78,12 @@ For **lap 1**:
   Recording *which* continuo drove a run is still rondo's job (`cadenza C-14`),
   now by verifying the revision `--version` reports against the pinned sha and
   persisting what was observed. `gate close` — the one verb rondo's own D-0013
-  assigns to its operating surface — has no `--json`, and D-0015 decides that
-  rondo drives it as an opaque exit code and confirms the result by reading
-  `gate show --json`.
+  assigns to its operating surface — had no `--json` when D-0015 was taken, so
+  that entry drove it as an opaque exit code confirmed by a second
+  `gate show --json`. **That gap is closed.** `continuo D-0092` gives the verb
+  the shared envelope, which fired D-0015's own falsifier, and **D-0017 replaces
+  rule 5**: `gate close` is decoded like every other verb, and the second
+  subprocess is gone.
 - **cadenza is not consumed at all** (D-0016). It now has a package entry point,
   an emitted `dist/` and a packed tarball that a consumer can import — but no
   git or codeload install delivers that build, so any route would make rondo
@@ -95,9 +105,11 @@ decision cadenza has not taken.
 | Path | What it is |
 |---|---|
 | `src/refrain/` | The loop. Imports nothing external, ever — that is the boundary. |
-| `src/access/` | Access points: the web UI and the localhost MCP surface, when they exist. May reach the loop; the loop may not reach back. |
+| `src/access/` | Access points: the web UI and the localhost MCP surface, when they exist. May reach the loop and the continuo seam; neither may reach back. `console.ts` is the one place output is escaped to ASCII. |
+| `src/continuo/` | The seam to continuo (D-0017): a pure protocol decoder, the pin and its verification, and `invoker.ts` — the one module under `src/` allowed to start a process. Reaches only itself. |
 | `src/store/` | Durable state. `sqlite.ts` is the one module under `src/` allowed to name a SQLite driver, which is the scope the test enforces. |
-| `test/architecture/` | The test that enforces the three sentences above. |
+| `test/architecture/` | The test that enforces the arrows above, and the per-module capability grants (SQLite, and the spawn). |
+| `continuo.pin.json` | Which continuo rondo drives: repository, full sha, and the exact `--version` line that build prints. CI provisions from it; `src/continuo/pin.ts` mirrors it; a test fails if they drift. |
 | `DECISIONS.md` | The append-only design record. Cite by ID. |
 | `AGENTS.md` | How work here is done. |
 | `docs/` | Index of the records, and of where the enforced rules live. |

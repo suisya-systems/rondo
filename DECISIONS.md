@@ -54,6 +54,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0014 | The agent type's role name is mapped in the continuo-invocation adapter, which refuses an unmapped name before admission (cadenza `C-15`) | accepted |
 | D-0015 | continuo's machine-readable seam, re-argued on its merits: the CLI boundary stands, `--json` is a wire protocol rather than types, and provenance becomes a verification duty | accepted |
 | D-0016 | cadenza is still not consumed in lap 1, now for a different and narrower reason: the entry point exists, the artefact does not, and the record rondo needs is not exported | accepted |
+| D-0017 | The first working seam to continuo: a `src/continuo/` layer, a build rondo verifies before it drives, and `gate close` rejoining the envelope | accepted |
 
 ---
 
@@ -1216,6 +1217,17 @@ sees modules.
 
 **Status:** accepted (2026-09-05, rondo's human gate)
 
+> **Annotation (2026-09-05, from D-0017).** Added after this entry was accepted, under the
+> annotation rule in "How to use this file". Nothing below is removed or rewritten. **Rule 5's own
+> falsifier — "`gate close` acquiring `--json`" — fired the same day**: `continuo D-0092` gives the
+> verb the shared `continuo.gate.close/1` envelope and names this rule as the reader that justified
+> the change. **D-0017 replaces rule 5** with the ordinary envelope handling of rules 2 and 3, which
+> is what this rule said would replace it; the second `gate show --json` per close is no longer
+> part of the protocol. Rules 1, 2, 3, 4, 6 and 7 are untouched and are what D-0017 builds on, and
+> rule 6 is implemented only as far as verification: persisting the observed revision per run waits
+> on a store schema, which D-0017 rule 5 records as outstanding. The measurements below are those of
+> `c92ab1a1c6fd9bd99c0c3b81326a30ba05432a61` and are kept as taken.
+
 D-0001 named this moment as one of its own falsifiers: *"continuo grows a machine-readable surface —
 `--json` on the driven subcommands and a `--version` that moves — at which point (c)'s two worst
 costs are gone and the entry should be re-argued on its merits rather than superseded by default."*
@@ -1765,3 +1777,333 @@ delivery.
   lap 2, and reaching it as precedent for a later lap would be reading it wider than it was taken.
 - Any measurement above failing to reproduce. Toolchain `node v22.17.0` / `npm 10.9.2`; cadenza at
   `4b53ecaec7ce2d8bcd3e4ac74cdaec27a232ca83`.
+
+---
+
+## D-0017 — The first working seam to continuo: a `src/continuo/` layer, a build rondo verifies before it drives, and `gate close` rejoining the envelope
+
+**Status:** accepted (2026-09-05, rondo's human gate)
+
+D-0015 named this moment as one of its own falsifiers: *"`gate close` acquiring `--json`. Rule 5's
+fallback then has no reason to exist, and the rule is replaced by the ordinary envelope handling of
+rules 2 and 3. This is the expected end of the gap, not a surprise."* `continuo D-0092` fired it,
+deliberately and by name — that entry cites rondo D-0015 rule 5 as the reader whose absence
+`continuo D-0090` had used to justify leaving the verb human-only, and says in as many words that
+the rule "is obsolete once this lands".
+
+**D-0015 stays accepted and keeps its ID.** Six of its seven rules are untouched and are the rules
+this entry builds on. Rule 5 is *replaced* rather than reinterpreted: what replaces it is not a new
+mechanism but the ordinary one every other driven verb already uses, which is exactly the outcome
+rule 5 said it was standing in for. D-0015 gains a dated annotation saying so, under the annotation
+rule in "How to use this file"; nothing in its text is edited.
+
+This entry is also the first one here that ships code against the seam rather than measuring it, so
+it takes the three decisions that implementing it requires and that D-0006 says may not be taken in
+passing: which layer the seam is, which module may start a process, and where the pin lives.
+
+### Decision
+
+1. **`gate close` is driven like every other verb, and D-0015 rule 5 is replaced.** At the pinned
+   revision `gate close --json` answers in `continuo.gate.close/1` — success on stdout at exit 0,
+   refusal on stderr at exit 2 — so rondo decodes it under D-0015 rules 2 and 3 and nothing else.
+   The three things rule 5 required all stop: rondo no longer drives the verb as an opaque exit
+   code, no longer treats its prose as the only available answer, and **no longer runs a second
+   `gate show --json` to find out what happened**. Reading a gate back afterwards remains an
+   ordinary thing rondo may do; what it is not is a protocol duty of the close.
+
+   **Two things this does not change.** `gate close`'s *prose* path is not gone — a disallowed
+   `--outcome` is refused by argparse before the verb runs, so exit 2 still does not guarantee a
+   document, and D-0015 rule 3's fallback covers it exactly as before. And **who may close a gate is
+   untouched**: `closeOpenGate` still hard-codes `actorKind: "human"` at the pinned revision, which
+   is precisely why D-0013 put the verb on rondo's operating surface rather than in the conductor.
+   D-0092 changed an encoding, not an authority, and reading this entry as licence for the
+   conductor to close gates would unpick D-0013 and D-0009.
+
+2. **The seam is a layer of its own, `src/continuo/`, split into a pure decoder and one invoker.**
+   `src/continuo/protocol.ts` turns bytes into rondo's records and can produce no bytes;
+   `src/continuo/invoker.ts` is the only module in rondo that starts a process;
+   `src/continuo/pin.ts` is the pin and its comparison. The arrows, added to
+   `ALLOWED_INTERNAL_BY_LAYER`: **`src/access` may reach `src/continuo`; `src/refrain` and
+   `src/store` may not; `src/continuo` reaches only itself.** The loop stays testable on a machine
+   with no continuo on it, which is what its empty allowance has always been for, and the seam
+   cannot grow into a second loop.
+
+   Not `src/access/`, which is where human-facing surfaces live; not `src/store/`, which owns
+   rondo's durable state; not a generic `src/seam/`, which would be a directory named after a
+   metaphor rather than after the thing behind it. Driving continuo against continuo's own control
+   plane does **not** make this a second SQLite owner (D-0005): that boundary is about naming a
+   driver, and this layer names none — the database is a path on a command line.
+
+   One side effect is named here rather than discovered later: the boundary test derives an
+   unlayered module's allowance from the layer table (`ALLOWED_FOR_UNLAYERED =
+   Object.keys(ALLOWED_INTERNAL_BY_LAYER)`), so adding this layer also lets `src/index.ts` re-export
+   from it. That is what a barrel is for and it is intended, but it means the allowlist widened in
+   two places and this entry is the record of both.
+
+3. **`spawn` from `node:child_process` is granted to `src/continuo/invoker.ts` and to no other
+   module.** This is the allowlist widening D-0006 says is a decision, and it is granted per module
+   and per binding, as `node:sqlite` is. The decoder sits in the same directory and is deliberately
+   ungranted, so a decoder that acquired the ability to produce the bytes it reads fails the
+   boundary sweep; `test/architecture/import-boundaries.test.ts` plants that case, the second-module
+   case, the `process.getBuiltinModule` laundering case and a control proving the grant still works.
+
+4. **The pin is a committed manifest, and an environment variable can never be it.**
+   `continuo.pin.json` holds the repository URL, the full 40-hex sha, and the exact `--version` line
+   that revision prints; `src/continuo/pin.ts` mirrors the three as literals so that no module under
+   `src/` needs a filesystem capability to know the pin, and `test/continuo/pin.test.ts` fails if
+   the two drift or if a second full sha appears in the CI workflow. `RONDO_CONTINUO_CLI` **locates**
+   an already-built `dist/cli.js` and says nothing about which revision it is. The pinned revision is
+   `44f62336108b86cab5da791111ffa0e5b73cd01a`, chosen because it is the first continuo whose
+   `gate close` answers in the envelope.
+
+5. **rondo verifies the build before it drives it, and records what it observed.** Before the first
+   driven verb, rondo reads `--version` and compares the whole line with the manifest: a mismatched
+   revision, the literal `unknown`, a `-dirty` suffix, a revision outside continuo's own alphabet,
+   or a line of another shape is a **startup refusal**, and the refusal names which of those it was.
+   The verified record carries the **observed** revision, never the expected one.
+
+   **D-0015 rule 6 is unchanged by this entry, and is half implemented.** That is a statement of
+   implementation status, not a narrowing: the rule still requires the observed revision to be
+   persisted *per run*, and this entry does not relieve rondo of it. What exists today is the
+   verification and a local, per-process record; rondo has no store schema
+   (`src/store/sqlite.ts` names the seam and throws), so there is nowhere to write the row, and
+   until there is, rondo can prove which continuo it verified only for as long as the process
+   lives. The falsifier list below is what keeps that from becoming permanent by silence.
+
+6. **CI provisions the pinned continuo in runner temp, per matrix cell, and the smoke is mandatory
+   in every one of them.** The `double-green` job clones the repository from the manifest, checks out
+   the exact sha detached, installs with `npm ci --ignore-scripts` and builds with
+   `CONTINUO_REQUIRE_REVISION=1`, then runs both seeded suites against that build. The smoke sequence
+   is: verified `--version`; `db create --json`; `run admit --json` with all seven intent fields and
+   an absolute workspace; an empty `gate list --json`; and `gate show --json` for a gate that does
+   not exist, expecting exit 2 and a decoded refusal envelope. `lap perform` is **not** driven: it
+   spawns a worker, and a test suite is not where an agent session belongs.
+
+   The smoke is **capability-gated locally and mandatory under CI**: with `RONDO_CONTINUO_CLI` unset
+   it skips with a reason that says how to set it, and under `CI` an unset variable **fails the
+   suite** rather than skipping. A skip there would make a green cell mean nothing about the seam,
+   and `gate` already treats a skipped job as red.
+
+   Provisioning reaches the network; the smoke itself does not. Nothing is built inside either
+   repository: not in rondo's checkout, where a `node_modules/` and a `dist/` would contaminate the
+   boundary sweep's directory walk, and not in a sibling checkout, which does not exist on a runner.
+
+7. **`--json` is put on the command line by the invoker, not by its callers.** Every verb this
+   layer decodes answers in the envelope only when the flag is present, and a caller that forgot it
+   would run continuo in human-output mode: a *mutating* verb would succeed, its prose would fail to
+   decode, and rondo would report its own defect for a command that had already taken effect — an
+   invitation to retry a write that did not need retrying. continuo declares the flag in one module
+   on its side for the same reason; rondo spells it once on this one.
+
+8. **What the decoder promises, in rondo's own words.** Validate `schema` first, then `ok`, then the
+   envelope's common fields, then the verb's payload. **Unknown keys are accepted everywhere** —
+   continuo's `/1` is explicit that an added field does not move the version, so a decoder that
+   refused them would break on continuo's next additive release for nothing. An unrecognised
+   `schema` is a clean refusal to proceed. `error.class` is carried as an opaque hint and never
+   branched on, because continuo says the message is the authority. Five outcomes, and no continuo
+   type leaves the layer: **answered**, **refused** (continuo's own refusal, in the envelope),
+   **refused in prose** (exit 2 whose stderr is not a document — an argparse-level refusal, relayed
+   unedited and never parsed), **protocol refusal** (a document whose `schema` rondo does not decode —
+   an unknown version, or another verb's), and **invoker defect** (an exit code that is neither 0
+   nor 2, a signal, a spawn failure, an exit 0 with nothing to parse, an envelope that contradicts
+   its own exit code, or a recognised document whose known fields will not read).
+
+   **The line between the last two is drawn at the discriminator, and it is drawn there on purpose.**
+   A schema rondo does not decode is the seam having moved: re-pin, or teach rondo the new shape. A
+   `continuo.<verb>/1` document *from a build whose revision rondo verified against a committed sha*
+   whose known fields are the wrong type is not an upstream surprise at all — it is rondo's model of
+   a build it pinned being wrong, and filing it as a protocol refusal would blunt the one signal the
+   pin exists to make loud.
+
+   `measure report` keeps its special case, by name, with its own entry point — and the case is
+   wider than D-0015 rule 4 states. That rule describes its *success* as unwrapped; read at the
+   pinned revision, `src/measurement/cli.ts` mounts `--json` and never calls the envelope's
+   `successLine` or `refusalLine` at all, because there the flag is only another spelling of
+   `--format json`. So the verb has **no envelope on any path**, and its exit 2 is prose. rondo's
+   decoder says so; an earlier draft of it invented a `continuo.measure.report/1` refusal document,
+   which does not exist.
+
+9. **A continuo rondo has not verified cannot be driven, and the check is at runtime.** The record
+   `startContinuo` hands back is a structural type, so a caller could write one by hand — and a
+   JavaScript caller needs no type at all — which would mean driving an arbitrary executable while
+   holding a value whose name says rondo checked it. So the invoker issues the handles it verified
+   and refuses any other, before it looks at the arguments and before it starts a process. A
+   boundary that can be reached around is worth what the `spawn` grant would be worth if any module
+   could import `node:child_process`.
+
+10. **Two argument shapes are refused before the spawn, and a document's silence is not an answer.**
+   An empty argument reaches continuo as an exit 1 and a raw stack (D-0015's exception 2); an
+   argument containing a NUL never reaches continuo at all, because `spawn` throws *synchronously*
+   rather than reporting through the event the invoker handles. Both are refused as rondo defects
+   before a process starts, and the spawn is guarded so that no failure of it can arrive as a
+   rejected promise — every caller in rondo is written against a value. Symmetrically, a field
+   continuo answers with "a string or `null`" is decoded as *present and null*: at the pinned
+   revision every such key is emitted on every document that carries it, so an **absent** one is a
+   document that does not match the pinned shape, and folding absence into null would be the
+   decoder declining to validate in the one place it looks like it validates.
+
+11. **The escaping stays exactly where D-0015 rule 7 put it, and is now a module.**
+   `src/access/console.ts` escapes to ASCII once, at the boundary where characters become output
+   (D-0004). Decoded messages are unchanged inside rondo, so a value rondo holds is still the value
+   continuo sent.
+
+### What was measured, and how
+
+Everything below was run on **2026-09-05**, `node v22.17.0` / `npm 10.9.2`, against a scratch clone
+of continuo at the pinned sha. The sibling checkout at `<workers>/continuo` was treated as strictly
+read-only and verified untouched before and after (`git status --porcelain` reported only the same
+pre-existing `?? .worktrees/`, and `HEAD` was unmoved); every build happened in a temporary
+directory.
+
+```
+git -C <workers>/continuo rev-parse HEAD  ->  44f62336108b86cab5da791111ffa0e5b73cd01a
+                                              (tip: "gate close answers in the shared --json envelope (D-0092)")
+npm ci --ignore-scripts                   ->  added 136 packages in 2s
+CONTINUO_REQUIRE_REVISION=1 npm run build ->  exit 0
+                                              revision: 44f6...d01a -> dist/build_revision.js
+node dist/cli.js --version
+```
+```
+@suisya-systems/continuo 0.0.0 (rev 44f62336108b86cab5da791111ffa0e5b73cd01a)
+```
+
+`npm ci --ignore-scripts` is enough to run the CLI on this matrix: `better-sqlite3` ships prebuilt
+binaries for `linux-x64` and `win32-x64` in the package, so no lifecycle script has to run for the
+control plane to open a database. That is what makes D-0007's install policy and a working smoke
+compatible on the Windows cell rather than only on this one.
+
+**The smoke sequence, run by hand before it was written as a test:**
+
+```
+db create --db <db> --json
+  ->  exit 0  {"schema":"continuo.db.create/1","ok":true,"db":"<db>","schema_version":4,"head_version":4}
+
+run admit --db <db> --run-id r1 --lease-claimant-id c1 --workspace <abs> --role worker
+          --base-branch main --topic-branch feat/x --prompt "a one-line request" --json
+  ->  exit 0  {"schema":"continuo.run.admit/1","ok":true,"db":"<db>","run_id":"r1",
+               "status":"created","created_at_ms":1788618380687,"events":{...}}
+
+gate list --db <db> --json
+  ->  exit 0  {"schema":"continuo.gate.list/1","ok":true,"db":"<db>","gates":[]}
+
+gate show --db <db> --gate-id nope --json
+  ->  exit 2  {"schema":"continuo.gate.show/1","ok":false,"db":"<db>",
+               "error":{"class":"UnknownGateRefused","message":"gate nope does not exist"}}
+```
+
+**The falsifier itself, reproduced.** This is the command D-0015 recorded as being rejected at the
+top level with `continuo: error: unrecognized arguments: --json`:
+
+```
+gate close --db <db> --gate-id nope --outcome withdrawn --actor-id op1 --json
+  ->  exit 2  {"schema":"continuo.gate.close/1","ok":false,"db":"<db>",
+               "error":{"class":"UnknownGateRefused","message":"no gate 'nope'"}}
+```
+
+The flag is accepted, the document is the shared envelope, and the refusal is on stderr with stdout
+empty — so the verb rondo's own D-0013 assigns to its operating surface is now inside the protocol
+that covers the other ten.
+
+**Three facts below this one were *read* rather than measured, and are marked as such** because no
+command available to rondo produces them. (i) The **successful** `gate close` payload —
+`gate_id`, `closed`, `outcome`, `from_stage`, `to_stage`, where `closed` is whether *this* call
+performed the close and `false` is an idempotent repeat rather than a refusal — is read from
+`continuo D-0092` and from `src/gate/cli.ts` at the pinned sha. No CLI path creates a gate: gates
+are opened from within `lap perform`, which this seam deliberately does not drive, so the success
+case cannot be reached from a smoke that stays out of the worker. (ii) The `unknown` and `-dirty`
+revision forms rondo refuses are read from continuo's `src/about.ts`
+(`REVISION_PATTERN = /^(?:[0-9a-f]{40}(?:-dirty)?|unknown)$/`); rondo did not produce them, and the
+refusals are exercised against fixture lines in `test/continuo/pin.test.ts` instead. (iii) That
+`measure report` carries no envelope on any path is read from `src/measurement/cli.ts`, which never
+calls `successLine` or `refusalLine`.
+
+**The revision is the identity, not the version.** `--version` reports `0.0.0` because continuo is
+unpublished, so a rondo that compared versions would compare a constant (D-0015 says this); rondo
+compares the whole line and records the revision out of it.
+
+**The two exceptions D-0015 named are unchanged**, and both were re-run at this sha:
+
+```
+run close --db <db> --run-id r1 --outcome bogus --actor-id op1 --json
+  ->  exit 2, stderr is PROSE:
+      usage: continuo run close [-h] --db DB --run-id RUN_ID --outcome {completed,failed,cancelled} ...
+      continuo run close: error: argument --outcome: invalid choice: 'bogus'
+
+run admit ... --workspace relative/ws ... --json
+  ->  exit 1, stderr is a raw stack (LapRunIntentUsageError)
+```
+
+So the decoder still needs the prose fallback at exit 2, and rondo still validates operator-supplied
+values before spawning. Neither is affected by `gate close` joining the envelope.
+
+**Non-ASCII, on the path rule 7 is about**: continuo's envelope encoder escapes it
+(`"db":"/tmp/日本.sqlite3"`), and the prose paths do not. rondo escapes at its own boundary
+either way, because which path a message came down is not a property rondo wants to have to know.
+
+**The smoke, as a test, run for real against this build:**
+
+```
+RONDO_CONTINUO_CLI=<abs>/dist/cli.js npx vitest run
+  ->  6 files, 134 tests, all green; the end-to-end case takes 581 ms for six subprocesses
+CI=true npx vitest run test/continuo/smoke.test.ts   (variable unset)
+  ->  FAILS: "RONDO_CONTINUO_CLI is not set under CI ... the end-to-end smoke is not optional there"
+npx vitest run test/continuo/smoke.test.ts           (variable unset, not CI)
+  ->  1 skipped: "[skipped: RONDO_CONTINUO_CLI is unset; point it at a built continuo dist/cli.js at 44f6...]"
+```
+
+### What this entry does not decide
+
+- **Which continuo verbs rondo will drive from its own surfaces.** The layer decodes five; D-0015's
+  table of eleven is unchanged, and adding a verb is adding a contract, not taking a decision.
+- **Where the observed revision is persisted**, which needs a store schema (rule 5 above).
+- **How rondo validates each operator-supplied value.** D-0015 already requires it in general; the
+  invoker refuses an empty argument before spawning, and the per-field rules belong with the code
+  that builds an intent from a person's request.
+- **Whether the pin moves on a schedule.** Moving it is an edit to the manifest, the mirror and the
+  recorded version line together, and a green matrix is what says the move is safe.
+
+### What would falsify it
+
+- **A `continuo.<verb>/2` envelope, or a driven verb arriving without `--json`.** The first makes
+  the decoder's single-version assumption wrong and needs a decision about handling two; the second
+  reopens exactly the gap rule 1 has just closed.
+- **continuo publishing to a registry** (`continuo D-0045`), which reopens D-0015's option
+  comparison and, with it, whether this layer is a subprocess adapter or a library adapter. The
+  layer and its arrows survive that; the invoker is what would not.
+- **The pinned build reporting `unknown` or `-dirty` on a runner in the matrix**, which would mean
+  `CONTINUO_REQUIRE_REVISION=1` on a clean detached clone does not hold somewhere — the Windows
+  cells being the ones this was not measured on locally.
+- **`better-sqlite3` ceasing to ship a prebuild for a matrix platform**, which would make
+  `npm ci --ignore-scripts` insufficient to provision continuo and force a decision between a
+  lifecycle script, a prebuilt artefact and a narrower matrix.
+- **The provisioning step's network access becoming unavailable in CI**, which would make artefact
+  delivery a decision rather than an implementation detail. The smoke's own execution reaches no
+  network, so only provisioning is exposed.
+- **A protocol refusal reaching an operator in practice**, which would mean the pin and the running
+  build had diverged without the startup check catching it, and would make the check the thing to
+  re-argue rather than the decoder.
+- **continuo changing the meaning of an existing field without moving to `/2`.** This is the
+  accept-extra-keys rule's own falsifier and the one thing rondo's tolerance structurally cannot
+  detect: an added key is what `/1` promises, and a *redefined* key looks identical to a decoder.
+  Nothing on rondo's side catches it, and this entry says so rather than implying the decoder is
+  total.
+- **A second module in `src/continuo/` needing to start a process**, or the invoker needing
+  `execFile`, `fork`, `spawnSync` or `node:worker_threads`. Rule 3's claim is about reaching a
+  process, not about one module name, and the grant is per binding — so any of those is a decision,
+  in D-0005's shape.
+- **`src/refrain/` needing to drive a verb itself**, which falsifies rule 2's arrow and reopens
+  whether the loop is a pure planner.
+- **`closeOpenGate` admitting a non-human actor kind**, or `gate close` gaining an actor argument
+  that is not a person. That falsifies D-0013 first and reaches rule 1 second.
+- **The store schema arriving and the observed revision still not being persisted.** This is the
+  falsifier for rule 5's deferral, and it is what stops "left to the store" from becoming permanent
+  by silence.
+- **A build whose `--version` is right and whose `dist/` is not** — the residual this entry accepts.
+  Verification proves that *this build reports the pinned revision*, not that *this build was
+  produced from the pinned tree*; a tampered or half-rebuilt `dist/` passes. Closing it would need
+  a hash of the artefact, which is a decision this entry does not take.
+- **The mandatory smoke going red for a reason that is continuo's or the network's rather than
+  rondo's.** Rule 6 accepts that cost deliberately; a recurrence means it was bought too dear, and
+  the answer is a provisioned or cached artefact, not a skip.
+- Any measurement above failing to reproduce. Toolchain `node v22.17.0` / `npm 10.9.2`; continuo at
+  `44f62336108b86cab5da791111ffa0e5b73cd01a`.

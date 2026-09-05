@@ -10,10 +10,11 @@ name), and where this file and that evidence disagree, the evidence wins.
 
 ## 1. rondo is a host, and it currently hosts nothing
 
-The repository is a skeleton. `src/` holds three layers and six modules, none of
-which does any work: there is no loop, no web UI, no MCP surface, no store
-schema and no code that talks to an agent. That is the state Issue #1 left it
-in, deliberately.
+The repository is a near-skeleton. `src/` holds four layers, and only one of them
+does any work: `src/continuo/` drives the pinned continuo across a process
+boundary and decodes its answers (D-0017). There is still no loop, no web UI, no
+MCP surface, no store schema and no code that talks to an agent. That is the
+state Issue #1 left it in, plus the one seam the host cannot be built without.
 
 So the thing to check before starting is not "does this fit the architecture" —
 it is **"has the decision this depends on been taken?"** Most of rondo's design
@@ -79,8 +80,16 @@ Consequences for anyone adding code here:
   not patch. D-0001's escalation list is largely spent: three of its four
   requests were carried out at the siblings' gates on 2026-09-05, and the fourth
   was a request to un-decide something.
+- **The seam is `src/continuo/`, and it is the one place under `src/` that starts
+  a process** (D-0017). The decoder is pure; the invoker alone is granted `spawn`;
+  the pin lives in `continuo.pin.json` and is mirrored in `src/continuo/pin.ts`;
+  and `RONDO_CONTINUO_CLI` only *locates* a build someone else made — it can
+  never stand in for the pin. The end-to-end smoke is mandatory in every CI cell
+  and capability-gated locally.
 - When continuo is driven, it is driven as a **subprocess whose revision rondo
-  verifies and records** (cadenza `C-14`, D-0015 rule 6). `--version` now
+  verifies and records** (cadenza `C-14`, D-0015 rule 6). Verification exists;
+  the per-run persistence does not, because there is no store schema yet, and
+  D-0017 rule 5 says so rather than letting the rule read as done. `--version` now
   reports the build's git revision, so provenance is no longer rondo inventing
   an answer the seam cannot give — it is rondo *checking* the seam's answer
   against the pinned sha and persisting what was observed. A mismatch, the
@@ -88,9 +97,10 @@ Consequences for anyone adding code here:
   checkout with `CONTINUO_REQUIRE_REVISION=1` so an unidentifiable build fails
   at build time.
 - **`--json` is a wire protocol, not types.** rondo drives eleven continuo verbs
-  and ten of them carry it. (continuo has fifteen in the surveyed set; the other
-  four — `gate present`, `deliver`, `ack`, `reconcile` — are human-only and
-  rondo drives none of them, so their lack of `--json` is not rondo's gap.)
+  and, since `continuo D-0092`, **all eleven** carry it — D-0015 recorded ten,
+  and `gate close` was the eleventh. (continuo has fifteen in the surveyed set;
+  the other four — `gate present`, `deliver`, `ack`, `reconcile` — are human-only
+  and rondo drives none of them, so their lack of `--json` is not rondo's gap.)
   rondo owns the runtime decoders and converts validated documents into rondo's
   own records. Three things the flag does not reach, all of which rondo's
   callers must handle: parser-level refusals are exit 2 with *prose* rather than
@@ -98,9 +108,11 @@ Consequences for anyone adding code here:
   so validate **every** operator-supplied value before spawning — `--run-id`,
   `--workspace`, `--base-branch`, `--topic-branch`, `--lease-claimant-id` and
   `--actor-id` are the known ones; and `measure report` answers unwrapped, identified
-  by `report_kind`. **`gate close` has no `--json` at all** and rejects the flag
-  at the top level — drive it as an opaque exit code and confirm with
-  `gate show --json`; never parse its prose (D-0015 rule 5).
+  by `report_kind`. **`gate close` used to reject `--json` at the top
+  level**, and D-0015 rule 5 was the workaround; `continuo D-0092` closed that
+  gap and **D-0017 replaces rule 5** — the verb answers in
+  `continuo.gate.close/1` and is decoded like every other, with no confirming
+  `gate show` call. Its prose is still never parsed.
 - **Relaying continuo's prose is not relaying continuo's bytes** (D-0015 rule
   7). Pass its words through unedited, but escape them to ASCII before printing:
   continuo echoes `--db` verbatim and unconstrained, so a non-ASCII path or gate
