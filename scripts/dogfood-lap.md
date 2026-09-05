@@ -161,7 +161,10 @@ costs on this machine, and that `resume` sees the outcome after a human answers.
    first costs nothing:
 
    ```sh
-   node -e 'import("./dist/continuo/roles.js").then(m => console.log(m.mapModelTier("standard")))'
+   # DIST is step 3's emitted tree -- the `outDir` of your tsconfig.dogfood.json,
+   # resolved, and the same tree the driver in step 2 imports from.
+   DIST=/absolute/path/to/dist
+   node -e "import('file://$DIST/continuo/roles.js').then(m => console.log(m.mapModelTier('standard')))"
    # { kind: 'selected', model: 'claude-opus-5' }   -- 'unknown' means stop and fix the agent type
    ```
 
