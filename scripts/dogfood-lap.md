@@ -94,8 +94,14 @@ costs on this machine, and that `resume` sees the outcome after a human answers.
    names the first field it refuses; that refusal is rondo's, before a process
    starts, which is the property D-0015's exception 2 asked for.
 
-   Set `invocationCeilingMs` above `turnTimeoutMs + gitTimeoutMs` with real
-   margin. **rondo's ceiling firing is a rondo defect, not a lap that failed**:
+   Set `invocationCeilingMs` above `turnTimeoutMs + gitTimeoutMs +
+   identityReadbackTimeoutMs` with real margin — **three budgets since D-0021**,
+   not two, and `runPlan()` refuses a ceiling that merely equals the sum.
+   `identityReadbackTimeoutMs` is the window the spawned worker gets to name its
+   own session id (`continuo D-0098`'s `--identity-readback-timeout-ms`), and it
+   is the number the first dogfood run died on: state it rather than inheriting
+   continuo's 30 s default, for the reason D-0019 rule 12 gives for the other
+   two. **rondo's ceiling firing is a rondo defect, not a lap that failed**:
    rondo's timer kills the CLI and not the fenced child, so a ceiling that fires
    leaves an orphaned worker with nobody polling it. If it fires, record what the
    lap actually cost and raise the ceiling — do not treat it as a flake.
@@ -135,6 +141,16 @@ costs on this machine, and that `resume` sees the outcome after a human answers.
    refusal, and the iteration ends at terminal `abandoned` — after the row is
    reserved.
 
+   One field of `agentTypeInput` is priced rather than carried, and it is the
+   other way to fail before a spawn: `executorPolicy.modelTier` is mapped to a
+   model id by `mapModelTier` (`src/continuo/roles.ts`) and passed as
+   `lap perform --model`, so **a tier rondo does not price is refused at the
+   `classify` step** rather than falling back to whatever the worker CLI
+   defaults to. `standard` is the tier the table prices at the time of writing,
+   and the refusal names the ones it knows. Omitting the flag is not the neutral
+   choice it looks like — that is D-0021's whole point, and F-2 in the record
+   below is what it cost before.
+
 2. **Admit.** Call the composition root's
    `admit(ports, plan, policy, iterationId)`, where `ports` comes from
    `openConductor(store, process.env)` and `iterationId` is yours to allocate
@@ -167,7 +183,34 @@ costs on this machine, and that `resume` sees the outcome after a human answers.
    drives none of these and must not: `closeOpenGate` hard-codes
    `actorKind: "human"` (D-0013).
 
-5. **Resume.** Call `resume(iterationId)`. Call it *twice*. The first call after
+   Each verb's `--gate-id` is what `gate list` prints, and **`gate ack` takes the
+   `message_id` the enqueueing verb returned** — `gate present`'s for the first
+   ack, `gate answer`'s for the second — so run both with `--json` and keep the
+   id rather than retyping a relay name. The stage moves on the ack and not on
+   the send, and **the second ack is what closes the gate**, as
+   `answered_and_forwarded`:
+
+   ```sh
+   G=$(node "$CLI" gate list --db "$DB" | awk '{print $1}')   # one open gate
+   A=human/your-name                                          # recorded on every transition
+
+   node "$CLI" gate present --db "$DB" --gate-id "$G" --json          # -> message_id
+   node "$CLI" gate deliver --db "$DB" --destination-dir "$DROPBOX" --holder "$A" --json
+   node "$CLI" gate ack     --db "$DB" --message-id "$PRESENTED" --actor-id "$A" --json
+
+   node "$CLI" gate answer  --db "$DB" --gate-id "$G" --body approve --actor-id "$A" --json
+   node "$CLI" gate deliver --db "$DB" --destination-dir "$DROPBOX" --holder "$A" --json
+   node "$CLI" gate ack     --db "$DB" --message-id "$FORWARDED" --actor-id "$A" --json
+   ```
+
+   `gate close` is the other ending and is not this one: it takes an outcome an
+   operator decides, and it accepts only `withdrawn`, `expired` and
+   `unanswerable` — `answered_and_forwarded` is refused there by name, because
+   it is the forward ack's to write. `resume` reads whichever of the two
+   happened.
+
+5. **Resume.** Call `resume(ports, iterationId)` — `ports` is step 2's, and
+   `resume` takes it first exactly as `admit` does. Call it *twice*. The first call after
    the answer transitions the iteration to `closed`; the second must change
    nothing and say so. Calling it before the answer must also change nothing —
    that is the idempotence `resume` promises to a surface that cannot be sure,
@@ -185,15 +228,40 @@ costs on this machine, and that `resume` sees the outcome after a human answers.
    there is no `run show` to read the state you are settling; `gate list --db`
    is the verb that answers for gates.
 
+   The run row is the one that needs a command, and closing it is a fact rather
+   than a tidy-up: `run close` refuses a second close, in its own words, saying
+   that a wrong terminal status is corrected by opening a new run.
+
+   ```sh
+   node "$CLI" gate list --db "$DB"                     # empty once the gate is closed
+   node "$CLI" run close --db "$DB" --run-id "$RUN_ID" \
+        --outcome completed --actor-id "$A"             # or failed / cancelled
+   git -C "$REPO" branch -a                             # the topic branch the lap cut
+   git -C "$REPO" worktree list                         # the workspace it materialised
+   ```
+
+   The workspace and the topic branch are left where they are on purpose, and
+   removing them is yours: the branch is a `+` in `branch -a` because the
+   workspace still has it checked out, so a `worktree remove` comes before a
+   `branch -d`. `run close` records step 11 and performs none of it — push, PR
+   and merge stay manual, which is D-0010 again.
+
 ## What one run of this actually did
 
 [`../docs/operations/lap-1-dogfood.md`](../docs/operations/lap-1-dogfood.md) is
-the record of walking this procedure on 2026-09-06, at the revisions pinned then.
-**It did not get past step 2**, and the reason is a hard-coded 2.5 second window
-in continuo's post-spawn identity read-back against a worker CLI that needs 4 to
-11 seconds to say its own name. Read it before running this: it carries the
-measurements, the eleven findings, and the parts of the procedure that are still
-unwalked.
+the record. It now holds two runs, both on 2026-09-06.
+
+**The first did not get past step 2**, and the reason was a hard-coded 2.5 second
+window in continuo's post-spawn identity read-back against a worker CLI that
+needs seconds to say its own name (sections 1-9).
+
+**The second walked all seven steps** — the pin moved to the continuo build that
+takes the read-back window as a budget, and rondo passes it (D-0021). Section 10
+is that run: two complete laps, what each cost in wall clock and in dollars, the
+gate answered through the verbs in step 4, and `resume` to `closed`. Read it
+before running this. What is worth knowing up front is that a lap on this machine
+answered in **18 to 21 seconds**, not the minutes step 2's report line predicts,
+and that one lap costs about **18 cents**.
 
 ## The paths worth walking on purpose, once each
 
