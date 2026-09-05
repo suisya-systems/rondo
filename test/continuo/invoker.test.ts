@@ -27,6 +27,7 @@ import {
   showGate,
   type VerifiedContinuo,
 } from "../../src/continuo/invoker.js";
+import { mapModelTier, mappedModelTiers } from "../../src/continuo/roles.js";
 
 /** A handle rondo did not issue: enough to reach `run()`, never past it. */
 const unissued: VerifiedContinuo = {
@@ -48,6 +49,7 @@ function lapRequest(overrides: Partial<PerformLapRequest> = {}): PerformLapReque
     endpointRecipient: "human-gated-effect",
     endpointDestinationDir: "/srv/rondo/outbox",
     claudeCommand: ["/usr/local/bin/claude"],
+    modelTier: "standard",
     interlockRoot: "/srv/rondo/interlock",
     claudeOrgPath: "/srv/claude-org",
     endpointDb: null,
@@ -58,11 +60,33 @@ function lapRequest(overrides: Partial<PerformLapRequest> = {}): PerformLapReque
     pollIntervalMs: null,
     turnTimeoutMs: 900_000,
     gitTimeoutMs: 120_000,
+    identityReadbackTimeoutMs: 30_000,
     gateOptions: [],
     gateDeadlineAtMs: null,
     invocationCeilingMs: 1_800_000,
     ...overrides,
   };
+}
+
+/**
+ * One lap driven with the case's edit, reduced to continuo's outcome.
+ *
+ * `performLap` answers a *pair* -- the outcome and the model rondo selected --
+ * for the same reason `admitRun` answers one with the role it used, so the cases
+ * that only ask "how far did this get" go through here and the two that ask
+ * about the model read the pair directly.
+ */
+async function performedLap(overrides: Partial<PerformLapRequest> = {}) {
+  return (await performLap(unissued, lapRequest(overrides))).result;
+}
+
+/** The model a priced tier selects, read through the table rather than retyped. */
+function selectedModel(tier: string): string {
+  const selection = mapModelTier(tier);
+  if (selection.kind !== "selected") {
+    throw new Error(`expected '${tier}' to be priced, got ${selection.kind}`);
+  }
+  return selection.model;
 }
 
 /** The reason out of a defect, or a failure saying what came back instead. */
@@ -78,7 +102,7 @@ describe("a request continuo would accept", () => {
     // The positive case, and it is the one that keeps the negatives honest: if
     // validation were too strict, every case below would still pass and the
     // conductor would refuse work continuo would have done.
-    expect(defectReason(await performLap(unissued, lapRequest()))).toContain(REACHED_RUN);
+    expect(defectReason(await performedLap())).toContain(REACHED_RUN);
   });
 
   test("an option-shaped gate label is carried rather than refused", async () => {
@@ -89,7 +113,7 @@ describe("a request continuo would accept", () => {
     // `--json` would be removed by `run()`'s de-duplication of that flag,
     // leaving a dangling `--gate-option` to swallow whichever flag came next.
     for (const option of ["--json", "--help", "-y"]) {
-      const outcome = await performLap(unissued, lapRequest({ gateOptions: [option] }));
+      const outcome = await performedLap({ gateOptions: [option] });
       expect(defectReason(outcome)).toContain(REACHED_RUN);
     }
   });
@@ -98,7 +122,7 @@ describe("a request continuo would accept", () => {
     // continuo's own default applies to an omitted flag; an empty string in its
     // place would be a value rondo invented. The default request above already
     // has all five paths and both optional integers null.
-    expect(defectReason(await performLap(unissued, lapRequest()))).toContain(REACHED_RUN);
+    expect(defectReason(await performedLap())).toContain(REACHED_RUN);
   });
 
   test("gate show reaches the drive too, and it is the one verb that mutates nothing", async () => {
@@ -109,9 +133,7 @@ describe("a request continuo would accept", () => {
 
 describe("a field continuo requires to be absolute", () => {
   test("a relative artifact root is named, and no process is started", async () => {
-    const reason = defectReason(
-      await performLap(unissued, lapRequest({ artifactRoot: "tmp/art" })),
-    );
+    const reason = defectReason(await performedLap({ artifactRoot: "tmp/art" }));
     expect(reason).toContain("artifactRoot");
     expect(reason).toContain("absolute");
     expect(reason).not.toContain(REACHED_RUN);
@@ -122,9 +144,7 @@ describe("a field continuo requires to be absolute", () => {
     // continuo's rule, and the fence is its reason: a bare name would be
     // resolved through `PATH`, so which binary ran would depend on the
     // environment the host inherited.
-    const reason = defectReason(
-      await performLap(unissued, lapRequest({ claudeCommand: ["claude", "--dangerous"] })),
-    );
+    const reason = defectReason(await performedLap({ claudeCommand: ["claude", "--dangerous"] }));
     expect(reason).toContain("claudeCommand[0]");
     expect(reason).not.toContain(REACHED_RUN);
   });
@@ -132,7 +152,7 @@ describe("a field continuo requires to be absolute", () => {
   test("an empty worker CLI is refused rather than omitted", async () => {
     // Omitting `--claude-command` entirely means continuo's own default, which
     // is a different request from "run no worker".
-    const reason = defectReason(await performLap(unissued, lapRequest({ claudeCommand: [] })));
+    const reason = defectReason(await performedLap({ claudeCommand: [] }));
     expect(reason).toContain("claudeCommand");
     expect(reason).not.toContain(REACHED_RUN);
   });
@@ -140,9 +160,7 @@ describe("a field continuo requires to be absolute", () => {
 
 describe("a field with a set of values continuo will accept", () => {
   test("a recipient continuo has no handler for is refused, and the set is named", async () => {
-    const reason = defectReason(
-      await performLap(unissued, lapRequest({ endpointRecipient: "external-notif" })),
-    );
+    const reason = defectReason(await performedLap({ endpointRecipient: "external-notif" }));
     for (const recipient of SERVED_ENDPOINT_RECIPIENTS) {
       expect(reason).toContain(recipient);
     }
@@ -151,7 +169,7 @@ describe("a field with a set of values continuo will accept", () => {
 
   test("both recipients continuo serves are accepted", async () => {
     for (const recipient of SERVED_ENDPOINT_RECIPIENTS) {
-      const result = await performLap(unissued, lapRequest({ endpointRecipient: recipient }));
+      const result = await performedLap({ endpointRecipient: recipient });
       expect(defectReason(result)).toContain(REACHED_RUN);
     }
   });
@@ -159,8 +177,18 @@ describe("a field with a set of values continuo will accept", () => {
 
 describe("the numbers", () => {
   test("a ceiling that is not a whole positive number of milliseconds is refused", async () => {
-    const reason = defectReason(await performLap(unissued, lapRequest({ invocationCeilingMs: 0 })));
+    const reason = defectReason(await performedLap({ invocationCeilingMs: 0 }));
     expect(reason).toContain("invocationCeilingMs");
+    expect(reason).not.toContain(REACHED_RUN);
+  });
+
+  test("the identity read-back budget is required, and a non-positive one is refused", async () => {
+    // The third budget rondo states rather than inherits (D-0021). continuo
+    // defaults it to 30 s; a plan that reached here with 0 would be rondo
+    // asking for a window no worker can meet, which is the defect the dogfood's
+    // F-1 measured in continuo's old constants.
+    const reason = defectReason(await performedLap({ identityReadbackTimeoutMs: 0 }));
+    expect(reason).toContain("identityReadbackTimeoutMs");
     expect(reason).not.toContain(REACHED_RUN);
   });
 
@@ -168,9 +196,52 @@ describe("the numbers", () => {
     // `String(1.5)` is a perfectly good string and a nonsense millisecond
     // count; continuo's parser types the flag as an int and would refuse it in
     // prose, which is continuo answering for rondo's arithmetic.
-    const reason = defectReason(await performLap(unissued, lapRequest({ pollIntervalMs: 1.5 })));
+    const reason = defectReason(await performedLap({ pollIntervalMs: 1.5 }));
     expect(reason).toContain("pollIntervalMs");
     expect(reason).not.toContain(REACHED_RUN);
+  });
+});
+
+describe("the model tier, which only rondo can price", () => {
+  test("a tier rondo has no model for is refused, and nothing is spawned", async () => {
+    // Unlike an unmapped role, this one has no upstream check to fall back on:
+    // cadenza validates the tier structurally and continuo never sees a tier at
+    // all. So the refusal here is the only thing standing between an agent type
+    // and a lap running on a model nobody chose.
+    const outcome = await performLap(unissued, lapRequest({ modelTier: "economy" }));
+    const reason = defectReason(outcome.result);
+    expect(reason).toContain("economy");
+    for (const tier of mappedModelTiers()) {
+      expect(reason).toContain(tier);
+    }
+    expect(reason).not.toContain(REACHED_RUN);
+    // Null exactly because rondo refused before driving: a reader cannot mistake
+    // this for a lap that ran on no particular model.
+    expect(outcome.model).toBeNull();
+  });
+
+  test("a prototype name is an unknown tier rather than a function on the command line", async () => {
+    for (const tier of ["constructor", "toString", "__proto__"]) {
+      const outcome = await performLap(unissued, lapRequest({ modelTier: tier }));
+      expect(defectReason(outcome.result)).not.toContain(REACHED_RUN);
+      expect(outcome.model).toBeNull();
+    }
+  });
+
+  test("every priced tier reaches the drive and reports the model it selected", async () => {
+    // The table asserted through the entry point rather than sampled: a tier
+    // added with a value that is not a model id would reach continuo's own
+    // `--model` check as an argv token, which is a refusal a lap away rather
+    // than a refusal before one.
+    for (const tier of mappedModelTiers()) {
+      const outcome = await performLap(unissued, lapRequest({ modelTier: tier }));
+      expect(defectReason(outcome.result)).toContain(REACHED_RUN);
+      expect(outcome.model).toBe(selectedModel(tier));
+      // continuo's own rule for this flag: the value becomes a token in the
+      // fenced child's command line, so it must not be spellable as a second
+      // argument.
+      expect(outcome.model).toMatch(/^[A-Za-z0-9][A-Za-z0-9._:-]*$/);
+    }
   });
 });
 

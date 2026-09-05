@@ -114,8 +114,14 @@ function asEffect<T, U>(result: ContinuoResult<T>, read: (payload: T) => U): Eff
  * command line. Writing the transcription out is what makes a field added to
  * one and not the other a compile error here rather than a missing flag at
  * runtime.
+ *
+ * **The model tier is the one field that is not read off the plan**, and it is a
+ * parameter for the same reason `admitRun`'s neutral role name is: it comes off
+ * the agent-type record cadenza built at the `classify` state, is committed to
+ * the row there, and reaches this layer through the loop rather than through the
+ * plan the caller wrote (D-0021).
  */
-function lapRequestOf(plan: RunPlan): PerformLapRequest {
+function lapRequestOf(plan: RunPlan, modelTier: string): PerformLapRequest {
   return {
     db: plan.db,
     runId: plan.runId,
@@ -125,6 +131,7 @@ function lapRequestOf(plan: RunPlan): PerformLapRequest {
     endpointRecipient: plan.endpointRecipient,
     endpointDestinationDir: plan.endpointDestinationDir,
     claudeCommand: plan.claudeCommand,
+    modelTier,
     interlockRoot: plan.interlockRoot,
     claudeOrgPath: plan.claudeOrgPath,
     endpointDb: plan.endpointDb,
@@ -135,6 +142,7 @@ function lapRequestOf(plan: RunPlan): PerformLapRequest {
     pollIntervalMs: plan.pollIntervalMs,
     turnTimeoutMs: plan.turnTimeoutMs,
     gitTimeoutMs: plan.gitTimeoutMs,
+    identityReadbackTimeoutMs: plan.identityReadbackTimeoutMs,
     gateOptions: plan.gateOptions,
     gateDeadlineAtMs: plan.gateDeadlineAtMs,
     invocationCeilingMs: plan.invocationCeilingMs,
@@ -210,8 +218,9 @@ export function conductorPorts(
         },
       };
     },
-    performLap: async (plan): Promise<EffectOutcome<LapPerformance>> =>
-      asEffect(await performLap(continuo, lapRequestOf(plan)), (payload) => ({
+    performLap: async (plan, modelTier): Promise<EffectOutcome<LapPerformance>> => {
+      const outcome = await performLap(continuo, lapRequestOf(plan, modelTier));
+      return asEffect(outcome.result, (payload) => ({
         // Kept rather than dropped: it is the only identity a lap's answer
         // carries that the conductor can check, and the check is the
         // interpreter's (see `LapPerformance.runId`).
@@ -221,7 +230,14 @@ export function conductorPorts(
         sessionPath: payload.sessionPath,
         endpointLeaseFailure: payload.endpointLeaseFailure,
         elapsedDeadlineAtMs: payload.elapsedDeadlineAtMs,
-      })),
+        // What continuo says the lap ran on, beside what rondo asked for. The
+        // adapter answers the second one because only it knows the model tier's
+        // price; comparing them is the interpreter's, exactly as comparing the
+        // run ids is.
+        model: payload.model,
+        requestedModel: outcome.model,
+      }));
+    },
     showGate: async (plan, gateId): Promise<EffectOutcome<GateObservation>> =>
       asEffect(await showGate(continuo, { db: plan.db, gateId }), (payload) => ({
         gateId: payload.gateId,

@@ -272,6 +272,14 @@ Symptom, cause, and what a fix would have to be. Raw output is byte for byte.
 
 **Blocking.** This is where the lap stops.
 
+> **Resolved upstream and taken here (2026-09-06, rondo `D-0021`).** `continuo D-0098` replaced the
+> two constants with a caller-supplied budget, `lap perform --identity-readback-timeout-ms`,
+> defaulting to 30 s. rondo pinned that build and made the number the third **explicit** field of
+> `RunPlan` — `identityReadbackTimeoutMs` — rather than inheriting the default, on the same
+> reasoning `D-0019` rule 12 gives for the other two budgets; it is counted into
+> `invocationCeilingMs`'s floor. The measurements below are the evidence for the size of the window
+> and stand as written; what changed is that the size is now a number an operator sets.
+
 ```
 The lap did not complete: the identity committed for session
 "b440a405-af33-4f14-9705-c49319a755e3" did not read back within 50 attempts; the
@@ -332,6 +340,17 @@ size of the window, not the strictness of the check. A fix is a `--readback-*` p
 ### F-2. Nothing anywhere selects the worker's model, so a lap runs on the most expensive one
 
 The brief asked for "the cheapest model continuo permits". There is no such setting.
+
+> **Resolved upstream and taken here (2026-09-06, rondo `D-0021`).** `continuo D-0099` added
+> `lap perform --model`, appended to every spawn of the lap's session, and a `model` field on the
+> verb's `--json` answer saying which model the lap ran on. rondo pinned that build and added
+> `mapModelTier` beside `mapNeutralRole` in `src/continuo/roles.ts`: cadenza's
+> `executorPolicy.modelTier` — the field this finding measured as "read by nobody" — is now read at
+> the `classify` state, priced into a model id in the invocation adapter, and passed as `--model`.
+> A tier the table does not price is refused before the spawn, so a lap never falls back to the
+> worker CLI's own default. The iteration row records the tier and the model together. The pairs
+> themselves are a cost policy and are **provisional pending an operator's ratification**; the
+> inventory below of where a model could have come from stands as written.
 
 - `continuo lap perform --help` at the pinned revision has **no `--model` flag**; the full option
   list is `--db --run-id --repository --artifact-root --state-root --endpoint-recipient

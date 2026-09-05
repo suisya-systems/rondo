@@ -207,6 +207,19 @@ export interface IterationRecord {
    */
   readonly neutralRoleName: string | null;
   readonly continuoRole: string | null;
+  /**
+   * cadenza's model tier, and the model the lap actually ran on (D-0021).
+   *
+   * Both, for the reason both role columns exist: a tier is what an agent type
+   * declared and a model id is what a lap cost, and the pair is the only place a
+   * person can see which model a tier was worth on the day the lap ran. The
+   * model is the value **continuo reported** rather than the one rondo selected;
+   * they are checked against each other before this column is written, and
+   * recording the request in place of the observation would make the check
+   * unable to fail.
+   */
+  readonly modelTier: string | null;
+  readonly model: string | null;
   /** The gate `lap perform` opened, and where it stands when last observed. */
   readonly gateId: string | null;
   readonly gateStage: string | null;

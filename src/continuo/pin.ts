@@ -38,11 +38,16 @@ export const CONTINUO_REPOSITORY = "https://github.com/suisya-systems/continuo.g
  * same commit, and an identifier that depends on where it was resolved is not
  * an identifier.
  *
- * This particular revision is chosen in D-0017: it is the first continuo that
- * answers `gate close --json` in the shared envelope (`continuo D-0092`), which
- * is the fact that lets rondo drive every verb it drives through one decoder.
+ * D-0017 chose `44f62336108b86cab5da791111ffa0e5b73cd01a`, the first continuo
+ * that answers `gate close --json` in the shared envelope (`continuo D-0092`).
+ * **D-0021 moves the pin here**, to the first continuo that answers the two
+ * things the lap-1 dogfood stopped on: the post-spawn identity read-back is a
+ * caller-supplied budget rather than 50 attempts at 50 ms (`continuo D-0098`,
+ * the dogfood's F-1), and `lap perform` takes `--model` and reports which model
+ * the lap ran on (`continuo D-0099`, F-2). The envelope property D-0017 pinned
+ * for is unchanged and still holds.
  */
-export const CONTINUO_REVISION = "44f62336108b86cab5da791111ffa0e5b73cd01a";
+export const CONTINUO_REVISION = "603843b7c0e91136bc7f7e5c9f91640f7bb970c9";
 
 /**
  * The exact line the pinned build's `--version` prints.
@@ -50,11 +55,14 @@ export const CONTINUO_REVISION = "44f62336108b86cab5da791111ffa0e5b73cd01a";
  * Recorded whole rather than assembled from parts, because it is a
  * *measurement* of the pinned build and not a format rondo gets to define. If
  * continuo ever changes the line's shape, rondo's verification fails loudly at
- * startup against a value that says what was actually observed on 2026-09-05,
- * instead of quietly agreeing with a template rondo wrote for itself.
+ * startup against a value that says what was actually observed -- on 2026-09-05
+ * for the revision D-0017 pinned, and on 2026-09-06 for this one, by building
+ * the pinned checkout with `CONTINUO_REQUIRE_REVISION=1` and running
+ * `node dist/cli.js --version` -- instead of quietly agreeing with a template
+ * rondo wrote for itself.
  */
 export const CONTINUO_VERSION_LINE =
-  "@suisya-systems/continuo 0.0.0 (rev 44f62336108b86cab5da791111ffa0e5b73cd01a)";
+  "@suisya-systems/continuo 0.0.0 (rev 603843b7c0e91136bc7f7e5c9f91640f7bb970c9)";
 
 /** What a build reports when it has no git information (`continuo`'s literal). */
 const REVISION_UNKNOWN = "unknown";

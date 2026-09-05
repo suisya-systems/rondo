@@ -262,6 +262,8 @@ function blankRecord(id: string, status: IterationStatus): IterationRecord {
     classificationReason: null,
     neutralRoleName: null,
     continuoRole: null,
+    modelTier: null,
+    model: null,
     gateId: null,
     gateStage: null,
     gateOutcome: null,
@@ -293,6 +295,7 @@ function successfulAnswers(): Answers {
         configDigest: "sha256:config",
         contractDigest: "sha256:contract",
         neutralRoleName: "worker",
+        modelTier: "standard",
       },
     },
     startContinuo: { kind: "answered", value: { revision: "44f62336" } },
@@ -309,6 +312,8 @@ function successfulAnswers(): Answers {
         sessionPath: "started",
         endpointLeaseFailure: null,
         elapsedDeadlineAtMs: null,
+        model: MODEL,
+        requestedModel: MODEL,
       },
     },
     showGate: {
@@ -382,6 +387,15 @@ const AGENT_TYPE_INPUT: AgentTypeInput = {
   executorPolicy: { roleName: "worker", modelTier: "standard", reportingDuties: [] },
 };
 
+/**
+ * The model every successful lap in this file both asks for and reports.
+ *
+ * One constant for both halves of the pair, because the interpreter's check is
+ * that they are equal: a case that wants them to differ says so at its own site,
+ * and every other case is about something else.
+ */
+const MODEL = "claude-opus-5";
+
 /** The grantee is the run id: `runPlan` refuses any other value. */
 const PARTIES: IssuanceParties = { issuer: "rondo-host", grantee: "run-1" };
 
@@ -420,6 +434,7 @@ const PLAN: RunPlan = (() => {
     pollIntervalMs: null,
     turnTimeoutMs: 900_000,
     gitTimeoutMs: 60_000,
+    identityReadbackTimeoutMs: 30_000,
     gateOptions: ["approve", "revise"],
     gateDeadlineAtMs: null,
     invocationCeilingMs: 1_800_000,
@@ -518,6 +533,8 @@ test("what a lap reported that the row has no column for is not lost", async () 
         sessionPath: "resumed",
         endpointLeaseFailure: "outbox-delivery held by another claimant",
         elapsedDeadlineAtMs: 42,
+        model: MODEL,
+        requestedModel: MODEL,
       },
     },
   });
@@ -603,6 +620,7 @@ test("a refused action ends at abandoned, which is not a failure", async () => {
         configDigest: "sha256:config",
         contractDigest: "sha256:contract",
         neutralRoleName: "worker",
+        modelTier: "standard",
       },
     },
   });
@@ -630,6 +648,7 @@ test("needs_approval ends at abandoned too, and never at awaiting_human", async 
         configDigest: "sha256:config",
         contractDigest: "sha256:contract",
         neutralRoleName: "worker",
+        modelTier: "standard",
       },
     },
   });
@@ -830,7 +849,11 @@ test("a restart that finds a classified row resumes normally", async () => {
   // Nothing external has been sent from `classified`, so this is the branch
   // that may proceed.
   const h = harness();
-  h.store.seed({ ...blankRecord("i-0001", "classified"), neutralRoleName: "worker" });
+  h.store.seed({
+    ...blankRecord("i-0001", "classified"),
+    neutralRoleName: "worker",
+    modelTier: "standard",
+  });
 
   const report = await resume(h.ports, "i-0001");
   expect(report.status).toBe("awaiting_human");
@@ -944,6 +967,8 @@ test("a withdrawal keeps what the lap already recorded on the row", async () => 
         sessionPath: "started",
         endpointLeaseFailure: "outbox-delivery held by another claimant",
         elapsedDeadlineAtMs: null,
+        model: MODEL,
+        requestedModel: MODEL,
       },
     },
   });
@@ -1322,6 +1347,8 @@ test("a lap answering for another run stalls rather than adopting its gate", asy
         sessionPath: "started",
         endpointLeaseFailure: null,
         elapsedDeadlineAtMs: null,
+        model: MODEL,
+        requestedModel: MODEL,
       },
     },
   });
@@ -1329,6 +1356,89 @@ test("a lap answering for another run stalls rather than adopting its gate", asy
   expect(report.status).toBe("stalled");
   expect(report.lines.join(" ")).toContain("run-9");
   expect((await readRow(h.store, "i-0001"))?.gateId).toBeNull();
+});
+
+test("a lap that ran on another model stalls, and the open gate is named first", async () => {
+  // The identity check the run id gets, applied to the second identity a lap
+  // answers with (D-0021). It is a stall and not terminal `failed`, because the
+  // lap DID happen and a gate IS open: this is a person's question about that
+  // gate, not a lap to retry -- and the gate id has to be in the report or the
+  // open gate is one nobody can find.
+  const h = harness({
+    performLap: {
+      kind: "answered",
+      value: {
+        runId: "run-1",
+        gateId: "gate-1",
+        sessionId: "session-1",
+        sessionPath: "started",
+        endpointLeaseFailure: null,
+        elapsedDeadlineAtMs: null,
+        model: "some-other-model",
+        requestedModel: MODEL,
+      },
+    },
+  });
+  const report = await admitOnce(h);
+  expect(report.status).toBe("stalled");
+  expect(says(report, "gate-1")).toBe(true);
+  expect(report.lines.join(" ")).toContain("some-other-model");
+  expect(report.lines.join(" ")).toContain(MODEL);
+  // Nothing about the gate is committed: the row was not moved to
+  // `awaiting_human`, so a later resume() cannot close on a lap rondo could not
+  // account for.
+  expect((await readRow(h.store, "i-0001"))?.gateId).toBeNull();
+});
+
+test("a lap that named no model at all is the same stall, spelled for a reader", async () => {
+  // `null` is continuo saying the choice fell through to the worker CLI's own
+  // default -- which is exactly what rondo passes `--model` to prevent, so a
+  // null here means the flag rondo believes it sent did not take effect.
+  const h = harness({
+    performLap: {
+      kind: "answered",
+      value: {
+        runId: "run-1",
+        gateId: "gate-1",
+        sessionId: "session-1",
+        sessionPath: "started",
+        endpointLeaseFailure: null,
+        elapsedDeadlineAtMs: null,
+        model: null,
+        requestedModel: MODEL,
+      },
+    },
+  });
+  const report = await admitOnce(h);
+  expect(report.status).toBe("stalled");
+  expect(report.lines.join(" ")).toContain("worker CLI's own default");
+});
+
+test("a clean lap records the model continuo reported, beside the tier it came from", async () => {
+  // Both, because a tier is what an agent type declared and a model id is what
+  // the lap cost: the pair is the only place a person can see what a tier was
+  // worth on the day the lap ran.
+  const h = harness();
+  expect((await admitOnce(h)).status).toBe("awaiting_human");
+  const row = await readRow(h.store, "i-0001");
+  expect(row?.modelTier).toBe("standard");
+  expect(row?.model).toBe(MODEL);
+});
+
+test("an admitted row with no model tier stalls rather than driving an unpriced lap", async () => {
+  // The model tier's version of the neutral role name's check at `admitting`:
+  // a row that reached here without one cannot be priced, and a lap rondo
+  // cannot price is a lap it does not start.
+  const h = harness();
+  h.store.seed({
+    ...blankRecord("i-0001", "admitted"),
+    neutralRoleName: "worker",
+    runId: "run-1",
+  });
+
+  const report = await resume(h.ports, "i-0001");
+  expect(report.status).toBe("stalled");
+  expect(report.lines.join(" ")).toContain("model tier");
 });
 
 test("a reason contained in an earlier one is still recorded", async () => {
@@ -1347,6 +1457,8 @@ test("a reason contained in an earlier one is still recorded", async () => {
         sessionPath: "started",
         endpointLeaseFailure: "timeout after 60 seconds",
         elapsedDeadlineAtMs: null,
+        model: MODEL,
+        requestedModel: MODEL,
       },
     },
   });

@@ -45,7 +45,7 @@ import {
   type RunAdmitted,
   type VerbContract,
 } from "./protocol.js";
-import { mapNeutralRole } from "./roles.js";
+import { mapModelTier, mapNeutralRole } from "./roles.js";
 
 /**
  * The flag that turns a continuo verb into a document rondo can decode.
@@ -727,6 +727,16 @@ export interface PerformLapRequest {
    * too: joining them would put a quoting rule between rondo and a fence.
    */
   readonly claudeCommand: readonly string[];
+  /**
+   * cadenza's `executorPolicy.modelTier`, **neutral and unmapped**.
+   *
+   * The caller passes the tier it has; {@link performLap} is what turns it into
+   * a model id or refuses it, exactly as {@link admitRun} does with the neutral
+   * role name. A caller that could pass a model id would be a caller that knows
+   * the worker CLI's roster, which is the same leak D-0014 rule 1 forbids for
+   * continuo's roles.
+   */
+  readonly modelTier: string;
   readonly interlockRoot: string;
   readonly claudeOrgPath: string;
   readonly endpointDb: string | null;
@@ -736,13 +746,27 @@ export interface PerformLapRequest {
   readonly python: string | null;
   readonly pollIntervalMs: number | null;
   /**
-   * continuo's two budgets, passed **explicitly and always** (D-0019 rule 12
-   * part 2), so the numbers rondo reasons about are the numbers in force.
-   * continuo's own default turn timeout is fifteen minutes; inheriting it would
-   * mean rondo's ceiling was set against a number rondo never saw.
+   * continuo's three budgets, passed **explicitly and always** (D-0019 rule 12
+   * part 2, widened to three by D-0021), so the numbers rondo reasons about are
+   * the numbers in force. continuo's own default turn timeout is fifteen
+   * minutes and its identity read-back budget is thirty seconds; inheriting
+   * either would mean rondo's ceiling was set against a number rondo never saw.
    */
   readonly turnTimeoutMs: number;
   readonly gitTimeoutMs: number;
+  /**
+   * How long the spawned worker is given to name the session id committed for
+   * it, `continuo D-0098`'s `--identity-readback-timeout-ms`.
+   *
+   * **The caller's budget, and the third one for the same reason as the first
+   * two.** Until `continuo D-0098` this window was two hard-coded constants --
+   * 50 attempts 50 ms apart -- and the lap-1 dogfood measured a real worker
+   * taking 3.5 to 11.3 seconds to emit its first event against that 2.5 second
+   * window (F-1). continuo now takes the number and defaults it to 30 s;
+   * inheriting the default would put rondo back to reasoning about a budget it
+   * never stated.
+   */
+  readonly identityReadbackTimeoutMs: number;
   readonly gateOptions: readonly string[];
   readonly gateDeadlineAtMs: number | null;
   /**
@@ -756,6 +780,27 @@ export interface PerformLapRequest {
 }
 
 /**
+ * What {@link performLap} answers: continuo's outcome, and the model rondo
+ * chose.
+ *
+ * **A wrapper rather than a field read off the payload**, for
+ * {@link AdmitRunOutcome}'s reason turned around. continuo's answer *does*
+ * carry a `model` -- it is the twelfth field of `continuo.lap.perform/1` -- but
+ * that value is what continuo **observed itself doing**, and this one is what
+ * rondo **asked for**. Keeping them apart is what lets a caller compare them;
+ * folding rondo's request into the decoder's record would leave nothing to
+ * compare it against.
+ *
+ * `model` is null exactly when rondo refused before driving the verb -- an
+ * unpriced model tier, or a field that failed validation -- so a reader cannot
+ * mistake a refusal for a lap that ran on no particular model.
+ */
+export interface PerformLapOutcome {
+  readonly result: ContinuoResult<LapPerformed>;
+  readonly model: string | null;
+}
+
+/**
  * Perform one admitted lap, bounded by the caller's ceiling.
  *
  * The flags are in continuo's own declaration order, so `--help` and this
@@ -763,11 +808,30 @@ export interface PerformLapRequest {
  * optional field that is null is simply not put on the command line: an omitted
  * flag is continuo's own default, and an empty string in its place would be a
  * value rondo invented.
+ *
+ * **The unpriced model tier is refused here, without a spawn**, exactly as
+ * {@link admitRun} refuses an unmapped role and for a sharper version of the
+ * same reason: cadenza validates `executorPolicy.modelTier` structurally and
+ * says nothing about which tiers exist, and continuo would not refuse a tier at
+ * all -- it never sees one. So a tier outside `roles.ts`'s table is a gap in
+ * rondo's own policy, and the alternative to refusing it is a lap that runs on
+ * the worker CLI's default, which is the model nobody chose (the dogfood's
+ * F-2).
+ *
+ * **`--model` is therefore on every lap rondo drives.** continuo's own help
+ * says omitting the flag is not a neutral choice, and D-0021 takes the side it
+ * points at: rondo either knows which model a lap runs on or does not start it.
  */
 export async function performLap(
   continuo: VerifiedContinuo,
   request: PerformLapRequest,
-): Promise<ContinuoResult<LapPerformed>> {
+): Promise<PerformLapOutcome> {
+  const selection = mapModelTier(request.modelTier);
+  if (selection.kind === "unknown") {
+    // Before the argv and before the spawn: the reason names the tier and the
+    // tiers rondo prices, because the person who can fix it is looking for both.
+    return { result: { kind: "invokerDefect", reason: selection.reason }, model: null };
+  }
   let argv: readonly string[];
   let ceiling: number;
   try {
@@ -791,6 +855,11 @@ export async function performLap(
       ...optionalFlag("--endpoint-module", "endpointModule", request.endpointModule),
       ...optionalFlag("--node", "node", request.node),
       ...claudeCommandFlags(request.claudeCommand),
+      // Two tokens and never `--model=<id>`, which is continuo's own rule for
+      // this flag: the value is appended to the fenced child's command line as
+      // its own argument, and it has been checked as an id on that assumption.
+      "--model",
+      selection.model,
       "--interlock-root",
       requireAbsolute("interlockRoot", request.interlockRoot),
       "--claude-org-path",
@@ -798,21 +867,29 @@ export async function performLap(
       ...optionalFlag("--hook-script", "hookScript", request.hookScript),
       ...optionalFlag("--python", "python", request.python),
       ...optionalIntegerFlag("--poll-interval-ms", "pollIntervalMs", request.pollIntervalMs),
-      // Always, and never inherited (D-0019 rule 12 part 2).
+      // Always, and never inherited (D-0019 rule 12 part 2, three budgets since
+      // D-0021).
       "--turn-timeout-ms",
       String(requirePositiveInteger("turnTimeoutMs", request.turnTimeoutMs)),
       "--git-timeout-ms",
       String(requirePositiveInteger("gitTimeoutMs", request.gitTimeoutMs)),
+      "--identity-readback-timeout-ms",
+      String(
+        requirePositiveInteger("identityReadbackTimeoutMs", request.identityReadbackTimeoutMs),
+      ),
       ...gateOptionFlags(request.gateOptions),
       ...optionalIntegerFlag("--gate-deadline-at-ms", "gateDeadlineAtMs", request.gateDeadlineAtMs),
     ];
   } catch (error) {
     if (error instanceof ArgumentRefusal) {
-      return refusedArgument(LAP_PERFORM, error);
+      return { result: refusedArgument(LAP_PERFORM, error), model: null };
     }
     throw error;
   }
-  return await run(continuo, LAP_PERFORM, argv, { timeoutMs: ceiling });
+  return {
+    result: await run(continuo, LAP_PERFORM, argv, { timeoutMs: ceiling }),
+    model: selection.model,
+  };
 }
 
 /** `--endpoint-recipient`, checked against continuo's `choices`. */

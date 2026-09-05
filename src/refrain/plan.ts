@@ -54,7 +54,8 @@ import type { JsonRecord, JsonValue } from "../store/records.js";
  * transcribing an observation instead. So it is pinned here with the revision
  * it was observed at, and a recipient continuo grows is a rondo diff.
  *
- * Observed at continuo `44f62336108b86cab5da791111ffa0e5b73cd01a`:
+ * Observed at continuo `603843b7c0e91136bc7f7e5c9f91640f7bb970c9`, the current
+ * pinned revision, and unchanged from the revision D-0019 read it at:
  * `NOTIFY_RECIPIENT = "external-notify"` and
  * `HUMAN_GATED_RECIPIENT = "human-gated-effect"`.
  */
@@ -122,13 +123,30 @@ export interface RunPlan {
   readonly python: string | null;
   readonly pollIntervalMs: number | null;
   /**
-   * The two budgets rondo passes **explicitly** rather than inheriting
-   * (D-0019 rule 12), so the numbers rondo reasons about are the numbers in
-   * force. continuo's own default turn timeout is fifteen minutes; inheriting
-   * it would mean rondo's ceiling was set against a number rondo never saw.
+   * The three budgets rondo passes **explicitly** rather than inheriting
+   * (D-0019 rule 12, widened to three by D-0021), so the numbers rondo reasons
+   * about are the numbers in force. continuo's own default turn timeout is
+   * fifteen minutes; inheriting it would mean rondo's ceiling was set against a
+   * number rondo never saw.
    */
   readonly turnTimeoutMs: number;
   readonly gitTimeoutMs: number;
+  /**
+   * How long the spawned worker is given to name the session id committed for
+   * it (`continuo D-0098`'s `--identity-readback-timeout-ms`).
+   *
+   * **The caller's, and the reason it is a field rather than a default is a
+   * measurement.** Before `continuo D-0098` the window was two hard-coded
+   * constants worth 2.5 seconds in total, and the lap-1 dogfood is where the
+   * loop stopped: a real worker took 3.5 to 11.3 seconds to emit the event that
+   * names its session, so every measured start exceeded the window and the
+   * fastest exceeded it by 40% (`docs/operations/lap-1-dogfood.md`, F-1).
+   * continuo now takes the number and defaults it to thirty seconds. rondo
+   * states it anyway, for the reason the other two budgets are stated: a
+   * default rondo never saw is a number rondo cannot reason about, and this one
+   * is counted into {@link invocationCeilingMs}'s floor.
+   */
+  readonly identityReadbackTimeoutMs: number;
   readonly gateOptions: readonly string[];
   readonly gateDeadlineAtMs: number | null;
 
@@ -147,8 +165,12 @@ export interface RunPlan {
    * causing exactly the orphan D-0019 rule 12 exists to prevent, because
    * rondo's timer kills the CLI and not the fenced child.
    *
-   * Validated as strictly greater than `turnTimeoutMs + gitTimeoutMs`: a floor,
-   * not an estimate. It is the operator's declared patience.
+   * Validated as strictly greater than
+   * `turnTimeoutMs + gitTimeoutMs + identityReadbackTimeoutMs`: a floor, not an
+   * estimate. It is the operator's declared patience. The read-back budget
+   * joined the sum under D-0021, because it is a window rondo now declares and
+   * a lap can spend in full before the turn has started at all -- leaving it
+   * out would let a plan pass with a ceiling the lap's own budgets can exceed.
    */
   readonly invocationCeilingMs: number;
 
@@ -337,6 +359,10 @@ export function runPlan(input: RunPlan): PlanOutcome {
       pollIntervalMs: optionalPositiveInteger("pollIntervalMs", input.pollIntervalMs),
       turnTimeoutMs: requirePositiveInteger("turnTimeoutMs", input.turnTimeoutMs),
       gitTimeoutMs: requirePositiveInteger("gitTimeoutMs", input.gitTimeoutMs),
+      identityReadbackTimeoutMs: requirePositiveInteger(
+        "identityReadbackTimeoutMs",
+        input.identityReadbackTimeoutMs,
+      ),
       gateOptions: requireGateOptions(input.gateOptions),
       gateDeadlineAtMs: optionalPositiveInteger("gateDeadlineAtMs", input.gateDeadlineAtMs),
       invocationCeilingMs: requireCeiling(input),
@@ -409,11 +435,12 @@ function requireCeiling(input: RunPlan): number {
         "can actually wait out.",
     );
   }
-  const floor = input.turnTimeoutMs + input.gitTimeoutMs;
+  const floor = input.turnTimeoutMs + input.gitTimeoutMs + input.identityReadbackTimeoutMs;
   if (ceiling <= floor) {
     return refuse(
       `'invocationCeilingMs' is ${String(ceiling)}, which is not above ` +
-        `turnTimeoutMs + gitTimeoutMs (${String(floor)}). rondo's ceiling firing means the CLI ` +
+        "turnTimeoutMs + gitTimeoutMs + identityReadbackTimeoutMs " +
+        `(${String(floor)}). rondo's ceiling firing means the CLI ` +
         "was killed and the fenced worker was not, so it must be the operator's declared " +
         "patience above continuo's own budgets rather than a number derived from them.",
     );
@@ -509,6 +536,7 @@ export function planPayload(plan: RunPlan): JsonRecord {
     poll_interval_ms: plan.pollIntervalMs,
     turn_timeout_ms: plan.turnTimeoutMs,
     git_timeout_ms: plan.gitTimeoutMs,
+    identity_readback_timeout_ms: plan.identityReadbackTimeoutMs,
     gate_options: [...plan.gateOptions],
     gate_deadline_at_ms: plan.gateDeadlineAtMs,
     invocation_ceiling_ms: plan.invocationCeilingMs,
@@ -561,6 +589,7 @@ export function readPlan(payload: JsonRecord): PlanOutcome {
       pollIntervalMs: readNullableNumber(payload, "poll_interval_ms"),
       turnTimeoutMs: readNumber(payload, "turn_timeout_ms"),
       gitTimeoutMs: readNumber(payload, "git_timeout_ms"),
+      identityReadbackTimeoutMs: readNumber(payload, "identity_readback_timeout_ms"),
       gateOptions: readStringArray(payload, "gate_options"),
       gateDeadlineAtMs: readNullableNumber(payload, "gate_deadline_at_ms"),
       invocationCeilingMs: readNumber(payload, "invocation_ceiling_ms"),

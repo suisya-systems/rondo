@@ -231,6 +231,39 @@ test("the row committed at admitting names the run id and the observed revision"
   expect(crashed.neutralRoleName).toBe("worker");
 });
 
+test("the executor policy is persisted as a pair: the tier declared and the model that ran", async () => {
+  // Both columns, because neither answers the other's question (D-0021): the
+  // tier is what the agent type asked for and the model id is what the lap
+  // actually cost, and a person auditing a month of laps needs to read them
+  // together.
+  const store = freshStore();
+  await reserveOne(store, "i-0001");
+  await store.transition(
+    "i-0001",
+    "planned",
+    "classified",
+    { neutralRoleName: "worker", modelTier: "standard" },
+    2_000,
+  );
+  await store.transition("i-0001", "classified", "admitting", { runId: "r-0001" }, 3_000);
+  await store.transition("i-0001", "admitting", "admitted", { continuoRole: "worker" }, 4_000);
+  await store.transition("i-0001", "admitted", "performing", {}, 5_000);
+  const suspended = await store.transition(
+    "i-0001",
+    "performing",
+    "awaiting_human",
+    { gateId: "g-1", model: "claude-opus-5" },
+    6_000,
+  );
+
+  expect(suspended.kind).toBe("transitioned");
+  const row = await readRecord(store, "i-0001");
+  // The tier survived four transitions after the one that wrote it: a
+  // transition writes the fields it was given and clears nothing else.
+  expect(row.modelTier).toBe("standard");
+  expect(row.model).toBe("claude-opus-5");
+});
+
 test("a transition hands back the row as the database holds it", async () => {
   const store = freshStore();
   await reserveOne(store, "i-0001");
