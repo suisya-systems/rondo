@@ -120,7 +120,7 @@ For **lap 1**:
   subprocess is gone.
 - **cadenza is consumed as a library** (D-0018), through the bridge cadenza
   accepted for exactly this (`cadenza D-0035`): a tarball packed once from
-  cadenza `e56d7e71981232d19120d20ba6b920a5c4d762dc`, committed under `vendor/`
+  cadenza `5d5d9f408c29f6500c422c8e10e6b6a3a6882aaf`, committed under `vendor/`
   with its sha256, and named in `package.json` as
   `file:vendor/suisya-systems-cadenza-0.0.0.tgz`. Three separate facts are
   pinned and never conflated — the **commit** (`cadenza.pin.json`) is what was
