@@ -100,15 +100,40 @@ costs on this machine, and that `resume` sees the outcome after a human answers.
    leaves an orphaned worker with nobody polling it. If it fires, record what the
    lap actually cost and raise the ceiling — do not treat it as a flake.
 
-   Two cross-field rules are not `runPlan()`'s and will not be refused by it.
-   `parties.grantee` must equal `runId` — `classifyPlan` hands cadenza the run id
-   as its classification context, so a grantee that differs comes back
-   `grantee_mismatch`, and that is an *answered* classification which ends the
-   iteration at terminal `abandoned` after the row is reserved. And
-   `catalogLayers[].data` is typed as a free-form table and is not one: cadenza
-   requires `schema_version`, `project.<name>.source`, and — for a `local_path`
-   source — `catalog.allowed_local_roots` on the layer that declares it.
-   `test/cadenza/smoke.test.ts` is the working example.
+   `parties.grantee` **is `runId`, spelled a second time**, and `runPlan()`
+   refuses any other value: `classifyPlan` hands cadenza the run id as its
+   classification context, and a grantee that differed would come back
+   `grantee_mismatch` — an *answered* classification, which ends the iteration
+   at terminal `abandoned` (D-0019 rule 15) only after the row is reserved and
+   the single-flight lock taken. Refused at the plan it costs nothing.
+
+   One rule is cadenza's and is not `runPlan()`'s to refuse: `catalogLayers[].data`
+   is typed as a free-form table and is not one. Observed against the vendored
+   build (`cadenza.pin.json`; `application/compose.ts` and
+   `domain/clone-source.ts` in its `src/`), the table is closed at every level:
+
+   - top level: exactly `schema_version`, `catalog`, `project`; `schema_version`
+     is required (`'schema_version' is required`) and must be `1` at the pinned
+     revision;
+   - `project.<name>`: exactly `aliases`, `source`, `base_branch`, `tombstone`;
+     once the layers are composed every project must have both a `source` and a
+     `base_branch` from some layer (`project '<name>' has no source` /
+     `... has no base_branch`), and `source` is a table whose `kind` is one of
+     `git_url` (with a `url`), `local_path` (with a `path`) or `new` (nothing
+     else);
+   - `catalog`: exactly `allowed_local_roots`, a list of strings, and for a
+     `local_path` source it must be declared **on the layer that declares the
+     source** — it is never merged across layers (`a clone source of kind
+     'local_path' requires the layer that declares it to declare its own
+     catalog.allowed_local_roots`).
+
+   `test/cadenza/smoke.test.ts` carries a working `git_url` layer, and the
+   `RunPlan` doc comment in `src/refrain/plan.ts` repeats this list beside the
+   field. rondo does not restate cadenza's rules as checks of its own (D-0018
+   rule 7): a layer that breaks one is thrown by `resolveProject` at the
+   conductor's `classify` step, `classifyPlan` carries the message as a
+   refusal, and the iteration ends at terminal `abandoned` — after the row is
+   reserved.
 
 2. **Admit.** Call the composition root's
    `admit(ports, plan, policy, iterationId)`, where `ports` comes from
@@ -116,10 +141,15 @@ costs on this machine, and that `resume` sees the outcome after a human answers.
    like every other identifier in lap 1 (D-0019 rule 3).
 
    The policy is explicitly constructed and **must not be
-   `CONSERVATIVE_POLICY`**: its `ask_every_iteration` refuses before a row exists,
-   on purpose (D-0019 rule 9), so a run started under the default is a run that
-   did not start. The value that starts one is
-   `{ autonomy: "ask_before_landing", maxIterations: 1 }`.
+   `CONSERVATIVE_POLICY`**: its `ask_every_iteration` is refused by `nextStep`
+   before a row exists, on purpose (D-0019 rule 9 — a policy stop costs no row
+   and takes no lock), so a run started under the default is a run that did not
+   start. The value that starts one is
+   `{ autonomy: "ask_before_landing", maxIterations: 1 }`: the other `Autonomy`
+   value, with the smallest ceiling `admissionStep` in `src/refrain/loop.ts`
+   accepts (it refuses `maxIterations < 1`). The `RunPlan` doc comment in
+   `src/refrain/plan.ts` says the same beside the type, so a caller filling a
+   plan meets it there.
 
    Expect the arc to stop at `awaiting_human` and the process to be free to
    exit. It is not a failure that nothing further happens: the gate is open, and
