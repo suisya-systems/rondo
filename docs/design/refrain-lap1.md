@@ -409,6 +409,14 @@ waiting, synchronously, for an event that only another surface can cause.
    outcome. `withdrawn` is the only outcome writable from `received`
    (`gates.ts:279`) and is one of the three a hand may write at all
    (`operator.ts:112-116`).
+5. **`resume` serves `withdrawal_requested` too, and it has to**, or the ask
+   would be a state with no way out. The observation is identical — one
+   `gate show`, read `outcome` — and so is the transition: non-null → `closed`,
+   null → nothing changes. The only difference is which outcome a reader should
+   expect (`withdrawn`, or `subject_gone` if the operator closed the run and
+   continuo's reconciliation swept the gate — `D-0013` names that second route).
+   Nothing about `resume` needs to know which of the two states it was called
+   on, which is why it is one entry point and not two.
 
 **On cadenza#22.** The operating surface is being designed in parallel as
 cadenza issue #22. This document cites the Issue and **does not assume its
@@ -448,12 +456,16 @@ one property `src/refrain/` currently has.
   TypeScript settings (`D-0002`, strictness beyond `strict`) is a compile error
   when a variant is added and not handled, rather than a runtime surprise.
 - **Anything the interpreter cannot classify halts and asks.** An unknown status
-  string read out of the database, a record whose fields do not read, an
-  effect result in a shape the union does not cover: all of them transition to
-  `awaiting_human` with the reason, and none of them proceeds. This is the same
-  rule `loop.ts:42-54` already applies to an unusable `maxIterations` or
-  `attempts` — *"it is answered by stopping and asking, which is what the loop
-  does whenever it does not know."*
+  string read out of the database, a record whose fields do not read, an effect
+  result in a shape the union does not cover: all of them transition to
+  **`stalled`** with the reason, and none of them proceeds. This is the same rule
+  `loop.ts:42-54` already applies to an unusable `maxIterations` or `attempts` —
+  *"it is answered by stopping and asking, which is what the loop does whenever
+  it does not know."* **Not `awaiting_human`**, which [7.1](#71-the-states)
+  reserves for an open continuo gate: a corrupt row has no gate for `resume` to
+  observe, so filing it there would be filing it somewhere nothing can reach it
+  again. `stalled` is the state for "a person must decide and there is no gate",
+  and [7.7](#77-the-lock-and-what-releases-each-state) names what leaves it.
 
 **`Step` has to grow, and the growth is the state machine.** Three variants
 cannot express eight states. The proposed union names the transitions of
@@ -479,9 +491,18 @@ rather than discovered. The proposal:
   `autonomy` has no unattended landing to permit because *every* lap-1 iteration
   ends at a human gate anyway (`D-0010`, cadenza `C-5`).
 - **`CONSERVATIVE_POLICY` stays the default and stays correct**, and the runner
-  requires an explicitly-constructed policy to proceed past `classify`. A default
-  that admitted runs unattended would be a decision about unattended action taken
-  by a default value, which is what `policy.ts:28-33` already argues against.
+  requires an explicitly-constructed policy to proceed. A default that admitted
+  runs unattended would be a decision about unattended action taken by a default
+  value, which is what `policy.ts:28-33` already argues against.
+- **The policy is consulted before `reserve()`, and a policy that says "ask"
+  refuses the request rather than reserving a row.** This matters more than it
+  looks: `nextStep` under `ask_every_iteration` returns `ask_human` for a
+  `planned` record, and a conductor that reserved first and asked second would
+  hold the single-flight lock ([7.3](#73-the-invariant-and-it-is-enforced-by-the-database))
+  on an iteration whose only exit is a human — for a *policy stop*, which is an
+  ordinary configured outcome and not an incident. Refused before reservation, it
+  costs nothing: no row, no lock, and a caller that gets an immediate answer
+  naming the policy that produced it.
 - cadenza's own `LoopPolicy` — `maxReviewRounds`, `noProgressWindow`,
   `noProgressRepeat` (cadenza `src/domain/agent-type.ts:80-87`) — is carried on
   the agent-type record, digested, and **read by nothing in lap 1**, which is
@@ -500,10 +521,10 @@ and provenance must be written *before* the effect it describes.
 
 ### 7.1 The states
 
-`IterationStatus` grows from four to ten.
+`IterationStatus` grows from four to eleven.
 
-**Non-terminal (7)** — `planned`, `classified`, `admitting`, `admitted`,
-`performing`, `awaiting_human`, `withdrawal_requested`.
+**Non-terminal (8)** — `planned`, `classified`, `admitting`, `admitted`,
+`performing`, `awaiting_human`, `withdrawal_requested`, `stalled`.
 
 **Terminal (3)** — `closed`, `abandoned`, `failed`.
 
@@ -511,7 +532,7 @@ and provenance must be written *before* the effect it describes.
 because "running" is the one word that cannot be acted on after a crash
 ([7.6](#76-restart-and-where-fail-closed-means-stop)).
 
-Three of the ten need their meaning pinned down, because the invariant in 7.3
+Four of the eleven need their meaning pinned down, because the invariant in 7.3
 makes every non-terminal status a lock on the whole conductor:
 
 - **`awaiting_human` means a continuo gate is open on this iteration**, and
@@ -527,7 +548,12 @@ makes every non-terminal status a lock on the whole conductor:
 - **`withdrawal_requested` is reachable only from `awaiting_human`**, because it
   is defined by the ask it carries — `gate close --outcome withdrawn` on a
   *named* gate (`D-0013`). A failure with no gate id has nothing to ask about;
-  it goes to `failed` (section 10's abort edge).
+  it goes to `failed` or stays `performing` (section 10's abort edges).
+- **`stalled` is "a person must decide, and there is no gate"**: a corrupt row, an
+  effect result the union does not cover, a status the interpreter does not
+  recognise. It exists so that those cases have somewhere to go that is neither a
+  lie (`awaiting_human`, which promises a gate) nor a loss (a terminal status,
+  which would release the lock on an iteration nobody understood).
 
 ### 7.2 The row
 
@@ -609,7 +635,45 @@ would leave a run continuo knows about and rondo does not.
 | `admitted` | resume: `lap perform` has not been sent |
 | `performing` | **stop and report; the row stays `performing`.** `lap perform` cannot be re-entered on an admitted run, and a fenced child may still be alive with nobody polling it. Re-running it is the one recovery that can do real damage. It holds the single-flight lock on purpose until a person settles it with `abandon()` |
 | `awaiting_human` | normal; wait for `resume` (section 5) |
-| `withdrawal_requested` | report the outstanding ask (`D-0013`); do not act |
+| `withdrawal_requested` | normal; wait for `resume` (section 5, step 5), and report the outstanding ask meanwhile (`D-0013`) |
+| `stalled` | report the recorded reason; do not act |
+
+### 7.7 The lock, and what releases each state
+
+7.3's unique index means **every non-terminal status is a lock on the whole
+conductor**, so a non-terminal state with no event that can end it is not an
+inconvenience — it is a conductor that never runs again. This table is therefore
+the design's real safety property, and it is a table rather than prose because a
+missing row is the whole failure mode.
+
+| non-terminal status | what releases it | goes to |
+|---|---|---|
+| `planned` | the interpreter, immediately | `classified`, or `abandoned` on `refused` / `needs_approval` |
+| `classified` | the interpreter, immediately | `admitting` |
+| `admitting` | `run admit` answering | `admitted`, or `failed` on a refusal |
+| `admitted` | the interpreter, immediately | `performing` |
+| `performing` | `lap perform` **answering** | `awaiting_human`, or `failed` when the answer is a refusal |
+| `performing`, with no answer (timeout, or a crash) | **an operator's `abandon()`** — deliberately nothing automatic, because a fenced child may be alive (8.4) | `abandoned` |
+| `awaiting_human` | `resume()` observing a non-null gate outcome; or the abort edge | `closed`, or `withdrawal_requested` |
+| `withdrawal_requested` | `resume()` observing a non-null gate outcome — `withdrawn` once the surface closed it, or `subject_gone` by continuo's reconciliation | `closed` |
+| `stalled` | **an operator's `abandon()`** | `abandoned` |
+
+`abandon(iterationId, reason)` is the operating surface's escape hatch and the
+last row of every path that cannot end itself. It writes a terminal row and
+**drives no continuo verb**, because there is no verb here that is rondo's to
+drive: if a gate is open, closing it is `D-0013`'s ask, and if a run is open,
+closing it is `D-0010`'s operator. Abandoning is rondo forgetting, honestly and
+on the record, that it ever knew what was happening — which is the only thing it
+can truthfully do about a lap whose outcome it cannot establish.
+
+Two rows are worth reading against each other, because they look inconsistent
+and are not. A `performing` iteration that **received a refusal** releases the
+lock; one that **received nothing** does not. The difference is not how bad the
+outcome was, it is whether anything might still be running: continuo's refusal
+families all fire either before a child exists or after the turn has ended
+(`lap/cli.ts:276-292`), whereas rondo's own ceiling firing means the CLI was
+killed and the fenced worker was not (8.4).
+
 
 ---
 
@@ -801,8 +865,10 @@ step is a state of section 7.1; every arrow is a committed transition.
 2. **`classified`.** Resolve the project through the facade
    (`facade.ts:116`), build the agent-type record (`:136`), issue the initial
    contract (`:155`), classify the intended action (`:172`). The three digests
-   and the outcome are committed. `refused` → `failed`; `needs_approval` →
-   `awaiting_human`, and the iteration ends there in lap 1 (section 9).
+   and the outcome are committed. **`refused` and `needs_approval` both end the
+   iteration at terminal `abandoned`**, with cadenza's own reason
+   (section 9) — neither reaches `awaiting_human`, because no gate exists to
+   observe and the status is reserved for one that does (7.1).
 3. **`admitting`.** `startContinuo()` verifies the build against the pin
    (`invoker.ts:169`) and hands back the **observed** revision. That revision and
    the run id are committed *before* anything is spawned (7.5).
@@ -839,17 +905,29 @@ rondo hold a gate id?
   `gate close --outcome withdrawn`. The conductor never writes the outcome
   (`D-0013`), and a gate whose close has been asked for is not thereby closed —
   that entry says so and this design does not improve on it.
-- **During step 5, with no gate id** — `lap perform` refused, threw, or hit a
-  timeout. There may be **no gate at all**: on an `isError` turn continuo's
-  ingest refuses the terminal report and `performLap` rethrows, so no gate is
-  opened, which is one of the two cases `D-0013` names as outside itself. Or a
-  gate may exist and rondo never read its id — the orphan case
-  [8.4](#84-the-timeout-which-today-is-wrong-by-an-order-of-magnitude-major-3)
-  describes. rondo cannot tell these apart from the outside, so it must not
-  claim to: the iteration goes to **`failed`** with continuo's own words, and the
-  report says plainly that a gate may or may not exist and that `gate list`
-  (`protocol.ts:319` — a verb rondo does drive) is how a person finds out. A
-  `withdrawal_requested` row here would name a gate id rondo does not have.
+- **During step 5, with no gate id**, and this edge splits again on one
+  question: **did rondo receive an answer?**
+  - **An answer arrived** — a decoded refusal, or a defect rondo diagnosed after
+    the child closed. The `lap perform` process is over and no worker of its is
+    still running: on an `isError` turn continuo's ingest refuses the terminal
+    report and `performLap` rethrows *after* the turn ended, so there is no gate
+    and no child, which is one of the two cases `D-0013` names as outside itself;
+    a `LeaseHeld`, a materialisation refusal or a `SpawnRefused` never started
+    one at all (continuo `lap/cli.ts:276-292` enumerates the families). The
+    iteration goes to terminal **`failed`** with continuo's own words, and the
+    lock is released — correctly, because nothing is running.
+  - **No answer arrived** — rondo's own ceiling fired, or rondo died while
+    performing. Then a fenced child may still be alive:
+    [8.4](#84-the-timeout-which-today-is-wrong-by-an-order-of-magnitude-major-3)
+    measures that rondo's timer kills the *CLI* and not the worker. The row
+    **stays `performing`**, with the reason recorded, and keeps the single-flight
+    lock. Releasing it here would let a second lap race an orphan, which is the
+    one outcome this whole design exists to make impossible.
+
+  In neither case is a `withdrawal_requested` row written: it would name a gate
+  id rondo does not have. The report says plainly that a gate may or may not
+  exist, and that `gate list` (`protocol.ts:319` — a verb rondo does drive) is
+  how a person finds out.
 
 The `performing` row a restart finds ([7.6](#76-restart-and-where-fail-closed-means-stop))
 is the third shape of the same question and is deliberately *not* auto-resolved:
@@ -869,7 +947,7 @@ rondo's to drive.
 
 | layer | what it may touch | what it proves |
 |---|---|---|
-| `test/refrain/` | **injected fakes only** — no continuo build, no cadenza call that reaches a process, no filesystem | order of the states; every refusal branch; persistence; restart from each state of 7.6; the single-flight invariant; `withdrawal_requested` on abort; the exhaustive `switch` |
+| `test/refrain/` | **injected fakes only** — no continuo build, no cadenza call that reaches a process, no filesystem | order of the states; every refusal branch; persistence; restart from each state of 7.6; the single-flight invariant; `withdrawal_requested` on abort; the exhaustive `switch`; **and 7.7's table as a case per row** — for every non-terminal status, the named event leaves it, so a state added later without a releasing event fails a test rather than wedging a conductor |
 | `test/store/` | a real `node:sqlite` in-memory or temp database | `reserve`/`transition` under `BEGIN IMMEDIATE`; the unique index actually refusing a second live row; the write order of 7.5 |
 | `test/continuo/protocol.test.ts` | bytes in fixtures | the `LAP_PERFORM` decoder, including the nullable object and the absent-is-not-null rule |
 | `test/cadenza/smoke.test.ts` | the real vendored cadenza, in memory | unchanged: it already runs in every cell (`D-0018` rule 6) |
@@ -939,12 +1017,12 @@ them, and `D-0019` is what records the outcome.
 | **R-2** | Where does the composition root live — a module in `src/access`, or a new layer? | **A module in `src/access`** | It is already the only layer that may see the loop, the store and the continuo seam (`import-boundaries.test.ts:148`), and `D-0009` and `D-0013` put the human-facing verbs there. A new layer for one file would be a layer named after a metaphor, which is the argument `D-0017` rule 2 used against `src/seam/` |
 | **R-3** | Does the caller pass a complete `RunPlan`, or does rondo gain an allocator / configuration layer in lap 1? | **A complete `RunPlan`** | The two things rondo would have to build are the identifier allocator `D-0012` records as an open decision with measurements owed, and defaults for a fence's geometry that continuo requires be absolute and outside the worktree. Both are decisions, and `AGENTS.md` section 7 forbids taking them inside an implementation diff |
 | **R-4** | Does the store persist the plan verbatim, or only a digest? | **Verbatim plus `plan_digest`** | A digest detects change and does not hand back the plan a past run used; continuo persists the admitted intent, not the executor paths or the agent type, so rondo's row is the only place the question is answerable |
-| **R-5** | How does the loop reach a closed gate: synchronous polling, or suspend and resume? | **Suspend at `awaiting_human` and return; `resume(iterationId)` is called by the operating surface; `resume` drives one `gate show` and is idempotent** | `lap perform` returns with the gate open at `received`; only another surface can close it (`closeOpenGate` hard-codes `actorKind: "human"`). Polling would hold a process for the length of a human's attention and turn "not answered yet" into a timeout nobody set. Cites cadenza#22 without assuming its outcome; the fallback is an operator-invoked `resume` |
+| **R-5** | How does the loop reach a closed gate: synchronous polling, or suspend and resume? | **Suspend at `awaiting_human` and return; `resume(iterationId)` is called by the operating surface; `resume` drives one `gate show`, is idempotent, and serves `withdrawal_requested` on the same observation** | `lap perform` returns with the gate open at `received`; only another surface can close it (`closeOpenGate` hard-codes `actorKind: "human"`). Polling would hold a process for the length of a human's attention and turn "not answered yet" into a timeout nobody set. Cites cadenza#22 without assuming its outcome; the fallback is an operator-invoked `resume` |
 | **R-6** | Loop, state graph, or eval-driven — and if a graph, a graph runtime? | **The graph's discipline, no graph runtime**: named states, a closed edge relation, a durable checkpoint per node | `nextStep` is already an edge relation rather than a loop body (`loop.ts:35`, no iteration in the layer). The graph's distinguishing feature is fan-out, which continuo refuses upstream (the global `outbox-delivery` lease), and its back-edge needs the allocator `D-0012` says does not exist. A second runtime dependency to model a linear walk is not defensible at this size |
 | **R-7** | Where does evaluation sit, and is a model-judged evaluator admitted in lap 1? | **Three deterministic positions — cadenza `classify()`, verify, the human gate — and no model judge in lap 1** | rondo is already eval-driven with total, pure evaluators. A model judge puts a non-deterministic verdict on the path to the one human contact this design rations, cannot be a unit case, and its most valuable output is a retry the lap-1 arc cannot perform |
 | **R-8** | Does `nextStep` stay pure, and where do the effects go? | **`nextStep` stays a total pure function; a separate async interpreter executes effects through injected ports; `Step` grows to the lap-1 state union** | It is the one property `src/refrain/` has, its external allowance is empty, and every existing case in `test/refrain/loop.test.ts` keeps passing. Unknown or corrupt state closes to "stop and ask", which is the rule `loop.ts:42-54` already applies |
-| **R-9** | What do `LoopPolicy`'s two axes mean in lap 1? | **Both dormant, and recorded as dormant.** `CONSERVATIVE_POLICY` stays the default and the runner requires an explicit policy to proceed | Measured: the default returns `ask_human` for a `planned` record (`policy.ts:34-37` with `loop.ts:39`), so a runner defaulted to it admits nothing, ever. With one lap per request `maxIterations` has no second iteration to bound and every iteration ends at a human gate anyway — the same dormancy `D-0012` already records for the no-progress halt and the review-round budget |
-| **R-10** | What replaces `read`/`write`? | **`reserve()` and `transition()` with `BEGIN IMMEDIATE` inside them, and a partial unique index making "at most one non-terminal iteration" the database's invariant** (shape B, the generated marker column) | An in-memory mutex breaks on restart. Both index shapes were measured working on `node:sqlite` / `node v22.17.0`, as was `BEGIN IMMEDIATE` refusing a second writer across connections. `BEGIN IMMEDIATE` for the reason continuo gives on its own admission path |
+| **R-9** | What do `LoopPolicy`'s two axes mean in lap 1, and when is the policy read? | **Both dormant, and recorded as dormant.** `CONSERVATIVE_POLICY` stays the default, the runner requires an explicit policy to proceed, and **the policy is read before `reserve()`** so a policy stop refuses the request instead of reserving a row | Measured: the default returns `ask_human` for a `planned` record (`policy.ts:34-37` with `loop.ts:39`), so a runner defaulted to it admits nothing, ever. With one lap per request `maxIterations` has no second iteration to bound and every iteration ends at a human gate anyway — the same dormancy `D-0012` already records for the no-progress halt and the review-round budget. Reading the policy before reservation is what keeps an ordinary configured stop from taking the single-flight lock (7.3, 7.7) |
+| **R-10** | What replaces `read`/`write`, and what guarantees the conductor can always run again? | **`reserve()` and `transition()` with `BEGIN IMMEDIATE` inside them; a partial unique index making "at most one non-terminal iteration" the database's invariant** (shape B, the generated marker column); **and every non-terminal status carrying a named releasing event ([7.7](#77-the-lock-and-what-releases-each-state)), with an operator `abandon()` as the last row of the paths that cannot end themselves** | An in-memory mutex breaks on restart. Both index shapes were measured working on `node:sqlite` / `node v22.17.0`, as was `BEGIN IMMEDIATE` refusing a second writer across connections. `BEGIN IMMEDIATE` for the reason continuo gives on its own admission path. The releasing-event table is the half that makes the invariant safe rather than merely correct: under the index, a non-terminal state nobody can leave is a conductor that never runs again |
 | **R-11** | What bounds a `lap perform` invocation, and what happens on restart while performing? | **Per-verb timeouts on the contract; rondo passes `--turn-timeout-ms` explicitly and sets its own ceiling above it with a teardown margin; no cancellation in lap 1; a `performing` row found at startup stops and reports** | rondo's 60s (`invoker.ts:102`) against continuo's 15-minute default (`lap/cli.ts:204`) would kill every real lap. rondo's timer kills the CLI, not the fenced child — continuo's own timeout is what stops the worker session — so rondo firing first means an orphan, and that is a defect to report rather than a lap that failed |
 | **R-12** | Where does the role mapping live, and what is the table? | **A typed `admitRun()` on the invoker owning the mapping, the refusal and the argv; the identity table over continuo's four roster names, recorded in `D-0019` with its falsifier and a table test** | `D-0014` rule 1 forbids the executor's vocabulary above the adapter, and cadenza's `roleName` is validated structurally only — any identifier is a legal neutral name, and the codomain is four. A mis-mapping onto a *valid* role is undetected at both ends, and `D-0014` already says so |
 | **R-13** | Does `lap perform` get a decoder, and does the lap-1 API carry a `--cli-arg` field? | **Yes to the decoder (`continuo.lap.perform/1`, the eleven fields of 8.2, semantic validation before the spawn); no `--cli-arg` field anywhere** | `D-0011` rule 1 admits with none, and continuo's own allowlist is `{"entries": []}` at the pinned revision — so the field costs nothing to omit and omitting it closes the route permanently. Validation before the spawn because an operator's typo reaches rondo as exit 1 and a stack, not a refusal document (`D-0015`) |
