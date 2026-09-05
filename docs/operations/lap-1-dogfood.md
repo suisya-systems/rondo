@@ -1118,6 +1118,8 @@ than a number derived from them.
 refused: 'identityReadbackTimeoutMs' is undefined, and a positive whole number of milliseconds was required
 
 ===== a model tier rondo does not price (D-0021) =====
+# mapModelTier() called directly -- unlike the four above, this one is NOT a runPlan() refusal:
+# it fires inside performLap, after the run has been admitted and the row committed to 'performing'.
 {"kind":"unknown","reason":"rondo has no model for the model tier 'frugal'. The tiers rondo prices
 are standard, and a lap runs on a model rondo chose rather than on the worker CLI's own default.
 Give the agent type one of those tiers, or add the pair to src/continuo/roles.ts under a new
@@ -1345,8 +1347,9 @@ it. Proposed: name the reachable-from stage beside each outcome in the flag's he
 
 **Not proposed: `scripts/dogfood-lap.md` was still wrong in four places and is fixed in the same
 change as this record**, on the first run's precedent. The script now says that `invocationCeilingMs`
-clears three budgets rather than two and why the third exists, that a model tier rondo cannot price is
-refused before the spawn, that `resume` takes `ports` first exactly as `admit` does, how `gate ack`
+clears three budgets rather than two and why the third exists, that a model tier rondo cannot price
+fails at the *perform* step -- spawning nothing, but only after a run has been admitted that the
+operator is then left to close -- that `resume` takes `ports` first exactly as `admit` does, how `gate ack`
 gets the `message_id` it needs and that the second ack is what closes the gate, that `gate close` is
 the other ending and which outcomes it takes, and what the step 7 clean-up commands actually are. Its
 "what one run of this actually did" section now points at two runs and leads with the fact that the

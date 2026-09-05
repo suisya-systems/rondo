@@ -141,15 +141,29 @@ costs on this machine, and that `resume` sees the outcome after a human answers.
    refusal, and the iteration ends at terminal `abandoned` — after the row is
    reserved.
 
-   One field of `agentTypeInput` is priced rather than carried, and it is the
-   other way to fail before a spawn: `executorPolicy.modelTier` is mapped to a
-   model id by `mapModelTier` (`src/continuo/roles.ts`) and passed as
-   `lap perform --model`, so **a tier rondo does not price is refused at the
-   `classify` step** rather than falling back to whatever the worker CLI
-   defaults to. `standard` is the tier the table prices at the time of writing,
-   and the refusal names the ones it knows. Omitting the flag is not the neutral
-   choice it looks like — that is D-0021's whole point, and F-2 in the record
-   below is what it cost before.
+   One field of `agentTypeInput` is priced rather than carried:
+   `executorPolicy.modelTier` is mapped to a model id by `mapModelTier`
+   (`src/continuo/roles.ts`) and passed as `lap perform --model`, so a lap runs
+   on a model rondo chose rather than on whatever the worker CLI defaults to.
+   Omitting the flag is not the neutral choice it looks like — that is D-0021's
+   whole point, and F-2 in the record below is what it cost before. `standard`
+   is the tier the table prices at the time of writing.
+
+   **A tier rondo cannot price is the expensive way to get this wrong, so check
+   it before you run.** The refusal does not come at `classify`: cadenza
+   validates `modelTier` structurally and answers `allowed`, the conductor
+   verifies continuo, **admits the run**, commits the row to `performing`, and
+   only then does `performLap` call `mapModelTier` and return a defect
+   (`src/continuo/invoker.ts`). Nothing is spawned — but a run *was* admitted.
+   The iteration ends terminal at `failed` with the reason on the row and the
+   single-flight lock released, and **continuo is left holding an admitted run
+   at `created` that step 7 is now yours to close**. Reading the tier's mapping
+   first costs nothing:
+
+   ```sh
+   node -e 'import("./dist/continuo/roles.js").then(m => console.log(m.mapModelTier("standard")))'
+   # { kind: 'selected', model: 'claude-opus-5' }   -- 'unknown' means stop and fix the agent type
+   ```
 
 2. **Admit.** Call the composition root's
    `admit(ports, plan, policy, iterationId)`, where `ports` comes from
@@ -191,14 +205,24 @@ costs on this machine, and that `resume` sees the outcome after a human answers.
    `answered_and_forwarded`:
 
    ```sh
-   G=$(node "$CLI" gate list --db "$DB" | awk '{print $1}')   # one open gate
-   A=human/your-name                                          # recorded on every transition
+   # The four the rest of this block needs. CLI is the one from 'Before you
+   # start'; DB and DROPBOX are the plan's `db` and `endpointDestinationDir`.
+   CLI=$RONDO_CONTINUO_CLI
+   DB=/absolute/path/to/control-plane.sqlite3
+   DROPBOX=/absolute/path/to/dropbox
+   A=human/your-name          # recorded on every transition; an identity, not an authority
 
-   node "$CLI" gate present --db "$DB" --gate-id "$G" --json          # -> message_id
+   G=$(node "$CLI" gate list --db "$DB" | awk '{print $1}')   # assumes exactly one open gate
+
+   # 'gate ack' takes the message_id its enqueueing verb returned, so capture it.
+   mid() { python3 -c 'import json,sys; print(json.load(sys.stdin)["message_id"])'; }
+
+   PRESENTED=$(node "$CLI" gate present --db "$DB" --gate-id "$G" --json | mid)
    node "$CLI" gate deliver --db "$DB" --destination-dir "$DROPBOX" --holder "$A" --json
    node "$CLI" gate ack     --db "$DB" --message-id "$PRESENTED" --actor-id "$A" --json
 
-   node "$CLI" gate answer  --db "$DB" --gate-id "$G" --body approve --actor-id "$A" --json
+   FORWARDED=$(node "$CLI" gate answer --db "$DB" --gate-id "$G" \
+                    --body approve --actor-id "$A" --json | mid)
    node "$CLI" gate deliver --db "$DB" --destination-dir "$DROPBOX" --holder "$A" --json
    node "$CLI" gate ack     --db "$DB" --message-id "$FORWARDED" --actor-id "$A" --json
    ```
@@ -233,6 +257,10 @@ costs on this machine, and that `resume` sees the outcome after a human answers.
    that a wrong terminal status is corrected by opening a new run.
 
    ```sh
+   # CLI, DB and A are step 4's; RUN_ID and REPO are the plan's `runId` and `repository`.
+   RUN_ID=<the plan's runId>
+   REPO=/absolute/path/to/target/repository
+
    node "$CLI" gate list --db "$DB"                     # empty once the gate is closed
    node "$CLI" run close --db "$DB" --run-id "$RUN_ID" \
         --outcome completed --actor-id "$A"             # or failed / cancelled
