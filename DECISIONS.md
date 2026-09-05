@@ -1916,7 +1916,18 @@ passing: which layer the seam is, which module may start a process, and where th
    decoder says so; an earlier draft of it invented a `continuo.measure.report/1` refusal document,
    which does not exist.
 
-8. **The escaping stays exactly where D-0015 rule 7 put it, and is now a module.**
+8. **Two argument shapes are refused before the spawn, and a document's silence is not an answer.**
+   An empty argument reaches continuo as an exit 1 and a raw stack (D-0015's exception 2); an
+   argument containing a NUL never reaches continuo at all, because `spawn` throws *synchronously*
+   rather than reporting through the event the invoker handles. Both are refused as rondo defects
+   before a process starts, and the spawn is guarded so that no failure of it can arrive as a
+   rejected promise — every caller in rondo is written against a value. Symmetrically, a field
+   continuo answers with "a string or `null`" is decoded as *present and null*: at the pinned
+   revision every such key is emitted on every document that carries it, so an **absent** one is a
+   document that does not match the pinned shape, and folding absence into null would be the
+   decoder declining to validate in the one place it looks like it validates.
+
+9. **The escaping stays exactly where D-0015 rule 7 put it, and is now a module.**
    `src/access/console.ts` escapes to ASCII once, at the boundary where characters become output
    (D-0004). Decoded messages are unchanged inside rondo, so a value rondo holds is still the value
    continuo sent.

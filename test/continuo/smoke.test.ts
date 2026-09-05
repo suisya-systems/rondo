@@ -169,3 +169,40 @@ test.skipIf(!available)(
   // variance, not a budget.
   120_000,
 );
+
+/**
+ * The two argument shapes rondo refuses to hand to `spawn`, checked without one.
+ *
+ * An empty argument reaches continuo as an exit 1 and a raw stack; an argument
+ * with a NUL in it never reaches continuo at all, because `spawn` throws
+ * *synchronously* rather than emitting the `error` event this module handles --
+ * which would reject a promise the invoker promises never to reject. Both are
+ * refused before the spawn, so these cases need no continuo and run everywhere.
+ */
+test("the invoker refuses an unusable argument before it starts a process", async () => {
+  const pretend: VerifiedContinuo = {
+    cliPath: "/nowhere/dist/cli.js",
+    revision: CONTINUO_REVISION,
+  };
+  const empty = await run(pretend, GATE_LIST, ["--db", ""]);
+  expect(empty).toEqual({
+    kind: "invokerDefect",
+    reason: expect.stringContaining("an empty argument at position 1"),
+  });
+  const withNul = await run(pretend, GATE_LIST, ["--db", "/tmp/a\u0000b"]);
+  expect(withNul).toEqual({
+    kind: "invokerDefect",
+    reason: expect.stringContaining("NUL byte at position 1"),
+  });
+});
+
+test("a CLI path that does not exist is a defect, not a rejected promise", async () => {
+  // The `error` event path. It must resolve, because every caller in rondo is
+  // written against a value rather than against a catch.
+  const missing: VerifiedContinuo = {
+    cliPath: "/nowhere/at/all/dist/cli.js",
+    revision: CONTINUO_REVISION,
+  };
+  const result = await run(missing, GATE_LIST, ["--db", "/tmp/x", "--json"]);
+  expect(result.kind).toBe("invokerDefect");
+});

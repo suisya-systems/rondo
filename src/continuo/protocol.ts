@@ -145,17 +145,23 @@ function requireBoolean(document: JsonObject, key: string): boolean {
 }
 
 /**
- * A field continuo may legitimately answer with `null`.
+ * A field continuo answers with a string or with `null`, and always answers.
  *
- * `gate show`'s `outcome` is null while the gate is open, and a decoder that
- * demanded a string there would refuse the commonest gate there is. Absent and
- * null are folded together on purpose: both mean "no answer yet", and telling
- * them apart would be reading meaning into which of the two continuo happened
- * to emit.
+ * `gate show`'s `outcome` is null while the gate is open and `run_id` is null
+ * for a gate scoped to something other than a run, so a decoder that demanded a
+ * string would refuse continuo's ordinary answers. **Absent is not null**: at
+ * the pinned revision every one of these keys is emitted on every document that
+ * carries it, so a missing key is a document that does not match the shape
+ * rondo pinned, and folding the two together would be the decoder declining to
+ * validate exactly where it looks like it is validating. Null is an answer;
+ * absence is a defect.
  */
-function optionalString(document: JsonObject, key: string): string | null {
+function nullableString(document: JsonObject, key: string): string | null {
   const value = document[key];
-  if (value === null || value === undefined) {
+  if (value === undefined) {
+    throw new PayloadMismatch(`'${key}' is absent, and a string or null was required`);
+  }
+  if (value === null) {
     return null;
   }
   if (typeof value !== "string") {
@@ -317,9 +323,9 @@ export const GATE_LIST: VerbContract<readonly OpenGate[]> = {
     requireObjectArray(payload, "gates").map((gate) => ({
       gateId: requireString(gate, "gate_id"),
       gateType: requireString(gate, "gate_type"),
-      runId: optionalString(gate, "run_id"),
+      runId: nullableString(gate, "run_id"),
       stage: requireString(gate, "stage"),
-      deadlineAtMs: optionalNumber(gate, "deadline_at_ms"),
+      deadlineAtMs: nullableNumber(gate, "deadline_at_ms"),
     })),
 };
 
@@ -329,9 +335,9 @@ export const GATE_SHOW: VerbContract<GateDetail> = {
   read: (payload) => ({
     gateId: requireString(payload, "gate_id"),
     gateType: requireString(payload, "gate_type"),
-    runId: optionalString(payload, "run_id"),
+    runId: nullableString(payload, "run_id"),
     stage: requireString(payload, "stage"),
-    outcome: optionalString(payload, "outcome"),
+    outcome: nullableString(payload, "outcome"),
   }),
 };
 
@@ -341,16 +347,24 @@ export const GATE_CLOSE: VerbContract<GateClosed> = {
   read: (payload) => ({
     gateId: requireString(payload, "gate_id"),
     closed: requireBoolean(payload, "closed"),
-    outcome: optionalString(payload, "outcome"),
-    fromStage: optionalString(payload, "from_stage"),
-    toStage: optionalString(payload, "to_stage"),
+    outcome: nullableString(payload, "outcome"),
+    fromStage: nullableString(payload, "from_stage"),
+    toStage: nullableString(payload, "to_stage"),
   }),
 };
 
-/** A deadline continuo may answer with `null`, for a gate that has none. */
-function optionalNumber(document: JsonObject, key: string): number | null {
+/**
+ * A deadline continuo answers with `null` for a gate that has none.
+ *
+ * Absent is a defect here for the reason {@link nullableString} gives: the key
+ * is always emitted, so its absence is not the same fact as its being null.
+ */
+function nullableNumber(document: JsonObject, key: string): number | null {
   const value = document[key];
-  if (value === null || value === undefined) {
+  if (value === undefined) {
+    throw new PayloadMismatch(`'${key}' is absent, and a finite number or null was required`);
+  }
+  if (value === null) {
     return null;
   }
   return requireNumber(document, key);

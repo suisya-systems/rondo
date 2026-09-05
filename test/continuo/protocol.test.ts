@@ -291,6 +291,43 @@ describe("a document rondo recognised and cannot read, which is rondo's own defe
     });
   });
 
+  test("a NULLABLE field that is absent is a defect, because absent is not null", () => {
+    // At the pinned sha every one of these keys is emitted on every document
+    // that carries it, so a missing key is a document that does not match the
+    // shape rondo pinned. Folding absent into null would be the decoder
+    // declining to validate in exactly the place it looks like it validates.
+    const result = decode(
+      GATE_SHOW,
+      output({
+        stdout: success(GATE_SHOW.schema, {
+          gate_id: "g1",
+          gate_type: "human_answer",
+          stage: "presented",
+          outcome: null,
+        }),
+      }),
+    );
+    expect(result).toEqual({
+      kind: "invokerDefect",
+      reason: expect.stringContaining("'run_id' is absent"),
+    });
+  });
+
+  test("an absent nullable deadline is a defect for the same reason", () => {
+    const result = decode(
+      GATE_LIST,
+      output({
+        stdout: success(GATE_LIST.schema, {
+          gates: [{ gate_id: "g1", gate_type: "human_answer", run_id: null, stage: "presented" }],
+        }),
+      }),
+    );
+    expect(result).toEqual({
+      kind: "invokerDefect",
+      reason: expect.stringContaining("'deadline_at_ms' is absent"),
+    });
+  });
+
   test("a required field that is simply missing is named as absent", () => {
     const result = decode(GATE_SHOW, output({ stdout: success(GATE_SHOW.schema, {}) }));
     expect(result).toEqual({

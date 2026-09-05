@@ -182,17 +182,19 @@ export async function run<T>(
   contract: VerbContract<T>,
   argv: readonly string[],
 ): Promise<ContinuoResult<T>> {
-  const unusable = argv.indexOf("");
-  if (unusable !== -1) {
-    // Before the spawn on purpose. An operator-supplied value that is empty
-    // reaches continuo as an exit 1 and a raw stack (D-0015's exception 2), so
-    // the boundary that can still give a clean answer is this one.
+  const unusable = unusableArgument(argv);
+  if (unusable !== null) {
+    // Before the spawn on purpose, and for two different hazards. An
+    // operator-supplied value that is EMPTY reaches continuo as an exit 1 and a
+    // raw stack (D-0015's exception 2). One containing a NUL never reaches
+    // continuo at all: `spawn` throws *synchronously* on it rather than
+    // emitting the `error` event, which would reject a promise this module
+    // promises never to reject. Both are answered here, as the defect they are.
     return {
       kind: "invokerDefect",
       reason:
-        `rondo built an empty argument at position ${String(unusable)} for continuo ` +
-        `${contract.command.join(" ")}. Every operator-supplied value is validated before ` +
-        "it reaches a continuo command line.",
+        `rondo built ${unusable} for continuo ${contract.command.join(" ")}. Every ` +
+        "operator-supplied value is validated before it reaches a continuo command line.",
     };
   }
   const output = await runProcess(continuo.cliPath, [...contract.command, ...argv]);
@@ -200,6 +202,27 @@ export async function run<T>(
     return { kind: "invokerDefect", reason: output.reason };
   }
   return decode(contract, output.value);
+}
+
+/**
+ * The first argument rondo must not hand to `spawn`, described, or null.
+ *
+ * Two shapes, and neither is continuo's problem: an empty string, which
+ * continuo answers with a stack rather than a refusal, and an embedded NUL,
+ * which `spawn` rejects by throwing before any child exists. Described rather
+ * than returned, because the message is the whole point -- an index alone sends
+ * a reader back to count arguments.
+ */
+function unusableArgument(argv: readonly string[]): string | null {
+  for (const [index, argument] of argv.entries()) {
+    if (argument === "") {
+      return `an empty argument at position ${String(index)}`;
+    }
+    if (argument.includes("\u0000")) {
+      return `an argument containing a NUL byte at position ${String(index)}`;
+    }
+  }
+  return null;
 }
 
 /** What {@link runProcess} answers: bytes, or the reason there are none. */
@@ -216,12 +239,30 @@ type ProcessOutcome =
  */
 async function runProcess(cliPath: string, argv: readonly string[]): Promise<ProcessOutcome> {
   return await new Promise<ProcessOutcome>((resolve) => {
-    const child = spawn(process.execPath, [cliPath, ...argv], {
-      shell: false,
-      // stdin is closed: continuo's driven verbs read none, and an inherited
-      // stdin would let a child block on a terminal rondo owns.
-      stdio: ["ignore", "pipe", "pipe"],
-    });
+    let child: ReturnType<typeof spawn>;
+    try {
+      child = spawn(process.execPath, [cliPath, ...argv], {
+        shell: false,
+        // stdin is closed: continuo's driven verbs read none, and an inherited
+        // stdin would let a child block on a terminal rondo owns.
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+    } catch (error) {
+      // `spawn` reports most failures through the `error` event, and a few --
+      // an argument or a path containing a NUL, an invalid option -- by
+      // throwing right here. `unusableArgument` refuses the reachable ones
+      // before this point; this catch is what keeps the remainder a value
+      // rather than a rejected promise, which is what every caller is written
+      // against.
+      resolve({
+        kind: "failed",
+        reason:
+          `rondo could not start continuo at '${cliPath}': ` +
+          `${error instanceof Error ? error.message : String(error)}. ` +
+          "This is rondo's own defect, not continuo's answer.",
+      });
+      return;
+    }
     let stdout = "";
     let stderr = "";
     let settled = false;
@@ -241,12 +282,28 @@ async function runProcess(cliPath: string, argv: readonly string[]): Promise<Pro
       resolve(outcome);
     };
 
-    child.stdout.setEncoding("utf8");
-    child.stderr.setEncoding("utf8");
-    child.stdout.on("data", (chunk: string) => {
+    // Both are pipes by the `stdio` above, so neither can be null in practice.
+    // The check is here because the declared type says they can be, and a
+    // non-null assertion would be rondo asserting something about a value it
+    // did not check -- in the one module that owns a process.
+    const fromChild = child.stdout;
+    const fromChildErrors = child.stderr;
+    if (fromChild === null || fromChildErrors === null) {
+      child.kill();
+      finish({
+        kind: "failed",
+        reason:
+          `rondo started continuo at '${cliPath}' without the pipes it asked for. ` +
+          "This is rondo's own defect, not continuo's answer.",
+      });
+      return;
+    }
+    fromChild.setEncoding("utf8");
+    fromChildErrors.setEncoding("utf8");
+    fromChild.on("data", (chunk: string) => {
       stdout += chunk;
     });
-    child.stderr.on("data", (chunk: string) => {
+    fromChildErrors.on("data", (chunk: string) => {
       stderr += chunk;
     });
     child.on("error", (error: Error) => {
