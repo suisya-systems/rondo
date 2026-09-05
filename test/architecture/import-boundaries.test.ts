@@ -128,9 +128,14 @@ const ALLOWED_INTERNAL_BY_LAYER: Readonly<Record<string, readonly string[]>> = {
   // The loop. May persist, may not be reached into from an access point's side
   // of the boundary.
   "src/refrain": ["src/refrain", "src/store"],
+  // The seam to continuo (D-0017): a pure protocol decoder and the one module
+  // that owns a subprocess. It names only itself, which is what keeps the
+  // arrow one-way -- rondo's loop must stay testable without a continuo, so
+  // `src/refrain` may not reach this layer and this layer may not reach it.
+  "src/continuo": ["src/continuo"],
   // The access points: the web UI and the localhost MCP surface, when they
-  // exist. They compose the other two and are composed by nobody.
-  "src/access": ["src/access", "src/refrain", "src/store"],
+  // exist. They compose the other three and are composed by nobody.
+  "src/access": ["src/access", "src/continuo", "src/refrain", "src/store"],
 };
 
 /**
@@ -182,6 +187,13 @@ const ALLOWED_EXTERNALS_BY_MODULE: Readonly<
   Record<string, Readonly<Record<string, readonly string[]>>>
 > = {
   "src/store/sqlite.ts": { "node:sqlite": ["DatabaseSync"] },
+  // The one module allowed to start a process, granted the one binding it
+  // needs to do it (D-0017 rule 3). Keyed by module rather than by layer for
+  // the reason SQLite is: `src/continuo/protocol.ts` sits in the same
+  // directory and is a pure reader of bytes, and a layer-wide grant would let
+  // it quietly become a second spawner. The planted corpus proves the
+  // distinction is enforced rather than merely intended.
+  "src/continuo/invoker.ts": { "node:child_process": ["spawn"] },
 };
 
 /**
@@ -216,7 +228,11 @@ const SQLITE_OWNER = "src/store/sqlite.ts";
  * can see.
  */
 const EXPECTED_MODULES: readonly string[] = [
+  "src/access/console.ts",
   "src/access/local.ts",
+  "src/continuo/invoker.ts",
+  "src/continuo/pin.ts",
+  "src/continuo/protocol.ts",
   "src/index.ts",
   "src/refrain/loop.ts",
   "src/refrain/policy.ts",
@@ -1179,11 +1195,93 @@ const PLANTED: ReadonlyArray<
     'export { nextStep } from "./loop";\n',
     "without a runtime extension",
   ],
+  [
+    // D-0017 rule 3 grants the spawn to ONE module. This is the case that
+    // makes the grant a grant rather than a layer-wide licence: the decoder
+    // sits in the same directory and must stay a pure reader of bytes, because
+    // a decoder that could produce bytes could not be tested against the ones
+    // continuo really sends.
+    "the-decoder-cannot-spawn",
+    "src/continuo/protocol.ts",
+    'import { spawn } from "node:child_process";\nexport const x = spawn;\n',
+    "which it is not granted",
+  ],
+  [
+    "a-second-module-in-the-continuo-layer-cannot-spawn",
+    "src/continuo/relay.ts",
+    'import { spawn } from "node:child_process";\nexport const x = spawn;\n',
+    "which it is not granted",
+  ],
+  [
+    // The same capability without an import at all, in the layer that has a
+    // reason to want it. `src/continuo` is granted `spawn` by name in one
+    // module; `process.getBuiltinModule` names the whole module in any of them.
+    "the-continuo-layer-cannot-launder-child-process",
+    "src/continuo/pin.ts",
+    'export const spawn = process.getBuiltinModule("node:child_process");\n',
+    "which it is not granted",
+  ],
+  [
+    // The invoker's grant is by binding, like every other grant in this file.
+    "the-invoker-takes-a-binding-it-was-not-granted",
+    "src/continuo/invoker.ts",
+    'import { spawn, execFileSync } from "node:child_process";\nexport const x = [spawn, execFileSync];\n',
+    "takes execFileSync from node:child_process",
+  ],
+  [
+    // The arrow that keeps the loop testable without a continuo on the
+    // machine. D-0017 rule 2: access -> continuo, and nothing else reaches it.
+    "the-loop-cannot-reach-the-continuo-seam",
+    "src/refrain/probe.ts",
+    'import { run } from "../continuo/invoker.js";\nexport const x = run;\n',
+    "outside its allowance",
+  ],
+  [
+    "the-durable-store-cannot-reach-the-continuo-seam",
+    "src/store/probe.ts",
+    'import { decode } from "../continuo/protocol.js";\nexport const x = decode;\n',
+    "outside its allowance",
+  ],
+  [
+    // And the reverse arrow, which is the one that would make the seam a
+    // second loop rather than a seam.
+    "the-continuo-seam-cannot-reach-the-loop",
+    "src/continuo/probe.ts",
+    'import { nextStep } from "../refrain/loop.js";\nexport const x = nextStep;\n',
+    "outside its allowance",
+  ],
+  [
+    "the-continuo-seam-cannot-open-sqlite-either",
+    "src/continuo/probe.ts",
+    'import { DatabaseSync } from "node:sqlite";\nexport const x = DatabaseSync;\n',
+    "is the one module that owns durable state",
+  ],
   // --- controls: these must come back clean --------------------------------
   [
     "control-the-loop-may-persist",
     "src/refrain/probe.ts",
     'import type { IterationRecord } from "../store/records.js";\nexport type X = IterationRecord;\n',
+    null,
+  ],
+  [
+    // The one module that IS granted the spawn, taking exactly what it was
+    // granted. Without this control the eight cases above would be satisfied by
+    // a sweep that had started refusing `node:child_process` everywhere.
+    "control-the-invoker-may-spawn",
+    "src/continuo/invoker.ts",
+    'import { spawn } from "node:child_process";\nexport const child = spawn;\n',
+    null,
+  ],
+  [
+    "control-an-access-point-may-reach-the-continuo-seam",
+    "src/access/probe.ts",
+    'import { startContinuo } from "../continuo/invoker.js";\nexport const x = startContinuo;\n',
+    null,
+  ],
+  [
+    "control-the-continuo-seam-may-reach-itself",
+    "src/continuo/invoker.ts",
+    'import { CONTINUO_REVISION } from "./pin.js";\nexport const x = CONTINUO_REVISION;\n',
     null,
   ],
   [
@@ -1300,8 +1398,8 @@ test("the planted corpus exercises the detector in both directions", () => {
   const clean = PLANTED.filter(([, , , expected]) => expected === null);
   // A corpus that lost its controls, or lost its violations, would still pass
   // every case below by agreeing with itself.
-  expect(caught.length).toBeGreaterThanOrEqual(44);
-  expect(clean.length).toBeGreaterThanOrEqual(6);
+  expect(caught.length).toBeGreaterThanOrEqual(52);
+  expect(clean.length).toBeGreaterThanOrEqual(9);
   expect(new Set(PLANTED.map(([id]) => id)).size).toBe(PLANTED.length);
 });
 

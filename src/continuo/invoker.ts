@@ -1,0 +1,267 @@
+/**
+ * The one module in rondo that owns a process.
+ *
+ * D-0001 item 2 puts continuo behind a CLI process boundary and D-0015 rule 1
+ * re-affirms it; D-0017 makes the spawn a *capability*, granted to this module
+ * by name in `test/architecture/import-boundaries.test.ts` and to no other. The
+ * split is the point: `src/continuo/protocol.ts` is a pure reader of bytes with
+ * no way to produce any, and this file is the only place bytes can come from.
+ * A second module in this layer that reached for `node:child_process` fails the
+ * boundary sweep, and there is a planted case that proves it.
+ *
+ * **How the child is started, and why each part of that matters.**
+ * `spawn(process.execPath, [cli, ...argv], { shell: false })`: the executable
+ * is the Node running rondo, so the child cannot pick up a different runtime
+ * from `PATH`; the CLI path and every argument are separate array elements, so
+ * nothing is ever quoted, joined or re-split, and a workspace path with a
+ * space, a backslash or a drive letter in it survives unchanged; and
+ * `shell: false` -- the default, written out because it is load-bearing --
+ * means no shell ever sees any of it.
+ *
+ * **The close event, not the exit event.** `exit` fires when the child dies;
+ * `close` fires when its stdio has also been drained. Reading the streams after
+ * `exit` can lose the tail of a refusal, and on Windows a directory cannot be
+ * removed while a handle into it is still open, so a smoke that cleaned up on
+ * `exit` would fail there and nowhere else.
+ *
+ * **The pin is not negotiable and the location is.** `RONDO_CONTINUO_CLI`
+ * names an already-built `dist/cli.js`; it cannot say which revision that build
+ * is, because {@link startContinuo} asks the build itself and compares the
+ * answer with `src/continuo/pin.ts` before rondo drives a single verb (D-0015
+ * rule 6, D-0017 rule 5).
+ */
+import { spawn } from "node:child_process";
+
+import { CONTINUO_REVISION, type PinVerdict, verifyVersionLine } from "./pin.js";
+import {
+  type ContinuoResult,
+  decode,
+  type InvocationOutput,
+  type VerbContract,
+} from "./protocol.js";
+
+/** The environment variable that locates a built continuo. Never the pin. */
+export const CLI_PATH_ENV = "RONDO_CONTINUO_CLI";
+
+/**
+ * A continuo rondo has verified and may drive.
+ *
+ * `revision` is what `--version` *observed*, not what the pin expected: the two
+ * are equal by the time this record exists, and recording the observation is
+ * what makes the record evidence rather than a restatement (D-0015 rule 6).
+ *
+ * **This record is local and per-process.** Rule 6 also requires the observed
+ * revision to be persisted per run, and rondo has no store schema yet
+ * (`src/store/sqlite.ts` names the seam and throws), so D-0017 rule 5 leaves
+ * that half to the issue that gives rondo a store. What exists today is the
+ * verification and the value; what does not exist is a row.
+ */
+export interface VerifiedContinuo {
+  readonly cliPath: string;
+  readonly revision: string;
+}
+
+/** Whether rondo may start at all. */
+export type StartupResult =
+  | { readonly kind: "ready"; readonly continuo: VerifiedContinuo }
+  | { readonly kind: "refused"; readonly reason: string };
+
+/**
+ * How long a single continuo invocation may take before rondo gives up.
+ *
+ * A ceiling on a hang rather than a performance budget: the measured cost of a
+ * driven verb is about a tenth of a second (D-0015), so a minute is three
+ * orders of magnitude of headroom and still bounded, which is what a test suite
+ * and an interactive host both need from a subprocess.
+ */
+const INVOCATION_TIMEOUT_MS = 60_000;
+
+/**
+ * Locate the built CLI, or say why rondo cannot.
+ *
+ * Absolute only. A relative path would be resolved against whatever directory
+ * the host happened to be started in, which is a different file on two runs of
+ * the same configuration -- and the one thing this seam must not be is
+ * ambiguous about which build it drove.
+ */
+export function resolveCliPath(environment: Readonly<Record<string, string | undefined>>): {
+  readonly path: string | null;
+  readonly reason: string;
+} {
+  const raw = environment[CLI_PATH_ENV];
+  if (raw === undefined || raw.trim() === "") {
+    return {
+      path: null,
+      reason:
+        `${CLI_PATH_ENV} is not set. It must be the absolute path of a built continuo ` +
+        `dist/cli.js at revision ${CONTINUO_REVISION}; it locates a build and never ` +
+        "replaces the pin.",
+    };
+  }
+  const path = raw.trim();
+  if (!isAbsolutePath(path)) {
+    return {
+      path: null,
+      reason: `${CLI_PATH_ENV} is '${path}', which is not an absolute path.`,
+    };
+  }
+  if (!endsWithCliEntry(path)) {
+    return {
+      path: null,
+      reason:
+        `${CLI_PATH_ENV} is '${path}', and rondo drives continuo's built entry point, ` +
+        "which is dist/cli.js.",
+    };
+  }
+  return { path, reason: "" };
+}
+
+/**
+ * Absolute on either platform, decided by shape rather than by `node:path`.
+ *
+ * `path.isAbsolute` answers for the platform it is running on, which is the
+ * right answer at runtime and the wrong one for a rule rondo states about its
+ * own configuration -- and reaching for it would put a second external module
+ * into the layer for a three-line regular expression. POSIX roots, a drive
+ * letter with either separator, and a UNC share are all of it.
+ */
+function isAbsolutePath(path: string): boolean {
+  return /^(?:\/|\\\\|[A-Za-z]:[\\/])/.test(path);
+}
+
+/** `.../dist/cli.js`, with either separator. */
+function endsWithCliEntry(path: string): boolean {
+  return /[\\/]dist[\\/]cli\.js$/.test(path);
+}
+
+/**
+ * Read `--version` from the located build and check it against the pin.
+ *
+ * The first thing rondo does with continuo, and the gate on everything after
+ * it: a build whose revision is unknown, dirty or simply not the pinned one is
+ * refused here rather than driven and recorded afterwards.
+ */
+export async function startContinuo(
+  environment: Readonly<Record<string, string | undefined>> = process.env,
+): Promise<StartupResult> {
+  const located = resolveCliPath(environment);
+  if (located.path === null) {
+    return { kind: "refused", reason: located.reason };
+  }
+  const output = await runProcess(located.path, ["--version"]);
+  if (output.kind === "failed") {
+    return { kind: "refused", reason: output.reason };
+  }
+  if (output.value.status !== 0) {
+    return {
+      kind: "refused",
+      reason:
+        `continuo --version exited ${String(output.value.status)}. rondo cannot identify ` +
+        `the build at '${located.path}'. stderr: ${output.value.stderr.trim()}`,
+    };
+  }
+  const verdict: PinVerdict = verifyVersionLine(output.value.stdout);
+  if (verdict.kind === "refused") {
+    return { kind: "refused", reason: verdict.reason };
+  }
+  return {
+    kind: "ready",
+    continuo: { cliPath: located.path, revision: verdict.revision },
+  };
+}
+
+/**
+ * Drive one verb and decode its answer.
+ *
+ * The only way out of this layer: a caller gets one of the five outcomes
+ * `protocol.ts` defines, never a document, never a stream and never an exit
+ * code.
+ */
+export async function run<T>(
+  continuo: VerifiedContinuo,
+  contract: VerbContract<T>,
+  argv: readonly string[],
+): Promise<ContinuoResult<T>> {
+  const unusable = argv.indexOf("");
+  if (unusable !== -1) {
+    // Before the spawn on purpose. An operator-supplied value that is empty
+    // reaches continuo as an exit 1 and a raw stack (D-0015's exception 2), so
+    // the boundary that can still give a clean answer is this one.
+    return {
+      kind: "invokerDefect",
+      reason:
+        `rondo built an empty argument at position ${String(unusable)} for continuo ` +
+        `${contract.command.join(" ")}. Every operator-supplied value is validated before ` +
+        "it reaches a continuo command line.",
+    };
+  }
+  const output = await runProcess(continuo.cliPath, [...contract.command, ...argv]);
+  if (output.kind === "failed") {
+    return { kind: "invokerDefect", reason: output.reason };
+  }
+  return decode(contract, output.value);
+}
+
+/** What {@link runProcess} answers: bytes, or the reason there are none. */
+type ProcessOutcome =
+  | { readonly kind: "ran"; readonly value: InvocationOutput }
+  | { readonly kind: "failed"; readonly reason: string };
+
+/**
+ * Spawn continuo, collect both streams, and resolve when the child has closed.
+ *
+ * Never rejects. A spawn that fails, a runtime that is not there, a child that
+ * hangs -- each is a sentence rondo can act on, and a rejected promise here
+ * would put process management into every caller's error handling.
+ */
+async function runProcess(cliPath: string, argv: readonly string[]): Promise<ProcessOutcome> {
+  return await new Promise<ProcessOutcome>((resolve) => {
+    const child = spawn(process.execPath, [cliPath, ...argv], {
+      shell: false,
+      // stdin is closed: continuo's driven verbs read none, and an inherited
+      // stdin would let a child block on a terminal rondo owns.
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stdout = "";
+    let stderr = "";
+    let settled = false;
+    const timer = setTimeout(() => {
+      child.kill();
+    }, INVOCATION_TIMEOUT_MS);
+    // `unref` so a pending timer cannot hold the process open once the child
+    // has closed and the timer has been cleared on every other path.
+    timer.unref();
+
+    const finish = (outcome: ProcessOutcome): void => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(timer);
+      resolve(outcome);
+    };
+
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk: string) => {
+      stdout += chunk;
+    });
+    child.stderr.on("data", (chunk: string) => {
+      stderr += chunk;
+    });
+    child.on("error", (error: Error) => {
+      finish({
+        kind: "failed",
+        reason:
+          `rondo could not run continuo at '${cliPath}': ${error.message}. ` +
+          "This is rondo's own defect or a broken provisioning step, not continuo's answer.",
+      });
+    });
+    // `close`, not `exit`: the streams are drained by the time this fires, and
+    // on Windows a scratch directory cannot be removed while a handle into it
+    // is still open.
+    child.on("close", (status: number | null, signal: NodeJS.Signals | null) => {
+      finish({ kind: "ran", value: { status, signal, stdout, stderr } });
+    });
+  });
+}

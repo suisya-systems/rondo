@@ -64,6 +64,58 @@ jobs:
       - name: Type-check
         run: npm run typecheck
 
+      - name: Provision the pinned continuo
+        # The seam rondo drives is a subprocess, so the only way to know it
+        # works is to run it (D-0017 rule 6). The build happens once per cell,
+        # in the runner's own temporary directory: not inside this checkout,
+        # where it would contaminate the boundary sweep's directory walk and
+        # the working tree, and not in a sibling checkout, which does not exist
+        # on a runner.
+        #
+        # The revision comes from `continuo.pin.json` and is never repeated
+        # here -- `test/continuo/pin.test.ts` fails if a full sha appears in
+        # this file at all. A detached checkout of that exact commit is what
+        # makes the pin a pin rather than a branch that moved.
+        #
+        # `npm ci --ignore-scripts` is continuo's own install policy and
+        # rondo's (D-0007); better-sqlite3 ships prebuilt binaries for the
+        # platforms in this matrix, so no lifecycle script has to run for the
+        # CLI to open a database. `CONTINUO_REQUIRE_REVISION=1` makes a build
+        # that cannot identify itself fail HERE, at build time, instead of
+        # surfacing later as rondo refusing to start against `unknown`.
+        #
+        # bash on both runners, so the Windows cell runs the same three
+        # commands rather than a second implementation of them.
+        id: continuo
+        shell: bash
+        run: |
+          set -euo pipefail
+          revision=$(node -p "require('./continuo.pin.json').revision")
+          repository=$(node -p "require('./continuo.pin.json').repository")
+          # The destination and the CLI path are computed by NODE, not by the
+          # shell. On the Windows cell `RUNNER_TEMP` is a native path with a
+          # drive letter and backslashes, and a path assembled in bash there is
+          # either a POSIX path Node cannot resolve or a mixed one that only
+          # sometimes works. `path.join` answers in the platform's own spelling
+          # on both cells, which is the spelling rondo's own absolute-path check
+          # accepts and the spelling `spawn` needs.
+          checkout=$(node -e 'const {join}=require("node:path");const {tmpdir}=require("node:os");process.stdout.write(join(process.env.RUNNER_TEMP||tmpdir(),"continuo-"+process.argv[1]))' "$revision")
+          cli=$(node -e 'const {join}=require("node:path");process.stdout.write(join(process.argv[1],"dist","cli.js"))' "$checkout")
+          git clone --quiet --no-checkout "$repository" "$checkout"
+          git -C "$checkout" checkout --quiet --detach "$revision"
+          # The clone is of a branch that moves; this is what makes it a pin.
+          test "$(git -C "$checkout" rev-parse HEAD)" = "$revision"
+          # `--prefix` rather than `cd`: npm runs both the install and the
+          # script with that directory as its working directory, and no bash
+          # builtin has to be handed a Windows path.
+          npm --prefix "$checkout" ci --ignore-scripts
+          CONTINUO_REQUIRE_REVISION=1 npm --prefix "$checkout" run build
+          test -f "$cli"
+          # Printed, so a cell that provisioned the wrong build says so in its
+          # own log rather than only as a decoded refusal ten lines later.
+          node "$cli" --version
+          echo "cli=$cli" >> "$GITHUB_OUTPUT"
+
       - name: Derive two distinct seeds for this cell
         id: seeds
         shell: bash
@@ -93,6 +145,11 @@ jobs:
       - name: Green 1 of 2 (seed ${{ steps.seeds.outputs.seed_a }})
         env:
           RONDO_TEST_SEED: ${{ steps.seeds.outputs.seed_a }}
+          # The end-to-end smoke is mandatory in every cell of this matrix: the
+          # suite FAILS under CI when this is unset, rather than skipping, so a
+          # provisioning step that silently did nothing cannot report green
+          # (D-0017 rule 6).
+          RONDO_CONTINUO_CLI: ${{ steps.continuo.outputs.cli }}
         # Shuffle itself is configured in vitest.config.ts and is NOT passed on
         # the command line: a CLI flag can be dropped by an edit to this file
         # without any test turning red, which would silently retire the rule
@@ -106,6 +163,7 @@ jobs:
         # means here.
         env:
           RONDO_TEST_SEED: ${{ steps.seeds.outputs.seed_b }}
+          RONDO_CONTINUO_CLI: ${{ steps.continuo.outputs.cli }}
         run: npm test
 
   checks:

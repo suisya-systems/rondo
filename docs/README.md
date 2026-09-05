@@ -28,8 +28,9 @@ currently held in two places that already exist and are maintained:
   what it would cost *cadenza* to take the npm dependency, and `C-17` removed
   its antecedent.
 - **continuo's `DECISIONS.md`** owns the control plane rondo drives, including
-  `continuo D-0045` (publication) and `continuo D-0090` (the `--version` and
-  `--json` seam `D-0015` consumes). Publication is the event that reopens the
+  `continuo D-0045` (publication), `continuo D-0090` (the `--version` and
+  `--json` seam `D-0015` consumes) and `continuo D-0092` (`gate close` joining
+  that envelope, which fired `D-0015`'s falsifier and is answered by `D-0017`). Publication is the event that reopens the
   consumption question; `D-0015` records that it makes the library-versus-
   subprocess choice a real choice rather than superseding D-0001 by itself.
 
@@ -45,6 +46,8 @@ it fails rather than being read:
 
 | Rule | Where it is enforced |
 |---|---|
-| The loop imports no HTTP, browser, session provider or continuo internals; access points may import the loop and never the reverse; exactly one module under `src/` owns SQLite | [`../test/architecture/import-boundaries.test.ts`](../test/architecture/import-boundaries.test.ts), and the `boundary-is-not-vacuous` job — check name "a planted violation makes the boundary test fail" — in [`../.github/workflows/ci.yml`](../.github/workflows/ci.yml) |
+| The loop imports no HTTP, browser, session provider or continuo internals; access points may import the loop and the continuo seam and never the reverse; exactly one module under `src/` owns SQLite, and exactly one starts a process (`D-0017`) | [`../test/architecture/import-boundaries.test.ts`](../test/architecture/import-boundaries.test.ts), and the `boundary-is-not-vacuous` job — check name "a planted violation makes the boundary test fail" — in [`../.github/workflows/ci.yml`](../.github/workflows/ci.yml) |
 | The suite is green twice per cell under two distinct random orders | `double-green` in the CI workflow, configured in [`../vitest.config.ts`](../vitest.config.ts) |
 | Nothing is installed except from the lockfile, with `--ignore-scripts` | `npm ci --ignore-scripts` in every CI job |
+| rondo drives the pinned continuo end to end, in every matrix cell | the "Provision the pinned continuo" step of `double-green` and [`../test/continuo/smoke.test.ts`](../test/continuo/smoke.test.ts), which fails rather than skips under `CI` |
+| The pin in [`../continuo.pin.json`](../continuo.pin.json), the literals in `src/continuo/pin.ts` and the sha CI provisions cannot drift apart | [`../test/continuo/pin.test.ts`](../test/continuo/pin.test.ts) |
