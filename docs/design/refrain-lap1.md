@@ -329,8 +329,16 @@ it is derivable from the request text and each function refuses without it:
 | `parties: IssuanceParties` | `issueInitialContract` (`facade.ts:155`) | `issuer` and `grantee` name a run and a delegate that are **rondo's** records; cadenza mints neither and says so (`facade.ts:145-153`) |
 | `intendedAction: IntendedAction` | `classifyAction` (`facade.ts:172`) | it is a set of capability keys naming every act the run performs (`classification.ts:38-46`). Deriving one from prose is exactly the inference `D-0009`'s reasoning distrusts, and getting it wrong makes the classification answer the wrong question |
 
+One field on the plan is rondo's own rather than either sibling's:
+`invocationCeilingMs`, the wall-clock bound rondo puts on the whole
+`lap perform` subprocess. It is the caller's because rondo cannot compute it —
+[8.4](#84-the-timeout-which-today-is-wrong-by-an-order-of-magnitude-major-3)
+gives the measurement — and it is validated as strictly greater than
+`turnTimeoutMs + gitTimeoutMs`.
+
 That is the honest size of "a one-line request does not determine a run": five
-values on cadenza's side and eighteen on continuo's, before the prompt.
+values on cadenza's side, eighteen on continuo's, and one of rondo's, before the
+prompt.
 `classifyAction` also needs the subject's `configDigest` **now**, which is not a
 plan field — it is read off the `ResolvedProject` at step 2 of section 10, which
 is the whole point of resolving rather than caching (`facade.ts:167-171`).
@@ -484,12 +492,18 @@ Wired to a runner as the default, the conductor would ask a human before every
 iteration and admit nothing, ever. Codex is right that this must be settled
 rather than discovered. The proposal:
 
-- **Both of the policy's axes are dormant in lap 1, and the document says so
-  rather than implying they work** — the same move `D-0012` makes for the
-  no-progress halt and the review-round budget, and for the same reason: with one
-  lap per request, `maxIterations` has no second iteration to bound, and
-  `autonomy` has no unattended landing to permit because *every* lap-1 iteration
-  ends at a human gate anyway (`D-0010`, cadenza `C-5`).
+- **Both axes are read exactly once, before reservation, and neither has a
+  second reader in lap 1.** "Dormant" is the wrong word for the whole policy and
+  the distinction matters to whoever implements it: the axes *are* enforced, as
+  an **admission** policy — `ask_every_iteration` refuses the request before a
+  row exists, and `maxIterations: 0` does the same, because `loop.ts:60` compares
+  the ceiling against `attempts` and a fresh iteration has zero. What is dormant
+  is their **post-admission** meaning, and that is dormant for `D-0012`'s reason:
+  with one lap per request `maxIterations` never bounds a *second* iteration
+  because there is never one, and `ask_before_landing` never permits an
+  unattended landing because rondo cannot land at all (`D-0010`, cadenza `C-5`).
+  So: one reader, at admission; no reader afterwards; and `D-0019` should say it
+  in those words rather than calling the policy dormant and then enforcing it.
 - **`CONSERVATIVE_POLICY` stays the default and stays correct**, and the runner
   requires an explicitly-constructed policy to proceed. A default that admitted
   runs unattended would be a decision about unattended action taken by a default
@@ -651,12 +665,19 @@ missing row is the whole failure mode.
 | `planned` | the interpreter, immediately | `classified`, or `abandoned` on `refused` / `needs_approval` |
 | `classified` | the interpreter, immediately | `admitting` |
 | `admitting` | `run admit` answering | `admitted`, or `failed` on a refusal |
+| `admitting`, with no answer (timeout, or a crash) | **an operator's `abandon()`** — a run may already exist under that id, and rondo will not re-admit to find out (7.6) | `abandoned` |
 | `admitted` | the interpreter, immediately | `performing` |
 | `performing` | `lap perform` **answering** | `awaiting_human`, or `failed` when the answer is a refusal |
 | `performing`, with no answer (timeout, or a crash) | **an operator's `abandon()`** — deliberately nothing automatic, because a fenced child may be alive (8.4) | `abandoned` |
 | `awaiting_human` | `resume()` observing a non-null gate outcome; or the abort edge | `closed`, or `withdrawal_requested` |
 | `withdrawal_requested` | `resume()` observing a non-null gate outcome — `withdrawn` once the surface closed it, or `subject_gone` by continuo's reconciliation | `closed` |
 | `stalled` | **an operator's `abandon()`** | `abandoned` |
+
+**`abandon()` is admitted from every non-terminal status, not only from the rows
+that name it.** The rows above name it where it is the *only* exit; as a floor it
+applies everywhere, so no status can be added to this design — now or later —
+that has no way out at all. The named rows are the design; the floor is the
+guarantee.
 
 `abandon(iterationId, reason)` is the operating surface's escape hatch and the
 last row of every path that cannot end itself. It writes a terminal row and
@@ -779,10 +800,24 @@ every real lap.
 1. **The timeout becomes per-verb**, carried on the `VerbContract` beside the
    schema and the reader, so the number lives with the verb it bounds. The five
    existing verbs keep 60s.
-2. **rondo always passes `--turn-timeout-ms` explicitly** rather than inheriting
-   continuo's default, and its own ceiling is *that value plus a teardown
-   margin*. The two numbers then cannot drift, and the direction of the
-   inequality is load-bearing — see 3.
+2. **rondo passes `--turn-timeout-ms` and `--git-timeout-ms` explicitly** rather
+   than inheriting continuo's defaults, so the numbers rondo reasons about are
+   the numbers in force.
+   **But rondo's own ceiling cannot be derived from them**, and that is the
+   correction this point exists to make. The turn timer is not the whole
+   invocation: before it starts, `lap perform` takes the global
+   `outbox-delivery` lease, materialises a worktree through an unknown number of
+   git commands each bounded separately by `--git-timeout-ms`, and renders and
+   publishes a fence; afterwards it ingests the terminal report and opens the
+   gate. None of those budgets is exposed to a caller, and the count of git
+   operations is not a number rondo can know from outside. A ceiling of
+   "turn timeout plus a margin" would therefore kill a healthy lap on a slow
+   checkout — causing exactly the orphan this section exists to prevent.
+   So the ceiling is **`invocationCeilingMs`, a `RunPlan` field the caller sets**
+   (section 4), validated at rondo's boundary as strictly greater than
+   `turnTimeoutMs + gitTimeoutMs` — a floor, not an estimate. It is the
+   operator's declared patience, and the document says plainly that rondo cannot
+   compute continuo's setup budget rather than pretending a formula does.
 3. **rondo must never be the one to fire.** continuo's own timeout does the
    teardown: its help text says the workspace and fence are left as they are and
    *"the worker's session is stopped, because a lap that gave up must not leave a
@@ -1021,9 +1056,9 @@ them, and `D-0019` is what records the outcome.
 | **R-6** | Loop, state graph, or eval-driven — and if a graph, a graph runtime? | **The graph's discipline, no graph runtime**: named states, a closed edge relation, a durable checkpoint per node | `nextStep` is already an edge relation rather than a loop body (`loop.ts:35`, no iteration in the layer). The graph's distinguishing feature is fan-out, which continuo refuses upstream (the global `outbox-delivery` lease), and its back-edge needs the allocator `D-0012` says does not exist. A second runtime dependency to model a linear walk is not defensible at this size |
 | **R-7** | Where does evaluation sit, and is a model-judged evaluator admitted in lap 1? | **Three deterministic positions — cadenza `classify()`, verify, the human gate — and no model judge in lap 1** | rondo is already eval-driven with total, pure evaluators. A model judge puts a non-deterministic verdict on the path to the one human contact this design rations, cannot be a unit case, and its most valuable output is a retry the lap-1 arc cannot perform |
 | **R-8** | Does `nextStep` stay pure, and where do the effects go? | **`nextStep` stays a total pure function; a separate async interpreter executes effects through injected ports; `Step` grows to the lap-1 state union** | It is the one property `src/refrain/` has, its external allowance is empty, and every existing case in `test/refrain/loop.test.ts` keeps passing. Unknown or corrupt state closes to "stop and ask", which is the rule `loop.ts:42-54` already applies |
-| **R-9** | What do `LoopPolicy`'s two axes mean in lap 1, and when is the policy read? | **Both dormant, and recorded as dormant.** `CONSERVATIVE_POLICY` stays the default, the runner requires an explicit policy to proceed, and **the policy is read before `reserve()`** so a policy stop refuses the request instead of reserving a row | Measured: the default returns `ask_human` for a `planned` record (`policy.ts:34-37` with `loop.ts:39`), so a runner defaulted to it admits nothing, ever. With one lap per request `maxIterations` has no second iteration to bound and every iteration ends at a human gate anyway — the same dormancy `D-0012` already records for the no-progress halt and the review-round budget. Reading the policy before reservation is what keeps an ordinary configured stop from taking the single-flight lock (7.3, 7.7) |
+| **R-9** | What do `LoopPolicy`'s two axes mean in lap 1, and when is the policy read? | **Enforced once, at admission, and with no second reader.** Both axes are read **before `reserve()`** — so a policy stop refuses the request instead of reserving a row — and neither is consulted again; `CONSERVATIVE_POLICY` stays the default and the runner requires an explicit policy to proceed | Measured: the default returns `ask_human` for a `planned` record (`policy.ts:34-37` with `loop.ts:39`), so a runner defaulted to it admits nothing, ever. What is dormant is the axes' *post-admission* meaning, for `D-0012`'s reason — with one lap per request `maxIterations` never bounds a second iteration and `ask_before_landing` never permits a landing rondo cannot perform (`D-0010`) — and calling the whole policy dormant while enforcing it at admission would leave the implementation contract ambiguous. Reading it before reservation is what keeps an ordinary configured stop from taking the single-flight lock (7.3, 7.7) |
 | **R-10** | What replaces `read`/`write`, and what guarantees the conductor can always run again? | **`reserve()` and `transition()` with `BEGIN IMMEDIATE` inside them; a partial unique index making "at most one non-terminal iteration" the database's invariant** (shape B, the generated marker column); **and every non-terminal status carrying a named releasing event ([7.7](#77-the-lock-and-what-releases-each-state)), with an operator `abandon()` as the last row of the paths that cannot end themselves** | An in-memory mutex breaks on restart. Both index shapes were measured working on `node:sqlite` / `node v22.17.0`, as was `BEGIN IMMEDIATE` refusing a second writer across connections. `BEGIN IMMEDIATE` for the reason continuo gives on its own admission path. The releasing-event table is the half that makes the invariant safe rather than merely correct: under the index, a non-terminal state nobody can leave is a conductor that never runs again |
-| **R-11** | What bounds a `lap perform` invocation, and what happens on restart while performing? | **Per-verb timeouts on the contract; rondo passes `--turn-timeout-ms` explicitly and sets its own ceiling above it with a teardown margin; no cancellation in lap 1; a `performing` row found at startup stops and reports** | rondo's 60s (`invoker.ts:102`) against continuo's 15-minute default (`lap/cli.ts:204`) would kill every real lap. rondo's timer kills the CLI, not the fenced child — continuo's own timeout is what stops the worker session — so rondo firing first means an orphan, and that is a defect to report rather than a lap that failed |
+| **R-11** | What bounds a `lap perform` invocation, and what happens on restart while performing? | **Per-verb timeouts on the contract; rondo passes `--turn-timeout-ms` and `--git-timeout-ms` explicitly; its own ceiling is a `RunPlan` field validated above their sum, because it cannot be derived; no cancellation in lap 1; a `performing` row with no answer keeps the lock until an operator abandons it** | rondo's 60s (`invoker.ts:102`) against continuo's 15-minute default (`lap/cli.ts:204`) would kill every real lap. A ceiling derived from the turn timeout alone would be wrong the other way: the turn timer is not the whole invocation — the lease, an unknown number of git commands each bounded by `--git-timeout-ms`, the fence render and the gate ingest all sit outside it — so a derived bound would kill a healthy lap on a slow checkout. rondo's timer kills the CLI, not the fenced child, so rondo firing first means an orphan, and that is a defect to report rather than a lap that failed |
 | **R-12** | Where does the role mapping live, and what is the table? | **A typed `admitRun()` on the invoker owning the mapping, the refusal and the argv; the identity table over continuo's four roster names, recorded in `D-0019` with its falsifier and a table test** | `D-0014` rule 1 forbids the executor's vocabulary above the adapter, and cadenza's `roleName` is validated structurally only — any identifier is a legal neutral name, and the codomain is four. A mis-mapping onto a *valid* role is undetected at both ends, and `D-0014` already says so |
 | **R-13** | Does `lap perform` get a decoder, and does the lap-1 API carry a `--cli-arg` field? | **Yes to the decoder (`continuo.lap.perform/1`, the eleven fields of 8.2, semantic validation before the spawn); no `--cli-arg` field anywhere** | `D-0011` rule 1 admits with none, and continuo's own allowlist is `{"entries": []}` at the pinned revision — so the field costs nothing to omit and omitting it closes the route permanently. Validation before the spawn because an operator's typo reaches rondo as exit 1 and a stack, not a refusal document (`D-0015`) |
 | **R-14** | Is admission-time classification in lap 1? | **Yes**, and **both stopping branches are terminal (`abandoned`)** — `refused` and `needs_approval` alike — with the successor-contract path recorded as a lap-1 reduction | It costs one call to a total pure function and it is what makes the contract load-bearing. Resuming a `needs_approval` needs a widening successor rondo may not compose (`D-0009` part 2, `D-0018` rule 7), so that branch is a dead end in lap 1. Spelling it `awaiting_human` would be the deadlock 7.1 names: non-terminal, no gate to observe, and holding the single-flight lock with no event able to release it |
