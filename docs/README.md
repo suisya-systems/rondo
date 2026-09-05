@@ -22,12 +22,16 @@ currently held in two places that already exist and are maintained:
   host. Its section 11 is the open-decision table; `C-17` is the row that
   created this repository (decided at cadenza's human gate on 2026-09-05,
   cadenza `D-0029`), and `C-8` and `C-14` are the rows
-  [`D-0001`](../DECISIONS.md) answers for rondo's side of the seam. `C-9` is
-  deliberately not in that list: it asks what it would cost *cadenza* to take
-  the npm dependency, and `C-17` removed its antecedent.
+  [`D-0001`](../DECISIONS.md) answers for rondo's side of the seam — re-argued
+  at the current sibling commits in `D-0015` (continuo) and `D-0016` (cadenza),
+  with both outcomes unchanged. `C-9` is deliberately not in that list: it asks
+  what it would cost *cadenza* to take the npm dependency, and `C-17` removed
+  its antecedent.
 - **continuo's `DECISIONS.md`** owns the control plane rondo drives, including
-  `continuo D-0045` (publication), which is the event that would supersede
-  D-0001.
+  `continuo D-0045` (publication) and `continuo D-0090` (the `--version` and
+  `--json` seam `D-0015` consumes). Publication is the event that reopens the
+  consumption question; `D-0015` records that it makes the library-versus-
+  subprocess choice a real choice rather than superseding D-0001 by itself.
 
 A design document appears here when rondo has a design of its own to state —
 the store schema, the web UI, the MCP surface — and not before. A document that
