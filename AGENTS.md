@@ -17,11 +17,26 @@ in, deliberately.
 
 So the thing to check before starting is not "does this fit the architecture" —
 it is **"has the decision this depends on been taken?"** Most of rondo's design
-lives in cadenza's `docs/design/conductor.md` section 11 as open rows (`C-1` …
-`C-16`), and a row that is still open is not a licence to choose. Ask on the
-issue rather than choosing. `C-17` is the one row there that is *not* open: it
-was decided at cadenza's human gate on 2026-09-05 (cadenza `D-0029`), and it is
-why this repository exists.
+was proposed in cadenza's `docs/design/conductor.md` section 11 as decision rows
+(`cadenza C-1` … `cadenza C-17`), and **the eight rows that came to rondo's gate
+have all been taken**: `cadenza C-8` and `cadenza C-14` in D-0001, and
+`cadenza C-4`, `cadenza C-5`, `cadenza C-6`, `cadenza C-7`, `cadenza C-13` and
+`cadenza C-15` in D-0009 … D-0014. `cadenza C-17` — why this repository exists —
+was decided at cadenza's human gate on 2026-09-05 (cadenza `D-0029`), and
+`cadenza C-11` was settled at continuo's (`continuo D-0076`), so no row of that
+section is open anywhere.
+
+So the answer to "has it been decided?" is now usually yes, and the entry is
+where the answer is. Read the D- entry before implementing against a row: three
+of the six take the row's outcome while **correcting the reason the row gives**,
+because continuo moved under it. And a decision a row does not cover is still
+not a licence to choose — name it on the issue. **Two such decisions are open
+right now**, and both fired a falsifier D-0001 names for itself: cadenza acquired
+a package entry point (cadenza `D-0033`), and continuo's CLI grew a `--version`
+carrying the build's revision plus `--json` on the verbs a host drives (continuo
+`D-0090`). So section 2 below, and D-0001 itself, describe measurements that have
+been overtaken — check both before relying on them — and the superseding entries
+have not been written.
 
 ## 2. rondo consumes continuo and cadenza — and today it consumes neither (D-0001)
 
@@ -129,9 +144,11 @@ to comments, Markdown, or test names.
 ## 7. Scope
 
 Do what the issue says and stop. rondo's issues are deliberately narrow because
-most of what would widen them is an open row in cadenza's design. If you find a
-decision that has to be taken to finish an issue, name it on the issue rather
-than taking it in the diff.
+most of what would widen them is a decision, and a decision is taken **as its own
+`DECISIONS.md` entry at rondo's gate** — not implicitly, in the middle of an
+implementation diff that was scoped to something else. If you find one that has
+to be taken to finish an issue, name it on the issue rather than settling it in
+passing.
 
 ## 8. Review and merge are ours, not yours
 

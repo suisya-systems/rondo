@@ -19,10 +19,28 @@ What does **not** exist yet, and is not merely unfinished but undecided:
 - the durable store's schema — `src/store/sqlite.ts` names the seam and throws;
 - the agent-type registry, and any code at all that talks to an agent.
 
-Most of those wait on open rows in cadenza's `docs/design/conductor.md` section
-11 (`C-1` … `C-16`). The decision to host this in a third repository is that
-document's `C-17`, taken in cadenza#40 on 2026-09-05, and it is why this
-repository exists.
+None of those now waits on an open design row. cadenza's
+`docs/design/conductor.md` section 11 sent eight of its seventeen rows to
+rondo's gate, and all eight are entries here: `cadenza C-8` and `cadenza C-14`
+in D-0001, and `cadenza C-4`, `cadenza C-5`, `cadenza C-6`, `cadenza C-7`,
+`cadenza C-13` and `cadenza C-15` in D-0009 … D-0014, each taken as the row
+recommends on 2026-09-05 — three of them correcting a reason continuo has since
+overtaken. `cadenza C-11` was settled at continuo's gate (`continuo D-0076`), so
+no row of section 11 is open anywhere. The decision to host this in a third
+repository is that document's `cadenza C-17`, taken on 2026-09-05, and it is why
+this repository exists.
+
+Two decisions are open and neither is one of those rows. Both of these fired a
+falsifier D-0001 names for itself, on 2026-09-05:
+
+- cadenza acquired a package entry point (cadenza `D-0033`);
+- continuo's CLI grew a `--version` that carries the build's revision and
+  `--json` on the verbs a host drives (continuo `D-0090`).
+
+So the section below, and D-0001 itself, describe measurements that have been
+overtaken — in particular the claims that cadenza has no entry point and that
+`--version` reports `0.0.0` for every revision. The entries that answer the two
+have not been written yet.
 
 `npm ci --ignore-scripts && npm run verify` is the whole of verification. CI
 runs it on ubuntu and windows, on Node 22 and Node 24 — macOS is deliberately
