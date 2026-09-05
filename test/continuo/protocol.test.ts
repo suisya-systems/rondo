@@ -19,6 +19,7 @@ import {
   GATE_LIST,
   GATE_SHOW,
   type InvocationOutput,
+  LAP_PERFORM,
   RUN_ADMIT,
 } from "../../src/continuo/protocol.js";
 
@@ -436,5 +437,181 @@ describe("measure report, the one verb whose success is unwrapped", () => {
       kind: "invokerDefect",
       reason: expect.stringContaining("'report_kind' is a number"),
     });
+  });
+});
+
+/**
+ * `lap perform`'s document, as continuo's `report()` writes it, minus whatever
+ * a case removes and plus whatever it changes.
+ *
+ * A whole document per case rather than a payload fragment, because the
+ * eleven fields are read together and the interesting failures are about a
+ * single key being wrong while the other ten are right.
+ */
+function lapPayload(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    run_id: "r1",
+    workspace: "/srv/work/r1",
+    topic_branch: "topic/r1",
+    base_commit: "9f1c0b2e5a4d3c6b8f7a0e1d2c3b4a5968770123",
+    session_id: "s-r1-1",
+    session_path: "started",
+    gate_id: "g-r1-1",
+    event_id: "report_ingested/r1",
+    event_seq: 7,
+    endpoint_lease_failure: null,
+    elapsed_deadline_at_ms: null,
+    ...overrides,
+  };
+}
+
+describe("lap perform, the verb whose document is the only record of a lap", () => {
+  test("a clean lap reads into all eleven fields", () => {
+    const result = decode(
+      LAP_PERFORM,
+      output({ stdout: success(LAP_PERFORM.schema, lapPayload()) }),
+    );
+    expect(result).toEqual({
+      kind: "answered",
+      db: "/tmp/cp.sqlite3",
+      payload: {
+        runId: "r1",
+        workspace: "/srv/work/r1",
+        topicBranch: "topic/r1",
+        baseCommit: "9f1c0b2e5a4d3c6b8f7a0e1d2c3b4a5968770123",
+        sessionId: "s-r1-1",
+        // The walk's own name, not a path. The fixture says `started` because
+        // that is one of the three words continuo actually sends.
+        sessionPath: "started",
+        gateId: "g-r1-1",
+        eventId: "report_ingested/r1",
+        eventSeq: 7,
+        endpointLeaseFailure: null,
+        elapsedDeadlineAtMs: null,
+      },
+    });
+  });
+
+  test("a lease failure is reduced to continuo's message", () => {
+    const result = decode(
+      LAP_PERFORM,
+      output({
+        stdout: success(
+          LAP_PERFORM.schema,
+          lapPayload({ endpoint_lease_failure: { message: "outbox-delivery held by other" } }),
+        ),
+      }),
+    );
+    expect(result).toEqual({
+      kind: "answered",
+      db: "/tmp/cp.sqlite3",
+      payload: expect.objectContaining({
+        endpointLeaseFailure: "outbox-delivery held by other",
+      }),
+    });
+  });
+
+  test("a null lease failure is an answer and an absent one is a defect", () => {
+    // continuo states the key is "always present, and null when there is
+    // nothing to say", and says a host that had to tell absent from null to
+    // learn the lap was clean would be reading the absence of evidence as
+    // evidence. So the two cases are asserted together: they are the same rule
+    // seen from both sides.
+    const present = decode(
+      LAP_PERFORM,
+      output({ stdout: success(LAP_PERFORM.schema, lapPayload({ endpoint_lease_failure: null })) }),
+    );
+    expect(present).toEqual({
+      kind: "answered",
+      db: "/tmp/cp.sqlite3",
+      payload: expect.objectContaining({ endpointLeaseFailure: null }),
+    });
+
+    const absent = lapPayload();
+    delete absent.endpoint_lease_failure;
+    expect(decode(LAP_PERFORM, output({ stdout: success(LAP_PERFORM.schema, absent) }))).toEqual({
+      kind: "invokerDefect",
+      reason: expect.stringContaining("'endpoint_lease_failure' is absent"),
+    });
+  });
+
+  test("a lease failure object with no message is a defect, not an empty reason", () => {
+    const result = decode(
+      LAP_PERFORM,
+      output({
+        stdout: success(LAP_PERFORM.schema, lapPayload({ endpoint_lease_failure: {} })),
+      }),
+    );
+    expect(result).toEqual({
+      kind: "invokerDefect",
+      reason: expect.stringContaining("'message' is absent"),
+    });
+  });
+
+  test("a null elapsed deadline is an answer: continuo drops it rather than the report", () => {
+    const result = decode(
+      LAP_PERFORM,
+      output({
+        stdout: success(LAP_PERFORM.schema, lapPayload({ elapsed_deadline_at_ms: null })),
+      }),
+    );
+    expect(result).toEqual({
+      kind: "answered",
+      db: "/tmp/cp.sqlite3",
+      payload: expect.objectContaining({ elapsedDeadlineAtMs: null }),
+    });
+  });
+
+  test("an elapsed deadline that did pass is carried as the number it is", () => {
+    const result = decode(
+      LAP_PERFORM,
+      output({
+        stdout: success(
+          LAP_PERFORM.schema,
+          lapPayload({ elapsed_deadline_at_ms: 1_788_618_380_687 }),
+        ),
+      }),
+    );
+    expect(result).toEqual({
+      kind: "answered",
+      db: "/tmp/cp.sqlite3",
+      payload: expect.objectContaining({ elapsedDeadlineAtMs: 1_788_618_380_687 }),
+    });
+  });
+
+  test("another version of the same verb is a protocol refusal, not a coercion", () => {
+    // The `/1` is the whole version story: a renamed key or a null that starts
+    // meaning something else becomes `/2`, and this is how rondo notices.
+    const result = decode(
+      LAP_PERFORM,
+      output({ stdout: success("continuo.lap.perform/2", lapPayload()) }),
+    );
+    expect(result).toEqual({
+      kind: "protocolRefusal",
+      reason: expect.stringContaining("continuo.lap.perform/2"),
+    });
+  });
+
+  test("a field of the wrong type under the RIGHT schema is rondo's own defect", () => {
+    // rondo verified this build against a committed sha before driving it, so
+    // a `/1` document from that build whose `event_seq` is a string is rondo's
+    // model being wrong rather than the seam having moved.
+    const result = decode(
+      LAP_PERFORM,
+      output({ stdout: success(LAP_PERFORM.schema, lapPayload({ event_seq: "7" })) }),
+    );
+    expect(result).toEqual({
+      kind: "invokerDefect",
+      reason: expect.stringContaining("'event_seq' is a string"),
+    });
+  });
+
+  test("its bound is not the control plane's, because a lap walks a worker", () => {
+    // The number itself is a floor the invoker overrides per call; what this
+    // case defends is that `lap perform` is not bounded by the sixty seconds
+    // the five control-plane verbs share, which would have killed every real
+    // lap at one fifteenth of continuo's own turn timeout.
+    expect(LAP_PERFORM.timeoutMs).toBeGreaterThan(GATE_SHOW.timeoutMs);
+    expect(GATE_SHOW.timeoutMs).toBe(60_000);
   });
 });

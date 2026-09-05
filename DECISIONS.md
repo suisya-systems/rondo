@@ -56,6 +56,8 @@ C-NN`, so the spaces can never be read as one.
 | D-0016 | cadenza is still not consumed in lap 1, now for a different and narrower reason: the entry point exists, the artefact does not, and the record rondo needs is not exported | superseded by D-0018 |
 | D-0017 | The first working seam to continuo: a `src/continuo/` layer, a build rondo verifies before it drives, and `gate close` rejoining the envelope | accepted |
 | D-0018 | cadenza becomes a library rondo consumes: a vendored tarball under cadenza's delivery bridge, one facade, and a smoke that runs in every cell | accepted |
+| D-0019 | The first working conductor loop: a pure planner, an interpreter over injected ports, a durable single-flight store, and a suspend at the open gate | accepted |
+| D-0020 | The operating surface's rondo-owned rows: gate panes first, the OIDC subject as `--actor-id`, LAN-first, and rondo's store as the home of the delegation record and the operator conversation | accepted |
 
 ---
 
@@ -1237,6 +1239,12 @@ sees modules.
 > on a store schema, which D-0017 rule 5 records as outstanding. The measurements below are those of
 > `c92ab1a1c6fd9bd99c0c3b81326a30ba05432a61` and are kept as taken.
 
+> **Annotation (2026-09-06, from D-0019).** **Rule 6's outstanding half is discharged.** The store
+> schema arrived with D-0019, and the iteration row carries the **observed** continuo revision;
+> D-0019 rule 10's write order commits it *before* `run admit` is spawned, so a crash between the
+> two leaves a row that names the run id and the build it was admitted against. Nothing else in this
+> entry changes: rules 1, 2, 3, 4 and 7 stand as written, and rule 5 remains replaced by D-0017.
+
 D-0001 named this moment as one of its own falsifiers: *"continuo grows a machine-readable surface —
 `--json` on the driven subcommands and a `--version` that moves — at which point (c)'s two worst
 costs are gone and the entry should be re-argued on its merits rather than superseded by default."*
@@ -1798,6 +1806,16 @@ delivery.
 
 **Status:** accepted (2026-09-05, rondo's human gate)
 
+> **Annotation (2026-09-06, from D-0019).** Added under the annotation rule in "How to use this
+> file"; nothing below is removed or rewritten. **Rule 5's own falsifier — "the store schema
+> arriving and the observed revision still not being persisted" — did not fire; the deferral is
+> discharged instead.** D-0019 gives rondo a store, and the iteration row persists the observed
+> continuo revision, committed before `run admit` is spawned. **All eleven rules stand as written**,
+> and this entry is *not* superseded: D-0019 takes `R-1` as ports rather than as an arrow, so
+> `src/refrain` still does not import `src/continuo` and rule 2's purpose — the loop stays testable
+> on a machine with no continuo on it — is unchanged. Rule 2's arrow table gains exactly one arrow,
+> `src/refrain -> src/cadenza`, which is D-0018 rule 5's arrow and not a claim of this entry's.
+
 D-0015 named this moment as one of its own falsifiers: *"`gate close` acquiring `--json`. Rule 5's
 fallback then has no reason to exist, and the rule is replaced by the ordinary envelope handling of
 rules 2 and 3. This is the expected end of the gap, not a surprise."* `continuo D-0092` fired it,
@@ -2128,6 +2146,15 @@ npx vitest run test/continuo/smoke.test.ts           (variable unset, not CI)
 
 **Status:** accepted (2026-09-06, rondo's human gate)
 
+> **Annotation (2026-09-06, from D-0019).** Added under the annotation rule in "How to use this
+> file"; nothing below is removed or rewritten. **Rule 5's trigger fired and the arrow was taken.**
+> Rule 5 left `src/refrain -> src/cadenza` unbuilt and said "the arrow arrives when conductor code
+> consumes the facade"; D-0019 is that code — the conductor's `classify` state consumes
+> `resolveProject`, `agentTypeRecord`, `issueInitialContract` and `classifyAction` — and the arrow is
+> now in the boundary table. **Rule 7 is untouched**: `delegate` and `adopt` are still not imported,
+> and D-0019 rule 15 records the `needs_approval` dead end that follows from it as a lap-1 reduction
+> rather than working around it.
+
 **This entry supersedes D-0001 and D-0016.** Both keep their IDs and their text; both gain
 `Status: superseded by D-0018`. Two entries rather than one, because the change falsifies a claim in
 each and the claims are not independent:
@@ -2316,3 +2343,440 @@ test, which is where the question "should this layer reach cadenza?" is asked.
   4 is a sequence, not a step, and `test/cadenza/pin.test.ts` fails when the sequence breaks.
 - Any measurement above failing to reproduce. Toolchain `node v22.17.0` / `npm 10.9.2`; cadenza at
   `e56d7e71981232d19120d20ba6b920a5c4d762dc`.
+
+---
+
+## D-0019 — The first working conductor loop: a pure planner, an interpreter over injected ports, a durable single-flight store, and a suspend at the open gate
+
+**Status:** accepted (2026-09-06, rondo's human gate)
+
+This entry records the outcome of the sixteen decision rows `R-1` … `R-16` that
+[`docs/design/refrain-lap1.md`](docs/design/refrain-lap1.md) put to the gate. **Every row was taken
+exactly as its recommendation column reads**, so the reasons below are that document's and are
+summarised rather than restated; the design document is the measurement record and this entry is the
+decision. The document was written propose-only and named this entry by number in advance; it is
+now the thing it referred to.
+
+**It supersedes nothing.** Under `R-1` the loop reaches continuo through injected ports rather than
+by an import, so `D-0017` rule 2's arrow table gains one arrow — `src/refrain -> src/cadenza`, which
+is `D-0018` rule 5's arrow and not `D-0017`'s claim — and all eleven of `D-0017`'s rules stand as
+written. `D-0015` and `D-0018` likewise stand. Three earlier entries gain **dated annotations**, and
+they are recorded at the end of this entry.
+
+### Decision
+
+1. **`R-1` — the loop reaches continuo through injected ports; the only new arrow is
+   `src/refrain -> src/cadenza`.** `src/refrain/ports.ts` declares `ConductorPorts` in refrain's own
+   vocabulary — a store port, a clock, and four effect ports (`startContinuo`, `admitRun`,
+   `performLap`, `showGate`) — and no module under `src/refrain/` imports `src/continuo`. The
+   cadenza facade owns no capability; the continuo layer owns a process. `D-0017` rule 2's stated
+   purpose — the loop stays testable on a machine with no continuo on it — survives the port and
+   dies under the arrow, and `test/refrain/` is written on injected fakes with no continuo build, no
+   `spawn` and no network.
+2. **`R-2` — the composition root is a module in `src/access`.** `src/access/conductor.ts` is the
+   only module that imports both the interpreter and the continuo adapter, and it is where the
+   `resume(iterationId)` and `abandon(iterationId, reason)` entry points the operating surface calls
+   live. No new layer: `src/access` is already the only layer permitted to see the loop, the store
+   and the continuo seam, and `D-0009` and `D-0013` already put the human-facing verbs there.
+3. **`R-3` — the caller passes a complete `RunPlan`; rondo gains no allocator and no configuration
+   layer.** `RunPlan` is declared in `src/refrain/plan.ts` with a validating constructor, carrying
+   every field `run admit` and `lap perform` require, the five inputs the cadenza facade needs, and
+   `invocationCeilingMs`. The conductor receives one and never invents a field. The two things rondo
+   would otherwise have had to build are the identifier allocator `D-0012` records as an open
+   decision, and defaults for a fence's geometry continuo requires be absolute and outside the
+   worktree; both are decisions, and `AGENTS.md` section 7 forbids taking one inside an
+   implementation diff.
+4. **`R-4` — the store persists the plan verbatim beside its `plan_digest`.** A digest detects change
+   and does not hand back the plan a past run used, and continuo persists the admitted intent rather
+   than the executor paths or the agent type, so rondo's row is the only place "under what plan did
+   this run happen" is answerable. The plan is persisted as the canonical-JSON payload
+   `src/refrain/plan.ts` renders and re-reads; `src/store/plan.ts` digests those bytes.
+5. **`R-5` — the loop suspends at `awaiting_human` and returns; `resume(iterationId)` is a separate
+   entry point.** After `lap perform` answers, the gate id and everything else learned is committed,
+   the iteration transitions to `awaiting_human`, and the interpreter returns: no timer, no poll
+   loop, no in-memory continuation, and the process may exit. `resume` drives **one**
+   `gate show --json` and reads `outcome`: non-null transitions the iteration to `closed`, null
+   changes nothing and says so, which makes `resume` idempotent and safe to call from a surface that
+   cannot be sure. `resume` serves `withdrawal_requested` on the identical observation, so that state
+   is not a state with no way out. rondo drives none of `gate present` / `deliver` / `ack` / the
+   answer, and never closes a gate (`D-0013`; `closeOpenGate` hard-codes `actorKind: "human"`).
+6. **`R-6` — the graph's discipline, and no graph runtime.** Named states, an explicit and closed
+   edge relation, and a durable checkpoint at every node; no second runtime dependency. The graph's
+   distinguishing feature is fan-out, which continuo refuses upstream through the single global
+   `outbox-delivery` lease (`D-0012`), and its back-edge needs the allocator `D-0012` says does not
+   exist — so in lap 1 the loop executes each edge at most once.
+7. **`R-7` — evaluation stays in three deterministic positions and no model judge is admitted.**
+   cadenza's `classify()` before admission, the conductor's own verify (out of scope — rule 15), and
+   the human at a continuo gate. A model-judged evaluator would put a non-deterministic verdict on
+   the path to the one human contact this design rations, could not be a unit case, and its most
+   valuable output is the retry the lap-1 arc cannot perform.
+8. **`R-8` — `nextStep` stays total and pure; a separate async interpreter executes effects.**
+   `src/refrain/interpreter.ts` is the only asynchronous module in the layer, holds no state of its
+   own, and imports no external module because its effects arrive as parameters. Every persisted
+   state and every effect result is a discriminated union and the interpreter's `switch` over them is
+   exhaustive, which under `D-0002`'s strictness is a compile error when a variant is added and not
+   handled. **Anything the interpreter cannot classify halts and asks**: an unknown status string, a
+   row whose fields do not read, an effect result the union does not cover, all transition to
+   `stalled` with the reason and none proceeds. Not `awaiting_human`, which is reserved for an open
+   gate.
+9. **`R-9` — both policy axes are read exactly once, before `reserve()`, and have no second
+   reader.** They are enforced as an **admission** policy: `ask_every_iteration` refuses the request
+   before a row exists, and `maxIterations: 0` does the same, because the ceiling is compared against
+   a fresh iteration's zero attempts. What is dormant is their **post-admission** meaning, and that is
+   dormant for `D-0012`'s reason — with one lap per request `maxIterations` never bounds a second
+   iteration because there is never one, and `ask_before_landing` never permits an unattended landing
+   because rondo cannot land at all (`D-0010`). `CONSERVATIVE_POLICY` stays the default and stays
+   correct, and the interpreter requires an explicitly-constructed policy to proceed. The policy is
+   consulted **before** reservation, so a policy stop costs no row and takes no lock. cadenza's own
+   `LoopPolicy` — `maxReviewRounds`, `noProgressWindow`, `noProgressRepeat` — is carried on the
+   agent-type record, digested, and read by nothing in lap 1.
+10. **`R-10` — `reserve()` and `transition()` with `BEGIN IMMEDIATE`, and a partial unique index
+    making "at most one non-terminal iteration" the database's invariant.** `IterationStore`'s
+    `read`/`write` pair is replaced. `reserve(...)` opens `BEGIN IMMEDIATE`, inserts the `planned`
+    row with the plan and its digest, and commits, or reports that a non-terminal iteration already
+    exists. `transition(id, from, to, fields)` opens `BEGIN IMMEDIATE`, asserts the current status is
+    `from`, writes, and commits; a transition from an unexpected state is refused rather than
+    applied. `BEGIN IMMEDIATE` rather than a deferred transaction for the reason continuo gives on
+    its own admission path: under a deferred transaction the write lock is taken at the first write,
+    which leaves a window where two readers both believe they may proceed. The index is **shape B** —
+    a virtual generated column `live` that is `NULL` for a terminal status and `1` otherwise, with
+    `CREATE UNIQUE INDEX ... ON iteration(live) WHERE live IS NOT NULL` — because the index is over a
+    named column a reader can `SELECT` and the terminal set is written once rather than repeated in
+    every partial index that later wants it.
+
+    **The "one" is a lap-1 reduction, not the shape rondo is aiming at.** The target is parallel
+    delegated work at least equal to what the present human organisation already runs concurrently;
+    single-flight is what lap 1 can defend, not what the host is for. **The route from one to N is a
+    capacity ledger, not a wider index**: the three conditions `D-0012` names — an allocator for the
+    (run id, topic branch, workspace) triple, continuo's lap-level serialisation lifting, and a
+    bound somebody sets and something enforces — have to be answered before a second admission is
+    safe, and they are tracked as **rondo#8** and **continuo#167**. Until then the invariant is a
+    constant of one; afterwards the unique index is replaced by a ledger that counts against that
+    bound, and the index name `iteration_one_live` and `reserve()`'s refusal are the two places the
+    constant is burned into the schema. Both carry a comment naming rondo#8, so the replacement sites
+    are findable by `grep` rather than by reading this entry. **The falsifier is explicit: the first
+    time a second concurrent admission is actually needed**, this rule's "one" is wrong and the
+    ledger is the decision that replaces it.
+11. **`R-10`, second half — every non-terminal status carries a named releasing event, and
+    `abandon()` is the last row of the paths that cannot end themselves.** Under the unique index a
+    non-terminal state nobody can leave is a conductor that never runs again, so this table is the
+    design's real safety property and is asserted as a case per row in `test/refrain/`:
+
+    | non-terminal status | what releases it | goes to |
+    |---|---|---|
+    | `planned` | the interpreter, immediately | `classified`, or `abandoned` on `refused` / `needs_approval` |
+    | `classified` | the interpreter, immediately | `admitting`, or `failed` when the build cannot be verified |
+    | `admitting` | `run admit` answering | `admitted`, or `failed` on a refusal |
+    | `admitting`, with no answer | an operator's `abandon()` | `abandoned` |
+    | `admitted` | the interpreter, immediately | `performing` |
+    | `performing` | `lap perform` answering | `awaiting_human`, or `failed` when the answer is a refusal |
+    | `performing`, with no answer | an operator's `abandon()` | `abandoned` |
+    | `awaiting_human` | `resume()` observing a non-null gate outcome; or the abort edge | `closed`, or `withdrawal_requested` |
+    | `withdrawal_requested` | `resume()` observing a non-null gate outcome | `closed` |
+    | `stalled` | an operator's `abandon()` | `abandoned` |
+
+    `abandon(iterationId, reason)` writes a terminal row and **drives no continuo verb**: if a gate
+    is open, closing it is `D-0013`'s ask, and if a run is open, closing it is `D-0010`'s operator.
+    A `performing` iteration that **received a refusal** releases the lock and a `performing`
+    iteration that **received nothing** does not, and the difference is not how bad the outcome was —
+    it is whether anything might still be running.
+12. **`R-11` — per-verb timeouts, explicit continuo budgets, an operator-set ceiling, and no
+    cancellation.** The timeout moves onto `VerbContract` beside the schema and the reader; the five
+    existing verbs keep 60s. rondo passes `--turn-timeout-ms` and `--git-timeout-ms` explicitly, so
+    the numbers rondo reasons about are the numbers in force. rondo's own ceiling on the whole
+    `lap perform` invocation is **`invocationCeilingMs`, a `RunPlan` field the caller sets**,
+    validated as strictly greater than `turnTimeoutMs + gitTimeoutMs` — a floor, not an estimate —
+    because the turn timer is not the whole invocation and the count of git operations is not a
+    number rondo can know from outside. rondo's timer kills the CLI and not the fenced child, so
+    **rondo's ceiling firing is reported as a rondo defect requiring a human, never as a lap that
+    failed**, and the row stays `performing`. Cancellation of a lap in flight is not offered in lap 1,
+    and that is recorded as a reduction.
+13. **`R-12` — a typed `admitRun` owns the mapping, the refusal and the argv; the role table is the
+    identity over continuo's four roster names.** No caller ever names a continuo role or spells a
+    flag (`D-0014` rule 1). cadenza's `executorPolicy.roleName` is validated *structurally* only — any
+    identifier matching "a lowercase letter followed by up to 63 of `[a-z0-9_-]`" — and cadenza states
+    it does not know which roles exist; continuo's roster is exactly four names read off the bundled
+    `src/fencing/roles.json` at the pinned revision. So the domain is open and the codomain is four:
+
+    | cadenza `executorPolicy.roleName` | continuo role |
+    |---|---|
+    | `worker` | `worker` |
+    | `curator` | `curator` |
+    | `dispatcher` | `dispatcher` |
+    | `secretary` | `secretary` |
+    | anything else | **refused**, before admission, as rondo's own vocabulary error |
+
+    The identity mapping is the honest lap-1 table because rondo has no agent types yet and will mint
+    the first ones itself; recording it as a table anyway is what makes the *second* executor a change
+    to one file (`D-0014` rule 3). The table is asserted in both directions — every key maps to a name
+    in the recorded roster, every roster name is reachable, and an unmapped name is refused **without
+    a spawn**. What no test on either side catches, and `D-0014` says so already, is a *mis-mapping
+    onto a valid role*: continuo's check is `roster.includes(role)` and nothing more.
+14. **`R-13` — `lap perform` gets a decoder, and no `--cli-arg` field exists anywhere in the lap-1
+    API.** `LAP_PERFORM` joins the five contracts in `src/continuo/protocol.ts` with
+    `schema: "continuo.lap.perform/1"`, read off continuo's source rather than assumed, and reads
+    eleven fields: `run_id`, `workspace`, `topic_branch`, `base_commit`, `session_id`, `session_path`,
+    `gate_id`, `event_id`, `event_seq`, `endpoint_lease_failure` and `elapsed_deadline_at_ms`.
+    `session_path` is the walk's own name (`started` / `respawned` / `resumed`) and **not a filesystem
+    path**, and rondo's record names it so. `endpoint_lease_failure` is an object or null and is
+    always present, so a `nullableObject` reader joins `nullableString` and `nullableNumber` under the
+    absent-is-not-null rule. Semantic validation happens **before the spawn**: absolute paths where
+    continuo requires absolute paths, a run id that is non-empty and carries no whitespace, an
+    `--endpoint-recipient` that is one of continuo's `choices`, and branch names that are not
+    option-shaped. `D-0011` rule 1 admits with no `--cli-arg`, continuo's own allowlist is
+    `{"entries": []}` at the pinned revision, and a field that could carry one would be a place for a
+    later change to put one without an entry.
+15. **`R-14` — admission-time classification is in lap 1, and both stopping branches are terminal.**
+    At the `classify` state the facade resolves the project, builds the agent-type record, issues the
+    initial contract and classifies the intended action, and the three digests and the outcome are
+    committed. `refused` ends the iteration at terminal **`abandoned`** with cadenza's own reason;
+    `needs_approval` does the same, **before** admission, rather than admitting and then asking.
+    Spelling `needs_approval` as `awaiting_human` would be wrong twice: there is no gate for `resume`
+    to observe, and the status is non-terminal, so the first askable request would hold the
+    single-flight lock with no event able to release it. **Recorded as a lap-1 reduction:** resuming a
+    `needs_approval` requires a widening successor contract, which rondo may not compose (`D-0009`
+    part 2, `D-0018` rule 7 — `delegate` and `adopt` are not imported at all), so in lap 1 that branch
+    is a dead end, the human is told why, and asking again is a new iteration. **Its trigger:** the
+    first time a human wants to approve one, `D-0009`'s successor path becomes lap-1 work and this
+    reduction is wrong.
+16. **`R-15` — the conductor's own verify is not in lap 1, recorded as a reduction with its
+    trigger.** The gate is *already open* by the time rondo could verify, so a failing verify's only
+    available action is to ask the operating surface to withdraw the gate — the same action a human
+    reading the gate would take. Half-building it would put an untested branch on the path to the one
+    human contact. **Its trigger:** a lap whose gate is opened after rondo's own check rather than
+    before it, or a verify verdict a human would act on differently from the gate's own contents.
+17. **`R-16` — the test layering, and the full lap as a documented manual dogfood script.**
+    `test/refrain/` uses injected fakes only and proves the order of the states, every refusal branch,
+    persistence, restart from each state, the single-flight invariant, `withdrawal_requested` on
+    abort, resume idempotence, and rule 11's table as a case per row. `test/store/` uses a real
+    `node:sqlite` in-memory database and proves `reserve`/`transition` under `BEGIN IMMEDIATE`, the
+    unique index refusing a second live row, and the write order. Real cadenza and real continuo stay
+    confined to the two existing smokes, and `test/continuo/smoke.test.ts` still **must not drive
+    `lap perform`** (`D-0017` rule 6: a test suite is not where an agent session belongs, and that job
+    is mandatory in every matrix cell). The full lap is a **documented manual procedure** —
+    `scripts/dogfood-lap.md` — rather than a `vitest` suite excluded from `npm test`, because a test
+    file that is not run by the test command is a file whose greenness nobody can state.
+
+### What this entry changes in the tree, beyond the sixteen rows
+
+- **`src/refrain -> src/cadenza` is added to the boundary table**, and it is the only arrow added.
+  `src/refrain -> src/continuo` stays refused, with a planted case that proves it.
+- **`IterationStatus` grows from four to eleven.** Non-terminal: `planned`, `classified`,
+  `admitting`, `admitted`, `performing`, `awaiting_human`, `withdrawal_requested`, `stalled`.
+  Terminal: `closed`, `abandoned`, `failed`. **`running` is removed**, replaced by the three states
+  that say *which* effect is in flight, because "running" is the one word that cannot be acted on
+  after a crash.
+- **`Step` grows and loses `iterate`.** The union is `reserve`, `classify`, `admit`, `perform`,
+  `observe_gate`, `report`, `ask_human`, `rest`, which names the transitions of the lap-1 arc.
+  `iterate` is removed because the back-edge it named does not exist in lap 1: a second attempt needs
+  a fresh (run id, topic branch, workspace) triple that `D-0012` records nothing allocates. It returns
+  with the allocator, as that change's decision.
+- **`nextStep` takes `IterationRecord | null`.** `null` is "no iteration exists yet", and it is where
+  rule 9's admission policy is read: a permitting policy answers `reserve` and a policy that says ask
+  answers `ask_human`, which is what keeps a policy stop from taking the single-flight lock. Every
+  behavioural claim the previous cases made — both axes read, the ceiling compared with `>=`, an
+  unusable ceiling or attempt count stopping rather than freeing the loop, the conservative default
+  asking — is preserved and re-pointed at the states that exist now. The design document's line that
+  the previous cases "keep passing" unchanged was written before `running` was removed by its own
+  section 7.1; the claims survive, the spellings do not, and this bullet is the correction.
+- **`src/store/plan.ts` is granted `node:crypto`'s `createHash`**, by module and by binding, to
+  compute `plan_digest` over the canonical-JSON payload. It is the third per-module capability grant
+  in the tree, beside `node:sqlite` and the `spawn`. `src/refrain/` is granted nothing, and its
+  external allowance stays empty — which is why the digest is the store's job and not the loop's.
+- **A sixth `ContinuoResult` variant, `timedOut`.** rondo's own ceiling firing is not the same fact as
+  a defect diagnosed after the child closed, and the single-flight invariant turns on the difference:
+  an answer releases the lock and a silence keeps it (rule 11). Folding the two together would have
+  let a second lap race an orphan.
+
+### Annotations this entry adds to earlier entries
+
+- **`D-0015` rule 6** deferred persisting the observed continuo revision per run to a store schema.
+  **Discharged (2026-09-06, D-0019):** the iteration row carries the observed revision, and rule 10's
+  write order commits it *before* `run admit` is spawned.
+- **`D-0017` rule 5** left the durable half of provenance to "the issue that gives rondo a store",
+  and named its own falsifier as "the store schema arriving and the observed revision still not being
+  persisted". **Discharged (2026-09-06, D-0019):** the schema arrived and the revision is persisted.
+  All eleven of `D-0017`'s rules stand; rule 2's arrow table gains `src/refrain -> src/cadenza`.
+- **`D-0018` rule 5** left `src/refrain -> src/cadenza` unbuilt and named its trigger: "the arrow
+  arrives when conductor code consumes the facade." **Fired and taken (2026-09-06, D-0019):**
+  `src/refrain/` consumes `resolveProject`, `agentTypeRecord`, `issueInitialContract` and
+  `classifyAction` at the `classify` state. Rule 7 is untouched: `delegate` and `adopt` are still not
+  imported, and rule 15 above is why.
+
+### What was measured, and at which revisions
+
+**2026-09-06**, toolchain `node v22.17.0`, against rondo at this branch, continuo at
+`44f62336108b86cab5da791111ffa0e5b73cd01a` — the revision `continuo.pin.json` pins — and cadenza at
+`e56d7e71981232d19120d20ba6b920a5c4d762dc` — the revision `cadenza.pin.json` names. That the siblings
+sit at exactly the pinned revisions is what makes the citations evidence about rondo's seam rather
+than about somebody's checkout. The measurements themselves are
+[`docs/design/refrain-lap1.md`](docs/design/refrain-lap1.md) sections 1 and 4 to 9, and its section
+1.5 records the same two revisions. Two of them carry this entry's weight and are named again here:
+both partial-index shapes and `BEGIN IMMEDIATE`'s cross-connection refusal were measured working on
+`node:sqlite`, and continuo's `src/fencing/cli_args_allow.json` is `{"entries": []}`.
+
+### What would falsify it
+
+- **`D-0012`'s allocator arriving**, from either side. It is the trigger under almost everything
+  above: the back-edge returns and `iterate` with it, the no-progress halt and the review-round budget
+  stop being dormant, and the single-non-terminal invariant becomes a capacity question rather than a
+  constant.
+- **continuo's lap-level serialisation going away.** The "there is no fan-out" argument under rule 6
+  dies with it, and the graph runtime is reopened on its merits.
+- **cadenza#22 landing in a shape that cannot call into rondo.** Rule 5's resume trigger then falls
+  back to an operator-invoked verb on the access point, which is strictly worse for the human and
+  identical for the state machine.
+- **`closeOpenGate` admitting a non-human actor kind.** That falsifies `D-0013` first and rule 5's
+  abort edge second: the conductor could then terminate its own aborted gate, and
+  `withdrawal_requested` has no reason to exist.
+- **continuo's `run admit` or `lap perform` flag set changing.** `RunPlan` is a transcription of two
+  argument lists at one revision; a required flag added upstream is a plan that no longer admits, and
+  the failure would be an exit 1 with a stack rather than a refusal document.
+- **A `continuo.lap.perform/2`**, or any of rule 14's eleven fields changing meaning without the
+  schema moving. `D-0017`'s accept-extra-keys falsifier applies here unchanged, and rondo cannot
+  detect the second case.
+- **continuo's roster changing, or becoming a runtime input rather than a bundled document**, or an
+  agent type whose role name is not one of the four. That is rule 13's table falsified, and it is
+  `D-0014`'s own first falsifier.
+- **`node:sqlite` losing either measured behaviour** — the partial unique index or `BEGIN IMMEDIATE`'s
+  cross-connection lock. `D-0005` names the driver swap as its falsifier and rule 10 leans on both;
+  they were measured on `node v22.17.0` only, and the matrix also runs Node 24 and Windows.
+- **The `RunPlan` needing a field rondo has to invent** rather than receive. That is rule 3 failing in
+  practice, and the answer would be the allocator or a configuration layer, not a default.
+- **A `needs_approval` that a human wants to approve** (rule 15's own trigger), or **a verify verdict
+  a human would act on differently from the gate's contents** (rule 16's).
+- **rondo's ceiling firing in ordinary operation.** Rule 12 exists so it cannot happen in the ordinary
+  case; the first time it does, `invocationCeilingMs` being the operator's declared patience rather
+  than a computed bound is the thing to re-argue.
+- Any measurement above failing to reproduce. Toolchain `node v22.17.0`; continuo at
+  `44f62336108b86cab5da791111ffa0e5b73cd01a`; cadenza at `e56d7e71981232d19120d20ba6b920a5c4d762dc`.
+
+---
+
+## D-0020 — The operating surface's rondo-owned rows: gate panes first, the OIDC subject as `--actor-id`, LAN-first, and rondo's store as the home of the delegation record and the operator conversation
+
+**Status:** accepted (2026-09-06, rondo's human gate)
+
+**This entry decides and does not build.** cadenza's `docs/design/operating-surface.md` (merged in
+cadenza PR #56) re-argues the operating surface against current measurements and ends in eleven rows,
+of which it assigns **five to rondo's gate** — `cadenza S-4` … `cadenza S-8`. This entry takes all
+five exactly as their recommendation columns read, so that the surface is designed against settled
+answers rather than against open ones. **Nothing in `src/` implements the surface as a result of this
+entry**: no OIDC adapter, no HTTP binding, no gate pane and no conversation store. The one thing
+lap 1 does build is the `resume(iterationId)` entry point the conductor needs, and that is `D-0019`
+rule 5's, sitting in the composition root of `D-0019` rule 2 — not this entry's rule 1.
+
+The rows cadenza kept for its own gate — `cadenza S-1`, `S-2`, `S-3`, `S-11` — are not rondo's and
+are not taken here.
+
+### Decision
+
+1. **`cadenza S-4` — keep layout B as the endpoint and build the gate panes first.** The first cut is
+   the gate list, the gate detail, and the two write verbs the human needs (`answer`, and
+   `close --outcome withdrawn`); the conversation pane arrives when rule 5 is built. This inverts
+   cadenza#22's build order without reversing its direction: B was always the endpoint, and #22's own
+   reason for starting with A — "both read the same data model, so promoting A's cards into B's centre
+   column later is a small change" — is unaffected, because what changed is *which half has a data
+   model today*. B's centre column ships already: `gate list --json` returns `gate_id`, `gate_type`,
+   `run_id`, `stage`, `stage_entered_at_ms` and `deadline_at_ms` per gate, which is a decision-inbox
+   row field for field, including the age the inbox sorts by. A's chat has no store in any of the
+   three repositories. And `D-0009` puts this surface on the critical path of every gate, so the first
+   thing built should be the thing that is blocking.
+2. **`cadenza S-5` — the OIDC subject is passed as continuo's `--actor-id` verbatim; the *surface's*
+   own identity is the contract `issuer`; and the approver set is an allowlist of OIDC subjects, of
+   size one for lap 1, checked in rondo's application layer before any gate verb is invoked.**
+   Authentication is delegated and never hand-rolled. The two identity fields answer two different
+   questions — "who answered" and "which surface recorded it" — and collapsing them would lose the
+   second. continuo records `--actor-id` on the word of whoever invokes the verb, so an identity the
+   surface did not choose is the only thing that makes the field worth reading. Nothing in any of the
+   three repositories bounds a *human* today — cadenza's contract bounds a run, whose `grantee` is a
+   run id — so the allowlist is the smallest thing that makes cadenza#22's "access points multiply the
+   surfaces, never the set of approvers" checkable rather than aspirational.
+   **A precondition rides with this row and is taken with it: the redirect URI must be verified against
+   the chosen provider before the auth adapter is written.** A provider that permits loopback redirects
+   (`http://127.0.0.1`) does not necessarily permit a plain-HTTP redirect to a LAN address such as
+   `http://192.168.x.x:port`, and answering a gate from a phone on the LAN is exactly the case that
+   needs the second. No provider's current policy is measured or asserted here; discovering it after
+   the adapter is written is the expensive order, which is why it is carried as a precondition rather
+   than as an assumption.
+3. **`cadenza S-6` — LAN-first stands, and the binding is decided explicitly, together with rule 2.**
+   The argument is mechanical rather than dispositional: every source the console renders is a local
+   file or a child process on the host — continuo's control plane is a SQLite file named by `--db`,
+   rondo's durable store is `node:sqlite` in one module on the same host (`D-0005`), the gate relays
+   are written into a dropbox directory on disk, and continuo is driven as a child process
+   (`D-0015` rule 1). There is nothing to reach remotely, and external exposure would mean exposing a
+   process that spawns child processes and holds a delivery lease. Whether the host binds the LAN
+   interface directly or binds loopback with the LAN reached some other way is decided **with** rule 2,
+   because the redirect constraint hangs off it.
+4. **`cadenza S-7` — the delegation record is persisted in rondo's store, carrying all six facts.**
+   Not continuo's `task` table: continuo states that neither `task` nor `assessment` has DDL and that
+   they are "not designed by implication", and the issue that needs them is rondo's, in rondo's ledger,
+   over values rondo mints from a library continuo does not consume. rondo already owns one SQLite
+   module by decision (`D-0005`) and, as of `D-0019`, a schema for these facts to join. The six:
+   1. **the contract's fields as issued** — `vocabularyVersion`, `projectId`, `configDigest`, `issuer`,
+      `grantee`, `granted`, `askable`, `supersedes` — as fields rather than as a rendering of them, so
+      `contract_digest` can be recomputed and checked rather than trusted;
+   2. **`contract_digest`** beside them, so a mismatch is detectable rather than theoretical;
+   3. **`agentTypeId` and `agent_type_digest`**, which cadenza is explicit do *not* enter
+      `DelegationContract` and are run provenance the host persists beside it — if the host does not,
+      "under what policy did it do that" stops being answerable, which is the property the digest exists
+      for;
+   4. **the superseded records themselves**, because agent-type records are immutable by minting a new
+      one on every edit and durability is assigned to the store owner: a digest detects change and does
+      not hand back the policy a past run used;
+   5. **the lineage of contracts** (`supersedes` chains), so a successor issuance and its issuer check
+      can be replayed against history rather than against the current head only;
+   6. **the human-decision records and their single-use consumption**, *if* `cadenza S-1` is taken at
+      cadenza's gate — the one rule cadenza structurally cannot enforce, because it persists nothing, so
+      a decision replayed after the store has marked it spent is refused by the store or by nothing at
+      all. This sixth fact does not exist today, because no widening has been issued yet, and rondo may
+      not compose one (`D-0009` part 2, `D-0018` rule 7, `D-0019` rule 15).
+   **`D-0019`'s iteration row is not this schema**, and the two must not be conflated: it persists the
+   `RunPlan`, the three digests and the run's continuo provenance for *one* iteration. The delegation
+   record above is a second schema in the same store, and writing its DDL is the work this row unblocks
+   rather than the work this entry does.
+5. **`cadenza S-8` — the operator conversation lives in rondo's store, and never in the slot that holds
+   a gate answer.** cadenza#22 recorded it as undecided and its own cross-link claims cadenza#40
+   answered it; cadenza#40's document does not — none of `conductor.md`'s seventeen rows is the
+   conversation, and nothing in any of the three trees persists one. Two constraints ride with the
+   answer: **a gate answer never lives in the conversation** — `gate_transition.body` is the verbatim
+   human answer and a paraphrase in that slot records as human approval — and **a message in the
+   conversation is not a decision record**, so a `HumanDecisionRecord.decisionId` must not be a chat
+   message id unless that id is durable and immutable.
+
+### What this buys, and what it does not
+
+**It buys a surface designed against settled answers.** All five rows were open at cadenza's document,
+and four of them (rules 1, 2, 4 and 5) are preconditions for work that is already named: the gate panes
+are what `D-0019` rule 5's `resume` is called *by*, and the store rows are what `D-0009`'s "carries a
+human's answer" is answered *from*. Taking them now is what keeps the first surface diff from being a
+diff that also settles five decisions.
+
+**It does not build any of it, and the absence is deliberate.** `AGENTS.md` section 7 wants a decision
+taken as its own entry rather than inside an implementation diff; this is the entry, and the
+implementation is a later one. In particular there is no HTTP module, no `node:http` grant and no new
+external allowance anywhere in the tree as a result of this entry — the boundary test is unchanged by
+it, and an access point that wants `node:http` will say so in its own diff, which is where the question
+"which layer is this, and what is it allowed to reach?" belongs.
+
+**It does not decide cadenza's rows.** `cadenza S-1`'s human-decision port in particular is cadenza's
+to take, and rule 4's sixth fact is written conditionally for exactly that reason.
+
+### What would falsify it
+
+- **`cadenza S-1` being refused at cadenza's gate.** Rule 4's sixth fact is conditional on it, and its
+  refusal removes the fact rather than moving it.
+- **The chosen OIDC provider refusing the redirect a LAN-reached console needs.** That is rule 2's own
+  precondition failing, and it reopens rule 3's binding rather than rule 2's identity mapping — the
+  answer would be how the LAN reaches loopback, not a hand-rolled login.
+- **continuo recording an *authenticated* answerer.** That supplies the provenance the seam does not
+  have today, which is `D-0009`'s own falsifier, and it changes what rule 2's `--actor-id` is worth.
+- **continuo writing DDL for `task`.** Rule 4 rests on continuo declining to design it by implication;
+  if continuo's own first Issue writes it, where the delegation record belongs is a live question again.
+- **A conversation store arriving anywhere else first** — in continuo, or in a surface that keeps its
+  own — which would make rule 5 a statement about a second copy rather than about the home.
+- **The console needing a source that is not a local file or a child process.** Rule 3's argument is
+  that there is nothing to reach remotely; a remote source falsifies it directly.
+- Any measurement above failing to reproduce. The measurements are cadenza's
+  `docs/design/operating-surface.md` sections 5 to 7 at cadenza PR #56, against continuo
+  `44f62336108b86cab5da791111ffa0e5b73cd01a` and cadenza `e56d7e71981232d19120d20ba6b920a5c4d762dc`.

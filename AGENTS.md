@@ -8,15 +8,32 @@ name), and where this file and that evidence disagree, the evidence wins.
 
 `README.md` says what rondo is. This file says how work on it is done.
 
-## 1. rondo is a host, and it currently hosts nothing
+## 1. rondo is a host, and it now conducts exactly one lap
 
-The repository is a near-skeleton. `src/` holds five layers, and only two of them
-do any work: `src/continuo/` drives the pinned continuo across a process
-boundary and decodes its answers (D-0017), and `src/cadenza/` holds the one
-module allowed to import the vendored cadenza, and the functions rondo reaches
-it through (D-0018). There is still no loop, no web UI, no MCP surface, no store
-schema and no code that talks to an agent. That is the state Issue #1 left it
-in, plus the two seams the host cannot be built without.
+`src/` holds five layers and four of them do work. `src/continuo/` drives the
+pinned continuo across a process boundary and decodes its answers (D-0017);
+`src/cadenza/` holds the one module allowed to import the vendored cadenza
+(D-0018); `src/store/` holds the iteration schema, whose partial unique index
+makes "at most one non-terminal iteration" the database's invariant; and
+`src/refrain/` holds the conductor — a total, pure `nextStep` planner beside an
+async interpreter that reaches continuo through **injected ports** and cadenza
+through the one arrow the boundary table grants it (D-0019). `src/access/` holds
+the composition root that wires them.
+
+**What that does and does not mean.** The arc runs end to end and stops where it
+is supposed to: it classifies against a contract, admits a run, walks one lap,
+and suspends at a gate a human has yet to answer. It never composes the answer
+(D-0009), never publishes (D-0010), never closes a gate (D-0013) and runs one
+iteration at a time (D-0012). There is still no web UI, no MCP surface, no
+agent-type registry and no allocator — and the last of those is why single-flight
+is a **reduction** rather than the target shape (D-0019 rule 10, rondo#8).
+
+**Two rules of this layer are worth knowing before you touch it.**
+`src/refrain/`'s external allowance is *empty* and must stay empty: that is why
+continuo arrives as a port and why the plan's digest is taken in the store.
+And `nextStep` is total and pure — effects live in `interpreter.ts` and arrive
+as parameters. A change that puts an effect in the planner is a change that
+needs a decision, not a review comment.
 
 So the thing to check before starting is not "does this fit the architecture" —
 it is **"has the decision this depends on been taken?"** Most of rondo's design
