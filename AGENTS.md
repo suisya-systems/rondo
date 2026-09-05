@@ -30,39 +30,66 @@ So the answer to "has it been decided?" is now usually yes, and the entry is
 where the answer is. Read the D- entry before implementing against a row: three
 of the six take the row's outcome while **correcting the reason the row gives**,
 because continuo moved under it. And a decision a row does not cover is still
-not a licence to choose — name it on the issue. **Two such decisions are open
-right now**, and both fired a falsifier D-0001 names for itself: cadenza acquired
-a package entry point (cadenza `D-0033`), and continuo's CLI grew a `--version`
-carrying the build's revision plus `--json` on the verbs a host drives (continuo
-`D-0090`). So section 2 below, and D-0001 itself, describe measurements that have
-been overtaken — check both before relying on them — and the superseding entries
-have not been written.
+not a licence to choose — name it on the issue.
 
-## 2. rondo consumes continuo and cadenza — and today it consumes neither (D-0001)
+That pattern has now happened to D-0001 itself, which is the thing to understand
+before reading section 2. Two falsifiers D-0001 names for itself fired on
+2026-09-05 — cadenza acquired a package entry point (cadenza `D-0033`), and
+continuo's CLI grew a `--version` carrying the build's revision plus `--json` on
+the verbs a host drives (continuo `D-0090`). Both were answered the same day,
+against re-measurements at the siblings' current commits: **D-0015** re-argues
+the continuo seam and **D-0016** takes the new cadenza decision. **Neither
+outcome changed and D-0001 stays accepted** — but D-0001's own measurements are
+of the older commits and are kept as taken, so where D-0001 and D-0015/D-0016
+describe the same fact, **the later entry is the current one**.
+
+## 2. rondo consumes continuo and cadenza — and today it consumes neither (D-0001, D-0015, D-0016)
 
 This is the single most surprising fact about the repository, so it is second.
 
 `package.json` has **no `dependencies` block at all**. That is not an oversight
-and not a "yet to be wired up": it is D-0001, taken on measurement. Both
-siblings are `private: true`, unpublished (`E404`), and ship no build output;
-cadenza has no entry point of any kind. The three options Issue #1 asked to be
-measured were measured, and the answer was that continuo is reachable only
-across a **CLI process boundary** and cadenza is reachable by **no route that
-does not require a change inside cadenza**.
+and not a "yet to be wired up": it is D-0001, taken on measurement and
+re-measured at the siblings' current commits in D-0015 and D-0016. Both siblings
+are `private: true` and unpublished (`E404`), and **neither has a lifecycle
+script that would build on install** — which is a decision at each sibling's own
+gate (`continuo D-0045`, `cadenza D-0033`), not an omission. So a git or `file:`
+install of either succeeds and delivers a tree with no `dist/`: green install,
+`ERR_MODULE_NOT_FOUND` at the first import. continuo is reachable only across a
+**CLI process boundary**; cadenza is reachable only as a **built artefact
+someone else builds**, which for lap 1 means not at all.
 
 Consequences for anyone adding code here:
 
 - **Do not add a git, `file:`, workspace or tarball dependency on either sibling
-  without superseding D-0001.** Each of the four was measured; each cost is
-  written down. Reaching for one because it "should work" repeats an experiment
-  whose result is already in the file.
+  without superseding D-0001.** Each was measured twice; each cost is written
+  down. Reaching for one because it "should work" repeats an experiment whose
+  result is already in the file — including the two that now look plausible and
+  are not: cadenza's `exports` map means a deep path into `src/` is refused
+  outright (`ERR_PACKAGE_PATH_NOT_EXPORTED`), and `npm pack` succeeding on a
+  built tree says nothing about what a git specifier delivers.
 - **Do not fix a sibling to make rondo's life easier.** If a lap needs
   `@suisya-systems/cadenza` to be importable, the change belongs in cadenza,
-  through cadenza's own gate. D-0001 names the exact fields. Escalate; do not
-  patch.
+  through cadenza's own gate. Escalate; do not patch. D-0001's escalation list
+  is largely spent: three of its four requests were carried out at the siblings'
+  gates on 2026-09-05, and the fourth was a request to un-decide something.
 - When continuo is driven, it is driven as a **subprocess whose revision rondo
-  records itself** — the CLI reports `0.0.0` for every commit, so provenance is
-  rondo's problem (cadenza `C-14`).
+  verifies and records** (cadenza `C-14`, D-0015 rule 6). `--version` now
+  reports the build's git revision, so provenance is no longer rondo inventing
+  an answer the seam cannot give — it is rondo *checking* the seam's answer
+  against the pinned sha and persisting what was observed. A mismatch, the
+  literal `unknown`, or a `-dirty` suffix is a startup refusal. Build the pinned
+  checkout with `CONTINUO_REQUIRE_REVISION=1` so an unidentifiable build fails
+  at build time.
+- **`--json` is a wire protocol, not types.** Ten of continuo's fifteen driven
+  verbs carry it; rondo owns the runtime decoders and converts validated
+  documents into rondo's own records. Three things it does not reach, all of
+  which rondo's callers must handle: parser-level refusals are exit 2 with
+  *prose* rather than a document; an operator-typed bad value (a relative
+  `--workspace`, an empty `--run-id`) escapes as **exit 1 with a raw stack**, so
+  validate before spawning; and `measure report` answers unwrapped, identified
+  by `report_kind`. **`gate close` has no `--json` at all** and rejects the flag
+  at the top level — drive it as an opaque exit code and confirm with
+  `gate show --json`; never parse its prose (D-0015 rule 5).
 
 ## 3. Decisions go in `DECISIONS.md`
 

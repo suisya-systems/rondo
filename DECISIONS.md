@@ -44,12 +44,23 @@ C-NN`, so the spaces can never be read as one.
 | D-0012 | Single-flight in lap 1, and what parallel admission actually waits on (cadenza `C-7`) | accepted |
 | D-0013 | An aborted iteration's open gate is closed `withdrawn` by the operating surface, not by the conductor (cadenza `C-13`) | accepted |
 | D-0014 | The agent type's role name is mapped in the continuo-invocation adapter, which refuses an unmapped name before admission (cadenza `C-15`) | accepted |
+| D-0015 | continuo's machine-readable seam, re-argued on its merits: the CLI boundary stands, `--json` is a wire protocol rather than types, and provenance becomes a verification duty | accepted |
+| D-0016 | cadenza is still not consumed in lap 1, now for a different and narrower reason: the entry point exists, the artefact does not, and the record rondo needs is not exported | accepted |
 
 ---
 
 ## D-0001 — How rondo consumes continuo and cadenza in lap 1: a CLI process boundary for continuo, and nothing at all for cadenza
 
 **Status:** accepted (2026-09-05, rondo#1)
+
+**Re-argued, and still accepted (2026-09-05).** Two of the falsifiers below fired on the day this
+entry was taken, and both have been answered without changing what this entry decides. **D-0015**
+re-argues the continuo half on its merits — the CLI process boundary stands, and this entry's "no
+types across the seam" cost and its item 4 provenance requirement both acquire corrected reasoning
+there. **D-0016** takes the new decision about cadenza this entry said would be needed, and
+re-affirms item 3 on different facts. The measurements below are those of
+`9212f2b2e6b14fa53f9a8ed378ba6d2529393c1e` / `f8b6696881de94ec13ff0d4a2eb7f16ab65b6796` and are kept
+as taken; the current-revision re-measurements are in D-0015 and D-0016. Nothing here is superseded.
 
 ### Decision
 
@@ -352,7 +363,14 @@ for cadenza — is the same work options (a) and (b) needed. It is not wasted ei
 ### Escalated, not made
 
 Neither sibling was modified. The changes each would need, named precisely so cadenza's and
-continuo's own gates can weigh them:
+continuo's own gates can weigh them.
+
+**Three of the four were carried out at the siblings' own gates on 2026-09-05**, which is recorded
+here so a later reader does not re-escalate them: cadenza's packaging (`cadenza D-0033`, see
+D-0016), and both continuo requests — the revision-carrying `--version` and `--json` on the driven
+subcommands (`continuo D-0090`, see D-0015). `--json` landed on ten of fifteen verbs and **not on
+`gate close`**, which D-0015 measures and decides how to drive. The `prepare` non-escalation below
+stands unchanged.
 
 - **cadenza** `package.json`: an `exports` map (continuo's shape:
   `{".": {"types": "./dist/index.d.ts", "default": "./dist/index.js"}}`), a `"build"` script, a
@@ -373,8 +391,12 @@ continuo's own gates can weigh them:
 - **continuo grows a machine-readable surface** — `--json` on the driven subcommands and a
   `--version` that moves — at which point (c)'s two worst costs are gone and the entry should be
   re-argued on its merits rather than superseded by default.
+  **Fired 2026-09-05** (`continuo D-0090`); re-argued in **D-0015**, which finds one of the two
+  costs materially improved rather than gone and this entry's outcome unchanged.
 - **cadenza acquires an entry point.** Then rondo has a decision to take about cadenza that it
   does not have today, and it is a new entry rather than an edit to this one.
+  **Fired 2026-09-05** (`cadenza D-0033`); the new entry is **D-0016**, which re-affirms item 3 on
+  the artefact and the exported surface rather than on the absence of an entry point.
 - Any measurement above failing to reproduce. Every command is here so that it can be re-run; the
   toolchain it was taken on is `node v22.17.0` / `npm 10.9.2`, and npm's behaviour around
   `prepare`, `--install-links` and workspace resolution is version-dependent in ways this entry
@@ -1172,3 +1194,516 @@ sees modules.
   different roster changes the adapter and nothing above it, so what falsifies it is an executor
   whose role model forces a change above or outside the adapter, not the arrival itself.
 - **cadenza moving the role out of `executorPolicy`**, which would move the mapping's home with it.
+
+---
+
+## D-0015 — continuo's machine-readable seam, re-argued on its merits: the CLI boundary stands, `--json` is a wire protocol rather than types, and provenance becomes a verification duty
+
+**Status:** accepted (2026-09-05, rondo's human gate)
+
+D-0001 named this moment as one of its own falsifiers: *"continuo grows a machine-readable surface —
+`--json` on the driven subcommands and a `--version` that moves — at which point (c)'s two worst
+costs are gone and the entry should be re-argued on its merits rather than superseded by default."*
+`continuo D-0090` fired it. This entry is that re-argument, run against fresh measurements rather
+than against D-0001's.
+
+**D-0001 stays accepted and keeps its ID.** Its outcome is unchanged and so is the reason for it;
+what changed is the price, and the price moved in the direction D-0001 predicted rather than in a
+direction that reverses it. Two of its clauses acquire corrected reasoning here — its "no types
+across the seam" cost and its item 4 provenance requirement — and neither correction changes what
+rondo does. cadenza's half of the same falsifier list is D-0016, a new decision rather than a
+correction to an old one.
+
+### Decision
+
+1. **The CLI process boundary stands.** rondo still takes no npm dependency on continuo, and still
+   drives a checkout pinned by commit sha, built once, invoked as `node <checkout>/dist/cli.js`.
+   D-0001 items 1 and 2 are re-affirmed on merits.
+2. **`--json` is consumed as a versioned wire protocol, and rondo owns the decoders.** Nothing
+   typed crosses the process boundary. rondo validates each document at runtime — the `schema`
+   discriminator first, then `ok`, then the payload — and converts a validated document into
+   rondo's own record types. A document whose `schema` rondo does not recognise is a refusal to
+   proceed, not a value to coerce.
+3. **The host contract is three-valued, and rondo implements all three.** Exit 0: parse stdout.
+   Exit 2: stderr holds the reason, which is *either* an envelope *or* argparse prose, so the
+   decoder must tolerate a non-document and fall back to surfacing the bytes verbatim. Any other
+   status: continuo was called wrong or the process failed, stderr is text, and rondo treats it as
+   its own defect.
+4. **`measure report` is special-cased by name.** Exit 0 plus stdout is an unwrapped report
+   identified by `report_kind`, not an envelope. Its domain refusals still escape as exit 1 with a
+   stack, which rule 3 already covers.
+5. **`gate close` is driven as an opaque exit code, and its prose is never parsed.** rondo confirms
+   the state change by reading `gate show --json` afterwards, which carries `stage` and `outcome`.
+6. **rondo still records which continuo revision it drove, per run — now by verifying the seam's
+   answer rather than by substituting for its silence.** rondo pins the expected full 40-hex source
+   sha, builds that checkout with `CONTINUO_REQUIRE_REVISION=1`, reads `--version` before the first
+   driven verb, and persists the *observed* revision per run. A mismatch against the pin, the
+   literal `unknown`, or a `-dirty` suffix is a startup refusal — never silently replaced with the
+   expected sha.
+
+### What was measured, and how
+
+Everything below was run on **2026-09-05** on `node v22.17.0` / `npm 10.9.2` — the same toolchain
+D-0001 used, so its version-dependent npm findings are compared like for like. Both sibling
+checkouts were treated as strictly read-only and verified untouched before and after: `git status
+--porcelain` reported only the same pre-existing `?? .worktrees/` in each, `HEAD` was unmoved, and
+neither acquired a `node_modules/` or a `dist/`. Every build below happened in a scratch clone.
+
+```
+git -C <workers>/continuo rev-parse HEAD  ->  c92ab1a1c6fd9bd99c0c3b81326a30ba05432a61
+git -C <workers>/cadenza  rev-parse HEAD  ->  4b53ecaec7ce2d8bcd3e4ac74cdaec27a232ca83
+```
+
+**The baseline is unchanged.** `npm view @suisya-systems/continuo version` still answers
+`E404`, verbatim as D-0001 records it, and so does cadenza's. And neither package has acquired a
+lifecycle script that would build on install:
+
+```
+grep -nE '"(prepare|prepack|prepublishOnly|postinstall|install)"' <continuo>/package.json <cadenza>/package.json; echo "grep-exit=$?"
+```
+```
+grep-exit=1
+```
+
+That matters twice over: it is why option (a) still fails below, and it is the fact `continuo
+D-0045` and `cadenza D-0033` each decided *deliberately* rather than left undone.
+
+### Option (a), re-measured at the current sha: still fails
+
+```
+npm install --ignore-scripts "git+https://github.com/suisya-systems/continuo.git#c92ab1a1c6fd9bd99c0c3b81326a30ba05432a61"
+```
+```
+npm warn skipping integrity check for git dependency ssh://git@github.com/suisya-systems/continuo.git
+added 6 packages, and audited 7 packages in 13s
+```
+
+Exit 0, and the same useless install D-0001 recorded — `"files": ["dist", "README.md", "LICENSE"]`
+honoured exactly against a tree with no `dist/`:
+
+```
+ls node_modules/@suisya-systems/continuo   ->  LICENSE  package.json  README.md
+node -e 'import("@suisya-systems/continuo")'
+  ->  ERR_MODULE_NOT_FOUND: Cannot find module '.../@suisya-systems/continuo/dist/index.js'
+ls node_modules/.bin  ->  No such file or directory
+```
+
+The lockfile again records an integrity hash
+(`sha512-kL0JvSu51RmU2DlYrmZsnBTSjZNKrZmWbZv4kGlsyR/0S9Ir6dPFznjVUqBCWZdn3YC9nxm4lXLYFLi4+R3P9A==`)
+under a `npm warn skipping integrity check` — recorded, not enforced. This is a re-measurement, not
+a copy: the sha, the package contents and the hash all differ from D-0001's, and the *verdict* is
+what reproduces. D-0001's generic finding that `--ignore-scripts` does not suppress a git
+dependency's `prepare` on npm 10.9.2 is not re-run here; the npm version is unchanged, and no
+`prepare` exists to be suppressed.
+
+### Option (b), re-measured at the current shas: still fails
+
+```
+npm install --ignore-scripts --install-links "file:<workers>/continuo" "file:<workers>/cadenza"
+  ->  added 8 packages, and audited 9 packages in 2s   (exit 0)
+```
+```
+@suisya-systems/continuo -> FAIL ERR_MODULE_NOT_FOUND ... /dist/index.js
+@suisya-systems/cadenza  -> FAIL ERR_MODULE_NOT_FOUND ... /dist/index.js
+node_modules/.bin  ->  No such file or directory
+```
+
+`--install-links` packs the target, and packing a tree with no `dist/` packs no `dist/` for either
+sibling. The decisive defect is also unchanged and is structural rather than incidental — the
+lockfile records a machine-specific path and nothing else:
+
+```
+"node_modules/@suisya-systems/continuo": { "resolved": "file:../../../../home/happy_ryo/work/org/workers/continuo" }
+```
+
+No registry URL, no integrity, no commit sha. Which revision this was built against is recorded
+nowhere in the repository, which is the property D-0001 called decisive and which nothing since has
+altered.
+
+### The seam itself, built and exercised
+
+A scratch clone at the pinned sha, built with the install policy D-0007 fixes:
+
+```
+npm ci --ignore-scripts            ->  added 136 packages in 2s
+CONTINUO_REQUIRE_REVISION=1 npm run build   ->  exit 0
+  revision: c92ab1a1c6fd9bd99c0c3b81326a30ba05432a61 -> dist/build_revision.js
+git status --porcelain             ->  (empty, after the build)
+```
+
+Two facts in that transcript are load-bearing for rule 6. The build under
+`CONTINUO_REQUIRE_REVISION=1` **succeeds** rather than warning, so rondo can make "this build knows
+what it is" a build-time guarantee instead of a runtime hope. And the tree is **still clean
+afterwards**: `scripts/generate-revision.mjs` overwrites the emitted `dist/build_revision.js` and
+never `src/`, so building does not dirty the checkout whose sha is the pin — which is what makes a
+`-dirty` suffix meaningful evidence rather than an artefact of having built.
+
+```
+node dist/cli.js --version
+```
+```
+@suisya-systems/continuo 0.0.0 (rev c92ab1a1c6fd9bd99c0c3b81326a30ba05432a61)
+```
+
+The revision is the pinned sha, so the verification rule 6 describes is not hypothetical: rondo
+compares two strings it already holds. Note that `version` is still the literal `0.0.0` — the
+package is unpublished and `private: true` — so **the revision, not the version, is the identity**,
+and a rondo that compared versions would compare a constant.
+
+**A representative success and a representative refusal, per the envelope:**
+
+```
+node dist/cli.js db create --db <db> --json
+  ->  exit 0, stdout: {"schema":"continuo.db.create/1","ok":true,"db":"<db>","schema_version":4,"head_version":4}
+
+node dist/cli.js db create --db <db> --json          # the same db, second time
+  ->  exit 2, stdout EMPTY, stderr:
+      {"schema":"continuo.db.create/1","ok":false,"db":"<db>",
+       "error":{"class":"ControlPlaneRefusal","message":"<db> already exists; refusing to create over it ..."}}
+
+node dist/cli.js gate show --db <db> --gate-id nope --json
+  ->  exit 2, stderr: {"schema":"continuo.gate.show/1","ok":false,"db":"<db>",
+                       "error":{"class":"UnknownGateRefused","message":"gate nope does not exist"}}
+
+node dist/cli.js gate list --db <db> --json
+  ->  exit 0, stdout: {"schema":"continuo.gate.list/1","ok":true,"db":"<db>","gates":[]}
+```
+
+Refusals really are on stderr with stdout empty, which is what makes rule 3's two-stream reading
+implementable rather than a preference.
+
+**Which verbs carry the flag**, read off `--help` at this sha rather than off the entry that
+introduced it:
+
+| verb | `--json` |
+|---|---|
+| `run admit`, `run close` | yes |
+| `db create`, `db migrate`, `db verify` | yes |
+| `gate list`, `gate show`, `gate answer` | yes |
+| `lap perform` | yes |
+| `measure report` | yes (unwrapped) |
+| `gate close`, `gate present`, `gate deliver`, `gate ack`, `gate reconcile` | **no** |
+
+Ten of the fifteen. That is D-0090's stated scope reproduced exactly, which is worth having as a
+measurement because rule 5 turns on the one row that is not in it.
+
+**The three exceptions, each reproduced rather than cited:**
+
+```
+# 1. parser-level refusal: exit 2 with prose, NOT a document
+node dist/cli.js run close --db <db> --run-id r1 --outcome bogus --json
+  ->  exit 2, stderr: usage: continuo run close [...]
+      continuo run close: error: argument --outcome: invalid choice: 'bogus' (choose from 'completed', 'failed', ...)
+
+# 2. caller defect from an operator-typed value: exit 1 with a raw stack
+node dist/cli.js run admit --db <db> --run-id r2 --workspace relative/path <...> --json
+  ->  exit 1, stdout empty, stderr:
+      file:///.../dist/control_plane/lap_run_intent.js:376
+        throw new LapRunIntentUsageError(`workspace must be a fully qualified absolute path, got ...`)
+node dist/cli.js run admit --db <db> --run-id '' <...> --json
+  ->  exit 1, stderr: LapRunIntentUsageError: ... must be a non-empty string
+
+# 3. measure report is unwrapped
+node dist/cli.js measure report --db <db> --period-start-ms 0 --period-end-ms 1 --json
+  ->  exit 0, stdout: { "report_kind": "interlock-measurement-report", "verdict": "...", "header": { ... } }
+     (no "schema", no "ok")
+
+# and the one new refusal
+node dist/cli.js measure report --db <db> --period-start-ms 0 --period-end-ms 1 --json --format markdown
+  ->  exit 2, stderr: continuo measure report: error: argument --json: another spelling of --format json,
+      so it contradicts --format markdown; give one of the two
+```
+
+Exception 2 is the one with a consequence rondo must build for, and it is worth stating in rondo's
+own terms: **an operator's typo reaches rondo as an exit 1 and a stack trace, not as a refusal
+document.** A relative `--workspace` and an empty `--run-id` both produce it. So rondo validates
+those values at its own boundary *before* spawning, and treats an exit 1 as a rondo defect to
+report rather than an operator error to relay. Rule 3's third branch exists for this.
+
+**Latency, re-measured** over 10 runs of `db verify --json` on the built tree: **101 ms** mean.
+D-0001 measured ~103 ms for the same verb without the flag. The flag costs nothing measurable, and
+the per-invocation floor D-0001 recorded as a cost is unchanged.
+
+### The `gate close` gap, which is this entry's sharpest fact
+
+rondo D-0013 puts `gate close --outcome withdrawn` on rondo's operating surface. `continuo D-0090`
+deliberately leaves `gate close` human-only, and the build confirms it:
+
+```
+node dist/cli.js gate close --db <db> --gate-id nope --outcome withdrawn --actor-id op1 --json
+  ->  exit 2, stderr: usage: continuo [-h] [--version] {measure,settings,sandbox,attention,db,run,lap,gate} ...
+      continuo: error: unrecognized arguments: --json
+
+node dist/cli.js gate close --db <db> --gate-id nope --outcome withdrawn --actor-id op1
+  ->  exit 2, stderr: error: no gate 'nope'
+```
+
+The flag does not merely go unhandled — it is *rejected at the top level*, so a rondo that passed
+`--json` uniformly to every verb would break this one call outright. **The machine-readable seam is
+therefore incomplete at exactly the verb rondo's own design assigns to itself**, and this entry says
+so rather than reporting D-0001's "no typed surface" cost as gone.
+
+**How rondo drives it until continuo closes the gap: as an opaque exit code, confirmed by a
+separate read.** Not by parsing `error: no gate 'nope'`. Three reasons, in order of weight:
+
+- **Parsing that string is the defect `--json` exists to remove**, applied to the one verb the flag
+  does not cover. `continuo D-0090` names it in its own context — prose "parsed by regular
+  expression, silently re-parsed wrong the day a word changes". Introducing that parser here, in
+  the same change that adopts the envelope everywhere else, would be adopting the fix and the
+  hazard together.
+- **rondo does not need the prose.** What rondo needs from this call is whether the gate is closed,
+  and `gate show --json` answers that from the machine-readable half of the seam: its payload
+  carries `stage` and `outcome` explicitly. So the close is a write whose effect rondo *reads
+  back*, which is a stronger check than trusting either an exit code or a parse — it survives a
+  close that succeeds and a close that silently does nothing.
+- **A person is already at this call site.** D-0013 puts the verb on the operating surface
+  precisely because `closeOpenGate` hard-codes `actorKind: "human"`. The refusal prose is addressed
+  to the operator standing there, and rondo's job is to surface those bytes verbatim, not to
+  interpret them.
+
+So: exit 0 means the close was accepted and rondo confirms with `gate show --json`; exit 2 means
+refused and rondo shows the operator continuo's stderr unaltered; any other status is rule 3's
+third branch. **The named follow-up for continuo is `--json` on `gate close`** — the verb a host's
+own design drives, excluded from the envelope that every other driven verb carries. rondo does not
+file it; that is the secretary's, and the request is identified here by what it asks for rather
+than by an issue number.
+
+### What D-0001's cost list looks like now
+
+Restated as a ledger, because "the two worst costs are gone" was D-0001's own prediction and it is
+only half right.
+
+- **"No types across the seam" — corrected, not removed.** rondo gets a versioned wire protocol on
+  ten verbs, which is much better than prose and is *not* types. There is no shared compile-time
+  artefact: no `.d.ts` crosses the boundary, `error.class` is a hint whose message remains the
+  authority, and `ControlPlaneRefusal` covers several unrelated conditions while `gate show` and
+  `gate answer` refuse the same condition under two different classes. rondo branches on the exit
+  code and the verb, and on `class` only where the class is a leaf. The cost that remains is the
+  decoders rondo now owns and must keep in step with `continuo.<verb>/1`.
+- **"Provenance is rondo's problem" — corrected, and the requirement survives.** D-0001 recorded
+  the checkout sha *because the binary could not identify itself*. It can now. But an identity the
+  seam reports is a claim to be checked, not a fact to be trusted: the same three-git-call
+  derivation that produces the sha produces `unknown` when it cannot, and `-dirty` when the build
+  tree was modified. So D-0001 item 4 is not deleted — it becomes rule 6, and it gets *stricter*:
+  rondo persists what `--version` observed, not what it expected, and refuses to start on a
+  mismatch. Recording the expected sha and calling it provenance would now be the weaker practice.
+- **~101 ms per invocation — unchanged**, and re-measured.
+- **A second checkout and a second build — unchanged.** The build gains a step
+  (`generate-revision.mjs`) and gains a switch worth setting (`CONTINUO_REQUIRE_REVISION=1`).
+- **`gate close` answers in prose — new to this ledger**, and covered by rule 5.
+
+Two costs improved, one materially; two are unchanged; one is newly named. Nothing here argues for a
+different option, which is why D-0001's outcome stands rather than being superseded. Option (d),
+the codeload tarball, is not re-measured: D-0090 changed nothing about it, and D-0001 declined it on
+ownership rather than on capability — rondo would still be reproducing continuo's internal build,
+which is now one script longer.
+
+### What continuo publication changes
+
+`continuo D-0045` remains the event this seam is waiting for, and it is out of scope here. When it
+happens: `npm view` resolves; the dependency becomes a pinned registry version whose tarball is an
+immutable artefact with an **enforced** integrity hash rather than a recorded-and-warned-past one;
+the publisher builds, so `--ignore-scripts` regains its full meaning on rondo's side (D-0007); and
+`dist/index.d.ts` — which continuo's `exports` already names — makes real library types available
+across a boundary that is today a process.
+
+**That is a new decision, not a pre-decided switch.** It is not the case that rondo flips to an npm
+dependency the day continuo publishes. Publication removes the *packaging* objection; it does not
+by itself answer whether rondo's seam should be a library call or a subprocess, and this entry has
+just re-argued that the process boundary earns its place on ownership grounds that publication does
+not touch. What publication does settle is that the choice becomes a real choice for the first
+time. Rule 6 also survives publication in a modified form: a published `dist/` still answers
+`--version` with the revision baked into it, which is exactly the case `continuo D-0090` designed
+the literal for, so rondo's verification duty follows the artefact rather than the checkout.
+
+### What would falsify it
+
+- **`gate close` acquiring `--json`.** Rule 5's fallback then has no reason to exist, and the rule
+  is replaced by the ordinary envelope handling of rules 2 and 3. This is the expected end of the
+  gap, not a surprise.
+- **A `continuo.<verb>/2` envelope, or a new verb rondo drives arriving without `--json`.** The
+  first would mean rondo's decoders must handle two schema versions and this entry should say how;
+  the second would widen the exception rule 5 treats as a single named case.
+- **An exit-1 caller defect reaching a human as a stack trace in practice**, which would mean
+  rondo's own pre-spawn validation is not covering what rule 3 assumes it covers.
+- **`--version` reporting `unknown` or `-dirty` from a build rondo made**, which would mean rule 6's
+  build-time guarantee (`CONTINUO_REQUIRE_REVISION=1` on a clean pinned clone) does not hold on some
+  machine or CI runner in the matrix — the Windows cell being the one this was not measured on.
+- **continuo being published** (`continuo D-0045`), which reopens the option comparison as described
+  above rather than superseding this entry by itself.
+- Any measurement above failing to reproduce. Every command is here to be re-run; the toolchain is
+  `node v22.17.0` / `npm 10.9.2` and the pinned sha is
+  `c92ab1a1c6fd9bd99c0c3b81326a30ba05432a61`.
+
+---
+
+## D-0016 — cadenza is still not consumed in lap 1, now for a different and narrower reason: the entry point exists, the artefact does not, and the record rondo needs is not exported
+
+**Status:** accepted (2026-09-05, rondo's human gate)
+
+D-0001 named this too: *"cadenza acquires an entry point. Then rondo has a decision to take about
+cadenza that it does not have today, and it is a new entry rather than an edit to this one."*
+`cadenza D-0033` fired it. This is that new entry.
+
+**D-0001 item 3 is re-affirmed, and its reason is replaced.** D-0001 said cadenza was unreachable
+because it had no entry point of any kind. That is no longer true and this entry does not repeat
+it. The outcome survives on two different facts measured below: no route delivers a *built* cadenza
+to rondo without rondo owning cadenza's build, and the one lap-1 record rondo would most want from
+cadenza is not on the exported surface.
+
+### Decision
+
+1. **rondo does not consume cadenza in lap 1.** Nothing in rondo imports it, spawns it, or links to
+   it. D-0001 item 3 stands.
+2. **The reason is the artefact and the surface, not the entry point.** Stating it correctly
+   matters, because the old reason pointed at a change inside cadenza that has now been made.
+3. **What rondo needs from cadenza's vocabulary in lap 1 it continues to restate at its own
+   boundary**, as D-0009 … D-0014 already do — each of those entries takes a cadenza design row's
+   outcome as a rondo decision, in rondo's own words, with no cadenza value crossing into rondo.
+
+### What was measured, and how
+
+Same day, same toolchain and same read-only discipline as D-0015; cadenza at
+`4b53ecaec7ce2d8bcd3e4ac74cdaec27a232ca83`, verified untouched afterwards. The build and the pack
+happened in a scratch clone.
+
+**What `cadenza D-0033` actually delivered, confirmed rather than assumed.** `package.json` now
+carries `exports` (`.` and `./package.json`, nothing else), `main`, `types`, `files`
+(`dist`, `src`, `README.md`, `LICENSE`), and a `build` script. Built from the pinned clone:
+
+```
+npm ci --ignore-scripts   ->  added 133 packages in 579ms
+npm run build             ->  exit 0   (clean, then tsc -p tsconfig.build.json)
+git status --porcelain    ->  (empty)
+ls dist  ->  adapters  application  domain  index.d.ts  index.d.ts.map  index.js  index.js.map  ports
+```
+
+**The packed tarball is genuinely consumable**, which is `cadenza D-0033`'s own claim, reproduced
+here from rondo's side:
+
+```
+npm pack <scratch-clone> --ignore-scripts      ->  suisya-systems-cadenza-0.0.0.tgz  (118 files)
+npm install --ignore-scripts <that tarball>    ->  exit 0
+node -e 'import("@suisya-systems/cadenza")'    ->  import ok: 70 exports
+```
+
+### Why that does not make cadenza consumable *by rondo* today
+
+**A git dependency at the current sha still fails, and it fails for a reason `npm pack` cannot
+speak to.** This is the distinction the whole entry turns on:
+
+```
+npm install --ignore-scripts "git+https://github.com/suisya-systems/cadenza.git#4b53ecaec7ce2d8bcd3e4ac74cdaec27a232ca83"
+  ->  npm warn skipping integrity check for git dependency ...
+      added 2 packages, and audited 3 packages in 12s   (exit 0)
+```
+```
+ls node_modules/@suisya-systems/cadenza  ->  LICENSE  package.json  README.md  src
+du -sh                                    ->  228K
+ls -d .../dist                            ->  No such file or directory
+node -e 'import("@suisya-systems/cadenza")'
+  ->  ERR_MODULE_NOT_FOUND: Cannot find module '.../@suisya-systems/cadenza/dist/index.js'
+```
+
+The install is *much better shaped* than the one D-0001 measured — 228 KB against 1.7 MB, `files`
+now an allowlist, `src/` packed deliberately so the emitted maps resolve — and it is still
+unimportable, because there is no `prepare` and a git install builds nothing. `npm pack` proves a
+**freshly built tree** can be consumed; it says nothing about what a git specifier or a GitHub
+source tarball delivers, and what they deliver is a tree with no `dist/`. `cadenza D-0033` rejected
+`prepare` explicitly and for a reason rondo shares (`--ignore-scripts` on both sides), so this is a
+settled position on cadenza's side rather than an omission to be escalated.
+
+**And the deep-path escape hatch D-0001 found is now closed.** D-0001 recorded that
+`@suisya-systems/cadenza/src/index.ts` could be reached behind `tsx` — consumption "through an
+unversioned internal path, behind a runtime loader", which it declined as a dependency rather than
+called impossible. The `exports` map ends that:
+
+```
+import("@suisya-systems/cadenza/src/index.ts")
+  ->  ERR_PACKAGE_PATH_NOT_EXPORTED: Package subpath './src/index.ts' is not defined by "exports"
+import("@suisya-systems/cadenza/src/index.js")
+  ->  ERR_PACKAGE_PATH_NOT_EXPORTED
+```
+
+This is worth recording as an improvement rather than a regression, and it sharpens the decision in
+a useful direction: cadenza has moved from "consumable only by a route rondo declines" to
+"consumable only by the route cadenza intends" — a built artefact through the package name. The
+option rondo would have refused on principle no longer needs refusing. What remains is the honest
+question of who builds it.
+
+**So the routes that remain, and their cost:** a git or codeload specifier plus rondo running
+cadenza's build (`npm run build`, hence `tsc 7.0.2` and cadenza's `tsconfig.build.json`, in rondo's
+CI); or a packed tarball, which someone must build and place. Both make **rondo responsible for
+building or hosting a dependency it does not own** — the same objection D-0001 raised against
+option (d) for continuo and settled the same way. For lap 1, in which rondo consumes cadenza
+*nowhere*, paying that to import nothing would be a commitment bought for its own sake.
+
+### The surface, inventoried against what lap 1 needs
+
+`cadenza D-0033` makes the barrel the surface cadenza is answerable for, so it is worth saying
+exactly what is on it. Measured from the installed tarball, **70 exports**, covering three groups:
+G1 project resolution (`composeCatalog`, `resolveProject`, the TOML layer loader, `configDigest`
+and its value types), the G2 delegation contract (`delegationContract`, `DelegationContract`,
+`contractDigest`, `delegate`/`adopt`), the total classifier (`classify`, `Classification`,
+`Outcome`), plus the canonical-JSON primitives and the error taxonomy.
+
+**The record rondo's lap-1 entries lean on hardest is not there.** Filtering the export list for
+anything agent-, role-, executor-, loop- or grant-shaped returns exactly two names, and both are
+delegation errors (`AmplifiedGrantError`, `UngrantedDelegationError`). **There is no agent-type
+export.** cadenza's `docs/design/conductor.md` assigns that record to cadenza, and cadenza `C-2` /
+`cadenza D-0031` decided its shape — but no code implements or exports it, and `src/index.ts` says
+in its own words that the list is "a statement about progress". Meanwhile rondo D-0014 already
+depends on the agent type carrying an executor-neutral role name, and D-0011 and D-0012 sit beside
+records of the same family.
+
+This is the distinction the entry must not blur: **"consume today's G1/G2 API" and "cadenza supplies
+every lap-1 domain record" are different claims, and only the first is available.** A rondo that
+took a cadenza dependency now would import 70 values, need none of them for lap 1, and still have
+to restate the one record it does need. There is also deliberately no gate API — `cadenza D-0033`
+says so, on the ground that a gate *outcome* is an input to `classify()` and the gate verbs belong
+to continuo, which is consistent with rondo reaching gates through continuo's CLI under D-0015.
+
+### Why this is a decision and not a deferral
+
+Because the answer could have gone the other way and the reasons are now different ones. `cadenza
+D-0033` removed the packaging objection that made D-0001's answer easy, and what is left is a
+judgement: taking a dependency rondo has no lap-1 use for, whose delivery rondo would own, to
+obtain a vocabulary rondo is already restating at its own boundary under six entries that work. The
+answer is no, and the falsifiers below say precisely what would change it — none of which is
+"cadenza became consumable", because it has.
+
+### What continuo publication changes
+
+Nothing about this entry directly, and that is worth stating so the two halves are not confused.
+`continuo D-0045` is continuo's, and cadenza's publication is a separate decision cadenza has not
+taken — `cadenza D-0033` says in as many words that it "does not publish anything" and the package
+stays `private: true`.
+
+What continuo publication changes *indirectly* is the precedent and the cost model. Once rondo
+holds one published sibling as an ordinary pinned dependency with an enforced integrity hash and
+types, the marginal cost of a second one falls to almost nothing, and the argument above — that
+rondo would be owning cadenza's delivery — evaporates for cadenza the day cadenza publishes too.
+**Neither is a pre-decided switch.** cadenza publishing would fire the first falsifier below and
+bring this entry back for a decision, on a question that would then be about need rather than about
+delivery.
+
+### What would falsify it
+
+- **cadenza publishing to a registry.** The delivery objection — the larger half of this entry —
+  disappears, and the remaining question is only whether rondo needs anything on the surface. That
+  is a re-argument of this entry on its merits, in the shape D-0015 is for D-0001.
+- **cadenza exporting the agent-type record**, or any other lap-1 domain record rondo's entries
+  name. The inventory above is the reason half of this entry, and it is dated: it is true of
+  `4b53ecaec7ce2d8bcd3e4ac74cdaec27a232ca83` on 2026-09-05 and of nothing else.
+- **rondo needing a cadenza value it cannot restate.** Every entry from D-0009 to D-0014 restates a
+  cadenza row's outcome in rondo's own words; a row whose outcome cannot be restated — one that
+  needs cadenza's *code* to be correct, such as `configDigest` or `contractDigest` agreeing
+  byte-for-byte with a value cadenza computes — makes the boundary the wrong shape and this entry
+  is superseded. `cadenza D-0029`'s own falsifier is the other edge of this.
+- **cadenza acquiring a `prepare` script or otherwise making a git install deliver `dist/`**, which
+  would remove the delivery cost without publication. `cadenza D-0033` rejected this deliberately,
+  so it would be a reversal there rather than a surprise here.
+- **lap 1 growing a consumer.** This entry is scoped to lap 1 by its title; it decides nothing about
+  lap 2, and reaching it as precedent for a later lap would be reading it wider than it was taken.
+- Any measurement above failing to reproduce. Toolchain `node v22.17.0` / `npm 10.9.2`; cadenza at
+  `4b53ecaec7ce2d8bcd3e4ac74cdaec27a232ca83`.
