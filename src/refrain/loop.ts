@@ -87,6 +87,17 @@ export function nextStep(
   if (record === null) {
     return admissionStep(policy);
   }
+  // A count that is not a count is a row rondo cannot vouch for, and it stops
+  // here whatever the status says. The ceiling has exactly one reader now
+  // (D-0019 rule 9, at admission), so this is no longer a bound being compared
+  // -- it is the record failing to read, and the answer to that is the answer to
+  // every other unreadable field: halt and ask, which the interpreter files at
+  // `stalled`. Dropping the check when the comparison moved would have quietly
+  // let a row edited out of band drive a lap on the strength of its status
+  // alone.
+  if (!Number.isSafeInteger(record.attempts) || record.attempts < 0) {
+    return { kind: "ask_human", about: unknownStatusId(record) };
+  }
   switch (record.status) {
     case "planned":
       return { kind: "classify", about: record.id };

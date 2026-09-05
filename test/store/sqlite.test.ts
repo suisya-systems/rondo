@@ -255,6 +255,50 @@ test("a transition hands back the row as the database holds it", async () => {
   expect(outcome.record.sessionPath).toBe("started");
 });
 
+test("a plan edited without its digest is unreadable, digest mismatch and all", async () => {
+  const connection = new DatabaseSync(":memory:");
+  const store = iterationStore(connection);
+  await reserveOne(store, "i-0001");
+
+  // The dangerous edit is not the malformed one -- it is the *valid* one. A
+  // plan swapped for different but well-formed JSON parses, and every field
+  // reads, so a decoder that took the plan and the digest independently would
+  // hand back a plan nobody validated beside the digest of the plan nobody ran.
+  // `resume()` would then drive an edited database, workspace or command
+  // prefix while reporting the old digest. Persisting both (D-0019 rule 4) is
+  // only worth anything if the pair is checked against itself.
+  connection
+    .prepare("UPDATE iteration SET plan = ? WHERE id = ?")
+    .run('{"db":"/srv/elsewhere/control.db"}', "i-0001");
+
+  const read = await store.read("i-0001");
+  expect(read).toMatchObject({ kind: "unreadable", id: "i-0001" });
+  expect(read.kind === "unreadable" && read.reason).toMatch(/plan_digest/);
+});
+
+test("settle releases a live row and refuses to overwrite a finished one", async () => {
+  const connection = new DatabaseSync(":memory:");
+  const store = iterationStore(connection);
+  await reserveOne(store, "i-0001");
+  await store.transition("i-0001", "planned", "closed", { gateOutcome: "approved" }, 2_000);
+
+  // A terminal row can be unreadable too: `read` refuses on any malformed
+  // column, not only on the status. Without the `live IS NOT NULL` guard the
+  // escape hatch would answer that by rewriting a `closed` iteration to
+  // `abandoned`, destroying the record of a lap that really did close -- and it
+  // would do it on an operator's instruction, because that is exactly what
+  // `resume()` tells them to do with a row it cannot read.
+  connection
+    .prepare("UPDATE iteration SET plan = ? WHERE id = ?")
+    .run('{"db":"/srv/elsewhere/control.db"}', "i-0001");
+  expect(await store.settle("i-0001", "an operator gave up", 3_000)).toEqual({ kind: "missing" });
+
+  const status = connection
+    .prepare("SELECT status, gate_outcome FROM iteration WHERE id = ?")
+    .get("i-0001");
+  expect(status).toMatchObject({ status: "closed", gate_outcome: "approved" });
+});
+
 test("a status edited out of band is unreadable rather than a coercion", async () => {
   const connection = new DatabaseSync(":memory:");
   const store = iterationStore(connection);

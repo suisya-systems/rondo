@@ -146,6 +146,16 @@ export interface RunPlan {
   readonly intendedAction: IntendedAction;
 }
 
+/**
+ * The largest delay `setTimeout` can hold: 2^31 - 1 milliseconds, about 24.8
+ * days.
+ *
+ * Not a policy of rondo's but a property of the runtime, and it is a *bound*
+ * here rather than a clamp because of how Node fails it -- see
+ * {@link requireCeiling}.
+ */
+const MAX_TIMER_MS = 2_147_483_647;
+
 /** A plan rondo accepted, or the first reason it did not. */
 export type PlanOutcome =
   | { readonly kind: "planned"; readonly plan: RunPlan }
@@ -326,6 +336,24 @@ function requireGateOptions(options: readonly string[]): readonly string[] {
  */
 function requireCeiling(input: RunPlan): number {
   const ceiling = requirePositiveInteger("invocationCeilingMs", input.invocationCeilingMs);
+  if (ceiling > MAX_TIMER_MS) {
+    // **A ceiling above Node's timer range is worse than no ceiling.**
+    // `setTimeout` stores its delay in a signed 32-bit integer, and a larger
+    // value does not saturate -- it is clamped to **1 ms**, with a warning
+    // rondo's caller never sees. So a plan declaring more than about 24.8 days
+    // of patience would kill the CLI almost immediately, leave the row at
+    // `performing` holding the single-flight lock, and report a rondo defect
+    // for a lap that had barely started. The one input whose whole meaning is
+    // "wait this long" must not silently mean its opposite, so it is refused
+    // here rather than clamped: rondo cannot honour the number, and pretending
+    // to would be inventing a patience the operator did not declare.
+    return refuse(
+      `'invocationCeilingMs' is ${String(ceiling)}, and Node's timers hold a delay in a signed ` +
+        `32-bit integer: anything above ${String(MAX_TIMER_MS)} ms is clamped to 1 ms rather ` +
+        "than saturating, so a ceiling this large would fire at once. Declare a patience rondo " +
+        "can actually wait out.",
+    );
+  }
   const floor = input.turnTimeoutMs + input.gitTimeoutMs;
   if (ceiling <= floor) {
     return refuse(

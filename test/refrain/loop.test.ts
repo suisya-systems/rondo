@@ -156,14 +156,25 @@ test("the policy has no second reader once a record exists", () => {
   }
 });
 
-test("a corrupted attempt count on the record changes nothing", () => {
-  // The old file's record-side ceiling claim, in its stronger form: there is no
-  // longer a post-admission reader of `attempts` for a corrupt value to fool.
-  for (const attempts of [Number.NaN, Number.POSITIVE_INFINITY, 0.5, -1, 10_000]) {
-    expect(nextStep(recordWith("planned", attempts), permissive(1))).toEqual(
-      nextStep(recordWith("planned", 1), permissive(1)),
-    );
+test("an attempt count that is not a whole number stops the loop", () => {
+  // The old file's record-side claim, kept: a corrupted count must not read as
+  // an ordinary one. The ceiling has moved to admission (D-0019 rule 9), so
+  // this is no longer a bound being compared -- it is the record failing to
+  // read, and an unreadable field halts and asks whatever the status says.
+  // Losing this when the comparison moved would have let a row edited out of
+  // band drive a lap on the strength of its status alone.
+  for (const attempts of [Number.NaN, Number.POSITIVE_INFINITY, 0.5, -1]) {
+    expect(nextStep(recordWith("planned", attempts), permissive(1))).toEqual(asks);
   }
+});
+
+test("an attempt count that is merely large is not corruption", () => {
+  // The other half of the same claim, and the one that keeps the check from
+  // being a second ceiling: there is no post-admission bound on `attempts`, so
+  // a big whole number is an ordinary record and reads as one.
+  expect(nextStep(recordWith("planned", 10_000), permissive(1))).toEqual(
+    nextStep(recordWith("planned", 1), permissive(1)),
+  );
 });
 
 // --- a case per status, so the switch is covered -----------------------------

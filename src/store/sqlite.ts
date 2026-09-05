@@ -475,24 +475,38 @@ export function iterationStore(connection: DatabaseSync): IterationStore {
               `UPDATE iteration SET status = ?, updated_at_ms = ?${write.clauses} WHERE id = ?`,
             )
             .run(to, nowMs, ...write.values, id);
-          return null;
+          // Read back **inside** the transaction, and hand back what came out of
+          // the database rather than what was constructed in memory. The two
+          // differ exactly when a write did not land, which is the case worth
+          // being able to see; a record assembled from the arguments would
+          // report the caller's intent back to the caller.
+          //
+          // **Inside rather than after the commit, and that is the whole point.**
+          // A read after `COMMIT` leaves a window in which another process --
+          // an operator's `abandon()`, most realistically -- moves the row to a
+          // terminal status before the read happens. This method would then hand
+          // back a terminal record as a *successful* transition, and the
+          // interpreter would go on to spawn `run admit` or `lap perform` for an
+          // iteration that had already released the single-flight lock, with a
+          // second iteration free to be reserved against it. That is precisely
+          // the race D-0019 rule 10's invariant exists to make impossible, so
+          // the read belongs where the write lock still holds.
+          const written = readRow(id);
+          if (written === null) {
+            return {
+              kind: "defect",
+              reason: `the row '${id}' vanished inside its own transaction`,
+            };
+          }
+          return { kind: "transitioned", record: toRecord(written) };
         });
-        if (outcome !== null) {
-          return outcome;
-        }
-        // Re-read **after** the commit, and hand back what came out of the
-        // database rather than what was constructed in memory. The two differ
-        // exactly when a write did not land, which is the case worth being able
-        // to see; a record assembled from the arguments would report the
-        // caller's intent back to the caller.
-        const written = readRow(id);
-        if (written === null) {
+        if (outcome === null) {
           return {
             kind: "defect",
-            reason: `the row '${id}' vanished between its own commit and the read back`,
+            reason: `the transition of '${id}' from '${from}' to '${to}' produced no answer`,
           };
         }
-        return { kind: "transitioned", record: toRecord(written) };
+        return outcome;
       } catch (error) {
         return { kind: "defect", reason: describe(error) };
       }
@@ -518,18 +532,28 @@ export function iterationStore(connection: DatabaseSync): IterationStore {
         // row this exists to end. `BEGIN IMMEDIATE` all the same, because the
         // write releases the single-flight lock and another process reserving
         // against it must be serialised by the database rather than by luck.
+        // **`live IS NOT NULL` is a guard and not an optimisation.** A row that
+        // will not decode may be one whose *status* is fine and whose some other
+        // column is malformed -- a `closed` iteration with a corrupt digest, say
+        // -- and `read` answers `unreadable` for that too. Without this clause
+        // the escape hatch would overwrite a finished outcome with `abandoned`,
+        // destroying the record of a lap that really did close. The hatch exists
+        // to release a row that is *holding the lock* (D-0019 rule 11), and the
+        // generated column is exactly the database's own answer to "is it".
         const changes = inTransaction(
           () =>
             connection
               .prepare(
                 "UPDATE iteration SET status = 'abandoned', reason = ?, updated_at_ms = ? " +
-                  "WHERE id = ?",
+                  "WHERE id = ? AND live IS NOT NULL",
               )
               .run(reason, nowMs, id).changes,
         );
         // `changes` is the only thing that distinguishes "no such row" from a
         // row that was terminated, and it is the database's count rather than a
-        // read this method is not allowed to make.
+        // read this method is not allowed to make. Zero now covers two cases --
+        // no row at all, and a row that was already terminal -- and both are
+        // "nothing to release", which is the one fact the caller acts on.
         return changes === 0n || changes === 0 ? { kind: "missing" } : { kind: "settled" };
       } catch (error) {
         return { kind: "defect", reason: describe(error) };
@@ -661,7 +685,7 @@ function toRecord(row: SqlRow): IterationRecord {
     status: requireStatus(row),
     request: requireText(row, "request"),
     plan: requirePlan(row),
-    planDigest: requireText(row, "plan_digest"),
+    planDigest: requireMatchingDigest(row),
     attempts: requireInteger(row, "attempts"),
     runId: optionalText(row, "run_id"),
     continuoRevision: optionalText(row, "continuo_revision"),
@@ -702,6 +726,34 @@ function requireStatus(row: SqlRow): IterationStatus {
 }
 
 /** The plan column, parsed back into the record it was stored as. */
+/**
+ * The persisted digest, checked against the plan it claims to describe.
+ *
+ * D-0019 rule 4 persists the plan **verbatim beside** its digest, and the reason
+ * it persists both is that a digest detects change. A decoder that read the two
+ * independently would hand back a plan and a digest that do not describe each
+ * other, and `resume()` would then drive a database, a workspace and a command
+ * prefix somebody edited while reporting the digest of the plan nobody ran --
+ * which is the one thing the pair was written down to prevent.
+ *
+ * So a mismatch is a row that will not decode. It is a `StoreDefect` rather than
+ * a coercion for the same reason an unknown status is: rondo is not the
+ * exclusive author of this database, and a row it cannot vouch for is one a
+ * person has to look at, not one to proceed on.
+ */
+function requireMatchingDigest(row: SqlRow): string {
+  const recorded = requireText(row, "plan_digest");
+  const recomputed = planDigest(requirePlan(row));
+  if (recorded !== recomputed) {
+    throw new StoreDefect(
+      `the iteration row's plan_digest is '${recorded}' and its plan digests to ` +
+        `'${recomputed}'. The pair no longer describes one plan, so rondo cannot say under what ` +
+        "plan this iteration ran.",
+    );
+  }
+  return recorded;
+}
+
 function requirePlan(row: SqlRow): JsonRecord {
   const text = requireText(row, "plan");
   let parsed: unknown;
