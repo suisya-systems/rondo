@@ -4,17 +4,21 @@ The host application of the successor stack: the one long-running process a pers
 
 ## Status
 
-**A skeleton with its boundaries enforced, one seam behind them that works,
-and nothing else.**
+**A skeleton with its boundaries enforced, two working seams behind them --
+one to each sibling -- and nothing else.**
 
 What exists: a TypeScript/ESM package in cadenza's conventions, a CI gate on
 ubuntu and windows across Node 22 and 24, an architecture test that polices the
 dependency direction of `src/`, `DECISIONS.md` with the measured decisions about
-how rondo consumes its two siblings (D-0001, re-argued in D-0015 and D-0016),
-and — new — **a working seam to continuo** (D-0017): `src/continuo/` decodes
+how rondo consumes its two siblings (D-0001, re-argued in D-0015 and D-0016 and
+now superseded by D-0018),
+**a working seam to continuo** (D-0017): `src/continuo/` decodes
 continuo's `--json` envelope, verifies the pinned build's revision before it
 drives anything, and is exercised end to end against a real continuo in every
-CI cell.
+CI cell — and, new, **cadenza consumed as a library** (D-0018): a tarball built
+once from a pinned cadenza commit and committed under `vendor/`, rondo's first
+runtime dependency, reached through the single facade in `src/cadenza/` and
+exercised in every CI cell with in-memory fixtures.
 
 What does **not** exist yet, and is not merely unfinished but undecided:
 
@@ -22,7 +26,9 @@ What does **not** exist yet, and is not merely unfinished but undecided:
 - the web UI and the localhost MCP surface — `src/access/` holds one in-process
   access point that forwards a question and nothing else;
 - the durable store's schema — `src/store/sqlite.ts` names the seam and throws;
-- the agent-type registry, and any code at all that talks to an agent;
+- the agent-type *registry* — cadenza supplies the record and rondo can now
+  build one (D-0018), and there is nowhere to keep them and nothing that talks
+  to an agent;
 - the durable half of provenance — the seam verifies which continuo it drove and
   hands back what it observed, and there is no row to write it to yet, which
   D-0017 rule 5 records rather than glosses.
@@ -41,29 +47,39 @@ this repository exists.
 Two of D-0001's own falsifiers fired on 2026-09-05 — cadenza acquired a package
 entry point (cadenza `D-0033`), and continuo's CLI grew a `--version` that
 carries the build's revision plus `--json` on the verbs a host drives (continuo
-`D-0090`). Both have since been answered, at rondo's gate on the same day, with
-the siblings re-measured at their current commits: **D-0015** re-argues the
-continuo seam on its merits and **D-0016** takes the new decision about cadenza.
-D-0001 stays accepted; neither outcome changed, and no decision is open.
+`D-0090`). Both were answered at rondo's gate on the same day, with the siblings
+re-measured at their current commits: **D-0015** re-argues the continuo seam on
+its merits and **D-0016** took the new decision about cadenza, and neither
+outcome changed then. **On 2026-09-06 the cadenza half changed**: cadenza
+accepted a delivery route for a consumer that installs with `--ignore-scripts`
+(cadenza `D-0035`) and exported the agent-type record (cadenza `D-0034`), which
+are two of the falsifiers D-0016 named for itself. **D-0018** answers both and
+supersedes D-0001 and D-0016. What D-0018 does *not* touch is D-0001's other
+half: continuo across a CLI process boundary, and the duty to record which
+continuo revision drove a run, are unchanged and live in D-0015 and D-0017.
 
-`npm ci --ignore-scripts && npm run verify` is the whole of verification. CI
-runs it on ubuntu and windows, on Node 22 and Node 24 — macOS is deliberately
-not in the matrix, because nothing here is platform-specific in a way the
-Windows cell does not already exercise harder.
+`node vendor/pin.mjs check && npm ci --ignore-scripts && npm run verify` is the
+whole of verification, and the first command is part of it rather than a
+formality: it says whether the vendored cadenza tarball is still the one this
+repository pinned, before npm can install previously pinned bytes out of a warm
+cache (D-0018 rule 4). CI runs the same sequence on ubuntu and windows, on Node
+22 and Node 24 — macOS is deliberately not in the matrix, because nothing here
+is platform-specific in a way the Windows cell does not already exercise
+harder.
 
 ## How it relates to continuo and cadenza
 
 rondo is the consumer. Neither sibling depends on it, and neither is changed to
 suit it.
 
-**Today rondo depends on neither of them as a package.** `package.json` has no
-`dependencies` block. That is D-0001, and it is a measurement rather than a
-plan: both siblings are `private: true` and unpublished (`npm view` still
-answers `E404` for each), and neither has a lifecycle script that would build on
-install, so a git or `file:` install of either delivers a tree with no `dist/`
-and an import that dies. Four ways of consuming them were measured in D-0001 and
-re-measured at the siblings' current commits in D-0015 and D-0016; the commands
-and their output are recorded verbatim in all three.
+**rondo depends on exactly one of them as a package: cadenza.** Both siblings
+are still `private: true` and unpublished (`npm view` answers `E404` for each),
+and neither builds on install — that measurement, in D-0001 and re-measured in
+D-0015 and D-0016, has not changed and is why neither can simply be named as a
+git or `file:` dependency. What changed is that cadenza wrote down a route that
+works anyway (`cadenza D-0035`): build it once, by hand, from a pinned commit,
+and commit the resulting tarball. rondo takes that route in D-0018, and it takes
+it for cadenza only — continuo stays a subprocess.
 
 For **lap 1**:
 
@@ -84,13 +100,18 @@ For **lap 1**:
   the shared envelope, which fired D-0015's own falsifier, and **D-0017 replaces
   rule 5**: `gate close` is decoded like every other verb, and the second
   subprocess is gone.
-- **cadenza is not consumed at all** (D-0016). It now has a package entry point,
-  an emitted `dist/` and a packed tarball that a consumer can import — but no
-  git or codeload install delivers that build, so any route would make rondo
-  responsible for building or hosting a dependency it does not own, to import
-  values lap 1 does not use. The one record rondo's own entries lean on, the
-  agent type, is not on the exported surface. The parts of cadenza rondo needs
-  are reached through continuo or restated at rondo's own boundary.
+- **cadenza is consumed as a library** (D-0018), through the bridge cadenza
+  accepted for exactly this (`cadenza D-0035`): a tarball packed once from
+  cadenza `e56d7e71981232d19120d20ba6b920a5c4d762dc`, committed under `vendor/`
+  with its sha256, and named in `package.json` as
+  `file:vendor/suisya-systems-cadenza-0.0.0.tgz`. Three separate facts are
+  pinned and never conflated — the **commit** (`cadenza.pin.json`) is what was
+  meant to be built, the **sha256** is which bytes rondo carries, and the
+  lockfile's **sha512** is which bytes npm installs. What the bridge cannot give
+  is provenance: nothing but the procedure and the person who ran it connects
+  that commit to those bytes, and that gap closes when cadenza publishes.
+  Everything rondo imports goes through one facade, `src/cadenza/facade.ts`; no
+  other module is allowed to name the package.
 
 What changes this: **publication**. When continuo is published to a registry
 (`continuo D-0045`), the dependency becomes an ordinary pinned version with an
@@ -98,7 +119,11 @@ What changes this: **publication**. When continuo is published to a registry
 that keeps `--ignore-scripts` meaningful on rondo's side. D-0015 records that
 this makes the library-versus-subprocess choice a real choice for the first time
 rather than flipping a pre-decided switch. cadenza's publication is a separate
-decision cadenza has not taken.
+decision cadenza has not taken — and when it is taken, it deletes the bridge:
+the vendored tarball, `vendor/pin.mjs`, the sha256 and the source pin are all
+replaced by an ordinary pinned version whose integrity npm enforces without any
+of this. That is what the bridge is for, and cadenza's own page says it is
+written to be thrown away.
 
 ## Layout
 
@@ -107,9 +132,12 @@ decision cadenza has not taken.
 | `src/refrain/` | The loop. Imports nothing external, ever — that is the boundary. |
 | `src/access/` | Access points: the web UI and the localhost MCP surface, when they exist. May reach the loop and the continuo seam; neither may reach back. `console.ts` is the one place output is escaped to ASCII. |
 | `src/continuo/` | The seam to continuo (D-0017): a pure protocol decoder, the pin and its verification, and `invoker.ts` — the one module under `src/` allowed to start a process. Reaches only itself. |
+| `src/cadenza/` | The seam to cadenza (D-0018): `facade.ts` is the one module under `src/` allowed to import `@suisya-systems/cadenza`, binding by binding. Reaches only itself — no layer reaches it yet, and the arrow from the loop arrives with the code that uses it. |
 | `src/store/` | Durable state. `sqlite.ts` is the one module under `src/` allowed to name a SQLite driver, which is the scope the test enforces. |
 | `test/architecture/` | The test that enforces the arrows above, and the per-module capability grants (SQLite, and the spawn). |
 | `continuo.pin.json` | Which continuo rondo drives: repository, full sha, and the exact `--version` line that build prints. CI provisions from it; `src/continuo/pin.ts` mirrors it; a test fails if they drift. |
+| `cadenza.pin.json` | Which cadenza rondo carries: repository and full sha — the *source* pin, and no version, because every cadenza build is `0.0.0`. |
+| `vendor/` | The committed cadenza tarball, its sha256, and `pin.mjs` — the portable `record`/`check` helper cadenza's bridge prescribes. `node vendor/pin.mjs check` runs immediately before every install, locally and in all three installing CI jobs. |
 | `DECISIONS.md` | The append-only design record. Cite by ID. |
 | `AGENTS.md` | How work here is done. |
 | `docs/` | Index of the records, and of where the enforced rules live. |

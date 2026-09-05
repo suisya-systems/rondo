@@ -22,9 +22,11 @@ currently held in two places that already exist and are maintained:
   host. Its section 11 is the open-decision table; `C-17` is the row that
   created this repository (decided at cadenza's human gate on 2026-09-05,
   cadenza `D-0029`), and `C-8` and `C-14` are the rows
-  [`D-0001`](../DECISIONS.md) answers for rondo's side of the seam — re-argued
+  [`D-0001`](../DECISIONS.md) answered for rondo's side of the seam — re-argued
   at the current sibling commits in `D-0015` (continuo) and `D-0016` (cadenza),
-  with both outcomes unchanged. `C-9` is deliberately not in that list: it asks
+  with both outcomes unchanged then, and **superseded for cadenza by `D-0018`**,
+  which takes the dependency through cadenza's own delivery bridge
+  (`cadenza D-0035`). `C-9` is deliberately not in that list: it asks
   what it would cost *cadenza* to take the npm dependency, and `C-17` removed
   its antecedent.
 - **continuo's `DECISIONS.md`** owns the control plane rondo drives, including
@@ -51,3 +53,6 @@ it fails rather than being read:
 | Nothing is installed except from the lockfile, with `--ignore-scripts` | `npm ci --ignore-scripts` in every CI job |
 | rondo drives the pinned continuo end to end, in every matrix cell | the "Provision the pinned continuo" step of `double-green` and [`../test/continuo/smoke.test.ts`](../test/continuo/smoke.test.ts), which fails rather than skips under `CI` |
 | The pin in [`../continuo.pin.json`](../continuo.pin.json), the literals in `src/continuo/pin.ts` and the sha CI provisions cannot drift apart | [`../test/continuo/pin.test.ts`](../test/continuo/pin.test.ts) |
+| The vendored cadenza is one artifact: the source pin in [`../cadenza.pin.json`](../cadenza.pin.json), the committed sha256, the dependency specifier and the lockfile's sha512 all describe the same tarball — and every CI install is preceded by the portable digest check (`D-0018`) | [`../test/cadenza/pin.test.ts`](../test/cadenza/pin.test.ts), and `node vendor/pin.mjs check` before each `npm ci --ignore-scripts` in [`../.github/workflows/ci.yml`](../.github/workflows/ci.yml) |
+| Exactly one module under `src/` imports `@suisya-systems/cadenza`, binding by binding, and no other layer reaches it (`D-0018`) | [`../test/architecture/import-boundaries.test.ts`](../test/architecture/import-boundaries.test.ts) |
+| rondo drives the vendored cadenza through its own facade — resolution, the agent-type record, an initial contract and one classification — in every matrix cell | [`../test/cadenza/smoke.test.ts`](../test/cadenza/smoke.test.ts) |

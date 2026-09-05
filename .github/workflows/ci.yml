@@ -54,6 +54,21 @@ jobs:
           node-version: ${{ matrix.node }}
           cache: npm
 
+      - name: Check the vendored cadenza tarball
+        # Immediately before the install, in every job that installs, and never
+        # only as a test afterwards (D-0018 rule 4). npm's integrity hash is
+        # enforced against its cache: swap the tarball with a COLD cache and
+        # `npm ci` fails with EINTEGRITY, but do it with a WARM one and npm
+        # exits 0 having installed the bytes it already held. That is integrity
+        # working rather than failing, and it makes a drifted tarball loud on a
+        # runner and silent on a laptop. This check is cache-independent and
+        # says which digest was expected and which was found, where EINTEGRITY
+        # reports a base64 hash nobody can read.
+        #
+        # Node rather than `sha256sum`: coreutils is absent on stock macOS and
+        # on Windows, and the cell below is a Windows cell.
+        run: node vendor/pin.mjs check
+
       - name: Install from the lockfile
         # `npm ci`, never `npm install`: it fails when package.json and
         # package-lock.json disagree, so a dependency cannot drift into a run
@@ -181,6 +196,11 @@ jobs:
           node-version: "22"
           cache: npm
 
+      # The digest check runs immediately before the install here too, for the
+      # reason the `double-green` job spells out: a warm npm cache can install
+      # previously pinned bytes when the committed tarball has drifted, and this
+      # is the one step that reports it either way (D-0018 rule 4).
+      - run: node vendor/pin.mjs check
       - run: npm ci --ignore-scripts
 
       - name: Lint and format
@@ -228,6 +248,11 @@ jobs:
           node-version: "22"
           cache: npm
 
+      # The digest check runs immediately before the install here too, for the
+      # reason the `double-green` job spells out: a warm npm cache can install
+      # previously pinned bytes when the committed tarball has drifted, and this
+      # is the one step that reports it either way (D-0018 rule 4).
+      - run: node vendor/pin.mjs check
       - run: npm ci --ignore-scripts
 
       - name: Plant a violation and require a red suite

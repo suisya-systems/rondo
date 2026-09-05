@@ -1,0 +1,9 @@
+{
+  "$comment": "The cadenza rondo consumes as a library (DECISIONS.md D-0018), delivered by cadenza's accepted artifact-delivery bridge (cadenza D-0035, docs/artifact-delivery-bridge.md). THREE DIFFERENT FACTS are pinned in three different places and this file holds exactly one of them: `repository` + `revision` is what was MEANT to be built, and it lives here because a tarball cannot attest to the revision it was packed from -- every build of every cadenza revision is version 0.0.0, so there is deliberately no version line here (unlike continuo.pin.json, whose seam has a --version to measure). Which bytes rondo carries is `vendor/cadenza.tgz.sha256`, checked by `node vendor/pin.mjs check`; which bytes npm installs is the sha512 `integrity` in package-lock.json. test/cadenza/pin.test.ts is where the three are required to describe the same tarball. Moving the pin means re-running phase 1 of the bridge and editing this file, the digest, the tarball and the lockfile together.",
+  "repository": "https://github.com/suisya-systems/cadenza.git",
+  "revision": "e56d7e71981232d19120d20ba6b920a5c4d762dc",
+  "tarball": "vendor/suisya-systems-cadenza-0.0.0.tgz",
+  "digestFile": "vendor/cadenza.tgz.sha256",
+  "packageName": "@suisya-systems/cadenza",
+  "packageSpecifier": "file:vendor/suisya-systems-cadenza-0.0.0.tgz"
+}

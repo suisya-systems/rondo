@@ -10,11 +10,13 @@ name), and where this file and that evidence disagree, the evidence wins.
 
 ## 1. rondo is a host, and it currently hosts nothing
 
-The repository is a near-skeleton. `src/` holds four layers, and only one of them
-does any work: `src/continuo/` drives the pinned continuo across a process
-boundary and decodes its answers (D-0017). There is still no loop, no web UI, no
-MCP surface, no store schema and no code that talks to an agent. That is the
-state Issue #1 left it in, plus the one seam the host cannot be built without.
+The repository is a near-skeleton. `src/` holds five layers, and only two of them
+do any work: `src/continuo/` drives the pinned continuo across a process
+boundary and decodes its answers (D-0017), and `src/cadenza/` holds the one
+module allowed to import the vendored cadenza, and the functions rondo reaches
+it through (D-0018). There is still no loop, no web UI, no MCP surface, no store
+schema and no code that talks to an agent. That is the state Issue #1 left it
+in, plus the two seams the host cannot be built without.
 
 So the thing to check before starting is not "does this fit the architecture" —
 it is **"has the decision this depends on been taken?"** Most of rondo's design
@@ -33,48 +35,76 @@ of the six take the row's outcome while **correcting the reason the row gives**,
 because continuo moved under it. And a decision a row does not cover is still
 not a licence to choose — name it on the issue.
 
-That pattern has now happened to D-0001 itself, which is the thing to understand
-before reading section 2. Two falsifiers D-0001 names for itself fired on
-2026-09-05 — cadenza acquired a package entry point (cadenza `D-0033`), and
-continuo's CLI grew a `--version` carrying the build's revision plus `--json` on
-the verbs a host drives (continuo `D-0090`). Both were answered the same day,
+That pattern has now happened to D-0001 itself, twice, which is the thing to
+understand before reading section 2. Two falsifiers D-0001 names for itself
+fired on 2026-09-05 — cadenza acquired a package entry point (cadenza `D-0033`),
+and continuo's CLI grew a `--version` carrying the build's revision plus `--json`
+on the verbs a host drives (continuo `D-0090`). Both were answered the same day,
 against re-measurements at the siblings' current commits: **D-0015** re-argues
-the continuo seam and **D-0016** takes the new cadenza decision. **Neither
-outcome changed and D-0001 stays accepted** — but D-0001's own measurements are
-of the older commits and are kept as taken, so where D-0001 and D-0015/D-0016
-describe the same fact, **the later entry is the current one**.
+the continuo seam and **D-0016** took the new cadenza decision, and neither
+outcome changed then. On 2026-09-06 the cadenza half moved for real — cadenza
+accepted a delivery bridge (`cadenza D-0035`) and exported the agent-type record
+(`cadenza D-0034`), which are two of D-0016's own falsifiers — and **D-0018
+supersedes both D-0001 and D-0016**.
 
-## 2. rondo consumes continuo and cadenza — and today it consumes neither (D-0001, D-0015, D-0016)
+Two habits follow. **Read the superseding entry, not the superseded one**, where
+they describe the same fact: D-0001's and D-0016's measurements are of older
+commits and are kept as taken. And **supersession here is whole-entry**, so read
+what the replacement says survives — D-0018 supersedes D-0001 while explicitly
+leaving its items 2 and 4 standing (continuo as a subprocess, and recording
+which continuo revision drove a run), carried by D-0015 and D-0017.
 
-This is the single most surprising fact about the repository, so it is second.
+## 2. rondo consumes continuo as a subprocess and cadenza as a package (D-0015, D-0017, D-0018)
 
-`package.json` has **no `dependencies` block at all**. That is not an oversight
-and not a "yet to be wired up": it is D-0001, taken on measurement and
-re-measured at the siblings' current commits in D-0015 and D-0016. Both siblings
-are `private: true` and unpublished (`E404`), and **neither has a lifecycle
-script that would build on install** — which is a decision at each sibling's own
-gate (`continuo D-0045`, `cadenza D-0033`), not an omission. So a git or `file:`
-install of either succeeds and delivers a tree with no `dist/`: green install,
-`ERR_MODULE_NOT_FOUND` at the first import. continuo is reachable only across a
-**CLI process boundary**; cadenza is reachable only as a **built artefact
-someone else builds**, which for lap 1 means not at all.
+This is the most surprising pair of facts about the repository, so it is second.
+It is also the part that moved most recently: D-0001 and D-0016 said rondo
+consumed **neither**, and **D-0018 supersedes both** as far as cadenza is
+concerned.
+
+`package.json` now has a `dependencies` block with exactly one entry:
+
+```
+"@suisya-systems/cadenza": "file:vendor/suisya-systems-cadenza-0.0.0.tgz"
+```
+
+Both siblings are still `private: true` and unpublished (`E404`), and **neither
+has a lifecycle script that would build on install** — a decision at each
+sibling's own gate (`continuo D-0045`, `cadenza D-0033`), not an omission. So a
+git or `file:`-to-a-checkout install of either still succeeds and delivers a
+tree with no `dist/`: green install, `ERR_MODULE_NOT_FOUND` at the first import.
+What changed is that cadenza wrote down the route that does work
+(`cadenza D-0035`, `docs/artifact-delivery-bridge.md`): a person builds cadenza
+once from a pinned commit in a scratch clone, `npm pack`s it, and the consumer
+**commits the tarball**. continuo is still reachable only across a **CLI process
+boundary**.
 
 Consequences for anyone adding code here:
 
-- **Do not add a git, `file:`, workspace or tarball dependency on either sibling
-  without superseding D-0001.** Each was measured twice; each cost is written
-  down. Reaching for one because it "should work" repeats an experiment whose
-  result is already in the file — including the two that now look plausible and
-  are not: cadenza's `exports` map means a deep path into `src/` is refused
-  outright (`ERR_PACKAGE_PATH_NOT_EXPORTED`), and `npm pack` succeeding on a
-  built tree says nothing about what a git specifier delivers.
-- **If a lap needs something from cadenza, the decision to revisit is D-0016,
-  not D-0001, and it is rondo's gate rather than cadenza's.** cadenza is already
-  importable from a built tarball — that was measured, and 70 values are on the
-  exported surface — so needing one of them requires **no sibling change at
-  all**; what it requires is a decision about delivery, which is D-0016's
-  subject. Take it there. Only a value that is *not* exported (the agent-type
-  record is the known one) is cadenza's question, and D-0016 names it.
+- **Do not move the cadenza pin by hand.** Moving it is phase 1 of the bridge —
+  clone at the new sha, verify `rev-parse`, `npm ci --ignore-scripts`,
+  `npm run build`, `npm pack` into `vendor/`, `node vendor/pin.mjs record`,
+  `npm install --ignore-scripts ./vendor/<tarball>` — and the diff is the
+  tarball, `vendor/cadenza.tgz.sha256`, `cadenza.pin.json`, `package.json` and
+  `package-lock.json` **together**. `test/cadenza/pin.test.ts` fails when they
+  stop describing one file. The scratch clone is never committed.
+- **Run `node vendor/pin.mjs check` before `npm ci`, always.** npm enforces its
+  integrity hash against its cache, so a drifted tarball is `EINTEGRITY` on a
+  cold cache and a silent install of the *previously pinned* bytes on a warm one
+  (D-0018 rule 4). CI does this in all three installing jobs, and the pin test
+  fails if an install ever loses its check.
+- **`src/cadenza/facade.ts` is the only module that may import the package, and
+  its bindings are granted one by one** (D-0018 rule 5). Needing another value
+  from cadenza is an edit to the facade *and* to
+  `ALLOWED_EXTERNALS_BY_MODULE` — which is the point: cadenza exports 80 values,
+  and `delegate` and `adopt` compose a widening successor rondo must never
+  compose (D-0009). A second module in `src/cadenza/` is not granted the
+  package, and neither is a deep path into it.
+- **`src/refrain -> src/cadenza` does not exist yet.** Add that arrow in the
+  diff where conductor code actually consumes the facade, not in advance.
+- **Do not add a dependency on continuo without superseding D-0015 / D-0017.**
+  D-0001's measurements of that seam were kept when it was superseded; each cost
+  is written down, and reaching for a git specifier because it "should work"
+  repeats an experiment whose result is already in the file.
 - **Do not fix a sibling to make rondo's life easier.** Where a sibling change
   genuinely is needed, it goes through that sibling's own gate — escalate, do
   not patch. D-0001's escalation list is largely spent: three of its four
@@ -149,6 +179,13 @@ before reporting anything as done. It takes a few seconds.
 
 Four things about it are not obvious:
 
+- **`node vendor/pin.mjs check` comes first, and `npm ci` second** (D-0018 rule
+  4). The full local sequence is
+  `node vendor/pin.mjs check && npm ci --ignore-scripts && npm run verify`. The
+  check is not decoration next to npm's own integrity hash: npm enforces that
+  against its cache, so a tarball that drifted from the one this repository
+  pinned fails loudly on a cold cache and installs the previously pinned bytes,
+  silently and with exit 0, on a warm one.
 - **`npm ci`, never `npm install`** (D-0007). On npm 10.9.2 a fresh
   `npm install` in this repository fails outright with
   `Cannot read properties of null (reading 'edgesOut')` — an arborist crash
@@ -177,7 +214,9 @@ rondo has no behaviour. Two habits keep it worth its runtime:
   ungranted and fails. Both failures are the question "which layer is this, and
   what is it allowed to reach?" arriving at the right moment. Answer it in
   `ALLOWED_INTERNAL_BY_LAYER` / `ALLOWED_EXTERNALS_BY_MODULE`, and say why in
-  the diff.
+  the diff. `src/cadenza/` is the worked example: a layer that names only
+  itself, one module granted one package, and every binding of that package
+  listed by name.
 - **Widening the allowlist is a decision.** Granting `node:http` to an access
   point is fine and expected. Granting anything at all to `src/refrain/` is the
   boundary Issue #1 drew, and needs a `D-` entry.
