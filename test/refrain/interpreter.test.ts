@@ -708,6 +708,60 @@ test("a lap that answered a refusal ends at failed and releases the lock", async
   expect(second.iterationId).toBe("i-0002");
 });
 
+test("a refusal that names its session writes the id to the row it failed", async () => {
+  // `continuo D-1102` puts the session on a `lap perform` refusal as a field of
+  // its own, and this is what rondo does with it: a failed lap is as findable
+  // afterwards as a suspended one. The column has always been there; before
+  // this it was written only on the path that suspends.
+  const h = harness({
+    performLap: {
+      kind: "refused",
+      message: "LapRefused: the turn outlived --turn-timeout-ms",
+      sessionId: "session-9",
+    },
+  });
+  const report = await admitOnce(h);
+
+  expect(report.status).toBe("failed");
+  const row = await readRow(h.store, "i-0001");
+  expect(row?.sessionId).toBe("session-9");
+  expect(row?.reason).toContain("the turn outlived");
+  // Named in the report as well as written to the row, for the reason the gate
+  // id is: an identity rondo learned about and never said is a worker that may
+  // still be running with nobody able to name it.
+  expect(says(report, "session-9")).toBe(true);
+});
+
+test("a refusal that names no session leaves the column null rather than guessing", async () => {
+  // The refusal quotes an id in its sentence, as continuo's messages always
+  // have, and rondo records nothing: the message is written for a person and is
+  // never the source of identity (D-0015 rule 7).
+  const h = harness({
+    performLap: {
+      kind: "refused",
+      message: "IdentityUnconfirmed: the identity 'session-9' was committed and never confirmed",
+    },
+  });
+  const report = await admitOnce(h);
+
+  expect(report.status).toBe("failed");
+  const row = await readRow(h.store, "i-0001");
+  expect(row?.sessionId).toBeNull();
+  expect(says(report, "session-9")).toBe(true);
+  // The id reaches the operator only inside continuo's own sentence, which
+  // rondo relayed whole. No line of rondo's own claims it as the session.
+  expect(says(report, "continuo names the session")).toBe(false);
+});
+
+test("a lap that hit a rondo defect has no session to name", async () => {
+  const h = harness({ performLap: { kind: "defect", reason: "rondo called continuo wrong" } });
+  const report = await admitOnce(h);
+
+  expect(report.status).toBe("failed");
+  expect((await readRow(h.store, "i-0001"))?.sessionId).toBeNull();
+  expect(says(report, "continuo names the session")).toBe(false);
+});
+
 test("a lap that answered nothing stays performing, keeps the lock, and is a rondo defect", async () => {
   const h = harness({ performLap: { kind: "noAnswer", reason: "rondo's ceiling fired" } });
   const report = await admitOnce(h);

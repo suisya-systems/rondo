@@ -948,7 +948,11 @@ async function admitStep(
  *    outside, after a person has answered.
  *  - **refused or defect** -- an answer arrived, so the `lap perform` process is
  *    over and no worker of its is still running. Terminal `failed` with
- *    continuo's own words, and the lock **is** released, correctly.
+ *    continuo's own words, and the lock **is** released, correctly. A refusal
+ *    that names its session (`continuo D-1102`) also writes that id to the row's
+ *    `session_id`, so a failed lap is as findable afterwards as a suspended one:
+ *    the identity comes from continuo's own field and never from its message,
+ *    which D-0015 rule 7 forbids rondo to parse.
  *  - **noAnswer** -- rondo's own ceiling fired, or rondo died performing. A
  *    fenced child may still be alive, because rondo's timer kills the CLI and
  *    not the worker (D-0019 rule 12). The row **stays** `performing` and keeps
@@ -1074,19 +1078,30 @@ async function performStep(
       return { kind: "finished", report: finish(suspended.record, lines) };
     }
     case "refused":
-    case "defect":
+    case "defect": {
+      const session = refusedSessionId(walked);
       return terminal(
         ports,
         performing.record,
         lines,
         "failed",
-        { reason: messageOf(walked) },
+        // The identity is written beside the reason, into the column that has
+        // always been there for it, and only when continuo named one: a failed
+        // lap whose session is unknown keeps a null rather than a guess.
+        { reason: messageOf(walked), ...(session === undefined ? {} : { sessionId: session }) },
         `The lap did not complete: ${messageOf(walked)}`,
         [
           "An answer arrived, so the 'lap perform' process is over and no worker of its is still " +
             "running. The single-flight lock is released.",
+          ...(session === undefined
+            ? []
+            : [
+                `continuo names the session the lap refused over: ${session}. It is on the row, ` +
+                  "and it is what a transcript read or a 'session stop' is keyed on.",
+              ]),
         ],
       );
+    }
     case "noAnswer":
       return {
         kind: "finished",
@@ -1464,6 +1479,22 @@ function appendReason(existing: string | null, addition: string): string {
 /** {@link appendReason} as the field a transition writes. */
 function appendedReason(record: IterationRecord, addition: string): IterationFields {
   return { reason: appendReason(record.reason, addition) };
+}
+
+/**
+ * The session a refused effect named, or nothing.
+ *
+ * **Only a refusal can carry one, and the only source is the field.** continuo
+ * names the session of a `lap perform` refusal in a key of its own precisely so
+ * that a host does not have to read it out of a sentence written for a person
+ * (`continuo D-1102`, D-0015 rule 7), and rondo's own defects have no session to
+ * name at all -- a defect is rondo calling continuo wrong, which happens on this
+ * side of the process boundary. So the two arms that share the terminal
+ * transition do not share this field, and a `defect` answers `undefined` here by
+ * construction rather than by a check that could later be forgotten.
+ */
+function refusedSessionId(outcome: EffectOutcome<unknown>): string | undefined {
+  return outcome.kind === "refused" ? outcome.sessionId : undefined;
 }
 
 /** continuo's or cadenza's own words, whichever kind of non-answer this is. */

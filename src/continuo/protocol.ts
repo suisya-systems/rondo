@@ -15,7 +15,19 @@
  *
  *     exit 0, stdout:  {"schema":"continuo.<verb>/1","ok":true,"db":"...", ...payload}
  *     exit 2, stderr:  {"schema":"continuo.<verb>/1","ok":false,"db":"...",
+ *                       "session_id":"...",   // optional; see below
  *                       "error":{"class":"...","message":"..."}}
+ *
+ * **`session_id` on a refusal is the one optional key in the envelope**
+ * (`continuo D-1102`, taken at the revision pinned here). It sits at the top
+ * level, beside `db` and outside `error`, and it is present exactly when the
+ * refusing verb held a *confirmed* session identity -- today only
+ * `lap perform`, and only for the refusals raised after the identity was read
+ * back. Absent means the identity is unknown, and absent is the only spelling
+ * of that: continuo promises never `null` and never `""`. The decoder reads
+ * the key from the envelope rather than from a verb's payload because that is
+ * where continuo put it, and it never falls back to `error.message`, which is
+ * D-0015 rule 7 and the whole reason the field exists.
  *
  * **Read the discriminator first, and accept what you did not ask for.**
  * `schema` is checked before `ok`, `ok` before the common fields, and the
@@ -85,6 +97,19 @@ export type ContinuoResult<T> =
       readonly db: string;
       readonly errorClass: string;
       readonly message: string;
+      /**
+       * The session the refusal is about, when continuo could name one.
+       *
+       * **Optional rather than nullable, and the property is absent rather than
+       * `undefined`** (`exactOptionalPropertyTypes`): continuo omits the key
+       * when the identity is unknown, and rondo's record says the same thing
+       * the same way instead of inventing a null the wire does not have. A
+       * reader that has one may act on it -- stop the session, read its
+       * transcript, correlate a log; a reader that has none knows only that
+       * there is no identity it may act on, and must not go looking for one in
+       * {@link message} (D-0015 rule 7).
+       */
+      readonly sessionId?: string;
     }
   /** Exit 2 whose stderr is not a document: an argparse-level refusal, in
    *  prose. Relayed verbatim (escaped at the terminal boundary), never parsed. */
@@ -227,6 +252,44 @@ function nullableObject(document: JsonObject, key: string): JsonObject | null {
   }
   if (!isJsonObject(value)) {
     throw new PayloadMismatch(`'${key}' is ${describe(value)}, and an object or null was required`);
+  }
+  return value;
+}
+
+/**
+ * A field continuo emits only when it has something true to say, and omits
+ * otherwise.
+ *
+ * **The exception to the absent-is-not-null rule above, and continuo argues for
+ * it in the same terms** (`continuo D-1102` point 5). There, a key that is
+ * always present exists so a host can read a fact *positively* -- `null`
+ * `endpoint_lease_failure` says the lap was clean. Here the two states are "this
+ * refusal is about a session I can name" and "it is not about a session at
+ * all", and a `null` would be a second spelling of the second one, which a host
+ * would have to distinguish from absence to learn nothing. So absence is the
+ * answer, and it is the only one.
+ *
+ * Present, the value is a non-empty string -- continuo promises that and omits
+ * the key rather than shipping `""`, because an empty string is not an identity
+ * and a host handed one would try to act on it. So `null`, `""` and a non-string
+ * are each a mismatch rather than a second way of saying "unknown": they are
+ * documents the pinned build does not write, and reading them as absence would
+ * be this decoder declining to validate exactly where it looks like it does.
+ */
+function optionalIdentity(document: JsonObject, key: string): string | undefined {
+  const value = document[key];
+  if (value === undefined) {
+    return undefined;
+  }
+  if (typeof value !== "string") {
+    throw new PayloadMismatch(
+      `'${key}' is ${describe(value)}, and a non-empty string was required when the key is present`,
+    );
+  }
+  if (value === "") {
+    throw new PayloadMismatch(
+      `'${key}' is an empty string, and continuo omits the key rather than sending one`,
+    );
   }
   return value;
 }
@@ -728,11 +791,22 @@ function decodeRefusal<T>(contract: VerbContract<T>, stderr: string): ContinuoRe
       throw new PayloadMismatch("'ok' is true on a document that arrived with exit 2");
     }
     const error = requireObject(document, "error");
+    // Read off the envelope and not off a verb's payload, because that is where
+    // continuo put it: `refusalLine` takes the identity beside `db`, and only
+    // `lap perform` passes one today. Decoding it here rather than per contract
+    // is therefore not a widening -- it is reading the envelope this function
+    // already reads -- and a verb that starts naming its session later is
+    // decoded by this line on the day it does.
+    const sessionId = optionalIdentity(document, "session_id");
     return {
       kind: "refused",
       db: requireString(document, "db"),
       errorClass: requireString(error, "class"),
       message: requireString(error, "message"),
+      // Added only when continuo sent one: under `exactOptionalPropertyTypes` a
+      // present key holding `undefined` is a different value from an absent one,
+      // and the record is meant to say what the document said.
+      ...(sessionId === undefined ? {} : { sessionId }),
     };
   } catch (error) {
     return unreadable(verbName(contract), `a '${contract.schema}' refusal document`, error);

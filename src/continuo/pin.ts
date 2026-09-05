@@ -40,14 +40,28 @@ export const CONTINUO_REPOSITORY = "https://github.com/suisya-systems/continuo.g
  *
  * D-0017 chose `44f62336108b86cab5da791111ffa0e5b73cd01a`, the first continuo
  * that answers `gate close --json` in the shared envelope (`continuo D-0092`).
- * **D-0021 moves the pin here**, to the first continuo that answers the two
- * things the lap-1 dogfood stopped on: the post-spawn identity read-back is a
- * caller-supplied budget rather than 50 attempts at 50 ms (`continuo D-0098`,
- * the dogfood's F-1), and `lap perform` takes `--model` and reports which model
- * the lap ran on (`continuo D-0099`, F-2). The envelope property D-0017 pinned
- * for is unchanged and still holds.
+ * D-0021 moved it to `603843b7c0e91136bc7f7e5c9f91640f7bb970c9`, the first that
+ * answers the two things the lap-1 dogfood stopped on: the post-spawn identity
+ * read-back as a caller-supplied budget (`continuo D-0098`, the dogfood's F-1)
+ * and `lap perform --model` (`continuo D-0099`, F-2).
+ *
+ * **The pin moves here to take `continuo D-1102`**: a `lap perform` refusal now
+ * names its session in a top-level `session_id` key of the envelope, so the
+ * identity of a failed lap is a field rondo reads rather than a fragment of a
+ * sentence rondo is forbidden to parse (D-0015 rule 7). `src/continuo/protocol.ts`
+ * is what reads it and `src/refrain/interpreter.ts` is what files it against the
+ * iteration. Moving the pin is this edit and a green matrix rather than a
+ * decision entry, which is what D-0017's open questions say it is; the envelope
+ * property D-0017 pinned for is unchanged and still holds, because D-1102 adds
+ * an optional key under the same `continuo.lap.perform/1`.
+ *
+ * What this revision also carries and rondo does **not** consume: nothing on the
+ * wire. The two commits between D-1102 and this sha are continuo's own
+ * documentation and its own Windows CI budget (`continuo D-1103`); `src/` is
+ * byte-identical across them, which is why the pin is taken at current main
+ * rather than at the commit that landed the field.
  */
-export const CONTINUO_REVISION = "603843b7c0e91136bc7f7e5c9f91640f7bb970c9";
+export const CONTINUO_REVISION = "38c667b5126fdfdc0465e4a422e88b20a8b53044";
 
 /**
  * The exact line the pinned build's `--version` prints.
@@ -56,13 +70,13 @@ export const CONTINUO_REVISION = "603843b7c0e91136bc7f7e5c9f91640f7bb970c9";
  * *measurement* of the pinned build and not a format rondo gets to define. If
  * continuo ever changes the line's shape, rondo's verification fails loudly at
  * startup against a value that says what was actually observed -- on 2026-09-05
- * for the revision D-0017 pinned, and on 2026-09-06 for this one, by building
- * the pinned checkout with `CONTINUO_REQUIRE_REVISION=1` and running
- * `node dist/cli.js --version` -- instead of quietly agreeing with a template
- * rondo wrote for itself.
+ * for the revision D-0017 pinned, and on 2026-09-06 for D-0021's and again for
+ * this one, by building the pinned checkout with `CONTINUO_REQUIRE_REVISION=1`
+ * and running `node dist/cli.js --version` -- instead of quietly agreeing with a
+ * template rondo wrote for itself.
  */
 export const CONTINUO_VERSION_LINE =
-  "@suisya-systems/continuo 0.0.0 (rev 603843b7c0e91136bc7f7e5c9f91640f7bb970c9)";
+  "@suisya-systems/continuo 0.0.0 (rev 38c667b5126fdfdc0465e4a422e88b20a8b53044)";
 
 /** What a build reports when it has no git information (`continuo`'s literal). */
 const REVISION_UNKNOWN = "unknown";

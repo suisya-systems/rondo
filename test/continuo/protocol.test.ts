@@ -33,12 +33,26 @@ function success(schema: string, payload: Record<string, unknown>): string {
   return `${JSON.stringify({ schema, ok: true, db: "/tmp/cp.sqlite3", ...payload })}\n`;
 }
 
-/** The refusal envelope, as continuo writes it to stderr. */
-function refusal(schema: string, errorClass: string, message: string): string {
+/**
+ * The refusal envelope, as continuo writes it to stderr.
+ *
+ * `metadata` is the envelope's optional top level -- today `session_id` and
+ * nothing else -- spread where continuo's own `refusalLine` puts it: between
+ * `db` and `error`, outside the diagnosis. A case that passes none gets the
+ * document every verb but `lap perform` writes, and the one an older continuo
+ * wrote for `lap perform` too.
+ */
+function refusal(
+  schema: string,
+  errorClass: string,
+  message: string,
+  metadata: Record<string, unknown> = {},
+): string {
   return `${JSON.stringify({
     schema,
     ok: false,
     db: "/tmp/cp.sqlite3",
+    ...metadata,
     error: { class: errorClass, message },
   })}\n`;
 }
@@ -235,6 +249,104 @@ describe("continuo's own refusals", () => {
     const result = decode(RUN_ADMIT, output({ status: 2, stderr: prose }));
     expect(result).toEqual({ kind: "refusedInProse", text: prose.trim() });
   });
+
+  test("a lap refusal names its session in a field, and rondo reads the field", () => {
+    // `continuo D-1102`: the id is a top-level key beside `db` and outside
+    // `error`, present exactly when the lap held a confirmed identity. It is
+    // what a transcript read or a `session stop` is keyed on, so a decoder that
+    // dropped it would leave a possibly-live worker with no name on rondo's
+    // side.
+    const result = decode(
+      LAP_PERFORM,
+      output({
+        status: 2,
+        stderr: refusal(
+          LAP_PERFORM.schema,
+          "LapRefused",
+          "the turn outlived --turn-timeout-ms; session 's-r1-1' may still be running",
+          { session_id: "s-r1-1" },
+        ),
+      }),
+    );
+    expect(result).toEqual({
+      kind: "refused",
+      db: "/tmp/cp.sqlite3",
+      errorClass: "LapRefused",
+      message: "the turn outlived --turn-timeout-ms; session 's-r1-1' may still be running",
+      sessionId: "s-r1-1",
+    });
+  });
+
+  test("an envelope without the key still decodes, and names no session", () => {
+    // The old producer and the new one refusing over no session are the same
+    // document, and that is correct: in both cases rondo has no identity it may
+    // act on. Asserted with `in` rather than with a `toEqual` that omits the
+    // field, because an absent property and a property holding `undefined` are
+    // different values under `exactOptionalPropertyTypes` and only the first is
+    // what the wire said.
+    const result = decode(
+      LAP_PERFORM,
+      output({
+        status: 2,
+        stderr: refusal(LAP_PERFORM.schema, "UnknownRunRefused", "no run 'r1' is admitted"),
+      }),
+    );
+    expect(result).toEqual({
+      kind: "refused",
+      db: "/tmp/cp.sqlite3",
+      errorClass: "UnknownRunRefused",
+      message: "no run 'r1' is admitted",
+    });
+    expect("sessionId" in result).toBe(false);
+  });
+
+  test("the identity is the field or nothing, and never the message", () => {
+    // D-0015 rule 7, as a case: the sentence quotes an id -- continuo's
+    // messages have always quoted it -- and the key is absent because this
+    // refusal was raised before any identity was confirmed. A decoder with a
+    // prose fallback would answer 's-r1-9' here and send a host after a session
+    // this lap cannot prove it owns.
+    const result = decode(
+      LAP_PERFORM,
+      output({
+        status: 2,
+        stderr: refusal(
+          LAP_PERFORM.schema,
+          "IdentityUnconfirmed",
+          "the identity 's-r1-9' was committed and never confirmed",
+        ),
+      }),
+    );
+    expect("sessionId" in result).toBe(false);
+  });
+
+  test.each([
+    ["null", null, "'session_id' is null"],
+    ["an empty string", "", "'session_id' is an empty string"],
+    ["a number", 7, "'session_id' is a number"],
+  ])(
+    "a session_id that is %s is rondo's defect, not a second way to say unknown",
+    (_name, value, expected) => {
+      // The pinned build writes a non-empty string or omits the key, so none of
+      // these is a document it produces. Reading them as absence would be this
+      // decoder declining to validate exactly where it looks like it validates --
+      // the same rule the nullable readers apply, and the schema matched, so it
+      // lands as rondo's own defect rather than as the seam having moved.
+      const result = decode(
+        LAP_PERFORM,
+        output({
+          status: 2,
+          stderr: refusal(LAP_PERFORM.schema, "LapRefused", "the turn outlived its timeout", {
+            session_id: value,
+          }),
+        }),
+      );
+      expect(result).toEqual({
+        kind: "invokerDefect",
+        reason: expect.stringContaining(expected),
+      });
+    },
+  );
 
   test("prose reaches rondo unchanged, non-ASCII included", () => {
     // The decoder does not escape: `src/access/console.ts` does, once, at the
