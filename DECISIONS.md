@@ -3351,6 +3351,25 @@ This entry is the smallest thing that makes the second option do what it says.
    otherwise answer `occupied` correctly and tell the operator about single-flight when what
    actually failed was their answer.
 
+   **The plan is not the whole of what has to be checked first**, and the rest of it is
+   `revisionBlocker`. Three things a valid plan cannot see would each be discovered after the gate
+   was gone: the successor's **iteration id** is not a plan field, so a plan can validate under an
+   id the store already holds; the **topic branch** and the **workspace** are compared by
+   `revisionPlan` against the predecessor's only, which is all a layer that may not start a process
+   can do, and continuo's materialiser requires that neither exists — of a branch from two laps
+   ago, or another spelling of a path, it would find out after `run admit`. So the branch is asked
+   of git through `src/access/forge.ts` (the command line still has no spawn binding, `D-0025`
+   rule 7), the workspace of `existsSync`, and an answer git will not give is a refusal rather than
+   room to proceed. A gate continuo has **already closed** is refused here too, because `walkGate`
+   walks it successfully and silently and `resume` then reports `closed` for `withdrawn` and
+   `expired` as readily as for an answer.
+
+   **And a walk that sent nothing is not permission to start a lap.** The gate can close between
+   the check above and the walk's own read, so `walkGate` reports whether *this* walk carried the
+   body (`answerSent`). Without it a revision could run on an outcome that is not a person saying
+   anything, with the instruction recorded nowhere. This and the three checks above were found by
+   review rather than by a walk: the happy path meets none of them.
+
 7. **The instruction reaches two places and rondo composes neither of them.** continuo gets it byte
    for byte as the gate's answer (`D-0025` rule 3), which is where the record of what a person said
    belongs. The second lap's prompt gets the **first lap's request verbatim, then the instruction

@@ -236,7 +236,7 @@ test("from 'received' the walk is six verbs, in continuo's order", () => {
     const { verbs, calls } = fakeVerbs("received");
     const outcome = await walkGate(continuo, walkRequest, verbs);
 
-    expect(outcome).toEqual({ kind: "walked", closed: true });
+    expect(outcome).toEqual({ kind: "walked", closed: true, answerSent: true });
     expect(calls).toEqual([
       "show:g1",
       "present:g1",
@@ -257,7 +257,7 @@ test("from 'presented' the walk skips straight to the answer", () => {
     const { verbs, calls } = fakeVerbs("presented");
     const outcome = await walkGate(continuo, walkRequest, verbs);
 
-    expect(outcome).toEqual({ kind: "walked", closed: true });
+    expect(outcome).toEqual({ kind: "walked", closed: true, answerSent: true });
     expect(calls).toEqual([
       "show:g1",
       "answer:approve",
@@ -276,7 +276,7 @@ test("from 'answered' the walk re-issues the identical body to recover the relay
     const { verbs, calls } = fakeVerbs("answered");
     const outcome = await walkGate(continuo, walkRequest, verbs);
 
-    expect(outcome).toEqual({ kind: "walked", closed: true });
+    expect(outcome).toEqual({ kind: "walked", closed: true, answerSent: true });
     // Re-issuing is idempotent for the same body, and it is the only way to get
     // the forwarded relay's id out of a payload rather than composing one.
     expect(calls).toEqual([
@@ -293,7 +293,12 @@ test("a gate that already has an outcome is not walked at all", () => {
     const { verbs, calls } = fakeVerbs("forwarded", "answered_and_forwarded");
     const outcome = await walkGate(continuo, walkRequest, verbs);
 
-    expect(outcome).toEqual({ kind: "walked", closed: true });
+    // **`answerSent: false` is the load-bearing half of this.** The walk
+    // succeeded and sent nothing, which is right -- and a caller that read
+    // `walked` as "the answer landed" would be wrong. `revise` reads this field
+    // and refuses to start a lap on it; `answer` may ignore it, having nothing
+    // left to do either way.
+    expect(outcome).toEqual({ kind: "walked", closed: true, answerSent: false });
     // Nothing after the observation. An answer sent to a closed gate would be
     // an operator believing they had answered something they had not.
     expect(calls).toEqual(["show:g1"]);
@@ -502,8 +507,22 @@ test("a revision is blocked before the walk when the id is taken or the gate is 
     gateOutcome: null,
     successorId: "iter-2",
     successorRow: "absent",
+    topicBranch: "topic/iter-2",
+    topicBranchExists: false,
+    workspace: "/srv/ws/iter-2",
+    workspaceExists: false,
   } as const;
   expect(revisionBlocker(clear)).toBe(null);
+
+  // The two continuo would refuse after `run admit` -- which for a revision is
+  // after the gate is gone. `revisionPlan`'s string comparison against the
+  // predecessor catches neither a branch from two laps ago nor another
+  // spelling of a path that resolves to the same directory; these are the same
+  // questions asked of git and of the filesystem.
+  expect(revisionBlocker({ ...clear, topicBranchExists: true })).toContain("topic/iter-2");
+  expect(revisionBlocker({ ...clear, topicBranchExists: true })).toContain("Nothing was touched");
+  expect(revisionBlocker({ ...clear, workspaceExists: true })).toContain("/srv/ws/iter-2");
+  expect(revisionBlocker({ ...clear, workspaceExists: true })).toContain("worktree");
 
   // A gate that already reached an outcome: the instruction would be carried
   // nowhere, and `withdrawn` and `expired` close a gate without a person having

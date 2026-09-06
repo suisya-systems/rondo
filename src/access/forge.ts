@@ -261,6 +261,55 @@ export async function inspectPushTarget(request: PushTargetRequest): Promise<Pus
   return { kind: "read", remotes, pushUrls, topicBranchExists: branch.status === 0 };
 }
 
+/** Whether a branch is already there, or why git could not say. */
+export type BranchPresence =
+  | { readonly kind: "read"; readonly exists: boolean }
+  | { readonly kind: "unreadable"; readonly reason: string };
+
+/**
+ * Ask a repository whether a branch is already there.
+ *
+ * **For `revise`, and it is a preflight rather than a courtesy.** continuo's
+ * materialiser requires a topic branch that does **not** already exist, and it
+ * discovers that after `run admit` -- which for a revision is after the gate has
+ * been presented, answered and closed. A person who reuses a branch from two
+ * laps ago would spend their gate to learn it. `revisionPlan` compares the
+ * three identifiers against the immediate predecessor's, which is a string
+ * comparison in a layer that may not start a process; this is the same question
+ * asked of git, so it also answers for a lap further back and for a branch
+ * created by anything else.
+ *
+ * The repository rather than the workspace: the workspace is the worktree a lap
+ * cuts and does not exist yet, and the branch lives in the repository it is cut
+ * from. `--verify --quiet` distinguishes "not there" (exit 1, silence) from
+ * "git could not answer", and the two must not be collapsed -- the caller
+ * refuses on the second rather than reading it as room to proceed.
+ */
+export async function inspectTopicBranch(request: {
+  readonly repository: string;
+  readonly topicBranch: string;
+}): Promise<BranchPresence> {
+  const branch = await runCommand(
+    "git",
+    [
+      "-C",
+      request.repository,
+      "rev-parse",
+      "--verify",
+      "--quiet",
+      `refs/heads/${request.topicBranch}`,
+    ],
+    PREFLIGHT_TIMEOUT_MS,
+  );
+  if (branch.spawnError !== null) {
+    return { kind: "unreadable", reason: `${branch.commandLine}: ${branch.spawnError}` };
+  }
+  if (branch.status !== 0 && branch.status !== 1) {
+    return { kind: "unreadable", reason: queryFailure(branch) ?? branch.commandLine };
+  }
+  return { kind: "read", exists: branch.status === 0 };
+}
+
 /** What a pull request needs. */
 export interface PullRequestRequest {
   /**

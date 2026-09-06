@@ -23,7 +23,7 @@
  * `./forge.ts`, so the boundary test can say that *this* module cannot spell a
  * push (D-0025 rule 6).
  */
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { isAbsolute } from "node:path";
 import { parseArgs } from "node:util";
 
@@ -48,6 +48,7 @@ import { asciiEscape, consoleSeams, relayUpstream } from "./console.js";
 import {
   inspectLapWork,
   inspectPushTarget,
+  inspectTopicBranch,
   type LapFile,
   type LapWorkInspection,
   openPullRequest,
@@ -362,7 +363,22 @@ function relayFailure(verb: string, result: ContinuoResult<unknown>): number {
 
 /** What one pass over the gate did, or why it stopped. */
 export type WalkOutcome =
-  | { readonly kind: "walked"; readonly closed: boolean }
+  | {
+      readonly kind: "walked";
+      readonly closed: boolean;
+      /**
+       * Whether **this** walk carried the body to the gate.
+       *
+       * False exactly when the gate already had an outcome, which is a
+       * successful walk that sent nothing -- the right thing to do, and a
+       * result a caller must not read as "the answer landed". `answer` may
+       * ignore it, because it has nothing left to do either way. `revise` may
+       * not: it would otherwise start a lap whose instruction was never
+       * recorded, under an outcome that may be `withdrawn` or `expired` rather
+       * than anyone saying anything.
+       */
+      readonly answerSent: boolean;
+    }
   | { readonly kind: "failed"; readonly status: number };
 
 /** The ports `walkGate` drives, injected so a test can watch the order. */
@@ -429,7 +445,7 @@ export async function walkGate(
       `Gate ${gate.gateId} is already closed as '${gate.outcome}'. Your answer was not sent, ` +
         "and nothing was written.",
     );
-    return { kind: "walked", closed: true };
+    return { kind: "walked", closed: true, answerSent: false };
   }
 
   let stage = gate.stage;
@@ -507,7 +523,7 @@ export async function walkGate(
     `  gate ack       stage is now '${finalAck.payload.toStage}'` +
       (finalAck.payload.closed ? ", and the gate is closed" : ""),
   );
-  return { kind: "walked", closed: finalAck.payload.closed };
+  return { kind: "walked", closed: finalAck.payload.closed, answerSent: true };
 }
 
 /** One delivery pass. Null when it worked; an exit status when it did not. */
@@ -909,7 +925,15 @@ async function commandAnswer(
  *     predecessor is `closed`, so a corrected retry is told that nothing is
  *     live. An `unreadable` row blocks the id too: it is a row, whatever it
  *     says.
- *  2. **A gate continuo has already closed is not an answer this command may
+ *  2. **The topic branch and the workspace are asked of the machine, not only
+ *     of the predecessor's plan.** `revisionPlan` compares the three
+ *     identifiers against the predecessor's, which catches the obvious reuse
+ *     and is all a layer that may not start a process can do. It does not catch
+ *     a branch from two laps ago, a branch something else created, or another
+ *     spelling of a path that resolves to the same directory -- and continuo's
+ *     materialiser requires that neither exists, discovering it after
+ *     `run admit`, which for a revision is after the gate is gone.
+ *  3. **A gate continuo has already closed is not an answer this command may
  *     stand on.** `walkGate` handles it correctly and gently -- it says so and
  *     sends nothing -- and that is exactly the trap: the walk *succeeds*, and a
  *     conductor's `resume` then reports `closed` for `withdrawn` and `expired`
@@ -927,6 +951,10 @@ export function revisionBlocker(input: {
   readonly gateOutcome: string | null;
   readonly successorId: string;
   readonly successorRow: ReadOutcome["kind"];
+  readonly topicBranch: string;
+  readonly topicBranchExists: boolean;
+  readonly workspace: string;
+  readonly workspaceExists: boolean;
 }): string | null {
   if (input.gateOutcome !== null) {
     return (
@@ -942,6 +970,19 @@ export function revisionBlocker(input: {
       "not be reserved under it -- and the gate would have been answered first. Nothing was " +
       "touched. Choose another --iteration-id, or another --run-id, which is what the " +
       "iteration id defaults to."
+    );
+  }
+  if (input.topicBranchExists) {
+    return (
+      `branch '${input.topicBranch}' already exists in the repository, and continuo creates the ` +
+      "topic branch rather than checking it out -- it requires one that is not there. Nothing " +
+      "was touched. Choose another --topic-branch."
+    );
+  }
+  if (input.workspaceExists) {
+    return (
+      `'${input.workspace}' already exists, and continuo creates the worktree there -- it ` +
+      "requires the path not to exist. Nothing was touched. Choose another --workspace."
     );
   }
   return null;
@@ -1056,11 +1097,31 @@ async function commandRevise(
   // is walked successfully and silently.
   const successorId = parsed.iterationId ?? successor.plan.runId;
   const existing = await store.read(successorId);
+  // **Asked of git, and a refusal when git will not say.** The branch is the
+  // one preflight that needs a process, so it is `forge.ts`'s (this module has
+  // no spawn binding, and D-0025 rule 7 is that property rather than a
+  // promise). An unreadable answer is refused rather than read as room to
+  // proceed: the next thing this command does cannot be undone.
+  const branch = await inspectTopicBranch({
+    repository: successor.plan.repository,
+    topicBranch: successor.plan.topicBranch,
+  });
+  if (branch.kind !== "read") {
+    return refuse(
+      `git could not say whether '${successor.plan.topicBranch}' already exists in ` +
+        `${successor.plan.repository}: ${branch.reason}. continuo requires a topic branch that ` +
+        "is not there, and rondo will not answer the gate without knowing. Nothing was touched.",
+    );
+  }
   const blocker = revisionBlocker({
     predecessorId: record.id,
     gateOutcome: gate.outcome,
     successorId,
     successorRow: existing.kind,
+    topicBranch: successor.plan.topicBranch,
+    topicBranchExists: branch.exists,
+    workspace: successor.plan.workspace,
+    workspaceExists: existsSync(successor.plan.workspace),
   });
   if (blocker !== null) {
     return refuse(blocker);
@@ -1077,6 +1138,23 @@ async function commandRevise(
   });
   if (walked.kind === "failed") {
     return walked.status;
+  }
+  // **A walk that sent nothing is not permission to start a lap.** The gate was
+  // closed by somebody else between the read above and the walk's own, so the
+  // instruction reached nothing -- and the outcome it closed at may be
+  // `withdrawn` or `expired`, which are not a person saying anything. `resume`
+  // below would settle the row at `closed` for any of them, so this is the
+  // check that keeps a successor from running on an answer that was never
+  // recorded. The row is still settled, because that is true and useful.
+  if (!walked.answerSent) {
+    const report = await resume(ports, record.id);
+    sayReport(report);
+    say("");
+    say(
+      "Your instruction was not carried to the gate, so no second lap was started. The " +
+        "iteration above is settled; 'rondo start' is how the work continues from here.",
+    );
+    return 1;
   }
 
   const report = await resume(ports, record.id);
