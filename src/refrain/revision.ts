@@ -50,6 +50,7 @@
  */
 import type { IterationRecord } from "../store/records.js";
 
+import { allocate } from "./allocator.js";
 import { type AdmittedPlan, type PlanOutcome, readPlan, runPlan } from "./plan.js";
 
 /**
@@ -193,16 +194,25 @@ function revisionPrompt(plan: AdmittedPlan, input: RevisionRequest): string {
  * agreeing with a copy is weaker than agreeing with the original.
  */
 function repeatedIdentifier(input: RevisionRequest, plan: AdmittedPlan): string | null {
-  // **One refusal now, and it used to be three.** The operator used to type the
-  // successor's run id, topic branch and workspace, so each could repeat the
-  // predecessor's and each needed its own sentence naming continuo's rule.
-  // Under `D-0023` all three are derived from the iteration id, so they repeat
-  // exactly when the id does -- and one id compared once is the whole check.
+  // **One refusal used to be three, and then one turned out not to be enough.**
+  // The operator used to type the successor's run id, topic branch and
+  // workspace, so each could repeat the predecessor's. Under `D-0023` all three
+  // are derived from the iteration id, so for an iteration rondo allocated they
+  // repeat exactly when the id does.
   //
-  // It is still worth making *here*, before the gate is touched, rather than
-  // leaving it to the store: reserving under the predecessor's id would be
-  // refused as a duplicate row, but only after a person's answer had already
-  // been carried to continuo and the first iteration closed.
+  // **That equivalence does not hold for a migrated predecessor**, and this is
+  // the case a review found. A row written before `D-0023` carries whatever
+  // triple the operator typed, which the upgrade back-filled onto it verbatim.
+  // Nothing stops that run id being `rondo-<some other id>`: a predecessor
+  // called `legacy-id` can already own `rondo-revision`, and revising it with
+  // `--iteration-id revision` derives exactly that. The id check passes, the
+  // branch and workspace may well be free, and `commandRevise` would then
+  // answer the predecessor's gate -- which cannot be undone -- before
+  // `reserve()` refused the successor against the migrated claim.
+  //
+  // So the derived triple is compared against the one the predecessor actually
+  // holds, and the id comparison is kept beside it because it is the one that
+  // still gives a person a sentence they can act on.
   if (input.iterationId === input.predecessor.id) {
     return (
       `'--iteration-id' is '${input.iterationId}', which is the iteration being revised. The ` +
@@ -212,6 +222,36 @@ function repeatedIdentifier(input: RevisionRequest, plan: AdmittedPlan): string 
       "carries the work across is the branch, and rondo sets that for you: the second lap's " +
       "base branch is the first lap's topic branch."
     );
+  }
+
+  const derived = allocate(input.iterationId, plan.workspaceRoot);
+  if (derived.kind === "refused") {
+    // Not this function's refusal to make: `admit()` is where an unusable id is
+    // refused, and saying it twice in two voices would be two rules.
+    return null;
+  }
+  // The row is the claim of record -- it is what the indexes are over -- and
+  // the plan is what a row written before the allocator carried. Both are
+  // checked, because a migrated row has the triple in both places and a row
+  // rondo allocated has it in both too.
+  for (const [field, mine, theirs] of [
+    ["run id", derived.allocation.runId, input.predecessor.runId ?? plan.runId],
+    [
+      "topic branch",
+      derived.allocation.topicBranch,
+      input.predecessor.topicBranch ?? plan.topicBranch,
+    ],
+    ["workspace", derived.allocation.workspace, input.predecessor.workspace ?? plan.workspace],
+  ] as const) {
+    if (mine === theirs) {
+      return (
+        `the ${field} rondo would derive for iteration '${input.iterationId}' is '${mine}', ` +
+        `which iteration '${input.predecessor.id}' already holds. That iteration was admitted ` +
+        "before rondo allocated identifiers, so its names were typed rather than derived and " +
+        "one of them happens to collide with what this id produces. Nothing was touched. " +
+        "Choose a different --iteration-id."
+      );
+    }
   }
   return null;
 }

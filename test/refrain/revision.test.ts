@@ -419,3 +419,30 @@ test("a malformed iteration id passes revisionPlan unchecked -- allocate() is wh
   const allocation = allocate("Not An Id!", WORKSPACE_ROOT);
   expect(allocation.kind).toBe("refused");
 });
+
+test("a migrated predecessor whose typed run id collides with the derived one is refused", () => {
+  // **Codex round 3.** For a row rondo allocated, distinct iteration ids give
+  // distinct triples. For a row written *before* the allocator they do not: its
+  // names were typed, and the upgrade back-filled them verbatim, so a
+  // predecessor called `legacy-id` can already own `rondo-revision`. Revising
+  // it with `--iteration-id revision` derives exactly that name. Without this
+  // check the gate would be answered -- which cannot be undone -- before
+  // `reserve()` refused the successor against the migrated claim.
+  // A row as the migration leaves one: its typed run id back-filled onto it.
+  const legacy: IterationRecord = {
+    ...closedRecord("legacy-id", FIRST),
+    runId: "rondo-revision",
+  };
+
+  const outcome = revisionPlan({
+    predecessor: legacy,
+    iterationId: "revision",
+    instruction: "use the existing helper",
+  });
+
+  expect(outcome.kind).toBe("refused");
+  if (outcome.kind === "refused") {
+    expect(outcome.reason).toContain("run id");
+    expect(outcome.reason).toContain("Nothing was touched");
+  }
+});
