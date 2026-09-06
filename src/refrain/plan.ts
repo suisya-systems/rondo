@@ -665,7 +665,7 @@ export function planPayload(plan: AdmittedPlan): JsonRecord {
  * it: the bytes may have been written by an older rondo, or edited by a person.
  */
 export function readPlan(payload: JsonRecord): AdmittedPlanOutcome {
-  const validated = readRunPlan(payload);
+  const validated = readRunPlan(withWorkspaceRoot(payload));
   if (validated.kind === "refused") {
     return validated;
   }
@@ -688,6 +688,42 @@ export function readPlan(payload: JsonRecord): AdmittedPlanOutcome {
     }
     throw error;
   }
+}
+
+/**
+ * A stored payload, with `workspace_root` supplied if it predates D-0023.
+ *
+ * **A row written before D-0023 has no `workspace_root`, and refusing it would
+ * strand every iteration that was open when the host was upgraded.** The plan
+ * column is persisted verbatim, so adding a field to `RunPlan` makes the older
+ * bytes fail their own re-validation -- and `readPlan` is called on the way
+ * *back into* a live iteration, so the failure would arrive as `stalled` on
+ * rows a person is already waiting on. That is a migration this entry owes as
+ * much as it owes the columns.
+ *
+ * The value derived is the honest one rather than a placeholder: the root a
+ * workspace was created under is exactly its parent directory, and the stored
+ * `workspace` is an absolute path that every pre-D-0023 row carries. Nothing
+ * downstream of admission reads `workspaceRoot` -- it is what the allocator
+ * derives *from*, and an already-admitted row's triple is read from the row --
+ * so the derived value is a faithful record rather than an input to anything.
+ *
+ * Deliberately not applied by {@link readRunPlan}, which reads an operator's
+ * plan file: there, `workspaceRoot` is the one path the person must supply, and
+ * inventing one would turn a typo into a workspace somewhere they did not name.
+ */
+function withWorkspaceRoot(payload: JsonRecord): JsonRecord {
+  if (payload["workspace_root"] !== undefined) {
+    return payload;
+  }
+  const workspace = payload["workspace"];
+  if (typeof workspace !== "string") {
+    return payload;
+  }
+  const cut = Math.max(workspace.lastIndexOf("/"), workspace.lastIndexOf("\\"));
+  // A workspace with no separator has no parent to name, so the payload is left
+  // as it is and refused by name below rather than repaired into a guess.
+  return cut <= 0 ? payload : { ...payload, workspace_root: workspace.slice(0, cut) };
 }
 
 /**

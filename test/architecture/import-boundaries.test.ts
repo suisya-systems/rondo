@@ -1719,3 +1719,84 @@ for (const [id, module, source, expected] of PLANTED) {
     }
   });
 }
+
+/**
+ * Every `inTransaction` body in the store is synchronous (D-0023 rule 16).
+ *
+ * **The property the whole in-process side of N > 1 rests on, enforced rather
+ * than assumed.** `inTransaction`'s type is `<T>(body: () => T) => T`, which
+ * admits a promise-returning body perfectly happily -- and then `COMMIT` runs
+ * *before* the awaited work, so the write lands outside the transaction that
+ * was supposed to contain it. Under one in-flight iteration the failure is
+ * invisible, because nothing else is ever inside a transaction at the same
+ * time. Above one it is a torn transaction and a bound that was never really
+ * checked, and it would be found as a corrupt row rather than as a test.
+ *
+ * The store also refuses a thenable return at runtime, which catches a body
+ * that becomes asynchronous through something it calls. This catches the
+ * ordinary way it would happen -- somebody writes `async` or `await` in the
+ * body -- and catches it at the moment the line is written rather than at the
+ * moment two admissions overlap.
+ *
+ * This is an AST assertion rather than a regular expression because `await`
+ * appears in the store's prose and in unrelated positions, and a text search
+ * would be a check that fails for the wrong reasons.
+ */
+test("no store transaction body is async or awaits", () => {
+  const module = "src/store/sqlite.ts";
+  const tree = parseSourceFile(parseNameOf(module), sourceOf(module));
+  const offenders: string[] = [];
+
+  const bodyIsAsync = (argument: ts.Node): boolean => {
+    if (!ts.isArrowFunction(argument) && !ts.isFunctionExpression(argument)) {
+      // A body that is not a literal function cannot be read here, and a store
+      // that passed one would have hidden the very thing this asserts.
+      return true;
+    }
+    if (argument.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.AsyncKeyword)) {
+      return true;
+    }
+    let awaits = false;
+    const walk = (node: ts.Node): void => {
+      // A nested function starts its own scope: an `await` inside one belongs
+      // to that function and not to the transaction body.
+      if (
+        ts.isArrowFunction(node) ||
+        ts.isFunctionExpression(node) ||
+        ts.isFunctionDeclaration(node)
+      ) {
+        return;
+      }
+      if (ts.isAwaitExpression(node)) {
+        awaits = true;
+        return;
+      }
+      node.forEachChild(walk);
+    };
+    argument.forEachChild(walk);
+    return awaits;
+  };
+
+  let calls = 0;
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      node.expression.text === "inTransaction"
+    ) {
+      calls += 1;
+      const argument = node.arguments[0];
+      if (argument === undefined || bodyIsAsync(argument)) {
+        offenders.push(`${module}: an inTransaction body is async or awaits`);
+      }
+    }
+    node.forEachChild(visit);
+  };
+  tree.forEachChild(visit);
+
+  expect(offenders).toEqual([]);
+  // The observed-red control for the sweep itself: a scan that found no call
+  // sites at all would pass the assertion above while checking nothing, which
+  // is how a renamed helper turns this test into decoration.
+  expect(calls).toBeGreaterThanOrEqual(3);
+});

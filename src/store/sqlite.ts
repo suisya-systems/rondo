@@ -740,6 +740,28 @@ export function iterationStore(connection: DatabaseSync, policy: HostPolicy): It
     connection.exec("BEGIN IMMEDIATE");
     try {
       const value = body();
+      // **Enforced rather than assumed** (D-0023 rule 16). The type is
+      // `<T>(body: () => T) => T`, which happily admits a promise-returning
+      // body -- and then `COMMIT` runs *before* the awaited work, so the
+      // transaction is torn and the write lands outside it. Under one
+      // in-flight iteration the failure is invisible, because nothing else is
+      // ever inside a transaction at the same time; under a bound above one it
+      // is a corrupt row and a bound that was never really checked.
+      //
+      // The property the whole in-process side of N > 1 rests on is that every
+      // transaction body is synchronous, so two overlapping `admit()` calls
+      // cannot interleave inside one: `node:sqlite` is synchronous and
+      // JavaScript is single-threaded, so a body with no `await` in it runs to
+      // completion before any other continuation. That is a real guarantee and
+      // it is worth exactly as much as the promise that nobody adds an
+      // `await` -- which is why this refuses instead of trusting.
+      if (typeof (value as { readonly then?: unknown } | null)?.then === "function") {
+        throw new StoreDefect(
+          "a store transaction body returned a thenable, which would commit before the awaited " +
+            "work had happened. Every body here must be synchronous: that is what makes two " +
+            "overlapping admissions unable to interleave inside one transaction.",
+        );
+      }
       connection.exec("COMMIT");
       return value;
     } catch (error) {

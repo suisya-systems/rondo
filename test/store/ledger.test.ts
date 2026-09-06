@@ -471,3 +471,21 @@ test("what the counted bound gives up: an out-of-band insert is not refused", as
   // grow -- but nothing refused the row on the way in, and that is the point.
   expect((await reserveOne(store, "c")).kind).toBe("atCapacity");
 });
+
+// ---------------------------------------------------------------------------
+// 5. The property the in-process side of N > 1 rests on.
+// ---------------------------------------------------------------------------
+
+test("overlapping admissions do not interleave inside a transaction", async () => {
+  // D-0023 rule 16's property, asserted at the level it actually holds. Two
+  // `reserve()` calls driven from interleaved continuations both commit, the
+  // second sees the first's write, and the bound is applied to the pair rather
+  // than to each in ignorance of the other -- which is only true because no
+  // transaction body awaits.
+  const { store, connection } = storeUnder({ maxOccupying: 1, maxLive: 1 });
+
+  const [first, second] = await Promise.all([reserveOne(store, "a"), reserveOne(store, "b")]);
+  const kinds = [first.kind, second.kind].sort();
+  expect(kinds).toEqual(["atCapacity", "reserved"]);
+  expect(connection.prepare("SELECT COUNT(*) AS n FROM iteration").get()).toMatchObject({ n: 1 });
+});
