@@ -30,6 +30,7 @@ import {
   publishPreflight,
   pullRequestText,
   repositoryFromRemoteUrl,
+  revisionBlocker,
   USAGE,
   walkGate,
 } from "../../src/access/cli.js";
@@ -150,7 +151,7 @@ test("a word that is not a command is refused, and the refusal lists the command
   expect(outcome.kind).toBe("refused");
   if (outcome.kind === "refused") {
     expect(outcome.reason).toContain("strat");
-    for (const command of ["start", "answer", "publish", "abandon"]) {
+    for (const command of ["start", "answer", "revise", "publish", "abandon"]) {
       expect(outcome.reason).toContain(command);
     }
   }
@@ -235,7 +236,7 @@ test("from 'received' the walk is six verbs, in continuo's order", () => {
     const { verbs, calls } = fakeVerbs("received");
     const outcome = await walkGate(continuo, walkRequest, verbs);
 
-    expect(outcome).toEqual({ kind: "walked", closed: true });
+    expect(outcome).toEqual({ kind: "walked", closed: true, answerSent: true });
     expect(calls).toEqual([
       "show:g1",
       "present:g1",
@@ -256,7 +257,7 @@ test("from 'presented' the walk skips straight to the answer", () => {
     const { verbs, calls } = fakeVerbs("presented");
     const outcome = await walkGate(continuo, walkRequest, verbs);
 
-    expect(outcome).toEqual({ kind: "walked", closed: true });
+    expect(outcome).toEqual({ kind: "walked", closed: true, answerSent: true });
     expect(calls).toEqual([
       "show:g1",
       "answer:approve",
@@ -275,7 +276,7 @@ test("from 'answered' the walk re-issues the identical body to recover the relay
     const { verbs, calls } = fakeVerbs("answered");
     const outcome = await walkGate(continuo, walkRequest, verbs);
 
-    expect(outcome).toEqual({ kind: "walked", closed: true });
+    expect(outcome).toEqual({ kind: "walked", closed: true, answerSent: true });
     // Re-issuing is idempotent for the same body, and it is the only way to get
     // the forwarded relay's id out of a payload rather than composing one.
     expect(calls).toEqual([
@@ -292,7 +293,12 @@ test("a gate that already has an outcome is not walked at all", () => {
     const { verbs, calls } = fakeVerbs("forwarded", "answered_and_forwarded");
     const outcome = await walkGate(continuo, walkRequest, verbs);
 
-    expect(outcome).toEqual({ kind: "walked", closed: true });
+    // **`answerSent: false` is the load-bearing half of this.** The walk
+    // succeeded and sent nothing, which is right -- and a caller that read
+    // `walked` as "the answer landed" would be wrong. `revise` reads this field
+    // and refuses to start a lap on it; `answer` may ignore it, having nothing
+    // left to do either way.
+    expect(outcome).toEqual({ kind: "walked", closed: true, answerSent: false });
     // Nothing after the observation. An answer sent to a closed gate would be
     // an operator believing they had answered something they had not.
     expect(calls).toEqual(["show:g1"]);
@@ -381,6 +387,12 @@ test("a flag the command does not read is refused, not ignored", () => {
     ["answer", "--actor-id", "me", "--body=approve", "--repo", "o/n"],
     ["publish", "--repo", "o/n", "--actor-id", "me", "--plan", "/tmp/p.json"],
     ["abandon", "--iteration-id", "i1", "--reason", "x", "--body=approve"],
+    // `revise` reads four of `start`'s flags and none of `publish`'s: a
+    // `--prompt` here would read as though it replaced the second lap's prompt,
+    // which is composed from the first lap's request and the instruction.
+    ["revise", "--actor-id", "me", "--body=x", "--dry-run"],
+    ["revise", "--actor-id", "me", "--body=x", "--prompt", "p"],
+    ["revise", "--actor-id", "me", "--body=x", "--plan", "/tmp/p.json"],
   ]) {
     const outcome = parseCommand(argv);
     expect(outcome.kind).toBe("refused");
@@ -420,10 +432,120 @@ test("each command still accepts every flag it does read", () => {
       "--dry-run",
     ],
     ["abandon", "--iteration-id", "i1", "--reason", "wedged"],
+    [
+      "revise",
+      "--actor-id",
+      "me",
+      "--body=use the existing helper",
+      "--run-id",
+      "r-2",
+      "--topic-branch",
+      "t-2",
+      "--workspace",
+      "/w2",
+      "--iteration-id",
+      "i-2",
+    ],
   ]) {
     const outcome = parseCommand(argv);
     expect(outcome.kind).toBe("parsed");
   }
+});
+
+/**
+ * The second lap's three identifiers reach the record.
+ *
+ * They are on the command line because rondo allocates none of them
+ * (`D-0012`, `D-0019` rule 3) and continuo will not take the first lap's: it
+ * holds a run under that id, git holds the branch, and a worktree stands at the
+ * workspace. What crosses the two laps is the branch, and rondo sets that
+ * itself.
+ */
+test("revise carries the instruction and the three fresh identifiers", () => {
+  const outcome = parseCommand([
+    "revise",
+    "--actor-id",
+    "me",
+    "--body=-- use the existing helper",
+    "--run-id",
+    "r-2",
+    "--topic-branch",
+    "dogfood/r-2",
+    "--workspace",
+    "/srv/ws2",
+  ]);
+  expect(outcome.kind).toBe("parsed");
+  if (outcome.kind !== "parsed") {
+    return;
+  }
+  expect(outcome.parsed).toMatchObject({
+    command: "revise",
+    actorId: "me",
+    // Carried byte for byte, dash and all: an instruction at a gate may
+    // legitimately begin with one, which is why USAGE spells `--body=TEXT`.
+    body: "-- use the existing helper",
+    runId: "r-2",
+    topicBranch: "dogfood/r-2",
+    workspace: "/srv/ws2",
+  });
+});
+
+/**
+ * The two refusals that have to come before the gate is walked.
+ *
+ * The walk presents, delivers and answers through continuo and its ack closes
+ * the gate; it cannot be taken back. `revisionPlan` already refuses a plan it
+ * cannot build, and these are the two things it cannot see -- the id the
+ * successor will be reserved under is not part of the plan, and a gate continuo
+ * has already closed is walked *successfully* and silently. Either discovered
+ * after the walk leaves a person having spent their gate on an answer that
+ * started nothing.
+ */
+test("a revision is blocked before the walk when the id is taken or the gate is closed", () => {
+  const clear = {
+    predecessorId: "iter-1",
+    gateOutcome: null,
+    successorId: "iter-2",
+    successorRow: "absent",
+    topicBranch: "topic/iter-2",
+    topicBranchExists: false,
+    workspace: "/srv/ws/iter-2",
+    workspaceExists: false,
+  } as const;
+  expect(revisionBlocker(clear)).toBe(null);
+
+  // The two continuo would refuse after `run admit` -- which for a revision is
+  // after the gate is gone. `revisionPlan`'s string comparison against the
+  // predecessor catches neither a branch from two laps ago nor another
+  // spelling of a path that resolves to the same directory; these are the same
+  // questions asked of git and of the filesystem.
+  expect(revisionBlocker({ ...clear, topicBranchExists: true })).toContain("topic/iter-2");
+  expect(revisionBlocker({ ...clear, topicBranchExists: true })).toContain("Nothing was touched");
+  expect(revisionBlocker({ ...clear, workspaceExists: true })).toContain("/srv/ws/iter-2");
+  expect(revisionBlocker({ ...clear, workspaceExists: true })).toContain("worktree");
+
+  // A gate that already reached an outcome: the instruction would be carried
+  // nowhere, and `withdrawn` and `expired` close a gate without a person having
+  // said anything at all.
+  for (const outcome of ["withdrawn", "expired", "answered_and_forwarded"]) {
+    const blocked = revisionBlocker({ ...clear, gateOutcome: outcome });
+    expect(blocked).toContain(outcome);
+    expect(blocked).toContain("No lap was started");
+  }
+
+  // A row already standing under the successor's id. `unreadable` blocks it as
+  // firmly as `read` does: it is a row, whatever it says.
+  for (const row of ["read", "unreadable"] as const) {
+    const blocked = revisionBlocker({ ...clear, successorRow: row });
+    expect(blocked).toContain("iter-2");
+    expect(blocked).toContain("Nothing was touched");
+  }
+
+  // The gate is checked first: a person whose gate has closed needs to hear
+  // that before they hear about an identifier.
+  expect(revisionBlocker({ ...clear, gateOutcome: "expired", successorRow: "read" })).toContain(
+    "expired",
+  );
 });
 
 test("the refusal names the flags the command does take", () => {

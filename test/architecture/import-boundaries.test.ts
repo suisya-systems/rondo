@@ -263,7 +263,14 @@ const ALLOWED_EXTERNALS_BY_MODULE: Readonly<
   // checks rather than a promise the prose makes (D-0010).
   "src/access/cli.ts": {
     "node:util": ["parseArgs"],
-    "node:fs": ["readFileSync"],
+    // `existsSync` joined `readFileSync` with `revise` (D-0027 rule 6): continuo
+    // creates the second lap's worktree and requires the path not to exist, and
+    // it discovers that after `run admit` -- which for a revision is after the
+    // gate has been answered and closed. Asking here costs a person nothing and
+    // saves them a gate. It is a read, on a path the plan validator already
+    // accepted, and it is the widest thing this module may do to a filesystem:
+    // there is still no write, no delete and no directory walk.
+    "node:fs": ["existsSync", "readFileSync"],
     // One predicate, for the check that `RONDO_STORE` names a durable database
     // rather than a different one per directory. It reads a string and touches
     // no filesystem, which is why it is here and `resolve` is not.
@@ -324,6 +331,7 @@ const EXPECTED_MODULES: readonly string[] = [
   "src/refrain/plan.ts",
   "src/refrain/policy.ts",
   "src/refrain/ports.ts",
+  "src/refrain/revision.ts",
   "src/store/plan.ts",
   "src/store/records.ts",
   "src/store/sqlite.ts",

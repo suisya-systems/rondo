@@ -437,6 +437,7 @@ const PLAN: RunPlan = (() => {
     identityReadbackTimeoutMs: 30_000,
     gateOptions: ["approve", "revise"],
     gateDeadlineAtMs: null,
+    pullRequestBaseBranch: null,
     invocationCeilingMs: 1_800_000,
     catalogLayers: [CATALOG_LAYER],
     projectName: "rondo",

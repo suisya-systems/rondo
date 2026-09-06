@@ -126,6 +126,7 @@ export type {
   RunAdmission,
   StorePort,
 } from "./refrain/ports.js";
+export { type RevisionRequest, revisionPlan } from "./refrain/revision.js";
 export { canonicalJson, planDigest } from "./store/plan.js";
 export type {
   IterationFields,

@@ -23,7 +23,7 @@
  * `./forge.ts`, so the boundary test can say that *this* module cannot spell a
  * push (D-0025 rule 6).
  */
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { isAbsolute } from "node:path";
 import { parseArgs } from "node:util";
 
@@ -40,13 +40,15 @@ import {
 import type { ContinuoResult } from "../continuo/protocol.js";
 import { type RunPlan, readPlan } from "../refrain/plan.js";
 import type { LoopPolicy } from "../refrain/policy.js";
+import { revisionPlan } from "../refrain/revision.js";
 import type { IterationRecord, JsonRecord } from "../store/records.js";
-import { type IterationStore, openIterationStore } from "../store/sqlite.js";
+import { type IterationStore, openIterationStore, type ReadOutcome } from "../store/sqlite.js";
 import { abandon, admit, conductorPorts, resume } from "./conductor.js";
 import { asciiEscape, consoleSeams, relayUpstream } from "./console.js";
 import {
   inspectLapWork,
   inspectPushTarget,
+  inspectTopicBranch,
   type LapFile,
   type LapWorkInspection,
   openPullRequest,
@@ -72,6 +74,13 @@ export const USAGE = `rondo - the operator surface for one lap at a time
   rondo answer --actor-id ID --body=TEXT
                           answer it, and settle the iteration. Write --body
                           with an equals sign: an answer may begin with a dash
+  rondo revise --actor-id ID --body=TEXT --run-id ID --topic-branch NAME
+               --workspace PATH [--iteration-id ID]
+                          answer the gate with a change to make, and run a
+                          second lap that continues from the first one's
+                          branch. The three identifiers are yours to choose:
+                          rondo allocates none, and continuo refuses the ones
+                          the first lap spent
   rondo publish --repo OWNER/NAME --actor-id ID [--remote NAME] [--dry-run]
                 [--allow-remote-mismatch]
                           push the branch, open the pull request, close the run.
@@ -143,7 +152,7 @@ export function approvedForPublication(record: IterationRecord): boolean {
 
 /** One command, as the parser understood it. Pure: this type holds no I/O. */
 export interface ParsedCommand {
-  readonly command: "start" | "answer" | "publish" | "abandon" | "help";
+  readonly command: "start" | "answer" | "revise" | "publish" | "abandon" | "help";
   readonly planFile: string | null;
   readonly runId: string | null;
   readonly topicBranch: string | null;
@@ -180,7 +189,7 @@ const FLAGS = {
   "allow-remote-mismatch": { type: "boolean" },
 } as const;
 
-const COMMANDS = ["start", "answer", "publish", "abandon"] as const;
+const COMMANDS = ["start", "answer", "revise", "publish", "abandon"] as const;
 
 /**
  * Which flags each command actually reads.
@@ -197,6 +206,7 @@ const COMMANDS = ["start", "answer", "publish", "abandon"] as const;
 const FLAGS_BY_COMMAND: Readonly<Record<string, readonly string[]>> = {
   start: ["plan", "run-id", "topic-branch", "workspace", "prompt", "iteration-id"],
   answer: ["actor-id", "body"],
+  revise: ["actor-id", "body", "run-id", "topic-branch", "workspace", "iteration-id"],
   publish: ["repo", "actor-id", "remote", "iteration-id", "dry-run", "allow-remote-mismatch"],
   abandon: ["iteration-id", "reason"],
 };
@@ -353,7 +363,22 @@ function relayFailure(verb: string, result: ContinuoResult<unknown>): number {
 
 /** What one pass over the gate did, or why it stopped. */
 export type WalkOutcome =
-  | { readonly kind: "walked"; readonly closed: boolean }
+  | {
+      readonly kind: "walked";
+      readonly closed: boolean;
+      /**
+       * Whether **this** walk carried the body to the gate.
+       *
+       * False exactly when the gate already had an outcome, which is a
+       * successful walk that sent nothing -- the right thing to do, and a
+       * result a caller must not read as "the answer landed". `answer` may
+       * ignore it, because it has nothing left to do either way. `revise` may
+       * not: it would otherwise start a lap whose instruction was never
+       * recorded, under an outcome that may be `withdrawn` or `expired` rather
+       * than anyone saying anything.
+       */
+      readonly answerSent: boolean;
+    }
   | { readonly kind: "failed"; readonly status: number };
 
 /** The ports `walkGate` drives, injected so a test can watch the order. */
@@ -420,7 +445,7 @@ export async function walkGate(
       `Gate ${gate.gateId} is already closed as '${gate.outcome}'. Your answer was not sent, ` +
         "and nothing was written.",
     );
-    return { kind: "walked", closed: true };
+    return { kind: "walked", closed: true, answerSent: false };
   }
 
   let stage = gate.stage;
@@ -498,7 +523,7 @@ export async function walkGate(
     `  gate ack       stage is now '${finalAck.payload.toStage}'` +
       (finalAck.payload.closed ? ", and the gate is closed" : ""),
   );
-  return { kind: "walked", closed: finalAck.payload.closed };
+  return { kind: "walked", closed: finalAck.payload.closed, answerSent: true };
 }
 
 /** One delivery pass. Null when it worked; an exit status when it did not. */
@@ -764,6 +789,8 @@ export async function main(
       return await commandStart(parsed, ports, continuo);
     case "answer":
       return await commandAnswer(parsed, environment, store, ports, continuo);
+    case "revise":
+      return await commandRevise(parsed, environment, store, ports, continuo);
     default:
       return await commandPublish(parsed, environment, store, continuo);
   }
@@ -880,6 +907,293 @@ async function commandAnswer(
     );
   }
   return 0;
+}
+
+/**
+ * Everything that has to be true before a revision may walk the gate.
+ *
+ * **A separate function because the walk is irreversible and these are not
+ * about the plan.** `revisionPlan` already refuses a plan it cannot build, but
+ * two things it cannot see would each be discovered *after* the gate had been
+ * presented, answered and closed -- at which point the person has spent their
+ * gate on an answer that started nothing, and the only way on is the
+ * hand-written plan `revise` exists to remove.
+ *
+ *  1. **The successor's iteration id is not part of its plan**, so a plan can
+ *     validate perfectly under an id the store already holds. `reserve` refuses
+ *     the duplicate correctly -- but it runs after the walk, and by then the
+ *     predecessor is `closed`, so a corrected retry is told that nothing is
+ *     live. An `unreadable` row blocks the id too: it is a row, whatever it
+ *     says.
+ *  2. **The topic branch and the workspace are asked of the machine, not only
+ *     of the predecessor's plan.** `revisionPlan` compares the three
+ *     identifiers against the predecessor's, which catches the obvious reuse
+ *     and is all a layer that may not start a process can do. It does not catch
+ *     a branch from two laps ago, a branch something else created, or another
+ *     spelling of a path that resolves to the same directory -- and continuo's
+ *     materialiser requires that neither exists, discovering it after
+ *     `run admit`, which for a revision is after the gate is gone.
+ *  3. **A gate continuo has already closed is not an answer this command may
+ *     stand on.** `walkGate` handles it correctly and gently -- it says so and
+ *     sends nothing -- and that is exactly the trap: the walk *succeeds*, and a
+ *     conductor's `resume` then reports `closed` for `withdrawn` and `expired`
+ *     as readily as for `answered_and_forwarded`. Read as permission, a
+ *     successful no-op walk would start a lap whose instruction was never
+ *     recorded anywhere, under a gate outcome that is not a person saying
+ *     anything at all.
+ *
+ * Both were found by review rather than by a walk, which is the half of the
+ * ordering argument the first walk could not reach: the happy path never meets
+ * either.
+ */
+export function revisionBlocker(input: {
+  readonly predecessorId: string;
+  readonly gateOutcome: string | null;
+  readonly successorId: string;
+  readonly successorRow: ReadOutcome["kind"];
+  readonly topicBranch: string;
+  readonly topicBranchExists: boolean;
+  readonly workspace: string;
+  readonly workspaceExists: boolean;
+}): string | null {
+  if (input.gateOutcome !== null) {
+    return (
+      `the gate on iteration '${input.predecessorId}' is already closed as ` +
+      `'${input.gateOutcome}', so your instruction cannot be carried to it and nothing would ` +
+      "record what you asked for. No lap was started. If the work should continue anyway, " +
+      "'rondo start' takes a plan whose base branch is this iteration's topic branch."
+    );
+  }
+  if (input.successorRow !== "absent") {
+    return (
+      `iteration '${input.successorId}' already exists in the store, so the second lap could ` +
+      "not be reserved under it -- and the gate would have been answered first. Nothing was " +
+      "touched. Choose another --iteration-id, or another --run-id, which is what the " +
+      "iteration id defaults to."
+    );
+  }
+  if (input.topicBranchExists) {
+    return (
+      `branch '${input.topicBranch}' already exists in the repository, and continuo creates the ` +
+      "topic branch rather than checking it out -- it requires one that is not there. Nothing " +
+      "was touched. Choose another --topic-branch."
+    );
+  }
+  if (input.workspaceExists) {
+    return (
+      `'${input.workspace}' already exists, and continuo creates the worktree there -- it ` +
+      "requires the path not to exist. Nothing was touched. Choose another --workspace."
+    );
+  }
+  return null;
+}
+
+/**
+ * Door two and a half: answer the gate with a change, and run a second lap.
+ *
+ * **The defect this closes, stated plainly.** `gate_options` has offered
+ * `["approve", "revise"]` since the first dogfood run and the second word bought
+ * nothing: `answer` carried whatever a person typed, the gate closed
+ * `answered_and_forwarded` either way, and the only thing rondo then said was
+ * "Next: rondo publish". Wanting a change meant writing a thirty-two-field plan
+ * by hand and knowing, untold, that the next lap's `base_branch` has to be the
+ * last lap's `topic_branch`. This command is that, typed once.
+ *
+ * **The order of the two effects is the whole of its safety.** The successor's
+ * plan is composed and fully validated **before** the gate is walked, because
+ * the walk cannot be taken back: it presents, delivers and answers through
+ * continuo, and the ack closes the gate. A revision refused after that would
+ * leave a person having spent their gate on an answer that started nothing, and
+ * the way back would be the hand-written plan this command exists to remove. So
+ * a bad identifier costs a refusal and nothing else -- the same "validate before
+ * the effect" rule `D-0019` rule 14 applies to a spawn, applied to a gate.
+ *
+ * **The instruction goes to two places and is composed in neither.** continuo
+ * gets it byte for byte as the gate's answer, which is where the record of what
+ * a person said belongs and the only place it is authoritative; the second lap's
+ * prompt gets it appended to the first lap's request by
+ * {@link import("../refrain/revision.js").revisionPlan}. rondo writes no part of
+ * either (`D-0009`).
+ */
+async function commandRevise(
+  parsed: ParsedCommand,
+  environment: Readonly<Record<string, string | undefined>>,
+  store: IterationStore,
+  ports: ReturnType<typeof conductorPorts>,
+  continuo: VerifiedContinuo,
+): Promise<number> {
+  const actor = approvedActor(parsed, environment);
+  if ("refusal" in actor) {
+    return refuse(actor.refusal);
+  }
+  if (parsed.body === null || parsed.body === "") {
+    return refuse(
+      "revise needs --body=TEXT, saying what to change. It is carried to the gate byte for " +
+        "byte and appended to the second lap's prompt, so there is nothing to carry without " +
+        "it. Write it with an equals sign: an instruction may begin with a dash.",
+    );
+  }
+  // **Three identifiers, named one refusal at a time is worse than named
+  // together**: an operator who supplied none would otherwise be told about the
+  // run id, type a command, and be told about the topic branch. rondo allocates
+  // none of the three (`D-0012`, `D-0019` rule 3), and this is the sentence
+  // that says so where a person meets it.
+  const runId = parsed.runId;
+  const topicBranch = parsed.topicBranch;
+  const workspace = parsed.workspace;
+  const missing = [
+    runId === null ? "--run-id ID" : null,
+    topicBranch === null ? "--topic-branch NAME" : null,
+    workspace === null ? "--workspace PATH" : null,
+  ].filter((flag): flag is string => flag !== null);
+  if (runId === null || topicBranch === null || workspace === null) {
+    return refuse(
+      `revise needs ${missing.join(", ")}. The second lap is a second run: continuo holds a ` +
+        "run under the first lap's id, git holds its branch and a worktree stands at its " +
+        "workspace, so all three have to be new. rondo allocates none of them. What carries " +
+        "the work across is the branch, and rondo sets that for you: the second lap's base " +
+        "branch is the first lap's topic branch.",
+    );
+  }
+
+  const live = await store.readLive();
+  if (live.kind === "absent") {
+    say("Nothing is waiting. No iteration is live, so there is nothing to revise.");
+    return 0;
+  }
+  if (live.kind === "unreadable") {
+    return refuse(`The live iteration row would not read: ${live.reason}`);
+  }
+  const record = live.record;
+  if (record.gateId === null) {
+    say(`iteration '${record.id}' is ${record.status}, and no gate is open on it.`);
+    say("There is nothing for a person to answer yet.");
+    return 0;
+  }
+
+  // Composed and validated first. Nothing below this line is undoable.
+  const successor = revisionPlan({
+    predecessor: record,
+    runId,
+    topicBranch,
+    workspace,
+    instruction: parsed.body,
+  });
+  if (successor.kind === "refused") {
+    return refuse(
+      `The second lap's plan was refused, and the gate was not touched: ${successor.reason}`,
+    );
+  }
+
+  const observed = await showGate(continuo, { db: planField(record, "db"), gateId: record.gateId });
+  if (observed.kind !== "answered") {
+    return relayFailure("gate show", observed);
+  }
+  const gate = observed.payload;
+
+  // The last two refusals, and the last things that cost nothing. See
+  // `revisionBlocker`: the id the successor will be reserved under is not part
+  // of the plan that was just validated, and a gate continuo has already closed
+  // is walked successfully and silently.
+  const successorId = parsed.iterationId ?? successor.plan.runId;
+  const existing = await store.read(successorId);
+  // **Asked of git, and a refusal when git will not say.** The branch is the
+  // one preflight that needs a process, so it is `forge.ts`'s (this module has
+  // no spawn binding, and D-0025 rule 7 is that property rather than a
+  // promise). An unreadable answer is refused rather than read as room to
+  // proceed: the next thing this command does cannot be undone.
+  const branch = await inspectTopicBranch({
+    repository: successor.plan.repository,
+    topicBranch: successor.plan.topicBranch,
+  });
+  if (branch.kind === "malformed") {
+    return refuse(
+      `'${successor.plan.topicBranch}' is not a name git will accept for a branch, so nothing ` +
+        "could create it -- and a name that cannot exist reads as a name that is free. Nothing " +
+        "was touched. Choose another --topic-branch.",
+    );
+  }
+  if (branch.kind !== "read") {
+    return refuse(
+      `git could not say whether '${successor.plan.topicBranch}' already exists in ` +
+        `${successor.plan.repository}: ${branch.reason}. continuo requires a topic branch that ` +
+        "is not there, and rondo will not answer the gate without knowing. Nothing was touched.",
+    );
+  }
+  const blocker = revisionBlocker({
+    predecessorId: record.id,
+    gateOutcome: gate.outcome,
+    successorId,
+    successorRow: existing.kind,
+    topicBranch: successor.plan.topicBranch,
+    topicBranchExists: branch.exists,
+    workspace: successor.plan.workspace,
+    workspaceExists: existsSync(successor.plan.workspace),
+  });
+  if (blocker !== null) {
+    return refuse(blocker);
+  }
+
+  say(`gate ${gate.gateId} is at stage '${gate.stage}'`);
+  const walked = await walkGate(continuo, {
+    db: planField(record, "db"),
+    gateId: gate.gateId,
+    destinationDir: planField(record, "endpoint_destination_dir"),
+    holder: planField(record, "lease_claimant_id"),
+    actorId: actor.actorId,
+    body: parsed.body,
+  });
+  if (walked.kind === "failed") {
+    return walked.status;
+  }
+  // **A walk that sent nothing is not permission to start a lap.** The gate was
+  // closed by somebody else between the read above and the walk's own, so the
+  // instruction reached nothing -- and the outcome it closed at may be
+  // `withdrawn` or `expired`, which are not a person saying anything. `resume`
+  // below would settle the row at `closed` for any of them, so this is the
+  // check that keeps a successor from running on an answer that was never
+  // recorded. The row is still settled, because that is true and useful.
+  if (!walked.answerSent) {
+    const report = await resume(ports, record.id);
+    sayReport(report);
+    say("");
+    say(
+      "Your instruction was not carried to the gate, so no second lap was started. The " +
+        "iteration above is settled; 'rondo start' is how the work continues from here.",
+    );
+    return 1;
+  }
+
+  const report = await resume(ports, record.id);
+  sayReport(report);
+  // **The second lap does not start until the first row is terminal**, and this
+  // is a refusal rather than an attempt because the attempt has a worse failure
+  // mode: `reserve` would answer `occupied` -- correctly -- and the operator
+  // would read a single-flight message about an iteration they had just
+  // answered, with no idea that the answer is what had not landed.
+  if (report.status !== "closed") {
+    say("");
+    say(
+      "The first iteration did not reach 'closed', so no second lap was started. Run " +
+        "'rondo answer' to see where its gate stands.",
+    );
+    return 1;
+  }
+
+  say("");
+  say(`revising as iteration '${successorId}', cut from '${successor.plan.baseBranch}'`);
+  say("the lap is the step that is slow");
+  const second = await admit(ports, successor.plan, START_POLICY, successorId);
+  sayReport(second);
+  if (second.status === "awaiting_human") {
+    say("");
+    say("A person has to answer this before anything lands. Next: rondo answer");
+    return 0;
+  }
+  if (second.iterationId === null) {
+    return 2;
+  }
+  return second.status === "closed" ? 0 : 1;
 }
 
 /** A forge repository as `gh` names one: `owner/name`. */
@@ -1254,7 +1568,17 @@ async function commandPublish(
 
   const workspace = planField(record, "workspace");
   const topicBranch = planField(record, "topic_branch");
-  const baseBranch = planField(record, "base_branch");
+  const cutFromBranch = planField(record, "base_branch");
+  // **A revision's pull request is opened against the branch the *first* lap
+  // was cut from, and not the branch *this* lap was cut from.** They are the
+  // same value until a `revise` happens, at which point the plan carries both:
+  // the second lap's worktree is cut from the first lap's topic branch, which
+  // is a branch on this machine that nothing has pushed (`D-0010`), so a pull
+  // request against it would name a branch the forge does not have. An absent
+  // key is a plan no revision has touched, which is every plan an operator
+  // writes.
+  const revisionBase = planField(record, "pull_request_base_branch");
+  const baseBranch = revisionBase === "" ? cutFromBranch : revisionBase;
   const db = planField(record, "db");
   const runId = record.runId;
   if (runId === null) {

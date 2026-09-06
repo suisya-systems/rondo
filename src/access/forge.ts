@@ -261,6 +261,81 @@ export async function inspectPushTarget(request: PushTargetRequest): Promise<Pus
   return { kind: "read", remotes, pushUrls, topicBranchExists: branch.status === 0 };
 }
 
+/** Whether a branch is already there, or why git could not say. */
+export type BranchPresence =
+  | { readonly kind: "read"; readonly exists: boolean }
+  /** git will not accept the name, whether or not anything holds it. */
+  | { readonly kind: "malformed" }
+  | { readonly kind: "unreadable"; readonly reason: string };
+
+/**
+ * Ask a repository whether a branch is already there.
+ *
+ * **For `revise`, and it is a preflight rather than a courtesy.** continuo's
+ * materialiser requires a topic branch that does **not** already exist, and it
+ * discovers that after `run admit` -- which for a revision is after the gate has
+ * been presented, answered and closed. A person who reuses a branch from two
+ * laps ago would spend their gate to learn it. `revisionPlan` compares the
+ * three identifiers against the immediate predecessor's, which is a string
+ * comparison in a layer that may not start a process; this is the same question
+ * asked of git, so it also answers for a lap further back and for a branch
+ * created by anything else.
+ *
+ * The repository rather than the workspace: the workspace is the worktree a lap
+ * cuts and does not exist yet, and the branch lives in the repository it is cut
+ * from. `--verify --quiet` distinguishes "not there" (exit 1, silence) from
+ * "git could not answer", and the two must not be collapsed -- the caller
+ * refuses on the second rather than reading it as room to proceed.
+ */
+export async function inspectTopicBranch(request: {
+  readonly repository: string;
+  readonly topicBranch: string;
+}): Promise<BranchPresence> {
+  // **Syntax before existence, because "no such ref" is the same answer for a
+  // name that could never be one.** `rev-parse --verify --quiet` exits 1 for
+  // `bad..branch` exactly as it does for a branch nobody has created, so asking
+  // only that question reports a malformed name as available -- and continuo's
+  // materialiser then refuses it after the gate is gone. `runPlan` cannot close
+  // this: it refuses an empty or option-shaped value, and the rest of what a
+  // refname may be is git's rule rather than rondo's, which is why it is asked
+  // of git.
+  //
+  // The full `refs/heads/` form rather than `--branch`: it is the name that
+  // will actually be created, and it is checked as a string with none of
+  // `--branch`'s shorthand expansion (`@{-1}` and friends) in the way.
+  const wellFormed = await runCommand(
+    "git",
+    ["check-ref-format", `refs/heads/${request.topicBranch}`],
+    PREFLIGHT_TIMEOUT_MS,
+  );
+  if (wellFormed.spawnError !== null) {
+    return { kind: "unreadable", reason: `${wellFormed.commandLine}: ${wellFormed.spawnError}` };
+  }
+  if (wellFormed.status !== 0) {
+    return { kind: "malformed" };
+  }
+
+  const branch = await runCommand(
+    "git",
+    [
+      "-C",
+      request.repository,
+      "rev-parse",
+      "--verify",
+      "--quiet",
+      `refs/heads/${request.topicBranch}`,
+    ],
+    PREFLIGHT_TIMEOUT_MS,
+  );
+  if (branch.spawnError !== null) {
+    return { kind: "unreadable", reason: `${branch.commandLine}: ${branch.spawnError}` };
+  }
+  if (branch.status !== 0 && branch.status !== 1) {
+    return { kind: "unreadable", reason: queryFailure(branch) ?? branch.commandLine };
+  }
+  return { kind: "read", exists: branch.status === 0 };
+}
+
 /** What a pull request needs. */
 export interface PullRequestRequest {
   /**

@@ -76,6 +76,7 @@ const VALID: RunPlan = {
   identityReadbackTimeoutMs: 30_000,
   gateOptions: ["approve", "revise"],
   gateDeadlineAtMs: null,
+  pullRequestBaseBranch: null,
   invocationCeilingMs: 1_800_000,
   catalogLayers: [CATALOG_LAYER],
   projectName: "rondo",
@@ -304,6 +305,39 @@ test("a persisted plan that will not read is refused rather than coerced", () =>
   }
   expect(readPlan({ ...payload, parties: "run-1" }).kind).toBe("refused");
   expect(readPlan({ ...payload, parties: ["rondo-host", "run-1"] }).kind).toBe("refused");
+});
+
+/**
+ * One key may be absent, and exactly one.
+ *
+ * `pull_request_base_branch` was added to the payload after rows existed, and
+ * **the plan column has no migration**: the store persists the bytes verbatim
+ * (D-0019 rule 4) and hands them back unaltered. A strict read would make every
+ * iteration written before the field unreadable -- filed at `stalled` by the
+ * interpreter, and met by `publish` on a row whose lap has already been paid
+ * for. Absent means "no revision has touched this plan", which is what an
+ * operator's own plan file means. A key that is *present* and not a string is
+ * still refused, and the rest of the payload is as strict as it was.
+ */
+test("a plan payload written before the revision field still reads, and nothing else may go missing", () => {
+  const planned = runPlan(VALID);
+  if (planned.kind !== "planned") {
+    throw new Error(planned.reason);
+  }
+  const { pull_request_base_branch: _absent, ...older } = planPayload(planned.plan);
+  const back = readPlan(older);
+  expect(back.kind).toBe("planned");
+  if (back.kind === "planned") {
+    expect(back.plan.pullRequestBaseBranch).toBe(null);
+  }
+  expect(readPlan({ ...older, pull_request_base_branch: 7 }).kind).toBe("refused");
+
+  // The tolerance is one key wide. Every other field absent is still a payload
+  // rondo did not write, and is refused.
+  const { base_branch: _base, ...noBase } = planPayload(planned.plan);
+  expect(readPlan(noBase).kind).toBe("refused");
+  const { invocation_ceiling_ms: _ceiling, ...noCeiling } = planPayload(planned.plan);
+  expect(readPlan(noCeiling).kind).toBe("refused");
 });
 
 test("reading a persisted plan re-runs the whole validation, not just the shapes", () => {
