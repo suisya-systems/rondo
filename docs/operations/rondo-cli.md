@@ -421,3 +421,5 @@ Two setup facts are worth stating because they are the ones the first walk did n
 the cold `continuo` build is **seconds, not the ~13 s recorded earlier** (TypeScript 7's native
 compiler), and every rondo command prints one `ExperimentalWarning: SQLite ...` line on stderr, which
 is `node:sqlite` on the supported Node versions and not a fault.
+
+The first pull request this runbook describes was opened by `rondo publish` itself, from a lap driven end to end against a GitHub-backed clone on 2026-09-06.
