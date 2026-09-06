@@ -142,6 +142,25 @@ const FLAGS = {
 const COMMANDS = ["start", "answer", "publish", "abandon"] as const;
 
 /**
+ * Which flags each command actually reads.
+ *
+ * **A flag a command ignores is worse than one it refuses**, and this table is
+ * what makes the difference. `--dry-run` is read only by `publish`; without
+ * this check `rondo answer --body=approve --dry-run` would answer the gate and
+ * close the iteration while its author believed they were previewing, and
+ * `rondo start --dry-run` would spawn a real worker and spend real money. The
+ * same reasoning covers the quieter cases -- `--repo` on `answer`, `--plan` on
+ * `publish` -- where a value silently doing nothing reads on the command line
+ * as though it did something.
+ */
+const FLAGS_BY_COMMAND: Readonly<Record<string, readonly string[]>> = {
+  start: ["plan", "run-id", "topic-branch", "workspace", "prompt", "iteration-id"],
+  answer: ["actor-id", "body"],
+  publish: ["repo", "actor-id", "remote", "iteration-id", "dry-run"],
+  abandon: ["iteration-id", "reason"],
+};
+
+/**
  * argv to a command, or the reason it will not read. Total; never throws.
  *
  * `parseArgs` in strict mode, which buys the refusal of an unknown flag for
@@ -173,6 +192,18 @@ export function parseCommand(argv: readonly string[]): ParseOutcome {
     positionals = parsed.positionals;
   } catch (error) {
     return { kind: "refused", reason: error instanceof Error ? error.message : String(error) };
+  }
+  const permitted = FLAGS_BY_COMMAND[command] ?? [];
+  for (const given of Object.keys(values)) {
+    if (!permitted.includes(given)) {
+      return {
+        kind: "refused",
+        reason:
+          `'--${given}' is not a flag of '${command}'. rondo refuses it rather than ignoring it, ` +
+          `because a flag that reads as though it did something is worse than one that is ` +
+          `rejected. '${command}' takes: ${permitted.map((flag) => `--${flag}`).join(", ")}.`,
+      };
+    }
   }
   if (positionals.length > 0) {
     return {
@@ -629,6 +660,18 @@ export async function main(
   }
   const store = opened.store;
 
+  // **`abandon` is dispatched before continuo is started, and that ordering is
+  // the whole of its usefulness.** It is the way out of a row that is holding
+  // the single-flight lock with nothing able to release it, and one of the
+  // states that produces such a row is a continuo that will not start or no
+  // longer matches the pin. Requiring a working continuo to recover from a
+  // broken one would make the escape hatch unreachable exactly when it is
+  // needed. It drives no continuo verb -- that is D-0019 rule 11's design, not
+  // an accident here -- so there is nothing for it to need.
+  if (parsed.command === "abandon") {
+    return await commandAbandon(parsed, conductorPorts(unverifiedContinuo(), store));
+  }
+
   const startup = await startContinuo(environment);
   if (startup.kind === "refused") {
     return refuse(`continuo is not usable: ${startup.reason}`);
@@ -641,10 +684,8 @@ export async function main(
       return await commandStart(parsed, ports, continuo);
     case "answer":
       return await commandAnswer(parsed, environment, store, ports, continuo);
-    case "publish":
-      return await commandPublish(parsed, environment, store, continuo);
     default:
-      return await commandAbandon(parsed, ports);
+      return await commandPublish(parsed, environment, store, continuo);
   }
 }
 
@@ -843,7 +884,7 @@ async function commandPublish(
     baseBranch,
     topicBranch,
     title,
-    body: pullRequestBody(record, runId, continuo.revision),
+    body: pullRequestBody(record, runId),
   });
   if (!reportCommand("open the pull request", opened)) {
     return 1;
@@ -897,8 +938,19 @@ function reportCommand(
   return true;
 }
 
-/** The pull request's body: what ran, under what, and what is still the human's. */
-function pullRequestBody(record: IterationRecord, runId: string, revision: string): string {
+/**
+ * The pull request's body: what ran, under what, and what is still the human's.
+ *
+ * **The revision comes off the row, not off this process.** The row records the
+ * continuo that actually drove the lap, committed before anything was spawned;
+ * the revision this process verified at startup is whatever is installed today,
+ * and the pin moves. Publishing a lap after a pin move would otherwise attribute
+ * it to a build that never ran it -- which is the provenance the repository asks
+ * to be recorded, replaced by a plausible wrong answer. A row with no revision
+ * says so rather than borrowing one.
+ */
+function pullRequestBody(record: IterationRecord, runId: string): string {
+  const revision = record.continuoRevision ?? "an unrecorded revision";
   return [
     record.request,
     "",
@@ -909,6 +961,22 @@ function pullRequestBody(record: IterationRecord, runId: string, revision: strin
     "",
     "This pull request was opened by `rondo publish`, which an operator ran. Merging it is not.",
   ].join("\n");
+}
+
+/**
+ * A handle that names no continuo, for the one command that drives none.
+ *
+ * `conductorPorts` wants a verified handle because every other port it wires
+ * reaches a subprocess. `abandon` reaches none: it writes one terminal row and
+ * returns (D-0019 rule 11). Handing it a handle whose paths are empty is
+ * therefore not a shortcut around verification -- any verb reached through it
+ * would be refused at the argument boundary before a process could start, which
+ * is the property `test/continuo/invoker.test.ts` already holds open. What it
+ * buys is that a stranded row can be settled on a machine whose continuo is
+ * missing, broken, or no longer the pinned one.
+ */
+function unverifiedContinuo(): VerifiedContinuo {
+  return { cliPath: "", revision: "" };
 }
 
 /** Door four, which is not a door: end an iteration rondo cannot finish. */

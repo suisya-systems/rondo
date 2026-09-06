@@ -359,3 +359,69 @@ test("the approver allowlist admits the one identity it names", () => {
   const allowed = approvedActor(withActor("happy_ryo"), { RONDO_APPROVER: "happy_ryo" });
   expect(allowed).toEqual({ actorId: "happy_ryo" });
 });
+
+test("a flag the command does not read is refused, not ignored", () => {
+  // The trap this closes: `--dry-run` is read only by `publish`, so before the
+  // per-command check `rondo answer --body=approve --dry-run` answered the gate
+  // and closed the iteration while its author believed they were previewing,
+  // and `start --dry-run` spawned a real worker.
+  for (const argv of [
+    ["answer", "--actor-id", "me", "--body=approve", "--dry-run"],
+    ["start", "--plan", "/tmp/p.json", "--dry-run"],
+    ["answer", "--actor-id", "me", "--body=approve", "--repo", "o/n"],
+    ["publish", "--repo", "o/n", "--actor-id", "me", "--plan", "/tmp/p.json"],
+    ["abandon", "--iteration-id", "i1", "--reason", "x", "--body=approve"],
+  ]) {
+    const outcome = parseCommand(argv);
+    expect(outcome.kind).toBe("refused");
+  }
+});
+
+test("each command still accepts every flag it does read", () => {
+  // The other half of the check: a table that refused too much would be a
+  // worse defect than the one it fixed, and would not show up above.
+  for (const argv of [
+    [
+      "start",
+      "--plan",
+      "/tmp/p.json",
+      "--run-id",
+      "r",
+      "--topic-branch",
+      "t",
+      "--workspace",
+      "/w",
+      "--prompt",
+      "p",
+      "--iteration-id",
+      "i",
+    ],
+    ["answer", "--actor-id", "me", "--body=approve"],
+    [
+      "publish",
+      "--repo",
+      "o/n",
+      "--actor-id",
+      "me",
+      "--remote",
+      "upstream",
+      "--iteration-id",
+      "i",
+      "--dry-run",
+    ],
+    ["abandon", "--iteration-id", "i1", "--reason", "wedged"],
+  ]) {
+    const outcome = parseCommand(argv);
+    expect(outcome.kind).toBe("parsed");
+  }
+});
+
+test("the refusal names the flags the command does take", () => {
+  const outcome = parseCommand(["answer", "--actor-id", "me", "--body=approve", "--dry-run"]);
+  expect(outcome.kind).toBe("refused");
+  if (outcome.kind === "refused") {
+    expect(outcome.reason).toContain("--dry-run");
+    expect(outcome.reason).toContain("--actor-id");
+    expect(outcome.reason).toContain("--body");
+  }
+});
