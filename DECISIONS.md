@@ -61,6 +61,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0021 | The pin moves to continuo `603843b`: a third explicit budget for the identity read-back, and the model tier priced into `lap perform --model` | accepted |
 | D-0024 | rondo ships a binary: an emitting build beside the type-check, a launcher, and the CI cell that runs it | accepted |
 | D-0025 | The lap-1 operating surface is a command line: `start`, `answer`, `publish`, `abandon`, with the plan file as the whole of configuration | accepted |
+| D-0026 | The pull request `publish` opens is written for a person: the lap's own commit subjects are the summary, and the request is quoted input | accepted |
 
 ---
 
@@ -3183,7 +3184,12 @@ publish and left *what the pull request says* unspecified. This entry specifies 
    commit on the branch, or a subject past `TITLE_LIMIT` (120 characters), at which point it has
    stopped being a summary — the title is `<topic branch> (rondo run <id>)`. That is a plain label
    and is deliberately preferred to a cut-off sentence: a reader can tell a label from a summary,
-   and cannot tell a truncated summary from a wrong one.
+   and cannot tell a truncated summary from a wrong one. **The label is itself bounded**: a branch
+   name and a run id are the operator's own strings and neither is limited, and a title past the
+   forge's own limit is refused by `gh` *after* the push has happened — the one leg this command
+   cannot undo. So it steps down to `rondo run <id>` and, past that, is cut. Cutting an identifier
+   is not the defect this rule is about: `TITLE_LIMIT` governs summaries that stop mid-sentence, and
+   a label is not a sentence.
 4. **The provenance stays, in a section of its own.** Run and iteration id, the branch and its base,
    the gate id and its outcome, the continuo revision **off the row** (`D-0025`'s reason: the pin
    moves, and the row records the build that actually drove the lap), the model and its tier, the
@@ -3197,7 +3203,11 @@ publish and left *what the pull request says* unspecified. This entry specifies 
    quotation and start writing the body. Discarding it entirely was rejected for the same reason
    rule 4 exists: it is provenance. Beyond `REQUEST_LIMIT` (4000 characters) the quotation says how
    much it left and that the whole of it is on the iteration row, which is a truncation with a
-   pointer rather than a loss.
+   pointer rather than a loss, and the fence is sized to **what is quoted** rather than to the whole
+   request — a run of backticks past the cut is not in the body, and guarding it would spend the
+   body's remaining size on two fence lines, turning the bound back into a pull request too large to
+   open. "Verbatim" is also literal: the block quotes what the row holds, whitespace included, and
+   only the emptiness check trims.
 6. **A history rondo could not read is said out loud.** `inspectLapWork` answers `unreadable` with
    git's own reason rather than an empty read, and the body prints that reason in place of the
    summary while keeping every line of rule 4. A publish must still be possible with an unreadable

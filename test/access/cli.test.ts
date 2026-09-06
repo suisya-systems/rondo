@@ -853,6 +853,9 @@ function worked(
   };
 }
 
+/** `REQUEST_LIMIT` in `src/access/cli.ts`: the length past which the quotation is cut. */
+const REQUEST_LIMIT = 4000;
+
 /** The pull request text a test varies one input of at a time. */
 function text(parts: Partial<PullRequestTextInput> = {}) {
   return pullRequestText({
@@ -965,4 +968,37 @@ test("long lists are counted rather than printed in full, and binary files say s
     work: worked({ files: [{ path: "docs/shot.png", added: null, deleted: null }] }),
   }).body;
   expect(binary).toContain("- `docs/shot.png` (binary)");
+});
+
+test("nothing rondo composes can be too long for the forge to accept", () => {
+  // The branch and the run id are the operator's own strings and neither is
+  // bounded. A title past a forge's limit is refused *after* the push, which is
+  // the one leg publish cannot undo -- so the label steps down instead.
+  const long = "b".repeat(400);
+  const stepped = text({ topicBranch: long, work: worked({ commits: [] }) }).title;
+  expect(stepped).toBe("rondo run dogfood-001");
+
+  const both = text({
+    topicBranch: long,
+    runId: "r".repeat(400),
+    work: worked({ commits: [] }),
+  }).title;
+  expect(both.length).toBe(120);
+  expect(both.startsWith("rondo run rrr")).toBe(true);
+});
+
+test("the quoted request is the row's, whitespace and all, and its fence is sized to what is shown", () => {
+  // Verbatim means verbatim: the block does not tidy what the row holds.
+  const padded = text({ record: published({ request: "\n\n  do the thing  \n" }) }).body;
+  expect(padded).toContain("```\n\n\n  do the thing  \n\n```");
+
+  // A run of backticks past the cut is not in the quotation, so it must not
+  // size the fence: a body whose fences are longer than its content is how a
+  // bounded truncation becomes a pull request too large to open.
+  const body = text({
+    record: published({ request: `${"x".repeat(REQUEST_LIMIT)}${"`".repeat(5000)}` }),
+  }).body;
+  expect(body).toContain("```\nxxx");
+  expect(body).not.toContain("````");
+  expect(body.length).toBeLessThan(REQUEST_LIMIT + 2000);
 });

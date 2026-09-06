@@ -1501,7 +1501,7 @@ export function pullRequestText(input: PullRequestTextInput): PullRequestText {
  * truncated summary from a wrong one.
  */
 function pullRequestTitle(input: PullRequestTextInput): string {
-  const fallback = `${input.topicBranch} (rondo run ${input.runId})`;
+  const fallback = labelTitle(input);
   if (input.work.kind !== "read") {
     return fallback;
   }
@@ -1515,6 +1515,29 @@ function pullRequestTitle(input: PullRequestTextInput): string {
       ? first.subject
       : `${first.subject} (+${String(rest)} more commit${rest === 1 ? "" : "s"})`;
   return title.length > TITLE_LIMIT ? fallback : title;
+}
+
+/**
+ * The label used when no commit subject can be the title.
+ *
+ * **It is bounded, because a branch name and a run id are not.** Both are the
+ * operator's own strings, and a title past the forge's own limit is refused by
+ * `gh` *after* the push has already happened -- the one failure mode `publish`
+ * cannot undo. So the label steps down: branch and run, then the run alone,
+ * then a hard cut. The cut is a cut of an **identifier**, which reads as one;
+ * `TITLE_LIMIT` is about summaries that stop mid-sentence, and a label is not a
+ * sentence.
+ */
+function labelTitle(input: PullRequestTextInput): string {
+  for (const candidate of [
+    `${input.topicBranch} (rondo run ${input.runId})`,
+    `rondo run ${input.runId}`,
+  ]) {
+    if (candidate.length <= TITLE_LIMIT) {
+      return candidate;
+    }
+  }
+  return `rondo run ${input.runId}`.slice(0, TITLE_LIMIT);
 }
 
 /** The body, section by section. */
@@ -1632,16 +1655,23 @@ function modelClause(record: IterationRecord): string {
  * where the description of the change should be.
  */
 function requestBlock(request: string): readonly string[] {
-  const text = request.trim();
-  if (text === "") {
+  // **Quoted as stored, not as tidied.** The emptiness check trims and the
+  // quotation does not: surrounding whitespace is part of what the row holds,
+  // and a block that says "verbatim" may not silently disagree with the row it
+  // came from. Inside a fence it renders as the blank lines it is.
+  if (request.trim() === "") {
     return [];
   }
   const shown =
-    text.length > REQUEST_LIMIT
-      ? `${text.slice(0, REQUEST_LIMIT)}\n[...${String(text.length - REQUEST_LIMIT)} more characters. ` +
-        "The whole of it is on this iteration's row in rondo's store.]"
-      : text;
-  const fence = "`".repeat(Math.max(3, longestBacktickRun(text) + 1));
+    request.length > REQUEST_LIMIT
+      ? `${request.slice(0, REQUEST_LIMIT)}\n[...${String(request.length - REQUEST_LIMIT)} more ` +
+        "characters. The whole of it is on this iteration's row in rondo's store.]"
+      : request;
+  // Over what is **shown**, not over the whole request: a run of backticks past
+  // the cut is not in the quotation, and sizing the fence to it would spend the
+  // body's remaining size on two fence lines guarding nothing -- turning a
+  // bounded truncation back into a pull request too large to open.
+  const fence = "`".repeat(Math.max(3, longestBacktickRun(shown) + 1));
   return [
     "<details>",
     "<summary>The request this lap was given (written for the agent, not a description of the change)</summary>",
