@@ -22,10 +22,15 @@ import {
   approvedActor,
   approvedForPublication,
   type GateVerbs,
+  type PreflightInput,
   parseCommand,
+  parseForgeSlug,
+  publishPreflight,
+  slugFromRemoteUrl,
   USAGE,
   walkGate,
 } from "../../src/access/cli.js";
+import type { PushTargetInspection } from "../../src/access/forge.js";
 import type { VerifiedContinuo } from "../../src/continuo/invoker.js";
 import type { ContinuoResult } from "../../src/continuo/protocol.js";
 
@@ -466,5 +471,194 @@ test("only a gate a person answered is publishable", () => {
   // its gate reads.
   for (const status of ["awaiting_human", "performing", "abandoned", "failed"]) {
     expect(approvedForPublication(rowWith(status, "answered_and_forwarded"))).toBe(false);
+  }
+});
+
+/** A workspace that answered every preflight query, with the parts a test varies. */
+function inspected(
+  parts: Partial<{
+    remotes: readonly string[];
+    pushUrl: string | null;
+    topicBranchExists: boolean;
+  }>,
+): PushTargetInspection {
+  return {
+    kind: "read",
+    remotes: parts.remotes ?? ["origin"],
+    pushUrl:
+      parts.pushUrl === undefined ? "git@github.com:suisya-systems/rondo.git" : parts.pushUrl,
+    topicBranchExists: parts.topicBranchExists ?? true,
+  };
+}
+
+/** The preflight input a test varies one field of at a time. */
+function preflight(parts: Partial<PreflightInput>) {
+  return publishPreflight({
+    repo: "suisya-systems/rondo",
+    remote: "origin",
+    workspace: "/srv/rondo/workspace-dogfood-001",
+    topicBranch: "dogfood/dogfood-001",
+    allowRemoteMismatch: false,
+    inspection: inspected({}),
+    ...parts,
+  });
+}
+
+test("a remote URL is read as owner/name only when it names a forge repository", () => {
+  const rondo = { owner: "suisya-systems", name: "rondo" };
+  for (const url of [
+    "git@github.com:suisya-systems/rondo.git",
+    "git@github.com:suisya-systems/rondo",
+    "https://github.com/suisya-systems/rondo.git",
+    "https://github.com/suisya-systems/rondo/",
+    "ssh://git@github.com/suisya-systems/rondo.git",
+    "https://user:token@github.com/suisya-systems/rondo.git",
+    "  https://github.com/suisya-systems/rondo.git  ",
+  ]) {
+    expect(slugFromRemoteUrl(url)).toEqual(rondo);
+  }
+
+  // None of these is malformed, and none of them is a repository a pull request
+  // can be opened in. The dogfood environment's own origin is the second.
+  for (const url of [
+    "",
+    "/srv/rondo/target-origin.git",
+    "file:///srv/rondo/target-origin.git",
+    "../sibling-clone",
+    "https://gitlab.example.com/team/group/project.git",
+    "https://github.com/suisya-systems",
+  ]) {
+    expect(slugFromRemoteUrl(url)).toBeNull();
+  }
+});
+
+test("--repo has to be OWNER/NAME, because the forge is given it unchanged", () => {
+  expect(parseForgeSlug("suisya-systems/rondo")).toEqual({
+    owner: "suisya-systems",
+    name: "rondo",
+  });
+  for (const repo of ["rondo", "suisya-systems/rondo/extra", "suisya systems/rondo", "/rondo"]) {
+    expect(parseForgeSlug(repo)).toBeNull();
+    expect(preflight({ repo }).kind).toBe("refused");
+  }
+});
+
+test("preflight refuses a workspace that cannot push where the plan says", () => {
+  // The measured defect: a workspace with no remotes at all, for which
+  // `--dry-run` printed a push as though it would work.
+  const none = preflight({ inspection: inspected({ remotes: [], pushUrl: null }) });
+  expect(none.kind).toBe("refused");
+  if (none.kind === "refused") {
+    expect(none.reason).toContain("has no remote 'origin'");
+    expect(none.reason).toContain("no remotes configured at all");
+  }
+
+  // A workspace that has remotes, but not the one the push would name. The
+  // others are printed, because the operator's next move is usually one of them.
+  const others = preflight({
+    inspection: inspected({ remotes: ["upstream", "fork"], pushUrl: null }),
+  });
+  expect(others.kind).toBe("refused");
+  if (others.kind === "refused") {
+    expect(others.reason).toContain("upstream, fork");
+  }
+
+  // git could not be asked at all. That is not "there is no remote", and the
+  // refusal says so rather than inventing a diagnosis.
+  const unreadable = preflight({
+    inspection: { kind: "unreadable", reason: "fatal: not a git repository" },
+  });
+  expect(unreadable.kind).toBe("refused");
+  if (unreadable.kind === "refused") {
+    expect(unreadable.reason).toContain("fatal: not a git repository");
+  }
+
+  // Nothing to push: the branch the plan says the lap committed on is gone.
+  const branchless = preflight({ inspection: inspected({ topicBranchExists: false }) });
+  expect(branchless.kind).toBe("refused");
+  if (branchless.kind === "refused") {
+    expect(branchless.reason).toContain("has no branch 'dogfood/dogfood-001'");
+  }
+});
+
+test("the push remote and --repo have to be one repository, or be said to differ", () => {
+  const agreed = preflight({});
+  expect(agreed.kind).toBe("ready");
+  if (agreed.kind === "ready") {
+    // Agreement is the ordinary case, and it changes nothing: the head is the
+    // branch name, and there is nothing to warn about.
+    expect(agreed.headRef).toBe("dogfood/dogfood-001");
+    expect(agreed.warnings).toEqual([]);
+  }
+
+  // GitHub does not distinguish case in an owner or a repository name, so
+  // neither does this; refusing on case alone would be rondo inventing a rule.
+  expect(preflight({ repo: "Suisya-Systems/Rondo" }).kind).toBe("ready");
+
+  // The second half of the measured defect: the push would go to one
+  // repository and the pull request would be opened against another.
+  const mismatch = preflight({
+    inspection: inspected({ pushUrl: "git@github.com:someone-else/practice.git" }),
+  });
+  expect(mismatch.kind).toBe("refused");
+  if (mismatch.kind === "refused") {
+    expect(mismatch.reason).toContain("someone-else/practice");
+    expect(mismatch.reason).toContain("--allow-remote-mismatch");
+  }
+
+  // A remote rondo cannot read as OWNER/NAME is refused too, and for a
+  // different stated reason: it is not that they differ, it is that rondo
+  // cannot tell. A local bare repository -- what the dogfood environment has --
+  // is this case.
+  const local = preflight({ inspection: inspected({ pushUrl: "/srv/rondo/target-origin.git" }) });
+  expect(local.kind).toBe("refused");
+  if (local.kind === "refused") {
+    expect(local.reason).toContain("not a forge repository rondo can read as OWNER/NAME");
+  }
+});
+
+test("--allow-remote-mismatch keeps the fork route open, and spells the head for it", () => {
+  // Push to the fork, open the pull request upstream. A bare branch name is
+  // read by the forge as a branch of --repo, which is not where the push went,
+  // so the head is qualified with the owner the push actually reached.
+  const fork = preflight({
+    allowRemoteMismatch: true,
+    inspection: inspected({ pushUrl: "git@github.com:happy-ryo/rondo.git" }),
+  });
+  expect(fork.kind).toBe("ready");
+  if (fork.kind === "ready") {
+    expect(fork.headRef).toBe("happy-ryo:dogfood/dogfood-001");
+    expect(fork.warnings.length).toBe(1);
+    expect(fork.warnings[0]).toContain("happy-ryo:dogfood/dogfood-001");
+  }
+
+  // With a remote that is not a forge repository there is no owner to qualify
+  // with, so the head stays bare and the warning says what that will mean.
+  const local = preflight({
+    allowRemoteMismatch: true,
+    inspection: inspected({ pushUrl: "/srv/rondo/target-origin.git" }),
+  });
+  expect(local.kind).toBe("ready");
+  if (local.kind === "ready") {
+    expect(local.headRef).toBe("dogfood/dogfood-001");
+    expect(local.warnings[0]).toContain("Expect the pull-request leg to fail");
+  }
+
+  // The override is publish's alone, and it is a flag `answer` would otherwise
+  // have accepted silently.
+  expect(parseCommand(["answer", "--actor-id", "me", "--allow-remote-mismatch"]).kind).toBe(
+    "refused",
+  );
+  const parsed = parseCommand([
+    "publish",
+    "--repo",
+    "o/n",
+    "--actor-id",
+    "me",
+    "--allow-remote-mismatch",
+  ]);
+  expect(parsed.kind).toBe("parsed");
+  if (parsed.kind === "parsed") {
+    expect(parsed.parsed.allowRemoteMismatch).toBe(true);
   }
 });

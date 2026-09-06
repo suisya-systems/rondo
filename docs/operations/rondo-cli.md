@@ -25,9 +25,16 @@ excludes -- an environment is a continuo clone, two SQLite databases, a worktree
 session output, and none of that is a thing to stage by accident.
 
 It builds rondo, clones and builds the pinned continuo, creates the control plane, creates a scratch
-target repository with a `main` branch to run laps against, writes a complete `plan.json` and an
-`env.sh` holding section 2's three exports -- and then prints the commands below with the real paths
-filled in. It **never runs a lap**: everything it does is free, and `start` is the line that is not.
+target repository with a `main` branch to run laps against and a bare repository beside it as that
+target's `origin`, writes a complete `plan.json` and an `env.sh` holding section 2's three exports --
+and then prints the commands below with the real paths filled in. It **never runs a lap**:
+everything it does is free, and `start` is the line that is not.
+
+**It cannot demonstrate `publish` to the end, and it says so.** The bare `origin` makes the push leg
+real -- it is an ordinary push to an ordinary repository. The pull-request leg is not reachable from
+here at all: a bare repository on disk is not a forge, no `OWNER/NAME` names it, and there is
+nothing for a pull request to be created against. Section 6 is the preflight that turns this from a
+plan that fails halfway into a refusal you get before anything runs.
 
 Re-running it is safe; every step checks for its own result first and repairs only what is missing.
 The three site paths it cannot discover -- the interlock checkout, the claude-org checkout and the
@@ -271,6 +278,31 @@ Drop `--dry-run` to run them. They go in order and stop at the first failure, be
 next one's precondition: there is no pull request to open for a branch that did not push, and
 closing the run is a claim that the work landed.
 
+**Nothing above is printed until the workspace has been asked whether it can run.** Before the plan
+appears -- and whether or not `--dry-run` was given -- `publish` asks the workspace three questions,
+and refuses with exit 2 on any of them:
+
+1. **Is the push remote there?** A workspace with no `origin` cannot run `git push origin <branch>`.
+   This is the defect the checks exist for: on 2026-09-06 a `--dry-run` printed a push for a
+   workspace that had no remotes at all, and a preview whose purpose is to catch a mistake before
+   the real run printed one as though it would work.
+2. **Is the topic branch there?** The plan says the lap committed on it; a workspace that no longer
+   has it has nothing to push.
+3. **Do the push remote and `--repo` name the same repository?** The push goes to the workspace's
+   remote and the pull request is opened against `--repo`, so when the two are unrelated the branch
+   lands somewhere the pull request does not look.
+
+The checks run identically with and without `--dry-run`, on purpose: a preview that passes where the
+real run would fail is the same defect in a quieter form.
+
+**`--allow-remote-mismatch` is the named way past the third one.** Pushing to a fork and opening the
+pull request upstream is a legitimate way to work, so a mismatch is a refusal with an override
+rather than a hard equality. With the flag, the head is spelled `owner:branch` using the owner the
+push actually reaches -- a bare branch name is read as a branch of `--repo`, which is not where the
+push went. When the remote is not a forge repository at all (a local bare repository, as in the
+dogfood environment) there is no owner to qualify with, so the head stays bare and rondo says in one
+line that the pull-request leg should be expected to fail.
+
 **What publish is, and is not.** Every value above comes from the plan the iteration already
 carries; `--repo` is the one flag, because the forge slug is the single fact about publishing that
 no `RunPlan` field holds. `--remote` defaults to `origin`.
@@ -314,6 +346,10 @@ yours.
 | `RONDO_APPROVER is not set` | rondo will not act for an unnamed person. | Export it. |
 | `No iteration is live` on `publish` | Answering closed the iteration, so it is no longer live. | Pass `--iteration-id`, which the `answer` output prints for you. |
 | `closed at gate outcome 'withdrawn'` on `publish` | The gate ended without a person answering it. | Nothing to publish; the work was not approved. |
+| `has no remote 'origin'` on `publish` | The workspace cannot push where the plan says. The refusal lists the remotes it does have. | Name one that is there with `--remote NAME`, or add the remote to the workspace. |
+| `has no branch '<topic>'` on `publish` | The branch the lap committed on is gone from the workspace. | There is nothing to publish from that workspace. |
+| `would not be about the same repository` on `publish` | The push remote and `--repo` are different repositories. | If that is deliberate (a fork), pass `--allow-remote-mismatch`; otherwise fix `--repo` or `--remote`. |
+| `--repo is '<x>', and it must be OWNER/NAME` | `--repo` is passed to the forge unchanged. | Spell it `owner/name`. |
 | `was not abandoned` (exit 2) | The row was absent, or the store refused the write. | The lock, if it was held, is still held. Read the row before trying again. |
 
 ---
@@ -332,6 +368,16 @@ Recorded so that "it works" is not read more broadly than it was tested.
   pushing and pull-request creation by design -- those are the operator's, which is the same
   boundary the command itself is built around. The first operator to run it without `--dry-run` is
   what closes this gap.
+- **`publish`'s preflight: walked against real workspaces, in every branch.** The refusals for a
+  workspace with no remotes, for a named remote that is not configured, for a missing topic branch,
+  for a malformed `--repo` and for a push remote that disagrees with `--repo` were each produced by
+  running the command against a real repository on disk; so were the two `--allow-remote-mismatch`
+  paths (a fork, which qualifies the head with an owner, and a local bare repository, which cannot
+  be qualified and says so). The workspace with no remotes was the very one from the walk below,
+  which is where the defect was found.
+- **The pull-request leg with `--allow-remote-mismatch` has never met a real forge.** The
+  `owner:branch` head is the documented spelling for a cross-repository head and is asserted by unit
+  tests, but no fork has been published through this command yet.
 - After the walk, continuo's run row was still `created` and rondo's row still recorded no publish,
   which is the correct state for work that was approved but not yet submitted.
 

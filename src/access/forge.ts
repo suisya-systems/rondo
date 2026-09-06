@@ -1,5 +1,11 @@
 /**
- * The two commands `publish` runs, and the only place rondo can spell one.
+ * The commands `publish` runs, and the only place rondo can spell one.
+ *
+ * Two of them change something outside rondo -- a branch push and a
+ * pull-request creation -- and the rest are the read-only `git` queries
+ * `publish` asks the workspace before it prints or runs anything (see
+ * `inspectPushTarget`). They are here for the same reason the two effects are:
+ * asking git a question needs a process, and only this module may start one.
  *
  * **Why this is a module of its own.** The operator's submit button has to run
  * a branch push and a pull-request creation, and running them needs
@@ -8,8 +14,8 @@
  * `src/access/cli.ts` keeps a property rather than a promise: the command line
  * -- the file that reads argv, reads the plan and drives every other verb -- has
  * no spawn binding at all, and cannot acquire one without an edit the boundary
- * test fails. What can spawn is this file, and this file can spell exactly two
- * command lines, both built here from a plan rondo already validated rather
+ * test fails. What can spawn is this file, and every command line it can spell
+ * is written out here in full, built from a plan rondo already validated rather
  * than assembled by a caller.
  *
  * **Where this sits against D-0010.** D-0010 says publishing is the operator's
@@ -125,12 +131,135 @@ export async function pushTopicBranch(request: PushRequest): Promise<CommandOutc
   ]);
 }
 
+/** What preflight asks a workspace about, before anything is printed or run. */
+export interface PushTargetRequest {
+  /** The worktree the lap materialised. Absolute; it is the plan's `workspace`. */
+  readonly workspace: string;
+  readonly remote: string;
+  readonly topicBranch: string;
+}
+
+/**
+ * What `git` said about the workspace a push would leave from.
+ *
+ * Facts, not a verdict. Which of these combinations may publish is a rule about
+ * publishing rather than a rule about git, and it lives with the other such
+ * rules in `./cli.ts`, where it is a pure function over this value and can be
+ * tested without a repository on disk.
+ */
+export type PushTargetInspection =
+  | {
+      readonly kind: "read";
+      /** Every remote configured in the workspace, in the order git listed them. */
+      readonly remotes: readonly string[];
+      /** The push URL of the requested remote, or null when it is not configured. */
+      readonly pushUrl: string | null;
+      /** Whether the topic branch exists in the workspace. */
+      readonly topicBranchExists: boolean;
+    }
+  /** git could not be asked at all: no such directory, not a repository, no git. */
+  | { readonly kind: "unreadable"; readonly reason: string };
+
+/**
+ * How long one preflight query may take.
+ *
+ * Every command below reads local configuration or a local ref and touches no
+ * network, so the only way to reach this is a hang. It is short because a
+ * preflight the operator is waiting on before a dry run should not be able to
+ * cost them five minutes.
+ */
+const PREFLIGHT_TIMEOUT_MS = 30_000;
+
+/** Why one preflight query did not answer, or null when it did. */
+function queryFailure(outcome: CommandOutcome): string | null {
+  if (outcome.spawnError !== null) {
+    return `${outcome.commandLine}: ${outcome.spawnError}`;
+  }
+  if (outcome.status !== 0) {
+    const said = outcome.stderr.trim();
+    return `${outcome.commandLine} exited ${String(outcome.status)}${said === "" ? "" : `: ${said}`}`;
+  }
+  return null;
+}
+
+/**
+ * Ask the workspace whether the push publish would run can run at all.
+ *
+ * **Three local reads, and no interpretation of them.** A remote that is not
+ * configured, a topic branch that is not there and a push URL naming a
+ * different repository than `--repo` are each a plan that cannot run, and
+ * printing such a plan under `--dry-run` is the defect this exists to close --
+ * but which of them is fatal is decided by the caller, not here.
+ *
+ * `git remote` before `git remote get-url` rather than reading the URL and
+ * treating a failure as absence: `get-url` fails for more reasons than a
+ * missing remote, and "there is no remote 'origin'" is worth being able to say
+ * as a fact rather than as an inference from an exit status.
+ */
+export async function inspectPushTarget(request: PushTargetRequest): Promise<PushTargetInspection> {
+  const listed = await runCommand("git", ["-C", request.workspace, "remote"], PREFLIGHT_TIMEOUT_MS);
+  const listFailure = queryFailure(listed);
+  if (listFailure !== null) {
+    return { kind: "unreadable", reason: listFailure };
+  }
+  const remotes = listed.stdout
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line !== "");
+
+  let pushUrl: string | null = null;
+  if (remotes.includes(request.remote)) {
+    // `--push` rather than the fetch URL: a remote may have `pushurl` set, and
+    // the URL this preflight compares against `--repo` has to be the one the
+    // push would actually reach.
+    const url = await runCommand(
+      "git",
+      ["-C", request.workspace, "remote", "get-url", "--push", request.remote],
+      PREFLIGHT_TIMEOUT_MS,
+    );
+    const urlFailure = queryFailure(url);
+    if (urlFailure !== null) {
+      return { kind: "unreadable", reason: urlFailure };
+    }
+    pushUrl = url.stdout.trim();
+  }
+
+  const branch = await runCommand(
+    "git",
+    [
+      "-C",
+      request.workspace,
+      "rev-parse",
+      "--verify",
+      "--quiet",
+      `refs/heads/${request.topicBranch}`,
+    ],
+    PREFLIGHT_TIMEOUT_MS,
+  );
+  if (branch.spawnError !== null) {
+    return { kind: "unreadable", reason: `${branch.commandLine}: ${branch.spawnError}` };
+  }
+  // `--verify --quiet` is exit 1 and silence for a ref that is not there, which
+  // is an answer. Any other non-zero status is git failing to answer, and the
+  // two must not be collapsed into "the branch is missing".
+  if (branch.status !== 0 && branch.status !== 1) {
+    return { kind: "unreadable", reason: queryFailure(branch) ?? branch.commandLine };
+  }
+
+  return { kind: "read", remotes, pushUrl, topicBranchExists: branch.status === 0 };
+}
+
 /** What a pull request needs. */
 export interface PullRequestRequest {
   /** `owner/name`, which appears in no `RunPlan` field and is the one flag. */
   readonly repo: string;
   readonly baseBranch: string;
-  readonly topicBranch: string;
+  /**
+   * What `--head` is given: the topic branch, or `owner:branch` when the push
+   * went to a repository other than `--repo`. The caller decides which, because
+   * deciding it needs the push URL preflight read (see `./cli.ts`).
+   */
+  readonly headRef: string;
   readonly title: string;
   readonly body: string;
 }
@@ -157,7 +286,7 @@ export async function openPullRequest(request: PullRequestRequest): Promise<Comm
     "--base",
     request.baseBranch,
     "--head",
-    request.topicBranch,
+    request.headRef,
     "--title",
     request.title,
     "--body",
