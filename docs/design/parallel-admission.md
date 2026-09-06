@@ -416,7 +416,8 @@ request still owns.
 **Candidate A: derive the triple from the iteration id.** `runId =
 "rondo-" + iterationId`, `topicBranch = "rondo/" + iterationId`, `workspace =
 join(workspaceRoot, iterationId)`. Pure, no I/O, testable by handing it a string,
-and invertible, so an operator reading a branch name knows the iteration. Cost:
+and invertible, so an operator reading a branch name knows the iteration —
+**but only over a domain nothing currently constrains, which is §3.2.1**. Cost:
 uniqueness rests entirely on iteration-id uniqueness, and **the branch namespace
 is not rondo's alone** — a person may have created `rondo/iter-005` by hand, and
 that collision is still discovered at materialisation (§1.3), after the run
@@ -437,6 +438,49 @@ reads for a check that is still not authoritative is the wrong trade. The
 collisions rondo *causes* become impossible; the collisions rondo *did not cause*
 keep being refused where they are refused today, and §3.5 says what the refusal
 must then look like.
+
+### 3.2.1 The iteration id has no alphabet today, and deriving paths from it is unsafe until it does (`N-26`)
+
+`admit(ports, plan, policy, id)` takes `id` as an unconstrained `string`
+(`src/refrain/interpreter.ts:124-128`) and `reserve()` inserts it as given
+(`src/store/sqlite.ts:423`); the only rule anywhere is `isIdCollision`
+(`:671`), which is about duplicates and not about shape. **So Candidate A's
+mapping is neither safe nor injective over the domain it is defined on today**,
+and both failures are ordinary rather than adversarial:
+
+- **Containment.** `join(workspaceRoot, "../other")` resolves outside
+  `workspaceRoot`. `runPlan()`'s surviving output check requires the workspace to
+  be *absolute* (`plan.ts:337-341`), which an escaped path is.
+- **Injectivity.** `join(root, "a/../b")` and `join(root, "b")` are the same
+  path, so two iteration ids name one workspace and the branch-name half of the
+  claim — *"an operator reading a branch name knows the iteration"* — is false.
+- **Well-formedness downstream.** `rondo/a/../b` is not a branch git will create,
+  and that refusal arrives at materialisation, which is §1.3's expensive place.
+
+The unique index of §3.3 would catch the second one *after* the fact, on the
+stored workspace string — but by then the run id is minted and the branch is
+about to be cut, so a post-check is the wrong instrument.
+
+**Recommended: a closed alphabet, checked in `admit()` before `reserve()`.**
+`^[a-z][a-z0-9_-]{0,63}$` — deliberately the same shape `D-0019` rule 13 already
+holds cadenza's `roleName` to, *"any identifier matching 'a lowercase letter
+followed by up to 63 of `[a-z0-9_-]`'"* (`DECISIONS.md:2519-2523`), so rondo has
+one identifier shape rather than two. It excludes `/`, `.` and every separator,
+which makes the derivation injective by construction rather than by an argument
+about normalisation, and makes each of the three derived values well-formed
+without a second rule per value.
+
+**Checked before `reserve()`, not inside it**, joining the family
+`interpreter.ts:143-160` already argues for: a value refused before the row costs
+no row and no lock, and `AGENTS.md:156-160` states the general rule this is an
+instance of — *"validate **every** operator-supplied value before spawning"*,
+listing `--run-id`, `--workspace` and `--topic-branch` among the known ones. The
+iteration id was not on that list because until this design it reached no command
+line. Under Candidate A it reaches all three.
+
+**This is a reduction and is recorded as one.** Ids that are legal today become
+illegal, and every id in the tree and the dogfood record already conforms
+(`i-0001`, `iter-005`, `lap1-dogfood-003`).
 
 ### 3.3 The claim is stored, not derived — because `advisory.md`'s `A-17` says a retry inherits
 
@@ -498,7 +542,11 @@ authorities for one fact. **Recommended (`N-9`): `runId`, `topicBranch` and
 `workspace` is derived; the run id and topic branch are derived from the iteration
 id. `runPlan()`'s three shape checks (`plan.ts:337-341`) move onto the allocator's
 **output**, where they are checks on rondo's own construction rather than on an
-operator's typing — which is a smaller job, not a larger one.
+operator's typing — which is a smaller job, not a larger one. **They are not the
+whole of the validation and must not be read as it**: they are absoluteness and
+option-shape, and §3.2.1 measures that neither catches an escaping or
+non-injective workspace. The operator-supplied value that now needs checking is
+the iteration **id**, on the input side.
 
 **This is a change to `D-0019` rule 3 and must be recorded as one.** Rule 3 is
 *"rondo gains no allocator and no configuration layer in lap 1"*, and
@@ -838,12 +886,21 @@ transaction.** Two sub-cases:
   (`test/architecture/import-boundaries.test.ts` already parses the tree) — and
   assert the refusal.
 
-`N-23`. And a fourth the issue does not name and the walk in §5 requires:
+`N-23`. And two the issue does not name, which the walk in §5 and §3.2.1 require:
 
 **4. `identifiers_spent` is set exactly once, at `admitting`, and a terminal spent
 row keeps holding its triple.** With its own observed-red control: a terminal
 **unspent** row releases it, which is `A-17`'s inheritance made testable. Without
 this case §3.3's whole mechanism is prose. `N-24`.
+
+**5. The iteration id's alphabet, asserted on both sides of the derivation.**
+The refusal: `admit()` refuses `../other`, `a/../b`, an empty id and an
+over-long one, **before** `reserve()` — with the observed-red control that a
+conforming id reserves. The property: over the admitted alphabet the derivation
+is **injective** and every derived workspace is **contained** in
+`workspaceRoot`, asserted as properties of the pure function rather than of one
+example, because the failure this replaces was a mapping that looked injective
+and was not (§3.2.1). `N-26`.
 
 ---
 
@@ -870,6 +927,10 @@ that an open question names its owner.
   a rondo timer, an endpoint still writing — which would make §2.1's release
   unsafe and collapse the design back to one bound. This is the claim most exposed
   to being wrong, because it rests on §1.5's reading of one `finally`.
+- **The closed alphabet turns out to be too narrow for a real id** — an operating
+  surface that wants uppercase, or an id it did not mint — which would put
+  `N-26` back to a reversible path-safe *encoding* rather than a restriction, and
+  make §3.2.1's "one identifier shape" argument the thing that was spent.
 - **A fourth thing the allocator must mint** that §1.4's three denials missed, or a
   fifth path in `RunPlan` that is per-run inside continuo in a way this document
   did not open.
@@ -913,7 +974,7 @@ to the paired design), or *measured here* (this document's own measurement).
 |---|---|---|
 | **N-1** | `D-0023` takes the allocator and the ledger as **one entry**, because §2.2 measures that they are not independent: releasing capacity at `awaiting_human` is safe only if something both mints and remembers identifiers. Two entries would let the gate accept the half that does not work alone. | measured here |
 | **N-2** | **`awaiting_human` and `withdrawal_requested` do not occupy capacity.** The criterion is the design's own — *"whether anything might still be running"* (`records.ts:125-129`, `D-0019` rule 11) — and §1.5 measures that nothing is: the process exited (`dogfood:905-906`), the delivery lease was released (`endpoint_lease.ts:343-354`), the child is gone. `stalled` **does** occupy, fail-closed, because it means *unknown*. | Issue #8 comment 4, answered by measurement |
-| **N-3** | The allocator derives the triple from the **iteration id** by a pure, total, invertible function. It does **not** pre-flight continuo, git or the filesystem: three I/O reads on the admission path buy an earlier refusal and no guarantee, because continuo's and git's own checks remain the authority (§3.2). | measured here |
+| **N-3** | The allocator derives the triple from the **iteration id** by a pure, total, invertible function — **invertible over the closed alphabet `N-26` imposes, and not over the unconstrained string `admit()` takes today** (§3.2.1). It does **not** pre-flight continuo, git or the filesystem: three I/O reads on the admission path buy an earlier refusal and no guarantee, because continuo's and git's own checks remain the authority (§3.2). | measured here |
 | **N-4** | rondo's own reuse is made impossible **atomically**; collisions rondo did not cause keep being refused where they are refused today. The entry states which class is which, so a later reader does not read `N-3` as a claim to own the branch namespace. | measured here |
 | **N-5** | The triple is **stored on the `iteration` row** — `run_id` exists (`sqlite.ts:290`), `topic_branch` and `workspace` are added — and written by `reserve()` in the same `BEGIN IMMEDIATE` as the row. Not a fourth table: it would hold one row per iteration keyed by the iteration. | measured here |
 | **N-6** | `leaseClaimantId` is **not** required to be fresh — nothing measured requires it — but is **recommended** to be derived from the run id, because it is the holder in continuo's audit trail and a constant holder across N laps makes that trail unable to say which lap wrote. | measured here |
@@ -936,6 +997,7 @@ to the paired design), or *measured here* (this document's own measurement).
 | **N-23** | The **resumption while others perform** case lives at `test/store` as well as `test/refrain`, because the assertion that matters is §1.6's: overlapping `admit()` and `resume()` on one connection do not interleave inside a transaction, and `inTransaction`'s synchronous-body guard (`N-16`) is asserted with it. | Issue #8 checkbox 3, measured here |
 | **N-24** | A **fourth** case the issue does not name and §5 requires: `identifiers_spent` is set exactly once at `admitting`, a terminal **spent** row keeps holding its triple for ever, and — the observed-red control — a terminal **unspent** row releases it. Without it `N-7`'s whole mechanism is prose. | measured here |
 | **N-25** | **Implementation starts only after the gate accepts or amends these lines and creates `D-0023`.** This document allocates no entry, edits no `DECISIONS.md`, and is not accepted authority. | `AGENTS.md` section 7 |
+| **N-26** | The iteration id gains a **closed alphabet, `^[a-z][a-z0-9_-]{0,63}$`, checked in `admit()` before `reserve()`** — the same shape `D-0019` rule 13 holds cadenza's `roleName` to (`DECISIONS.md:2519-2523`), so rondo has one identifier shape rather than two. Without it `N-3`'s derivation is neither contained nor injective: `join(workspaceRoot, "../other")` escapes the root and passes `runPlan()`'s absoluteness check, and `a/../b` and `b` name one workspace, which makes the invertibility claim false and `rondo/a/../b` a branch git refuses at materialisation (§1.3's expensive place). `AGENTS.md:156-160` states the general rule — *validate every operator-supplied value before spawning* — and the id was off its list only because until this design it reached no command line. **Recorded as a reduction**: ids legal today become illegal, and every id in the tree and the dogfood conforms already. | measured here, after Codex round 2 |
 
 ---
 
@@ -979,7 +1041,10 @@ Return or reject `D-0023` unless every answer is yes.
     keys — rather than assumed (`N-17`, `N-18`)?
 14. Are the residuals named with **who decides** each, including the composition
     root's unowned pragmas that this entry exposes rather than creates (section 9)?
-15. Does implementation wait for the gate-created `D-0023` (`N-25`)?
+15. Is the iteration id constrained to a closed alphabet **before** anything is
+    derived from it, so that the derivation is contained and injective rather
+    than assumed to be (`N-26`, `N-3`)?
+16. Does implementation wait for the gate-created `D-0023` (`N-25`)?
 
 ---
 
@@ -999,3 +1064,11 @@ The finding is recorded rather than smoothed away because what it found is the
 shape of the problem and not the shape of the drafting: a bound named after the
 last status in its set is a bound somebody narrows again, and the rename is the
 part of the fix most likely to survive a later edit.
+
+**Round 2** raised one further finding, again confirmed, and it did not repeat
+round 1's — which is the shape of a converging review rather than a contested
+one.
+
+| # | Finding | Verdict | Where answered |
+|---|---|---|---|
+| P2-2 | §3.2's Candidate A derives a workspace path and a branch name from the iteration id, and the id has no alphabet: `admit()` takes an unconstrained `string`. `../other` escapes `workspaceRoot` and still passes §3.4's absoluteness check; `a/../b` and `b` name one workspace, so the derivation is not injective and `N-3`'s invertibility claim is false | **Confirmed**, and against the tree rather than against the prose: `interpreter.ts:124-128` takes the id unconstrained, `sqlite.ts:423` inserts it as given, and the only existing rule (`isIdCollision`, `:671`) is about duplicates. `AGENTS.md:156-160` already states the general rule, and the id was off its list only because it reached no command line before this design | **New §3.2.1** with the alphabet, its placement before `reserve()` and the reduction it costs; **`N-3` amended**; **new `N-26`**; §3.4 corrected so the retained output checks are not read as the whole validation; **new §8 case 5** asserting containment and injectivity as properties rather than examples; one new falsifier |
