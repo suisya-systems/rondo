@@ -25,14 +25,15 @@ import { expect, test } from "vitest";
 import { allocate } from "../../src/refrain/allocator.js";
 import { admit } from "../../src/refrain/interpreter.js";
 import type { AdmittedPlan, RunPlan } from "../../src/refrain/plan.js";
-import { admittedPlan, planPayload, runPlan } from "../../src/refrain/plan.js";
+import { admittedPlan, planPayload, readPlan, runPlan } from "../../src/refrain/plan.js";
 import type { HostPolicy, LoopPolicy } from "../../src/refrain/policy.js";
 import type {
   ClassificationRecord,
   ConductorPorts,
   EffectOutcome,
 } from "../../src/refrain/ports.js";
-import type { IterationStatus } from "../../src/store/records.js";
+import { canonicalJson, planDigest } from "../../src/store/plan.js";
+import type { IterationStatus, JsonRecord } from "../../src/store/records.js";
 import { iterationStore } from "../../src/store/sqlite.js";
 
 const START_POLICY: LoopPolicy = { autonomy: "ask_before_landing", maxIterations: 1 };
@@ -298,26 +299,64 @@ test("no ordering is promised, and starvation is possible", async () => {
 // The plan payload's own backward compatibility.
 // ---------------------------------------------------------------------------
 
-test("a plan payload written before D-0023 still reads, and keeps its own workspace", async () => {
-  // The `plan` column is persisted verbatim, so adding `workspaceRoot` to
-  // `RunPlan` makes older bytes fail their own re-validation -- and `readPlan`
-  // runs on the way back *into* a live iteration, so the failure would arrive
-  // as `stalled` on rows a person is already waiting on. The root is derived
-  // from the stored workspace's parent, which is what it actually was.
+test("a stored payload written before the version key still reads, through the real store", async () => {
+  // **The observed red is a row written in the old shape, not a new one with a
+  // key removed.** The `plan` column is persisted verbatim, so a payload that
+  // predates D-0023 has no `workspace_root`, one that predates D-0027 has no
+  // `pull_request_base_branch`, and one that predates D-0028 has no
+  // `payload_version` at all -- and `readPlan` runs on the way back *into* a
+  // live iteration, so a refusal would arrive as `stalled` on rows a person is
+  // already waiting on. This writes those bytes into a real database and reads
+  // them back the way the interpreter does.
   const admitted = admittedFor("iter-a");
-  const payload = { ...planPayload(admitted) };
-  delete (payload as Record<string, unknown>)["workspace_root"];
+  const legacy = { ...planPayload(admitted) } as Record<string, unknown>;
+  delete legacy["payload_version"];
+  delete legacy["workspace_root"];
+  delete legacy["pull_request_base_branch"];
 
-  const { readPlan } = await import("../../src/refrain/plan.js");
-  const read = readPlan(payload);
+  const connection = new DatabaseSync(":memory:");
+  const store = iterationStore(connection, { maxOccupying: 1, maxLive: 3 });
+  const bytes = canonicalJson(legacy as JsonRecord);
+  connection
+    .prepare(
+      "INSERT INTO iteration (id, status, request, plan, plan_digest, attempts, run_id, " +
+        "topic_branch, workspace, identifiers_spent, created_at_ms, updated_at_ms) " +
+        "VALUES ('iter-a', 'awaiting_human', 'do the thing', ?, ?, 1, ?, ?, ?, 1, 1, 1)",
+    )
+    .run(
+      bytes,
+      planDigest(legacy as JsonRecord),
+      admitted.runId,
+      admitted.topicBranch,
+      admitted.workspace,
+    );
+
+  const row = await store.read("iter-a");
+  expect(row.kind).toBe("read");
+  if (row.kind !== "read") {
+    return;
+  }
+  const read = readPlan(row.record.plan);
   expect(read.kind).toBe("planned");
   if (read.kind === "planned") {
     expect(read.plan.workspace).toBe("/srv/work/iter-iter-a");
     expect(read.plan.workspaceRoot).toBe("/srv/work");
+    expect(read.plan.pullRequestBaseBranch).toBe(null);
     // The identifiers come off the row rather than being re-derived, so a row
     // whose triple was not a function of its own id still reads correctly.
     expect(read.plan.runId).toBe("rondo-iter-a");
   }
+
+  // **And the row was not rewritten.** The payload migrates on the way out and
+  // never on the way in: the bytes still declare no version and still digest to
+  // what the row claims, which is the property D-0019 rule 4 buys and which a
+  // lazy write-back would have spent.
+  const after = connection
+    .prepare("SELECT plan, plan_digest FROM iteration WHERE id = ?")
+    .get("iter-a") as { plan: string; plan_digest: string };
+  expect(after.plan).toBe(bytes);
+  expect(after.plan).not.toContain("payload_version");
+  expect(after.plan_digest).toBe(planDigest(legacy as JsonRecord));
 });
 
 // ---------------------------------------------------------------------------
