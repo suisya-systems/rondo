@@ -152,8 +152,16 @@ export type PushTargetInspection =
       readonly kind: "read";
       /** Every remote configured in the workspace, in the order git listed them. */
       readonly remotes: readonly string[];
-      /** The push URL of the requested remote, or null when it is not configured. */
-      readonly pushUrl: string | null;
+      /**
+       * Every URL a push to the requested remote would reach; empty when the
+       * remote is not configured at all.
+       *
+       * Plural because `remote.<name>.pushurl` is a multi-valued setting and
+       * `git push` sends to **all** of it. A preflight that read only the first
+       * would approve a publish that also reached repositories it never looked
+       * at.
+       */
+      readonly pushUrls: readonly string[];
       /** Whether the topic branch exists in the workspace. */
       readonly topicBranchExists: boolean;
     }
@@ -207,21 +215,25 @@ export async function inspectPushTarget(request: PushTargetRequest): Promise<Pus
     .map((line) => line.trim())
     .filter((line) => line !== "");
 
-  let pushUrl: string | null = null;
+  let pushUrls: readonly string[] = [];
   if (remotes.includes(request.remote)) {
-    // `--push` rather than the fetch URL: a remote may have `pushurl` set, and
-    // the URL this preflight compares against `--repo` has to be the one the
-    // push would actually reach.
-    const url = await runCommand(
+    // `--push` rather than the fetch URL, because a remote may have `pushurl`
+    // set and what this compares against `--repo` has to be where the push
+    // actually goes. `--all` because `pushurl` is multi-valued and `git push`
+    // sends to every one of them.
+    const urls = await runCommand(
       "git",
-      ["-C", request.workspace, "remote", "get-url", "--push", request.remote],
+      ["-C", request.workspace, "remote", "get-url", "--push", "--all", request.remote],
       PREFLIGHT_TIMEOUT_MS,
     );
-    const urlFailure = queryFailure(url);
+    const urlFailure = queryFailure(urls);
     if (urlFailure !== null) {
       return { kind: "unreadable", reason: urlFailure };
     }
-    pushUrl = url.stdout.trim();
+    pushUrls = urls.stdout
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line !== "");
   }
 
   const branch = await runCommand(
@@ -246,7 +258,7 @@ export async function inspectPushTarget(request: PushTargetRequest): Promise<Pus
     return { kind: "unreadable", reason: queryFailure(branch) ?? branch.commandLine };
   }
 
-  return { kind: "read", remotes, pushUrl, topicBranchExists: branch.status === 0 };
+  return { kind: "read", remotes, pushUrls, topicBranchExists: branch.status === 0 };
 }
 
 /** What a pull request needs. */

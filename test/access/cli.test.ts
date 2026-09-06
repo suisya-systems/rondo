@@ -21,12 +21,13 @@ import { expect, test } from "vitest";
 import {
   approvedActor,
   approvedForPublication,
+  forgeHost,
   type GateVerbs,
   type PreflightInput,
   parseCommand,
   parseForgeSlug,
   publishPreflight,
-  slugFromRemoteUrl,
+  repositoryFromRemoteUrl,
   USAGE,
   walkGate,
 } from "../../src/access/cli.js";
@@ -478,15 +479,14 @@ test("only a gate a person answered is publishable", () => {
 function inspected(
   parts: Partial<{
     remotes: readonly string[];
-    pushUrl: string | null;
+    pushUrls: readonly string[];
     topicBranchExists: boolean;
   }>,
 ): PushTargetInspection {
   return {
     kind: "read",
     remotes: parts.remotes ?? ["origin"],
-    pushUrl:
-      parts.pushUrl === undefined ? "git@github.com:suisya-systems/rondo.git" : parts.pushUrl,
+    pushUrls: parts.pushUrls ?? ["git@github.com:suisya-systems/rondo.git"],
     topicBranchExists: parts.topicBranchExists ?? true,
   };
 }
@@ -498,6 +498,7 @@ function preflight(parts: Partial<PreflightInput>) {
     remote: "origin",
     workspace: "/srv/rondo/workspace-dogfood-001",
     topicBranch: "dogfood/dogfood-001",
+    forgeHost: "github.com",
     allowRemoteMismatch: false,
     inspection: inspected({}),
     ...parts,
@@ -505,7 +506,7 @@ function preflight(parts: Partial<PreflightInput>) {
 }
 
 test("a remote URL is read as owner/name only when it names a forge repository", () => {
-  const rondo = { owner: "suisya-systems", name: "rondo" };
+  const rondo = { host: "github.com", owner: "suisya-systems", name: "rondo" };
   for (const url of [
     "git@github.com:suisya-systems/rondo.git",
     "git@github.com:suisya-systems/rondo",
@@ -515,7 +516,7 @@ test("a remote URL is read as owner/name only when it names a forge repository",
     "https://user:token@github.com/suisya-systems/rondo.git",
     "  https://github.com/suisya-systems/rondo.git  ",
   ]) {
-    expect(slugFromRemoteUrl(url)).toEqual(rondo);
+    expect(repositoryFromRemoteUrl(url)).toEqual(rondo);
   }
 
   // None of these is malformed, and none of them is a repository `--repo
@@ -528,27 +529,38 @@ test("a remote URL is read as owner/name only when it names a forge repository",
     "../sibling-clone",
     "https://gitlab.example.com/team/group/project.git",
     "https://github.com/suisya-systems",
-    // The host is half of a repository's identity, and dropping it would call
-    // these two the same repository as `suisya-systems/rondo` on github.com.
+  ]) {
+    expect(repositoryFromRemoteUrl(url)).toBeNull();
+  }
+
+  // The host is carried rather than discarded, because it is half of a
+  // repository's identity: these two are not `suisya-systems/rondo`, and a
+  // slug-only reading would have called them that.
+  for (const url of [
     "https://gitlab.com/suisya-systems/rondo.git",
     "git@gitlab.com:suisya-systems/rondo.git",
-    // An enterprise host is not something `--repo OWNER/NAME` can name, so it
-    // is a mismatch the operator overrides rather than one rondo guesses at.
-    "https://github.example.com/suisya-systems/rondo.git",
   ]) {
-    expect(slugFromRemoteUrl(url)).toBeNull();
+    expect(repositoryFromRemoteUrl(url)).toEqual({
+      host: "gitlab.com",
+      owner: "suisya-systems",
+      name: "rondo",
+    });
   }
 
   // A port and a userinfo section are both part of the URL and neither is part
   // of the repository.
-  expect(slugFromRemoteUrl("ssh://git@github.com:22/suisya-systems/rondo.git")).toEqual(rondo);
+  expect(repositoryFromRemoteUrl("ssh://git@github.com:22/suisya-systems/rondo.git")).toEqual(
+    rondo,
+  );
 });
 
 test("a token in a push URL is not printed back at the operator", () => {
   // A push URL may carry a credential in its userinfo, and every mention of a
   // remote URL is a line a terminal scrolls back and a log keeps.
   const refused = preflight({
-    inspection: inspected({ pushUrl: "https://someone:ghp_SECRETTOKEN@github.com/fork/rondo.git" }),
+    inspection: inspected({
+      pushUrls: ["https://someone:ghp_SECRETTOKEN@github.com/fork/rondo.git"],
+    }),
   });
   expect(refused.kind).toBe("refused");
   if (refused.kind === "refused") {
@@ -561,7 +573,7 @@ test("a token in a push URL is not printed back at the operator", () => {
 
   const allowed = preflight({
     allowRemoteMismatch: true,
-    inspection: inspected({ pushUrl: "https://someone:ghp_SECRETTOKEN@example.invalid/x.git" }),
+    inspection: inspected({ pushUrls: ["https://someone:ghp_SECRETTOKEN@example.invalid/x.git"] }),
   });
   expect(allowed.kind).toBe("ready");
   if (allowed.kind === "ready") {
@@ -583,7 +595,7 @@ test("--repo has to be OWNER/NAME, because the forge is given it unchanged", () 
 test("preflight refuses a workspace that cannot push where the plan says", () => {
   // The measured defect: a workspace with no remotes at all, for which
   // `--dry-run` printed a push as though it would work.
-  const none = preflight({ inspection: inspected({ remotes: [], pushUrl: null }) });
+  const none = preflight({ inspection: inspected({ remotes: [], pushUrls: [] }) });
   expect(none.kind).toBe("refused");
   if (none.kind === "refused") {
     expect(none.reason).toContain("has no remote 'origin'");
@@ -593,7 +605,7 @@ test("preflight refuses a workspace that cannot push where the plan says", () =>
   // A workspace that has remotes, but not the one the push would name. The
   // others are printed, because the operator's next move is usually one of them.
   const others = preflight({
-    inspection: inspected({ remotes: ["upstream", "fork"], pushUrl: null }),
+    inspection: inspected({ remotes: ["upstream", "fork"], pushUrls: [] }),
   });
   expect(others.kind).toBe("refused");
   if (others.kind === "refused") {
@@ -635,7 +647,7 @@ test("the push remote and --repo have to be one repository, or be said to differ
   // The second half of the measured defect: the push would go to one
   // repository and the pull request would be opened against another.
   const mismatch = preflight({
-    inspection: inspected({ pushUrl: "git@github.com:someone-else/practice.git" }),
+    inspection: inspected({ pushUrls: ["git@github.com:someone-else/practice.git"] }),
   });
   expect(mismatch.kind).toBe("refused");
   if (mismatch.kind === "refused") {
@@ -647,18 +659,89 @@ test("the push remote and --repo have to be one repository, or be said to differ
   // different stated reason: it is not that they differ, it is that rondo
   // cannot tell. A local bare repository -- what the dogfood environment has --
   // is this case.
-  const local = preflight({ inspection: inspected({ pushUrl: "/srv/rondo/target-origin.git" }) });
+  const local = preflight({
+    inspection: inspected({ pushUrls: ["/srv/rondo/target-origin.git"] }),
+  });
   expect(local.kind).toBe("refused");
   if (local.kind === "refused") {
-    expect(local.reason).toContain("cannot read as a github.com OWNER/NAME");
+    expect(local.reason).toContain("not a repository rondo can read as OWNER/NAME");
   }
 
-  // The same case for the reason that is easiest to miss: the path reads as
-  // `owner/name`, and the host says it is a different repository entirely.
+  // The mismatch that is easiest to miss: the path reads as `owner/name`, and
+  // the host says it is a different repository entirely.
   const elsewhere = preflight({
-    inspection: inspected({ pushUrl: "https://gitlab.com/suisya-systems/rondo.git" }),
+    inspection: inspected({ pushUrls: ["https://gitlab.com/suisya-systems/rondo.git"] }),
   });
   expect(elsewhere.kind).toBe("refused");
+  if (elsewhere.kind === "refused") {
+    expect(elsewhere.reason).toContain("on gitlab.com");
+  }
+
+  // The host compared against is the one the forge CLI will use, not an
+  // assumed github.com: with an enterprise host configured, the enterprise
+  // remote agrees and the github.com one does not.
+  const enterprise = { forgeHost: "github.example.com" };
+  expect(
+    preflight({
+      ...enterprise,
+      inspection: inspected({ pushUrls: ["https://github.example.com/suisya-systems/rondo.git"] }),
+    }).kind,
+  ).toBe("ready");
+  expect(preflight({ ...enterprise }).kind).toBe("refused");
+});
+
+test("the forge host is read from the environment publish will spawn under", () => {
+  // Assuming github.com is what would let the check approve a push to one
+  // forge while the pull request is opened on another.
+  expect(forgeHost({})).toBe("github.com");
+  expect(forgeHost({ GH_HOST: "" })).toBe("github.com");
+  expect(forgeHost({ GH_HOST: "  " })).toBe("github.com");
+  expect(forgeHost({ GH_HOST: "github.example.com" })).toBe("github.example.com");
+});
+
+test("every destination of a multi-URL push remote is checked, not the first", () => {
+  // `remote.<name>.pushurl` is multi-valued and `git push` sends to all of
+  // them, so a check that stopped at the first would approve a publish that
+  // also reached a repository it never looked at.
+  const extra = preflight({
+    inspection: inspected({
+      pushUrls: [
+        "git@github.com:suisya-systems/rondo.git",
+        "git@github.com:someone-else/mirror.git",
+      ],
+    }),
+  });
+  expect(extra.kind).toBe("refused");
+  if (extra.kind === "refused") {
+    expect(extra.reason).toContain("pushes to 2 places");
+    expect(extra.reason).toContain("someone-else/mirror");
+  }
+
+  // Two destinations that agree with --repo are still an agreement.
+  expect(
+    preflight({
+      inspection: inspected({
+        pushUrls: [
+          "git@github.com:suisya-systems/rondo.git",
+          "https://github.com/suisya-systems/rondo.git",
+        ],
+      }),
+    }).kind,
+  ).toBe("ready");
+
+  // Under the override, two destinations with different owners leave no single
+  // owner to qualify the head with, so it stays bare and says so.
+  const spread = preflight({
+    allowRemoteMismatch: true,
+    inspection: inspected({
+      pushUrls: ["git@github.com:happy-ryo/rondo.git", "git@github.com:someone-else/rondo.git"],
+    }),
+  });
+  expect(spread.kind).toBe("ready");
+  if (spread.kind === "ready") {
+    expect(spread.headRef).toBe("dogfood/dogfood-001");
+    expect(spread.warnings[0]).toContain("no single github.com owner");
+  }
 });
 
 test("--allow-remote-mismatch keeps the fork route open, and spells the head for it", () => {
@@ -667,7 +750,7 @@ test("--allow-remote-mismatch keeps the fork route open, and spells the head for
   // so the head is qualified with the owner the push actually reached.
   const fork = preflight({
     allowRemoteMismatch: true,
-    inspection: inspected({ pushUrl: "git@github.com:happy-ryo/rondo.git" }),
+    inspection: inspected({ pushUrls: ["git@github.com:happy-ryo/rondo.git"] }),
   });
   expect(fork.kind).toBe("ready");
   if (fork.kind === "ready") {
@@ -680,7 +763,7 @@ test("--allow-remote-mismatch keeps the fork route open, and spells the head for
   // with, so the head stays bare and the warning says what that will mean.
   const local = preflight({
     allowRemoteMismatch: true,
-    inspection: inspected({ pushUrl: "/srv/rondo/target-origin.git" }),
+    inspection: inspected({ pushUrls: ["/srv/rondo/target-origin.git"] }),
   });
   expect(local.kind).toBe("ready");
   if (local.kind === "ready") {

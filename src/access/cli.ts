@@ -884,6 +884,11 @@ export interface ForgeSlug {
   readonly name: string;
 }
 
+/** The same, plus the host it is on -- which a remote URL always carries. */
+export interface RemoteRepository extends ForgeSlug {
+  readonly host: string;
+}
+
 /** The characters GitHub allows in an owner or a repository name. */
 const SLUG_SEGMENT = /^[A-Za-z0-9._-]+$/;
 
@@ -916,7 +921,7 @@ export function parseForgeSlug(text: string): ForgeSlug | null {
  * Both spellings git accepts are read: the scp-like `git@host:owner/name.git`
  * and the URL forms `ssh://`, `git://`, `http://` and `https://`.
  */
-export function slugFromRemoteUrl(url: string): ForgeSlug | null {
+export function repositoryFromRemoteUrl(url: string): RemoteRepository | null {
   const trimmed = url.trim();
   let host: string | null = null;
   let path: string | null = null;
@@ -937,33 +942,41 @@ export function slugFromRemoteUrl(url: string): ForgeSlug | null {
       path = afterScheme.slice(slash + 1);
     }
   }
-  if (host === null || path === null) {
-    return null;
-  }
-  // **The host is checked, not merely parsed.** `--repo OWNER/NAME` is passed
-  // to the forge as a github.com repository, so a remote on some other host
-  // whose path happens to read as `owner/name` is a different repository
-  // wearing the same name -- and comparing the slugs alone would call the push
-  // and the pull request agreed when they are not.
-  if (!GITHUB_HOSTS.has(host.toLowerCase())) {
+  if (host === null || host === "" || path === null) {
     return null;
   }
   const cleaned = path
     .replace(/^\/+/, "")
     .replace(/\/+$/, "")
     .replace(/\.git$/, "");
-  return parseForgeSlug(cleaned);
+  const slug = parseForgeSlug(cleaned);
+  return slug === null ? null : { host, owner: slug.owner, name: slug.name };
+}
+
+/** Whether two host names are the same forge. `www.` is not a different one. */
+function sameHost(left: string, right: string): boolean {
+  const bare = (host: string): string => host.toLowerCase().replace(/^www\./, "");
+  return bare(left) === bare(right);
 }
 
 /**
- * The hosts `--repo OWNER/NAME` can be about.
+ * The host a pull request would be opened on, as the forge CLI would resolve it.
  *
- * `gh` reaches github.com unless it is told otherwise, and rondo's `--repo` is
- * two segments with no host in them. An enterprise host is therefore not
- * something this can recognise, and it is refused as a mismatch the operator
- * can override rather than being guessed at.
+ * **`--repo OWNER/NAME` carries no host, so the host has to come from somewhere,
+ * and the only safe somewhere is where `gh` gets it.** `gh` reads it from the
+ * environment and falls back to github.com, and rondo is handed the same
+ * environment it will spawn `gh` under -- so this reads it rather than assuming
+ * github.com. Assuming would produce exactly the failure these checks exist to
+ * stop: a push approved against one forge while the pull request is opened on
+ * another.
  */
-const GITHUB_HOSTS: ReadonlySet<string> = new Set(["github.com", "www.github.com"]);
+export function forgeHost(environment: Readonly<Record<string, string | undefined>>): string {
+  const named = environment[FORGE_HOST_ENV];
+  return named === undefined || named.trim() === "" ? DEFAULT_FORGE_HOST : named.trim();
+}
+
+const FORGE_HOST_ENV = "GH_HOST";
+const DEFAULT_FORGE_HOST = "github.com";
 
 /**
  * A remote URL as it may be printed: any credentials in it replaced.
@@ -1003,6 +1016,8 @@ export interface PreflightInput {
   readonly remote: string;
   readonly workspace: string;
   readonly topicBranch: string;
+  /** The host `--repo` is on: what `forgeHost` read, not an assumption. */
+  readonly forgeHost: string;
   readonly allowRemoteMismatch: boolean;
   readonly inspection: PushTargetInspection;
 }
@@ -1031,10 +1046,12 @@ export interface PreflightInput {
  * the override is used, since a bare branch name is read by `gh` as a branch of
  * `--repo` and would find the wrong branch or none.
  *
- * **Agreement is over the host as well as the two path segments.** `--repo`
- * names a github.com repository, so a remote on another host whose path happens
- * to read as `owner/name` is a different repository wearing the same name, and
- * it is refused as a mismatch rather than passed as an agreement.
+ * **Agreement is over the host and every destination, not two path segments
+ * and the first URL.** A remote on another host whose path happens to read as
+ * `owner/name` is a different repository wearing the same name, and the host to
+ * compare against is the one the forge CLI will resolve rather than an assumed
+ * github.com (see `forgeHost`). A remote can also push to several URLs at once,
+ * and all of them have to agree, because all of them receive the branch.
  *
  * Pure, over what `inspectPushTarget` read. The rules are here because they are
  * rules about publishing; the process that reads a git config is in `./forge.ts`
@@ -1059,7 +1076,7 @@ export function publishPreflight(input: PreflightInput): PreflightOutcome {
     };
   }
   const inspection = input.inspection;
-  if (inspection.pushUrl === null) {
+  if (inspection.pushUrls.length === 0) {
     const configured =
       inspection.remotes.length === 0
         ? "It has no remotes configured at all"
@@ -1082,51 +1099,87 @@ export function publishPreflight(input: PreflightInput): PreflightOutcome {
     };
   }
 
-  const pushing = slugFromRemoteUrl(inspection.pushUrl);
-  if (pushing !== null && sameRepository(pushing, wanted)) {
+  // **Every destination, not the first one.** `remote.<name>.pushurl` is
+  // multi-valued and `git push` sends to all of them, so a check that read one
+  // URL would approve a publish that also reached repositories it never looked
+  // at.
+  const destinations = inspection.pushUrls.map((url) => ({
+    shown: redactRemoteUrl(url),
+    repository: repositoryFromRemoteUrl(url),
+  }));
+  const agrees = (destination: (typeof destinations)[number]): boolean =>
+    destination.repository !== null &&
+    sameHost(destination.repository.host, input.forgeHost) &&
+    sameRepository(destination.repository, wanted);
+  const disagreeing = destinations.filter((destination) => !agrees(destination));
+  if (disagreeing.length === 0) {
     return { kind: "ready", headRef: input.topicBranch, warnings: [] };
   }
 
-  const shown = redactRemoteUrl(inspection.pushUrl);
-  const difference =
-    pushing === null
-      ? `'${input.remote}' is '${shown}', which rondo cannot read as a github.com OWNER/NAME, ` +
-        `so it cannot be shown to be the repository '${input.repo}' names`
-      : `'${input.remote}' is '${shown}', which is '${pushing.owner}/${pushing.name}', and ` +
-        `--repo is '${input.repo}'`;
+  const differences = disagreeing.map((destination) => {
+    const repository = destination.repository;
+    if (repository === null) {
+      return `'${destination.shown}' is not a repository rondo can read as OWNER/NAME on a forge`;
+    }
+    if (!sameHost(repository.host, input.forgeHost)) {
+      return (
+        `'${destination.shown}' is '${repository.owner}/${repository.name}' on ` +
+        `${repository.host}, and --repo names a repository on ${input.forgeHost}`
+      );
+    }
+    return `'${destination.shown}' is '${repository.owner}/${repository.name}'`;
+  });
+  const scope =
+    destinations.length === 1
+      ? `'${input.remote}' pushes to one place, and ${differences[0] ?? ""}`
+      : `'${input.remote}' pushes to ${String(destinations.length)} places, and ` +
+        `${String(disagreeing.length)} of them do not match --repo: ${differences.join("; ")}`;
   if (!input.allowRemoteMismatch) {
     return {
       kind: "refused",
       reason:
-        `The push and the pull request would not be about the same repository: ${difference}. ` +
-        "The push goes to the workspace's remote and the pull request is opened against --repo, " +
-        "so publishing this way puts the branch somewhere the pull request does not look. If " +
-        "that is deliberate -- pushing to a fork and opening the pull request upstream is the " +
-        "usual reason -- pass --allow-remote-mismatch.",
+        `The push and the pull request would not be about the same repository: ${scope}, while ` +
+        `--repo is '${input.repo}'. The push goes to the workspace's remote and the pull ` +
+        "request is opened against --repo, so publishing this way puts the branch somewhere the " +
+        "pull request does not look. If that is deliberate -- pushing to a fork and opening the " +
+        "pull request upstream is the usual reason -- pass --allow-remote-mismatch.",
     };
   }
+
   // The override was given, so the operator has said the two differ on purpose.
-  // What is left is to make `gh` agree: `--head branch` names a branch of
-  // `--repo`, which is not where the push went.
-  if (pushing === null) {
+  // What is left is to make the forge agree: a bare `--head branch` names a
+  // branch of `--repo`, which is not where the push went. Qualifying it needs
+  // one owner on the forge's own host, which is the fork case; anything else --
+  // a local path, another host, or several destinations that disagree with each
+  // other -- has no single owner to name, and rondo says so rather than
+  // choosing one.
+  const owners = new Set(
+    destinations.map((destination) =>
+      destination.repository !== null && sameHost(destination.repository.host, input.forgeHost)
+        ? destination.repository.owner
+        : null,
+    ),
+  );
+  const owner = owners.size === 1 ? [...owners][0] : null;
+  if (owner === null || owner === undefined) {
     return {
       kind: "ready",
       headRef: input.topicBranch,
       warnings: [
-        `--allow-remote-mismatch: pushing to '${shown}' and opening the pull request against ` +
-          `'${input.repo}'. rondo cannot read that remote as a github.com OWNER/NAME, so the ` +
-          `head is the bare branch name and the forge will look for '${input.topicBranch}' in ` +
+        `--allow-remote-mismatch: ${scope}, while the pull request is opened against ` +
+          `'${input.repo}'. There is no single ${input.forgeHost} owner to qualify the head ` +
+          `with, so it stays '${input.topicBranch}' and the forge will look for that branch in ` +
           `'${input.repo}'. Expect the pull-request leg to fail unless it is there.`,
       ],
     };
   }
   return {
     kind: "ready",
-    headRef: `${pushing.owner}:${input.topicBranch}`,
+    headRef: `${owner}:${input.topicBranch}`,
     warnings: [
-      `--allow-remote-mismatch: pushing to '${pushing.owner}/${pushing.name}' and opening the ` +
-        `pull request against '${input.repo}'. --head is spelled ` +
-        `'${pushing.owner}:${input.topicBranch}' so that gh looks for the branch where the push ` +
+      `--allow-remote-mismatch: pushing to '${owner}' on ${input.forgeHost} and opening the ` +
+        `pull request against '${input.repo}'. The head is spelled ` +
+        `'${owner}:${input.topicBranch}' so that the forge looks for the branch where the push ` +
         "put it.",
     ],
   };
@@ -1237,6 +1290,7 @@ async function commandPublish(
     remote,
     workspace,
     topicBranch,
+    forgeHost: forgeHost(environment),
     allowRemoteMismatch: parsed.allowRemoteMismatch,
     inspection: await inspectPushTarget({ workspace, remote, topicBranch }),
   });
