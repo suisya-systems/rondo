@@ -118,6 +118,7 @@ export {
   type AdmittedPlan,
   type AdmittedPlanOutcome,
   admittedPlan,
+  PLAN_PAYLOAD_VERSION,
   type PlanOutcome,
   planPayload,
   type RunPlan,

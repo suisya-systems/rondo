@@ -101,10 +101,28 @@ The one file an operator writes, and they write it once per project rather than 
 column of any past iteration row is a valid plan file** -- with the one caveat `D-0023` adds below,
 that a row written before it names three fields a plan file may no longer carry. `readRunPlan`
 validates every field of a plan file and refuses by field name; `readPlan` validates a stored
-payload. Two keys may be **absent** from a stored payload, because the plan column has no
-migration and rows written before either field existed are still valid plans:
-`pull_request_base_branch`, which reads as null and which only `revise` ever sets (see 5.1), and
-`workspace_root`, which is derived from the stored workspace's parent.
+payload.
+
+**The payload carries its own version** (`D-0028`). `payload_version` says which shape the bytes
+are, and reading climbs an ordered ladder of steps from that version to the one this rondo
+understands -- in memory, on the way *out* of the store. The row itself is never rewritten, because
+the `plan` column is persisted verbatim beside a digest of its own bytes (`D-0019` rule 4). Three
+things follow, and they are the whole of what an operator needs to know:
+
+- **A document with no `payload_version` is version 0**, which is every row rondo wrote before
+  `D-0028` and every plan file anybody has typed. Two keys may be absent from a version 0 document
+  and are supplied by the ladder: `pull_request_base_branch`, which reads as null and which only
+  `revise` ever sets (see 5.1), and `workspace_root`, which is derived from the stored workspace's
+  parent -- and only for a document that carries a `workspace`, which a plan file may not (see
+  below), so **an operator who omits `workspace_root` is still refused by name** rather than handed
+  a directory they did not name.
+- **A document that declares a version is held to it.** At version 1 every field is required,
+  including `pull_request_base_branch`. So a hand-written plan file is easiest left without the key
+  -- it is then a version 0 document and needs nothing -- and a file copied out of a `plan` column
+  is used exactly as it came.
+- **A payload from a newer rondo is refused by name**, saying which version the bytes declare and
+  which this rondo reads. That is the case a per-field tolerance could not express: without a
+  version, bytes written by a newer rondo would be read as though they were current.
 
 **Three fields the plan file used to carry are gone** (`D-0023`): `run_id`, `topic_branch` and
 `workspace`. rondo derives all three from the iteration id now, so a plan file cannot name them and

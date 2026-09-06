@@ -64,6 +64,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0026 | The pull request `publish` opens is written for a person: the lap's own commit subjects are the summary, and the request is quoted input | accepted |
 | D-0023 | The identifier allocator and the capacity ledger: rondo mints the triple, `awaiting_human` stops occupying capacity, and the single-flight index becomes a counted bound | accepted |
 | D-0027 | "Revise" at the gate becomes a second lap: fresh identifiers, the predecessor's branch as the base, and the instruction carried into the prompt | accepted |
+| D-0028 | The plan payload carries its own version: an ordered read-side upgrade ladder, strict again at the version that introduced each field, and separate from the schema's migration on purpose | accepted |
 
 ---
 
@@ -3343,6 +3344,12 @@ This entry is the smallest thing that makes the second option do what it says.
    operator's own plan file means. A key that is *present* and not a string is still refused, and
    every other field is as strict as it was.
 
+   > **Note (D-0028, 2026-09-07).** No longer the one key that may be absent, and no longer a
+   > bespoke reader. `readAbsentAsNullString` is retired: absence is now scoped to payload version
+   > 0 by a ladder step, and at version 1 this field is required like every other. What this rule
+   > asserted about *meaning* — absent means no revision has touched this plan — is what the step
+   > supplies.
+
 6. **The successor's plan is composed and fully validated before the gate is walked.** The walk
    presents, delivers and answers through continuo and its ack closes the gate; it cannot be taken
    back. A revision refused after that would leave a person having spent their gate on an answer
@@ -3686,6 +3693,12 @@ waiting, not the working.
     name. This is one field's repair and not a general mechanism; the plan column's want of a
     versioning story is a residual below.
 
+    > **Note (D-0028, 2026-09-07).** The residual is answered. The payload now carries
+    > `payload_version` and this repair is the first rung of its upgrade ladder rather than a
+    > special case; the derivation and its guard are unchanged, and the guard is what keeps this
+    > rule's "an operator's plan file is deliberately not given the same latitude" true now that
+    > the ladder runs at both entry points.
+
 ### What this does not do
 
 - It does not make two laps run at once. `maxOccupying` stays at one until `continuo D-1104`
@@ -3748,3 +3761,111 @@ waiting, not the working.
 - **rondo's ledger measuring the lap term as binding after all**, which would mean the 17% / 83%
   split was an artefact of one operator's pace rather than a property of the work.
 
+---
+
+## D-0028 — The plan payload carries its own version: an ordered read-side upgrade ladder, strict again at the version that introduced each field, and separate from the schema's migration on purpose
+
+**Status:** accepted (2026-09-07, rondo's human gate). Closes rondo#34.
+
+rondo has two places that store data. `D-0023` rule 26 gave the first one — the `iteration`
+schema — a migration, and named the second as still owing one: the `plan` column, a JSON payload
+persisted verbatim and read back by `readPlan`, which validates all thirty-four fields and refuses
+by field name. **Adding a field to `RunPlan` makes every existing row unreadable**, and that
+refusal arrives on the way back *into* a live iteration, so it is filed at `stalled` on a row a
+person is already waiting on — including a lap already paid for.
+
+Twice now that has been answered one field at a time. `D-0027` added a bespoke "absent reads as
+null" reader for `pull_request_base_branch`; `D-0023` rule 28 added a bespoke repair deriving
+`workspace_root` from the stored workspace's parent. Each is correct for its own field and neither
+generalises: applied to every new field, the first turns a payload whose stated virtue is *refuses
+by field name* into one that silently accepts anything absent, which is the opposite property. The
+next field would have faced the same choice with no rule to appeal to.
+
+### What was measured before deciding
+
+- **One key, not a pattern.** `readAbsentAsNullString` was used at exactly one call site, for
+  exactly one key, at the time this entry was taken. The relaxation had not yet spread; it was
+  about to.
+- **The payload format is also the plan-file format.** `readRunPlan` is the single entry both
+  documents pass through — a stored payload via `readPlan`, and an operator's plan file via
+  `src/access/cli.ts`'s `loadPlan` — and `docs/operations/rondo-cli.md` advertises that *the `plan`
+  column of any past iteration row is a valid plan file*. A migration applied at one entry and not
+  the other would make that promise false in one direction.
+- **`plan_digest` is verified on every read.** `iterationStore`'s reader recomputes the digest over
+  the stored bytes and refuses a row whose column and digest disagree.
+
+### Decision
+
+1. **The payload carries `payload_version`, an integer, and `planPayload` writes it.** A document
+   with **no** version key is version **0**: every row rondo wrote before this entry, and every
+   plan file anybody has typed. Absence is a shape, not an error.
+2. **Reading climbs an ordered ladder of pure steps, in memory, on the way out.** Entry *n* of the
+   ladder takes a version *n* record to version *n* + 1. A step may only supply what a newer
+   `RunPlan` field needs; it may not consult the filesystem, the clock or the store, because it
+   runs on the path back into a live iteration and a step that can fail for an external reason
+   would file that iteration at `stalled`. **The current version is the ladder's height** rather
+   than a constant typed beside it, so a version and a set of steps cannot disagree: appending a
+   step *is* the version bump.
+3. **The stored bytes are never rewritten, and that is the reason the two halves do not share one
+   mechanism.** This is the load-bearing sentence of the entry, and it is a judgement rather than
+   an omission — `D-0023` rule 26 left "the moment a second table needs a coordinated change, this
+   becomes the wrong shape" as its own reversal condition, and a later reader is owed the
+   difference between *not converged yet* and *deliberately not converging*. The schema's migration
+   is applied **once, in place, destructively, under one transaction**. The payload cannot be
+   migrated that way: `D-0019` rule 4 persists the plan **verbatim** beside a digest of its own
+   bytes, precisely so that "under what plan did this run happen" has an answer, and a lazy
+   write-back would change the bytes and recompute the digest — at which point the digest detects
+   the migration and nothing else. So the two halves share the *shape* — a declarative, ordered
+   list, appended to rather than edited — and share no code. **What would reverse this**: a payload
+   change that cannot be expressed as a pure function of the older record (a field whose value must
+   be looked up rather than derived), which would need a real, written, one-time data migration and
+   the digest question answered head-on.
+4. **`readAbsentAsNullString` is retired, not sanctioned.** Its one field becomes a rung: the v0 →
+   v1 step supplies `pull_request_base_branch: null`, which is what absence meant. At version 1 the
+   field is **required**, so a current row that has lost the key is refused by name again. The
+   general rule the issue asked for: *an additive field is strict at the version that introduced it
+   and supplied by the step below it*, so tolerance is scoped to the shape that needs it rather
+   than granted to the field for ever.
+5. **A payload declaring a version this rondo does not have is refused, by name, saying both
+   numbers.** This is the half a per-field relaxation could never provide. A payload written by a
+   newer rondo may carry a *changed meaning* for a field this code does read; ignoring its unknown
+   keys reads such a row as though it were current and acts on it. The refusal is the honest
+   answer, and the sentence names what to run instead.
+6. **The ladder applies at both entry points, and the operator's protection is kept by the guard
+   rather than by the call site.** `D-0023` rule 28 kept the `workspace_root` repair out of
+   `readRunPlan` so that a person who omits the field is refused by name rather than handed a
+   directory they did not name. That property survives the move because the derivation fires only
+   when the document carries a `workspace` — one of the three identifiers `D-0023` rule 9 forbids a
+   plan file to carry at all. A hand-written plan file has no `workspace`, so nothing is derived
+   and the refusal is unchanged. **One document's behaviour does change**: a copy of a pre-`D-0023`
+   row's `plan` column, used as a plan file, now reads with the root that row actually had instead
+   of being refused for a field the copy could not have carried — which is the runbook's promise
+   kept rather than a latitude granted.
+7. **The ladder supplies what an older shape omitted and never repairs what a newer one got
+   wrong.** A key that is *present* and the wrong type is refused at every version. A step that
+   cannot recover a field's meaning leaves it absent, and the field's own reader refuses it by
+   name: the ladder's job is to say what an older shape *meant*, and a shape whose meaning cannot
+   be recovered is a refusal rather than a guess.
+
+### What this does not do
+
+- It does not version the `iteration` schema. That half keeps `D-0023` rule 26's column diff, for
+  rule 3's reason.
+- It does not reject unknown keys in a payload. A version 1 document with an extra key still reads,
+  as it did before; what the version buys is detection of a *higher* version, not of a stray key.
+- It does not migrate anything on disk. No row is rewritten by this entry, and no row needs to be.
+- It does not add the lineage column `D-0027` rule 9 deferred "to the entry that adds a migration
+  to the store". That entry was `D-0023`, on the schema half; this one adds no column, and the
+  deferral stands.
+
+### What would falsify it
+
+- **A payload change that is not a pure function of the older record.** Rule 3 names it as the
+  reversal condition, and rule 2's "no I/O in a step" is where it would first be felt.
+- **The ladder growing long enough that reading an old row is a chain nobody can follow.** The
+  measured height today is one. A rondo whose ladder is tall enough that the steps need their own
+  tests to compose is a rondo that should have written a one-time migration and dropped support for
+  the versions below it — which it may do, because the version in the bytes is what makes "we no
+  longer read version 0" a sentence rondo can say precisely.
+- **`plan_digest` ceasing to be verified on read**, which is the fact rule 3 rests on and which was
+  measured in `src/store/sqlite.ts` on 2026-09-07.

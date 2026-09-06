@@ -612,6 +612,7 @@ export function admittedPlan(plan: RunPlan, allocation: Allocation): AdmittedPla
  */
 export function planPayload(plan: AdmittedPlan): JsonRecord {
   return {
+    payload_version: PLAN_PAYLOAD_VERSION,
     db: plan.db,
     workspace_root: plan.workspaceRoot,
     run_id: plan.runId,
@@ -665,7 +666,22 @@ export function planPayload(plan: AdmittedPlan): JsonRecord {
  * it: the bytes may have been written by an older rondo, or edited by a person.
  */
 export function readPlan(payload: JsonRecord): AdmittedPlanOutcome {
-  const validated = readRunPlan(withWorkspaceRoot(payload));
+  let current: JsonRecord;
+  try {
+    // Climbed here as well as inside `readRunPlan`, and the second application
+    // is a no-op rather than a repeat: {@link upgradePayload} writes the current
+    // version into the record it returns, so a payload that has already climbed
+    // the ladder has no steps left. What it buys is that the four identifiers
+    // below are read out of the *same* upgraded record as the rest of the plan,
+    // so a future step that touches one of them has one place to do it.
+    current = upgradePayload(payload);
+  } catch (error) {
+    if (error instanceof PlanRefusal) {
+      return { kind: "refused", reason: error.message };
+    }
+    throw error;
+  }
+  const validated = readRunPlan(current);
   if (validated.kind === "refused") {
     return validated;
   }
@@ -676,10 +692,10 @@ export function readPlan(payload: JsonRecord): AdmittedPlanOutcome {
     // not a function of its own id -- so the row, and not the derivation, is
     // what the machine reads.
     const allocation: Allocation = {
-      runId: readString(payload, "run_id"),
-      leaseClaimantId: readString(payload, "lease_claimant_id"),
-      workspace: readString(payload, "workspace"),
-      topicBranch: readString(payload, "topic_branch"),
+      runId: readString(current, "run_id"),
+      leaseClaimantId: readString(current, "lease_claimant_id"),
+      workspace: readString(current, "workspace"),
+      topicBranch: readString(current, "topic_branch"),
     };
     return admittedPlan(validated.plan, allocation);
   } catch (error) {
@@ -691,26 +707,173 @@ export function readPlan(payload: JsonRecord): AdmittedPlanOutcome {
 }
 
 /**
- * A stored payload, with `workspace_root` supplied if it predates D-0023.
+ * The version {@link planPayload} writes today, which is the height of the
+ * ladder below.
  *
- * **A row written before D-0023 has no `workspace_root`, and refusing it would
- * strand every iteration that was open when the host was upgraded.** The plan
- * column is persisted verbatim, so adding a field to `RunPlan` makes the older
- * bytes fail their own re-validation -- and `readPlan` is called on the way
- * *back into* a live iteration, so the failure would arrive as `stalled` on
- * rows a person is already waiting on. That is a migration this entry owes as
- * much as it owes the columns.
+ * Derived from {@link PAYLOAD_UPGRADES} rather than typed beside it, because a
+ * version number and a list of steps that disagree is the one failure this
+ * whole mechanism exists to prevent: a payload would then claim a shape no step
+ * produces. Appending a step *is* the version bump.
+ */
+export const PLAN_PAYLOAD_VERSION: number = 1;
+
+/** The key the version travels under, written once so it is spelled once. */
+const VERSION_KEY = "payload_version";
+
+/**
+ * The plan payload's migration path, and why it is a read-side ladder rather
+ * than the store's `ALTER TABLE` diff (issue #34, D-0028).
+ *
+ * **The two halves of rondo's persistence cannot share one mechanism, and the
+ * reason is `plan_digest`.** D-0023 rule 26 gave the `iteration` *schema* a
+ * migration: a declarative column list, diffed against the table and applied
+ * once, in place, destructively, under one transaction. The `plan` *column*
+ * cannot be migrated that way, because D-0019 rule 4 persists it **verbatim**
+ * beside a digest of its own bytes: rewriting a stored payload into the current
+ * shape would change the bytes, and the bytes are the answer to "under what
+ * plan did this run happen". A lazy write-back would also have to recompute the
+ * digest, at which point the digest detects the migration and nothing else.
+ *
+ * So the payload migrates **on the way out and never on the way in**: the row
+ * keeps the bytes it was written with for ever, and every read climbs from the
+ * version those bytes declare to the version this code understands, in memory.
+ * The two halves share the *shape* -- a declarative, ordered list, appended to
+ * rather than edited -- and share no code, and that is a decision rather than
+ * an omission.
+ *
+ * **Each entry upgrades from its own index to the next**, so entry `0` takes a
+ * v0 payload to v1. A step may only *add* what a newer `RunPlan` field needs
+ * and must be a pure function of the record it is handed; it may not consult
+ * the filesystem, the clock or the store, because it runs on the path back into
+ * a live iteration and a step that can fail for an external reason would file
+ * that iteration at `stalled`.
+ *
+ * **A payload with no version key is v0**, which is every payload rondo wrote
+ * before this entry and every plan file an operator has ever typed.
+ */
+const PAYLOAD_UPGRADES: readonly ((payload: JsonRecord) => JsonRecord)[] = [
+  /**
+   * v0 -> v1: the two fields that were being repaired by hand.
+   *
+   * Both existed before this ladder and neither was a general mechanism --
+   * `pull_request_base_branch` was read through a bespoke "absent means null"
+   * reader (D-0027 rule 5) and `workspace_root` through a bespoke repair
+   * (D-0023 rule 28). They are the ladder's first rung rather than its
+   * justification: the mechanism is introduced carrying the migrations that
+   * already existed, not a speculative one.
+   */
+  (payload) => withWorkspaceRoot(withPullRequestBaseBranch(payload)),
+];
+
+/**
+ * The version a payload declares, or the refusal that it does not declare one.
+ *
+ * **An absent key is v0 and is not an error.** Every payload written before
+ * this entry lacks it, and so does every plan file an operator wrote by hand;
+ * treating absence as a refusal would strand exactly the rows the ladder
+ * exists for.
+ *
+ * **A version this rondo does not have is refused by name**, which is the half
+ * of the mechanism a per-field relaxation could never provide. A payload
+ * written by a newer rondo carries fields this code does not read and may carry
+ * a *changed meaning* for one it does; ignoring the unknown keys would read
+ * such a row as though it were current, silently, and act on it. Refusing puts
+ * the iteration at `stalled` with a sentence naming both versions, which is a
+ * thing an operator can act on -- by running the rondo that wrote the row.
+ */
+function readPayloadVersion(payload: JsonRecord): number {
+  const declared = payload[VERSION_KEY];
+  if (declared === undefined) {
+    return 0;
+  }
+  if (typeof declared !== "number" || !Number.isSafeInteger(declared) || declared < 0) {
+    throw new PlanRefusal(
+      `the persisted plan's '${VERSION_KEY}' is ${JSON.stringify(declared)}, and a payload ` +
+        "version is a whole number that is not negative",
+    );
+  }
+  if (declared > PLAN_PAYLOAD_VERSION) {
+    throw new PlanRefusal(
+      `the persisted plan declares payload version ${String(declared)} and this rondo reads up ` +
+        `to ${String(PLAN_PAYLOAD_VERSION)}, so it was written by a newer rondo than the one ` +
+        "reading it. Run the rondo that wrote the row rather than editing the row",
+    );
+  }
+  return declared;
+}
+
+/**
+ * One payload, climbed to {@link PLAN_PAYLOAD_VERSION}.
+ *
+ * Total on the version and partial on nothing else: a step that cannot supply a
+ * field leaves it absent, and the field's own reader refuses it by name below.
+ * That split is deliberate -- the ladder's job is to say what an older shape
+ * *meant*, and a shape whose meaning cannot be recovered is a refusal rather
+ * than a guess.
+ *
+ * The returned record declares the current version, which makes the function
+ * idempotent: climbing an already-current payload runs no steps.
+ */
+function upgradePayload(payload: JsonRecord): JsonRecord {
+  const from = readPayloadVersion(payload);
+  if (from === PLAN_PAYLOAD_VERSION) {
+    return payload;
+  }
+  let climbed = payload;
+  for (const step of PAYLOAD_UPGRADES.slice(from)) {
+    climbed = step(climbed);
+  }
+  return { ...climbed, [VERSION_KEY]: PLAN_PAYLOAD_VERSION };
+}
+
+/**
+ * A payload from before `pullRequestBaseBranch` existed, given the value it had.
+ *
+ * **Absent means "no revision has happened to this plan"**, which is null, and
+ * which is also what a plan file an operator wrote means -- the field is set by
+ * `revise` and by nothing else (D-0027 rule 5). A key that is *present* is left
+ * exactly as it is, including a present non-string, which the reader below
+ * still refuses: the ladder supplies what an older shape omitted and never
+ * repairs what a newer one got wrong.
+ *
+ * This replaces the `readAbsentAsNullString` reader D-0027 added. That reader
+ * was correct for one field and refused to generalise: applied to every
+ * additive field it would turn a payload whose stated virtue is "refuses by
+ * field name" into one that silently accepts anything absent. With a version in
+ * the bytes the relaxation has somewhere to live -- in a step that applies only
+ * to payloads old enough to need it -- so every field is strict again at the
+ * version that introduced it.
+ */
+function withPullRequestBaseBranch(payload: JsonRecord): JsonRecord {
+  if (payload["pull_request_base_branch"] !== undefined) {
+    return payload;
+  }
+  return { ...payload, pull_request_base_branch: null };
+}
+
+/**
+ * A payload from before `workspaceRoot` existed, given the root it was created
+ * under (D-0023 rule 28, now a rung rather than a special case).
  *
  * The value derived is the honest one rather than a placeholder: the root a
  * workspace was created under is exactly its parent directory, and the stored
- * `workspace` is an absolute path that every pre-D-0023 row carries. Nothing
- * downstream of admission reads `workspaceRoot` -- it is what the allocator
- * derives *from*, and an already-admitted row's triple is read from the row --
- * so the derived value is a faithful record rather than an input to anything.
+ * `workspace` is an absolute path that every pre-D-0023 stored payload carries.
+ * Nothing downstream of admission reads `workspaceRoot` -- it is what the
+ * allocator derives *from*, and an already-admitted row's triple is read from
+ * the row -- so the derived value is a faithful record rather than an input.
  *
- * Deliberately not applied by {@link readRunPlan}, which reads an operator's
- * plan file: there, `workspaceRoot` is the one path the person must supply, and
- * inventing one would turn a typo into a workspace somewhere they did not name.
+ * **The guard, not the call site, is what keeps an operator's typo honest.**
+ * D-0023 kept this repair out of `readRunPlan` so that a person who omits
+ * `workspaceRoot` is refused by name rather than handed a workspace somewhere
+ * they did not name. The ladder runs on both entry points, and the property
+ * survives because the derivation fires only when the payload carries a
+ * `workspace` -- one of the three identifiers D-0023 rule 9 forbids a plan file
+ * to carry at all. A hand-written plan file has no `workspace`, so nothing is
+ * derived and the refusal is unchanged. The one document whose behaviour does
+ * change is a *copy of an old row's plan column* used as a plan file, which
+ * `docs/operations/rondo-cli.md` has always advertised as a valid one: it now
+ * reads, with the root that row actually had, instead of being refused for a
+ * field the copy could not have carried.
  */
 function withWorkspaceRoot(payload: JsonRecord): JsonRecord {
   if (payload["workspace_root"] !== undefined) {
@@ -750,37 +913,43 @@ function withWorkspaceRoot(payload: JsonRecord): JsonRecord {
  */
 export function readRunPlan(payload: JsonRecord): PlanOutcome {
   try {
+    // The ladder runs here rather than at each caller, because this is the one
+    // function both documents pass through: a stored payload arrives via
+    // {@link readPlan} and a plan file arrives from `src/access/cli.ts`. A
+    // migration applied at one entry and not the other would be a payload that
+    // reads back out of the store and refuses out of a copy of itself.
+    const current = upgradePayload(payload);
     const draft: RunPlan = {
-      db: readString(payload, "db"),
-      workspaceRoot: readString(payload, "workspace_root"),
-      baseBranch: readString(payload, "base_branch"),
-      prompt: readString(payload, "prompt"),
-      repository: readString(payload, "repository"),
-      artifactRoot: readString(payload, "artifact_root"),
-      stateRoot: readString(payload, "state_root"),
-      interlockRoot: readString(payload, "interlock_root"),
-      claudeOrgPath: readString(payload, "claude_org_path"),
-      endpointRecipient: readString(payload, "endpoint_recipient"),
-      endpointDestinationDir: readString(payload, "endpoint_destination_dir"),
-      claudeCommand: readStringArray(payload, "claude_command"),
-      endpointDb: readNullableString(payload, "endpoint_db"),
-      endpointModule: readNullableString(payload, "endpoint_module"),
-      node: readNullableString(payload, "node"),
-      hookScript: readNullableString(payload, "hook_script"),
-      python: readNullableString(payload, "python"),
-      pollIntervalMs: readNullableNumber(payload, "poll_interval_ms"),
-      turnTimeoutMs: readNumber(payload, "turn_timeout_ms"),
-      gitTimeoutMs: readNumber(payload, "git_timeout_ms"),
-      identityReadbackTimeoutMs: readNumber(payload, "identity_readback_timeout_ms"),
-      gateOptions: readStringArray(payload, "gate_options"),
-      gateDeadlineAtMs: readNullableNumber(payload, "gate_deadline_at_ms"),
-      pullRequestBaseBranch: readAbsentAsNullString(payload, "pull_request_base_branch"),
-      invocationCeilingMs: readNumber(payload, "invocation_ceiling_ms"),
-      catalogLayers: readCatalogLayers(payload),
-      projectName: readString(payload, "project_name"),
-      agentTypeInput: readOpaque(payload, "agent_type_input") as unknown as AgentTypeInput,
-      parties: readOpaque(payload, "parties") as unknown as IssuanceParties,
-      intendedAction: readOpaque(payload, "intended_action") as unknown as IntendedAction,
+      db: readString(current, "db"),
+      workspaceRoot: readString(current, "workspace_root"),
+      baseBranch: readString(current, "base_branch"),
+      prompt: readString(current, "prompt"),
+      repository: readString(current, "repository"),
+      artifactRoot: readString(current, "artifact_root"),
+      stateRoot: readString(current, "state_root"),
+      interlockRoot: readString(current, "interlock_root"),
+      claudeOrgPath: readString(current, "claude_org_path"),
+      endpointRecipient: readString(current, "endpoint_recipient"),
+      endpointDestinationDir: readString(current, "endpoint_destination_dir"),
+      claudeCommand: readStringArray(current, "claude_command"),
+      endpointDb: readNullableString(current, "endpoint_db"),
+      endpointModule: readNullableString(current, "endpoint_module"),
+      node: readNullableString(current, "node"),
+      hookScript: readNullableString(current, "hook_script"),
+      python: readNullableString(current, "python"),
+      pollIntervalMs: readNullableNumber(current, "poll_interval_ms"),
+      turnTimeoutMs: readNumber(current, "turn_timeout_ms"),
+      gitTimeoutMs: readNumber(current, "git_timeout_ms"),
+      identityReadbackTimeoutMs: readNumber(current, "identity_readback_timeout_ms"),
+      gateOptions: readStringArray(current, "gate_options"),
+      gateDeadlineAtMs: readNullableNumber(current, "gate_deadline_at_ms"),
+      pullRequestBaseBranch: readNullableString(current, "pull_request_base_branch"),
+      invocationCeilingMs: readNumber(current, "invocation_ceiling_ms"),
+      catalogLayers: readCatalogLayers(current),
+      projectName: readString(current, "project_name"),
+      agentTypeInput: readOpaque(current, "agent_type_input") as unknown as AgentTypeInput,
+      parties: readOpaque(current, "parties") as unknown as IssuanceParties,
+      intendedAction: readOpaque(current, "intended_action") as unknown as IntendedAction,
     };
     return runPlan(draft);
   } catch (error) {
@@ -797,25 +966,6 @@ function readString(payload: JsonRecord, key: string): string {
     return refuse(`the persisted plan's '${key}' is not a string`);
   }
   return value;
-}
-
-/**
- * A nullable string whose **key may be absent**, which is true of exactly one
- * field and is a decision rather than a convenience.
- *
- * Every other reader below refuses an absent key, correctly: the payload is
- * `planPayload`'s own rendering, so a missing field means the bytes are not a
- * plan rondo wrote. `pull_request_base_branch` is the exception because it was
- * added after rows existed, and **the plan column has no migration**: the store
- * persists the bytes verbatim (D-0019 rule 4) and hands them back unaltered, so
- * a strict read here would make every iteration written before this field
- * unreadable -- which the interpreter files at `stalled`, and which `publish`
- * would hit on a row whose lap has already been paid for. An absent key means
- * "no revision has happened to this plan", which is what a plan written by an
- * operator means too. A key that is present and not a string is still refused.
- */
-function readAbsentAsNullString(payload: JsonRecord, key: string): string | null {
-  return payload[key] === undefined ? null : readNullableString(payload, key);
 }
 
 function readNullableString(payload: JsonRecord, key: string): string | null {
