@@ -20,6 +20,7 @@
 import { expect, test } from "vitest";
 import {
   approvedActor,
+  approvedForPublication,
   type GateVerbs,
   parseCommand,
   USAGE,
@@ -423,5 +424,47 @@ test("the refusal names the flags the command does take", () => {
     expect(outcome.reason).toContain("--dry-run");
     expect(outcome.reason).toContain("--actor-id");
     expect(outcome.reason).toContain("--body");
+  }
+});
+
+test("an actor id continuo would refuse is refused before any effect", () => {
+  // `RONDO_APPROVER='Jane Doe'` matches `--actor-id 'Jane Doe'` and then fails
+  // at the argument boundary -- after `publish` has pushed and opened a pull
+  // request, or after `answer` has presented and delivered. The shape is
+  // checked with the allowlist so that never happens.
+  const spaced = approvedActor(withActor("Jane Doe"), { RONDO_APPROVER: "Jane Doe" });
+  expect(spaced).toHaveProperty("refusal");
+  if ("refusal" in spaced) {
+    expect(spaced.refusal).toContain("whitespace");
+  }
+
+  // Written attached, because the parser refuses the space-separated form one
+  // layer earlier -- which is itself the right answer, just not this one's.
+  const dashedParse = parseCommand(["answer", "--actor-id=--db", "--body=x"]);
+  expect(dashedParse.kind).toBe("parsed");
+  if (dashedParse.kind === "parsed") {
+    expect(approvedActor(dashedParse.parsed, { RONDO_APPROVER: "--db" })).toHaveProperty("refusal");
+  }
+});
+
+/** An iteration row with only the two fields the publication check reads. */
+function rowWith(status: string, gateOutcome: string | null) {
+  return { status, gateOutcome } as unknown as Parameters<typeof approvedForPublication>[0];
+}
+
+test("only a gate a person answered is publishable", () => {
+  expect(approvedForPublication(rowWith("closed", "answered_and_forwarded"))).toBe(true);
+
+  // Each of these closes a gate and therefore closes the iteration, and none of
+  // them is a person saying yes. Publishing on one would open a pull request
+  // whose body claims an approval that never happened.
+  for (const outcome of ["withdrawn", "expired", "unanswerable", null]) {
+    expect(approvedForPublication(rowWith("closed", outcome))).toBe(false);
+  }
+
+  // And a row that never reached a terminal status is not publishable however
+  // its gate reads.
+  for (const status of ["awaiting_human", "performing", "abandoned", "failed"]) {
+    expect(approvedForPublication(rowWith(status, "answered_and_forwarded"))).toBe(false);
   }
 });

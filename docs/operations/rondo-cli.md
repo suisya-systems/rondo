@@ -230,6 +230,15 @@ spawn -- which `test/architecture/import-boundaries.test.ts` checks with a plant
 than asserting in prose. The credential used is the operator's own `git` and `gh` configuration,
 which rondo neither stores nor reads.
 
+**Only work a person actually approved can be published.** `withdrawn`, `expired` and
+`unanswerable` all close a gate, and `publish` refuses every one of them by name: a closed gate is
+not an approval, and the pull request's body says a human approved this.
+
+**If the pull request leg fails, the push has already happened.** rondo does not persist how far a
+publish got, so it prints the one remaining leg -- the `run close` -- for you to run. Re-running
+`publish` is safe for the push (git answers "Everything up-to-date") but will be refused for a pull
+request that already exists.
+
 **Closing the run is not idempotent, on purpose.** continuo refuses a second close: which terminal
 status a run reached is a fact, and a wrong one is corrected by opening a new run.
 

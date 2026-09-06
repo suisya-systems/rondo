@@ -102,6 +102,31 @@ const APPROVER_ENV = "RONDO_APPROVER";
 /** The remote a push goes to when the operator does not name one. */
 const DEFAULT_REMOTE = "origin";
 
+/**
+ * The one gate outcome that means a person answered.
+ *
+ * continuo reaches it itself, as `actor_kind: "system"`, when the forwarded
+ * relay is acked -- so it is the only outcome that records an answer having
+ * been carried all the way out. The other three (`withdrawn`, `expired`,
+ * `unanswerable`) also close a gate and also close the iteration, and none of
+ * them is a person saying yes.
+ */
+const APPROVED_OUTCOME = "answered_and_forwarded";
+
+/**
+ * Whether an iteration records a person having actually approved the work.
+ *
+ * A predicate rather than an inline comparison because it is the check that
+ * stands between "a gate ended" and "a person said yes", and those are not the
+ * same fact: `withdrawn`, `expired` and `unanswerable` each close a gate and
+ * each close the iteration. Publishing on one of them would push the work and
+ * open a pull request whose body says a human approved it -- rondo making a
+ * false statement about somebody else.
+ */
+export function approvedForPublication(record: IterationRecord): boolean {
+  return record.status === "closed" && record.gateOutcome === APPROVED_OUTCOME;
+}
+
 /** One command, as the parser understood it. Pure: this type holds no I/O. */
 export interface ParsedCommand {
   readonly command: "start" | "answer" | "publish" | "abandon" | "help";
@@ -605,6 +630,20 @@ export function approvedActor(
         "the same identity.",
     };
   }
+  // The shape continuo requires of an identifier, checked **here** rather than
+  // left to the verb that first carries it. An identity with whitespace in it
+  // passes the allowlist and is then refused at the argument boundary -- after
+  // `publish` has already pushed and opened a pull request, or after `answer`
+  // has already presented and delivered. Rondo refuses before a process starts
+  // when it can, and this is one of the places it can.
+  if (/\s/.test(parsed.actorId) || parsed.actorId.startsWith("-")) {
+    return {
+      refusal:
+        `--actor-id is '${parsed.actorId}', and continuo's identifiers carry no whitespace and ` +
+        "do not begin with a dash. It would be refused partway through, after the effects before " +
+        "it had already happened.",
+    };
+  }
   return { actorId: parsed.actorId };
 }
 
@@ -850,6 +889,20 @@ async function commandPublish(
         "person has already approved at the gate.",
     );
   }
+  // **A closed iteration is not an approved one.** `withdrawn`, `expired` and
+  // `unanswerable` all close a gate and therefore close the iteration, and
+  // none of them is a person saying yes. Publishing on any of those would push
+  // the work and open a pull request whose body claims a human approved it --
+  // a false statement about somebody else, written by rondo. Only the outcome
+  // that continuo reaches by carrying an answer through to its forward may
+  // publish.
+  if (!approvedForPublication(record)) {
+    return refuse(
+      `iteration '${record.id}' closed at gate outcome ` +
+        `'${record.gateOutcome ?? "(none recorded)"}', not '${APPROVED_OUTCOME}'. That is a gate ` +
+        "that ended without a person answering it, so there is no approval to publish under.",
+    );
+  }
 
   const workspace = planField(record, "workspace");
   const topicBranch = planField(record, "topic_branch");
@@ -887,6 +940,21 @@ async function commandPublish(
     body: pullRequestBody(record, runId),
   });
   if (!reportCommand("open the pull request", opened)) {
+    // **The push already happened, and it is the one leg that cannot be
+    // undone from here.** Re-running `publish` re-runs the push harmlessly
+    // (git answers "Everything up-to-date"), but a pull request that was in
+    // fact created and then failed to be reported would be refused as a
+    // duplicate on the second attempt, leaving the run row open with no way
+    // forward through this command. rondo does not persist how far a publish
+    // got -- that would be a durable record of somebody else's state -- so it
+    // says instead exactly what is left and how to do it.
+    say("");
+    say(`The branch '${topicBranch}' was pushed to '${remote}'; that part is done.`);
+    say("If the pull request already exists, the only leg left is the run close:");
+    say(
+      `  ${continuo.cliPath} run close --db ${db} --run-id ${runId} ` +
+        `--outcome completed --actor-id ${actor.actorId}`,
+    );
     return 1;
   }
 
