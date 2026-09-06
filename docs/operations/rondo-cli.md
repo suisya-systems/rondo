@@ -40,7 +40,9 @@ export RONDO_APPROVER=happy_ryo                            # the one identity al
 ```
 
 `RONDO_STORE` is a **second** database, separate from continuo's control plane. rondo's iteration
-rows are rondo's; the run, gate and relay rows are continuo's.
+rows are rondo's; the run, gate and relay rows are continuo's. It must be an **absolute** path and
+must not be `:memory:` -- each command is a separate process, so a row that does not outlive one is
+a lap that ran, cost money, and then vanished. rondo refuses both by name.
 
 ## 3. The plan file
 
@@ -262,6 +264,8 @@ yours.
 | `continuo is not usable: ...` | The build is not the pinned revision, or is dirty. | Rebuild the pinned continuo (section 1). |
 | `RONDO_APPROVER is not set` | rondo will not act for an unnamed person. | Export it. |
 | `No iteration is live` on `publish` | Answering closed the iteration, so it is no longer live. | Pass `--iteration-id`, which the `answer` output prints for you. |
+| `closed at gate outcome 'withdrawn'` on `publish` | The gate ended without a person answering it. | Nothing to publish; the work was not approved. |
+| `was not abandoned` (exit 2) | The row was absent, or the store refused the write. | The lock, if it was held, is still held. Read the row before trying again. |
 
 ---
 

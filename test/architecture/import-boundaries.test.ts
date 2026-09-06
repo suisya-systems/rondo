@@ -264,6 +264,10 @@ const ALLOWED_EXTERNALS_BY_MODULE: Readonly<
   "src/access/cli.ts": {
     "node:util": ["parseArgs"],
     "node:fs": ["readFileSync"],
+    // One predicate, for the check that `RONDO_STORE` names a durable database
+    // rather than a different one per directory. It reads a string and touches
+    // no filesystem, which is why it is here and `resolve` is not.
+    "node:path": ["isAbsolute"],
   },
   // The one module that runs a forge command, granted the one binding it needs
   // -- keyed by module for the reason `src/continuo/invoker.ts`'s spawn is, and
@@ -1386,6 +1390,15 @@ const PLANTED: ReadonlyArray<
     "takes execSync from node:child_process",
   ],
   [
+    // `node:path` is granted one predicate. Reaching for a resolver beside it
+    // would be the command line starting to compute paths rather than check
+    // the one it was handed.
+    "the-command-line-cannot-resolve-paths",
+    "src/access/cli.ts",
+    'import { isAbsolute, resolve } from "node:path";\nexport const x = [isAbsolute, resolve];\n',
+    "takes resolve from node:path",
+  ],
+  [
     // The command line is granted two builtins by binding. A third binding on a
     // module it *is* granted is the case that keeps the grant a list rather
     // than a licence for the package.
@@ -1683,7 +1696,7 @@ test("the planted corpus exercises the detector in both directions", () => {
   const clean = PLANTED.filter(([, , , expected]) => expected === null);
   // A corpus that lost its controls, or lost its violations, would still pass
   // every case below by agreeing with itself.
-  expect(caught.length).toBeGreaterThanOrEqual(65);
+  expect(caught.length).toBeGreaterThanOrEqual(66);
   expect(clean.length).toBeGreaterThanOrEqual(12);
   expect(new Set(PLANTED.map(([id]) => id)).size).toBe(PLANTED.length);
 });

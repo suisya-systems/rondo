@@ -24,6 +24,7 @@
  * push (D-0025 rule 6).
  */
 import { readFileSync } from "node:fs";
+import { isAbsolute } from "node:path";
 import { parseArgs } from "node:util";
 
 import {
@@ -657,6 +658,29 @@ function openStore(
       refusal: `${STORE_ENV} is not set. It is the absolute path to rondo's iteration database, which is created on first use.`,
     };
   }
+  // **Durable and absolute, checked before the file is opened.** `:memory:` is
+  // SQLite's in-memory sentinel: `start` would run a real lap, spend real money
+  // and then lose the row when the process exits, so the next `answer` would
+  // report that nothing is waiting while a gate stood open. A relative path is
+  // the quieter version of the same failure -- it names a different database
+  // from each directory a command is run in, so the single-flight invariant
+  // would hold per directory rather than per machine.
+  if (path === ":memory:" || path.startsWith("file::memory:")) {
+    return {
+      refusal:
+        `${STORE_ENV} is '${path}', which is SQLite's in-memory database. rondo's commands are ` +
+        "separate processes and the row has to outlive each of them, so an in-memory store would " +
+        "lose a lap that had already run.",
+    };
+  }
+  if (!isAbsolute(path)) {
+    return {
+      refusal:
+        `${STORE_ENV} is '${path}', and it must be an absolute path. A relative one names a ` +
+        "different database from each directory a command is run in, and single-flight is an " +
+        "invariant of one database.",
+    };
+  }
   try {
     return { store: openIterationStore(path) };
   } catch (error) {
@@ -1063,6 +1087,17 @@ async function commandAbandon(
   }
   const report = await abandon(ports, parsed.iterationId, parsed.reason);
   sayReport(report);
+  // **`abandoned` or nothing.** A report with any other status is a settlement
+  // that did not happen -- the row was absent, or the store refused the
+  // terminal write and the single-flight lock is still held. Exiting 0 there
+  // would tell an operator, and any script wrapping this, that a recovery
+  // succeeded while the thing it was recovering from is still in place.
+  if (report.status !== "abandoned") {
+    return refuse(
+      `iteration '${parsed.iterationId}' was not abandoned. Nothing was settled, and if it was ` +
+        "holding the single-flight lock it still is.",
+    );
+  }
   say("");
   say(
     "rondo closed nothing upstream. If a gate is still open, closing it is yours; if the " +
