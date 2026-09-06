@@ -152,6 +152,25 @@ export interface RunPlan {
 
   // --- rondo's own ----------------------------------------------------------
   /**
+   * The branch a pull request is opened against, when that is **not** the
+   * branch the workspace was cut from. Null in every plan an operator writes.
+   *
+   * The two are the same thing right up until a revision, and continuo's
+   * materialiser calls `baseBranch` both ("the branch the topic branch is cut
+   * from, and the branch the lap's pull request is opened against"). A second
+   * lap breaks the tie: it is cut from the **first lap's topic branch**, which
+   * is what makes it a continuation rather than a restart, and that branch has
+   * never been pushed -- `D-0010` leaves publishing to the operator and the
+   * operator publishes the last lap, not each one. A pull request opened
+   * against it would name a branch no forge has. So the field the revision
+   * carries forward is the branch the *first* lap was cut from, and a chain of
+   * revisions carries the same one all the way along.
+   *
+   * rondo's own, in the section that says so: continuo is never told about it,
+   * and `src/access/cli.ts`'s `publish` is its only reader.
+   */
+  readonly pullRequestBaseBranch: string | null;
+  /**
    * How long rondo will wait for the whole `lap perform` invocation.
    *
    * **The caller's, because rondo cannot compute it.** The turn timer is not
@@ -365,6 +384,10 @@ export function runPlan(input: RunPlan): PlanOutcome {
       ),
       gateOptions: requireGateOptions(input.gateOptions),
       gateDeadlineAtMs: optionalPositiveInteger("gateDeadlineAtMs", input.gateDeadlineAtMs),
+      pullRequestBaseBranch:
+        input.pullRequestBaseBranch === null
+          ? null
+          : requireNotOptionShaped("pullRequestBaseBranch", input.pullRequestBaseBranch),
       invocationCeilingMs: requireCeiling(input),
       catalogLayers: requireCatalogLayers(input.catalogLayers),
       projectName: requireNonEmpty("projectName", input.projectName),
@@ -539,6 +562,7 @@ export function planPayload(plan: RunPlan): JsonRecord {
     identity_readback_timeout_ms: plan.identityReadbackTimeoutMs,
     gate_options: [...plan.gateOptions],
     gate_deadline_at_ms: plan.gateDeadlineAtMs,
+    pull_request_base_branch: plan.pullRequestBaseBranch,
     invocation_ceiling_ms: plan.invocationCeilingMs,
     catalog_layers: plan.catalogLayers.map((layer) => ({
       layer: layer.layer,
@@ -592,6 +616,7 @@ export function readPlan(payload: JsonRecord): PlanOutcome {
       identityReadbackTimeoutMs: readNumber(payload, "identity_readback_timeout_ms"),
       gateOptions: readStringArray(payload, "gate_options"),
       gateDeadlineAtMs: readNullableNumber(payload, "gate_deadline_at_ms"),
+      pullRequestBaseBranch: readAbsentAsNullString(payload, "pull_request_base_branch"),
       invocationCeilingMs: readNumber(payload, "invocation_ceiling_ms"),
       catalogLayers: readCatalogLayers(payload),
       projectName: readString(payload, "project_name"),
@@ -614,6 +639,25 @@ function readString(payload: JsonRecord, key: string): string {
     return refuse(`the persisted plan's '${key}' is not a string`);
   }
   return value;
+}
+
+/**
+ * A nullable string whose **key may be absent**, which is true of exactly one
+ * field and is a decision rather than a convenience.
+ *
+ * Every other reader below refuses an absent key, correctly: the payload is
+ * `planPayload`'s own rendering, so a missing field means the bytes are not a
+ * plan rondo wrote. `pull_request_base_branch` is the exception because it was
+ * added after rows existed, and **the plan column has no migration**: the store
+ * persists the bytes verbatim (D-0019 rule 4) and hands them back unaltered, so
+ * a strict read here would make every iteration written before this field
+ * unreadable -- which the interpreter files at `stalled`, and which `publish`
+ * would hit on a row whose lap has already been paid for. An absent key means
+ * "no revision has happened to this plan", which is what a plan written by an
+ * operator means too. A key that is present and not a string is still refused.
+ */
+function readAbsentAsNullString(payload: JsonRecord, key: string): string | null {
+  return payload[key] === undefined ? null : readNullableString(payload, key);
 }
 
 function readNullableString(payload: JsonRecord, key: string): string | null {

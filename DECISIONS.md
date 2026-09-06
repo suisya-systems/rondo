@@ -62,6 +62,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0024 | rondo ships a binary: an emitting build beside the type-check, a launcher, and the CI cell that runs it | accepted |
 | D-0025 | The lap-1 operating surface is a command line: `start`, `answer`, `publish`, `abandon`, with the plan file as the whole of configuration | accepted |
 | D-0026 | The pull request `publish` opens is written for a person: the lap's own commit subjects are the summary, and the request is quoted input | accepted |
+| D-0026 | "Revise" at the gate becomes a second lap: fresh identifiers, the predecessor's branch as the base, and the instruction carried into the prompt | accepted |
 
 ---
 
@@ -3270,3 +3271,150 @@ one commit), through `inspectLapWork` and `pullRequestText` as `publish` calls t
   its own is a question this entry does not answer.
 - `RunPlan` gaining a human-facing description field, which would make rule 1 a choice between two
   inputs rather than a rule about the only one.
+---
+
+## D-0026 — "Revise" at the gate becomes a second lap: fresh identifiers, the predecessor's branch as the base, and the instruction carried into the prompt
+
+**Status:** accepted (2026-09-06, rondo's human gate)
+
+`gate_options` has read `["approve", "revise"]` since the first dogfood run and the second word
+bought nothing. `D-0025` gave the operator `answer`, and `answer` carries a body byte for byte to
+continuo whatever it says: "looks good" and "not quite -- use the existing helper" both close the
+gate `answered_and_forwarded`, both end the iteration at `closed`, and rondo then prints `Next:
+rondo publish` for both. A person who wanted the work changed had to write a fresh thirty-two-field
+plan by hand, pick three new identifiers, and know without being told that the next lap's
+`base_branch` has to be the last lap's `topic_branch` or the second worker starts from nothing.
+This entry is the smallest thing that makes the second option do what it says.
+
+### Decision
+
+1. **`revise` is a fifth command**, beside `D-0025`'s four:
+   `rondo revise --actor-id ID --body=TEXT --run-id ID --topic-branch NAME --workspace PATH
+   [--iteration-id ID]`. It answers the open gate with the instruction and then starts one more
+   lap. It is not a mode of `answer`: `answer` settles a request and `revise` continues it, and a
+   flag that turned one into the other would make the difference invisible on the command line.
+
+2. **A revision is a new iteration, not a resumed one, and the loop gains no back edge.**
+   `advisory.md`'s `A-10` settles this and gives the reason — *"resuming would mean re-entering a
+   terminal state, which `D-0019` rule 10's edge relation refuses. Lineage costs a join; revival
+   costs the invariant."* So the predecessor's row is never reopened, `nextStep` and the `Step`
+   union are untouched, and the successor walks the ordinary arc from `planned`. **`iterate` stays
+   absent**, which is what `parallel-admission.md`'s `N-19` asks: the back edge is a question about
+   `maxIterations`' dormant post-admission meaning, and this entry does not answer it. Nothing here
+   makes rondo revise on its own; a person types the command, once, per lap.
+
+3. **The three identifiers are the operator's, and rondo mints none of them** (`D-0012`,
+   `D-0019` rule 3). They are on the command line for the same reason `start`'s four overrides are,
+   and a `revise` missing one is refused in a single message naming all three rather than one at a
+   time. When the allocator lands, these flags are removed with `start`'s.
+
+   **`A-17`'s inheritance is not available here, and the measurement is why.** `A-17` proposes that
+   a retry reuse the predecessor's `(run id, topic branch, workspace)`, and scopes itself to route
+   S — where `D-0019` rule 15 stopped a `needs_approval` **before** admission, so *"the triple is
+   unused, not spent"*. A gate exists only after a lap ran, so a revision is always the admitted
+   case, which `A-17` itself puts *"out of scope in lap 1 ... its first consumer arrives with the
+   allocator or with a resumable lap, not here"*. continuo agrees at the pinned revision
+   `38c667b5126fdfdc0465e4a422e88b20a8b53044`: `src/workspace/materializer.ts` documents
+   `topicBranch` as *"Must not already exist"* and `workspace` as *"Absolute path the worktree is
+   created at. Must not exist"*, and `continuo D-0057` refuses a second materialisation of the same
+   run. Three fresh identifiers are not a preference; they are the only thing continuo accepts.
+
+4. **What is inherited is the base branch: the successor is cut from the predecessor's topic
+   branch.** This is the whole difference between "revise" and "start over", and it is one field.
+   The second worktree is cut from the commits the first lap made, so the second worker edits that
+   work rather than re-doing it. Nothing is pushed to reach it (`D-0010`): the branch is in the same
+   repository the first workspace was cut from. Every other plan field is the predecessor's row,
+   verbatim — which is `D-0019` rule 4's "persist it verbatim" being spent on something.
+
+5. **`RunPlan` gains `pullRequestBaseBranch`, and it is rondo's own field.** continuo's materialiser
+   calls `baseBranch` two things at once — *"the branch the topic branch is cut from, and the branch
+   the lap's pull request is opened against"* — and rule 4 breaks the tie. The predecessor's topic
+   branch is local to the machine that ran the lap and nothing pushes it, so a pull request opened
+   against it names a branch no forge has. So `publish` reads this field instead when it is set, a
+   revision sets it to `predecessor.pullRequestBaseBranch ?? predecessor.baseBranch` — carrying the
+   **first** lap's base along a chain of any length — and continuo is never told about it. Null in
+   every plan a person writes.
+
+   **It is the one payload key that may be absent, and that is a decision.** The plan column has no
+   migration: the store persists the bytes verbatim and hands them back unaltered, so a strict read
+   would make every row written before this field unreadable — filed at `stalled`, and met by
+   `publish` on a row whose lap has already been paid for. Absent reads as null, which is what an
+   operator's own plan file means. A key that is *present* and not a string is still refused, and
+   every other field is as strict as it was.
+
+6. **The successor's plan is composed and fully validated before the gate is walked.** The walk
+   presents, delivers and answers through continuo and its ack closes the gate; it cannot be taken
+   back. A revision refused after that would leave a person having spent their gate on an answer
+   that started nothing, and the way back would be the hand-written plan this entry removes. This is
+   `D-0019` rule 14's "validate before the effect" applied to a gate rather than to a spawn. In the
+   same spirit the second lap is not started unless the first row reached `closed`: `reserve` would
+   otherwise answer `occupied` correctly and tell the operator about single-flight when what
+   actually failed was their answer.
+
+7. **The instruction reaches two places and rondo composes neither of them.** continuo gets it byte
+   for byte as the gate's answer (`D-0025` rule 3), which is where the record of what a person said
+   belongs. The second lap's prompt gets the **first lap's request verbatim, then the instruction
+   verbatim**, then one paragraph of fact: which run and iteration preceded this one, and that its
+   commits are on the branch this workspace was cut from. Appended rather than replacing, because
+   an instruction at a gate is a delta and a worker handed only the delta has lost the request it is
+   a delta of. rondo writes no part of either (`D-0009`).
+
+8. **An inherited absolute gate deadline is refused rather than carried or shifted.**
+   `gateDeadlineAtMs` is an instant, so the predecessor's is behind the second lap before it starts;
+   carrying it forward would open a gate already past its deadline and the person who asked for the
+   revision would be the one to find out. Choosing a new one would be rondo deciding how long a
+   human has to answer, which is the operator's declared patience for the same reason
+   `invocationCeilingMs` is. So a plan carrying one is refused, by name, before anything is touched.
+
+9. **What this does not build, stated so it is not read in.** No lineage column: the successor
+   records no reference to the predecessor, and the chain is reconstructible only through the
+   branch names and the prompt. That is a weaker record than `A-10`'s lineage and it is deferred to
+   the entry that adds a migration to the store, because there is no migration mechanism at all
+   today and adding one is that change's decision rather than this one's. No bound on how many
+   revisions a request may have — each one is a person typing a command, which is the only bound
+   lap 1 has ever had. No `revise` from anywhere but the live iteration's open gate.
+
+### What was measured, and how
+
+Two walks on 2026-09-06 against the pinned continuo with a real `claude -p` worker, provisioned by
+`scripts/dogfood-env.sh`. **Four laps**, and the second walk is the first one re-run against the
+final code after the first found a defect.
+
+**Walk 1 (`revise-001` -> `revise-002`).** `start` opened a gate on a worker that had appended the
+requested line and committed it as `600b3c1` on `dogfood/revise-001`. `revise` then carried *"Not
+quite. The line you added should read exactly: 'Touched twice by the rondo operator CLI.'"* to the
+gate, closed the iteration `answered_and_forwarded`, and started `revise-002` **cut from
+`dogfood/revise-001`**. The second worker's own report is the finding:
+
+> *"Continued from the previous lap's commit rather than restarting: `docs/NOTES.md:4` now reads
+> `Touched twice by the rondo operator CLI.`, committed as `def1894` on `dogfood/revise-002`."*
+
+`git log` on the second workspace shows `def1894` on top of `600b3c1` on top of the seed commit: one
+linear history, the first lap's work edited rather than repeated. The gate was then answered
+`approve` and the iteration reached `closed`. **51.4 s and 42.9 s** end to end, measured from the
+store's own timestamps.
+
+**The defect that walk found, and unit tests had not.** `publish --dry-run` on `revise-002` printed
+a pull-request leg based on `dogfood/revise-001` — the predecessor's topic branch, which nothing
+pushes. Rule 5 is that defect answered; it was found by running the command rather than by reading
+the diff, and it would have failed on the first real publish of a revised iteration.
+
+**Walk 2 (`revise-003` -> `revise-004`), on the final code.** The same sequence, and this time
+`publish --dry-run` prints `--base main` while the plan's own `base_branch` is `dogfood/revise-003`
+— the two fields doing their separate jobs. The pushed branch `dogfood/revise-004` carries both
+commits linearly from `main`, so one pull request against `main` shows the whole request. **38.6 s
+and 54.5 s.**
+
+Four laps at roughly $0.17 each is the whole cost of the evidence in this entry.
+
+### What would falsify it
+
+- **The allocator arriving** (`D-0023`), which removes rule 3's three flags and moves
+  `parties.grantee` off the caller.
+- **A store migration arriving**, which is what rule 9's deferred lineage column is waiting on.
+- **continuo's materialiser accepting an existing branch or workspace**, which would reopen rule 3
+  and make `A-17`'s inheritance reachable from an admitted run.
+- **`publish` learning to push more than one branch**, which would make rule 5's second base branch
+  unnecessary — a stacked pull request would then be expressible.
+- **A revision needing to change a plan field the instruction cannot express**, which is where
+  rule 4's "everything else verbatim" stops being tenable.

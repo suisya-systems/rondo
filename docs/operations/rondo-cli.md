@@ -1,7 +1,8 @@
-# The operator's four commands
+# The operator's five commands
 
 What a person types to get one request through rondo, from asking for it to publishing it -- and,
-in section 7, `abandon`, which is how a request that cannot get there is settled instead.
+in section 7, `abandon`, which is how a request that cannot get there is settled instead. Section
+5.1 is `revise`, which is what a person types when the answer to the gate is "not quite".
 Everything here was run on 2026-09-06 against continuo `38c667b5126fdfdc0465e4a422e88b20a8b53044`
 (`continuo.pin.json`), and the transcripts are what actually came back.
 
@@ -97,8 +98,10 @@ a lap that ran, cost money, and then vanished. rondo refuses both by name.
 
 The one file an operator writes, and they write it once per project rather than once per run. It is
 `planPayload`'s own JSON -- the same shape rondo stores in the `plan` column -- so **the `plan`
-column of any past iteration row is a valid plan file**. `readPlan` validates all thirty-two fields
-and refuses by field name.
+column of any past iteration row is a valid plan file**. `readPlan` validates all thirty-three fields
+and refuses by field name -- except `pull_request_base_branch`, which is the one key that may be
+**absent** (it reads as null) because the plan column has no migration and rows written before it
+existed are still valid plans. Only `revise` ever sets it; see 5.1.
 
 Four values change per run and have flags, so the file itself does not have to be edited to start a
 second lap: `--run-id`, `--topic-branch`, `--workspace`, `--prompt`.
@@ -147,6 +150,7 @@ shim.
 
   "gate_options": ["approve", "revise"],
   "gate_deadline_at_ms": null,
+  "pull_request_base_branch": null,
 
   "catalog_layers": [
     {
@@ -259,6 +263,63 @@ ASCII escaping applies to what rondo *prints*, never to what it sends.
 **Answering twice is safe.** The walk reads the stage continuo reports and resumes from it rather
 than replaying from the start, so a half-finished walk can simply be run again. A gate that already
 has an outcome is not walked at all, and says so.
+
+### 5.1 Revise -- answer with a change, and run a second lap
+
+`options` has said `["approve", "revise"]` since the first walk, and until `D-0026` the second word
+did nothing: `answer` carried it, the gate closed the same way, and the only thing left to do was
+write a new plan file by hand. `revise` is the other way to answer a gate.
+
+```console
+$ node bin/rondo.mjs revise --actor-id happy_ryo \
+    --body="Not quite. The line you added should read exactly: 'Touched twice by the rondo operator CLI.' Change that one line and commit it. Do nothing else." \
+    --run-id revise-004 --topic-branch dogfood/revise-004 --workspace "$S/workspace-revise-004"
+gate gate/worker_escalation/7ddacc1b-.../0 is at stage 'received'
+  gate present   message relay/gate/.../presented (enqueued: true)
+  ... the same six verbs `answer` drives ...
+iteration 'revise-003' is closed
+  Gate ... reached outcome 'answered_and_forwarded' at stage 'forwarded'.
+
+revising as iteration 'revise-004', cut from 'dogfood/revise-003'
+the lap is the step that is slow
+iteration 'revise-004' is awaiting_human
+  Reserved iteration revise-004 at 'planned'.
+  ...
+A person has to answer this before anything lands. Next: rondo answer
+```
+
+**The three identifiers are yours, and all three must be new.** continuo holds a run under the first
+lap's id, git holds its branch, and a worktree stands at its workspace; its materialiser requires a
+topic branch that does not already exist and a workspace path that does not exist. rondo allocates
+none of them (`D-0012`), so it asks for them and refuses -- naming all three at once -- if one is
+missing. Reusing one is refused too, with the reason.
+
+**What carries the work across is the branch, and rondo sets that for you.** The second lap's
+`base_branch` is the first lap's `topic_branch`, so git cuts the second worktree from the first
+lap's commits and the second worker edits that work rather than repeating it. In the walk above the
+second worker said so itself:
+
+> Continued from the previous lap's commit rather than restarting: `docs/NOTES.md:4` now reads
+> `Touched twice by the rondo operator CLI.`, committed as `def1894` on `dogfood/revise-002`.
+
+**The pull request still goes against the original base.** The predecessor's branch is local and
+nothing pushes it, so `publish` on a revised iteration prints `--base main`, not
+`--base dogfood/revise-003` -- the plan carries both branches for exactly this reason. The pushed
+branch has every lap's commits on it, so one pull request shows the whole request.
+
+**Everything else is the first lap's plan, verbatim**, with the instruction appended to the prompt
+after the original request. rondo composes no part of what a person wrote: continuo gets the
+instruction byte for byte as the gate's answer, and the prompt gets it byte for byte too.
+
+**Nothing here happens on its own.** A revision is a person typing the command; there is no retry
+loop, no bound to reach, and no path into `revise` that does not start with a keyboard. Revise as
+many times as the work needs -- each one costs a lap.
+
+Two things `revise` refuses before it touches the gate, because a walked gate cannot be taken back:
+a plan whose identifiers will not validate, and a plan carrying a `gate_deadline_at_ms`. The second
+is an instant rather than a duration, so the first lap's is already behind the second one; rondo
+will not carry it forward and will not pick a new one, because how long a person has to answer is
+yours to declare. Set it and use `start`.
 
 ## 6. Publish -- push the branch, open the pull request, close the run
 
@@ -417,6 +478,15 @@ Recorded so that "it works" is not read more broadly than it was tested.
   The worker did the work it was asked to do -- commit `68f7067` on `dogfood/cli-lap-001` really
   appends the line -- the gate opened at `received`, six verbs closed it `answered_and_forwarded`,
   and the iteration reached `closed` with the lock released.
+- **`revise`: walked end to end, twice, over four laps.** `start` -> `revise` -> `answer approve`,
+  on the pinned continuo with real workers. The second lap really continued the first: its history
+  is `def1894` on top of `600b3c1` on top of the seed commit, one linear branch, and the second
+  worker reported *"Continued from the previous lap's commit rather than restarting"*. Laps took
+  51.4 s, 42.9 s, 38.6 s and 54.5 s. **The first walk found a defect the tests had not**: `publish
+  --dry-run` on the revised iteration named the predecessor's topic branch as the pull-request base,
+  which nothing pushes. `pull_request_base_branch` is that answered, and the second walk is the
+  re-run that confirms it -- the same command now prints `--base main` while the plan's own
+  `base_branch` is `dogfood/revise-003`.
 - **`publish`: exercised as far as this worker may go.** `--dry-run` computes all three legs
   correctly from the stored plan, and the legs themselves are covered by unit tests. The push and
   the pull request were **not** executed here, because this repository's worker environment blocks

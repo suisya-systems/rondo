@@ -381,6 +381,12 @@ test("a flag the command does not read is refused, not ignored", () => {
     ["answer", "--actor-id", "me", "--body=approve", "--repo", "o/n"],
     ["publish", "--repo", "o/n", "--actor-id", "me", "--plan", "/tmp/p.json"],
     ["abandon", "--iteration-id", "i1", "--reason", "x", "--body=approve"],
+    // `revise` reads four of `start`'s flags and none of `publish`'s: a
+    // `--prompt` here would read as though it replaced the second lap's prompt,
+    // which is composed from the first lap's request and the instruction.
+    ["revise", "--actor-id", "me", "--body=x", "--dry-run"],
+    ["revise", "--actor-id", "me", "--body=x", "--prompt", "p"],
+    ["revise", "--actor-id", "me", "--body=x", "--plan", "/tmp/p.json"],
   ]) {
     const outcome = parseCommand(argv);
     expect(outcome.kind).toBe("refused");
@@ -420,10 +426,62 @@ test("each command still accepts every flag it does read", () => {
       "--dry-run",
     ],
     ["abandon", "--iteration-id", "i1", "--reason", "wedged"],
+    [
+      "revise",
+      "--actor-id",
+      "me",
+      "--body=use the existing helper",
+      "--run-id",
+      "r-2",
+      "--topic-branch",
+      "t-2",
+      "--workspace",
+      "/w2",
+      "--iteration-id",
+      "i-2",
+    ],
   ]) {
     const outcome = parseCommand(argv);
     expect(outcome.kind).toBe("parsed");
   }
+});
+
+/**
+ * The second lap's three identifiers reach the record.
+ *
+ * They are on the command line because rondo allocates none of them
+ * (`D-0012`, `D-0019` rule 3) and continuo will not take the first lap's: it
+ * holds a run under that id, git holds the branch, and a worktree stands at the
+ * workspace. What crosses the two laps is the branch, and rondo sets that
+ * itself.
+ */
+test("revise carries the instruction and the three fresh identifiers", () => {
+  const outcome = parseCommand([
+    "revise",
+    "--actor-id",
+    "me",
+    "--body=-- use the existing helper",
+    "--run-id",
+    "r-2",
+    "--topic-branch",
+    "dogfood/r-2",
+    "--workspace",
+    "/srv/ws2",
+  ]);
+  expect(outcome.kind).toBe("parsed");
+  if (outcome.kind !== "parsed") {
+    return;
+  }
+  expect(outcome.parsed).toMatchObject({
+    command: "revise",
+    actorId: "me",
+    // Carried byte for byte, dash and all: an instruction at a gate may
+    // legitimately begin with one, which is why USAGE spells `--body=TEXT`.
+    body: "-- use the existing helper",
+    runId: "r-2",
+    topicBranch: "dogfood/r-2",
+    workspace: "/srv/ws2",
+  });
 });
 
 test("the refusal names the flags the command does take", () => {

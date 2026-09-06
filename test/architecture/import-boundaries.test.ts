@@ -324,6 +324,7 @@ const EXPECTED_MODULES: readonly string[] = [
   "src/refrain/plan.ts",
   "src/refrain/policy.ts",
   "src/refrain/ports.ts",
+  "src/refrain/revision.ts",
   "src/store/plan.ts",
   "src/store/records.ts",
   "src/store/sqlite.ts",

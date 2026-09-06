@@ -353,6 +353,13 @@ node -e '
     gate_options: ["approve", "revise"],
     gate_deadline_at_ms: null,
 
+    // Null in a plan a person writes, always: it is the branch a pull request
+    // is opened against when that is not the branch the workspace was cut
+    // from, and only `rondo revise` ever sets it. Written out rather than left
+    // absent so that the generated file shows the whole shape -- an absent key
+    // reads as null, which is what keeps plans written before the field valid.
+    pull_request_base_branch: null,
+
     catalog_layers: [
       {
         layer: "tracked",
