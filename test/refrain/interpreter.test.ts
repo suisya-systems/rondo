@@ -732,6 +732,33 @@ test("a refusal that names its session writes the id to the row it failed", asyn
   expect(says(report, "session-9")).toBe(true);
 });
 
+test("the refused session id survives a commit another writer blocked", async () => {
+  // The mirror of the gate-id case above, and it exists for the same reason: a
+  // worker may still be out there, the id is the only handle on it, and a
+  // `performing -> failed` commit that another writer blocks never reaches the
+  // row. So the identity is said before the write and is in the report on both
+  // paths; only the column is claimed after it.
+  const h = harness({
+    performLap: {
+      kind: "refused",
+      message: "LapRefused: the turn outlived --turn-timeout-ms",
+      sessionId: "session-9",
+    },
+  });
+  h.store.beforeTransitionTo = {
+    to: "failed",
+    hook: () => {
+      h.store.seed({ ...blankRecord("i-0001", "abandoned"), reason: "an operator settled it" });
+    },
+  };
+
+  const report = await admitOnce(h);
+  expect(report.status).toBe("abandoned");
+  expect(says(report, "another writer moved it")).toBe(true);
+  expect(says(report, "session-9")).toBe(true);
+  expect((await readRow(h.store, "i-0001"))?.sessionId).toBeNull();
+});
+
 test("a refusal that names no session leaves the column null rather than guessing", async () => {
   // The refusal quotes an id in its sentence, as continuo's messages always
   // have, and rondo records nothing: the message is written for a person and is

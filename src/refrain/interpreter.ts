@@ -1080,6 +1080,19 @@ async function performStep(
     case "refused":
     case "defect": {
       const session = refusedSessionId(walked);
+      if (session !== undefined) {
+        // **Said before it is committed**, exactly as the answered path says its
+        // gate id first and for the same reason: a blocked commit -- an operator
+        // who called abandon() while the lap was walking, or a store that
+        // refused -- drops the fact from the row, and an identity rondo learned
+        // about and then never named is a worker that may still be running with
+        // nobody able to name it. The line is in the report on both paths; only
+        // the column is claimed after the write.
+        lines.push(
+          `continuo names the session the lap refused over: ${session}. It is what a transcript ` +
+            "read or a 'session stop' is keyed on.",
+        );
+      }
       return terminal(
         ports,
         performing.record,
@@ -1093,12 +1106,6 @@ async function performStep(
         [
           "An answer arrived, so the 'lap perform' process is over and no worker of its is still " +
             "running. The single-flight lock is released.",
-          ...(session === undefined
-            ? []
-            : [
-                `continuo names the session the lap refused over: ${session}. It is on the row, ` +
-                  "and it is what a transcript read or a 'session stop' is keyed on.",
-              ]),
         ],
       );
     }
