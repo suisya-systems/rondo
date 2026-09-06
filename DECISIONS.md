@@ -61,6 +61,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0021 | The pin moves to continuo `603843b`: a third explicit budget for the identity read-back, and the model tier priced into `lap perform --model` | accepted |
 | D-0024 | rondo ships a binary: an emitting build beside the type-check, a launcher, and the CI cell that runs it | accepted |
 | D-0025 | The lap-1 operating surface is a command line: `start`, `answer`, `publish`, `abandon`, with the plan file as the whole of configuration | accepted |
+| D-0026 | The pull request `publish` opens is written for a person: the lap's own commit subjects are the summary, and the request is quoted input | accepted |
 
 ---
 
@@ -3155,3 +3156,117 @@ Walked on 2026-09-06 against the pinned continuo with a real `claude -p` worker
 - continuo's gate verb set, its `/1` schemas, or the type of `gate show`'s `options` moving.
 - The plan file needing a field `planPayload` does not carry, which is where rule 5's "no
   configuration layer" would stop being tenable.
+
+## D-0026 — The pull request `publish` opens is written for a person: the lap's own commit subjects are the summary, and the request is quoted input
+
+**Status:** accepted (2026-09-06, rondo's human gate)
+
+The first pull request `rondo publish` opened for real (`#29`, 2026-09-06) put the lap's prompt in
+both fields. The title was the topic branch, a colon, and the prompt's first line cut off with an
+ellipsis; the body was the prompt entire, so a reviewer's first sight of the change was "Do not
+build. Do not lint. Do not push." — instructions addressed to a worker, standing where an account
+of the change belongs, and saying nothing about the diff. `D-0025` rule 6 settled *who* may
+publish and left *what the pull request says* unspecified. This entry specifies it.
+
+### Decision
+
+1. **The request is never the description.** A `RunPlan`'s prompt is written to an agent. It may
+   contain prohibitions, tooling instructions and process notes, none of which are true statements
+   about the change and some of which read as instructions to the reviewer. It is therefore never
+   the title and never the body's prose.
+2. **The summary is the lap's own work.** `publish` reads two facts from the workspace before it
+   prints anything — the commits the topic branch adds to its base (`--no-merges`, oldest first)
+   and the paths the diff touches (`--numstat`, three-dot) — and builds both fields from them. A
+   commit subject is the one line in the whole record written by somebody for somebody to read, and
+   it is already about the change; **rondo selects, and does not compose prose.**
+3. **No title ends in an ellipsis.** The title is the oldest commit's subject, with
+   `(+N more commits)` when there are more. When there is no subject to use — git unreadable, no
+   commit on the branch, or a subject past `TITLE_LIMIT` (120 characters), at which point it has
+   stopped being a summary — the title is `<topic branch> (rondo run <id>)`. That is a plain label
+   and is deliberately preferred to a cut-off sentence: a reader can tell a label from a summary,
+   and cannot tell a truncated summary from a wrong one. **The label is itself bounded**: a branch
+   name and a run id are the operator's own strings and neither is limited, and a title past the
+   forge's own limit is refused by `gh` *after* the push has happened — the one leg this command
+   cannot undo. So it steps down to `rondo run <id>` and, past that, is cut. Cutting an identifier
+   is not the defect this rule is about: `TITLE_LIMIT` governs summaries that stop mid-sentence, and
+   a label is not a sentence.
+4. **The provenance stays, in a section of its own.** Run and iteration id, the branch and its base,
+   the gate id and its outcome, the continuo revision **off the row** (`D-0025`'s reason: the pin
+   moves, and the row records the build that actually drove the lap), the model and its tier, the
+   session — and the sentence `This pull request was opened by rondo publish, which an operator ran.
+   Merging it is not.`, unchanged, because it is the one thing the first real pull request got right
+   and it is `D-0010` said in the place a reader will meet it.
+5. **The request is kept, folded and fenced.** "Was this what was asked for?" is a real question a
+   reviewer asks and rondo's row is the only place that can still answer it, so the request is
+   carried verbatim inside a `<details>` whose summary says what it is, in a code fence longer than
+   the longest run of backticks inside it — so a request containing a code block cannot end the
+   quotation and start writing the body. Discarding it entirely was rejected for the same reason
+   rule 4 exists: it is provenance. Beyond `REQUEST_LIMIT` (4000 characters) the quotation says how
+   much it left and that the whole of it is on the iteration row, which is a truncation with a
+   pointer rather than a loss, and the fence is sized to **what is quoted** rather than to the whole
+   request — a run of backticks past the cut is not in the body, and guarding it would spend the
+   body's remaining size on two fence lines, turning the bound back into a pull request too large to
+   open. "Verbatim" is also literal: the block quotes what the row holds, whitespace included, and
+   only the emptiness check trims.
+6. **A history rondo could not read is said out loud.** `inspectLapWork` answers `unreadable` with
+   git's own reason rather than an empty read, and the body prints that reason in place of the
+   summary while keeping every line of rule 4. A publish must still be possible with an unreadable
+   workspace — the operator is standing there and the diff is real — and what a reader must not do
+   is take an empty section for an empty change.
+
+   **The body is bounded by what it lists as well as by how much.** Twenty entries is no bound when
+   one entry is unbounded, so a commit subject or a path past `LISTED_LIMIT` (200 characters) is
+   described rather than printed, and so is every value the row carries into the body — the run and
+   iteration ids, the branch names, the ref, the gate id and outcome, the revision, the model and
+   tier, the session, and git's own reason for an unreadable history. The sum is checked as well as
+   the parts: past `BODY_LIMIT` (60,000 characters) the quoted request is dropped for a line saying
+   where it still is, because it is the one part of the body that is not about this change and is
+   recoverable from the row. Every value rondo composes is bounded before the push, because a title
+   or body the forge refuses is refused *after* the push, which is the one leg that cannot be taken
+   back.
+
+   **The summary names the ref it compared, not the branch it was cut from.** Under
+   `--allow-remote-mismatch` the branch is pushed to one repository and the pull request opened in
+   another, so the base rondo read is the workspace's and the base the forge diffs against is the
+   target's; when they have drifted, a body that said "against `main`" would describe a comparison
+   this pull request is not making. It names the ref, and in that case says in one line which
+   comparison it made. rondo does not fetch the target's base to settle it: that is a network effect
+   nothing asked for, against a repository the operator only named.
+7. **The text is composed where it can be tested, and read where a process is allowed.**
+   `inspectLapWork` lives in `src/access/forge.ts`, because asking git a question needs a spawn and
+   that module holds the tree's only grant (`D-0025` rule 7, unchanged). `pullRequestText` is a pure
+   function in `src/access/cli.ts` over what it read, for the reason `publishPreflight` is: the
+   rules about what a pull request says are rules about pull requests, and are checkable without a
+   repository on disk.
+8. **`--dry-run` prints the title and the body.** They are the part of a publish a person can only
+   check by reading, so a preview that printed three command lines and left the text to be composed
+   afterwards would preview everything except the thing this entry is about. Same rule as the
+   preflight: the preview and the run compute the same values.
+
+### What was measured, and how
+
+Composed on 2026-09-06 against a real repository (a workspace with a base branch, a topic branch and
+one commit), through `inspectLapWork` and `pullRequestText` as `publish` calls them:
+
+- **Title**: `docs: record the first real lap in the operator runbook` — the lap's commit subject,
+  where `#29` had `docs/rondo-first-real-lap: Append exactly one line to the end of
+  docs/operations/rondo-cli.md, r...`.
+- **Body**: `## What changed` with `- \`8ee604b\` docs: record the first real lap in the operator
+  runbook` and `- \`docs/operations/rondo-cli.md\` (+1 -0)`; `## How this got here` with the run,
+  the gate outcome, the revision, the model and the session; the request folded into a `<details>`;
+  the merging sentence last.
+- The `refs/heads/<base>` fallback of rule 2 is what that measurement exercised; the
+  `refs/remotes/<remote>/<base>` candidate is tried first and is what a continuo-cut worktree will
+  actually resolve.
+
+### What would falsify it
+
+- A forge whose pull-request body does not render `<details>`, which ends rule 5's fold and would
+  need the request somewhere else or nowhere.
+- Laps that routinely produce many unrelated commits, at which point rule 3's oldest-subject choice
+  stops naming the change and a real summary — which rondo cannot write — becomes the requirement.
+- A summariser being introduced, which would overturn rule 2's "selects, does not compose": what a
+  pull request says about a change would then be generated text, and whether rondo may state it as
+  its own is a question this entry does not answer.
+- `RunPlan` gaining a human-facing description field, which would make rule 1 a choice between two
+  inputs rather than a rule about the only one.

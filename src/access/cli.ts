@@ -45,7 +45,10 @@ import { type IterationStore, openIterationStore } from "../store/sqlite.js";
 import { abandon, admit, conductorPorts, resume } from "./conductor.js";
 import { asciiEscape, consoleSeams, relayUpstream } from "./console.js";
 import {
+  inspectLapWork,
   inspectPushTarget,
+  type LapFile,
+  type LapWorkInspection,
   openPullRequest,
   type PushTargetInspection,
   pushTopicBranch,
@@ -1258,7 +1261,6 @@ async function commandPublish(
     return refuse(`iteration '${record.id}' records no run id, so there is no run to close.`);
   }
   const remote = parsed.remote ?? DEFAULT_REMOTE;
-  const title = `${topicBranch}: ${firstLine(record.request)}`;
   // The plan validated before the row existed, so a blank here is a row edited
   // out of band rather than an operator's mistake -- and every leg below is
   // built from these three, so guessing past one would print a command line
@@ -1302,6 +1304,21 @@ async function commandPublish(
   // spelling the CLI already accepts, and it makes the two the same answer.
   const forgeRepo = `${host}/${parsed.repo}`;
 
+  // **Read before the plan is printed, for the same reason the preflight is.**
+  // The title and the body are what the operator is being asked to approve, so
+  // a dry run that printed the three command lines and left the text to be
+  // composed later would preview everything except the part a person can only
+  // check by reading it.
+  const work = await inspectLapWork({ workspace, remote, baseBranch, topicBranch });
+  const pullRequest = pullRequestText({
+    record,
+    runId,
+    topicBranch,
+    baseBranch,
+    headIsQualified: headRef !== topicBranch,
+    work,
+  });
+
   say(`iteration '${record.id}' is closed; gate outcome '${record.gateOutcome ?? "(none)"}'`);
   for (const warning of preflight.warnings) {
     say("");
@@ -1312,6 +1329,13 @@ async function commandPublish(
   say(`  1. git -C ${workspace} push ${remote} ${topicBranch}`);
   say(`  2. gh pr create --repo ${forgeRepo} --base ${baseBranch} --head ${headRef}`);
   say(`  3. continuo run close --run-id ${runId} --outcome completed`);
+  say("");
+  say("the pull request it opens reads:");
+  say(`  title: ${pullRequest.title}`);
+  say("  body:");
+  for (const line of pullRequest.body.split("\n")) {
+    say(line === "" ? "" : `    ${line}`);
+  }
   say("");
   if (parsed.dryRun) {
     say("--dry-run: nothing was run.");
@@ -1327,8 +1351,8 @@ async function commandPublish(
     repo: forgeRepo,
     baseBranch,
     headRef,
-    title,
-    body: pullRequestBody(record, runId),
+    title: pullRequest.title,
+    body: pullRequest.body,
   });
   if (!reportCommand("open the pull request", opened)) {
     // **The push already happened, and it is the one leg that cannot be
@@ -1398,7 +1422,92 @@ function reportCommand(
 }
 
 /**
- * The pull request's body: what ran, under what, and what is still the human's.
+ * The longest title rondo will compose, in characters.
+ *
+ * Well inside every forge's own limit, and that is not what it is for. It is
+ * the point past which a commit subject has stopped being a summary, and the
+ * answer to one that has is to use a different title rather than to cut this
+ * one short: **a title that ends in an ellipsis is a title that stops in the
+ * middle of a sentence**, which is the defect the first real publish printed.
+ */
+const TITLE_LIMIT = 120;
+
+/** How many commits, and how many paths, a body lists before it counts the rest. */
+const LIST_LIMIT = 20;
+
+/**
+ * How long one listed commit subject or path may be before it is described
+ * instead of printed.
+ *
+ * Past this a value has stopped being a line in a list. `LIST_LIMIT` bounds how
+ * many entries there are and this bounds how large one can be; together they
+ * are what keeps the body inside a forge's own size limit, which is checked
+ * after a push that cannot be taken back.
+ */
+const LISTED_LIMIT = 200;
+
+/**
+ * How much of the request the collapsed block carries.
+ *
+ * A forge body has a size limit and a request has none, so something has to
+ * give at some length. What gives is the *quoted input*, at a length no request
+ * a person types comes near, and it says how much it left and where the whole
+ * of it still is -- which is the difference between a truncation and a loss.
+ */
+const REQUEST_LIMIT = 4000;
+
+/**
+ * The largest body rondo will hand to the forge.
+ *
+ * Inside GitHub's own 65,536, with room for the difference between characters
+ * and the bytes a forge counts. It is the belt to `LIST_LIMIT`, `LISTED_LIMIT`
+ * and `REQUEST_LIMIT`'s braces: those bound every part, and this bounds the sum
+ * of them, because the thing being prevented -- a pull request refused after
+ * the push -- is worth being sure about rather than arguing about.
+ */
+const BODY_LIMIT = 60_000;
+
+/** What the title and body are composed from. Every value is already on the row. */
+export interface PullRequestTextInput {
+  readonly record: IterationRecord;
+  readonly runId: string;
+  readonly topicBranch: string;
+  readonly baseBranch: string;
+  /**
+   * Whether the head is spelled `owner:branch` -- which is to say, whether the
+   * push and the pull request go to different repositories.
+   *
+   * It comes from the preflight rather than from the flag, because the flag is
+   * permission to mismatch and this is the mismatch having happened.
+   */
+  readonly headIsQualified: boolean;
+  readonly work: LapWorkInspection;
+}
+
+export interface PullRequestText {
+  readonly title: string;
+  readonly body: string;
+}
+
+/**
+ * The pull request a person will read: what changed, how it was approved, and
+ * what is still theirs.
+ *
+ * **The request is not the description, and this is the whole of why this
+ * function exists.** The request is a prompt written *to an agent*; the first
+ * pull request `publish` opened put it in both fields, so the title was the
+ * prompt cut off mid-clause and the body was a list of instructions -- "do not
+ * build", "do not push" -- standing where an account of the change belongs. It
+ * told a reviewer nothing about the diff and several things that were not
+ * addressed to them. What rondo has that *is* about the change is the work
+ * itself: the commit subjects the lap wrote for people to read, and the paths
+ * it touched. Those are the summary; the request is kept as quoted input,
+ * collapsed and fenced, because "was this what was asked for?" is a real
+ * question a reviewer asks and rondo is the only thing that can still answer it.
+ *
+ * **Pure, over what `inspectLapWork` read**, for the reason `publishPreflight`
+ * is: the rules about what a pull request says are rules about pull requests,
+ * and they should be checkable without a repository on disk.
  *
  * **The revision comes off the row, not off this process.** The row records the
  * continuo that actually drove the lap, committed before anything was spawned;
@@ -1408,18 +1517,300 @@ function reportCommand(
  * to be recorded, replaced by a plausible wrong answer. A row with no revision
  * says so rather than borrowing one.
  */
-function pullRequestBody(record: IterationRecord, runId: string): string {
-  const revision = record.continuoRevision ?? "an unrecorded revision";
-  return [
-    record.request,
-    "",
-    "---",
-    "",
-    `Run \`${runId}\` was walked by rondo and approved by a person at the gate`,
-    `(outcome \`${record.gateOutcome ?? "unknown"}\`), against continuo \`${revision}\`.`,
-    "",
+export function pullRequestText(input: PullRequestTextInput): PullRequestText {
+  return { title: pullRequestTitle(input), body: pullRequestBody(input) };
+}
+
+/**
+ * The title: the lap's own first commit subject, or nothing of the kind.
+ *
+ * A commit subject is the one line in this whole record that was written by
+ * somebody for somebody to read, and it is already about the change. Oldest
+ * first, because that is the commit the lap set out to make and the ones after
+ * it are what the work turned into; `(+N more commits)` says the rest exist
+ * without pretending to summarise them.
+ *
+ * When there is no subject to use -- git could not be read, the branch adds no
+ * commit, or the subject is long enough that it is no longer a summary -- the
+ * title falls back to naming the branch and the run. That is a plain label
+ * rather than a good title, and it is deliberately preferred over a cut-off
+ * sentence: a reader can tell a label from a summary, and cannot tell a
+ * truncated summary from a wrong one.
+ */
+function pullRequestTitle(input: PullRequestTextInput): string {
+  const fallback = labelTitle(input);
+  if (input.work.kind !== "read") {
+    return fallback;
+  }
+  const first = input.work.commits[0];
+  if (first === undefined || first.subject === "") {
+    return fallback;
+  }
+  const rest = input.work.commits.length - 1;
+  const title =
+    rest === 0
+      ? first.subject
+      : `${first.subject} (+${String(rest)} more commit${rest === 1 ? "" : "s"})`;
+  return title.length > TITLE_LIMIT ? fallback : title;
+}
+
+/**
+ * The label used when no commit subject can be the title.
+ *
+ * **It is bounded, because a branch name and a run id are not.** Both are the
+ * operator's own strings, and a title past the forge's own limit is refused by
+ * `gh` *after* the push has already happened -- the one failure mode `publish`
+ * cannot undo. So the label steps down: branch and run, then the run alone,
+ * then a hard cut. The cut is a cut of an **identifier**, which reads as one;
+ * `TITLE_LIMIT` is about summaries that stop mid-sentence, and a label is not a
+ * sentence.
+ */
+function labelTitle(input: PullRequestTextInput): string {
+  for (const candidate of [
+    `${input.topicBranch} (rondo run ${input.runId})`,
+    `rondo run ${input.runId}`,
+  ]) {
+    if (candidate.length <= TITLE_LIMIT) {
+      return candidate;
+    }
+  }
+  return `rondo run ${input.runId}`.slice(0, TITLE_LIMIT);
+}
+
+/**
+ * The body, and the last check that it is one a forge will take.
+ *
+ * **Every value it contains is bounded on the way in** -- lists by
+ * `LIST_LIMIT`, each listed or row-carried value by `LISTED_LIMIT`, the request
+ * by `REQUEST_LIMIT` -- and this is the check that the sum is bounded too. It
+ * exists because the failure it prevents is asymmetric: a body the forge
+ * refuses is refused after the push, which is the one leg `publish` cannot take
+ * back. The quoted request is what gives way first, because it is the one part
+ * of the body that is not about this change and is recoverable from the row.
+ */
+function pullRequestBody(input: PullRequestTextInput): string {
+  const whole = composeBody(input, true);
+  if (whole.length <= BODY_LIMIT) {
+    return whole;
+  }
+  const withoutRequest = composeBody(input, false);
+  return withoutRequest.length <= BODY_LIMIT ? withoutRequest : withoutRequest.slice(0, BODY_LIMIT);
+}
+
+/** The body, section by section. */
+function composeBody(input: PullRequestTextInput, withRequest: boolean): string {
+  const { record, runId, topicBranch, baseBranch, work } = input;
+  const lines: string[] = ["## What changed", ""];
+
+  if (work.kind === "read") {
+    if (work.commits.length === 0) {
+      lines.push(
+        `No commit separates \`${listed(topicBranch, "branch name")}\` from ` +
+          `\`${listed(work.baseRef, "ref")}\`, so rondo has nothing ` +
+          "to summarise here. Whatever this pull request shows, the lap did not commit it.",
+        "",
+      );
+    } else {
+      for (const commit of work.commits.slice(0, LIST_LIMIT)) {
+        lines.push(`- \`${commit.abbreviatedSha}\` ${listed(commit.subject, "subject")}`);
+      }
+      const hidden = work.commits.length - LIST_LIMIT;
+      if (hidden > 0) {
+        lines.push(`- ...and ${String(hidden)} more commit${hidden === 1 ? "" : "s"}.`);
+      }
+      lines.push("");
+    }
+    if (work.files.length > 0) {
+      const count = work.files.length;
+      // **The ref, not the branch name.** What was compared is a ref in the
+      // workspace; naming the branch instead would claim this is a comparison
+      // against the base the forge will use, which under `--allow-remote-mismatch`
+      // it is not (see `forkCaveat`).
+      lines.push(
+        `${String(count)} file${count === 1 ? "" : "s"} changed against \`${listed(work.baseRef, "ref")}\`:`,
+        "",
+      );
+      for (const file of work.files.slice(0, LIST_LIMIT)) {
+        lines.push(`- \`${listed(file.path, "path")}\` ${fileCounts(file)}`);
+      }
+      const hidden = count - LIST_LIMIT;
+      if (hidden > 0) {
+        lines.push(`- ...and ${String(hidden)} more file${hidden === 1 ? "" : "s"}.`);
+      }
+      lines.push("");
+    }
+    lines.push(...forkCaveat(input, work.baseRef));
+  } else {
+    // **A history rondo could not read is said out loud rather than left as a
+    // silence.** The diff is on the branch either way; what a reader must not
+    // do is take an empty section for an empty change.
+    lines.push(
+      "rondo could not read this branch's history, so it has not summarised the change: " +
+        listed(work.reason, "reason"),
+      "",
+      "The commits on the branch are the record. Read them rather than this section.",
+      "",
+    );
+  }
+
+  lines.push("## How this got here", "");
+  lines.push(
+    `- rondo walked run \`${listed(runId, "run id")}\` (iteration \`${listed(record.id, "id")}\`) ` +
+      `on \`${listed(topicBranch, "branch name")}\`, for \`${listed(baseBranch, "branch name")}\`.`,
+  );
+  lines.push(`- ${gateSentence(record)}`);
+  lines.push(
+    `- Against continuo \`${listed(record.continuoRevision ?? "an unrecorded revision", "revision")}\`` +
+      `${modelClause(record)}.`,
+  );
+  if (record.sessionId !== null && record.sessionId !== "") {
+    lines.push(`- Session \`${listed(record.sessionId, "session name")}\`.`);
+  }
+  lines.push("");
+  lines.push(
+    ...(withRequest
+      ? requestBlock(record.request)
+      : [
+          "The request this lap was given is on this iteration's row in rondo's store. It is not " +
+            "quoted here: with it, this body is larger than a pull request may be.",
+          "",
+        ]),
+  );
+  lines.push(
     "This pull request was opened by `rondo publish`, which an operator ran. Merging it is not.",
-  ].join("\n");
+  );
+  return lines.join("\n");
+}
+
+/**
+ * One listed value, or a stand-in saying how long it was.
+ *
+ * **A list of twenty entries is not a bounded body if an entry is unbounded.**
+ * A commit subject and a path are both as long as somebody made them, and a
+ * body past the forge's limit is refused by `gh` after the push has already
+ * happened -- the one leg `publish` cannot undo. Past `LISTED_LIMIT` the value
+ * is replaced rather than cut, for the reason a too-long subject does not
+ * become the title: a cut summary cannot be told from a wrong one, and the
+ * commit itself is right there to read.
+ */
+function listed(value: string, what: string): string {
+  if (value.length <= LISTED_LIMIT) {
+    return value;
+  }
+  return `(${what} of ${String(value.length)} characters, not printed here)`;
+}
+
+/**
+ * The line a fork publish needs, and an ordinary one does not.
+ *
+ * Under `--allow-remote-mismatch` the branch goes to one repository and the
+ * pull request is opened in another, so the base rondo compared against is the
+ * *workspace's* idea of it and the base the forge diffs against is the target
+ * repository's. When those two have drifted, the summary above is honest about
+ * a comparison the pull request is not making -- so the body says which
+ * comparison it made rather than letting the two be read as one. rondo does not
+ * fetch the target's base to settle it: that would be a network effect nothing
+ * asked for, on a repository the operator only named.
+ */
+function forkCaveat(input: PullRequestTextInput, baseRef: string): readonly string[] {
+  if (!input.headIsQualified) {
+    return [];
+  }
+  return [
+    `This branch was pushed to a different repository than this pull request is opened in, so the ` +
+      `summary above compares against \`${baseRef}\` as the workspace has it, which may not be the ` +
+      "commit this pull request is actually based on.",
+    "",
+  ];
+}
+
+/** One file's line counts, or the fact that it has none. */
+function fileCounts(file: LapFile): string {
+  if (file.added === null || file.deleted === null) {
+    return "(binary)";
+  }
+  return `(+${String(file.added)} -${String(file.deleted)})`;
+}
+
+/** What the gate says about who approved this, in a reviewer's terms. */
+function gateSentence(record: IterationRecord): string {
+  const gate =
+    record.gateId === null || record.gateId === ""
+      ? "The gate"
+      : `Gate \`${listed(record.gateId, "gate id")}\``;
+  const outcome = listed(record.gateOutcome ?? "unknown", "outcome");
+  if (outcome === APPROVED_OUTCOME) {
+    return `${gate} closed \`${outcome}\`: a person answered it, and the answer was carried through.`;
+  }
+  return `${gate} closed \`${outcome}\`.`;
+}
+
+/**
+ * The model a lap ran on, when the row knows it.
+ *
+ * Tier and model both, for the reason the row keeps both (see
+ * `IterationRecord`): a tier is what an agent type asked for and a model id is
+ * what the lap cost, and only the pair says what the tier was worth that day.
+ */
+function modelClause(record: IterationRecord): string {
+  if (record.model === null || record.model === "") {
+    return "";
+  }
+  const tier =
+    record.modelTier === null || record.modelTier === ""
+      ? ""
+      : ` (tier \`${listed(record.modelTier, "tier")}\`)`;
+  return `, on \`${listed(record.model, "model id")}\`${tier}`;
+}
+
+/**
+ * The request, collapsed and quoted as what it is: input to an agent.
+ *
+ * Fenced rather than laid out as prose, and the fence is longer than the
+ * longest run of backticks inside it, so a request that contains a code block
+ * cannot end the quotation early and start writing the body. Collapsed, so the
+ * instructions in it -- which are addressed to a worker, and often say what
+ * *not* to do -- are somewhere a reviewer can go and not something they read
+ * where the description of the change should be.
+ */
+function requestBlock(request: string): readonly string[] {
+  // **Quoted as stored, not as tidied.** The emptiness check trims and the
+  // quotation does not: surrounding whitespace is part of what the row holds,
+  // and a block that says "verbatim" may not silently disagree with the row it
+  // came from. Inside a fence it renders as the blank lines it is.
+  if (request.trim() === "") {
+    return [];
+  }
+  const shown =
+    request.length > REQUEST_LIMIT
+      ? `${request.slice(0, REQUEST_LIMIT)}\n[...${String(request.length - REQUEST_LIMIT)} more ` +
+        "characters. The whole of it is on this iteration's row in rondo's store.]"
+      : request;
+  // Over what is **shown**, not over the whole request: a run of backticks past
+  // the cut is not in the quotation, and sizing the fence to it would spend the
+  // body's remaining size on two fence lines guarding nothing -- turning a
+  // bounded truncation back into a pull request too large to open.
+  const fence = "`".repeat(Math.max(3, longestBacktickRun(shown) + 1));
+  return [
+    "<details>",
+    "<summary>The request this lap was given (written for the agent, not a description of the change)</summary>",
+    "",
+    fence,
+    shown,
+    fence,
+    "",
+    "</details>",
+    "",
+  ];
+}
+
+/** The longest run of backticks in `text`, so a fence can be longer than it. */
+function longestBacktickRun(text: string): number {
+  let longest = 0;
+  for (const run of text.match(/`+/g) ?? []) {
+    longest = Math.max(longest, run.length);
+  }
+  return longest;
 }
 
 /**
@@ -1484,10 +1875,4 @@ async function commandAbandon(
 function planField(record: IterationRecord, key: string): string {
   const value = record.plan[key];
   return typeof value === "string" ? value : "";
-}
-
-/** The first line of a request, for a pull request title. */
-function firstLine(text: string): string {
-  const line = text.split("\n")[0] ?? "";
-  return line.length > 72 ? `${line.slice(0, 69)}...` : line;
 }

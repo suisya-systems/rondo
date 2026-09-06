@@ -271,12 +271,57 @@ publish runs these three, in order, as you:
   2. gh pr create --repo github.com/OWNER/NAME --base main --head dogfood/cli-lap-001
   3. continuo run close --run-id cli-lap-001 --outcome completed
 
+the pull request it opens reads:
+  title: docs: record the first real lap in the operator runbook
+  body:
+    ## What changed
+
+    - `8ee604b` docs: record the first real lap in the operator runbook
+
+    1 file changed against `refs/heads/main`:
+
+    - `docs/operations/rondo-cli.md` (+1 -0)
+
+    ## How this got here
+
+    - rondo walked run `cli-lap-001` (iteration `cli-lap-001`) on `dogfood/cli-lap-001`, for `main`.
+    - Gate `g-9f2c1a` closed `answered_and_forwarded`: a person answered it, and the answer was carried through.
+    - Against continuo `603843b`, on `claude-opus-5` (tier `standard`).
+    - Session `sonorous-lap-7`.
+
+    <details>
+    <summary>The request this lap was given (written for the agent, not a description of the change)</summary>
+
+    ```
+    Append exactly one line to the end of docs/operations/rondo-cli.md, recording that the
+    first real lap ran.
+
+    Do not build. Do not lint. Do not push. Do nothing else.
+    ```
+
+    </details>
+
+    This pull request was opened by `rondo publish`, which an operator ran. Merging it is not.
+
 --dry-run: nothing was run.
 ```
 
 Drop `--dry-run` to run them. They go in order and stop at the first failure, because each is the
 next one's precondition: there is no pull request to open for a branch that did not push, and
 closing the run is a claim that the work landed.
+
+**The pull request is written for a person, and the title and body are printed before either is
+used.** The title is the lap's own first commit subject -- one more commit adds `(+N more commits)`
+rather than a summary of them -- and the body is what changed (the commits, the paths, the line
+counts, and the ref they were compared against), how it got here (run, iteration, gate outcome,
+continuo revision, model, session) and the
+sentence that says merging is still yours. The request the lap was given is *quoted input*, folded
+into a `<details>` and fenced, because it is a set of instructions written to an agent: on
+2026-09-06 the first real publish put it in both fields, so the title was the prompt cut off with an
+ellipsis and the body opened with "do not build, do not lint, do not push" where an account of the
+change belongs. When git cannot be read in the workspace at all, the body says so in place of the
+summary and keeps every provenance line; the title falls back to `<branch> (rondo run <id>)`, which
+is a label rather than a sentence that stops in the middle of itself.
 
 **Nothing above is printed until the workspace has been asked whether it can run.** Before the plan
 appears -- and whether or not `--dry-run` was given -- `publish` asks the workspace three questions,

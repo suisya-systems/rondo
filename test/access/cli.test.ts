@@ -24,16 +24,19 @@ import {
   forgeHost,
   type GateVerbs,
   type PreflightInput,
+  type PullRequestTextInput,
   parseCommand,
   parseForgeSlug,
   publishPreflight,
+  pullRequestText,
   repositoryFromRemoteUrl,
   USAGE,
   walkGate,
 } from "../../src/access/cli.js";
-import type { PushTargetInspection } from "../../src/access/forge.js";
+import type { LapWorkInspection, PushTargetInspection } from "../../src/access/forge.js";
 import type { VerifiedContinuo } from "../../src/continuo/invoker.js";
 import type { ContinuoResult } from "../../src/continuo/protocol.js";
+import type { IterationRecord } from "../../src/store/records.js";
 
 /** A handle no test reaches past: every verb below is a fake. */
 const continuo: VerifiedContinuo = {
@@ -788,4 +791,280 @@ test("--allow-remote-mismatch keeps the fork route open, and spells the head for
   if (parsed.kind === "parsed") {
     expect(parsed.parsed.allowRemoteMismatch).toBe(true);
   }
+});
+
+/**
+ * The lap prompt that opened the first real pull request, in miniature.
+ *
+ * It is here in full shape rather than as a placeholder because the defect
+ * being held closed is about *this kind of text*: a set of instructions to an
+ * agent, several of them prohibitions, which said nothing about the change and
+ * was printed as though it were the description of one.
+ */
+const REQUEST = [
+  "Append exactly one line to the end of docs/operations/rondo-cli.md, recording that the",
+  "first real lap ran.",
+  "",
+  "Do not build. Do not lint. Do not push. Do nothing else.",
+].join("\n");
+
+/** An iteration row a publish would be run against, varied one field at a time. */
+function published(parts: Partial<IterationRecord> = {}): IterationRecord {
+  return {
+    id: "dogfood-001",
+    status: "closed",
+    request: REQUEST,
+    plan: {},
+    planDigest: "sha256:0",
+    attempts: 1,
+    runId: "dogfood-001",
+    continuoRevision: "603843b",
+    agentTypeDigest: null,
+    configDigest: null,
+    contractDigest: null,
+    classification: "allowed",
+    classificationReason: null,
+    neutralRoleName: null,
+    continuoRole: null,
+    modelTier: "standard",
+    model: "claude-opus-5",
+    gateId: "g-1",
+    gateStage: "forwarded",
+    gateOutcome: "answered_and_forwarded",
+    sessionId: "s-1",
+    sessionPath: null,
+    reason: null,
+    createdAtMs: 0,
+    updatedAtMs: 0,
+    ...parts,
+  };
+}
+
+/** What `inspectLapWork` read, with one commit and one file unless varied. */
+function worked(
+  parts: Partial<Extract<LapWorkInspection, { kind: "read" }>> = {},
+): LapWorkInspection {
+  return {
+    kind: "read",
+    baseRef: "refs/remotes/origin/main",
+    commits: [{ abbreviatedSha: "cfa4502", subject: "docs: record the first real lap" }],
+    files: [{ path: "docs/operations/rondo-cli.md", added: 1, deleted: 0 }],
+    ...parts,
+  };
+}
+
+/** The three bounds `src/access/cli.ts` composes a body under. */
+const REQUEST_LIMIT = 4000;
+const LIST_LIMIT = 20;
+const LISTED_LIMIT = 200;
+
+/** The pull request text a test varies one input of at a time. */
+function text(parts: Partial<PullRequestTextInput> = {}) {
+  return pullRequestText({
+    record: published(),
+    runId: "dogfood-001",
+    topicBranch: "docs/rondo-first-real-lap",
+    baseBranch: "main",
+    headIsQualified: false,
+    work: worked(),
+    ...parts,
+  });
+}
+
+test("the title is the lap's own commit subject, never the request cut short", () => {
+  // The subject as written. Not the branch name, not the prompt, and nothing
+  // appended: a commit subject is already a summary a person wrote.
+  expect(text().title).toBe("docs: record the first real lap");
+
+  // More than one commit says so rather than summarising the rest.
+  const two = text({
+    work: worked({
+      commits: [
+        { abbreviatedSha: "aaa1111", subject: "docs: record the first real lap" },
+        { abbreviatedSha: "bbb2222", subject: "docs: fix the section number" },
+      ],
+    }),
+  });
+  expect(two.title).toBe("docs: record the first real lap (+1 more commit)");
+
+  // No title rondo composes ends mid-sentence: the request never reaches it,
+  // and a subject too long to be a summary is replaced rather than cut.
+  const long = "docs: ".concat("and then it kept going ".repeat(20)).trim();
+  expect(long.length).toBeGreaterThan(120);
+  for (const title of [
+    text({ work: worked({ commits: [{ abbreviatedSha: "ccc3333", subject: long }] }) }).title,
+    text({ work: worked({ commits: [] }) }).title,
+    text({ work: { kind: "unreadable", reason: "not a git repository" } }).title,
+  ]) {
+    expect(title).toBe("docs/rondo-first-real-lap (rondo run dogfood-001)");
+    expect(title).not.toContain("...");
+    expect(title).not.toContain("Do not");
+  }
+});
+
+test("the body describes the change, and the request is quoted rather than presented", () => {
+  const body = text().body;
+
+  // What changed, from the work itself.
+  expect(body).toContain("## What changed");
+  expect(body).toContain("- `cfa4502` docs: record the first real lap");
+  expect(body).toContain("1 file changed against `refs/remotes/origin/main`:");
+  expect(body).toContain("- `docs/operations/rondo-cli.md` (+1 -0)");
+
+  // The provenance the first pull request got right, kept.
+  expect(body).toContain("run `dogfood-001` (iteration `dogfood-001`)");
+  expect(body).toContain("Gate `g-1` closed `answered_and_forwarded`: a person answered it");
+  expect(body).toContain("Against continuo `603843b`, on `claude-opus-5` (tier `standard`).");
+  expect(body).toContain(
+    "This pull request was opened by `rondo publish`, which an operator ran. Merging it is not.",
+  );
+
+  // And the instructions to the agent are quoted input behind a fold, not the
+  // body's own prose. The prohibition is *below* the `<details>` that names
+  // what it is -- which is the whole of the defect this test holds closed.
+  expect(body).toContain("<details>");
+  expect(body.indexOf("Do not build.")).toBeGreaterThan(body.indexOf("<summary>"));
+  expect(body.indexOf("Do not build.")).toBeGreaterThan(body.indexOf("```"));
+  expect(body.startsWith("## What changed")).toBe(true);
+  expect(body.trimEnd().endsWith("Merging it is not.")).toBe(true);
+});
+
+test("a request that contains a code block cannot end the quotation it is inside", () => {
+  const body = text({
+    record: published({ request: "Run this:\n\n```sh\nnpm run verify\n```\n\nThen stop." }),
+  }).body;
+  // A fence longer than anything inside it, so the quoted request stays quoted.
+  expect(body).toContain("````\nRun this:");
+  expect(body).toContain("Then stop.\n````");
+});
+
+test("a very long request is quoted as far as it goes and says where the rest is", () => {
+  const body = text({ record: published({ request: "x".repeat(4100) }) }).body;
+  expect(body).toContain("[...100 more characters.");
+  expect(body).toContain("on this iteration's row in rondo's store.]");
+});
+
+test("a history rondo could not read is said out loud, and loses no provenance", () => {
+  const body = text({ work: { kind: "unreadable", reason: "not a git repository" } }).body;
+  expect(body).toContain("rondo could not read this branch's history");
+  expect(body).toContain("not a git repository");
+  expect(body).toContain("Gate `g-1` closed `answered_and_forwarded`");
+  expect(body).toContain("Merging it is not.");
+});
+
+test("long lists are counted rather than printed in full, and binary files say so", () => {
+  const commits = Array.from({ length: 22 }, (_, index) => ({
+    abbreviatedSha: `sha${String(index)}`,
+    subject: `commit ${String(index)}`,
+  }));
+  const files = Array.from({ length: 21 }, (_, index) => ({
+    path: `src/file-${String(index)}.ts`,
+    added: index,
+    deleted: 0,
+  }));
+  const body = text({ work: worked({ commits, files }) }).body;
+  expect(body).toContain("- ...and 2 more commits.");
+  expect(body).toContain("- ...and 1 more file.");
+  expect(body).not.toContain("commit 21");
+
+  const binary = text({
+    work: worked({ files: [{ path: "docs/shot.png", added: null, deleted: null }] }),
+  }).body;
+  expect(binary).toContain("- `docs/shot.png` (binary)");
+});
+
+test("nothing rondo composes can be too long for the forge to accept", () => {
+  // The branch and the run id are the operator's own strings and neither is
+  // bounded. A title past a forge's limit is refused *after* the push, which is
+  // the one leg publish cannot undo -- so the label steps down instead.
+  const long = "b".repeat(400);
+  const stepped = text({ topicBranch: long, work: worked({ commits: [] }) }).title;
+  expect(stepped).toBe("rondo run dogfood-001");
+
+  const both = text({
+    topicBranch: long,
+    runId: "r".repeat(400),
+    work: worked({ commits: [] }),
+  }).title;
+  expect(both.length).toBe(120);
+  expect(both.startsWith("rondo run rrr")).toBe(true);
+});
+
+test("the quoted request is the row's, whitespace and all, and its fence is sized to what is shown", () => {
+  // Verbatim means verbatim: the block does not tidy what the row holds.
+  const padded = text({ record: published({ request: "\n\n  do the thing  \n" }) }).body;
+  expect(padded).toContain("```\n\n\n  do the thing  \n\n```");
+
+  // A run of backticks past the cut is not in the quotation, so it must not
+  // size the fence: a body whose fences are longer than its content is how a
+  // bounded truncation becomes a pull request too large to open.
+  const body = text({
+    record: published({ request: `${"x".repeat(REQUEST_LIMIT)}${"`".repeat(5000)}` }),
+  }).body;
+  expect(body).toContain("```\nxxx");
+  expect(body).not.toContain("````");
+  expect(body.length).toBeLessThan(REQUEST_LIMIT + 2000);
+});
+
+test("a body is bounded by what it lists as well as by how much", () => {
+  // Twenty entries is not a bound when one entry is unbounded: a subject and a
+  // path are both as long as somebody made them, and a body past the forge's
+  // limit is refused after the push has already happened.
+  const body = text({
+    work: worked({
+      commits: [{ abbreviatedSha: "aaa1111", subject: "s".repeat(300) }],
+      files: [{ path: `${"p".repeat(300)}.ts`, added: 1, deleted: 0 }],
+    }),
+  }).body;
+  expect(body).toContain("- `aaa1111` (subject of 300 characters, not printed here)");
+  expect(body).toContain("(path of 303 characters, not printed here)");
+  expect(body).not.toContain("sss");
+});
+
+test("a fork publish says which base its summary compared against", () => {
+  // The push went to one repository and the pull request is opened in another,
+  // so the base rondo read is the workspace's and the base the forge diffs
+  // against is the target's. The body says so rather than letting the two read
+  // as one comparison.
+  const forked = text({ headIsQualified: true }).body;
+  expect(forked).toContain("pushed to a different repository than this pull request is opened in");
+  expect(forked).toContain("compares against `refs/remotes/origin/main` as the workspace has it");
+
+  expect(text().body).not.toContain("pushed to a different repository");
+
+  // There is nothing to caveat when there was no comparison to begin with.
+  const unreadable = text({
+    headIsQualified: true,
+    work: { kind: "unreadable", reason: "not a git repository" },
+  }).body;
+  expect(unreadable).not.toContain("pushed to a different repository");
+});
+
+test("no value the row carries can make a body the forge refuses", () => {
+  // A run id, a branch, a session name and a git error are each as long as
+  // whatever wrote them. Every one is bounded on the way into the body.
+  const body = text({
+    runId: "r".repeat(70_000),
+    topicBranch: "b".repeat(70_000),
+    record: published({ sessionId: "s".repeat(70_000), model: "m".repeat(70_000) }),
+    work: { kind: "unreadable", reason: "e".repeat(70_000) },
+  }).body;
+  expect(body).toContain("(run id of 70000 characters, not printed here)");
+  expect(body).toContain("(session name of 70000 characters, not printed here)");
+  expect(body).toContain("(reason of 70000 characters, not printed here)");
+  expect(body.length).toBeLessThan(6000);
+
+  // And the sum is checked as well as the parts: the quoted request is what
+  // gives way, because it is the one part not about this change and the row
+  // still has it.
+  const commits = Array.from({ length: LIST_LIMIT }, (_, index) => ({
+    abbreviatedSha: "a".repeat(LISTED_LIMIT),
+    subject: `${String(index)}${"s".repeat(LISTED_LIMIT - 1)}`,
+  }));
+  const huge = text({
+    record: published({ request: "q".repeat(REQUEST_LIMIT) }),
+    work: worked({ commits }),
+  }).body;
+  expect(huge).toContain("qqq");
+  expect(huge.length).toBeLessThanOrEqual(60_000);
 });
