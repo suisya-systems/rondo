@@ -125,13 +125,16 @@ function admit(iterationId: string, plan: RunPlan): AdmittedPlan {
   return outcome.plan;
 }
 
-const FIRST = admit("iter-1", (() => {
-  const outcome = runPlan(FIRST_INPUT);
-  if (outcome.kind !== "planned") {
-    throw new Error(`the fixture plan is not a plan: ${outcome.reason}`);
-  }
-  return outcome.plan;
-})());
+const FIRST = admit(
+  "iter-1",
+  (() => {
+    const outcome = runPlan(FIRST_INPUT);
+    if (outcome.kind !== "planned") {
+      throw new Error(`the fixture plan is not a plan: ${outcome.reason}`);
+    }
+    return outcome.plan;
+  })(),
+);
 
 /**
  * The predecessor as the store holds it: `closed`, with the *admitted* plan
