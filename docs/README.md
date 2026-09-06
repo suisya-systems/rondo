@@ -18,6 +18,8 @@ decision, so the index starts by saying where the decisions are.
 | File | What it is |
 |---|---|
 | [`design/refrain-lap1.md`](design/refrain-lap1.md) | The lap-1 conductor loop in `src/refrain`: how a request becomes a continuo run driven through the cadenza facade and the continuo seam, and stops at a gate a human has yet to answer. **Propose-only** — it takes no decision, and ends in decision rows `R-1` … `R-16` for rondo's gate. |
+| [`design/advisory.md`](design/advisory.md) | The advisory component rondo#9 describes: a total, pure function from a durable snapshot to a **proposal** — an agent type, a `RunPlan`, a contract's candidate key sets, a widening successor — with its authority removed by construction. **Propose-only** — decision rows `A-1` … `A-18`, and the entry it names is `D-0022`. |
+| [`design/parallel-admission.md`](design/parallel-admission.md) | The two things `D-0012` says parallel admission waits on that are rondo's: an **allocator** for the (run id, topic branch, workspace) triple, and a **capacity ledger** replacing `R-10`'s partial unique index. Paired with continuo #167, which owns the delivery-lease half. **Propose-only** — decision rows `N-1` … `N-25`, and the entry it names is `D-0023`. |
 
 **This is rondo's first design document of its own, and until it existed this
 section said there were none.** That was accurate rather than modest: every
