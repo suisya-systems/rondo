@@ -147,21 +147,50 @@ withheld from work a person approved, and a clean verdict unlocks nothing.
      wrong.
 
 10. **`V-10` — the absence of a reading refuses `publish` exactly as `concerns`
-    does.** A fail-open absence makes "reviewed clean" and "nothing read it"
-    indistinguishable at the only point where either matters, and a stage whose
-    absence costs nothing is a stage that exists only in the record. It costs a
-    keystroke and never a person's gate.
+    does, and so does a reading that no longer describes the work being pushed.** A
+    fail-open absence makes "reviewed clean" and "nothing read it" indistinguishable
+    at the only point where either matters, and a stage whose absence costs nothing
+    is a stage that exists only in the record. **Staleness is that same failure with
+    a delay in it**, and it is the easier one to miss: the verdict is written when
+    the lap suspends, `publish` happens later, and `publish` inspects and pushes the
+    branch *as it is then*. A branch that moved in between — a commit into the
+    worktree, an amend, a reset to its base — would publish under a `clear` that
+    describes something else, and a reset to base would carry through the very
+    "adds no commits" refusal the deterministic reader exists to make. So the
+    refusal is not "is there a `clear`" but **"is there a `clear` whose recorded tip
+    commit and material digest still match what `publish` just measured"**, and a
+    mismatch is `unavailable`. One comparison; it costs a keystroke and never a
+    person's gate.
 
 11. **`V-11` — a `clear` may only be written beside rondo's own measurement of
-    what was read, and the store's writer refuses one without it.** The base ref,
-    the commit shas, the touched paths and the digest over them, as rondo's own
-    `git` read returned them — **never the reviewer's account of what it read**. The
-    reference implementation's countermeasure for the empty pass counts evidence
-    outside the reviewer's own message, because a reviewer that read nothing
-    returns a clean pass and a zero exit and is otherwise indistinguishable from a
-    real one. A reading that cannot produce that evidence is recorded `unavailable`.
-    **What this proves and does not prove is stated rather than implied:** it proves
-    the material was read; it cannot prove it was understood.
+    what was read; a model drafter's verdict must additionally carry rondo's digest
+    of the bytes it handed the reviewer; and the store's writer refuses a `clear`
+    without either.** The base ref, the tip commit, the commit shas, the touched
+    paths and the digest over them, as rondo's own `git` read returned them —
+    **never the reviewer's account of what it read**. The reference
+    implementation's countermeasure for the empty pass counts evidence outside the
+    reviewer's own message, because a reviewer that read nothing returns a clean
+    pass and a zero exit and is otherwise indistinguishable from a real one.
+
+    **The second clause exists because the first is not enough for a model
+    drafter, and the gap is exactly the failure the rule is for.** rondo running
+    `git` successfully proves that *rondo* gathered the material; it says nothing
+    about what reached the reviewer. Without the second clause the empty pass
+    survives intact as: the gather succeeds, the model is handed nothing or attends
+    to nothing, and `clear` comes back. So a model drafter's row carries the digest
+    of the bytes rondo delivered, computed by rondo, and it must equal the digest of
+    the material the same row records as read; absent or mismatched, the verdict is
+    `unavailable`.
+
+    **Three grades, stated rather than inferred.** For the deterministic drafter
+    the evidence proves the material was **read**, because the reader is the
+    measurement. For a model drafter the second clause proves it was
+    **delivered**, which is strictly weaker. **Neither proves it was understood**,
+    and no rule here can: a reviewer handed a diff that answers `clear` without
+    attending to it is, from rondo's side, indistinguishable from one that read it
+    carefully. That residue is why rule 6 admits a model drafter as material for a
+    person rather than as a check, and why rule 9's ceiling is in this entry rather
+    than left to a reader to discover.
 
 12. **`V-12` — the stage is proved non-vacuous by a planted case in CI that
     asserts named messages rather than an exit status**, in the shape
@@ -304,8 +333,13 @@ nothing else should check these:
   is one keystroke; if the keystroke is reflexive, the stage costs a table, a
   query, a port and two command changes and prevents nothing. It is measurable, and
   this entry should be judged on it.
-- **A `clear` written with no evidence.** Rule 11 failing is the failure that looks
-  like success, and rule 12's planted case is what should fire first.
+- **A `clear` written with no evidence**, or a `clear` accepted at `publish` whose
+  tip commit is not the one being pushed. Rules 11 and 10 failing is the failure
+  that looks like success, and rule 12's planted case is what should fire first.
+- **A model drafter's delivered digest turning out to be trivially satisfiable** —
+  bytes counted as delivered that the reviewer never had to attend to. Rule 11's
+  second clause buys delivery and nothing more, and the first evidence that
+  delivery is not the property worth buying falsifies it.
 - **Terminal iterations accumulating with no verdict row.** Rule 10 is supposed to
   make that visible at `publish`; a population nobody noticed means the enumeration
   query is not read, and an unread query is not a record.

@@ -422,6 +422,24 @@ distinguishable, and without it the stage is decorative: a fail-open unread lap 
 a lap that publishes exactly as it does today while the record says a stage
 exists (`V-10`).
 
+**And fail-closed on staleness, which is the same rule and is easy to miss.** The
+verdict is written when the lap suspends; `publish` happens later, and it pushes
+and inspects **the branch as it is then**, not the commit that was read
+(`commandPublish` re-runs `inspectLapWork` at `cli.ts:1827` against the live
+workspace). Between the two, the topic branch can move — a person can commit into
+the worktree, amend, or reset it to its base — and a stale `clear` would then
+certify work nobody read. Worse, resetting the branch to its base is exactly the
+case the deterministic reader's "adds no commits" check exists to refuse, and a
+stale verdict would carry it through.
+
+So the refusal is not *"is there a `clear`"* but **"is there a `clear` whose
+recorded evidence still describes the commits `publish` is about to push"**. The
+verdict row carries the tip commit and the digest over the read material (6.1);
+`publish` compares them against what it just measured, and **a mismatch is
+`unavailable`**, refused under the same flag as any other absent reading. This
+costs one comparison and closes the gap between "reviewed" and "reviewed, and
+still the same work" (`V-10`).
+
 ---
 
 ## 6. Where does the verdict live?
@@ -463,18 +481,37 @@ Transplanted into rondo's idiom, and this is the row the design would least like
 to lose (`V-11`):
 
 > **A `clear` verdict may only be written beside rondo's own measurement of what
-> was read** — the base ref, the commit shas, the touched paths, and the digest
-> over them, as `inspectLapWork` returned them. Not the reviewer's account of what
-> it read. A reading that cannot produce that evidence is recorded `unavailable`,
-> and the store's writer refuses the `clear`.
+> was read** — the base ref, the tip commit, the commit shas, the touched paths,
+> and the digest over them, as `inspectLapWork` returned them. Not the reviewer's
+> account of what it read. A reading that cannot produce that evidence is recorded
+> `unavailable`, and the store's writer refuses the `clear`.
 
 The distinction is the point: `inspectLapWork` is rondo running `git`
 (`forge.ts:450-528`), so the evidence is a measurement rondo took, not an
-assertion a reviewer made. For a model drafter this is the difference between a
-gate and a rubber stamp, and it is enforced by the writer rather than by prose.
-It is provable for the deterministic drafter and **not provable for the model
-drafter** — the evidence rule can show that the material was read, never that it
-was understood — and section 9 says so rather than implying coverage.
+assertion a reviewer made. It is enforced by the writer rather than by prose, and
+the tip commit is what makes section 5's staleness check possible at all.
+
+**For a model drafter this rule as stated is not enough, and saying so is the
+whole point of writing it down.** rondo running `git` successfully proves that
+*rondo* gathered the material. It does not prove that the reviewer received it —
+the exact empty pass the rule exists to prevent survives as: `inspectLapWork`
+succeeds, the model is handed nothing or reads nothing, and `clear` comes back.
+So the rule has a second clause for that drafter (`V-11`):
+
+> **A model drafter's verdict carries the digest of the material rondo actually
+> handed it**, computed by rondo over the bytes it delivered, and that digest must
+> equal the digest of the material the same row records as read. A verdict whose
+> delivered digest is absent, or does not match, is `unavailable`.
+
+**Three grades, stated so nobody has to infer them.** For the deterministic
+drafter the evidence proves the material was read, because the reader *is* the
+measurement. For a model drafter the second clause proves the material was
+**delivered**, and that is a strictly weaker claim. **Neither proves the material
+was understood**, and no rule in this design can: a reviewer that receives a diff
+and answers `clear` without attending to it is indistinguishable, from rondo's
+side, from one that read it carefully. That residue is why `V-6` admits a model
+drafter as material for a person rather than as a check, and why section 9.3's
+ceiling is stated in the entry rather than left to a reader to discover.
 
 A planted case in CI, in the shape `boundary-is-not-vacuous` already uses
 (a real violation, and the assertion is the *named messages* rather than the exit
@@ -763,9 +800,14 @@ anything.
   port and two command changes and prevents nothing. **This is measurable and the
   design should be judged on it**: count publishes carrying the flag against
   publishes that did not need it.
-- **A `clear` verdict written with no evidence.** That is section 6.1 failing, and
-  it is the failure that looks like success. The planted CI case is what should
-  fire first.
+- **A `clear` verdict written with no evidence**, or one accepted at `publish`
+  whose tip commit is not the commit being pushed. That is section 6.1 and section
+  5's staleness rule failing, and it is the failure that looks like success. The
+  planted CI case is what should fire first.
+- **A model drafter's delivered digest turning out to be trivially satisfiable** —
+  bytes counted as delivered that the reviewer never had to attend to. The second
+  clause of 6.1 buys delivery and nothing more, and the first evidence that
+  delivery is not the property worth buying falsifies it.
 - **An iteration reaching a terminal status with no verdict row, at any rate above
   noise.** Section 6's fail-closed refusal is supposed to make that visible at
   `publish`; a population of unreviewed closed iterations that nobody noticed
@@ -803,8 +845,8 @@ anything.
 | **V-7** | What happens on a refusal? | **Nothing automatic. The person answers, revises, abandons or overrules** | `D-0027` rule 2 already fixed that a person types `revise`, once, per lap. An automatic re-lap driven by a machine verdict is the bypass this design checks itself against, and it keeps rondo#36 off this path entirely |
 | **V-8** | Where does the verdict live? | **An immutable append-only row with no `status` column, written in the same `BEGIN IMMEDIATE` as the `awaiting_human` transition, with its enumeration query shipping alongside** | `D-0022` rules 4 and 9's shape, for their reasons. The transaction closes the window in which a person could answer a gate that a reading exists for but is not yet recorded; the query is what stops this design inheriting `D-0022`'s "a closed row cannot be found at all" residual |
 | **V-9** | Is a clean verdict permission? | **No. It unlocks nothing, anywhere. And the stage's scope is part of the decision, not commentary** | `D-0022` rule 11's grade. The asymmetry — `concerns` costs a keystroke, `clear` costs nothing — is what keeps a candidate from becoming a permission, and section 9's two lists are what keep the record from overstating reach |
-| **V-10** | What happens when no reading exists? | **`publish` refuses exactly as it does for `concerns`** | A fail-open absence makes "reviewed clean" and "nothing read it" indistinguishable at the only point either matters. It costs a keystroke and never a person's gate |
-| **V-11** | How is an empty pass prevented? | **A `clear` may only be written beside rondo's own measurement of what was read; the store's writer refuses one without it** | The reference implementation's own countermeasure, transplanted to rondo's idiom: evidence outside the reviewer's message. It proves the material was read and never that it was understood, which is stated rather than implied (6.1) |
+| **V-10** | What happens when no reading exists, or when the work moved after it? | **`publish` refuses exactly as it does for `concerns`, and a verdict whose evidence no longer describes what is about to be pushed is treated as no verdict** | A fail-open absence makes "reviewed clean" and "nothing read it" indistinguishable at the only point either matters. Staleness is the same failure with a delay in it: `publish` inspects and pushes the branch as it is then, so a verdict not bound to the commit being pushed certifies work nobody read. One comparison, and it costs a keystroke and never a person's gate |
+| **V-11** | How is an empty pass prevented? | **A `clear` may only be written beside rondo's own measurement of what was read, and a model drafter's verdict must additionally carry rondo's digest of the bytes it was handed; the store's writer refuses a `clear` without either** | The reference implementation's countermeasure is evidence outside the reviewer's message, and rondo's `git` read is that for the deterministic drafter. It is **not** that for a model drafter: rondo gathering material proves nothing about what the reviewer received, and without the second clause the exact empty pass survives. Three grades, stated rather than inferred — read, delivered, and understood, of which the last is not provable at all (6.1) |
 | **V-12** | How is the stage proved non-vacuous? | **A planted case in CI, asserting named messages rather than an exit status** | `boundary-is-not-vacuous`'s shape, for its reason: a green suite over an empty walk looks exactly like a green suite. It proves the deterministic half only |
 | **V-13** | Where does the exit criterion live, who may change it, and what if it is absent? | **Code for the deterministic drafter; a plan field for a model drafter; `unavailable` when absent. An organisation-wide criterion store is a residual** | Code is auditable as a diff and reviewable as a unit case; a plan field is versioned by `D-0028`, persisted verbatim and digested, so "which criterion was in force" is answerable from the row. Neither ever defaults to a `clear` |
 | **V-14** | Does rondo hold a round budget and an exit criterion for re-review? | **No, in lap 1 — recorded as a reduction with its trigger** | The organisation's cap terminates in a per-turn human interlocutor an unattended lap does not have, and its round heuristic is documented as a person's judgement (8.1). rondo's bound is already a person typing `revise`. Trigger: the first time somebody wants an unattended re-review |
