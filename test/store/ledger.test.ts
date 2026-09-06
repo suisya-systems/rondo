@@ -588,3 +588,105 @@ test("a legacy row that spent its identifiers keeps holding them after the migra
   });
   expect(reissued.kind).toBe("defect");
 });
+
+test("a legacy row's branch and workspace are back-filled from its plan and then protected", async () => {
+  // **Codex's finding, and it is the other half of the back-fill.** Setting
+  // `identifiers_spent` alone leaves `topic_branch` and `workspace` NULL on
+  // every legacy row, and a NULL is excluded from the claim indexes -- so a
+  // later iteration could be handed a branch git already has, which is the
+  // failure the indexes exist to prevent, reintroduced by the upgrade itself.
+  // The values were never lost: the triple travelled in the plan payload.
+  const connection = new DatabaseSync(":memory:");
+  connection.exec(`
+    CREATE TABLE iteration (
+      id TEXT PRIMARY KEY, status TEXT NOT NULL, request TEXT NOT NULL, plan TEXT NOT NULL,
+      plan_digest TEXT NOT NULL, attempts INTEGER NOT NULL, run_id TEXT, continuo_revision TEXT,
+      agent_type_digest TEXT, config_digest TEXT, contract_digest TEXT, classification TEXT,
+      classification_reason TEXT, neutral_role_name TEXT, continuo_role TEXT, model_tier TEXT,
+      model TEXT, gate_id TEXT, gate_stage TEXT, gate_outcome TEXT, session_id TEXT,
+      session_path TEXT, reason TEXT, created_at_ms INTEGER NOT NULL,
+      updated_at_ms INTEGER NOT NULL,
+      live INTEGER GENERATED ALWAYS AS (
+        CASE WHEN status IN ('closed','abandoned','failed') THEN NULL ELSE 1 END) VIRTUAL
+    );
+  `);
+  // A pre-D-0023 plan payload: the triple is in the plan, not on the row.
+  const legacyPlan = {
+    run_id: "legacy-run",
+    topic_branch: "dogfood/legacy",
+    workspace: "/srv/legacy",
+  };
+  connection
+    .prepare(
+      "INSERT INTO iteration (id, status, request, plan, plan_digest, attempts, run_id, " +
+        "created_at_ms, updated_at_ms) VALUES ('old', 'awaiting_human', 'ask', ?, ?, 1, " +
+        "'legacy-run', 1, 1)",
+    )
+    .run(JSON.stringify(legacyPlan), planDigest(legacyPlan));
+
+  const { store } = storeUnder({ maxOccupying: 1, maxLive: 3 }, connection);
+
+  const old = await store.read("old");
+  expect(old.kind === "read" && old.record.topicBranch).toBe("dogfood/legacy");
+  expect(old.kind === "read" && old.record.workspace).toBe("/srv/legacy");
+  expect(old.kind === "read" && old.record.identifiersSpent).toBe(1);
+
+  // And the names it holds cannot be handed to a new iteration.
+  const collided = await store.reserve({
+    id: "new",
+    request: "do new",
+    plan: somePlan(),
+    runId: "rondo-new",
+    topicBranch: "dogfood/legacy",
+    workspace: "/srv/work/iter-new",
+    nowMs: 2_000,
+  });
+  expect(collided.kind).toBe("defect");
+});
+
+test("an interrupted upgrade leaves nothing behind: the migration is one transaction", () => {
+  // Codex's second finding. `ALTER TABLE` commits on its own, so a crash
+  // between adding `identifiers_spent` and back-filling it would leave a
+  // database whose columns are present and whose claims are wrong -- and the
+  // next open would find nothing missing and skip the back-fill for ever.
+  // Asserted by making the work inside the transaction fail: the columns must
+  // not survive.
+  const connection = new DatabaseSync(":memory:");
+  connection.exec(`
+    CREATE TABLE iteration (
+      id TEXT PRIMARY KEY, status TEXT NOT NULL, request TEXT NOT NULL, plan TEXT NOT NULL,
+      plan_digest TEXT NOT NULL, attempts INTEGER NOT NULL, run_id TEXT, continuo_revision TEXT,
+      agent_type_digest TEXT, config_digest TEXT, contract_digest TEXT, classification TEXT,
+      classification_reason TEXT, neutral_role_name TEXT, continuo_role TEXT, model_tier TEXT,
+      model TEXT, gate_id TEXT, gate_stage TEXT, gate_outcome TEXT, session_id TEXT,
+      session_path TEXT, reason TEXT, created_at_ms INTEGER NOT NULL,
+      updated_at_ms INTEGER NOT NULL,
+      live INTEGER GENERATED ALWAYS AS (
+        CASE WHEN status IN ('closed','abandoned','failed') THEN NULL ELSE 1 END) VIRTUAL
+    );
+  `);
+  // A row whose `plan` is not JSON makes the back-fill's json_extract fail,
+  // which is the cheapest way to fail *inside* the migration's transaction.
+  connection
+    .prepare(
+      "INSERT INTO iteration (id, status, request, plan, plan_digest, attempts, created_at_ms, " +
+        "updated_at_ms) VALUES ('broken', 'planned', 'ask', 'not json', 'sha256:x', 1, 1, 1)",
+    )
+    .run();
+
+  expect(() => storeUnder({ maxOccupying: 1, maxLive: 3 }, connection)).toThrow();
+
+  // Nothing was left half-applied: the columns are not there, so the next open
+  // still knows there is work to do.
+  const columns = new Set(
+    (
+      connection
+        .prepare("SELECT name FROM pragma_table_xinfo('iteration')")
+        .all() as unknown as readonly {
+        readonly name: string;
+      }[]
+    ).map((row) => row.name),
+  );
+  expect(columns.has("identifiers_spent")).toBe(false);
+  expect(columns.has("topic_branch")).toBe(false);
+});

@@ -3644,7 +3644,21 @@ waiting, not the working.
     columns, so no DDL change since `D-0019` would have reached an existing database — a gap nobody
     had stepped in because no column had ever been added. The shape taken is the small one: a
     declarative list of columns, a diff against the table, and an `ALTER TABLE ADD COLUMN` for each
-    missing one. **Versioned migration files were considered and rejected** — continuo carries that
+    missing one — **inside one `BEGIN IMMEDIATE`, with the back-fill**. `ALTER TABLE` commits on
+    its own, so a process that stopped between adding `identifiers_spent` and filling it would
+    leave a database whose columns are present and whose claims are wrong, and whose next open
+    would find nothing missing and skip the back-fill for ever.
+    **The back-fill is part of the migration and not an afterthought.** A legacy row keeps the
+    claim it actually had: `identifiers_spent` is set from `run_id IS NOT NULL` — which before this
+    entry meant exactly "this iteration reached `admitting`" — and the triple itself is read out of
+    the stored plan, where it lived, because a row whose branch and workspace stayed NULL would sit
+    outside all three claim indexes and let a later iteration be handed a branch git already has.
+    The order matters and is stated in the code: the spent bit is read before anything writes a run
+    id from the plan, or the signal it rests on is destroyed.
+    **A database that already holds two iterations claiming one name cannot take the indexes**, and
+    that is legal in a database written before this entry, where the triple was the operator's to
+    type. rondo refuses to open such a store, in its own words, rather than opening one whose
+    claims it cannot enforce. **Versioned migration files were considered and rejected** — continuo carries that
     machinery and is right to, but rondo's store is one module over one table with no
     down-migration and no branch in its history, and a version counter would be a mechanism whose
     failure modes exceed the thing it guards. **It is a reversible choice**: the moment a second

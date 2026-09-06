@@ -558,37 +558,77 @@ const ADDED_COLUMNS = Object.freeze({
  * of them; the migration is reversible, the history it enabled is not.
  */
 function migrate(connection: DatabaseSync): void {
-  const present = new Set(
-    connection
-      .prepare("SELECT name FROM pragma_table_xinfo('iteration')")
-      .all()
-      .map((row) => String((row as SqlRow)["name"])),
-  );
-  const added: string[] = [];
-  for (const [column, declaration] of Object.entries(ADDED_COLUMNS)) {
-    if (!present.has(column)) {
-      connection.exec(`ALTER TABLE iteration ADD COLUMN ${column} ${declaration}`);
-      added.push(column);
+  // **One transaction around the whole upgrade, and that is not tidiness.**
+  // `ALTER TABLE` commits on its own, so a process that stopped between adding
+  // `identifiers_spent` and back-filling it would leave a database whose
+  // columns are present and whose claims are wrong -- and the next open would
+  // find nothing missing, skip the back-fill for ever, and quietly release
+  // every spent legacy claim. `BEGIN IMMEDIATE` also makes two first opens
+  // race for the write lock rather than for the `ALTER`.
+  connection.exec("BEGIN IMMEDIATE");
+  try {
+    const present = new Set(
+      connection
+        .prepare("SELECT name FROM pragma_table_xinfo('iteration')")
+        .all()
+        .map((row) => String((row as SqlRow)["name"])),
+    );
+    const added: string[] = [];
+    for (const [column, declaration] of Object.entries(ADDED_COLUMNS)) {
+      if (!present.has(column)) {
+        connection.exec(`ALTER TABLE iteration ADD COLUMN ${column} ${declaration}`);
+        added.push(column);
+      }
     }
+    if (added.includes("identifiers_spent")) {
+      backfill(connection);
+    }
+    connection.exec("DROP INDEX IF EXISTS iteration_one_live");
+    connection.exec("COMMIT");
+  } catch (error) {
+    try {
+      connection.exec("ROLLBACK");
+    } catch {
+      // The transaction was already resolved, or the connection is gone.
+    }
+    throw error;
   }
-  if (added.includes("identifiers_spent")) {
-    // **The back-fill, and without it the migration is wrong rather than
-    // merely incomplete.** `ALTER TABLE ADD COLUMN` gives every existing row
-    // the default, so every pre-D-0023 row would read `identifiers_spent = 0`
-    // -- including rows that reached `admitting`, for which `run admit` really
-    // was spawned and continuo really does own a run. Those rows would then
-    // have `holds_identifiers` NULL once terminal, drop out of all three claim
-    // indexes, and release names that git and continuo still hold. That is the
-    // one thing rule 7 exists to make impossible.
-    //
-    // `run_id IS NOT NULL` is the honest predicate and not a guess: before
-    // D-0023 the run id was written by the transition into `admitting` and by
-    // nothing earlier, so a legacy row has one exactly when it spent its
-    // identifiers. Rows that never got that far keep 0, which is equally
-    // correct -- they spent nothing.
-    connection.exec("UPDATE iteration SET identifiers_spent = 1 WHERE run_id IS NOT NULL");
+}
+
+/**
+ * Give every pre-D-0023 row the identifiers and the claim it actually had.
+ *
+ * **The order of these four statements is the whole of their correctness.**
+ * Before D-0023 the run id was written by the transition into `admitting` and
+ * by nothing earlier, so `run_id IS NOT NULL` on the *row* is exactly "this
+ * iteration spent its identifiers". That signal has to be read before anything
+ * writes a run id from the plan, or it is destroyed -- so `identifiers_spent`
+ * is set first, and the three columns are filled afterwards.
+ *
+ * The values come from the stored plan, because that is where they were: the
+ * triple was the operator's and travelled in the plan payload, and the row
+ * carried only the run id and only once it was admitted. A legacy row whose
+ * branch and workspace stayed NULL would sit outside all three claim indexes,
+ * so a later iteration could be handed a branch git already has -- which is the
+ * failure the indexes exist to prevent, reintroduced by the upgrade itself.
+ *
+ * `json_extract` returns NULL for a plan that does not carry the key, which
+ * leaves the column NULL and the row out of the indexes: correct, because a row
+ * whose plan never named a branch never claimed one.
+ */
+function backfill(connection: DatabaseSync): void {
+  connection.exec(
+    "UPDATE iteration SET identifiers_spent = 1 WHERE run_id IS NOT NULL AND identifiers_spent = 0",
+  );
+  for (const [column, key] of [
+    ["run_id", "$.run_id"],
+    ["topic_branch", "$.topic_branch"],
+    ["workspace", "$.workspace"],
+  ] as const) {
+    connection.exec(
+      `UPDATE iteration SET ${column} = json_extract(plan, '${key}') WHERE ${column} IS NULL`,
+    );
   }
-  connection.exec("DROP INDEX IF EXISTS iteration_one_live");
 }
 
 /**
@@ -666,7 +706,24 @@ export function openIterationStore(databasePath: string, policy: HostPolicy): It
 export function iterationStore(connection: DatabaseSync, policy: HostPolicy): IterationStore {
   connection.exec(SCHEMA);
   migrate(connection);
-  connection.exec(CLAIM_INDEXES);
+  try {
+    connection.exec(CLAIM_INDEXES);
+  } catch (error) {
+    // **The one upgrade failure a person has to be able to act on.** These
+    // indexes are created over data that predates them, and a database in
+    // which two rows already hold one name cannot have them -- which is a fact
+    // about that database and not a fault in this code. The driver would say
+    // "UNIQUE constraint failed: iteration.topic_branch", naming a column and
+    // no row; this says what happened and what it means, and refuses to open
+    // rather than opening a store whose claims are not enforced.
+    throw new StoreDefect(
+      "this database already holds two iterations claiming one run id, topic branch or " +
+        "workspace, so the claim indexes D-0023 requires cannot be created over it. That is " +
+        "legal in a database written before D-0023, where the triple was the operator's to " +
+        "type and could be reused across iterations. rondo will not open a store whose claims " +
+        `it cannot enforce: ${describe(error)}`,
+    );
+  }
 
   const readRow = (id: string): SqlRow | null => {
     const row = connection.prepare(`SELECT ${SELECT_COLUMNS} FROM iteration WHERE id = ?`).get(id);
