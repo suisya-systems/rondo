@@ -3720,6 +3720,11 @@ waiting, not the working.
 | The bound as a durable operator-editable row | a surface decision, not a scheduling one (rule 13) | rondo's gate, with `D-0020` |
 | The loop's back edge | it is `maxIterations`' dormant post-admission meaning, not capacity (rule 19) | rondo's gate, as its own entry |
 | A versioning story for the `plan` column | rule 28 repairs one field; the column has no general mechanism, and a second added field will meet the same wall | rondo's gate, in whichever entry adds one |
+
+> **Note (D-0028, 2026-09-07).** This row is answered. The column carries `payload_version` and
+> reading climbs an ordered ladder; rule 28's repair is its first rung. The second added field met
+> the wall as predicted -- it was `pull_request_base_branch` under D-0027 -- and that is what took
+> the entry.
 | A promised refusal class for `LeaseHeld` | a refusal taxonomy is continuo's to offer, and rondo may not build on a hint (rule 20) | continuo's gate |
 | Two host processes against one store | not proposed and not forbidden; the counted bound is per-process where the index was per-database, which narrows what a second process would be safe to do | rondo's gate |
 | `probe-evidence.txt` overwritten by concurrent probes | continuo already treats the write as best-effort | continuo, if it stops being best-effort |

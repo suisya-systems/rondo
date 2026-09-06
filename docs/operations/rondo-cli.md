@@ -98,8 +98,10 @@ a lap that ran, cost money, and then vanished. rondo refuses both by name.
 
 The one file an operator writes, and they write it once per project rather than once per run. It is
 `planPayload`'s own JSON -- the same shape rondo stores in the `plan` column -- so **the `plan`
-column of any past iteration row is a valid plan file** -- with the one caveat `D-0023` adds below,
-that a row written before it names three fields a plan file may no longer carry. `readRunPlan`
+column of any past iteration row is a valid plan file**. A row names three fields a plan file has no
+reason to carry (`run_id`, `topic_branch`, `workspace`; see below), and carrying them costs nothing:
+rondo reads the keys it names and ignores the rest, so a copied row is used exactly as it came.
+`readRunPlan`
 validates every field of a plan file and refuses by field name; `readPlan` validates a stored
 payload.
 

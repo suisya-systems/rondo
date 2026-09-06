@@ -706,17 +706,6 @@ export function readPlan(payload: JsonRecord): AdmittedPlanOutcome {
   }
 }
 
-/**
- * The version {@link planPayload} writes today, which is the height of the
- * ladder below.
- *
- * Derived from {@link PAYLOAD_UPGRADES} rather than typed beside it, because a
- * version number and a list of steps that disagree is the one failure this
- * whole mechanism exists to prevent: a payload would then claim a shape no step
- * produces. Appending a step *is* the version bump.
- */
-export const PLAN_PAYLOAD_VERSION: number = 1;
-
 /** The key the version travels under, written once so it is spelled once. */
 const VERSION_KEY = "payload_version";
 
@@ -766,6 +755,21 @@ const PAYLOAD_UPGRADES: readonly ((payload: JsonRecord) => JsonRecord)[] = [
 ];
 
 /**
+ * The version {@link planPayload} writes today, which is the height of the
+ * ladder above.
+ *
+ * **Derived rather than typed beside it**, and declared after the ladder so it
+ * can be: a version number and a list of steps that disagree is the one failure
+ * this whole mechanism exists to prevent. A constant left at `1` while a second
+ * step was appended would stamp `payload_version: 1` onto records carrying the
+ * v2 shape, and would skip the new step on every row already written at 1 --
+ * the exact "silently unreadable row" this entry exists to end, reintroduced by
+ * the mechanism meant to end it. Appending a step *is* the version bump, and
+ * nothing has to remember to do it.
+ */
+export const PLAN_PAYLOAD_VERSION: number = PAYLOAD_UPGRADES.length;
+
+/**
  * The version a payload declares, or the refusal that it does not declare one.
  *
  * **An absent key is v0 and is not an error.** Every payload written before
@@ -794,9 +798,10 @@ function readPayloadVersion(payload: JsonRecord): number {
   }
   if (declared > PLAN_PAYLOAD_VERSION) {
     throw new PlanRefusal(
-      `the persisted plan declares payload version ${String(declared)} and this rondo reads up ` +
-        `to ${String(PLAN_PAYLOAD_VERSION)}, so it was written by a newer rondo than the one ` +
-        "reading it. Run the rondo that wrote the row rather than editing the row",
+      `the plan declares payload version ${String(declared)} and this rondo reads up to ` +
+        `${String(PLAN_PAYLOAD_VERSION)}, so it was written by a newer rondo than the one reading ` +
+        "it. Run the rondo that wrote it rather than editing the version down, which would claim " +
+        "a shape the bytes do not have",
     );
   }
   return declared;
