@@ -268,7 +268,7 @@ iteration 'cli-lap-001' is closed; gate outcome 'answered_and_forwarded'
 
 publish runs these three, in order, as you:
   1. git -C /abs/workspace-cli-lap-001 push origin dogfood/cli-lap-001
-  2. gh pr create --repo OWNER/NAME --base main --head dogfood/cli-lap-001
+  2. gh pr create --repo github.com/OWNER/NAME --base main --head dogfood/cli-lap-001
   3. continuo run close --run-id cli-lap-001 --outcome completed
 
 --dry-run: nothing was run.
@@ -290,11 +290,17 @@ and refuses with exit 2 on any of them:
    has it has nothing to push.
 3. **Do the push remote and `--repo` name the same repository?** The push goes to the workspace's
    remote and the pull request is opened against `--repo`, so when the two are unrelated the branch
-   lands somewhere the pull request does not look. The host counts: `--repo OWNER/NAME` is a
-   github.com repository, so `https://gitlab.com/OWNER/NAME` is a different repository wearing the
-   same name, and an enterprise host is one rondo cannot recognise from two path segments. Both are
-   mismatches you override rather than agreements. A credential embedded in a push URL is redacted
-   before any of these messages print it.
+   lands somewhere the pull request does not look. The host counts, and so does every destination:
+   `https://gitlab.com/OWNER/NAME` is a different repository wearing the same name as
+   `OWNER/NAME` on github.com, and `remote.<name>.pushurl` may name several places at once, all of
+   which receive the branch and all of which are therefore checked. A credential embedded in a
+   push URL is redacted before any of these messages print it.
+
+The host the check compares against is the one `GH_HOST` names, and github.com when it is unset --
+the same rule the forge CLI uses. **rondo then passes that host on the command line**
+(`--repo HOST/OWNER/NAME`), so the repository the pull request is opened in is the one the check
+agreed about rather than one resolved a second time from the CLI's own configuration. Set `GH_HOST`
+for an enterprise host and both halves move together.
 
 The checks run identically with and without `--dry-run`, on purpose: a preview that passes where the
 real run would fail is the same defect in a quieter form.

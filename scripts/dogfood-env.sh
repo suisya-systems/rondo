@@ -251,9 +251,10 @@ else
   git init --quiet --bare -- "$push_origin"
   note "created $push_origin"
 fi
-# `get-url` rather than a grep of `remote -v`: it is the URL the push would
-# actually use, which is what rondo's preflight compares against.
-current_origin=$(git -C "$target" remote get-url --push origin 2>/dev/null || true)
+# `get-url --push --all` rather than a grep of `remote -v`: these are the URLs
+# the push would actually reach -- `pushurl` overrides `url` and may be set more
+# than once -- and they are what rondo's preflight compares against.
+current_origin=$(git -C "$target" remote get-url --push --all origin 2>/dev/null || true)
 if [ "$current_origin" = "$push_origin" ]; then
   note "target's origin already points at it"
 elif [ -z "$current_origin" ]; then
@@ -262,10 +263,19 @@ elif [ -z "$current_origin" ]; then
 else
   # A --root reused from an environment that lived somewhere else. Moving the
   # URL is the repair; refusing would strand a rerun on the one thing a rerun is
-  # for.
+  # for. `set-url` writes `remote.origin.url`, which an explicit `pushurl` would
+  # still override, so any of those are dropped first -- otherwise the repair
+  # would report a move while pushes kept reaching the old place.
+  git -C "$target" config --unset-all remote.origin.pushurl 2>/dev/null || true
   git -C "$target" remote set-url origin "$push_origin"
-  note "target's origin moved from $current_origin to $push_origin"
+  note "target's origin moved from '$(printf '%s' "$current_origin" | tr '\n' ' ')' to $push_origin"
 fi
+# Confirmed, not assumed. This is the one place the script makes a claim about
+# where a push goes, and the claim is what the runbook and the output below rest
+# on.
+verified_origin=$(git -C "$target" remote get-url --push --all origin)
+[ "$verified_origin" = "$push_origin" ] ||
+  die "target's origin still pushes to '$(printf '%s' "$verified_origin" | tr '\n' ' ')'"
 
 step "Catalog"
 # cadenza resolves the project through this layer. `data` is what it reads;

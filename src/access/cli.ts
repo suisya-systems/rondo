@@ -82,6 +82,7 @@ environment:
   RONDO_CONTINUO_CLI  absolute path to continuo's built dist/cli.js
   RONDO_STORE         absolute path to rondo's own iteration database
   RONDO_APPROVER      the one identity allowed to answer a gate or publish
+  GH_HOST             the forge host --repo is on. Default: github.com
 
 rondo never merges a pull request, and nothing here runs unless you typed it.
 `;
@@ -1118,28 +1119,22 @@ export function publishPreflight(input: PreflightInput): PreflightOutcome {
 
   const differences = disagreeing.map((destination) => {
     const repository = destination.repository;
-    if (repository === null) {
-      return `'${destination.shown}' is not a repository rondo can read as OWNER/NAME on a forge`;
-    }
-    if (!sameHost(repository.host, input.forgeHost)) {
-      return (
-        `'${destination.shown}' is '${repository.owner}/${repository.name}' on ` +
-        `${repository.host}, and --repo names a repository on ${input.forgeHost}`
-      );
-    }
-    return `'${destination.shown}' is '${repository.owner}/${repository.name}'`;
+    return repository === null
+      ? `'${destination.shown}' is not a repository rondo can read as OWNER/NAME on a forge`
+      : `'${destination.shown}' is '${repository.owner}/${repository.name}' on ${repository.host}`;
   });
   const scope =
     destinations.length === 1
-      ? `'${input.remote}' pushes to one place, and ${differences[0] ?? ""}`
+      ? `'${input.remote}' pushes to one place: ${differences[0] ?? ""}`
       : `'${input.remote}' pushes to ${String(destinations.length)} places, and ` +
-        `${String(disagreeing.length)} of them do not match --repo: ${differences.join("; ")}`;
+        `${String(disagreeing.length)} of them do not match: ${differences.join("; ")}`;
+  const wantedShown = `'${input.repo}' on ${input.forgeHost}`;
   if (!input.allowRemoteMismatch) {
     return {
       kind: "refused",
       reason:
-        `The push and the pull request would not be about the same repository: ${scope}, while ` +
-        `--repo is '${input.repo}'. The push goes to the workspace's remote and the pull ` +
+        "The push and the pull request would not be about the same repository. --repo is " +
+        `${wantedShown}, and ${scope}. The push goes to the workspace's remote and the pull ` +
         "request is opened against --repo, so publishing this way puts the branch somewhere the " +
         "pull request does not look. If that is deliberate -- pushing to a fork and opening the " +
         "pull request upstream is the usual reason -- pass --allow-remote-mismatch.",
@@ -1167,7 +1162,7 @@ export function publishPreflight(input: PreflightInput): PreflightOutcome {
       headRef: input.topicBranch,
       warnings: [
         `--allow-remote-mismatch: ${scope}, while the pull request is opened against ` +
-          `'${input.repo}'. There is no single ${input.forgeHost} owner to qualify the head ` +
+          `${wantedShown}. There is no single ${input.forgeHost} owner to qualify the head ` +
           `with, so it stays '${input.topicBranch}' and the forge will look for that branch in ` +
           `'${input.repo}'. Expect the pull-request leg to fail unless it is there.`,
       ],
@@ -1178,7 +1173,7 @@ export function publishPreflight(input: PreflightInput): PreflightOutcome {
     headRef: `${owner}:${input.topicBranch}`,
     warnings: [
       `--allow-remote-mismatch: pushing to '${owner}' on ${input.forgeHost} and opening the ` +
-        `pull request against '${input.repo}'. The head is spelled ` +
+        `pull request against ${wantedShown}. The head is spelled ` +
         `'${owner}:${input.topicBranch}' so that the forge looks for the branch where the push ` +
         "put it.",
     ],
@@ -1285,12 +1280,13 @@ async function commandPublish(
   // preview exists to catch a mistake before the real run, so a preview that
   // passes where the real thing would fail is the failure it was meant to
   // prevent (see `publishPreflight`).
+  const host = forgeHost(environment);
   const preflight = publishPreflight({
     repo: parsed.repo,
     remote,
     workspace,
     topicBranch,
-    forgeHost: forgeHost(environment),
+    forgeHost: host,
     allowRemoteMismatch: parsed.allowRemoteMismatch,
     inspection: await inspectPushTarget({ workspace, remote, topicBranch }),
   });
@@ -1298,6 +1294,13 @@ async function commandPublish(
     return refuse(preflight.reason);
   }
   const headRef = preflight.headRef;
+  // **The host that was checked is the host that is named**, rather than left
+  // to the forge CLI to resolve a second time from its own configuration. It
+  // resolves a bare `OWNER/NAME` against whatever host it is set up for, so a
+  // preflight that agreed about one host and a command that then reached
+  // another would be two answers to one question. `HOST/OWNER/NAME` is a
+  // spelling the CLI already accepts, and it makes the two the same answer.
+  const forgeRepo = `${host}/${parsed.repo}`;
 
   say(`iteration '${record.id}' is closed; gate outcome '${record.gateOutcome ?? "(none)"}'`);
   for (const warning of preflight.warnings) {
@@ -1307,7 +1310,7 @@ async function commandPublish(
   say("");
   say("publish runs these three, in order, as you:");
   say(`  1. git -C ${workspace} push ${remote} ${topicBranch}`);
-  say(`  2. gh pr create --repo ${parsed.repo} --base ${baseBranch} --head ${headRef}`);
+  say(`  2. gh pr create --repo ${forgeRepo} --base ${baseBranch} --head ${headRef}`);
   say(`  3. continuo run close --run-id ${runId} --outcome completed`);
   say("");
   if (parsed.dryRun) {
@@ -1321,7 +1324,7 @@ async function commandPublish(
   }
 
   const opened = await openPullRequest({
-    repo: parsed.repo,
+    repo: forgeRepo,
     baseBranch,
     headRef,
     title,

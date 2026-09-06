@@ -263,7 +263,11 @@ export async function inspectPushTarget(request: PushTargetRequest): Promise<Pus
 
 /** What a pull request needs. */
 export interface PullRequestRequest {
-  /** `owner/name`, which appears in no `RunPlan` field and is the one flag. */
+  /**
+   * `host/owner/name`: `--repo`'s two segments with the host the caller
+   * checked in front of them, so that the repository this reaches is the one
+   * the preflight agreed about rather than one the CLI resolves for itself.
+   */
   readonly repo: string;
   readonly baseBranch: string;
   /**
