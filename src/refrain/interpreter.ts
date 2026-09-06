@@ -1103,10 +1103,25 @@ async function performStep(
         // lap whose session is unknown keeps a null rather than a guess.
         { reason: messageOf(walked), ...(session === undefined ? {} : { sessionId: session }) },
         `The lap did not complete: ${messageOf(walked)}`,
-        [
-          "An answer arrived, so the 'lap perform' process is over and no worker of its is still " +
-            "running. The single-flight lock is released.",
-        ],
+        // The lock is released on both spellings, because an answer means the
+        // CLI is over -- D-0019 rule 11, unchanged. What the second spelling
+        // does not repeat is the blanket claim that nothing of the lap's is
+        // still running: continuo names a session on a refusal precisely
+        // because the states that carry one are the ones a person may still
+        // have to act on, and its own teardown stops a session it still owns
+        // rather than promising rondo that one was never there.
+        session === undefined
+          ? [
+              "An answer arrived, so the 'lap perform' process is over and no worker of its is " +
+                "still running. The single-flight lock is released.",
+            ]
+          : [
+              "An answer arrived, so the 'lap perform' process is over and the single-flight " +
+                "lock is released.",
+              "continuo stops a session it still owns before it answers a refusal, so this is " +
+                "not the ceiling-fired case that keeps the lock. The id above is what a person " +
+                "checks that against, and it is on the row.",
+            ],
       );
     }
     case "noAnswer":

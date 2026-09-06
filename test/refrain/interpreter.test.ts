@@ -730,6 +730,12 @@ test("a refusal that names its session writes the id to the row it failed", asyn
   // id is: an identity rondo learned about and never said is a worker that may
   // still be running with nobody able to name it.
   expect(says(report, "session-9")).toBe(true);
+  // The lock is still released -- an answer means the CLI is over (D-0019 rule
+  // 11) -- but the blanket claim is not repeated beside an id continuo sent
+  // *because* the state may still need acting on.
+  expect(h.store.path().at(-1)).toBe("performing->failed");
+  expect(says(report, "single-flight lock is released")).toBe(true);
+  expect(says(report, "no worker of its is still running")).toBe(false);
 });
 
 test("the refused session id survives a commit another writer blocked", async () => {
@@ -785,6 +791,8 @@ test("a lap that hit a rondo defect has no session to name", async () => {
   const report = await admitOnce(h);
 
   expect(report.status).toBe("failed");
+  // The refusal with no id keeps the sentence it always had.
+  expect(says(report, "no worker of its is still running")).toBe(true);
   expect((await readRow(h.store, "i-0001"))?.sessionId).toBeNull();
   expect(says(report, "continuo names the session")).toBe(false);
 });
