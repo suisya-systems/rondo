@@ -863,6 +863,7 @@ function text(parts: Partial<PullRequestTextInput> = {}) {
     runId: "dogfood-001",
     topicBranch: "docs/rondo-first-real-lap",
     baseBranch: "main",
+    headIsQualified: false,
     work: worked(),
     ...parts,
   });
@@ -905,7 +906,7 @@ test("the body describes the change, and the request is quoted rather than prese
   // What changed, from the work itself.
   expect(body).toContain("## What changed");
   expect(body).toContain("- `cfa4502` docs: record the first real lap");
-  expect(body).toContain("1 file changed against `main`:");
+  expect(body).toContain("1 file changed against `refs/remotes/origin/main`:");
   expect(body).toContain("- `docs/operations/rondo-cli.md` (+1 -0)");
 
   // The provenance the first pull request got right, kept.
@@ -1001,4 +1002,38 @@ test("the quoted request is the row's, whitespace and all, and its fence is size
   expect(body).toContain("```\nxxx");
   expect(body).not.toContain("````");
   expect(body.length).toBeLessThan(REQUEST_LIMIT + 2000);
+});
+
+test("a body is bounded by what it lists as well as by how much", () => {
+  // Twenty entries is not a bound when one entry is unbounded: a subject and a
+  // path are both as long as somebody made them, and a body past the forge's
+  // limit is refused after the push has already happened.
+  const body = text({
+    work: worked({
+      commits: [{ abbreviatedSha: "aaa1111", subject: "s".repeat(300) }],
+      files: [{ path: `${"p".repeat(300)}.ts`, added: 1, deleted: 0 }],
+    }),
+  }).body;
+  expect(body).toContain("- `aaa1111` (subject of 300 characters, not printed here)");
+  expect(body).toContain("(path of 303 characters, not printed here)");
+  expect(body).not.toContain("sss");
+});
+
+test("a fork publish says which base its summary compared against", () => {
+  // The push went to one repository and the pull request is opened in another,
+  // so the base rondo read is the workspace's and the base the forge diffs
+  // against is the target's. The body says so rather than letting the two read
+  // as one comparison.
+  const forked = text({ headIsQualified: true }).body;
+  expect(forked).toContain("pushed to a different repository than this pull request is opened in");
+  expect(forked).toContain("compares against `refs/remotes/origin/main` as the workspace has it");
+
+  expect(text().body).not.toContain("pushed to a different repository");
+
+  // There is nothing to caveat when there was no comparison to begin with.
+  const unreadable = text({
+    headIsQualified: true,
+    work: { kind: "unreadable", reason: "not a git repository" },
+  }).body;
+  expect(unreadable).not.toContain("pushed to a different repository");
 });

@@ -278,7 +278,7 @@ the pull request it opens reads:
 
     - `8ee604b` docs: record the first real lap in the operator runbook
 
-    1 file changed against `main`:
+    1 file changed against `refs/heads/main`:
 
     - `docs/operations/rondo-cli.md` (+1 -0)
 
@@ -313,7 +313,8 @@ closing the run is a claim that the work landed.
 **The pull request is written for a person, and the title and body are printed before either is
 used.** The title is the lap's own first commit subject -- one more commit adds `(+N more commits)`
 rather than a summary of them -- and the body is what changed (the commits, the paths, the line
-counts), how it got here (run, iteration, gate outcome, continuo revision, model, session) and the
+counts, and the ref they were compared against), how it got here (run, iteration, gate outcome,
+continuo revision, model, session) and the
 sentence that says merging is still yours. The request the lap was given is *quoted input*, folded
 into a `<details>` and fenced, because it is a set of instructions written to an agent: on
 2026-09-06 the first real publish put it in both fields, so the title was the prompt cut off with an

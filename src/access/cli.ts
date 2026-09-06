@@ -1310,7 +1310,14 @@ async function commandPublish(
   // composed later would preview everything except the part a person can only
   // check by reading it.
   const work = await inspectLapWork({ workspace, remote, baseBranch, topicBranch });
-  const pullRequest = pullRequestText({ record, runId, topicBranch, baseBranch, work });
+  const pullRequest = pullRequestText({
+    record,
+    runId,
+    topicBranch,
+    baseBranch,
+    headIsQualified: headRef !== topicBranch,
+    work,
+  });
 
   say(`iteration '${record.id}' is closed; gate outcome '${record.gateOutcome ?? "(none)"}'`);
   for (const warning of preflight.warnings) {
@@ -1429,6 +1436,17 @@ const TITLE_LIMIT = 120;
 const LIST_LIMIT = 20;
 
 /**
+ * How long one listed commit subject or path may be before it is described
+ * instead of printed.
+ *
+ * Past this a value has stopped being a line in a list. `LIST_LIMIT` bounds how
+ * many entries there are and this bounds how large one can be; together they
+ * are what keeps the body inside a forge's own size limit, which is checked
+ * after a push that cannot be taken back.
+ */
+const LISTED_LIMIT = 200;
+
+/**
  * How much of the request the collapsed block carries.
  *
  * A forge body has a size limit and a request has none, so something has to
@@ -1444,6 +1462,14 @@ export interface PullRequestTextInput {
   readonly runId: string;
   readonly topicBranch: string;
   readonly baseBranch: string;
+  /**
+   * Whether the head is spelled `owner:branch` -- which is to say, whether the
+   * push and the pull request go to different repositories.
+   *
+   * It comes from the preflight rather than from the flag, because the flag is
+   * permission to mismatch and this is the mismatch having happened.
+   */
+  readonly headIsQualified: boolean;
   readonly work: LapWorkInspection;
 }
 
@@ -1554,7 +1580,7 @@ function pullRequestBody(input: PullRequestTextInput): string {
       );
     } else {
       for (const commit of work.commits.slice(0, LIST_LIMIT)) {
-        lines.push(`- \`${commit.abbreviatedSha}\` ${commit.subject}`);
+        lines.push(`- \`${commit.abbreviatedSha}\` ${listed(commit.subject, "subject")}`);
       }
       const hidden = work.commits.length - LIST_LIMIT;
       if (hidden > 0) {
@@ -1564,12 +1590,16 @@ function pullRequestBody(input: PullRequestTextInput): string {
     }
     if (work.files.length > 0) {
       const count = work.files.length;
+      // **The ref, not the branch name.** What was compared is a ref in the
+      // workspace; naming the branch instead would claim this is a comparison
+      // against the base the forge will use, which under `--allow-remote-mismatch`
+      // it is not (see `forkCaveat`).
       lines.push(
-        `${String(count)} file${count === 1 ? "" : "s"} changed against \`${baseBranch}\`:`,
+        `${String(count)} file${count === 1 ? "" : "s"} changed against \`${work.baseRef}\`:`,
         "",
       );
       for (const file of work.files.slice(0, LIST_LIMIT)) {
-        lines.push(`- \`${file.path}\` ${fileCounts(file)}`);
+        lines.push(`- \`${listed(file.path, "path")}\` ${fileCounts(file)}`);
       }
       const hidden = count - LIST_LIMIT;
       if (hidden > 0) {
@@ -1577,6 +1607,7 @@ function pullRequestBody(input: PullRequestTextInput): string {
       }
       lines.push("");
     }
+    lines.push(...forkCaveat(input, work.baseRef));
   } else {
     // **A history rondo could not read is said out loud rather than left as a
     // silence.** The diff is on the branch either way; what a reader must not
@@ -1607,6 +1638,48 @@ function pullRequestBody(input: PullRequestTextInput): string {
     "This pull request was opened by `rondo publish`, which an operator ran. Merging it is not.",
   );
   return lines.join("\n");
+}
+
+/**
+ * One listed value, or a stand-in saying how long it was.
+ *
+ * **A list of twenty entries is not a bounded body if an entry is unbounded.**
+ * A commit subject and a path are both as long as somebody made them, and a
+ * body past the forge's limit is refused by `gh` after the push has already
+ * happened -- the one leg `publish` cannot undo. Past `LISTED_LIMIT` the value
+ * is replaced rather than cut, for the reason a too-long subject does not
+ * become the title: a cut summary cannot be told from a wrong one, and the
+ * commit itself is right there to read.
+ */
+function listed(value: string, what: string): string {
+  if (value.length <= LISTED_LIMIT) {
+    return value;
+  }
+  return `(${what} of ${String(value.length)} characters, not printed here)`;
+}
+
+/**
+ * The line a fork publish needs, and an ordinary one does not.
+ *
+ * Under `--allow-remote-mismatch` the branch goes to one repository and the
+ * pull request is opened in another, so the base rondo compared against is the
+ * *workspace's* idea of it and the base the forge diffs against is the target
+ * repository's. When those two have drifted, the summary above is honest about
+ * a comparison the pull request is not making -- so the body says which
+ * comparison it made rather than letting the two be read as one. rondo does not
+ * fetch the target's base to settle it: that would be a network effect nothing
+ * asked for, on a repository the operator only named.
+ */
+function forkCaveat(input: PullRequestTextInput, baseRef: string): readonly string[] {
+  if (!input.headIsQualified) {
+    return [];
+  }
+  return [
+    `This branch was pushed to a different repository than this pull request is opened in, so the ` +
+      `summary above compares against \`${baseRef}\` as the workspace has it, which may not be the ` +
+      "commit this pull request is actually based on.",
+    "",
+  ];
 }
 
 /** One file's line counts, or the fact that it has none. */

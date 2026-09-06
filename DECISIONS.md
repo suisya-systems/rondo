@@ -3213,6 +3213,20 @@ publish and left *what the pull request says* unspecified. This entry specifies 
    summary while keeping every line of rule 4. A publish must still be possible with an unreadable
    workspace — the operator is standing there and the diff is real — and what a reader must not do
    is take an empty section for an empty change.
+
+   **The body is bounded by what it lists as well as by how much.** Twenty entries is no bound when
+   one entry is unbounded, so a commit subject or a path past `LISTED_LIMIT` (200 characters) is
+   described rather than printed. Every value rondo composes is bounded before the push, because a
+   title or body the forge refuses is refused *after* the push, which is the one leg that cannot be
+   taken back.
+
+   **The summary names the ref it compared, not the branch it was cut from.** Under
+   `--allow-remote-mismatch` the branch is pushed to one repository and the pull request opened in
+   another, so the base rondo read is the workspace's and the base the forge diffs against is the
+   target's; when they have drifted, a body that said "against `main`" would describe a comparison
+   this pull request is not making. It names the ref, and in that case says in one line which
+   comparison it made. rondo does not fetch the target's base to settle it: that is a network effect
+   nothing asked for, against a repository the operator only named.
 7. **The text is composed where it can be tested, and read where a process is allowed.**
    `inspectLapWork` lives in `src/access/forge.ts`, because asking git a question needs a spawn and
    that module holds the tree's only grant (`D-0025` rule 7, unchanged). `pullRequestText` is a pure
