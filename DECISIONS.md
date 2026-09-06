@@ -62,7 +62,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0024 | rondo ships a binary: an emitting build beside the type-check, a launcher, and the CI cell that runs it | accepted |
 | D-0025 | The lap-1 operating surface is a command line: `start`, `answer`, `publish`, `abandon`, with the plan file as the whole of configuration | accepted |
 | D-0026 | The pull request `publish` opens is written for a person: the lap's own commit subjects are the summary, and the request is quoted input | accepted |
-| D-0026 | "Revise" at the gate becomes a second lap: fresh identifiers, the predecessor's branch as the base, and the instruction carried into the prompt | accepted |
+| D-0027 | "Revise" at the gate becomes a second lap: fresh identifiers, the predecessor's branch as the base, and the instruction carried into the prompt | accepted |
 
 ---
 
@@ -3273,7 +3273,7 @@ one commit), through `inspectLapWork` and `pullRequestText` as `publish` calls t
   inputs rather than a rule about the only one.
 ---
 
-## D-0026 — "Revise" at the gate becomes a second lap: fresh identifiers, the predecessor's branch as the base, and the instruction carried into the prompt
+## D-0027 — "Revise" at the gate becomes a second lap: fresh identifiers, the predecessor's branch as the base, and the instruction carried into the prompt
 
 **Status:** accepted (2026-09-06, rondo's human gate)
 

@@ -263,7 +263,7 @@ const ALLOWED_EXTERNALS_BY_MODULE: Readonly<
   // checks rather than a promise the prose makes (D-0010).
   "src/access/cli.ts": {
     "node:util": ["parseArgs"],
-    // `existsSync` joined `readFileSync` with `revise` (D-0026 rule 6): continuo
+    // `existsSync` joined `readFileSync` with `revise` (D-0027 rule 6): continuo
     // creates the second lap's worktree and requires the path not to exist, and
     // it discovers that after `run admit` -- which for a revision is after the
     // gate has been answered and closed. Asking here costs a person nothing and

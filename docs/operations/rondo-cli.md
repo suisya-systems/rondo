@@ -266,7 +266,7 @@ has an outcome is not walked at all, and says so.
 
 ### 5.1 Revise -- answer with a change, and run a second lap
 
-`options` has said `["approve", "revise"]` since the first walk, and until `D-0026` the second word
+`options` has said `["approve", "revise"]` since the first walk, and until `D-0027` the second word
 did nothing: `answer` carried it, the gate closed the same way, and the only thing left to do was
 write a new plan file by hand. `revise` is the other way to answer a gate.
 
