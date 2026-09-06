@@ -230,6 +230,53 @@ else
   note "created $target on branch main"
 fi
 
+step "Push target (a bare repository on this disk, so the push leg is real)"
+# **Why this exists.** `rondo publish` asks the workspace whether its plan can
+# run before it prints or runs anything, and a workspace with no remote is
+# refused -- rightly, because `git push origin` cannot resolve `origin`. Before
+# this step the target had no remotes at all, so the walk stopped at that
+# refusal and the push leg was never seen. A bare repository on the same disk is
+# a real push target: a push to it does everything a push does, and the lap's
+# workspace is a worktree of this repository, so it inherits this remote.
+#
+# **What it is still not is a forge.** `gh pr create` cannot be demonstrated
+# against a directory, so the pull-request leg cannot be walked in this
+# environment at all. That is stated here, in the READY block below and in
+# section 8 of docs/operations/rondo-cli.md rather than left to be discovered by
+# an operator reading a plan that cannot run.
+push_origin="$env_root/target-origin.git"
+if [ -d "$push_origin" ]; then
+  note "already at $push_origin"
+else
+  git init --quiet --bare -- "$push_origin"
+  note "created $push_origin"
+fi
+# `get-url --push --all` rather than a grep of `remote -v`: these are the URLs
+# the push would actually reach -- `pushurl` overrides `url` and may be set more
+# than once -- and they are what rondo's preflight compares against.
+current_origin=$(git -C "$target" remote get-url --push --all origin 2>/dev/null || true)
+if [ "$current_origin" = "$push_origin" ]; then
+  note "target's origin already points at it"
+elif [ -z "$current_origin" ]; then
+  git -C "$target" remote add origin "$push_origin"
+  note "target's origin -> $push_origin"
+else
+  # A --root reused from an environment that lived somewhere else. Moving the
+  # URL is the repair; refusing would strand a rerun on the one thing a rerun is
+  # for. `set-url` writes `remote.origin.url`, which an explicit `pushurl` would
+  # still override, so any of those are dropped first -- otherwise the repair
+  # would report a move while pushes kept reaching the old place.
+  git -C "$target" config --unset-all remote.origin.pushurl 2>/dev/null || true
+  git -C "$target" remote set-url origin "$push_origin"
+  note "target's origin moved from '$(printf '%s' "$current_origin" | tr '\n' ' ')' to $push_origin"
+fi
+# Confirmed, not assumed. This is the one place the script makes a claim about
+# where a push goes, and the claim is what the runbook and the output below rest
+# on.
+verified_origin=$(git -C "$target" remote get-url --push --all origin)
+[ "$verified_origin" = "$push_origin" ] ||
+  die "target's origin still pushes to '$(printf '%s' "$verified_origin" | tr '\n' ' ')'"
+
 step "Catalog"
 # cadenza resolves the project through this layer. `data` is what it reads;
 # `origin` and `base_dir` name where the layer came from, so the file is written
@@ -384,11 +431,27 @@ Ready. The environment is at $env_root
   node bin/rondo.mjs start --plan $q_plan
   node bin/rondo.mjs answer
   node bin/rondo.mjs answer --actor-id $q_approver --body=approve
-  node bin/rondo.mjs publish --iteration-id $q_run_id --repo OWNER/NAME --actor-id $q_approver --dry-run
+  node bin/rondo.mjs publish --iteration-id $q_run_id --repo OWNER/NAME --actor-id $q_approver \\
+    --dry-run --allow-remote-mismatch
 
 'start' spawns a real worker session and costs real money; nothing above this
 line did. 'publish' without --dry-run pushes the branch and opens a pull request
 as you, so it is left with --dry-run here.
+
+** publish cannot be walked to the end in this environment, and here is why. **
+'publish' checks the workspace before it prints anything. The push leg is real:
+origin is the bare repository at
+  $push_origin
+and a push to it works. The pull-request leg is not: a bare repository on this
+disk is not a forge, so no OWNER/NAME names it and 'gh pr create' has nothing to
+create against. That is why --allow-remote-mismatch is on the line above --
+without it rondo refuses, correctly, because the push and the pull request would
+be about different repositories. Run it without the flag once to see the
+refusal; it is the check working.
+
+Walking publish to the end needs a workspace whose origin is a real repository
+on a forge you can open a pull request in. This environment is not one, and no
+flag makes it one.
 
 A second lap needs no second plan file:
 
