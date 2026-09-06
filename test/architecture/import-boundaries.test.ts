@@ -255,6 +255,22 @@ const ALLOWED_EXTERNALS_BY_MODULE: Readonly<
       "resolveProject",
     ],
   },
+  // The operator's command line (D-0025 rule 9). Two builtins: the argv parser
+  // and the one reader of the plan file. What matters here is what is *absent*:
+  // there is no `node:child_process`, so the module that reads argv, reads the
+  // plan and drives every continuo verb literally cannot start a process. That
+  // is what makes "rondo does not publish on its own" a property this test
+  // checks rather than a promise the prose makes (D-0010).
+  "src/access/cli.ts": {
+    "node:util": ["parseArgs"],
+    "node:fs": ["readFileSync"],
+  },
+  // The one module that runs a forge command, granted the one binding it needs
+  // -- keyed by module for the reason `src/continuo/invoker.ts`'s spawn is, and
+  // with more riding on it: `src/access/` holds the whole operator surface, so
+  // a layer-wide grant would have put a spawn in reach of every command rather
+  // than of the one an operator has to type the word `publish` to reach.
+  "src/access/forge.ts": { "node:child_process": ["spawn"] },
 };
 
 /**
@@ -1351,6 +1367,34 @@ const PLANTED: ReadonlyArray<
     "which it is not granted",
   ],
   [
+    // D-0025 rule 6's property, planted. `publish` runs a push and a
+    // pull-request creation, and the spawn that does it is granted to
+    // `src/access/forge.ts` alone -- so the module that reads argv and drives
+    // every other verb must not be able to start a process. If this case ever
+    // stops being caught, "rondo cannot publish on its own" has become prose.
+    "the-command-line-cannot-spawn",
+    "src/access/cli.ts",
+    'import { spawn } from "node:child_process";\nexport const x = spawn;\n',
+    "which it is not granted",
+  ],
+  [
+    // The forge's grant is by binding too: it may spawn, and it may not reach
+    // for the synchronous escape hatch beside it.
+    "the-forge-takes-a-binding-it-was-not-granted",
+    "src/access/forge.ts",
+    'import { spawn, execSync } from "node:child_process";\nexport const x = [spawn, execSync];\n',
+    "takes execSync from node:child_process",
+  ],
+  [
+    // The command line is granted two builtins by binding. A third binding on a
+    // module it *is* granted is the case that keeps the grant a list rather
+    // than a licence for the package.
+    "the-command-line-takes-a-binding-it-was-not-granted",
+    "src/access/cli.ts",
+    'import { readFileSync, writeFileSync } from "node:fs";\nexport const x = [readFileSync, writeFileSync];\n',
+    "takes writeFileSync from node:fs",
+  ],
+  [
     // The invoker's grant is by binding, like every other grant in this file.
     "the-invoker-takes-a-binding-it-was-not-granted",
     "src/continuo/invoker.ts",
@@ -1639,7 +1683,7 @@ test("the planted corpus exercises the detector in both directions", () => {
   const clean = PLANTED.filter(([, , , expected]) => expected === null);
   // A corpus that lost its controls, or lost its violations, would still pass
   // every case below by agreeing with itself.
-  expect(caught.length).toBeGreaterThanOrEqual(62);
+  expect(caught.length).toBeGreaterThanOrEqual(65);
   expect(clean.length).toBeGreaterThanOrEqual(12);
   expect(new Set(PLANTED.map(([id]) => id)).size).toBe(PLANTED.length);
 });

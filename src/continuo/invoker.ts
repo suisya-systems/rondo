@@ -36,13 +36,23 @@ import { CONTINUO_REVISION, type PinVerdict, verifyVersionLine } from "./pin.js"
 import {
   type ContinuoResult,
   decode,
+  GATE_ACK,
+  GATE_ANSWER,
+  GATE_DELIVER,
+  GATE_PRESENT,
   GATE_SHOW,
+  type GateAcked,
+  type GateAnswered,
+  type GateDelivered,
   type GateDetail,
+  type GatePresented,
   type InvocationOutput,
   LAP_PERFORM,
   type LapPerformed,
   RUN_ADMIT,
+  RUN_CLOSE,
   type RunAdmitted,
+  type RunClosed,
   type VerbContract,
 } from "./protocol.js";
 import { mapModelTier, mapNeutralRole } from "./roles.js";
@@ -936,6 +946,240 @@ function gateOptionFlags(options: readonly string[]): readonly string[] {
   return options.map(
     (option, index) => `--gate-option=${requireText(`gateOptions[${String(index)}]`, option)}`,
   );
+}
+
+/** What `gate present` needs. */
+export interface PresentGateRequest {
+  readonly db: string;
+  readonly gateId: string;
+}
+
+/**
+ * Enqueue the relay that carries a gate's question outward.
+ *
+ * The first of the four verbs the operating surface drives to answer a gate
+ * (D-0025 rule 2). They are wrappers here rather than argv a surface spells for
+ * itself, for the reason {@link showGate} gives: a caller that spelled
+ * `--gate-id` could spell `--outcome` next, and which outcome a gate closes at
+ * is not rondo's to write.
+ *
+ * It does not move the stage. What does is {@link ackGate} on the message id
+ * this returns.
+ */
+export async function presentGate(
+  continuo: VerifiedContinuo,
+  request: PresentGateRequest,
+): Promise<ContinuoResult<GatePresented>> {
+  let argv: readonly string[];
+  try {
+    argv = [
+      "--db",
+      requireAbsolute("db", request.db),
+      "--gate-id",
+      requireIdentifier("gateId", request.gateId),
+    ];
+  } catch (error) {
+    if (error instanceof ArgumentRefusal) {
+      return refusedArgument(GATE_PRESENT, error);
+    }
+    throw error;
+  }
+  return await run(continuo, GATE_PRESENT, argv);
+}
+
+/** What `gate deliver` needs. Note the absence of a gate id. */
+export interface DeliverGateRequest {
+  readonly db: string;
+  readonly destinationDir: string;
+  readonly holder: string;
+}
+
+/**
+ * Drain the outbox for the notify recipient.
+ *
+ * **A queue-wide pass, not a verb about one gate**, which is why there is no
+ * `gateId` here: continuo's own command line has none. A caller wanting to know
+ * whether *its* message went out reads {@link GateDelivered.deliveredMessageIds}
+ * rather than assuming its own was the only one queued.
+ *
+ * It takes the global `outbox-delivery` lease, which is the same lease
+ * `lap perform` holds for the length of a lap -- so a deliver racing a lap is
+ * refused `LeaseHeld`, and that refusal is an ordinary answer to relay rather
+ * than a defect.
+ */
+export async function deliverGate(
+  continuo: VerifiedContinuo,
+  request: DeliverGateRequest,
+): Promise<ContinuoResult<GateDelivered>> {
+  let argv: readonly string[];
+  try {
+    argv = [
+      "--db",
+      requireAbsolute("db", request.db),
+      "--destination-dir",
+      requireAbsolute("destinationDir", request.destinationDir),
+      "--holder",
+      requireIdentifier("holder", request.holder),
+    ];
+  } catch (error) {
+    if (error instanceof ArgumentRefusal) {
+      return refusedArgument(GATE_DELIVER, error);
+    }
+    throw error;
+  }
+  return await run(continuo, GATE_DELIVER, argv);
+}
+
+/** What `gate ack` needs. Keyed on a message id, not on a gate id. */
+export interface AckGateRequest {
+  readonly db: string;
+  readonly messageId: string;
+  readonly actorId: string;
+}
+
+/**
+ * Acknowledge one delivered relay, which is what advances a gate's stage.
+ *
+ * `requireIdentifier` rather than the weaker check, even though a relay id is
+ * path-shaped (`relay/<gate id>/presented`): the rule it applies is "not
+ * option-shaped and no whitespace", and a `/` is neither. The stronger check
+ * costs nothing here and is what every other identifier on this surface gets.
+ */
+export async function ackGate(
+  continuo: VerifiedContinuo,
+  request: AckGateRequest,
+): Promise<ContinuoResult<GateAcked>> {
+  let argv: readonly string[];
+  try {
+    argv = [
+      "--db",
+      requireAbsolute("db", request.db),
+      "--message-id",
+      requireIdentifier("messageId", request.messageId),
+      "--actor-id",
+      requireIdentifier("actorId", request.actorId),
+    ];
+  } catch (error) {
+    if (error instanceof ArgumentRefusal) {
+      return refusedArgument(GATE_ACK, error);
+    }
+    throw error;
+  }
+  return await run(continuo, GATE_ACK, argv);
+}
+
+/** What `gate answer` needs. The body is the human's own words. */
+export interface AnswerGateRequest {
+  readonly db: string;
+  readonly gateId: string;
+  readonly body: string;
+  readonly actorId: string;
+}
+
+/**
+ * Carry a human's answer to a gate, and enqueue the relay that forwards it.
+ *
+ * **The body is carried byte for byte** (D-0009 part 3): rondo does not trim,
+ * reflow, template or summarise it, and the only value it refuses is the empty
+ * string, which continuo would refuse anyway. `asciiEscape` governs what rondo
+ * *prints*, never what it sends.
+ *
+ * `--body=` attached rather than as a separate token, for the reason
+ * `--prompt=` and `--gate-option=` are attached: an answer legitimately begins
+ * with a dash, a separate token would then read as a flag, and a body spelled
+ * exactly `--json` would be deleted by {@link run}'s de-duplication of that
+ * flag.
+ */
+export async function answerGate(
+  continuo: VerifiedContinuo,
+  request: AnswerGateRequest,
+): Promise<ContinuoResult<GateAnswered>> {
+  let argv: readonly string[];
+  try {
+    argv = [
+      "--db",
+      requireAbsolute("db", request.db),
+      "--gate-id",
+      requireIdentifier("gateId", request.gateId),
+      `--body=${requireText("body", request.body)}`,
+      "--actor-id",
+      requireIdentifier("actorId", request.actorId),
+    ];
+  } catch (error) {
+    if (error instanceof ArgumentRefusal) {
+      return refusedArgument(GATE_ANSWER, error);
+    }
+    throw error;
+  }
+  return await run(continuo, GATE_ANSWER, argv);
+}
+
+/**
+ * The terminal statuses `run close` accepts, mirrored from continuo's own
+ * closed vocabulary (`TERMINAL_RUN_STATUSES`).
+ *
+ * Stated here so that a wrong value is rondo's refusal naming the three that
+ * work, rather than an argparse `invalid choice` from a subprocess -- the same
+ * reason {@link SERVED_ENDPOINT_RECIPIENTS} is stated. It is a mirror, so it
+ * drifts if continuo's set moves; `test/continuo/smoke.test.ts` is where that
+ * would show.
+ */
+export const RUN_CLOSE_OUTCOMES: readonly string[] = Object.freeze([
+  "completed",
+  "failed",
+  "cancelled",
+]);
+
+/** What `run close` needs. */
+export interface CloseRunRequest {
+  readonly db: string;
+  readonly runId: string;
+  readonly outcome: string;
+  readonly actorId: string;
+}
+
+/**
+ * Record that a run reached a terminal status.
+ *
+ * **The operator's verb, and it is theirs in the sense D-0010 means**: it
+ * records a human's observation that the work landed, and rondo drives it only
+ * from `publish`, only when a person typed that command. Nothing in the
+ * conductor reaches it -- the loop's own report says in as many words that the
+ * run row is not rondo's to settle.
+ *
+ * Not idempotent: continuo refuses a second close, because which terminal
+ * status a run reached is a fact rather than a setting. The refusal is relayed
+ * as it arrives.
+ */
+export async function closeRun(
+  continuo: VerifiedContinuo,
+  request: CloseRunRequest,
+): Promise<ContinuoResult<RunClosed>> {
+  let argv: readonly string[];
+  try {
+    if (!RUN_CLOSE_OUTCOMES.includes(request.outcome)) {
+      throw new ArgumentRefusal(
+        `'outcome' is ${JSON.stringify(request.outcome)}, and a run closes at one of ` +
+          `${RUN_CLOSE_OUTCOMES.join(", ")}. A close names the terminal status the run reached.`,
+      );
+    }
+    argv = [
+      "--db",
+      requireAbsolute("db", request.db),
+      "--run-id",
+      requireIdentifier("runId", request.runId),
+      "--outcome",
+      request.outcome,
+      "--actor-id",
+      requireIdentifier("actorId", request.actorId),
+    ];
+  } catch (error) {
+    if (error instanceof ArgumentRefusal) {
+      return refusedArgument(RUN_CLOSE, error);
+    }
+    throw error;
+  }
+  return await run(continuo, RUN_CLOSE, argv);
 }
 
 /** What `gate show` needs. One observation, and it mutates nothing. */

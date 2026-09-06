@@ -1,0 +1,24 @@
+{
+  // The emitting configuration, and the only one (DECISIONS.md D-0024).
+  //
+  // A second file rather than a flag on `tsconfig.json`, because that file's
+  // `include` covers `test`, `scripts` and `vitest.config.ts`: flipping
+  // `noEmit` there would emit `dist/test/**` beside the tree rondo ships, and
+  // `rootDir` would have to climb to the repository root to hold them all.
+  // Everything else -- ESM, NodeNext, the `.js` suffix rule, the strictness
+  // beyond `strict` -- is inherited unchanged, so the executable is compiled
+  // under exactly the settings the suite type-checks against (D-0002).
+  //
+  // `dist/` is at the repository root and cannot move: cadenza is a
+  // `file:vendor/*.tgz` dependency, and a tree emitted outside the repository
+  // resolves neither it nor `@types/node`. It stays gitignored and unpublished.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "rootDir": "src",
+    "outDir": "dist",
+    "declaration": false,
+    "sourceMap": false
+  },
+  "include": ["src"]
+}
