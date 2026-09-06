@@ -1,6 +1,7 @@
-# The operator's three commands
+# The operator's four commands
 
-What a person types to get one request through rondo, from asking for it to publishing it.
+What a person types to get one request through rondo, from asking for it to publishing it -- and,
+in section 7, `abandon`, which is how a request that cannot get there is settled instead.
 Everything here was run on 2026-09-06 against continuo `38c667b5126fdfdc0465e4a422e88b20a8b53044`
 (`continuo.pin.json`), and the transcripts are what actually came back.
 
