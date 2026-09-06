@@ -337,7 +337,9 @@ If capacity is released at `awaiting_human`, a single number can no longer expre
 the bound, because the two things worth bounding have different owners and
 different reasons:
 
-- **`maxPerforming`** — iterations at `admitting`, `admitted` or `performing`.
+- **`maxOccupying`** — iterations whose `occupying` is non-null, which is
+  **every non-terminal status except `awaiting_human` and `withdrawal_requested`**:
+  `planned`, `classified`, `admitting`, `admitted`, `performing` and `stalled`.
   This bounds concurrent `lap perform` processes, and it is the bound `D-0012`'s
   third reason is entirely about: continuo refuses a second concurrent lap
   `LeaseHeld` (`DECISIONS.md:1040-1052`). **Recommended value: 1, until
@@ -347,8 +349,26 @@ different reasons:
   person. **Recommended: an operator-set value that may exceed 1 today**, because
   §1.5 measures that a suspended iteration holds no continuo resource.
 
+**The name is `maxOccupying` and not `maxPerforming`, and the rename is a
+finding rather than a preference.** The first draft of this section called it
+`maxPerforming` and defined it over `admitting`/`admitted`/`performing` alone —
+a set narrower than §2.1's table, which is the set the column is generated from.
+A Codex review of the committed draft showed what the narrower set costs: with
+`maxLive > 1`, two `admit()` calls can both commit a `planned` row, neither is
+counted, both pass a bound of one, and both go on to perform. `stalled` was
+excluded by the same slip, which would have contradicted §2.1's fail-closed rule
+in the one state that exists because rondo does not know what is running.
+**The bound and the column are one definition, given once in §2.1**, and the name
+now says so; a bound named after the last status in its set is a bound somebody
+will narrow again.
+
+**`maxLive >= maxOccupying` is a validated constraint, not a convention**
+(`N-8`). A host policy that set them the other way round would have `maxLive`
+refuse admissions the execution bound was willing to run, which is a
+configuration that cannot be satisfied rather than one that is merely tight.
+
 **The two-bound shape is what makes the 17% / 83% split actionable rather than
-merely quoted.** `maxPerforming` is the 17% and it is continuo's to unlock;
+merely quoted.** `maxOccupying` is the 17% and it is continuo's to unlock;
 `maxLive` is the 83% and it is rondo's, and it is unlocked by a rondo-only change.
 That is `P-13`'s boundary, arrived at from rondo's side and agreeing with it.
 
@@ -359,7 +379,7 @@ table needs no second reading. Its cost is that sizing one thing sizes the other
 a bound of 5 chosen so that a person may have five open questions also authorises
 five concurrent laps, and there is no way to say "five open questions, one lap" at
 all. Under the recommendation the gate can also *choose* the single-bound
-behaviour by setting `maxLive == maxPerforming`; under the alternative it cannot
+behaviour by setting `maxLive == maxOccupying`; under the alternative it cannot
 choose the other way round. That asymmetry is the argument, and it is the whole of
 it — the two-bound form is strictly more expressive at the cost of one more number
 an operator has to understand.
@@ -540,7 +560,10 @@ SELECT COUNT(*) FROM iteration WHERE occupying IS NOT NULL
 ```
 
 read inside the transaction the insert happens in, refusing when the count is at
-the bound. `BEGIN IMMEDIATE` is what makes it atomic, and `sqlite.ts:378-392`
+the bound — **both counts, `occupying` and `live`, in the same transaction as the
+insert**, because a bound checked in one transaction and enforced in another is
+the deferred-transaction window `sqlite.ts:378-392` already rejects, one level
+up. `BEGIN IMMEDIATE` is what makes it atomic, and `sqlite.ts:378-392`
 already argues exactly this point for `reserve()` — *"under a deferred transaction
 the write lock is taken at the first write, which leaves a window in which two
 readers have both decided they may proceed"*. The bound is a **value the ledger
@@ -611,7 +634,7 @@ one" in some places and "at most N" in others.
 
 | Site | Change |
 |---|---|
-| `sqlite.ts:307-310` | `live` stays; **`occupying` is added** as a second generated column over the narrower status set (§2.1) |
+| `sqlite.ts:307-310` | `live` stays; **`occupying` is added** as a second generated column, `NULL` for a terminal status **and** for `awaiting_human` / `withdrawal_requested`, and `1` otherwise — §2.1's table is its only definition, and `maxOccupying` counts exactly it (§2.3) |
 | `sqlite.ts:322-323` | `iteration_one_live` is **dropped**; the count in `reserve()` replaces it |
 | `sqlite.ts:434-452` | the `isLiveIndexViolation` branch becomes the counted refusal |
 | `sqlite.ts:645-658` | `isLiveIndexViolation` is **deleted** — it matches an index name that no longer exists |
@@ -632,7 +655,7 @@ line is listed so that leaving it alone is a decision somebody took.
 
 ---
 
-## 5. One admission, end to end, with `maxLive = 3` and `maxPerforming = 1`
+## 5. One admission, end to end, with `maxLive = 3` and `maxOccupying = 1`
 
 The walk that makes the two bounds concrete. `iter-A` is at `awaiting_human` with
 a gate open; a person is reading it.
@@ -649,7 +672,7 @@ a gate open; a person is reading it.
    `identifiers_spent = 1`, so `run-B` and `rondo/iter-B` are held for ever from
    this instant — including after `iter-B` ends, which is what stops a later
    iteration from being handed a branch that exists.
-4. **`iter-B` performs.** `maxPerforming = 1` and `iter-A` is not performing, so
+4. **`iter-B` performs.** `maxOccupying = 1` and `iter-A` occupies nothing, so
    this is the only lap. `lap perform` acquires the **global** `outbox-delivery`
    resource — unchanged, because `D-1104` has not landed — and `iter-A`'s lap
    released it when it exited (§1.5). No `LeaseHeld`.
@@ -678,7 +701,7 @@ parallelised is the **human wait**. That is `P-14`'s 83%.
 design **depends on continuo's contract**, stated as decision rows so that a
 change on continuo's side fires a falsifier here rather than a surprise.
 
-### 6.1 `maxPerforming > 1` requires `D-1104` to take **both** halves
+### 6.1 `maxOccupying > 1` requires `D-1104` to take **both** halves
 
 `rondo D-0012`'s falsifier says the enabling change is not the lifting:
 
@@ -688,7 +711,7 @@ change on continuo's side fires a falsifier here rather than a surprise.
 > further entry changes it (`DECISIONS.md:1057-1064`).
 
 continuo's `P-13` answers it in one line, and its §10.2 says so explicitly. So
-`N-17`: **`maxPerforming` may exceed 1 only after a `D-1104` that contains the
+`N-17`: **`maxOccupying` may exceed 1 only after a `D-1104` that contains the
 holder-identity half (`P-3`), not merely the column (`P-2`).** A `D-1104` that
 took only the schema half leaves this number at 1, and rondo's entry should be
 able to say which `D-1104` it is reading.
@@ -707,7 +730,7 @@ make the keys per-run and the sharing safe (§8 step 4, `P-18`).
 `N-18`: **rondo records that a shared destination directory across concurrent laps
 rests on `D-1104`'s per-run fence keys, and that until then the safety comes from
 the serialisation rather than from `D-0085`.** This is unreachable while
-`maxPerforming = 1`, which is why it is a recorded dependency and not a blocker.
+`maxOccupying = 1`, which is why it is a recorded dependency and not a blocker.
 
 ### 6.3 A `LeaseHeld` refusal is indistinguishable from a permanent one at rondo's boundary
 
@@ -741,7 +764,7 @@ Borrowed from `P-14`'s discipline, and each line is checkable against the sectio
 above.
 
 - **It does not make two laps run at once.** On this document's recommendation
-  `maxPerforming` stays at 1 until `D-1104` (§6.1). What it parallelises is
+  `maxOccupying` stays at 1 until `D-1104` (§6.1). What it parallelises is
   iterations *waiting on a person*.
 - **It does not shorten any human wait.** F-13's 104.5 s was one operator reading
   `--help` between commands and is *"not a floor"*
@@ -789,7 +812,15 @@ starvation is possible, so a later reader finds a decision rather than a gap.
 occupancy and the bound, writes no iteration row, spawns nothing, and writes one
 refusal row (§4.4). **With an observed-red control**: the same call with the bound
 raised by one reserves. Without the control the case passes against a `reserve()`
-that refuses everything. `N-22`.
+that refuses everything.
+
+**And one sub-case per status, because the bound's status set is where this
+design was already wrong once** (§2.3). At `maxOccupying = 1`, a row sitting at
+each of `planned`, `classified`, `admitting`, `admitted`, `performing` and
+`stalled` refuses the next reservation; a row at `awaiting_human` or
+`withdrawal_requested` does not. Six of those eight cases are the ones a
+narrower predicate would silently drop, and `planned` is the one that let two
+laps through. `N-22`.
 
 **3. Resumption of one iteration while others perform — the case that must be
 `test/store` and not only `test/refrain`.** The interpreter-level assertion is
@@ -853,7 +884,7 @@ that an open question names its owner.
   order puts the run id somewhere else, which would move §3.3's boundary and make
   `A-17`'s "unused, not spent" unrepresentable as a column.
 - **A `D-1104` that takes only the schema half** is accepted at continuo's gate,
-  which would leave `maxPerforming` at 1 indefinitely and make §2.3's two-bound
+  which would leave `maxOccupying` at 1 indefinitely and make §2.3's two-bound
   argument the whole of what this entry delivers.
 - **`advisory.md`'s `A-17` is amended or rejected** at rondo's gate, which would
   remove the inheritance case and make Candidate A sufficient on its own — §3.3's
@@ -887,7 +918,7 @@ to the paired design), or *measured here* (this document's own measurement).
 | **N-5** | The triple is **stored on the `iteration` row** — `run_id` exists (`sqlite.ts:290`), `topic_branch` and `workspace` are added — and written by `reserve()` in the same `BEGIN IMMEDIATE` as the row. Not a fourth table: it would hold one row per iteration keyed by the iteration. | measured here |
 | **N-6** | `leaseClaimantId` is **not** required to be fresh — nothing measured requires it — but is **recommended** to be derived from the run id, because it is the holder in continuo's audit trail and a constant holder across N laps makes that trail unable to say which lap wrote. | measured here |
 | **N-7** | Uniqueness is three partial unique indexes over a generated `holds_identifiers`, which is `NULL` exactly when the row is **terminal and unspent**, with `identifiers_spent` set by the one transition into `admitting`. This is `R-10`'s shape B applied a second time, and it is what makes `advisory.md`'s `A-17` inheritance legal without a special case (§3.3). | measured here, on `A-17` |
-| **N-8** | **Two bounds**: `maxPerforming` over `admitting`/`admitted`/`performing`, and `maxLive` over every non-terminal status. The gate may instead take **one** bound over `live` — simpler, one counter — at the cost that sizing the human's queue depth also sizes concurrent laps, and that `maxLive == maxPerforming` is expressible under the recommendation while the converse is not (§2.3). | measured here, against continuo `P-14` |
+| **N-8** | **Two bounds**: `maxOccupying` over the `occupying` set of §2.1 — every non-terminal status **except** `awaiting_human` and `withdrawal_requested`, so `planned`, `classified` and `stalled` are all counted — and `maxLive` over every non-terminal status, with **`maxLive >= maxOccupying` validated** rather than assumed. The bound and the generated column are **one definition**: a `maxOccupying` defined over `admitting`/`admitted`/`performing` alone lets two `planned` rows both pass a bound of one and then both perform, and drops `stalled` out of §2.1's fail-closed rule (§2.3). The gate may instead take **one** bound over `live` — simpler, one counter — at the cost that sizing the human's queue depth also sizes concurrent laps, and that `maxLive == maxOccupying` is expressible under the recommendation while the converse is not. | measured here, against continuo `P-14`; the status-set error found by Codex round 1 |
 | **N-9** | `runId`, `topicBranch` and `workspace` **leave `RunPlan`**, replaced by one `workspaceRoot`; `parties.grantee` is filled by the allocator and `runPlan()`'s equality check stays as an assertion about rondo's own two writes. **This fires `D-0019` rule 3's first half and leaves its second half — fence geometry defaults — untouched**, which the entry says in as many words (§3.4). | measured here |
 | **N-10** | A derived collision the allocator can see is retried under a fresh iteration id; one it cannot see is **refused in rondo's own words**, naming abandon-and-readmit rather than relaying continuo's sentence about branches. The retry does not loop (§3.5). | measured here |
 | **N-11** | The ledger is a **counting predicate inside `reserve()`'s `BEGIN IMMEDIATE`**, not a wider index and not a slot table. **The cost is stated, not argued away**: the invariant stops being the database's and an out-of-band insert violates it silently, which is what `D-0019` rule 10's *"the database's invariant"* was buying (§4.1, §4.2). The gate may take the slot table to keep it. | Issue #8 checkbox 2, measured here |
@@ -896,12 +927,12 @@ to the paired design), or *measured here* (this document's own measurement).
 | **N-14** | **A capacity refusal writes a refusal row** — timestamp, request, bound in force, occupancy observed — outside the iteration table and outside any lock. It reserves nothing, so `D-0019` rule 9's "no row, no lock" holds. This is the **demand** measurement `D-0012`'s last falsifier asks for and that F-13 does not supply: F-13 gives the shape, only this gives the count (§1.8, §4.4). | Issue #8, `D-0012`'s falsifier |
 | **N-15** | The sites that change together are a **closed list** (§4.5), and it includes the four `D-0019` rule 10 did not name because they are types and API shapes rather than DDL — `readLiveRow`'s `.get()`, `readLive()`'s singular `ReadOutcome`, `occupied`'s single `liveIterationId`, and `isLiveIndexViolation`'s match on the index name. **Rule 10's own claim is about the schema and is exact about the schema**; what is added is that a `grep` for `rondo#8` does not reach the other four. `settle()`'s `live IS NOT NULL` guard is on the list **to be left alone** (§4.5). | measured here |
 | **N-16** | `inTransaction`'s body **may not be `async`**, enforced rather than assumed. Today the type admits a promise-returning body, `COMMIT` would run before the awaited work, and the failure is invisible under N = 1 and a torn transaction under N > 1 (§1.6). | measured here |
-| **N-17** | **`maxPerforming` may exceed 1 only after a `continuo D-1104` that contains the holder-identity half (`P-3`), not merely the column (`P-2`)** — `D-0012`'s falsifier says the enabling change is not the lifting, and continuo's `P-13` agrees. rondo's entry records **which** `D-1104` it is reading. | `D-0012`, continuo `P-13` |
-| **N-18** | A **shared `endpointDestinationDir` across concurrent laps** rests on `D-1104`'s per-run fence keys and not on `D-0085` alone: the dropbox's fence file is keyed by the lease resource and the materialiser's pre-flight reads it under the global constant (continuo §1.1, `P-18`). Recorded as a dependency; unreachable while `maxPerforming = 1` (§6.2). | continuo #167 |
+| **N-17** | **`maxOccupying` may exceed 1 only after a `continuo D-1104` that contains the holder-identity half (`P-3`), not merely the column (`P-2`)** — `D-0012`'s falsifier says the enabling change is not the lifting, and continuo's `P-13` agrees. rondo's entry records **which** `D-1104` it is reading. | `D-0012`, continuo `P-13` |
+| **N-18** | A **shared `endpointDestinationDir` across concurrent laps** rests on `D-1104`'s per-run fence keys and not on `D-0085` alone: the dropbox's fence file is keyed by the lease resource and the materialiser's pre-flight reads it under the global constant (continuo §1.1, `P-18`). Recorded as a dependency; unreachable while `maxOccupying = 1` (§6.2). | continuo #167 |
 | **N-19** | The loop's back edge (`iterate`) is **not** brought back by this entry, though `loop.ts:20-27` names the allocator as what returns it. A retry edge is a question about `maxIterations`' dormant post-admission meaning (`D-0019` rule 9), and it goes to rondo's gate as its own entry. | measured here |
 | **N-20** | **rondo does not retry a `LeaseHeld` refusal.** `errorClass` is decoded (`protocol.ts:98`, `:804`) and discarded at the conductor boundary (`conductor.ts:102-111`), and rondo's own module says the class *"is a hint, not a taxonomy"* (`protocol.ts:42-44`). The `abandon()` path's 60 s TTL window (`endpoint_lease.ts:107`, `:375-381`) is recorded as a cost, and a promised refusal class is **asked of continuo's gate**, not built here (§6.3). | measured here |
 | **N-21** | The **ordering** case asserts what is promised — two racing reserves at `bound - 1` produce exactly one reservation and one refusal — and a second case **pins that no ordering is promised** and starvation is possible, so a later reader finds a decision rather than a gap. A durable queue is `D-0020`'s (§8, §9). | Issue #8 checkbox 3 |
-| **N-22** | The **refusal at capacity** case asserts `atCapacity` with occupancy and bound, no iteration row, nothing spawned, one refusal row — **with an observed-red control** (the same call with the bound raised by one reserves), without which it passes against a `reserve()` that refuses everything. | Issue #8 checkbox 3 |
+| **N-22** | The **refusal at capacity** case asserts `atCapacity` with occupancy and bound, no iteration row, nothing spawned, one refusal row — **with an observed-red control** (the same call with the bound raised by one reserves), without which it passes against a `reserve()` that refuses everything. It carries **one sub-case per non-terminal status**, because the bound's status set is where this design was wrong once (§2.3, `N-8`): `planned` at `maxOccupying = 1` must refuse, and `awaiting_human` must not. | Issue #8 checkbox 3; sharpened by Codex round 1 |
 | **N-23** | The **resumption while others perform** case lives at `test/store` as well as `test/refrain`, because the assertion that matters is §1.6's: overlapping `admit()` and `resume()` on one connection do not interleave inside a transaction, and `inTransaction`'s synchronous-body guard (`N-16`) is asserted with it. | Issue #8 checkbox 3, measured here |
 | **N-24** | A **fourth** case the issue does not name and §5 requires: `identifiers_spent` is set exactly once at `admitting`, a terminal **spent** row keeps holding its triple for ever, and — the observed-red control — a terminal **unspent** row releases it. Without it `N-7`'s whole mechanism is prose. | measured here |
 | **N-25** | **Implementation starts only after the gate accepts or amends these lines and creates `D-0023`.** This document allocates no entry, edits no `DECISIONS.md`, and is not accepted authority. | `AGENTS.md` section 7 |
@@ -927,7 +958,9 @@ Return or reject `D-0023` unless every answer is yes.
 6. Does the entry record **what the counted bound gives up** — that the invariant
    stops being the database's — rather than presenting the index's removal as free
    (`N-11`)?
-7. Is `maxPerforming` held at **1** until a `D-1104` containing `P-3`, and does the
+7. Is `maxOccupying` held at **1** until a `D-1104` containing `P-3`, does its status
+   set match §2.1's `occupying` column exactly, and is `maxLive >= maxOccupying`
+   validated (`N-8`, `N-17`), and does the
    entry say which `D-1104` it read (`N-17`)?
 8. Is the closed list of changing sites complete, including the four that carry no
    `rondo#8` comment, and is `settle()`'s guard explicitly **left alone**
@@ -947,3 +980,22 @@ Return or reject `D-0023` unless every answer is yes.
 14. Are the residuals named with **who decides** each, including the composition
     root's unowned pragmas that this entry exposes rather than creates (section 9)?
 15. Does implementation wait for the gate-created `D-0023` (`N-25`)?
+
+---
+
+## Appendix A. The in-loop Codex review of this document
+
+A `codex exec review` pass over the committed document raised its findings
+against the tree rather than against the prose, and they are answered above
+rather than noted as limitations.
+
+**Round 1** raised one finding, confirmed.
+
+| # | Finding | Verdict | Where answered |
+|---|---|---|---|
+| P2-1 | §2.3's `maxPerforming` was defined over `admitting`/`admitted`/`performing` alone, a set narrower than §2.1's table. With `maxLive > 1`, two `admit()` calls both commit a `planned` row, neither is counted, both pass a bound of one and both then perform. `stalled` was excluded by the same slip, contradicting §2.1's fail-closed rule | **Confirmed.** The two sections disagreed and the narrower one was the enforcing one, so §2.1's table was decorative wherever the bound was actually read | §2.3 rewritten: the bound is renamed **`maxOccupying`** and defined as **exactly** §2.1's `occupying` column, one definition in one place; `maxLive >= maxOccupying` becomes a validated constraint; **`N-8` amended**; §4.2 states that both counts are read in the insert's own transaction; §4.5's `occupying` row spells the status set; **`N-22` amended** to carry one sub-case per status |
+
+The finding is recorded rather than smoothed away because what it found is the
+shape of the problem and not the shape of the drafting: a bound named after the
+last status in its set is a bound somebody narrows again, and the rename is the
+part of the fix most likely to survive a later edit.
