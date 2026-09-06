@@ -30,6 +30,7 @@ import {
   publishPreflight,
   pullRequestText,
   repositoryFromRemoteUrl,
+  revisionBlocker,
   USAGE,
   walkGate,
 } from "../../src/access/cli.js";
@@ -150,7 +151,7 @@ test("a word that is not a command is refused, and the refusal lists the command
   expect(outcome.kind).toBe("refused");
   if (outcome.kind === "refused") {
     expect(outcome.reason).toContain("strat");
-    for (const command of ["start", "answer", "publish", "abandon"]) {
+    for (const command of ["start", "answer", "revise", "publish", "abandon"]) {
       expect(outcome.reason).toContain(command);
     }
   }
@@ -482,6 +483,50 @@ test("revise carries the instruction and the three fresh identifiers", () => {
     topicBranch: "dogfood/r-2",
     workspace: "/srv/ws2",
   });
+});
+
+/**
+ * The two refusals that have to come before the gate is walked.
+ *
+ * The walk presents, delivers and answers through continuo and its ack closes
+ * the gate; it cannot be taken back. `revisionPlan` already refuses a plan it
+ * cannot build, and these are the two things it cannot see -- the id the
+ * successor will be reserved under is not part of the plan, and a gate continuo
+ * has already closed is walked *successfully* and silently. Either discovered
+ * after the walk leaves a person having spent their gate on an answer that
+ * started nothing.
+ */
+test("a revision is blocked before the walk when the id is taken or the gate is closed", () => {
+  const clear = {
+    predecessorId: "iter-1",
+    gateOutcome: null,
+    successorId: "iter-2",
+    successorRow: "absent",
+  } as const;
+  expect(revisionBlocker(clear)).toBe(null);
+
+  // A gate that already reached an outcome: the instruction would be carried
+  // nowhere, and `withdrawn` and `expired` close a gate without a person having
+  // said anything at all.
+  for (const outcome of ["withdrawn", "expired", "answered_and_forwarded"]) {
+    const blocked = revisionBlocker({ ...clear, gateOutcome: outcome });
+    expect(blocked).toContain(outcome);
+    expect(blocked).toContain("No lap was started");
+  }
+
+  // A row already standing under the successor's id. `unreadable` blocks it as
+  // firmly as `read` does: it is a row, whatever it says.
+  for (const row of ["read", "unreadable"] as const) {
+    const blocked = revisionBlocker({ ...clear, successorRow: row });
+    expect(blocked).toContain("iter-2");
+    expect(blocked).toContain("Nothing was touched");
+  }
+
+  // The gate is checked first: a person whose gate has closed needs to hear
+  // that before they hear about an identifier.
+  expect(revisionBlocker({ ...clear, gateOutcome: "expired", successorRow: "read" })).toContain(
+    "expired",
+  );
 });
 
 test("the refusal names the flags the command does take", () => {

@@ -42,7 +42,7 @@ import { type RunPlan, readPlan } from "../refrain/plan.js";
 import type { LoopPolicy } from "../refrain/policy.js";
 import { revisionPlan } from "../refrain/revision.js";
 import type { IterationRecord, JsonRecord } from "../store/records.js";
-import { type IterationStore, openIterationStore } from "../store/sqlite.js";
+import { type IterationStore, openIterationStore, type ReadOutcome } from "../store/sqlite.js";
 import { abandon, admit, conductorPorts, resume } from "./conductor.js";
 import { asciiEscape, consoleSeams, relayUpstream } from "./console.js";
 import {
@@ -894,6 +894,60 @@ async function commandAnswer(
 }
 
 /**
+ * Everything that has to be true before a revision may walk the gate.
+ *
+ * **A separate function because the walk is irreversible and these are not
+ * about the plan.** `revisionPlan` already refuses a plan it cannot build, but
+ * two things it cannot see would each be discovered *after* the gate had been
+ * presented, answered and closed -- at which point the person has spent their
+ * gate on an answer that started nothing, and the only way on is the
+ * hand-written plan `revise` exists to remove.
+ *
+ *  1. **The successor's iteration id is not part of its plan**, so a plan can
+ *     validate perfectly under an id the store already holds. `reserve` refuses
+ *     the duplicate correctly -- but it runs after the walk, and by then the
+ *     predecessor is `closed`, so a corrected retry is told that nothing is
+ *     live. An `unreadable` row blocks the id too: it is a row, whatever it
+ *     says.
+ *  2. **A gate continuo has already closed is not an answer this command may
+ *     stand on.** `walkGate` handles it correctly and gently -- it says so and
+ *     sends nothing -- and that is exactly the trap: the walk *succeeds*, and a
+ *     conductor's `resume` then reports `closed` for `withdrawn` and `expired`
+ *     as readily as for `answered_and_forwarded`. Read as permission, a
+ *     successful no-op walk would start a lap whose instruction was never
+ *     recorded anywhere, under a gate outcome that is not a person saying
+ *     anything at all.
+ *
+ * Both were found by review rather than by a walk, which is the half of the
+ * ordering argument the first walk could not reach: the happy path never meets
+ * either.
+ */
+export function revisionBlocker(input: {
+  readonly predecessorId: string;
+  readonly gateOutcome: string | null;
+  readonly successorId: string;
+  readonly successorRow: ReadOutcome["kind"];
+}): string | null {
+  if (input.gateOutcome !== null) {
+    return (
+      `the gate on iteration '${input.predecessorId}' is already closed as ` +
+      `'${input.gateOutcome}', so your instruction cannot be carried to it and nothing would ` +
+      "record what you asked for. No lap was started. If the work should continue anyway, " +
+      "'rondo start' takes a plan whose base branch is this iteration's topic branch."
+    );
+  }
+  if (input.successorRow !== "absent") {
+    return (
+      `iteration '${input.successorId}' already exists in the store, so the second lap could ` +
+      "not be reserved under it -- and the gate would have been answered first. Nothing was " +
+      "touched. Choose another --iteration-id, or another --run-id, which is what the " +
+      "iteration id defaults to."
+    );
+  }
+  return null;
+}
+
+/**
  * Door two and a half: answer the gate with a change, and run a second lap.
  *
  * **The defect this closes, stated plainly.** `gate_options` has offered
@@ -996,6 +1050,22 @@ async function commandRevise(
   }
   const gate = observed.payload;
 
+  // The last two refusals, and the last things that cost nothing. See
+  // `revisionBlocker`: the id the successor will be reserved under is not part
+  // of the plan that was just validated, and a gate continuo has already closed
+  // is walked successfully and silently.
+  const successorId = parsed.iterationId ?? successor.plan.runId;
+  const existing = await store.read(successorId);
+  const blocker = revisionBlocker({
+    predecessorId: record.id,
+    gateOutcome: gate.outcome,
+    successorId,
+    successorRow: existing.kind,
+  });
+  if (blocker !== null) {
+    return refuse(blocker);
+  }
+
   say(`gate ${gate.gateId} is at stage '${gate.stage}'`);
   const walked = await walkGate(continuo, {
     db: planField(record, "db"),
@@ -1025,7 +1095,6 @@ async function commandRevise(
     return 1;
   }
 
-  const successorId = parsed.iterationId ?? successor.plan.runId;
   say("");
   say(`revising as iteration '${successorId}', cut from '${successor.plan.baseBranch}'`);
   say("the lap is the step that is slow");
