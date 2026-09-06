@@ -192,14 +192,29 @@ fi
 
 step "Target repository (the repository a lap is allowed to touch)"
 target="$env_root/target"
-if [ -d "$target/.git" ]; then
+# The test is "main resolves to a commit", not "a .git exists". An interrupted
+# first run -- a seed commit that failed on configured signing is the easy way
+# to get one -- leaves a repository a `.git` check calls finished and a lap
+# cannot materialise a workspace from, because there is no `main` to cut the
+# topic branch off. Repairing it is a rerun; that is what this branch is for.
+if [ -d "$target/.git" ] && git -C "$target" rev-parse --verify --quiet refs/heads/main >/dev/null 2>&1; then
   note "already at $target"
 else
   mkdir -p -- "$target/docs"
-  git -C "$target" init --quiet --initial-branch=main
-  printf '# Notes\n\nA scratch target for walking the rondo operator CLI.\n' > "$target/docs/NOTES.md"
+  [ -d "$target/.git" ] || git -C "$target" init --quiet --initial-branch=main
+  # A repository left with an unborn HEAD may be pointing at whatever
+  # `init.defaultBranch` says rather than at main; the seed commit has to land
+  # on the branch the plan names.
+  git -C "$target" rev-parse --verify --quiet HEAD >/dev/null 2>&1 ||
+    git -C "$target" symbolic-ref HEAD refs/heads/main
+  [ -f "$target/docs/NOTES.md" ] ||
+    printf '# Notes\n\nA scratch target for walking the rondo operator CLI.\n' > "$target/docs/NOTES.md"
   git -C "$target" add docs/NOTES.md
+  # Identity and signing are pinned to this one command: a scratch target is not
+  # a place to inherit a machine's commit policy, and signing is the failure
+  # that produces the half-initialised repository above.
   git -C "$target" -c user.name=rondo-dogfood -c user.email=rondo-dogfood@invalid \
+    -c commit.gpgsign=false \
     commit --quiet -m 'docs: seed the dogfood target'
   note "created $target on branch main"
 fi
@@ -346,6 +361,7 @@ q_repo_root=$(printf %q "$repo_root")
 q_env_file=$(printf %q "$env_file")
 q_plan=$(printf %q "$plan")
 q_approver=$(printf %q "$approver")
+q_run_id=$(printf %q "$run_id")
 
 cat <<READY
 
@@ -357,7 +373,7 @@ Ready. The environment is at $env_root
   node bin/rondo.mjs start --plan $q_plan
   node bin/rondo.mjs answer
   node bin/rondo.mjs answer --actor-id $q_approver --body=approve
-  node bin/rondo.mjs publish --iteration-id $run_id --repo OWNER/NAME --actor-id $q_approver --dry-run
+  node bin/rondo.mjs publish --iteration-id $q_run_id --repo OWNER/NAME --actor-id $q_approver --dry-run
 
 'start' spawns a real worker session and costs real money; nothing above this
 line did. 'publish' without --dry-run pushes the branch and opens a pull request
