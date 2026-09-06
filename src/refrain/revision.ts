@@ -50,26 +50,31 @@
  */
 import type { IterationRecord } from "../store/records.js";
 
-import { type PlanOutcome, type RunPlan, readPlan, runPlan } from "./plan.js";
+import { allocate } from "./allocator.js";
+import { type AdmittedPlan, type PlanOutcome, readPlan, runPlan } from "./plan.js";
 
 /**
  * Everything a second lap needs that the first lap's row does not already hold.
  *
- * Four values, and the asymmetry between them is the point: the three
- * identifiers are the operator's because rondo allocates none, and the
- * instruction is the operator's because rondo composes no answer on a person's
- * behalf (`D-0009`). Every one of the remaining twenty-eight plan fields comes
- * off the predecessor's row.
+ * **Three values now, and it used to be five.** The successor's run id, topic
+ * branch and workspace were the operator's, because rondo allocated none.
+ * `D-0023` gave rondo an allocator, so all three are derived from the
+ * successor's iteration id and none of them can be typed: the instruction is
+ * the operator's because rondo composes no answer on a person's behalf
+ * (`D-0009`), and the id is the operator's because it is the one name `D-0023`
+ * leaves them. Every remaining plan field comes off the predecessor's row.
  */
 export interface RevisionRequest {
   /** The row whose gate a person has just answered with a change to make. */
   readonly predecessor: IterationRecord;
-  /** The successor's run id. Fresh: continuo holds a run under the old one. */
-  readonly runId: string;
-  /** The successor's topic branch. Fresh: git holds a branch under the old one. */
-  readonly topicBranch: string;
-  /** The successor's workspace. Fresh: a worktree stands at the old path. */
-  readonly workspace: string;
+  /**
+   * The id the successor will be reserved under.
+   *
+   * It is not part of the plan this module builds -- the allocator turns it
+   * into the triple at `admit()` -- and it is carried here only so that the one
+   * refusal that depends on it can be made before the gate is touched.
+   */
+  readonly iterationId: string;
   /** What the person asked for, byte for byte as they wrote it. */
   readonly instruction: string;
 }
@@ -128,9 +133,6 @@ export function revisionPlan(input: RevisionRequest): PlanOutcome {
 
   return runPlan({
     ...plan,
-    runId: input.runId,
-    topicBranch: input.topicBranch,
-    workspace: input.workspace,
     // The whole of the continuation, in one field. See this module's header.
     baseBranch: plan.topicBranch,
     // **And the whole of what that costs, in the field beside it.** The branch
@@ -142,14 +144,13 @@ export function revisionPlan(input: RevisionRequest): PlanOutcome {
     // lap's base all the way along instead of walking back one link.
     pullRequestBaseBranch: plan.pullRequestBaseBranch ?? plan.baseBranch,
     prompt: revisionPrompt(plan, input),
-    // `parties.grantee` is the run id spelled a second time, and `runPlan`
-    // refuses a plan where the two disagree -- so a successor that kept the
-    // predecessor's grantee would be refused here rather than answered
-    // `grantee_mismatch` by cadenza after the row was reserved. `loadPlan`
-    // rewrites the same field for the same reason when `start` overrides
-    // `--run-id`; this is that rule applied to the one other place a run id can
-    // change.
-    parties: { ...plan.parties, grantee: input.runId },
+    // `parties.grantee` is not rewritten here any more, and that is `D-0023`
+    // rule 9 rather than an omission: the successor's run id is minted by the
+    // allocator at `admit()`, from an iteration id this module never turns into
+    // one, so there is no value here that could be written. `admittedPlan()`
+    // fills the grantee from the run id it derived and then asserts the two
+    // agree. The predecessor's grantee rides along in the spread above and is
+    // overwritten there, which is why it does not have to be cleared here.
   });
 }
 
@@ -168,7 +169,7 @@ export function revisionPlan(input: RevisionRequest): PlanOutcome {
  * **ASCII only** (`D-0004`), like everything else rondo composes: this string
  * reaches continuo's command line and a cp932 console on the Windows cell.
  */
-function revisionPrompt(plan: RunPlan, input: RevisionRequest): string {
+function revisionPrompt(plan: AdmittedPlan, input: RevisionRequest): string {
   return [
     plan.prompt,
     "",
@@ -192,28 +193,65 @@ function revisionPrompt(plan: RunPlan, input: RevisionRequest): string {
  * plan is the thing continuo was handed: the column is written from it and
  * agreeing with a copy is weaker than agreeing with the original.
  */
-function repeatedIdentifier(input: RevisionRequest, plan: RunPlan): string | null {
-  if (input.runId === plan.runId) {
+function repeatedIdentifier(input: RevisionRequest, plan: AdmittedPlan): string | null {
+  // **One refusal used to be three, and then one turned out not to be enough.**
+  // The operator used to type the successor's run id, topic branch and
+  // workspace, so each could repeat the predecessor's. Under `D-0023` all three
+  // are derived from the iteration id, so for an iteration rondo allocated they
+  // repeat exactly when the id does.
+  //
+  // **That equivalence does not hold for a migrated predecessor**, and this is
+  // the case a review found. A row written before `D-0023` carries whatever
+  // triple the operator typed, which the upgrade back-filled onto it verbatim.
+  // Nothing stops that run id being `rondo-<some other id>`: a predecessor
+  // called `legacy-id` can already own `rondo-revision`, and revising it with
+  // `--iteration-id revision` derives exactly that. The id check passes, the
+  // branch and workspace may well be free, and `commandRevise` would then
+  // answer the predecessor's gate -- which cannot be undone -- before
+  // `reserve()` refused the successor against the migrated claim.
+  //
+  // So the derived triple is compared against the one the predecessor actually
+  // holds, and the id comparison is kept beside it because it is the one that
+  // still gives a person a sentence they can act on.
+  if (input.iterationId === input.predecessor.id) {
     return (
-      `'runId' is '${input.runId}', which is the run the previous lap was admitted under. ` +
-      "continuo holds that run and refuses a second materialisation of it (continuo D-0057), " +
-      "so a revision needs a run id of its own. What continues across the two laps is the " +
-      "branch, not the identifier."
+      `'--iteration-id' is '${input.iterationId}', which is the iteration being revised. The ` +
+      "second lap is a second run: continuo holds a run under the first lap's id, git holds " +
+      `its branch '${plan.topicBranch}' and a worktree stands at '${plan.workspace}'. rondo ` +
+      "derives all three from the iteration id, so the revision needs an id of its own. What " +
+      "carries the work across is the branch, and rondo sets that for you: the second lap's " +
+      "base branch is the first lap's topic branch."
     );
   }
-  if (input.topicBranch === plan.topicBranch) {
-    return (
-      `'topicBranch' is '${input.topicBranch}', which the previous lap created. continuo ` +
-      "requires a topic branch that does not already exist, and this one holds the work the " +
-      "revision continues from -- it is the successor's 'baseBranch', which rondo sets for you."
-    );
+
+  const derived = allocate(input.iterationId, plan.workspaceRoot);
+  if (derived.kind === "refused") {
+    // Not this function's refusal to make: `admit()` is where an unusable id is
+    // refused, and saying it twice in two voices would be two rules.
+    return null;
   }
-  if (input.workspace === plan.workspace) {
-    return (
-      `'workspace' is '${input.workspace}', where the previous lap's worktree still stands. ` +
-      "continuo creates the worktree and requires the path not to exist, so the revision needs " +
-      "a directory of its own."
-    );
+  // The row is the claim of record -- it is what the indexes are over -- and
+  // the plan is what a row written before the allocator carried. Both are
+  // checked, because a migrated row has the triple in both places and a row
+  // rondo allocated has it in both too.
+  for (const [field, mine, theirs] of [
+    ["run id", derived.allocation.runId, input.predecessor.runId ?? plan.runId],
+    [
+      "topic branch",
+      derived.allocation.topicBranch,
+      input.predecessor.topicBranch ?? plan.topicBranch,
+    ],
+    ["workspace", derived.allocation.workspace, input.predecessor.workspace ?? plan.workspace],
+  ] as const) {
+    if (mine === theirs) {
+      return (
+        `the ${field} rondo would derive for iteration '${input.iterationId}' is '${mine}', ` +
+        `which iteration '${input.predecessor.id}' already holds. That iteration was admitted ` +
+        "before rondo allocated identifiers, so its names were typed rather than derived and " +
+        "one of them happens to collide with what this id produces. Nothing was touched. " +
+        "Choose a different --iteration-id."
+      );
+    }
   }
   return null;
 }

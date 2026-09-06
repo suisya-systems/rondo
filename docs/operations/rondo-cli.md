@@ -98,13 +98,19 @@ a lap that ran, cost money, and then vanished. rondo refuses both by name.
 
 The one file an operator writes, and they write it once per project rather than once per run. It is
 `planPayload`'s own JSON -- the same shape rondo stores in the `plan` column -- so **the `plan`
-column of any past iteration row is a valid plan file**. `readPlan` validates all thirty-three fields
-and refuses by field name -- except `pull_request_base_branch`, which is the one key that may be
-**absent** (it reads as null) because the plan column has no migration and rows written before it
-existed are still valid plans. Only `revise` ever sets it; see 5.1.
+column of any past iteration row is a valid plan file** -- with the one caveat `D-0023` adds below,
+that a row written before it names three fields a plan file may no longer carry. `readRunPlan`
+validates every field of a plan file and refuses by field name; `readPlan` validates a stored
+payload. Two keys may be **absent** from a stored payload, because the plan column has no
+migration and rows written before either field existed are still valid plans:
+`pull_request_base_branch`, which reads as null and which only `revise` ever sets (see 5.1), and
+`workspace_root`, which is derived from the stored workspace's parent.
 
-Four values change per run and have flags, so the file itself does not have to be edited to start a
-second lap: `--run-id`, `--topic-branch`, `--workspace`, `--prompt`.
+**Three fields the plan file used to carry are gone** (`D-0023`): `run_id`, `topic_branch` and
+`workspace`. rondo derives all three from the iteration id now, so a plan file cannot name them and
+there is no flag to override them. What replaces them is one `workspace_root` -- the directory the
+workspaces are cut under. Two values change per run and have flags:
+`--iteration-id` and `--prompt`.
 
 A complete working example follows, and [`scripts/dogfood-env.sh`](../../scripts/dogfood-env.sh)
 generates one filled in for the machine it runs on. Every path must be absolute, and
@@ -120,11 +126,8 @@ shim.
 ```json
 {
   "db": "/abs/control-plane.sqlite3",
-  "run_id": "cli-lap-001",
-  "lease_claimant_id": "rondo-operator",
-  "workspace": "/abs/workspace-cli-lap-001",
+  "workspace_root": "/abs/workspaces",
   "base_branch": "main",
-  "topic_branch": "dogfood/cli-lap-001",
   "prompt": "Append one line to docs/NOTES.md reading exactly: 'Touched by the rondo operator CLI.' Then commit it with the message 'docs: touched by the rondo operator CLI'. Do nothing else.",
 
   "repository": "/abs/target",
@@ -180,30 +183,52 @@ shim.
     "loopPolicy": { "maxReviewRounds": 2, "noProgressWindow": 3, "noProgressRepeat": 2 },
     "executorPolicy": { "roleName": "worker", "modelTier": "standard", "reportingDuties": [] }
   },
-  "parties": { "issuer": "rondo-cli", "grantee": "cli-lap-001" },
+  "parties": { "issuer": "rondo-cli", "grantee": "rondo-allocates-this" },
   "intended_action": { "capabilities": ["command.run"] }
 }
 ```
 
-`parties.grantee` must equal `run_id`. **The CLI rewrites it for you** whenever `--run-id` is
-given, so overriding the run id on the command line cannot leave the two disagreeing -- which
-previously cost a whole iteration, because cadenza answers a mismatch as an *answered*
-classification rather than a refusal.
+`parties.grantee` must equal the run id, and **the run id is no longer yours to write**
+(`D-0023` rule 9). Whatever you put in `grantee` is overwritten with the run id rondo derived, so
+the field is a placeholder that exists only because cadenza's type requires it. It cannot drift,
+which is the point: cadenza answers a grantee mismatch as an *answered* classification rather than
+a refusal, so a disagreement used to cost a whole iteration.
+
+**What rondo derives, from `--iteration-id ID`:**
+
+| Value | Derived as |
+|---|---|
+| run id | `rondo-ID` |
+| topic branch | `rondo/ID` |
+| workspace | `<workspace_root>/iter-ID` |
+| `lease_claimant_id` | `rondo-ID` |
+
+`ID` must be a lowercase letter followed by up to 63 more of `[a-z0-9_-]`, and it is refused before
+any row is written. The `iter-` prefix on the workspace is not decoration: `con`, `nul`, `aux` and
+`com1` are legal iteration ids and are reserved device names on Windows, where a bare directory of
+that name cannot be created.
+
+**More than one iteration can be open at once.** An iteration waiting at its gate holds no worker,
+so it does not occupy an execution slot and a second `start` is accepted beside it.
+`RONDO_MAX_LIVE` bounds how many may be open at once (default 3) and `RONDO_MAX_OCCUPYING` how many
+may be *executing* (default 1; raising it needs continuo to allow a second concurrent lap first).
+When more than one is open, `answer` needs `--iteration-id ID` to say which one you mean -- it
+refuses and lists them rather than picking.
 
 ---
 
 ## 4. Start -- take one request and run a lap
 
 ```console
-$ node bin/rondo.mjs start --plan "$S/plan.json"
-plan ok: 32 fields
+$ node bin/rondo.mjs start --plan "$S/plan.json" --iteration-id cli-lap-001
+plan ok: 30 fields
 continuo verified at revision 38c667b5126fdfdc0465e4a422e88b20a8b53044
 starting iteration 'cli-lap-001'; the lap is the step that is slow
 iteration 'cli-lap-001' is awaiting_human
-  Reserved iteration cli-lap-001 at 'planned'.
+  Reserved iteration cli-lap-001 at 'planned', holding run id rondo-cli-lap-001, branch rondo/cli-lap-001 and workspace /abs/workspaces/iter-cli-lap-001.
   cadenza allowed the action (granted); the three digests are committed.
-  continuo build verified at revision 38c667b...; run id cli-lap-001 and that revision are committed before anything is spawned.
-  continuo admitted run cli-lap-001 at status 'created' under role 'worker' (neutral name 'worker').
+  continuo build verified at revision 38c667b...; run id rondo-cli-lap-001 and that revision are committed before anything is spawned.
+  continuo admitted run rondo-cli-lap-001 at status 'created' under role 'worker' (neutral name 'worker').
   Sending one lap; this is the step that takes minutes.
   The lap answered. Gate gate/worker_escalation/2d6d4fd5-.../0 is already open; session 2d6d4fd5-... was started.
   The conductor is suspending here. There is no timer and no poll loop, and the process may exit; call resume() once a person has answered the gate.
@@ -212,7 +237,14 @@ A person has to answer this before anything lands. Next: rondo answer
 ```
 
 **22.8 seconds**, measured. The process exits and the gate stays open; there is no daemon to leave
-running. The iteration id defaults to the run id -- rondo allocates nothing.
+running. The iteration id has no default and is the only identifier you type: rondo mints the run
+id, the topic branch and the workspace from it (`D-0023`).
+
+**A second `start` while this one waits is accepted**, which is what `D-0023` delivers. Measured on
+the same machine, two laps run one after the other: with `dogfood-001` suspended at its gate,
+`dogfood-002` was admitted and performed, and the store read `live=2, occupying=1` while it did --
+two iterations open, one worker running. Setting `RONDO_MAX_LIVE=1` refuses the same command in
+about a millisecond, writes no iteration row, and records one demand row.
 
 ## 5. Answer -- see what is waiting, and answer it
 
@@ -456,7 +488,11 @@ yours.
 
 | What you see | What it means | What to do |
 |---|---|---|
-| `iteration <id> is still live, and at most one iteration may be non-terminal at a time` | Single-flight. Something is unfinished. | `rondo answer` to see it, or `abandon` it. |
+| `Refused: 1 of a permitted 1 iterations are already executing on this host` | A lap is running. The bound is `RONDO_MAX_OCCUPYING`, which is 1 until continuo allows a second concurrent lap. | Wait for it, or `abandon` it. An iteration merely *waiting at a gate* does not count here. |
+| `Refused: 3 of a permitted 3 iterations are already open on this host` | Three iterations are unfinished, most likely waiting on you. The bound is `RONDO_MAX_LIVE`. | `answer` them, `abandon` them, or raise `RONDO_MAX_LIVE`. |
+| `Refused: 2 of a permitted 1 ... more than the bound rather than equal to it` | Expected, not corruption: an iteration already counted re-entered the executing set without a new admission. | Nothing. It drains as those iterations end; no further admission is accepted meanwhile. |
+| `the iteration id '<id>' is not a rondo identifier` | rondo derives the run id, branch and workspace from it, so it must be `[a-z][a-z0-9_-]{0,63}`. | Pick a conforming id. Nothing was written. |
+| `N iterations are live, so "the live one" does not name anything` | More than one is open, which is now normal. | Re-run with `--iteration-id ID`; the message lists them. |
 | `continuo gate deliver refused (LeaseHeld)` | A lap holds the global delivery lease. | Wait; the lease is 60 s. |
 | `continuo is not usable: ...` | The build is not the pinned revision, or is dirty. | Rebuild the pinned continuo (section 1). |
 | `RONDO_APPROVER is not set` | rondo will not act for an unnamed person. | Export it. |

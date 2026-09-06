@@ -21,7 +21,7 @@ set -euo pipefail
 
 usage() {
   cat <<'USAGE'
-usage: scripts/dogfood-env.sh [--root DIR] [--run-id ID] [--force-continuo-rebuild]
+usage: scripts/dogfood-env.sh [--root DIR] [--iteration-id ID] [--force-continuo-rebuild]
 
 Provision a working environment for the rondo operator CLI and print the
 commands that drive it.
@@ -32,10 +32,13 @@ options:
       or <repo>/.worker-scratch/dogfood-env when that is unset -- which is the
       root .gitignore already excludes, so a default run cannot put a control
       plane one `git add -A` away from a commit.
-  --run-id ID
-      the run id written into the generated plan file. Default: dogfood-001.
-      A second lap does not need a second plan file -- `rondo start` takes
-      --run-id, --topic-branch, --workspace and --prompt as flags.
+  --iteration-id ID
+      the iteration id the printed commands use. Default: dogfood-001.
+      It is no longer written into the plan file: rondo derives the run id, the
+      topic branch and the workspace from it (D-0023). A second lap does not
+      need a second plan file -- `rondo start` takes --iteration-id and
+      --prompt as flags. It must be a lowercase letter followed by up to 63
+      more of [a-z0-9_-].
   --force-continuo-rebuild
       rebuild the pinned continuo even when the built one already reports the
       pinned version line.
@@ -74,7 +77,7 @@ force_continuo_rebuild=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --root) [ $# -ge 2 ] || die "--root needs a value"; env_root=$2; shift 2 ;;
-    --run-id) [ $# -ge 2 ] || die "--run-id needs a value"; run_id=$2; shift 2 ;;
+    --iteration-id) [ $# -ge 2 ] || die "--iteration-id needs a value"; run_id=$2; shift 2 ;;
     --force-continuo-rebuild) force_continuo_rebuild=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) usage >&2; die "unknown argument '$1'" ;;
@@ -320,13 +323,13 @@ node -e '
   const gitTimeoutMs = 60_000;
   const identityReadbackTimeoutMs = 120_000;
 
+  // D-0023: the run id, the topic branch and the workspace are no longer in a
+  // plan file. rondo derives all three from the iteration id, so what the plan
+  // carries is the *root* the workspaces are cut under.
   const plan = {
     db: controlPlane,
-    run_id: runId,
-    lease_claimant_id: "rondo-operator",
-    workspace: `${envRoot}/workspace-${runId}`,
+    workspace_root: `${envRoot}/workspaces`,
     base_branch: "main",
-    topic_branch: `dogfood/${runId}`,
     prompt,
 
     repository: target,
@@ -388,9 +391,11 @@ node -e '
       loopPolicy: { maxReviewRounds: 2, noProgressWindow: 3, noProgressRepeat: 2 },
       executorPolicy: { roleName: "worker", modelTier: "standard", reportingDuties: [] },
     },
-    // parties.grantee is run_id spelled a second time, and rondo refuses any
-    // other value. `rondo start --run-id` rewrites it, so the two cannot drift.
-    parties: { issuer: "rondo-cli", grantee: runId },
+    // parties.grantee is the run id spelled a second time, and D-0023 rule 9
+    // makes the run id rondo own mint -- so this value is a placeholder that
+    // the allocator overwrites with the run id it derived. It is written at
+    // all only because the cadenza type requires the field.
+    parties: { issuer: "rondo-cli", grantee: "rondo-allocates-this" },
     intended_action: { capabilities: ["command.run"] },
   };
 
@@ -435,7 +440,7 @@ Ready. The environment is at $env_root
   cd $q_repo_root
   . $q_env_file
 
-  node bin/rondo.mjs start --plan $q_plan
+  node bin/rondo.mjs start --plan $q_plan --iteration-id $q_run_id
   node bin/rondo.mjs answer
   node bin/rondo.mjs answer --actor-id $q_approver --body=approve
   node bin/rondo.mjs publish --iteration-id $q_run_id --repo OWNER/NAME --actor-id $q_approver \\
@@ -460,13 +465,19 @@ Walking publish to the end needs a workspace whose origin is a real repository
 on a forge you can open a pull request in. This environment is not one, and no
 flag makes it one.
 
-A second lap needs no second plan file:
+A second lap needs no second plan file, and no second set of identifiers:
 
-  node bin/rondo.mjs start --plan $q_plan \\
-    --run-id dogfood-002 \\
-    --topic-branch dogfood/dogfood-002 \\
-    --workspace $(printf %q "$env_root/workspace-dogfood-002") \\
-    --prompt "..."
+  node bin/rondo.mjs start --plan $q_plan --iteration-id dogfood-002 --prompt "..."
+
+rondo derives run id 'rondo-dogfood-002', branch 'rondo/dogfood-002' and
+workspace '$env_root/workspaces/iter-dogfood-002' from that one name (D-0023).
+
+** Two iterations can now be open at once. ** While the first is waiting at its
+gate it holds no worker, so it does not occupy an execution slot: the second
+'start' above is accepted rather than refused. RONDO_MAX_LIVE bounds how many
+may be open (default 3) and RONDO_MAX_OCCUPYING how many may be executing
+(default 1, and raising it needs continuo to allow a second concurrent lap
+first). With more than one open, 'answer' needs --iteration-id ID to say which.
 
 If something is stuck, 'node bin/rondo.mjs abandon --iteration-id ID --reason "..."'
 is the way out; see section 7 of docs/operations/rondo-cli.md.

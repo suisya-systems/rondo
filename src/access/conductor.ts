@@ -52,7 +52,7 @@ import {
   requestWithdrawal as requestIterationWithdrawal,
   resume as resumeIteration,
 } from "../refrain/interpreter.js";
-import type { RunPlan } from "../refrain/plan.js";
+import type { AdmittedPlan, RunPlan } from "../refrain/plan.js";
 import type { LoopPolicy } from "../refrain/policy.js";
 import type {
   ConductorPorts,
@@ -139,7 +139,7 @@ function asEffect<T, U>(result: ContinuoResult<T>, read: (payload: T) => U): Eff
  * the row there, and reaches this layer through the loop rather than through the
  * plan the caller wrote (D-0021).
  */
-function lapRequestOf(plan: RunPlan, modelTier: string): PerformLapRequest {
+function lapRequestOf(plan: AdmittedPlan, modelTier: string): PerformLapRequest {
   return {
     db: plan.db,
     runId: plan.runId,

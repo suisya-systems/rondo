@@ -23,10 +23,13 @@ the composition root that wires them.
 **What that does and does not mean.** The arc runs end to end and stops where it
 is supposed to: it classifies against a contract, admits a run, walks one lap,
 and suspends at a gate a human has yet to answer. It never composes the answer
-(D-0009), never publishes (D-0010), never closes a gate (D-0013) and runs one
-iteration at a time (D-0012). There is still no web UI, no MCP surface, no
-agent-type registry and no allocator — and the last of those is why single-flight
-is a **reduction** rather than the target shape (D-0019 rule 10, rondo#8).
+(D-0009), never publishes (D-0010) and never closes a gate (D-0013). It now runs
+**one lap at a time and several iterations at once**: an iteration suspended at a
+gate holds no worker, so it stops occupying an execution slot (D-0023). There is
+still no web UI, no MCP surface and no agent-type registry. rondo **does** have an
+allocator now, and single-flight over *executing* laps is what remains of the
+reduction — held there by continuo's single delivery resource rather than by
+rondo's schema (D-0023 rules 8 and 17).
 
 **Two rules of this layer are worth knowing before you touch it.**
 `src/refrain/`'s external allowance is *empty* and must stay empty: that is why

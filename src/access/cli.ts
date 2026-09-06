@@ -38,10 +38,16 @@ import {
   type VerifiedContinuo,
 } from "../continuo/invoker.js";
 import type { ContinuoResult } from "../continuo/protocol.js";
-import { type RunPlan, readPlan } from "../refrain/plan.js";
-import type { LoopPolicy } from "../refrain/policy.js";
+import { allocate } from "../refrain/allocator.js";
+import { type RunPlan, readRunPlan } from "../refrain/plan.js";
+import {
+  CONSERVATIVE_HOST_POLICY,
+  type HostPolicy,
+  hostPolicy,
+  type LoopPolicy,
+} from "../refrain/policy.js";
 import { revisionPlan } from "../refrain/revision.js";
-import type { IterationRecord, JsonRecord } from "../store/records.js";
+import { type IterationRecord, isTerminal, type JsonRecord } from "../store/records.js";
 import { type IterationStore, openIterationStore, type ReadOutcome } from "../store/sqlite.js";
 import { abandon, admit, conductorPorts, resume } from "./conductor.js";
 import { asciiEscape, consoleSeams, relayUpstream } from "./console.js";
@@ -65,13 +71,17 @@ import {
  * vitest captures stdout through a UTF-8 path -- so a test that reads this
  * string is the only thing that catches an em-dash before an operator does.
  */
-export const USAGE = `rondo - the operator surface for one lap at a time
+export const USAGE = `rondo - the operator surface for delegated work
 
-  rondo start --plan FILE [--run-id ID] [--topic-branch NAME]
-              [--workspace PATH] [--prompt TEXT]
-                          take one request and run a lap, and stop at the gate
-  rondo answer            show the gate that is waiting for a person
-  rondo answer --actor-id ID --body=TEXT
+  rondo start --plan FILE --iteration-id ID [--prompt TEXT]
+                          take one request and run a lap, and stop at the gate.
+                          The run id, the topic branch and the workspace are
+                          derived from --iteration-id; rondo mints them, so
+                          there is no flag to type them
+  rondo answer [--iteration-id ID]
+                          show the gate that is waiting for a person. Name one
+                          when more than one iteration is open
+  rondo answer --actor-id ID --body=TEXT [--iteration-id ID]
                           answer it, and settle the iteration. Write --body
                           with an equals sign: an answer may begin with a dash
   rondo revise --actor-id ID --body=TEXT --run-id ID --topic-branch NAME
@@ -81,8 +91,8 @@ export const USAGE = `rondo - the operator surface for one lap at a time
                           branch. The three identifiers are yours to choose:
                           rondo allocates none, and continuo refuses the ones
                           the first lap spent
-  rondo publish --repo OWNER/NAME --actor-id ID [--remote NAME] [--dry-run]
-                [--allow-remote-mismatch]
+  rondo publish --repo OWNER/NAME --actor-id ID --iteration-id ID
+                [--remote NAME] [--dry-run] [--allow-remote-mismatch]
                           push the branch, open the pull request, close the run.
                           Refuses before it prints when the workspace cannot
                           push where the plan says, or when the push remote and
@@ -94,6 +104,11 @@ environment:
   RONDO_CONTINUO_CLI  absolute path to continuo's built dist/cli.js
   RONDO_STORE         absolute path to rondo's own iteration database
   RONDO_APPROVER      the one identity allowed to answer a gate or publish
+  RONDO_MAX_LIVE      how many iterations may be open at once. Default 3. An
+                      iteration suspended at a gate holds no worker, so this
+                      bounds how many questions may wait on a person at once
+  RONDO_MAX_OCCUPYING how many may be executing at once. Default 1, and raising
+                      it needs continuo to allow a second concurrent lap first
   GH_HOST             the forge host --repo is on. Default: github.com
 
 rondo never merges a pull request, and nothing here runs unless you typed it.
@@ -120,6 +135,22 @@ const START_POLICY: LoopPolicy = Object.freeze({
 });
 
 const STORE_ENV = "RONDO_STORE";
+
+/**
+ * The two bounds, as environment variables (D-0023 rule 12).
+ *
+ * Read here, once, on the way to opening the store, because this is where
+ * rondo's other deployment facts are read: the database's path is already an
+ * environment variable for the same reason, and one process with one bound is
+ * the shape that makes the number mean anything. They are emphatically **not**
+ * on `LoopPolicy`, which `admit()` takes per call -- a bound each request may
+ * restate is not a bound.
+ *
+ * The durable, operator-editable form is D-0020's operating surface and is
+ * deliberately not taken here (D-0023 rule 13).
+ */
+const MAX_LIVE_ENV = "RONDO_MAX_LIVE";
+const MAX_OCCUPYING_ENV = "RONDO_MAX_OCCUPYING";
 const APPROVER_ENV = "RONDO_APPROVER";
 
 /** The remote a push goes to when the operator does not name one. */
@@ -154,9 +185,6 @@ export function approvedForPublication(record: IterationRecord): boolean {
 export interface ParsedCommand {
   readonly command: "start" | "answer" | "revise" | "publish" | "abandon" | "help";
   readonly planFile: string | null;
-  readonly runId: string | null;
-  readonly topicBranch: string | null;
-  readonly workspace: string | null;
   readonly prompt: string | null;
   readonly iterationId: string | null;
   readonly actorId: string | null;
@@ -175,9 +203,6 @@ export type ParseOutcome =
 
 const FLAGS = {
   plan: { type: "string" },
-  "run-id": { type: "string" },
-  "topic-branch": { type: "string" },
-  workspace: { type: "string" },
   prompt: { type: "string" },
   "iteration-id": { type: "string" },
   "actor-id": { type: "string" },
@@ -204,9 +229,15 @@ const COMMANDS = ["start", "answer", "revise", "publish", "abandon"] as const;
  * as though it did something.
  */
 const FLAGS_BY_COMMAND: Readonly<Record<string, readonly string[]>> = {
-  start: ["plan", "run-id", "topic-branch", "workspace", "prompt", "iteration-id"],
-  answer: ["actor-id", "body"],
-  revise: ["actor-id", "body", "run-id", "topic-branch", "workspace", "iteration-id"],
+  // `--run-id`, `--topic-branch` and `--workspace` are gone from `start` and
+  // from `revise` (D-0023 rule 9): rondo derives all three from the iteration
+  // id, which is now required rather than defaulted. D-0027 typed them on
+  // `revise` because no allocator existed when it was written.
+  start: ["plan", "prompt", "iteration-id"],
+  // `answer` gained `--iteration-id` because more than one iteration may be
+  // waiting at once now, which is the whole point of D-0023.
+  answer: ["actor-id", "body", "iteration-id"],
+  revise: ["actor-id", "body", "iteration-id"],
   publish: ["repo", "actor-id", "remote", "iteration-id", "dry-run", "allow-remote-mismatch"],
   abandon: ["iteration-id", "reason"],
 };
@@ -275,9 +306,6 @@ export function parseCommand(argv: readonly string[]): ParseOutcome {
     parsed: {
       command: command as ParsedCommand["command"],
       planFile: text("plan"),
-      runId: text("run-id"),
-      topicBranch: text("topic-branch"),
-      workspace: text("workspace"),
       prompt: text("prompt"),
       iterationId: text("iteration-id"),
       actorId: text("actor-id"),
@@ -295,9 +323,6 @@ function emptyCommand(command: ParsedCommand["command"]): ParsedCommand {
   return {
     command,
     planFile: null,
-    runId: null,
-    topicBranch: null,
-    workspace: null,
     prompt: null,
     iterationId: null,
     actorId: null,
@@ -602,36 +627,18 @@ function loadPlan(parsed: ParsedCommand): { plan: RunPlan } | { refusal: string 
   }
 
   const payload = { ...(document as JsonRecord) };
-  if (parsed.runId !== null) {
-    payload["run_id"] = parsed.runId;
-  }
-  if (parsed.topicBranch !== null) {
-    payload["topic_branch"] = parsed.topicBranch;
-  }
-  if (parsed.workspace !== null) {
-    payload["workspace"] = parsed.workspace;
-  }
   if (parsed.prompt !== null) {
     payload["prompt"] = parsed.prompt;
   }
 
-  // `parties.grantee` must equal `runId`: the conductor classifies under the run
-  // id, so a different grantee is answered `grantee_mismatch` -- an *answered*
-  // classification that ends the iteration at `abandoned` after the row is
-  // reserved and the lock taken. `runPlan` refuses it by name, and rewriting it
-  // here means an operator who overrode `--run-id` never meets that refusal.
-  const parties = payload["parties"];
-  const runId = payload["run_id"];
-  if (
-    parties !== null &&
-    typeof parties === "object" &&
-    !Array.isArray(parties) &&
-    typeof runId === "string"
-  ) {
-    payload["parties"] = { ...(parties as JsonRecord), grantee: runId };
-  }
-
-  const outcome = readPlan(payload);
+  // **`--run-id`, `--topic-branch` and `--workspace` are gone, and so is the
+  // `parties.grantee` rewrite that went with them** (D-0023 rule 9). All four
+  // values are rondo's now: the allocator derives the triple from the iteration
+  // id and fills the grantee from the run id it minted. An operator who could
+  // still override one of them would be a second authority for a name the
+  // capacity ledger's claim indexes rest on, which is the one thing the
+  // allocator exists to prevent.
+  const outcome = readRunPlan(payload);
   if (outcome.kind !== "planned") {
     return { refusal: `The plan was refused: ${outcome.reason}` };
   }
@@ -723,13 +730,143 @@ function openStore(
         "invariant of one database.",
     };
   }
+  const bounds = hostPolicyOf(environment);
+  if ("refusal" in bounds) {
+    return bounds;
+  }
   try {
-    return { store: openIterationStore(path) };
+    return { store: openIterationStore(path, bounds.policy) };
   } catch (error) {
     return {
       refusal: `The iteration store at ${path} could not be opened: ${error instanceof Error ? error.message : String(error)}`,
     };
   }
+}
+
+/**
+ * Which iteration a verb that used to mean "the live one" should act on.
+ *
+ * **The function D-0023 makes necessary.** While the bound was one, "the live
+ * iteration" named a row, and `readLive()` could answer with it. Above one it
+ * names nothing, and the honest answers are three rather than two: this is the
+ * one, there is none, or there are several and the operator has to say which.
+ * Picking the oldest would have kept every call site compiling and would have
+ * silently answered somebody else's gate.
+ *
+ * An explicit `--iteration-id` always wins and is read by id, so a person may
+ * name a terminal iteration that no longer appears in the live set at all --
+ * which is what `publish` needs, since it acts on `closed` rows.
+ */
+async function pickWaiting(
+  store: IterationStore,
+  iterationId: string | null,
+): Promise<
+  { readonly record: IterationRecord | null; readonly note: string } | { readonly refusal: string }
+> {
+  if (iterationId !== null) {
+    const found = await store.read(iterationId);
+    if (found.kind === "absent") {
+      return { refusal: `There is no iteration '${iterationId}'.` };
+    }
+    if (found.kind === "unreadable") {
+      return { refusal: `That iteration row would not read: ${found.reason}` };
+    }
+    return { record: found.record, note: "" };
+  }
+  const live = await store.readLive();
+  const unreadable = live.filter((outcome) => outcome.kind === "unreadable");
+  const readable = live
+    .filter((outcome) => outcome.kind === "read")
+    .map((outcome) => outcome.record);
+  if (readable.length === 0) {
+    // An unreadable row is reported rather than counted as "nothing waiting":
+    // a person told nothing is open, while a row sits there holding capacity,
+    // has been told the one thing that stops them looking.
+    if (unreadable.length > 0) {
+      return {
+        refusal:
+          `No live iteration would read. ${String(unreadable.length)} row(s) are there and ` +
+          "cannot be decoded; name one with --iteration-id ID to see why, or end it with abandon.",
+      };
+    }
+    return { record: null, note: "Nothing is waiting. No iteration is live." };
+  }
+  // **Ambiguity is counted over every live row, readable or not.** A row that
+  // will not decode is still an iteration a person may have meant, and one that
+  // still holds capacity; dropping it from the count would let "the live one"
+  // silently name the only row that happened to parse, and `answer --body`
+  // would then carry a human's answer to the other iteration's gate.
+  if (readable.length + unreadable.length > 1) {
+    const named = [
+      ...readable.map((record) => `${record.id} (${record.status})`),
+      ...unreadable.map((outcome) => `${outcome.id} (unreadable)`),
+    ].join(", ");
+    return {
+      refusal:
+        `${String(readable.length + unreadable.length)} iterations are live, so "the live one" ` +
+        `does not name anything. Say which with --iteration-id ID: ${named}`,
+    };
+  }
+  if (readable.length > 1) {
+    // **One line, and that is a constraint rather than a preference.** `say`
+    // and `refuse` put every message through `asciiEscape` (D-0004), which
+    // escapes control characters -- so a newline embedded here reaches the
+    // operator as a literal `\u000a` and the list becomes unreadable. That is
+    // exactly how it first shipped, and the real run is what caught it.
+    const named = readable.map((record) => `${record.id} (${record.status})`).join(", ");
+    return {
+      refusal:
+        `${String(readable.length)} iterations are live, so "the live one" does not name ` +
+        `anything. Say which with --iteration-id ID: ${named}`,
+    };
+  }
+  const only = readable[0];
+  if (only === undefined) {
+    return { record: null, note: "Nothing is waiting. No iteration is live." };
+  }
+  return { record: only, note: "" };
+}
+
+/**
+ * The host's two bounds, from the environment, validated.
+ *
+ * Absent means the default rather than zero: a host nobody has configured
+ * should behave the way lap 1 measured, which is one lap at a time with room
+ * for a few unanswered questions beside it.
+ *
+ * **`maxOccupying` is settable, and setting it above one is currently a way to
+ * make continuo refuse laps rather than a way to run them.** continuo
+ * serialises `lap perform` on one global delivery resource until its `D-1104`
+ * lands the holder-identity half; until then a second concurrent lap is refused
+ * there. The knob exists here so that the day it lands is a policy edit and not
+ * a code change, and this paragraph is what stops the number being raised on
+ * the assumption that rondo is the thing in the way.
+ */
+function hostPolicyOf(
+  environment: Readonly<Record<string, string | undefined>>,
+): { readonly policy: HostPolicy } | { readonly refusal: string } {
+  const read = (name: string, fallback: number): number | string => {
+    const raw = environment[name];
+    if (raw === undefined || raw.trim() === "") {
+      return fallback;
+    }
+    const value = Number(raw);
+    return Number.isInteger(value) ? value : `${name} is '${raw}', which is not a whole number.`;
+  };
+  const maxOccupying = read(MAX_OCCUPYING_ENV, CONSERVATIVE_HOST_POLICY.maxOccupying);
+  if (typeof maxOccupying === "string") {
+    return { refusal: maxOccupying };
+  }
+  const maxLive = read(MAX_LIVE_ENV, CONSERVATIVE_HOST_POLICY.maxLive);
+  if (typeof maxLive === "string") {
+    return { refusal: maxLive };
+  }
+  const outcome = hostPolicy({ maxOccupying, maxLive });
+  return outcome.kind === "accepted"
+    ? { policy: outcome.policy }
+    : {
+        refusal: `${MAX_OCCUPYING_ENV}/${MAX_LIVE_ENV} do not describe a host that can run: ${outcome.reason}`,
+      };
 }
 
 /**
@@ -810,9 +947,21 @@ async function commandStart(
 
   say(`plan ok: ${String(Object.keys(plan).length)} fields`);
   say(`continuo verified at revision ${continuo.revision}`);
-  // The iteration id defaults to the run id: a copy of an identifier the
-  // operator already chose, not a mint. rondo allocates nothing (D-0012).
-  const iterationId = parsed.iterationId ?? plan.runId;
+  // **The iteration id is the one identifier an operator still supplies, and it
+  // no longer has a default** (D-0023). It used to fall back to the plan's run
+  // id -- a copy of a name the operator had already chosen -- but the run id is
+  // derived *from* the iteration id now, so the old default is circular. It is
+  // also the value three command lines are built out of, which is why it is
+  // checked against a closed alphabet before any row is written.
+  if (parsed.iterationId === null) {
+    return refuse(
+      "start needs --iteration-id ID. rondo derives the run id, the topic branch and the " +
+        "workspace from it, so it is the one name a person chooses and the only one that is " +
+        "not the host's to mint. It must be a lowercase letter followed by up to 63 more of " +
+        "[a-z0-9_-].",
+    );
+  }
+  const iterationId = parsed.iterationId;
   say(`starting iteration '${iterationId}'; the lap is the step that is slow`);
 
   const report = await admit(ports, plan, START_POLICY, iterationId);
@@ -836,15 +985,31 @@ async function commandAnswer(
   ports: ReturnType<typeof conductorPorts>,
   continuo: VerifiedContinuo,
 ): Promise<number> {
-  const live = await store.readLive();
-  if (live.kind === "absent") {
-    say("Nothing is waiting. No iteration is live.");
+  const chosen = await pickWaiting(store, parsed.iterationId);
+  if ("refusal" in chosen) {
+    return refuse(chosen.refusal);
+  }
+  if (chosen.record === null) {
+    say(chosen.note);
     return 0;
   }
-  if (live.kind === "unreadable") {
-    return refuse(`The live iteration row would not read: ${live.reason}`);
+  const record = chosen.record;
+  // **A terminal row is refused before its gate is read** (`D-0023` rule 15).
+  // `pickWaiting` applies no status filter on purpose, because `publish` acts
+  // on `closed` rows and has to be able to name one -- but `answer` must not
+  // inherit that latitude. `abandon` writes a terminal row and deliberately
+  // drives no continuo verb, so an abandoned iteration usually still has an
+  // open gate on it; answering that gate would close a run whose iteration a
+  // person has already ended, and would record a human answer against work
+  // rondo had given up on. Before D-0023 this was unreachable because there was
+  // no `--iteration-id` on `answer` at all.
+  if (isTerminal(record.status)) {
+    return refuse(
+      `iteration '${record.id}' is ${record.status}, which is terminal, so there is nothing ` +
+        "left to answer. Its gate may still be open -- closing that is a person's, through " +
+        "'gate close' on the operating surface (D-0013).",
+    );
   }
-  const record = live.record;
   if (record.gateId === null) {
     say(`iteration '${record.id}' is ${record.status}, and no gate is open on it.`);
     say("There is nothing for a person to answer yet.");
@@ -866,7 +1031,12 @@ async function commandAnswer(
     say(`options ${gate.options}`);
     say("");
     say("to answer:");
-    say(`  rondo answer --actor-id YOU --body="your answer"`);
+    // **The id is always printed, not only when several are open.** A command
+    // that is correct today and refused tomorrow -- because somebody started a
+    // second iteration in between -- is worse than one that is always explicit,
+    // and since D-0023 "the live one" stops naming anything the moment a second
+    // iteration is admitted.
+    say(`  rondo answer --iteration-id ${record.id} --actor-id YOU --body="your answer"`);
     return 0;
   }
 
@@ -1033,38 +1203,39 @@ async function commandRevise(
         "it. Write it with an equals sign: an instruction may begin with a dash.",
     );
   }
-  // **Three identifiers, named one refusal at a time is worse than named
-  // together**: an operator who supplied none would otherwise be told about the
-  // run id, type a command, and be told about the topic branch. rondo allocates
-  // none of the three (`D-0012`, `D-0019` rule 3), and this is the sentence
-  // that says so where a person meets it.
-  const runId = parsed.runId;
-  const topicBranch = parsed.topicBranch;
-  const workspace = parsed.workspace;
-  const missing = [
-    runId === null ? "--run-id ID" : null,
-    topicBranch === null ? "--topic-branch NAME" : null,
-    workspace === null ? "--workspace PATH" : null,
-  ].filter((flag): flag is string => flag !== null);
-  if (runId === null || topicBranch === null || workspace === null) {
+  // **One identifier now, and it used to be three.** The second lap is a second
+  // run -- continuo holds a run under the first lap's id, git holds its branch
+  // and a worktree stands at its workspace -- so it needs identifiers of its
+  // own. Under `D-0023` rondo derives all three from the iteration id, so this
+  // is the only one a person types.
+  const successorId = parsed.iterationId;
+  if (successorId === null) {
     return refuse(
-      `revise needs ${missing.join(", ")}. The second lap is a second run: continuo holds a ` +
-        "run under the first lap's id, git holds its branch and a worktree stands at its " +
-        "workspace, so all three have to be new. rondo allocates none of them. What carries " +
-        "the work across is the branch, and rondo sets that for you: the second lap's base " +
-        "branch is the first lap's topic branch.",
+      "revise needs --iteration-id ID, which is the id the second lap is reserved under. " +
+        "rondo derives its run id, topic branch and workspace from it, so it must be new and " +
+        "must be a lowercase letter followed by up to 63 more of [a-z0-9_-]. What carries the " +
+        "work across is the branch, and rondo sets that for you: the second lap's base branch " +
+        "is the first lap's topic branch.",
     );
   }
 
-  const live = await store.readLive();
-  if (live.kind === "absent") {
+  // **The iteration being revised is resolved the way `answer` resolves it**,
+  // which since `D-0023` means "the one live iteration, and a refusal when
+  // that does not name one". `--iteration-id` is already spoken for here: on
+  // this verb alone it names the successor rather than the row being acted on,
+  // which `D-0027` chose when there could only ever be one live row to revise.
+  // With more than one open there is no second flag to say which, so revise is
+  // unavailable until the others are settled -- a real limitation, recorded
+  // rather than papered over with a guess at which row was meant.
+  const chosen = await pickWaiting(store, null);
+  if ("refusal" in chosen) {
+    return refuse(chosen.refusal);
+  }
+  if (chosen.record === null) {
     say("Nothing is waiting. No iteration is live, so there is nothing to revise.");
     return 0;
   }
-  if (live.kind === "unreadable") {
-    return refuse(`The live iteration row would not read: ${live.reason}`);
-  }
-  const record = live.record;
+  const record = chosen.record;
   if (record.gateId === null) {
     say(`iteration '${record.id}' is ${record.status}, and no gate is open on it.`);
     say("There is nothing for a person to answer yet.");
@@ -1074,9 +1245,7 @@ async function commandRevise(
   // Composed and validated first. Nothing below this line is undoable.
   const successor = revisionPlan({
     predecessor: record,
-    runId,
-    topicBranch,
-    workspace,
+    iterationId: successorId,
     instruction: parsed.body,
   });
   if (successor.kind === "refused") {
@@ -1095,7 +1264,19 @@ async function commandRevise(
   // `revisionBlocker`: the id the successor will be reserved under is not part
   // of the plan that was just validated, and a gate continuo has already closed
   // is walked successfully and silently.
-  const successorId = parsed.iterationId ?? successor.plan.runId;
+  //
+  // **The successor's branch and workspace are derived here rather than read
+  // off the plan** (`D-0023` rule 9): the plan no longer carries them, and what
+  // the preflight has to ask git about is the name `admit()` will actually
+  // mint. Deriving it twice -- once here, once at admission -- is safe because
+  // the derivation is a pure function of the id, which is the property that
+  // makes the check meaningful at all.
+  const allocation = allocate(successorId, successor.plan.workspaceRoot);
+  if (allocation.kind === "refused") {
+    return refuse(`The second lap's iteration id was refused: ${allocation.reason}`);
+  }
+  const successorTopicBranch = allocation.allocation.topicBranch;
+  const successorWorkspace = allocation.allocation.workspace;
   const existing = await store.read(successorId);
   // **Asked of git, and a refusal when git will not say.** The branch is the
   // one preflight that needs a process, so it is `forge.ts`'s (this module has
@@ -1104,18 +1285,18 @@ async function commandRevise(
   // proceed: the next thing this command does cannot be undone.
   const branch = await inspectTopicBranch({
     repository: successor.plan.repository,
-    topicBranch: successor.plan.topicBranch,
+    topicBranch: successorTopicBranch,
   });
   if (branch.kind === "malformed") {
     return refuse(
-      `'${successor.plan.topicBranch}' is not a name git will accept for a branch, so nothing ` +
+      `'${successorTopicBranch}' is not a name git will accept for a branch, so nothing ` +
         "could create it -- and a name that cannot exist reads as a name that is free. Nothing " +
-        "was touched. Choose another --topic-branch.",
+        "was touched. Choose another --iteration-id.",
     );
   }
   if (branch.kind !== "read") {
     return refuse(
-      `git could not say whether '${successor.plan.topicBranch}' already exists in ` +
+      `git could not say whether '${successorTopicBranch}' already exists in ` +
         `${successor.plan.repository}: ${branch.reason}. continuo requires a topic branch that ` +
         "is not there, and rondo will not answer the gate without knowing. Nothing was touched.",
     );
@@ -1125,10 +1306,10 @@ async function commandRevise(
     gateOutcome: gate.outcome,
     successorId,
     successorRow: existing.kind,
-    topicBranch: successor.plan.topicBranch,
+    topicBranch: successorTopicBranch,
     topicBranchExists: branch.exists,
-    workspace: successor.plan.workspace,
-    workspaceExists: existsSync(successor.plan.workspace),
+    workspace: successorWorkspace,
+    workspaceExists: existsSync(successorWorkspace),
   });
   if (blocker !== null) {
     return refuse(blocker);
@@ -1532,19 +1713,29 @@ async function commandPublish(
     return refuse(actor.refusal);
   }
 
-  const iterationId = parsed.iterationId;
-  const found = iterationId === null ? await store.readLive() : await store.read(iterationId);
-  if (found.kind === "absent") {
+  // **`publish` names its iteration and never infers it.** It acts on a
+  // `closed` row, and a closed row is terminal and therefore never in the live
+  // set -- so there has never been anything for the no-id path to find. Before
+  // D-0023 that path answered "no iteration is live", which was confusing but
+  // harmless. With more than one iteration open it would instead have selected
+  // an unrelated *live* one and refused with a sentence about it, naming an
+  // iteration that has nothing to do with what the operator meant to publish.
+  // `answer` prints the id, so it is always to hand.
+  if (parsed.iterationId === null) {
     return refuse(
-      iterationId === null
-        ? "No iteration is live. Name one with --iteration-id ID to publish a closed iteration."
-        : `There is no iteration '${iterationId}'.`,
+      "publish needs --iteration-id ID. It publishes an iteration a person has already " +
+        "approved at the gate, and an approved iteration is closed -- so it is never the one " +
+        "that is 'live' and cannot be guessed from what is. 'rondo answer' prints the id.",
     );
   }
-  if (found.kind === "unreadable") {
-    return refuse(`That iteration row would not read: ${found.reason}`);
+  const chosen = await pickWaiting(store, parsed.iterationId);
+  if ("refusal" in chosen) {
+    return refuse(chosen.refusal);
   }
-  const record = found.record;
+  if (chosen.record === null) {
+    return refuse(`${chosen.note} Name one with --iteration-id ID to publish a closed iteration.`);
+  }
+  const record = chosen.record;
   if (record.status !== "closed") {
     return refuse(
       `iteration '${record.id}' is ${record.status}, not closed. Publishing is for work a ` +

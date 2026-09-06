@@ -35,6 +35,7 @@ import type {
   IntendedAction,
   IssuanceParties,
 } from "../../src/cadenza/facade.js";
+import { allocate } from "../../src/refrain/allocator.js";
 import {
   abandon,
   admit,
@@ -42,7 +43,13 @@ import {
   requestWithdrawal,
   resume,
 } from "../../src/refrain/interpreter.js";
-import { planPayload, type RunPlan, runPlan } from "../../src/refrain/plan.js";
+import {
+  type AdmittedPlan,
+  admittedPlan,
+  planPayload,
+  type RunPlan,
+  runPlan,
+} from "../../src/refrain/plan.js";
 import type { LoopPolicy } from "../../src/refrain/policy.js";
 import { CONSERVATIVE_POLICY } from "../../src/refrain/policy.js";
 import type {
@@ -131,16 +138,31 @@ class FakeStore implements StorePort {
 
   reserve(input: ReserveInput): Promise<ReserveOutcome> {
     this.calls.push("reserve");
+    let occupancy = 0;
     for (const row of this.rows.values()) {
       if (!isTerminal(row.status)) {
-        return Promise.resolve({ kind: "occupied", liveIterationId: row.id });
+        occupancy += 1;
       }
+    }
+    if (occupancy >= 1) {
+      // The fake keeps modelling strict single-flight -- any non-terminal row
+      // blocks the next reservation -- and reports it in D-0023's vocabulary
+      // rather than D-0019's. This is `maxOccupying` at its default of one; a
+      // host with a wider `maxLive` and the nuance of which non-terminal
+      // statuses actually occupy a slot is exercised in `test/refrain`'s
+      // capacity cases, not here.
+      return Promise.resolve({ kind: "atCapacity", bound: "maxOccupying", limit: 1, occupancy });
     }
     const record: IterationRecord = {
       ...blankRecord(input.id, "planned"),
       request: input.request,
       plan: input.plan,
       planDigest: "sha256:fake",
+      // Written by `reserve()` itself now (D-0023 rule 5): the claim is taken
+      // in the same transaction as the row.
+      runId: input.runId,
+      topicBranch: input.topicBranch,
+      workspace: input.workspace,
       createdAtMs: input.nowMs,
       updatedAtMs: input.nowMs,
     };
@@ -198,13 +220,14 @@ class FakeStore implements StorePort {
     return Promise.resolve({ kind: "read", record: row });
   }
 
-  readLive(): Promise<ReadOutcome> {
+  async readLive(): Promise<readonly ReadOutcome[]> {
+    const live: ReadOutcome[] = [];
     for (const row of this.rows.values()) {
       if (!isTerminal(row.status)) {
-        return this.read(row.id);
+        live.push(await this.read(row.id));
       }
     }
-    return Promise.resolve({ kind: "absent" });
+    return live;
   }
 
   /**
@@ -250,10 +273,13 @@ function blankRecord(id: string, status: IterationStatus): IterationRecord {
     id,
     status,
     request: "do the thing",
-    plan: planPayload(PLAN),
+    plan: planPayload(ADMITTED_PLAN),
     planDigest: "sha256:fake",
     attempts: 1,
     runId: null,
+    topicBranch: null,
+    workspace: null,
+    identifiersSpent: 0,
     continuoRevision: null,
     agentTypeDigest: null,
     configDigest: null,
@@ -274,6 +300,17 @@ function blankRecord(id: string, status: IterationStatus): IterationRecord {
     updatedAtMs: NOW_MS,
   };
 }
+
+/**
+ * The run id `allocate()` mints for the fixture iteration id `i-0001`.
+ *
+ * `admitStep` checks `run admit`'s answer against `plan.runId` and `performLap`'s
+ * check does the same for the lap's answer (D-0019 rule 15's run-id checks), so
+ * every fixture answer that reports a run id back has to agree with this one --
+ * under D-0023 that is no longer a caller-typed constant but the allocator's own
+ * derivation from the iteration id `admitOnce` uses by default.
+ */
+const ALLOCATED_RUN_ID = "rondo-i-0001";
 
 /** What each of the five effect ports will answer, mutable between calls. */
 interface Answers {
@@ -301,12 +338,12 @@ function successfulAnswers(): Answers {
     startContinuo: { kind: "answered", value: { revision: "44f62336" } },
     admitRun: {
       kind: "answered",
-      value: { runId: "run-1", status: "created", continuoRole: "worker" },
+      value: { runId: ALLOCATED_RUN_ID, status: "created", continuoRole: "worker" },
     },
     performLap: {
       kind: "answered",
       value: {
-        runId: "run-1",
+        runId: ALLOCATED_RUN_ID,
         gateId: "gate-1",
         sessionId: "session-1",
         sessionPath: "started",
@@ -346,7 +383,7 @@ function harness(overrides: Partial<Answers> = {}): Harness {
       calls.push("startContinuo");
       return Promise.resolve(answers.startContinuo);
     },
-    admitRun: (_plan: RunPlan, neutralRoleName: string) => {
+    admitRun: (_plan: AdmittedPlan, neutralRoleName: string) => {
       calls.push(`admitRun:${neutralRoleName}`);
       return Promise.resolve(answers.admitRun);
     },
@@ -354,7 +391,7 @@ function harness(overrides: Partial<Answers> = {}): Harness {
       calls.push("performLap");
       return Promise.resolve(answers.performLap);
     },
-    showGate: (_plan: RunPlan, gateId: string) => {
+    showGate: (_plan: AdmittedPlan, gateId: string) => {
       calls.push(`showGate:${gateId}`);
       return Promise.resolve(answers.showGate);
     },
@@ -396,7 +433,16 @@ const AGENT_TYPE_INPUT: AgentTypeInput = {
  */
 const MODEL = "claude-opus-5";
 
-/** The grantee is the run id: `runPlan` refuses any other value. */
+/**
+ * The grantee, before the allocator has a say.
+ *
+ * Under D-0023 rule 9 the run id is no longer the caller's to write, so
+ * `runPlan` no longer checks this against anything: whatever value is written
+ * here is overwritten with the allocated run id by `admittedPlan`, which then
+ * asserts the two agree -- an assertion about rondo's own two writes rather
+ * than about this fixture. What is written here is deliberately not the
+ * allocated run id, to make that overwrite visible.
+ */
 const PARTIES: IssuanceParties = { issuer: "rondo-host", grantee: "run-1" };
 
 const INTENDED_ACTION: IntendedAction = { capabilities: ["command.run"] };
@@ -412,11 +458,8 @@ const INTENDED_ACTION: IntendedAction = { capabilities: ["command.run"] };
 const PLAN: RunPlan = (() => {
   const outcome = runPlan({
     db: "/srv/rondo/control.db",
-    runId: "run-1",
-    leaseClaimantId: "rondo-host",
-    workspace: "/srv/rondo/work/run-1",
+    workspaceRoot: "/srv/rondo/work",
     baseBranch: "main",
-    topicBranch: "topic/run-1",
     prompt: "do the thing",
     repository: "/srv/rondo/repo",
     artifactRoot: "/srv/rondo/artifacts",
@@ -447,6 +490,27 @@ const PLAN: RunPlan = (() => {
   });
   if (outcome.kind !== "planned") {
     throw new Error(`the fixture plan is not a plan: ${outcome.reason}`);
+  }
+  return outcome.plan;
+})();
+
+/**
+ * The fixture plan with `i-0001`'s allocated identifiers on it.
+ *
+ * `admit()` derives this itself from the caller's half plus the allocator; a
+ * fixture that needs *a* fully-shaped `AdmittedPlan` for a persisted row --
+ * `blankRecord`'s default payload, and every seeded record that skips
+ * `admit()` to plant a row directly at a later status -- builds the same
+ * shape by hand, through the same two functions, rather than inventing one.
+ */
+const ADMITTED_PLAN: AdmittedPlan = (() => {
+  const allocation = allocate("i-0001", PLAN.workspaceRoot);
+  if (allocation.kind !== "allocated") {
+    throw new Error(`the fixture id did not allocate: ${allocation.reason}`);
+  }
+  const outcome = admittedPlan(PLAN, allocation.allocation);
+  if (outcome.kind !== "planned") {
+    throw new Error(`the fixture allocation did not admit: ${outcome.reason}`);
   }
   return outcome.plan;
 })();
@@ -528,7 +592,7 @@ test("what a lap reported that the row has no column for is not lost", async () 
     performLap: {
       kind: "answered",
       value: {
-        runId: "run-1",
+        runId: ALLOCATED_RUN_ID,
         gateId: "gate-1",
         sessionId: "session-1",
         sessionPath: "resumed",
@@ -958,13 +1022,20 @@ test("a restart that finds a classified row resumes normally", async () => {
 // --- single-flight -----------------------------------------------------------
 
 test("a second admission while an iteration is live is refused and writes nothing", async () => {
+  // D-0023 replaces the single `occupied` answer, which named the one row
+  // blocking it, with `atCapacity`, which names the bound and how full it is
+  // instead: under a bound above one there is no single *the* blocking row to
+  // name. The fake still enforces strict single-flight (`maxOccupying` at its
+  // default of one), so the prose this asserts is `admit()`'s own rendering of
+  // that refusal.
   const h = harness();
   await admitOnce(h);
 
   const second = await admitOnce(h, "i-0002");
   expect(second.iterationId).toBeNull();
   expect(second.status).toBeNull();
-  expect(says(second, "i-0001")).toBe(true);
+  expect(says(second, "1 of a permitted 1")).toBe(true);
+  expect(says(second, "already executing")).toBe(true);
   expect(await readRow(h.store, "i-0002")).toBeNull();
 });
 
@@ -1051,7 +1122,7 @@ test("a withdrawal keeps what the lap already recorded on the row", async () => 
     performLap: {
       kind: "answered",
       value: {
-        runId: "run-1",
+        runId: ALLOCATED_RUN_ID,
         gateId: "gate-1",
         sessionId: "session-1",
         sessionPath: "started",
@@ -1128,6 +1199,28 @@ test("abandon settles a row it cannot read, and the lock is genuinely released",
   // Asserted on a fresh admission rather than on the call returning: the lock is
   // the partial unique index, and what proves it was released is the store
   // accepting a reservation it would otherwise refuse.
+  //
+  // A different iteration id needs its own matching fixture answers, because
+  // under D-0023 the run id `run admit` and `lap perform` are asked to confirm
+  // is the allocator's derivation from the id and not a caller-typed constant
+  // any more (`ALLOCATED_RUN_ID` is `i-0001`'s).
+  h.answers.admitRun = {
+    kind: "answered",
+    value: { runId: "rondo-i-0002", status: "created", continuoRole: "worker" },
+  };
+  h.answers.performLap = {
+    kind: "answered",
+    value: {
+      runId: "rondo-i-0002",
+      gateId: "gate-1",
+      sessionId: "session-1",
+      sessionPath: "started",
+      endpointLeaseFailure: null,
+      elapsedDeadlineAtMs: null,
+      model: MODEL,
+      requestedModel: MODEL,
+    },
+  };
   const second = await admitOnce(h, "i-0002");
   expect(second.iterationId).toBe("i-0002");
   expect(second.status).toBe("awaiting_human");
@@ -1379,12 +1472,20 @@ test("abandon() refuses while this process is still driving the iteration", asyn
   expect(settled.status).toBe("abandoned");
 });
 
-test("a grantee that is not the run id is refused before a row exists", async () => {
-  // The one cross-field rule the dogfood paid a whole iteration for (F-6):
-  // cadenza would answer the mismatch as `grantee_mismatch`, an *answered*
-  // classification, only after `reserve` had committed a row and taken the
-  // single-flight lock. Refused at the plan, nothing is reserved and no port
-  // is called, and the very next admission with the grantee corrected succeeds.
+test("a caller-supplied grantee is overwritten with the allocated run id, not refused", async () => {
+  // The one cross-field rule the dogfood paid a whole iteration for (F-6) used
+  // to be checkable against the caller's own typing: `runId` was the caller's
+  // field, so a `parties.grantee` that disagreed with it was a caller mistake
+  // `runPlan` could name before a row existed. D-0023 rule 9 took `runId` away
+  // from the caller entirely -- the allocator mints it from the iteration id --
+  // so there is no longer a caller-visible value to compare `grantee` against
+  // at plan time. `admittedPlan` closes the gap by writing `parties.grantee`
+  // itself, from the same allocation that mints the run id, and only then
+  // asserting the two agree (an assertion about rondo's own two writes, not
+  // about a caller's plan -- see `admittedPlan`'s own doc comment). So a plan
+  // whose grantee names something else altogether is no longer a refusal: it
+  // is silently corrected, and the admission proceeds as if it had named the
+  // run id all along.
   const h = harness();
   const report = await admit(
     h.ports,
@@ -1392,12 +1493,8 @@ test("a grantee that is not the run id is refused before a row exists", async ()
     PERMISSIVE,
     "i-0001",
   );
-  expect(report.iterationId).toBeNull();
-  expect(report.lines.join(" ")).toContain("'parties.grantee'");
-  expect(report.lines.join(" ")).toContain("grantee_mismatch");
-  expect(h.calls).toEqual([]);
-  expect(await readRow(h.store, "i-0001")).toBeNull();
-  expect((await admitOnce(h)).status).toBe("awaiting_human");
+  expect(report.iterationId).toBe("i-0001");
+  expect(report.status).toBe("awaiting_human");
 });
 
 test("an invalid plan is refused before a row exists, so it takes no lock", async () => {
@@ -1410,7 +1507,7 @@ test("an invalid plan is refused before a row exists, so it takes no lock", asyn
   const h = harness();
   const report = await admit(
     h.ports,
-    { ...PLAN, workspace: "relative/path" },
+    { ...PLAN, workspaceRoot: "relative/path" },
     PERMISSIVE,
     "i-0001",
   );
@@ -1458,7 +1555,7 @@ test("a lap that ran on another model stalls, and the open gate is named first",
     performLap: {
       kind: "answered",
       value: {
-        runId: "run-1",
+        runId: ALLOCATED_RUN_ID,
         gateId: "gate-1",
         sessionId: "session-1",
         sessionPath: "started",
@@ -1488,7 +1585,7 @@ test("a lap that named no model at all is the same stall, spelled for a reader",
     performLap: {
       kind: "answered",
       value: {
-        runId: "run-1",
+        runId: ALLOCATED_RUN_ID,
         gateId: "gate-1",
         sessionId: "session-1",
         sessionPath: "started",
@@ -1541,7 +1638,7 @@ test("a reason contained in an earlier one is still recorded", async () => {
     performLap: {
       kind: "answered",
       value: {
-        runId: "run-1",
+        runId: ALLOCATED_RUN_ID,
         gateId: "gate-1",
         sessionId: "session-1",
         sessionPath: "started",
