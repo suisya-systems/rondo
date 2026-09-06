@@ -192,16 +192,32 @@ fi
 
 step "Target repository (the repository a lap is allowed to touch)"
 target="$env_root/target"
+# Written into the repository rather than passed as `-c` on the seed commit,
+# because the seed commit is not the only one made here: the lap commits in a
+# *worktree* of this repository, and git config is per-repository, so a worktree
+# inherits what is set here and inherits nothing from a `-c` that has ended. A
+# machine with no global identity, or with signing on, would otherwise pass
+# setup and fail inside the paid lap -- on exactly the configuration setup
+# thought it had handled. A scratch target is also not a place to inherit a
+# machine's commit policy.
+set_target_commit_config() {
+  git -C "$target" config user.name rondo-dogfood
+  git -C "$target" config user.email rondo-dogfood@invalid
+  git -C "$target" config commit.gpgsign false
+}
+
 # The test is "main resolves to a commit", not "a .git exists". An interrupted
 # first run -- a seed commit that failed on configured signing is the easy way
 # to get one -- leaves a repository a `.git` check calls finished and a lap
 # cannot materialise a workspace from, because there is no `main` to cut the
 # topic branch off. Repairing it is a rerun; that is what this branch is for.
 if [ -d "$target/.git" ] && git -C "$target" rev-parse --verify --quiet refs/heads/main >/dev/null 2>&1; then
+  set_target_commit_config
   note "already at $target"
 else
   mkdir -p -- "$target/docs"
   [ -d "$target/.git" ] || git -C "$target" init --quiet --initial-branch=main
+  set_target_commit_config
   # A repository left with an unborn HEAD may be pointing at whatever
   # `init.defaultBranch` says rather than at main; the seed commit has to land
   # on the branch the plan names.
@@ -210,12 +226,7 @@ else
   [ -f "$target/docs/NOTES.md" ] ||
     printf '# Notes\n\nA scratch target for walking the rondo operator CLI.\n' > "$target/docs/NOTES.md"
   git -C "$target" add docs/NOTES.md
-  # Identity and signing are pinned to this one command: a scratch target is not
-  # a place to inherit a machine's commit policy, and signing is the failure
-  # that produces the half-initialised repository above.
-  git -C "$target" -c user.name=rondo-dogfood -c user.email=rondo-dogfood@invalid \
-    -c commit.gpgsign=false \
-    commit --quiet -m 'docs: seed the dogfood target'
+  git -C "$target" commit --quiet -m 'docs: seed the dogfood target'
   note "created $target on branch main"
 fi
 
