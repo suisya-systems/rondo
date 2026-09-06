@@ -349,6 +349,30 @@ different reasons:
   person. **Recommended: an operator-set value that may exceed 1 today**, because
   §1.5 measures that a suspended iteration holds no continuo resource.
 
+**The bound governs admissions, and one existing edge may push occupancy past it
+(`N-27`).** `stall()` writes `stalled` from **any** status
+(`src/refrain/interpreter.ts:1365-1386`), and `resume()` reaches it from
+`awaiting_human` — on a gate-id mismatch (`gateSeen`, `:1225-1233`) or on a row
+at `awaiting_human` that names no gate (`observeStep`, `:1170-1179`). So a suspended row can re-enter the `occupying` set
+without passing through `reserve()`, and at `maxOccupying = 1` with another
+iteration occupying, occupancy momentarily reads **2**.
+
+**This is permitted and accounted for rather than refused, and the reason is
+`stalled`'s own.** `records.ts:60-65` says `stalled` exists so a corrupt row or
+an unrecognised outcome has *"somewhere to go that is neither a lie
+(`awaiting_human`, which promises a gate) nor a loss"*. A capacity check that
+refused the transition would leave the row at `awaiting_human` promising a gate
+that is not there — a bound that declines to record a fact. So:
+
+- **the bound is an admission control, not a conservation law.** It is read in
+  `reserve()` and nowhere else;
+- **the excess drains and cannot grow**: `reserve()` already refuses at
+  `count >= bound`, so an over-capacity state admits nothing further, and the
+  only edge that produces it consumes a row that was already live;
+- **the refusal must be able to say `occupancy > bound` without looking like a
+  defect** (§4.5's refusal prose), because a reader who sees 2 of 1 and no
+  explanation will read it as corruption.
+
 **The name is `maxOccupying` and not `maxPerforming`, and the rename is a
 finding rather than a preference.** The first draft of this section called it
 `maxPerforming` and defined it over `admitting`/`admitted`/`performing` alone —
@@ -415,7 +439,7 @@ request still owns.
 
 **Candidate A: derive the triple from the iteration id.** `runId =
 "rondo-" + iterationId`, `topicBranch = "rondo/" + iterationId`, `workspace =
-join(workspaceRoot, iterationId)`. Pure, no I/O, testable by handing it a string,
+join(workspaceRoot, "iter-" + iterationId)`. Pure, no I/O, testable by handing it a string,
 and invertible, so an operator reading a branch name knows the iteration —
 **but only over a domain nothing currently constrains, which is §3.2.1**. Cost:
 uniqueness rests entirely on iteration-id uniqueness, and **the branch namespace
@@ -477,6 +501,24 @@ instance of — *"validate **every** operator-supplied value before spawning"*,
 listing `--run-id`, `--workspace` and `--topic-branch` among the known ones. The
 iteration id was not on that list because until this design it reached no command
 line. Under Candidate A it reaches all three.
+
+**The alphabet is not sufficient on Windows, and the workspace needs a prefix
+(`N-28`).** `windows-latest` is a **required** cell of the double-green matrix
+(`.github/workflows/ci.yml:37-44`), and Windows reserves `con`, `nul`, `aux`,
+`prn`, `com1`..`com9` and `lpt1`..`lpt9` as device names on any path component.
+Every one of them matches `^[a-z][a-z0-9_-]{0,63}$`, so
+`join(workspaceRoot, "con")` is a directory `git worktree add` cannot create —
+which is the post-admission failure §3.2.1 exists to prevent, arriving on one
+platform only.
+
+**Recommended: prefix the derived component — `workspace =
+join(workspaceRoot, "iter-" + iterationId)` — rather than deny-list the
+names.** A denylist has to be maintained and Windows' rule has edges (a
+reserved name with an extension, a trailing dot or space is reserved too); a
+prefix removes the whole class, because no component beginning `iter-` is a
+device name. It also makes the three derived values **consistent**: the run id
+is already `rondo-`-prefixed and the branch `rondo/`-prefixed, and the workspace
+was the only one of the three deriving a bare component.
 
 **This is a reduction and is recorded as one.** Ids that are legal today become
 illegal, and every id in the tree and the dogfood record already conforms
@@ -886,6 +928,12 @@ transaction.** Two sub-cases:
   (`test/architecture/import-boundaries.test.ts` already parses the tree) — and
   assert the refusal.
 
+**And the case Codex round 3 named, which belongs here rather than with the
+capacity cases**: at `maxOccupying = 1` with `iter-B` occupying, `resume(iterA)`
+on a mismatched gate observation **succeeds** in writing `stalled`, occupancy
+then reads **2 of 1**, and the next `reserve()` refuses with prose that says so
+without calling it a defect (§2.3, `N-27`).
+
 `N-23`. And two the issue does not name, which the walk in §5 and §3.2.1 require:
 
 **4. `identifiers_spent` is set exactly once, at `admitting`, and a terminal spent
@@ -900,7 +948,12 @@ conforming id reserves. The property: over the admitted alphabet the derivation
 is **injective** and every derived workspace is **contained** in
 `workspaceRoot`, asserted as properties of the pure function rather than of one
 example, because the failure this replaces was a mapping that looked injective
-and was not (§3.2.1). `N-26`.
+and was not (§3.2.1). **And the Windows cases, which are the ones a Linux-only
+run cannot fail**: `con`, `nul`, `aux` and `com1` are admissible ids whose
+*prefixed* workspace component is materialisable, asserted as a property of the
+derivation rather than by creating a directory — the platform-dependent half is
+what `windows-latest` already runs (`.github/workflows/ci.yml:37-44`). `N-26`,
+`N-28`.
 
 ---
 
@@ -927,6 +980,10 @@ that an open question names its owner.
   a rondo timer, an endpoint still writing — which would make §2.1's release
   unsafe and collapse the design back to one bound. This is the claim most exposed
   to being wrong, because it rests on §1.5's reading of one `finally`.
+- **A second edge into the `occupying` set is found** that `N-27`'s reasoning
+  does not cover — one that is not fail-closed, or one that can repeat — which
+  would turn the permitted excess into an unbounded one and force the bound to be
+  read somewhere besides `reserve()`.
 - **The closed alphabet turns out to be too narrow for a real id** — an operating
   surface that wants uppercase, or an id it did not mint — which would put
   `N-26` back to a reversible path-safe *encoding* rather than a restriction, and
@@ -997,6 +1054,8 @@ to the paired design), or *measured here* (this document's own measurement).
 | **N-23** | The **resumption while others perform** case lives at `test/store` as well as `test/refrain`, because the assertion that matters is §1.6's: overlapping `admit()` and `resume()` on one connection do not interleave inside a transaction, and `inTransaction`'s synchronous-body guard (`N-16`) is asserted with it. | Issue #8 checkbox 3, measured here |
 | **N-24** | A **fourth** case the issue does not name and §5 requires: `identifiers_spent` is set exactly once at `admitting`, a terminal **spent** row keeps holding its triple for ever, and — the observed-red control — a terminal **unspent** row releases it. Without it `N-7`'s whole mechanism is prose. | measured here |
 | **N-25** | **Implementation starts only after the gate accepts or amends these lines and creates `D-0023`.** This document allocates no entry, edits no `DECISIONS.md`, and is not accepted authority. | `AGENTS.md` section 7 |
+| **N-27** | **The bound is an admission control, not a conservation law**, and it is read in `reserve()` and nowhere else. `stall()` writes `stalled` from any status (`interpreter.ts:1365-1386`) and `resume()` reaches it from `awaiting_human` (`gateSeen` `:1225-1233`, `observeStep` `:1170-1179`), so a suspended row may re-enter the `occupying` set without a reservation and occupancy may momentarily read `2` of `1`. **This is permitted, not refused**: refusing it would leave the row at `awaiting_human` promising a gate that is not there, which is the state `stalled` exists to avoid (`records.ts:60-65`). The excess cannot grow, because `reserve()` already refuses at the bound, and the refusal prose must be able to say `occupancy > bound` without reading as corruption (§2.3). | measured here, after Codex round 3 |
+| **N-28** | The derived **workspace component is prefixed** — `join(workspaceRoot, "iter-" + iterationId)` — rather than deny-listing Windows device names. `con`, `nul`, `aux`, `prn`, `com1`..`com9` and `lpt1`..`lpt9` all match `N-26`'s alphabet and are unusable as path components on `windows-latest`, which is a **required** double-green cell (`.github/workflows/ci.yml:37-44`). A prefix removes the class where a denylist has edges (a reserved name with an extension, a trailing dot or space), and it makes the three derived values consistent: the run id and branch already carry prefixes and the workspace was the only bare one (§3.2.1). | measured here, after Codex round 3 |
 | **N-26** | The iteration id gains a **closed alphabet, `^[a-z][a-z0-9_-]{0,63}$`, checked in `admit()` before `reserve()`** — the same shape `D-0019` rule 13 holds cadenza's `roleName` to (`DECISIONS.md:2519-2523`), so rondo has one identifier shape rather than two. Without it `N-3`'s derivation is neither contained nor injective: `join(workspaceRoot, "../other")` escapes the root and passes `runPlan()`'s absoluteness check, and `a/../b` and `b` name one workspace, which makes the invertibility claim false and `rondo/a/../b` a branch git refuses at materialisation (§1.3's expensive place). `AGENTS.md:156-160` states the general rule — *validate every operator-supplied value before spawning* — and the id was off its list only because until this design it reached no command line. **Recorded as a reduction**: ids legal today become illegal, and every id in the tree and the dogfood conforms already. | measured here, after Codex round 2 |
 
 ---
@@ -1044,7 +1103,12 @@ Return or reject `D-0023` unless every answer is yes.
 15. Is the iteration id constrained to a closed alphabet **before** anything is
     derived from it, so that the derivation is contained and injective rather
     than assumed to be (`N-26`, `N-3`)?
-16. Does implementation wait for the gate-created `D-0023` (`N-25`)?
+16. Is it stated that the bound is an **admission control** — read only in
+    `reserve()`, with the `stalled` edge permitted to exceed it and the excess
+    unable to grow — rather than left to be discovered as a hole (`N-27`)?
+17. Is the derived workspace component **prefixed**, so that an admissible id is
+    never a Windows device name on a required matrix cell (`N-28`)?
+18. Does implementation wait for the gate-created `D-0023` (`N-25`)?
 
 ---
 
@@ -1072,3 +1136,21 @@ one.
 | # | Finding | Verdict | Where answered |
 |---|---|---|---|
 | P2-2 | §3.2's Candidate A derives a workspace path and a branch name from the iteration id, and the id has no alphabet: `admit()` takes an unconstrained `string`. `../other` escapes `workspaceRoot` and still passes §3.4's absoluteness check; `a/../b` and `b` name one workspace, so the derivation is not injective and `N-3`'s invertibility claim is false | **Confirmed**, and against the tree rather than against the prose: `interpreter.ts:124-128` takes the id unconstrained, `sqlite.ts:423` inserts it as given, and the only existing rule (`isIdCollision`, `:671`) is about duplicates. `AGENTS.md:156-160` already states the general rule, and the id was off its list only because it reached no command line before this design | **New §3.2.1** with the alphabet, its placement before `reserve()` and the reduction it costs; **`N-3` amended**; **new `N-26`**; §3.4 corrected so the retained output checks are not read as the whole validation; **new §8 case 5** asserting containment and injectivity as properties rather than examples; one new falsifier |
+
+**Round 3** raised two further findings, both confirmed, and neither repeated an
+earlier one. **This was the round limit** this task was given, so the document
+stops here with round 3 answered and no round 4 run.
+
+| # | Finding | Verdict | Where answered |
+|---|---|---|---|
+| P2-3 | Capacity is checked only in `reserve()`, but `stall()` writes `stalled` from any status and `resume()` reaches it from `awaiting_human`, so a suspended row can re-enter the `occupying` set without a reservation and exceed the bound | **Confirmed.** `stall()` is status-blind (`interpreter.ts:1365-1386`) and `resume()` reaches it from `awaiting_human` on a gate-id mismatch (`gateSeen`, `:1225-1233`) or a missing gate id (`observeStep`, `:1170-1179`) | §2.3 gains the rule and its reason — **the bound is an admission control, not a conservation law**, and refusing the transition would leave a row promising a gate that is not there (`records.ts:60-65`); **new `N-27`**; §8 case 3 gains the over-capacity case; one new falsifier |
+| P2-4 | `con`, `nul`, `aux` and `com1` match the new alphabet and are Windows reserved device names, so the derived workspace cannot be materialised — reproducing the post-admission failure §3.2.1 exists to prevent, on the required `windows-latest` cell | **Confirmed.** `windows-latest` is a required double-green cell (`.github/workflows/ci.yml:37-44`), and the alphabet admits every one of the reserved names | §3.2.1 gains the **prefix** — `join(workspaceRoot, "iter-" + iterationId)` — chosen over a denylist because Windows' rule has edges a list keeps missing, and because the run id and branch were already prefixed and the workspace was the only bare component; **new `N-28`**; §8 case 5 gains the Windows cases |
+
+**What the three rounds have in common is worth recording**, because it is the
+argument for the design rather than against it: each round found a place where a
+**set** was stated twice and the two statements disagreed — the bound's status
+set against the column's (round 1), the derivation's domain against the id's
+(round 2), and the edges into the occupying set against the one edge the bound
+was read on (round 3). None found the recommendation wrong. A gate reading this
+should treat "state each set once, in one place" as the entry's implementation
+rule and not only as its drafting history.
