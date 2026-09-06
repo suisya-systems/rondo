@@ -615,6 +615,14 @@ function migrate(connection: DatabaseSync): void {
  * `json_extract` returns NULL for a plan that does not carry the key, which
  * leaves the column NULL and the row out of the indexes: correct, because a row
  * whose plan never named a branch never claimed one.
+ *
+ * **`json_valid` is the guard, and a corrupt row must not brick the store.**
+ * `json_extract` raises on malformed JSON, and one damaged historical row would
+ * otherwise stop the whole database opening -- including for `abandon()`, which
+ * is the one path that exists to end exactly such a row and which deliberately
+ * leaves its plan bytes untouched. So an unreadable plan yields no back-fill
+ * for that row and no error: it keeps NULL identifiers, stays outside the claim
+ * indexes, and remains reachable by the recovery that was built for it.
  */
 function backfill(connection: DatabaseSync): void {
   connection.exec(
@@ -626,7 +634,8 @@ function backfill(connection: DatabaseSync): void {
     ["workspace", "$.workspace"],
   ] as const) {
     connection.exec(
-      `UPDATE iteration SET ${column} = json_extract(plan, '${key}') WHERE ${column} IS NULL`,
+      `UPDATE iteration SET ${column} = json_extract(plan, '${key}') ` +
+        `WHERE ${column} IS NULL AND json_valid(plan)`,
     );
   }
 }

@@ -791,6 +791,22 @@ async function pickWaiting(
     }
     return { record: null, note: "Nothing is waiting. No iteration is live." };
   }
+  // **Ambiguity is counted over every live row, readable or not.** A row that
+  // will not decode is still an iteration a person may have meant, and one that
+  // still holds capacity; dropping it from the count would let "the live one"
+  // silently name the only row that happened to parse, and `answer --body`
+  // would then carry a human's answer to the other iteration's gate.
+  if (readable.length + unreadable.length > 1) {
+    const named = [
+      ...readable.map((record) => `${record.id} (${record.status})`),
+      ...unreadable.map((outcome) => `${outcome.id} (unreadable)`),
+    ].join(", ");
+    return {
+      refusal:
+        `${String(readable.length + unreadable.length)} iterations are live, so "the live one" ` +
+        `does not name anything. Say which with --iteration-id ID: ${named}`,
+    };
+  }
   if (readable.length > 1) {
     // **One line, and that is a constraint rather than a preference.** `say`
     // and `refuse` put every message through `asciiEscape` (D-0004), which

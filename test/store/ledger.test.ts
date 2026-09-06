@@ -665,14 +665,20 @@ test("an interrupted upgrade leaves nothing behind: the migration is one transac
         CASE WHEN status IN ('closed','abandoned','failed') THEN NULL ELSE 1 END) VIRTUAL
     );
   `);
-  // A row whose `plan` is not JSON makes the back-fill's json_extract fail,
-  // which is the cheapest way to fail *inside* the migration's transaction.
+  // A trigger that aborts on UPDATE fails the back-fill from *inside* the
+  // migration's transaction, which is what this asserts the rollback of. A
+  // malformed plan deliberately does not do this any more -- see the case
+  // below -- so the failure has to be injected some other way.
   connection
     .prepare(
-      "INSERT INTO iteration (id, status, request, plan, plan_digest, attempts, created_at_ms, " +
-        "updated_at_ms) VALUES ('broken', 'planned', 'ask', 'not json', 'sha256:x', 1, 1, 1)",
+      "INSERT INTO iteration (id, status, request, plan, plan_digest, attempts, run_id, " +
+        `created_at_ms, updated_at_ms) VALUES ('old', 'closed', 'ask', '{}', '${planDigest({})}', ` +
+        "1, 'legacy-run', 1, 1)",
     )
     .run();
+  connection.exec(
+    "CREATE TRIGGER refuse_update BEFORE UPDATE ON iteration BEGIN SELECT RAISE(ABORT, 'boom'); END",
+  );
 
   expect(() => storeUnder({ maxOccupying: 1, maxLive: 3 }, connection)).toThrow();
 
@@ -689,4 +695,39 @@ test("an interrupted upgrade leaves nothing behind: the migration is one transac
   );
   expect(columns.has("identifiers_spent")).toBe(false);
   expect(columns.has("topic_branch")).toBe(false);
+});
+
+test("a legacy row whose plan is not JSON does not stop the store opening", async () => {
+  // **Codex round 2.** `json_extract` raises on malformed JSON, so one damaged
+  // historical row would otherwise stop the whole database opening -- including
+  // for `abandon()`, which exists to end exactly such a row and which
+  // deliberately leaves its plan bytes untouched. Bricking the store would make
+  // the recovery path unreachable for the one row that needs it.
+  const connection = new DatabaseSync(":memory:");
+  connection.exec(`
+    CREATE TABLE iteration (
+      id TEXT PRIMARY KEY, status TEXT NOT NULL, request TEXT NOT NULL, plan TEXT NOT NULL,
+      plan_digest TEXT NOT NULL, attempts INTEGER NOT NULL, run_id TEXT, continuo_revision TEXT,
+      agent_type_digest TEXT, config_digest TEXT, contract_digest TEXT, classification TEXT,
+      classification_reason TEXT, neutral_role_name TEXT, continuo_role TEXT, model_tier TEXT,
+      model TEXT, gate_id TEXT, gate_stage TEXT, gate_outcome TEXT, session_id TEXT,
+      session_path TEXT, reason TEXT, created_at_ms INTEGER NOT NULL,
+      updated_at_ms INTEGER NOT NULL,
+      live INTEGER GENERATED ALWAYS AS (
+        CASE WHEN status IN ('closed','abandoned','failed') THEN NULL ELSE 1 END) VIRTUAL
+    );
+  `);
+  connection
+    .prepare(
+      "INSERT INTO iteration (id, status, request, plan, plan_digest, attempts, created_at_ms, " +
+        "updated_at_ms) VALUES ('broken', 'awaiting_human', 'ask', '{not json', 'sha256:x', 1, 1, 1)",
+    )
+    .run();
+
+  const { store } = storeUnder({ maxOccupying: 1, maxLive: 3 }, connection);
+
+  // The store opened, the row is reachable, and the recovery that exists for it
+  // still works.
+  expect((await store.read("broken")).kind).toBe("unreadable");
+  expect((await store.settle("broken", "the operator ended it", 2_000)).kind).toBe("settled");
 });

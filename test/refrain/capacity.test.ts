@@ -374,3 +374,27 @@ test("the refusal prose admit() produces is one line per entry, with no control 
   // must be caught, or the assertion above is checking nothing.
   expect(hasControl("a\nb")).toBe(true);
 });
+
+test("an unreadable live row still counts toward which iteration is meant", async () => {
+  // **Codex round 2.** A row that will not decode is still an iteration a
+  // person may have meant, and one that still holds capacity. Counting only the
+  // rows that parse would let "the live one" silently name whichever happened
+  // to be readable -- and `answer --body` would then carry a human's answer to
+  // the other iteration's gate. This asserts the store-level fact the CLI's
+  // selection rests on: both rows come back from `readLive()`, and the
+  // unreadable one is reported rather than dropped.
+  const { ports, store, connection } = portsOver({ maxOccupying: 1, maxLive: 3 });
+  await admit(ports, PLAN, START_POLICY, "iter-a");
+  putAt(connection, "iter-a", "awaiting_human");
+  await admit(ports, PLAN, START_POLICY, "iter-b");
+  putAt(connection, "iter-b", "awaiting_human");
+
+  // A status rondo's union does not recognise is the ordinary way a row stops
+  // decoding: a person with sqlite3 is one edit away from it.
+  connection.prepare("UPDATE iteration SET status = 'nonsense' WHERE id = 'iter-b'").run();
+
+  const live = await store.readLive();
+  expect(live).toHaveLength(2);
+  expect(live.filter((outcome) => outcome.kind === "unreadable")).toHaveLength(1);
+  expect(live.filter((outcome) => outcome.kind === "read")).toHaveLength(1);
+});
