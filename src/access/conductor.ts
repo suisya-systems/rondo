@@ -66,7 +66,7 @@ import type { LapReadingDraft } from "../store/records.js";
 import type { IterationStore } from "../store/sqlite.js";
 
 import { inspectLapWork } from "./forge.js";
-import { readingOf } from "./review.js";
+import { READING_REMOTE, readingOf } from "./review.js";
 
 export type { ConductorReport };
 
@@ -189,19 +189,6 @@ function lapRequestOf(plan: AdmittedPlan, modelTier: string): PerformLapRequest 
  * point that classified would be an access point taking a domain decision, which
  * is the shape D-0018 rule 5 argued against.
  */
-/**
- * The remote whose tracking ref the reading prefers when resolving the base.
- *
- * `inspectLapWork` tries `refs/remotes/<remote>/<base>` before
- * `refs/heads/<base>`, and falls through when the first is absent -- so on the
- * machine a lap actually ran on, where nothing has been pushed, this name costs
- * one failed `rev-parse` and changes no answer. It is spelled here rather than
- * taken from the plan because the plan has no remote: `publish` learns one from
- * `--remote` on a command line a person types, and the reading happens hours
- * earlier with nobody there to type it.
- */
-const DEFAULT_READING_REMOTE = "origin";
-
 export function conductorPorts(
   continuo: VerifiedContinuo,
   store: IterationStore,
@@ -297,7 +284,7 @@ export function conductorPorts(
       value: readingOf(
         await inspectLapWork({
           workspace: plan.workspace,
-          remote: DEFAULT_READING_REMOTE,
+          remote: READING_REMOTE,
           baseBranch: plan.baseBranch,
           topicBranch: plan.topicBranch,
         }),

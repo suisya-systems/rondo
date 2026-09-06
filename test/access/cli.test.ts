@@ -29,17 +29,19 @@ import {
   parseForgeSlug,
   publishPreflight,
   pullRequestText,
+  readingRangeOf,
   repositoryFromRemoteUrl,
   reviewGate,
   revisionBlocker,
   USAGE,
   walkGate,
+  workLines,
 } from "../../src/access/cli.js";
 import type { LapWorkInspection, PushTargetInspection } from "../../src/access/forge.js";
 import { evidenceOf } from "../../src/access/review.js";
 import type { VerifiedContinuo } from "../../src/continuo/invoker.js";
 import type { ContinuoResult } from "../../src/continuo/protocol.js";
-import type { IterationRecord, LapReading } from "../../src/store/records.js";
+import type { IterationRecord, JsonRecord, LapReading } from "../../src/store/records.js";
 
 /** A handle no test reaches past: every verb below is a fake. */
 const continuo: VerifiedContinuo = {
@@ -901,6 +903,22 @@ const REQUEST = [
 ].join("\n");
 
 /** An iteration row a publish would be run against, varied one field at a time. */
+/**
+ * The plan fields `readingRangeOf` reads, as `revise` and `start` leave them.
+ *
+ * Named so a test can vary one of them and leave the rest, which is what the
+ * revision case needs: `base_branch` and `pull_request_base_branch` differ
+ * there and are the same field everywhere else.
+ */
+function somePublishedPlan(): JsonRecord {
+  return {
+    workspace: "/srv/work/iter-i-0002",
+    topic_branch: "rondo/i-0002",
+    base_branch: "main",
+    pull_request_base_branch: "",
+  };
+}
+
 function published(parts: Partial<IterationRecord> = {}): IterationRecord {
   return {
     id: "dogfood-001",
@@ -1280,4 +1298,99 @@ test("--despite-review overrules every one of those refusals, and only those", (
     expect(reviewGate(reading, work, false).kind).toBe("refused");
     expect(reviewGate(reading, work, true)).toEqual({ kind: "ready" });
   }
+});
+
+test("the range a reading was taken across is the plan's base, never the pull request's", () => {
+  // **A revision is where these two diverge, and where getting it wrong is
+  // routine rather than rare.** `revise` sets `base_branch` to the
+  // predecessor's topic branch and carries the first lap's base in
+  // `pull_request_base_branch`; the reader saw the first of those. Comparing
+  // the reading against the second would call every unchanged revision stale
+  // and teach the operator that --despite-review is how publish works.
+  const revision = published({
+    plan: {
+      ...somePublishedPlan(),
+      base_branch: "rondo/i-0001",
+      pull_request_base_branch: "main",
+    },
+  });
+
+  expect(readingRangeOf(revision)).toEqual({
+    workspace: "/srv/work/iter-i-0002",
+    remote: "origin",
+    baseBranch: "rondo/i-0001",
+    topicBranch: "rondo/i-0002",
+  });
+});
+
+test("the reading's remote is rondo's own, not whatever --remote a person typed", () => {
+  // The reading is taken hours before publish, by a composition root with no
+  // command line to read a remote from. Re-measuring its range under the
+  // operator's remote would resolve a different base ref and report the
+  // difference as staleness.
+  const range = readingRangeOf(published({ plan: somePublishedPlan() }));
+
+  expect(range?.remote).toBe("origin");
+});
+
+test("a row that does not name a range says so rather than guessing one", () => {
+  expect(readingRangeOf(published({ plan: { ...somePublishedPlan(), workspace: "" } }))).toBeNull();
+  expect(
+    readingRangeOf(published({ plan: { ...somePublishedPlan(), base_branch: "" } })),
+  ).toBeNull();
+});
+
+test("the operator is shown the commits and the files, not a count of them", () => {
+  // D-0029 rule 2 asks for the base ref, the subjects and the paths. A summary
+  // saying "3 commits, 2 files" would leave a person exactly where the gate's
+  // own rationale leaves them: told that work happened, by a summary.
+  const lines = workLines(
+    worked({
+      commits: [
+        { abbreviatedSha: "aaa1111", subject: "feat: add the thing" },
+        { abbreviatedSha: "bbb2222", subject: "test: cover the thing" },
+      ],
+      files: [
+        { path: "src/thing.ts", added: 40, deleted: 2 },
+        { path: "test/thing.test.ts", added: 90, deleted: 0 },
+      ],
+    }),
+  ).join("\n");
+
+  expect(lines).toContain("against refs/remotes/origin/main");
+  expect(lines).toContain("aaa1111 feat: add the thing");
+  expect(lines).toContain("bbb2222 test: cover the thing");
+  expect(lines).toContain("src/thing.ts");
+  expect(lines).toContain("test/thing.test.ts");
+});
+
+test("a workspace that cannot be read is said out loud and blocks nothing", () => {
+  // This runs on the path to a person's gate answer, where nothing of rondo's
+  // may stand between them and it (D-0029 rule 3).
+  const lines = workLines({ kind: "unreadable", reason: "no such directory" });
+
+  expect(lines).toEqual(["        the workspace could not be read: no such directory"]);
+});
+
+test("a long list is capped and says how many it hid", () => {
+  // A list that stops without saying it stopped is a list a person reads as
+  // complete, which is worse than one that is honestly truncated.
+  const many = Array.from({ length: 25 }, (_, index) => ({
+    abbreviatedSha: `sha${String(index).padStart(4, "0")}`,
+    subject: `commit ${String(index)}`,
+  }));
+
+  const lines = workLines(worked({ commits: many }));
+
+  // Twenty listed and no more; the twenty-first line is the count of what was
+  // hidden, which is a different sentence and is asserted below.
+  expect(lines.filter((line) => line.includes("commit "))).toHaveLength(20);
+  expect(lines.join("\n")).toContain("...and 5 more commit(s)");
+});
+
+test("an empty branch is described rather than left silent", () => {
+  const lines = workLines(worked({ commits: [], files: [] })).join("\n");
+
+  expect(lines).toContain("no non-merge commits on the branch");
+  expect(lines).toContain("no files changed");
 });

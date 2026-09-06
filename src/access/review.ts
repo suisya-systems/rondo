@@ -45,6 +45,18 @@ import type { LapWorkInspection } from "./forge.js";
 export const DETERMINISTIC_DRAFTER = "rondo/deterministic/1";
 
 /**
+ * The remote whose tracking ref a reading prefers when it resolves the base.
+ *
+ * **Exported so that both ends of D-0029 rule 10's comparison use the same
+ * one.** The reading is taken hours before `publish`, by a composition root
+ * with no command line to read a remote from, so it takes this; `publish` has a
+ * `--remote` an operator may have typed. Re-measuring the reading's range with
+ * the operator's remote would compare two different ranges and call the
+ * difference staleness.
+ */
+export const READING_REMOTE = "origin";
+
+/**
  * The digest of the material a reading was taken over.
  *
  * Over the resolved range and the whole of what `git` reported about it, not

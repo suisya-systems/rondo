@@ -62,11 +62,12 @@ import {
   inspectTopicBranch,
   type LapFile,
   type LapWorkInspection,
+  type LapWorkRequest,
   openPullRequest,
   type PushTargetInspection,
   pushTopicBranch,
 } from "./forge.js";
-import { evidenceOf } from "./review.js";
+import { evidenceOf, READING_REMOTE } from "./review.js";
 
 /**
  * The whole surface on one screen.
@@ -1023,6 +1024,20 @@ async function sayLapMaterial(store: IterationStore, record: IterationRecord): P
   const topicBranch = planField(record, "topic_branch");
   say(`work    ${topicBranch === "" ? "(no topic branch on the row)" : topicBranch}`);
   say(`        in ${workspace === "" ? "(no workspace on the row)" : workspace}`);
+  // **The commits and the files, not a count of them.** A summary that said
+  // "3 commits, 2 files" would leave the person exactly where the gate's own
+  // `rationale` leaves them: told that work happened, and told it by a summary.
+  // D-0029 rule 2 asks for the base ref, the subjects and the paths, and the
+  // point of asking is that a subject is the one place a lap says what it did
+  // in words nobody generated for this screen.
+  const range = readingRangeOf(record);
+  if (range === null) {
+    say("        the row does not name a range, so there is nothing to list");
+  } else {
+    for (const line of workLines(await inspectLapWork(range))) {
+      say(line);
+    }
+  }
   const readings = await store.readingsFor(record.id);
   const latest = readings.at(-1);
   if (latest === undefined) {
@@ -1033,6 +1048,72 @@ async function sayLapMaterial(store: IterationStore, record: IterationRecord): P
   for (const line of reviewLines(latest)) {
     say(line);
   }
+}
+
+/**
+ * What the lap committed, listed rather than counted.
+ *
+ * **An unreadable workspace prints and does not refuse.** This runs on the path
+ * to a person's gate answer, where D-0029 rule 3 refuses to let anything of
+ * rondo's stand between them and it: a workspace that has been moved or removed
+ * since the lap ran is worth saying out loud and is not worth withholding the
+ * gate over.
+ *
+ * Capped at `LIST_LIMIT` for the reason the pull-request body is, and saying
+ * how many were hidden rather than trailing off -- a list that stops without
+ * saying it stopped is a list a person reads as complete.
+ */
+export function workLines(work: LapWorkInspection): readonly string[] {
+  if (work.kind !== "read") {
+    return [`        the workspace could not be read: ${work.reason}`];
+  }
+  const lines = [`        against ${work.baseRef}`];
+  if (work.commits.length === 0) {
+    lines.push("        no non-merge commits on the branch");
+  } else {
+    for (const commit of work.commits.slice(0, LIST_LIMIT)) {
+      lines.push(`        ${commit.abbreviatedSha} ${commit.subject}`);
+    }
+    const hiddenCommits = work.commits.length - LIST_LIMIT;
+    if (hiddenCommits > 0) {
+      lines.push(`        ...and ${String(hiddenCommits)} more commit(s)`);
+    }
+  }
+  if (work.files.length === 0) {
+    lines.push("        no files changed");
+    return lines;
+  }
+  for (const file of work.files.slice(0, LIST_LIMIT)) {
+    lines.push(`        ${file.path} ${fileCounts(file)}`);
+  }
+  const hiddenFiles = work.files.length - LIST_LIMIT;
+  if (hiddenFiles > 0) {
+    lines.push(`        ...and ${String(hiddenFiles)} more file(s)`);
+  }
+  return lines;
+}
+
+/**
+ * The range a reading of this row was taken across, or null when the row does
+ * not name one.
+ *
+ * **One definition, read by both ends of D-0029 rule 10's comparison**, and it
+ * exists because getting it wrong is invisible in the ordinary case and routine
+ * in the revision case. `publish` compares against `pull_request_base_branch`
+ * when a revision set one -- the first lap's base, carried along the chain --
+ * while the reading was taken against `base_branch`, the predecessor's topic
+ * branch. Two different ranges compared against each other report every
+ * unchanged revision as stale, which sends the operator to `--despite-review`
+ * as a habit and costs the stage the only force it has.
+ */
+export function readingRangeOf(record: IterationRecord): LapWorkRequest | null {
+  const workspace = planField(record, "workspace");
+  const topicBranch = planField(record, "topic_branch");
+  const baseBranch = planField(record, "base_branch");
+  if (workspace === "" || topicBranch === "" || baseBranch === "") {
+    return null;
+  }
+  return { workspace, remote: READING_REMOTE, baseBranch, topicBranch };
 }
 
 /** One stored reading, as an operator reads it. ASCII, one line at a time (D-0004). */
@@ -2020,7 +2101,22 @@ async function commandPublish(
   // is that a preview must not pass where the real run would fail; a review
   // refusal a dry run hid would be the same defect with a different cause.
   const readings = await store.readingsFor(record.id);
-  const gateOnReview = reviewGate(readings.at(-1) ?? null, work, parsed.despiteReview);
+  // **A second inspection, over the range the *reading* was taken across.**
+  // `work` above is built for the pull request, which after `rondo revise` is a
+  // different range: `publish` compares against `pull_request_base_branch` --
+  // the first lap's base, carried along the chain -- while the reader saw
+  // `base_branch`, the predecessor's topic branch. The material digest covers
+  // the base ref, the base commit, the commits and the files, so comparing the
+  // two would report every unchanged revision as stale and send the operator to
+  // `--despite-review` as a matter of routine. That is this design's own
+  // falsifier fired on the first day, and the fix is one query rather than a
+  // looser comparison.
+  const range = readingRangeOf(record);
+  const asRead: LapWorkInspection =
+    range === null
+      ? { kind: "unreadable", reason: "the row does not name the range a reading was taken across" }
+      : await inspectLapWork(range);
+  const gateOnReview = reviewGate(readings.at(-1) ?? null, asRead, parsed.despiteReview);
   if (gateOnReview.kind === "refused") {
     return refuse(gateOnReview.reason);
   }
