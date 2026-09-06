@@ -45,13 +45,25 @@ withheld from work a person approved, and a clean verdict unlocks nothing.
    is what that measurement leaves standing rather than what the name suggests.
 
 2. **`V-2` — `rondo answer` prints what the lap produced, on both of its paths,
-   and this rule is worth more than every other rule in this entry.** Today the
-   reading mode prints the gate's `rationale` — the worker's own account of its
-   own work — and no workspace path and no topic branch, and the `--body` path
-   prints none of even that. The base ref, the commit subjects and the touched
-   files go above the answer command on both paths. It produces no verdict and
-   takes no authority: it is material for a person, which is the grade `D-0022`
-   rule 13 permits, and it needs no status, no table and no new capability grant.
+   and the documented procedure gains a step that reads before it answers. This
+   rule is worth more than every other rule in this entry.** Today the reading mode
+   prints the gate's `rationale` — the worker's own account of its own work — and
+   no workspace path and no topic branch, and the `--body` path prints none of even
+   that. The base ref, the commit subjects and the touched files go above the
+   answer command on both paths. It produces no verdict and takes no authority: it
+   is material for a person, which is the grade `D-0022` rule 13 permits, and it
+   needs no status, no table and no new capability grant.
+
+   **The two paths are not equal and the entry says which is which.** On the
+   reading-mode path the material arrives before an answer is typed and informs
+   it. On the one-shot `--body` path the answer is already given and the command
+   goes on to walk the gate with no second chance to take input, so **there the
+   print is a receipt** — a record of what the person approved over, which is worth
+   having and is not information they could act on. What closes the remainder is
+   the procedure, which today walks the operator straight to `--body approve` with
+   no step before it, and **not** a machine refusing to carry a person's gate
+   answer; rule 3's clock argument refuses that, and whether it should be
+   reconsidered is a residual with a named trigger.
 
 3. **`V-3` — a refusal stops `publish`, once, with a named override; it never
    stops the gate, `closed`, or admission.** `publish` is the only act that
@@ -237,6 +249,13 @@ withheld from work a person approved, and a clean verdict unlocks nothing.
 - **`src/access/` gains a pure verdict function and one adapter.** No new entry in
   `ALLOWED_EXTERNALS_BY_MODULE`: `inspectLapWork` already holds the `spawn`, and
   this entry adds call sites rather than capability.
+- **`inspectLapWork` gains one query and one field: the topic branch's resolved
+  tip.** It returns a base *ref name*, **abbreviated** shas of the **non-merge**
+  commits and per-file counts, none of which is an identity for the commit
+  `publish` will push — an abbreviation is not a commit id, and the newest non-merge
+  entry is not the tip when the tip is a merge. `git rev-parse --verify --quiet`
+  against the branch ref, the query the module already spells for a different
+  question, supplies it. Rule 10's staleness check is unimplementable without it.
 - **The store gains one record kind, one writer and one query.** The writer refuses
   a `clear` without evidence (rule 11); the query answers "which iterations reached
   a terminal status with no reading".
@@ -299,6 +318,7 @@ withheld from work a person approved, and a clean verdict unlocks nothing.
 | An organisation-wide criterion store, and how a criterion revision is dated | A plan field answers one plan and not a fleet | a later entry |
 | A second approver | It is a change to who may act, not to this stage | `D-0020` rule 2's surface work |
 | The verdict becoming a proposal a person approves before a retry is admitted | `D-0022` rule 17's route, whose machinery is unbuilt | the advisory record-design task |
+| Whether `answer --body` should refuse once on an unacknowledged `concerns` | It is friction at the gate, which rule 3 refuses on the clock argument, and the answer turns on evidence nobody has yet. Trigger: the first `concerns` an operator would have acted on and did not see | rondo's gate, if the trigger fires |
 
 ### What was measured, and at which revision
 

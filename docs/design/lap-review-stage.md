@@ -488,8 +488,25 @@ to lose (`V-11`):
 
 The distinction is the point: `inspectLapWork` is rondo running `git`
 (`forge.ts:450-528`), so the evidence is a measurement rondo took, not an
-assertion a reviewer made. It is enforced by the writer rather than by prose, and
-the tip commit is what makes section 5's staleness check possible at all.
+assertion a reviewer made. It is enforced by the writer rather than by prose.
+
+**The tip commit is not something the current reader returns, and the design
+requires it rather than assuming it.** `LapWorkInspection` carries a base *ref
+name*, **abbreviated** shas of the **non-merge** commits, and per-file counts
+(`forge.ts:397-431`, produced by `git log --no-merges --reverse --format=%h%x09%s`
+at `:485-496`). Three of those are the wrong shape for an identity: an
+abbreviation is not a commit id, the newest entry of that list is not the tip when
+the tip is a merge, and a ref name is not a revision. So **the reading resolves
+the tip itself** — `git rev-parse --verify --quiet refs/heads/<topic branch>`,
+which is the query `inspectPushTarget` already spells for a different question
+(`forge.ts:242-258`), returning the full sha and distinguishing "not there" from
+"git could not answer" — and the resolved sha, not an inference from the log, is
+what the row records and what section 5 compares. This is an addition to the
+reader, and it is listed in section 12 as one.
+
+Without it, section 5's staleness check cannot be implemented at all, and the
+evidence rule would be recording an abbreviation of a commit that may not be the
+one being pushed.
 
 **For a model drafter this rule as stated is not enough, and saying so is the
 whole point of writing it down.** rondo running `git` successfully proves that
@@ -710,8 +727,22 @@ credential, or convert a clean verdict into permission. The one asymmetry — a
 human decides" while making the decision meaningless. Three instances were
 looked for:
 
-- *A verdict shown when the person can no longer act.* Closed by printing on the
-  `--body` path, which is the path the documented procedure teaches (1.2).
+- *A verdict shown when the person can no longer act.* **Only half closed, and
+  the half that is not closed is named rather than glossed.** On the reading-mode
+  path the verdict arrives before the person types an answer, and it informs the
+  answer. On the one-shot `--body` path it does not: the answer was already typed,
+  and `commandAnswer` goes on to `walkGate` with no second opportunity to take
+  input (`cli.ts:1042-1061`). **There the print is a receipt, not information** —
+  it tells the person what they have just approved over, which is worth having and
+  is not the same thing. What closes the rest is not a machine standing between a
+  person and their own gate answer (`V-3`'s clock argument refuses that); it is
+  the documented procedure gaining a step, because today `scripts/dogfood-lap.md`
+  walks the operator straight to `--body approve` with nothing before it. The
+  reading mode is the pre-answer step, and the procedure should teach it (`V-2`).
+  Whether `answer --body` should additionally refuse once on an unacknowledged
+  `concerns` is a real question with a person's gate deadline on the other side of
+  it, and it is **deliberately not taken here** — it is a residual with its
+  trigger: the first `concerns` an operator would have acted on and did not see.
 - *An auto-pass, so the person is only consulted on failures.* Refused: a clean
   verdict changes nothing about what the person is asked, and the material is
   printed either way.
@@ -768,6 +799,10 @@ rather than a row nobody understands.
 - **A port and a wiring**: one member on `ConductorPorts`, one adapter in
   `src/access`. No new external grant anywhere — `inspectLapWork` already holds
   the `spawn` (`import-boundaries.test.ts:284`).
+- **One query added to the reader.** `inspectLapWork` resolves the topic branch's
+  tip with `git rev-parse --verify --quiet` and returns the full sha, because an
+  abbreviated non-merge log entry is not an identity for the commit `publish` will
+  push (6.1). Same module, same grant, one more `runCommand`.
 - **A table, a writer, and one query.** The query is not optional (section 6, item 3).
 - **Two commands change**: `answer` prints more, on both paths; `publish` gains a
   refusal and a flag.
@@ -837,7 +872,7 @@ anything.
 | Row | Question | Recommendation | Why |
 |---|---|---|---|
 | **V-1** | Does the lap gain an independent review stage at all? | **Yes — as a reading, a record and one refusal; not as a state and not as a judge** | Two of the three conditions an in-arc stage needs fail on the tree (2.1); both succeed outside it. The stage that survives measurement is small, and the parts that do not survive are refused by name rather than deferred |
-| **V-2** | Does `answer` print what the lap produced? | **Yes, on both paths, and it is worth more than every other row here** | Today the reading mode prints the worker's own account and no workspace path, and the `--body` path prints nothing (1.2). It is material for a person, needs no status, no grant and no verdict, and it is the precondition for anything else being useful |
+| **V-2** | Does `answer` print what the lap produced? | **Yes, on both paths — and `scripts/dogfood-lap.md` gains a step that reads before it answers. It is worth more than every other row here** | Today the reading mode prints the worker's own account and no workspace path, and the `--body` path prints nothing (1.2). It is material for a person, needs no status, no grant and no verdict. The distinction matters and is stated in section 10: on the reading-mode path the material informs the answer; on the one-shot path it is a **receipt** for an answer already typed, and what closes that gap is the procedure teaching the reading step rather than a machine refusing a person's gate answer |
 | **V-3** | What does a refusal stop? | **`publish`, once, with `--despite-review`; never the gate, never `closed`, never admission** | `publish` is the only act reaching the world and the only refusal point where no human clock is running (1.4, section 5). It already has the refuse-once-name-the-flag shape |
 | **V-4** | Does `IterationStatus` gain a state? | **No** | The reading fits between `lap perform` answering and the `awaiting_human` commit, where the row is already `performing` and already carries its releasing events (1.1). A new state would owe `RELEASED_BY` a row, `SUSPENDED_STATUSES` a classification and the ledger a column, and would buy restartability of a reading that is cheaper to redo |
 | **V-5** | Who reads, in the first cut? | **A pure function over rondo's own `git` measurement, in `src/access/`** | Independence is structural rather than promised, it is a unit case, and it carries no non-deterministic verdict — which is `D-0019` rule 7's first two legs intact. Its ceiling is shape, and `V-9` records that (9.1) |
@@ -861,3 +896,4 @@ anything.
 | An organisation-wide criterion store, and how a criterion is revised so a later reader can date the change | Named in 8.2; a plan field answers one plan and not a fleet | a later entry |
 | A second approver — `approvedActor` admitting more than `RONDO_APPROVER` | It is a change to who may act, not to this stage (1.5) | `D-0020` rule 2's surface work |
 | The verdict becoming a `proposal` a person approves before a retry is admitted | That is `D-0022` rule 17's route and its machinery is unbuilt (section 7) | the advisory record-design task |
+| Whether `answer --body` should refuse once on an unacknowledged `concerns` | It is friction at the gate, which `V-3` refuses on the clock argument; the answer turns on evidence nobody has yet. Trigger: the first `concerns` an operator would have acted on and did not see (section 10) | rondo's gate, if the trigger fires |
