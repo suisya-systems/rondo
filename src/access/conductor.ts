@@ -82,6 +82,13 @@ export type { ConductorReport };
  * D-0019 rules 11 and 12 exist to prevent. The whole cost of getting it wrong is
  * one line here, which is exactly why the line has a paragraph.
  *
+ * **The refusal's session id passes through and is never manufactured.** A
+ * `lap perform` refusal that names its session (`continuo D-1102`) hands the
+ * conductor an identity it can act on; every other refusal, prose included,
+ * hands it none, and the absence is carried as an absence. Nothing here reads
+ * the message for one -- that is D-0015 rule 7, and it is the reason continuo
+ * made the id a field.
+ *
  * `protocolRefusal` maps to `defect` rather than to `refused` because it is not
  * an answer addressed to an operator: it says the seam is not the seam rondo was
  * built against, and what a person does about it is re-pin continuo or teach
@@ -93,8 +100,19 @@ function asEffect<T, U>(result: ContinuoResult<T>, read: (payload: T) => U): Eff
     case "answered":
       return { kind: "answered", value: read(result.payload) };
     case "refused":
-      return { kind: "refused", message: result.message };
+      // The identity travels with the refusal it belongs to and is added only
+      // when the envelope carried one: a `sessionId` key holding `undefined`
+      // would be rondo claiming to have looked and found nothing, where the
+      // truth is that continuo did not say (`exactOptionalPropertyTypes`).
+      return {
+        kind: "refused",
+        message: result.message,
+        ...(result.sessionId === undefined ? {} : { sessionId: result.sessionId }),
+      };
     case "refusedInProse":
+      // No identity here and none inferable: prose is an argparse-level refusal
+      // raised before any session exists, and D-0015 rule 7 forbids reading one
+      // out of the words either way.
       return { kind: "refused", message: result.text };
     case "protocolRefusal":
       return { kind: "defect", reason: result.reason };

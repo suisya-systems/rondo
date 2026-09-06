@@ -43,7 +43,28 @@ import type { RunPlan } from "./plan.js";
  */
 export type EffectOutcome<T> =
   | { readonly kind: "answered"; readonly value: T }
-  | { readonly kind: "refused"; readonly message: string }
+  | {
+      readonly kind: "refused";
+      readonly message: string;
+      /**
+       * The session the refused effect was about, when it named one.
+       *
+       * **A fact rondo may act on, carried beside words rondo may only relay.**
+       * `message` is written for a person and is free to be reworded by any
+       * later continuo commit; the identity is a field, and D-0015 rule 7 is
+       * the standing rule that the first may never be mined for the second.
+       * Absent means the effect named no session, and the interpreter writes
+       * nothing rather than a value it inferred.
+       *
+       * Optional on the shared union rather than on a lap-only one, because the
+       * translation into this vocabulary is a single generic function in the
+       * composition root (`asEffect`) and a second union would make the lap the
+       * one effect that had to go round it. Only `performLap` can carry a value
+       * today: continuo's envelope has exactly one verb that names its session
+       * on a refusal (`continuo D-1102`).
+       */
+      readonly sessionId?: string;
+    }
   | { readonly kind: "defect"; readonly reason: string }
   | { readonly kind: "noAnswer"; readonly reason: string };
 
