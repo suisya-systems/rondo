@@ -1,6 +1,7 @@
-# The operator's three commands
+# The operator's four commands
 
-What a person types to get one request through rondo, from asking for it to publishing it.
+What a person types to get one request through rondo, from asking for it to publishing it -- and,
+in section 7, `abandon`, which is how a request that cannot get there is settled instead.
 Everything here was run on 2026-09-06 against continuo `38c667b5126fdfdc0465e4a422e88b20a8b53044`
 (`continuo.pin.json`), and the transcripts are what actually came back.
 
@@ -10,9 +11,42 @@ with ids copied between them (`lap-1-dogfood.md`). That is what these commands r
 
 ---
 
-## 1. Once per machine
+## 0. The one-command path
+
+Sections 1 to 3 are the setup as an explanation. [`scripts/dogfood-env.sh`](../../scripts/dogfood-env.sh)
+is the same setup as a command, for when you want the environment rather than the reasoning:
 
 ```sh
+scripts/dogfood-env.sh --root /abs/where/the/environment/lives
+```
+
+`--root` is optional; it defaults to `.worker-scratch/dogfood-env`, which `.gitignore` already
+excludes -- an environment is a continuo clone, two SQLite databases, a worktree and captured
+session output, and none of that is a thing to stage by accident.
+
+It builds rondo, clones and builds the pinned continuo, creates the control plane, creates a scratch
+target repository with a `main` branch to run laps against, writes a complete `plan.json` and an
+`env.sh` holding section 2's three exports -- and then prints the commands below with the real paths
+filled in. It **never runs a lap**: everything it does is free, and `start` is the line that is not.
+
+Re-running it is safe; every step checks for its own result first and repairs only what is missing.
+The three site paths it cannot discover -- the interlock checkout, the claude-org checkout and the
+worker CLI -- have defaults and `RONDO_DOGFOOD_*` overrides, and it fails by name rather than
+guessing when one is absent. `--help` lists them.
+
+If you would rather do it by hand, or want to know what that script is doing, read on.
+
+## 1. Once per machine
+
+`$S` below is one directory you choose; everything the setup writes lives under it. It has to exist
+before the first command, and so do the four directories in section 3's plan (`artifacts`,
+`state_root`, the dropbox and the catalog dir): **no continuo verb creates a directory**, and a
+missing one is an error from inside a lap rather than at setup.
+
+```sh
+S=/abs/where/the/environment/lives
+mkdir -p "$S" "$S/artifacts" "$S/session-state" "$S/dropbox" "$S/catalog"
+
 # rondo itself
 npm ci --ignore-scripts
 npm run build
@@ -30,6 +64,14 @@ node "$S/continuo-$REV/dist/cli.js" db create --db "$S/control-plane.sqlite3"
 
 `rondo` verifies that build's `--version` against the pin on every command and refuses a mismatch or
 a `-dirty` tree, so a stale continuo is a refusal rather than a wrong answer.
+
+**`db create` refuses a path that already exists**, on purpose -- it will not adopt somebody else's
+schema -- so the last line is the one that fails on a second run. That is not a problem to solve; it
+is the reason the script guards it rather than re-running it.
+
+**You also need a repository a lap may touch**, with the plan's `base_branch` already present and at
+least one commit on it. A lap materialises a worktree from it and cuts the topic branch; an empty
+repository has no `main` to cut from. The script creates a scratch one for exactly this reason.
 
 ## 2. Three environment variables
 
@@ -54,9 +96,16 @@ and refuses by field name.
 Four values change per run and have flags, so the file itself does not have to be edited to start a
 second lap: `--run-id`, `--topic-branch`, `--workspace`, `--prompt`.
 
-A complete working example is in [`../../.worker-scratch`-shaped form below]; every path must be
-absolute, and `invocation_ceiling_ms` must be **strictly greater** than
+A complete working example follows, and [`scripts/dogfood-env.sh`](../../scripts/dogfood-env.sh)
+generates one filled in for the machine it runs on. Every path must be absolute, and
+`invocation_ceiling_ms` must be **strictly greater** than
 `turn_timeout_ms + git_timeout_ms + identity_readback_timeout_ms`.
+
+**`node` is the trap in this file.** It is the interpreter the fenced endpoint runs under, so it must
+be the interpreter's own installed path -- not what `command -v node` prints on a machine with a
+version manager, which is a per-shell shim directory that will not exist for the child. Resolve it
+(`node -e 'console.log(require("node:fs").realpathSync(process.execPath))'`) rather than copying the
+shim.
 
 ```json
 {
@@ -285,3 +334,34 @@ Recorded so that "it works" is not read more broadly than it was tested.
   what closes this gap.
 - After the walk, continuo's run row was still `created` and rondo's row still recorded no publish,
   which is the correct state for work that was approved but not yet submitted.
+
+### The second walk: from nothing, through `scripts/dogfood-env.sh`
+
+Run on 2026-09-06 on the same machine and the same pin, from an empty directory, to check that the
+script above actually produces an environment the four commands run in. Two laps were spent.
+
+| Command | Wall clock | What it reached |
+|---|---|---|
+| `scripts/dogfood-env.sh` (cold: clone + both builds) | 8.4 s | environment provisioned, no lap run |
+| `start` | 15.4 s | `awaiting_human`, gate open at `received` |
+| `answer` (read) | 0.28 s | printed the worker's own sentence and the options |
+| `answer --body=approve` | 1.2 s | six verbs, `answered_and_forwarded`, iteration `closed` |
+| `publish --dry-run` | 0.15 s | the three legs, computed from the stored plan |
+| `abandon` | 0.06 s | `abandoned` from `performing`, lock released |
+
+The worker did the work it was asked for: commit `dc8a01c` on `dogfood/dogfood-001` appends the
+line. `publish` was again not run without `--dry-run`, for the same reason as above.
+
+**`abandon` was walked on a `performing` row**, which is the case section 7 exists for and the first
+walk did not cover. The lap was started and rondo was killed eight seconds in, simulating a host that
+died mid-lap. What followed is the behaviour the single-flight lock promises: `answer` reported
+`iteration 'dogfood-002' is performing, and no gate is open on it`, a third `start` was **refused
+before anything was spawned** -- so a stuck row costs nothing to bump into -- and `abandon` released
+the lock, after which `answer` reported nothing live. Two things it deliberately left behind, both
+the operator's by D-0010: an admitted continuo run at `created`, and the materialised workspace with
+its topic branch.
+
+Two setup facts are worth stating because they are the ones the first walk did not have to discover:
+the cold `continuo` build is **seconds, not the ~13 s recorded earlier** (TypeScript 7's native
+compiler), and every rondo command prints one `ExperimentalWarning: SQLite ...` line on stderr, which
+is `node:sqlite` on the supported Node versions and not a fault.
