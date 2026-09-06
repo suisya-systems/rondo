@@ -65,6 +65,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0023 | The identifier allocator and the capacity ledger: rondo mints the triple, `awaiting_human` stops occupying capacity, and the single-flight index becomes a counted bound | accepted |
 | D-0027 | "Revise" at the gate becomes a second lap: fresh identifiers, the predecessor's branch as the base, and the instruction carried into the prompt | accepted |
 | D-0028 | The plan payload carries its own version: an ordered read-side upgrade ladder, strict again at the version that introduced each field, and separate from the schema's migration on purpose | accepted |
+| D-0022 | The advisory component: a pure function in its own layer, three authorities, one ledger per fact — and the widening a lap-1 retry actually takes, which is a fresh plan and not a successor contract | accepted |
 
 ---
 
@@ -3765,7 +3766,6 @@ waiting, not the working.
   `transition()` currently reports as a defect and which is a retry.
 - **rondo's ledger measuring the lap term as binding after all**, which would mean the 17% / 83%
   split was an artefact of one operator's pace rather than a property of the work.
-
 ---
 
 ## D-0028 — The plan payload carries its own version: an ordered read-side upgrade ladder, strict again at the version that introduced each field, and separate from the schema's migration on purpose
@@ -3874,3 +3874,379 @@ next field would have faced the same choice with no rule to appeal to.
   longer read version 0" a sentence rondo can say precisely.
 - **`plan_digest` ceasing to be verified on read**, which is the fact rule 3 rests on and which was
   measured in `src/store/sqlite.ts` on 2026-09-07.
+---
+
+## D-0022 — The advisory component: a pure function in its own layer, three authorities, one ledger per fact — and the widening a lap-1 retry actually takes, which is a fresh plan and not a successor contract
+
+**Status:** accepted (2026-09-07, rondo's human gate)
+
+The design is [`docs/design/advisory.md`](docs/design/advisory.md), whose rows `A-1` … `A-18` this
+entry takes. It answers rondo#9: whether the component that proposes contracts and explains state
+exists in rondo at all, in which layer, what it may read, what it may propose, and where the line
+sits between proposing and deciding.
+
+**The document is left as it was written**, as `parallel-admission.md` and `refrain-lap1.md` were,
+so a later reader can see what was measured and when. Revising it before ratification was
+considered and refused: a design document that is edited to match the tree it is being taken
+against stops being evidence of anything. **This entry is therefore the authority wherever the two
+differ**, and the differences are named rule by rule below rather than left for a reader to
+discover.
+
+**They are not incidental.** The design measured the tree at `878eea4`; **thirteen commits landed
+between that measurement and this gate**, including the operating surface (`D-0024`, `D-0025`),
+`revise` (`D-0027`) and parallel admission (`D-0023`). Every row was re-measured at `b9e284a` on
+2026-09-07 before it was taken. Nine rows survived untouched, one had already been carried out, six
+needed a measurement restated, and **one was falsified outright**.
+
+**The falsified row is the interesting one, and the shape of its replacement is why this entry is
+worth reading.** `A-17` decided that a retry after a `needs_approval` reuses the predecessor's
+`(run id, topic branch, workspace)`, because a successor contract may not change its grantee and a
+grantee is a run id. `D-0023` then made identifiers **derived** rather than typed, which removes
+the reuse this row depends on — and the same derivation is what makes the replacement clean, because
+an iteration id now fixes the whole triple *before* admission, so the contract a retry will be
+issued under can be composed and shown to a person before they approve it. **The entry that
+falsified `A-17` is the entry that made the row it replaces unnecessary.** Rule 17 is that
+argument.
+
+### Decision
+
+1. **The advisory component exists, and it lives in a layer of its own, `src/advisory/`** (`A-1`).
+   Its internal allowance is `["src/advisory", "src/store"]` and its **external allowance is
+   empty**; `src/access` gains `src/advisory`. rondo#9's own title proposes `src/access` and this
+   entry overrules it, on a measurement re-taken at `b9e284a`: the boundary test grants internals
+   **per layer** (`test/architecture/import-boundaries.test.ts:124-161`, argued in its own comment
+   at `:111-122`) and externals **per module** (`:208-285`, argued at `:185-192`), so "this one
+   module may not import cadenza while its neighbours may" is a rule that table cannot express. In
+   `src/access` under rule 5 below, the component that must never compose a contract would sit in
+   the layer that may. A layer makes it a planted case instead of a review comment. **A module
+   absent from the external table may import no external at all**, so the empty external allowance
+   needs no entry — absence *is* the empty allowance.
+
+2. **It is a total, pure function of an injected snapshot**, `propose(snapshot) -> Proposal`
+   (`A-2`). Gathering is the composition root's. A function that returns a value cannot issue one,
+   which is how "expresses no authority" becomes a type rather than a discipline, and it is what
+   lets `test/advisory/` run with no database, no continuo build and no cadenza package. **One
+   caveat is recorded rather than implied**: what the boundary test mechanically enforces is the
+   absence of imports and of the five names in `FORBIDDEN_GLOBALS`
+   (`import-boundaries.test.ts:552-558`), which does not include `Date`. Determinism beyond the
+   import graph is a property of the tests, not of the boundary.
+
+3. **What it may read at runtime is rondo's store, the pinned cadenza through the facade only, and
+   admitted continuo `--json` verbs decoded by `src/continuo/protocol.ts` and handed over in the
+   snapshot** (`A-3`). Never a sibling checkout, never continuo's SQLite file. Design-time
+   measurement and runtime input are different things, and the document's own section 1 is the
+   first. Two of the design's supporting sentences are stale and both widen the permitted surface
+   rather than narrowing it: continuo now decodes **eleven** verbs, not six
+   (`src/continuo/protocol.ts`, contracts at `:633,643,654,668,683,696,709,724,736,749,775`), and a
+   `GATE_ANSWER` contract does exist (`:724-733`).
+
+4. **Proposals are persisted as their own immutable, append-only record kind, with no `status`
+   column** (`A-7`), carrying the columns the design's section 8 names — the snapshot **verbatim**
+   beside its digest, so a proposal is re-derivable and not only re-readable. A row that can be
+   rewritten to `approved` is a record of what somebody wishes had been proposed.
+   `candidate_contract_digest` is **null on a proposal**, always: a digest there would be the
+   advisory claiming to have composed something. **"Immutable" is a property of the schema and of
+   the absence of any writer that updates, not of a trigger** — there are no triggers in
+   `src/store/sqlite.ts`, and `D-0023` has just traded one schema-level invariant for an
+   application-level one (rule 13 below). The entry claims it at that grade.
+
+5. **`src/access` gains the `src/cadenza` arrow, and the facade gains a successor composer**
+   (`A-4`). Not `src/refrain`, not a new layer, and the advisory calls neither. `D-0009` part 2
+   and `D-0020` rule 2 both put the *issuer* of a widening at the
+   operating surface. **Note what this grant actually reaches**, because internal allowances are
+   per layer: `src/access` is now five modules and roughly 3400 lines, including the
+   process-spawning `forge.ts`. That is the price of the mechanism rule 1 relies on, and it is paid
+   knowingly. Under rule 17 the composer this row anticipated is **not called in lap 1**; the arrow
+   is taken because the facade is where such a call would have to live, and withheld from use until
+   something consumes it.
+
+6. **`A-5` is taken as a past-tense record: the pin has already moved, and its evidence sentence is
+   false at HEAD.** The design says `supersedeOnDecision`, `humanDecisionRecord`,
+   `HumanDecisionRecord` and `DecisionOutcome` "appear nowhere in the installed `dist/index.d.ts`"
+   and that the pin is `e56d7e7`. Measured from the vendored bytes rather than from `node_modules`,
+   which is the artefact this repository pins: `cadenza.pin.json` reads
+   `5d5d9f408c29f6500c422c8e10e6b6a3a6882aaf`, and `package/dist/index.d.ts` inside
+   `vendor/suisya-systems-cadenza-0.0.0.tgz` exports `supersedeOnDecision` at line 49 and
+   `DecisionOutcome`, `HumanDecisionRecord` and `humanDecisionRecord` at line 67. The move landed in
+   `0f20e4c` (#16), in exactly the isolated form `A-5` asks for. **The reason it reads as unmet is
+   worth recording**: `0f20e4c` is dated 2026-09-06 07:46:43 and the design commit `07bba50`
+   07:51:45, and `git merge-base --is-ancestor 0f20e4c 878eea4` is false — the design branch
+   measured, five minutes later, a tree that never contained the pin move. A design document's
+   measured revision and the tree it merges into are different things, and this is the worked
+   example.
+
+7. **`A-6` is taken with its hole list re-grounded, because four of the five fields it names are no
+   longer `RunPlan` fields at all.** The recommendation stands: a proposal about a plan may be a
+   **selection** among persisted plans, a **diff** against a named predecessor, and an **explicit
+   list of the fields it will not fill** — and it may never fill them, because that would be the
+   allocator `D-0019` rule 3 refuses. What has changed is the list. `D-0023` rule 9 removed
+   `runId`, `workspace` and `topicBranch` from `RunPlan`, replacing all three with `workspaceRoot`
+   (`src/refrain/plan.ts:91-111`), and `leaseClaimantId` is derived with them
+   (`src/refrain/allocator.ts:139-158`). **So the hole a person still fills is `workspaceRoot` and
+   the fence roots** — `repository`, `artifactRoot`, `stateRoot`, `interlockRoot`, `claudeOrgPath`,
+   `endpointRecipient`, `endpointDestinationDir` (`plan.ts:117-125`) and `claudeCommand` (`:133`) —
+   because continuo requires each absolute and outside the worktree and a rondo-side default would
+   be rondo guessing at a fence's geometry. `RunPlan` now declares **thirty** fields
+   (`plan.ts:87-259`), not thirty-one. **And one rule is added that the design could not have
+   written**: naming an iteration id now names the whole triple by derivation, so a proposal that
+   names a successor iteration id has, in that one field, said everything about identifiers there
+   is to say.
+
+8. **`A-8`'s ledger is taken with one exception named and bounded.** One home per fact, every other
+   mention a reference, and the gate answer's home is continuo's `gate_transition.body`, copied
+   nowhere. The design says the iteration row's `gateStage`/`gateOutcome` (`records.ts:300-301`) are
+   the one unavoidable observation. **`D-0027` has since added a second, and it is a copy of the
+   answer itself**: `rondo revise` passes the operator's gate-answer body verbatim into
+   `revisionPlan` (`src/access/cli.ts:1246-1250`), which splices it into the successor's prompt
+   (`src/refrain/revision.ts:172-186`, the splice at `:181`), and that prompt is persisted in
+   `iteration.plan` under `plan_digest`. So the prose a person typed at a gate has a second home in
+   rondo's store today. **This entry does not undo it** — it is `D-0027`'s decision and it is how a
+   revision carries an instruction — but it bounds it: that copy is an **input to a plan**, it is
+   never read back as the answer to anything, and no reader may treat it as the record of what a
+   human approved. `A-8`'s rule is otherwise unchanged, and `D-0020` rule 5's refusal of prose in
+   the gate-answer slot stands.
+
+9. **One human decision authorises at most one issuance, and rondo's store is what guarantees it**
+   (`A-9`): `supersedeOnDecision` or its rule-17 replacement, the delegation row and a
+   `decision_consumption` row whose **primary key is `decision_id`**, in one `BEGIN IMMEDIATE`
+   transaction; the decision row itself is never updated. cadenza cannot do this — it persists
+   nothing and assigns the duty to its `S-7`, which `D-0020` rule 4 fact 6 accepts. `BEGIN
+   IMMEDIATE` is still the store's idiom (`src/store/sqlite.ts:806`, re-affirmed by `D-0023` rule
+   10). **Under rule 17 this row carries more weight than the design gave it**, because the four
+   value checks of `supersedeOnDecision` — including the one that makes a decision unusable twice
+   inside a lineage — are not run at all. Single use is rondo's, alone.
+
+10. **The `needs_approval` iteration is never revived, rewritten or resumed; a new one is linked to
+    it by lineage** (`A-10`). The store already enforces it: `transition` refuses any write whose
+    `from` status does not match (`src/store/sqlite.ts:958-963`), and the row is terminal. The
+    design's reason is unchanged and is quoted verbatim by `D-0027` rule 2. **One clause under the
+    row is corrected here**: the design's section 7 item 3 says "the run id is the predecessor's",
+    which rule 17 replaces — a new iteration necessarily carries a new run id.
+
+11. **The candidate key sets are called "candidate" and never "permission"** (`A-11`), in type
+    names, column names and rendered prose; authority is `classify()` over an actual contract.
+    cadenza `D-0031` section 1: `granted` and `askable` are inputs to contract construction,
+    consumed before the contract exists, and never a second answer standing beside one. **The check
+    belongs in `test/advisory/` only** — `D-0023` has since put the word "permitted" into an
+    unrelated capacity message in `src/refrain/interpreter.ts`, and a tree-wide grep would fail on
+    it for no reason.
+
+12. **`cadenza S-4`'s B lands before A, as an acceptance criterion** (`A-12`), with the record
+    design of the design's sections 6 and 8 as the named exception that may go first. **The row's
+    own enumeration is split here, because part of it has shipped and part of it is deliberately out
+    of scope.** The blocking half of B — gate detail and the `answer` write verb — landed in
+    `D-0025`'s command line (`GATE_ANSWER` at `src/continuo/protocol.ts:724`, driven from
+    `src/access/cli.ts:520-524`), in reduced CLI rather than web-pane form. `gate list` and
+    `close --outcome withdrawn` are **not** preconditions for A: `D-0025` rule 1 left `status` and a
+    `withdrawn` close deliberately absent. The web and OIDC panes of `D-0020` rule 1 remain unbuilt,
+    and the CLI is a reduction of B rather than B itself.
+
+13. **The record is identical whichever drafter produced it, `drafter` is a column, and the first
+    cut ships the deterministic drafter** (`A-13`). A model draft is a candidate like any other, is
+    never presented unread, and never reaches a gate as anything but material. `D-0019` rule 7
+    keeps a non-deterministic verdict off the path to the one human
+    contact this design rations, and `D-0026`'s deterministic pull-request text is the precedent for
+    shipping the deterministic one first.
+
+14. **The test layering is the design's `A-14`**, with one correction: the `test/cadenza/` row is
+    gated on **rule 5** (the facade gaining the composer and a seventeenth entry in its per-module
+    allowlist at `import-boundaries.test.ts:238-250`), **not** on the pin move, which has already
+    landed. The planted case in `test/architecture/` is the row that matters and is why rule 1 chose
+    a layer over a module: it is the only one that can fail when somebody later adds one import in
+    good faith. `EXPECTED_MODULES` (`:318-338`) is a floor asserted with `arrayContaining` and a
+    length bound (`:998-999`), so listing new modules there is inventory hygiene rather than a
+    requirement.
+
+15. **There are two approval routes and neither invents a gate** (`A-15`). Route G: a lap ran and
+    suspended, the human answers a question the *worker* raised, and continuo's
+    `gate_transition.body` is the source of truth. Route S: no gate exists, the approval is recorded
+    as rondo's own row, and **nothing is sent to continuo**. The measurement the row turns on holds
+    at `b9e284a`: a `needs_approval` ends the request before admission, at terminal `abandoned`
+    (`src/refrain/interpreter.ts:847-857` — the design's `:756-765`, moved), no run was admitted,
+    `lap perform` never ran and no gate was opened; the only write of `awaiting_human` is
+    `interpreter.ts:1154`, and it happens only after a lap has run. **rondo never mints a gate of
+    its own to manufacture a question no run asked.** What route S loses is stated plainly: rondo's
+    approver allowlist is the only bound on who may approve, and it exists today as an environment
+    variable compared against a typed `--actor-id` (`src/access/cli.ts:661-676`), with no OIDC
+    behind it until `D-0020` rule 2's precondition is met. **What is approved on route S is settled
+    by rule 17**, and it is a plan and its contract digest rather than a key set.
+
+16. **A route-G approval is made recoverable by `D-0019` rule 10's write order across the seam**
+    (`A-16`), and three statements inside the design's row are corrected here. The row's summary
+    says to drive one `gate show --json` afterwards and match the transition on
+    `(gate_id, seq, actor_id)`; **the design's own section 6.4 repudiates that** in favour of the
+    answer's own reply being the confirmation, and this entry takes section 6.4's form, not the
+    row's summary. The row cites "a partial unique index in `iteration_one_live`'s shape"; **that
+    index no longer exists** — `D-0023` dropped it (`src/store/sqlite.ts:586`) in favour of a
+    counted in-transaction bound, and the idiom's live exemplar is `CLAIM_INDEXES` (`:493-499`),
+    which is exactly a partial unique index over a nullable marker column. And the row's supporting
+    measurement that a gate is answerable only from stage `presented` is false at HEAD. **Recovery
+    still fails closed**: an intent whose reply was lost is reported for a person to settle, never
+    completed by matching, because naming a transition is not proving this intent caused it, and
+    reconstructing a decision from the gate's prose is composing a human's answer (`D-0009`
+    part 3).
+
+17. **`A-17` is replaced. The widening a lap-1 retry takes is a fresh `RunPlan` under a fresh
+    iteration id — not a successor contract over the predecessor — and `supersedeOnDecision` is not
+    consumed in lap 1.**
+
+    **Why the original row cannot stand.** It reuses the predecessor's triple because a successor
+    may not change its grantee. `D-0023` rule 3 makes the triple **derived** from the iteration id
+    by a pure, total, invertible function (`src/refrain/allocator.ts:139-158`), and the iteration id
+    is the `iteration` table's primary key (`src/store/sqlite.ts:422`), so a second iteration
+    cannot carry the first one's run id. The reuse has no implementation path left.
+
+    **And a second, independent obstruction, which the design did not measure.** rondo constructs a
+    contract in exactly one place: `issueInitialContract` at `src/refrain/classification.ts:71`,
+    inside `classifyPlan` (`:67`), from the agent-type record, the resolved project and
+    `plan.parties`. The value is local and is never returned, persisted or handed on — the record
+    the function returns reads only from cadenza's answer, the agent-type record and the project.
+    **rondo has no path that accepts a supplied contract**, so an approved successor would have had
+    no consumer even if its grantee had matched.
+
+    **What replaces it.** A retry is an ordinary admission of an ordinary plan: a new iteration id,
+    the triple derived from it, the abandoned row's plan with the proposal's diff applied, and —
+    where the widening is the point — a **different agent type**, whose grants are what widens.
+    `admittedPlan()` fills the identifiers from the allocation and refuses any plan whose
+    `parties.grantee` is not its `runId` (`src/refrain/plan.ts:575-604`, the refusal at
+    `:587-590`), so the contract issued at admission is issued to the retry's own run.
+
+    **Why this still satisfies cadenza `D-0036`, which is the row's real obligation.** `D-0036`
+    requires that a human approve **a specific contract identified by its digest**, because a record
+    naming only the predecessor would let a two-key approval authorise a ten-key widening. That
+    obligation is met without a successor, and **it is `D-0023` that makes it meetable**: because
+    identifiers are derived, choosing the successor's iteration id fixes its `runId`, and therefore
+    fixes `parties`, before anything is admitted. The surface can compose the exact contract the
+    retry will run under — `agentTypeRecord`, `resolveProject` and `issueInitialContract`
+    (`src/cadenza/facade.ts:136`, `:116`, `:155-161`) are all pure and all already exported — record
+    it as rule 19's `composition` row, and show the human its digest **before** they approve. **The
+    entry that falsified this row is the entry that makes its replacement exact.**
+
+    **The binding that makes the approval enforceable at admission.** `classifyPlan` returns
+    cadenza's own `contractDigest`, taken off the `Classification` rather than recomputed
+    (`src/refrain/classification.ts:87`; cadenza `D-0026` puts it there so a reader can tell which
+    contract produced which verdict). The surface compares it against the approved digest and
+    refuses the admission if they differ. **`src/refrain` is unchanged by this rule** — the
+    comparison is the composition root's and the store's, which is where rule 5 already puts
+    issuance authority.
+
+    **What this gives up, stated rather than discovered.** Three things, and the third is the real
+    price:
+
+    - **cadenza's lineage.** The retry's contract does not `supersede` the predecessor's; cadenza
+      links them not at all. The lineage is rondo's columns alone (rule 4).
+    - **the four checks in `supersedeOnDecision`**, including the one that makes a decision
+      unusable a second time inside a lineage. Single use falls entirely to rule 9's
+      `decision_consumption` primary key, which is why that row is not optional.
+    - **the amplification bound.** A successor is bounded by what the delegator holds; an *initial*
+      contract is bounded only by its agent type and project. So under this rule the predecessor's
+      grants bound the retry not at all, and "widening" means whatever agent type a person
+      approved. What stands in place of cadenza's bound is the approved digest and `D-0020` rule
+      2's allowlist, and nothing else. **This is the cost of taking route C and it is taken
+      knowingly**; the falsifier below names the condition under which it stops being acceptable.
+
+    **A widening over an *admitted* run remains out of scope in lap 1**, unchanged: `lap perform`
+    cannot be re-entered and the loop has no back edge (`D-0019` rule 6).
+
+    **Two claims elsewhere are overtaken by this rule, and are recorded here rather than edited
+    where they sit.** `D-0019` rule 15 makes a `needs_approval` a lap-1 dead end and gives as its
+    reason that resuming "requires a widening successor contract, which rondo may not compose"; on
+    this rule a retry needs no successor at all, so the reduction still holds but its reason does
+    not — what actually blocks a retry today is that nothing yet builds the proposal, the decision
+    and the approval, which rules 4, 9, 18 and 19 describe and do not build. That entry's stated
+    trigger, "the first time a human wants to approve one", is this one, and correcting its reason
+    is a dated annotation for a later gate rather than a change made in passing here. And the
+    design's section 4 calls the retry "the one place the hole list is empty" because the triple is
+    reused; the conclusion survives the loss of its premise, for a different reason — a retry starts
+    from the abandoned row's plan, which already carries `workspaceRoot` and the fence roots, so
+    rule 7's holes are filled by the predecessor rather than by the identifiers being reused.
+
+18. **The contract the human was shown is recorded in its own immutable `composition` row, written
+    before presentation** (`A-18`), carrying the contract's fields **as issued**, its digest, the
+    predecessor it supersedes where there is one, and the cadenza pin that composed it — so
+    `contract_digest` can be recomputed rather than trusted (`D-0020` rule 4 fact 1's reason). A
+    refusal writes no delegation row, so without this the ledger would keep the candidate *inputs*
+    and not the contract that was on the screen. The design calls the pin's mobility a forecast;
+    it is now a fact, having fired once already (rule 6).
+
+19. **The record design of the design's sections 6 and 8 may land before the surface work, and it
+    carries one acceptance criterion the design does not state: unconsumed decisions must be
+    enumerable.** "Which approvals were never spent" must be answerable by a query over the store,
+    because under rule 17 an approved plan that is never admitted leaves no other trace anywhere —
+    cadenza holds nothing, continuo was never told, and the iteration that would have carried it
+    does not exist. Without this, "the human approved something that never ran" is a state the
+    ledger cannot report. It is the detection point that route C's concessions make load-bearing.
+
+20. **Nothing in `src/` changes on this entry.** It ratifies rows and takes no implementation. The
+    record design (rules 4, 9, 18, 19) and the `src/advisory` layer (rules 1, 2) are separate work,
+    in that order, behind rule 12's build order.
+
+### What this does not do
+
+- **It does not build the component.** No file under `src/` is touched by this entry, which is the
+  discipline `advisory.md` states for itself and the one `D-0019` and `D-0023` were both taken
+  under.
+- **It does not revise `advisory.md`.** The document keeps its `878eea4` measurements, including the
+  ones this entry records as stale. Where they differ, this entry governs.
+- **It does not take rondo#8's allocator question.** `D-0019` rule 3 is untouched: the caller hands
+  rondo a complete plan, and rule 7's hole list is what a person still fills.
+- **It does not decide the operator conversation** (`D-0020` rule 5), which stays decided and
+  unbuilt, or widen `GATE_SHOW`'s reader, which rules 4 and 16 both want and neither builds.
+- **It does not annotate `D-0025`.** That entry's rule 5 still says "No allocator is added", which
+  `D-0023` overtook; correcting it is a dated annotation on somebody else's entry and belongs to a
+  gate, not to this one. It is carried as a residual.
+- **It does not make `supersedeOnDecision` dead code.** Rule 5 takes the arrow and rule 17 declines
+  to use it in lap 1; the machinery is cadenza's and is waiting on a consumer, not removed.
+
+### Residuals, with who decides
+
+| Residual | Why not here | Who decides |
+|---|---|---|
+| `D-0025` rule 5's "No allocator is added", overtaken by `D-0023` | A dated annotation on an accepted entry is additive but is still a change to the record; `AGENTS.md` section 7 keeps it out of a diff scoped to something else | rondo's gate, as its own annotation |
+| A `GATE_SHOW` reader carrying the transitions array | Rule 4's snapshot tuple and rule 16's match key both need `transition_seq`, which no decoder supplies; the gate-detail pane needs it independently | `D-0020` rule 1's surface work |
+| Enumerating **terminal** rows | `read(id)` needs an id already known and `readLive` filters terminal rows out (`src/store/sqlite.ts:225`, `:236`, `:742-746`), so the abandoned iteration this component most exists to explain cannot currently be found at all | the record-design task (rule 19) |
+| The amplification bound rule 17 gives up | It costs nothing until an agent type exists whose grants are wider than one approval should carry | a later entry, if the falsifier below fires |
+| `knip` and the first cut | `npm run verify` runs `knip`, which fails an exported `propose()` with no consumer, so rules 1 and 2 cannot land green without a caller | the `src/advisory` task |
+
+### What was measured, and how
+
+At rondo `b9e284a`, on 2026-09-07, with the cadenza pin read from
+`vendor/suisya-systems-cadenza-0.0.0.tgz` rather than from `node_modules`, because the vendored
+tarball is what this repository pins and a warm npm cache can install other bytes with exit 0
+(`D-0018` rule 4). Every `file:line` in this entry was re-read at that revision; the design's own
+citations were taken at `878eea4` and have drifted, which is why this entry re-cites rather than
+referring to the document's numbers.
+
+`D-0028` landed while this entry was being written and rewrote much of
+`src/refrain/plan.ts`, which several rules cite. Those citations were therefore re-measured a second
+time against `7c13245` before this entry was rebased onto it: the `RunPlan` interface and its thirty
+fields, `workspaceRoot`, the fence roots and `admittedPlan()`'s grantee refusal are all at the lines
+given above. That check is the entry's own subject applied to itself, and it is recorded because the
+next reader has no way to tell a citation that was verified from one that merely survived.
+
+### What would falsify it
+
+- **A consumer for cadenza's successor machinery arriving in rondo** — a `classifyPlan` that can
+  classify against a *supplied* contract, or a resumable lap. Rule 17's replacement exists because
+  neither is true; either would restore `A-17`'s original question and re-open which of the two
+  forms a widening takes.
+- **An agent type whose grants are wide enough that approving it in one step is the wrong grade of
+  decision.** Rule 17 gave up cadenza's amplification bound on the argument that the approved digest
+  and the allowlist are enough; a catalog that makes "widen by choosing a wider agent type" a
+  dangerous sentence is what makes that trade wrong.
+- **`D-0023` being superseded so identifiers stop being derived.** Rule 17's exactness — the
+  contract being computable before admission — is entirely a consequence of derivation, and rule 7's
+  hole list would move back.
+- **cadenza `D-0036` being superseded, or `HumanDecisionRecord` gaining a field.** Rules 15, 17 and
+  18 are consumers of that entry's shape.
+- **continuo recording an *authenticated* answerer**, which is `D-0009`'s own falsifier and would
+  make route S's identity a proven fact rather than a claimed one.
+- **The advisory needing to write.** Rules 1 and 2 are the whole design; the first requirement that
+  cannot be met by returning a value is what falsifies them.
+- **A proposal whose approval fits neither route G nor route S** — an approval binding to a second
+  approver, or to a scope smaller than one plan.
+- **The store growing a listing API for another reason**, which would cost this design nothing and
+  improve it immediately: the residual above stops being a residual.
+- **`gate show --json`'s payload changing**, to which `D-0017`'s accept-extra-keys rule
+  (`src/continuo/protocol.ts:34-38`) applies unchanged.
+- Any measurement above failing to reproduce at `b9e284a`.
