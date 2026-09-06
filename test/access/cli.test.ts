@@ -518,8 +518,9 @@ test("a remote URL is read as owner/name only when it names a forge repository",
     expect(slugFromRemoteUrl(url)).toEqual(rondo);
   }
 
-  // None of these is malformed, and none of them is a repository a pull request
-  // can be opened in. The dogfood environment's own origin is the second.
+  // None of these is malformed, and none of them is a repository `--repo
+  // OWNER/NAME` can be about. The dogfood environment's own origin is the
+  // second.
   for (const url of [
     "",
     "/srv/rondo/target-origin.git",
@@ -527,8 +528,44 @@ test("a remote URL is read as owner/name only when it names a forge repository",
     "../sibling-clone",
     "https://gitlab.example.com/team/group/project.git",
     "https://github.com/suisya-systems",
+    // The host is half of a repository's identity, and dropping it would call
+    // these two the same repository as `suisya-systems/rondo` on github.com.
+    "https://gitlab.com/suisya-systems/rondo.git",
+    "git@gitlab.com:suisya-systems/rondo.git",
+    // An enterprise host is not something `--repo OWNER/NAME` can name, so it
+    // is a mismatch the operator overrides rather than one rondo guesses at.
+    "https://github.example.com/suisya-systems/rondo.git",
   ]) {
     expect(slugFromRemoteUrl(url)).toBeNull();
+  }
+
+  // A port and a userinfo section are both part of the URL and neither is part
+  // of the repository.
+  expect(slugFromRemoteUrl("ssh://git@github.com:22/suisya-systems/rondo.git")).toEqual(rondo);
+});
+
+test("a token in a push URL is not printed back at the operator", () => {
+  // A push URL may carry a credential in its userinfo, and every mention of a
+  // remote URL is a line a terminal scrolls back and a log keeps.
+  const refused = preflight({
+    inspection: inspected({ pushUrl: "https://someone:ghp_SECRETTOKEN@github.com/fork/rondo.git" }),
+  });
+  expect(refused.kind).toBe("refused");
+  if (refused.kind === "refused") {
+    expect(refused.reason).not.toContain("ghp_SECRETTOKEN");
+    expect(refused.reason).toContain("<redacted>@github.com/fork/rondo.git");
+    // The slug is still read through the credential, so the refusal still says
+    // which repository the push would reach.
+    expect(refused.reason).toContain("fork/rondo");
+  }
+
+  const allowed = preflight({
+    allowRemoteMismatch: true,
+    inspection: inspected({ pushUrl: "https://someone:ghp_SECRETTOKEN@example.invalid/x.git" }),
+  });
+  expect(allowed.kind).toBe("ready");
+  if (allowed.kind === "ready") {
+    expect(allowed.warnings[0]).not.toContain("ghp_SECRETTOKEN");
   }
 });
 
@@ -613,8 +650,15 @@ test("the push remote and --repo have to be one repository, or be said to differ
   const local = preflight({ inspection: inspected({ pushUrl: "/srv/rondo/target-origin.git" }) });
   expect(local.kind).toBe("refused");
   if (local.kind === "refused") {
-    expect(local.reason).toContain("not a forge repository rondo can read as OWNER/NAME");
+    expect(local.reason).toContain("cannot read as a github.com OWNER/NAME");
   }
+
+  // The same case for the reason that is easiest to miss: the path reads as
+  // `owner/name`, and the host says it is a different repository entirely.
+  const elsewhere = preflight({
+    inspection: inspected({ pushUrl: "https://gitlab.com/suisya-systems/rondo.git" }),
+  });
+  expect(elsewhere.kind).toBe("refused");
 });
 
 test("--allow-remote-mismatch keeps the fork route open, and spells the head for it", () => {

@@ -290,7 +290,11 @@ and refuses with exit 2 on any of them:
    has it has nothing to push.
 3. **Do the push remote and `--repo` name the same repository?** The push goes to the workspace's
    remote and the pull request is opened against `--repo`, so when the two are unrelated the branch
-   lands somewhere the pull request does not look.
+   lands somewhere the pull request does not look. The host counts: `--repo OWNER/NAME` is a
+   github.com repository, so `https://gitlab.com/OWNER/NAME` is a different repository wearing the
+   same name, and an enterprise host is one rondo cannot recognise from two path segments. Both are
+   mismatches you override rather than agreements. A credential embedded in a push URL is redacted
+   before any of these messages print it.
 
 The checks run identically with and without `--dry-run`, on purpose: a preview that passes where the
 real run would fail is the same defect in a quieter form.

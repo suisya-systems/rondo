@@ -918,16 +918,34 @@ export function parseForgeSlug(text: string): ForgeSlug | null {
  */
 export function slugFromRemoteUrl(url: string): ForgeSlug | null {
   const trimmed = url.trim();
+  let host: string | null = null;
   let path: string | null = null;
-  const scpLike = /^[A-Za-z0-9._-]+@[A-Za-z0-9._-]+:(?!\/)(.+)$/.exec(trimmed);
+  const scpLike = /^[A-Za-z0-9._-]+@([A-Za-z0-9._-]+):(?!\/)(.+)$/.exec(trimmed);
   if (scpLike !== null) {
-    path = scpLike[1] ?? null;
+    host = scpLike[1] ?? null;
+    path = scpLike[2] ?? null;
   } else if (/^(?:ssh|git|https?):\/\//.test(trimmed)) {
     const afterScheme = trimmed.replace(/^[A-Za-z][A-Za-z0-9+.-]*:\/\//, "");
     const slash = afterScheme.indexOf("/");
-    path = slash === -1 ? null : afterScheme.slice(slash + 1);
+    if (slash !== -1) {
+      // Userinfo off the front, port off the back: what is left is the host,
+      // which is half of the identity of a repository and was the half a
+      // slug-only reading threw away.
+      const authority = afterScheme.slice(0, slash);
+      const at = authority.lastIndexOf("@");
+      host = (at === -1 ? authority : authority.slice(at + 1)).split(":")[0] ?? null;
+      path = afterScheme.slice(slash + 1);
+    }
   }
-  if (path === null) {
+  if (host === null || path === null) {
+    return null;
+  }
+  // **The host is checked, not merely parsed.** `--repo OWNER/NAME` is passed
+  // to the forge as a github.com repository, so a remote on some other host
+  // whose path happens to read as `owner/name` is a different repository
+  // wearing the same name -- and comparing the slugs alone would call the push
+  // and the pull request agreed when they are not.
+  if (!GITHUB_HOSTS.has(host.toLowerCase())) {
     return null;
   }
   const cleaned = path
@@ -935,6 +953,29 @@ export function slugFromRemoteUrl(url: string): ForgeSlug | null {
     .replace(/\/+$/, "")
     .replace(/\.git$/, "");
   return parseForgeSlug(cleaned);
+}
+
+/**
+ * The hosts `--repo OWNER/NAME` can be about.
+ *
+ * `gh` reaches github.com unless it is told otherwise, and rondo's `--repo` is
+ * two segments with no host in them. An enterprise host is therefore not
+ * something this can recognise, and it is refused as a mismatch the operator
+ * can override rather than being guessed at.
+ */
+const GITHUB_HOSTS: ReadonlySet<string> = new Set(["github.com", "www.github.com"]);
+
+/**
+ * A remote URL as it may be printed: any credentials in it replaced.
+ *
+ * A push URL can carry a token in its userinfo (`https://user:TOKEN@host/...`),
+ * and every place rondo mentions a remote URL is a line an operator reads, a
+ * terminal scrolls back and a captured log keeps. Refusing to print the URL at
+ * all would remove the one fact that makes the refusal actionable, so what is
+ * printed is the URL without the part that is a secret.
+ */
+function redactRemoteUrl(url: string): string {
+  return url.replace(/^([A-Za-z][A-Za-z0-9+.-]*:\/\/)[^/@]*@/, "$1<redacted>@");
 }
 
 /** Whether two slugs name the same repository. GitHub is case-insensitive. */
@@ -990,6 +1031,11 @@ export interface PreflightInput {
  * the override is used, since a bare branch name is read by `gh` as a branch of
  * `--repo` and would find the wrong branch or none.
  *
+ * **Agreement is over the host as well as the two path segments.** `--repo`
+ * names a github.com repository, so a remote on another host whose path happens
+ * to read as `owner/name` is a different repository wearing the same name, and
+ * it is refused as a mismatch rather than passed as an agreement.
+ *
  * Pure, over what `inspectPushTarget` read. The rules are here because they are
  * rules about publishing; the process that reads a git config is in `./forge.ts`
  * because that is the only module allowed to start one.
@@ -1041,12 +1087,13 @@ export function publishPreflight(input: PreflightInput): PreflightOutcome {
     return { kind: "ready", headRef: input.topicBranch, warnings: [] };
   }
 
+  const shown = redactRemoteUrl(inspection.pushUrl);
   const difference =
     pushing === null
-      ? `'${input.remote}' is '${inspection.pushUrl}', which is not a forge repository rondo can ` +
-        `read as OWNER/NAME, so it cannot be the repository '${input.repo}' names`
-      : `'${input.remote}' is '${inspection.pushUrl}', which is ` +
-        `'${pushing.owner}/${pushing.name}', and --repo is '${input.repo}'`;
+      ? `'${input.remote}' is '${shown}', which rondo cannot read as a github.com OWNER/NAME, ` +
+        `so it cannot be shown to be the repository '${input.repo}' names`
+      : `'${input.remote}' is '${shown}', which is '${pushing.owner}/${pushing.name}', and ` +
+        `--repo is '${input.repo}'`;
   if (!input.allowRemoteMismatch) {
     return {
       kind: "refused",
@@ -1066,9 +1113,9 @@ export function publishPreflight(input: PreflightInput): PreflightOutcome {
       kind: "ready",
       headRef: input.topicBranch,
       warnings: [
-        `--allow-remote-mismatch: pushing to '${inspection.pushUrl}' and opening the pull ` +
-          `request against '${input.repo}'. rondo cannot read that remote as OWNER/NAME, so ` +
-          `--head is the bare branch name and gh will look for '${input.topicBranch}' in ` +
+        `--allow-remote-mismatch: pushing to '${shown}' and opening the pull request against ` +
+          `'${input.repo}'. rondo cannot read that remote as a github.com OWNER/NAME, so the ` +
+          `head is the bare branch name and the forge will look for '${input.topicBranch}' in ` +
           `'${input.repo}'. Expect the pull-request leg to fail unless it is there.`,
       ],
     };
