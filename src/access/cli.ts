@@ -792,11 +792,16 @@ async function pickWaiting(
     return { record: null, note: "Nothing is waiting. No iteration is live." };
   }
   if (readable.length > 1) {
-    const named = readable.map((record) => `  ${record.id}  ${record.status}`).join("\n");
+    // **One line, and that is a constraint rather than a preference.** `say`
+    // and `refuse` put every message through `asciiEscape` (D-0004), which
+    // escapes control characters -- so a newline embedded here reaches the
+    // operator as a literal `\u000a` and the list becomes unreadable. That is
+    // exactly how it first shipped, and the real run is what caught it.
+    const named = readable.map((record) => `${record.id} (${record.status})`).join(", ");
     return {
       refusal:
         `${String(readable.length)} iterations are live, so "the live one" does not name ` +
-        `anything. Say which with --iteration-id ID:\n${named}`,
+        `anything. Say which with --iteration-id ID: ${named}`,
     };
   }
   const only = readable[0];

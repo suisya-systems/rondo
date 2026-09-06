@@ -318,3 +318,58 @@ test("a plan payload written before D-0023 still reads, and keeps its own worksp
     expect(read.plan.runId).toBe("rondo-iter-a");
   }
 });
+
+// ---------------------------------------------------------------------------
+// What the real run caught that the suite did not.
+// ---------------------------------------------------------------------------
+
+/**
+ * Whether a string carries a control character, which `asciiEscape` would mangle.
+ *
+ * A codepoint scan rather than a regular expression because biome refuses a
+ * control character inside one, and this tree has no `biome-ignore` anywhere --
+ * so the check is written in the form the repository actually permits.
+ */
+const hasControl = (text: string): boolean =>
+  [...text].some((character) => {
+    const code = character.codePointAt(0) ?? 0;
+    return code < 0x20 || code === 0x7f;
+  });
+
+test("the refusal prose admit() produces is one line per entry, with no control character", async () => {
+  // **Found by running it, not by testing it.** `say` and `refuse` put every
+  // message through `asciiEscape` (D-0004), because the Windows console may be
+  // cp932 and a character it cannot encode crashes the writer rather than
+  // printing badly. A newline is a control character, so a message composed as
+  // a multi-line list reaches the operator as a literal escape sequence and the
+  // list is unreadable. That is how the "several iterations are live" refusal
+  // first shipped, and two real laps are what showed it.
+  //
+  // Asserted over the class rather than over the one string that was wrong:
+  // every line this path produces must survive the escape unchanged.
+  const { ports, connection } = portsOver({ maxOccupying: 1, maxLive: 3 });
+  await admit(ports, PLAN, START_POLICY, "iter-a");
+  putAt(connection, "iter-a", "performing");
+
+  const executing = await admit(ports, PLAN, START_POLICY, "iter-b");
+  const badId = await admit(ports, PLAN, START_POLICY, "../other");
+  putAt(connection, "iter-a", "awaiting_human");
+  await admit(ports, PLAN, START_POLICY, "iter-c");
+  putAt(connection, "iter-c", "awaiting_human");
+  await admit(ports, PLAN, START_POLICY, "iter-d");
+  putAt(connection, "iter-d", "awaiting_human");
+  const open = await admit(ports, PLAN, START_POLICY, "iter-e");
+
+  for (const report of [executing, badId, open]) {
+    expect(report.lines.length).toBeGreaterThan(0);
+    for (const line of report.lines) {
+      expect(
+        hasControl(line),
+        `a printed line carries a control character: ${JSON.stringify(line)}`,
+      ).toBe(false);
+    }
+  }
+  // The observed-red control for the sweep: a line that really does carry one
+  // must be caught, or the assertion above is checking nothing.
+  expect(hasControl("a\nb")).toBe(true);
+});
