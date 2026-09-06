@@ -29,15 +29,19 @@ import {
   parseForgeSlug,
   publishPreflight,
   pullRequestText,
+  readingRangeOf,
   repositoryFromRemoteUrl,
+  reviewGate,
   revisionBlocker,
   USAGE,
   walkGate,
+  workLines,
 } from "../../src/access/cli.js";
 import type { LapWorkInspection, PushTargetInspection } from "../../src/access/forge.js";
+import { evidenceOf } from "../../src/access/review.js";
 import type { VerifiedContinuo } from "../../src/continuo/invoker.js";
 import type { ContinuoResult } from "../../src/continuo/protocol.js";
-import type { IterationRecord } from "../../src/store/records.js";
+import type { IterationRecord, JsonRecord, LapReading } from "../../src/store/records.js";
 
 /** A handle no test reaches past: every verb below is a fake. */
 const continuo: VerifiedContinuo = {
@@ -899,6 +903,22 @@ const REQUEST = [
 ].join("\n");
 
 /** An iteration row a publish would be run against, varied one field at a time. */
+/**
+ * The plan fields `readingRangeOf` reads, as `revise` and `start` leave them.
+ *
+ * Named so a test can vary one of them and leave the rest, which is what the
+ * revision case needs: `base_branch` and `pull_request_base_branch` differ
+ * there and are the same field everywhere else.
+ */
+function somePublishedPlan(): JsonRecord {
+  return {
+    workspace: "/srv/work/iter-i-0002",
+    topic_branch: "rondo/i-0002",
+    base_branch: "main",
+    pull_request_base_branch: "",
+  };
+}
+
 function published(parts: Partial<IterationRecord> = {}): IterationRecord {
   return {
     id: "dogfood-001",
@@ -940,6 +960,8 @@ function worked(
   return {
     kind: "read",
     baseRef: "refs/remotes/origin/main",
+    baseCommit: "b".repeat(40),
+    tipCommit: "a".repeat(40),
     commits: [{ abbreviatedSha: "cfa4502", subject: "docs: record the first real lap" }],
     files: [{ path: "docs/operations/rondo-cli.md", added: 1, deleted: 0 }],
     ...parts,
@@ -1160,4 +1182,215 @@ test("no value the row carries can make a body the forge refuses", () => {
   }).body;
   expect(huge).toContain("qqq");
   expect(huge.length).toBeLessThanOrEqual(60_000);
+});
+
+/**
+ * A stored reading of the work `worked()` describes, unless varied.
+ *
+ * Built through `evidenceOf` rather than by hand, for the reason the staleness
+ * check exists: the two halves of "the same work" have to be computed the same
+ * way, and a fixture that spelled the digest itself would make the comparison
+ * pass on a coincidence.
+ */
+function reviewed(parts: Partial<LapReading> = {}): LapReading {
+  return {
+    iterationId: "i-0001",
+    readAtMs: 2_000,
+    drafter: "rondo/deterministic/1",
+    verdict: "clear",
+    findings: [],
+    evidence: evidenceOf(worked() as Extract<LapWorkInspection, { kind: "read" }>),
+    unavailableReason: null,
+    ...parts,
+  };
+}
+
+test("publish refuses when nothing read the work, and names the way past", () => {
+  // D-0029 rule 10: the absence of a reading refuses exactly as a raised point
+  // does. Making this pass silently is the fail-open that leaves the stage
+  // existing only in the record.
+  const outcome = reviewGate(null, worked(), false);
+
+  expect(outcome.kind).toBe("refused");
+  expect(outcome.kind === "refused" && outcome.reason).toContain("--despite-review");
+  expect(outcome.kind === "refused" && outcome.reason).toContain("nothing read");
+});
+
+test("publish refuses when the reading raised something, and says it is not a veto", () => {
+  const outcome = reviewGate(
+    reviewed({ verdict: "concerns", findings: ["the topic branch changes no files"] }),
+    worked(),
+    false,
+  );
+
+  expect(outcome.kind).toBe("refused");
+  expect(outcome.kind === "refused" && outcome.reason).toContain("changes no files");
+  expect(outcome.kind === "refused" && outcome.reason).toContain("not a veto");
+});
+
+test("publish refuses when no reading could be taken, for the same reason", () => {
+  const outcome = reviewGate(
+    reviewed({ verdict: "unavailable", evidence: null, unavailableReason: "no such directory" }),
+    worked(),
+    false,
+  );
+
+  expect(outcome.kind).toBe("refused");
+  expect(outcome.kind === "refused" && outcome.reason).toContain("no such directory");
+});
+
+test("publish is ready when the reading is clear and still describes what would be pushed", () => {
+  expect(reviewGate(reviewed(), worked(), false)).toEqual({ kind: "ready" });
+});
+
+test("publish refuses a clear reading taken over commits that are no longer the tip", () => {
+  // **The staleness refusal.** `publish` pushes the branch as it is now, and a
+  // reading is about the commits it read. Between the two, a person can commit,
+  // amend, or reset -- and a reset onto the base is exactly what the reader's
+  // own "left nothing" finding exists to raise, arriving under a stale clear.
+  const moved = worked({ tipCommit: "f".repeat(40) });
+
+  const outcome = reviewGate(reviewed(), moved, false);
+
+  expect(outcome.kind).toBe("refused");
+  expect(outcome.kind === "refused" && outcome.reason).toContain("does not describe the work");
+  expect(outcome.kind === "refused" && outcome.reason).toContain("f".repeat(40));
+});
+
+test("publish refuses a clear reading when the content moved under the same tip", () => {
+  // The digest and the tip are both compared, and neither is redundant: a tip
+  // that matched while the file list did not would be a workspace somebody had
+  // edited without committing, or a reading taken against a different base.
+  const edited = worked({ files: [{ path: "src/thing.ts", added: 99, deleted: 0 }] });
+
+  expect(reviewGate(reviewed(), edited, false).kind).toBe("refused");
+});
+
+test("publish refuses when the workspace cannot be read now, so nothing can be checked", () => {
+  const outcome = reviewGate(reviewed(), { kind: "unreadable", reason: "not a repository" }, false);
+
+  expect(outcome.kind).toBe("refused");
+  expect(outcome.kind === "refused" && outcome.reason).toContain("not a repository");
+});
+
+test("publish refuses a clear reading that carries no measurement at all", () => {
+  // Unreachable through the store, which records that as `unavailable`
+  // instead. Refused here as well, because the branch below it is the only one
+  // that would be silently skipped if it ever became reachable.
+  expect(reviewGate(reviewed({ evidence: null }), worked(), false).kind).toBe("refused");
+});
+
+test("--despite-review overrules every one of those refusals, and only those", () => {
+  // The override is the whole of the stage's binding force being one keystroke,
+  // and the design says so: a person decides, having been told. What it must
+  // not do is change what was recorded, which is why it is a parameter here and
+  // not a mutation anywhere.
+  const cases: readonly (readonly [LapReading | null, LapWorkInspection])[] = [
+    [null, worked()],
+    [reviewed({ verdict: "concerns", findings: ["something"] }), worked()],
+    [reviewed({ verdict: "unavailable", evidence: null }), worked()],
+    [reviewed(), worked({ tipCommit: "f".repeat(40) })],
+    [reviewed(), { kind: "unreadable", reason: "not a repository" }],
+    [reviewed({ evidence: null }), worked()],
+  ];
+
+  for (const [reading, work] of cases) {
+    expect(reviewGate(reading, work, false).kind).toBe("refused");
+    expect(reviewGate(reading, work, true)).toEqual({ kind: "ready" });
+  }
+});
+
+test("the range a reading was taken across is the plan's base, never the pull request's", () => {
+  // **A revision is where these two diverge, and where getting it wrong is
+  // routine rather than rare.** `revise` sets `base_branch` to the
+  // predecessor's topic branch and carries the first lap's base in
+  // `pull_request_base_branch`; the reader saw the first of those. Comparing
+  // the reading against the second would call every unchanged revision stale
+  // and teach the operator that --despite-review is how publish works.
+  const revision = published({
+    plan: {
+      ...somePublishedPlan(),
+      base_branch: "rondo/i-0001",
+      pull_request_base_branch: "main",
+    },
+  });
+
+  expect(readingRangeOf(revision)).toEqual({
+    workspace: "/srv/work/iter-i-0002",
+    remote: "origin",
+    baseBranch: "rondo/i-0001",
+    topicBranch: "rondo/i-0002",
+  });
+});
+
+test("the reading's remote is rondo's own, not whatever --remote a person typed", () => {
+  // The reading is taken hours before publish, by a composition root with no
+  // command line to read a remote from. Re-measuring its range under the
+  // operator's remote would resolve a different base ref and report the
+  // difference as staleness.
+  const range = readingRangeOf(published({ plan: somePublishedPlan() }));
+
+  expect(range?.remote).toBe("origin");
+});
+
+test("a row that does not name a range says so rather than guessing one", () => {
+  expect(readingRangeOf(published({ plan: { ...somePublishedPlan(), workspace: "" } }))).toBeNull();
+  expect(
+    readingRangeOf(published({ plan: { ...somePublishedPlan(), base_branch: "" } })),
+  ).toBeNull();
+});
+
+test("the operator is shown the commits and the files, not a count of them", () => {
+  // D-0029 rule 2 asks for the base ref, the subjects and the paths. A summary
+  // saying "3 commits, 2 files" would leave a person exactly where the gate's
+  // own rationale leaves them: told that work happened, by a summary.
+  const lines = workLines(
+    worked({
+      commits: [
+        { abbreviatedSha: "aaa1111", subject: "feat: add the thing" },
+        { abbreviatedSha: "bbb2222", subject: "test: cover the thing" },
+      ],
+      files: [
+        { path: "src/thing.ts", added: 40, deleted: 2 },
+        { path: "test/thing.test.ts", added: 90, deleted: 0 },
+      ],
+    }),
+  ).join("\n");
+
+  expect(lines).toContain("against refs/remotes/origin/main");
+  expect(lines).toContain("aaa1111 feat: add the thing");
+  expect(lines).toContain("bbb2222 test: cover the thing");
+  expect(lines).toContain("src/thing.ts");
+  expect(lines).toContain("test/thing.test.ts");
+});
+
+test("a workspace that cannot be read is said out loud and blocks nothing", () => {
+  // This runs on the path to a person's gate answer, where nothing of rondo's
+  // may stand between them and it (D-0029 rule 3).
+  const lines = workLines({ kind: "unreadable", reason: "no such directory" });
+
+  expect(lines).toEqual(["        the workspace could not be read: no such directory"]);
+});
+
+test("a long list is capped and says how many it hid", () => {
+  // A list that stops without saying it stopped is a list a person reads as
+  // complete, which is worse than one that is honestly truncated.
+  const many = Array.from({ length: 25 }, (_, index) => ({
+    abbreviatedSha: `sha${String(index).padStart(4, "0")}`,
+    subject: `commit ${String(index)}`,
+  }));
+
+  const lines = workLines(worked({ commits: many }));
+
+  // Twenty listed and no more; the twenty-first line is the count of what was
+  // hidden, which is a different sentence and is asserted below.
+  expect(lines.filter((line) => line.includes("commit "))).toHaveLength(20);
+  expect(lines.join("\n")).toContain("...and 5 more commit(s)");
+});
+
+test("an empty branch is described rather than left silent", () => {
+  const lines = workLines(worked({ commits: [], files: [] })).join("\n");
+
+  expect(lines).toContain("no non-merge commits on the branch");
+  expect(lines).toContain("no files changed");
 });

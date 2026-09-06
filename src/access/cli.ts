@@ -47,7 +47,12 @@ import {
   type LoopPolicy,
 } from "../refrain/policy.js";
 import { revisionPlan } from "../refrain/revision.js";
-import { type IterationRecord, isTerminal, type JsonRecord } from "../store/records.js";
+import {
+  type IterationRecord,
+  isTerminal,
+  type JsonRecord,
+  type LapReading,
+} from "../store/records.js";
 import { type IterationStore, openIterationStore, type ReadOutcome } from "../store/sqlite.js";
 import { abandon, admit, conductorPorts, resume } from "./conductor.js";
 import { asciiEscape, consoleSeams, relayUpstream } from "./console.js";
@@ -57,10 +62,12 @@ import {
   inspectTopicBranch,
   type LapFile,
   type LapWorkInspection,
+  type LapWorkRequest,
   openPullRequest,
   type PushTargetInspection,
   pushTopicBranch,
 } from "./forge.js";
+import { evidenceOf, READING_REMOTE } from "./review.js";
 
 /**
  * The whole surface on one screen.
@@ -93,10 +100,14 @@ export const USAGE = `rondo - the operator surface for delegated work
                           the first lap spent
   rondo publish --repo OWNER/NAME --actor-id ID --iteration-id ID
                 [--remote NAME] [--dry-run] [--allow-remote-mismatch]
+                [--despite-review]
                           push the branch, open the pull request, close the run.
                           Refuses before it prints when the workspace cannot
-                          push where the plan says, or when the push remote and
-                          --repo name different repositories
+                          push where the plan says, when the push remote and
+                          --repo name different repositories, or when the
+                          independent reading of the work raised something, was
+                          never taken, or was taken over other commits.
+                          --despite-review is how you overrule that last one
   rondo abandon --iteration-id ID --reason TEXT
                           end an iteration rondo cannot finish
 
@@ -194,6 +205,7 @@ export interface ParsedCommand {
   readonly reason: string | null;
   readonly dryRun: boolean;
   readonly allowRemoteMismatch: boolean;
+  readonly despiteReview: boolean;
 }
 
 /** A command rondo understood, or the first reason it did not. */
@@ -212,6 +224,7 @@ const FLAGS = {
   reason: { type: "string" },
   "dry-run": { type: "boolean" },
   "allow-remote-mismatch": { type: "boolean" },
+  "despite-review": { type: "boolean" },
 } as const;
 
 const COMMANDS = ["start", "answer", "revise", "publish", "abandon"] as const;
@@ -238,7 +251,15 @@ const FLAGS_BY_COMMAND: Readonly<Record<string, readonly string[]>> = {
   // waiting at once now, which is the whole point of D-0023.
   answer: ["actor-id", "body", "iteration-id"],
   revise: ["actor-id", "body", "iteration-id"],
-  publish: ["repo", "actor-id", "remote", "iteration-id", "dry-run", "allow-remote-mismatch"],
+  publish: [
+    "repo",
+    "actor-id",
+    "remote",
+    "iteration-id",
+    "dry-run",
+    "allow-remote-mismatch",
+    "despite-review",
+  ],
   abandon: ["iteration-id", "reason"],
 };
 
@@ -315,6 +336,7 @@ export function parseCommand(argv: readonly string[]): ParseOutcome {
       reason: text("reason"),
       dryRun: values["dry-run"] === true,
       allowRemoteMismatch: values["allow-remote-mismatch"] === true,
+      despiteReview: values["despite-review"] === true,
     },
   };
 }
@@ -332,6 +354,7 @@ function emptyCommand(command: ParsedCommand["command"]): ParsedCommand {
     reason: null,
     dryRun: false,
     allowRemoteMismatch: false,
+    despiteReview: false,
   };
 }
 
@@ -978,6 +1001,236 @@ async function commandStart(
 }
 
 /** Door two: see what is waiting, and answer it. */
+/**
+ * What the operator is shown about the work itself, on every path that answers.
+ *
+ * **This is the half of D-0029 the entry says is worth more than the rest**, and
+ * the measurement it answers is in `docs/operations/lap-1-dogfood.md`: the gate
+ * carries `rationale`, which is the worker's own account of its own work, and
+ * this command used to print that and no workspace path, no branch and nothing
+ * a person could go and look at. An operator was recorded approving on it.
+ *
+ * **The two callers are not equal, and the difference is stated rather than
+ * blurred.** On the reading path this arrives before an answer is typed and
+ * informs it. On the one-shot `--body` path the answer is already given and
+ * `walkGate` follows with no further chance to take input, so there it is a
+ * **receipt**: a record of what was approved over. Closing the rest of that gap
+ * is the procedure's job -- a step that reads before it answers -- and not a
+ * refusal here, because a machine standing between a person and their own gate
+ * answer is what D-0029 rule 3 refuses on the clock argument.
+ */
+async function sayLapMaterial(store: IterationStore, record: IterationRecord): Promise<void> {
+  const workspace = planField(record, "workspace");
+  const topicBranch = planField(record, "topic_branch");
+  say(`work    ${topicBranch === "" ? "(no topic branch on the row)" : topicBranch}`);
+  say(`        in ${workspace === "" ? "(no workspace on the row)" : workspace}`);
+  // **The commits and the files, not a count of them.** A summary that said
+  // "3 commits, 2 files" would leave the person exactly where the gate's own
+  // `rationale` leaves them: told that work happened, and told it by a summary.
+  // D-0029 rule 2 asks for the base ref, the subjects and the paths, and the
+  // point of asking is that a subject is the one place a lap says what it did
+  // in words nobody generated for this screen.
+  const range = readingRangeOf(record);
+  if (range === null) {
+    say("        the row does not name a range, so there is nothing to list");
+  } else {
+    for (const line of workLines(await inspectLapWork(range))) {
+      say(line);
+    }
+  }
+  const readings = await store.readingsFor(record.id);
+  const latest = readings.at(-1);
+  if (latest === undefined) {
+    say("review  no independent reading of this work was recorded.");
+    say("        'rondo publish' will refuse once on that, and --despite-review is the way past.");
+    return;
+  }
+  for (const line of reviewLines(latest)) {
+    say(line);
+  }
+}
+
+/**
+ * What the lap committed, listed rather than counted.
+ *
+ * **An unreadable workspace prints and does not refuse.** This runs on the path
+ * to a person's gate answer, where D-0029 rule 3 refuses to let anything of
+ * rondo's stand between them and it: a workspace that has been moved or removed
+ * since the lap ran is worth saying out loud and is not worth withholding the
+ * gate over.
+ *
+ * Capped at `LIST_LIMIT` for the reason the pull-request body is, and saying
+ * how many were hidden rather than trailing off -- a list that stops without
+ * saying it stopped is a list a person reads as complete.
+ */
+export function workLines(work: LapWorkInspection): readonly string[] {
+  if (work.kind !== "read") {
+    return [`        the workspace could not be read: ${work.reason}`];
+  }
+  const lines = [`        against ${work.baseRef}`];
+  if (work.commits.length === 0) {
+    lines.push("        no non-merge commits on the branch");
+  } else {
+    for (const commit of work.commits.slice(0, LIST_LIMIT)) {
+      lines.push(`        ${commit.abbreviatedSha} ${commit.subject}`);
+    }
+    const hiddenCommits = work.commits.length - LIST_LIMIT;
+    if (hiddenCommits > 0) {
+      lines.push(`        ...and ${String(hiddenCommits)} more commit(s)`);
+    }
+  }
+  if (work.files.length === 0) {
+    lines.push("        no files changed");
+    return lines;
+  }
+  for (const file of work.files.slice(0, LIST_LIMIT)) {
+    lines.push(`        ${file.path} ${fileCounts(file)}`);
+  }
+  const hiddenFiles = work.files.length - LIST_LIMIT;
+  if (hiddenFiles > 0) {
+    lines.push(`        ...and ${String(hiddenFiles)} more file(s)`);
+  }
+  return lines;
+}
+
+/**
+ * The range a reading of this row was taken across, or null when the row does
+ * not name one.
+ *
+ * **One definition, read by both ends of D-0029 rule 10's comparison**, and it
+ * exists because getting it wrong is invisible in the ordinary case and routine
+ * in the revision case. `publish` compares against `pull_request_base_branch`
+ * when a revision set one -- the first lap's base, carried along the chain --
+ * while the reading was taken against `base_branch`, the predecessor's topic
+ * branch. Two different ranges compared against each other report every
+ * unchanged revision as stale, which sends the operator to `--despite-review`
+ * as a habit and costs the stage the only force it has.
+ */
+export function readingRangeOf(record: IterationRecord): LapWorkRequest | null {
+  const workspace = planField(record, "workspace");
+  const topicBranch = planField(record, "topic_branch");
+  const baseBranch = planField(record, "base_branch");
+  if (workspace === "" || topicBranch === "" || baseBranch === "") {
+    return null;
+  }
+  return { workspace, remote: READING_REMOTE, baseBranch, topicBranch };
+}
+
+/** One stored reading, as an operator reads it. ASCII, one line at a time (D-0004). */
+function reviewLines(reading: LapReading): readonly string[] {
+  const evidence = reading.evidence;
+  switch (reading.verdict) {
+    case "clear":
+      return [
+        `review  read and nothing raised (${reading.drafter}).`,
+        `        ${String(evidence?.commitCount ?? 0)} commit(s), ` +
+          `${String(evidence?.fileCount ?? 0)} file(s), tip ${evidence?.tipCommit ?? "(none)"}.`,
+        "        This is material for you. It is not an approval and it permits nothing.",
+      ];
+    case "concerns":
+      return [
+        `review  ${String(reading.findings.length)} point(s) raised (${reading.drafter}):`,
+        ...reading.findings.map((finding) => `        - ${finding}`),
+        "        Material for you to weigh. The answer is still yours.",
+      ];
+    default:
+      return [
+        "review  no reading could be taken: " +
+          `${reading.unavailableReason ?? "no reason recorded"}`,
+        "        'rondo publish' refuses on this exactly as it does on a point raised, so that " +
+          "unread",
+        "        and read-and-fine cannot look alike.",
+      ];
+  }
+}
+
+/**
+ * Whether the recorded reading lets `publish` run without being overruled.
+ *
+ * **Pure, and over both halves of the comparison**, for the reason
+ * `publishPreflight` is pure over a `PushTargetInspection`: which readings may
+ * publish is a rule about publishing rather than a fact about git, and a rule
+ * that can be exercised without a repository on disk is a rule a test can hold.
+ *
+ * Three refusals and one pass, and the third refusal is the one that is easy to
+ * miss. A reading is about the commits it read; `publish` pushes the branch as
+ * it is *now*. Between the two, somebody can commit into the worktree, amend or
+ * reset it -- and a reset onto the base is exactly the case the reader's own
+ * "left nothing" finding exists to raise, arriving under a stale `clear` that
+ * would carry it through (D-0029 rule 10).
+ */
+export function reviewGate(
+  reading: LapReading | null,
+  work: LapWorkInspection,
+  despiteReview: boolean,
+): { readonly kind: "ready" } | { readonly kind: "refused"; readonly reason: string } {
+  const overruled = { kind: "ready" } as const;
+  if (reading === null) {
+    return despiteReview
+      ? overruled
+      : {
+          kind: "refused",
+          reason:
+            "no independent reading of this work was recorded, so publishing it would put " +
+            "work in front of the world that nothing read. That is the same refusal a reading " +
+            "which raised something gets, on purpose: unread and read-and-fine must not look " +
+            "alike. Pass --despite-review to publish anyway.",
+        };
+  }
+  if (reading.verdict !== "clear") {
+    return despiteReview
+      ? overruled
+      : {
+          kind: "refused",
+          reason:
+            `the independent reading of this work is '${reading.verdict}'` +
+            `${reading.findings.length === 0 ? "" : `: ${reading.findings.join("; ")}`}` +
+            `${reading.unavailableReason === null ? "" : `: ${reading.unavailableReason}`}. ` +
+            "It settles nothing and it is not a veto; it is a point you have not answered. " +
+            "Pass --despite-review to publish anyway.",
+        };
+  }
+  const evidence = reading.evidence;
+  if (evidence === null) {
+    // Unreachable through the store, which records a clear with no evidence as
+    // `unavailable` instead (D-0029 rule 11). Refused rather than trusted all
+    // the same: a clear whose evidence is missing is a clear nothing can be
+    // compared against, and the branch below is the only one that would be
+    // silently skipped if it ever became reachable.
+    return despiteReview
+      ? overruled
+      : {
+          kind: "refused",
+          reason:
+            "the recorded reading is 'clear' but carries no measurement of what was read, so " +
+            "there is nothing to check it against. Pass --despite-review to publish anyway.",
+        };
+  }
+  if (work.kind !== "read") {
+    return despiteReview
+      ? overruled
+      : {
+          kind: "refused",
+          reason:
+            `the workspace cannot be read now (${work.reason}), so the recorded reading cannot ` +
+            "be checked against what would be pushed. Pass --despite-review to publish anyway.",
+        };
+  }
+  const now = evidenceOf(work);
+  if (now.tipCommit !== evidence.tipCommit || now.materialDigest !== evidence.materialDigest) {
+    return despiteReview
+      ? overruled
+      : {
+          kind: "refused",
+          reason:
+            `the reading was taken over ${evidence.tipCommit} and this would push ` +
+            `${now.tipCommit}, so it does not describe the work any more. Read it again, or ` +
+            "pass --despite-review to publish anyway.",
+        };
+  }
+  return overruled;
+}
+
 async function commandAnswer(
   parsed: ParsedCommand,
   environment: Readonly<Record<string, string | undefined>>,
@@ -1029,6 +1282,10 @@ async function commandAnswer(
     say(`gate    ${gate.gateId}  (${gate.gateType})  stage '${gate.stage}'`);
     say(`why     ${gate.rationale}`);
     say(`options ${gate.options}`);
+    // **`why` is the worker's account of its own work; what follows is not.**
+    // The two are printed adjacently on purpose, so that a person can see which
+    // of them is the graded party speaking (D-0029 rule 2).
+    await sayLapMaterial(store, record);
     say("");
     say("to answer:");
     // **The id is always printed, not only when several are open.** A command
@@ -1051,6 +1308,11 @@ async function commandAnswer(
   }
 
   say(`gate ${gate.gateId} is at stage '${gate.stage}'`);
+  // **A receipt, and the code says so because the difference matters.** The
+  // answer is already typed and `walkGate` below takes no further input, so
+  // this cannot inform the decision the way the reading path's copy does. What
+  // it does is leave the person holding a record of what they approved over.
+  await sayLapMaterial(store, record);
   const walked = await walkGate(continuo, {
     db: planField(record, "db"),
     gateId: gate.gateId,
@@ -1834,7 +2096,42 @@ async function commandPublish(
     work,
   });
 
+  // **Before the first line is printed, and therefore before `--dry-run`
+  // returns.** The ordering doctrine this file already states for the preflight
+  // is that a preview must not pass where the real run would fail; a review
+  // refusal a dry run hid would be the same defect with a different cause.
+  const readings = await store.readingsFor(record.id);
+  // **A second inspection, over the range the *reading* was taken across.**
+  // `work` above is built for the pull request, which after `rondo revise` is a
+  // different range: `publish` compares against `pull_request_base_branch` --
+  // the first lap's base, carried along the chain -- while the reader saw
+  // `base_branch`, the predecessor's topic branch. The material digest covers
+  // the base ref, the base commit, the commits and the files, so comparing the
+  // two would report every unchanged revision as stale and send the operator to
+  // `--despite-review` as a matter of routine. That is this design's own
+  // falsifier fired on the first day, and the fix is one query rather than a
+  // looser comparison.
+  const range = readingRangeOf(record);
+  const asRead: LapWorkInspection =
+    range === null
+      ? { kind: "unreadable", reason: "the row does not name the range a reading was taken across" }
+      : await inspectLapWork(range);
+  const gateOnReview = reviewGate(readings.at(-1) ?? null, asRead, parsed.despiteReview);
+  if (gateOnReview.kind === "refused") {
+    return refuse(gateOnReview.reason);
+  }
+
   say(`iteration '${record.id}' is closed; gate outcome '${record.gateOutcome ?? "(none)"}'`);
+  if (parsed.despiteReview) {
+    // Printed rather than silent: an override that leaves no trace on the run
+    // that used it is an override nobody can audit afterwards, and the reading
+    // it overrode is in the store either way.
+    say("");
+    say(
+      "--despite-review: publishing without a clean reading of this work. That is yours to " +
+        "decide; rondo is recording that you decided it.",
+    );
+  }
   for (const warning of preflight.warnings) {
     say("");
     say(warning);

@@ -54,6 +54,9 @@ import {
   type IterationRecord,
   type IterationStatus,
   type JsonRecord,
+  type LapReading,
+  type LapReadingDraft,
+  type ReadingEvidence,
   SUSPENDED_STATUSES,
   TERMINAL_STATUSES,
 } from "./records.js";
@@ -202,14 +205,51 @@ export type SettleOutcome =
 export interface IterationStore {
   /** Commit the `planned` row, or say that a non-terminal iteration exists. */
   reserve(input: ReserveInput): Promise<ReserveOutcome>;
-  /** Assert the current status, then write the new one with its fields. */
+  /**
+   * Assert the current status, then write the new one with its fields.
+   *
+   * **`reading` is written in the same transaction as the transition, and that
+   * is D-0029 rule 8 rather than a convenience.** A reading committed after the
+   * transition succeeded leaves a window in which the row says
+   * `awaiting_human` and no reading exists -- and the person who answers the
+   * gate inside that window is the person the reading was taken for. Passing it
+   * here rather than offering a second method is what makes the window
+   * unreachable instead of merely small: there is no call a caller could make
+   * in the wrong order.
+   */
   transition(
     id: string,
     from: IterationStatus,
     to: IterationStatus,
     fields: IterationFields,
     nowMs: number,
+    reading?: LapReadingDraft | null,
   ): Promise<TransitionOutcome>;
+  /**
+   * Every reading taken of one iteration, oldest first.
+   *
+   * What `publish` consults, and the reason D-0029 rule 8 refuses to defer the
+   * query: a reading on a row that has reached a terminal status is reachable
+   * through nothing else in this file. {@link IterationStore.read} needs an id
+   * a caller already has and answers about the iteration rather than about its
+   * readings; {@link IterationStore.readLive} filters terminal rows out.
+   */
+  readingsFor(iterationId: string): Promise<readonly LapReading[]>;
+  /**
+   * Every iteration that reached a terminal status carrying no reading at all.
+   *
+   * **The fail-open detector, and it exists because the fail-open is silent.**
+   * A lap whose reading was never written closes within minutes and looks from
+   * every other read in this file exactly like one that was read and found
+   * fine. Without this, "how often does the stage not happen" is not a question
+   * the store can answer, and a stage whose absence is unobservable is a stage
+   * that can quietly stop running.
+   *
+   * Ids rather than records: the question is a count and a list to go look at,
+   * and returning records would make a row that will not decode able to break
+   * the census of the rows that do.
+   */
+  terminalWithoutReading(): Promise<readonly string[]>;
   /**
    * One iteration by id -- total, and that totality is load-bearing.
    *
@@ -465,6 +505,43 @@ CREATE TABLE IF NOT EXISTS admission_refusal (
   bound                 INTEGER NOT NULL,
   occupancy             INTEGER NOT NULL
 );
+
+-- D-0029 rule 8. One reading of what a lap produced, per row that produced one.
+--
+-- **Append-only, and with no status column on purpose.** A row that could be
+-- rewritten to clear would be a record of what somebody wished had been read
+-- (D-0022 rule 4, whose shape this copies). Immutability here is a property of
+-- the schema and of there being no writer that updates -- not of a trigger, and
+-- the entry claims it at that grade.
+--
+-- iteration_id is not a foreign key, for admission_refusal's reason: this
+-- database has no foreign keys at all, and adding one to a single table would
+-- make the schema say that referential integrity is enforced somewhere it is
+-- not. It is also not unique: a second reading of the same row is a later fact
+-- about it and not a correction of the first, so the newest is what a reader
+-- takes and both stay readable.
+--
+-- The evidence columns are nullable together: null exactly when the verdict is
+-- unavailable. findings is canonical JSON of an array of strings rather
+-- than a joined string, because a finding may contain any character a person's
+-- branch name may and a separator would be a bug waiting for that character.
+CREATE TABLE IF NOT EXISTS lap_reading (
+  iteration_id          TEXT    NOT NULL,
+  read_at_ms            INTEGER NOT NULL,
+  drafter               TEXT    NOT NULL,
+  verdict               TEXT    NOT NULL,
+  findings              TEXT    NOT NULL,
+  base_ref              TEXT,
+  base_commit           TEXT,
+  tip_commit            TEXT,
+  material_digest       TEXT,
+  commit_count          INTEGER,
+  file_count            INTEGER,
+  unavailable_reason    TEXT
+);
+
+CREATE INDEX IF NOT EXISTS lap_reading_by_iteration
+  ON lap_reading(iteration_id, read_at_ms);
 `;
 
 /**
@@ -843,6 +920,66 @@ export function iterationStore(connection: DatabaseSync, policy: HostPolicy): It
     }
   };
 
+  /**
+   * Write one reading beside the transition that carries it.
+   *
+   * Synchronous, and it has to be: it runs inside `inTransaction`, whose body
+   * refuses a thenable for the reason stated there.
+   *
+   * **The `clear` that arrives with no evidence is refused here, and refusing
+   * it is not the same as refusing the transition.** D-0029 rule 11 says a
+   * `clear` may only be written beside rondo's own measurement of what was
+   * read; a `clear` without one can only come from a defect in the reader, and
+   * the two available answers are both bad in different directions. Failing the
+   * transaction would strand the row at `performing` with a gate already open --
+   * a reader's bug costing an iteration. Writing the `clear` would put the
+   * stage's one enforced property in the hands of the code it is enforcing
+   * against. So the reading is recorded as `unavailable`, naming what happened:
+   * `publish` then refuses exactly as it does for any other absent reading
+   * (rule 10), the row is untouched, and the defect is in the record rather
+   * than in nobody's hands.
+   */
+  const writeReading = (iterationId: string, nowMs: number, draft: LapReadingDraft): void => {
+    const evidence =
+      draft.verdict === "clear" && !hasEvidence(draft.evidence) ? null : draft.evidence;
+    const verdict = draft.verdict === "clear" && evidence === null ? "unavailable" : draft.verdict;
+    const unavailableReason =
+      verdict === draft.verdict
+        ? draft.unavailableReason
+        : "a 'clear' reading arrived with no measurement of what was read, so the store refused " +
+          "it: D-0029 rule 11 admits a clear verdict only beside rondo's own reading of the work";
+    connection
+      .prepare(
+        "INSERT INTO lap_reading (iteration_id, read_at_ms, drafter, verdict, findings, " +
+          "base_ref, base_commit, tip_commit, material_digest, commit_count, file_count, " +
+          "unavailable_reason) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      )
+      .run(
+        iterationId,
+        nowMs,
+        draft.drafter,
+        verdict,
+        canonicalJson([...draft.findings]),
+        evidence === null ? null : evidence.baseRef,
+        evidence === null ? null : evidence.baseCommit,
+        evidence === null ? null : evidence.tipCommit,
+        evidence === null ? null : evidence.materialDigest,
+        evidence === null ? null : evidence.commitCount,
+        evidence === null ? null : evidence.fileCount,
+        unavailableReason,
+      );
+  };
+
+  const readingRows = (iterationId: string): readonly LapReading[] =>
+    connection
+      .prepare(
+        "SELECT iteration_id, read_at_ms, drafter, verdict, findings, base_ref, base_commit, " +
+          "tip_commit, material_digest, commit_count, file_count, unavailable_reason " +
+          "FROM lap_reading WHERE iteration_id = ? ORDER BY read_at_ms, rowid",
+      )
+      .all(iterationId)
+      .map((row) => toReading(row as SqlRow));
+
   return {
     async reserve(input: ReserveInput): Promise<ReserveOutcome> {
       try {
@@ -950,6 +1087,7 @@ export function iterationStore(connection: DatabaseSync, policy: HostPolicy): It
       to: IterationStatus,
       fields: IterationFields,
       nowMs: number,
+      reading: LapReadingDraft | null = null,
     ): Promise<TransitionOutcome> {
       try {
         const outcome = inTransaction<TransitionOutcome | null>(() => {
@@ -971,6 +1109,17 @@ export function iterationStore(connection: DatabaseSync, policy: HostPolicy): It
               `UPDATE iteration SET status = ?, updated_at_ms = ?${write.clauses} WHERE id = ?`,
             )
             .run(to, nowMs, ...write.values, id);
+          // **After the status assertion and inside the same lock.** The
+          // assertion above is what makes this reading belong to the transition
+          // it came with: a row another writer had already moved is refused
+          // before this line, so no reading is ever appended to a transition
+          // that did not happen. And being inside the transaction is D-0029
+          // rule 8 -- either both land or neither does, so the window in which
+          // a person could answer a gate whose reading exists but is not yet
+          // written does not exist.
+          if (reading !== null) {
+            writeReading(id, nowMs, reading);
+          }
           // Read back **inside** the transaction, and hand back what came out of
           // the database rather than what was constructed in memory. The two
           // differ exactly when a write did not land, which is the case worth
@@ -1018,6 +1167,24 @@ export function iterationStore(connection: DatabaseSync, policy: HostPolicy): It
       // is read defensively: a row that will not decode may be a row whose own
       // `id` is not text, and the answer still has to say which row it means.
       return readLiveRows().map((row) => decode(row, idOf(row)));
+    },
+
+    async readingsFor(iterationId: string): Promise<readonly LapReading[]> {
+      return readingRows(iterationId);
+    },
+
+    async terminalWithoutReading(): Promise<readonly string[]> {
+      // `live IS NULL` is the generated column's own answer to "has this row
+      // reached a terminal status", read rather than restated: the terminal set
+      // is written once, in `records.ts`, and a second spelling here is exactly
+      // what D-0019 rule 10 rejected shape A for.
+      return connection
+        .prepare(
+          "SELECT id FROM iteration WHERE live IS NULL AND id NOT IN " +
+            "(SELECT iteration_id FROM lap_reading) ORDER BY created_at_ms, id",
+        )
+        .all()
+        .map((row) => String((row as SqlRow)["id"]));
     },
 
     async settle(id: string, reason: string, nowMs: number): Promise<SettleOutcome> {
@@ -1227,6 +1394,106 @@ function toRecord(row: SqlRow): IterationRecord {
     createdAtMs: requireInteger(row, "created_at_ms"),
     updatedAtMs: requireInteger(row, "updated_at_ms"),
   };
+}
+
+/**
+ * Whether a reading carries a measurement complete enough to stand behind a
+ * `clear`.
+ *
+ * **Every field, not any field.** A digest with no tip commit cannot answer
+ * D-0029 rule 10's staleness question and a tip commit with no digest cannot
+ * answer rule 11's; a partial measurement is the shape a defect takes, and
+ * accepting one would let the two rules pass each other in the dark. The counts
+ * are checked for being non-negative rather than for being interesting: a
+ * reading of a branch with nothing on it is a real reading, and `concerns` is
+ * what says so.
+ */
+function hasEvidence(evidence: ReadingEvidence | null): boolean {
+  return (
+    evidence !== null &&
+    evidence.baseRef !== "" &&
+    evidence.baseCommit !== "" &&
+    evidence.tipCommit !== "" &&
+    evidence.materialDigest !== "" &&
+    Number.isInteger(evidence.commitCount) &&
+    evidence.commitCount >= 0 &&
+    Number.isInteger(evidence.fileCount) &&
+    evidence.fileCount >= 0
+  );
+}
+
+/**
+ * One `lap_reading` row, read back.
+ *
+ * **Total where `toRecord` refuses**, and the asymmetry is deliberate: an
+ * iteration row that will not decode is an iteration nobody may act on, while a
+ * reading that will not decode is a reading nobody may rely on -- and the
+ * caller's response to the second is already the response to a missing one.
+ * So a verdict this rondo does not know reads as `unavailable` naming what was
+ * found, which is exactly what `publish` refuses on. A row edited by hand into
+ * something unrecognisable therefore cannot become a pass.
+ */
+function toReading(row: SqlRow): LapReading {
+  const verdict = row["verdict"];
+  const known = verdict === "clear" || verdict === "concerns" || verdict === "unavailable";
+  const evidence: ReadingEvidence | null =
+    typeof row["base_ref"] === "string" &&
+    typeof row["base_commit"] === "string" &&
+    typeof row["tip_commit"] === "string" &&
+    typeof row["material_digest"] === "string" &&
+    typeof row["commit_count"] === "number" &&
+    typeof row["file_count"] === "number"
+      ? {
+          baseRef: row["base_ref"],
+          baseCommit: row["base_commit"],
+          tipCommit: row["tip_commit"],
+          materialDigest: row["material_digest"],
+          commitCount: row["commit_count"],
+          fileCount: row["file_count"],
+        }
+      : null;
+  const findings = readFindings(row["findings"]);
+  return {
+    iterationId: idOfReading(row),
+    readAtMs: typeof row["read_at_ms"] === "number" ? row["read_at_ms"] : 0,
+    drafter: typeof row["drafter"] === "string" ? row["drafter"] : "(unrecorded)",
+    verdict: known ? verdict : "unavailable",
+    findings,
+    evidence: known ? evidence : null,
+    unavailableReason: known
+      ? typeof row["unavailable_reason"] === "string"
+        ? row["unavailable_reason"]
+        : null
+      : `the stored verdict is ${JSON.stringify(verdict)}, which this rondo does not know`,
+  };
+}
+
+/** A reading row's iteration id, named defensively for the reason `idOf` is. */
+function idOfReading(row: SqlRow): string {
+  const value = row["iteration_id"];
+  return typeof value === "string" ? value : "(a reading row whose iteration id is not text)";
+}
+
+/**
+ * The findings column, which is canonical JSON of an array of strings.
+ *
+ * Anything else reads as a single finding saying so, rather than as none: a
+ * findings list that silently became empty is a `concerns` row that looks like
+ * it had nothing to say.
+ */
+function readFindings(value: unknown): readonly string[] {
+  if (typeof value !== "string") {
+    return Object.freeze(["(the stored findings are not text)"]);
+  }
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (Array.isArray(parsed) && parsed.every((entry) => typeof entry === "string")) {
+      return Object.freeze([...(parsed as string[])]);
+    }
+  } catch {
+    // Falls through to the same answer a wrong shape gets.
+  }
+  return Object.freeze([`(the stored findings do not read as a list of strings: ${value})`]);
 }
 
 /**

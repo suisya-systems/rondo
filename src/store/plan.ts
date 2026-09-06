@@ -73,8 +73,22 @@ export function canonicalJson(value: JsonValue): string {
  * meaning depends on a convention held somewhere else, and the day rondo needs
  * a second algorithm the rows already say which one they were written under.
  */
+export function contentDigest(value: JsonRecord): string {
+  return `sha256:${createHash("sha256").update(canonicalJson(value), "utf8").digest("hex")}`;
+}
+
+/**
+ * The same digest, named for the payload this module was written to identify.
+ *
+ * It is a second name rather than a second implementation, and the two must
+ * stay one: a plan's digest and a lap reading's material digest are compared
+ * against values written by earlier revisions of rondo, so a divergence here
+ * would not be a refactor -- it would be every stored digest silently ceasing
+ * to describe the bytes it was taken over. D-0029 rule 11's evidence is the
+ * second caller; {@link contentDigest} is where a third goes.
+ */
 export function planDigest(plan: JsonRecord): string {
-  return `sha256:${createHash("sha256").update(canonicalJson(plan), "utf8").digest("hex")}`;
+  return contentDigest(plan);
 }
 
 /**

@@ -62,7 +62,11 @@ import type {
   RunAdmission,
   StorePort,
 } from "../refrain/ports.js";
+import type { LapReadingDraft } from "../store/records.js";
 import type { IterationStore } from "../store/sqlite.js";
+
+import { inspectLapWork } from "./forge.js";
+import { READING_REMOTE, readingOf } from "./review.js";
 
 export type { ConductorReport };
 
@@ -262,6 +266,30 @@ export function conductorPorts(
         stage: payload.stage,
         outcome: payload.outcome,
       })),
+    // **The first arrow from this module to `./forge.js`, and it is why the
+    // reading needs no new capability** (D-0029 rule 5). `forge.ts` already
+    // holds this layer's only `spawn` grant and already reads what a lap
+    // produced; what this adds is a second caller and an earlier one, not a
+    // third module that may start a process.
+    //
+    // It answers rather than refuses. `inspectLapWork` reports an unreadable
+    // workspace as a value, `readingOf` turns that into an `unavailable`
+    // verdict, and both are readings -- so this port's `EffectOutcome` is
+    // `answered` on every path a person could reach. The refusal arms stay in
+    // the type because the port is a promise this module keeps and not one it
+    // is entitled to assume, and the interpreter maps them to the same
+    // `unavailable` if a later wiring ever produces one.
+    readLapWork: async (plan): Promise<EffectOutcome<LapReadingDraft>> => ({
+      kind: "answered",
+      value: readingOf(
+        await inspectLapWork({
+          workspace: plan.workspace,
+          remote: READING_REMOTE,
+          baseBranch: plan.baseBranch,
+          topicBranch: plan.topicBranch,
+        }),
+      ),
+    }),
   };
 }
 

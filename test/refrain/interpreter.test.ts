@@ -71,6 +71,8 @@ import type {
   IterationFields,
   IterationRecord,
   IterationStatus,
+  LapReading,
+  LapReadingDraft,
   NonTerminalStatus,
 } from "../../src/store/records.js";
 import { isTerminal, RELEASED_BY } from "../../src/store/records.js";
@@ -120,6 +122,8 @@ class FakeStore implements StorePort {
    * row that is *there*, counts as live, and cannot be read.
    */
   readonly corrupt = new Map<string, string>();
+  /** Every reading committed beside a transition, in the order they landed. */
+  readonly readings: LapReading[] = [];
 
   /** Run just before a transition is applied, so a test can move the row underneath a call. */
   beforeTransition: (() => void) | null = null;
@@ -176,6 +180,7 @@ class FakeStore implements StorePort {
     to: IterationStatus,
     fields: IterationFields,
     nowMs: number,
+    reading: LapReadingDraft | null = null,
   ): Promise<TransitionOutcome> {
     this.calls.push(`transition:${from}->${to}`);
     if (this.beforeTransition !== null) {
@@ -205,6 +210,13 @@ class FakeStore implements StorePort {
     const next: IterationRecord = { ...row, ...fields, status: to, updatedAtMs: nowMs };
     this.rows.set(id, next);
     this.moves.push({ from, to });
+    // **Recorded only on the paths that committed.** The real store writes the
+    // reading inside the same transaction, so a refused or blocked transition
+    // writes neither -- and a fake that appended it above the refusals would
+    // make the one property D-0029 rule 8 rests on untestable here.
+    if (reading !== null) {
+      this.readings.push({ ...reading, iterationId: id, readAtMs: nowMs });
+    }
     return Promise.resolve({ kind: "transitioned", record: next });
   }
 
@@ -319,6 +331,7 @@ interface Answers {
   admitRun: EffectOutcome<RunAdmission>;
   performLap: EffectOutcome<LapPerformance>;
   showGate: EffectOutcome<GateObservation>;
+  readLapWork: EffectOutcome<LapReadingDraft>;
 }
 
 function successfulAnswers(): Answers {
@@ -357,8 +370,25 @@ function successfulAnswers(): Answers {
       kind: "answered",
       value: { gateId: "gate-1", stage: "received", outcome: null },
     },
+    readLapWork: { kind: "answered", value: CLEAR_READING },
   };
 }
+
+/** A reading that read something and found nothing to raise. */
+const CLEAR_READING: LapReadingDraft = {
+  drafter: "rondo/deterministic/1",
+  verdict: "clear",
+  findings: [],
+  evidence: {
+    baseRef: "refs/heads/main",
+    baseCommit: "b".repeat(40),
+    tipCommit: "a".repeat(40),
+    materialDigest: `sha256:${"c".repeat(64)}`,
+    commitCount: 2,
+    fileCount: 3,
+  },
+  unavailableReason: null,
+};
 
 interface Harness {
   readonly ports: ConductorPorts;
@@ -395,12 +425,23 @@ function harness(overrides: Partial<Answers> = {}): Harness {
       calls.push(`showGate:${gateId}`);
       return Promise.resolve(answers.showGate);
     },
+    readLapWork: () => {
+      calls.push("readLapWork");
+      return Promise.resolve(answers.readLapWork);
+    },
   };
   return { ports, store, calls, answers };
 }
 
 /** The five effect names, for asserting that none of them was driven. */
-const EFFECT_CALLS = ["classify", "startContinuo", "admitRun", "performLap", "showGate"];
+const EFFECT_CALLS = [
+  "classify",
+  "startContinuo",
+  "admitRun",
+  "performLap",
+  "showGate",
+  "readLapWork",
+];
 
 function effectCalls(calls: readonly string[]): string[] {
   return calls.filter((call) => EFFECT_CALLS.some((name) => call.startsWith(name)));
@@ -572,6 +613,12 @@ test("the conductor returns at the open gate and does not observe it", async () 
     "startContinuo",
     "admitRun:worker",
     "performLap",
+    // The reading is the fifth and last effect of the arc, and its position is
+    // the assertion: after the lap answered, before the suspend, and with no
+    // `showGate` after it. D-0029 rule 4 puts it inside the step that was
+    // already `performing` precisely so that this list gains an entry and the
+    // state machine gains nothing.
+    "readLapWork",
   ]);
 });
 
@@ -1654,4 +1701,127 @@ test("a reason contained in an earlier one is still recorded", async () => {
   const reason = (await readRow(h.store, "i-0001"))?.reason ?? "";
   expect(reason).toContain("timeout after 60 seconds");
   expect(reason.split("; ")).toContain("timeout");
+});
+
+test("the reading is committed by the same transition that suspends the row", async () => {
+  // **D-0029 rule 8, and the reason it is a parameter of `transition` rather
+  // than a second call.** The fake records a reading only on the path that
+  // committed, so this asserts both that the reading landed and that it landed
+  // with the suspend rather than beside it.
+  const h = harness();
+
+  await admitOnce(h);
+
+  expect(h.store.readings).toHaveLength(1);
+  expect(h.store.readings[0]?.iterationId).toBe("i-0001");
+  expect(h.store.readings[0]?.verdict).toBe("clear");
+  expect(h.store.path().at(-1)).toBe("performing->awaiting_human");
+});
+
+test("a suspend another writer blocked commits no reading either", async () => {
+  // Neither lands, which is what "the same transaction" buys. A reading written
+  // beside a transition that was refused would be a record of a reading of a
+  // suspend that never happened -- and, worse, one `publish` would later accept.
+  const h = harness();
+  h.store.beforeTransitionTo = {
+    to: "awaiting_human",
+    hook: () => {
+      const row = h.store.rows.get("i-0001");
+      if (row !== undefined) {
+        h.store.rows.set("i-0001", { ...row, status: "abandoned" });
+      }
+    },
+  };
+
+  await admitOnce(h);
+
+  expect(h.store.readings).toEqual([]);
+});
+
+test("the reading is taken after the lap answered and before the row suspends", async () => {
+  // Position, not merely presence. Before the lap answers there is no work to
+  // read; after the suspend commit the person is already being asked.
+  const h = harness();
+
+  await admitOnce(h);
+
+  const performed = h.calls.indexOf("performLap");
+  const read = h.calls.indexOf("readLapWork");
+  const suspended = h.calls.indexOf("transition:performing->awaiting_human");
+  expect(performed).toBeLessThan(read);
+  expect(read).toBeLessThan(suspended);
+});
+
+test("a reading that could not be taken still suspends the row, as unavailable", async () => {
+  // **The port cannot fail the step** (D-0029 rule 3). A reading nobody could
+  // take must not cost an iteration whose gate is already open, so the row
+  // reaches `awaiting_human` exactly as it would have, carrying a reading that
+  // says so. `publish` is where that costs something, and it costs a keystroke.
+  const h = harness({
+    readLapWork: { kind: "refused", message: "the workspace is gone" },
+  });
+
+  const report = await admitOnce(h);
+
+  expect(report.status).toBe("awaiting_human");
+  expect(h.store.readings).toHaveLength(1);
+  expect(h.store.readings[0]?.verdict).toBe("unavailable");
+  expect(h.store.readings[0]?.unavailableReason).toContain("the workspace is gone");
+});
+
+test("a reading that could not be taken is attributed to nobody, not to the reader", async () => {
+  // "The reading did not happen" and "the reader looked and found nothing" are
+  // the two facts D-0029 rule 10 keeps apart, and the drafter column is where
+  // the difference survives.
+  const h = harness({ readLapWork: { kind: "defect", reason: "a rondo bug" } });
+
+  await admitOnce(h);
+
+  expect(h.store.readings[0]?.drafter).toBe("rondo/none");
+});
+
+test("the operator is told what the reading found, above the gate id", async () => {
+  const h = harness();
+
+  const report = await admitOnce(h);
+
+  const said = report.lines.join("\n");
+  expect(said).toContain("An independent reading of the work found nothing to raise");
+  expect(said).toContain("not an approval");
+  expect(said.indexOf("independent reading")).toBeLessThan(said.indexOf("is already open"));
+});
+
+test("a reading that raised something says so and still calls it the person's", async () => {
+  const h = harness({
+    readLapWork: {
+      kind: "answered",
+      value: {
+        drafter: "rondo/deterministic/1",
+        verdict: "concerns",
+        findings: ["the topic branch changes no files against refs/heads/main"],
+        evidence: null,
+        unavailableReason: null,
+      },
+    },
+  });
+
+  const report = await admitOnce(h);
+
+  const said = report.lines.join("\n");
+  expect(said).toContain("raised 1 point(s)");
+  expect(said).toContain("changes no files");
+  expect(said).toContain("the answer is still yours");
+  expect(report.status).toBe("awaiting_human");
+});
+
+test("no reading is taken on the paths where no lap answered", async () => {
+  // A refusal from `lap perform` ends the iteration at `failed`, and there is
+  // nothing to read: reading a workspace whose lap reported a refusal would be
+  // rondo taking a verdict over work that was never claimed to exist.
+  const h = harness({ performLap: { kind: "refused", message: "continuo refused" } });
+
+  await admitOnce(h);
+
+  expect(h.calls).not.toContain("readLapWork");
+  expect(h.store.readings).toEqual([]);
 });

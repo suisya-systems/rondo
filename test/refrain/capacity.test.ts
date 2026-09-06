@@ -121,6 +121,10 @@ const portsOver = (policy: HostPolicy) => {
     admitRun: async () => ({ kind: "refused", message: "no continuo in this test" }),
     performLap: async () => ({ kind: "refused", message: "no continuo in this test" }),
     showGate: async () => ({ kind: "refused", message: "no continuo in this test" }),
+    // Refusing like the rest: these cases never reach a lap, so a reading is
+    // never taken, and a fixture that answered one would be describing work
+    // that does not exist.
+    readLapWork: async () => ({ kind: "refused", message: "no workspace in this test" }),
   };
   return { ports, store, connection };
 };
