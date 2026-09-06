@@ -3216,9 +3216,14 @@ publish and left *what the pull request says* unspecified. This entry specifies 
 
    **The body is bounded by what it lists as well as by how much.** Twenty entries is no bound when
    one entry is unbounded, so a commit subject or a path past `LISTED_LIMIT` (200 characters) is
-   described rather than printed. Every value rondo composes is bounded before the push, because a
-   title or body the forge refuses is refused *after* the push, which is the one leg that cannot be
-   taken back.
+   described rather than printed, and so is every value the row carries into the body — the run and
+   iteration ids, the branch names, the ref, the gate id and outcome, the revision, the model and
+   tier, the session, and git's own reason for an unreadable history. The sum is checked as well as
+   the parts: past `BODY_LIMIT` (60,000 characters) the quoted request is dropped for a line saying
+   where it still is, because it is the one part of the body that is not about this change and is
+   recoverable from the row. Every value rondo composes is bounded before the push, because a title
+   or body the forge refuses is refused *after* the push, which is the one leg that cannot be taken
+   back.
 
    **The summary names the ref it compared, not the branch it was cut from.** Under
    `--allow-remote-mismatch` the branch is pushed to one repository and the pull request opened in

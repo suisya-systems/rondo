@@ -853,8 +853,10 @@ function worked(
   };
 }
 
-/** `REQUEST_LIMIT` in `src/access/cli.ts`: the length past which the quotation is cut. */
+/** The three bounds `src/access/cli.ts` composes a body under. */
 const REQUEST_LIMIT = 4000;
+const LIST_LIMIT = 20;
+const LISTED_LIMIT = 200;
 
 /** The pull request text a test varies one input of at a time. */
 function text(parts: Partial<PullRequestTextInput> = {}) {
@@ -1036,4 +1038,33 @@ test("a fork publish says which base its summary compared against", () => {
     work: { kind: "unreadable", reason: "not a git repository" },
   }).body;
   expect(unreadable).not.toContain("pushed to a different repository");
+});
+
+test("no value the row carries can make a body the forge refuses", () => {
+  // A run id, a branch, a session name and a git error are each as long as
+  // whatever wrote them. Every one is bounded on the way into the body.
+  const body = text({
+    runId: "r".repeat(70_000),
+    topicBranch: "b".repeat(70_000),
+    record: published({ sessionId: "s".repeat(70_000), model: "m".repeat(70_000) }),
+    work: { kind: "unreadable", reason: "e".repeat(70_000) },
+  }).body;
+  expect(body).toContain("(run id of 70000 characters, not printed here)");
+  expect(body).toContain("(session name of 70000 characters, not printed here)");
+  expect(body).toContain("(reason of 70000 characters, not printed here)");
+  expect(body.length).toBeLessThan(6000);
+
+  // And the sum is checked as well as the parts: the quoted request is what
+  // gives way, because it is the one part not about this change and the row
+  // still has it.
+  const commits = Array.from({ length: LIST_LIMIT }, (_, index) => ({
+    abbreviatedSha: "a".repeat(LISTED_LIMIT),
+    subject: `${String(index)}${"s".repeat(LISTED_LIMIT - 1)}`,
+  }));
+  const huge = text({
+    record: published({ request: "q".repeat(REQUEST_LIMIT) }),
+    work: worked({ commits }),
+  }).body;
+  expect(huge).toContain("qqq");
+  expect(huge.length).toBeLessThanOrEqual(60_000);
 });

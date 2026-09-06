@@ -1456,6 +1456,17 @@ const LISTED_LIMIT = 200;
  */
 const REQUEST_LIMIT = 4000;
 
+/**
+ * The largest body rondo will hand to the forge.
+ *
+ * Inside GitHub's own 65,536, with room for the difference between characters
+ * and the bytes a forge counts. It is the belt to `LIST_LIMIT`, `LISTED_LIMIT`
+ * and `REQUEST_LIMIT`'s braces: those bound every part, and this bounds the sum
+ * of them, because the thing being prevented -- a pull request refused after
+ * the push -- is worth being sure about rather than arguing about.
+ */
+const BODY_LIMIT = 60_000;
+
 /** What the title and body are composed from. Every value is already on the row. */
 export interface PullRequestTextInput {
   readonly record: IterationRecord;
@@ -1566,15 +1577,36 @@ function labelTitle(input: PullRequestTextInput): string {
   return `rondo run ${input.runId}`.slice(0, TITLE_LIMIT);
 }
 
-/** The body, section by section. */
+/**
+ * The body, and the last check that it is one a forge will take.
+ *
+ * **Every value it contains is bounded on the way in** -- lists by
+ * `LIST_LIMIT`, each listed or row-carried value by `LISTED_LIMIT`, the request
+ * by `REQUEST_LIMIT` -- and this is the check that the sum is bounded too. It
+ * exists because the failure it prevents is asymmetric: a body the forge
+ * refuses is refused after the push, which is the one leg `publish` cannot take
+ * back. The quoted request is what gives way first, because it is the one part
+ * of the body that is not about this change and is recoverable from the row.
+ */
 function pullRequestBody(input: PullRequestTextInput): string {
+  const whole = composeBody(input, true);
+  if (whole.length <= BODY_LIMIT) {
+    return whole;
+  }
+  const withoutRequest = composeBody(input, false);
+  return withoutRequest.length <= BODY_LIMIT ? withoutRequest : withoutRequest.slice(0, BODY_LIMIT);
+}
+
+/** The body, section by section. */
+function composeBody(input: PullRequestTextInput, withRequest: boolean): string {
   const { record, runId, topicBranch, baseBranch, work } = input;
   const lines: string[] = ["## What changed", ""];
 
   if (work.kind === "read") {
     if (work.commits.length === 0) {
       lines.push(
-        `No commit separates \`${topicBranch}\` from \`${work.baseRef}\`, so rondo has nothing ` +
+        `No commit separates \`${listed(topicBranch, "branch name")}\` from ` +
+          `\`${listed(work.baseRef, "ref")}\`, so rondo has nothing ` +
           "to summarise here. Whatever this pull request shows, the lap did not commit it.",
         "",
       );
@@ -1595,7 +1627,7 @@ function pullRequestBody(input: PullRequestTextInput): string {
       // against the base the forge will use, which under `--allow-remote-mismatch`
       // it is not (see `forkCaveat`).
       lines.push(
-        `${String(count)} file${count === 1 ? "" : "s"} changed against \`${work.baseRef}\`:`,
+        `${String(count)} file${count === 1 ? "" : "s"} changed against \`${listed(work.baseRef, "ref")}\`:`,
         "",
       );
       for (const file of work.files.slice(0, LIST_LIMIT)) {
@@ -1613,7 +1645,8 @@ function pullRequestBody(input: PullRequestTextInput): string {
     // silence.** The diff is on the branch either way; what a reader must not
     // do is take an empty section for an empty change.
     lines.push(
-      `rondo could not read this branch's history, so it has not summarised the change: ${work.reason}`,
+      "rondo could not read this branch's history, so it has not summarised the change: " +
+        listed(work.reason, "reason"),
       "",
       "The commits on the branch are the record. Read them rather than this section.",
       "",
@@ -1622,18 +1655,27 @@ function pullRequestBody(input: PullRequestTextInput): string {
 
   lines.push("## How this got here", "");
   lines.push(
-    `- rondo walked run \`${runId}\` (iteration \`${record.id}\`) on \`${topicBranch}\`, ` +
-      `for \`${baseBranch}\`.`,
+    `- rondo walked run \`${listed(runId, "run id")}\` (iteration \`${listed(record.id, "id")}\`) ` +
+      `on \`${listed(topicBranch, "branch name")}\`, for \`${listed(baseBranch, "branch name")}\`.`,
   );
   lines.push(`- ${gateSentence(record)}`);
   lines.push(
-    `- Against continuo \`${record.continuoRevision ?? "an unrecorded revision"}\`${modelClause(record)}.`,
+    `- Against continuo \`${listed(record.continuoRevision ?? "an unrecorded revision", "revision")}\`` +
+      `${modelClause(record)}.`,
   );
   if (record.sessionId !== null && record.sessionId !== "") {
-    lines.push(`- Session \`${record.sessionId}\`.`);
+    lines.push(`- Session \`${listed(record.sessionId, "session name")}\`.`);
   }
   lines.push("");
-  lines.push(...requestBlock(record.request));
+  lines.push(
+    ...(withRequest
+      ? requestBlock(record.request)
+      : [
+          "The request this lap was given is on this iteration's row in rondo's store. It is not " +
+            "quoted here: with it, this body is larger than a pull request may be.",
+          "",
+        ]),
+  );
   lines.push(
     "This pull request was opened by `rondo publish`, which an operator ran. Merging it is not.",
   );
@@ -1693,8 +1735,10 @@ function fileCounts(file: LapFile): string {
 /** What the gate says about who approved this, in a reviewer's terms. */
 function gateSentence(record: IterationRecord): string {
   const gate =
-    record.gateId === null || record.gateId === "" ? "The gate" : `Gate \`${record.gateId}\``;
-  const outcome = record.gateOutcome ?? "unknown";
+    record.gateId === null || record.gateId === ""
+      ? "The gate"
+      : `Gate \`${listed(record.gateId, "gate id")}\``;
+  const outcome = listed(record.gateOutcome ?? "unknown", "outcome");
   if (outcome === APPROVED_OUTCOME) {
     return `${gate} closed \`${outcome}\`: a person answered it, and the answer was carried through.`;
   }
@@ -1713,8 +1757,10 @@ function modelClause(record: IterationRecord): string {
     return "";
   }
   const tier =
-    record.modelTier === null || record.modelTier === "" ? "" : ` (tier \`${record.modelTier}\`)`;
-  return `, on \`${record.model}\`${tier}`;
+    record.modelTier === null || record.modelTier === ""
+      ? ""
+      : ` (tier \`${listed(record.modelTier, "tier")}\`)`;
+  return `, on \`${listed(record.model, "model id")}\`${tier}`;
 }
 
 /**
