@@ -386,6 +386,132 @@ export interface GateDetail {
   readonly runId: string | null;
   readonly stage: string;
   readonly outcome: string | null;
+  /**
+   * Why the worker stopped, in the worker's own words.
+   *
+   * **Not nullable**, which is continuo's shape rather than a guess: its own
+   * `GateDetail.rationale` is `string` and `showPayload` emits the column
+   * verbatim. It is the one field on this surface that carries a person's
+   * question to another person, and rondo relays it without interpreting it
+   * (D-0015 rule 7) -- escaped on the way to a terminal, never parsed.
+   */
+  readonly rationale: string;
+  /**
+   * The answer vocabulary, **as the JSON array text the row carries**.
+   *
+   * A string, not an array. continuo's own field is
+   * `readonly options: string` with the comment "the JSON array text the row
+   * carries", and the payload passes it through untouched. rondo prints it and
+   * never parses it: parsing would be reading a meaning out of continuo's
+   * bytes, which is the half of the seam rule 7 keeps on continuo's side, and a
+   * decoder that demanded an array would call continuo's ordinary answer a
+   * protocol break.
+   */
+  readonly options: string;
+}
+
+/**
+ * `gate present`, which enqueues the relay that carries the question outward.
+ *
+ * **It does not move the stage**, and that is the fact a caller most needs from
+ * this record: the gate is still at `received` when this returns. What moves it
+ * is the ack of the relay this call enqueued, which is why {@link messageId} is
+ * the only field here that the next verb consumes.
+ *
+ * `enqueued` is whether *this* call created the relay. `false` is the
+ * idempotent repeat -- the relay already existed -- and is a success, exactly as
+ * `closed: false` is on {@link GateClosed}.
+ */
+export interface GatePresented {
+  readonly gateId: string;
+  readonly messageId: string;
+  readonly toStage: string;
+  readonly recipient: string;
+  readonly enqueued: boolean;
+}
+
+/**
+ * `gate deliver`, a queue-wide pass rather than a verb about one gate.
+ *
+ * There is no gate id here and none on the command line: deliver drains
+ * whatever is queued for one recipient, so a caller that wanted "deliver *my*
+ * message" has to find its own id in {@link deliveredMessageIds} -- which is
+ * what the operating surface does rather than assuming its message was the only
+ * one.
+ *
+ * `recipient` is top-level because a pass serves exactly one, and `epoch` is
+ * the delivery epoch continuo advances per pass. The `dedup_key` continuo emits
+ * on every element is deliberately read past: rondo never keys on it, and
+ * decoding a field it does not use would turn an upstream rename into a rondo
+ * defect for no gain.
+ */
+export interface GateDelivered {
+  readonly recipient: string;
+  readonly epoch: number;
+  readonly deliveredMessageIds: readonly string[];
+}
+
+/**
+ * `gate ack`, the verb that actually advances a gate's stage.
+ *
+ * Four booleans, and `closed` is the one that ends a walk: continuo sets it
+ * when this ack was the *forwarded* relay's, because acking the forward is what
+ * closes a gate `answered_and_forwarded`. That outcome is written by continuo
+ * as `actor_kind: "system"` and is not in `gate close`'s vocabulary at all --
+ * nobody *decides* it, which is why there is no seventh verb on the answered
+ * path and why rondo never spells that outcome itself.
+ *
+ * `advanced` is whether this ack moved the stage; `false` is the idempotent
+ * repeat.
+ */
+export interface GateAcked {
+  readonly messageId: string;
+  readonly gateId: string;
+  readonly toStage: string;
+  readonly acked: boolean;
+  readonly cancelled: boolean;
+  readonly advanced: boolean;
+  readonly closed: boolean;
+}
+
+/**
+ * `gate answer`, which is one verb doing two writes.
+ *
+ * It records the `answered` advance **and** enqueues the `forwarded` relay, so
+ * a caller gets a new {@link messageId} to deliver and ack. That is why the
+ * answered path is six verbs and not seven.
+ *
+ * Re-issuing it with the **identical** body is idempotent and answers
+ * `advanced: false`; a *different* body is refused `AnswerAlreadyRecorded`.
+ * Both are what let a walk resume from `answered` after a partial failure
+ * without either guessing a message id or being refused.
+ */
+export interface GateAnswered {
+  readonly advanced: boolean;
+  readonly enqueued: boolean;
+  readonly messageId: string;
+  readonly toStage: string;
+}
+
+/**
+ * `run close`, the operator's record that a run reached a terminal status.
+ *
+ * The step and the epoch. `from` is worth reading rather than discarding
+ * because an operator closing a run out of `created` should be told it never
+ * ran, and `writerEpoch` is the link between this row and the lease row naming
+ * who closed it -- the whole of the close's audit trail.
+ *
+ * **Not idempotent, on purpose.** A second close of the same run is refused:
+ * which terminal status a run reached is a fact, and continuo's own refusal
+ * says a wrong fact is corrected by opening a new run rather than by re-closing
+ * this one.
+ */
+export interface RunClosed {
+  readonly runId: string;
+  readonly from: string;
+  readonly to: string;
+  readonly actorId: string;
+  readonly writerEpoch: number;
 }
 
 /**
@@ -549,6 +675,74 @@ export const GATE_SHOW: VerbContract<GateDetail> = {
     runId: nullableString(payload, "run_id"),
     stage: requireString(payload, "stage"),
     outcome: nullableString(payload, "outcome"),
+    rationale: requireString(payload, "rationale"),
+    options: requireString(payload, "options"),
+  }),
+};
+
+export const GATE_PRESENT: VerbContract<GatePresented> = {
+  command: ["gate", "present"],
+  schema: "continuo.gate.present/1",
+  timeoutMs: CONTROL_PLANE_TIMEOUT_MS,
+  read: (payload) => ({
+    gateId: requireString(payload, "gate_id"),
+    messageId: requireString(payload, "message_id"),
+    toStage: requireString(payload, "to_stage"),
+    recipient: requireString(payload, "recipient"),
+    enqueued: requireBoolean(payload, "enqueued"),
+  }),
+};
+
+export const GATE_DELIVER: VerbContract<GateDelivered> = {
+  command: ["gate", "deliver"],
+  schema: "continuo.gate.deliver/1",
+  timeoutMs: CONTROL_PLANE_TIMEOUT_MS,
+  read: (payload) => ({
+    recipient: requireString(payload, "recipient"),
+    epoch: requireNumber(payload, "epoch"),
+    deliveredMessageIds: requireObjectArray(payload, "delivered").map((message) =>
+      requireString(message, "message_id"),
+    ),
+  }),
+};
+
+export const GATE_ACK: VerbContract<GateAcked> = {
+  command: ["gate", "ack"],
+  schema: "continuo.gate.ack/1",
+  timeoutMs: CONTROL_PLANE_TIMEOUT_MS,
+  read: (payload) => ({
+    messageId: requireString(payload, "message_id"),
+    gateId: requireString(payload, "gate_id"),
+    toStage: requireString(payload, "to_stage"),
+    acked: requireBoolean(payload, "acked"),
+    cancelled: requireBoolean(payload, "cancelled"),
+    advanced: requireBoolean(payload, "advanced"),
+    closed: requireBoolean(payload, "closed"),
+  }),
+};
+
+export const GATE_ANSWER: VerbContract<GateAnswered> = {
+  command: ["gate", "answer"],
+  schema: "continuo.gate.answer/1",
+  timeoutMs: CONTROL_PLANE_TIMEOUT_MS,
+  read: (payload) => ({
+    advanced: requireBoolean(payload, "advanced"),
+    enqueued: requireBoolean(payload, "enqueued"),
+    messageId: requireString(payload, "message_id"),
+    toStage: requireString(payload, "to_stage"),
+  }),
+};
+
+export const RUN_CLOSE: VerbContract<RunClosed> = {
+  command: ["run", "close"],
+  schema: "continuo.run.close/1",
+  timeoutMs: CONTROL_PLANE_TIMEOUT_MS,
+  read: (payload) => ({
+    runId: requireString(payload, "run_id"),
+    from: requireString(payload, "from"),
+    to: requireString(payload, "to"),
+    actorId: requireString(payload, "actor_id"),
+    writerEpoch: requireNumber(payload, "writer_epoch"),
   }),
 };
 

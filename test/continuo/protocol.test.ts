@@ -15,12 +15,18 @@ import {
   DB_CREATE,
   decode,
   decodeMeasureReport,
+  GATE_ACK,
+  GATE_ANSWER,
   GATE_CLOSE,
+  GATE_DELIVER,
   GATE_LIST,
+  GATE_PRESENT,
   GATE_SHOW,
   type InvocationOutput,
   LAP_PERFORM,
   RUN_ADMIT,
+  RUN_CLOSE,
+  type VerbContract,
 } from "../../src/continuo/protocol.js";
 
 /** A finished invocation, with the fields a case does not care about defaulted. */
@@ -175,8 +181,13 @@ describe("a document rondo understands", () => {
           run_id: "r1",
           stage: "presented",
           outcome: null,
-          rationale: null,
-          options: [],
+          // continuo's own shapes, read at the pin: `rationale` is a
+          // non-nullable string and `options` is the JSON array *text* the row
+          // carries (`src/gate/operator.ts`). This fixture used to say
+          // `rationale: null, options: []`, which was a guess and was wrong on
+          // both counts -- it passed only because the decoder read neither.
+          rationale: "The change is ready. Land it?",
+          options: '["approve", "revise"]',
           relays: [],
           transitions: [],
         }),
@@ -191,6 +202,11 @@ describe("a document rondo understands", () => {
         runId: "r1",
         stage: "presented",
         outcome: null,
+        rationale: "The change is ready. Land it?",
+        // Relayed as the text it arrived as. A decoder that parsed this into
+        // an array would be reading a meaning out of continuo's bytes, which
+        // is the half of the seam that stays on continuo's side (D-0015 r7).
+        options: '["approve", "revise"]',
       },
     });
   });
@@ -745,5 +761,241 @@ describe("lap perform, the verb whose document is the only record of a lap", () 
     // lap at one fifteenth of continuo's own turn timeout.
     expect(LAP_PERFORM.timeoutMs).toBeGreaterThan(GATE_SHOW.timeoutMs);
     expect(GATE_SHOW.timeoutMs).toBe(60_000);
+  });
+});
+
+/**
+ * The four gate verbs the operating surface drives, and the one run verb
+ * `publish` drives (D-0025 rules 2 and 7).
+ *
+ * Each verb gets the same three cases the older contracts get: a success
+ * document decodes into rondo's record, a document under the wrong schema id is
+ * a protocol refusal, and continuo's refusal envelope on exit 2 is an ordinary
+ * refusal rather than a defect. The payloads are continuo's own field names,
+ * read off `src/gate/cli.ts` and `src/control_plane/run_cli.ts` at the pinned
+ * revision.
+ */
+describe("the verbs that answer a gate and settle a run", () => {
+  /**
+   * The five, as one list, for the cases that hold for all of them.
+   *
+   * Typed at `unknown` because the payload types differ and the cases below
+   * assert only the outcome's `kind` -- which is the property every contract
+   * shares and the only one a loop over five of them can state.
+   */
+  const NEW_CONTRACTS: readonly VerbContract<unknown>[] = [
+    GATE_PRESENT,
+    GATE_DELIVER,
+    GATE_ACK,
+    GATE_ANSWER,
+    RUN_CLOSE,
+  ];
+
+  test("gate present is read into rondo's own record", () => {
+    const result = decode(
+      GATE_PRESENT,
+      output({
+        stdout: success(GATE_PRESENT.schema, {
+          gate_id: "g1",
+          message_id: "relay/g1/presented",
+          to_stage: "presented",
+          recipient: "external-notify",
+          enqueued: true,
+        }),
+      }),
+    );
+    expect(result).toEqual({
+      kind: "answered",
+      db: "/tmp/cp.sqlite3",
+      payload: {
+        gateId: "g1",
+        messageId: "relay/g1/presented",
+        toStage: "presented",
+        recipient: "external-notify",
+        enqueued: true,
+      },
+    });
+  });
+
+  test("gate present's idempotent repeat is a success, not a refusal", () => {
+    // `enqueued: false` means the relay already existed. continuo exits 0, so
+    // a decoder that treated the boolean as a verdict would turn a safe retry
+    // into an error the operator has to interpret.
+    const result = decode(
+      GATE_PRESENT,
+      output({
+        stdout: success(GATE_PRESENT.schema, {
+          gate_id: "g1",
+          message_id: "relay/g1/presented",
+          to_stage: "presented",
+          recipient: "external-notify",
+          enqueued: false,
+        }),
+      }),
+    );
+    expect(kindOf(result)).toBe("answered");
+  });
+
+  test("gate deliver reads the message ids and reads past dedup_key", () => {
+    const result = decode(
+      GATE_DELIVER,
+      output({
+        stdout: success(GATE_DELIVER.schema, {
+          recipient: "external-notify",
+          epoch: 3,
+          delivered: [
+            { message_id: "relay/g1/presented", dedup_key: "whatever" },
+            { message_id: "relay/g2/forwarded", dedup_key: "also-whatever" },
+          ],
+        }),
+      }),
+    );
+    expect(result).toEqual({
+      kind: "answered",
+      db: "/tmp/cp.sqlite3",
+      payload: {
+        recipient: "external-notify",
+        epoch: 3,
+        deliveredMessageIds: ["relay/g1/presented", "relay/g2/forwarded"],
+      },
+    });
+  });
+
+  test("gate deliver's empty pass is a success with no ids", () => {
+    const result = decode(
+      GATE_DELIVER,
+      output({
+        stdout: success(GATE_DELIVER.schema, {
+          recipient: "external-notify",
+          epoch: 4,
+          delivered: [],
+        }),
+      }),
+    );
+    expect(result).toEqual({
+      kind: "answered",
+      db: "/tmp/cp.sqlite3",
+      payload: { recipient: "external-notify", epoch: 4, deliveredMessageIds: [] },
+    });
+  });
+
+  test("gate ack reads all four booleans, including the close", () => {
+    const result = decode(
+      GATE_ACK,
+      output({
+        stdout: success(GATE_ACK.schema, {
+          message_id: "relay/g1/forwarded",
+          gate_id: "g1",
+          to_stage: "forwarded",
+          acked: true,
+          cancelled: false,
+          advanced: true,
+          closed: true,
+        }),
+      }),
+    );
+    expect(result).toEqual({
+      kind: "answered",
+      db: "/tmp/cp.sqlite3",
+      payload: {
+        messageId: "relay/g1/forwarded",
+        gateId: "g1",
+        toStage: "forwarded",
+        acked: true,
+        cancelled: false,
+        advanced: true,
+        closed: true,
+      },
+    });
+  });
+
+  test("gate answer reads the forwarded relay it enqueued", () => {
+    const result = decode(
+      GATE_ANSWER,
+      output({
+        stdout: success(GATE_ANSWER.schema, {
+          advanced: true,
+          enqueued: true,
+          message_id: "relay/g1/forwarded",
+          to_stage: "forwarded",
+        }),
+      }),
+    );
+    expect(result).toEqual({
+      kind: "answered",
+      db: "/tmp/cp.sqlite3",
+      payload: {
+        advanced: true,
+        enqueued: true,
+        messageId: "relay/g1/forwarded",
+        toStage: "forwarded",
+      },
+    });
+  });
+
+  test("run close reads the step and the writer epoch", () => {
+    const result = decode(
+      RUN_CLOSE,
+      output({
+        stdout: success(RUN_CLOSE.schema, {
+          run_id: "r1",
+          from: "created",
+          to: "completed",
+          actor_id: "happy_ryo",
+          writer_epoch: 1,
+        }),
+      }),
+    );
+    expect(result).toEqual({
+      kind: "answered",
+      db: "/tmp/cp.sqlite3",
+      payload: {
+        runId: "r1",
+        from: "created",
+        to: "completed",
+        actorId: "happy_ryo",
+        writerEpoch: 1,
+      },
+    });
+  });
+
+  test("each new verb refuses a document written under another verb's schema", () => {
+    for (const contract of NEW_CONTRACTS) {
+      const result = decode(contract, output({ stdout: success("continuo.some.other/1", {}) }));
+      expect(kindOf(result)).toBe("protocolRefusal");
+    }
+  });
+
+  test("each new verb relays continuo's refusal envelope as a refusal", () => {
+    for (const contract of NEW_CONTRACTS) {
+      const result = decode(
+        contract,
+        output({
+          status: 2,
+          stderr: refusal(contract.schema, "InadmissibleTransitionRefused", "not from here"),
+        }),
+      );
+      expect(kindOf(result)).toBe("refused");
+    }
+  });
+
+  test("a missing boolean is a defect rather than a silent false", () => {
+    // The failure this guards is the quiet one: `closed` absent, read as
+    // `undefined`, treated as falsy, and a walk that reports an open gate on a
+    // gate continuo just closed.
+    const result = decode(
+      GATE_ACK,
+      output({
+        stdout: success(GATE_ACK.schema, {
+          message_id: "relay/g1/forwarded",
+          gate_id: "g1",
+          to_stage: "forwarded",
+          acked: true,
+          cancelled: false,
+          advanced: true,
+        }),
+      }),
+    );
+    expect(kindOf(result)).toBe("invokerDefect");
   });
 });

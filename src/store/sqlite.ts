@@ -15,11 +15,23 @@
  * thing that would falsify it, and this module is the whole of what such a swap
  * would touch. That is the point of the boundary.
  *
- * The import is **still type-position only**, and that is a property rather
- * than a leftover: the connection is handed in, so opening it -- and therefore
- * knowing where the file lives -- belongs to the composition root in
- * `src/access/conductor.ts` (D-0019 rule 2) rather than to the store. Nothing
- * here loads the experimental module on an `import` of the barrel.
+ * **The import is a value import, and that reversed a property this paragraph
+ * used to state.** It was type-position only, so that an `import` of the barrel
+ * never loaded the experimental module; the connection was handed in, and
+ * knowing where the database file lives belonged to the composition root
+ * (D-0019 rule 2). {@link openIterationStore} is what changed it, because the
+ * operator's command line has to open a database by path and
+ * `test/architecture/import-boundaries.test.ts` asserts *equality* on the set
+ * of modules naming a SQLite driver -- so a second opener would not be a second
+ * module, it would be a failing test. The opener therefore comes here, to the
+ * module that already owns the driver, and the cost is paid in the open:
+ * importing the barrel now loads `node:sqlite`, and Node prints one
+ * `ExperimentalWarning` per process that does. That cost is recorded in
+ * DECISIONS.md D-0024 rule 5 rather than left to be discovered in a terminal.
+ *
+ * {@link iterationStore} still takes a connection, and every existing caller
+ * still hands one in: the opener is an addition beside it, not a replacement,
+ * which is what keeps the suite able to pass `:memory:` and a fake alike.
  *
  * **What D-0019 rule 10 made this file do.** The `read`/`write` pair it used to
  * declare could not express durable single-flight: a write that takes a whole
@@ -34,7 +46,7 @@
  * {@link IterationStore.read} and {@link IterationStore.settle} for why a store
  * that threw on such a row closed every path out of it.
  */
-import type { DatabaseSync } from "node:sqlite";
+import { DatabaseSync } from "node:sqlite";
 
 import { canonicalJson, planDigest } from "./plan.js";
 import {
@@ -359,6 +371,25 @@ const SELECT_COLUMNS = [
  * configured: journal mode, busy timeout and file location are the composition
  * root's, because they are deployment facts and this module is a schema.
  */
+/**
+ * Open the durable store at a path.
+ *
+ * The one function in rondo that turns a filename into a database, and it is
+ * here rather than in a composition root because the boundary test asserts
+ * equality on the set of modules that name a SQLite driver (see this module's
+ * header): an opener anywhere else would be a second owner, and the answer to
+ * "where does the operator's database get opened" would have been a failing
+ * architecture test rather than a design choice.
+ *
+ * The file is created if it is not there, and {@link iterationStore} applies
+ * the schema on every open, so a first run needs no separate provisioning step
+ * -- which is the whole reason the operator's surface can name a path that does
+ * not exist yet and simply work.
+ */
+export function openIterationStore(databasePath: string): IterationStore {
+  return iterationStore(new DatabaseSync(databasePath));
+}
+
 export function iterationStore(connection: DatabaseSync): IterationStore {
   connection.exec(SCHEMA);
 

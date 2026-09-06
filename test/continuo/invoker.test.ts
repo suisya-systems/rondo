@@ -20,9 +20,15 @@
 import { describe, expect, test } from "vitest";
 
 import {
+  ackGate,
   admitRun,
+  answerGate,
+  closeRun,
+  deliverGate,
   type PerformLapRequest,
   performLap,
+  presentGate,
+  RUN_CLOSE_OUTCOMES,
   SERVED_ENDPOINT_RECIPIENTS,
   showGate,
   type VerifiedContinuo,
@@ -314,5 +320,121 @@ describe("gate show", () => {
   test("a relative database path is refused", async () => {
     const result = await showGate(unissued, { db: "cp.sqlite3", gateId: "g1" });
     expect(defectReason(result)).toContain("db");
+  });
+});
+
+/**
+ * The five verbs D-0025 adds, checked where this file checks every other one:
+ * at the argument boundary, before a process exists.
+ *
+ * `REACHED_RUN` is the far marker. A case asserting a refusal also asserts the
+ * absence of that marker, which is what distinguishes "rondo refused this" from
+ * "rondo built argv and continuo would have refused it" -- the whole point of
+ * validating here (D-0015 exception 2).
+ */
+describe("the gate walk's verbs, at the argument boundary", () => {
+  test("gate present refuses a relative db and an option-shaped gate id", async () => {
+    const relative = await presentGate(unissued, { db: "cp.sqlite3", gateId: "g1" });
+    expect(defectReason(relative)).toContain("db");
+    expect(defectReason(relative)).not.toContain(REACHED_RUN);
+
+    const optionShaped = await presentGate(unissued, {
+      db: "/srv/rondo/cp.sqlite3",
+      gateId: "--db",
+    });
+    expect(defectReason(optionShaped)).toContain("gateId");
+    expect(defectReason(optionShaped)).not.toContain(REACHED_RUN);
+  });
+
+  test("gate deliver refuses a relative destination directory", async () => {
+    const result = await deliverGate(unissued, {
+      db: "/srv/rondo/cp.sqlite3",
+      destinationDir: "dropbox",
+      holder: "rondo-operator",
+    });
+    expect(defectReason(result)).toContain("destinationDir");
+    expect(defectReason(result)).not.toContain(REACHED_RUN);
+  });
+
+  test("gate deliver with every field absolute reaches run", async () => {
+    const result = await deliverGate(unissued, {
+      db: "/srv/rondo/cp.sqlite3",
+      destinationDir: "/srv/rondo/dropbox",
+      holder: "rondo-operator",
+    });
+    expect(defectReason(result)).toContain(REACHED_RUN);
+  });
+
+  test("gate ack accepts a path-shaped relay id and refuses an option-shaped one", async () => {
+    // A relay id is `relay/<gate id>/<stage>`. `requireIdentifier` refuses
+    // option-shaped values and whitespace; a slash is neither, so the stronger
+    // check costs this surface nothing.
+    const ok = await ackGate(unissued, {
+      db: "/srv/rondo/cp.sqlite3",
+      messageId: "relay/g1/presented",
+      actorId: "happy_ryo",
+    });
+    expect(defectReason(ok)).toContain(REACHED_RUN);
+
+    const bad = await ackGate(unissued, {
+      db: "/srv/rondo/cp.sqlite3",
+      messageId: "--gate-id",
+      actorId: "happy_ryo",
+    });
+    expect(defectReason(bad)).toContain("messageId");
+    expect(defectReason(bad)).not.toContain(REACHED_RUN);
+  });
+
+  test("gate answer refuses an empty body", async () => {
+    const result = await answerGate(unissued, {
+      db: "/srv/rondo/cp.sqlite3",
+      gateId: "g1",
+      body: "",
+      actorId: "happy_ryo",
+    });
+    expect(defectReason(result)).toContain("body");
+    expect(defectReason(result)).not.toContain(REACHED_RUN);
+  });
+
+  test("gate answer carries a dash-leading body through, because --body is attached", async () => {
+    // The case the attached form exists for: as a separate token this body
+    // would read as a flag. It reaches `run`, which is as far as this file can
+    // see -- the bytes themselves are asserted where the walk is tested.
+    const result = await answerGate(unissued, {
+      db: "/srv/rondo/cp.sqlite3",
+      gateId: "g1",
+      body: "--approve, with reservations",
+      actorId: "happy_ryo",
+    });
+    expect(defectReason(result)).toContain(REACHED_RUN);
+  });
+
+  test("run close refuses an outcome outside continuo's terminal set", async () => {
+    const result = await closeRun(unissued, {
+      db: "/srv/rondo/cp.sqlite3",
+      runId: "r1",
+      outcome: "merged",
+      actorId: "happy_ryo",
+    });
+    const reason = defectReason(result);
+    expect(reason).toContain("outcome");
+    // The refusal names the three that work, so the operator's next command is
+    // in the message rather than in continuo's --help.
+    for (const outcome of RUN_CLOSE_OUTCOMES) {
+      expect(reason).toContain(outcome);
+    }
+    expect(reason).not.toContain(REACHED_RUN);
+  });
+
+  test("run close reaches run for each outcome continuo accepts", async () => {
+    for (const outcome of RUN_CLOSE_OUTCOMES) {
+      const result = await closeRun(unissued, {
+        db: "/srv/rondo/cp.sqlite3",
+        runId: "r1",
+        outcome,
+        actorId: "happy_ryo",
+      });
+      expect(defectReason(result)).toContain(REACHED_RUN);
+    }
   });
 });

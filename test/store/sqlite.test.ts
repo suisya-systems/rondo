@@ -30,7 +30,7 @@ import { expect, test } from "vitest";
 import { planDigest } from "../../src/store/plan.js";
 import type { JsonRecord } from "../../src/store/records.js";
 import { TERMINAL_STATUSES } from "../../src/store/records.js";
-import { iterationStore } from "../../src/store/sqlite.js";
+import { iterationStore, openIterationStore } from "../../src/store/sqlite.js";
 
 /**
  * A plan payload of the shape `src/refrain/plan.ts` renders.
@@ -463,4 +463,39 @@ test("reserving the same iteration id twice is a defect, not an occupied conduct
   expect(outcome.reason).toContain("already exists");
   expect(outcome.reason).not.toMatch(/UNIQUE constraint/);
   expect(outcome.reason).not.toMatch(/iteration\.id/);
+});
+
+/**
+ * `openIterationStore` opens by path and applies the schema on the way in.
+ *
+ * The one behaviour the operator's command line rests on that `iterationStore`
+ * cannot demonstrate: that a *path* -- not a connection somebody else opened --
+ * becomes a usable store, schema and all, without a provisioning step. It is
+ * written against `:memory:` rather than a temporary file because what is under
+ * test is the value import and the `exec(SCHEMA)` behind it, and neither is a
+ * property of the filesystem; a file would add a cleanup path and test Node's
+ * `open(2)` rather than rondo's.
+ */
+test("openIterationStore opens a store by path, schema applied", async () => {
+  const store = openIterationStore(":memory:");
+
+  const reserved = await store.reserve({
+    id: "iter-open",
+    request: "do the thing",
+    plan: somePlan(),
+    nowMs: 1_000,
+  });
+  expect(reserved.kind).toBe("reserved");
+
+  const read = await store.read("iter-open");
+  expect(read.kind).toBe("read");
+  if (read.kind !== "read") {
+    return;
+  }
+  expect(read.record.status).toBe("planned");
+  // The plan's bytes, back out of a database this function opened -- which is
+  // the whole claim: the schema was applied on the way in, and nothing else had
+  // to be done to the path first.
+  expect(read.record.plan["run_id"]).toBe("r-0001");
+  expect(read.record.request).toBe("do the thing");
 });

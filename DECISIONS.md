@@ -59,6 +59,8 @@ C-NN`, so the spaces can never be read as one.
 | D-0019 | The first working conductor loop: a pure planner, an interpreter over injected ports, a durable single-flight store, and a suspend at the open gate | accepted |
 | D-0020 | The operating surface's rondo-owned rows: gate panes first, the OIDC subject as `--actor-id`, LAN-first, and rondo's store as the home of the delegation record and the operator conversation | accepted |
 | D-0021 | The pin moves to continuo `603843b`: a third explicit budget for the identity read-back, and the model tier priced into `lap perform --model` | accepted |
+| D-0024 | rondo ships a binary: an emitting build beside the type-check, a launcher, and the CI cell that runs it | accepted |
+| D-0025 | The lap-1 operating surface is a command line: `start`, `answer`, `publish`, `abandon`, with the plan file as the whole of configuration | accepted |
 
 ---
 
@@ -2979,3 +2981,177 @@ since made the size an argument.
   there is none; the first time there is, the missing migration path is the thing to decide.
 - Any measurement above failing to reproduce. Toolchain `node v22.17.0`; continuo at
   `603843b7c0e91136bc7f7e5c9f91640f7bb970c9`; cadenza as `cadenza.pin.json` names it.
+
+---
+
+## D-0024 — rondo ships a binary: an emitting build beside the type-check, a launcher, and the CI cell that runs it
+
+**Status:** accepted (2026-09-06, rondo's human gate — the operator's approval to build the minimal
+operating loop)
+
+`D-0002` decided that rondo emits nothing, and named the condition under which that would change:
+"The day rondo ships a binary is the day that entry gains a build." This is that day. Nothing else
+in `D-0002` moves — ESM, NodeNext, the explicit `.js` suffixes and the strictness beyond `strict`
+are inherited unchanged, so the executable is compiled under exactly the settings the suite is
+type-checked against.
+
+### Decision
+
+1. **`tsconfig.build.json` extends `tsconfig.json`** with `noEmit: false`, `rootDir: "src"`,
+   `outDir: "dist"`, and `include: ["src"]`. A second file rather than a flag on the first, because
+   `tsconfig.json`'s `include` covers `test`, `scripts` and `vitest.config.ts`: flipping `noEmit`
+   there would emit `dist/test/**` beside the tree rondo ships.
+2. **`dist/` is at the repository root and cannot move.** cadenza is a `file:vendor/*.tgz`
+   dependency, so a tree emitted outside the repository resolves neither it nor `@types/node`. It
+   stays gitignored and unpublished, and the package stays `private: true`.
+3. **The bin is `bin/rondo.mjs`, outside `src/`, and it reaches `dist/access/cli.js` through a
+   dynamic import.** Measured: knip reads `package.json`'s `bin` as an entry point regardless of its
+   own globs, and a *static* import into a gitignored directory makes it report an unresolved import
+   and exit 1 — and `npm run knip` is a gate. A computed specifier is one knip does not follow. The
+   `try` around it is the same choice seen from the operator's side: an unbuilt tree becomes a
+   sentence naming the command that fixes it rather than a module-resolution stack.
+4. **`D-0002`'s objection was "a build that nothing checks", and this is the check.**
+   `npm run build` is **first** in `npm run verify`, so a stale `dist/` cannot survive a green run,
+   and it is a step in CI's `double-green` job, so it runs in all four matrix cells — which is where
+   the Windows path handling and the Node 22/24 split are observed.
+5. **`src/store/sqlite.ts`'s `node:sqlite` import becomes a value import**, and that module gains
+   `openIterationStore(path)`. This is recorded because it *reverses a stated property of that
+   file*: the import was type-position only, so importing the barrel never loaded the experimental
+   driver. The operator's command line has to open a database by path, and
+   `test/architecture/import-boundaries.test.ts` asserts **equality** on the set of modules naming a
+   SQLite driver — so a second opener would not be a second module, it would be a failing test. The
+   cost is one `ExperimentalWarning` per process that imports the barrel, and it is named here
+   rather than left to be discovered in a terminal.
+
+### What was measured
+
+- `tsc -p tsconfig.build.json` emits the tree in well under a second, and the emitted
+  `dist/access/cli.js` runs under `node` on `v22.17.0`.
+- `node:sqlite` needs **no** `--experimental-sqlite` flag on the engines floor; it prints one
+  warning to stderr. The `--experimental-sqlite` in the older dogfood notes is stale.
+- Type stripping was considered and rejected. It needs `--experimental-strip-types` below Node
+  22.18 against an engines floor of 22.14.0, has no portable shebang across the Windows cell, and
+  would be a second module-resolution implementation beside the one `D-0002` chose.
+
+### What would falsify it
+
+- The build ceasing to run in any matrix cell, which would restore `D-0002`'s objection exactly.
+- rondo becoming a published package, which makes `files`, `exports` and a declaration build
+  decisions this entry did not take.
+- `dist/` being committed.
+- Type stripping becoming portable across the whole engines range, which would make the launcher and
+  the second config removable rather than merely unnecessary.
+
+---
+
+## D-0025 — The lap-1 operating surface is a command line: `start`, `answer`, `publish`, `abandon`, with the plan file as the whole of configuration
+
+**Status:** accepted (2026-09-06, rondo's human gate)
+
+Everything rondo needed to walk one request existed and nothing could reach it. `D-0019` built the
+conductor; `D-0021` moved the pin so a lap completes; the lap-1 dogfood
+([`docs/operations/lap-1-dogfood.md`](docs/operations/lap-1-dogfood.md)) walked one end to end — by
+writing a throwaway `tsconfig`, compiling by hand, driving the composition root from a thirty-line
+`drive.mjs`, and typing six continuo verbs in order with ids copied between them. This entry is the
+surface that replaces all of that, and it is deliberately the smallest one that closes the loop.
+
+### Decision
+
+1. **One executable, four subcommands** — `start`, `answer`, `publish`, `abandon` — in
+   `src/access/cli.ts`. `abandon` is an escape hatch rather than a feature, and it is here because
+   without it one killed lap holds the single-flight lock with nothing able to release it, which is
+   the exact defect this work exists to remove. `status` and a `withdrawn` close are deliberately
+   absent; `GATE_CLOSE` stays defined and undriven, as it was.
+2. **`src/access/cli.ts` is the operating surface `D-0009` and `D-0013` name**, and it — never the
+   conductor — drives `gate present`, `deliver`, `ack` and `answer`. `D-0019` rule 5 remains true
+   *of the conductor*, which is what it was about.
+3. **A gate body is carried byte for byte.** `--body` reaches continuo as the attached
+   `--body=<bytes>` with no trim, reflow, template or summary (`D-0009` part 3). Attached because a
+   separate token beginning with a dash reads as a flag and a body spelled exactly `--json` would be
+   deleted by the invoker's de-duplication of that flag. The only value refused is the empty string.
+   ASCII escaping governs what rondo **prints**, never what it **sends**.
+4. **The approver is an allowlist of size one, checked before any verb runs.** `--actor-id` must
+   equal `RONDO_APPROVER`. This keeps the half of `D-0020` rule 2 that a command line can keep and
+   is honest that it cannot keep the other: there is no OIDC subject here, so the identity is
+   asserted by whoever types it. A stated reduction scoped to lap 1, whose end is the adapter
+   `D-0020` already specifies. `D-0020` is **not** superseded — no HTTP binding, gate pane or
+   conversation store is built.
+5. **rondo gains no configuration layer** (`D-0019` rule 3 holds). The plan file **is**
+   `planPayload`'s JSON and `readPlan` is its only reader: no defaults, no templating, no merging,
+   no inference. The CLI applies at most four per-run overrides (`--run-id`, `--topic-branch`,
+   `--workspace`, `--prompt`) and rewrites `parties.grantee` to the effective run id, which is the
+   only value the planner permits it to have. Because the format is `planPayload`'s inverse, **the
+   `plan` column of any past iteration row is a valid plan file**. No allocator is added: the
+   `(run id, topic branch, workspace)` triple is typed by the operator, so `D-0012`'s blocker is
+   untouched. Two values are rondo's own and are named as such — `START_POLICY`, because
+   `CONSERVATIVE_POLICY`'s `ask_every_iteration` is refused before a row exists and a command called
+   `start` must be able to start; and the iteration id, defaulting to the run id, which is a copy of
+   an identifier the operator already chose rather than a mint.
+6. **`publish` runs the push and opens the pull request, and never merges.** This is the one place
+   this entry touches `D-0010`, and it does not overturn it. `D-0010` settles **where the authority
+   to publish sits** — with the operator, not with rondo — and that is unchanged: nothing here runs
+   unless a person typed `publish`, no other command in the tree reaches the module that can start a
+   process, there is no scheduler, retry or automatic path into it, and the credential used is the
+   operator's own `git` and `gh` configuration, which rondo neither stores nor reads. What was
+   settled when this entry was written is that **a button an operator presses is not the same act as
+   rondo publishing on its own**: the authority stays with the person, and the command is the
+   keyboard rather than the authority. Merging is absent in both senses. `run close` is driven only
+   from here, and only after the other two legs succeeded, because it is a claim that they did.
+
+   **A closed iteration is not an approved one, and `publish` checks which it has.** `withdrawn`,
+   `expired` and `unanswerable` each close a gate and therefore close the iteration, and none of
+   them is a person saying yes; only `answered_and_forwarded` records an answer carried through to
+   its forward. Publishing on any of the other three would push the work and open a pull request
+   whose body states that a human approved it — rondo making a false statement about somebody else,
+   which is `D-0009`'s concern seen from the other end.
+
+   **A publish that fails partway leaves the operator a command, not a puzzle.** rondo persists
+   nothing about how far it got — that would be a durable record of somebody else's state — so a
+   failed pull-request leg says that the push is done and prints the one remaining leg. Re-running
+   `publish` is safe for the push and refused for a pull request that already exists; that
+   asymmetry is stated in the runbook rather than worked around here.
+7. **The spawn that publishes is granted to `src/access/forge.ts` alone**, not to the command line
+   and not to the layer. That is what makes rule 6 a property rather than a promise:
+   `src/access/cli.ts` — the module that reads argv, reads the plan and drives every continuo verb —
+   has no `node:child_process` binding and cannot acquire one without an edit that
+   `test/architecture/import-boundaries.test.ts` fails. Three planted violations hold that open.
+8. **rondo consumes four more gate verbs and one run verb.** `GATE_PRESENT`, `GATE_DELIVER`,
+   `GATE_ACK`, `GATE_ANSWER` and `RUN_CLOSE`, with schema ids read off continuo's own source at the
+   pinned revision `38c667b5126fdfdc0465e4a422e88b20a8b53044`. `GATE_SHOW` additionally decodes
+   `rationale` and `options` — **both plain strings**, `options` being the JSON array *text* the row
+   carries, which rondo relays and never parses. That correction is load-bearing: the previous test
+   fixture guessed `rationale: null, options: []` and was wrong on both counts, and passed only
+   because no decoder read either field. `gate reconcile` is never driven; it is the one verb with
+   no `--json`, and its prose must not be parsed.
+9. **The walk resumes from the stage continuo reports and never replays from the start**, and every
+   message id it uses is read out of the payload that produced it rather than composed from the gate
+   id. A walk that always began at `present` would be refused `InadmissibleTransitionRefused`
+   exactly when a person most needs a retry to work, and a computed id is a guess that happens to be
+   right until it is not.
+
+### What was measured, and how
+
+Walked on 2026-09-06 against the pinned continuo with a real `claude -p` worker
+([`docs/operations/rondo-cli.md`](docs/operations/rondo-cli.md) section 8):
+
+- **`start`: 22.8 s**, one command, from a 32-field plan file to a gate open at `received`. The
+  worker did the work asked of it — the commit really appends the line.
+- **`answer`: 1.3 s**, one command, driving all six verbs and closing the gate
+  `answered_and_forwarded`, with the iteration reaching `closed` and the lock released.
+- **`publish`: `--dry-run` computes all three legs correctly from the stored plan.** The push and
+  the pull request were not executed in that walk, because the environment it ran in blocks both by
+  design — which is the same boundary rule 6 is built around. They are covered by unit tests, and
+  the first operator to run the command without `--dry-run` is what closes the gap.
+- Node's `parseArgs` refuses a dash-leading value passed with a space and its own message names the
+  form that works, so `--body=` is what the help text spells.
+
+### What would falsify it
+
+- The web surface of `D-0020` arriving, which ends rule 4's reduction.
+- rondo acquiring a push credential of its own, or a spawn grant reaching `src/access/cli.ts` — at
+  which point rule 6 would become a supersession of `D-0010` rather than a reading of it, and would
+  need `D-0010`'s own gate.
+- A parallelism entry landing, which replaces rule 5's operator-typed triple with an allocator.
+- continuo's gate verb set, its `/1` schemas, or the type of `gate show`'s `options` moving.
+- The plan file needing a field `planPayload` does not carry, which is where rule 5's "no
+  configuration layer" would stop being tenable.
