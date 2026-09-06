@@ -62,6 +62,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0024 | rondo ships a binary: an emitting build beside the type-check, a launcher, and the CI cell that runs it | accepted |
 | D-0025 | The lap-1 operating surface is a command line: `start`, `answer`, `publish`, `abandon`, with the plan file as the whole of configuration | accepted |
 | D-0026 | The pull request `publish` opens is written for a person: the lap's own commit subjects are the summary, and the request is quoted input | accepted |
+| D-0023 | The identifier allocator and the capacity ledger: rondo mints the triple, `awaiting_human` stops occupying capacity, and the single-flight index becomes a counted bound | accepted |
 | D-0027 | "Revise" at the gate becomes a second lap: fresh identifiers, the predecessor's branch as the base, and the instruction carried into the prompt | accepted |
 
 ---
@@ -3450,3 +3451,266 @@ Four laps at roughly $0.17 each is the whole cost of the evidence in this entry.
   unnecessary — a stacked pull request would then be expressible.
 - **A revision needing to change a plan field the instruction cannot express**, which is where
   rule 4's "everything else verbatim" stops being tenable.
+---
+
+## D-0023 — The identifier allocator and the capacity ledger: rondo mints the triple, `awaiting_human` stops occupying capacity, and the single-flight index becomes a counted bound
+
+**Status:** accepted (2026-09-06, rondo's human gate)
+
+`D-0012` decided single-flight for lap 1 and named what a second admission waits on. Two of its
+three conditions are rondo's: **an allocator** for the `(run id, topic branch, workspace)` triple,
+because continuo's verbs refuse on existence and nothing mints a fresh one; and **a bound somebody
+sets and something enforces**, because a lease answers "who is writing", not "how many may run".
+`D-0019` rule 10 then wrote the constant one into the schema and said the route from one to N is
+"a capacity ledger, not a wider index".
+
+What this entry adds to those two sentences is the finding that **they are not independent**. The
+ledger's central question — whether an iteration waiting on a human still consumes capacity — can
+only be answered *yes it may be released* if the allocator exists, because a released slot is safe
+only when the next iteration cannot be handed the suspended one's identifiers. The allocator is not
+a prerequisite the ledger waits on; it is the thing that makes the ledger's interesting answer legal.
+So this is one entry, not two, and a gate that took half of it would have taken the half that does
+not work alone.
+
+The design is [`docs/design/parallel-admission.md`](docs/design/parallel-admission.md), whose rows
+`N-1` … `N-28` this entry takes. It is paired with continuo's `D-1104`, whose own design fixes the
+boundary in a line: continuo owns partitioning, fencing and the two-run proof; rondo owns
+allocation, the capacity bound and suspend accounting.
+
+**What this delivers today, stated plainly, because the headline is easy to overstate.** It does not
+make two laps run at once, and it does not shorten any human wait. Of a measured 125.4 s iteration
+lifetime, continuo's delivery lease was held for 20.9 s and rondo's lock for the remaining 104.5 s,
+across an unbounded wait on a person. **This entry is about that 83%.** What is parallelised is the
+waiting, not the working.
+
+### Decision
+
+1. **The allocator and the ledger are one decision**, for the reason above: releasing capacity at
+   `awaiting_human` is safe only because something both mints and remembers identifiers.
+2. **`awaiting_human` and `withdrawal_requested` do not occupy capacity.** The criterion is the
+   design's own, already written in `src/store/records.ts` and restated by `D-0019` rule 11: a
+   status keeps the lock according to **whether anything of the iteration might still be running**.
+   At those two, nothing is — the `lap perform` process has exited, continuo's delivery lease was
+   released when it did, and no fenced child survives it. **`stalled` does occupy, fail-closed**,
+   because it means *unknown*, and the honest answer about a row nobody understands is that
+   something may still be running. The set lives in one place, `SUSPENDED_STATUSES`, and the
+   generated `occupying` column and the bound both read it.
+3. **The allocator derives the triple from the iteration id** by a pure, total, invertible
+   function — invertible over the closed alphabet rule 26 imposes, and not over the unconstrained
+   string `admit()` used to take. It does **not** pre-flight continuo, git or the filesystem:
+   three I/O reads on the admission path buy an earlier refusal and no guarantee, because
+   continuo's and git's own checks remain the authority and the check-then-use window stays open
+   behind them.
+4. **Collisions rondo would cause become impossible; collisions rondo did not cause are refused
+   where they are refused today.** The first class is made impossible atomically, by derivation
+   plus a durable claim. The second — a person who created `rondo/iter-005` by hand — is still
+   discovered inside `lap perform`, after continuo's run row exists, and rondo answers it in its
+   own words naming abandon-and-readmit under a different iteration id, rather than relaying
+   continuo's sentence about branches. It does not loop: a retry that kept minting would be a retry
+   against a namespace rondo does not own.
+5. **The triple is stored on the `iteration` row**, written by `reserve()` in the same
+   `BEGIN IMMEDIATE` as the row itself, because a claim committed after the row is a claim with a
+   window in it. Not a fourth table: one row per iteration keyed by the iteration is a table shaped
+   like a column. `IterationFields` **excludes** the three, so a transition that wrote them again
+   is a type error — two authorities for one fact is how a row moves its own claim off a name it
+   was already admitted under.
+6. **`leaseClaimantId` is not required to be fresh but is derived anyway.** Nothing measured
+   requires a per-run claimant. It is the holder continuo records in its lease audit trail, and a
+   constant holder across N concurrent laps makes that trail unable to say which lap wrote — a cost
+   that falls due exactly when N stops being one.
+7. **Uniqueness is three partial unique indexes over a generated `holds_identifiers` column**,
+   which is null exactly when a row is **terminal and unspent**, with `identifiers_spent` set by the
+   single transition into `admitting` and by nothing else. So a live row holds its triple, a
+   terminal **spent** row holds it for ever — continuo's run exists, the branch exists, the worktree
+   exists — and a terminal **unspent** row releases it. This is `D-0019` rule 10's shape B applied a
+   second time.
+8. **Two bounds, not one.** `maxOccupying` counts the `occupying` column of rule 2;
+   `maxLive` counts every non-terminal row. **The bound and the column are one definition**: a
+   `maxOccupying` defined over `admitting`/`admitted`/`performing` alone would let two `planned`
+   rows both pass a bound of one and then both perform, and would drop `stalled` out of rule 2's
+   fail-closed rule. `maxLive >= maxOccupying` is **validated** rather than assumed, because the
+   other way round is not merely tight but unsatisfiable. The single-bound alternative was
+   available and is expressible under this one by setting the two equal; the converse is not, and
+   that asymmetry is the whole argument.
+9. **`runId`, `topicBranch` and `workspace` leave `RunPlan`**, replaced by one `workspaceRoot`.
+   `parties.grantee` is filled by the allocator, and the equality check against the run id **stays**
+   as an assertion about rondo's own two writes — placed where it can never fail silently rather
+   than deleted as unreachable. **This fires the first half of `D-0019` rule 3 and leaves the second
+   half untouched**: rondo gains an allocator and still gains no defaults for a fence's geometry.
+10. **The ledger is a counting predicate inside `reserve()`'s own `BEGIN IMMEDIATE`**, not a wider
+    index and not a slot table. Both counts and the insert are in one transaction, because a bound
+    checked in one transaction and enforced in another is the deferred-transaction window
+    `src/store/sqlite.ts` already rejects one level up.
+11. **What the counted bound gives up is stated rather than argued away.** The invariant stops being
+    the database's. Under `iteration_one_live` a row inserted from outside rondo's code could not
+    violate single-flight; under a counted bound it can, silently. `D-0019` rule 10 bought
+    "making 'at most one non-terminal iteration' the **database's** invariant", and that is what is
+    being spent. The slot table would have kept it, at the cost of making the bound a row count
+    whose change is a data migration under a lock. This is recorded as a test, not only as prose:
+    `test/store/ledger.test.ts` demonstrates the out-of-band insert going unrefused.
+12. **The bound is a `HostPolicy`, read once where the store is opened, never on `LoopPolicy`.**
+    `admit()` takes a policy per call, so a bound placed there is a bound each request states about
+    the whole host, and "the bound" becomes whichever caller arrived. **`maxIterations` is not this
+    number**: it bounds attempts of one request and is compared against a fresh iteration's zero
+    attempts, where these bound concurrent requests. Different axes, different owners.
+13. **The durable, operator-editable bound is named and not taken.** A resident host that must be
+    restarted to change its own concurrency is a poor resident host, but that is `D-0020`'s
+    operating surface, and taking it here would settle a surface decision inside a scheduling one.
+14. **A capacity refusal writes a demand row** — timestamp, request, the bound in force and the
+    occupancy observed — in a table of its own, outside the iteration table and outside any lock, so
+    that `D-0019` rule 9's "no row, no lock" still holds and a refusal still costs about a
+    millisecond. It is the **demand** measurement `D-0012`'s last falsifier asks for and that no
+    other artefact in the tree can produce: it is the only way to tell a bound that is *binding*
+    from one that is merely *set*, which is the difference between raising it on evidence and
+    raising it because somebody complained.
+15. **The sites that change together are a closed list**, and it includes four that carry no
+    `rondo#8` comment because they are types and API shapes rather than DDL: `readLiveRow`'s
+    single-row read, `readLive()`'s singular answer, `occupied`'s single `liveIterationId`, and
+    `isLiveIndexViolation`'s match on the index name. `readLive()` becomes plural.
+    **`settle()`'s `live IS NOT NULL` guard is on the list to be left alone**: it exists to refuse
+    overwriting a finished outcome, which is a question about the row's own lifecycle, and moving it
+    to `occupying` would let `abandon()` overwrite a `closed` row.
+16. **`inTransaction`'s body may not be `async`, enforced rather than assumed**, twice: the store
+    refuses a thenable return at runtime, and an AST sweep in
+    `test/architecture/import-boundaries.test.ts` refuses an `async` body at the moment it is
+    written. The type `<T>(body: () => T) => T` admits a promise-returning body, `COMMIT` would run
+    before the awaited work, and the failure is invisible under one in-flight iteration and a torn
+    transaction above one.
+17. **`maxOccupying` may exceed one only after a `continuo D-1104` that contains the
+    holder-identity half, not merely the schema half.** continuo serialises `lap perform` on one
+    global delivery resource; until that changes, a second concurrent lap is refused there rather
+    than here, and raising this number would make rondo admit work continuo will refuse. It is left
+    at **1**, settable, so that the day it lands is a policy edit and not a code change.
+18. **A shared endpoint destination directory across concurrent laps rests on `D-1104`'s per-run
+    fence keys**, not on `continuo D-0085` alone: the dropbox's fence file is keyed by the lease
+    resource. Recorded as a dependency; unreachable while `maxOccupying` is one, which is why it is
+    recorded rather than solved.
+19. **The loop's back edge (`iterate`) is not brought back by this entry**, though
+    `src/refrain/loop.ts` says it "returns with the allocator". That sentence is older than this
+    decision and is now wrong: a retry edge is a question about `maxIterations`' dormant
+    post-admission meaning, and it goes to rondo's gate as its own entry.
+20. **rondo does not retry a `LeaseHeld` refusal.** continuo puts an error class on the wire and
+    rondo decodes it, but the conductor discards it at the boundary and rondo's own protocol module
+    says the class "is a hint, not a taxonomy". Building a retry on a hint continuo declines to
+    promise is `D-0015` rule 7's failure mode with an extra step. The cost is recorded: the teardown
+    path leaves a delivery lease standing for up to its 60 s TTL, and under a raised bound two
+    admissions land inside that window more often. A promised refusal class is **asked of continuo's
+    gate**, not built here.
+21. **The ordering case pins the absence of a promise.** Nothing in the tree queues: `admit()`
+    refuses immediately and returns. What is asserted is what is promised — two admissions racing at
+    the bound produce exactly one reservation and exactly one refusal, never two of either — and a
+    second case records that **no ordering is promised and starvation is possible**, so a later
+    reader finds a decision rather than a gap. A durable queue is `D-0020`'s.
+22. **Every capacity case carries an observed-red control** — the same call with the bound one
+    higher reserves — without which the group passes against a `reserve()` that refuses everything.
+    It carries **one sub-case per non-terminal status**, because the bound's status set is where
+    this design was wrong once.
+23. **The bound is an admission control, not a conservation law.** It is read in `reserve()` and
+    nowhere else. `stall()` writes `stalled` from any status and `resume()` reaches it from
+    `awaiting_human`, so a suspended row may re-enter the occupying set without a reservation and
+    occupancy may momentarily read 2 of 1. **This is permitted rather than refused**: refusing the
+    transition would leave a row at `awaiting_human` promising a gate that is not there, which is
+    the state `stalled` exists to avoid. The excess cannot grow, because `reserve()` already refuses
+    at the bound, and the refusal says `occupancy > bound` in words that do not read as corruption.
+24. **The iteration id gains a closed alphabet, `^[a-z][a-z0-9_-]{0,63}$`, checked in `admit()`
+    before `reserve()`** — the same shape `D-0019` rule 12 holds cadenza's role names to, so rondo
+    has one identifier shape rather than two. Without it the derivation is neither contained nor
+    injective: a workspace can escape its root while still passing the absoluteness check, and two
+    ids can name one directory. **Recorded as a reduction**: ids legal before this entry are illegal
+    after it, and every id in the tree and the dogfood record already conforms.
+25. **The derived workspace component is prefixed `iter-`** rather than deny-listing Windows device
+    names. `con`, `nul`, `aux`, `prn`, `com1`..`com9` and `lpt1`..`lpt9` all match the alphabet and
+    are unusable as path components on `windows-latest`, which is a required double-green cell. A
+    prefix removes the class where a denylist has edges — a reserved name with an extension, a
+    trailing dot or space — and it makes the three derived values consistent, since the run id and
+    branch already carried prefixes and the workspace was the only bare one.
+26. **rondo gains a schema migration, because it had none and now needs one.**
+    `CREATE TABLE IF NOT EXISTS` is a no-op against a table that already exists, whatever its
+    columns, so no DDL change since `D-0019` would have reached an existing database — a gap nobody
+    had stepped in because no column had ever been added. The shape taken is the small one: a
+    declarative list of columns, a diff against the table, and an `ALTER TABLE ADD COLUMN` for each
+    missing one. **Versioned migration files were considered and rejected** — continuo carries that
+    machinery and is right to, but rondo's store is one module over one table with no
+    down-migration and no branch in its history, and a version counter would be a mechanism whose
+    failure modes exceed the thing it guards. **It is a reversible choice**: the moment a second
+    table needs a coordinated change, this becomes the wrong shape.
+27. **Dropping `iteration_one_live` is this decision's consequence and is not a migration step.**
+    It is named separately from rule 26 because rule 11's cost is *paid* here, on existing
+    databases: the instant that index is dropped, "at most one non-terminal iteration" stops being
+    something SQLite guarantees and becomes something `reserve()`'s transaction does. Leaving it in
+    place was not an option — it refuses a second live row unconditionally, so an operator's
+    existing database would have ignored `maxLive` and behaved as though this entry had not landed.
+    **The reversibility is partial and the asymmetry is the point**: the index can be recreated, and
+    will succeed exactly while at most one non-terminal row exists. Once a host has actually
+    admitted a second live iteration, it cannot be recreated until an operator ends one of them —
+    so a downgrade to a rondo that recreates the index on open will fail to open the database.
+    **The migration is reversible; the history it enables is not.** That the code still holds the
+    bound with the index gone is asserted directly rather than assumed.
+28. **The plan payload needed a migration too, and it is a different one.** The `plan` column is
+    persisted verbatim, so adding `workspaceRoot` to `RunPlan` makes payloads written before this
+    entry fail their own re-validation — and that re-read happens on the way back *into* a live
+    iteration, so the failure would have arrived as `stalled` on rows a person was already waiting
+    on, including laps already paid for. A stored payload with no `workspace_root` therefore has one
+    derived from the stored workspace's parent, which is what it actually was. **An operator's plan
+    file is deliberately not given the same latitude**: there `workspaceRoot` is the one path a
+    person must supply, and inventing one would turn a typo into a workspace somewhere they did not
+    name. This is one field's repair and not a general mechanism; the plan column's want of a
+    versioning story is a residual below.
+
+### What this does not do
+
+- It does not make two laps run at once. `maxOccupying` stays at one until `continuo D-1104`
+  (rule 17). What it parallelises is iterations waiting on a person.
+- It does not shorten any human wait. The measured 104.5 s was one operator reading `--help` between
+  commands and is not a floor. Nothing here makes an answer arrive sooner; it stops one unanswered
+  question blocking unrelated work.
+- It does not widen `R-10` into a wider index. It removes the index and puts the invariant in a
+  transaction, and rule 11 records the cost.
+- It does not give rondo defaults for a fence's geometry (rule 9).
+- It does not add the loop's back edge (rule 19).
+- It does not decide the multi-plane topology, which issue #8 withdrew. One control plane throughout.
+
+### Residuals, with who decides
+
+| Residual | Why not here | Who decides |
+|---|---|---|
+| A durable queue with an ordering promise | needs a restart story and a surface; rule 21 pins its absence instead | `D-0020`'s operating surface, on evidence from rule 14's refusal rows |
+| The bound as a durable operator-editable row | a surface decision, not a scheduling one (rule 13) | rondo's gate, with `D-0020` |
+| The loop's back edge | it is `maxIterations`' dormant post-admission meaning, not capacity (rule 19) | rondo's gate, as its own entry |
+| A versioning story for the `plan` column | rule 28 repairs one field; the column has no general mechanism, and a second added field will meet the same wall | rondo's gate, in whichever entry adds one |
+| A promised refusal class for `LeaseHeld` | a refusal taxonomy is continuo's to offer, and rondo may not build on a hint (rule 20) | continuo's gate |
+| Two host processes against one store | not proposed and not forbidden; the counted bound is per-process where the index was per-database, which narrows what a second process would be safe to do | rondo's gate |
+| `probe-evidence.txt` overwritten by concurrent probes | continuo already treats the write as best-effort | continuo, if it stops being best-effort |
+
+### What would falsify it
+
+- **`awaiting_human` turning out to hold something after all** — a continuo resource, a rondo timer,
+  an endpoint still writing — which would make rule 2's release unsafe and collapse the design back
+  to one bound. This is the claim most exposed to being wrong, because it rests on reading one
+  `finally` in continuo and one line of the dogfood record.
+- **A second edge into the occupying set** that rule 23's reasoning does not cover — one that is not
+  fail-closed, or one that can repeat — which would turn a permitted excess into an unbounded one
+  and force the bound to be read somewhere besides `reserve()`.
+- **The closed alphabet turning out to be too narrow for a real id** — an operating surface that
+  wants uppercase, or an id rondo did not mint — which would put rule 24 back to a reversible
+  path-safe *encoding* rather than a restriction.
+- **A fourth thing the allocator must mint**, or a fifth path in `RunPlan` that is per-run inside
+  continuo in a way this entry did not open.
+- **`git worktree add` turning out not to be atomic against a concurrent creation of the same
+  branch**, which would mean rule 4's "collisions rondo did not cause" have a race in them and not
+  only a refusal.
+- **A `D-1104` that takes only the schema half** being accepted at continuo's gate, which would
+  leave `maxOccupying` at one indefinitely and make rule 8's two-bound argument the whole of what
+  this entry delivered.
+- **Refusal rows showing no demand.** If rule 14's counter runs for months at one refusal, then
+  `maxLive > 1` is a bound nobody was waiting on, and this entry's premise — that the human wait
+  blocks unrelated work — was true in shape and false in practice.
+- **The 60-second `abandon()` window turning out to be the common path** rather than the teardown
+  exception, which would make rule 20's "do not retry" a decision that loses laps rather than one
+  that avoids a hint.
+- **A second host process being introduced**, at which point rule 10's count — which serialises
+  through one connection's `BEGIN IMMEDIATE` — has to be re-argued against `SQLITE_BUSY`, which
+  `transition()` currently reports as a defect and which is a retry.
+- **rondo's ledger measuring the lap term as binding after all**, which would mean the 17% / 83%
+  split was an artefact of one operator's pace rather than a property of the work.
+

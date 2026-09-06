@@ -20,11 +20,18 @@
  * **`iterate` is gone**, and its absence is a decision rather than an
  * oversight. It named the one edge an iterative controller needs -- "failed, go
  * round again" -- and that edge does not exist in lap 1: `lap perform` cannot be
- * re-entered on an admitted run, and a second attempt needs a fresh (run id,
- * topic branch, workspace) triple that D-0012 records nothing allocates. So the
- * lap-1 loop executes each edge at most once, and a variant standing for a
- * transition nothing can take would be a promise the machine cannot keep. It
- * returns with the allocator, as that change's decision.
+ * re-entered on an admitted run. So the lap-1 loop executes each edge at most
+ * once, and a variant standing for a transition nothing can take would be a
+ * promise the machine cannot keep.
+ *
+ * **This paragraph used to end "it returns with the allocator, as that change's
+ * decision", and D-0023 is that change and did not return it.** The second
+ * half of the old reason -- that a second attempt needs a triple nothing
+ * allocates -- is now false: rondo allocates. The first half still holds, and
+ * on its own it is not enough to bring the edge back, because what a back edge
+ * actually asks is what `maxIterations` means *after* admission, where it is
+ * dormant (D-0019 rule 9). D-0023 rule 19 declines to answer that inside a
+ * scheduling decision and sends it to rondo's gate as its own entry.
  */
 import type { IterationRecord } from "../store/records.js";
 
@@ -64,6 +71,11 @@ export type Step =
  * The next step, given the state and a policy.
  *
  * **`null` is "no iteration exists yet"**, and it is where the policy is read.
+ * It is a literal `null` at the one call site rather than a lookup, and under
+ * D-0023's bound above one that is the difference between correct and wrong:
+ * "the live iteration" no longer names a row, and a reader who "fixed" the call
+ * by passing one would move the policy read after the lock -- which is the one
+ * thing D-0019 rule 9 exists to prevent.
  * That is D-0019 rule 9 and it is load-bearing rather than tidy: `nextStep`
  * under `ask_every_iteration` refuses, and a conductor that reserved first and
  * asked second would hold the single-flight lock on an iteration whose only

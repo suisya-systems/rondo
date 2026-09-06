@@ -22,13 +22,16 @@
  */
 import { DatabaseSync } from "node:sqlite";
 import { expect, test } from "vitest";
-
+import { allocate } from "../../src/refrain/allocator.js";
 import { admit } from "../../src/refrain/interpreter.js";
 import type { AdmittedPlan, RunPlan } from "../../src/refrain/plan.js";
 import { admittedPlan, planPayload, runPlan } from "../../src/refrain/plan.js";
 import type { HostPolicy, LoopPolicy } from "../../src/refrain/policy.js";
-import type { ClassificationRecord, ConductorPorts, EffectOutcome } from "../../src/refrain/ports.js";
-import { allocate } from "../../src/refrain/allocator.js";
+import type {
+  ClassificationRecord,
+  ConductorPorts,
+  EffectOutcome,
+} from "../../src/refrain/ports.js";
 import type { IterationStatus } from "../../src/store/records.js";
 import { iterationStore } from "../../src/store/sqlite.js";
 
@@ -196,10 +199,9 @@ test("two iterations are live at once when one of them is suspended", async () =
   putAt(connection, "iter-b", "performing");
 
   const live = await store.readLive();
-  expect(live.map((outcome) => (outcome.kind === "read" ? outcome.record.id : outcome.kind))).toEqual([
-    "iter-a",
-    "iter-b",
-  ]);
+  expect(
+    live.map((outcome) => (outcome.kind === "read" ? outcome.record.id : outcome.kind)),
+  ).toEqual(["iter-a", "iter-b"]);
   // One lap at a time, several questions open at once.
   const third = await admit(ports, PLAN, START_POLICY, "iter-c");
   expect(third.iterationId).toBeNull();
