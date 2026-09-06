@@ -3360,7 +3360,9 @@ This entry is the smallest thing that makes the second option do what it says.
    ago, or another spelling of a path, it would find out after `run admit`. So the branch is asked
    of git through `src/access/forge.ts` (the command line still has no spawn binding, `D-0025`
    rule 7), the workspace of `existsSync`, and an answer git will not give is a refusal rather than
-   room to proceed. A gate continuo has **already closed** is refused here too, because `walkGate`
+   room to proceed. git is asked **twice**: `check-ref-format` before `rev-parse`, because
+   `rev-parse --verify --quiet` answers a malformed name and an unused one identically, so a branch
+   called `bad..branch` would read as available (measured: exit 1 for both). A gate continuo has **already closed** is refused here too, because `walkGate`
    walks it successfully and silently and `resume` then reports `closed` for `withdrawn` and
    `expired` as readily as for an answer.
 
@@ -3392,6 +3394,17 @@ This entry is the smallest thing that makes the second option do what it says.
    today and adding one is that change's decision rather than this one's. No bound on how many
    revisions a request may have — each one is a person typing a command, which is the only bound
    lap 1 has ever had. No `revise` from anywhere but the live iteration's open gate.
+
+   **And the preflight of rule 6 is not complete, which is stated rather than implied.** It checks
+   what rondo can see: its own store, git, and the filesystem. It does **not** check that the
+   successor's **run id** is free in continuo's control plane, so a `--run-id` naming an older run
+   is still discovered by `run admit` after the gate is gone. Closing it needs rondo to consume a
+   run-reading verb, and `D-0025` rule 8 enumerates the verb set rondo consumes — adding one is
+   that entry's decision and not a line in this diff. The general shape of the gap is worth naming
+   too: **every field continuo validates at admission is a candidate for this list**, and the
+   complete answer is a continuo verb that validates an admission without performing one, which
+   does not exist. Until then the preflight is a set of named checks rather than a guarantee, and
+   the failure it leaves is loud — a spent gate and a settled predecessor — rather than silent.
 
 ### What was measured, and how
 

@@ -264,6 +264,8 @@ export async function inspectPushTarget(request: PushTargetRequest): Promise<Pus
 /** Whether a branch is already there, or why git could not say. */
 export type BranchPresence =
   | { readonly kind: "read"; readonly exists: boolean }
+  /** git will not accept the name, whether or not anything holds it. */
+  | { readonly kind: "malformed" }
   | { readonly kind: "unreadable"; readonly reason: string };
 
 /**
@@ -289,6 +291,30 @@ export async function inspectTopicBranch(request: {
   readonly repository: string;
   readonly topicBranch: string;
 }): Promise<BranchPresence> {
+  // **Syntax before existence, because "no such ref" is the same answer for a
+  // name that could never be one.** `rev-parse --verify --quiet` exits 1 for
+  // `bad..branch` exactly as it does for a branch nobody has created, so asking
+  // only that question reports a malformed name as available -- and continuo's
+  // materialiser then refuses it after the gate is gone. `runPlan` cannot close
+  // this: it refuses an empty or option-shaped value, and the rest of what a
+  // refname may be is git's rule rather than rondo's, which is why it is asked
+  // of git.
+  //
+  // The full `refs/heads/` form rather than `--branch`: it is the name that
+  // will actually be created, and it is checked as a string with none of
+  // `--branch`'s shorthand expansion (`@{-1}` and friends) in the way.
+  const wellFormed = await runCommand(
+    "git",
+    ["check-ref-format", `refs/heads/${request.topicBranch}`],
+    PREFLIGHT_TIMEOUT_MS,
+  );
+  if (wellFormed.spawnError !== null) {
+    return { kind: "unreadable", reason: `${wellFormed.commandLine}: ${wellFormed.spawnError}` };
+  }
+  if (wellFormed.status !== 0) {
+    return { kind: "malformed" };
+  }
+
   const branch = await runCommand(
     "git",
     [

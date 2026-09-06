@@ -1106,6 +1106,13 @@ async function commandRevise(
     repository: successor.plan.repository,
     topicBranch: successor.plan.topicBranch,
   });
+  if (branch.kind === "malformed") {
+    return refuse(
+      `'${successor.plan.topicBranch}' is not a name git will accept for a branch, so nothing ` +
+        "could create it -- and a name that cannot exist reads as a name that is free. Nothing " +
+        "was touched. Choose another --topic-branch.",
+    );
+  }
   if (branch.kind !== "read") {
     return refuse(
       `git could not say whether '${successor.plan.topicBranch}' already exists in ` +
