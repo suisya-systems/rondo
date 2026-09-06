@@ -489,3 +489,102 @@ test("overlapping admissions do not interleave inside a transaction", async () =
   expect(kinds).toEqual(["atCapacity", "reserved"]);
   expect(connection.prepare("SELECT COUNT(*) AS n FROM iteration").get()).toMatchObject({ n: 1 });
 });
+
+test("the overshoot is bounded by maxLive rather than by one, and it does not drain", async () => {
+  // **The correction an adversarial pass forced, and it fires this entry's own
+  // falsifier.** The first version of rule 23 said the excess "cannot grow,
+  // because reserve() already refuses at the bound", and pinned it at "2 of 1".
+  // That reasoning holds for one suspended row. The `awaiting_human -> stalled`
+  // edge is per row and takes no reservation, so every row `maxLive` lets
+  // accumulate at a gate can cross it independently: the occupying set reaches
+  // `maxLive`, not the bound plus one.
+  //
+  // It is fail-closed -- nothing of a `stalled` row is running, so no extra lap
+  // executes -- but it is not momentary, because `RELEASED_BY` gives `stalled`
+  // exactly one releasing event, an operator's `abandon()`.
+  const { store, connection } = storeUnder({ maxOccupying: 1, maxLive: 4 });
+  for (const id of ["a", "b", "c", "d"]) {
+    await reserveOne(store, id);
+    putAt(connection, id, "awaiting_human");
+  }
+  expect(occupancyOver(connection, "occupying")).toBe(0);
+
+  // Every one of them stalls, which `resume()` does on a gate-id mismatch.
+  for (const id of ["a", "b", "c", "d"]) {
+    putAt(connection, id, "stalled");
+  }
+  expect(occupancyOver(connection, "occupying")).toBe(4);
+
+  const refused = await reserveOne(store, "e");
+  expect(refused.kind).toBe("atCapacity");
+  if (refused.kind === "atCapacity") {
+    // Four of one, not two of one.
+    expect(refused.occupancy).toBe(4);
+    expect(refused.limit).toBe(1);
+  }
+
+  // And it drains only when a person ends them: nothing here ends on its own.
+  await store.settle("a", "the operator ended it", 9_000);
+  expect(occupancyOver(connection, "occupying")).toBe(3);
+});
+
+/** The occupancy the ledger itself counts, read the way `reserve()` reads it. */
+function occupancyOver(connection: DatabaseSync, column: "occupying" | "live"): number {
+  return Number(
+    (
+      connection
+        .prepare(`SELECT COUNT(*) AS n FROM iteration WHERE ${column} IS NOT NULL`)
+        .get() as { readonly n: number }
+    ).n,
+  );
+}
+
+test("a legacy row that spent its identifiers keeps holding them after the migration", async () => {
+  // **The blocker an adversarial pass found.** `ALTER TABLE ADD COLUMN` gives
+  // every existing row the default, so without a back-fill every pre-D-0023 row
+  // reads `identifiers_spent = 0` -- including rows that reached `admitting`,
+  // for which `run admit` really was spawned and continuo really does own a
+  // run. Once terminal, those rows would drop out of all three claim indexes
+  // and release names git and continuo still hold, which is the one thing
+  // rule 7 exists to prevent.
+  const connection = new DatabaseSync(":memory:");
+  connection.exec(`
+    CREATE TABLE iteration (
+      id TEXT PRIMARY KEY, status TEXT NOT NULL, request TEXT NOT NULL, plan TEXT NOT NULL,
+      plan_digest TEXT NOT NULL, attempts INTEGER NOT NULL, run_id TEXT, continuo_revision TEXT,
+      agent_type_digest TEXT, config_digest TEXT, contract_digest TEXT, classification TEXT,
+      classification_reason TEXT, neutral_role_name TEXT, continuo_role TEXT, model_tier TEXT,
+      model TEXT, gate_id TEXT, gate_stage TEXT, gate_outcome TEXT, session_id TEXT,
+      session_path TEXT, reason TEXT, created_at_ms INTEGER NOT NULL,
+      updated_at_ms INTEGER NOT NULL,
+      live INTEGER GENERATED ALWAYS AS (
+        CASE WHEN status IN ('closed','abandoned','failed') THEN NULL ELSE 1 END) VIRTUAL
+    );
+  `);
+  const insert = connection.prepare(
+    "INSERT INTO iteration (id, status, request, plan, plan_digest, attempts, run_id, " +
+      `created_at_ms, updated_at_ms) VALUES (?, ?, 'ask', '{}', '${planDigest({})}', 1, ?, 1, 1)`,
+  );
+  // One that really was admitted, and one that never got that far.
+  insert.run("spent", "closed", "rondo-legacy");
+  insert.run("unspent", "abandoned", null);
+
+  const { store } = storeUnder({ maxOccupying: 1, maxLive: 3 }, connection);
+
+  const spent = await store.read("spent");
+  expect(spent.kind === "read" && spent.record.identifiersSpent).toBe(1);
+  const unspent = await store.read("unspent");
+  expect(unspent.kind === "read" && unspent.record.identifiersSpent).toBe(0);
+
+  // So the admitted run id is still held, and cannot be reissued.
+  const reissued = await store.reserve({
+    id: "new",
+    request: "do new",
+    plan: somePlan(),
+    runId: "rondo-legacy",
+    topicBranch: "rondo/new",
+    workspace: "/srv/work/iter-new",
+    nowMs: 2_000,
+  });
+  expect(reissued.kind).toBe("defect");
+});

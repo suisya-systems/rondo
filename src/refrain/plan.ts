@@ -723,7 +723,19 @@ function withWorkspaceRoot(payload: JsonRecord): JsonRecord {
   const cut = Math.max(workspace.lastIndexOf("/"), workspace.lastIndexOf("\\"));
   // A workspace with no separator has no parent to name, so the payload is left
   // as it is and refused by name below rather than repaired into a guess.
-  return cut <= 0 ? payload : { ...payload, workspace_root: workspace.slice(0, cut) };
+  if (cut < 0) {
+    return payload;
+  }
+  // **A root is a parent, and an earlier version of this lost that.** Slicing
+  // at `cut` gives `""` for a worktree at `/legacy` and `"C:"` for one at
+  // `C:\legacy` -- neither of which is an absolute path, so `requireAbsolute`
+  // refuses and the live iteration this function exists to rescue is stranded
+  // anyway. The parent of `/legacy` is `/`, and the parent of `C:\legacy` is
+  // `C:\`; the separator is kept rather than trimmed in exactly those cases.
+  const separator = workspace.slice(cut, cut + 1);
+  const parent = workspace.slice(0, cut);
+  const root = parent === "" || /^[A-Za-z]:$/.test(parent) ? `${parent}${separator}` : parent;
+  return { ...payload, workspace_root: root };
 }
 
 /**

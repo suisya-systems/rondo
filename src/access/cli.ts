@@ -47,7 +47,7 @@ import {
   type LoopPolicy,
 } from "../refrain/policy.js";
 import { revisionPlan } from "../refrain/revision.js";
-import type { IterationRecord, JsonRecord } from "../store/records.js";
+import { type IterationRecord, isTerminal, type JsonRecord } from "../store/records.js";
 import { type IterationStore, openIterationStore, type ReadOutcome } from "../store/sqlite.js";
 import { abandon, admit, conductorPorts, resume } from "./conductor.js";
 import { asciiEscape, consoleSeams, relayUpstream } from "./console.js";
@@ -91,8 +91,8 @@ export const USAGE = `rondo - the operator surface for delegated work
                           branch. The three identifiers are yours to choose:
                           rondo allocates none, and continuo refuses the ones
                           the first lap spent
-  rondo publish --repo OWNER/NAME --actor-id ID [--remote NAME] [--dry-run]
-                [--allow-remote-mismatch]
+  rondo publish --repo OWNER/NAME --actor-id ID --iteration-id ID
+                [--remote NAME] [--dry-run] [--allow-remote-mismatch]
                           push the branch, open the pull request, close the run.
                           Refuses before it prints when the workspace cannot
                           push where the plan says, or when the push remote and
@@ -978,6 +978,22 @@ async function commandAnswer(
     return 0;
   }
   const record = chosen.record;
+  // **A terminal row is refused before its gate is read** (`D-0023` rule 15).
+  // `pickWaiting` applies no status filter on purpose, because `publish` acts
+  // on `closed` rows and has to be able to name one -- but `answer` must not
+  // inherit that latitude. `abandon` writes a terminal row and deliberately
+  // drives no continuo verb, so an abandoned iteration usually still has an
+  // open gate on it; answering that gate would close a run whose iteration a
+  // person has already ended, and would record a human answer against work
+  // rondo had given up on. Before D-0023 this was unreachable because there was
+  // no `--iteration-id` on `answer` at all.
+  if (isTerminal(record.status)) {
+    return refuse(
+      `iteration '${record.id}' is ${record.status}, which is terminal, so there is nothing ` +
+        "left to answer. Its gate may still be open -- closing that is a person's, through " +
+        "'gate close' on the operating surface (D-0013).",
+    );
+  }
   if (record.gateId === null) {
     say(`iteration '${record.id}' is ${record.status}, and no gate is open on it.`);
     say("There is nothing for a person to answer yet.");
@@ -999,7 +1015,12 @@ async function commandAnswer(
     say(`options ${gate.options}`);
     say("");
     say("to answer:");
-    say(`  rondo answer --actor-id YOU --body="your answer"`);
+    // **The id is always printed, not only when several are open.** A command
+    // that is correct today and refused tomorrow -- because somebody started a
+    // second iteration in between -- is worse than one that is always explicit,
+    // and since D-0023 "the live one" stops naming anything the moment a second
+    // iteration is admitted.
+    say(`  rondo answer --iteration-id ${record.id} --actor-id YOU --body="your answer"`);
     return 0;
   }
 
@@ -1676,6 +1697,21 @@ async function commandPublish(
     return refuse(actor.refusal);
   }
 
+  // **`publish` names its iteration and never infers it.** It acts on a
+  // `closed` row, and a closed row is terminal and therefore never in the live
+  // set -- so there has never been anything for the no-id path to find. Before
+  // D-0023 that path answered "no iteration is live", which was confusing but
+  // harmless. With more than one iteration open it would instead have selected
+  // an unrelated *live* one and refused with a sentence about it, naming an
+  // iteration that has nothing to do with what the operator meant to publish.
+  // `answer` prints the id, so it is always to hand.
+  if (parsed.iterationId === null) {
+    return refuse(
+      "publish needs --iteration-id ID. It publishes an iteration a person has already " +
+        "approved at the gate, and an approved iteration is closed -- so it is never the one " +
+        "that is 'live' and cannot be guessed from what is. 'rondo answer' prints the id.",
+    );
+  }
   const chosen = await pickWaiting(store, parsed.iterationId);
   if ("refusal" in chosen) {
     return refuse(chosen.refusal);

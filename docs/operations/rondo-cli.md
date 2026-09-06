@@ -237,7 +237,14 @@ A person has to answer this before anything lands. Next: rondo answer
 ```
 
 **22.8 seconds**, measured. The process exits and the gate stays open; there is no daemon to leave
-running. The iteration id defaults to the run id -- rondo allocates nothing.
+running. The iteration id has no default and is the only identifier you type: rondo mints the run
+id, the topic branch and the workspace from it (`D-0023`).
+
+**A second `start` while this one waits is accepted**, which is what `D-0023` delivers. Measured on
+the same machine, two laps run one after the other: with `dogfood-001` suspended at its gate,
+`dogfood-002` was admitted and performed, and the store read `live=2, occupying=1` while it did --
+two iterations open, one worker running. Setting `RONDO_MAX_LIVE=1` refuses the same command in
+about a millisecond, writes no iteration row, and records one demand row.
 
 ## 5. Answer -- see what is waiting, and answer it
 

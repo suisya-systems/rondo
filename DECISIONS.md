@@ -3608,10 +3608,25 @@ waiting, not the working.
 23. **The bound is an admission control, not a conservation law.** It is read in `reserve()` and
     nowhere else. `stall()` writes `stalled` from any status and `resume()` reaches it from
     `awaiting_human`, so a suspended row may re-enter the occupying set without a reservation and
-    occupancy may momentarily read 2 of 1. **This is permitted rather than refused**: refusing the
-    transition would leave a row at `awaiting_human` promising a gate that is not there, which is
-    the state `stalled` exists to avoid. The excess cannot grow, because `reserve()` already refuses
-    at the bound, and the refusal says `occupancy > bound` in words that do not read as corruption.
+    occupancy may read higher than the bound. **This is permitted rather than refused**: refusing
+    the transition would leave a row at `awaiting_human` promising a gate that is not there, which
+    is the state `stalled` exists to avoid.
+    **The excess is bounded by `maxLive`, not by one, and it does not drain on its own.** An
+    earlier draft of this rule said it "cannot grow, because `reserve()` already refuses at the
+    bound", and pinned it at "2 of 1". That is wrong, and an adversarial pass against the
+    implementation is what showed it: the `awaiting_human` to `stalled` edge is **per row** and
+    takes no reservation, so every iteration `maxLive` lets accumulate at a gate can cross it
+    independently. The occupying set therefore reaches `maxLive`. Two consequences follow and both
+    are stated rather than discovered. First, **raising `maxLive` raises the worst-case occupancy
+    one for one** -- so the knob this entry advertises as safe today, because it changes nothing
+    about execution, does change this. Second, **`RELEASED_BY` gives `stalled` exactly one
+    releasing event, an operator's `abandon()`**, so the excess persists until a person clears it
+    and the refusal must say so rather than telling anyone to wait.
+    What survives from the original reasoning is the part that matters: the overshoot is
+    **fail-closed**. Every row counted in it is `stalled`, nothing of a `stalled` iteration is
+    running, and no additional lap executes. What is lost is admission, until a person acts.
+    **This is rule 23 meeting its own falsifier below**, recorded here rather than left for a
+    later reader to find as a surprise.
 24. **The iteration id gains a closed alphabet, `^[a-z][a-z0-9_-]{0,63}$`, checked in `admit()`
     before `reserve()`** — the same shape `D-0019` rule 12 holds cadenza's role names to, so rondo
     has one identifier shape rather than two. Without it the derivation is neither contained nor
@@ -3688,9 +3703,14 @@ waiting, not the working.
   an endpoint still writing — which would make rule 2's release unsafe and collapse the design back
   to one bound. This is the claim most exposed to being wrong, because it rests on reading one
   `finally` in continuo and one line of the dogfood record.
-- **A second edge into the occupying set** that rule 23's reasoning does not cover — one that is not
-  fail-closed, or one that can repeat — which would turn a permitted excess into an unbounded one
-  and force the bound to be read somewhere besides `reserve()`.
+- **A second edge into the occupying set** that rule 23's reasoning does not cover — one that is
+  **not fail-closed**. The "can repeat" half of this falsifier **has already fired**, before the
+  entry was merged: the `stalled` edge repeats once per suspended row, which is what rule 23 now
+  records. It stayed inside the entry rather than reopening it because the excess is fail-closed
+  and bounded by `maxLive`. An edge that is neither would force the bound to be read somewhere
+  besides `reserve()`, and that is a different entry.
+- **`stalled` acquiring a releasing event that is not an operator**, which would make rule 23's
+  "does not drain" false in the good direction and is worth noticing rather than inheriting.
 - **The closed alphabet turning out to be too narrow for a real id** — an operating surface that
   wants uppercase, or an id rondo did not mint — which would put rule 24 back to a reversible
   path-safe *encoding* rather than a restriction.
