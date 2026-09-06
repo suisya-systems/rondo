@@ -102,6 +102,35 @@ export type IterationStatus =
  */
 export const TERMINAL_STATUSES = Object.freeze(["closed", "abandoned", "failed"] as const);
 
+/**
+ * The two non-terminal statuses that hold **no** capacity (D-0023 rule 2).
+ *
+ * Written once, here, for the reason {@link TERMINAL_STATUSES} is: the
+ * generated `occupying` column in `sqlite.ts`, the bound `maxOccupying` counts
+ * against, and the tests that assert one status per row all read this tuple, so
+ * the set has one spelling and cannot be narrowed in one place and not another.
+ * D-0023's own drafting was wrong here once -- a bound defined over
+ * `admitting`/`admitted`/`performing` alone let two `planned` rows pass a bound
+ * of one -- and a set stated twice is what made that possible.
+ *
+ * The criterion is {@link RELEASED_BY}'s own, applied to a second question:
+ * **whether anything of this iteration might still be running.** At
+ * `awaiting_human` and `withdrawal_requested` nothing is. The `lap perform`
+ * process has exited, continuo's delivery lease was released when it did, and
+ * no fenced child survives it -- so the row is durable state in front of a
+ * person rather than work in flight, and holding an execution slot for it
+ * bounds the human's queue depth by the number of laps that may run.
+ *
+ * **`stalled` is deliberately not here.** It means *unknown* -- a corrupt row,
+ * an outcome the union does not cover -- and the one honest answer about a row
+ * nobody understands is that something may still be running. It occupies,
+ * fail-closed.
+ */
+export const SUSPENDED_STATUSES = Object.freeze([
+  "awaiting_human",
+  "withdrawal_requested",
+] as const);
+
 /** A status that ends an iteration, and therefore frees the conductor. */
 export type TerminalStatus = (typeof TERMINAL_STATUSES)[number];
 
@@ -127,6 +156,18 @@ export function isTerminal(status: IterationStatus): status is TerminalStatus {
  * nothing** does not. The difference is not how bad the outcome was -- it is
  * whether anything might still be running, because rondo's own ceiling kills
  * the CLI and not the fenced child (D-0019 rule 12).
+ *
+ * **That criterion answers a second question, and D-0023 is the entry that
+ * asked it.** Read as "what ends this status", the table is about liveness.
+ * Read as "is anything of this iteration running", the same column decides
+ * whether the row should occupy an execution slot at all -- and it gives the
+ * opposite answer from the schema for exactly two rows. `awaiting_human` and
+ * `withdrawal_requested` are released by an event that comes from *outside*
+ * the iteration, because by then the process has exited and nothing of it
+ * survives; every other non-terminal row is released by something of its own
+ * that is still in flight. {@link SUSPENDED_STATUSES} is those two rows, and
+ * it is that reading made into a set. No row is added or removed here by
+ * D-0023: the table was already right, and was already answering both.
  */
 export const RELEASED_BY: Readonly<Record<NonTerminalStatus, readonly string[]>> = Object.freeze({
   planned: ["the interpreter, immediately"],
@@ -179,8 +220,42 @@ export interface IterationRecord {
    * compared against.
    */
   readonly attempts: number;
-  /** The run id continuo was asked to admit. From the plan, so known early. */
+  /**
+   * The three identifiers rondo minted for this iteration (D-0023 rule 5).
+   *
+   * They are on the row rather than in a fourth table because a table holding
+   * exactly one row per iteration, keyed by the iteration, is a table shaped
+   * like a column. `runId` predates D-0023 and was written later, at
+   * `admitting`, from the plan the caller had typed; under the allocator all
+   * three are written by `reserve()` in the same `BEGIN IMMEDIATE` as the row,
+   * because the claim they represent is what makes a second iteration safe and
+   * a claim committed after the row is a claim with a window in it.
+   *
+   * **The claim is not a lock and is never released.** {@link
+   * identifiersSpent} is what says whether it may be, and the three partial
+   * unique indexes over the generated `holds_identifiers` column in
+   * `sqlite.ts` are what enforce it.
+   */
   readonly runId: string | null;
+  readonly topicBranch: string | null;
+  readonly workspace: string | null;
+  /**
+   * Whether this iteration's identifiers have been handed to continuo.
+   *
+   * Zero until the one transition into `admitting` sets it to one, and never
+   * back. It is the difference between a triple that was *used* and one that
+   * was merely *held*: once `run admit` is spawned continuo owns a run under
+   * that id, git owns the branch, and the filesystem owns the worktree, so the
+   * names are spent for ever and no later iteration may be handed them --
+   * including after this row reaches a terminal status.
+   *
+   * A terminal row that is **unspent** releases its triple, which is the only
+   * reason this is a column rather than a constant. Nothing in the tree
+   * inherits a released triple today; the column exists so that the schema
+   * cannot make such an inheritance unsafe later without the change being
+   * visible here. See D-0023's own note on `advisory.md`'s unratified `A-17`.
+   */
+  readonly identifiersSpent: number;
   /**
    * The continuo revision `startContinuo` **observed**, not the one the pin
    * expected.
@@ -247,7 +322,18 @@ export interface IterationRecord {
  * store's to stamp from the clock the caller passed. Spelling it as a type
  * rather than accepting a loose object is what keeps a typo from being a
  * silently ignored column.
+ *
+ * **The three allocated identifiers are omitted too, and that is D-0023 rule 5
+ * enforced by the type rather than by a comment.** `reserve()` writes them
+ * inside the transaction that writes the row, and a transition that could
+ * write them again would be a second authority for the fact the partial unique
+ * indexes rest on -- a row could move its own claim off a name it had already
+ * been admitted under. `identifiersSpent` stays writable because the one
+ * transition into `admitting` is exactly what sets it.
  */
 export type IterationFields = Partial<
-  Omit<IterationRecord, "id" | "status" | "createdAtMs" | "updatedAtMs">
+  Omit<
+    IterationRecord,
+    "id" | "status" | "createdAtMs" | "updatedAtMs" | "runId" | "topicBranch" | "workspace"
+  >
 >;

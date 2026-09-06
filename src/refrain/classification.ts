@@ -29,7 +29,7 @@ import {
   resolveProject,
 } from "../cadenza/facade.js";
 
-import type { RunPlan } from "./plan.js";
+import type { AdmittedPlan } from "./plan.js";
 import type { ClassificationRecord, EffectOutcome } from "./ports.js";
 
 /**
@@ -64,7 +64,7 @@ import type { ClassificationRecord, EffectOutcome } from "./ports.js";
  * future out-of-line classifier could not take later without changing every
  * caller, and `./ports.ts` already records that reasoning for the store.
  */
-export function classifyPlan(plan: RunPlan): EffectOutcome<ClassificationRecord> {
+export function classifyPlan(plan: AdmittedPlan): EffectOutcome<ClassificationRecord> {
   try {
     const project = resolveProject(plan.catalogLayers, plan.projectName);
     const record = agentTypeRecord(plan.agentTypeInput);

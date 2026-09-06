@@ -177,12 +177,8 @@ test("each command's flags land on the parsed record", () => {
     "start",
     "--plan",
     "/tmp/plan.json",
-    "--run-id",
-    "r-9",
-    "--topic-branch",
-    "dogfood/r-9",
-    "--workspace",
-    "/srv/ws",
+    "--iteration-id",
+    "iter-9",
     "--prompt",
     "do the thing",
   ]);
@@ -190,12 +186,13 @@ test("each command's flags land on the parsed record", () => {
   if (outcome.kind !== "parsed") {
     return;
   }
+  // `--run-id`, `--topic-branch` and `--workspace` are gone (D-0023 rule 9):
+  // rondo derives all three from the iteration id, so there is no flag to type
+  // them and the parser refuses one as unknown.
   expect(outcome.parsed).toMatchObject({
     command: "start",
     planFile: "/tmp/plan.json",
-    runId: "r-9",
-    topicBranch: "dogfood/r-9",
-    workspace: "/srv/ws",
+    iterationId: "iter-9",
     prompt: "do the thing",
     dryRun: false,
   });
@@ -403,22 +400,9 @@ test("each command still accepts every flag it does read", () => {
   // The other half of the check: a table that refused too much would be a
   // worse defect than the one it fixed, and would not show up above.
   for (const argv of [
-    [
-      "start",
-      "--plan",
-      "/tmp/p.json",
-      "--run-id",
-      "r",
-      "--topic-branch",
-      "t",
-      "--workspace",
-      "/w",
-      "--prompt",
-      "p",
-      "--iteration-id",
-      "i",
-    ],
+    ["start", "--plan", "/tmp/p.json", "--prompt", "p", "--iteration-id", "i"],
     ["answer", "--actor-id", "me", "--body=approve"],
+    ["answer", "--actor-id", "me", "--body=approve", "--iteration-id", "i"],
     [
       "publish",
       "--repo",
@@ -432,20 +416,10 @@ test("each command still accepts every flag it does read", () => {
       "--dry-run",
     ],
     ["abandon", "--iteration-id", "i1", "--reason", "wedged"],
-    [
-      "revise",
-      "--actor-id",
-      "me",
-      "--body=use the existing helper",
-      "--run-id",
-      "r-2",
-      "--topic-branch",
-      "t-2",
-      "--workspace",
-      "/w2",
-      "--iteration-id",
-      "i-2",
-    ],
+    // `--run-id`, `--topic-branch` and `--workspace` are gone from `revise`
+    // too (D-0023 rule 9): `--iteration-id` is the one identifier left, and it
+    // names the successor.
+    ["revise", "--actor-id", "me", "--body=use the existing helper", "--iteration-id", "i-2"],
   ]) {
     const outcome = parseCommand(argv);
     expect(outcome.kind).toBe("parsed");
@@ -453,26 +427,22 @@ test("each command still accepts every flag it does read", () => {
 });
 
 /**
- * The second lap's three identifiers reach the record.
+ * The second lap's one identifier reaches the record.
  *
- * They are on the command line because rondo allocates none of them
- * (`D-0012`, `D-0019` rule 3) and continuo will not take the first lap's: it
- * holds a run under that id, git holds the branch, and a worktree stands at the
- * workspace. What crosses the two laps is the branch, and rondo sets that
- * itself.
+ * It is on the command line because rondo allocates the triple from it rather
+ * than taking one typed directly (`D-0023`), and continuo will not take the
+ * first lap's: it holds a run under that id, git holds the branch, and a
+ * worktree stands at the workspace. What crosses the two laps is the branch,
+ * and rondo sets that itself.
  */
-test("revise carries the instruction and the three fresh identifiers", () => {
+test("revise carries the instruction and the successor's iteration id", () => {
   const outcome = parseCommand([
     "revise",
     "--actor-id",
     "me",
     "--body=-- use the existing helper",
-    "--run-id",
+    "--iteration-id",
     "r-2",
-    "--topic-branch",
-    "dogfood/r-2",
-    "--workspace",
-    "/srv/ws2",
   ]);
   expect(outcome.kind).toBe("parsed");
   if (outcome.kind !== "parsed") {
@@ -484,9 +454,7 @@ test("revise carries the instruction and the three fresh identifiers", () => {
     // Carried byte for byte, dash and all: an instruction at a gate may
     // legitimately begin with one, which is why USAGE spells `--body=TEXT`.
     body: "-- use the existing helper",
-    runId: "r-2",
-    topicBranch: "dogfood/r-2",
-    workspace: "/srv/ws2",
+    iterationId: "r-2",
   });
 });
 
@@ -940,6 +908,9 @@ function published(parts: Partial<IterationRecord> = {}): IterationRecord {
     planDigest: "sha256:0",
     attempts: 1,
     runId: "dogfood-001",
+    topicBranch: "docs/rondo-first-real-lap",
+    workspace: "/srv/rondo/workspace-dogfood-001",
+    identifiersSpent: 1,
     continuoRevision: "603843b",
     agentTypeDigest: null,
     configDigest: null,

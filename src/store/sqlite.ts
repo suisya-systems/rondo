@@ -54,6 +54,7 @@ import {
   type IterationRecord,
   type IterationStatus,
   type JsonRecord,
+  SUSPENDED_STATUSES,
   TERMINAL_STATUSES,
 } from "./records.js";
 
@@ -76,20 +77,87 @@ export interface ReserveInput {
   readonly request: string;
   /** The plan as the loop rendered it; the store digests these bytes. */
   readonly plan: JsonRecord;
+  /**
+   * The triple the allocator minted for this iteration (D-0023 rule 5).
+   *
+   * Handed in rather than derived here, because deriving them is a pure
+   * function of the iteration id and the workspace root and belongs where the
+   * loop can be tested against it. The store's job is the half that needs a
+   * transaction: writing the claim in the same `BEGIN IMMEDIATE` as the row, so
+   * that no concurrent reservation can be handed a name this one is taking.
+   */
+  readonly runId: string;
+  readonly topicBranch: string;
+  readonly workspace: string;
   readonly nowMs: number;
+}
+
+/**
+ * The two bounds one host admits under (D-0023 rule 12).
+ *
+ * Read once at the composition root and handed to the store, never taken from
+ * a request: `admit()` receives a `LoopPolicy` per call, so a bound placed
+ * there would be a bound each request states about the whole host, and "the
+ * bound" would become whichever caller arrived last. A host-wide limit any
+ * request may restate is not a limit.
+ *
+ * **`maxIterations` is not either of these numbers.** It is a ceiling on
+ * attempts *of one request* and is compared against a fresh iteration's zero
+ * attempts before a row exists; these bound *concurrent requests*. Different
+ * axes, different owners.
+ *
+ * Declared here as well as in `src/refrain/policy.ts` for the reason
+ * {@link ReserveInput} is: the store may not import the loop, and
+ * `src/access/conductor.ts` is where the two are checked against each other.
+ */
+export interface HostPolicy {
+  /**
+   * How many iterations may be *executing* at once.
+   *
+   * Counted over the generated `occupying` column: every non-terminal status
+   * except `awaiting_human` and `withdrawal_requested`. **One, until continuo's
+   * D-1104 lands its holder-identity half** -- continuo serialises `lap perform`
+   * on a single global delivery resource, so a second concurrent lap is refused
+   * there rather than here. Raising this number is then a policy edit and not a
+   * code change.
+   */
+  readonly maxOccupying: number;
+  /**
+   * How many iterations may be *non-terminal* at once.
+   *
+   * Counted over `live`. This one may exceed one today, because an iteration
+   * suspended at a gate holds no continuo resource, no process and no fenced
+   * child -- it is a durable row in front of a person. What it bounds is the
+   * leak: worktrees, branches, open runs and unanswered questions.
+   */
+  readonly maxLive: number;
 }
 
 /**
  * Why a reservation did not happen.
  *
- * `occupied` is the single-flight refusal and is an ordinary answer rather than
- * a fault: a conductor that is already conducting says so, and the caller tries
- * again when the live iteration ends.
+ * `atCapacity` is the capacity refusal and is an ordinary answer rather than a
+ * fault: a host that is already at its bound says so, and the caller tries
+ * again when something ends. It replaces D-0019's `occupied`, which named the
+ * one blocking row -- a meaningful answer only while the bound was one.
+ *
+ * It carries the bound, the occupancy observed and which of the two bounds
+ * refused, because that is what a person needs in order to decide whether to
+ * wait or to raise a number, and because the occupancy may legitimately read
+ * *higher* than the bound (D-0023 rule 27).
  */
 export type ReserveOutcome =
   | { readonly kind: "reserved"; readonly record: IterationRecord }
-  | { readonly kind: "occupied"; readonly liveIterationId: string }
+  | {
+      readonly kind: "atCapacity";
+      readonly bound: BoundName;
+      readonly limit: number;
+      readonly occupancy: number;
+    }
   | { readonly kind: "defect"; readonly reason: string };
+
+/** Which of {@link HostPolicy}'s two bounds an admission was refused by. */
+export type BoundName = "maxOccupying" | "maxLive";
 
 /** Why a transition did not happen. */
 export type TransitionOutcome =
@@ -155,8 +223,17 @@ export interface IterationStore {
    * process that should stop.
    */
   read(id: string): Promise<ReadOutcome>;
-  /** The one non-terminal iteration; `absent` when every iteration is terminal. */
-  readLive(): Promise<ReadOutcome>;
+  /**
+   * Every non-terminal iteration, oldest first.
+   *
+   * Plural since D-0023: under a bound above one there is no such thing as
+   * *the* live iteration, and a singular answer would have been an arbitrary
+   * row. Each element is a {@link ReadOutcome} rather than a record so that one
+   * row that will not decode does not make the others unreadable -- which is
+   * the same totality argument {@link IterationStore.read} makes, applied to a
+   * list.
+   */
+  readLive(): Promise<readonly ReadOutcome[]>;
   /**
    * Terminate a row by id alone, without decoding it.
    *
@@ -238,7 +315,7 @@ const COLUMN_BY_FIELD = {
   plan: "plan",
   planDigest: "plan_digest",
   attempts: "attempts",
-  runId: "run_id",
+  identifiersSpent: "identifiers_spent",
   continuoRevision: "continuo_revision",
   agentTypeDigest: "agent_type_digest",
   configDigest: "config_digest",
@@ -277,6 +354,39 @@ type SqlRow = Readonly<Record<string, unknown>>;
 const TERMINAL_SQL_LITERALS = TERMINAL_STATUSES.map((status) => `'${status}'`).join(", ");
 
 /**
+ * The terminal set plus the two suspended statuses, as SQL literals.
+ *
+ * The `occupying` column's whole definition, and it is derived from
+ * `records.ts` for {@link TERMINAL_SQL_LITERALS}'s reason: `maxOccupying`
+ * counts exactly this column, so the bound and the column are one definition
+ * and the set has one spelling (D-0023 rule 8).
+ */
+const UNOCCUPIED_SQL_LITERALS = [...TERMINAL_STATUSES, ...SUSPENDED_STATUSES]
+  .map((status) => `'${status}'`)
+  .join(", ");
+
+/**
+ * The generated columns, as SQL expressions, written once.
+ *
+ * Named here rather than inline in the DDL because they are needed twice: once
+ * by `CREATE TABLE` for a database that does not exist yet, and once by
+ * {@link migrate} for one that does. Two spellings of a generated column would
+ * be two definitions of a bound.
+ */
+const GENERATED_COLUMNS = Object.freeze({
+  live: `INTEGER GENERATED ALWAYS AS (
+                          CASE WHEN status IN (${TERMINAL_SQL_LITERALS}) THEN NULL ELSE 1 END
+                        ) VIRTUAL`,
+  occupying: `INTEGER GENERATED ALWAYS AS (
+                          CASE WHEN status IN (${UNOCCUPIED_SQL_LITERALS}) THEN NULL ELSE 1 END
+                        ) VIRTUAL`,
+  holds_identifiers: `INTEGER GENERATED ALWAYS AS (
+                          CASE WHEN status IN (${TERMINAL_SQL_LITERALS}) AND identifiers_spent = 0
+                            THEN NULL ELSE 1 END
+                        ) VIRTUAL`,
+});
+
+/**
  * The schema, created idempotently on construction.
  *
  * `request` and `plan` are `NOT NULL` because `IterationRecord` says they are
@@ -286,8 +396,27 @@ const TERMINAL_SQL_LITERALS = TERMINAL_STATUSES.map((status) => `'${status}'`).j
  * the three digests, the gate -- is nullable, because it is legitimately
  * unknown at the moment the row is first written.
  *
- * `live` and the unique index over it are the invariant. Both carry the comment
- * below, and it is not decoration.
+ * **`live` is no longer an invariant the database holds, and that is D-0023.**
+ * It stays as a column and keeps its meaning -- "this row has not reached a
+ * terminal status" -- but the unique index over it is gone, because a unique
+ * index expresses "at most one" and nothing else: `UNIQUE(live)` over a column
+ * whose only non-null value is `1` is a bound of one *by construction*, and
+ * there is no "at most N" index to widen it into. What replaces it is a count
+ * read inside `reserve()`'s own `BEGIN IMMEDIATE`.
+ *
+ * **What that costs is stated here rather than argued away.** Under the index,
+ * a row inserted from outside this code -- `sqlite3` on the file, a hand-edited
+ * migration -- could not violate single-flight, because the database refused
+ * it. Under a counted bound the invariant lives in `reserve()`'s transaction
+ * and an out-of-band insert violates it silently. D-0019 rule 10 bought
+ * "making 'at most one non-terminal iteration' the *database's* invariant", and
+ * that is what is being spent. D-0023 rule 11 records it, and names the slot
+ * table as the alternative that would have kept it.
+ *
+ * `occupying` and `holds_identifiers` are the two generated columns that
+ * replace what the index was doing, and neither is a bound: they are the sets
+ * the bounds are counted over and the claims the partial unique indexes are
+ * taken over. See {@link GENERATED_COLUMNS}.
  */
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS iteration (
@@ -298,6 +427,9 @@ CREATE TABLE IF NOT EXISTS iteration (
   plan_digest           TEXT    NOT NULL,
   attempts              INTEGER NOT NULL,
   run_id                TEXT,
+  topic_branch          TEXT,
+  workspace             TEXT,
+  identifiers_spent     INTEGER NOT NULL DEFAULT 0,
   continuo_revision     TEXT,
   agent_type_digest     TEXT,
   config_digest         TEXT,
@@ -316,24 +448,162 @@ CREATE TABLE IF NOT EXISTS iteration (
   reason                TEXT,
   created_at_ms         INTEGER NOT NULL,
   updated_at_ms         INTEGER NOT NULL,
-  live                  INTEGER GENERATED ALWAYS AS (
-                          CASE WHEN status IN (${TERMINAL_SQL_LITERALS}) THEN NULL ELSE 1 END
-                        ) VIRTUAL
+  live                  ${GENERATED_COLUMNS.live},
+  occupying             ${GENERATED_COLUMNS.occupying},
+  holds_identifiers     ${GENERATED_COLUMNS.holds_identifiers}
 );
--- rondo#8. **The "one" here is a lap-1 reduction, not the shape rondo is aiming
--- at.** The target is parallel delegated work at least equal to what the present
--- human organisation already runs concurrently; single-flight is what lap 1 can
--- defend, not what the host is for. The route from one to N is a **capacity
--- ledger, not a wider index**: D-0012's three conditions -- an allocator for the
--- (run id, topic branch, workspace) triple, continuo's lap-level serialisation
--- lifting, and a bound somebody sets and something enforces -- must be answered
--- before a second admission is safe, and they are tracked as rondo#8 and
--- continuo#167. This index and reserve()'s refusal are the two places the
--- constant 1 is burned into the schema, so the replacement sites are findable by
--- grep rather than by reading D-0019.
-CREATE UNIQUE INDEX IF NOT EXISTS iteration_one_live
-  ON iteration(live) WHERE live IS NOT NULL;
+-- D-0023 rule 14. The demand record, and it is deliberately not the iteration
+-- table: a capacity refusal must reserve nothing, take no lock and cost no row
+-- *there*, which is what D-0019 rule 9 and the dogfood's 1 ms measurement both
+-- rest on. Without this table a refusal leaves no trace at all, and the bound
+-- could only ever be raised because somebody complained rather than because
+-- somebody was counted.
+CREATE TABLE IF NOT EXISTS admission_refusal (
+  refused_at_ms         INTEGER NOT NULL,
+  request               TEXT    NOT NULL,
+  bound_name            TEXT    NOT NULL,
+  bound                 INTEGER NOT NULL,
+  occupancy             INTEGER NOT NULL
+);
 `;
+
+/**
+ * The allocator's three claims, as partial unique indexes.
+ *
+ * **Applied after {@link migrate} rather than with {@link SCHEMA}, and the
+ * order is load-bearing.** Each index names `holds_identifiers` in its `WHERE`,
+ * and on a database created before D-0023 that column does not exist until the
+ * migration adds it -- so creating these with the tables would fail on exactly
+ * the databases the migration exists for.
+ *
+ * `AND <column> IS NOT NULL` in each predicate because SQLite treats NULLs as
+ * distinct in a unique index but the intent is worth stating rather than
+ * inheriting: a row that has not been allocated a triple yet claims no name,
+ * and several such rows are not a collision.
+ *
+ * D-0023 rule 7. The reason these are indexes over a generated column rather
+ * than three plain UNIQUE constraints is that a claim must outlive the
+ * iteration that made it. A *live* row holds its triple, so no concurrent
+ * iteration can be handed it. A *terminal, spent* row keeps holding it for
+ * ever -- continuo's run exists, the branch exists, the worktree exists, and
+ * reissuing any of those names is how a design hands a second run a branch a
+ * merged pull request still owns. A *terminal, unspent* row releases it, which
+ * is the one case a plain UNIQUE could not express.
+ */
+const CLAIM_INDEXES = `
+CREATE UNIQUE INDEX IF NOT EXISTS iteration_holds_run_id
+  ON iteration(run_id) WHERE holds_identifiers IS NOT NULL AND run_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS iteration_holds_topic_branch
+  ON iteration(topic_branch) WHERE holds_identifiers IS NOT NULL AND topic_branch IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS iteration_holds_workspace
+  ON iteration(workspace) WHERE holds_identifiers IS NOT NULL AND workspace IS NOT NULL;
+`;
+
+/**
+ * The columns and indexes a database created before D-0023 does not have.
+ *
+ * **This exists because rondo had no migration mechanism and now needs one.**
+ * `CREATE TABLE IF NOT EXISTS` is a no-op against a table that is already
+ * there, whatever its columns, so every DDL change since D-0019 would have
+ * reached new databases only -- and D-0023 is the first change that adds a
+ * column at all, which is why the gap had never been stepped in.
+ *
+ * The shape is deliberately the small one: a declarative list of columns, a
+ * diff against what the table actually has, and an `ALTER TABLE ADD COLUMN` for
+ * each one missing. There is no version number and no ordered directory of
+ * migration files. continuo carries that machinery and is right to; rondo's
+ * store is one module over one table with no down-migration and no branch in
+ * its history, and a version counter would be a mechanism whose failure modes
+ * exceed the thing it guards. **It is a reversible choice**: the moment a
+ * second table needs a coordinated change, this becomes the wrong shape.
+ *
+ * **`pragma_table_xinfo` rather than `pragma_table_info`, and that is not a
+ * preference.** `table_info` does not list generated columns at all, so a diff
+ * taken against it would try to add `live`, `occupying` and
+ * `holds_identifiers` on every open and fail with `duplicate column name` on
+ * the second one. `table_xinfo` lists them, marked `hidden = 2`.
+ *
+ * A `VIRTUAL` generated column can be added by `ALTER TABLE`; a `STORED` one
+ * cannot, portably. All three of rondo's are `VIRTUAL`.
+ */
+const ADDED_COLUMNS = Object.freeze({
+  topic_branch: "TEXT",
+  workspace: "TEXT",
+  identifiers_spent: "INTEGER NOT NULL DEFAULT 0",
+  occupying: GENERATED_COLUMNS.occupying,
+  holds_identifiers: GENERATED_COLUMNS.holds_identifiers,
+});
+
+/**
+ * Bring an existing database up to the schema above.
+ *
+ * Idempotent, and safe on a database that has just been created by
+ * {@link SCHEMA}: every column is already there, so the diff is empty.
+ *
+ * **Dropping `iteration_one_live` is a decision's consequence and not a
+ * housekeeping step.** It is the index D-0019 rule 10 made the single-flight
+ * invariant *the database's*, and on an existing database this line is the
+ * exact moment that stops being true: afterwards the bound is enforced by
+ * `reserve()`'s counted refusal, in this process, and an insert that does not
+ * go through it is unopposed. Leaving the index in place instead was not an
+ * option -- it refuses a second live row unconditionally, so an operator's
+ * existing database would have silently ignored `maxLive` and kept behaving as
+ * if D-0023 had not landed.
+ *
+ * **It is reversible only while the bound it replaced would still hold.**
+ * `CREATE UNIQUE INDEX iteration_one_live` can be re-run to restore the
+ * database-side guarantee, and it will succeed exactly when at most one
+ * non-terminal row exists at that moment. Once a host has actually admitted a
+ * second live iteration, recreating the index fails until the operator ends one
+ * of them; the migration is reversible, the history it enabled is not.
+ */
+function migrate(connection: DatabaseSync): void {
+  const present = new Set(
+    connection
+      .prepare("SELECT name FROM pragma_table_xinfo('iteration')")
+      .all()
+      .map((row) => String((row as SqlRow)["name"])),
+  );
+  const added: string[] = [];
+  for (const [column, declaration] of Object.entries(ADDED_COLUMNS)) {
+    if (!present.has(column)) {
+      connection.exec(`ALTER TABLE iteration ADD COLUMN ${column} ${declaration}`);
+      added.push(column);
+    }
+  }
+  if (added.includes("identifiers_spent")) {
+    // **The back-fill, and without it the migration is wrong rather than
+    // merely incomplete.** `ALTER TABLE ADD COLUMN` gives every existing row
+    // the default, so every pre-D-0023 row would read `identifiers_spent = 0`
+    // -- including rows that reached `admitting`, for which `run admit` really
+    // was spawned and continuo really does own a run. Those rows would then
+    // have `holds_identifiers` NULL once terminal, drop out of all three claim
+    // indexes, and release names that git and continuo still hold. That is the
+    // one thing rule 7 exists to make impossible.
+    //
+    // `run_id IS NOT NULL` is the honest predicate and not a guess: before
+    // D-0023 the run id was written by the transition into `admitting` and by
+    // nothing earlier, so a legacy row has one exactly when it spent its
+    // identifiers. Rows that never got that far keep 0, which is equally
+    // correct -- they spent nothing.
+    connection.exec("UPDATE iteration SET identifiers_spent = 1 WHERE run_id IS NOT NULL");
+  }
+  connection.exec("DROP INDEX IF EXISTS iteration_one_live");
+}
+
+/**
+ * The two bounds, in the order `reserve()` checks them.
+ *
+ * `maxOccupying` first, so that a host whose execution bound is the binding one
+ * says so rather than reporting the looser number. Each entry pairs a bound
+ * with the generated column it is counted over, which is what keeps
+ * "the bound and the column are one definition" (D-0023 rule 8) true in the
+ * code and not only in the entry.
+ */
+const BOUNDS = Object.freeze([
+  { name: "maxOccupying", column: "occupying" },
+  { name: "maxLive", column: "live" },
+] as const satisfies readonly { name: BoundName; column: "occupying" | "live" }[]);
 
 /** Every column the reader expects, in the order the record spells them. */
 const SELECT_COLUMNS = [
@@ -344,6 +614,9 @@ const SELECT_COLUMNS = [
   "plan_digest",
   "attempts",
   "run_id",
+  "topic_branch",
+  "workspace",
+  "identifiers_spent",
   "continuo_revision",
   "agent_type_digest",
   "config_digest",
@@ -386,23 +659,70 @@ const SELECT_COLUMNS = [
  * -- which is the whole reason the operator's surface can name a path that does
  * not exist yet and simply work.
  */
-export function openIterationStore(databasePath: string): IterationStore {
-  return iterationStore(new DatabaseSync(databasePath));
+export function openIterationStore(databasePath: string, policy: HostPolicy): IterationStore {
+  return iterationStore(new DatabaseSync(databasePath), policy);
 }
 
-export function iterationStore(connection: DatabaseSync): IterationStore {
+export function iterationStore(connection: DatabaseSync, policy: HostPolicy): IterationStore {
   connection.exec(SCHEMA);
+  migrate(connection);
+  connection.exec(CLAIM_INDEXES);
 
   const readRow = (id: string): SqlRow | null => {
     const row = connection.prepare(`SELECT ${SELECT_COLUMNS} FROM iteration WHERE id = ?`).get(id);
     return row === undefined ? null : (row as SqlRow);
   };
 
-  const readLiveRow = (): SqlRow | null => {
-    const row = connection
-      .prepare(`SELECT ${SELECT_COLUMNS} FROM iteration WHERE live IS NOT NULL`)
-      .get();
-    return row === undefined ? null : (row as SqlRow);
+  const readLiveRows = (): readonly SqlRow[] =>
+    connection
+      .prepare(
+        `SELECT ${SELECT_COLUMNS} FROM iteration WHERE live IS NOT NULL ORDER BY created_at_ms, id`,
+      )
+      .all() as readonly SqlRow[];
+
+  /**
+   * How many rows the given bound counts, read inside the caller's transaction.
+   *
+   * The column name is one of two literals chosen here rather than anything a
+   * caller supplies, which is what keeps the interpolation safe; every other
+   * value in this file is a bound parameter.
+   */
+  const occupancyOf = (column: "occupying" | "live"): number =>
+    Number(
+      (
+        connection
+          .prepare(`SELECT COUNT(*) AS n FROM iteration WHERE ${column} IS NOT NULL`)
+          .get() as SqlRow
+      )["n"],
+    );
+
+  /**
+   * Write the demand record for a refusal (D-0023 rule 14).
+   *
+   * **Outside the transaction that refused, and outside any transaction.** The
+   * refusal's whole value is that it costs no row in `iteration` and takes no
+   * lock, and writing the trace inside the reserving transaction would have
+   * rolled it back with the refusal it was recording.
+   *
+   * Best-effort on purpose: this table is evidence for a later decision about
+   * the bound, not a fact the caller acts on, and failing to write it must not
+   * turn an ordinary refusal into a defect. A refusal a person can act on is
+   * worth more than a count nobody has read yet.
+   */
+  const recordRefusal = (
+    input: ReserveInput,
+    refusal: { readonly bound: BoundName; readonly limit: number; readonly occupancy: number },
+  ): void => {
+    try {
+      connection
+        .prepare(
+          "INSERT INTO admission_refusal (refused_at_ms, request, bound_name, bound, occupancy) " +
+            "VALUES (?, ?, ?, ?, ?)",
+        )
+        .run(input.nowMs, input.request, refusal.bound, refusal.limit, refusal.occupancy);
+    } catch {
+      // The demand record is not the answer; the refusal above is.
+    }
   };
 
   /**
@@ -440,46 +760,83 @@ export function iterationStore(connection: DatabaseSync): IterationStore {
       try {
         const encoded = canonicalJson(input.plan);
         const digest = planDigest(input.plan);
-        inTransaction(() => {
+        // **Both counts and the insert in one `BEGIN IMMEDIATE`, and that is
+        // the whole of the ledger.** A bound checked in one transaction and
+        // enforced in another is the deferred-transaction window this file
+        // already rejects one level up: two callers would each read an
+        // occupancy below the bound and each then insert. Taking the write lock
+        // at `BEGIN` is what makes "count, decide, write" atomic, and it is why
+        // the count is here rather than in the interpreter.
+        const outcome = inTransaction<ReserveOutcome | null>(() => {
+          for (const bound of BOUNDS) {
+            const occupancy = occupancyOf(bound.column);
+            const limit = policy[bound.name];
+            if (occupancy >= limit) {
+              // Nothing is written and nothing is locked, which is the property
+              // D-0019 rule 9 rests on and the reason this returns rather than
+              // throws. The demand record is written *after* the transaction,
+              // outside it, for the same reason.
+              return { kind: "atCapacity", bound: bound.name, limit, occupancy };
+            }
+          }
           connection
             .prepare(
               "INSERT INTO iteration (id, status, request, plan, plan_digest, attempts, " +
-                "created_at_ms, updated_at_ms) VALUES (?, 'planned', ?, ?, ?, 1, ?, ?)",
+                "run_id, topic_branch, workspace, identifiers_spent, created_at_ms, " +
+                "updated_at_ms) VALUES (?, 'planned', ?, ?, ?, 1, ?, ?, ?, 0, ?, ?)",
             )
             // One attempt, not zero: the row exists because an attempt is being
             // made. `nextStep` compares the policy's ceiling against a *fresh*
             // iteration's zero attempts, which is the state before this row --
             // and `records.ts` says the persisted count is one in lap 1,
             // always, because there is no back-edge to raise it.
-            .run(input.id, input.request, encoded, digest, input.nowMs, input.nowMs);
-        });
-        const row = readRow(input.id);
-        if (row === null) {
-          return {
-            kind: "defect",
-            reason: `the reserved row '${input.id}' was not there after its own commit`,
-          };
-        }
-        return { kind: "reserved", record: toRecord(row) };
-      } catch (error) {
-        if (isLiveIndexViolation(error)) {
-          // rondo#8: the single-flight refusal, and the second of the two
-          // places the constant 1 lives (the first is `iteration_one_live` in
-          // SCHEMA above). It is not a defect -- a conductor that is already
-          // conducting saying so is an ordinary answer, and the caller retries
-          // when the live iteration ends. When the ledger of D-0012's three
-          // conditions replaces the index, this branch becomes "the bound is
-          // reached" and both sites change together.
-          const live = readLiveRow();
-          if (live === null) {
+            //
+            // `identifiers_spent` is zero here and is set to one by the single
+            // transition into `admitting`. Until then the triple is held but
+            // unspent: no run exists under it, no branch was cut and no
+            // worktree was materialised.
+            .run(
+              input.id,
+              input.request,
+              encoded,
+              digest,
+              input.runId,
+              input.topicBranch,
+              input.workspace,
+              input.nowMs,
+              input.nowMs,
+            );
+          const written = readRow(input.id);
+          if (written === null) {
             return {
               kind: "defect",
-              reason:
-                "the unique index refused a second live iteration and no live row could then " +
-                "be read, so the store cannot say which iteration holds the conductor",
+              reason: `the reserved row '${input.id}' was not there inside its own transaction`,
             };
           }
-          return { kind: "occupied", liveIterationId: requireText(live, "id") };
+          return { kind: "reserved", record: toRecord(written) };
+        });
+        if (outcome === null) {
+          return { kind: "defect", reason: `reserving '${input.id}' produced no answer` };
+        }
+        if (outcome.kind === "atCapacity") {
+          recordRefusal(input, outcome);
+        }
+        return outcome;
+      } catch (error) {
+        if (isClaimCollision(error)) {
+          // rondo minting a name it has already handed out, which the allocator
+          // makes impossible by construction -- so reaching this is a defect in
+          // rondo and is filed as one, in rondo's own words rather than the
+          // driver's. It is *not* the collision a person causes by creating
+          // `rondo/iter-005` by hand: that one is not in this database at all
+          // and is still refused by git, at materialisation.
+          return {
+            kind: "defect",
+            reason:
+              `the identifiers minted for iteration '${input.id}' are already held by another ` +
+              "iteration, and an allocated triple is held for ever once it is spent: " +
+              describe(error),
+          };
         }
         if (isIdCollision(error)) {
           // A defect, in rondo's own words. The driver's text names a table
@@ -568,12 +925,11 @@ export function iterationStore(connection: DatabaseSync): IterationStore {
       return row === null ? { kind: "absent" } : decode(row, id);
     },
 
-    async readLive(): Promise<ReadOutcome> {
-      const row = readLiveRow();
-      // The id comes out of the row here rather than from an argument, and it
+    async readLive(): Promise<readonly ReadOutcome[]> {
+      // The id comes out of each row here rather than from an argument, and it
       // is read defensively: a row that will not decode may be a row whose own
       // `id` is not text, and the answer still has to say which row it means.
-      return row === null ? { kind: "absent" } : decode(row, idOf(row));
+      return readLiveRows().map((row) => decode(row, idOf(row)));
     },
 
     async settle(id: string, reason: string, nowMs: number): Promise<SettleOutcome> {
@@ -673,26 +1029,32 @@ function assignmentsFor(fields: IterationFields): {
 }
 
 /**
- * Whether an error is the single-flight index refusing a second live row.
+ * Whether an error is one of the three claim indexes refusing a minted name.
  *
- * Matched on the message because that is what the driver gives: `node:sqlite`
- * reports a constraint failure as `ERR_SQLITE_ERROR` with SQLite's own text,
- * and the text is what distinguishes `iteration.live` from `iteration.id`. The
- * distinction matters: a duplicate iteration id is rondo minting one twice,
- * which is a defect, and reporting it as `occupied` would tell an operator to
- * wait for an iteration that has nothing to do with theirs.
+ * The successor to `isLiveIndexViolation`, which matched `iteration.live` and
+ * `iteration_one_live` and died with the index it named. Matched on the
+ * driver's message for the same reason that one was: `node:sqlite` reports a
+ * constraint failure as `ERR_SQLITE_ERROR` with SQLite's own text, and the text
+ * is the only thing that says *which* constraint refused. The distinction still
+ * matters -- an identifier rondo minted twice is a rondo defect, and a
+ * duplicate iteration id is a different rondo defect -- but neither is
+ * `atCapacity` any more, because capacity is now counted before the insert
+ * rather than learned from a refusal.
  */
-function isLiveIndexViolation(error: unknown): boolean {
+function isClaimCollision(error: unknown): boolean {
   return (
     isUniqueViolation(error) &&
-    (error.message.includes("iteration.live") || error.message.includes("iteration_one_live"))
+    (error.message.includes("iteration.run_id") ||
+      error.message.includes("iteration.topic_branch") ||
+      error.message.includes("iteration.workspace") ||
+      error.message.includes("iteration_holds_"))
   );
 }
 
 /**
  * Whether an error is the primary key refusing a second row under one id.
  *
- * Matched the same way as {@link isLiveIndexViolation} and for the same reason:
+ * Matched the same way as {@link isClaimCollision} and for the same reason:
  * the driver's message is the only thing that says which constraint refused.
  * Kept apart from it because the two are different facts with different
  * answers -- one is a conductor that is busy, the other is rondo minting an id
@@ -755,6 +1117,9 @@ function toRecord(row: SqlRow): IterationRecord {
     planDigest: requireMatchingDigest(row),
     attempts: requireInteger(row, "attempts"),
     runId: optionalText(row, "run_id"),
+    topicBranch: optionalText(row, "topic_branch"),
+    workspace: optionalText(row, "workspace"),
+    identifiersSpent: requireInteger(row, "identifiers_spent"),
     continuoRevision: optionalText(row, "continuo_revision"),
     agentTypeDigest: optionalText(row, "agent_type_digest"),
     configDigest: optionalText(row, "config_digest"),

@@ -27,10 +27,11 @@
 import { DatabaseSync } from "node:sqlite";
 import { expect, test } from "vitest";
 
+import { CONSERVATIVE_HOST_POLICY } from "../../src/refrain/policy.js";
 import { planDigest } from "../../src/store/plan.js";
 import type { JsonRecord } from "../../src/store/records.js";
 import { TERMINAL_STATUSES } from "../../src/store/records.js";
-import { iterationStore, openIterationStore } from "../../src/store/sqlite.js";
+import { type HostPolicy, iterationStore, openIterationStore } from "../../src/store/sqlite.js";
 
 /**
  * A plan payload of the shape `src/refrain/plan.ts` renders.
@@ -52,11 +53,32 @@ const somePlan = (overrides: JsonRecord = {}): JsonRecord => ({
   ...overrides,
 });
 
-/** A store over a database of its own, so no test can see another's rows. */
-const freshStore = () => iterationStore(new DatabaseSync(":memory:"));
+/**
+ * A store over a database of its own, so no test can see another's rows.
+ *
+ * Takes the host policy rather than hard-coding it, so a test that means to
+ * probe a bound (`maxOccupying`, `maxLive`) can hand this a different pair
+ * without opening its own connection; a test that does not care gets
+ * `CONSERVATIVE_HOST_POLICY`, the same default `iterationStore` documents.
+ */
+const freshStore = (policy: HostPolicy = CONSERVATIVE_HOST_POLICY) =>
+  iterationStore(new DatabaseSync(":memory:"), policy);
+
+/**
+ * The triple the allocator would have derived for this id (`src/refrain/allocator.ts`).
+ *
+ * Restated here rather than imported so this file's reservations do not
+ * depend on the allocator's internals -- only on ids never colliding, which
+ * distinct ids across this file's tests already guarantee.
+ */
+const tripleFor = (id: string) => ({
+  runId: `rondo-${id}`,
+  topicBranch: `rondo/${id}`,
+  workspace: `/srv/work/iter-${id}`,
+});
 
 const reserveOne = async (store: ReturnType<typeof freshStore>, id: string, nowMs = 1_000) =>
-  store.reserve({ id, request: "do the thing", plan: somePlan(), nowMs });
+  store.reserve({ id, request: "do the thing", plan: somePlan(), nowMs, ...tripleFor(id) });
 
 /**
  * The record a read was expected to find.
@@ -89,7 +111,14 @@ test("a reservation commits a planned row that reads back with its plan and dige
   // field, and the digest is the digest of those bytes (D-0019 rule 4).
   expect(read.plan).toEqual(somePlan());
   expect(read.planDigest).toBe(planDigest(somePlan()));
-  expect(read.runId).toBeNull();
+  // The allocator's triple is written by `reserve()` itself now (D-0023 rule
+  // 5), not typed by a caller and committed later at `admitting`.
+  expect(read.runId).toBe("rondo-i-0001");
+  expect(read.topicBranch).toBe("rondo/i-0001");
+  expect(read.workspace).toBe("/srv/work/iter-i-0001");
+  // The triple is held from the first row, but not yet spent: no run exists
+  // under it until the transition into `admitting` sets `identifiersSpent`.
+  expect(read.identifiersSpent).toBe(0);
   expect(read.continuoRevision).toBeNull();
 });
 
@@ -98,9 +127,21 @@ test("the plan digest does not depend on the order the plan's keys were written 
   const forwards: JsonRecord = { run_id: "r-0001", workspace: "/w", turn_timeout_ms: 1 };
   const backwards: JsonRecord = { turn_timeout_ms: 1, workspace: "/w", run_id: "r-0001" };
 
-  await store.reserve({ id: "i-0001", request: "one", plan: forwards, nowMs: 1 });
+  await store.reserve({
+    id: "i-0001",
+    request: "one",
+    plan: forwards,
+    nowMs: 1,
+    ...tripleFor("i-0001"),
+  });
   await store.transition("i-0001", "planned", "closed", {}, 2);
-  await store.reserve({ id: "i-0002", request: "two", plan: backwards, nowMs: 3 });
+  await store.reserve({
+    id: "i-0002",
+    request: "two",
+    plan: backwards,
+    nowMs: 3,
+    ...tripleFor("i-0002"),
+  });
 
   const first = await readRecord(store, "i-0001");
   const second = await readRecord(store, "i-0002");
@@ -110,26 +151,39 @@ test("the plan digest does not depend on the order the plan's keys were written 
   expect(second.plan).toEqual(first.plan);
 });
 
-test("the partial unique index refuses a second live iteration and names the first", async () => {
+test("the occupying bound refuses a second executing iteration and names it", async () => {
+  // rondo#8's constant 1 is `maxOccupying` under `CONSERVATIVE_HOST_POLICY`
+  // now, and the row it refuses beside (D-0019's `occupied`) is replaced by
+  // the count and the bound it hit (D-0023 rule 27): a `planned` row is
+  // `occupying`, so a second reservation while it is live is refused before
+  // any row or claim is written.
   const store = freshStore();
   await reserveOne(store, "i-0001");
 
   const second = await reserveOne(store, "i-0002", 2_000);
 
-  // rondo#8: the constant 1, refusing. Not a defect -- a conductor that is
-  // already conducting saying so.
-  expect(second).toEqual({ kind: "occupied", liveIterationId: "i-0001" });
+  // Not a defect -- a conductor that is already conducting saying so.
+  expect(second).toEqual({ kind: "atCapacity", bound: "maxOccupying", limit: 1, occupancy: 1 });
   expect(await store.read("i-0002")).toEqual({ kind: "absent" });
 });
 
-test("a non-terminal status other than planned holds the lock just as hard", async () => {
-  const store = freshStore();
+test("a suspended status holds no occupying slot, but still counts toward maxLive", async () => {
+  // D-0023 rule 2: `awaiting_human` is exactly the status that stops holding
+  // the *execution* slot, because `lap perform` has already exited by the
+  // time a gate is open. Under the default policy a second admission would
+  // now be allowed to run concurrently (`maxLive` is 3) -- so this is
+  // reproduced under a policy of (1, 1) instead, which is what makes the
+  // claim "still refused" true, and true for the reason D-0023 actually
+  // gives: the `maxLive` bound, not `maxOccupying`.
+  const store = freshStore({ maxOccupying: 1, maxLive: 1 });
   await reserveOne(store, "i-0001");
   await store.transition("i-0001", "planned", "awaiting_human", { gateId: "g-1" }, 2_000);
 
   expect(await reserveOne(store, "i-0002", 3_000)).toEqual({
-    kind: "occupied",
-    liveIterationId: "i-0001",
+    kind: "atCapacity",
+    bound: "maxLive",
+    limit: 1,
+    occupancy: 1,
   });
 });
 
@@ -144,20 +198,21 @@ for (const terminal of TERMINAL_STATUSES) {
     // in SQL -- a status dropped from it would be a conductor that never runs
     // again, and only the missing case would show it.
     expect(await reserveOne(store, "i-0002", 3_000)).toMatchObject({ kind: "reserved" });
-    expect(await store.readLive()).toMatchObject({ kind: "read", record: { id: "i-0002" } });
+    expect(await store.readLive()).toMatchObject([{ kind: "read", record: { id: "i-0002" } }]);
   });
 }
 
-test("readLive is absent when every iteration is terminal", async () => {
+test("readLive is empty when every iteration is terminal", async () => {
   const store = freshStore();
   await reserveOne(store, "i-0001");
-  expect(await store.readLive()).toMatchObject({ kind: "read", record: { id: "i-0001" } });
+  expect(await store.readLive()).toMatchObject([{ kind: "read", record: { id: "i-0001" } }]);
 
   await store.transition("i-0001", "planned", "abandoned", { reason: "operator" }, 2_000);
-  // `absent` rather than a null record: "no live iteration" is an ordinary
-  // answer the caller acts on, and it is not the same fact as "there is a live
-  // iteration and it will not decode".
-  expect(await store.readLive()).toEqual({ kind: "absent" });
+  // An empty array rather than a null record: "no live iteration" is an
+  // ordinary answer the caller acts on, and it is not the same fact as "there
+  // is a live iteration and it will not decode". Plural since D-0023: under a
+  // bound above one there is no single answer to name absent or present.
+  expect(await store.readLive()).toEqual([]);
 });
 
 test("a transition from an unexpected status is refused and writes nothing", async () => {
@@ -166,10 +221,12 @@ test("a transition from an unexpected status is refused and writes nothing", asy
   await store.transition("i-0001", "planned", "classified", { classification: "allowed" }, 2_000);
 
   const refused = await store.transition(
+    // `runId` is no longer a field a transition may write (D-0023 rule 5): it
+    // was written once, by `reserve()`, and stays whatever it was.
     "i-0001",
     "planned",
     "admitting",
-    { runId: "r-0001", continuoRevision: "abc123" },
+    { continuoRevision: "abc123" },
     3_000,
   );
 
@@ -178,7 +235,8 @@ test("a transition from an unexpected status is refused and writes nothing", asy
   // transaction left the row alone, and only the database can say so.
   const row = await readRecord(store, "i-0001");
   expect(row.status).toBe("classified");
-  expect(row.runId).toBeNull();
+  // Held since reservation, and untouched by the refused transition.
+  expect(row.runId).toBe("rondo-i-0001");
   expect(row.continuoRevision).toBeNull();
   expect(row.updatedAtMs).toBe(2_000);
 });
@@ -212,19 +270,25 @@ test("the row committed at admitting names the run id and the observed revision"
     "i-0001",
     "classified",
     "admitting",
-    { runId: "r-0001", continuoRevision: "44f62336108b86cab5da791111ffa0e5b73cd01a" },
+    // `runId` was already committed at `reserve()` (D-0023 rule 5) and
+    // survives untouched through `classified`; the one transition into
+    // `admitting` is what spends the triple, by setting `identifiersSpent`.
+    { continuoRevision: "44f62336108b86cab5da791111ffa0e5b73cd01a", identifiersSpent: 1 },
     3_000,
   );
 
   expect(admitting.kind).toBe("transitioned");
-  // The write order of D-0019 rule 10: this row is committed *before*
-  // `run admit` is spawned, so a crash between the two leaves a row naming the
-  // run id and the build that ran it. The reverse order would leave a run
-  // continuo knows about and rondo does not.
+  // The write order of D-0019 rule 10: the run id has named this row since
+  // reservation, so a crash between this commit and `run admit` leaves a row
+  // naming the run id and the build that ran it. The reverse order would
+  // leave a run continuo knows about and rondo does not.
   const crashed = await readRecord(store, "i-0001");
   expect(crashed.status).toBe("admitting");
-  expect(crashed.runId).toBe("r-0001");
+  expect(crashed.runId).toBe("rondo-i-0001");
   expect(crashed.continuoRevision).toBe("44f62336108b86cab5da791111ffa0e5b73cd01a");
+  // The triple is spent from this transition on (D-0023 rule 5's other half):
+  // continuo now owns a run under this name, for ever.
+  expect(crashed.identifiersSpent).toBe(1);
   // Everything learned at `classified` is still on the row, because a
   // transition writes the fields it was given and clears nothing else.
   expect(crashed.agentTypeDigest).toBe("sha256:a");
@@ -245,7 +309,7 @@ test("the executor policy is persisted as a pair: the tier declared and the mode
     { neutralRoleName: "worker", modelTier: "standard" },
     2_000,
   );
-  await store.transition("i-0001", "classified", "admitting", { runId: "r-0001" }, 3_000);
+  await store.transition("i-0001", "classified", "admitting", { identifiersSpent: 1 }, 3_000);
   await store.transition("i-0001", "admitting", "admitted", { continuoRole: "worker" }, 4_000);
   await store.transition("i-0001", "admitted", "performing", {}, 5_000);
   const suspended = await store.transition(
@@ -290,7 +354,7 @@ test("a transition hands back the row as the database holds it", async () => {
 
 test("a plan edited without its digest is unreadable, digest mismatch and all", async () => {
   const connection = new DatabaseSync(":memory:");
-  const store = iterationStore(connection);
+  const store = iterationStore(connection, CONSERVATIVE_HOST_POLICY);
   await reserveOne(store, "i-0001");
 
   // The dangerous edit is not the malformed one -- it is the *valid* one. A
@@ -311,7 +375,7 @@ test("a plan edited without its digest is unreadable, digest mismatch and all", 
 
 test("settle releases a live row and refuses to overwrite a finished one", async () => {
   const connection = new DatabaseSync(":memory:");
-  const store = iterationStore(connection);
+  const store = iterationStore(connection, CONSERVATIVE_HOST_POLICY);
   await reserveOne(store, "i-0001");
   await store.transition("i-0001", "planned", "closed", { gateOutcome: "approved" }, 2_000);
 
@@ -334,7 +398,7 @@ test("settle releases a live row and refuses to overwrite a finished one", async
 
 test("a status edited out of band is unreadable rather than a coercion", async () => {
   const connection = new DatabaseSync(":memory:");
-  const store = iterationStore(connection);
+  const store = iterationStore(connection, CONSERVATIVE_HOST_POLICY);
   await reserveOne(store, "i-0001");
 
   // A person with sqlite3 is one edit away from any string at all, so this is
@@ -349,7 +413,7 @@ test("a status edited out of band is unreadable rather than a coercion", async (
   expect(read.kind === "unreadable" && read.reason).toMatch(/gremlin/);
   // And the same row through the live read, which is how a restart finds it:
   // the row still holds the lock, so the answer has to name it.
-  expect(await store.readLive()).toMatchObject({ kind: "unreadable", id: "i-0001" });
+  expect(await store.readLive()).toMatchObject([{ kind: "unreadable", id: "i-0001" }]);
   // A transition is still a defect that names itself, rather than an
   // `unexpectedStatus` naming a status that is not one.
   const outcome = await store.transition("i-0001", "planned", "classified", {}, 2_000);
@@ -358,7 +422,7 @@ test("a status edited out of band is unreadable rather than a coercion", async (
 
 test("a plan column that is not JSON is unreadable through both reads", async () => {
   const connection = new DatabaseSync(":memory:");
-  const store = iterationStore(connection);
+  const store = iterationStore(connection, CONSERVATIVE_HOST_POLICY);
   await reserveOne(store, "i-0001");
 
   connection.prepare("UPDATE iteration SET plan = ? WHERE id = ?").run("{not json", "i-0001");
@@ -366,12 +430,12 @@ test("a plan column that is not JSON is unreadable through both reads", async ()
   const read = await store.read("i-0001");
   expect(read).toMatchObject({ kind: "unreadable", id: "i-0001" });
   expect(read.kind === "unreadable" && read.reason).toMatch(/not JSON/);
-  expect(await store.readLive()).toMatchObject({ kind: "unreadable", id: "i-0001" });
+  expect(await store.readLive()).toMatchObject([{ kind: "unreadable", id: "i-0001" }]);
 });
 
 test("settle ends a row that will not decode, and the lock is then free", async () => {
   const connection = new DatabaseSync(":memory:");
-  const store = iterationStore(connection);
+  const store = iterationStore(connection, CONSERVATIVE_HOST_POLICY);
   await reserveOne(store, "i-0001");
   connection.prepare("UPDATE iteration SET status = ? WHERE id = ?").run("gremlin", "i-0001");
 
@@ -399,7 +463,7 @@ test("settle on an id with no row is missing and writes nothing", async () => {
   // The live iteration is untouched, which is the assertion that separates
   // "wrote nothing" from "reported nothing": a settle by the wrong id must not
   // have released somebody else's lock.
-  expect(await store.readLive()).toMatchObject({ kind: "read", record: { id: "i-0001" } });
+  expect(await store.readLive()).toMatchObject([{ kind: "read", record: { id: "i-0001" } }]);
   const live = await readRecord(store, "i-0001");
   expect(live.status).toBe("planned");
   expect(live.updatedAtMs).toBe(1_000);
@@ -420,7 +484,7 @@ test("settle also ends an ordinary readable row, because it is status-blind", as
   const settled = await readRecord(store, "i-0001");
   expect(settled.status).toBe("abandoned");
   expect(settled.gateId).toBe("g-1");
-  expect(await store.readLive()).toEqual({ kind: "absent" });
+  expect(await store.readLive()).toEqual([]);
 });
 
 test("a digest that does not describe the plan beside it is refused", async () => {
@@ -477,13 +541,14 @@ test("reserving the same iteration id twice is a defect, not an occupied conduct
  * `open(2)` rather than rondo's.
  */
 test("openIterationStore opens a store by path, schema applied", async () => {
-  const store = openIterationStore(":memory:");
+  const store = openIterationStore(":memory:", CONSERVATIVE_HOST_POLICY);
 
   const reserved = await store.reserve({
     id: "iter-open",
     request: "do the thing",
     plan: somePlan(),
     nowMs: 1_000,
+    ...tripleFor("iter-open"),
   });
   expect(reserved.kind).toBe("reserved");
 

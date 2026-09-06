@@ -44,6 +44,7 @@ import type {
   IssuanceParties,
 } from "../cadenza/facade.js";
 import type { JsonRecord, JsonValue } from "../store/records.js";
+import type { Allocation } from "./allocator.js";
 
 /**
  * The recipients continuo's outbox has a handler for, at the pinned revision.
@@ -87,13 +88,28 @@ export interface RunPlan {
   // --- continuo: the control plane and the run -----------------------------
   /** The control-plane database every verb names. Absolute. */
   readonly db: string;
-  /** The run id, which is the caller's to allocate (D-0012). */
-  readonly runId: string;
-  readonly leaseClaimantId: string;
-  /** The worktree the run is materialised into. Absolute. */
-  readonly workspace: string;
+  /**
+   * The directory rondo materialises workspaces under. Absolute.
+   *
+   * **This one field replaces three (D-0023 rule 9).** `runId`, `workspace` and
+   * `topicBranch` used to be here, typed by the operator, because rondo had no
+   * allocator and minting them inside an implementation diff would have taken
+   * D-0012's open decision by accident. The allocator exists now, so the caller
+   * must stop supplying them: two authorities for one fact is exactly how a
+   * second run is handed a branch that a first one already owns.
+   *
+   * What the caller still chooses is *where* -- the root. What rondo derives is
+   * the component under it, from the iteration id.
+   *
+   * **This fires the first half of D-0019 rule 3 and leaves the second half
+   * alone.** Rule 3 said rondo gains no allocator *and* no configuration layer
+   * in lap 1, and `plan.ts` named both as what it was avoiding. D-0023 fires the
+   * condition rule 3 named for the allocator only: rondo still supplies no
+   * defaults for a fence's geometry, and the twenty-odd fields below are still
+   * the caller's to write.
+   */
+  readonly workspaceRoot: string;
   readonly baseBranch: string;
-  readonly topicBranch: string;
   /** The request text. The one field of eight that the one-liner supplies. */
   readonly prompt: string;
 
@@ -252,9 +268,26 @@ export interface RunPlan {
  */
 const MAX_TIMER_MS = 2_147_483_647;
 
+/**
+ * A validated plan with the allocator's three identifiers on it.
+ *
+ * The shape everything downstream of `admit()` actually needs: continuo's two
+ * verbs are handed a run id, a workspace and a topic branch, and none of them
+ * is the caller's any more (D-0023 rule 9). Keeping it a separate type from
+ * {@link RunPlan} rather than making the three fields optional is what makes
+ * "the caller cannot write these" and "the invoker can rely on these" the same
+ * statement, checked by the compiler at every site in between.
+ */
+export interface AdmittedPlan extends RunPlan, Allocation {}
+
 /** A plan rondo accepted, or the first reason it did not. */
 export type PlanOutcome =
   | { readonly kind: "planned"; readonly plan: RunPlan }
+  | { readonly kind: "refused"; readonly reason: string };
+
+/** An admitted plan, or the first reason its identifiers were not usable. */
+export type AdmittedPlanOutcome =
+  | { readonly kind: "planned"; readonly plan: AdmittedPlan }
   | { readonly kind: "refused"; readonly reason: string };
 
 /**
@@ -353,11 +386,8 @@ export function runPlan(input: RunPlan): PlanOutcome {
   try {
     const plan: RunPlan = {
       db: requireAbsolute("db", input.db),
-      runId: requireIdentifier("runId", input.runId),
-      leaseClaimantId: requireIdentifier("leaseClaimantId", input.leaseClaimantId),
-      workspace: requireAbsolute("workspace", input.workspace),
+      workspaceRoot: requireAbsolute("workspaceRoot", input.workspaceRoot),
       baseBranch: requireNotOptionShaped("baseBranch", input.baseBranch),
-      topicBranch: requireNotOptionShaped("topicBranch", input.topicBranch),
       prompt: requireNonEmpty("prompt", input.prompt),
       repository: requireAbsolute("repository", input.repository),
       artifactRoot: requireAbsolute("artifactRoot", input.artifactRoot),
@@ -494,16 +524,10 @@ function requireParties(input: RunPlan): IssuanceParties {
   if (typeof parties !== "object" || parties === null || Array.isArray(parties)) {
     return refuse("'parties' is not a table, and cadenza issues a contract between two identities");
   }
-  const grantee: unknown = (parties as { readonly grantee?: unknown }).grantee;
-  if (grantee !== input.runId) {
-    const spelled = typeof grantee === "string" ? `'${grantee}'` : "not a string";
-    return refuse(
-      `'parties.grantee' is ${spelled}, and it must equal 'runId' ('${input.runId}'): the ` +
-        "conductor classifies under the run id, so cadenza would answer a different grantee " +
-        "with grantee_mismatch -- an answered classification that ends the iteration at " +
-        "'abandoned' after the row is reserved and the single-flight lock taken.",
-    );
-  }
+  // The grantee is **not** checked here any more. It is not the caller's to
+  // write under D-0023 rule 9: the allocator mints the run id, so the only
+  // correct grantee is a value the caller cannot know at this point.
+  // {@link admittedPlan} fills it and then asserts it.
   return input.parties;
 }
 
@@ -525,6 +549,58 @@ function refuse(reason: string): never {
 }
 
 /**
+ * Put the allocator's three identifiers onto a validated plan.
+ *
+ * **The shape checks that used to run on the caller's typing now run on
+ * rondo's own construction, and that is a smaller job rather than a larger
+ * one** (D-0023 rule 9). `requireIdentifier`, `requireAbsolute` and
+ * `requireNotOptionShaped` are the same three functions D-0019 pointed at an
+ * operator's command line; here they assert that the derivation produced
+ * something continuo will accept. They are **not** the whole of the validation
+ * and must not be read as it: neither absoluteness nor option-shape catches a
+ * workspace that escapes its root or a derivation that is not injective, which
+ * is why the alphabet is checked on the iteration id on the way *in*, before
+ * anything is derived from it.
+ *
+ * **`parties.grantee` is written here and then asserted.** cadenza answers a
+ * contract whose grantee differs from the classification context with
+ * `grantee_mismatch` -- an *answered* classification, so terminal `abandoned`
+ * after the row exists. The caller can no longer write the run id, so it can no
+ * longer write the grantee either; the allocator fills it, and the equality
+ * check survives as an assertion about rondo's own two writes. It is placed
+ * where it can never fail silently rather than removed as unreachable: a later
+ * edit that filled one of the two from somewhere else would fail here instead
+ * of at cadenza, after a lap.
+ */
+export function admittedPlan(plan: RunPlan, allocation: Allocation): AdmittedPlanOutcome {
+  try {
+    const runId = requireIdentifier("runId", allocation.runId);
+    const parties: IssuanceParties = { ...plan.parties, grantee: runId };
+    const admitted: AdmittedPlan = {
+      ...plan,
+      runId,
+      leaseClaimantId: requireIdentifier("leaseClaimantId", allocation.leaseClaimantId),
+      workspace: requireAbsolute("workspace", allocation.workspace),
+      topicBranch: requireNotOptionShaped("topicBranch", allocation.topicBranch),
+      parties,
+    };
+    if (admitted.parties.grantee !== admitted.runId) {
+      return refuse(
+        `'parties.grantee' is '${String(admitted.parties.grantee)}' and 'runId' is ` +
+          `'${admitted.runId}'. rondo writes both, from one allocation, so this cannot be a ` +
+          "caller's mistake -- it is rondo having acquired a second authority for the run id.",
+      );
+    }
+    return { kind: "planned", plan: Object.freeze(admitted) };
+  } catch (error) {
+    if (error instanceof PlanRefusal) {
+      return { kind: "refused", reason: error.message };
+    }
+    throw error;
+  }
+}
+
+/**
  * The plan as the store persists it (D-0019 rule 4).
  *
  * A plain JSON record rather than the plan itself, because the store may not
@@ -534,9 +610,10 @@ function refuse(reason: string): never {
  * identities, a set of capability keys -- and re-deriving them would be rondo
  * modelling cadenza rather than persisting what it was given.
  */
-export function planPayload(plan: RunPlan): JsonRecord {
+export function planPayload(plan: AdmittedPlan): JsonRecord {
   return {
     db: plan.db,
+    workspace_root: plan.workspaceRoot,
     run_id: plan.runId,
     lease_claimant_id: plan.leaseClaimantId,
     workspace: plan.workspace,
@@ -587,15 +664,48 @@ export function planPayload(plan: RunPlan): JsonRecord {
  * full validation rather than trusting that whatever wrote the row validated
  * it: the bytes may have been written by an older rondo, or edited by a person.
  */
-export function readPlan(payload: JsonRecord): PlanOutcome {
+export function readPlan(payload: JsonRecord): AdmittedPlanOutcome {
+  const validated = readRunPlan(payload);
+  if (validated.kind === "refused") {
+    return validated;
+  }
   try {
-    const draft: RunPlan = {
-      db: readString(payload, "db"),
+    // Read back rather than re-derived, and that is the point of storing them.
+    // Re-deriving from the iteration id would give the right answer for every
+    // row rondo has ever written and the wrong one for any row whose triple was
+    // not a function of its own id -- so the row, and not the derivation, is
+    // what the machine reads.
+    const allocation: Allocation = {
       runId: readString(payload, "run_id"),
       leaseClaimantId: readString(payload, "lease_claimant_id"),
       workspace: readString(payload, "workspace"),
-      baseBranch: readString(payload, "base_branch"),
       topicBranch: readString(payload, "topic_branch"),
+    };
+    return admittedPlan(validated.plan, allocation);
+  } catch (error) {
+    if (error instanceof PlanRefusal) {
+      return { kind: "refused", reason: error.message };
+    }
+    throw error;
+  }
+}
+
+/**
+ * The caller's half of a plan, read from a document (D-0023 rule 9).
+ *
+ * What an operator's plan file holds: everything except the three identifiers
+ * the allocator mints. Separate from {@link readPlan} because the two documents
+ * are genuinely different -- a plan file is written by a person before an
+ * iteration exists, and a stored payload is written by rondo after one does --
+ * and reading the first with the second's rules would demand that an operator
+ * type the values D-0023 exists to stop them typing.
+ */
+export function readRunPlan(payload: JsonRecord): PlanOutcome {
+  try {
+    const draft: RunPlan = {
+      db: readString(payload, "db"),
+      workspaceRoot: readString(payload, "workspace_root"),
+      baseBranch: readString(payload, "base_branch"),
       prompt: readString(payload, "prompt"),
       repository: readString(payload, "repository"),
       artifactRoot: readString(payload, "artifact_root"),

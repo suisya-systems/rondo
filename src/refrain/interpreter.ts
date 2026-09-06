@@ -47,11 +47,19 @@
  */
 import type { IterationFields, IterationRecord, IterationStatus } from "../store/records.js";
 import { isTerminal } from "../store/records.js";
-
+import { allocate } from "./allocator.js";
 import { nextStep, type Step } from "./loop.js";
-import { planPayload, type RunPlan, readPlan, runPlan } from "./plan.js";
+import {
+  type AdmittedPlan,
+  admittedPlan,
+  planPayload,
+  type RunPlan,
+  readPlan,
+  runPlan,
+} from "./plan.js";
 import type { LoopPolicy } from "./policy.js";
 import type {
+  BoundName,
   ClassificationRecord,
   ConductorPorts,
   EffectOutcome,
@@ -114,13 +122,32 @@ const MAX_TRANSITIONS = 12;
  * would hold the single-flight lock on an iteration whose only exit is a human,
  * for a policy stop -- an ordinary configured outcome, not an incident.
  *
- * `id` is the caller's, like every other identifier in lap 1 (D-0019 rule 3):
- * rondo has no allocator, and minting one here would be D-0012's open decision
- * taken inside an implementation diff.
+ * **`id` is the caller's and is now the *only* identifier that is** (D-0023).
+ * rondo has an allocator, and the run id, the topic branch and the workspace
+ * are derived from this one value rather than typed beside it -- so this
+ * argument reaches three command lines it never reached before, and it is
+ * checked against a closed alphabet here, before `reserve()`, for the reason
+ * every other refusal in this function is placed where it is: a value refused
+ * before the row costs no row and no lock.
  *
  * Returns when the machine reaches a state that suspends (`awaiting_human`, and
  * the process may then exit) or that is terminal. It never waits on a human.
  */
+/**
+ * The bound, in the words a person refused by it needs.
+ *
+ * Two sentences rather than the field name, because `maxOccupying` and
+ * `maxLive` are the operator's vocabulary and the person hitting the bound may
+ * be neither: what they need to know is *which* thing there is too much of, and
+ * the two are genuinely different things -- work in flight, and questions left
+ * open.
+ */
+function describeBound(bound: BoundName): string {
+  return bound === "maxOccupying"
+    ? "iterations are already executing on this host"
+    : "iterations are already open on this host, counting those suspended at a gate";
+}
+
 export async function admit(
   ports: ConductorPorts,
   plan: RunPlan,
@@ -159,8 +186,34 @@ export async function admit(
     return { iterationId: null, status: null, lines: Object.freeze(lines) };
   }
 
+  // **Allocated before the lock and refused before it too** (D-0023 rules 3
+  // and 26). The derivation is pure, so this costs no I/O; what it buys is that
+  // an iteration id which cannot produce a contained, injective, git-legal
+  // triple is refused here rather than inside `lap perform`, after continuo's
+  // run row exists for ever.
+  const allocation = allocate(id, validated.plan.workspaceRoot);
+  if (allocation.kind === "refused") {
+    lines.push(
+      `The iteration id was refused before an iteration was reserved: ${allocation.reason}`,
+      "No row was written and no lock was taken, so nothing has to be settled by a person.",
+    );
+    return { iterationId: null, status: null, lines: Object.freeze(lines) };
+  }
+
+  const admitted = admittedPlan(validated.plan, allocation.allocation);
+  if (admitted.kind === "refused") {
+    lines.push(
+      `The allocated identifiers were refused before an iteration was reserved: ${admitted.reason}`,
+      "No row was written and no lock was taken, so nothing has to be settled by a person.",
+    );
+    return { iterationId: null, status: null, lines: Object.freeze(lines) };
+  }
+
   const reservation = await ports.store.reserve({
     id,
+    runId: admitted.plan.runId,
+    topicBranch: admitted.plan.topicBranch,
+    workspace: admitted.plan.workspace,
     // **The row's request text is the plan's own `prompt`, and there is no
     // second way to supply it.** This used to take a `request` argument beside
     // the plan, which meant the durable row could record what a person asked
@@ -169,25 +222,53 @@ export async function admit(
     // the type system or the store able to notice. One source of truth beats a
     // check that both callers have to remember to satisfy.
     request: validated.plan.prompt,
-    plan: planPayload(validated.plan),
+    plan: planPayload(admitted.plan),
     nowMs: ports.now(),
   });
   switch (reservation.kind) {
-    case "occupied":
-      // D-0012's single-flight, as an ordinary answer rather than a fault: a
-      // conductor that is already conducting says so, and names the row a
-      // caller can look at.
+    case "atCapacity":
+      // D-0023's capacity refusal, as an ordinary answer rather than a fault: a
+      // host already at its bound says so, and says which bound and how full it
+      // was, because those are the two facts a person needs in order to decide
+      // between waiting and raising a number.
+      //
+      // **The occupancy may read higher than the bound, and the wording must
+      // survive that without looking like corruption** (D-0023 rule 27). The
+      // bound is an admission control and not a conservation law: `stall()`
+      // writes `stalled` from any status, and `resume()` reaches it from
+      // `awaiting_human`, so a suspended row can re-enter the occupying set
+      // without passing through a reservation.
+      //
+      // **And it does not drain on its own, which an earlier version of this
+      // message got wrong.** The edge is per row, so every suspended iteration
+      // can take it independently and the occupying set can reach `maxLive`
+      // rather than the bound plus one. `RELEASED_BY` gives `stalled` exactly
+      // one releasing event -- an operator's `abandon()` -- so telling a person
+      // to wait would be telling them to wait for something that cannot
+      // happen. The excess is fail-closed, because nothing of a `stalled` row
+      // is running, but it is the operator's to clear.
       lines.push(
-        `Refused: iteration ${reservation.liveIterationId} is still live, and at most one ` +
-          "iteration may be non-terminal at a time.",
-        "Try again once that iteration reaches a terminal status, or settle it with abandon().",
+        `Refused: ${String(reservation.occupancy)} of a permitted ` +
+          `${String(reservation.limit)} ${describeBound(reservation.bound)}.`,
+        reservation.occupancy > reservation.limit
+          ? "That is more than the bound rather than equal to it, which is expected rather than " +
+              "corrupt: an iteration already counted re-entered the set without a reservation, " +
+              "which is what happens when a suspended iteration is stalled. Nothing of a " +
+              "stalled iteration is running, but nothing ends one either: settle them with " +
+              "abandon() before anything further can be admitted."
+          : "Try again once one of them reaches a terminal status, settle one with abandon(), " +
+              "or raise the bound if this host should be running more at once.",
       );
       return { iterationId: null, status: null, lines: Object.freeze(lines) };
     case "defect":
       lines.push(`The store could not reserve an iteration: ${reservation.reason}`);
       return { iterationId: null, status: null, lines: Object.freeze(lines) };
     case "reserved":
-      lines.push(`Reserved iteration ${reservation.record.id} at 'planned'.`);
+      lines.push(
+        `Reserved iteration ${reservation.record.id} at 'planned', holding run id ` +
+          `${admitted.plan.runId}, branch ${admitted.plan.topicBranch} and workspace ` +
+          `${admitted.plan.workspace}.`,
+      );
       return drive(ports, reservation.record, lines);
   }
 }
@@ -405,10 +486,19 @@ export async function abandon(
         "'gate close' on the operating surface (D-0013).",
     );
   }
-  if (committed.record.runId !== null) {
+  // **Guarded on `identifiersSpent` rather than on the run id, and D-0023 is
+  // why.** Before it, the run id was written by the transition into
+  // `admitting`, so "the row names a run" and "a run was admitted" were the
+  // same fact. The allocator now writes the run id at `reserve()`, so every row
+  // names one from `planned` onward and this warning would fire for an
+  // iteration that spawned nothing -- telling an operator to go and close a run
+  // continuo has never heard of. `identifiersSpent` is the bit that still means
+  // what `runId` used to.
+  if (committed.record.identifiersSpent !== 0) {
     lines.push(
-      `A run may still be open under id ${committed.record.runId}. Closing it is the operator's ` +
-        "(D-0010), and 'gate list' is how a person finds out whether a gate exists for it.",
+      `A run may still be open under id ${committed.record.runId ?? "(unrecorded)"}. Closing it ` +
+        "is the operator's (D-0010), and 'gate list' is how a person finds out whether a gate " +
+        "exists for it.",
     );
   }
   return finish(committed.record, lines);
@@ -852,9 +942,21 @@ async function admitStep(
 
   const admitting = await commit(ports, lines, record, "admitting", {
     continuoRevision: started.value.revision,
-    // From the plan, so it is known before the admission and can be committed
-    // before it (D-0019 rule 10's write order).
-    runId: plan.plan.runId,
+    // **The one transition that spends the identifiers** (D-0023 rule 7). Set
+    // here and nowhere else, because this is the edge after which continuo owns
+    // a run under that id, git owns the branch and the filesystem owns the
+    // worktree -- so the three names are spent, and the row goes on holding
+    // them for ever, including after it reaches a terminal status.
+    //
+    // Committed *before* `run admit` is spawned, which is D-0019 rule 10's
+    // write order applied to the claim as well as to the run id: a crash
+    // between this commit and the spawn must leave the names held, because the
+    // spawn may nonetheless have happened.
+    //
+    // The run id itself is no longer written here. It was put on the row by
+    // `reserve()`, inside the transaction that took the capacity, and
+    // `IterationFields` now makes writing it again a type error.
+    identifiersSpent: 1,
   });
   if (admitting.kind === "blocked") {
     return { kind: "finished", report: admitting.report };
@@ -880,7 +982,6 @@ async function admitStep(
         };
       }
       const next = await commit(ports, lines, admitting.record, "admitted", {
-        runId: admitted.value.runId,
         continuoRole: admitted.value.continuoRole,
       });
       if (next.kind === "blocked") {
@@ -1389,7 +1490,7 @@ async function stall(
 
 /** The plan a step needs, or the stall that ends the call because it will not read. */
 type PlanLookup =
-  | { readonly kind: "read"; readonly plan: RunPlan }
+  | { readonly kind: "read"; readonly plan: AdmittedPlan }
   | { readonly kind: "unreadable"; readonly report: ConductorReport };
 
 /**

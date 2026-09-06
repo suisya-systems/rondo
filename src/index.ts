@@ -105,18 +105,38 @@ export {
   mappedModelTiers,
   mappedNeutralRoleNames,
 } from "./continuo/roles.js";
+export {
+  ALLOCATION_COLLISION_REMEDY,
+  type Allocation,
+  type AllocationOutcome,
+  allocate,
+  ITERATION_ID_PATTERN,
+} from "./refrain/allocator.js";
 export { classifyPlan } from "./refrain/classification.js";
 export { nextStep, type Step } from "./refrain/loop.js";
 export {
+  type AdmittedPlan,
+  type AdmittedPlanOutcome,
+  admittedPlan,
   type PlanOutcome,
   planPayload,
   type RunPlan,
   readPlan,
+  readRunPlan,
   runPlan,
   SERVED_RECIPIENTS,
 } from "./refrain/plan.js";
-export { type Autonomy, CONSERVATIVE_POLICY, type LoopPolicy } from "./refrain/policy.js";
+export {
+  type Autonomy,
+  CONSERVATIVE_HOST_POLICY,
+  CONSERVATIVE_POLICY,
+  type HostPolicy,
+  type HostPolicyOutcome,
+  hostPolicy,
+  type LoopPolicy,
+} from "./refrain/policy.js";
 export type {
+  BoundName,
   ClassificationRecord,
   ConductorPorts,
   ContinuoStarted,
@@ -137,7 +157,12 @@ export type {
   NonTerminalStatus,
   TerminalStatus,
 } from "./store/records.js";
-export { isTerminal, RELEASED_BY, TERMINAL_STATUSES } from "./store/records.js";
+export {
+  isTerminal,
+  RELEASED_BY,
+  SUSPENDED_STATUSES,
+  TERMINAL_STATUSES,
+} from "./store/records.js";
 export {
   type IterationStore,
   iterationStore,

@@ -31,7 +31,7 @@ import type {
   IterationStatus,
   JsonRecord,
 } from "../store/records.js";
-import type { RunPlan } from "./plan.js";
+import type { AdmittedPlan } from "./plan.js";
 
 /**
  * What one effect produced.
@@ -160,14 +160,24 @@ export interface ClassificationRecord {
 /**
  * Why a reservation did not happen.
  *
- * `occupied` is the single-flight refusal and is an ordinary answer rather than
- * a fault: a conductor that is already conducting says so, and the caller tries
- * again when the live iteration ends.
+ * `atCapacity` is the capacity refusal and is an ordinary answer rather than a
+ * fault: a host already at its bound says so, and the caller tries again when
+ * something ends. It replaces D-0019's `occupied`, whose single
+ * `liveIterationId` named the one blocking row -- an answer that only means
+ * anything while the bound is one.
  */
 export type ReserveOutcome =
   | { readonly kind: "reserved"; readonly record: IterationRecord }
-  | { readonly kind: "occupied"; readonly liveIterationId: string }
+  | {
+      readonly kind: "atCapacity";
+      readonly bound: BoundName;
+      readonly limit: number;
+      readonly occupancy: number;
+    }
   | { readonly kind: "defect"; readonly reason: string };
+
+/** Which of the host's two bounds an admission was refused by (D-0023 rule 8). */
+export type BoundName = "maxOccupying" | "maxLive";
 
 /** Why a transition did not happen. */
 export type TransitionOutcome =
@@ -256,8 +266,15 @@ export interface StorePort {
    * that should stop.
    */
   read(id: string): Promise<ReadOutcome>;
-  /** The one non-terminal iteration; `absent` when every iteration is terminal. */
-  readLive(): Promise<ReadOutcome>;
+  /**
+   * Every non-terminal iteration, oldest first (D-0023 rule 15).
+   *
+   * Plural because under a bound above one there is no such thing as *the* live
+   * iteration, and a singular answer would have been an arbitrary row. Each
+   * element is a {@link ReadOutcome} rather than a record so that one row that
+   * will not decode does not make the rest unreadable.
+   */
+  readLive(): Promise<readonly ReadOutcome[]>;
   /**
    * Terminate a row by id alone, without decoding it.
    *
@@ -285,6 +302,16 @@ export interface ReserveInput {
   readonly request: string;
   /** The plan as the loop rendered it; the store digests these bytes. */
   readonly plan: JsonRecord;
+  /**
+   * The triple the allocator minted for this iteration (D-0023 rule 5).
+   *
+   * Written by `reserve()` in the same transaction as the row, because the
+   * claim is what makes a second admission safe and a claim committed after the
+   * row is a claim with a window in it.
+   */
+  readonly runId: string;
+  readonly topicBranch: string;
+  readonly workspace: string;
   readonly nowMs: number;
 }
 
@@ -309,12 +336,18 @@ export interface ConductorPorts {
    * `refused` and `needs_approval` arrive as values here and the *interpreter*
    * is what turns them into terminal `abandoned`.
    */
-  readonly classify: (plan: RunPlan) => Promise<EffectOutcome<ClassificationRecord>>;
+  readonly classify: (plan: AdmittedPlan) => Promise<EffectOutcome<ClassificationRecord>>;
   readonly startContinuo: () => Promise<EffectOutcome<ContinuoStarted>>;
   readonly admitRun: (
-    plan: RunPlan,
+    plan: AdmittedPlan,
     neutralRoleName: string,
   ) => Promise<EffectOutcome<RunAdmission>>;
-  readonly performLap: (plan: RunPlan, modelTier: string) => Promise<EffectOutcome<LapPerformance>>;
-  readonly showGate: (plan: RunPlan, gateId: string) => Promise<EffectOutcome<GateObservation>>;
+  readonly performLap: (
+    plan: AdmittedPlan,
+    modelTier: string,
+  ) => Promise<EffectOutcome<LapPerformance>>;
+  readonly showGate: (
+    plan: AdmittedPlan,
+    gateId: string,
+  ) => Promise<EffectOutcome<GateObservation>>;
 }
