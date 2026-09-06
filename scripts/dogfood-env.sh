@@ -29,7 +29,9 @@ commands that drive it.
 options:
   --root DIR
       where the environment lives. Created if absent. Default: $RONDO_DOGFOOD_ROOT,
-      or <repo>/.dogfood when that is unset.
+      or <repo>/.worker-scratch/dogfood-env when that is unset -- which is the
+      root .gitignore already excludes, so a default run cannot put a control
+      plane one `git add -A` away from a commit.
   --run-id ID
       the run id written into the generated plan file. Default: dogfood-001.
       A second lap does not need a second plan file -- `rondo start` takes
@@ -60,7 +62,12 @@ note() { printf '   %s\n' "$1"; }
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 
-env_root=${RONDO_DOGFOOD_ROOT:-"$repo_root/.dogfood"}
+# The default lives under `.worker-scratch/`, which .gitignore excludes for the
+# reason written beside it there: a real environment is a continuo clone, two
+# SQLite databases, a worktree and captured session output, and none of that is
+# a thing to stage by accident. It also keeps the generated JSON out of
+# `biome check .`, which is a red gate rather than a warning (AGENTS.md).
+env_root=${RONDO_DOGFOOD_ROOT:-"$repo_root/.worker-scratch/dogfood-env"}
 run_id=dogfood-001
 force_continuo_rebuild=0
 
@@ -85,19 +92,32 @@ interlock_root=${RONDO_DOGFOOD_INTERLOCK_ROOT:-"$HOME/work/org/workers/interlock
 claude_org_path=${RONDO_DOGFOOD_CLAUDE_ORG_PATH:-"$HOME/work/org/claude-org-ja"}
 claude_bin=${RONDO_DOGFOOD_CLAUDE_BIN:-}
 
+# Absolute, not merely present. `readPlan` refuses a relative `interlock_root`
+# or `claude_org_path` by field name, so a relative override that passes the
+# directory check here would provision an environment whose very first `start`
+# is refused -- a setup that reports success and hands over a plan that cannot
+# run is worse than one that stops.
 [ -d "$interlock_root" ] ||
   die "interlock root '$interlock_root' is not a directory; set RONDO_DOGFOOD_INTERLOCK_ROOT"
+interlock_root=$(cd -- "$interlock_root" && pwd)
 [ -d "$claude_org_path" ] ||
   die "claude-org path '$claude_org_path' is not a directory; set RONDO_DOGFOOD_CLAUDE_ORG_PATH"
+claude_org_path=$(cd -- "$claude_org_path" && pwd)
 
 if [ -z "$claude_bin" ]; then
   claude_bin=$(command -v claude 2>/dev/null || true)
   [ -n "$claude_bin" ] ||
     die "no 'claude' on PATH; set RONDO_DOGFOOD_CLAUDE_BIN to the worker CLI"
 fi
+[ -d "$(dirname -- "$claude_bin")" ] ||
+  die "worker CLI '$claude_bin' is not in an existing directory; set RONDO_DOGFOOD_CLAUDE_BIN"
 # Every token of claude_command must be absolute -- continuo's rule, not
 # rondo's, and rondo passes it through rather than restating it.
 claude_bin=$(cd -- "$(dirname -- "$claude_bin")" && pwd)/$(basename -- "$claude_bin")
+# Checked here rather than left to the lap: a worker CLI that is not there is a
+# refusal from inside a spawned fence, minutes and dollars after the mistake.
+[ -x "$claude_bin" ] && [ -f "$claude_bin" ] ||
+  die "worker CLI '$claude_bin' is not an executable file; set RONDO_DOGFOOD_CLAUDE_BIN"
 
 # The interpreter the fenced endpoint runs under. `command -v node` on a machine
 # with a version manager is a per-shell shim directory that will not exist in
@@ -301,30 +321,43 @@ note "$plan"
 
 step "Environment"
 env_file="$env_root/env.sh"
-cat > "$env_file" <<ENVSH
-# Written by scripts/dogfood-env.sh. Source this before typing a rondo command.
-export RONDO_CONTINUO_CLI="$continuo_cli"
-# RONDO_STORE is a *second* database, and is not the control plane above:
-# rondo's iteration rows are rondo's, and continuo's run, gate and relay rows
-# are continuo's. It must be absolute and must not be ':memory:' -- each command
-# is its own process, so a row that does not outlive one is a lap that ran, cost
-# money, and then vanished.
-export RONDO_STORE="$env_root/rondo-iterations.sqlite3"
-export RONDO_APPROVER="$approver"
-ENVSH
+# Every value below goes through `printf %q`. This file is *sourced*, so a path
+# holding a literal `$`, a quote or a space -- all of which are legal in a
+# directory name, and `/tmp/dogfood-$USER` is the easy one to type -- would be
+# re-expanded by the shell reading it back and point rondo somewhere else. %q is
+# the only writer here that round-trips.
+{
+  printf '# Written by scripts/dogfood-env.sh. Source this before typing a rondo command.\n'
+  printf 'export RONDO_CONTINUO_CLI=%q\n' "$continuo_cli"
+  printf '# RONDO_STORE is a *second* database, and is not the control plane:\n'
+  printf "# rondo's iteration rows are rondo's, and continuo's run, gate and relay\n"
+  printf "# rows are continuo's. It must be absolute and must not be ':memory:' --\n"
+  printf '# each command is its own process, so a row that does not outlive one is a\n'
+  printf '# lap that ran, cost money, and then vanished.\n'
+  printf 'export RONDO_STORE=%q\n' "$env_root/rondo-iterations.sqlite3"
+  printf '# The one identity allowed to answer or publish.\n'
+  printf 'export RONDO_APPROVER=%q\n' "$approver"
+} > "$env_file"
 note "$env_file"
+
+# The same quoting for the commands printed below, which are meant to be copied
+# into a shell verbatim.
+q_repo_root=$(printf %q "$repo_root")
+q_env_file=$(printf %q "$env_file")
+q_plan=$(printf %q "$plan")
+q_approver=$(printf %q "$approver")
 
 cat <<READY
 
 Ready. The environment is at $env_root
 
-  cd $repo_root
-  . $env_file
+  cd $q_repo_root
+  . $q_env_file
 
-  node bin/rondo.mjs start --plan $plan
+  node bin/rondo.mjs start --plan $q_plan
   node bin/rondo.mjs answer
-  node bin/rondo.mjs answer --actor-id $approver --body=approve
-  node bin/rondo.mjs publish --iteration-id $run_id --repo OWNER/NAME --actor-id $approver --dry-run
+  node bin/rondo.mjs answer --actor-id $q_approver --body=approve
+  node bin/rondo.mjs publish --iteration-id $run_id --repo OWNER/NAME --actor-id $q_approver --dry-run
 
 'start' spawns a real worker session and costs real money; nothing above this
 line did. 'publish' without --dry-run pushes the branch and opens a pull request
@@ -332,10 +365,10 @@ as you, so it is left with --dry-run here.
 
 A second lap needs no second plan file:
 
-  node bin/rondo.mjs start --plan $plan \\
+  node bin/rondo.mjs start --plan $q_plan \\
     --run-id dogfood-002 \\
     --topic-branch dogfood/dogfood-002 \\
-    --workspace $env_root/workspace-dogfood-002 \\
+    --workspace $(printf %q "$env_root/workspace-dogfood-002") \\
     --prompt "..."
 
 If something is stuck, 'node bin/rondo.mjs abandon --iteration-id ID --reason "..."'

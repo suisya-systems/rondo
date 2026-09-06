@@ -19,6 +19,10 @@ is the same setup as a command, for when you want the environment rather than th
 scripts/dogfood-env.sh --root /abs/where/the/environment/lives
 ```
 
+`--root` is optional; it defaults to `.worker-scratch/dogfood-env`, which `.gitignore` already
+excludes -- an environment is a continuo clone, two SQLite databases, a worktree and captured
+session output, and none of that is a thing to stage by accident.
+
 It builds rondo, clones and builds the pinned continuo, creates the control plane, creates a scratch
 target repository with a `main` branch to run laps against, writes a complete `plan.json` and an
 `env.sh` holding section 2's three exports -- and then prints the commands below with the real paths
