@@ -50,33 +50,27 @@ costs on this machine, and that `resume` sees the outcome after a human answers.
    node "$RONDO_CONTINUO_CLI" db create --db /absolute/path/to/control-plane.sqlite3
    ```
 
-3. **A compiled rondo**, because there is not one. `tsconfig.json` is `noEmit`
-   and there is no `build` script (D-0002): rondo is a host and nothing consumes
-   a `dist/` of it, which is right for the tree and leaves the one caller who
-   has to `import` the composition root — you — with a step of their own.
-   `node --experimental-strip-types` does *not* substitute for it: relative
-   imports are spelled `.js` and Node does not remap them to `.ts`.
+3. **A built rondo.** `npm run build` (`D-0024`) emits `dist/` and
+   `bin/rondo.mjs` is the executable. The throwaway `tsconfig.dogfood.json` and
+   the hand-written `drive.mjs` this step used to describe are gone: the
+   commands below are the surface.
 
    The install comes first and is the repository's own (`AGENTS.md`): the emit
    cannot resolve `@suisya-systems/cadenza` until the vendored tarball is
-   installed, and the compiler is the pinned one in `node_modules/.bin` rather
-   than whatever `npx` would fetch.
+   installed.
 
    ```sh
    node vendor/pin.mjs check          # the digest check, before every install
    npm ci --ignore-scripts            # never `npm install` (D-0007)
-
-   # A throwaway config beside the run, not a build the repository keeps.
-   # extends ../tsconfig.json with:
-   #   "noEmit": false, "outDir": "dist", "rootDir": "../src", "include": ["../src"]
-   ./node_modules/.bin/tsc -p /absolute/path/to/tsconfig.dogfood.json
+   npm run build
    ```
 
 4. **rondo's own iteration store, which is a second database and is not the one
-   in step 2.** `iterationStore(connection)` takes a `node:sqlite` `DatabaseSync`
-   the caller opens, so its path is yours to pick and its schema is applied on
-   open. On Node 22 the module is behind a flag, so every command below is
-   `node --experimental-sqlite`.
+   in step 2.** Point `RONDO_STORE` at a path; `openIterationStore` creates the
+   file and applies the schema on first open, so there is nothing to provision.
+   `node:sqlite` needs **no** flag on the supported Node versions -- it prints
+   one `ExperimentalWarning` and works (measured on `v22.17.0`; the
+   `--experimental-sqlite` this step used to require was stale).
 
 5. **A repository you are willing to have a worker touch**, and a base branch
    and a topic branch that does not exist yet. Nothing here is a dry run: a lap
@@ -89,6 +83,14 @@ costs on this machine, and that `resume` sees the outcome after a human answers.
    default would be rondo guessing at a fence's geometry.
 
 ## The procedure
+
+> **There is a shorter way now.** `rondo start`, `rondo answer` and `rondo publish` do steps 2, 4,
+> 5 and 7 as three commands (`D-0025`), and
+> [`../docs/operations/rondo-cli.md`](../docs/operations/rondo-cli.md) is their runbook. What
+> follows is still worth walking once, because it is the procedure that shows *what those commands
+> do* -- and it is what you fall back to when one of them refuses and you need to see which verb
+> was the one that stopped.
+
 
 1. **Write a `RunPlan`.** Every field, by hand. `runPlan()` validates it and
    names the first field it refuses; that refusal is rondo's, before a process

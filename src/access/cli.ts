@@ -539,8 +539,20 @@ function loadPlan(parsed: ParsedCommand): { plan: RunPlan } | { refusal: string 
   return { plan: outcome.plan };
 }
 
-/** The identity check both answering and publishing pass through. */
-function approvedActor(
+/**
+ * The identity check both answering and publishing pass through.
+ *
+ * **An allowlist of size one, read from the environment, checked before any
+ * verb runs.** It keeps the half of D-0020 rule 2 that a command line can keep
+ * -- rondo acts for a named person and refuses to act for an unnamed one -- and
+ * it cannot keep the other half: there is no OIDC subject here, so the identity
+ * is asserted by whoever is typing. That is a stated reduction scoped to lap 1,
+ * and the thing that ends it is the adapter D-0020 already specifies.
+ *
+ * Exported so it can be tested. The end-to-end walk cannot reach its refusals:
+ * by the time an operator gets an actor wrong, the interesting states are gone.
+ */
+export function approvedActor(
   parsed: ParsedCommand,
   environment: Readonly<Record<string, string | undefined>>,
 ): { actorId: string } | { refusal: string } {
@@ -739,7 +751,12 @@ async function commandAnswer(
   sayReport(report);
   if (report.status === "closed") {
     say("");
-    say("Next: rondo publish --repo OWNER/NAME --actor-id YOU");
+    // The id is spelled out because closing the iteration is what stops it
+    // being the live one, so `publish` can no longer find it on its own. A
+    // hint the operator cannot paste is not a hint.
+    say(
+      `Next: rondo publish --iteration-id ${record.id} --repo OWNER/NAME --actor-id ${actor.actorId}`,
+    );
   }
   return 0;
 }

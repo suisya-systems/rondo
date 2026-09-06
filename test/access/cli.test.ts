@@ -18,7 +18,13 @@
  * `docs/operations/rondo-cli.md` records it.
  */
 import { expect, test } from "vitest";
-import { type GateVerbs, parseCommand, USAGE, walkGate } from "../../src/access/cli.js";
+import {
+  approvedActor,
+  type GateVerbs,
+  parseCommand,
+  USAGE,
+  walkGate,
+} from "../../src/access/cli.js";
 import type { VerifiedContinuo } from "../../src/continuo/invoker.js";
 import type { ContinuoResult } from "../../src/continuo/protocol.js";
 
@@ -315,4 +321,41 @@ test("a stage the walk cannot carry an answer from is refused, not guessed at", 
     expect(outcome.kind).toBe("failed");
     expect(calls).toEqual(["show:g1"]);
   })();
+});
+
+/** A parsed command carrying only the actor, for the approver cases. */
+function withActor(actorId: string | null) {
+  const outcome = parseCommand(actorId === null ? ["answer"] : ["answer", "--actor-id", actorId]);
+  if (outcome.kind !== "parsed") {
+    throw new Error("the fixture did not parse");
+  }
+  return outcome.parsed;
+}
+
+test("the approver allowlist refuses an unnamed actor, an unset allowlist and a mismatch", () => {
+  // Three refusals rather than one, because they are three different mistakes
+  // and an operator needs to be told which one they made.
+  expect(approvedActor(withActor(null), { RONDO_APPROVER: "happy_ryo" })).toHaveProperty("refusal");
+
+  const unset = approvedActor(withActor("happy_ryo"), {});
+  expect(unset).toHaveProperty("refusal");
+  if ("refusal" in unset) {
+    expect(unset.refusal).toContain("RONDO_APPROVER");
+  }
+
+  const mismatch = approvedActor(withActor("somebody-else"), { RONDO_APPROVER: "happy_ryo" });
+  expect(mismatch).toHaveProperty("refusal");
+  if ("refusal" in mismatch) {
+    expect(mismatch.refusal).toContain("somebody-else");
+    expect(mismatch.refusal).toContain("happy_ryo");
+  }
+
+  // An empty allowlist is not an empty-string identity that something could
+  // match: it is an unset allowlist, and it refuses.
+  expect(approvedActor(withActor(""), { RONDO_APPROVER: "" })).toHaveProperty("refusal");
+});
+
+test("the approver allowlist admits the one identity it names", () => {
+  const allowed = approvedActor(withActor("happy_ryo"), { RONDO_APPROVER: "happy_ryo" });
+  expect(allowed).toEqual({ actorId: "happy_ryo" });
 });

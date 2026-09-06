@@ -76,6 +76,14 @@ jobs:
         # (D-0007), not a reaction to a particular package.
         run: npm ci --ignore-scripts
 
+      - name: Build the executable
+        # D-0002 objected to "a build that nothing checks"; this is the check
+        # (D-0024 rule 4). It is in `double-green` rather than in `checks` so
+        # that it runs in all four cells: Windows path handling and the Node
+        # 22/24 split are what this matrix exists to observe, and the
+        # executable is the first thing rondo ships that runs outside vitest.
+        run: npm run build
+
       - name: Type-check
         run: npm run typecheck
 

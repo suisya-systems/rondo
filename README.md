@@ -30,12 +30,25 @@ operating surface says they have. It never composes the answer (D-0009), never
 publishes (D-0010), never closes a gate (D-0013), and runs one iteration at a
 time (D-0012).
 
+**As of D-0024 and D-0025 there is a way in.** rondo ships a binary — an
+emitting build beside the type-check, and `bin/rondo.mjs` — and the operator's
+surface is four subcommands: `rondo start` takes one request and walks a lap to
+the open gate, `rondo answer` shows what a person is being asked and carries
+their answer through continuo's six gate verbs, `rondo publish` pushes the
+branch and opens the pull request the operator asked for, and `rondo abandon`
+settles a row rondo cannot finish.
+[`docs/operations/rondo-cli.md`](docs/operations/rondo-cli.md) is the runbook and
+carries a measured walk: 22.8 s to the gate, 1.3 s to close it. Before this, the
+same walk needed a hand-written driver script and six verbs typed in order.
+
 What does **not** exist yet, and is not merely unfinished but undecided:
 
-- the web UI and the localhost MCP surface — `src/access/` holds the composition
-  root, an in-process access point and the ASCII escaper. D-0020 takes the five
-  operating-surface rows cadenza sent to rondo's gate and **decides only**: the
-  gate panes, the OIDC adapter and the conversation store are a later diff;
+- the web UI and the localhost MCP surface — `src/access/` now holds the
+  composition root, the ASCII escaper and the operator's command line. D-0020
+  takes the five operating-surface rows cadenza sent to rondo's gate and
+  **decides only**: the gate panes, the OIDC adapter and the conversation store
+  are a later diff, and D-0025 rule 4 records what a command line can and cannot
+  keep of D-0020's identity rule in the meantime;
 - the agent-type *registry* — cadenza supplies the record and rondo can now
   build one (D-0018), and there is nowhere to keep them;
 - an identifier allocator, and with it any second concurrent iteration. D-0019
