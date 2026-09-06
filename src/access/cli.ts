@@ -45,7 +45,10 @@ import { type IterationStore, openIterationStore } from "../store/sqlite.js";
 import { abandon, admit, conductorPorts, resume } from "./conductor.js";
 import { asciiEscape, consoleSeams, relayUpstream } from "./console.js";
 import {
+  inspectLapWork,
   inspectPushTarget,
+  type LapFile,
+  type LapWorkInspection,
   openPullRequest,
   type PushTargetInspection,
   pushTopicBranch,
@@ -1258,7 +1261,6 @@ async function commandPublish(
     return refuse(`iteration '${record.id}' records no run id, so there is no run to close.`);
   }
   const remote = parsed.remote ?? DEFAULT_REMOTE;
-  const title = `${topicBranch}: ${firstLine(record.request)}`;
   // The plan validated before the row existed, so a blank here is a row edited
   // out of band rather than an operator's mistake -- and every leg below is
   // built from these three, so guessing past one would print a command line
@@ -1302,6 +1304,14 @@ async function commandPublish(
   // spelling the CLI already accepts, and it makes the two the same answer.
   const forgeRepo = `${host}/${parsed.repo}`;
 
+  // **Read before the plan is printed, for the same reason the preflight is.**
+  // The title and the body are what the operator is being asked to approve, so
+  // a dry run that printed the three command lines and left the text to be
+  // composed later would preview everything except the part a person can only
+  // check by reading it.
+  const work = await inspectLapWork({ workspace, remote, baseBranch, topicBranch });
+  const pullRequest = pullRequestText({ record, runId, topicBranch, baseBranch, work });
+
   say(`iteration '${record.id}' is closed; gate outcome '${record.gateOutcome ?? "(none)"}'`);
   for (const warning of preflight.warnings) {
     say("");
@@ -1312,6 +1322,13 @@ async function commandPublish(
   say(`  1. git -C ${workspace} push ${remote} ${topicBranch}`);
   say(`  2. gh pr create --repo ${forgeRepo} --base ${baseBranch} --head ${headRef}`);
   say(`  3. continuo run close --run-id ${runId} --outcome completed`);
+  say("");
+  say("the pull request it opens reads:");
+  say(`  title: ${pullRequest.title}`);
+  say("  body:");
+  for (const line of pullRequest.body.split("\n")) {
+    say(line === "" ? "" : `    ${line}`);
+  }
   say("");
   if (parsed.dryRun) {
     say("--dry-run: nothing was run.");
@@ -1327,8 +1344,8 @@ async function commandPublish(
     repo: forgeRepo,
     baseBranch,
     headRef,
-    title,
-    body: pullRequestBody(record, runId),
+    title: pullRequest.title,
+    body: pullRequest.body,
   });
   if (!reportCommand("open the pull request", opened)) {
     // **The push already happened, and it is the one leg that cannot be
@@ -1398,7 +1415,62 @@ function reportCommand(
 }
 
 /**
- * The pull request's body: what ran, under what, and what is still the human's.
+ * The longest title rondo will compose, in characters.
+ *
+ * Well inside every forge's own limit, and that is not what it is for. It is
+ * the point past which a commit subject has stopped being a summary, and the
+ * answer to one that has is to use a different title rather than to cut this
+ * one short: **a title that ends in an ellipsis is a title that stops in the
+ * middle of a sentence**, which is the defect the first real publish printed.
+ */
+const TITLE_LIMIT = 120;
+
+/** How many commits, and how many paths, a body lists before it counts the rest. */
+const LIST_LIMIT = 20;
+
+/**
+ * How much of the request the collapsed block carries.
+ *
+ * A forge body has a size limit and a request has none, so something has to
+ * give at some length. What gives is the *quoted input*, at a length no request
+ * a person types comes near, and it says how much it left and where the whole
+ * of it still is -- which is the difference between a truncation and a loss.
+ */
+const REQUEST_LIMIT = 4000;
+
+/** What the title and body are composed from. Every value is already on the row. */
+export interface PullRequestTextInput {
+  readonly record: IterationRecord;
+  readonly runId: string;
+  readonly topicBranch: string;
+  readonly baseBranch: string;
+  readonly work: LapWorkInspection;
+}
+
+export interface PullRequestText {
+  readonly title: string;
+  readonly body: string;
+}
+
+/**
+ * The pull request a person will read: what changed, how it was approved, and
+ * what is still theirs.
+ *
+ * **The request is not the description, and this is the whole of why this
+ * function exists.** The request is a prompt written *to an agent*; the first
+ * pull request `publish` opened put it in both fields, so the title was the
+ * prompt cut off mid-clause and the body was a list of instructions -- "do not
+ * build", "do not push" -- standing where an account of the change belongs. It
+ * told a reviewer nothing about the diff and several things that were not
+ * addressed to them. What rondo has that *is* about the change is the work
+ * itself: the commit subjects the lap wrote for people to read, and the paths
+ * it touched. Those are the summary; the request is kept as quoted input,
+ * collapsed and fenced, because "was this what was asked for?" is a real
+ * question a reviewer asks and rondo is the only thing that can still answer it.
+ *
+ * **Pure, over what `inspectLapWork` read**, for the reason `publishPreflight`
+ * is: the rules about what a pull request says are rules about pull requests,
+ * and they should be checkable without a repository on disk.
  *
  * **The revision comes off the row, not off this process.** The row records the
  * continuo that actually drove the lap, committed before anything was spawned;
@@ -1408,18 +1480,188 @@ function reportCommand(
  * to be recorded, replaced by a plausible wrong answer. A row with no revision
  * says so rather than borrowing one.
  */
-function pullRequestBody(record: IterationRecord, runId: string): string {
-  const revision = record.continuoRevision ?? "an unrecorded revision";
-  return [
-    record.request,
-    "",
-    "---",
-    "",
-    `Run \`${runId}\` was walked by rondo and approved by a person at the gate`,
-    `(outcome \`${record.gateOutcome ?? "unknown"}\`), against continuo \`${revision}\`.`,
-    "",
+export function pullRequestText(input: PullRequestTextInput): PullRequestText {
+  return { title: pullRequestTitle(input), body: pullRequestBody(input) };
+}
+
+/**
+ * The title: the lap's own first commit subject, or nothing of the kind.
+ *
+ * A commit subject is the one line in this whole record that was written by
+ * somebody for somebody to read, and it is already about the change. Oldest
+ * first, because that is the commit the lap set out to make and the ones after
+ * it are what the work turned into; `(+N more commits)` says the rest exist
+ * without pretending to summarise them.
+ *
+ * When there is no subject to use -- git could not be read, the branch adds no
+ * commit, or the subject is long enough that it is no longer a summary -- the
+ * title falls back to naming the branch and the run. That is a plain label
+ * rather than a good title, and it is deliberately preferred over a cut-off
+ * sentence: a reader can tell a label from a summary, and cannot tell a
+ * truncated summary from a wrong one.
+ */
+function pullRequestTitle(input: PullRequestTextInput): string {
+  const fallback = `${input.topicBranch} (rondo run ${input.runId})`;
+  if (input.work.kind !== "read") {
+    return fallback;
+  }
+  const first = input.work.commits[0];
+  if (first === undefined || first.subject === "") {
+    return fallback;
+  }
+  const rest = input.work.commits.length - 1;
+  const title =
+    rest === 0
+      ? first.subject
+      : `${first.subject} (+${String(rest)} more commit${rest === 1 ? "" : "s"})`;
+  return title.length > TITLE_LIMIT ? fallback : title;
+}
+
+/** The body, section by section. */
+function pullRequestBody(input: PullRequestTextInput): string {
+  const { record, runId, topicBranch, baseBranch, work } = input;
+  const lines: string[] = ["## What changed", ""];
+
+  if (work.kind === "read") {
+    if (work.commits.length === 0) {
+      lines.push(
+        `No commit separates \`${topicBranch}\` from \`${work.baseRef}\`, so rondo has nothing ` +
+          "to summarise here. Whatever this pull request shows, the lap did not commit it.",
+        "",
+      );
+    } else {
+      for (const commit of work.commits.slice(0, LIST_LIMIT)) {
+        lines.push(`- \`${commit.abbreviatedSha}\` ${commit.subject}`);
+      }
+      const hidden = work.commits.length - LIST_LIMIT;
+      if (hidden > 0) {
+        lines.push(`- ...and ${String(hidden)} more commit${hidden === 1 ? "" : "s"}.`);
+      }
+      lines.push("");
+    }
+    if (work.files.length > 0) {
+      const count = work.files.length;
+      lines.push(
+        `${String(count)} file${count === 1 ? "" : "s"} changed against \`${baseBranch}\`:`,
+        "",
+      );
+      for (const file of work.files.slice(0, LIST_LIMIT)) {
+        lines.push(`- \`${file.path}\` ${fileCounts(file)}`);
+      }
+      const hidden = count - LIST_LIMIT;
+      if (hidden > 0) {
+        lines.push(`- ...and ${String(hidden)} more file${hidden === 1 ? "" : "s"}.`);
+      }
+      lines.push("");
+    }
+  } else {
+    // **A history rondo could not read is said out loud rather than left as a
+    // silence.** The diff is on the branch either way; what a reader must not
+    // do is take an empty section for an empty change.
+    lines.push(
+      `rondo could not read this branch's history, so it has not summarised the change: ${work.reason}`,
+      "",
+      "The commits on the branch are the record. Read them rather than this section.",
+      "",
+    );
+  }
+
+  lines.push("## How this got here", "");
+  lines.push(
+    `- rondo walked run \`${runId}\` (iteration \`${record.id}\`) on \`${topicBranch}\`, ` +
+      `for \`${baseBranch}\`.`,
+  );
+  lines.push(`- ${gateSentence(record)}`);
+  lines.push(
+    `- Against continuo \`${record.continuoRevision ?? "an unrecorded revision"}\`${modelClause(record)}.`,
+  );
+  if (record.sessionId !== null && record.sessionId !== "") {
+    lines.push(`- Session \`${record.sessionId}\`.`);
+  }
+  lines.push("");
+  lines.push(...requestBlock(record.request));
+  lines.push(
     "This pull request was opened by `rondo publish`, which an operator ran. Merging it is not.",
-  ].join("\n");
+  );
+  return lines.join("\n");
+}
+
+/** One file's line counts, or the fact that it has none. */
+function fileCounts(file: LapFile): string {
+  if (file.added === null || file.deleted === null) {
+    return "(binary)";
+  }
+  return `(+${String(file.added)} -${String(file.deleted)})`;
+}
+
+/** What the gate says about who approved this, in a reviewer's terms. */
+function gateSentence(record: IterationRecord): string {
+  const gate =
+    record.gateId === null || record.gateId === "" ? "The gate" : `Gate \`${record.gateId}\``;
+  const outcome = record.gateOutcome ?? "unknown";
+  if (outcome === APPROVED_OUTCOME) {
+    return `${gate} closed \`${outcome}\`: a person answered it, and the answer was carried through.`;
+  }
+  return `${gate} closed \`${outcome}\`.`;
+}
+
+/**
+ * The model a lap ran on, when the row knows it.
+ *
+ * Tier and model both, for the reason the row keeps both (see
+ * `IterationRecord`): a tier is what an agent type asked for and a model id is
+ * what the lap cost, and only the pair says what the tier was worth that day.
+ */
+function modelClause(record: IterationRecord): string {
+  if (record.model === null || record.model === "") {
+    return "";
+  }
+  const tier =
+    record.modelTier === null || record.modelTier === "" ? "" : ` (tier \`${record.modelTier}\`)`;
+  return `, on \`${record.model}\`${tier}`;
+}
+
+/**
+ * The request, collapsed and quoted as what it is: input to an agent.
+ *
+ * Fenced rather than laid out as prose, and the fence is longer than the
+ * longest run of backticks inside it, so a request that contains a code block
+ * cannot end the quotation early and start writing the body. Collapsed, so the
+ * instructions in it -- which are addressed to a worker, and often say what
+ * *not* to do -- are somewhere a reviewer can go and not something they read
+ * where the description of the change should be.
+ */
+function requestBlock(request: string): readonly string[] {
+  const text = request.trim();
+  if (text === "") {
+    return [];
+  }
+  const shown =
+    text.length > REQUEST_LIMIT
+      ? `${text.slice(0, REQUEST_LIMIT)}\n[...${String(text.length - REQUEST_LIMIT)} more characters. ` +
+        "The whole of it is on this iteration's row in rondo's store.]"
+      : text;
+  const fence = "`".repeat(Math.max(3, longestBacktickRun(text) + 1));
+  return [
+    "<details>",
+    "<summary>The request this lap was given (written for the agent, not a description of the change)</summary>",
+    "",
+    fence,
+    shown,
+    fence,
+    "",
+    "</details>",
+    "",
+  ];
+}
+
+/** The longest run of backticks in `text`, so a fence can be longer than it. */
+function longestBacktickRun(text: string): number {
+  let longest = 0;
+  for (const run of text.match(/`+/g) ?? []) {
+    longest = Math.max(longest, run.length);
+  }
+  return longest;
 }
 
 /**
@@ -1484,10 +1726,4 @@ async function commandAbandon(
 function planField(record: IterationRecord, key: string): string {
   const value = record.plan[key];
   return typeof value === "string" ? value : "";
-}
-
-/** The first line of a request, for a pull request title. */
-function firstLine(text: string): string {
-  const line = text.split("\n")[0] ?? "";
-  return line.length > 72 ? `${line.slice(0, 69)}...` : line;
 }

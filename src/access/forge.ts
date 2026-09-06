@@ -309,3 +309,167 @@ export async function openPullRequest(request: PullRequestRequest): Promise<Comm
     request.body,
   ]);
 }
+
+/** What reading the lap's work needs. Every value comes from the plan. */
+export interface LapWorkRequest {
+  /** The worktree the lap materialised. Absolute; it is the plan's `workspace`. */
+  readonly workspace: string;
+  readonly remote: string;
+  readonly baseBranch: string;
+  readonly topicBranch: string;
+}
+
+/** One commit the lap made, as a person would list it. */
+export interface LapCommit {
+  readonly abbreviatedSha: string;
+  /** The commit's first line, exactly as the lap wrote it. */
+  readonly subject: string;
+}
+
+/** One path the lap touched, with its line counts. Null counts mean binary. */
+export interface LapFile {
+  readonly path: string;
+  readonly added: number | null;
+  readonly deleted: number | null;
+}
+
+/**
+ * What the lap actually did to the workspace, as `git` reports it.
+ *
+ * Facts again, and for the same reason `PushTargetInspection` is: what a pull
+ * request's title and body are made of is a rule about pull requests, and it
+ * lives in `./cli.ts` as a pure function over this value.
+ *
+ * `unreadable` is a first-class answer rather than an empty read. A publish
+ * whose history could not be read still has to be publishable -- the diff is
+ * already pushed and the operator is standing there -- so the caller degrades
+ * to a body that says so, which it can only do if it can tell the two apart.
+ */
+export type LapWorkInspection =
+  | {
+      readonly kind: "read";
+      /** The ref the range was taken from, so the body can name what it compared against. */
+      readonly baseRef: string;
+      /** Oldest first: the order the lap built the work, which is the order it reads in. */
+      readonly commits: readonly LapCommit[];
+      readonly files: readonly LapFile[];
+    }
+  | { readonly kind: "unreadable"; readonly reason: string };
+
+/**
+ * Read the commits and the touched paths the topic branch adds to its base.
+ *
+ * **The base is resolved before it is used, and the remote-tracking ref is
+ * preferred.** The plan names a base *branch*, and a worktree cut for one lap
+ * may carry no local branch of that name at all -- `main..topic` would then
+ * fail as "unknown revision" and cost the body its summary for a reason that is
+ * not a real absence. `<remote>/<base>` is the ref that actually describes what
+ * the pull request will be opened against, so it is tried first and the local
+ * branch second.
+ *
+ * `--no-merges` because a merge commit is the shape of the history rather than
+ * a change the lap made, and a person reading a list of what changed is asking
+ * for the second. Three dots for the diff, so a base that moved after the lap
+ * branched does not show up as work this pull request did.
+ */
+export async function inspectLapWork(request: LapWorkRequest): Promise<LapWorkInspection> {
+  const candidates = [
+    `refs/remotes/${request.remote}/${request.baseBranch}`,
+    `refs/heads/${request.baseBranch}`,
+  ];
+  let baseRef: string | null = null;
+  for (const candidate of candidates) {
+    const resolved = await runCommand(
+      "git",
+      ["-C", request.workspace, "rev-parse", "--verify", "--quiet", candidate],
+      PREFLIGHT_TIMEOUT_MS,
+    );
+    if (resolved.spawnError !== null) {
+      return { kind: "unreadable", reason: `${resolved.commandLine}: ${resolved.spawnError}` };
+    }
+    // Exit 1 with no output is "no such ref", which is an answer here and not a
+    // failure: the next candidate may resolve. Anything else is git unable to
+    // answer, and collapsing the two would report a broken repository as a
+    // missing branch.
+    if (resolved.status === 0) {
+      baseRef = candidate;
+      break;
+    }
+    if (resolved.status !== 1) {
+      return { kind: "unreadable", reason: queryFailure(resolved) ?? resolved.commandLine };
+    }
+  }
+  if (baseRef === null) {
+    return {
+      kind: "unreadable",
+      reason: `neither ${candidates[0] ?? ""} nor ${candidates[1] ?? ""} is a ref in ${request.workspace}`,
+    };
+  }
+
+  const logged = await runCommand(
+    "git",
+    [
+      "-C",
+      request.workspace,
+      "log",
+      "--no-merges",
+      "--reverse",
+      // A tab cannot appear in an abbreviated sha, so the first one is the
+      // separator and every tab after it belongs to the subject.
+      "--format=%h%x09%s",
+      `${baseRef}..${request.topicBranch}`,
+    ],
+    PREFLIGHT_TIMEOUT_MS,
+  );
+  const logFailure = queryFailure(logged);
+  if (logFailure !== null) {
+    return { kind: "unreadable", reason: logFailure };
+  }
+  const commits: LapCommit[] = [];
+  for (const line of logged.stdout.split("\n")) {
+    const tab = line.indexOf("\t");
+    if (tab <= 0) {
+      continue;
+    }
+    commits.push({ abbreviatedSha: line.slice(0, tab), subject: line.slice(tab + 1).trim() });
+  }
+
+  const diffed = await runCommand(
+    "git",
+    [
+      "-C",
+      request.workspace,
+      // Paths as they are, rather than as C string literals, because this one
+      // is read by a person in a pull request and not by a shell.
+      "-c",
+      "core.quotePath=false",
+      "diff",
+      "--numstat",
+      `${baseRef}...${request.topicBranch}`,
+    ],
+    PREFLIGHT_TIMEOUT_MS,
+  );
+  const diffFailure = queryFailure(diffed);
+  if (diffFailure !== null) {
+    return { kind: "unreadable", reason: diffFailure };
+  }
+  const files: LapFile[] = [];
+  for (const line of diffed.stdout.split("\n")) {
+    const fields = line.split("\t");
+    const added = fields[0];
+    const deleted = fields[1];
+    const path = fields.slice(2).join("\t");
+    if (added === undefined || deleted === undefined || path === "") {
+      continue;
+    }
+    // `-` for both counts is git saying "binary", which is a fact about the
+    // file rather than a zero -- printing 0 would claim nothing changed in it.
+    files.push({
+      path,
+      added: added === "-" ? null : Number.parseInt(added, 10),
+      deleted: deleted === "-" ? null : Number.parseInt(deleted, 10),
+    });
+  }
+
+  return { kind: "read", baseRef, commits, files };
+}
