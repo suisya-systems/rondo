@@ -3097,6 +3097,19 @@ surface that replaces all of that, and it is deliberately the smallest one that 
    rondo publishing on its own**: the authority stays with the person, and the command is the
    keyboard rather than the authority. Merging is absent in both senses. `run close` is driven only
    from here, and only after the other two legs succeeded, because it is a claim that they did.
+
+   **A closed iteration is not an approved one, and `publish` checks which it has.** `withdrawn`,
+   `expired` and `unanswerable` each close a gate and therefore close the iteration, and none of
+   them is a person saying yes; only `answered_and_forwarded` records an answer carried through to
+   its forward. Publishing on any of the other three would push the work and open a pull request
+   whose body states that a human approved it — rondo making a false statement about somebody else,
+   which is `D-0009`'s concern seen from the other end.
+
+   **A publish that fails partway leaves the operator a command, not a puzzle.** rondo persists
+   nothing about how far it got — that would be a durable record of somebody else's state — so a
+   failed pull-request leg says that the push is done and prints the one remaining leg. Re-running
+   `publish` is safe for the push and refused for a pull request that already exists; that
+   asymmetry is stated in the runbook rather than worked around here.
 7. **The spawn that publishes is granted to `src/access/forge.ts` alone**, not to the command line
    and not to the layer. That is what makes rule 6 a property rather than a promise:
    `src/access/cli.ts` — the module that reads argv, reads the plan and drives every continuo verb —
