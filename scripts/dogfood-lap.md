@@ -211,6 +211,22 @@ costs on this machine, and that `resume` sees the outcome after a human answers.
    drives none of these and must not: `closeOpenGate` hard-codes
    `actorKind: "human"` (D-0013).
 
+   **Read the work before you answer it, and that is a step rather than a
+   courtesy** (D-0029 rule 2). This procedure used to walk straight from the
+   gate to `--body approve`, and what a person is shown at a gate is the gate's
+   `rationale` — the worker's own account of its own work. Run
+
+   ```sh
+   rondo answer --iteration-id ID
+   ```
+
+   with no `--body` first. It prints the branch, the workspace and what the
+   independent reading of the work found, and it sends nothing. Then go and look
+   at the branch it named. Answering in one command works and is a fair thing to
+   do once you have looked — but the material it prints on that path is a
+   **receipt** for an answer already typed, not something you can act on, so the
+   looking has to happen here.
+
    Each verb's `--gate-id` is what `gate list` prints, and **`gate ack` takes the
    `message_id` the enqueueing verb returned** — `gate present`'s for the first
    ack, `gate answer`'s for the second — so run both with `--json` and keep the

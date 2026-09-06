@@ -425,6 +425,23 @@ export type LapWorkInspection =
       readonly kind: "read";
       /** The ref the range was taken from, so the body can name what it compared against. */
       readonly baseRef: string;
+      /**
+       * That ref resolved to a full sha, and the topic branch resolved to one.
+       *
+       * **The names alone are not an identity, and D-0029 rule 10 needs one.** A
+       * ref name says where to look and not what was there; the abbreviated shas
+       * `%h` yields per commit are not commit ids; and the newest entry of the
+       * log is not the tip when the tip is a merge, because the log is
+       * `--no-merges`. So a reading taken here and a `publish` that happens later
+       * could not otherwise be compared, and a branch that moved in between would
+       * publish under a verdict describing something else.
+       *
+       * The base resolution costs nothing: the loop below already runs
+       * `rev-parse` over the candidates and used to discard the sha it printed.
+       * The tip is one more query of the same shape.
+       */
+      readonly baseCommit: string;
+      readonly tipCommit: string;
       /** Oldest first: the order the lap built the work, which is the order it reads in. */
       readonly commits: readonly LapCommit[];
       readonly files: readonly LapFile[];
@@ -453,6 +470,7 @@ export async function inspectLapWork(request: LapWorkRequest): Promise<LapWorkIn
     `refs/heads/${request.baseBranch}`,
   ];
   let baseRef: string | null = null;
+  let baseCommit = "";
   for (const candidate of candidates) {
     const resolved = await runCommand(
       "git",
@@ -468,6 +486,11 @@ export async function inspectLapWork(request: LapWorkRequest): Promise<LapWorkIn
     // missing branch.
     if (resolved.status === 0) {
       baseRef = candidate;
+      // **Kept rather than discarded, which is the whole of this line's
+      // history.** This query already printed the base's full sha and the sha
+      // died with the loop iteration; D-0029 rule 10 needs it, and needing it
+      // costs a variable rather than a command.
+      baseCommit = resolved.stdout.trim();
       break;
     }
     if (resolved.status !== 1) {
@@ -478,6 +501,43 @@ export async function inspectLapWork(request: LapWorkRequest): Promise<LapWorkIn
     return {
       kind: "unreadable",
       reason: `neither ${candidates[0] ?? ""} nor ${candidates[1] ?? ""} is a ref in ${request.workspace}`,
+    };
+  }
+  if (baseCommit === "") {
+    // `rev-parse --verify` exiting 0 and printing nothing is git answering in a
+    // way this function has no reading of. Refusing beats carrying an empty
+    // string into a row that claims to identify a commit.
+    return {
+      kind: "unreadable",
+      reason: `git rev-parse --verify ${baseRef} in ${request.workspace} printed no sha`,
+    };
+  }
+
+  // The topic branch, resolved. Not `--verify --quiet` over a bare name: the
+  // branch is spelled `refs/heads/...` so a tag or a remote ref of the same
+  // name cannot answer for it, which is the mistake `inspectPushTarget` is
+  // written to avoid one function above.
+  const tip = await runCommand(
+    "git",
+    [
+      "-C",
+      request.workspace,
+      "rev-parse",
+      "--verify",
+      "--quiet",
+      `refs/heads/${request.topicBranch}`,
+    ],
+    PREFLIGHT_TIMEOUT_MS,
+  );
+  const tipFailure = queryFailure(tip);
+  if (tipFailure !== null) {
+    return { kind: "unreadable", reason: tipFailure };
+  }
+  const tipCommit = tip.stdout.trim();
+  if (tipCommit === "") {
+    return {
+      kind: "unreadable",
+      reason: `git rev-parse --verify refs/heads/${request.topicBranch} in ${request.workspace} printed no sha`,
     };
   }
 
@@ -546,5 +606,5 @@ export async function inspectLapWork(request: LapWorkRequest): Promise<LapWorkIn
     });
   }
 
-  return { kind: "read", baseRef, commits, files };
+  return { kind: "read", baseRef, baseCommit, tipCommit, commits, files };
 }

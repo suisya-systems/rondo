@@ -337,3 +337,82 @@ export type IterationFields = Partial<
     "id" | "status" | "createdAtMs" | "updatedAtMs" | "runId" | "topicBranch" | "workspace"
   >
 >;
+
+/**
+ * What one independent reading of a lap's work concluded (D-0029).
+ *
+ * **The three verdicts are not a scale.** `clear` and `concerns` are what a
+ * reading that happened says; `unavailable` is what the absence of a reading
+ * says, and it is a first-class answer rather than a missing row -- because a
+ * row that is simply absent and a row that says "nothing could be read" are the
+ * same fact to a reader who never looks, and the whole point of D-0029 rule 10
+ * is that `publish` treats them alike and a person can tell them apart.
+ *
+ * **`clear` is the only one that carries an obligation**, and it is the store's
+ * to enforce: a `clear` may be written only beside rondo's own measurement of
+ * what was read (D-0029 rule 11). See {@link LapReading.evidence}.
+ */
+export type ReadingVerdict = "clear" | "concerns" | "unavailable";
+
+/**
+ * rondo's own measurement of the work a reading was taken over.
+ *
+ * **Not the reader's account of what it read.** Every field here comes from
+ * `git` as rondo ran it, which is what makes the row evidence rather than
+ * testimony -- the distinction D-0029 rule 11 exists to draw, and the reason
+ * the empty pass (a reviewer that read nothing and answered "no findings") is
+ * detectable here at all.
+ *
+ * `tipCommit` is load-bearing twice over: it is half the evidence, and it is
+ * the whole of the staleness check `publish` makes (D-0029 rule 10). A reading
+ * is about the commits it read, and `publish` pushes the branch as it is then.
+ */
+export interface ReadingEvidence {
+  /** The ref the range was taken from, as a name. */
+  readonly baseRef: string;
+  /** That ref resolved, so the range is identified and not merely named. */
+  readonly baseCommit: string;
+  /** The topic branch resolved: the commit `publish` would push. */
+  readonly tipCommit: string;
+  /** A digest over the material, so "the same work" is one comparison. */
+  readonly materialDigest: string;
+  readonly commitCount: number;
+  readonly fileCount: number;
+}
+
+/**
+ * One reading, as the store holds it. Immutable and append-only.
+ *
+ * There is no `status` column and no writer that updates: a row that could be
+ * rewritten to `clear` would be a record of what somebody wished had been read
+ * (D-0022 rule 4, applied to a second record kind by D-0029 rule 8).
+ *
+ * `drafter` names who produced it. It exists so that a model drafter's row and
+ * the deterministic one are the *same* record kind rather than two -- D-0022
+ * rule 13's grade, which is what lets a later entry admit a model reader
+ * without a schema change.
+ */
+export interface LapReadingDraft {
+  /** Who produced it: the deterministic reader today, a model drafter later. */
+  readonly drafter: string;
+  readonly verdict: ReadingVerdict;
+  /** Empty on `clear`. One line each; never prose rondo composed about a person. */
+  readonly findings: readonly string[];
+  /** Null exactly when the verdict is `unavailable`. */
+  readonly evidence: ReadingEvidence | null;
+  /** Why nothing could be read. Null unless the verdict is `unavailable`. */
+  readonly unavailableReason: string | null;
+}
+
+/**
+ * A draft as the store holds it, once the row it is about has been named.
+ *
+ * The identity and the clock are added by the store rather than by the reader,
+ * for the reason every other timestamp in this file is the caller's: the reader
+ * has no business knowing which row it is being written beside, and a reading
+ * that named its own iteration could name the wrong one.
+ */
+export interface LapReading extends LapReadingDraft {
+  readonly iterationId: string;
+  readonly readAtMs: number;
+}

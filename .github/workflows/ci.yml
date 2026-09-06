@@ -300,6 +300,78 @@ jobs:
           fi
           echo "The planted violation was caught, with both expected messages (vitest exited $status)."
 
+  review-is-not-vacuous:
+    # D-0029 rule 12. The review stage's whole binding force is that a reading
+    # which could not be taken refuses `publish` -- so the way this stage fails
+    # is by quietly answering `clear` when it read nothing, which is the exact
+    # failure mode the organisation measured in its own reviewer: a clean pass
+    # over nothing, indistinguishable from a real one, reported with a zero exit
+    # status.
+    #
+    # A test suite cannot catch that on its own, because a suite that stopped
+    # asserting the property would go green for the same reason the property
+    # holding does. So this job breaks the property on purpose and requires the
+    # suite to go RED **with the named case failing**. A green run here is the
+    # failure, and so is a red run that failed for some other reason.
+    name: a fail-open reading makes the review test fail
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+
+      - run: node vendor/pin.mjs check
+      - run: npm ci --ignore-scripts
+
+      - name: Plant a fail-open reading and require a red suite
+        shell: bash
+        env:
+          RONDO_TEST_SEED: "1"
+        run: |
+          set -uo pipefail
+          # Restored from a copy rather than from the index: the restore has to
+          # work whether or not the tree is clean, and a job that reached for
+          # git to undo its own edit would be one `git` behaviour change away
+          # from leaving the mutation in place.
+          cp src/access/review.ts "$RUNNER_TEMP/review.ts.orig"
+          # The mutation is one word, and it is the one word that matters: a
+          # workspace nobody could read is recorded as though it had been read
+          # and found fine. `perl -0pi` rather than `sed` so the match spans the
+          # four lines that make it unambiguous -- `unavailable` appears
+          # elsewhere in the file, and mutating the wrong occurrence would plant
+          # a different defect than this job claims to be planting.
+          perl -0pi -e 's/verdict: "unavailable",\n      findings: Object\.freeze\(\[\]\),\n      evidence: null,\n      unavailableReason: inspection\.reason,/verdict: "clear",\n      findings: Object.freeze([]),\n      evidence: null,\n      unavailableReason: inspection.reason,/' src/access/review.ts
+          if ! grep -q 'verdict: "clear",' src/access/review.ts; then
+            cp -f "$RUNNER_TEMP/review.ts.orig" src/access/review.ts
+            echo "::error::The planted mutation did not apply. src/access/review.ts has changed shape, so this job is asserting nothing -- re-point it at the branch that maps an unreadable workspace to a verdict."
+            exit 1
+          fi
+          set +e
+          npx vitest run test/access/review.test.ts 2>&1 | tee planted.log
+          status=${PIPESTATUS[0]}
+          set -e
+          cp -f "$RUNNER_TEMP/review.ts.orig" src/access/review.ts
+          if [ "$status" -eq 0 ]; then
+            rm -f planted.log
+            echo "::error::The review test passed while an unreadable workspace read as 'clear'. The stage is vacuous: a lap whose work nobody could read would publish as though it had been read."
+            exit 1
+          fi
+          # The exit status alone is not the assertion, for the reason
+          # `boundary-is-not-vacuous` gives: a suite that went red because it
+          # would not compile satisfies `status != 0` and proves nothing. The
+          # named case has to be the one that failed.
+          if ! grep -q "a workspace that could not be read is 'unavailable' and never 'clear'" planted.log; then
+            rm -f planted.log
+            echo "::error::The suite went red, but not on the case this job plants against. Something else is failing, and this job has proved nothing about the reading."
+            exit 1
+          fi
+          rm -f planted.log
+          echo "The fail-open reading was caught by its own case (vitest exited $status)."
+
   gate:
     # The single stable check name, and the one a branch ruleset should require.
     # It exists so that adding a matrix cell does not require editing the
@@ -310,7 +382,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     if: always()
-    needs: [double-green, checks, boundary-is-not-vacuous]
+    needs: [double-green, checks, boundary-is-not-vacuous, review-is-not-vacuous]
     steps:
       - name: Every upstream job must have succeeded
         shell: python

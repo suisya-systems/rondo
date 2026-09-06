@@ -30,14 +30,16 @@ import {
   publishPreflight,
   pullRequestText,
   repositoryFromRemoteUrl,
+  reviewGate,
   revisionBlocker,
   USAGE,
   walkGate,
 } from "../../src/access/cli.js";
 import type { LapWorkInspection, PushTargetInspection } from "../../src/access/forge.js";
+import { evidenceOf } from "../../src/access/review.js";
 import type { VerifiedContinuo } from "../../src/continuo/invoker.js";
 import type { ContinuoResult } from "../../src/continuo/protocol.js";
-import type { IterationRecord } from "../../src/store/records.js";
+import type { IterationRecord, LapReading } from "../../src/store/records.js";
 
 /** A handle no test reaches past: every verb below is a fake. */
 const continuo: VerifiedContinuo = {
@@ -940,6 +942,8 @@ function worked(
   return {
     kind: "read",
     baseRef: "refs/remotes/origin/main",
+    baseCommit: "b".repeat(40),
+    tipCommit: "a".repeat(40),
     commits: [{ abbreviatedSha: "cfa4502", subject: "docs: record the first real lap" }],
     files: [{ path: "docs/operations/rondo-cli.md", added: 1, deleted: 0 }],
     ...parts,
@@ -1160,4 +1164,120 @@ test("no value the row carries can make a body the forge refuses", () => {
   }).body;
   expect(huge).toContain("qqq");
   expect(huge.length).toBeLessThanOrEqual(60_000);
+});
+
+/**
+ * A stored reading of the work `worked()` describes, unless varied.
+ *
+ * Built through `evidenceOf` rather than by hand, for the reason the staleness
+ * check exists: the two halves of "the same work" have to be computed the same
+ * way, and a fixture that spelled the digest itself would make the comparison
+ * pass on a coincidence.
+ */
+function reviewed(parts: Partial<LapReading> = {}): LapReading {
+  return {
+    iterationId: "i-0001",
+    readAtMs: 2_000,
+    drafter: "rondo/deterministic/1",
+    verdict: "clear",
+    findings: [],
+    evidence: evidenceOf(worked() as Extract<LapWorkInspection, { kind: "read" }>),
+    unavailableReason: null,
+    ...parts,
+  };
+}
+
+test("publish refuses when nothing read the work, and names the way past", () => {
+  // D-0029 rule 10: the absence of a reading refuses exactly as a raised point
+  // does. Making this pass silently is the fail-open that leaves the stage
+  // existing only in the record.
+  const outcome = reviewGate(null, worked(), false);
+
+  expect(outcome.kind).toBe("refused");
+  expect(outcome.kind === "refused" && outcome.reason).toContain("--despite-review");
+  expect(outcome.kind === "refused" && outcome.reason).toContain("nothing read");
+});
+
+test("publish refuses when the reading raised something, and says it is not a veto", () => {
+  const outcome = reviewGate(
+    reviewed({ verdict: "concerns", findings: ["the topic branch changes no files"] }),
+    worked(),
+    false,
+  );
+
+  expect(outcome.kind).toBe("refused");
+  expect(outcome.kind === "refused" && outcome.reason).toContain("changes no files");
+  expect(outcome.kind === "refused" && outcome.reason).toContain("not a veto");
+});
+
+test("publish refuses when no reading could be taken, for the same reason", () => {
+  const outcome = reviewGate(
+    reviewed({ verdict: "unavailable", evidence: null, unavailableReason: "no such directory" }),
+    worked(),
+    false,
+  );
+
+  expect(outcome.kind).toBe("refused");
+  expect(outcome.kind === "refused" && outcome.reason).toContain("no such directory");
+});
+
+test("publish is ready when the reading is clear and still describes what would be pushed", () => {
+  expect(reviewGate(reviewed(), worked(), false)).toEqual({ kind: "ready" });
+});
+
+test("publish refuses a clear reading taken over commits that are no longer the tip", () => {
+  // **The staleness refusal.** `publish` pushes the branch as it is now, and a
+  // reading is about the commits it read. Between the two, a person can commit,
+  // amend, or reset -- and a reset onto the base is exactly what the reader's
+  // own "left nothing" finding exists to raise, arriving under a stale clear.
+  const moved = worked({ tipCommit: "f".repeat(40) });
+
+  const outcome = reviewGate(reviewed(), moved, false);
+
+  expect(outcome.kind).toBe("refused");
+  expect(outcome.kind === "refused" && outcome.reason).toContain("does not describe the work");
+  expect(outcome.kind === "refused" && outcome.reason).toContain("f".repeat(40));
+});
+
+test("publish refuses a clear reading when the content moved under the same tip", () => {
+  // The digest and the tip are both compared, and neither is redundant: a tip
+  // that matched while the file list did not would be a workspace somebody had
+  // edited without committing, or a reading taken against a different base.
+  const edited = worked({ files: [{ path: "src/thing.ts", added: 99, deleted: 0 }] });
+
+  expect(reviewGate(reviewed(), edited, false).kind).toBe("refused");
+});
+
+test("publish refuses when the workspace cannot be read now, so nothing can be checked", () => {
+  const outcome = reviewGate(reviewed(), { kind: "unreadable", reason: "not a repository" }, false);
+
+  expect(outcome.kind).toBe("refused");
+  expect(outcome.kind === "refused" && outcome.reason).toContain("not a repository");
+});
+
+test("publish refuses a clear reading that carries no measurement at all", () => {
+  // Unreachable through the store, which records that as `unavailable`
+  // instead. Refused here as well, because the branch below it is the only one
+  // that would be silently skipped if it ever became reachable.
+  expect(reviewGate(reviewed({ evidence: null }), worked(), false).kind).toBe("refused");
+});
+
+test("--despite-review overrules every one of those refusals, and only those", () => {
+  // The override is the whole of the stage's binding force being one keystroke,
+  // and the design says so: a person decides, having been told. What it must
+  // not do is change what was recorded, which is why it is a parameter here and
+  // not a mutation anywhere.
+  const cases: readonly (readonly [LapReading | null, LapWorkInspection])[] = [
+    [null, worked()],
+    [reviewed({ verdict: "concerns", findings: ["something"] }), worked()],
+    [reviewed({ verdict: "unavailable", evidence: null }), worked()],
+    [reviewed(), worked({ tipCommit: "f".repeat(40) })],
+    [reviewed(), { kind: "unreadable", reason: "not a repository" }],
+    [reviewed({ evidence: null }), worked()],
+  ];
+
+  for (const [reading, work] of cases) {
+    expect(reviewGate(reading, work, false).kind).toBe("refused");
+    expect(reviewGate(reading, work, true)).toEqual({ kind: "ready" });
+  }
 });

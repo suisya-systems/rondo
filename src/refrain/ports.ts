@@ -30,6 +30,7 @@ import type {
   IterationRecord,
   IterationStatus,
   JsonRecord,
+  LapReadingDraft,
 } from "../store/records.js";
 import type { AdmittedPlan } from "./plan.js";
 
@@ -245,13 +246,23 @@ export interface StorePort {
    * in `src/store/sqlite.ts`.
    */
   reserve(input: ReserveInput): Promise<ReserveOutcome>;
-  /** Assert the current status, then write the new one with its fields. */
+  /**
+   * Assert the current status, then write the new one with its fields.
+   *
+   * **The optional reading is written in the same transaction as the
+   * transition** (D-0029 rule 8). It is a parameter here rather than a second
+   * method for the reason the fields are: a caller who could write the reading
+   * separately could write it in the wrong order, and the order is the whole
+   * property -- a person answering a gate whose reading had not landed yet is
+   * the person the reading exists for.
+   */
   transition(
     id: string,
     from: IterationStatus,
     to: IterationStatus,
     fields: IterationFields,
     nowMs: number,
+    reading?: LapReadingDraft | null,
   ): Promise<TransitionOutcome>;
   /**
    * One iteration by id -- total, and that totality is load-bearing.
@@ -350,4 +361,22 @@ export interface ConductorPorts {
     plan: AdmittedPlan,
     gateId: string,
   ) => Promise<EffectOutcome<GateObservation>>;
+  /**
+   * Read what the lap produced, independently of what the lap said about it
+   * (D-0029).
+   *
+   * **A port for the same reason `performLap` is one**, and it is the reason
+   * this layer's external allowance can stay empty: reading a workspace needs a
+   * process, the loop may not start one, and what crosses is a value in rondo's
+   * own vocabulary rather than an import. `test/refrain/` still needs no git,
+   * no repository on disk and no continuo build.
+   *
+   * **Every failure of this port becomes a persisted reading rather than a
+   * failure of the step.** The interpreter maps `refused`, `defect` and
+   * `noAnswer` onto an `unavailable` verdict naming what happened; nothing here
+   * can stop a lap, stall a row, or keep a gate id from reaching a person. That
+   * is D-0029 rule 3 as a shape rather than a promise: a reading that cannot be
+   * taken costs a keystroke at `publish` and never a person's gate.
+   */
+  readonly readLapWork: (plan: AdmittedPlan) => Promise<EffectOutcome<LapReadingDraft>>;
 }

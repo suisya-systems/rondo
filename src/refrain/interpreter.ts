@@ -45,7 +45,12 @@
  * access point, not this module's. Escaping is transport; this module is
  * meaning.
  */
-import type { IterationFields, IterationRecord, IterationStatus } from "../store/records.js";
+import type {
+  IterationFields,
+  IterationRecord,
+  IterationStatus,
+  LapReadingDraft,
+} from "../store/records.js";
 import { isTerminal } from "../store/records.js";
 import { allocate } from "./allocator.js";
 import { nextStep, type Step } from "./loop.js";
@@ -1135,6 +1140,32 @@ async function performStep(
           ),
         };
       }
+      // **The independent reading, here and nowhere else** (D-0029 rules 4
+      // and 8). Here because this is the only point in the arc at which the
+      // work exists and nothing a person can act on has been written yet: the
+      // row is durably `performing`, so a crash leaves the same row it would
+      // have left a line earlier. Nowhere else because the two neighbouring
+      // places are both wrong -- before the identity checks above the lap may
+      // not even be this iteration's, and after the suspend commit the person
+      // is already being asked.
+      //
+      // **It adds no state and it cannot fail the step.** `performing` already
+      // occupies capacity and already owns its two releasing events, so
+      // RELEASED_BY, SUSPENDED_STATUSES and the ledger are untouched; and every
+      // outcome of the port that is not an answer becomes an `unavailable`
+      // reading rather than a stall, because a reading nobody could take must
+      // not cost an iteration whose gate is already open.
+      const read = await ports.readLapWork(plan.plan);
+      const reading: LapReadingDraft =
+        read.kind === "answered"
+          ? read.value
+          : {
+              drafter: UNREAD_DRAFTER,
+              verdict: "unavailable",
+              findings: Object.freeze([]),
+              evidence: null,
+              unavailableReason: messageOf(read),
+            };
       // **Said before it is committed, on purpose.** A blocked commit -- an
       // operator who called abandon() while the lap was walking -- drops these
       // facts from the row, and the gate id is the one thing only a person can
@@ -1142,6 +1173,7 @@ async function performStep(
       // nobody can find. So the lines go in first and are in the report on both
       // paths, and only the suspension itself is claimed after the write.
       lines.push(
+        ...readingLines(reading),
         `The lap answered. Gate ${lap.gateId} is already open; session ${lap.sessionId} was ` +
           `${lap.sessionPath}.`,
         ...(lap.endpointLeaseFailure === null
@@ -1151,24 +1183,33 @@ async function performStep(
           ? []
           : [`continuo reported an elapsed deadline at ${String(lap.elapsedDeadlineAtMs)}ms.`]),
       );
-      const suspended = await commit(ports, lines, performing.record, "awaiting_human", {
-        gateId: lap.gateId,
-        sessionId: lap.sessionId,
-        // continuo's own header says this is the walk's own name -- `started`,
-        // `respawned`, `resumed` -- and not a filesystem path. The record's
-        // field is named after continuo's field so a reader can match them.
-        sessionPath: lap.sessionPath,
-        // continuo's own answer rather than rondo's request: the two were just
-        // checked to be the same value, and recording the observation is what
-        // makes that check able to fail (D-0015 rule 6's habit, applied to a
-        // second measured field).
-        model: lap.model,
-        ...lapNoteFields(
-          performing.record.reason,
-          lap.endpointLeaseFailure,
-          lap.elapsedDeadlineAtMs,
-        ),
-      });
+      const suspended = await commit(
+        ports,
+        lines,
+        performing.record,
+        "awaiting_human",
+        {
+          gateId: lap.gateId,
+          sessionId: lap.sessionId,
+          // continuo's own header says this is the walk's own name -- `started`,
+          // `respawned`, `resumed` -- and not a filesystem path. The record's
+          // field is named after continuo's field so a reader can match them.
+          sessionPath: lap.sessionPath,
+          // continuo's own answer rather than rondo's request: the two were just
+          // checked to be the same value, and recording the observation is what
+          // makes that check able to fail (D-0015 rule 6's habit, applied to a
+          // second measured field).
+          model: lap.model,
+          ...lapNoteFields(
+            performing.record.reason,
+            lap.endpointLeaseFailure,
+            lap.elapsedDeadlineAtMs,
+          ),
+        },
+        // The one write of D-0029 rule 8: the reading lands inside the same
+        // `BEGIN IMMEDIATE` as the suspend, or neither lands.
+        reading,
+      );
       if (suspended.kind === "blocked") {
         return { kind: "finished", report: suspended.report };
       }
@@ -1358,6 +1399,51 @@ async function gateSeen(
 
 // --- committing -------------------------------------------------------------
 
+/**
+ * Who a reading is attributed to when no reader produced one.
+ *
+ * A named value rather than the deterministic reader's name, because the row
+ * has to be able to say "the reading did not happen" and not "the reader looked
+ * and found nothing". Those are the two facts D-0029 rule 10 exists to keep
+ * apart, and attributing an absence to the reader would erase the difference in
+ * the one place it is recorded.
+ */
+const UNREAD_DRAFTER = "rondo/none";
+
+/**
+ * What the operator is told about the reading, above the gate id.
+ *
+ * One line per finding, and a line even when there is nothing to say: a person
+ * shown nothing cannot tell a clean reading from a stage that did not run,
+ * which is the distinction the row keeps and the one `publish` refuses on.
+ * Every string here is rondo's own and is ASCII (D-0004).
+ */
+function readingLines(reading: LapReadingDraft): readonly string[] {
+  switch (reading.verdict) {
+    case "clear":
+      return [
+        `An independent reading of the work found nothing to raise (${reading.drafter}). It read ` +
+          `${String(reading.evidence?.commitCount ?? 0)} commit(s) and ` +
+          `${String(reading.evidence?.fileCount ?? 0)} file(s); this is material for you, not an ` +
+          "approval.",
+      ];
+    case "concerns":
+      return [
+        `An independent reading of the work raised ${String(reading.findings.length)} point(s) ` +
+          `(${reading.drafter}):`,
+        ...reading.findings.map((finding) => `  - ${finding}`),
+        "That is material for you to weigh. It settles nothing, and the answer is still yours.",
+      ];
+    default:
+      return [
+        "No independent reading of the work could be taken: " +
+          `${reading.unavailableReason ?? "no reason recorded"}.`,
+        "'rondo publish' will refuse once on this, for the same reason it refuses a reading that " +
+          "raised something: unread and read-and-fine must not look alike.",
+      ];
+  }
+}
+
 /** A transition either happened, or the call is over and says why. */
 type CommitResult =
   | { readonly kind: "committed"; readonly record: IterationRecord }
@@ -1377,8 +1463,16 @@ async function commit(
   record: IterationRecord,
   to: IterationStatus,
   fields: IterationFields,
+  reading: LapReadingDraft | null = null,
 ): Promise<CommitResult> {
-  const outcome = await ports.store.transition(record.id, record.status, to, fields, ports.now());
+  const outcome = await ports.store.transition(
+    record.id,
+    record.status,
+    to,
+    fields,
+    ports.now(),
+    reading,
+  );
   switch (outcome.kind) {
     case "transitioned":
       return { kind: "committed", record: outcome.record };
