@@ -503,10 +503,12 @@ describe("rondo's own defects, which an operator should never be shown", () => {
     });
   });
 
-  test("an exit 1 stack from a malformed operator value is rondo's to fix", () => {
+  test("an exit 1 stack is an abnormal end, because the CLI never reported", () => {
     // D-0015's exception 2: a relative --workspace or an empty --run-id escapes
     // continuo as exit 1 and a raw stack. rondo validates before spawning, so
-    // reaching this branch means the validation missed something.
+    // reaching this branch means the validation missed something -- but it is
+    // NOT `invokerDefect`, because rondo cannot tell this exit 1 from the one an
+    // exception escaping `lap perform`'s teardown produces (`D-0035`).
     const result = decode(
       RUN_ADMIT,
       output({
@@ -515,17 +517,28 @@ describe("rondo's own defects, which an operator should never be shown", () => {
       }),
     );
     expect(result).toEqual({
-      kind: "invokerDefect",
+      kind: "endedAbnormally",
       reason: expect.stringContaining("exited 1"),
     });
   });
 
-  test("a child killed by a signal is a defect and says which signal", () => {
+  test("a child killed by a signal is an abnormal end and says which signal", () => {
     const result = decode(GATE_LIST, output({ status: null, signal: "SIGKILL" }));
     expect(result).toEqual({
-      kind: "invokerDefect",
+      kind: "endedAbnormally",
       reason: expect.stringContaining("SIGKILL"),
     });
+  });
+
+  test("the two statuses the contract defines stay answers, however bad the bytes", () => {
+    // The other half of `D-0035`'s line, and the half a regression would cross
+    // silently: exit 0 and exit 2 are what say the CLI came back through its own
+    // reporting path, so neither may become an abnormal end just because rondo
+    // could not read what it found there.
+    const unreadable = decode(GATE_LIST, output({ status: 0, stdout: "not a document\n" }));
+    expect(unreadable.kind).toBe("invokerDefect");
+    const prose = decode(GATE_LIST, output({ status: 2, stderr: "usage: continuo gate list" }));
+    expect(prose.kind).toBe("refusedInProse");
   });
 });
 
@@ -556,6 +569,17 @@ describe("measure report, the one verb whose success is unwrapped", () => {
     const prose = "continuo measure report: error: argument --json: another spelling of ...";
     const result = decodeMeasureReport(output({ status: 2, stderr: prose }));
     expect(result).toEqual({ kind: "refusedInProse", text: prose });
+  });
+
+  test("a measure report killed by a signal is an abnormal end here too", () => {
+    // The distinction is drawn on both decoders (`D-0035`) even though this verb
+    // drives no lap: one decoder disagreeing with the other about what a signal
+    // death is would read as a difference that means something.
+    const result = decodeMeasureReport(output({ status: null, signal: "SIGTERM" }));
+    expect(result).toEqual({
+      kind: "endedAbnormally",
+      reason: expect.stringContaining("SIGTERM"),
+    });
   });
 
   test("a report whose kind will not read is rondo's defect, not a refusal", () => {
