@@ -369,6 +369,10 @@ export async function showInbox(ports: InboxPorts, actorId: string): Promise<Inb
     atMs,
     sinceMs,
     live,
+    // **Bounded here and nowhere else, on purpose** -- see this function's
+    // note: this is the read the look writes about, and the display reads
+    // stay unbounded so that nothing live is hidden from the screen. Making
+    // the four agree would be tidier and wrong.
     open: await ports.record.openProposals(atMs),
     changed: sinceMs === null ? [] : await ports.record.changedSince(sinceMs),
     attention: await ports.record.attentionBreakdown(),
