@@ -66,6 +66,8 @@ import {
   type ExplainPorts,
   elevateObservation,
   explainIteration,
+  proposeRetry,
+  recordAnswer,
 } from "./advisory.js";
 import { abandon, admit, conductorPorts, resume } from "./conductor.js";
 import { asciiEscape, consoleSeams, relayUpstream } from "./console.js";
@@ -132,6 +134,19 @@ export const USAGE = `rondo - the operator surface for delegated work
                           iteration:ID, gate:ID#SEQ, run:ID, or
                           repo:PATH@COMMIT#FIRST-LAST. Write --observation with
                           an equals sign: an observation may begin with a dash
+  rondo propose --iteration-id ID --successor-id ID
+                          propose the plans a retry of one iteration could run
+                          under, one option per persisted plan, with exactly one
+                          recommended and the contract each one would run under.
+                          Records the proposal and every contract before it
+                          shows them. Approving one starts nothing: no admission
+                          reads the decision yet
+  rondo decide --proposal-id ID --actor-id ID --outcome approved|declined
+               [--contract-digest DIGEST]
+                          answer a proposal. --contract-digest is the contract
+                          line of the option you are approving, copied from the
+                          screen, and it is required on approved and refused on
+                          declined. An explanation cannot be answered at all
   rondo explain --iteration-id ID
                           say what the store holds about one iteration, with
                           what each claim rests on. Reads rondo's own rows and
@@ -231,6 +246,8 @@ export interface ParsedCommand {
     | "abandon"
     | "explain"
     | "elevate"
+    | "propose"
+    | "decide"
     | "help";
   readonly planFile: string | null;
   readonly prompt: string | null;
@@ -243,6 +260,10 @@ export interface ParsedCommand {
   readonly messageId: string | null;
   readonly observation: string | null;
   readonly basis: string | null;
+  readonly successorId: string | null;
+  readonly proposalId: string | null;
+  readonly contractDigest: string | null;
+  readonly outcome: string | null;
   readonly dryRun: boolean;
   readonly allowRemoteMismatch: boolean;
   readonly despiteReview: boolean;
@@ -265,12 +286,26 @@ const FLAGS = {
   "message-id": { type: "string" },
   observation: { type: "string" },
   basis: { type: "string" },
+  "successor-id": { type: "string" },
+  "proposal-id": { type: "string" },
+  "contract-digest": { type: "string" },
+  outcome: { type: "string" },
   "dry-run": { type: "boolean" },
   "allow-remote-mismatch": { type: "boolean" },
   "despite-review": { type: "boolean" },
 } as const;
 
-const COMMANDS = ["start", "answer", "revise", "publish", "abandon", "explain", "elevate"] as const;
+const COMMANDS = [
+  "start",
+  "answer",
+  "revise",
+  "publish",
+  "abandon",
+  "explain",
+  "elevate",
+  "propose",
+  "decide",
+] as const;
 
 /**
  * Which flags each command actually reads.
@@ -316,6 +351,19 @@ export const FLAGS_BY_COMMAND: Readonly<Record<string, readonly string[]>> = {
   // a default here would be rondo supplying part of an act it is recording a
   // person as having taken.
   elevate: ["iteration-id", "actor-id", "message-id", "observation", "basis"],
+  // **Two ids, both required, and neither has a default.** The subject is the
+  // iteration whose work was not taken, and the successor is the identity the
+  // retry would run as -- which `D-0023` makes the one name a person chooses,
+  // because the run id, the topic branch and the workspace are derived from it.
+  // A default for either would be rondo proposing something about a row nobody
+  // named, under an identity nobody chose.
+  propose: ["iteration-id", "successor-id"],
+  // `--outcome` is typed rather than implied by the verb: D-0032 rule 6 makes
+  // "declined" a row and not an absence, so refusing has to be as sayable as
+  // approving. `--contract-digest` is the option's own value, which is why it
+  // is copied off the screen rather than chosen by an index -- an index is a
+  // position in a list that could have been re-rendered since.
+  decide: ["proposal-id", "actor-id", "outcome", "contract-digest"],
 };
 
 /**
@@ -392,6 +440,10 @@ export function parseCommand(argv: readonly string[]): ParseOutcome {
       messageId: text("message-id"),
       observation: text("observation"),
       basis: text("basis"),
+      successorId: text("successor-id"),
+      proposalId: text("proposal-id"),
+      contractDigest: text("contract-digest"),
+      outcome: text("outcome"),
       dryRun: values["dry-run"] === true,
       allowRemoteMismatch: values["allow-remote-mismatch"] === true,
       despiteReview: values["despite-review"] === true,
@@ -413,6 +465,10 @@ function emptyCommand(command: ParsedCommand["command"]): ParsedCommand {
     messageId: null,
     observation: null,
     basis: null,
+    successorId: null,
+    proposalId: null,
+    contractDigest: null,
+    outcome: null,
     dryRun: false,
     allowRemoteMismatch: false,
     despiteReview: false,
@@ -1025,6 +1081,18 @@ export async function main(
     return await commandElevate(parsed, environment, store, opened.path);
   }
 
+  // **`propose` and `decide` are dispatched here for `explain`'s reason.** Both
+  // read and write rondo's own rows and drive no continuo verb: the iteration a
+  // retry is proposed for has already ended, and an answer to a proposal is a
+  // row in rondo's ledger. Requiring a working continuo to record either would
+  // make them unreachable exactly where they are for.
+  if (parsed.command === "propose") {
+    return await commandPropose(parsed, store, opened.path);
+  }
+  if (parsed.command === "decide") {
+    return await commandDecide(parsed, environment, opened.path);
+  }
+
   const startup = await startContinuo(environment);
   if (startup.kind === "refused") {
     return refuse(`continuo is not usable: ${startup.reason}`);
@@ -1225,7 +1293,7 @@ const BASIS_FORMS_LINE =
   "snapshot:/pointer, iteration:ID, gate:ID#SEQ, run:ID, or repo:PATH@COMMIT#FIRST-LAST";
 
 /**
- * Door seven: hand one observation to the advisory, and record that a person
+ * Door nine: hand one observation to the advisory, and record that a person
  * did it.
  *
  * **This is where authority enters** (#41 section 3): an observation constrains
@@ -1278,12 +1346,184 @@ async function commandElevate(
   if ("refusal" in actor) {
     return refuse(actor.refusal);
   }
-  const outcome = await elevateObservation(advisoryPorts(store, storePath), parsed.iterationId, {
-    messageId: parsed.messageId,
-    actorId: actor.actorId,
-    observation: { label: "observation", value: parsed.observation, basis },
-  });
-  return sayAdvisoryOutcome(outcome);
+  return sayAdvisoryOutcome(
+    await elevateObservation(advisoryPorts(store, storePath), parsed.iterationId, {
+      messageId: parsed.messageId,
+      actorId: actor.actorId,
+      observation: { label: "observation", value: parsed.observation, basis },
+    }),
+  );
+}
+
+/**
+ * The cadenza that composed a contract, read from the pin the repository keeps.
+ *
+ * **A file rather than a constant, because a constant would be a fifth place
+ * the pin is written down** -- `cadenza.pin.json`, `vendor/cadenza.tgz.sha256`,
+ * `package-lock.json` and the tarball are the four `test/cadenza/pin.test.ts`
+ * already holds to one story, and a copy in `src/` would be one no test
+ * compares. `composition.cadenza_revision` records *which* cadenza composed the
+ * contract a person approved (D-0022 rule 18), so a stale copy here would
+ * misattribute it silently.
+ *
+ * Read relative to this module rather than to the working directory: `src/` and
+ * the built `dist/` sit at the same depth below the repository root, so one
+ * relative URL answers for both.
+ */
+function cadenzaRevision(): { revision: string } | { refusal: string } {
+  try {
+    const raw = readFileSync(new URL("../../cadenza.pin.json", import.meta.url), "utf8");
+    const parsed: unknown = JSON.parse(raw);
+    const revision =
+      parsed !== null && typeof parsed === "object"
+        ? (parsed as Record<string, unknown>)["revision"]
+        : undefined;
+    if (typeof revision !== "string" || revision === "") {
+      return {
+        refusal:
+          "cadenza.pin.json holds no 'revision', so which cadenza composed a contract could not be recorded.",
+      };
+    }
+    return { revision };
+  } catch (error) {
+    return {
+      refusal: `cadenza.pin.json could not be read: ${error instanceof Error ? error.message : String(error)}`,
+    };
+  }
+}
+
+/**
+ * Door seven: propose the plans a retry could run under, and record what was
+ * shown.
+ *
+ * **The first approvable kind reaches an operator here** (D-0022 rule 4's
+ * union, D-0032 rule 1's option set). Unlike `explain`, this path composes: it
+ * issues the exact contract each option would run under, for the successor
+ * identity the operator names, and records it before showing the digest --
+ * which is D-0022 rules 17 and 18 taken together, and the reason `src/access`
+ * finally takes the cadenza arrow rule 5 granted it.
+ */
+async function commandPropose(
+  parsed: ParsedCommand,
+  store: IterationStore,
+  storePath: string,
+): Promise<number> {
+  if (parsed.iterationId === null || parsed.successorId === null) {
+    return refuse(
+      "propose needs --iteration-id ID and --successor-id ID: the first names the iteration " +
+        "whose work was not taken, and the second is the identity the retry would run as. rondo " +
+        "derives the run id and the topic branch from the second, so it is a person's to choose.",
+    );
+  }
+  const pin = cadenzaRevision();
+  if ("refusal" in pin) {
+    return refuse(pin.refusal);
+  }
+  const outcome = await proposeRetry(
+    {
+      store,
+      record: openAdvisoryRecord(storePath),
+      now: Date.now,
+      cadenzaRevision: pin.revision,
+      present: (lines) => {
+        for (const line of lines) {
+          say(line);
+        }
+      },
+    },
+    parsed.iterationId,
+    parsed.successorId,
+  );
+  if (outcome.kind === "refused") {
+    return refuse(outcome.reason);
+  }
+  say(`recorded as proposal '${outcome.proposalId}'`);
+  say(
+    `Next: rondo decide --proposal-id ${outcome.proposalId} --actor-id ID ` +
+      "--outcome approved --contract-digest DIGEST",
+  );
+  if (outcome.kind === "presentedUncounted") {
+    // `explain`'s arm, for `explain`'s reason: the proposal and its contracts
+    // are in the ledger and the operator has read them; what failed is the
+    // count of what was put to them (D-0032 rule 10).
+    consoleSeams.writeError(
+      asciiEscape(
+        `This proposal was shown and was not counted as presented: ${outcome.reason}. ` +
+          "The breakdown of what was put to you and what was not will be short by one.\n",
+      ),
+    );
+    return 1;
+  }
+  return 0;
+}
+
+/**
+ * Door eight: answer a proposal, and write down who answered it.
+ *
+ * **Every rule that decides whether this may be recorded is the store's**
+ * (D-0032 rules 5 and 6): a kind that binds nothing is refused inside the
+ * writer's own transaction, and so is an approval naming a contract that was
+ * never composed for the proposal. What this function checks is what a command
+ * line owes an operator before a write is attempted -- that the identity is the
+ * approver's, and that an approval carries the digest it is approving.
+ *
+ * **Nothing is consumed.** An approval recorded here authorises an issuance
+ * that nothing performs yet: `decision_consumption` stays empty, and D-0022
+ * rule 19's *"approved and never spent"* query is what will report it.
+ */
+async function commandDecide(
+  parsed: ParsedCommand,
+  environment: Readonly<Record<string, string | undefined>>,
+  storePath: string,
+): Promise<number> {
+  if (parsed.proposalId === null) {
+    return refuse("decide needs --proposal-id ID, naming the proposal being answered.");
+  }
+  if (parsed.outcome !== "approved" && parsed.outcome !== "declined") {
+    return refuse(
+      "decide needs --outcome approved or --outcome declined. Declining is written down rather " +
+        "than left as silence: 'the operator settled this' and 'nobody has answered' are " +
+        "different facts about the same proposal.",
+    );
+  }
+  const approving = parsed.outcome === "approved";
+  if (approving && parsed.contractDigest === null) {
+    return refuse(
+      "approving needs --contract-digest DIGEST: the contract line of the option you are " +
+        "approving, copied from the screen. What is recorded is the contract you were shown, " +
+        "not the option's position in a list that may have been rendered again since.",
+    );
+  }
+  if (!approving && parsed.contractDigest !== null) {
+    return refuse(
+      "--contract-digest is refused with --outcome declined: a refusal approves no contract, " +
+        "and a digest on one would read as an approval that had been recorded as its opposite.",
+    );
+  }
+  const actor = approvedActor(parsed, environment);
+  if ("refusal" in actor) {
+    return refuse(actor.refusal);
+  }
+  const outcome = await recordAnswer(
+    { record: openAdvisoryRecord(storePath), now: Date.now },
+    {
+      proposalId: parsed.proposalId,
+      outcome: parsed.outcome,
+      contractDigest: parsed.contractDigest,
+      actorId: actor.actorId,
+    },
+  );
+  if (outcome.kind === "refused") {
+    return refuse(outcome.reason);
+  }
+  say(`recorded as decision '${outcome.decisionId}'`);
+  if (approving) {
+    say(
+      "This records that you approved that contract. Nothing runs on it yet: no admission " +
+        "compares it against a plan, so the approval stands unspent.",
+    );
+  }
+  return 0;
 }
 
 /** Door two: see what is waiting, and answer it. */

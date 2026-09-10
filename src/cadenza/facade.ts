@@ -49,7 +49,9 @@ import {
   agentType as cadenzaAgentType,
   classify as cadenzaClassify,
   composeCatalog as cadenzaComposeCatalog,
+  contractDigest as cadenzaContractDigest,
   contractInputForAgentType as cadenzaContractInputForAgentType,
+  contractPayload as cadenzaContractPayload,
   delegationContract as cadenzaDelegationContract,
   layerDocument as cadenzaLayerDocument,
   resolveProject as cadenzaResolveProject,
@@ -175,4 +177,45 @@ export function classifyAction(
   context: ClassificationContext,
 ): Classification {
   return cadenzaClassify(contract, action, context);
+}
+
+/**
+ * cadenza's canonical rendering of a contract, as plain readable data.
+ *
+ * `unknown` rather than a JSON union because the union's home is the store, and
+ * this layer may not name it (see {@link contractPayload}).
+ */
+export type ContractPayload = Readonly<Record<string, unknown>>;
+
+/**
+ * The contract's fields **as issued**, as plain data (D-0022 rule 18).
+ *
+ * A pass-through, and the reason it is here at all is that the `composition`
+ * row holds the contract verbatim so that its digest can be **recomputed
+ * rather than trusted** (`D-0020` rule 4 fact 1). The payload cadenza digests
+ * and the payload rondo persists have to be the same bytes, so rondo takes
+ * cadenza's rendering instead of writing a second one -- a second encoding is
+ * a second thing that can drift, and it would drift silently, because a
+ * recomputation over the wrong bytes fails the comparison it exists to make.
+ *
+ * The return type is stated structurally rather than as the store's
+ * `JsonRecord`: this layer's internal allowance names only itself, so the one
+ * module that may import cadenza may not import the store either, and a shape
+ * both sides can read is what crosses. The caller in `src/access` is where the
+ * two are stated to be the same document.
+ */
+export function contractPayload(contract: DelegationContract): ContractPayload {
+  return cadenzaContractPayload(contract);
+}
+
+/**
+ * cadenza's digest of one contract, which is the value a human approves.
+ *
+ * Taken from cadenza rather than computed here for {@link contractPayload}'s
+ * reason and one more: `D-0022` rule 17 makes the approved digest the thing
+ * admission compares its own classification against, so a digest rondo framed
+ * differently would refuse every retry a person had actually approved.
+ */
+export function contractDigest(contract: DelegationContract): string {
+  return cadenzaContractDigest(contract);
 }
