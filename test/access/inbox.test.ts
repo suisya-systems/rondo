@@ -105,9 +105,9 @@ test("the mark is sampled before the reads and written after the render", async 
       events.push("read");
       return await record.lastView(actorId);
     },
-    openProposals: async () => {
-      events.push("read");
-      return await record.openProposals();
+    openProposals: async (uptoMs: number) => {
+      events.push(`read upto ${String(uptoMs)}`);
+      return await record.openProposals(uptoMs);
     },
     recordAttention: async (row: Parameters<typeof record.recordAttention>[0]) => {
       events.push("count");
@@ -147,6 +147,10 @@ test("the mark is sampled before the reads and written after the render", async 
   // later re-sampled it.
   expect(clock).toEqual([9_999]);
   expect(events.indexOf("read")).toBeLessThan(events.indexOf("render"));
+  // **The read the look writes about is bounded by the mark it will write.**
+  // Otherwise a proposal that landed after the sample is counted as presented
+  // at a moment before it existed.
+  expect(events).toContain("read upto 5000");
   expect(events.indexOf("render")).toBeLessThan(events.lastIndexOf("mark 5000"));
   expect(events.at(-1)).toBe("mark 5000");
   // And the mark that was written is the bound, not a later clock.
@@ -365,4 +369,48 @@ test("NEW marks only what landed since the mark, and only when there is a mark",
   // A first look marks nothing new: everything would be, which is true and
   // useless.
   expect(inboxLines("operator-1", { ...EMPTY, open }).join("\n")).not.toContain("NEW");
+});
+
+test("a proposal that lands after the bound is not counted as presented before it existed", async () => {
+  // D-0032 rule 9's own words: the mark is *the bound the render's own query
+  // used*. The proposal below is created after the look's sample, so this look
+  // neither shows it nor stamps an `operator_attention` row for it at a moment
+  // it did not exist. The next look, whose bound is later, does both.
+  const { connection, store, record } = fresh();
+  await reserveOne(store, "i-0001");
+  await record.recordProposal({
+    proposalId: "p-late",
+    kind: "run_plan",
+    drafter: "rondo/advisory/deterministic",
+    payload: { options: [] },
+    snapshot: {},
+    derivation: null,
+    iterationId: "i-0001",
+    supersedesIterationId: null,
+    supersedesProposalId: null,
+    predecessorPlanDigest: null,
+    predecessorContractDigest: null,
+    agentTypeDigest: null,
+    configDigest: null,
+    contractDigest: null,
+    continuoRevision: null,
+    cadenzaRevision: null,
+    elevatedFromMessageId: null,
+    elevatedByActorId: null,
+    createdAtMs: 8_000,
+  });
+
+  const early = screen();
+  await showInbox({ store, record, present: early.present, now: () => 5_000 }, "operator-1");
+  expect(early.shown.join("\n")).not.toContain("p-late");
+  expect(connection.prepare("SELECT count(*) AS n FROM operator_attention").get()).toEqual({
+    n: 0,
+  });
+
+  const later = screen();
+  await showInbox({ store, record, present: later.present, now: () => 9_000 }, "operator-1");
+  expect(later.shown.join("\n")).toContain("p-late");
+  expect(connection.prepare("SELECT at_ms FROM operator_attention").get()).toEqual({
+    at_ms: 9_000,
+  });
 });

@@ -322,6 +322,18 @@ export function inboxLines(actorId: string, snapshot: InboxSnapshot): readonly s
  * *after* the mark. Sampling first accepts the opposite failure: a row that
  * landed during the render is shown again next time. D-0032 rule 11 names that
  * trade and takes this side of it.
+ *
+ * **The bound is applied to the read this look writes about, and deliberately
+ * not to the rest.** `openProposals(atMs)` is bounded because each of its rows
+ * becomes an `operator_attention` row stamped `atMs`, and a presentation
+ * recorded before its subject existed is a row no clock explains. The display
+ * reads are left unbounded on purpose: bounding `readLive` would *hide* an
+ * iteration that started between the sample and the read, and a live row
+ * missing from "in flight" understates what is running to the one reader
+ * deciding whether to start something else -- which is the failure the
+ * undecodable-row line exists to prevent, arriving by a different door. Those
+ * rows are shown early and shown again next look, which is rule 11's accepted
+ * duplicate.
  */
 export async function showInbox(ports: InboxPorts, actorId: string): Promise<InboxOutcome> {
   const atMs = ports.now();
@@ -340,7 +352,7 @@ export async function showInbox(ports: InboxPorts, actorId: string): Promise<Inb
     atMs,
     sinceMs,
     live,
-    open: await ports.record.openProposals(),
+    open: await ports.record.openProposals(atMs),
     changed: sinceMs === null ? [] : await ports.record.changedSince(sinceMs),
     attention: await ports.record.attentionBreakdown(),
     unspent: await ports.record.unconsumedDecisions(),

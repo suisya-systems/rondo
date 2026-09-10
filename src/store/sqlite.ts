@@ -1680,8 +1680,13 @@ export interface AdvisoryRecord {
    * on `proposal` -- the row is immutable -- so "still waiting on a person" is
    * the absence of a `human_decision` naming it, which rule 6 made a
    * distinguishable fact by making *declined* a row of its own.
+   *
+   * `uptoMs` is the caller's bound, inclusive: rule 9 says the mark is *the
+   * bound the render's own query used*, and this is the read the surface
+   * writes about -- a proposal counted as presented at a moment before it
+   * existed would be a row in `operator_attention` that no clock explains.
    */
-  openProposals(): Promise<readonly OpenProposal[]>;
+  openProposals(uptoMs: number): Promise<readonly OpenProposal[]>;
   /**
    * The silence, as one `GROUP BY` over one table (D-0032 rule 10).
    *
@@ -2178,14 +2183,15 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
       );
     },
 
-    async openProposals(): Promise<readonly OpenProposal[]> {
+    async openProposals(uptoMs: number): Promise<readonly OpenProposal[]> {
       return connection
         .prepare(
           "SELECT proposal_id, kind, iteration_id, created_at_ms FROM proposal " +
-            "WHERE proposal_id NOT IN (SELECT proposal_id FROM human_decision) " +
+            "WHERE created_at_ms <= ? " +
+            "AND proposal_id NOT IN (SELECT proposal_id FROM human_decision) " +
             "ORDER BY created_at_ms, proposal_id",
         )
-        .all()
+        .all(uptoMs)
         .map((row) => {
           const record = row as SqlRow;
           const iterationId = record["iteration_id"];
