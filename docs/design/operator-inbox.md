@@ -167,16 +167,35 @@ stops the *reference* from lying.
 `D-0032`'s paper screen draws *"waiting on you / on CI / still running"* from
 `iteration.status` and marks it *"already stored, no new field"*. Reading the union
 rather than the sentence: `IterationStatus` has eleven members
-(`src/store/records.ts:72-94`). Waiting on a person is `awaiting_human`,
-`withdrawal_requested` and `stalled` — the two suspended statuses plus the one that
-means *a person must decide and there is no gate*. In flight is `admitting`,
-`admitted` and `performing`. **No member means "waiting on CI"**, and the reason is
-structural rather than an omission: CI runs inside `lap perform`, which is
-continuo's, and from rondo's side the whole of it is the single word `performing` —
-which `records.ts:81` describes as *"the one step that takes minutes"*.
+(`src/store/records.ts:72-94`). Three of them are terminal (`TERMINAL_STATUSES`,
+103) and are not a wait at all — a closed item belongs to `D-0032` rule 11's
+terminal enumeration, which is a different region of the screen. **The partition
+is over the remaining eight, and it is written out in full rather than
+illustrated:**
 
-So the partition is **waiting on you / in flight**, and it is drawn from a column
-that exists.
+- **Waiting on you** — `awaiting_human`, `withdrawal_requested`, `stalled`: the
+  two suspended statuses (`SUSPENDED_STATUSES`, 129) plus the one that means *a
+  person must decide and there is no gate*.
+- **In flight** — `planned`, `classified`, `admitting`, `admitted`, `performing`.
+
+**Both lists are exhaustive on purpose, and `planned` and `classified` are the
+reason it is said that way.** They are durable rows, not moments in a function:
+an iteration is `planned` once reserved with nothing sent, and `classified` once
+cadenza has answered, and a crash leaves either of them standing. An inbox built
+from two illustrative lists would silently drop exactly those rows — live
+iterations, omitted at the moment the operator came back to find out what is
+live. The implementation takes its totality the way this repository already takes
+it elsewhere: `RELEASED_BY` (`records.ts:172`) is a `Record<NonTerminalStatus,
+...>`, so a status added to the union and forgotten here is a type error rather
+than a missing inbox row.
+
+**No member means "waiting on CI"**, and the reason is structural rather than an
+omission: CI runs inside `lap perform`, which is continuo's, and from rondo's side
+the whole of it is the single word `performing` — which `records.ts:81` describes
+as *"the one step that takes minutes"*.
+
+So the wait is **two-way, over the eight non-terminal statuses**, and it is drawn
+from a column that exists.
 
 **The third distinction is refused rather than deferred.** Obtaining it means
 rondo reading continuo's view of a run's CI state, which is a widening of what the
@@ -297,6 +316,9 @@ behaviour, and #41's own measurements are of a different organisation on
 - **An operator acting differently on "waiting on CI" than on "still running"** —
   rule 5's own trigger, and the only thing that makes the widening it refuses worth
   its arrow.
+- **A twelfth `IterationStatus` member** that is neither terminal nor obviously one
+  of rule 5's two buckets, which is the case its exhaustive lists exist to make
+  visible rather than to absorb.
 - **`explain` or any later verb needing to record a presentation it did not
   perform**, which would make rule 1's invariant — every presented subject has a
   row — false in the writer rather than in the schema.
