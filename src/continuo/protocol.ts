@@ -44,15 +44,23 @@
  * So this module carries the class through as an opaque string for a human to
  * read and never branches on it.
  *
- * **Six outcomes, and the difference between them is who has to act.**
- * {@link ContinuoResult} is closed over exactly the six, because the answer to
+ * **Seven outcomes, and the difference between them is who has to act.**
+ * {@link ContinuoResult} is closed over exactly the seven, because the answer to
  * "what does rondo do now?" differs for each: an answered call has a payload;
  * an upstream refusal is continuo's answer and belongs to the operator; a prose
  * refusal is the same thing said in words rondo may relay but never parse; a
  * protocol refusal means the seam is not the seam rondo was built against and
  * rondo stops; a defect is rondo's own bug, which an operator should never have
- * been shown; and a timeout is rondo's own ceiling firing, which is a fact this
- * module can *name* but never produce -- only `invoker.ts` owns a timer.
+ * been shown; an abnormal end is an invocation that never reached its own
+ * reporting path, so nothing about it is known; and a timeout is rondo's own
+ * ceiling firing, which is a fact this module can *name* but never produce --
+ * only `invoker.ts` owns a timer.
+ *
+ * **The last two are the ones that keep the conductor's slot** (`D-0035`). Every
+ * other outcome is an invocation that came back through one of the two exit
+ * statuses continuo's contract defines, which is what makes it evidence that
+ * `lap perform`'s teardown ran; an abnormal end is not, and neither is a
+ * ceiling.
  */
 
 /** The JSON rondo is prepared to see. A wire vocabulary, not a rondo type. */
@@ -139,7 +147,29 @@ export type ContinuoResult<T> =
    * {@link decode} never produces it. It is a fact about a timer, and the timer
    * is `invoker.ts`'s.
    */
-  | { readonly kind: "timedOut"; readonly reason: string };
+  | { readonly kind: "timedOut"; readonly reason: string }
+  /**
+   * **The invocation ended without reaching continuo's own reporting path**
+   * (`D-0035`): a death by signal, or an exit status the host contract does not
+   * define.
+   *
+   * A variant of its own rather than a seventh spelling of `invokerDefect`, and
+   * for the same kind of reason `timedOut` is one. continuo's CLI sets
+   * `process.exitCode` and constructs its `ArgparseExit` with 0 or 2 and no
+   * other value, so reaching either of those means the verb came back through
+   * its own reporting path -- after `lap perform`'s teardown, which is what
+   * makes an answer evidence that the lap's child is over. Anything else does
+   * not: an escaping exception ends the process at exit 1 immediately, holding
+   * no handle open and running no more of the teardown, so a worker may still
+   * be alive and rondo has no identity for it either.
+   *
+   * The conductor therefore reads this as `noAnswer` -- the row keeps its
+   * `performing` status and the execution slot with it -- exactly as it reads a
+   * ceiling that fired. Folding it back into `invokerDefect` would file a lap
+   * nobody can account for as a lap that failed, and give the slot to the next
+   * one.
+   */
+  | { readonly kind: "endedAbnormally"; readonly reason: string };
 
 /**
  * What rondo reads out of one verb's document.
@@ -867,8 +897,13 @@ function nullableNumber(document: JsonObject, key: string): number | null {
  * The three-valued host contract, applied to one finished invocation.
  *
  * Exit 0: parse stdout. Exit 2: parse stderr, which is *either* a document or
- * argparse prose. Anything else -- including a death by signal -- is rondo's
- * own defect (D-0015 rule 3).
+ * argparse prose. **Anything else -- including a death by signal -- is an
+ * abnormal end rather than a defect** (`D-0035`): 0 and 2 are the whole of what
+ * continuo's `ArgparseExit` is ever constructed with at the pinned revision, so
+ * reaching neither means the CLI never came back through its own reporting
+ * path and rondo knows nothing about what it left behind. What a person then
+ * does about it is the same as for a ceiling that fired, and
+ * {@link ContinuoResult}'s own entry is where that reasoning is written down.
  *
  * **Where the hard cases land, and why the line is drawn there.** A document
  * that parses and carries a `schema` rondo does not decode -- an unknown
@@ -890,7 +925,7 @@ function nullableNumber(document: JsonObject, key: string): number | null {
 export function decode<T>(contract: VerbContract<T>, output: InvocationOutput): ContinuoResult<T> {
   if (output.signal !== null) {
     return {
-      kind: "invokerDefect",
+      kind: "endedAbnormally",
       reason: `continuo ${verbName(contract)} was killed by signal ${output.signal}`,
     };
   }
@@ -901,7 +936,7 @@ export function decode<T>(contract: VerbContract<T>, output: InvocationOutput): 
     return decodeRefusal(contract, output.stderr);
   }
   return {
-    kind: "invokerDefect",
+    kind: "endedAbnormally",
     reason:
       `continuo ${verbName(contract)} exited ${describeStatus(output.status)}, which is ` +
       "neither the success nor the refusal the host contract defines. rondo called it wrong, " +
@@ -940,7 +975,7 @@ function describeStatus(status: number | null): string {
 export function decodeMeasureReport(output: InvocationOutput): ContinuoResult<MeasureReport> {
   if (output.signal !== null) {
     return {
-      kind: "invokerDefect",
+      kind: "endedAbnormally",
       reason: `continuo measure report was killed by signal ${output.signal}`,
     };
   }
@@ -948,8 +983,12 @@ export function decodeMeasureReport(output: InvocationOutput): ContinuoResult<Me
     return { kind: "refusedInProse", text: output.stderr.trim() };
   }
   if (output.status !== 0) {
+    // The same two branches {@link decode} draws, drawn here too (`D-0035`).
+    // This verb drives no lap and so keeps no slot, but a reader who found the
+    // distinction on one decoder and not the other would have to work out
+    // whether the difference meant something.
     return {
-      kind: "invokerDefect",
+      kind: "endedAbnormally",
       reason:
         `continuo measure report exited ${describeStatus(output.status)}, which is neither ` +
         `the success nor the refusal the host contract defines. stderr: ${output.stderr.trim()}`,

@@ -411,8 +411,15 @@ function relayFailure(verb: string, result: ContinuoResult<unknown>): number {
       return 2;
     case "timedOut":
       // rondo's ceiling killed the CLI and not whatever it had started, so this
-      // is the one failure that may have left work running.
+      // is one of the two failures that may have left work running.
       relayUpstream(`continuo ${verb} timed out`, result.reason);
+      return 1;
+    case "endedAbnormally":
+      // The other one (`D-0035`): the CLI never reached its own reporting path,
+      // so whatever it had started is unaccounted for. Said in its own words
+      // rather than folded into the line below, because "could not be read"
+      // describes a document and there was none.
+      relayUpstream(`continuo ${verb} ended without reporting`, result.reason);
       return 1;
     case "protocolRefusal":
     case "invokerDefect":

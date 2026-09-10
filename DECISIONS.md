@@ -72,6 +72,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0032 | The record the operator's surface has to be able to show: alternatives inside one immutable proposal, a basis that is a locator, a durable last-look mark, and one table counting what was put to the operator and what was not | accepted |
 | D-0033 | Nothing new owns the work between laps: three existing owners, a snapshot that widens instead of a component that decides, and one gap named rather than filled | accepted |
 | D-0034 | An explanation carries claims and no recommendation: how `D-0032` rule 1 and rule 5 are read together | accepted |
+| D-0035 | What actually releases the conductor's slot: the exit status continuo's contract defines, and an abnormal end that keeps it | accepted |
 
 ---
 
@@ -2363,6 +2364,17 @@ test, which is where the question "should this layer reach cadenza?" is asked.
 ## D-0019 — The first working conductor loop: a pure planner, an interpreter over injected ports, a durable single-flight store, and a suspend at the open gate
 
 **Status:** accepted (2026-09-06, rondo's human gate)
+
+> **Annotation (2026-09-11, from D-0035).** Added after this entry was accepted, and additive: no
+> claim, measurement or date below is edited. **Rule 11's table stands exactly as written; the
+> sentence under it that says why does not.** The rule releases the lock on a refusal because "an
+> answer arrived, so the CLI is over and no worker of its is still running", and `continuo D-1102`
+> made that sentence checkable: some refusals now name a session, and continuo's teardown declines
+> to stop one in three states. **D-0035** re-measures it and keeps the rule's conclusion on a
+> different fact -- a live child holds `lap perform`'s process open, so an invocation that came back
+> is one whose child is gone -- and narrows what counts as "an answer arrived": the two exit statuses
+> continuo's contract defines, rather than any outcome that is not a timeout. A death by signal or an
+> exit 1 now reaches this rule's `performing`-with-no-answer row instead of its refusal row.
 
 > **Annotation (2026-09-07, from D-0029).** Added after this entry was accepted, and additive: no
 > claim, measurement or date below is edited. Two of this entry's own statements have been overtaken
@@ -5658,3 +5670,128 @@ shape had to be decided somewhere, and is why it is decided here.
 - **A claim that is only meaningful as one of a set of alternatives** -- an explanation whose honest
   form is "either of these two readings of the row fits" -- which would reopen whether an option set
   without a recommendation is a third shape rather than a narrowing of rule 1.
+
+---
+
+## D-0035 — What actually releases the conductor's slot: the exit status continuo's contract defines, and an abnormal end that keeps it
+
+**Status:** accepted (2026-09-11, rondo's human gate). Refs rondo#24.
+
+This entry takes rows `S-1` … `S-4` of
+[`docs/design/refusal-session-lock.md`](docs/design/refusal-session-lock.md), which was written
+propose-only and named this entry's question in advance. **The document is kept rather than
+removed**, unlike the drafts `D-0029` and `D-0032` withdrew: it is not a copy of this entry but the
+measurement record underneath it -- what the pinned continuo's teardown does, in which states it
+declines to stop, and which of those a host can see -- and `D-0022`, `D-0023` and `D-0029` all
+leave such a document standing. **This entry governs wherever the two differ.** Its rows `S-5` and
+`S-6` are *not* taken here: `S-5` is rondo#55 and `S-6` is an ask filed against continuo.
+
+**It supersedes nothing, and `D-0019` rule 11's table is untouched.** What changes is the reason
+under the rule and one mapping in the composition root. `D-0019` gains a dated annotation.
+
+### What the question was
+
+`D-0019` rule 11 releases the conductor's capacity when a `performing` iteration receives a refusal
+and keeps it when the iteration receives nothing, "and the difference is not how bad the outcome was
+-- it is whether anything might still be running". `continuo D-1102` then made some `lap perform`
+refusals carry a `session_id`, which are exactly the refusals raised after the walk: a turn that
+outlived its budget, a terminal report that could not be read or was about another session. If a
+refusal can name a live session, rondo#24 asked, is "an answer came back" still the same fact as
+"nothing of the lap's is running", and should the release wait for a confirmed stop or an
+`abandon()`?
+
+### Decision
+
+1. **A refusal that names a session releases the slot. `D-0019` rule 11 stands, and the reason
+   under it is replaced.** The rule's own premise -- "an answer arrived, so the CLI is over and no
+   worker of its is still running" -- is not what makes the release safe, and was never checked
+   against the case where continuo declines to stop. What makes it safe is measured at the pinned
+   revision `38c667b`: continuo's CLI sets `process.exitCode` and never calls `process.exit`
+   (`src/cli.ts:298`), its provider keeps the spawned child in `#sessions` and never `unref`s it
+   (`src/session/claude_cli_provider.ts:1931`), and continuo's own teardown states the consequence
+   -- "the provider holds a referenced handle to it, so `lap perform` may not return until that
+   child exits" (`src/lap/root.ts:1581-1586`). **A live child therefore holds the CLI open, and an
+   invocation that came back is one whose child is gone.**
+
+   **This is a stronger fact than the issue expected, and it covers more states than the issue
+   listed.** The teardown declines to stop a session in *three* states, not one: `LoserTerminated`
+   with `stopAttempted === false` (`src/supervisor.ts:582-601`), a lease epoch that moved under a
+   long turn so the session is no longer this lap's (`root.ts:1628-1641`), and a stop the provider
+   did not confirm (`root.ts:1654-1673`). In each of them the child is left running -- and so is the
+   CLI, which then does not answer at all. That path is rondo's ceiling firing, which `D-0019`
+   rule 12 already routes to `noAnswer` and which already keeps the slot.
+
+2. **The releasing fact is the exit status continuo's contract defines, and not the outcome's
+   class.** `ArgparseExit` is constructed with `0` and `2` at the pinned revision and with no other
+   value, and `mainAsync` returns an `ArgparseExit`'s code while **rethrowing everything else**
+   (`src/cli.ts:222-231`) into a top-level `await`. So an escaping exception ends the process at
+   exit 1 *immediately*, holding no handle open and running no more of the teardown -- and a throw
+   inside the teardown itself is reachable, because `stillThisLapsSession` reads SQLite where
+   `stopSession` swallows its failures. **Exit 0 and exit 2 are evidence that the CLI came back
+   through its own reporting path; every other ending is evidence of nothing.**
+
+3. **`decode` gains a seventh outcome, `endedAbnormally`, and the composition root maps it to
+   `noAnswer`.** A death by signal and a status the contract does not define stop being
+   `invokerDefect` and become their own variant (`src/continuo/protocol.ts`), and `asEffect` reads it
+   the way it reads a ceiling that fired (`src/access/conductor.ts`): the row keeps `performing`, the
+   execution slot stays taken, and the report says a human is needed. Every other `defect` -- an
+   unreadable document from an orderly exit 0, a protocol break, a call rondo made wrong -- keeps
+   releasing, because the process it was diagnosing had already come back through its own reporting
+   path.
+
+   **A variant rather than a boolean on `invokerDefect`**, for `timedOut`'s reason and by its
+   precedent: the difference is what the conductor does next, and a closed union is where rondo
+   writes down "the answer to *what does rondo do now?* differs for each". `decodeMeasureReport`
+   draws the same two branches even though that verb drives no lap, because one decoder disagreeing
+   with the other about what a signal death is would read as a difference that meant something.
+
+4. **No waiting state, and `abandon()` gains no ordinary path.** Nothing waits for a stop to be
+   confirmed, no non-terminal status is added to rule 11's table, and no refusal is held back. The
+   alternative -- hold the slot on any refusal that names a session until a stop is confirmed -- was
+   available and is refused, because at this pin **there is no fact to confirm against**: continuo's
+   CLI mounts six verb groups and none of them is `session` (`src/cli.ts:124-182`), and `run show`'s
+   session rows cannot answer liveness, since `released_at_ms` has no writer anywhere in continuo's
+   `src/` (`releaseBinding` is exported and never called) and `provider_state` is a snapshot taken
+   when the identity was confirmed. The only exit from such a hold would be an operator's
+   `abandon()`, taken on every ordinary turn timeout -- which inverts rule 11 in exchange for
+   nothing.
+
+### What this costs, stated rather than argued away
+
+An exit 1 that is genuinely rondo's own fault now **stalls the row instead of failing it**.
+`D-0015`'s exception 2 is the known example: a relative `--workspace` escapes continuo as exit 1 and
+a raw stack, and rondo's pre-spawn validation exists so that never happens. Under this entry such a
+lap is held at `performing` for a person to settle rather than filed as a lap that failed. That is
+deliberate -- rondo cannot tell that exit 1 from the one an exception escaping the teardown produces,
+and only one of the two is safe to release on -- and the cost is bounded by the validation that
+makes the state unreachable in the first place.
+
+### What is not decided
+
+- **The worker's own descendants.** The child leads its own process group and continuo's stop
+  signals the group, but nothing in the handle argument covers a grandchild that outlives the child.
+  rondo has no evidence either way and this entry claims none.
+- **A session adopted by pid rather than by handle**, which continuo's `resume` path can produce.
+  The fresh-spawn path a rondo lap drives always holds a handle; no lap-1 path was found that does
+  not, but that was read rather than exercised.
+- **None of this was reproduced by running a lap.** Every claim above is a reading of the pinned
+  source, and the design document says so in the same words.
+- **Capacity.** These rules decide *when the slot is given back*, not how many laps may hold one.
+  `D-0023` rule 17 leaves `maxOccupying` at one until `continuo D-1104`; a host that raises it should
+  re-read that rule and rule 18 rather than this entry.
+
+### What would falsify it
+
+- **continuo `unref`s a child handle, calls `process.exit`, or otherwise lets `lap perform` return
+  with a live child of its lap's.** Rule 1's whole argument goes with it and the question reopens.
+  This is the thing to check when the pin moves.
+- **continuo constructs an `ArgparseExit` with a third code**, which would have to be sorted into
+  "reported" or "ended abnormally" before rule 2 could stand as written.
+- **continuo grows a `session` verb group, or puts a stop-confirmation field on the refusal
+  envelope** (the `S-6` ask). Rule 4's refusal was taken on there being no fact to wait for, and that
+  is the change that would supply one.
+- **`released_at_ms` acquires a writer**, which would make `run show` an answer to liveness and
+  reopen the middle option rule 4 rejected.
+- Any measurement above failing to reproduce at continuo `38c667b` and rondo `f74c37c`, which is
+  this entry's base. The continuo readings were taken against the pin and the rondo ones against
+  `e1a64ff`; `npm run verify` is green on the base above with the rules implemented.
