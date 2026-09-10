@@ -584,7 +584,9 @@ Three properties of that output are the point rather than the formatting:
   an answer that names one (`D-0032` rule 5).
 
 It records what it said before it prints it: a framing a person read and the ledger does not hold is
-the failure the record exists to prevent, so if the row cannot be written, nothing is shown.
+the failure the record exists to prevent, so if the row cannot be written, nothing is shown. After it
+prints, it counts the explanation as **presented** -- that table is the only place the number of
+things put to you comes from, and answers are counted elsewhere (`D-0032` rule 10).
 
 | What you see | What it means | What to do |
 |---|---|---|
@@ -592,6 +594,7 @@ the failure the record exists to prevent, so if the row cannot be written, nothi
 | `There is no iteration '<id>' in this store` | No such row, or `RONDO_STORE` names a different database. | Check the id and `RONDO_STORE`. Nothing was written. |
 | `is in the store and will not decode` | The row is corrupt, so nothing about it can be cited. | The refusal carries the store's own reason; the row needs a person, not a second explanation. |
 | `was composed and not recorded, so it is not being shown` | The proposal row could not be written. | Fix the store fault the message names; nothing was presented and nothing was kept. |
+| `was shown and was not counted as presented` (exit 1) | You read it and the proposal was kept, but the presentation count could not be written. | Nothing to re-read. The breakdown of what was put to you is short by one until the store fault the message names is fixed. |
 
 ---
 

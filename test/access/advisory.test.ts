@@ -47,6 +47,12 @@ const reserveOne = async (store: ReturnType<typeof fresh>["store"], id: string) 
   });
 
 /** The one row the proposal table holds, as the database has it. */
+/** A screen that keeps what it was shown, so a test can read it. */
+const screen = () => {
+  const shown: string[] = [];
+  return { shown, present: (lines: readonly string[]) => shown.push(...lines) };
+};
+
 const onlyProposal = (connection: DatabaseSync): Record<string, unknown> => {
   const rows = connection.prepare("SELECT * FROM proposal").all() as Record<string, unknown>[];
   expect(rows.length).toBe(1);
@@ -61,11 +67,12 @@ test("it explains a row it can read, and records what it said", async () => {
   const { connection, store, record } = fresh();
   await reserveOne(store, "i-0001");
 
-  const outcome = await explainIteration({ store, record, now: () => 5_000 }, "i-0001");
+  const shows = screen();
+  const outcome = await explainIteration(
+    { store, record, now: () => 5_000, present: shows.present },
+    "i-0001",
+  );
   expect(outcome.kind).toBe("explained");
-  if (outcome.kind !== "explained") {
-    return;
-  }
 
   const row = onlyProposal(connection);
   expect(row["kind"]).toBe("explanation");
@@ -88,7 +95,7 @@ test("it explains a row it can read, and records what it said", async () => {
 
   // The lines carry the claim and its basis, which is #39's requirement: the
   // citation is readable without opening anything.
-  const rendered = outcome.lines.join("\n");
+  const rendered = shows.shown.join("\n");
   expect(rendered).toContain("explanation of iteration 'i-0001'");
   expect(rendered).toContain("status: planned");
   expect(rendered).toContain("basis: snapshot /iteration/status");
@@ -98,7 +105,10 @@ test("it explains a row it can read, and records what it said", async () => {
 
 test("it refuses an iteration the store does not hold, and writes nothing", async () => {
   const { connection, store, record } = fresh();
-  const outcome = await explainIteration({ store, record, now: () => 5_000 }, "i-ghost");
+  const outcome = await explainIteration(
+    { store, record, now: () => 5_000, present: screen().present },
+    "i-ghost",
+  );
   expect(outcome.kind).toBe("refused");
   expect(connection.prepare("SELECT count(*) AS n FROM proposal").get()).toEqual({ n: 0 });
 });
@@ -119,13 +129,78 @@ test("a proposal that could not be recorded is not rendered", async () => {
     }),
   };
 
-  const outcome = await explainIteration({ store, record: refusing, now: () => 5_000 }, "i-0001");
+  const shows = screen();
+  const outcome = await explainIteration(
+    { store, record: refusing, now: () => 5_000, present: shows.present },
+    "i-0001",
+  );
   expect(outcome.kind).toBe("refused");
   if (outcome.kind !== "refused") {
     return;
   }
   expect(outcome.reason).toContain("the disk is gone");
   expect(outcome.reason).toContain("not being shown");
+  expect(shows.shown).toEqual([]);
+});
+
+test("what was presented is counted as presented", async () => {
+  // **D-0032 rule 10's numerator.** The count of what was put to the operator
+  // comes from this table and from nowhere else: `human_decision` counts
+  // answers, so with an explanation on the screen and nothing to answer it
+  // reports zero. `rule_name` is null because `explain` withholds nothing and a
+  // rule named where no policy applied would be a record of a judgement nobody
+  // made.
+  const { connection, store, record } = fresh();
+  await reserveOne(store, "i-0001");
+
+  const outcome = await explainIteration(
+    { store, record, now: () => 5_000, present: screen().present },
+    "i-0001",
+  );
+  expect(outcome.kind).toBe("explained");
+
+  const rows = connection.prepare("SELECT * FROM operator_attention").all() as Record<
+    string,
+    unknown
+  >[];
+  expect(rows.length).toBe(1);
+  expect(rows[0]?.["disposition"]).toBe("presented");
+  expect(rows[0]?.["subject_kind"]).toBe("proposal");
+  expect(rows[0]?.["subject_id"]).toBe(
+    outcome.kind === "explained" ? outcome.proposalId : "unreachable",
+  );
+  expect(rows[0]?.["rule_name"]).toBe(null);
+  expect(rows[0]?.["at_ms"]).toBe(5_000);
+});
+
+test("an explanation that was shown and not counted says so, and is still shown", async () => {
+  // The failure has to be loud rather than absorbed: the operator has read the
+  // explanation and the proposal is in the ledger, so treating this as a refusal
+  // would be a lie about what happened -- and treating it as success would leave
+  // #40's breakdown quietly short by one, which is the accountability the table
+  // exists for.
+  const { store, record } = fresh();
+  await reserveOne(store, "i-0001");
+  const halfWriting: AdvisoryRecord = {
+    ...record,
+    recordAttention: async (): Promise<RecordOutcome> => ({
+      kind: "defect",
+      reason: "the attention table is locked",
+    }),
+  };
+  const shows = screen();
+
+  const outcome = await explainIteration(
+    { store, record: halfWriting, now: () => 5_000, present: shows.present },
+    "i-0001",
+  );
+
+  expect(outcome.kind).toBe("presentedUncounted");
+  if (outcome.kind === "presentedUncounted") {
+    expect(outcome.reason).toContain("locked");
+  }
+  // Shown, and recorded as a proposal: the only thing missing is the count.
+  expect(shows.shown.join("\n")).toContain("status: planned");
 });
 
 test("two explanations of one row are two rows, and the later one cites the later state", async () => {
@@ -134,7 +209,7 @@ test("two explanations of one row are two rows, and the later one cites the late
   // second is a second row rather than an edit (D-0022 rule 4).
   const { connection, store, record } = fresh();
   await reserveOne(store, "i-0001");
-  await explainIteration({ store, record, now: () => 5_000 }, "i-0001");
+  await explainIteration({ store, record, now: () => 5_000, present: screen().present }, "i-0001");
   const moved = await store.transition(
     "i-0001",
     "planned",
@@ -143,7 +218,7 @@ test("two explanations of one row are two rows, and the later one cites the late
     6_000,
   );
   expect(moved.kind).toBe("transitioned");
-  await explainIteration({ store, record, now: () => 7_000 }, "i-0001");
+  await explainIteration({ store, record, now: () => 7_000, present: screen().present }, "i-0001");
 
   const rows = connection
     .prepare("SELECT proposal_id, snapshot FROM proposal ORDER BY created_at_ms")

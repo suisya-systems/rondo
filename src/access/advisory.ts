@@ -43,15 +43,51 @@ import type { AdvisoryRecord, IterationStore } from "../store/sqlite.js";
  */
 export const DETERMINISTIC_DRAFTER = "rondo/advisory/deterministic";
 
-/** What one `explain` did, or the first reason it did not. */
+/**
+ * The subject kind `explain` counts itself under (D-0032 rule 10).
+ *
+ * A proposal is what was put in front of the operator; the iteration it is about
+ * is what the proposal is *for*. Counting the iteration would make one row's
+ * several explanations indistinguishable from one.
+ */
+export const PROPOSAL_SUBJECT = "proposal";
+
+/**
+ * What one `explain` did, or the first reason it did not.
+ *
+ * **The middle arm is D-0032 rule 10 refusing to be silent.** The count of what
+ * was put to the operator comes from `operator_attention` and from nowhere else
+ * -- `human_decision` counts answers, so with six proposals on the screen and
+ * none answered it reports zero -- so a presentation that happened and was not
+ * counted leaves that table understating the numerator. It is not a refusal: the
+ * operator has already read the explanation and the proposal row is in the
+ * ledger. It is the one case where the surface has to say that its own
+ * accounting is short.
+ */
 export type ExplainOutcome =
-  | { readonly kind: "explained"; readonly proposalId: string; readonly lines: readonly string[] }
+  | { readonly kind: "explained"; readonly proposalId: string }
+  | {
+      readonly kind: "presentedUncounted";
+      readonly proposalId: string;
+      readonly reason: string;
+    }
   | { readonly kind: "refused"; readonly reason: string };
 
-/** Everything `explain` is handed: two ports over the store, and a clock. */
+/** Everything `explain` is handed: two ports over the store, a clock, and a screen. */
 export interface ExplainPorts {
   readonly store: IterationStore;
   readonly record: AdvisoryRecord;
+  /**
+   * Where the lines go.
+   *
+   * A port rather than a return value, because **the order is the property**:
+   * the proposal is recorded before this is called and the attention row is
+   * written after it, so "presented" is a claim about something that has already
+   * reached the screen rather than about something that is about to. D-0032
+   * rule 9's own note applies -- a look is a claim by the surface that it
+   * rendered, not proof that a person read anything.
+   */
+  readonly present: (lines: readonly string[]) => void;
   /**
    * The caller's clock.
    *
@@ -224,5 +260,20 @@ export async function explainIteration(
         "the thing the record exists to prevent.",
     };
   }
-  return { kind: "explained", proposalId, lines: explanationLines(iterationId, proposal) };
+  ports.present(explanationLines(iterationId, proposal));
+  // **Counted after it was shown** (D-0032 rule 10). This is the first writer
+  // that table has: `explain` withholds nothing, so only the `presented` side
+  // fires here, and `rule_name` stays null because there is no policy to name.
+  // The withheld side arrives with the layer that decides what the operator does
+  // *not* see, which #40 says nothing owns yet.
+  const counted = await ports.record.recordAttention({
+    atMs: createdAtMs,
+    subjectKind: PROPOSAL_SUBJECT,
+    subjectId: proposalId,
+    disposition: "presented",
+    ruleName: null,
+  });
+  return counted.kind === "recorded"
+    ? { kind: "explained", proposalId }
+    : { kind: "presentedUncounted", proposalId, reason: counted.reason };
 }

@@ -1055,16 +1055,36 @@ async function commandExplain(
     );
   }
   const outcome = await explainIteration(
-    { store, record: openAdvisoryRecord(storePath), now: Date.now },
+    {
+      store,
+      record: openAdvisoryRecord(storePath),
+      now: Date.now,
+      present: (lines) => {
+        for (const line of lines) {
+          say(line);
+        }
+      },
+    },
     parsed.iterationId,
   );
   if (outcome.kind === "refused") {
     return refuse(outcome.reason);
   }
-  for (const line of outcome.lines) {
-    say(line);
-  }
   say(`recorded as proposal '${outcome.proposalId}'`);
+  if (outcome.kind === "presentedUncounted") {
+    // **Status 1 rather than 0, and the explanation still stands on the
+    // screen.** The operator has read it and the proposal is in the ledger; what
+    // failed is the count of what was put to them, which is the one number
+    // D-0032 rule 10 says nothing else can supply. Reporting success here would
+    // make an under-counted ledger the quiet outcome.
+    consoleSeams.writeError(
+      asciiEscape(
+        `This explanation was shown and was not counted as presented: ${outcome.reason}. ` +
+          "The breakdown of what was put to you and what was not will be short by one.\n",
+      ),
+    );
+    return 1;
+  }
   return 0;
 }
 
