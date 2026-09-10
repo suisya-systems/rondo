@@ -475,8 +475,8 @@ const PLAN_INPUT: RunPlan = {
   intendedAction: { capabilities: ["command.run"] },
 };
 
-const realPlan = (iterationId: string): JsonRecord => {
-  const validated = runPlan(PLAN_INPUT);
+const realPlan = (iterationId: string, plan: RunPlan = PLAN_INPUT): JsonRecord => {
+  const validated = runPlan(plan);
   if (validated.kind !== "planned") {
     throw new Error(`the fixture plan is not a plan: ${validated.reason}`);
   }
@@ -495,11 +495,12 @@ const reserveWithPlan = async (
   store: ReturnType<typeof fresh>["store"],
   id: string,
   supersedesIterationId: string | null,
+  plan: RunPlan = PLAN_INPUT,
 ) =>
   store.reserve({
     id,
     request: "teach rondo to count",
-    plan: realPlan(id),
+    plan: realPlan(id, plan),
     nowMs: 1_000,
     supersedesIterationId,
     runId: `rondo-${id}`,
@@ -527,6 +528,7 @@ test("it proposes the plans a retry could run under, and records both before sho
   const shows = screen();
   const outcome = await proposeRetry(
     { ...PROPOSE_PORTS, store, record, present: shows.present },
+    "run_plan",
     "iter-1",
     "iter-2",
   );
@@ -613,6 +615,7 @@ test("a lineage deeper than one generation offers two plans and not five", async
 
   const outcome = await proposeRetry(
     { ...PROPOSE_PORTS, store, record, present: screen().present },
+    "run_plan",
     "iter-2",
     "iter-3",
   );
@@ -635,6 +638,7 @@ test("a proposal whose alternatives are not all readable is refused, not shorten
   const shows = screen();
   const outcome = await proposeRetry(
     { ...PROPOSE_PORTS, store, record, present: shows.present },
+    "run_plan",
     "iter-1",
     "iter-2",
   );
@@ -653,6 +657,7 @@ test("a plan that will not decode is named rather than silently dropped", async 
 
   const outcome = await proposeRetry(
     { ...PROPOSE_PORTS, store, record, present: screen().present },
+    "run_plan",
     "iter-1",
     "iter-2",
   );
@@ -671,6 +676,7 @@ test("an approval is recorded against the contract that was shown", async () => 
   await reserveWithPlan(store, "iter-1", null);
   const proposed = await proposeRetry(
     { ...PROPOSE_PORTS, store, record, present: screen().present },
+    "run_plan",
     "iter-1",
     "iter-2",
   );
@@ -719,6 +725,7 @@ test("a refusal is a row, and it approves no contract", async () => {
   await reserveWithPlan(store, "iter-1", null);
   const proposed = await proposeRetry(
     { ...PROPOSE_PORTS, store, record, present: screen().present },
+    "run_plan",
     "iter-1",
     "iter-2",
   );
@@ -796,6 +803,7 @@ test("a successor identity that is already taken is refused before anything is c
   const shows = screen();
   const outcome = await proposeRetry(
     { ...PROPOSE_PORTS, store, record, present: shows.present },
+    "run_plan",
     "iter-1",
     "iter-1",
   );
@@ -806,4 +814,228 @@ test("a successor identity that is already taken is refused before anything is c
   expect(shows.shown).toEqual([]);
   expect(connection.prepare("SELECT count(*) AS n FROM proposal").get()).toEqual({ n: 0 });
   expect(connection.prepare("SELECT count(*) AS n FROM composition").get()).toEqual({ n: 0 });
+});
+
+/** The same plan under a wider agent type: what a lineage's alternative looks like. */
+const WIDER_PLAN: RunPlan = {
+  ...PLAN_INPUT,
+  agentTypeInput: {
+    ...PLAN_INPUT.agentTypeInput,
+    agentTypeId: "worker-wide",
+    granted: ["command.run", "worktree.write"],
+    askable: ["branch.push"],
+  },
+};
+
+test("agent_type offers the agent types the lineage ran under, and recommends the row's own", async () => {
+  // **D-0022 rule 17's widening, as an option set.** A retry's grants are its
+  // agent type's, so this is the kind that widens -- and the recommendation is
+  // still the agent type the row already had, because rondo proposes candidates
+  // and a person decides a widening (`D-0009`).
+  const { connection, store, record } = fresh();
+  await reserveWithPlan(store, "iter-0", null, WIDER_PLAN);
+  await store.settle("iter-0", "the work was not taken", 2_000);
+  await reserveWithPlan(store, "iter-1", "iter-0");
+
+  const shows = screen();
+  const outcome = await proposeRetry(
+    { ...PROPOSE_PORTS, store, record, present: shows.present },
+    "agent_type",
+    "iter-1",
+    "iter-2",
+  );
+  expect(outcome.kind === "refused" ? outcome.reason : "proposed").toBe("proposed");
+  if (outcome.kind !== "proposed") {
+    return;
+  }
+
+  const row = onlyProposal(connection);
+  expect(row["kind"]).toBe("agent_type");
+  expect(row["derivation"]).toBe(null);
+  expect(row["cadenza_revision"]).toBe("5d5d9f4");
+
+  expect(outcome.options.length).toBe(2);
+  // **Distinct digests are what makes them separately answerable**: two options
+  // carrying one value would be two ways to record an approval the ledger
+  // cannot tell apart, because `human_decision.approved` names a digest.
+  expect(new Set(outcome.options.map((option) => option.value)).size).toBe(2);
+  const rendered = shows.shown.join("\n");
+  expect(rendered).toContain("(agent_type)");
+  expect(rendered).toContain("[recommended] run 'iter-2' under agent type 'worker-basic'");
+  expect(rendered).toContain("[alternative] run 'iter-2' under agent type 'worker-wide'");
+
+  // Every option's digest is a contract this proposal composed, in option order.
+  const compositions = connection
+    .prepare("SELECT * FROM composition WHERE proposal_id = ? ORDER BY composition_id")
+    .all(outcome.proposalId) as Record<string, unknown>[];
+  expect(compositions.map((one) => String(one["contract_digest"]))).toEqual(
+    outcome.options.map((option) => option.value),
+  );
+  // The widened option really is the wider contract, in the bytes cadenza
+  // digested rather than only in the label.
+  const wider = JSON.parse(String(compositions[1]?.["contract"])) as Record<string, unknown>;
+  expect(wider["granted"]).toEqual(["command.run", "worktree.write"]);
+});
+
+test("an agent type the lineage repeats is one option, not two identical ones", async () => {
+  // Two agent types with one digest issue one contract. Offering both would put
+  // two options with the same value on the screen, and an approval could not say
+  // which was taken -- so they are one candidate, and the first is the row's own.
+  const { store, record } = fresh();
+  await reserveWithPlan(store, "iter-0", null);
+  await store.settle("iter-0", "the work was not taken", 2_000);
+  await reserveWithPlan(store, "iter-1", "iter-0");
+
+  const outcome = await proposeRetry(
+    { ...PROPOSE_PORTS, store, record, present: screen().present },
+    "agent_type",
+    "iter-1",
+    "iter-2",
+  );
+  expect(outcome.kind === "refused" ? outcome.reason : "proposed").toBe("proposed");
+  if (outcome.kind !== "proposed") {
+    return;
+  }
+  expect(outcome.options.length).toBe(1);
+  expect(outcome.options[0]?.label).toContain("worker-basic");
+});
+
+test("contract_keys offers one promotion per askable key, and recommends promoting none", async () => {
+  // **One key at a time, and only a key the agent type's author already listed
+  // as askable.** Promoting two at once would ask a person to approve two
+  // widenings with one answer; a key from outside `askable` would be rondo
+  // inventing a grant nobody offered.
+  const { connection, store, record } = fresh();
+  await reserveWithPlan(store, "iter-1", null);
+
+  const shows = screen();
+  const outcome = await proposeRetry(
+    { ...PROPOSE_PORTS, store, record, present: shows.present },
+    "contract_keys",
+    "iter-1",
+    "iter-2",
+  );
+  expect(outcome.kind === "refused" ? outcome.reason : "proposed").toBe("proposed");
+  if (outcome.kind !== "proposed") {
+    return;
+  }
+
+  expect(onlyProposal(connection)["kind"]).toBe("contract_keys");
+  // The fixture's agent type asks for one key, so: unchanged, and one promotion.
+  expect(outcome.options.length).toBe(2);
+  const rendered = shows.shown.join("\n");
+  expect(rendered).toContain("[recommended] leave the keys as they are");
+  expect(rendered).toContain("[alternative] grant 'branch.push'");
+
+  const compositions = connection
+    .prepare("SELECT * FROM composition WHERE proposal_id = ? ORDER BY composition_id")
+    .all(outcome.proposalId) as Record<string, unknown>[];
+  const unchanged = JSON.parse(String(compositions[0]?.["contract"])) as Record<string, unknown>;
+  const promoted = JSON.parse(String(compositions[1]?.["contract"])) as Record<string, unknown>;
+  expect(unchanged["granted"]).toEqual(["command.run"]);
+  expect(unchanged["askable"]).toEqual(["branch.push"]);
+  // **The key moved rather than being copied**, which is what makes it a
+  // promotion: cadenza requires the two lists to be disjoint, and a key in both
+  // would be a contract that cannot exist.
+  expect(promoted["granted"]).toEqual(["branch.push", "command.run"]);
+  expect(promoted["askable"]).toEqual([]);
+});
+
+test("an approval of a widening names the widened contract and nothing else", async () => {
+  // The point of the pair: what the ledger records is the contract that was on
+  // the screen, so "which widening did a person approve" is answerable from the
+  // decision row and the composition it references.
+  const { connection, store, record } = fresh();
+  await reserveWithPlan(store, "iter-1", null);
+  const proposed = await proposeRetry(
+    { ...PROPOSE_PORTS, store, record, present: screen().present },
+    "contract_keys",
+    "iter-1",
+    "iter-2",
+  );
+  expect(proposed.kind).toBe("proposed");
+  if (proposed.kind !== "proposed") {
+    return;
+  }
+  const widening = proposed.options[1];
+
+  const answered = await recordAnswer(
+    { record, now: () => 8_000 },
+    {
+      proposalId: proposed.proposalId,
+      outcome: "approved",
+      contractDigest: widening?.value ?? "",
+      actorId: "operator-1",
+    },
+  );
+  expect(answered.kind).toBe("answered");
+
+  const approved = String(
+    (connection.prepare("SELECT approved FROM human_decision").get() as Record<string, unknown>)[
+      "approved"
+    ],
+  );
+  expect(approved).toBe(widening?.value);
+  const contract = connection
+    .prepare("SELECT contract FROM composition WHERE contract_digest = ?")
+    .get(approved) as Record<string, unknown>;
+  expect(JSON.parse(String(contract["contract"]))["granted"]).toEqual([
+    "branch.push",
+    "command.run",
+  ]);
+});
+
+test("an alternative whose plan will not decode is refused rather than omitted", async () => {
+  // **The same rule `run_plan` follows, on the agent type.** The alternative
+  // exists and rondo could not read it, so a one-option set in front of a person
+  // who really had two would be the framing this record exists to prevent.
+  const { connection, store, record } = fresh();
+  await reserveOne(store, "iter-0");
+  await store.settle("iter-0", "the work was not taken", 2_000);
+  await reserveWithPlan(store, "iter-1", "iter-0");
+
+  const outcome = await proposeRetry(
+    { ...PROPOSE_PORTS, store, record, present: screen().present },
+    "agent_type",
+    "iter-1",
+    "iter-2",
+  );
+  expect(outcome.kind).toBe("refused");
+  if (outcome.kind === "refused") {
+    expect(outcome.reason).toContain("iter-0");
+    expect(outcome.reason).toContain("will not decode");
+  }
+  expect(connection.prepare("SELECT count(*) AS n FROM proposal").get()).toEqual({ n: 0 });
+});
+
+test("an agent type cadenza will not build is a refusal and not a crash", async () => {
+  // **`readPlan` carries `agentTypeInput` through as opaque data** -- the store
+  // may not name a cadenza type -- so a plan that decodes says nothing about
+  // whether its key lists are lists. A row from an older build, or edited with
+  // `sqlite3`, has to reach an operator as a sentence rather than as a stack.
+  const { connection, store, record } = fresh();
+  const malformed = realPlan("iter-1") as Record<string, unknown>;
+  malformed["agent_type_input"] = {
+    ...(malformed["agent_type_input"] as Record<string, unknown>),
+    askable: null,
+  };
+  await store.reserve({
+    id: "iter-1",
+    request: "teach rondo to count",
+    plan: malformed as JsonRecord,
+    nowMs: 1_000,
+    supersedesIterationId: null,
+    runId: "rondo-iter-1",
+    topicBranch: "rondo/iter-1",
+    workspace: "/srv/work/iter-1",
+  });
+
+  const outcome = await proposeRetry(
+    { ...PROPOSE_PORTS, store, record, present: screen().present },
+    "contract_keys",
+    "iter-1",
+    "iter-2",
+  );
+  expect(outcome.kind).toBe("refused");
+  expect(connection.prepare("SELECT count(*) AS n FROM proposal").get()).toEqual({ n: 0 });
 });

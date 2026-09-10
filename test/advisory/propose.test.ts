@@ -24,8 +24,11 @@ import {
   type AdvisorySnapshot,
   BASIS_FORMS,
   type Claim,
+  type ContractSnapshot,
   DERIVATIONS,
   propose,
+  proposeAgentType,
+  proposeContractKeys,
   proposeElevated,
   proposeRetryPlan,
   type RetrySnapshot,
@@ -368,4 +371,89 @@ test("a candidate list without the subject's own plan still recommends exactly o
 
 test("the option set is pure: the same snapshot gives the same bytes", () => {
   expect(JSON.stringify(proposeRetryPlan(RETRY))).toBe(JSON.stringify(proposeRetryPlan(RETRY)));
+});
+
+/**
+ * Candidate contracts with the subject's own **second**, so that a
+ * recommendation found by position would pick the widening.
+ */
+const CONTRACTS: ContractSnapshot = {
+  iteration: FULL.iteration,
+  successor: {
+    iterationId: "iter-2",
+    runId: "rondo-iter-2",
+    topicBranch: "rondo/iter-2",
+  },
+  candidates: [
+    {
+      from: { form: "promotedKey", key: "branch.push" },
+      agentTypeId: "worker-basic",
+      agentTypeDigest: "sha256:widened",
+      granted: ["branch.push", "command.run"],
+      askable: [],
+      contractDigest: "sha256:contract-with-push-granted",
+    },
+    {
+      from: { form: "iteration", iterationId: FULL.iteration.id },
+      agentTypeId: "worker-basic",
+      agentTypeDigest: "sha256:as-it-is",
+      granted: ["command.run"],
+      askable: ["branch.push"],
+      contractDigest: "sha256:contract-as-it-is",
+    },
+  ],
+};
+
+test("neither approvable kind recommends more authority than the row already had", () => {
+  // **`D-0009`'s division, kept at the level of the screen.** The advisory
+  // proposes candidates and a *widening* is a human's decision, so the
+  // recommendation is the candidate that changes nothing -- the row's own agent
+  // type, unchanged. A person reaches for a widening; they never acquire one by
+  // taking the default. The fixture puts the widening first, so a drafter that
+  // recommended index 0 fails here.
+  for (const proposal of [proposeAgentType(CONTRACTS), proposeContractKeys(CONTRACTS)]) {
+    expect(proposal.derivation).toBe(null);
+    expect(proposal.payload.recommended).toBe(1);
+    const recommended = proposal.payload.options[proposal.payload.recommended];
+    expect(recommended?.value).toBe("sha256:contract-as-it-is");
+  }
+});
+
+test("every option names a distinct contract, cited where the snapshot keeps it", () => {
+  // **Distinct values are what makes an option set answerable.**
+  // `human_decision.approved` names a digest, so two options carrying one digest
+  // would be two ways to record an approval the ledger cannot tell apart.
+  for (const proposal of [proposeAgentType(CONTRACTS), proposeContractKeys(CONTRACTS)]) {
+    const values = proposal.payload.options.map((option) => option.value);
+    expect(new Set(values).size).toBe(values.length);
+    for (const [index, option] of proposal.payload.options.entries()) {
+      expect(option.basis.form).toBe("snapshot");
+      if (option.basis.form === "snapshot") {
+        expect(resolve(CONTRACTS, option.basis.pointer)).toBe(option.value);
+      }
+      expect(option.value).toBe(CONTRACTS.candidates[index]?.contractDigest);
+    }
+  }
+});
+
+test("a contract_keys option says which key it grants, and the other says it changes nothing", () => {
+  // The label is the whole of what an operator reads before approving, so the
+  // one motion each option makes has to be in it -- D-0022 rule 11's vocabulary
+  // included: these are candidate inputs to a contract, never a permission
+  // standing beside one.
+  const options = proposeContractKeys(CONTRACTS).payload.options;
+  expect(options[0]?.label).toContain("grant 'branch.push'");
+  expect(options[1]?.label).toContain("leave the keys as they are");
+  for (const option of options) {
+    expect(option.label.toLowerCase()).not.toContain("permission");
+  }
+});
+
+test("an agent_type option names the agent type and both of its lists", () => {
+  const options = proposeAgentType(CONTRACTS).payload.options;
+  expect(options[1]?.label).toContain("agent type 'worker-basic'");
+  expect(options[1]?.label).toContain("command.run");
+  // An empty list is a fact about the list rather than a blank on the screen,
+  // which is `ABSENT`'s job everywhere else in this payload.
+  expect(options[0]?.label).toContain(`asking for ${ABSENT}`);
 });
