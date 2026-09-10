@@ -1640,6 +1640,26 @@ const CHANGES_SINCE_SQL = `${CHANGE_SOURCES.map(
  * {@link migrate}: that is the `iteration` table's column history, and nothing
  * here reads a column the migration adds.
  */
+/**
+ * Open the advisory record at a path.
+ *
+ * Beside {@link openIterationStore} and for the same reason it is here at all:
+ * this module is the one owner of a SQLite driver, so a second opener anywhere
+ * else would be a failing architecture test rather than a design choice.
+ *
+ * **A second connection to one file rather than a second port over one
+ * connection**, which is a deliberate reduction and not an oversight. The two
+ * ports answer different questions for different callers (see
+ * {@link AdvisoryRecord}), and threading one connection out of
+ * {@link openIterationStore} would change a signature five call sites use so
+ * that one command could share it. SQLite serialises the writers itself; what
+ * this gives up is the busy timeout nothing in this tree sets anyway, so a
+ * concurrent writer is reported as a defect rather than waited on.
+ */
+export function openAdvisoryRecord(databasePath: string): AdvisoryRecord {
+  return advisoryRecord(new DatabaseSync(databasePath));
+}
+
 export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
   connection.exec(SCHEMA);
 
