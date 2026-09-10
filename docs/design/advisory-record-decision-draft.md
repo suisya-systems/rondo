@@ -153,22 +153,31 @@ field - a column for a computable value is a second home for a fact (`D-0022` ru
    clock at the *end* of a render loses every row committed while the render was running: it was
    never displayed, and its timestamp precedes the mark, so rule 11's query omits it for ever. So
    the surface samples the bound **before** it reads, uses that same bound as the upper limit of
-   every query in the render, and writes it after. Anything committed during the render is at or
-   after the mark and is reported at the next look. Rule 11's comparison is inclusive for the same
-   reason: **the failure this design accepts is showing something twice, and the failure it refuses
-   is losing it.**
+   every query in the render, and writes it after; rule 11's comparison is inclusive of the bound.
+   **The failure this shape accepts is showing something twice, and it narrows - rather than
+   closes - the failure of losing something.**
 
    **Per-item read/unread flags are refused**: one row per look answers the same question as N rows
    per item, and a per-item flag is a mutable column on an immutable record, which is `D-0022` rule
    4's whole objection.
 
-   **The ceiling, named with its upgrade path.** These timestamps are the *caller's* clock, never
-   the store's (`D-0019`'s rule, restated at `records.ts:150-152`), so a writer whose clock is
-   behind can commit a row that lands before a mark already written. The mark is therefore a bound
-   and not a proof, and the window is the clock skew between writers on one host. Removing it means
-   a store-assigned monotone sequence beside the caller's clock on every record kind, which is a
-   change to all of them and to a rule this entry has no reason to reopen; it is what the falsifier
-   below asks for if the window is ever observed to matter.
+   **The ceiling, stated exactly, because a smaller claim was made here first and was wrong.** A
+   timestamp cursor is **not** lossless, and the reason is not clock skew: these timestamps are the
+   *caller's* clock, taken **before** the writer enters `BEGIN IMMEDIATE` (`D-0019`'s rule, restated
+   at `records.ts:150-152`, and the idiom every store method already follows). So a writer that
+   samples its clock before the render's bound and commits after the render's query has produced a
+   row the operator never saw and whose timestamp is already behind the mark. Clock skew between
+   writers widens the same window; it does not create it. **The window is sample-to-commit latency,
+   and one lost row is silently lost** - which is the property #39 cares about most, since a stale
+   premise is what a summary hides best.
+
+   **The upgrade path, so this is a reduction and not an oversight.** A commit-ordered cursor closes
+   it: writes to these tables are serialised by `BEGIN IMMEDIATE` and nothing here is ever deleted,
+   so each append-only table's `rowid` is already in commit order, and the mark becomes a last-seen
+   `rowid` per table instead of one timestamp. It is not taken now because it makes `operator_view`'s
+   shape a function of the set of record kinds, and because the window it closes has never been
+   observed - rondo has one operator, one surface and one writer at a time today. **The falsifier
+   below is what takes it.**
 
    **What this does not claim.** A look is a claim by the surface that it rendered, not proof that a
    person read anything - the same grade as `D-0029` rule 11's third clause, and it is recorded here
@@ -318,9 +327,9 @@ cited here as requirements rather than re-verified.
   voice, and would reopen rule 5 rather than adjust it.
 - **A withholding whose rule cannot be named**, which is rule 10's writer refusal firing against a
   legitimate case and means the policy is not written down anywhere.
-- **A row observed to land before a mark that was written after it** - rule 9's named ceiling firing,
-  whose answer is a store-assigned monotone sequence beside the caller's clock and not a change to
-  this rule.
+- **A row observed to land before a mark that was written after it**, or a second concurrent writer
+  arriving at all - rule 9's named ceiling firing. Its answer is the per-table commit-ordered cursor
+  that rule names, and not a change to what the mark is for.
 - **A second surface, or a second approver**, which makes rule 9's mark per-actor-per-surface and
   makes `D-0020` rule 2's allowlist of size one a real set.
 - **The between-laps component arriving** (#40), which is what turns rule 10 from a table with one
