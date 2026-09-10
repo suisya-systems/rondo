@@ -67,6 +67,7 @@ import {
   elevateObservation,
   explainIteration,
   PROPOSABLE_KINDS,
+  type ProposeOutcome,
   proposeRetry,
   recordAnswer,
 } from "./advisory.js";
@@ -1189,6 +1190,7 @@ async function commandExplain(
   }
   return sayAdvisoryOutcome(
     await explainIteration(advisoryPorts(store, storePath), parsed.iterationId),
+    "explanation",
   );
 }
 
@@ -1206,21 +1208,39 @@ function advisoryPorts(store: IterationStore, storePath: string): ExplainPorts {
   };
 }
 
-/** What `explain` and `elevate` do with the answer they get back. */
-function sayAdvisoryOutcome(outcome: ExplainOutcome): number {
+/**
+ * What every advisory door does with the answer it gets back.
+ *
+ * One function for `explain`, `elevate` and `propose` because the one thing
+ * worth getting right is the same for all three: a subject that reached the
+ * screen and was not counted exits **1**, with the record kept and the lines
+ * still standing. Two copies of that rule are two places it can drift, and the
+ * quiet outcome of a drift is an under-counted ledger (D-0032 rule 10).
+ *
+ * `noun` is what the door calls what it showed, and `next` is the command that
+ * follows where there is one.
+ */
+function sayAdvisoryOutcome(
+  outcome: ExplainOutcome | ProposeOutcome,
+  noun: string,
+  next?: string,
+): number {
   if (outcome.kind === "refused") {
     return refuse(outcome.reason);
   }
   say(`recorded as proposal '${outcome.proposalId}'`);
+  if (next !== undefined) {
+    say(next);
+  }
   if (outcome.kind === "presentedUncounted") {
-    // **Status 1 rather than 0, and the explanation still stands on the
+    // **Status 1 rather than 0, and what was shown still stands on the
     // screen.** The operator has read it and the proposal is in the ledger; what
     // failed is the count of what was put to them, which is the one number
     // D-0032 rule 10 says nothing else can supply. Reporting success here would
     // make an under-counted ledger the quiet outcome.
     consoleSeams.writeError(
       asciiEscape(
-        `This explanation was shown and was not counted as presented: ${outcome.reason}. ` +
+        `This ${noun} was shown and was not counted as presented: ${outcome.reason}. ` +
           "The breakdown of what was put to you and what was not will be short by one.\n",
       ),
     );
@@ -1361,6 +1381,7 @@ async function commandElevate(
       actorId: actor.actorId,
       observation: { label: "observation", value: parsed.observation, basis },
     }),
+    "elevation",
   );
 }
 
@@ -1443,42 +1464,21 @@ async function commandPropose(
     return refuse(pin.refusal);
   }
   const outcome = await proposeRetry(
-    {
-      store,
-      record: openAdvisoryRecord(storePath),
-      now: Date.now,
-      cadenzaRevision: pin.revision,
-      present: (lines) => {
-        for (const line of lines) {
-          say(line);
-        }
-      },
-    },
+    // The four ports every advisory door takes, plus the one this door needs:
+    // which cadenza composed the contracts it is about to show (D-0022 rule 18).
+    { ...advisoryPorts(store, storePath), cadenzaRevision: pin.revision },
     kind,
     parsed.iterationId,
     parsed.successorId,
   );
-  if (outcome.kind === "refused") {
-    return refuse(outcome.reason);
-  }
-  say(`recorded as proposal '${outcome.proposalId}'`);
-  say(
-    `Next: rondo decide --proposal-id ${outcome.proposalId} --actor-id ID ` +
-      "--outcome approved --contract-digest DIGEST",
+  return sayAdvisoryOutcome(
+    outcome,
+    "proposal",
+    outcome.kind === "refused"
+      ? undefined
+      : `Next: rondo decide --proposal-id ${outcome.proposalId} --actor-id ID ` +
+          "--outcome approved --contract-digest DIGEST",
   );
-  if (outcome.kind === "presentedUncounted") {
-    // `explain`'s arm, for `explain`'s reason: the proposal and its contracts
-    // are in the ledger and the operator has read them; what failed is the
-    // count of what was put to them (D-0032 rule 10).
-    consoleSeams.writeError(
-      asciiEscape(
-        `This proposal was shown and was not counted as presented: ${outcome.reason}. ` +
-          "The breakdown of what was put to you and what was not will be short by one.\n",
-      ),
-    );
-    return 1;
-  }
-  return 0;
 }
 
 /**
