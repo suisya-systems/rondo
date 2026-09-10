@@ -1574,6 +1574,8 @@ test("every form of a basis can be typed, and nothing else parses", () => {
     "gate:g-1",
     "gate:#3",
     "gate:g-1#later",
+    "gate:g-1#",
+    "gate:g-1# ",
     "gate:g-1#-1",
     "repo:src/plan.ts@c0ffee",
     "repo:src/plan.ts@c0ffee#12-8",

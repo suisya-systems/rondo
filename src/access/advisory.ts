@@ -163,13 +163,26 @@ function cited(snapshot: AdvisorySnapshot, pointer: string): string {
     .split("/")
     .slice(1)
     .reduce<unknown>(
-      (at, step) => (at === null || typeof at !== "object" ? undefined : Reflect.get(at, step)),
+      (at, step) =>
+        // **Own properties only.** A pointer is a locator into the snapshot as
+        // persisted, and `constructor`, `toString` and `__proto__` are in no
+        // snapshot -- they are on every object. Walking into them would render
+        // a function as a citation of material the row does not hold, which is
+        // the one thing a locator is supposed to make impossible. It matters
+        // here rather than in the abstract because a pointer can now come from
+        // an operator's `--basis` (D-0032 rule 2, #41 section 3).
+        at === null || typeof at !== "object" || !Object.hasOwn(at, step)
+          ? undefined
+          : Reflect.get(at, step),
       snapshot,
     );
-  if (found === undefined) {
+  // `JSON.stringify` answers `undefined` for a value JSON has no form for as
+  // well as for an absent one, and the two are the same answer to a reader: a
+  // pointer that leads to nothing they can open.
+  const rendered = found === undefined ? undefined : JSON.stringify(found);
+  if (rendered === undefined) {
     return "does not resolve";
   }
-  const rendered = JSON.stringify(found);
   return rendered.length > CITATION_CEILING
     ? `${rendered.slice(0, CITATION_CEILING)}... (${String(rendered.length)} chars)`
     : rendered;

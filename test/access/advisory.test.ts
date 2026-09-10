@@ -351,3 +351,30 @@ test("a dangling elevation is refused by the writer, and the verb passes that re
   expect(connection.prepare("SELECT count(*) AS n FROM proposal").get()).toEqual({ n: 0 });
   expect(shows.shown).toEqual([]);
 });
+
+test("a pointer at something no snapshot holds does not resolve, and does not throw", async () => {
+  // **A pointer can now come from an operator** (`--basis snapshot:/...`), and
+  // `constructor` is on every object while being in no snapshot. Walking into
+  // it would render a function as a citation -- and, before the own-property
+  // check, would throw *after* the message and the proposal were written,
+  // leaving a spent message id and nothing on the screen.
+  const { connection, store, record } = fresh();
+  await reserveOne(store, "i-0001");
+
+  const shows = screen();
+  const outcome = await elevateObservation(
+    { store, record, now: () => 5_000, present: shows.present },
+    "i-0001",
+    {
+      ...anObservation(),
+      observation: {
+        label: "observation",
+        value: "pointed at nothing the row holds",
+        basis: { form: "snapshot", pointer: "/constructor" },
+      },
+    },
+  );
+  expect(outcome.kind).toBe("explained");
+  expect(shows.shown.join("\n")).toContain("basis: snapshot /constructor = does not resolve");
+  expect(connection.prepare("SELECT count(*) AS n FROM proposal").get()).toEqual({ n: 1 });
+});

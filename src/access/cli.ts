@@ -1187,8 +1187,13 @@ export function parseBasis(text: string): Basis | null {
       return { form: "continuoRun", runId: rest };
     case "gate": {
       const hash = rest.lastIndexOf("#");
-      const seq = Number(rest.slice(hash + 1));
-      return hash <= 0 || !Number.isSafeInteger(seq) || seq < 0
+      const tail = rest.slice(hash + 1);
+      // The tail is matched rather than coerced: `Number("")` is 0 and
+      // `Number(" ")` is 0, so a gate cited with no sequence at all would
+      // record as a citation of transition zero -- a reference to different
+      // material, arrived at silently, which is worse than a refusal.
+      const seq = /^\d+$/.test(tail) ? Number(tail) : Number.NaN;
+      return hash <= 0 || !Number.isSafeInteger(seq)
         ? null
         : { form: "gateTransition", gateId: rest.slice(0, hash), transitionSeq: seq };
     }
