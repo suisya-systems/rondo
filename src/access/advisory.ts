@@ -551,6 +551,25 @@ export async function proposeRetry(
         `rondo can propose a retry from: ${subject.reason}`,
     };
   }
+  // **The successor's identity must be free, and this is where that is
+  // checked.** `allocate()` validates the *shape* of an iteration id and knows
+  // nothing about the store, so without this an operator can be shown -- and
+  // can approve -- a contract for an identity that is already taken. The
+  // iteration id is a primary key, so such a retry can never be admitted; and
+  // moving to a free id changes the derived run id, which changes the grantee,
+  // which changes the digest they approved. `revise` refuses a taken successor
+  // for the same reason (`D-0027`), one lap earlier.
+  const successor = await ports.store.read(successorId);
+  if (successor.kind !== "absent") {
+    return {
+      kind: "refused",
+      reason:
+        `Iteration '${successorId}' already exists in this store, so it cannot be the identity a ` +
+        "retry runs as: the id is a primary key, and the contract composed under it would be one " +
+        "no admission could ever take. Name an unused --successor-id.",
+    };
+  }
+
   // **The subject's own plan first, then its predecessor's.** Order is the
   // payload's own and the recommendation is found by identity rather than by
   // position (see `proposeRetryPlan`), so this is the reading order and not the

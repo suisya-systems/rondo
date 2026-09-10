@@ -589,3 +589,29 @@ test("PLANTED: an explanation cannot be answered, on the path an operator would 
   }
   expect(connection.prepare("SELECT count(*) AS n FROM human_decision").get()).toEqual({ n: 0 });
 });
+
+test("a successor identity that is already taken is refused before anything is composed", async () => {
+  // **The approval this prevents is one nobody could ever spend.** The
+  // iteration id is a primary key, so a retry under a taken id cannot be
+  // admitted -- and moving to a free id changes the derived run id, hence the
+  // grantee, hence the digest that was approved. `allocate()` checks the shape
+  // of an id and knows nothing about the store, so the check has to be here.
+  const { connection, store, record } = fresh();
+  await reserveWithPlan(store, "iter-1", null);
+
+  // The subject's own id is the taken one that is easiest to type by mistake,
+  // and it is the case a shape check cannot catch.
+  const shows = screen();
+  const outcome = await proposeRetry(
+    { ...PROPOSE_PORTS, store, record, present: shows.present },
+    "iter-1",
+    "iter-1",
+  );
+  expect(outcome.kind).toBe("refused");
+  if (outcome.kind === "refused") {
+    expect(outcome.reason).toContain("already exists");
+  }
+  expect(shows.shown).toEqual([]);
+  expect(connection.prepare("SELECT count(*) AS n FROM proposal").get()).toEqual({ n: 0 });
+  expect(connection.prepare("SELECT count(*) AS n FROM composition").get()).toEqual({ n: 0 });
+});
