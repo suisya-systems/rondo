@@ -1,4 +1,4 @@
-# The operator's nine commands
+# The operator's ten commands
 
 What a person types to get one request through rondo, from asking for it to publishing it -- and,
 in section 7, `abandon`, which is how a request that cannot get there is settled instead, and
@@ -735,7 +735,82 @@ recorded as proposal 'elevation-m-0007'
 
 ---
 
-## 8. What has and has not been walked on real infrastructure
+## 8. Inbox -- what is waiting on you, and what changed while you were away
+
+This is the screen a day starts and ends on. Most of the elapsed time in this loop is waiting --
+laps take tens of minutes -- so the property that matters is not responsiveness but **recovering
+context after a gap**: what is waiting on you, what is running, what moved since you last looked,
+and what rondo put in front of you versus kept back.
+
+```console
+$ node bin/rondo.mjs inbox --actor-id "$RONDO_APPROVER"
+inbox for 'operator-1'
+waiting on you
+  proposals that become contracts when you approve them (1)
+    p-retry-i-0007  run_plan  about 'i-0007'  waiting 41m  NEW
+  proposals that bind nothing (1)
+    explanation-i-0003-1757500000000  explanation  about 'i-0003'  waiting 3h
+  iterations waiting on you (2)
+    i-0007  awaiting_human  41m  answer gate g-0007
+    i-0011  stalled  2h  no gate answer releases this (stopped at g-0011): a person has to decide
+
+in flight (2)
+  i-0012  performing  12m
+  i-0013  planned  1m
+
+since your last look 4h ago (7 records)
+  proposal 2, composition 2, human_decision 1, iteration 2
+    proposal  p-retry-i-0007  41m ago
+    ...
+
+what was put to you and what was not
+  presented 6, withheld 0
+
+approved and never spent (1)
+  d-0004  proposal p-retry-i-0006  sha256:...  by 'operator-1' 2h ago
+```
+
+Five things about that screen are the point rather than the formatting:
+
+- **The order is an argument.** What you can act on, then what is running, then what changed, then
+  rondo's own accounting. The last section is about rondo; the first two are about the work.
+- **The two voices are separate sections, not one list with a badge.** A proposal that becomes a
+  contract when you approve it and one that binds nothing are different kinds of thing, and the
+  split is computed from the proposal's `kind` alone (`D-0032` rule 5) -- never from who drafted it
+  and never from its prose. A kind this rondo does not recognise is listed under *binds nothing*,
+  which is the same answer the writer of `human_decision` gives.
+- **A waiting row says what actually releases it.** `awaiting_human` and `withdrawal_requested`
+  suspend at a named continuo gate, and `rondo answer` releases them. `stalled` does not: a person
+  has to decide, and `resume()` observes no gate in that status. A stalled row may still be
+  carrying the gate id it stopped at -- `stall()` does not clear it -- so the id is printed as
+  where it stopped rather than offered as a thing to answer. A line that reads like help and is
+  not costs a round trip in exactly the state that already needs a person.
+- **The wait has two sides and not three.** *Waiting on you* is `awaiting_human`,
+  `withdrawal_requested` and `stalled`; *in flight* is the other five live statuses. There is no
+  "waiting on CI" side: CI runs inside `lap perform`, and no stored status distinguishes it
+  (`D-0036` rule 5). Both lists are exhaustive over the type, so a status added later and forgotten
+  here is a compile error rather than a row missing from your inbox.
+- **Looking is recorded, and it is recorded once per thing.** Each open proposal is counted as
+  *presented* the first time it is drawn; drawing it again on your next look stores nothing
+  (`D-0036` rule 1). Otherwise one unanswered proposal, looked at twenty times over a morning,
+  would report twenty presentations and the *"six were put to you, forty were not"* ratio would
+  stop being a sentence.
+- **The mark moves last.** The bound is sampled before anything is read and written after the
+  screen is rendered, so a row that lands while the render is running is shown again next time
+  rather than lost for ever (`D-0032` rules 9 and 11). There is deliberately no `--since`: the mark
+  is the only cursor, and a second one typed on the command line would let the screen report a diff
+  against a moment nobody marked.
+
+| What you see | What it means | What to do |
+|---|---|---|
+| `This command needs --actor-id ID` | The last-look mark is per person, so a look has to say whose it is. | Name yourself. It is checked against `RONDO_APPROVER`, the same as `answer` and `publish`. |
+| `you have never looked` | No mark for this actor yet. Nothing is marked `NEW`, because everything would be. | Nothing. The next look is a diff against this one. |
+| `will not decode` in *in flight* | A live row whose columns rondo cannot read. It still holds a slot. | `rondo abandon --iteration-id ID --reason ...`; `explain` will refuse it for the same reason. |
+| `This look was not fully recorded` (exit 1) | You read the screen; what failed was the count of what was shown, or the mark. | The screen stands. If the mark did not move, the next inbox repeats this diff. |
+
+---
+
+## 9. What has and has not been walked on real infrastructure
 
 Recorded so that "it works" is not read more broadly than it was tested.
 
