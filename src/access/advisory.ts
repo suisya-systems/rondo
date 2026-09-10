@@ -46,6 +46,7 @@ import {
   snapshotDocument,
 } from "../advisory/proposal.js";
 import {
+  type AgentType,
   type AgentTypeInput,
   agentTypeRecord,
   contractDigest,
@@ -644,6 +645,84 @@ function draftRunPlan(
   };
 }
 
+/** One candidate's provenance and the agent-type input it composes from. */
+type CandidateInput = { readonly from: CandidateSource; readonly input: AgentTypeInput };
+
+type InputsOutcome = { readonly inputs: readonly CandidateInput[] } | { readonly refusal: string };
+
+/**
+ * The agent types the lineage ran under, or the first row that will not say.
+ *
+ * **A row whose plan will not decode is a refusal and not a shorter list**, for
+ * `lineage`'s reason: the alternative exists, rondo could not read it, and a
+ * proposal that quietly omitted it would put a one-option set in front of a
+ * person who had two. The row is named, because "something in the lineage" is
+ * not something anyone can act on.
+ */
+function agentTypesOf(rows: readonly IterationRecord[]): InputsOutcome {
+  const inputs: CandidateInput[] = [];
+  for (const row of rows) {
+    const decoded = readPlan(row.plan);
+    if (decoded.kind !== "planned") {
+      return {
+        refusal:
+          `the plan iteration '${row.id}' ran will not decode, so the agent type it ran under ` +
+          `cannot be offered as an alternative: ${decoded.reason}`,
+      };
+    }
+    inputs.push({
+      from: { form: "iteration", iterationId: row.id },
+      input: decoded.plan.agentTypeInput,
+    });
+  }
+  return { inputs };
+}
+
+/**
+ * The unchanged key set, and one candidate per askable key promoted.
+ *
+ * **cadenza validates the stored input before anything is enumerated from it**,
+ * and that is not defensive habit: `readPlan` carries `agentTypeInput` through
+ * as opaque data (the store may not name a cadenza type), so a plan that
+ * decodes says nothing about whether `granted` and `askable` are lists at all.
+ * A row written by an older build, or edited with `sqlite3`, would otherwise
+ * throw here -- before `issueFor`'s `try`, which is where cadenza's refusals
+ * are turned into something an operator can read.
+ *
+ * The lists are then taken **off the record cadenza built** rather than off the
+ * input: `agentType()` sorts, de-duplicates and freezes them, so what is
+ * enumerated is what the contract would actually carry.
+ */
+function promotionsOf(own: AgentTypeInput, subjectId: string): InputsOutcome {
+  let record: AgentType;
+  try {
+    record = agentTypeRecord(own);
+  } catch (error) {
+    return {
+      refusal:
+        `the agent type iteration '${subjectId}' ran under is not one cadenza will build, so its ` +
+        `keys cannot be offered: ${error instanceof Error ? error.message : String(error)}`,
+    };
+  }
+  return {
+    inputs: [
+      { from: { form: "iteration", iterationId: subjectId }, input: own },
+      ...record.askable.map((key) => ({
+        from: { form: "promotedKey", key } as const,
+        // **One key, and only one the author already offered.** cadenza requires
+        // `granted` and `askable` to be disjoint, so the key moves rather than
+        // being copied -- which is what makes this a promotion and not an
+        // invention.
+        input: {
+          ...own,
+          granted: [...record.granted, key],
+          askable: record.askable.filter((other) => other !== key),
+        },
+      })),
+    ],
+  };
+}
+
 /**
  * Draft `agent_type` or `contract_keys`: one option per candidate contract.
  *
@@ -676,34 +755,11 @@ function draftContracts(
   }
   const plan = admitted.plan;
   const own = plan.agentTypeInput;
-  const inputs: { readonly from: CandidateSource; readonly input: AgentTypeInput }[] =
-    kind === "agent_type"
-      ? rows.flatMap((row) => {
-          const decoded = readPlan(row.plan);
-          return decoded.kind === "planned"
-            ? [
-                {
-                  from: { form: "iteration", iterationId: row.id } as const,
-                  input: decoded.plan.agentTypeInput,
-                },
-              ]
-            : [];
-        })
-      : [
-          { from: { form: "iteration", iterationId: subject.id } as const, input: own },
-          ...own.askable.map((key) => ({
-            from: { form: "promotedKey", key } as const,
-            // **One key, and only one the author already offered.** cadenza
-            // requires `granted` and `askable` to be disjoint, so the key moves
-            // rather than being copied -- which is what makes this a promotion
-            // and not an invention.
-            input: {
-              ...own,
-              granted: [...own.granted, key],
-              askable: own.askable.filter((other) => other !== key),
-            },
-          })),
-        ];
+  const enumerated = kind === "agent_type" ? agentTypesOf(rows) : promotionsOf(own, subject.id);
+  if ("refusal" in enumerated) {
+    return { kind: "refused", reason: enumerated.refusal };
+  }
+  const inputs = enumerated.inputs;
 
   const candidates: SnapshotContractCandidate[] = [];
   const contracts: JsonRecord[] = [];

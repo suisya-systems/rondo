@@ -819,3 +819,58 @@ test("an approval of a widening names the widened contract and nothing else", as
     "command.run",
   ]);
 });
+
+test("an alternative whose plan will not decode is refused rather than omitted", async () => {
+  // **The same rule `run_plan` follows, on the agent type.** The alternative
+  // exists and rondo could not read it, so a one-option set in front of a person
+  // who really had two would be the framing this record exists to prevent.
+  const { connection, store, record } = fresh();
+  await reserveOne(store, "iter-0");
+  await store.settle("iter-0", "the work was not taken", 2_000);
+  await reserveWithPlan(store, "iter-1", "iter-0");
+
+  const outcome = await proposeRetry(
+    { ...PROPOSE_PORTS, store, record, present: screen().present },
+    "agent_type",
+    "iter-1",
+    "iter-2",
+  );
+  expect(outcome.kind).toBe("refused");
+  if (outcome.kind === "refused") {
+    expect(outcome.reason).toContain("iter-0");
+    expect(outcome.reason).toContain("will not decode");
+  }
+  expect(connection.prepare("SELECT count(*) AS n FROM proposal").get()).toEqual({ n: 0 });
+});
+
+test("an agent type cadenza will not build is a refusal and not a crash", async () => {
+  // **`readPlan` carries `agentTypeInput` through as opaque data** -- the store
+  // may not name a cadenza type -- so a plan that decodes says nothing about
+  // whether its key lists are lists. A row from an older build, or edited with
+  // `sqlite3`, has to reach an operator as a sentence rather than as a stack.
+  const { connection, store, record } = fresh();
+  const malformed = realPlan("iter-1") as Record<string, unknown>;
+  malformed["agent_type_input"] = {
+    ...(malformed["agent_type_input"] as Record<string, unknown>),
+    askable: null,
+  };
+  await store.reserve({
+    id: "iter-1",
+    request: "teach rondo to count",
+    plan: malformed as JsonRecord,
+    nowMs: 1_000,
+    supersedesIterationId: null,
+    runId: "rondo-iter-1",
+    topicBranch: "rondo/iter-1",
+    workspace: "/srv/work/iter-1",
+  });
+
+  const outcome = await proposeRetry(
+    { ...PROPOSE_PORTS, store, record, present: screen().present },
+    "contract_keys",
+    "iter-1",
+    "iter-2",
+  );
+  expect(outcome.kind).toBe("refused");
+  expect(connection.prepare("SELECT count(*) AS n FROM proposal").get()).toEqual({ n: 0 });
+});
