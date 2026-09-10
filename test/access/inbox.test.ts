@@ -289,7 +289,12 @@ test("the wait is a two-way partition, and every live status is on one side", ()
   for (const [index, status] of Object.keys(WAIT_SIDE).entries()) {
     expect(rendered).toContain(`i-${String(index)}  ${status}`);
   }
-  expect(rendered).toContain("iterations with no gate to answer (3)");
+  expect(rendered).toContain("iterations waiting on you (3)");
+  // **The gate, or its absence, is read off the row.** Two of the three
+  // waiting statuses suspend at a named gate; the fixture above has no gate id
+  // on any of them, so all three say so rather than implying `rondo answer`
+  // would work.
+  expect(rendered).toContain("no gate: a person has to decide");
   expect(rendered).toContain("in flight (5)");
 });
 
@@ -327,7 +332,7 @@ test("the two voices are separated by kind and by nothing else", () => {
 test("nothing waiting is a section that says zero, not a section that vanishes", () => {
   const rendered = inboxLines("operator-1", EMPTY).join("\n");
   expect(rendered).toContain("become contracts when you approve them (0)");
-  expect(rendered).toContain("iterations with no gate to answer (0)");
+  expect(rendered).toContain("iterations waiting on you (0)");
   expect(rendered).toContain("in flight (0)");
   expect(rendered).toContain("presented 0, withheld 0");
   expect(rendered).toContain("approved and never spent (0)");

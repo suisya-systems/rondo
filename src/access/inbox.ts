@@ -172,10 +172,19 @@ function waitingOnYouLines(snapshot: InboxSnapshot): readonly string[] {
     ...proposalLines(binding, snapshot, seenProposals),
     `  proposals that bind nothing (${String(nonBinding.length)})`,
     ...proposalLines(nonBinding, snapshot, seenProposals),
-    `  iterations with no gate to answer (${String(waiting.length)})`,
+    `  iterations waiting on you (${String(waiting.length)})`,
     ...waiting.map(
       (record) =>
-        `    ${record.id}  ${record.status}  ${ago(record.updatedAtMs, snapshot.atMs)}` +
+        `    ${record.id}  ${record.status}  ${ago(record.updatedAtMs, snapshot.atMs)}  ` +
+        // **Read off the row and not off the status.** Two of the three
+        // waiting statuses suspend at a named continuo gate and one does not
+        // (`stalled` means a person must decide and there is no gate), and the
+        // difference decides which command unblocks the work. Taking it from
+        // `gate_id` rather than from a second table of statuses is what keeps
+        // the line true for a row whose gate is not where its status implies.
+        (record.gateId === null
+          ? "no gate: a person has to decide"
+          : `answer gate ${record.gateId}`) +
         newMark(seenIterations, record.id, snapshot.sinceMs),
     ),
   ];

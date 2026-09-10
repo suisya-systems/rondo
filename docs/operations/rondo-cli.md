@@ -726,8 +726,9 @@ waiting on you
     p-retry-i-0007  run_plan  about 'i-0007'  waiting 41m  NEW
   proposals that bind nothing (1)
     explanation-i-0003-1757500000000  explanation  about 'i-0003'  waiting 3h
-  iterations with no gate to answer (1)
-    i-0011  stalled  2h
+  iterations waiting on you (2)
+    i-0007  awaiting_human  41m  answer gate g-0007
+    i-0011  stalled  2h  no gate: a person has to decide
 
 in flight (2)
   i-0012  performing  12m
@@ -754,6 +755,10 @@ Five things about that screen are the point rather than the formatting:
   split is computed from the proposal's `kind` alone (`D-0032` rule 5) -- never from who drafted it
   and never from its prose. A kind this rondo does not recognise is listed under *binds nothing*,
   which is the same answer the writer of `human_decision` gives.
+- **A waiting row says how to unblock it, and it reads that off the row.** Two of the three
+  waiting statuses suspend at a named continuo gate (`rondo answer`); `stalled` means a person has
+  to decide and there is no gate at all. The line takes it from the row's `gate_id` rather than
+  from its status, so it stays true for a row whose gate is not where its status implies.
 - **The wait has two sides and not three.** *Waiting on you* is `awaiting_human`,
   `withdrawal_requested` and `stalled`; *in flight* is the other five live statuses. There is no
   "waiting on CI" side: CI runs inside `lap perform`, and no stored status distinguishes it
