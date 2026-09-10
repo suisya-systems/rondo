@@ -17,6 +17,19 @@ lock, and waits for an operator's `abandon()`. The stated difference "is not how
 bad the outcome was — it is whether anything might still be running"
 ([`DECISIONS.md:2536-2538`](../../DECISIONS.md)).
 
+**What "the lock" is today, since rule 11's wording predates it.** `D-0023`
+replaced `R-10`'s partial unique index with a counted bound: `maxOccupying`
+counts the generated `occupying` column — every non-terminal status except the
+two suspended ones — inside `reserve()`'s own `BEGIN IMMEDIATE`
+(`src/store/sqlite.ts:429-495`, `D-0023` rule 8). It is **1** by default and
+settable (`src/refrain/policy.ts:103-106`, `src/access/cli.ts:853-887`), and
+`D-0023` rule 17 leaves it at one until continuo's `D-1104` lands the
+holder-identity half, because continuo serialises `lap perform` on one global
+delivery resource. So "the lock" below means **the execution slot a
+`performing` row occupies**, and at the default it is exclusive; the rows here
+are about *when the slot is given back*, which is the same question under either
+bound.
+
 `D-1102` then made some refusals name a session. If a refusal can name a session,
 the reasoning goes, the child was alive at the moment the refusal was raised —
 so is "an answer came back" still the same fact as "nothing of the lap's is
@@ -112,8 +125,10 @@ And on rondo's side, a CLI that does *not* leave is already not a refusal:
 lock.
 
 **Therefore, for the direct child of a lap: a decoded refusal in rondo's hands is
-a `lap perform` process that exited by itself, and such a process had no live
-child of its lap's.** The states of section 3 do not produce a refusal-with-a
+a `lap perform` process that ended through its own reporting path, and such a
+process had no live child of its lap's.** (An *orderly* end — section 6 is where
+the crash that ends a process without draining anything is dealt with, and it is
+why this sentence says "through its own reporting path" rather than "exited".) The states of section 3 do not produce a refusal-with-a
 live-worker; they produce a **hang**, which rondo's ceiling turns into the
 `noAnswer` case rule 11 already keeps the lock for. Rule 11's conclusion survives;
 its stated premise ("an answer arrived, so the CLI is over and nothing of its is
@@ -156,35 +171,56 @@ which is precisely the inversion the issue warns about, bought for nothing.
 ## 6. Where rule 11 *is* thin: `defect`
 
 The interpreter's `performing` branch handles `refused` and `defect` in one arm:
-both go terminal `failed` and release the lock
+both go terminal `failed` and give the slot back
 (`src/refrain/interpreter.ts:1269-1320`). For `refused` section 4 justifies that.
-For `defect` it does not, because `defect` is not one thing:
+For `defect` it does not, because `defect` folds together two things that are
+not alike — and the line between them is **not** the one section 4's argument
+draws by itself.
 
-| `ContinuoResult` | maps to | did the CLI exit by itself? |
-|---|---|---|
-| `refusedInProse` | `refused` | yes |
-| `protocolRefusal` (a document rondo could not read) | `defect` | yes |
-| `invokerDefect` from a decode or pipe fault | `defect` | yes |
-| **`invokerDefect` from a death by signal** (`protocol.ts:891-895`) | `defect` | **no** |
-| `timedOut` | `noAnswer` | no — and the lock is kept |
+**A numeric exit status is not evidence that the loop drained.** continuo's
+`mainAsync` returns an `ArgparseExit`'s code and **rethrows everything else**
+(`src/cli.ts:222-231`), and the entry point awaits it at top level (`:298`), so
+an escaping exception ends the process at once — with exit 1, and without
+draining anything. Section 4's handle argument covers an *orderly* exit and
+nothing more. A throw from inside the teardown itself reaches this: `stopSession`
+swallows the provider's failures (`root.ts:1654-1673`), but
+`stillThisLapsSession` reads SQLite (`root.ts:1628-1641`) and a database error
+there escapes the `finally` with the stop unfired and the child unstopped.
 
-The last row is the hole. A `lap perform` killed by something that is not
-rondo's own timer — an OOM kill, a host shutdown, an operator's Ctrl-C — never
-finished its teardown, may have left a worker running, and carries no
-`session_id` for anyone to chase. rondo files it as a lap that failed and hands
-the lock to the next iteration. That is the state the single-flight invariant
-exists to prevent, and it is reachable today without any refusal being involved.
+What *is* evidence is the exit status continuo's host contract defines. Only two
+exist: `ArgparseExit` is constructed with 0 or 2 and with nothing else anywhere
+in continuo's `src/`, and reaching either means the CLI came back through its own
+reporting path, after the `finally` of section 3 had run. rondo's decoder already
+sorts on exactly this and then loses the distinction one layer up:
 
-Note that it is *not* the ceiling case: rondo's own kill sets `firedOwnTimer` and
-becomes `timedOut` (`invoker.ts:396-405, 452-470`), which is already correct.
+| what the invocation did | `ContinuoResult` | maps to | slot given back? | did the CLI reach its own reporting path? |
+|---|---|---|---|---|
+| exit 0, document read | `answered` | `answered` | on suspend | yes |
+| exit 2, refusal envelope or argparse prose | `refused` / `refusedInProse` | `refused` | yes | yes |
+| exit 0, document unreadable or absent | `protocolRefusal` / `invokerDefect` | `defect` | yes | yes |
+| **exit 1, or any other status** (`protocol.ts:903-911`) | `invokerDefect` | `defect` | **yes** | **no** |
+| **death by signal** (`protocol.ts:891-895`) | `invokerDefect` | `defect` | **yes** | **no** |
+| rondo's own ceiling fired | `timedOut` | `noAnswer` | no | no — and the slot is kept |
+
+The two bold rows are the hole. A `lap perform` that crashed, or that something
+other than rondo's timer killed — an OOM kill, a host shutdown, an operator's
+Ctrl-C — may never have run its teardown to the end, may have left a worker
+running, and carries no `session_id` for anyone to chase. rondo files it as a lap
+that failed and gives the slot back. That is the state the invariant exists to
+prevent, and it is reachable today without any refusal being involved.
+
+It is *not* the ceiling case: rondo's own kill sets `firedOwnTimer` and becomes
+`timedOut` (`invoker.ts:396-405, 452-470`), which is already correct. And it is
+not a defect-versus-refusal distinction: an unreadable document from an orderly
+exit 0 stays a `defect` and stays safe to release.
 
 ## 7. Decision rows
 
 | # | Question | Recommendation |
 |---|---|---|
-| `S-1` | Does a refusal that names a session keep the lock? | **No — rule 11 stands.** A decoded refusal is a CLI that exited by itself, and section 4 is why that is evidence about the child rather than an assumption about it. |
-| `S-2` | Then what changes? | **The reason under rule 11 is restated** to be the one that is true: the lock is released because the invocation *ended*, not because continuo promised a stop. Rule 11's table is untouched. |
-| `S-3` | Does `defect` stay rule 11's second spelling? | **No.** An invocation that ended abnormally — `signal !== null`, or a null status with no signal — is a "nothing came back" and belongs on the `noAnswer` path: row stays `performing`, keeps the lock, reported as a rondo defect requiring a human. Every other `defect` (a document rondo could not read, a pipe fault) is a CLI that exited by itself and keeps releasing. |
+| `S-1` | Does a refusal that names a session keep the slot? | **No — rule 11 stands.** A decoded refusal is a CLI that came back through its own reporting path, and section 4 is why that is evidence about the child rather than an assumption about it. |
+| `S-2` | Then what changes? | **The reason under rule 11 is restated** to be the one that is true: the slot is given back because the invocation ended *through continuo's own reporting path*, not because continuo promised a stop. Rule 11's table is untouched. |
+| `S-3` | Does `defect` stay rule 11's second spelling? | **Not for every `defect`.** The releasing fact is the **exit status**, not the outcome's class: continuo's contract defines 0 and 2 and constructs no other (`ArgparseExit` is built with those two alone), and either means the teardown ran and the CLI reported. An invocation that ended any other way — a death by signal, exit 1, no status at all — is a "nothing came back": the row stays `performing`, keeps the slot, and is reported as a rondo defect requiring a human, exactly as `noAnswer` already is. `decode` holds the fact today and discards it one layer up (section 6); giving it a variant of its own is the implementation's business, not this row's. |
 | `S-4` | Is a "waiting for a stop" state introduced? | **No.** Nothing waits, `abandon()` gains no ordinary path, and no new non-terminal status is added to rule 11's table. |
 | `S-5` | What does rondo do with the session id it now has? | **Name it, and nothing else** — as today, minus one repair: the report line stops citing `session stop`, which is not a command at the pin (section 5). A transcript read is what the id is actually good for. |
 | `S-6` | Is anything asked of continuo? | **Yes, as an upstream ask rather than a rondo behaviour**: a refusal that declined to stop, or could not confirm one, is a fact only continuo holds, and the envelope has room for it beside `session_id`. Filed against continuo; rondo does not block on it. |
@@ -220,10 +256,19 @@ becomes `timedOut` (`invoker.ts:396-405, 452-470`), which is already correct.
   the refusal envelope.** `S-5` and `S-6` are then answerable, and the middle
   option this document rejected becomes buildable.
 - **`released_at_ms` acquires a writer.** The `run show` option reopens.
-- **The capacity ledger (`D-0023`, rondo#8) replaces `R-10`'s partial unique
-  index.** These rows are about *when the lock is given back*, not about how many
-  laps may hold one; the ledger changes the second and inherits the first. It is
-  not re-argued here.
+- **continuo constructs an `ArgparseExit` with a third code.** `S-3` keys on
+  "the two statuses the host contract defines"; a third one would have to be
+  sorted into "reported" or "ended abnormally" before it is released on.
+- **`maxOccupying` is raised above one.** The ledger has *already* replaced the
+  unique index (section 1), and at the default of one a retained `performing` row
+  still excludes every other lap. Above one it does not, and what then stands
+  between a second lap and an orphan is the allocator's per-iteration triple —
+  the partial unique indexes on run id, topic branch and workspace
+  (`src/store/sqlite.ts:791-819`) — plus continuo's single delivery resource,
+  which is what `D-0023` rule 17 says refuses a second concurrent lap today.
+  These rows change nothing about that and claim nothing about it: they decide
+  *when the slot is given back*, and a host that raises the bound should re-read
+  `D-0023` rules 17 and 18 rather than these.
 
 ## 8. What this document does not decide
 
