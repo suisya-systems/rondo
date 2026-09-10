@@ -164,16 +164,35 @@ const ALLOWED_INTERNAL_BY_LAYER: Readonly<Record<string, readonly string[]>> = {
   // make that a mechanism instead of this comment.
   "src/advisory": ["src/advisory", "src/store"],
   // The access points: the web UI and the localhost MCP surface, when they
-  // exist. They compose the other three and are composed by nobody. cadenza is
-  // NOT among them: an access point that needed a delegation contract would be
-  // an access point taking a domain decision, and D-0018 rule 5 says the arrow
-  // to add first is the loop's.
+  // exist. They compose the other three and are composed by nobody.
+  //
+  // **cadenza is among them now, and this is D-0022 rule 5's arrow arriving
+  // rather than a widening taken here.** That rule granted `src/access` the
+  // cadenza arrow and then withheld it from use -- *"the arrow is taken because
+  // the facade is where such a call would have to live, and withheld from use
+  // until something consumes it"*. `src/access/advisory.ts` is what consumes
+  // it: rule 17 replaced the successor contract with a **fresh initial
+  // contract** for a retry, and made showing its digest before a person
+  // approves it the surface's job, which cannot be done without composing one.
+  // The earlier reading -- that an access point needing a contract would be one
+  // taking a domain decision -- is what rule 17 answers: the decision is the
+  // human's, and what the surface does is compose the exact thing they are
+  // being asked about. The composition is still cadenza's, through the one
+  // facade, and `src/advisory` remains outside this row: the layer that must
+  // never compose a contract still cannot name the module that does.
   //
   // `src/advisory` joined the row with D-0022 rule 1: gathering the snapshot,
   // recording the proposal and rendering it are all the composition root's, and
   // the arrow runs this way only -- the advisory names neither this layer nor
   // any other but the store.
-  "src/access": ["src/access", "src/advisory", "src/continuo", "src/refrain", "src/store"],
+  "src/access": [
+    "src/access",
+    "src/advisory",
+    "src/cadenza",
+    "src/continuo",
+    "src/refrain",
+    "src/store",
+  ],
 };
 
 /**
@@ -265,7 +284,9 @@ const ALLOWED_EXTERNALS_BY_MODULE: Readonly<
       "agentType",
       "classify",
       "composeCatalog",
+      "contractDigest",
       "contractInputForAgentType",
+      "contractPayload",
       "delegationContract",
       "layerDocument",
       "resolveProject",
@@ -1150,12 +1171,25 @@ const PLANTED: ReadonlyArray<
     null,
   ],
   [
-    // The arrow is the loop's, and only the loop's. An access point that needed
-    // a delegation contract would be an access point taking a domain decision,
-    // which is the reason D-0018 rule 5 gave for making the loop's arrow the
-    // one to add first.
+    // **The control for D-0022 rule 5's arrow, which D-0022 rule 17 is what
+    // consumes.** The surface composes the exact contract a retry would run
+    // under, so that a person approves a digest rather than a promise; the
+    // decision stays the human's, and the composition stays cadenza's behind
+    // the one facade. It was refused here until something consumed it, which
+    // is the state this case used to record.
     "an-access-point-reaches-cadenza",
     "src/access/probe.ts",
+    'import { classifyAction } from "../cadenza/facade.js";\nexport const x = classifyAction;\n',
+    null,
+  ],
+  [
+    // **And the advisory still may not**, which is the half of D-0022 rule 1
+    // that the row above must not quietly repeal: internals are granted per
+    // layer, so the component that must never compose a contract is in a layer
+    // that cannot name the module that does. This is the case that fails if
+    // `src/advisory` is ever folded into the access row for convenience.
+    "the-advisory-cannot-reach-cadenza",
+    "src/advisory/probe.ts",
     'import { classifyAction } from "../cadenza/facade.js";\nexport const x = classifyAction;\n',
     "outside its allowance",
   ],

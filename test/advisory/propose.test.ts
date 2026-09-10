@@ -26,6 +26,8 @@ import {
   type Claim,
   DERIVATIONS,
   propose,
+  proposeRetryPlan,
+  type RetrySnapshot,
   UNDETERMINED,
 } from "../../src/advisory/proposal.js";
 
@@ -186,19 +188,28 @@ test("every claim carries a basis, and every basis is one of the five forms", ()
   }
 });
 
+/**
+ * Follow one JSON pointer into a snapshot, the way the renderer does.
+ *
+ * At module scope because both voices cite this way: a claim's basis and an
+ * option's basis are the same closed union under the same rule (D-0032 rule 2,
+ * D-0034 rule 3), so one resolver checking both is what keeps the two from
+ * drifting into two notions of what a citation is.
+ */
+const resolve = (document: unknown, pointer: string): unknown =>
+  pointer
+    .split("/")
+    .slice(1)
+    .reduce<unknown>(
+      (at, step) => (at === null || typeof at !== "object" ? undefined : Reflect.get(at, step)),
+      document,
+    );
+
 test("a snapshot basis points at a field the persisted snapshot actually has", () => {
   // **The citation is checked rather than trusted.** A pointer is only worth
   // storing if following it lands somewhere, and the snapshot is the document
   // the store keeps verbatim -- so this resolves each pointer against the very
   // value handed to `propose`.
-  const resolve = (document: unknown, pointer: string): unknown =>
-    pointer
-      .split("/")
-      .slice(1)
-      .reduce<unknown>(
-        (at, step) => (at === null || typeof at !== "object" ? undefined : Reflect.get(at, step)),
-        document,
-      );
   for (const snapshot of [FULL, BARE]) {
     for (const claim of propose(snapshot).payload.claims) {
       if (claim.basis.form !== "snapshot") {
@@ -243,4 +254,85 @@ test("it is pure: the same snapshot gives the same bytes", () => {
   // randomness, no ordering that depends on anything but the snapshot.
   expect(JSON.stringify(propose(FULL))).toBe(JSON.stringify(propose(FULL)));
   expect(JSON.stringify(propose(BARE))).not.toBe(JSON.stringify(propose(FULL)));
+});
+
+/**
+ * The subject's own plan **second**, so that a recommendation found by position
+ * would pick the wrong one.
+ *
+ * D-0022 rule 17 says a retry starts from the abandoned row's plan; the drafter
+ * finds it by identity, and this fixture is what makes the difference between
+ * that rule and "index 0" visible.
+ */
+const RETRY: RetrySnapshot = {
+  iteration: FULL.iteration,
+  successor: {
+    iterationId: "iter-2",
+    runId: "rondo-iter-2",
+    topicBranch: "rondo/iter-2",
+  },
+  candidates: [
+    {
+      iterationId: "iter-0",
+      status: "closed",
+      planDigest: "sha256:aaa",
+      contractDigest: "sha256:contract-of-the-predecessor",
+    },
+    {
+      iterationId: FULL.iteration.id,
+      status: "abandoned",
+      planDigest: "sha256:bbb",
+      contractDigest: "sha256:contract-of-the-subject",
+    },
+  ],
+};
+
+test("an option set carries exactly one recommendation, and it is the subject's own plan", () => {
+  // D-0032 rule 1 with D-0034 rule 2, and D-0022 rule 17 for *which* option:
+  // the retry starts from the plan of the row whose work was not taken. The
+  // index is 1 here, so a drafter that recommended the first candidate -- or
+  // that marked every option -- fails rather than passing on a fixture whose
+  // order happened to agree with it.
+  const proposal = proposeRetryPlan(RETRY);
+  expect(proposal.kind).toBe("run_plan");
+  // D-0032 rule 8's CHECK from this side: `derivation` is an explanation's.
+  expect(proposal.derivation).toBe(null);
+  expect(proposal.payload.options.length).toBe(2);
+  expect(proposal.payload.recommended).toBe(1);
+  const recommended = proposal.payload.options[proposal.payload.recommended];
+  expect(recommended?.label).toContain("this iteration");
+});
+
+test("an option's value is the digest an approval would name, and its basis resolves", () => {
+  // **The value is the contract digest and not the plan digest**, because
+  // `human_decision.approved` references `composition.contract_digest`: an
+  // option whose value were a plan digest would leave the operator approving
+  // one fact and the ledger recording another. And every option carries a
+  // basis on a claim's terms exactly (D-0032 rule 2, D-0034 rule 3), which is
+  // only a citation if it resolves against the bytes that were kept.
+  const proposal = proposeRetryPlan(RETRY);
+  for (const [index, option] of proposal.payload.options.entries()) {
+    expect(Object.keys(option).sort()).toEqual(["basis", "label", "value"]);
+    expect(option.value).toBe(RETRY.candidates[index]?.contractDigest);
+    expect(option.basis.form).toBe("snapshot");
+    if (option.basis.form === "snapshot") {
+      expect(resolve(RETRY, option.basis.pointer)).toBe(option.value);
+    }
+  }
+});
+
+test("a candidate list without the subject's own plan still recommends exactly one", () => {
+  // The gatherer drops nothing today, but the drafter is total over the
+  // snapshot it is handed (D-0022 rule 2): a set with no recommendation is the
+  // one shape rule 1 does not admit, so the first option takes it.
+  const proposal = proposeRetryPlan({
+    ...RETRY,
+    candidates: [RETRY.candidates[0]],
+  });
+  expect(proposal.payload.options.length).toBe(1);
+  expect(proposal.payload.recommended).toBe(0);
+});
+
+test("the option set is pure: the same snapshot gives the same bytes", () => {
+  expect(JSON.stringify(proposeRetryPlan(RETRY))).toBe(JSON.stringify(proposeRetryPlan(RETRY)));
 });

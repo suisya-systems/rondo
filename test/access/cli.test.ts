@@ -1529,3 +1529,47 @@ test("explain takes an iteration id and refuses every other flag", () => {
   const refused = parseCommand(["explain", "--iteration-id", "i-0001", "--actor-id", "me"]);
   expect(refused.kind).toBe("refused");
 });
+
+test("propose and decide take their own flags and refuse the others", () => {
+  // The table `parseCommand` refuses against, exercised on the two verbs this
+  // cut adds. `--body` on `decide` is the interesting one: an answer to a
+  // proposal is a kind and a digest, never prose -- `D-0020` rule 5 keeps prose
+  // out of the slot where a paraphrase would record as human approval.
+  const proposed = parseCommand([
+    "propose",
+    "--iteration-id",
+    "iter-1",
+    "--successor-id",
+    "iter-2",
+  ]);
+  expect(proposed.kind).toBe("parsed");
+  if (proposed.kind === "parsed") {
+    expect(proposed.parsed.command).toBe("propose");
+    expect(proposed.parsed.successorId).toBe("iter-2");
+  }
+
+  const decided = parseCommand([
+    "decide",
+    "--proposal-id",
+    "p-1",
+    "--actor-id",
+    "operator-1",
+    "--outcome",
+    "approved",
+    "--contract-digest",
+    "sha256:abc",
+  ]);
+  expect(decided.kind).toBe("parsed");
+  if (decided.kind === "parsed") {
+    expect(decided.parsed.proposalId).toBe("p-1");
+    expect(decided.parsed.outcome).toBe("approved");
+    expect(decided.parsed.contractDigest).toBe("sha256:abc");
+  }
+
+  for (const argv of [
+    ["propose", "--iteration-id", "iter-1", "--actor-id", "operator-1"],
+    ["decide", "--proposal-id", "p-1", "--body=approve"],
+  ]) {
+    expect(parseCommand(argv).kind).toBe("refused");
+  }
+});
