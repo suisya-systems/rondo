@@ -129,20 +129,32 @@ that already exists.
    changed since `t`". This entry writes neither schema and adds no field to either.
 
 9. **Collisions inside a repository's own namespace are owned by nobody, this entry
-   says so rather than placing an owner, and names why the gap cannot fire yet.**
-   rondo de-conflicts only the identifiers it mints — the `(run id, topic branch,
-   workspace)` triple derived from the iteration id (`D-0023` rules 3 to 7). A
-   decision id or a migration number lives **inside the work**, and rondo's only
-   reader of that work is `D-0029`'s lap reading, which reads one lap's material for
-   one gate and compares nothing to a second lap.
+   says so rather than placing an owner, and records that the gap is live today
+   rather than waiting on a raised bound.** rondo de-conflicts only the identifiers
+   it mints — the `(run id, topic branch, workspace)` triple derived from the
+   iteration id (`D-0023` rules 3 to 7). A decision id or a migration number lives
+   **inside the work**, and rondo's only reader of that work is `D-0029`'s lap
+   reading, which reads one lap's material for one gate and compares nothing to a
+   second lap.
 
-   **Who bears it: the operator.** And the reason it is affordable to leave there is
-   measured rather than hoped: `maxOccupying` is one by default
-   (`src/refrain/policy.ts:103-106`), and raising it above one is today a way to make
-   continuo refuse laps rather than a way to run them, until continuo `D-1104`
-   (`src/access/cli.ts:860-866`, `D-0023` rule 17). rondo cannot have two concurrent
-   laps to collide. **The first raised bound is the falsifier, and it is named
-   below.**
+   **It is already reachable, and the first draft of this rule said otherwise.** The
+   bound that matters is not `maxOccupying` but `maxLive`, which is **three** by
+   default (`src/refrain/policy.ts:103-106`): an iteration suspended at a gate stops
+   occupying an execution slot and keeps its branch (`D-0023` rule 2, `D-0023` rule
+   8's two bounds). So one lap may take migration `0005`, suspend at its gate, and a
+   second lap started against the same unmerged base may take `0005` again — with
+   `maxOccupying` still one and continuo still serialising execution. **Serial
+   execution bounds what runs, never what accumulates on open branches**, and #40's
+   measured case is exactly two branches, not two running workers.
+
+   **Who bears it: the operator, knowingly.** The gap is left unowned because the
+   thing that would close it does not exist and is not cheap: comparing what two laps
+   wrote requires a reader across branches, where `D-0029`'s reading is per-lap and
+   per-gate by construction. What this entry refuses is closing it by assertion — a
+   rule saying the collision cannot happen would have been wrong, which is how this
+   paragraph got its shape. Rule 4's host-wide snapshot is the **detection point when
+   somebody builds one**: two live iterations are two rows in it, and rondo's own
+   `D-0023` triple is what tells them apart.
 
 10. **Whatever is built first for #40 writes to `operator_attention` or does not
     ship.** `D-0032` rule 10 designed the table with one writer in mind and this
@@ -193,7 +205,7 @@ that already exists.
 |---|---|---|
 | The attention policy artefact — its format, where it lives, how it is edited | Rule 6's default is "withhold nothing", so nothing is blocked on it; its shape is a property of the surface that edits it | the surface work, or the first operator who asks for a suppression |
 | What triggers a between-laps composition | No surface exists to ask, and nothing in rondo runs on a schedule | the surface work |
-| Cross-lap collisions in a repository's namespace (rule 9) | Cannot fire while `maxOccupying` is one, and above one continuo refuses first | a later entry, once the bound is raised |
+| Cross-lap collisions in a repository's namespace (rule 9) | Live today at `maxLive` three, and closing it needs a reader across branches that nothing in rondo has; the operator bears it in the meantime | a later entry, once something can read two laps' material together |
 | Whether a host-wide snapshot stays affordable | Nothing has measured a snapshot of any size; `D-0032`'s own snapshot-size residual is the same question one row at a time | the implementation, which is the first thing that can measure it |
 | The conversation schema (`D-0020` rule 5) | Rule 8 needs it to exist and needs no property of it that `D-0032` rule 7 has not already required | the surface work |
 
@@ -211,8 +223,9 @@ material.
 - **The acts rondo can take between laps**: admission and its refusal
   (`src/store/sqlite.ts:542`, `:1116`), the bounds `maxOccupying` / `maxLive`
   (`src/refrain/policy.ts:69-106`) and their environment read
-  (`src/access/cli.ts:868-893`). The comment at `src/access/cli.ts:860-866` is where
-  rule 9's "cannot fire yet" is taken from.
+  (`src/access/cli.ts:868-893`). The comment at `src/access/cli.ts:860-866` is what
+  rule 9 cites for continuo still serialising execution — and what rule 9 is careful
+  **not** to read as a bound on how many branches are open.
 - **What the surface shows today**: `pickWaiting` lists every live row and refuses
   on ambiguity rather than choosing (`src/access/cli.ts:799-832`), which is rule 6's
   default already being the behaviour.
@@ -221,15 +234,19 @@ material.
 - **The record duties already taken**: `D-0032` rules 5, 9, 10 and 11, and its own
   statement that #40's component is not designed there.
 - **What was not measured**: no snapshot has been gathered or sized; no surface
-  exists, so rule 6's default is the CLI's behaviour and not a screen's; rondo has
-  never run two concurrent laps, so rule 9's gap is argued from the bound rather
-  than observed; and no operator has ever been offered a between-laps proposal, so
-  whether one is useful is unmeasured in rondo.
+  exists, so rule 6's default is the CLI's behaviour and not a screen's; no
+  collision of rule 9's kind has been observed in rondo's own laps, which is why
+  that rule is argued from the bounds and from #40's measurement of another
+  organisation rather than from a rondo incident; and no operator has ever been
+  offered a between-laps proposal, so whether one is useful is unmeasured in rondo.
 
 ### What would falsify it
 
-- **`maxOccupying` raised above one and two laps running.** Rule 9's gap becomes
-  live, and the entry that raises the bound owns it.
+- **A collision observed between two of rondo's own laps** — rule 9's gap firing,
+  which it can do at today's defaults. Raising `maxLive` widens it and raising
+  `maxOccupying` (`D-0023` rule 17, continuo `D-1104`) widens it again; neither is a
+  precondition, and treating one as a precondition is the error this rule was
+  corrected for.
 - **A between-laps output that somebody has to approve.** Rule 2 would be wrong: the
   layer would need authority and therefore a gate of its own, which is option A
   arriving on evidence rather than on anticipation.
