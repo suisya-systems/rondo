@@ -157,6 +157,7 @@ function closedRecord(id: string, plan: AdmittedPlan): IterationRecord {
     topicBranch: plan.topicBranch,
     workspace: plan.workspace,
     identifiersSpent: 1,
+    supersedesIterationId: null,
     continuoRevision: "38c667b",
     agentTypeDigest: null,
     configDigest: null,

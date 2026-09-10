@@ -135,6 +135,13 @@ const MAX_TRANSITIONS = 12;
  * every other refusal in this function is placed where it is: a value refused
  * before the row costs no row and no lock.
  *
+ * **`supersedesIterationId` is the lineage, and it is an argument rather than a
+ * plan field** (D-0030 rule 1). The plan is what continuo is handed and what a
+ * person may write by hand; which rondo row preceded this one is neither, and
+ * putting it in the payload would have made it a thirty-third field an operator
+ * could type. It defaults to null because a first lap is what almost every call
+ * is, and `revise` is the one caller with something to say.
+ *
  * Returns when the machine reaches a state that suspends (`awaiting_human`, and
  * the process may then exit) or that is terminal. It never waits on a human.
  */
@@ -158,6 +165,7 @@ export async function admit(
   plan: RunPlan,
   policy: LoopPolicy,
   id: string,
+  supersedesIterationId: string | null = null,
 ): Promise<ConductorReport> {
   const lines: string[] = [];
   const admission = nextStep(null, policy);
@@ -228,6 +236,7 @@ export async function admit(
     // check that both callers have to remember to satisfy.
     request: validated.plan.prompt,
     plan: planPayload(admitted.plan),
+    supersedesIterationId,
     nowMs: ports.now(),
   });
   switch (reservation.kind) {
@@ -274,6 +283,16 @@ export async function admit(
           `${admitted.plan.runId}, branch ${admitted.plan.topicBranch} and workspace ` +
           `${admitted.plan.workspace}.`,
       );
+      // **Said where it is written, and off the row rather than off the
+      // argument** (D-0030 rule 4). The row is what a later reader will have,
+      // so a line that reported the argument would be able to say a lineage was
+      // recorded on a row that does not carry one.
+      if (reservation.record.supersedesIterationId !== null) {
+        lines.push(
+          `It is a revision of iteration ${reservation.record.supersedesIterationId}, and the ` +
+            "row records that rather than leaving it to be inferred from the branch names.",
+        );
+      }
       return drive(ports, reservation.record, lines);
   }
 }

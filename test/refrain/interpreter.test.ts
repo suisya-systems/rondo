@@ -167,6 +167,11 @@ class FakeStore implements StorePort {
       runId: input.runId,
       topicBranch: input.topicBranch,
       workspace: input.workspace,
+      // Written by `reserve()` and by nothing after it (D-0030 rule 2), which
+      // is why the fake carries it here rather than accepting it on a
+      // transition: a fake that let a later write set it would make the type's
+      // omission of the field look like a detail.
+      supersedesIterationId: input.supersedesIterationId,
       createdAtMs: input.nowMs,
       updatedAtMs: input.nowMs,
     };
@@ -292,6 +297,7 @@ function blankRecord(id: string, status: IterationStatus): IterationRecord {
     topicBranch: null,
     workspace: null,
     identifiersSpent: 0,
+    supersedesIterationId: null,
     continuoRevision: null,
     agentTypeDigest: null,
     configDigest: null,
@@ -1380,6 +1386,32 @@ test("the two no-answer rows of that table hold their status on purpose", async 
     // for it to have named one about.
     expect(h.calls.some((call) => call.startsWith("showGate"))).toBe(false);
   }
+});
+
+// --- the lineage a revision writes (D-0030) ---------------------------------
+
+test("a lineage handed to admit reaches the row, and is said where it is written", async () => {
+  const h = harness();
+  // The predecessor's id, as `revise` has it: the row it just answered the gate
+  // on. What is under test here is that `admit` carries it to `reserve` and
+  // reports what the row came back holding -- the store is where a predecessor
+  // that is not there is refused, and `test/store/ledger.test.ts` is where that
+  // is asserted against a real database.
+  const report = await admit(h.ports, PLAN, PERMISSIVE, "i-0001", "i-0000");
+
+  expect((await readRow(h.store, "i-0001"))?.supersedesIterationId).toBe("i-0000");
+  expect(says(report, "It is a revision of iteration i-0000")).toBe(true);
+});
+
+test("the observed-red control: an ordinary admission records no lineage and claims none", async () => {
+  // Without this the case above passes against an `admit` that wrote the id
+  // onto every row it reserved, and the column would say every first lap
+  // revised something.
+  const h = harness();
+  const report = await admitOnce(h);
+
+  expect((await readRow(h.store, "i-0001"))?.supersedesIterationId).toBeNull();
+  expect(says(report, "It is a revision of iteration")).toBe(false);
 });
 
 // --- what cannot be classified halts and asks -------------------------------

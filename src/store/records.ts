@@ -257,6 +257,30 @@ export interface IterationRecord {
    */
   readonly identifiersSpent: number;
   /**
+   * The iteration this one is a revision of, or null for a first lap (D-0030).
+   *
+   * **The lineage D-0027 rule 9 deferred**, and the deferral was to "the entry
+   * that adds a migration to the store" -- which D-0023 did, on the schema
+   * half, so this is a column and an `ALTER TABLE` rather than a design. What
+   * it replaces is an inference: a successor's `base_branch` equals its
+   * predecessor's `topic_branch`, so a reader could *guess* the succession from
+   * two branch names and could not tell a real one from two laps whose names
+   * happen to line up.
+   *
+   * **Written once, by `reserve()`, in the same transaction as the row, and by
+   * nothing afterwards.** It is a fact about how the row came to exist -- the
+   * same grade of fact as the three identifiers beside it -- and a record of
+   * where a lap came from that a later transition could rewrite is a record of
+   * where somebody would prefer it had come from. {@link IterationFields} omits
+   * it for that reason, as it omits the triple (D-0023 rule 5).
+   *
+   * **Null is not "unknown", it is "no predecessor".** Every first lap has it,
+   * and every row written before D-0030 has it -- which are the same fact to a
+   * reader, deliberately: a database that predates the column holds no
+   * revision it could have recorded, because `revise` had nowhere to write one.
+   */
+  readonly supersedesIterationId: string | null;
+  /**
    * The continuo revision `startContinuo` **observed**, not the one the pin
    * expected.
    *
@@ -330,11 +354,24 @@ export interface IterationRecord {
  * indexes rest on -- a row could move its own claim off a name it had already
  * been admitted under. `identifiersSpent` stays writable because the one
  * transition into `admitting` is exactly what sets it.
+ *
+ * **`supersedesIterationId` is omitted for the same reason and a second one**
+ * (D-0030 rule 2). It is fixed at reservation, so nothing later has anything
+ * to say about it -- and a lineage a transition could write is a lineage that
+ * can be composed after the fact, which is the difference between a record and
+ * an assertion.
  */
 export type IterationFields = Partial<
   Omit<
     IterationRecord,
-    "id" | "status" | "createdAtMs" | "updatedAtMs" | "runId" | "topicBranch" | "workspace"
+    | "id"
+    | "status"
+    | "createdAtMs"
+    | "updatedAtMs"
+    | "runId"
+    | "topicBranch"
+    | "workspace"
+    | "supersedesIterationId"
   >
 >;
 

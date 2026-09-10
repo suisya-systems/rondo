@@ -336,6 +336,7 @@ revising as iteration 'revise-004', cut from 'dogfood/revise-003'
 the lap is the step that is slow
 iteration 'revise-004' is awaiting_human
   Reserved iteration revise-004 at 'planned'.
+  It is a revision of iteration revise-003, and the row records that rather than leaving it to be inferred from the branch names.
   ...
 A person has to answer this before anything lands. Next: rondo answer
 ```
@@ -353,6 +354,21 @@ second worker said so itself:
 
 > Continued from the previous lap's commit rather than restarting: `docs/NOTES.md:4` now reads
 > `Touched twice by the rondo operator CLI.`, committed as `def1894` on `dogfood/revise-002`.
+
+**The succession is on the row, not only in the branch names** (`D-0030`). The second lap's row
+carries `supersedes_iteration_id`, written when it is reserved and never afterwards, so "this lap
+revised that one" is a record rather than something you infer from a base branch that happens to
+look like somebody's topic branch. You see it in three places, and only on a lap that has one:
+
+- `rondo revise` says `It is a revision of iteration <id>.` under the reservation line.
+- `rondo answer` prints a `revises <id>` line above the gate.
+- the pull request body's `## How this got here` says
+  `- It revises iteration \`<id>\`, whose commits are on this branch too: ...`.
+
+A database written before `D-0030` gains the column on the next open and reads null on every row,
+which is the truth about those rows: `revise` had nowhere to write a predecessor, so none of them
+records one. Nothing back-fills it from the branch names -- that would be recording the guess this
+column exists to replace.
 
 **The pull request still goes against the original base.** The predecessor's branch is local and
 nothing pushes it, so `publish` on a revised iteration prints `--base main`, not

@@ -25,6 +25,13 @@
  *     observed-red control -- a terminal *unspent* row releases it. Without
  *     this group rule 7's whole mechanism is prose.
  *
+ * A fifth group came with D-0030, and it is here rather than in
+ * `sqlite.test.ts` because it is about the two things this file already holds:
+ * what `reserve()` writes inside its own transaction, and what the migration
+ * does to a database written before the column existed. The lineage is refused
+ * when it names a row that is not there, which is the only check standing in
+ * for a foreign key this database does not declare.
+ *
  * And one group that exists because of what the migration gives up: once
  * `iteration_one_live` is dropped, **the database no longer refuses a second
  * live row**, so the evidence that `maxOccupying` still holds has to be that
@@ -53,6 +60,7 @@ const reserveOne = async (
   store: ReturnType<typeof storeUnder>["store"],
   id: string,
   nowMs = 1_000,
+  supersedesIterationId: string | null = null,
 ) =>
   store.reserve({
     id,
@@ -61,6 +69,7 @@ const reserveOne = async (
     runId: `rondo-${id}`,
     topicBranch: `rondo/${id}`,
     workspace: `/srv/work/iter-${id}`,
+    supersedesIterationId,
     nowMs,
   });
 
@@ -269,6 +278,7 @@ test("a terminal spent row holds its triple for ever", async () => {
     runId: "rondo-a",
     topicBranch: "rondo/b",
     workspace: "/srv/work/iter-b",
+    supersedesIterationId: null,
     nowMs: 3_000,
   });
   expect(collided.kind).toBe("defect");
@@ -294,6 +304,7 @@ test("the observed-red control: a terminal unspent row releases its triple", asy
     runId: "rondo-a",
     topicBranch: "rondo/a",
     workspace: "/srv/work/iter-a",
+    supersedesIterationId: null,
     nowMs: 3_000,
   });
   expect(inheriting.kind).toBe("reserved");
@@ -330,6 +341,7 @@ test("two live iterations may not hold one name even before either is spent", as
     runId: "rondo-b",
     topicBranch: "rondo/a",
     workspace: "/srv/work/iter-b",
+    supersedesIterationId: null,
     nowMs: 2_000,
   });
   expect(collided.kind).toBe("defect");
@@ -584,6 +596,7 @@ test("a legacy row that spent its identifiers keeps holding them after the migra
     runId: "rondo-legacy",
     topicBranch: "rondo/new",
     workspace: "/srv/work/iter-new",
+    supersedesIterationId: null,
     nowMs: 2_000,
   });
   expect(reissued.kind).toBe("defect");
@@ -639,6 +652,7 @@ test("a legacy row's branch and workspace are back-filled from its plan and then
     runId: "rondo-new",
     topicBranch: "dogfood/legacy",
     workspace: "/srv/work/iter-new",
+    supersedesIterationId: null,
     nowMs: 2_000,
   });
   expect(collided.kind).toBe("defect");
@@ -730,4 +744,100 @@ test("a legacy row whose plan is not JSON does not stop the store opening", asyn
   // still works.
   expect((await store.read("broken")).kind).toBe("unreadable");
   expect((await store.settle("broken", "the operator ended it", 2_000)).kind).toBe("settled");
+});
+
+// ---------------------------------------------------------------------------
+// 5. The lineage a revision writes (D-0030).
+// ---------------------------------------------------------------------------
+
+test("a revision's row records the iteration it supersedes", async () => {
+  const { store } = storeUnder({ maxOccupying: 9, maxLive: 9 });
+  await reserveOne(store, "first");
+  const second = await reserveOne(store, "second", 2_000, "first");
+
+  expect(second.kind).toBe("reserved");
+  const read = await store.read("second");
+  expect(read.kind === "read" && read.record.supersedesIterationId).toBe("first");
+
+  // The observed-red control: without it this passes against a store that
+  // wrote the predecessor's id onto every row, and "revises nothing" would be
+  // unsayable. A first lap's column is null, and null means exactly that.
+  const first = await store.read("first");
+  expect(first.kind === "read" && first.record.supersedesIterationId).toBeNull();
+});
+
+test("a lineage naming no row, and a row naming itself, are refused with nothing written", async () => {
+  const { store } = storeUnder({ maxOccupying: 9, maxLive: 9 });
+
+  // This database declares no foreign keys, so the check inside `reserve()`'s
+  // own transaction is the only thing between the column and a reference no
+  // reader can follow -- which would be weaker than the branch names it
+  // replaced, because it looks like a record.
+  const dangling = await reserveOne(store, "orphan", 1_000, "never-existed");
+  expect(dangling.kind).toBe("defect");
+  if (dangling.kind === "defect") {
+    expect(dangling.reason).toContain("not a row in this database");
+  }
+  expect((await store.read("orphan")).kind).toBe("absent");
+
+  const itself = await reserveOne(store, "loop", 2_000, "loop");
+  expect(itself.kind).toBe("defect");
+  if (itself.kind === "defect") {
+    expect(itself.reason).toContain("its own predecessor");
+  }
+  expect((await store.read("loop")).kind).toBe("absent");
+
+  // And the control that the refusals are about the lineage rather than about
+  // reserving at all: the same call with a predecessor that exists reserves.
+  await reserveOne(store, "real", 3_000);
+  expect((await reserveOne(store, "successor", 4_000, "real")).kind).toBe("reserved");
+});
+
+test("a database created before D-0030 gains the lineage column, and its rows revise nothing", async () => {
+  // The D-0023-era schema: every column that entry added, and none of this
+  // one's. A row written under it holds no revision the migration could
+  // recover, because `revise` had nowhere to write one -- so the column is
+  // added and left null rather than back-filled from anything.
+  const connection = new DatabaseSync(":memory:");
+  connection.exec(`
+    CREATE TABLE iteration (
+      id TEXT PRIMARY KEY, status TEXT NOT NULL, request TEXT NOT NULL, plan TEXT NOT NULL,
+      plan_digest TEXT NOT NULL, attempts INTEGER NOT NULL, run_id TEXT, topic_branch TEXT,
+      workspace TEXT, identifiers_spent INTEGER NOT NULL DEFAULT 0, continuo_revision TEXT,
+      agent_type_digest TEXT, config_digest TEXT, contract_digest TEXT, classification TEXT,
+      classification_reason TEXT, neutral_role_name TEXT, continuo_role TEXT, model_tier TEXT,
+      model TEXT, gate_id TEXT, gate_stage TEXT, gate_outcome TEXT, session_id TEXT,
+      session_path TEXT, reason TEXT, created_at_ms INTEGER NOT NULL,
+      updated_at_ms INTEGER NOT NULL,
+      live INTEGER GENERATED ALWAYS AS (
+        CASE WHEN status IN ('closed','abandoned','failed') THEN NULL ELSE 1 END) VIRTUAL
+    );
+  `);
+  connection
+    .prepare(
+      "INSERT INTO iteration (id, status, request, plan, plan_digest, attempts, created_at_ms, " +
+        `updated_at_ms) VALUES ('old', 'closed', 'ask', '{}', '${planDigest({})}', 1, 1, 1)`,
+    )
+    .run();
+
+  const { store } = storeUnder({ maxOccupying: 1, maxLive: 3 }, connection);
+
+  const columns = new Set(
+    (
+      connection
+        .prepare("SELECT name FROM pragma_table_xinfo('iteration')")
+        .all() as unknown as readonly {
+        readonly name: string;
+      }[]
+    ).map((row) => row.name),
+  );
+  expect(columns.has("supersedes_iteration_id")).toBe(true);
+
+  const old = await store.read("old");
+  expect(old.kind === "read" && old.record.supersedesIterationId).toBeNull();
+
+  // And the upgraded database is one a revision can be written into: the
+  // pre-existing row is a predecessor like any other.
+  const successor = await reserveOne(store, "next", 2_000, "old");
+  expect(successor.kind).toBe("reserved");
 });
