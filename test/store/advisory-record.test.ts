@@ -404,6 +404,63 @@ test("both sides of the silence come out of one GROUP BY", async () => {
   ]);
 });
 
+test("a subject presented twice is counted once, and the repeat is a no-op", async () => {
+  // D-0036 rule 1. The inbox re-renders the same item across gaps, so counting
+  // per render makes one unanswered proposal, looked at twenty times over a
+  // morning, report twenty presentations -- and rule 10's ratio then compares a
+  // count of renders against a count of subjects.
+  const connection = freshConnection();
+  const record = advisoryRecord(connection);
+
+  expect(await record.recordAttention(attention({ atMs: 4_000 }))).toEqual({ kind: "recorded" });
+  // **Recorded, not refused** (D-0036 rule 1). `presentedUncounted` says the
+  // surface's own accounting is short; a re-render is not that case, because the
+  // subject already has its row.
+  expect(await record.recordAttention(attention({ atMs: 9_000 }))).toEqual({ kind: "recorded" });
+  // A different subject is a different presentation, and the ratio's numerator
+  // is a count of subjects.
+  expect(await record.recordAttention(attention({ subjectId: "p-0002" }))).toEqual({
+    kind: "recorded",
+  });
+
+  expect(
+    connection
+      .prepare(
+        "SELECT subject_id, at_ms FROM operator_attention WHERE disposition = 'presented' " +
+          "ORDER BY subject_id",
+      )
+      .all(),
+  ).toEqual([
+    // The **first** look's clock survives: when a subject was first shown is
+    // preserved, how often it was shown is the stated ceiling.
+    { subject_id: "p-0001", at_ms: 4_000 },
+    { subject_id: "p-0002", at_ms: 4_000 },
+  ]);
+});
+
+test("the once-per-subject index leaves the withheld side alone", async () => {
+  // The index is partial over `presented` for D-0032 rule 10's reason: the most
+  // common withholding was never composed into anything with an id, and two of
+  // them are two withholdings and not one repeated. Same subject, same rule,
+  // twice, on both shapes of `subject_id`.
+  const connection = freshConnection();
+  const record = advisoryRecord(connection);
+  const withheld = { disposition: "withheld", ruleName: "duplicate_delivery" } as const;
+
+  await record.recordAttention(attention({ ...withheld, subjectId: null }));
+  await record.recordAttention(attention({ ...withheld, subjectId: null }));
+  await record.recordAttention(attention({ ...withheld, subjectId: "p-0001" }));
+  await record.recordAttention(attention({ ...withheld, subjectId: "p-0001" }));
+  // A presented row carrying no id collides with nothing either: NULLs are
+  // distinct in the index, which is the wanted behaviour and not a tolerated one.
+  await record.recordAttention(attention({ subjectId: null }));
+  await record.recordAttention(attention({ subjectId: null }));
+
+  expect(connection.prepare("SELECT COUNT(*) AS n FROM operator_attention").get()).toEqual({
+    n: 6,
+  });
+});
+
 // --- Rule 11's three enumeration queries ----------------------------------
 
 test("an approved decision that was never spent is enumerable", async () => {

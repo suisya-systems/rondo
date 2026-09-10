@@ -785,6 +785,30 @@ CREATE TABLE IF NOT EXISTS operator_attention (
   CHECK (disposition IN ('presented', 'withheld')),
   CHECK (disposition = 'presented' OR (rule_name IS NOT NULL AND rule_name <> ''))
 );
+
+-- D-0036 rule 1. A presentation is counted once per subject, not once per
+-- render.
+--
+-- The inbox is looked at repeatedly across gaps (#41 section 4), so counting at
+-- each render makes one unanswered proposal, looked at twenty times over a
+-- morning, report twenty presentations -- and D-0032 rule 10's GROUP BY stops
+-- reading as "six were put to you, forty were not" the moment its numerator
+-- counts renders and its denominator counts subjects.
+--
+-- Partial and over the presented side only, in the shape D-0023's claims
+-- already use. A repeat is a **no-op and not a refusal** (the writer's
+-- ON CONFLICT DO NOTHING): the invariant every presented subject has a row
+-- still holds, so a re-render is not the case explain's presentedUncounted arm
+-- exists to report. SQLite treating NULLs as distinct here is the behaviour
+-- wanted rather than one tolerated -- the most common withholding carries no
+-- subject_id at all, and those must never collide with each other.
+--
+-- **The ceiling, stated rather than hidden.** *When* a subject was first shown
+-- is preserved; *how often* is not, and is not recoverable afterwards. If that
+-- question ever has to be answered, this rule is what moves -- not a column
+-- added beside it.
+CREATE UNIQUE INDEX IF NOT EXISTS operator_attention_presented_subject
+  ON operator_attention(subject_kind, subject_id) WHERE disposition = 'presented';
 `;
 
 /**
@@ -1932,9 +1956,14 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
             "that turns a suppressed count into a record",
         };
       }
+      // **D-0036 rule 1: a second presentation of one subject stores nothing and
+      // reports success.** The conflict target names the partial index rather
+      // than being left bare, so a unique constraint added here later is a
+      // defect the caller hears about instead of a write this silently drops.
       return insert(
         "INSERT INTO operator_attention (at_ms, subject_kind, subject_id, disposition, " +
-          "rule_name) VALUES (?, ?, ?, ?, ?)",
+          "rule_name) VALUES (?, ?, ?, ?, ?) " +
+          "ON CONFLICT (subject_kind, subject_id) WHERE disposition = 'presented' DO NOTHING",
         [row.atMs, row.subjectKind, row.subjectId, row.disposition, row.ruleName],
       );
     },
