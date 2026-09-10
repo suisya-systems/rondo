@@ -192,8 +192,13 @@ function waitingOnYouLines(snapshot: InboxSnapshot): readonly string[] {
 
 function inFlightLines(snapshot: InboxSnapshot): readonly string[] {
   const running = onSide(snapshot, "inFlight");
+  const unreadable = snapshot.live.filter((row) => row.kind === "unreadable");
   return [
-    `in flight (${String(running.length)})`,
+    // **The count is of the rows printed below it, undecodable ones
+    // included.** A live row rondo cannot read still holds a slot, so leaving
+    // it out of the number would report capacity that is not there -- to the
+    // one reader who has to decide whether to start something else.
+    `in flight (${String(running.length + unreadable.length)})`,
     ...running.map(
       (record) => `  ${record.id}  ${record.status}  ${ago(record.updatedAtMs, snapshot.atMs)}`,
     ),
@@ -201,7 +206,7 @@ function inFlightLines(snapshot: InboxSnapshot): readonly string[] {
     // it.** It is live -- it holds a slot -- and an inbox that dropped it
     // silently would be wrong about what is running in exactly the case where a
     // person has to intervene.
-    ...snapshot.live.flatMap((row) =>
+    ...unreadable.flatMap((row) =>
       row.kind === "unreadable" ? [`  ${row.id}  will not decode: ${row.reason}`] : [],
     ),
   ];

@@ -304,6 +304,10 @@ test("a live row that will not decode is on the screen", () => {
     live: [{ kind: "unreadable", id: "i-0009", reason: "status column is 'wat'" }],
   }).join("\n");
   expect(rendered).toContain("i-0009  will not decode: status column is 'wat'");
+  // **And it is in the count above it.** The row holds a slot; a section
+  // reading `in flight (0)` over a printed row would report capacity that is
+  // not there, to the reader deciding whether to start something else.
+  expect(rendered).toContain("in flight (1)");
 });
 
 test("the two voices are separated by kind and by nothing else", () => {
