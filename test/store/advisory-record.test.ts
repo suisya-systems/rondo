@@ -173,6 +173,10 @@ test("the two elevation columns are null together", async () => {
   // observation are each half of the one link where authority enters #41's
   // chain, and half a link is not a provenance record.
   const record = advisoryRecord(freshConnection());
+  // Both rows below name a message that is in the conversation, so what they
+  // observe is this CHECK and not D-0036 rule 4's refusal, which would
+  // otherwise answer first for a message that is not there.
+  await record.recordMessage("m-0007");
 
   expect(
     await record.recordProposal(
@@ -184,8 +188,11 @@ test("the two elevation columns are null together", async () => {
     ),
   ).toEqual({ kind: "recorded" });
   expect(
-    (await record.recordProposal(proposal({ proposalId: "p-half", elevatedFromMessageId: "m-8" })))
-      .kind,
+    (
+      await record.recordProposal(
+        proposal({ proposalId: "p-half", elevatedFromMessageId: "m-0007" }),
+      )
+    ).kind,
   ).toBe("defect");
 });
 
@@ -314,6 +321,107 @@ test("a decision naming no proposal at all is refused", async () => {
   expect(refused.kind === "refused" && refused.reason).toContain("p-missing");
 });
 
+// --- The conversation, and rule 4's writer refusal (D-0036) ---------------
+
+test("a message is an id and nothing else, so a gate answer cannot live there", async () => {
+  // **D-0036 rule 3's three properties, read off the schema.** The third one --
+  // a gate answer never lives in the conversation (D-0020 rule 5) -- is held by
+  // the shape rather than by a CHECK: there is no column to put a body in, so
+  // the paraphrase that would record as human approval has nowhere to go. This
+  // asserts the column list rather than one insert, because the property is the
+  // absence of the other columns and an insert cannot observe an absence.
+  const connection = freshConnection();
+  const record = advisoryRecord(connection);
+
+  expect(await record.recordMessage("m-0001")).toEqual({ kind: "recorded" });
+  expect(
+    (
+      connection.prepare("PRAGMA table_info(conversation_message)").all() as Record<
+        string,
+        unknown
+      >[]
+    ).map((column) => column["name"]),
+  ).toEqual(["message_id"]);
+});
+
+test("a message id is immutable: a second row under one id is refused", async () => {
+  // Rule 3's first property, as a refusal a caller can observe. The store holds
+  // no body, so it cannot tell a repeat of one message from a different message
+  // reusing an id -- and taking the second write as a no-op would let a
+  // reference that has already been elevated come to mean something else.
+  const record = advisoryRecord(freshConnection());
+  await record.recordMessage("m-0001");
+
+  const refused = await record.recordMessage("m-0001");
+
+  expect(refused.kind).toBe("refused");
+  expect(refused.kind === "refused" && refused.reason).toContain("durable and immutable");
+});
+
+test("PLANTED: a proposal elevated from a message that is not there is refused", async () => {
+  // **D-0036 rule 4's planted case.** The elevation pair passes the schema's
+  // CHECK -- both columns are non-null, which is all D-0032 rule 7 asks -- so
+  // the only thing standing between a dangling chain and a recorded proposal is
+  // the lookup inside this writer's own transaction.
+  const connection = freshConnection();
+  const record = advisoryRecord(connection);
+
+  const refused = await record.recordProposal(
+    proposal({
+      proposalId: "p-elevated",
+      elevatedFromMessageId: "m-never-said",
+      elevatedByActorId: "oidc|operator-1",
+    }),
+  );
+
+  expect(refused.kind).toBe("refused");
+  expect(refused.kind === "refused" && refused.reason).toContain("m-never-said");
+  expect(refused.kind === "refused" && refused.reason).toContain("no message in this conversation");
+  // And nothing was written: the refusal happens inside the transaction that
+  // would have carried the insert, so a refused elevation leaves no proposal
+  // behind to be read as one that was never elevated.
+  expect(
+    connection.prepare("SELECT COUNT(*) AS n FROM proposal").get() as Record<string, unknown>,
+  ).toEqual({ n: 0 });
+});
+
+test("PLANTED: the same proposal is recorded once the message it names exists", async () => {
+  // **The non-vacuity half.** A refusal that fired on every elevation would be
+  // a writer that records no chain at all, and D-0032 rule 7's two columns
+  // would stay null-together for ever for a new reason -- which is a green
+  // suite over a store that lost the feature it just gained.
+  const connection = freshConnection();
+  const record = advisoryRecord(connection);
+  await record.recordMessage("m-0001");
+
+  expect(
+    await record.recordProposal(
+      proposal({
+        proposalId: "p-elevated",
+        elevatedFromMessageId: "m-0001",
+        elevatedByActorId: "oidc|operator-1",
+      }),
+    ),
+  ).toEqual({ kind: "recorded" });
+
+  const row = connection
+    .prepare("SELECT elevated_from_message_id, elevated_by_actor_id FROM proposal")
+    .get() as Record<string, unknown>;
+  expect(row["elevated_from_message_id"]).toBe("m-0001");
+  expect(row["elevated_by_actor_id"]).toBe("oidc|operator-1");
+});
+
+test("PLANTED: a proposal that elevates nothing is recorded, message or no message", async () => {
+  // The second neighbouring case, and the one every existing writer takes:
+  // `explain` writes the pair as null (D-0032 rule 7), so a refusal reaching
+  // rows that name no message would stop the one proposal rondo composes today.
+  const record = advisoryRecord(freshConnection());
+
+  expect(await record.recordProposal(proposal({ proposalId: "p-plain" }))).toEqual({
+    kind: "recorded",
+  });
+});
+
 // --- Rule 10's writer refusal ---------------------------------------------
 
 test("PLANTED: a withholding whose rule cannot be named is refused, and says why", async () => {
@@ -402,6 +510,63 @@ test("both sides of the silence come out of one GROUP BY", async () => {
     { disposition: "withheld", rule_name: "below_threshold", n: 1 },
     { disposition: "withheld", rule_name: "duplicate_delivery", n: 2 },
   ]);
+});
+
+test("a subject presented twice is counted once, and the repeat is a no-op", async () => {
+  // D-0036 rule 1. The inbox re-renders the same item across gaps, so counting
+  // per render makes one unanswered proposal, looked at twenty times over a
+  // morning, report twenty presentations -- and rule 10's ratio then compares a
+  // count of renders against a count of subjects.
+  const connection = freshConnection();
+  const record = advisoryRecord(connection);
+
+  expect(await record.recordAttention(attention({ atMs: 4_000 }))).toEqual({ kind: "recorded" });
+  // **Recorded, not refused** (D-0036 rule 1). `presentedUncounted` says the
+  // surface's own accounting is short; a re-render is not that case, because the
+  // subject already has its row.
+  expect(await record.recordAttention(attention({ atMs: 9_000 }))).toEqual({ kind: "recorded" });
+  // A different subject is a different presentation, and the ratio's numerator
+  // is a count of subjects.
+  expect(await record.recordAttention(attention({ subjectId: "p-0002" }))).toEqual({
+    kind: "recorded",
+  });
+
+  expect(
+    connection
+      .prepare(
+        "SELECT subject_id, at_ms FROM operator_attention WHERE disposition = 'presented' " +
+          "ORDER BY subject_id",
+      )
+      .all(),
+  ).toEqual([
+    // The **first** look's clock survives: when a subject was first shown is
+    // preserved, how often it was shown is the stated ceiling.
+    { subject_id: "p-0001", at_ms: 4_000 },
+    { subject_id: "p-0002", at_ms: 4_000 },
+  ]);
+});
+
+test("the once-per-subject index leaves the withheld side alone", async () => {
+  // The index is partial over `presented` for D-0032 rule 10's reason: the most
+  // common withholding was never composed into anything with an id, and two of
+  // them are two withholdings and not one repeated. Same subject, same rule,
+  // twice, on both shapes of `subject_id`.
+  const connection = freshConnection();
+  const record = advisoryRecord(connection);
+  const withheld = { disposition: "withheld", ruleName: "duplicate_delivery" } as const;
+
+  await record.recordAttention(attention({ ...withheld, subjectId: null }));
+  await record.recordAttention(attention({ ...withheld, subjectId: null }));
+  await record.recordAttention(attention({ ...withheld, subjectId: "p-0001" }));
+  await record.recordAttention(attention({ ...withheld, subjectId: "p-0001" }));
+  // A presented row carrying no id collides with nothing either: NULLs are
+  // distinct in the index, which is the wanted behaviour and not a tolerated one.
+  await record.recordAttention(attention({ subjectId: null }));
+  await record.recordAttention(attention({ subjectId: null }));
+
+  expect(connection.prepare("SELECT COUNT(*) AS n FROM operator_attention").get()).toEqual({
+    n: 6,
+  });
 });
 
 // --- Rule 11's three enumeration queries ----------------------------------
@@ -640,7 +805,7 @@ test("the last look is the furthest one, per actor, and null before the first", 
 
 test("the advisory tables arrive on a database that predates them", async () => {
   // Every statement in `SCHEMA` is `IF NOT EXISTS`, so a store opened over an
-  // older database gains the six tables without a column migration -- and
+  // older database gains the seven tables without a column migration -- and
   // either port may be the one that opens it, because both apply the schema.
   const connection = freshConnection();
   iterationStore(connection, CONSERVATIVE_HOST_POLICY);

@@ -588,7 +588,7 @@ CREATE INDEX IF NOT EXISTS lap_reading_by_iteration
 -- what a person answered, what that answer was spent on, where the operator's
 -- reading stopped, and what was put in front of them or kept from them.
 --
--- **Six append-only tables and no status column anywhere.** D-0022 rule 4's
+-- **Seven append-only tables and no status column anywhere.** D-0022 rule 4's
 -- grade is inherited exactly, and by the same means: immutability is a property
 -- of the schema and of the absence of any writer that updates, not of a
 -- trigger. There are no triggers in this file.
@@ -602,6 +602,40 @@ CREATE INDEX IF NOT EXISTS lap_reading_by_iteration
 -- No indexes beyond the primary keys. Every query below is a full scan of a
 -- table rondo has never yet written a row to, and an index chosen before a
 -- measurement is a guess about a shape nobody has seen.
+
+-- D-0036 rule 3. The conversation, fixed only as far as elevation reaches.
+--
+-- **One column, and the count is the decision rather than an unfinished
+-- table.** Rule 3 fixes three properties and names the rest -- the body's type,
+-- its authorship, ordering, threading, retention, and whether the surface ever
+-- writes here before an operator does -- as explicitly undecided. So every
+-- column that is absent is one this table is not yet allowed to choose, and the
+-- task that first composes a message is who chooses them (D-0036's residuals).
+--
+--   1. **A message id is durable and immutable**: the primary key of an
+--      append-only table with no writer that updates, which is D-0022 rule 4's
+--      grade reached by D-0022 rule 4's two means. recordMessage refuses a
+--      second row under an id that already exists, so the immutability is a
+--      refusal a caller can observe and not only an absence of code.
+--   2. **An observation is a message here**, and there is no observation table
+--      anywhere in this schema. That is the one link #41 section 3's chain had
+--      no home for, and proposal.elevated_from_message_id is what points at
+--      it.
+--   3. **A gate answer never lives here, and here it cannot**: there is no
+--      column to put one in. D-0020 rule 5's constraint -- gate_transition.body
+--      is the verbatim human answer, and a paraphrase in that slot records as
+--      human approval -- is held by the shape rather than by a CHECK somebody
+--      has to remember to write, and elevation is the first thing that could
+--      have violated it by accident.
+--
+-- **No created_at_ms**, which is the one absence worth naming twice: a caller
+-- clock on an append-only table is exactly what CHANGE_SOURCES enumerates, so
+-- adding one would settle ordering and put messages in the operator's "what
+-- changed" feed -- two decisions rule 3 leaves open, taken as a side effect of
+-- a column.
+CREATE TABLE IF NOT EXISTS conversation_message (
+  message_id                  TEXT    PRIMARY KEY
+);
 
 -- D-0022 rule 4, extended by D-0032 rules 1, 2, 3, 7 and 8.
 --
@@ -785,6 +819,40 @@ CREATE TABLE IF NOT EXISTS operator_attention (
   CHECK (disposition IN ('presented', 'withheld')),
   CHECK (disposition = 'presented' OR (rule_name IS NOT NULL AND rule_name <> ''))
 );
+
+-- D-0036 rule 1. A presentation is counted once per subject, not once per
+-- render.
+--
+-- The inbox is looked at repeatedly across gaps (#41 section 4), so counting at
+-- each render makes one unanswered proposal, looked at twenty times over a
+-- morning, report twenty presentations -- and D-0032 rule 10's GROUP BY stops
+-- reading as "six were put to you, forty were not" the moment its numerator
+-- counts renders and its denominator counts subjects.
+--
+-- Partial and over the presented side only, in the shape D-0023's claims
+-- already use. A repeat is a **no-op and not a refusal** (the writer's
+-- ON CONFLICT DO NOTHING): the invariant every presented subject has a row
+-- still holds, so a re-render is not the case explain's presentedUncounted arm
+-- exists to report. SQLite treating NULLs as distinct here is the behaviour
+-- wanted rather than one tolerated -- the most common withholding carries no
+-- subject_id at all, and those must never collide with each other.
+--
+-- **No backfill, and the reason is a fact about the writers rather than
+-- optimism.** Creating a unique index over rows that already collide fails, and
+-- both stores exec this schema on open -- so a database holding two presented
+-- rows for one subject would stop opening. There is exactly one presented
+-- writer (explain), and the subject_id it writes is the proposal primary key it
+-- has just inserted, so a second row for one subject was never reachable: the
+-- proposal insert collides first and nothing is presented. If a second writer
+-- ever counts a subject it did not just create, the backfill is that change's
+-- and not this one's.
+--
+-- **The ceiling, stated rather than hidden.** *When* a subject was first shown
+-- is preserved; *how often* is not, and is not recoverable afterwards. If that
+-- question ever has to be answered, this rule is what moves -- not a column
+-- added beside it.
+CREATE UNIQUE INDEX IF NOT EXISTS operator_attention_presented_subject
+  ON operator_attention(subject_kind, subject_id) WHERE disposition = 'presented';
 `;
 
 /**
@@ -1508,7 +1576,31 @@ export type RecordOutcome =
  * what the entry listed.
  */
 export interface AdvisoryRecord {
-  /** Append one immutable proposal (D-0022 rule 4). */
+  /**
+   * Append one message to the operator conversation -- **or refuse it**
+   * (D-0036 rule 3).
+   *
+   * The id is all a message is here (see the `conversation_message` DDL), so
+   * this takes one and returns one of three answers. A second call under an id
+   * that already exists is **refused rather than taken as a no-op**: the store
+   * holds no body, so it cannot tell a repeat of one message from a different
+   * message reusing an id, and rule 3's first property is that the id is
+   * immutable. Refusing is the answer that cannot silently be wrong.
+   */
+  recordMessage(messageId: string): Promise<RecordOutcome>;
+  /**
+   * Append one immutable proposal (D-0022 rule 4) -- **or refuse it**
+   * (D-0036 rule 4).
+   *
+   * A draft naming an `elevatedFromMessageId` that is no message in the
+   * conversation is refused, in the shape D-0032 rule 5 already uses: the
+   * lookup and the insert happen inside one `BEGIN IMMEDIATE`, so the message
+   * that was there when the reference was checked is still there when the row
+   * lands. A dangling reference would make the chain #41 section 3 asks to
+   * record indistinguishable from one that was never recorded -- and it would
+   * do so afterwards, when the message that justified the proposal is what a
+   * reader went looking for.
+   */
   recordProposal(draft: ProposalDraft): Promise<RecordOutcome>;
   /** Append the contract that is about to be presented (D-0022 rule 18). */
   recordComposition(draft: CompositionDraft): Promise<RecordOutcome>;
@@ -1590,6 +1682,12 @@ export interface AdvisoryRecord {
  * **`operator_view` is the one exclusion, and it is the cursor itself.** A mark
  * is written by the render at the end of the render, so including it would make
  * every look report itself as a change the operator has not seen.
+ *
+ * `conversation_message` is absent rather than excluded: it carries no clock at
+ * all, so the membership rule above never reaches it. D-0036 rule 3 leaves
+ * ordering undecided, and a table with no timestamp is what that looks like
+ * here -- the task that gives a message a clock is the one that decides whether
+ * a message is a change the operator is shown.
  *
  * `iteration` contributes `updated_at_ms` rather than `created_at_ms`: it is
  * the one mutable row in the store, and what changed about it is when it last
@@ -1682,6 +1780,31 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
   };
 
   return {
+    async recordMessage(messageId: string): Promise<RecordOutcome> {
+      try {
+        connection
+          .prepare("INSERT INTO conversation_message (message_id) VALUES (?)")
+          .run(messageId);
+        return { kind: "recorded" };
+      } catch (error) {
+        if (isUniqueViolation(error)) {
+          // The database's refusal, said in rondo's words rather than the
+          // driver's -- `consumeDecision`'s precedent. This is D-0036 rule 3's
+          // first property observed firing: an id already spoken for cannot be
+          // spoken for again, so nothing a proposal already elevated from can
+          // come to mean something else.
+          return {
+            kind: "refused",
+            reason:
+              `the message '${messageId}' is already in the conversation, and a message id is ` +
+              "durable and immutable (D-0036 rule 3): a second row under one id would let a " +
+              "reference that has already been elevated come to mean something else",
+          };
+        }
+        return { kind: "defect", reason: describe(error) };
+      }
+    },
+
     async recordProposal(draft: ProposalDraft): Promise<RecordOutcome> {
       let payload: string;
       let snapshot: string;
@@ -1695,40 +1818,74 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
       } catch (error) {
         return { kind: "defect", reason: describe(error) };
       }
-      return insert(
+      const sql =
         "INSERT INTO proposal (proposal_id, kind, drafter, payload, proposal_digest, snapshot, " +
-          "snapshot_digest, derivation, iteration_id, supersedes_iteration_id, " +
-          "supersedes_proposal_id, predecessor_plan_digest, predecessor_contract_digest, " +
-          "agent_type_digest, config_digest, contract_digest, continuo_revision, " +
-          "cadenza_revision, elevated_from_message_id, elevated_by_actor_id, created_at_ms) " +
-          "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        [
-          draft.proposalId,
-          draft.kind,
-          draft.drafter,
-          payload,
-          contentDigest(draft.payload),
-          snapshot,
-          contentDigest(draft.snapshot),
-          draft.derivation,
-          draft.iterationId,
-          draft.supersedesIterationId,
-          draft.supersedesProposalId,
-          draft.predecessorPlanDigest,
-          draft.predecessorContractDigest,
-          draft.agentTypeDigest,
-          draft.configDigest,
-          draft.contractDigest,
-          draft.continuoRevision,
-          draft.cadenzaRevision,
-          draft.elevatedFromMessageId,
-          draft.elevatedByActorId,
-          draft.createdAtMs,
-        ],
-      );
+        "snapshot_digest, derivation, iteration_id, supersedes_iteration_id, " +
+        "supersedes_proposal_id, predecessor_plan_digest, predecessor_contract_digest, " +
+        "agent_type_digest, config_digest, contract_digest, continuo_revision, " +
+        "cadenza_revision, elevated_from_message_id, elevated_by_actor_id, created_at_ms) " +
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+      const values = [
+        draft.proposalId,
+        draft.kind,
+        draft.drafter,
+        payload,
+        contentDigest(draft.payload),
+        snapshot,
+        contentDigest(draft.snapshot),
+        draft.derivation,
+        draft.iterationId,
+        draft.supersedesIterationId,
+        draft.supersedesProposalId,
+        draft.predecessorPlanDigest,
+        draft.predecessorContractDigest,
+        draft.agentTypeDigest,
+        draft.configDigest,
+        draft.contractDigest,
+        draft.continuoRevision,
+        draft.cadenzaRevision,
+        draft.elevatedFromMessageId,
+        draft.elevatedByActorId,
+        draft.createdAtMs,
+      ];
       // `candidate_contract_digest` is named by no column list above, so the
       // insert leaves it NULL and the schema's `CHECK` keeps it there
       // (D-0022 rule 4).
+      try {
+        // **The lookup and the insert in one `BEGIN IMMEDIATE`, and that is
+        // D-0036 rule 4** -- `recordDecision`'s shape, for `recordDecision`'s
+        // reason. The same question asked before the transaction would be a
+        // check with a window in it: the write lock is what makes the message
+        // that was there when the reference was checked the message that is
+        // still there when the row lands.
+        //
+        // The transaction is taken whether or not anything was elevated. A
+        // single insert needs none, but two spellings of "record a proposal"
+        // -- one transactional and one not -- would be two answers to what this
+        // writer does about concurrency, chosen by a column's nullness.
+        return immediateTransaction<RecordOutcome>(connection, () => {
+          if (draft.elevatedFromMessageId !== null) {
+            const row = connection
+              .prepare("SELECT 1 FROM conversation_message WHERE message_id = ?")
+              .get(draft.elevatedFromMessageId);
+            if (row === undefined) {
+              return {
+                kind: "refused",
+                reason:
+                  `the proposal '${draft.proposalId}' is elevated from ` +
+                  `'${draft.elevatedFromMessageId}', which is no message in this conversation: ` +
+                  "D-0036 rule 4 refuses a dangling elevation, because a reference to nothing " +
+                  "is indistinguishable from a chain that was never recorded at exactly the " +
+                  "moment a reader goes looking for what justified the proposal",
+              };
+            }
+          }
+          connection.prepare(sql).run(...values);
+          return { kind: "recorded" };
+        });
+      } catch (error) {
+        return { kind: "defect", reason: describe(error) };
+      }
     },
 
     async recordComposition(draft: CompositionDraft): Promise<RecordOutcome> {
@@ -1932,9 +2089,14 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
             "that turns a suppressed count into a record",
         };
       }
+      // **D-0036 rule 1: a second presentation of one subject stores nothing and
+      // reports success.** The conflict target names the partial index rather
+      // than being left bare, so a unique constraint added here later is a
+      // defect the caller hears about instead of a write this silently drops.
       return insert(
         "INSERT INTO operator_attention (at_ms, subject_kind, subject_id, disposition, " +
-          "rule_name) VALUES (?, ?, ?, ?, ?)",
+          "rule_name) VALUES (?, ?, ?, ?, ?) " +
+          "ON CONFLICT (subject_kind, subject_id) WHERE disposition = 'presented' DO NOTHING",
         [row.atMs, row.subjectKind, row.subjectId, row.disposition, row.ruleName],
       );
     },

@@ -730,6 +730,12 @@ export type AttentionDisposition = "presented" | "withheld";
  * **What this cannot prove, stated rather than implied**: a suppression that
  * writes no row is invisible here, so the table bounds the *accountable*
  * silence and not the total.
+ *
+ * **A presentation is counted once per subject, not once per render** (D-0036
+ * rule 1). A second `presented` row for a `(subjectKind, subjectId)` already
+ * counted stores nothing and reports `recorded`. So *when* a subject was first
+ * shown is preserved and *how often* is not, and the missing count is not
+ * recoverable from this table afterwards.
  */
 export interface OperatorAttention {
   readonly atMs: number;
