@@ -87,6 +87,26 @@ export const BASIS_FORMS = Object.freeze([
 export const UNDETERMINED = "undetermined";
 
 /**
+ * What a claim says when the snapshot settles it **negatively**.
+ *
+ * **The distinction {@link UNDETERMINED} would otherwise destroy.** Most nulls
+ * in an iteration row mean "not observed yet" -- a row that has not been
+ * classified has no digests, and a lap that has not run has no gate. But
+ * `supersedesIterationId` is documented in `src/store/records.ts` in exactly the
+ * opposite terms: *"Null is not 'unknown', it is 'no predecessor'"*, written
+ * once by `reserve()` and by nothing afterwards. Rendering that as
+ * `undetermined` would report every first lap as an iteration whose lineage
+ * rondo could not establish, which is a worse answer than the one the row
+ * actually gives.
+ *
+ * The rule for which a field takes: **`none` when the store documents the null
+ * as a fact, `undetermined` when it documents it as a value not yet written.**
+ * A field whose null means neither has not been thought about, and it is worth
+ * one sentence here rather than a guess at the screen.
+ */
+export const ABSENT = "none";
+
+/**
  * One thing an explanation says, and what it rests on.
  *
  * Three fields and no fourth: there is no confidence, no severity and no
@@ -205,6 +225,11 @@ export type Proposal = {
   readonly payload: ExplanationPayload;
 };
 
+/** A claim over a null the store documents as a fact rather than as a gap. */
+function settled(label: string, value: string | null, pointer: string): Claim {
+  return { label, value: value ?? ABSENT, basis: { form: "snapshot", pointer } };
+}
+
 /** A claim over a value the snapshot may not hold, pointed at where it would be. */
 function claim(label: string, value: string | null, pointer: string): Claim {
   return {
@@ -242,7 +267,7 @@ export function propose(snapshot: AdvisorySnapshot): Proposal {
     claim("status", it.status, "/iteration/status"),
     claim("attempts", String(it.attempts), "/iteration/attempts"),
     claim("plan digest", it.planDigest, "/iteration/planDigest"),
-    claim("revision of", it.supersedesIterationId, "/iteration/supersedesIterationId"),
+    settled("revision of", it.supersedesIterationId, "/iteration/supersedesIterationId"),
     claim("classification", it.classification, "/iteration/classification"),
     claim("classification reason", it.classificationReason, "/iteration/classificationReason"),
     claim("agent type digest", it.agentTypeDigest, "/iteration/agentTypeDigest"),

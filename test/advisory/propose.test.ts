@@ -20,6 +20,7 @@
 import { expect, test } from "vitest";
 
 import {
+  ABSENT,
   type AdvisorySnapshot,
   BASIS_FORMS,
   type Claim,
@@ -141,11 +142,21 @@ test("a field the snapshot does not settle is undetermined and is not dropped", 
     "model",
     "gate stage",
     "gate outcome",
-    "revision of",
     "gate",
   ]) {
     expect(labelled(bare, label).value).toBe(UNDETERMINED);
   }
+});
+
+test("a first lap revises nothing, which is a fact and not a gap", () => {
+  // `src/store/records.ts` on `supersedesIterationId`: *"Null is not 'unknown',
+  // it is 'no predecessor'"* -- written once at reservation and by nothing
+  // afterwards. Rendering it as `undetermined` would report every first lap as
+  // an iteration whose lineage rondo could not establish, which is a worse
+  // answer than the one the row gives.
+  expect(labelled(propose(BARE).payload.claims, "revision of").value).toBe(ABSENT);
+  expect(labelled(propose(BARE).payload.claims, "revision of").value).not.toBe(UNDETERMINED);
+  expect(labelled(propose(FULL).payload.claims, "revision of").value).toBe("i-0000");
 });
 
 test("a lap with no independent reading says so rather than saying nothing", () => {
