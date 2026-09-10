@@ -600,6 +600,66 @@ things put to you comes from, and answers are counted elsewhere (`D-0032` rule 1
 | `was composed and not recorded, so it is not being shown` | The proposal row could not be written. | Fix the store fault the message names; nothing was presented and nothing was kept. |
 | `was shown and was not counted as presented` (exit 1) | You read it and the proposal was kept, but the presentation count could not be written. | Nothing to re-read. The breakdown of what was put to you is short by one until the store fault the message names is fixed. |
 
+### 7.2 Propose and decide -- what a retry could run under, and answering it
+
+`explain` says what the store holds and binds nothing. `propose` is the other voice: it puts an
+**option set** in front of you -- the plans a retry of one iteration could run under, with exactly
+one recommended -- and each option names the **contract that retry would run under**, composed for
+the successor identity you name. `decide` records your answer.
+
+The options are **the iteration's own plan and the one it superseded**, and no further: a row five
+revisions deep would otherwise offer five plans, four of them already superseded for reasons you
+acted on, and the set of alternatives is the framing rather than a menu. An older ancestor's plan is
+still readable with `explain`, and can be proposed by naming that iteration instead.
+
+Both read rondo's own rows and drive **no continuo verb**, so they reach the same ended rows
+`explain` does.
+
+```console
+$ node bin/rondo.mjs propose --iteration-id cli-lap-001 --successor-id cli-lap-002
+a retry of iteration 'cli-lap-001', as iteration 'cli-lap-002'
+  drafter: rondo/advisory/deterministic
+  the retry would run as rondo-cli-lap-002 on rondo/cli-lap-002
+  approving one of these records that you approved its contract. It starts nothing yet:
+  no admission reads this decision (D-0022 rule 17's consumer is not built).
+  [recommended] run 'cli-lap-002' under the plan this iteration ran (status abandoned, plan sha256:...)
+      contract: sha256:15475d4c...
+      basis: snapshot /candidates/0/contractDigest = "sha256:15475d4c..."
+recorded as proposal 'run_plan-cli-lap-002-1757500000000'
+Next: rondo decide --proposal-id run_plan-cli-lap-002-1757500000000 --actor-id ID --outcome approved --contract-digest DIGEST
+
+$ node bin/rondo.mjs decide --proposal-id run_plan-cli-lap-002-1757500000000 \
+    --actor-id "$RONDO_APPROVER" --outcome approved --contract-digest sha256:15475d4c...
+recorded as decision 'decision-run_plan-cli-lap-002-1757500000000-1757500060000'
+This records that you approved that contract. Nothing runs on it yet: no admission compares it
+against a plan, so the approval stands unspent.
+```
+
+**Read the last line literally.** This pair records a proposal and an approval; **nothing consumes
+either**. No admission compares an approved digest against the plan it is about to run (`D-0022`
+rule 17's enforcement), `decision_consumption` stays empty, and the retry does not start. What you
+have afterwards is a ledger entry that says which contract a named person approved, and rule 19's
+*"approved and never spent"* query is what reports it.
+
+Three properties of `propose` are the point:
+
+- **the contract is composed and recorded before its digest is on the screen** (`D-0022` rule 18), so
+  a contract you were shown is one the ledger holds -- including when you decline it;
+- **the digest is the retry's own.** The grantee is the run id derived from `--successor-id`, not the
+  predecessor's, which is what makes it the contract the retry would actually run under;
+- **an option is never dropped quietly.** If a plan in the lineage cannot be read, `propose` refuses
+  and names it, because a proposal short one alternative is a framing rather than a shorter list.
+
+| What you see | What it means | What to do |
+|---|---|---|
+| `propose needs --iteration-id ID and --successor-id ID` | Neither has a default: the second is the identity the retry runs as, and rondo derives the run id and branch from it. | Name both. The successor id must be unused. |
+| `the plan iteration '<id>' ran will not decode` | The row's plan is not a plan, so no contract can be composed from it. | Nothing was written. The row needs a person. |
+| `that row cannot be read, so the alternatives rondo would offer are not all of them` | The iteration this one superseded is missing or corrupt, so the second option cannot be offered -- and a proposal short one alternative is a framing. | Nothing was written. `explain` the lineage first. |
+| `cadenza refused to issue a contract` | cadenza's own refusal, verbatim -- usually an unknown project name in the plan's catalog. | Fix the plan the retry would run under; nothing was written. |
+| `decide needs --outcome approved or --outcome declined` | Declining is written down rather than left as silence (`D-0032` rule 6). | Say which. Both are rows. |
+| `approving needs --contract-digest DIGEST` | An approval names the contract you were shown, not a position in a list. | Copy the `contract:` line of the option you are approving. |
+| `binds nothing and cannot be answered` | You named an `explanation`. Authority is a function of the proposal's kind alone (`D-0032` rule 5). | Nothing was written. Only the approvable kinds can be answered. |
+
 ---
 
 ## 8. What has and has not been walked on real infrastructure
@@ -637,6 +697,12 @@ Recorded so that "it works" is not read more broadly than it was tested.
   tests, but no fork has been published through this command yet.
 - After the walk, continuo's run row was still `created` and rondo's row still recorded no publish,
   which is the correct state for work that was approved but not yet submitted.
+- **`propose` and `decide`: not walked at all.** Both are exercised end to end against a real
+  SQLite store in `test/access/advisory.test.ts` -- the proposal row, every composition row, the
+  digests on the screen and the decision that names one -- and neither has been run by an operator
+  on real infrastructure. There is also nothing downstream of them to walk: no admission reads an
+  approval yet, so what a walk would confirm is a ledger entry, which is what the tests already
+  assert.
 
 ### The second walk: from nothing, through `scripts/dogfood-env.sh`
 

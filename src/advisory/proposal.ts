@@ -200,6 +200,126 @@ export type ExplanationPayload = {
 };
 
 /**
+ * One thing an operator may choose, and what it rests on (D-0032 rule 1).
+ *
+ * The same three fields a {@link Claim} carries, for D-0034 rule 3's reason:
+ * rule 2's *"every claim and every option in the payload carries a `basis`"*
+ * names the two as different members of a payload and holds them to one rule
+ * about where they rest. What differs is what `value` **is**.
+ *
+ * **On an approvable kind, `value` is the `composition.contract_digest` an
+ * approval of this option would name**, and that is not a decoration of the
+ * candidate value -- it *is* it. `human_decision.approved` is a reference into
+ * the composition table and is non-null exactly on an approval, so an option a
+ * person can say yes to is an option that already names the contract they would
+ * be saying yes to (D-0022 rule 18: the contract the human was *shown*). An
+ * option whose value were a plan digest would leave the operator approving one
+ * fact and the ledger recording another.
+ */
+export type Option = {
+  /** What choosing it means, as the line an operator reads. */
+  readonly label: string;
+  /** The candidate value: on an approvable kind, the digest an approval binds. */
+  readonly value: string;
+  /** Where it rests. Required, on {@link Claim}'s terms exactly. */
+  readonly basis: Basis;
+};
+
+/**
+ * The payload of an approvable kind: options in order, exactly one recommended.
+ *
+ * **The recommendation is an index and not a flag on the option**, for the
+ * reason D-0032 rule 5 refuses an `approvable` column: a per-option flag can be
+ * set on two options or on none, and neither state has an answer -- *"two
+ * authorities with no precedence is not stricter, it is unanswerable"*. An
+ * index cannot say "both".
+ *
+ * **`options` is non-empty by construction, and the constructor is the
+ * snapshot.** {@link RetrySnapshot.candidates} is a non-empty tuple, so the
+ * drafter never faces the case of an option set with nothing in it -- which
+ * would be a proposal with a recommendation naming nothing, and the one shape
+ * rule 1 cannot be read to permit. Where there is nothing to propose there is
+ * no proposal, and the composition root refuses before this function is called.
+ *
+ * **There is no hole list here, and its absence is D-0022 rule 17 rather than
+ * an omission.** Rule 7 permits a proposal about a plan to carry *"an explicit
+ * list of the fields it will not fill"*; rule 17 records that a retry starts
+ * from the abandoned row's plan, *"so rule 7's holes are filled by the
+ * predecessor"*. Every option here is a **selection among persisted plans**,
+ * and a persisted plan is one that was admitted -- it carries `workspaceRoot`
+ * and every fence root already. The `diff` form of rule 7, which is the one
+ * that can leave a field for a person to fill, is not in this cut, and it is
+ * what brings the list with it.
+ */
+export type OptionSetPayload = {
+  /** The options in the order they are read. Never empty. */
+  readonly options: readonly Option[];
+  /** Which one rondo recommends: an index into {@link options}. Exactly one. */
+  readonly recommended: number;
+};
+
+/**
+ * One persisted plan a retry could run under, as the snapshot carries it.
+ *
+ * **`contractDigest` is composed rather than read off a row, and it is the
+ * composition root that composes it** (D-0022 rules 1, 5 and 17): this layer
+ * may not import cadenza, and a digest is what the operator approves. It is the
+ * digest of the contract *this plan under the successor's identity* would run
+ * under -- not the digest the predecessor ran under, which named a run that no
+ * longer exists.
+ */
+export type SnapshotCandidate = {
+  /** Whose plan it is: the iteration whose row holds it. */
+  readonly iterationId: string;
+  /** That iteration's status, so a reader can see what became of the plan. */
+  readonly status: string;
+  /** The plan's digest, as its row records it. */
+  readonly planDigest: string;
+  /** The contract the successor would run under with this plan. */
+  readonly contractDigest: string;
+};
+
+/**
+ * The identity the retry would take, derived and never minted here.
+ *
+ * The iteration id is the operator's (`D-0023`: rondo derives the run id, the
+ * topic branch and the workspace from it, and the id itself is *"the one name a
+ * person chooses and the only one that is not the host's to mint"*). It is in
+ * the snapshot because the contract's grantee is the derived run id, so the
+ * digest in every option is a function of this value -- an operator approving a
+ * digest is entitled to see the identity that fixed it.
+ *
+ * **The workspace is not here, and the reason is that it is not a property of
+ * the identity alone.** `allocate()` derives it from the id *and* the plan's
+ * `workspaceRoot`, so two options over two plans can name two workspaces; the
+ * run id and the topic branch come from the id by itself and are the same under
+ * every option. What the workspace would be is settled at admission, by the
+ * plan that is actually taken.
+ */
+export type SnapshotSuccessor = {
+  readonly iterationId: string;
+  readonly runId: string;
+  readonly topicBranch: string;
+};
+
+/**
+ * What the composition root gathered for a `run_plan` proposal.
+ *
+ * A second snapshot shape rather than a widening of {@link AdvisorySnapshot},
+ * and the reason is D-0032 rule 2: a `snapshot` basis is a pointer into **this
+ * row's own** snapshot, so the document is per proposal and not per tree. An
+ * explanation that carried candidates it never reads would be paying for
+ * re-derivability nothing uses, which is the same argument
+ * {@link AdvisorySnapshot} makes about the plan.
+ */
+export type RetrySnapshot = {
+  readonly iteration: SnapshotIteration;
+  readonly successor: SnapshotSuccessor;
+  /** Non-empty: a proposal with nothing to propose is not composed at all. */
+  readonly candidates: readonly [SnapshotCandidate, ...SnapshotCandidate[]];
+};
+
+/**
  * What the advisory returns.
  *
  * **An `explanation` carries claims and no recommendation, and that is a
@@ -215,14 +335,27 @@ export type ExplanationPayload = {
  * members. So: claims here, options and a recommendation when the approvable
  * kinds arrive.
  *
- * A union of one today. The four approvable kinds of `PROPOSAL_KINDS` join it
- * with their option sets, which is why `kind` is discriminating a union that
- * currently needs no discrimination.
+ * **`run_plan` is the first of the four approvable kinds to arrive**, and it
+ * arrives with the shape D-0034 rule 2 reserved for them: the ordered option
+ * set of D-0032 rule 1, with exactly one recommendation. `derivation` is `null`
+ * on it -- on every kind but `explanation` -- which is the schema's own
+ * `CHECK ((derivation IS NOT NULL) = (kind = 'explanation'))` read from this
+ * side, so a payload that could not be recorded cannot be composed either.
  */
-export type Proposal = {
+export type Proposal = Explanation | RunPlanProposal;
+
+/** The third voice: claims, a derivation, and nothing to approve. */
+export type Explanation = {
   readonly kind: "explanation";
   readonly derivation: Derivation;
   readonly payload: ExplanationPayload;
+};
+
+/** The first approvable kind: an option set, and no derivation. */
+export type RunPlanProposal = {
+  readonly kind: "run_plan";
+  readonly derivation: null;
+  readonly payload: OptionSetPayload;
 };
 
 /** A claim over a null the store documents as a fact rather than as a gap. */
@@ -260,7 +393,7 @@ function claim(label: string, value: string | null, pointer: string): Claim {
  * re-derivable from the snapshot persisted beside it rather than from a world
  * that has since moved.
  */
-export function propose(snapshot: AdvisorySnapshot): Proposal {
+export function propose(snapshot: AdvisorySnapshot): Explanation {
   const it = snapshot.iteration;
   const claims: Claim[] = [
     claim("request", it.request, "/iteration/request"),
@@ -327,6 +460,55 @@ export function propose(snapshot: AdvisorySnapshot): Proposal {
 }
 
 /**
+ * What a retry could run under, as an ordered option set a person can answer.
+ *
+ * **A selection among persisted plans, which is the first of D-0022 rule 7's
+ * three forms.** Every option names a plan some iteration actually ran under;
+ * rondo composes no plan here and fills no field, because a plan rondo wrote
+ * would be the allocator `D-0019` rule 3 refuses and the framing #39 measures.
+ * The alternatives are the ones the store holds -- most often one, when the
+ * subject has no predecessor -- and an alternative rondo invented would be a
+ * worse answer than a short list.
+ *
+ * **The recommendation is the subject's own plan** (D-0022 rule 17: a retry
+ * *"starts from the abandoned row's plan"*), found by identity rather than by
+ * position so that the rule survives a gatherer that orders its candidates
+ * differently. Where the subject's own plan is not among the candidates -- a
+ * row whose plan will not decode, so the gatherer dropped it -- the first
+ * candidate is recommended, because a set with no recommendation is the one
+ * shape D-0032 rule 1 does not admit.
+ *
+ * Total over the snapshot and pure, on {@link propose}'s terms exactly: same
+ * bytes in, same bytes out, no clock, no I/O.
+ */
+export function proposeRetryPlan(snapshot: RetrySnapshot): RunPlanProposal {
+  const options = snapshot.candidates.map((candidate, index): Option => {
+    const own = candidate.iterationId === snapshot.iteration.id;
+    return {
+      label:
+        `run '${snapshot.successor.iterationId}' under the plan ` +
+        `${own ? "this iteration" : `iteration '${candidate.iterationId}'`} ran ` +
+        `(status ${candidate.status}, plan ${candidate.planDigest})`,
+      // **The digest and not the plan** -- see {@link Option}. It is what
+      // `human_decision.approved` will hold, so it is what is on the screen.
+      value: candidate.contractDigest,
+      basis: { form: "snapshot", pointer: `/candidates/${String(index)}/contractDigest` },
+    };
+  });
+  const own = snapshot.candidates.findIndex(
+    (candidate) => candidate.iterationId === snapshot.iteration.id,
+  );
+  return {
+    kind: "run_plan",
+    // Null on every kind but `explanation`, which the schema's CHECK enforces
+    // and D-0032 rule 8 explains: `derivation` says how an explanation was
+    // *derived*, and an option set was composed rather than derived.
+    derivation: null,
+    payload: { options, recommended: own === -1 ? 0 : own },
+  };
+}
+
+/**
  * The snapshot as the store takes it, and the one assertion that keeps the two
  * shapes from drifting.
  *
@@ -336,7 +518,7 @@ export function propose(snapshot: AdvisorySnapshot): Proposal {
  * compiling, which is where that mistake should be caught rather than at the
  * insert that silently dropped a field.
  */
-export function snapshotDocument(snapshot: AdvisorySnapshot): JsonRecord {
+export function snapshotDocument(snapshot: AdvisorySnapshot | RetrySnapshot): JsonRecord {
   return snapshot;
 }
 
@@ -347,6 +529,6 @@ export function snapshotDocument(snapshot: AdvisorySnapshot): JsonRecord {
  * one place the compiler checks that what the advisory composed is something
  * `canonicalJson` can round-trip.
  */
-export function payloadDocument(payload: ExplanationPayload): JsonRecord {
+export function payloadDocument(payload: ExplanationPayload | OptionSetPayload): JsonRecord {
   return payload;
 }
