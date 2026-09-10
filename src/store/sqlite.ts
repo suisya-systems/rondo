@@ -50,6 +50,7 @@ import { DatabaseSync } from "node:sqlite";
 
 import { canonicalJson, contentDigest, planDigest } from "./plan.js";
 import {
+  type AttentionCount,
   type CompositionDraft,
   type HumanDecisionDraft,
   type IterationFields,
@@ -59,6 +60,7 @@ import {
   type JsonRecord,
   type LapReading,
   type LapReadingDraft,
+  type OpenProposal,
   type OperatorAttention,
   type ProposalDraft,
   type ReadingEvidence,
@@ -1671,6 +1673,23 @@ export interface AdvisoryRecord {
    * the duplicate-delivery rule"* is a record.
    */
   recordAttention(row: OperatorAttention): Promise<RecordOutcome>;
+  /**
+   * Every proposal nobody has answered, oldest first (D-0032 rule 6).
+   *
+   * **A left anti-join and not a status column.** There is no `answered` flag
+   * on `proposal` -- the row is immutable -- so "still waiting on a person" is
+   * the absence of a `human_decision` naming it, which rule 6 made a
+   * distinguishable fact by making *declined* a row of its own.
+   */
+  openProposals(): Promise<readonly OpenProposal[]>;
+  /**
+   * The silence, as one `GROUP BY` over one table (D-0032 rule 10).
+   *
+   * Both dispositions in one answer, because the ratio is the point: a
+   * numerator counted here and a denominator counted somewhere else would be
+   * two quantities with no sentence between them.
+   */
+  attentionBreakdown(): Promise<readonly AttentionCount[]>;
   /** Every approval that was never spent (D-0022 rule 19, D-0032 rule 11). */
   unconsumedDecisions(): Promise<readonly UnconsumedDecision[]>;
   /**
@@ -2157,6 +2176,49 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
           "ON CONFLICT (subject_kind, subject_id) WHERE disposition = 'presented' DO NOTHING",
         [row.atMs, row.subjectKind, row.subjectId, row.disposition, row.ruleName],
       );
+    },
+
+    async openProposals(): Promise<readonly OpenProposal[]> {
+      return connection
+        .prepare(
+          "SELECT proposal_id, kind, iteration_id, created_at_ms FROM proposal " +
+            "WHERE proposal_id NOT IN (SELECT proposal_id FROM human_decision) " +
+            "ORDER BY created_at_ms, proposal_id",
+        )
+        .all()
+        .map((row) => {
+          const record = row as SqlRow;
+          const iterationId = record["iteration_id"];
+          return {
+            proposalId: String(record["proposal_id"]),
+            // **Not decoded against `PROPOSAL_KINDS`.** A kind this rondo does
+            // not know is still a row an operator is waiting on, and the screen
+            // reports it as a voice it cannot place rather than dropping it --
+            // which is the reader refusal of D-0022 rule 4 applied where the
+            // question is "what is waiting" and not "what may be approved".
+            kind: String(record["kind"]),
+            iterationId: iterationId === null ? null : String(iterationId),
+            createdAtMs: Number(record["created_at_ms"]),
+          };
+        });
+    },
+
+    async attentionBreakdown(): Promise<readonly AttentionCount[]> {
+      return connection
+        .prepare(
+          "SELECT disposition, rule_name, count(*) AS n FROM operator_attention " +
+            "GROUP BY disposition, rule_name ORDER BY disposition, rule_name",
+        )
+        .all()
+        .map((row) => {
+          const record = row as SqlRow;
+          const ruleName = record["rule_name"];
+          return {
+            disposition: record["disposition"] === "withheld" ? "withheld" : "presented",
+            ruleName: ruleName === null ? null : String(ruleName),
+            count: Number(record["n"]),
+          } as const;
+        });
     },
 
     async unconsumedDecisions(): Promise<readonly UnconsumedDecision[]> {

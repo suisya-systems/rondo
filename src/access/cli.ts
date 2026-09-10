@@ -82,6 +82,7 @@ import {
   type PushTargetInspection,
   pushTopicBranch,
 } from "./forge.js";
+import { type InboxOutcome, showInbox } from "./inbox.js";
 import { evidenceOf, READING_REMOTE } from "./review.js";
 
 /**
@@ -147,6 +148,13 @@ export const USAGE = `rondo - the operator surface for delegated work
                           line of the option you are approving, copied from the
                           screen, and it is required on approved and refused on
                           declined. An explanation cannot be answered at all
+  rondo inbox --actor-id ID
+                          what is waiting on you, what is running, what changed
+                          since you last looked, and what was put to you versus
+                          withheld. Reads rondo's own rows and drives no
+                          continuo. Looking is recorded: it counts what it
+                          showed you (once per thing, however often it is
+                          drawn) and moves your last-look mark
   rondo explain --iteration-id ID
                           say what the store holds about one iteration, with
                           what each claim rests on. Reads rondo's own rows and
@@ -246,6 +254,7 @@ export interface ParsedCommand {
     | "abandon"
     | "explain"
     | "elevate"
+    | "inbox"
     | "propose"
     | "decide"
     | "help";
@@ -303,6 +312,7 @@ const COMMANDS = [
   "abandon",
   "explain",
   "elevate",
+  "inbox",
   "propose",
   "decide",
 ] as const;
@@ -351,6 +361,11 @@ export const FLAGS_BY_COMMAND: Readonly<Record<string, readonly string[]>> = {
   // a default here would be rondo supplying part of an act it is recording a
   // person as having taken.
   elevate: ["iteration-id", "actor-id", "message-id", "observation", "basis"],
+  // **One flag, and no `--since`.** The bound is the last-look mark and
+  // nothing else (D-0032 rule 9): a `--since` an operator typed would be a
+  // second cursor beside the stored one, and the first time the two disagreed
+  // the screen would report a diff against a moment nobody marked.
+  inbox: ["actor-id"],
   // **Two ids, both required, and neither has a default.** The subject is the
   // iteration whose work was not taken, and the successor is the identity the
   // retry would run as -- which `D-0023` makes the one name a person chooses,
@@ -1081,6 +1096,13 @@ export async function main(
     return await commandElevate(parsed, environment, store, opened.path);
   }
 
+  // **`inbox` is dispatched here for `explain`'s reason, and most of all.** The
+  // screen that says what is stuck has to be reachable when something is stuck,
+  // and a continuo that will not start is one of the things it exists to show.
+  if (parsed.command === "inbox") {
+    return await commandInbox(parsed, environment, store, opened.path);
+  }
+
   // **`propose` and `decide` are dispatched here for `explain`'s reason.** Both
   // read and write rondo's own rows and drive no continuo verb: the iteration a
   // retry is proposed for has already ended, and an answer to a proposal is a
@@ -1353,6 +1375,61 @@ async function commandElevate(
       observation: { label: "observation", value: parsed.observation, basis },
     }),
   );
+}
+
+/**
+ * Door ten: what is waiting on you, and the record that you looked.
+ *
+ * **`--actor-id` is checked against the approver allowlist, and that is a
+ * reuse rather than a claim.** Looking is not answering and not publishing, so
+ * the allowlist is stricter than this verb strictly needs: the reason it is
+ * used anyway is that rondo has exactly one identity path today
+ * ({@link approvedActor}), and a second one -- "anybody may look" -- would be
+ * a second answer to who rondo acts for, introduced by a read-only screen. If
+ * a reader who cannot approve ever has to see the inbox, this is the line that
+ * moves, and the mark it writes is already per actor
+ * (`operator_view.actor_id`), so nothing below it has to.
+ */
+async function commandInbox(
+  parsed: ParsedCommand,
+  environment: Readonly<Record<string, string | undefined>>,
+  store: IterationStore,
+  storePath: string,
+): Promise<number> {
+  const actor = approvedActor(parsed, environment);
+  if ("refusal" in actor) {
+    return refuse(actor.refusal);
+  }
+  const outcome = await showInbox(
+    {
+      store,
+      record: openAdvisoryRecord(storePath),
+      now: Date.now,
+      present: (lines) => {
+        for (const line of lines) {
+          say(line);
+        }
+      },
+    },
+    actor.actorId,
+  );
+  return sayInboxOutcome(outcome);
+}
+
+/** What `inbox` does with the answer it gets back. */
+function sayInboxOutcome(outcome: InboxOutcome): number {
+  if (outcome.kind === "shown") {
+    return 0;
+  }
+  // **Status 1, and the screen still stands.** The operator has read it; what
+  // failed is rondo's record of the reading -- the count of what was put to
+  // them (D-0032 rule 10) or the mark that makes the next look a diff (rule 9).
+  // Reporting success would make an under-counted ledger, or a cursor that
+  // silently stopped moving, the quiet outcome.
+  for (const reason of outcome.reasons) {
+    consoleSeams.writeError(asciiEscape(`This look was not fully recorded: ${reason}\n`));
+  }
+  return 1;
 }
 
 /**

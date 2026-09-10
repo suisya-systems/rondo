@@ -181,6 +181,42 @@ export const RELEASED_BY: Readonly<Record<NonTerminalStatus, readonly string[]>>
 });
 
 /**
+ * Which side of the wait one live iteration is on (D-0036 rule 5).
+ *
+ * **A two-way partition, exhaustive over the eight non-terminal statuses, and
+ * written out rather than illustrated.** #41 section 4 describes three sides --
+ * waiting on you, waiting on CI, still running -- and rule 5 refuses the third:
+ * no `IterationStatus` member means "waiting on CI", because CI runs inside
+ * `lap perform`, and obtaining the distinction would mean widening what rondo
+ * may read for something the operator cannot act on either way.
+ *
+ * **A `Record<NonTerminalStatus, ...>` for {@link RELEASED_BY}'s reason**, and
+ * rule 5 names that reason: a status added to the union and forgotten here is a
+ * **type error** rather than an iteration missing from the inbox at the moment
+ * the operator came back to find out what is live. `planned` and `classified`
+ * are why the lists are written in full -- they are durable rows a crash leaves
+ * standing, not moments inside a function, and two illustrative lists would
+ * drop exactly them.
+ *
+ * The terminal three are absent because a closed item is not a wait at all: it
+ * belongs to D-0032 rule 11's terminal enumeration, which is a different region
+ * of the screen.
+ */
+export const WAIT_SIDE: Readonly<Record<NonTerminalStatus, "waitingOnYou" | "inFlight">> =
+  Object.freeze({
+    // The two suspended statuses (`SUSPENDED_STATUSES`) plus the one that means
+    // a person must decide and there is no gate.
+    awaiting_human: "waitingOnYou",
+    withdrawal_requested: "waitingOnYou",
+    stalled: "waitingOnYou",
+    planned: "inFlight",
+    classified: "inFlight",
+    admitting: "inFlight",
+    admitted: "inFlight",
+    performing: "inFlight",
+  });
+
+/**
  * One iteration of the loop, as the store holds it.
  *
  * Every field is nullable that can legitimately be unknown at the moment the
@@ -775,6 +811,40 @@ export interface UnconsumedDecision {
   readonly approved: string;
   readonly actorId: string;
   readonly decidedAtMs: number;
+}
+
+/**
+ * One proposal nobody has answered (D-0032 rule 6, #41 section 1).
+ *
+ * **The question `human_decision` cannot be asked directly.** Rule 6 makes
+ * *declined* a row rather than an absence, so "what is still waiting on the
+ * operator" is the proposals with no decision row at all -- and that is the
+ * numerator of #41's inbox, not of its accounting.
+ *
+ * `kind` travels because authority is a function of it alone (D-0032 rule 5):
+ * the screen separates the voice that becomes a contract from the voice that
+ * binds nothing, and it must do that without reading anybody's prose.
+ */
+export interface OpenProposal {
+  readonly proposalId: string;
+  readonly kind: string;
+  /** The iteration it is about, or null for a proposal about no row. */
+  readonly iterationId: string | null;
+  readonly createdAtMs: number;
+}
+
+/**
+ * One line of the silence (D-0032 rule 10, #41 section 5).
+ *
+ * *"Six were put to you, forty were not, here is the breakdown"* is one
+ * `GROUP BY` over one table, and this is one of its rows. `ruleName` is null on
+ * the presented side, where there is no policy to name, and non-null on the
+ * withheld side, where the writer refuses a row without one.
+ */
+export interface AttentionCount {
+  readonly disposition: AttentionDisposition;
+  readonly ruleName: string | null;
+  readonly count: number;
 }
 
 /**
