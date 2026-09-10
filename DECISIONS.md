@@ -70,7 +70,9 @@ C-NN`, so the spaces can never be read as one.
 | D-0030 | The lineage `D-0027` deferred: one nullable column on the iteration row, written once at reservation, refused when it names nothing, and read where provenance is shown | accepted |
 | D-0031 | The last field `revise` could not see before it spends the gate: rondo reads one run, and only an answer counts | accepted |
 | D-0032 | The record the operator's surface has to be able to show: alternatives inside one immutable proposal, a basis that is a locator, a durable last-look mark, and one table counting what was put to the operator and what was not | accepted |
+| D-0033 | Nothing new owns the work between laps: three existing owners, a snapshot that widens instead of a component that decides, and one gap named rather than filled | accepted |
 | D-0034 | An explanation carries claims and no recommendation: how `D-0032` rule 1 and rule 5 are read together | accepted |
+| D-0035 | What actually releases the conductor's slot: the exit status continuo's contract defines, and an abnormal end that keeps it | accepted |
 
 ---
 
@@ -2362,6 +2364,17 @@ test, which is where the question "should this layer reach cadenza?" is asked.
 ## D-0019 — The first working conductor loop: a pure planner, an interpreter over injected ports, a durable single-flight store, and a suspend at the open gate
 
 **Status:** accepted (2026-09-06, rondo's human gate)
+
+> **Annotation (2026-09-11, from D-0035).** Added after this entry was accepted, and additive: no
+> claim, measurement or date below is edited. **Rule 11's table stands exactly as written; the
+> sentence under it that says why does not.** The rule releases the lock on a refusal because "an
+> answer arrived, so the CLI is over and no worker of its is still running", and `continuo D-1102`
+> made that sentence checkable: some refusals now name a session, and continuo's teardown declines
+> to stop one in three states. **D-0035** re-measures it and keeps the rule's conclusion on a
+> different fact -- a live child holds `lap perform`'s process open, so an invocation that came back
+> is one whose child is gone -- and narrows what counts as "an answer arrived": the two exit statuses
+> continuo's contract defines, rather than any outcome that is not a timeout. A death by signal or an
+> exit 1 now reaches this rule's `performing`-with-no-answer row instead of its refusal row.
 
 > **Annotation (2026-09-07, from D-0029).** Added after this entry was accepted, and additive: no
 > claim, measurement or date below is edited. Two of this entry's own statements have been overtaken
@@ -5318,6 +5331,275 @@ cited here as requirements rather than re-verified.
 
 ---
 
+## D-0033 — Nothing new owns the work between laps: three existing owners, a snapshot that widens instead of a component that decides, and one gap named rather than filled
+
+**Status:** accepted (2026-09-11, rondo's human gate). Refs rondo#40, rondo#39, rondo#41.
+
+**The draft of this entry has been removed rather than kept**, for `D-0029`'s reason and by
+`D-0032`'s precedent. `docs/design/` carried it as `between-laps-ownership-decision-draft.md` so
+the gate could approve text instead of a promise of text; once appended here it would be a second
+copy of an accepted decision with no rule for which copy wins. Its history, including the two
+review rounds that corrected rule 9's premise, is in the pull request that added it. **It leaves
+no design document behind**, for `D-0032`'s reason: everything it measures is in `DECISIONS.md`,
+in the schema and in `src/` already.
+
+**One fact this entry rests on was answered by the human at the gate, and is recorded here because
+it is an intention rather than a measurement.** Rules 2 and 3 hold because rondo has no act it can
+take between laps by itself; whether it ever will is nobody's to measure. Asked directly, the gate
+answered that **rondo is not to be given autonomy**: neither the advisory nor the part that talks
+to a person acts on its own initiative, and the one candidate named for ever doing so was **the
+search for the next piece of work**, which is a search that does not affect a lap. So the premise
+is affirmed rather than assumed, and it is narrow enough to falsify: the trigger below is not
+"rondo becomes autonomous" in general but **a self-started act that reaches a lap**, which is the
+only kind that would move rule 2.
+
+rondo#40 measures one day of the organisation rondo is meant to replace and finds
+three functions with no owner in rondo's design: **coordination across laps**, **the
+policy for when to interrupt the operator**, and **the operator's own thread**. It
+is explicit that it is not asking for the thing to be built, and equally explicit
+about the hazard if it accretes instead: *a layer that decides what the operator
+sees can also decide what they do not see*, and silence leaves nothing to audit.
+
+`D-0032` has since taken the record half of that hazard — `operator_attention`
+counts both dispositions and refuses a withholding whose rule cannot be named —
+and said in its own "what this does not do" that it does **not** design #40's
+component, because a record for an unbuilt owner is what the build order exists to
+prevent. This entry is the other half: it says who owns each of #40's three parts.
+
+**Its finding is that the work needs no new authority, and therefore no new
+component.** Every act #40 describes is either material for a person to read, or an
+act rondo already has an owner and a refusal for. What is missing is not a
+decider; it is a **snapshot that spans laps**, which is an argument to a function
+that already exists.
+
+### Decision
+
+1. **No new role, no new layer, and no new authority.** #40's three parts are placed
+   on three owners that exist today: composing cross-lap material is the advisory's
+   (`D-0022` rules 1 and 2); the policy for what reaches the operator is the
+   **operator's own**, as data (rules 6 and 7 below); the operator's thread is the
+   operating surface's (`D-0020` rule 5, `D-0032` rules 9 and 11). Placing duties is
+   what closes #40, not inventing a component to hold them.
+
+2. **Everything #40 section 1 asks for is `explanation` under `D-0022` rule 4's
+   `kind` union: it binds nothing, and by `D-0032` rule 5 it cannot be approved.**
+   The three measured cases — two branches claiming one decision id and one
+   migration number, one defect behind two blocked pull requests, work deliberately
+   not started — are each **material a person acts on**, and none is an act rondo
+   can take. rondo holds no push credentials and stops at the closed gate
+   (`D-0010`), files no issue, renames nothing in a repository, and reaches the
+   world only at `publish` (`D-0029` rule 3).
+
+   **This is the hazard's answer at the type level rather than in prose.** The layer
+   that reads across laps can produce a sentence and can never produce a stop. No
+   new approvable kind is added, and the writer refusal `D-0032` rule 5 already
+   specifies is what proves it.
+
+3. **The one between-laps act rondo *can* take is admission, and it already has an
+   owner and a refusal.** "Not starting work" is `D-0023`'s ledger — the bound
+   refuses and writes an `admission_refusal` demand row (`src/store/sqlite.ts:542`,
+   written at `:1116`) — or a person who does not run `start`. An advisory that
+   could withhold an admission by itself would be the advisory deciding, which
+   `D-0022` rule 2 removes by construction. So #40's deliberate non-starts become:
+   an `explanation` naming the collision or the cost, a human who does not admit,
+   and — where the bound was what refused — a row that was already being counted.
+
+4. **What changes is the snapshot, not the function.** `propose(snapshot) ->
+   Proposal` stays total and pure (`D-0022` rule 2); a between-laps proposal is one
+   composed from a snapshot that spans **every** iteration rather than one. The
+   gathering is the composition root's, which is where rule 2 already put it, and
+   the reads it needs are `D-0032` rule 11's three enumeration queries — unconsumed
+   decisions, terminal iterations, what changed since `t` — none of them new and
+   none of them added here.
+
+   **This is the whole of the mechanism.** There is no scheduler, no daemon, no
+   second loop and no new table in this entry. `D-0022` rule 3's read allowance is
+   not widened by a word: a host-wide snapshot is more rows of rondo's own store,
+   not a new source.
+
+5. **Batching is presentation and needs no policy; withholding is what needs one.**
+   #40 counts three gates batched into one and routine noise never surfaced at all,
+   and they are different acts. A batched item is still a `presented` row under
+   `D-0032` rule 10, so batching costs no accountability and requires no rule name.
+   Only *not shown at all* is a withholding, and rule 10's writer already refuses
+   one whose rule cannot be named.
+
+6. **Until an operator has written a suppression rule, nothing is withheld, and
+   that default is this entry's decision rather than its silence.** Measured: the
+   surface shows every live row and, where "the live one" is ambiguous, **refuses
+   and names them** rather than choosing (`src/access/cli.ts:799-832`).
+
+   **The alternative refused is a default suppression list**, drawn from the
+   replaced organisation's written rules — duplicate terminal deliveries, ledger
+   synchronisation, watcher pane cleanup. Those rules were measured on a different
+   machine, against a different day's traffic, and rondo emits none of those events.
+   A default the operator never wrote is precisely the unauditable silence #40 names,
+   arriving as a shipped default instead of as a judgement.
+
+7. **When an attention policy exists it is data the operator owns and the host
+   reads, in the shape `HostPolicy` already has, and this entry does not write it.**
+   `HostPolicy` is two numbers, validated, read once where the store is opened
+   (`src/refrain/policy.ts:69-106`, read at `src/access/cli.ts:868-893`), and
+   `D-0023` rule 13 named the durable operator-editable form and deliberately did
+   not take it. An attention policy has the same shape and the same argument. What
+   this entry places is one constraint on that unwritten artefact: **a `rule_name`
+   written into `operator_attention` must name a rule in it**, so that
+   `D-0032` rule 10's breakdown resolves to something a person can read and edit.
+   A suppression policy expressed as code is refused for the same reason: a rule the
+   operator cannot read back is silence with a compile step.
+
+8. **The operator's thread gets no new owner, and the worker half of #40 section 3
+   is already carried by a column.** #40's lost sessions were a worker's, and the
+   material was carried across by the surrounding role rather than by any record; in
+   rondo a lap's session identity is on the iteration row (`session_id`,
+   `session_path`, `src/store/sqlite.ts:527-528`) beside its status and reason, and
+   the row outlives the session by construction. The operator's own half — what was
+   decided earlier, what changed since, what a decision has foreclosed — is
+   `D-0020` rule 5's conversation with `D-0032` rule 9's mark and rule 11's "what
+   changed since `t`". This entry writes neither schema and adds no field to either.
+
+9. **Collisions inside a repository's own namespace are owned by nobody, this entry
+   says so rather than placing an owner, and records that the gap is live today
+   rather than waiting on a raised bound.** rondo de-conflicts only the identifiers
+   it mints — the `(run id, topic branch, workspace)` triple derived from the
+   iteration id (`D-0023` rules 3 to 7). A decision id or a migration number lives
+   **inside the work**, and rondo's only reader of that work is `D-0029`'s lap
+   reading, which reads one lap's material for one gate and compares nothing to a
+   second lap.
+
+   **It is already reachable, and the first draft of this rule said otherwise.** The
+   bound that matters is not `maxOccupying` but `maxLive`, which is **three** by
+   default (`src/refrain/policy.ts:103-106`): an iteration suspended at a gate stops
+   occupying an execution slot and keeps its branch (`D-0023` rule 2, `D-0023` rule
+   8's two bounds). So one lap may take migration `0005`, suspend at its gate, and a
+   second lap started against the same unmerged base may take `0005` again — with
+   `maxOccupying` still one and continuo still serialising execution. **Serial
+   execution bounds what runs, never what accumulates on open branches**, and #40's
+   measured case is exactly two branches, not two running workers.
+
+   **Who bears it: the operator, knowingly.** The gap is left unowned because the
+   thing that would close it does not exist and is not cheap: comparing what two laps
+   wrote requires a reader across branches, where `D-0029`'s reading is per-lap and
+   per-gate by construction. What this entry refuses is closing it by assertion — a
+   rule saying the collision cannot happen would have been wrong, which is how this
+   paragraph got its shape. Rule 4's host-wide snapshot is the **detection point when
+   somebody builds one**: two live iterations are two rows in it, and rondo's own
+   `D-0023` triple is what tells them apart.
+
+10. **Whatever is built first for #40 writes to `operator_attention` or does not
+    ship.** `D-0032` rule 10 designed the table with one writer in mind and this
+    entry supplies it: a between-laps composer that puts something to the operator
+    writes a `presented` row, and one that withholds writes a `withheld` row naming
+    its rule. Under rule 6 the second is empty until an operator writes a policy,
+    which is the point — the denominator is recorded from the first day rather than
+    reconstructed after somebody complains.
+
+11. **Nothing in `src/` changes on this entry**, and it takes no implementation. It
+    supersedes nothing and corrects nothing. `src/advisory/` does not exist in the
+    tree at the revision measured; the layer `D-0022` rules 1 and 2 authorise is
+    separate work, and rule 4's snapshot argument above is a property of what that
+    layer is *handed*, not a change to what `D-0022` decided it is.
+
+### The options, and why the others were refused
+
+| Option | Outcome |
+|---|---|
+| **A. A new between-laps component with its own authority** — the replaced role, reproduced: it watches every lap, decides what to interrupt for, and starts or stops work | **Refused.** It would be the only thing in rondo that decides what a human sees, which is #40's own stated hazard; and it would be the first authority in rondo that ends somewhere other than a human gate. Every existing one ends at one (`D-0009`, `D-0010`, `D-0022` rule 9, `D-0031` rule 6) |
+| **B. Widen the advisory's snapshot to the host and keep its authority at zero** | **Taken** (rules 2 and 4). It adds no authority, no layer, no table and no read allowance — only more rows in an argument |
+| **C. Put the between-laps work in the operating surface** | **Refused.** The surface composes and issues contracts; a surface that also drafted across laps would put the drafter in the layer that may issue, which is exactly why `D-0022` rule 1 overruled rondo#9's own proposal of `src/access` |
+| **D. Place no owner at all and leave #40 open** | **Refused for two of the three parts, taken for the third** (rule 9). Sections 1 and 2 have owners available today at no cost; the repository-namespace half genuinely has none, and rule 9 takes that reading with the risk stated — the collision is reachable at today's bounds and the operator knowingly bears it, which is more useful than a component that would need a reader across branches nothing in rondo has |
+| **E. An attention policy written as code** | **Refused** (rule 7). A rule the operator cannot read back or edit is an unauditable silence with a compile step, and `D-0032` rule 10's `rule_name` would resolve to an identifier only a reader of `src/` could check |
+
+### What this does not do
+
+- **It does not build anything.** No file under `src/` is touched, and the snapshot
+  widening of rule 4 is a property of the composition root the advisory layer does
+  not have yet.
+- **It does not decide when a between-laps proposal is composed.** Nothing in rondo
+  runs periodically, and one operator asking is enough; a schedule is a decision for
+  whichever surface first has a reason to want one.
+- **It does not write the attention policy** (rule 7), the conversation schema
+  (`D-0020` rule 5), or any DDL. It places one constraint on the first and none on
+  the second beyond `D-0032` rule 7's.
+- **It does not widen what the advisory may read** (`D-0022` rule 3), grant an arrow,
+  or add an external dependency.
+- **It does not re-decide the audit surface.** `D-0032` rule 10 stands as taken;
+  rule 10 above only names its writer.
+- **It does not claim #40's function is cheap.** It claims the function is
+  *material plus a policy the operator owns*, and that the part which looked like a
+  new role was the part rondo cannot do at all.
+
+### Residuals, with who decides
+
+| Residual | Why not here | Who decides |
+|---|---|---|
+| The attention policy artefact — its format, where it lives, how it is edited | Rule 6's default is "withhold nothing", so nothing is blocked on it; its shape is a property of the surface that edits it | the surface work, or the first operator who asks for a suppression |
+| What triggers a between-laps composition | No surface exists to ask, and nothing in rondo runs on a schedule | the surface work |
+| Cross-lap collisions in a repository's namespace (rule 9) | Live today at `maxLive` three, and closing it needs a reader across branches that nothing in rondo has; the operator bears it in the meantime | a later entry, once something can read two laps' material together |
+| Whether a host-wide snapshot stays affordable | Nothing has measured a snapshot of any size; `D-0032`'s own snapshot-size residual is the same question one row at a time | the implementation, which is the first thing that can measure it |
+| The conversation schema (`D-0020` rule 5) | Rule 8 needs it to exist and needs no property of it that `D-0032` rule 7 has not already required | the surface work |
+
+### What was measured, and how
+
+At rondo `e1a64ff` on **2026-09-11**, by reading rather than by running. #40's own
+measurements are of a **different organisation** on 2026-09-07; they are cited here
+as requirements and are not re-verified, which is `D-0032`'s treatment of the same
+material.
+
+- **The tree has no between-laps anything, and no advisory layer yet**: `src/`
+  holds `access`, `cadenza`, `continuo`, `refrain`, `store` and the barrel, and the
+  boundary table classifies exactly those
+  (`test/architecture/import-boundaries.test.ts:124-161`).
+- **The acts rondo can take between laps**: admission and its refusal
+  (`src/store/sqlite.ts:542`, `:1116`), the bounds `maxOccupying` / `maxLive`
+  (`src/refrain/policy.ts:69-106`) and their environment read
+  (`src/access/cli.ts:868-893`). The comment at `src/access/cli.ts:860-866` is what
+  rule 9 cites for continuo still serialising execution — and what rule 9 is careful
+  **not** to read as a bound on how many branches are open.
+- **What the surface shows today**: `pickWaiting` lists every live row and refuses
+  on ambiguity rather than choosing (`src/access/cli.ts:799-832`), which is rule 6's
+  default already being the behaviour.
+- **What carries a lost session**: `session_id` and `session_path` on the iteration
+  row (`src/store/sqlite.ts:527-528`).
+- **The record duties already taken**: `D-0032` rules 5, 9, 10 and 11, and its own
+  statement that #40's component is not designed there.
+- **What was not measured**: no snapshot has been gathered or sized; no surface
+  exists, so rule 6's default is the CLI's behaviour and not a screen's; no
+  collision of rule 9's kind has been observed in rondo's own laps, which is why
+  that rule is argued from the bounds and from #40's measurement of another
+  organisation rather than from a rondo incident; and no operator has ever been
+  offered a between-laps proposal, so whether one is useful is unmeasured in rondo.
+
+### What would falsify it
+
+- **A collision observed between two of rondo's own laps** — rule 9's gap firing,
+  which it can do at today's defaults. Raising `maxLive` widens it and raising
+  `maxOccupying` (`D-0023` rule 17, continuo `D-1104`) widens it again; neither is a
+  precondition, and treating one as a precondition is the error this rule was
+  corrected for.
+- **A between-laps output that somebody has to approve.** Rule 2 would be wrong: the
+  layer would need authority and therefore a gate of its own, which is option A
+  arriving on evidence rather than on anticipation.
+- **rondo gaining an act it can take between laps by itself** — push credentials,
+  issue filing, a rename — which reverses rules 2 and 3 at their premise. The gate's
+  recorded answer above is what makes this a falsifier rather than an open question, and it
+  draws the line where the answer drew it: a self-started **search for the next piece of
+  work** does not fire it, because it reaches no lap; a self-started act that reaches one
+  does.
+- **An operator asking for a withholding whose rule cannot be written as data**
+  (rule 7), or naming a `rule_name` that resolves to nothing.
+- **A host-wide snapshot that cannot be gathered affordably**, which moves rule 4
+  from "the same function with a wider argument" to a component with a read strategy.
+- **Silence that leaves no row**, observed after the first #40 work ships — rule 10
+  failing in practice, which `D-0032` rule 10 already records as the bound it cannot
+  prove.
+- **continuo `D-1104` landing** (`D-0023` rule 17), and **the conversation schema
+  arriving** (`D-0020` rule 5), each of which unblocks a residual above.
+- Any measurement above failing to reproduce at `e1a64ff`. The commits between that revision
+  and this entry are the draft it was taken from, and they change no code.
+
+---
+
 ## D-0034 — An explanation carries claims and no recommendation: how `D-0032` rule 1 and rule 5 are read together
 
 **Status:** accepted (2026-09-11, rondo's human gate). Refs rondo#39, rondo#40, rondo#41.
@@ -5388,3 +5670,128 @@ shape had to be decided somewhere, and is why it is decided here.
 - **A claim that is only meaningful as one of a set of alternatives** -- an explanation whose honest
   form is "either of these two readings of the row fits" -- which would reopen whether an option set
   without a recommendation is a third shape rather than a narrowing of rule 1.
+
+---
+
+## D-0035 — What actually releases the conductor's slot: the exit status continuo's contract defines, and an abnormal end that keeps it
+
+**Status:** accepted (2026-09-11, rondo's human gate). Refs rondo#24.
+
+This entry takes rows `S-1` … `S-4` of
+[`docs/design/refusal-session-lock.md`](docs/design/refusal-session-lock.md), which was written
+propose-only and named this entry's question in advance. **The document is kept rather than
+removed**, unlike the drafts `D-0029` and `D-0032` withdrew: it is not a copy of this entry but the
+measurement record underneath it -- what the pinned continuo's teardown does, in which states it
+declines to stop, and which of those a host can see -- and `D-0022`, `D-0023` and `D-0029` all
+leave such a document standing. **This entry governs wherever the two differ.** Its rows `S-5` and
+`S-6` are *not* taken here: `S-5` is rondo#55 and `S-6` is an ask filed against continuo.
+
+**It supersedes nothing, and `D-0019` rule 11's table is untouched.** What changes is the reason
+under the rule and one mapping in the composition root. `D-0019` gains a dated annotation.
+
+### What the question was
+
+`D-0019` rule 11 releases the conductor's capacity when a `performing` iteration receives a refusal
+and keeps it when the iteration receives nothing, "and the difference is not how bad the outcome was
+-- it is whether anything might still be running". `continuo D-1102` then made some `lap perform`
+refusals carry a `session_id`, which are exactly the refusals raised after the walk: a turn that
+outlived its budget, a terminal report that could not be read or was about another session. If a
+refusal can name a live session, rondo#24 asked, is "an answer came back" still the same fact as
+"nothing of the lap's is running", and should the release wait for a confirmed stop or an
+`abandon()`?
+
+### Decision
+
+1. **A refusal that names a session releases the slot. `D-0019` rule 11 stands, and the reason
+   under it is replaced.** The rule's own premise -- "an answer arrived, so the CLI is over and no
+   worker of its is still running" -- is not what makes the release safe, and was never checked
+   against the case where continuo declines to stop. What makes it safe is measured at the pinned
+   revision `38c667b`: continuo's CLI sets `process.exitCode` and never calls `process.exit`
+   (`src/cli.ts:298`), its provider keeps the spawned child in `#sessions` and never `unref`s it
+   (`src/session/claude_cli_provider.ts:1931`), and continuo's own teardown states the consequence
+   -- "the provider holds a referenced handle to it, so `lap perform` may not return until that
+   child exits" (`src/lap/root.ts:1581-1586`). **A live child therefore holds the CLI open, and an
+   invocation that came back is one whose child is gone.**
+
+   **This is a stronger fact than the issue expected, and it covers more states than the issue
+   listed.** The teardown declines to stop a session in *three* states, not one: `LoserTerminated`
+   with `stopAttempted === false` (`src/supervisor.ts:582-601`), a lease epoch that moved under a
+   long turn so the session is no longer this lap's (`root.ts:1628-1641`), and a stop the provider
+   did not confirm (`root.ts:1654-1673`). In each of them the child is left running -- and so is the
+   CLI, which then does not answer at all. That path is rondo's ceiling firing, which `D-0019`
+   rule 12 already routes to `noAnswer` and which already keeps the slot.
+
+2. **The releasing fact is the exit status continuo's contract defines, and not the outcome's
+   class.** `ArgparseExit` is constructed with `0` and `2` at the pinned revision and with no other
+   value, and `mainAsync` returns an `ArgparseExit`'s code while **rethrowing everything else**
+   (`src/cli.ts:222-231`) into a top-level `await`. So an escaping exception ends the process at
+   exit 1 *immediately*, holding no handle open and running no more of the teardown -- and a throw
+   inside the teardown itself is reachable, because `stillThisLapsSession` reads SQLite where
+   `stopSession` swallows its failures. **Exit 0 and exit 2 are evidence that the CLI came back
+   through its own reporting path; every other ending is evidence of nothing.**
+
+3. **`decode` gains a seventh outcome, `endedAbnormally`, and the composition root maps it to
+   `noAnswer`.** A death by signal and a status the contract does not define stop being
+   `invokerDefect` and become their own variant (`src/continuo/protocol.ts`), and `asEffect` reads it
+   the way it reads a ceiling that fired (`src/access/conductor.ts`): the row keeps `performing`, the
+   execution slot stays taken, and the report says a human is needed. Every other `defect` -- an
+   unreadable document from an orderly exit 0, a protocol break, a call rondo made wrong -- keeps
+   releasing, because the process it was diagnosing had already come back through its own reporting
+   path.
+
+   **A variant rather than a boolean on `invokerDefect`**, for `timedOut`'s reason and by its
+   precedent: the difference is what the conductor does next, and a closed union is where rondo
+   writes down "the answer to *what does rondo do now?* differs for each". `decodeMeasureReport`
+   draws the same two branches even though that verb drives no lap, because one decoder disagreeing
+   with the other about what a signal death is would read as a difference that meant something.
+
+4. **No waiting state, and `abandon()` gains no ordinary path.** Nothing waits for a stop to be
+   confirmed, no non-terminal status is added to rule 11's table, and no refusal is held back. The
+   alternative -- hold the slot on any refusal that names a session until a stop is confirmed -- was
+   available and is refused, because at this pin **there is no fact to confirm against**: continuo's
+   CLI mounts six verb groups and none of them is `session` (`src/cli.ts:124-182`), and `run show`'s
+   session rows cannot answer liveness, since `released_at_ms` has no writer anywhere in continuo's
+   `src/` (`releaseBinding` is exported and never called) and `provider_state` is a snapshot taken
+   when the identity was confirmed. The only exit from such a hold would be an operator's
+   `abandon()`, taken on every ordinary turn timeout -- which inverts rule 11 in exchange for
+   nothing.
+
+### What this costs, stated rather than argued away
+
+An exit 1 that is genuinely rondo's own fault now **stalls the row instead of failing it**.
+`D-0015`'s exception 2 is the known example: a relative `--workspace` escapes continuo as exit 1 and
+a raw stack, and rondo's pre-spawn validation exists so that never happens. Under this entry such a
+lap is held at `performing` for a person to settle rather than filed as a lap that failed. That is
+deliberate -- rondo cannot tell that exit 1 from the one an exception escaping the teardown produces,
+and only one of the two is safe to release on -- and the cost is bounded by the validation that
+makes the state unreachable in the first place.
+
+### What is not decided
+
+- **The worker's own descendants.** The child leads its own process group and continuo's stop
+  signals the group, but nothing in the handle argument covers a grandchild that outlives the child.
+  rondo has no evidence either way and this entry claims none.
+- **A session adopted by pid rather than by handle**, which continuo's `resume` path can produce.
+  The fresh-spawn path a rondo lap drives always holds a handle; no lap-1 path was found that does
+  not, but that was read rather than exercised.
+- **None of this was reproduced by running a lap.** Every claim above is a reading of the pinned
+  source, and the design document says so in the same words.
+- **Capacity.** These rules decide *when the slot is given back*, not how many laps may hold one.
+  `D-0023` rule 17 leaves `maxOccupying` at one until `continuo D-1104`; a host that raises it should
+  re-read that rule and rule 18 rather than this entry.
+
+### What would falsify it
+
+- **continuo `unref`s a child handle, calls `process.exit`, or otherwise lets `lap perform` return
+  with a live child of its lap's.** Rule 1's whole argument goes with it and the question reopens.
+  This is the thing to check when the pin moves.
+- **continuo constructs an `ArgparseExit` with a third code**, which would have to be sorted into
+  "reported" or "ended abnormally" before rule 2 could stand as written.
+- **continuo grows a `session` verb group, or puts a stop-confirmation field on the refusal
+  envelope** (the `S-6` ask). Rule 4's refusal was taken on there being no fact to wait for, and that
+  is the change that would supply one.
+- **`released_at_ms` acquires a writer**, which would make `run show` an answer to liveness and
+  reopen the middle option rule 4 rejected.
+- Any measurement above failing to reproduce at continuo `38c667b` and rondo `f74c37c`, which is
+  this entry's base. The continuo readings were taken against the pin and the rondo ones against
+  `e1a64ff`; `npm run verify` is green on the base above with the rules implemented.

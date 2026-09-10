@@ -73,11 +73,12 @@ export type { ConductorReport };
 /**
  * Turn one continuo outcome into one conductor outcome.
  *
- * Five of the six mappings are ordinary. The sixth is the reason this function
- * is written out rather than inlined at four call sites:
+ * Five of the seven mappings are ordinary. The other two are the reason this
+ * function is written out rather than inlined at four call sites, and they are
+ * the same reason twice:
  *
- * **`timedOut` maps to `noAnswer`, and it must never map to `refused` or
- * `defect`.** rondo's own ceiling firing means the *CLI* was killed and the
+ * **`timedOut` and `endedAbnormally` map to `noAnswer`, and neither may ever
+ * map to `refused` or `defect`.** rondo's own ceiling firing means the *CLI* was killed and the
  * fenced child was not, so a worker may still be alive with nobody polling it.
  * The conductor reads `noAnswer` as "keep the single-flight lock and ask a
  * person", and reads `refused` and `defect` as "the child is over, release it".
@@ -93,13 +94,27 @@ export type { ConductorReport };
  * the message for one -- that is D-0015 rule 7, and it is the reason continuo
  * made the id a field.
  *
+ * **`endedAbnormally` is the same hazard reached from the other side**
+ * (`D-0035`). continuo's CLI sets `process.exitCode` rather than exiting, and
+ * its provider keeps a referenced handle on the child it spawned, so a
+ * `lap perform` that comes back through one of the two exit statuses its
+ * contract defines is a process whose teardown ran and whose child is over --
+ * which is what makes `D-0019` rule 11's release sound. An invocation that
+ * ended any other way bought none of that: an escaping exception exits 1 at
+ * once, and a signal death runs nothing at all. rondo cannot tell such a lap
+ * from one that left a worker running, and it has no session id for it either,
+ * so the row keeps `performing` and the slot with it.
+ *
  * `protocolRefusal` maps to `defect` rather than to `refused` because it is not
  * an answer addressed to an operator: it says the seam is not the seam rondo was
  * built against, and what a person does about it is re-pin continuo or teach
  * rondo the new shape. `refusedInProse` maps to `refused` because it *is*
  * continuo's answer, said in words rondo may relay but never parse.
  */
-function asEffect<T, U>(result: ContinuoResult<T>, read: (payload: T) => U): EffectOutcome<U> {
+export function asEffect<T, U>(
+  result: ContinuoResult<T>,
+  read: (payload: T) => U,
+): EffectOutcome<U> {
   switch (result.kind) {
     case "answered":
       return { kind: "answered", value: read(result.payload) };
@@ -123,6 +138,8 @@ function asEffect<T, U>(result: ContinuoResult<T>, read: (payload: T) => U): Eff
     case "invokerDefect":
       return { kind: "defect", reason: result.reason };
     case "timedOut":
+      return { kind: "noAnswer", reason: result.reason };
+    case "endedAbnormally":
       return { kind: "noAnswer", reason: result.reason };
   }
 }
