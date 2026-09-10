@@ -31,7 +31,7 @@ import {
   proposeElevated,
   snapshotDocument,
 } from "../advisory/proposal.js";
-import type { IterationRecord, LapReading } from "../store/records.js";
+import type { IterationRecord, LapReading, ProposalDraft } from "../store/records.js";
 import type { AdvisoryRecord, IterationStore } from "../store/sqlite.js";
 
 /**
@@ -335,23 +335,6 @@ async function explainedBy(
         `rondo can cite about it: ${outcome.reason}`,
     };
   }
-  // **The message is appended after the row is known to be readable, and that
-  // order is the operator's to live with.** A message id is immutable and
-  // `recordMessage` refuses a second row under one (D-0036 rule 3), so an id
-  // burned on an iteration that does not exist is an id the operator cannot
-  // retype. Appending after the read leaves the common mistake -- a typo'd
-  // `--iteration-id` -- costing nothing.
-  if (elevation !== null) {
-    const appended = await ports.record.recordMessage(elevation.messageId);
-    if (appended.kind !== "recorded") {
-      return {
-        kind: "refused",
-        reason:
-          `The observation was not appended to the conversation as '${elevation.messageId}', so ` +
-          `there is nothing to elevate from: ${appended.reason}`,
-      };
-    }
-  }
   const snapshot = gather(outcome.record, await ports.store.readingsFor(iterationId));
   const proposal =
     elevation === null ? propose(snapshot) : proposeElevated(snapshot, elevation.observation);
@@ -371,7 +354,14 @@ async function explainedBy(
     elevation === null
       ? `explanation-${iterationId}-${String(createdAtMs)}`
       : `elevation-${elevation.messageId}`;
-  const recorded = await ports.record.recordProposal({
+  // **The message and the proposal are one write** (`recordElevation`), and
+  // the reason is that they are one gesture. A message id is spent for ever
+  // once appended (D-0036 rule 3), so appending it and then failing to record
+  // the proposal would cost the operator the name they chose and leave a row
+  // in the conversation with no observation behind it. Nothing is appended
+  // before the iteration is known to be readable either, for the same reason:
+  // the commonest mistake is a typo'd iteration id.
+  const draft: ProposalDraft = {
     proposalId,
     kind: "explanation",
     drafter: DETERMINISTIC_DRAFTER,
@@ -402,14 +392,18 @@ async function explainedBy(
     elevatedFromMessageId: elevation?.messageId ?? null,
     elevatedByActorId: elevation?.actorId ?? null,
     createdAtMs,
-  });
+  };
+  const recorded =
+    elevation === null
+      ? await ports.record.recordProposal(draft)
+      : await ports.record.recordElevation(elevation.messageId, draft);
   if (recorded.kind !== "recorded") {
     return {
       kind: "refused",
       reason:
-        `The explanation of '${iterationId}' was composed and not recorded, so it is not being ` +
-        `shown: ${recorded.reason}. A framing an operator reads and the ledger does not hold is ` +
-        "the thing the record exists to prevent.",
+        `The ${elevation === null ? "explanation" : "elevation"} of '${iterationId}' was ` +
+        `composed and not recorded, so it is not being shown: ${recorded.reason}. A framing an ` +
+        "operator reads and the ledger does not hold is the thing the record exists to prevent.",
     };
   }
   ports.present(explanationLines(iterationId, proposal, snapshot, elevation));

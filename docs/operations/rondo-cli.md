@@ -630,7 +630,9 @@ recorded as proposal 'elevation-m-0007'
   `snapshot:/pointer`, `iteration:ID`, `gate:ID#SEQ`, `run:ID` and `repo:PATH@COMMIT#FIRST-LAST`.
 - **`--message-id` names the observation in the conversation, and it is spent once.** The
   conversation holds the id and no body, so a second elevation under one id is refused rather than
-  taken as a repeat -- rondo cannot tell a repeat from a different observation reusing the name.
+  taken as a repeat -- rondo cannot tell a repeat from a different observation reusing the name. A
+  failed elevation spends nothing: the message and the proposal are one transaction, because they
+  are one gesture.
 - **The chain stops at the proposal in this cut.** `observation -> (you elevate) -> proposal` is
   recorded; `proposal -> (you approve) -> contract` is not reachable from here, because the kind
   produced is `explanation` and an explanation binds nothing. What the elevation columns record is
@@ -644,8 +646,8 @@ recorded as proposal 'elevation-m-0007'
 | `elevate needs --basis LOCATOR` | An observation with no basis is the thing this verb exists to prevent. | Cite where you saw it, in one of the five forms above. |
 | `which is none of the forms a basis may take` | The locator did not parse; nothing was written. | Check the form. A malformed basis is refused rather than guessed at. |
 | `--actor-id is '<x>' and RONDO_APPROVER is '<y>'` | Elevation passes the same identity check as `answer` and `publish`. | Elevate as the approver, or fix `RONDO_APPROVER`. |
-| `The observation was not appended to the conversation` | The message id is already in the conversation, or the store refused the write. | Choose an id that has not been used. Nothing was proposed. |
-| `is no message in this conversation` | The proposal's reference would have dangled, so the writer refused it (`D-0036` rule 4). | Nothing was written. This should not be reachable from the command line; report it. |
+| `already in the conversation, and a message id is durable and immutable` | That message id is spent. rondo holds no message body, so it cannot tell a repeat from a different observation reusing the name. | Choose an id that has not been used. Nothing was proposed. |
+| `was composed and not recorded, so it is not being shown` | The store refused or failed the write. | Nothing was written -- **the message id too was rolled back**, because the two are one transaction. Fix the fault the message names and retype the same command. |
 
 
 ---

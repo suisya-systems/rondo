@@ -323,32 +323,35 @@ test("an iteration that is not there costs no message id", async () => {
   });
 });
 
-test("a dangling elevation is refused by the writer, and the verb passes that refusal on", async () => {
-  // **D-0036 rule 4's planted case, from the verb's side.** The store's own
-  // proof is in `test/store/advisory-record.test.ts`; what is asserted here is
-  // that `elevate` composes a draft the refusal actually applies to, and that a
-  // proposal it stopped is a proposal nobody was shown. Planted with a port
-  // that reports the message appended without appending it, because the real
-  // pair cannot come apart.
+test("a proposal that cannot be written leaves the message id unspent", async () => {
+  // **One gesture, one transaction** (`recordElevation`). A message id is spent
+  // for ever once appended (D-0036 rule 3), so a message beside a proposal that
+  // was not written would cost the operator the name they chose and leave a row
+  // in the conversation with no observation behind it. Planted with a proposal
+  // row already sitting under the id this elevation would mint, because the
+  // real failures here are store faults.
   const { connection, store, record } = fresh();
   await reserveOne(store, "i-0001");
-  const lying: AdvisoryRecord = {
-    ...record,
-    recordMessage: async (): Promise<RecordOutcome> => ({ kind: "recorded" }),
-  };
+  connection
+    .prepare(
+      "INSERT INTO proposal (proposal_id, kind, drafter, payload, proposal_digest, snapshot, " +
+        "snapshot_digest, derivation, created_at_ms) " +
+        "VALUES (?, 'explanation', 'x', '{}', 'd', '{}', 'd', 'store_rows', 1)",
+    )
+    .run("elevation-m-0001");
 
   const shows = screen();
   const outcome = await elevateObservation(
-    { store, record: lying, now: () => 5_000, present: shows.present },
+    { store, record, now: () => 5_000, present: shows.present },
     "i-0001",
     anObservation(),
   );
   expect(outcome.kind).toBe("refused");
-  if (outcome.kind !== "refused") {
-    return;
-  }
-  expect(outcome.reason).toContain("no message in this conversation");
-  expect(connection.prepare("SELECT count(*) AS n FROM proposal").get()).toEqual({ n: 0 });
+  // The message was rolled back with the proposal: the operator can retype
+  // 'm-0001' once the fault is fixed.
+  expect(connection.prepare("SELECT count(*) AS n FROM conversation_message").get()).toEqual({
+    n: 0,
+  });
   expect(shows.shown).toEqual([]);
 });
 
