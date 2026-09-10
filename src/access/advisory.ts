@@ -29,6 +29,7 @@ import {
   type Option,
   payloadDocument,
   propose,
+  proposeElevated,
   proposeRetryPlan,
   type RetrySnapshot,
   type RunPlanProposal,
@@ -45,7 +46,13 @@ import {
 } from "../cadenza/facade.js";
 import { allocate } from "../refrain/allocator.js";
 import { admittedPlan, readPlan } from "../refrain/plan.js";
-import type { DecisionOutcome, IterationRecord, JsonRecord, LapReading } from "../store/records.js";
+import type {
+  DecisionOutcome,
+  IterationRecord,
+  JsonRecord,
+  LapReading,
+  ProposalDraft,
+} from "../store/records.js";
 import type { AdvisoryRecord, IterationStore } from "../store/sqlite.js";
 
 /**
@@ -177,6 +184,20 @@ function gather(record: IterationRecord, readings: readonly LapReading[]): Advis
 const CITATION_CEILING = 200;
 
 /**
+ * Whether one pointer token addresses something **in the JSON document**.
+ *
+ * Own properties only, and on an array only an index: `constructor` is on
+ * every object and `length` is on every array, and neither is in any snapshot.
+ * A pointer that walked into one would render a number or a function as a
+ * citation of material the row does not hold, which is the one thing a locator
+ * is supposed to make impossible -- and the pointer can now come from an
+ * operator's `--basis` (D-0032 rule 2, #41 section 3).
+ */
+function addressable(at: object, step: string): boolean {
+  return Array.isArray(at) ? /^(0|[1-9]\d*)$/.test(step) && step in at : Object.hasOwn(at, step);
+}
+
+/**
  * Resolve one JSON pointer against the snapshot the proposal kept.
  *
  * Total: a pointer that leads nowhere says so rather than rendering as an empty
@@ -189,13 +210,19 @@ function cited(snapshot: AdvisorySnapshot | RetrySnapshot, pointer: string): str
     .split("/")
     .slice(1)
     .reduce<unknown>(
-      (at, step) => (at === null || typeof at !== "object" ? undefined : Reflect.get(at, step)),
+      (at, step) =>
+        at === null || typeof at !== "object" || !addressable(at, step)
+          ? undefined
+          : Reflect.get(at, step),
       snapshot,
     );
-  if (found === undefined) {
+  // `JSON.stringify` answers `undefined` for a value JSON has no form for as
+  // well as for an absent one, and the two are the same answer to a reader: a
+  // pointer that leads to nothing they can open.
+  const rendered = found === undefined ? undefined : JSON.stringify(found);
+  if (rendered === undefined) {
     return "does not resolve";
   }
-  const rendered = JSON.stringify(found);
   return rendered.length > CITATION_CEILING
     ? `${rendered.slice(0, CITATION_CEILING)}... (${String(rendered.length)} chars)`
     : rendered;
@@ -242,9 +269,18 @@ export function explanationLines(
   iterationId: string,
   proposal: Explanation,
   snapshot: AdvisorySnapshot,
+  elevation: Elevation | null = null,
 ): readonly string[] {
   return [
     `explanation of iteration '${iterationId}'`,
+    ...(elevation === null
+      ? []
+      : // **The chain, on the screen, in the order #41 section 3 writes it.** The
+        // two columns are the record of it; this is the one line that says out
+        // loud that a person put this here, because an elevated proposal that
+        // rendered exactly like a drafted one would hide the very act the
+        // columns exist to keep.
+        [`  elevated from message '${elevation.messageId}' by '${elevation.actorId}'`]),
     `  drafter: ${DETERMINISTIC_DRAFTER}; derivation: ${proposal.derivation}`,
     // **Said out loud, because the record says it and a screen that did not
     // would be the confusion D-0032 rule 5 refuses**: this kind binds nothing,
@@ -252,6 +288,23 @@ export function explanationLines(
     "  this explanation binds nothing: it is not a proposal and cannot be approved",
     ...proposal.payload.claims.flatMap((claim) => claimLines(claim, snapshot)),
   ];
+}
+
+/**
+ * One observation, as the operator hands it over (#41 section 3, D-0036
+ * rules 3 and 4).
+ *
+ * **Three fields, and each of them is a different half of the chain.** The
+ * message is the observation's own identity in the conversation -- D-0036
+ * rule 3 property 2 makes an observation a message and gives #41's chain its
+ * one missing link; the actor is who took it up, which is where authority
+ * enters; the claim is what was said *and what it rests on*, which is the
+ * hazard's answer rather than the gesture's convenience.
+ */
+export interface Elevation {
+  readonly messageId: string;
+  readonly actorId: string;
+  readonly observation: Claim;
 }
 
 /**
@@ -267,6 +320,42 @@ export function explanationLines(
 export async function explainIteration(
   ports: ExplainPorts,
   iterationId: string,
+): Promise<ExplainOutcome> {
+  return await explainedBy(ports, iterationId, null);
+}
+
+/**
+ * Elevate one observation into a proposal about an iteration: append the
+ * message, then explain the row with the observation at the head of the claims.
+ *
+ * **The two elevation columns are written here and nowhere else** (D-0032
+ * rule 7, D-0036 rule 3). Everything else about the path is `explain`'s,
+ * deliberately: the same gather, the same record-before-render order, the same
+ * one-per-subject count. Elevation is a *provenance* on a proposal rather than
+ * a second kind of proposal, which is why it is two arguments and not a second
+ * pipeline.
+ *
+ * **This is the first writer the conversation has**, and that settles a
+ * question D-0036 rule 3 left open on purpose -- whether the surface writes a
+ * message before an operator does. It does not: the only message rondo composes
+ * is the one an operator typed at this verb, in the same gesture that elevates
+ * it. Everything else rule 3 left open (the body's type, authorship, ordering,
+ * threading, retention) is still open, because nothing here needed it: the
+ * conversation stores an id, and the observation's text travels in the
+ * proposal's payload, beside the basis it rests on.
+ */
+export async function elevateObservation(
+  ports: ExplainPorts,
+  iterationId: string,
+  elevation: Elevation,
+): Promise<ExplainOutcome> {
+  return await explainedBy(ports, iterationId, elevation);
+}
+
+async function explainedBy(
+  ports: ExplainPorts,
+  iterationId: string,
+  elevation: Elevation | null,
 ): Promise<ExplainOutcome> {
   const outcome = await ports.store.read(iterationId);
   if (outcome.kind === "absent") {
@@ -287,14 +376,32 @@ export async function explainIteration(
     };
   }
   const snapshot = gather(outcome.record, await ports.store.readingsFor(iterationId));
-  const proposal = propose(snapshot);
+  const proposal =
+    elevation === null ? propose(snapshot) : proposeElevated(snapshot, elevation.observation);
   const createdAtMs = ports.now();
   // **The id is the operator's to read, and a collision is a repeat.** Two
   // explanations of one row in one millisecond carry the same bytes, so the
   // primary key collides exactly when the second row would have said what the
   // first one says; the store reports that as a defect and nothing is presented.
-  const proposalId = `explanation-${iterationId}-${String(createdAtMs)}`;
-  const recorded = await ports.record.recordProposal({
+  // **An elevation is named after the message it came from, and the reason is
+  // not tidiness.** The clock-derived form is right for `explain`, where two
+  // rows one millisecond apart say the same thing; two elevations in one
+  // millisecond say *different* things, because the operator typed them, so a
+  // clock that cannot separate them would refuse the second one's observation
+  // as though it were a repeat. The message id already cannot collide -- the
+  // row was just inserted under it -- so the proposal id inherits that.
+  const proposalId =
+    elevation === null
+      ? `explanation-${iterationId}-${String(createdAtMs)}`
+      : `elevation-${elevation.messageId}`;
+  // **The message and the proposal are one write** (`recordElevation`), and
+  // the reason is that they are one gesture. A message id is spent for ever
+  // once appended (D-0036 rule 3), so appending it and then failing to record
+  // the proposal would cost the operator the name they chose and leave a row
+  // in the conversation with no observation behind it. Nothing is appended
+  // before the iteration is known to be readable either, for the same reason:
+  // the commonest mistake is a typo'd iteration id.
+  const draft: ProposalDraft = {
     proposalId,
     kind: "explanation",
     drafter: DETERMINISTIC_DRAFTER,
@@ -317,22 +424,29 @@ export async function explainIteration(
     // The pin that *composed* something. An explanation composes no contract,
     // so there is no composition for a pin to qualify (D-0022 rule 18).
     cadenzaRevision: null,
-    // D-0032 rule 7's pair, null together: nothing was elevated, because the
-    // conversation this would reference is still undecided (`D-0020` rule 5).
-    elevatedFromMessageId: null,
-    elevatedByActorId: null,
+    // **D-0032 rule 7's pair, written together or not at all.** Null on an
+    // `explain`, because nothing was elevated; both non-null on an elevation,
+    // because an observation with no elevator and an elevator with no
+    // observation are each half a link. The schema's CHECK says the same thing,
+    // and the store refuses a message id that names no message (D-0036 rule 4).
+    elevatedFromMessageId: elevation?.messageId ?? null,
+    elevatedByActorId: elevation?.actorId ?? null,
     createdAtMs,
-  });
+  };
+  const recorded =
+    elevation === null
+      ? await ports.record.recordProposal(draft)
+      : await ports.record.recordElevation(elevation.messageId, draft);
   if (recorded.kind !== "recorded") {
     return {
       kind: "refused",
       reason:
-        `The explanation of '${iterationId}' was composed and not recorded, so it is not being ` +
-        `shown: ${recorded.reason}. A framing an operator reads and the ledger does not hold is ` +
-        "the thing the record exists to prevent.",
+        `The ${elevation === null ? "explanation" : "elevation"} of '${iterationId}' was ` +
+        `composed and not recorded, so it is not being shown: ${recorded.reason}. A framing an ` +
+        "operator reads and the ledger does not hold is the thing the record exists to prevent.",
     };
   }
-  ports.present(explanationLines(iterationId, proposal, snapshot));
+  ports.present(explanationLines(iterationId, proposal, snapshot, elevation));
   // **Counted after it was shown** (D-0032 rule 10). This is the first writer
   // that table has: `explain` withholds nothing, so only the `presented` side
   // fires here, and `rule_name` stays null because there is no policy to name.

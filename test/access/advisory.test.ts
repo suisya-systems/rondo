@@ -16,6 +16,8 @@ import { expect, test } from "vitest";
 
 import {
   COMMAND_LINE_SURFACE,
+  type Elevation,
+  elevateObservation,
   explainIteration,
   proposeRetry,
   recordAnswer,
@@ -242,6 +244,169 @@ test("two explanations of one row are two rows, and the later one cites the late
   expect(rows.length).toBe(2);
   expect(rows[0]?.snapshot).toContain('"classification":null');
   expect(rows[1]?.snapshot).toContain('"classification":"allowed"');
+});
+
+// --- elevate: the two columns, and the refusals on the way to them ---------
+
+/** One observation, as `elevate` hands it over. */
+const anObservation = (): Elevation => ({
+  messageId: "m-0001",
+  actorId: "operator-1",
+  observation: {
+    label: "observation",
+    value: "this plan was already merged last week",
+    basis: { form: "iteration", iterationId: "i-0001" },
+  },
+});
+
+test("it elevates an observation, and the row records which message and who", async () => {
+  // **D-0032 rule 7's pair, written for the first time** (#41 section 3): the
+  // chain observation -> proposal is a fact in the ledger rather than a
+  // convention, and it is a fact about *this* proposal rather than a separate
+  // table nobody joins.
+  const { connection, store, record } = fresh();
+  await reserveOne(store, "i-0001");
+
+  const shows = screen();
+  const outcome = await elevateObservation(
+    { store, record, now: () => 5_000, present: shows.present },
+    "i-0001",
+    anObservation(),
+  );
+  expect(outcome.kind).toBe("explained");
+
+  const row = onlyProposal(connection);
+  expect(row["elevated_from_message_id"]).toBe("m-0001");
+  expect(row["elevated_by_actor_id"]).toBe("operator-1");
+  // The message the reference names is in the conversation, which is what
+  // D-0036 rule 4 refuses a proposal for lacking.
+  expect(
+    connection
+      .prepare("SELECT count(*) AS n FROM conversation_message WHERE message_id = ?")
+      .get("m-0001"),
+  ).toEqual({ n: 1 });
+  // The derivation says a person is in this payload (D-0032 rule 8).
+  expect(row["derivation"]).toBe("operator_elevation");
+  // Still the kind that binds nothing: this cut reaches proposal and stops.
+  expect(row["kind"]).toBe("explanation");
+
+  const rendered = shows.shown.join("\n");
+  expect(rendered).toContain("elevated from message 'm-0001' by 'operator-1'");
+  expect(rendered).toContain("observation: this plan was already merged last week");
+  expect(rendered).toContain("basis: iteration i-0001");
+  expect(rendered).toContain("binds nothing");
+});
+
+test("an observation whose message id is already spoken for is refused, and nothing is proposed", async () => {
+  // **The CLI-reachable half of D-0036 rule 3.** A message id is immutable, and
+  // the store holds no body, so it cannot tell a repeat of one message from a
+  // different message reusing an id. Refusing is the answer that cannot
+  // silently be wrong -- and the proposal that would have cited it is not
+  // written either.
+  const { connection, store, record } = fresh();
+  await reserveOne(store, "i-0001");
+  expect(await record.recordMessage("m-0001")).toEqual({ kind: "recorded" });
+
+  const shows = screen();
+  const outcome = await elevateObservation(
+    { store, record, now: () => 5_000, present: shows.present },
+    "i-0001",
+    anObservation(),
+  );
+  expect(outcome.kind).toBe("refused");
+  expect(connection.prepare("SELECT count(*) AS n FROM proposal").get()).toEqual({ n: 0 });
+  expect(shows.shown).toEqual([]);
+});
+
+test("an iteration that is not there costs no message id", async () => {
+  // The order is deliberate: a message id is spent for ever once appended, so
+  // the commonest mistake -- a typo'd iteration id -- must not burn the name
+  // the operator is about to retype.
+  const { connection, store, record } = fresh();
+  const outcome = await elevateObservation(
+    { store, record, now: () => 5_000, present: screen().present },
+    "i-ghost",
+    anObservation(),
+  );
+  expect(outcome.kind).toBe("refused");
+  expect(connection.prepare("SELECT count(*) AS n FROM conversation_message").get()).toEqual({
+    n: 0,
+  });
+});
+
+test("a proposal that cannot be written leaves the message id unspent", async () => {
+  // **One gesture, one transaction** (`recordElevation`). A message id is spent
+  // for ever once appended (D-0036 rule 3), so a message beside a proposal that
+  // was not written would cost the operator the name they chose and leave a row
+  // in the conversation with no observation behind it. Planted with a proposal
+  // row already sitting under the id this elevation would mint, because the
+  // real failures here are store faults.
+  const { connection, store, record } = fresh();
+  await reserveOne(store, "i-0001");
+  connection
+    .prepare(
+      "INSERT INTO proposal (proposal_id, kind, drafter, payload, proposal_digest, snapshot, " +
+        "snapshot_digest, derivation, created_at_ms) " +
+        "VALUES (?, 'explanation', 'x', '{}', 'd', '{}', 'd', 'store_rows', 1)",
+    )
+    .run("elevation-m-0001");
+
+  const shows = screen();
+  const outcome = await elevateObservation(
+    { store, record, now: () => 5_000, present: shows.present },
+    "i-0001",
+    anObservation(),
+  );
+  expect(outcome.kind).toBe("refused");
+  // The message was rolled back with the proposal: the operator can retype
+  // 'm-0001' once the fault is fixed.
+  expect(connection.prepare("SELECT count(*) AS n FROM conversation_message").get()).toEqual({
+    n: 0,
+  });
+  expect(shows.shown).toEqual([]);
+});
+
+test("a pointer at something no snapshot holds does not resolve, and does not throw", async () => {
+  // **A pointer can now come from an operator** (`--basis snapshot:/...`), and
+  // `constructor` is on every object while being in no snapshot. Walking into
+  // it would render a function as a citation -- and, before the own-property
+  // check, would throw *after* the message and the proposal were written,
+  // leaving a spent message id and nothing on the screen.
+  const { connection, store, record } = fresh();
+  await reserveOne(store, "i-0001");
+
+  const shows = screen();
+  const outcome = await elevateObservation(
+    { store, record, now: () => 5_000, present: shows.present },
+    "i-0001",
+    {
+      ...anObservation(),
+      observation: {
+        label: "observation",
+        value: "pointed at nothing the row holds",
+        basis: { form: "snapshot", pointer: "/constructor" },
+      },
+    },
+  );
+  expect(outcome.kind).toBe("explained");
+  expect(shows.shown.join("\n")).toContain("basis: snapshot /constructor = does not resolve");
+  expect(connection.prepare("SELECT count(*) AS n FROM proposal").get()).toEqual({ n: 1 });
+
+  // The same for an array: `length` is on every array and is in no snapshot,
+  // and RFC 6901 addresses an array by index only. An index that is there
+  // still resolves, which is what keeps this a check rather than a ban.
+  const more = screen();
+  await elevateObservation({ store, record, now: () => 6_000, present: more.present }, "i-0001", {
+    ...anObservation(),
+    messageId: "m-0002",
+    observation: {
+      label: "observation",
+      value: "counted the readings",
+      basis: { form: "snapshot", pointer: "/readings/length" },
+    },
+  });
+  expect(more.shown.join("\n")).toContain("basis: snapshot /readings/length = does not resolve");
+  expect(more.shown.join("\n")).toContain('basis: snapshot /iteration/status = "planned"');
 });
 
 /**

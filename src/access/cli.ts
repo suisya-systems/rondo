@@ -27,6 +27,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { isAbsolute } from "node:path";
 import { parseArgs } from "node:util";
 
+import type { Basis } from "../advisory/proposal.js";
 import {
   ackGate,
   answerGate,
@@ -60,7 +61,14 @@ import {
   openIterationStore,
   type ReadOutcome,
 } from "../store/sqlite.js";
-import { explainIteration, proposeRetry, recordAnswer } from "./advisory.js";
+import {
+  type ExplainOutcome,
+  type ExplainPorts,
+  elevateObservation,
+  explainIteration,
+  proposeRetry,
+  recordAnswer,
+} from "./advisory.js";
 import { abandon, admit, conductorPorts, resume } from "./conductor.js";
 import { asciiEscape, consoleSeams, relayUpstream } from "./console.js";
 import {
@@ -116,6 +124,16 @@ export const USAGE = `rondo - the operator surface for delegated work
                           --despite-review is how you overrule that last one
   rondo abandon --iteration-id ID --reason TEXT
                           end an iteration rondo cannot finish
+  rondo elevate --iteration-id ID --actor-id ID --message-id ID
+                --observation=TEXT --basis LOCATOR
+                          hand one observation of yours to the advisory. The
+                          observation becomes a message in the conversation and
+                          the proposal records which message it came from and
+                          who elevated it. --basis is required and names where
+                          the observation rests: snapshot:/pointer,
+                          iteration:ID, gate:ID#SEQ, run:ID, or
+                          repo:PATH@COMMIT#FIRST-LAST. Write --observation with
+                          an equals sign: an observation may begin with a dash
   rondo propose --iteration-id ID --successor-id ID
                           propose the plans a retry of one iteration could run
                           under, one option per persisted plan, with exactly one
@@ -227,6 +245,7 @@ export interface ParsedCommand {
     | "publish"
     | "abandon"
     | "explain"
+    | "elevate"
     | "propose"
     | "decide"
     | "help";
@@ -238,6 +257,9 @@ export interface ParsedCommand {
   readonly repo: string | null;
   readonly remote: string | null;
   readonly reason: string | null;
+  readonly messageId: string | null;
+  readonly observation: string | null;
+  readonly basis: string | null;
   readonly successorId: string | null;
   readonly proposalId: string | null;
   readonly contractDigest: string | null;
@@ -261,6 +283,9 @@ const FLAGS = {
   repo: { type: "string" },
   remote: { type: "string" },
   reason: { type: "string" },
+  "message-id": { type: "string" },
+  observation: { type: "string" },
+  basis: { type: "string" },
   "successor-id": { type: "string" },
   "proposal-id": { type: "string" },
   "contract-digest": { type: "string" },
@@ -277,6 +302,7 @@ const COMMANDS = [
   "publish",
   "abandon",
   "explain",
+  "elevate",
   "propose",
   "decide",
 ] as const;
@@ -320,6 +346,11 @@ export const FLAGS_BY_COMMAND: Readonly<Record<string, readonly string[]>> = {
   // a different iteration would be the wrong answer rendered as confidently as
   // the right one.
   explain: ["iteration-id"],
+  // **Five flags and every one of them required**, for `explain`'s reason and
+  // one of elevation's own: this is where authority enters (#41 section 3), and
+  // a default here would be rondo supplying part of an act it is recording a
+  // person as having taken.
+  elevate: ["iteration-id", "actor-id", "message-id", "observation", "basis"],
   // **Two ids, both required, and neither has a default.** The subject is the
   // iteration whose work was not taken, and the successor is the identity the
   // retry would run as -- which `D-0023` makes the one name a person chooses,
@@ -406,6 +437,9 @@ export function parseCommand(argv: readonly string[]): ParseOutcome {
       repo: text("repo"),
       remote: text("remote"),
       reason: text("reason"),
+      messageId: text("message-id"),
+      observation: text("observation"),
+      basis: text("basis"),
       successorId: text("successor-id"),
       proposalId: text("proposal-id"),
       contractDigest: text("contract-digest"),
@@ -428,6 +462,9 @@ function emptyCommand(command: ParsedCommand["command"]): ParsedCommand {
     repo: null,
     remote: null,
     reason: null,
+    messageId: null,
+    observation: null,
+    basis: null,
     successorId: null,
     proposalId: null,
     contractDigest: null,
@@ -1036,6 +1073,14 @@ export async function main(
     return await commandExplain(parsed, store, opened.path);
   }
 
+  // **`elevate` is dispatched here for `explain`'s reason exactly.** It reads
+  // rondo's own rows and writes rondo's own rows; nothing about handing an
+  // observation to the advisory needs a worker, and the observation most worth
+  // elevating is often about a lap that has already ended.
+  if (parsed.command === "elevate") {
+    return await commandElevate(parsed, environment, store, opened.path);
+  }
+
   // **`propose` and `decide` are dispatched here for `explain`'s reason.** Both
   // read and write rondo's own rows and drive no continuo verb: the iteration a
   // retry is proposed for has already ended, and an answer to a proposal is a
@@ -1133,19 +1178,27 @@ async function commandExplain(
         "default would explain a different row just as confidently.",
     );
   }
-  const outcome = await explainIteration(
-    {
-      store,
-      record: openAdvisoryRecord(storePath),
-      now: Date.now,
-      present: (lines) => {
-        for (const line of lines) {
-          say(line);
-        }
-      },
-    },
-    parsed.iterationId,
+  return sayAdvisoryOutcome(
+    await explainIteration(advisoryPorts(store, storePath), parsed.iterationId),
   );
+}
+
+/** The four things both advisory doors are handed, assembled once. */
+function advisoryPorts(store: IterationStore, storePath: string): ExplainPorts {
+  return {
+    store,
+    record: openAdvisoryRecord(storePath),
+    now: Date.now,
+    present: (lines) => {
+      for (const line of lines) {
+        say(line);
+      }
+    },
+  };
+}
+
+/** What `explain` and `elevate` do with the answer they get back. */
+function sayAdvisoryOutcome(outcome: ExplainOutcome): number {
   if (outcome.kind === "refused") {
     return refuse(outcome.reason);
   }
@@ -1165,6 +1218,141 @@ async function commandExplain(
     return 1;
   }
   return 0;
+}
+
+/**
+ * One `--basis LOCATOR` as the closed union the advisory already has, or null.
+ *
+ * **A compact spelling of {@link Basis} and not a sixth form.** #41 section 3
+ * requires that what is elevated carries its basis with it, and D-0032 rule 2
+ * already fixes what a basis is: a locator, in one of five forms, never a copy
+ * of the material. So the only thing missing was a way to type one on a command
+ * line, which is this function and nothing more -- there is deliberately no
+ * form meaning "the operator said so", because that is the claim with no basis
+ * #39 measured an operator approving on.
+ *
+ * Total; never throws. An unrecognised prefix, a malformed tail and a pointer
+ * that is not a pointer all read as null, and the caller says what the five
+ * forms are.
+ */
+export function parseBasis(text: string): Basis | null {
+  const at = text.indexOf(":");
+  const form = at === -1 ? "" : text.slice(0, at);
+  const rest = text.slice(at + 1);
+  if (rest === "") {
+    return null;
+  }
+  switch (form) {
+    case "snapshot":
+      // RFC 6901: the empty pointer is the whole document, and every other one
+      // begins with a slash. A pointer that does not resolve is not refused
+      // here -- the renderer says "does not resolve", which is the answer that
+      // shows an operator what they actually cited.
+      return rest.startsWith("/") ? { form: "snapshot", pointer: rest } : null;
+    case "iteration":
+      return { form: "iteration", iterationId: rest };
+    case "run":
+      return { form: "continuoRun", runId: rest };
+    case "gate": {
+      const hash = rest.lastIndexOf("#");
+      const tail = rest.slice(hash + 1);
+      // The tail is matched rather than coerced: `Number("")` is 0 and
+      // `Number(" ")` is 0, so a gate cited with no sequence at all would
+      // record as a citation of transition zero -- a reference to different
+      // material, arrived at silently, which is worse than a refusal.
+      const seq = /^\d+$/.test(tail) ? Number(tail) : Number.NaN;
+      return hash <= 0 || !Number.isSafeInteger(seq)
+        ? null
+        : { form: "gateTransition", gateId: rest.slice(0, hash), transitionSeq: seq };
+    }
+    case "repo": {
+      const match = /^(.+)@([^@#]+)#(\d+)-(\d+)$/.exec(rest);
+      if (match === null) {
+        return null;
+      }
+      const [, path, commit, first, last] = match as unknown as readonly string[];
+      const firstLine = Number(first);
+      const lastLine = Number(last);
+      return firstLine < 1 || lastLine < firstLine
+        ? null
+        : {
+            form: "repository",
+            path: String(path),
+            commit: String(commit),
+            firstLine,
+            lastLine,
+          };
+    }
+    default:
+      return null;
+  }
+}
+
+/** The one sentence that lists what a `--basis` may be, written once. */
+const BASIS_FORMS_LINE =
+  "snapshot:/pointer, iteration:ID, gate:ID#SEQ, run:ID, or repo:PATH@COMMIT#FIRST-LAST";
+
+/**
+ * Door nine: hand one observation to the advisory, and record that a person
+ * did it.
+ *
+ * **This is where authority enters** (#41 section 3): an observation constrains
+ * nothing until a human takes it up, so the act is recorded as two columns on
+ * the proposal -- which message it came from and who elevated it -- and the
+ * identity is checked against `RONDO_APPROVER` before anything is written, the
+ * same allowlist `answer` and `publish` pass through.
+ *
+ * **It composes no contract and the proposal it produces cannot be approved.**
+ * The kind is `explanation`, so #41 section 3's chain reaches
+ * `observation -> proposal` here and stops: what turns a proposal into a
+ * contract is an approvable kind's option set, which is not this cut. The
+ * elevation columns are written the same way whichever kind arrives later.
+ */
+async function commandElevate(
+  parsed: ParsedCommand,
+  environment: Readonly<Record<string, string | undefined>>,
+  store: IterationStore,
+  storePath: string,
+): Promise<number> {
+  if (parsed.iterationId === null || parsed.messageId === null) {
+    return refuse(
+      "elevate needs --iteration-id ID, naming the row the observation is about, and " +
+        "--message-id ID, naming the observation itself in the conversation. Neither has a " +
+        "default: an elevation is an act by a person, and rondo does not supply half of one.",
+    );
+  }
+  if (parsed.observation === null || parsed.observation === "") {
+    return refuse(
+      "elevate needs --observation=TEXT, which is what you are handing over. Write it with an " +
+        "equals sign: an observation may begin with a dash.",
+    );
+  }
+  if (parsed.basis === null) {
+    return refuse(
+      `elevate needs --basis LOCATOR, naming where the observation rests: ${BASIS_FORMS_LINE}. ` +
+        "It has no default and there is no form meaning 'because I say so': an observation that " +
+        "carries no basis acquires the look of a proposal without acquiring the grounds for " +
+        "one, which is the hazard elevating in one gesture creates.",
+    );
+  }
+  const basis = parseBasis(parsed.basis);
+  if (basis === null) {
+    return refuse(
+      `--basis is '${parsed.basis}', which is none of the forms a basis may take: ` +
+        `${BASIS_FORMS_LINE}.`,
+    );
+  }
+  const actor = approvedActor(parsed, environment);
+  if ("refusal" in actor) {
+    return refuse(actor.refusal);
+  }
+  return sayAdvisoryOutcome(
+    await elevateObservation(advisoryPorts(store, storePath), parsed.iterationId, {
+      messageId: parsed.messageId,
+      actorId: actor.actorId,
+      observation: { label: "observation", value: parsed.observation, basis },
+    }),
+  );
 }
 
 /**
