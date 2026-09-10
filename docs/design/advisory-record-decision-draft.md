@@ -12,12 +12,12 @@ Until then `D-0032` is a name for a thing that does not exist, not a citation.
 Index row to add:
 
 ```
-| D-0032 | The record the operator's surface has to be able to show: alternatives inside one immutable proposal, a basis that is a locator, a durable last-look mark, and a row for every silence | accepted |
+| D-0032 | The record the operator's surface has to be able to show: alternatives inside one immutable proposal, a basis that is a locator, a durable last-look mark, and one table counting what was put to the operator and what was not | accepted |
 ```
 
 ---
 
-## D-0032 - The record the operator's surface has to be able to show: alternatives inside one immutable proposal, a basis that is a locator, a durable last-look mark, and a row for every silence
+## D-0032 - The record the operator's surface has to be able to show: alternatives inside one immutable proposal, a basis that is a locator, a durable last-look mark, and one table counting what was put to the operator and what was not
 
 **Status:** draft (proposed 2026-09-11). Refs rondo#39, rondo#40, rondo#41.
 
@@ -108,8 +108,9 @@ field - a column for a computable value is a second home for a fact (`D-0022` ru
    outcome, so "declined" and "never answered" are different rows rather than the same absence. A
    refusal writes no `decision_consumption` row and no delegation row, which is what `D-0022` rule 18
    already assumes when it says the composition must outlive a refusal. Without this, #41's inbox
-   cannot tell what is waiting on the operator from what the operator has already settled, and #40's
-   count of what reached the operator is uncountable in the direction that matters.
+   cannot tell what is waiting on the operator from what the operator has already settled. It does
+   **not** carry #40's count of what reached the operator: an answer is a fact about a person and a
+   presentation is a fact about the surface, and rule 10 holds the second.
 
 7. **An elevation is recorded on the proposal, as two nullable columns that are null together:
    `elevated_from_message_id` and `elevated_by_actor_id`.** #41's chain -
@@ -141,33 +142,69 @@ field - a column for a computable value is a second home for a fact (`D-0022` ru
    reading as permission; this is the same refusal for the third voice, so that *"it was explained
    well"* can never come to function as *"it passed"*.
 
-9. **`operator_view(actor_id, viewed_at_ms)`, append-only, is the durable last-look mark.** #39's
-   *"what changed since the operator last looked"* and #41's *"recovering context after a gap"* are
-   the same question, and today only the replaced role's in-memory context answers it. Every record
-   kind in the store already carries a caller-clock timestamp, so the only missing fact is when the
-   operator last looked - two columns, written by the surface when it renders.
+9. **`operator_view(actor_id, viewed_at_ms)`, append-only, is the durable last-look mark, and
+   `viewed_at_ms` is the bound the render's own query used rather than the time the render
+   finished.** #39's *"what changed since the operator last looked"* and #41's *"recovering context
+   after a gap"* are the same question, and today only the replaced role's in-memory context answers
+   it. Every record kind in the store already carries a caller-clock timestamp, so the only missing
+   fact is where the operator's reading stopped.
+
+   **Which value is written is the whole of the rule, and the obvious one is wrong.** Writing the
+   clock at the *end* of a render loses every row committed while the render was running: it was
+   never displayed, and its timestamp precedes the mark, so rule 11's query omits it for ever. So
+   the surface samples the bound **before** it reads, uses that same bound as the upper limit of
+   every query in the render, and writes it after. Anything committed during the render is at or
+   after the mark and is reported at the next look. Rule 11's comparison is inclusive for the same
+   reason: **the failure this design accepts is showing something twice, and the failure it refuses
+   is losing it.**
 
    **Per-item read/unread flags are refused**: one row per look answers the same question as N rows
    per item, and a per-item flag is a mutable column on an immutable record, which is `D-0022` rule
    4's whole objection.
 
+   **The ceiling, named with its upgrade path.** These timestamps are the *caller's* clock, never
+   the store's (`D-0019`'s rule, restated at `records.ts:150-152`), so a writer whose clock is
+   behind can commit a row that lands before a mark already written. The mark is therefore a bound
+   and not a proof, and the window is the clock skew between writers on one host. Removing it means
+   a store-assigned monotone sequence beside the caller's clock on every record kind, which is a
+   change to all of them and to a rule this entry has no reason to reopen; it is what the falsifier
+   below asks for if the window is ever observed to matter.
+
    **What this does not claim.** A look is a claim by the surface that it rendered, not proof that a
    person read anything - the same grade as `D-0029` rule 11's third clause, and it is recorded here
    rather than left to be discovered.
 
-10. **Silence leaves a row: `withholding(withheld_at_ms, subject_kind, subject_id, rule_name)`,
-    append-only, and the breakdown is a `GROUP BY` over it.** #40's hazard is that a layer deciding
-    what the operator sees also decides what they do not see, and that *"nothing happened"* leaves
-    nothing to audit. The shape is not new: `admission_refusal` exists for exactly this reason - a
-    refusal that reserves nothing, takes no lock and would otherwise leave no trace, counted so that
-    a bound can be raised because somebody was counted rather than because somebody complained.
+10. **Both sides of the silence are one append-only table:
+    `operator_attention(at_ms, subject_kind, subject_id, disposition, rule_name)`, where
+    `disposition` is `presented` or `withheld` and `rule_name` is required on a `withheld` row.**
+    #40's hazard is that a layer deciding what the operator sees also decides what they do not see,
+    and that *"nothing happened"* leaves nothing to audit. The screen it asks for - *"six things
+    were put to you, forty were not, here is the breakdown"* - is then one `GROUP BY` over one
+    table.
 
-    **`rule_name` is required, and it is the point of the table.** *"Suppressed 40"* is a number;
-    *"suppressed 40, of which 31 by the duplicate-delivery rule"* is a record. A withholding whose
-    rule cannot be named is a judgement with no policy behind it, and the writer refuses it.
+    **One table rather than two, because the numerator and the denominator have to come from the
+    same place.** A withheld-only table makes the count of what *was* put to the operator somebody
+    else's problem, and the only candidate is `human_decision`, which counts **answers** and not
+    presentations: with six proposals on the screen and none answered yet it reports zero. A
+    presentation is a fact about the surface and an answer is a fact about a person, and #40's
+    accountability claim is over the first.
 
-    **A separate table rather than a flag on the withheld thing**, because the most common
-    withholding has no row anywhere to carry a flag: it was never composed into a proposal at all.
+    **A row rather than a column on the thing presented**, for two reasons. The most common
+    withholding has nothing to carry a column: it was never composed into a proposal at all. And a
+    `presented_at_ms` written onto a proposal row would be an update to a record `D-0022` rule 4
+    makes immutable, trading the invariant for a value an append-only row holds just as well. The
+    shape is not new either: `admission_refusal` exists for exactly this reason - a refusal that
+    reserves nothing, takes no lock and would otherwise leave no trace, counted so that a bound can
+    be raised because somebody was counted rather than because somebody complained.
+
+    **`rule_name` is required on the withheld side, and it is the point of the table.** *"Suppressed
+    40"* is a number; *"suppressed 40, of which 31 by the duplicate-delivery rule"* is a record. A
+    withholding whose rule cannot be named is a judgement with no policy behind it, and the writer
+    refuses it.
+
+    **This is not `operator_view` and does not replace it.** One row per look answers *where the
+    operator's reading stopped*; these rows answer *what was offered and what was not*. Collapsing
+    them would make a presentation depend on somebody having looked.
 
     **What this cannot prove, stated rather than implied.** A suppression that writes no row is
     invisible to this table, so it bounds the *accountable* silence and not the total. That is the
@@ -184,7 +221,8 @@ field - a column for a computable value is a second home for a fact (`D-0022` ru
       part its verdicts needed; #39's *"what changed"*, #41's inbox and #40's breakdown all need the
       rest.
     - **What changed since `t`** - one ordered read across the record kinds by their caller-clock
-      timestamps, which is what makes rule 9's two columns worth storing.
+      timestamps, **inclusive of `t`** for rule 9's reason, which is what makes that rule's two
+      columns worth storing.
 
     A query that does not exist is a field that cannot be shown, which is this entry's own subject
     applied to itself.
@@ -201,7 +239,7 @@ sketch, region by region, with its source:
 
 | Region | Drawn from |
 |---|---|
-| *"3 waiting for you, 12 changed since 09:14"* | `operator_view.viewed_at_ms` (rule 9), counted over rows whose timestamp is later |
+| *"3 waiting for you, 12 changed since 09:14"* | `operator_view.viewed_at_ms` (rule 9), counted over rows at or after the mark |
 | One item's one-line title | the recommended option's label inside `payload` (rule 1) |
 | Its options, with the recommendation marked | the ordered option set inside `payload` (rule 1) |
 | The basis under each option | `basis` locators (rule 2): snapshot pointers render inline from the row's own verbatim snapshot, external locators render as something to open |
@@ -209,8 +247,9 @@ sketch, region by region, with its source:
 | The voice badge, and whether the item can be approved at all | `kind` (rule 5); an `explanation` also shows `derivation` and its `undetermined` claims (rule 8) |
 | *"Changed since you last looked"* per item | the item's own timestamp against `operator_view` (rule 9) |
 | Waiting on you / on CI / still running | `iteration.status` - already stored, no new field |
-| *"6 were put to you, 40 were not"* with a breakdown | `withholding` grouped by `rule_name` (rule 10), against the answered and refused `human_decision` rows (rule 6) |
+| *"6 were put to you, 40 were not"* with a breakdown | `operator_attention` grouped by `disposition` and `rule_name` (rule 10) - both counts from one table, neither of them inferred from `human_decision` |
 | Where this came from | `elevated_from_message_id` / `elevated_by_actor_id` (rule 7), and `proposal_id` / `composition.contract_digest` for the rest of the chain |
+| Answered / declined / still open, per item | `human_decision` outcome (rule 6) against the `presented` rows of `operator_attention` (rule 10) |
 | A closed item, and what was decided | `human_decision` outcome (rule 6), reachable because of rule 11's terminal enumeration |
 
 **Two fields were discovered by drawing it**, and both are in the rules above rather than in a later
@@ -279,6 +318,9 @@ cited here as requirements rather than re-verified.
   voice, and would reopen rule 5 rather than adjust it.
 - **A withholding whose rule cannot be named**, which is rule 10's writer refusal firing against a
   legitimate case and means the policy is not written down anywhere.
+- **A row observed to land before a mark that was written after it** - rule 9's named ceiling firing,
+  whose answer is a store-assigned monotone sequence beside the caller's clock and not a change to
+  this rule.
 - **A second surface, or a second approver**, which makes rule 9's mark per-actor-per-surface and
   makes `D-0020` rule 2's allowlist of size one a real set.
 - **The between-laps component arriving** (#40), which is what turns rule 10 from a table with one
