@@ -364,6 +364,24 @@ export interface RunAdmitted {
   readonly createdAtMs: number;
 }
 
+/**
+ * `run show`: the run exists, and the two fields rondo asks the question with.
+ *
+ * **The payload is much larger than this and the narrowing is the decision.**
+ * continuo's document carries the run's lease, its sessions, its open gates,
+ * its events and its outbox rows -- `D-0096` deliberately withholds nothing, so
+ * that a console has no reason to open the database. rondo asks this verb one
+ * question: **is this run id already taken?** The answer to that is the arrival
+ * of the document, not anything inside it, and a decoder that read the other
+ * five keys would be rondo claiming to understand rows it does nothing with.
+ * `status` is read because a refusal that can say what the run is doing is
+ * worth more to the person reading it than one that cannot.
+ */
+export interface RunObserved {
+  readonly runId: string;
+  readonly status: string;
+}
+
 /** One row of `gate list`. */
 export interface OpenGate {
   readonly gateId: string;
@@ -649,6 +667,24 @@ export const RUN_ADMIT: VerbContract<RunAdmitted> = {
     status: requireString(payload, "status"),
     createdAtMs: requireNumber(payload, "created_at_ms"),
   }),
+};
+
+export const RUN_SHOW: VerbContract<RunObserved> = {
+  command: ["run", "show"],
+  schema: "continuo.run.show/1",
+  timeoutMs: CONTROL_PLANE_TIMEOUT_MS,
+  // `run` is a nested object rather than five flat keys, which is continuo's
+  // own shape: `showPayload` keys the document by the tables it read, so the
+  // run's own columns live under `run` beside `lease`, `sessions`, `gates`,
+  // `events` and `outbox`. The other five are not read here; see
+  // {@link RunObserved}.
+  read: (payload) => {
+    const row = requireObject(payload, "run");
+    return {
+      runId: requireString(row, "run_id"),
+      status: requireString(row, "status"),
+    };
+  },
 };
 
 export const GATE_LIST: VerbContract<readonly OpenGate[]> = {

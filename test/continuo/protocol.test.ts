@@ -26,6 +26,7 @@ import {
   LAP_PERFORM,
   RUN_ADMIT,
   RUN_CLOSE,
+  RUN_SHOW,
   type VerbContract,
 } from "../../src/continuo/protocol.js";
 
@@ -789,6 +790,7 @@ describe("the verbs that answer a gate and settle a run", () => {
     GATE_ACK,
     GATE_ANSWER,
     RUN_CLOSE,
+    RUN_SHOW,
   ];
 
   test("gate present is read into rondo's own record", () => {
@@ -957,6 +959,66 @@ describe("the verbs that answer a gate and settle a run", () => {
         writerEpoch: 1,
       },
     });
+  });
+
+  /**
+   * `run show`, which is the one verb rondo drives to learn that a run is NOT
+   * there (D-0031).
+   *
+   * Three cases and they are the three the reading turns on. The payload keys
+   * the run's own columns under `run`, beside the five tables rondo does not
+   * read -- carried here so the case fails if a future decoder starts reading
+   * them. An UNKNOWN run is continuo's ordinary refusal envelope, and it must
+   * decode as `refused` rather than as a defect, because that is the outcome
+   * `revise` reads as "the id is free". And the class in that envelope is never
+   * consulted: `refused` is `refused` whatever continuo called it.
+   */
+  test("run show reads the run's own row and ignores the five tables beside it", () => {
+    const result = decode(
+      RUN_SHOW,
+      output({
+        stdout: success(RUN_SHOW.schema, {
+          run: {
+            run_id: "rondo-iter-2",
+            status: "running",
+            writer_epoch: 1,
+            created_at_ms: 1_757_000_000_000,
+            updated_at_ms: 1_757_000_000_001,
+          },
+          lease: null,
+          sessions: [],
+          gates: [],
+          events: [],
+          outbox: [],
+        }),
+      }),
+    );
+    expect(result).toEqual({
+      kind: "answered",
+      db: "/tmp/cp.sqlite3",
+      payload: { runId: "rondo-iter-2", status: "running" },
+    });
+  });
+
+  test("an unknown run is a refusal rather than a defect, whatever class it carries", () => {
+    for (const errorClass of ["UnknownRunRefused", "MissingStateRefused", "SomethingNewer"]) {
+      const result = decode(
+        RUN_SHOW,
+        output({
+          status: 2,
+          stderr: refusal(RUN_SHOW.schema, errorClass, "run rondo-iter-2 is not on the table"),
+        }),
+      );
+      expect(kindOf(result)).toBe("refused");
+    }
+  });
+
+  test("run show without the nested run object is a defect rather than an empty answer", () => {
+    // The failure this guards is the one that would matter: a payload rondo
+    // could not read decoding as something falsy, and `revise` reading that as
+    // "the id is free" on a control plane that had just said otherwise.
+    const result = decode(RUN_SHOW, output({ stdout: success(RUN_SHOW.schema, { lease: null }) }));
+    expect(kindOf(result)).toBe("invokerDefect");
   });
 
   test("each new verb refuses a document written under another verb's schema", () => {

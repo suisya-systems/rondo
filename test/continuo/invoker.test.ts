@@ -31,6 +31,7 @@ import {
   RUN_CLOSE_OUTCOMES,
   SERVED_ENDPOINT_RECIPIENTS,
   showGate,
+  showRun,
   type VerifiedContinuo,
 } from "../../src/continuo/invoker.js";
 import { mapModelTier, mappedModelTiers } from "../../src/continuo/roles.js";
@@ -134,6 +135,18 @@ describe("a request continuo would accept", () => {
   test("gate show reaches the drive too, and it is the one verb that mutates nothing", async () => {
     const result = await showGate(unissued, { db: "/srv/rondo/cp.sqlite3", gateId: "g-r1-1" });
     expect(defectReason(result)).toContain(REACHED_RUN);
+  });
+
+  test("run show reaches the drive, and its arguments are validated first", async () => {
+    const result = await showRun(unissued, { db: "/srv/rondo/cp.sqlite3", runId: "rondo-iter-2" });
+    expect(defectReason(result)).toContain(REACHED_RUN);
+
+    // A relative database never reaches a command line, and the reason names
+    // the field rather than the position -- the same contract every other verb
+    // in this layer holds to.
+    const relative = defectReason(await showRun(unissued, { db: "cp.sqlite3", runId: "r1" }));
+    expect(relative).toContain("db");
+    expect(relative).not.toContain(REACHED_RUN);
   });
 });
 

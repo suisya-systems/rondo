@@ -463,22 +463,25 @@ test("revise carries the instruction and the successor's iteration id", () => {
 });
 
 /**
- * The two refusals that have to come before the gate is walked.
+ * The refusals that have to come before the gate is walked.
  *
  * The walk presents, delivers and answers through continuo and its ack closes
  * the gate; it cannot be taken back. `revisionPlan` already refuses a plan it
- * cannot build, and these are the two things it cannot see -- the id the
- * successor will be reserved under is not part of the plan, and a gate continuo
- * has already closed is walked *successfully* and silently. Either discovered
- * after the walk leaves a person having spent their gate on an answer that
- * started nothing.
+ * cannot build, and these are the things it cannot see -- the id the successor
+ * will be reserved under is not part of the plan, the branch and the workspace
+ * are facts about the machine, the run id is a fact about continuo's control
+ * plane, and a gate continuo has already closed is walked *successfully* and
+ * silently. Any of them discovered after the walk leaves a person having spent
+ * their gate on an answer that started nothing.
  */
-test("a revision is blocked before the walk when the id is taken or the gate is closed", () => {
+test("a revision is blocked before the walk when a name is taken or the gate is closed", () => {
   const clear = {
     predecessorId: "iter-1",
     gateOutcome: null,
     successorId: "iter-2",
     successorRow: "absent",
+    successorRunId: "rondo-iter-2",
+    successorRunStatus: null,
     topicBranch: "topic/iter-2",
     topicBranchExists: false,
     workspace: "/srv/ws/iter-2",
@@ -512,6 +515,20 @@ test("a revision is blocked before the walk when the id is taken or the gate is 
     expect(blocked).toContain("iter-2");
     expect(blocked).toContain("Nothing was touched");
   }
+
+  // A run continuo's control plane already holds under the successor's id.
+  // `run admit` refuses a second run under one id, and for a revision that
+  // refusal arrives after the gate is spent -- so it is asked here, of the same
+  // database `gate show` has just been read from. Only an ANSWERED `run show`
+  // reaches this branch: a refusal, an unreadable database or a seam that did
+  // not answer leaves `successorRunStatus` null, which is the reading that
+  // keeps this check from turning continuo's refusal vocabulary into a
+  // taxonomy (D-0015 rule 2).
+  const held = revisionBlocker({ ...clear, successorRunStatus: "running" });
+  expect(held).toContain("rondo-iter-2");
+  expect(held).toContain("running");
+  expect(held).toContain("Nothing was touched");
+  expect(held).toContain("--iteration-id");
 
   // The gate is checked first: a person whose gate has closed needs to hear
   // that before they hear about an identifier.

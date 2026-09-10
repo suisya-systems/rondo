@@ -34,6 +34,7 @@ import {
   deliverGate,
   presentGate,
   showGate,
+  showRun,
   startContinuo,
   type VerifiedContinuo,
 } from "../continuo/invoker.js";
@@ -1366,7 +1367,19 @@ async function commandAnswer(
  *     predecessor is `closed`, so a corrected retry is told that nothing is
  *     live. An `unreadable` row blocks the id too: it is a row, whatever it
  *     says.
- *  2. **The topic branch and the workspace are asked of the machine, not only
+ *  2. **The successor's run id is asked of continuo's control plane**, which is
+ *     the one field `run admit` checks that rondo's own store cannot see. Under
+ *     `D-0023` the run id is a pure function of the iteration id, so a
+ *     collision rondo caused is impossible and check (1) covers the rest of
+ *     rondo's own history -- but a control plane holding a run rondo's store
+ *     does not (a store rebuilt or replaced, a `--db` pointing somewhere else,
+ *     a run made by hand) still refuses at `run admit`, which for a revision is
+ *     after the gate is gone. **Only an answered `run show` counts as taken**;
+ *     a refusal, an unreadable database or a seam that did not answer leaves
+ *     this command behaving exactly as it did before the check existed, which
+ *     is what keeps a verb rondo drives to learn about an absence from turning
+ *     continuo's refusal vocabulary into a taxonomy (`D-0015` rule 2).
+ *  3. **The topic branch and the workspace are asked of the machine, not only
  *     of the predecessor's plan.** `revisionPlan` compares the three
  *     identifiers against the predecessor's, which catches the obvious reuse
  *     and is all a layer that may not start a process can do. It does not catch
@@ -1374,7 +1387,7 @@ async function commandAnswer(
  *     spelling of a path that resolves to the same directory -- and continuo's
  *     materialiser requires that neither exists, discovering it after
  *     `run admit`, which for a revision is after the gate is gone.
- *  3. **A gate continuo has already closed is not an answer this command may
+ *  4. **A gate continuo has already closed is not an answer this command may
  *     stand on.** `walkGate` handles it correctly and gently -- it says so and
  *     sends nothing -- and that is exactly the trap: the walk *succeeds*, and a
  *     conductor's `resume` then reports `closed` for `withdrawn` and `expired`
@@ -1383,15 +1396,17 @@ async function commandAnswer(
  *     recorded anywhere, under a gate outcome that is not a person saying
  *     anything at all.
  *
- * Both were found by review rather than by a walk, which is the half of the
+ * All four were found by review rather than by a walk, which is the half of the
  * ordering argument the first walk could not reach: the happy path never meets
- * either.
+ * any of them.
  */
 export function revisionBlocker(input: {
   readonly predecessorId: string;
   readonly gateOutcome: string | null;
   readonly successorId: string;
   readonly successorRow: ReadOutcome["kind"];
+  readonly successorRunId: string;
+  readonly successorRunStatus: string | null;
   readonly topicBranch: string;
   readonly topicBranchExists: boolean;
   readonly workspace: string;
@@ -1411,6 +1426,15 @@ export function revisionBlocker(input: {
       "not be reserved under it -- and the gate would have been answered first. Nothing was " +
       "touched. Choose another --iteration-id, or another --run-id, which is what the " +
       "iteration id defaults to."
+    );
+  }
+  if (input.successorRunStatus !== null) {
+    return (
+      `continuo's control plane already holds run '${input.successorRunId}' at status ` +
+      `'${input.successorRunStatus}', and admission refuses a second run under one id -- the ` +
+      "second lap could not have been admitted, and the gate would have been answered first. " +
+      "Nothing was touched. rondo derives the run id from the iteration id, so choose another " +
+      "--iteration-id."
     );
   }
   if (input.topicBranchExists) {
@@ -1572,11 +1596,26 @@ async function commandRevise(
         "is not there, and rondo will not answer the gate without knowing. Nothing was touched.",
     );
   }
+  // **Asked of continuo, and only an answer is a fact.** This is the field
+  // `D-0027` rule 9 left open: `run admit` refuses a run id the control plane
+  // already holds, and for a revision that refusal arrives after the gate is
+  // spent. An answered document means the id is taken; every other outcome --
+  // continuo refusing, a database rondo cannot read, a seam that did not answer
+  // -- leaves this command as it was, because a verb driven to learn about an
+  // absence must not turn continuo's refusals into a taxonomy (`D-0015`
+  // rule 2). The database is the predecessor's own, which `gate show` has just
+  // read successfully.
+  const successorRun = await showRun(continuo, {
+    db: planField(record, "db"),
+    runId: allocation.allocation.runId,
+  });
   const blocker = revisionBlocker({
     predecessorId: record.id,
     gateOutcome: gate.outcome,
     successorId,
     successorRow: existing.kind,
+    successorRunId: allocation.allocation.runId,
+    successorRunStatus: successorRun.kind === "answered" ? successorRun.payload.status : null,
     topicBranch: successorTopicBranch,
     topicBranchExists: branch.exists,
     workspace: successorWorkspace,

@@ -383,9 +383,19 @@ instruction byte for byte as the gate's answer, and the prompt gets it byte for 
 loop, no bound to reach, and no path into `revise` that does not start with a keyboard. Revise as
 many times as the work needs -- each one costs a lap.
 
-Two things `revise` refuses before it touches the gate, because a walked gate cannot be taken back:
-a plan whose identifiers will not validate, and a plan carrying a `gate_deadline_at_ms`. The second
-is an instant rather than a duration, so the first lap's is already behind the second one; rondo
+Everything `revise` can refuse, it refuses before it touches the gate, because a walked gate cannot
+be taken back: a plan whose identifiers will not validate, a successor id the store already holds, a
+topic branch git says exists, a workspace path that is already there, a gate continuo has closed
+already -- and a run id continuo's control plane already holds, which rondo asks `run show` about
+(`D-0031`). That last one matters when rondo's store and the control plane have drifted apart: a
+store that was rebuilt or replaced, or a `--db` naming a different database, can leave a run
+standing under a name rondo believes is free. If the check cannot get an answer -- continuo refuses,
+the database will not open -- `revise` proceeds anyway and the collision is discovered by
+`run admit` as it was before, which is the loud failure it has always been rather than a new refusal
+invented from an unread reply.
+
+One more thing is refused there and is worth its own sentence: a plan carrying a
+`gate_deadline_at_ms`. It is an instant rather than a duration, so the first lap's is already behind the second one; rondo
 will not carry it forward and will not pick a new one, because how long a person has to answer is
 yours to declare. Set it and use `start`.
 
