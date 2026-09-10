@@ -92,6 +92,15 @@ export interface ReserveInput {
   readonly runId: string;
   readonly topicBranch: string;
   readonly workspace: string;
+  /**
+   * The iteration this one revises, or null for a first lap (D-0030 rule 1).
+   *
+   * Required rather than optional, so that every caller says which it is: a
+   * lineage that can be left off is a lineage a caller forgets, and the row
+   * that results is indistinguishable from a first lap for ever. `revise` is
+   * the one caller that passes an id today.
+   */
+  readonly supersedesIterationId: string | null;
   readonly nowMs: number;
 }
 
@@ -436,6 +445,15 @@ const GENERATED_COLUMNS = Object.freeze({
  * the three digests, the gate -- is nullable, because it is legitimately
  * unknown at the moment the row is first written.
  *
+ * **`supersedes_iteration_id` is the one nullable column that is not an
+ * "unknown yet"** (D-0030). It is written by `reserve()` or never, and null
+ * means this iteration revises nothing rather than that its lineage has not
+ * been established. It is **not** a foreign key, for `admission_refusal`'s
+ * reason below: this database declares none at all, and one on a single column
+ * would make the schema claim that referential integrity is enforced somewhere
+ * it is not. What stands in its place is a check inside `reserve()`'s own
+ * transaction, where the predecessor can be read under the write lock.
+ *
  * **`live` is no longer an invariant the database holds, and that is D-0023.**
  * It stays as a column and keeps its meaning -- "this row has not reached a
  * terminal status" -- but the unique index over it is gone, because a unique
@@ -470,6 +488,7 @@ CREATE TABLE IF NOT EXISTS iteration (
   topic_branch          TEXT,
   workspace             TEXT,
   identifiers_spent     INTEGER NOT NULL DEFAULT 0,
+  supersedes_iteration_id TEXT,
   continuo_revision     TEXT,
   agent_type_digest     TEXT,
   config_digest         TEXT,
@@ -577,7 +596,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS iteration_holds_workspace
 `;
 
 /**
- * The columns and indexes a database created before D-0023 does not have.
+ * The columns a database created before the entry that added them does not
+ * have.
  *
  * **This exists because rondo had no migration mechanism and now needs one.**
  * `CREATE TABLE IF NOT EXISTS` is a no-op against a table that is already
@@ -594,6 +614,14 @@ CREATE UNIQUE INDEX IF NOT EXISTS iteration_holds_workspace
  * exceed the thing it guards. **It is a reversible choice**: the moment a
  * second table needs a coordinated change, this becomes the wrong shape.
  *
+ * **D-0030 is the second entry to add a column, and it is the evidence for that
+ * paragraph rather than a strain on it.** `supersedes_iteration_id` is one
+ * nullable column on the same table, needing no back-fill -- a database written
+ * before it holds no revision it could record, because `revise` had nowhere to
+ * write one -- so the list grows by a line and the mechanism does not grow at
+ * all. That is what D-0027 rule 9 was waiting for when it deferred the lineage
+ * "to the entry that adds a migration to the store".
+ *
  * **`pragma_table_xinfo` rather than `pragma_table_info`, and that is not a
  * preference.** `table_info` does not list generated columns at all, so a diff
  * taken against it would try to add `live`, `occupying` and
@@ -607,6 +635,7 @@ const ADDED_COLUMNS = Object.freeze({
   topic_branch: "TEXT",
   workspace: "TEXT",
   identifiers_spent: "INTEGER NOT NULL DEFAULT 0",
+  supersedes_iteration_id: "TEXT",
   occupying: GENERATED_COLUMNS.occupying,
   holds_identifiers: GENERATED_COLUMNS.holds_identifiers,
 });
@@ -743,6 +772,7 @@ const SELECT_COLUMNS = [
   "topic_branch",
   "workspace",
   "identifiers_spent",
+  "supersedes_iteration_id",
   "continuo_revision",
   "agent_type_digest",
   "config_digest",
@@ -1004,11 +1034,25 @@ export function iterationStore(connection: DatabaseSync, policy: HostPolicy): It
               return { kind: "atCapacity", bound: bound.name, limit, occupancy };
             }
           }
+          // **The lineage is checked here, under the write lock, because that
+          // is the only place it can be** (D-0030 rule 3). This database
+          // declares no foreign keys, so nothing else would refuse a
+          // predecessor that is not there -- and a lineage naming a row nobody
+          // can read is worse than the branch-name inference it replaced,
+          // because it *looks* like a record. A row superseding itself is the
+          // same failure with a shorter cycle. Both are rondo defects rather
+          // than a person's mistake: the only caller passes a row it has
+          // already read.
+          const lineage = lineageDefect(connection, input);
+          if (lineage !== null) {
+            return { kind: "defect", reason: lineage };
+          }
           connection
             .prepare(
               "INSERT INTO iteration (id, status, request, plan, plan_digest, attempts, " +
-                "run_id, topic_branch, workspace, identifiers_spent, created_at_ms, " +
-                "updated_at_ms) VALUES (?, 'planned', ?, ?, ?, 1, ?, ?, ?, 0, ?, ?)",
+                "run_id, topic_branch, workspace, identifiers_spent, supersedes_iteration_id, " +
+                "created_at_ms, updated_at_ms) VALUES (?, 'planned', ?, ?, ?, 1, ?, ?, ?, 0, " +
+                "?, ?, ?)",
             )
             // One attempt, not zero: the row exists because an attempt is being
             // made. `nextStep` compares the policy's ceiling against a *fresh*
@@ -1028,6 +1072,7 @@ export function iterationStore(connection: DatabaseSync, policy: HostPolicy): It
               input.runId,
               input.topicBranch,
               input.workspace,
+              input.supersedesIterationId,
               input.nowMs,
               input.nowMs,
             );
@@ -1225,6 +1270,42 @@ export function iterationStore(connection: DatabaseSync, policy: HostPolicy): It
 }
 
 /**
+ * Why a reservation's lineage cannot be written, or null when it can.
+ *
+ * **Read inside the caller's transaction**, which is what makes the answer
+ * worth anything: `BEGIN IMMEDIATE` holds the write lock, so a predecessor
+ * that exists when this looks still exists when the row is inserted. The same
+ * question asked before the transaction would be a check with a window in it.
+ *
+ * Rows are never deleted by anything in this file -- `settle` and `transition`
+ * both write statuses -- so "the predecessor is not there" means it was never
+ * there, and that is a defect in the caller rather than a race it lost.
+ */
+function lineageDefect(connection: DatabaseSync, input: ReserveInput): string | null {
+  const predecessor = input.supersedesIterationId;
+  if (predecessor === null) {
+    return null;
+  }
+  if (predecessor === input.id) {
+    return (
+      `iteration '${input.id}' was reserved as a revision of itself, and an iteration is not ` +
+      "its own predecessor: a revision is a second lap, reserved under an id of its own"
+    );
+  }
+  const found = connection
+    .prepare("SELECT 1 AS present FROM iteration WHERE id = ?")
+    .get(predecessor);
+  if (found === undefined) {
+    return (
+      `iteration '${input.id}' was reserved as a revision of '${predecessor}', which is not a ` +
+      "row in this database. rondo will not write a lineage that names nothing: a reference " +
+      "no reader can follow is weaker than the branch names it was added to replace"
+    );
+  }
+  return null;
+}
+
+/**
  * A transition's fields as a SQL fragment and its bound values.
  *
  * The clause list is built from `COLUMN_BY_FIELD` rather than from the caller's
@@ -1375,6 +1456,7 @@ function toRecord(row: SqlRow): IterationRecord {
     topicBranch: optionalText(row, "topic_branch"),
     workspace: optionalText(row, "workspace"),
     identifiersSpent: requireInteger(row, "identifiers_spent"),
+    supersedesIterationId: optionalText(row, "supersedes_iteration_id"),
     continuoRevision: optionalText(row, "continuo_revision"),
     agentTypeDigest: optionalText(row, "agent_type_digest"),
     configDigest: optionalText(row, "config_digest"),

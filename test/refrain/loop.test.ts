@@ -54,6 +54,7 @@ const recordWith = (status: IterationStatus, attempts = 1): IterationRecord => (
   topicBranch: null,
   workspace: null,
   identifiersSpent: 0,
+  supersedesIterationId: null,
   continuoRevision: null,
   agentTypeDigest: null,
   configDigest: null,

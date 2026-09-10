@@ -67,6 +67,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0028 | The plan payload carries its own version: an ordered read-side upgrade ladder, strict again at the version that introduced each field, and separate from the schema's migration on purpose | accepted |
 | D-0022 | The advisory component: a pure function in its own layer, three authorities, one ledger per fact — and the widening a lap-1 retry actually takes, which is a fresh plan and not a successor contract | accepted |
 | D-0029 | An independent reading of what a lap produced: material for the person at the gate, one refusal at `publish`, and a verdict that cannot certify what it never read | accepted |
+| D-0030 | The lineage `D-0027` deferred: one nullable column on the iteration row, written once at reservation, refused when it names nothing, and read where provenance is shown | accepted |
 
 ---
 
@@ -3432,6 +3433,13 @@ This entry is the smallest thing that makes the second option do what it says.
    revisions a request may have — each one is a person typing a command, which is the only bound
    lap 1 has ever had. No `revise` from anywhere but the live iteration's open gate.
 
+   > **Note (D-0030, 2026-09-10).** The deferral has been carried out, and this rule's first
+   > sentence no longer describes the tree. `D-0023` supplied the migration mechanism it was
+   > waiting for; `D-0030` adds `supersedes_iteration_id` to the iteration row, writes it at the
+   > successor's reservation and reads it where provenance is shown. Nothing else in the rule
+   > moves: there is still no bound on how many revisions a request may have, and still no
+   > `revise` from anywhere but the live iteration's open gate.
+
    **And the preflight of rule 6 is not complete, which is stated rather than implied.** It checks
    what rondo can see: its own store, git, and the filesystem. It does **not** check that the
    successor's **run id** is free in continuo's control plane, so a `--run-id` naming an older run
@@ -3890,6 +3898,11 @@ next field would have faced the same choice with no rule to appeal to.
 - It does not add the lineage column `D-0027` rule 9 deferred "to the entry that adds a migration
   to the store". That entry was `D-0023`, on the schema half; this one adds no column, and the
   deferral stands.
+
+  > **Note (D-0030, 2026-09-10).** The deferral no longer stands, and this bullet's first two
+  > sentences are unchanged by that: `D-0030` adds the column on the schema half, through
+  > `D-0023`'s `ADDED_COLUMNS` diff, and touches no payload version and no step of this entry's
+  > ladder. Which half a change belongs to is exactly the separation rule 3 bought.
 
 ### What would falsify it
 
@@ -4687,3 +4700,130 @@ nothing else should check these:
   possible — at which point rule 3's "information where the clock runs, friction
   where it does not" is re-openable on better terms.
 - Any measurement above failing to reproduce at `0497ca8`, or its re-take at `7c63f05`.
+
+---
+
+## D-0030 — The lineage `D-0027` deferred: one nullable column on the iteration row, written once at reservation, refused when it names nothing, and read where provenance is shown
+
+**Status:** accepted (2026-09-10, rondo's human gate)
+
+`D-0027` rule 9 named what it was not building: *"No lineage column: the successor records no
+reference to the predecessor, and the chain is reconstructible only through the branch names and
+the prompt."* It deferred that column "to the entry that adds a migration to the store", because on
+2026-09-06 rondo had no migration mechanism at all. `D-0023` then added one — a declarative column
+list, a diff against `pragma_table_xinfo`, and an `ALTER TABLE ADD COLUMN` for each one missing —
+and `D-0028` recorded that the deferral was still standing because it was the payload half rather
+than the schema half that had moved. rondo#33 is the deferral coming due, and this entry is it.
+
+**What the implicit link actually is, restated because it is the whole case.** A revision's
+`base_branch` is its predecessor's `topic_branch` (`D-0027` rule 4). That equality lets a reader
+*infer* a succession from two names, and an inference is not a record: two laps whose branches
+happen to line up are indistinguishable from a real one, and nothing says which of "this revised
+that" and "these are adjacent" is true. `advisory.md`'s `A-10` already priced the alternative —
+*"Lineage costs a join; revival costs the invariant"* — and this entry pays the join's price on the
+iteration row.
+
+**It supersedes nothing and annotates two entries**: `D-0027` rule 9, whose deferral is now
+carried out, and `D-0028`'s "does not add the lineage column" bullet, whose "the deferral stands"
+has expired. Both notes are additive under "How to use this file"; neither entry's claims change.
+
+### Decision
+
+1. **`supersedes_iteration_id TEXT`, nullable, on the `iteration` table, and the value travels as
+   an argument rather than as a plan field.** `admit()` gains a fifth parameter defaulting to null,
+   `src/access/conductor.ts` passes it through, and `commandRevise` is the one caller with
+   something to say: the row whose gate it has just answered. The plan is what continuo is handed
+   and what a person may write by hand, and which rondo row preceded this one is neither — a plan
+   field would have made the lineage a thirty-third value an operator could type, and a payload
+   key would have owed `D-0028`'s ladder a step for a fact that is not in the payload's business.
+
+   **The name is `A-10`'s and the row is not.** `advisory.md` spells this column
+   `supersedes_iteration_id` on a *proposal*, in a component rondo has not built; the same name on
+   the iteration row is the same relation recorded one table earlier, so that the advisory's
+   lineage, when it arrives, finds the vocabulary already in use rather than a second spelling.
+
+2. **Written once, by `reserve()`, inside the transaction that writes the row — and by nothing
+   afterwards.** `IterationFields` omits it, exactly as it omits the three allocated identifiers
+   (`D-0023` rule 5), so the omission is a compile error rather than a comment. The reason is not
+   only symmetry with the triple: a lineage a later transition could write is a lineage that can be
+   *composed after the fact*, and a record of where a lap came from that can be edited later is a
+   record of where somebody would have preferred it came from. Null means "revises nothing", never
+   "not established yet" — which is the one nullable column on this table that is not a
+   write-order consequence.
+
+3. **A lineage that names no row, and a row that names itself, are refused inside `reserve()`'s own
+   `BEGIN IMMEDIATE`, with nothing written.** This database declares no foreign keys and this entry
+   does not add one: a single referential constraint on one column would make the schema claim an
+   integrity it does not enforce anywhere else (the `admission_refusal` and `lap_reading` comments
+   both already say so). What replaces it is a read under the write lock, which is where the answer
+   is stable — the same question asked before the transaction would be a check with a window in it.
+   Both refusals are `defect`, not a person's mistake: the only caller passes a row it has already
+   read, so reaching either is a rondo bug and is filed as one. **A dangling reference would be
+   worse than the inference it replaces**, because it looks like a record.
+
+4. **Read in three places, and they are the three places provenance is shown.** The conductor's
+   reservation report says the row is a revision of its predecessor, off the row rather than off
+   the argument, at the moment the fact is written. `rondo answer`'s reading mode prints a `revises`
+   line above the gate, because "what am I looking at" has a different answer for a second lap than
+   for a first and the person answering the gate is the one who most needs it. And the pull request
+   body's "How this got here" states it (`D-0026`): the pushed branch carries every lap's commits,
+   so a reviewer reading a revision is reading work that was already answered for once, and nothing
+   else in that body would say so. Each is printed only when the column is set, so an ordinary
+   lap's output is byte-identical to what it was.
+
+5. **What this does not build, stated so it is not read in.** No back-fill: a database written
+   before this column holds no revision it could recover, because `revise` had nowhere to write
+   one, so every existing row reads null and that is the truth about it rather than a gap. No
+   index, because nothing queries by predecessor yet and an index over a column with one reader is
+   a bound nobody asked for. No chain walk: a reader following a chain of any length follows it one
+   row at a time, and the shape a transitive query would want is a decision the first consumer
+   should take. No lineage for anything but a revision — `start` records none, and a `needs_approval`
+   retry has no successor to record until `advisory.md`'s component exists. And nothing reads the
+   column to *decide* anything: it is a record, and a machine that branched on it would be taking
+   `D-0027` rule 2's refusal of a back edge by another route.
+
+### What was measured, and how
+
+Measured at `46e30aa` on 2026-09-10, which is `origin/main` at the time this was implemented.
+
+- **The migration mechanism `D-0027` rule 9 was waiting for exists and takes one line.**
+  `ADDED_COLUMNS` in `src/store/sqlite.ts` is a declarative record diffed against
+  `pragma_table_xinfo('iteration')`; adding `supersedes_iteration_id: "TEXT"` to it is the whole of
+  the upgrade, and `migrate()` needed no other change. `D-0023`'s own note that the shape becomes
+  wrong "the moment a second table needs a coordinated change" is untouched: this is the same
+  table.
+- **No back-fill is possible and none is needed.** The pre-`D-0030` schema has no column a
+  predecessor's id could be recovered from: the successor's plan carries `base_branch` (the
+  predecessor's topic branch) and `pull_request_base_branch`, and neither names an iteration.
+  Deriving a predecessor from a branch name would be recording the inference this entry exists to
+  replace, as a fact.
+- **`revise` is the only path that has a predecessor to name.** `commandRevise` is the one place in
+  `src/access/` that holds two iterations at once, and `admit()`'s other caller (`commandStart`)
+  has one. The default of null is therefore what every existing call site already meant.
+- **The person at the gate is shown nothing about lineage today.** `rondo answer`'s reading mode
+  prints the run, the gate, the rationale, the options and the lap's material (`D-0029` rule 2);
+  none of that distinguishes a first lap from a fourth, and the operations runbook's own worked
+  revision shows an operator having to read the branch names to tell.
+
+### What would falsify it
+
+- **A revision recorded with a null lineage.** The column is written at reservation or never, so a
+  path that reaches `admit()` with a predecessor in hand and does not pass it produces a row that
+  claims a first lap for ever. That is the failure this entry is most likely to have, and it is
+  invisible except by looking.
+- **The column being read to decide something** — a bound on revisions, a resumed row, a query that
+  refuses a lap because of its ancestry. Rule 5 forbids it, and the first such reader means the
+  lineage has stopped being a record and become a state.
+- **A second writer of the column.** Rule 2's whole property is that reservation is the only
+  authority; a transition, a repair script or a back-fill that sets it makes "the row records where
+  this lap came from" a sentence with an exception in it.
+- **The advisory component landing with its own `supersedes_iteration_id`** on a proposal row
+  (`A-10`). Two columns of one name in one database is readable only while one of them is on a
+  table nobody has built; when that table exists, whether the iteration's column is a duplicate of
+  the proposal's or the thing the proposal's points at is a question this entry does not answer.
+- **A chain long enough that one row at a time stops being a way to read it.** Rule 5 declines the
+  transitive query on the grounds that nothing needs it; the first person who does need it
+  falsifies that rather than the column.
+- **`reserve()` ceasing to be the only insert into `iteration`.** Rule 3's refusals live there, so
+  a second insert path is a second place a dangling lineage could enter the database — and out-of-band
+  inserts are already what `D-0023` rule 11 recorded as the cost of the counted bound.

@@ -30,7 +30,14 @@ const tripleFor = (id: string) => ({
 });
 
 const reserveOne = async (store: ReturnType<typeof freshStore>, id: string, nowMs = 1_000) =>
-  store.reserve({ id, request: "do the thing", plan: somePlan(), nowMs, ...tripleFor(id) });
+  store.reserve({
+    id,
+    request: "do the thing",
+    plan: somePlan(),
+    nowMs,
+    supersedesIterationId: null,
+    ...tripleFor(id),
+  });
 
 const EVIDENCE: ReadingEvidence = {
   baseRef: "refs/remotes/origin/main",

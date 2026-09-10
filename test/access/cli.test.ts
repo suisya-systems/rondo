@@ -931,6 +931,7 @@ function published(parts: Partial<IterationRecord> = {}): IterationRecord {
     topicBranch: "docs/rondo-first-real-lap",
     workspace: "/srv/rondo/workspace-dogfood-001",
     identifiersSpent: 1,
+    supersedesIterationId: null,
     continuoRevision: "603843b",
     agentTypeDigest: null,
     configDigest: null,
@@ -1042,6 +1043,25 @@ test("the body describes the change, and the request is quoted rather than prese
   expect(body.indexOf("Do not build.")).toBeGreaterThan(body.indexOf("```"));
   expect(body.startsWith("## What changed")).toBe(true);
   expect(body.trimEnd().endsWith("Merging it is not.")).toBe(true);
+});
+
+test("a revision's body states the lineage instead of leaving it to the branch names", () => {
+  // D-0030 rule 4, at the reader who most needs it: the branch being merged
+  // carries every lap's commits, so a reviewer looking at a revision is looking
+  // at work that was already answered for once, and nothing else in this body
+  // would say so.
+  const body = text({ record: published({ supersedesIterationId: "dogfood-000" }) }).body;
+  expect(body).toContain("It revises iteration `dogfood-000`");
+  // Above the gate sentence, which is about the last lap rather than all of
+  // them, and inside the section that says how the change got here.
+  expect(body.indexOf("It revises iteration")).toBeGreaterThan(
+    body.indexOf("## How this got here"),
+  );
+  expect(body.indexOf("It revises iteration")).toBeLessThan(body.indexOf("Gate `g-1` closed"));
+
+  // The observed-red control: a first lap's body claims no predecessor, so the
+  // line means something when it is there.
+  expect(text().body).not.toContain("It revises iteration");
 });
 
 test("a request that contains a code block cannot end the quotation it is inside", () => {

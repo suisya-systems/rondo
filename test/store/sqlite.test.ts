@@ -78,7 +78,14 @@ const tripleFor = (id: string) => ({
 });
 
 const reserveOne = async (store: ReturnType<typeof freshStore>, id: string, nowMs = 1_000) =>
-  store.reserve({ id, request: "do the thing", plan: somePlan(), nowMs, ...tripleFor(id) });
+  store.reserve({
+    id,
+    request: "do the thing",
+    plan: somePlan(),
+    nowMs,
+    supersedesIterationId: null,
+    ...tripleFor(id),
+  });
 
 /**
  * The record a read was expected to find.
@@ -132,6 +139,7 @@ test("the plan digest does not depend on the order the plan's keys were written 
     request: "one",
     plan: forwards,
     nowMs: 1,
+    supersedesIterationId: null,
     ...tripleFor("i-0001"),
   });
   await store.transition("i-0001", "planned", "closed", {}, 2);
@@ -140,6 +148,7 @@ test("the plan digest does not depend on the order the plan's keys were written 
     request: "two",
     plan: backwards,
     nowMs: 3,
+    supersedesIterationId: null,
     ...tripleFor("i-0002"),
   });
 
@@ -548,6 +557,7 @@ test("openIterationStore opens a store by path, schema applied", async () => {
     request: "do the thing",
     plan: somePlan(),
     nowMs: 1_000,
+    supersedesIterationId: null,
     ...tripleFor("iter-open"),
   });
   expect(reserved.kind).toBe("reserved");

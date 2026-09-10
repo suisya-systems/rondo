@@ -1279,6 +1279,15 @@ async function commandAnswer(
     // The reading mode: what is being asked, and the command that answers it.
     say(`iteration '${record.id}' is ${record.status}`);
     say(`run     ${record.runId ?? "(none recorded)"}`);
+    // **Where a person meets the lineage** (D-0030 rule 4). A revision's work
+    // is the predecessor's plus a delta, so "what am I looking at" has a
+    // different answer for a second lap than for a first -- and before the
+    // column the only way to learn it here was to notice that the base branch
+    // looked like somebody's topic branch. Printed only when there is one, so
+    // an ordinary lap's screen is unchanged.
+    if (record.supersedesIterationId !== null) {
+      say(`revises ${record.supersedesIterationId}`);
+    }
     say(`gate    ${gate.gateId}  (${gate.gateType})  stage '${gate.stage}'`);
     say(`why     ${gate.rationale}`);
     say(`options ${gate.options}`);
@@ -1626,7 +1635,13 @@ async function commandRevise(
   say("");
   say(`revising as iteration '${successorId}', cut from '${successor.plan.baseBranch}'`);
   say("the lap is the step that is slow");
-  const second = await admit(ports, successor.plan, START_POLICY, successorId);
+  // **The predecessor's id travels beside the plan, not inside it** (D-0030
+  // rule 1). It is the one place in rondo that knows this lap is a revision of
+  // that one at the moment the row is written, and until this argument existed
+  // the succession survived only as `base_branch` equalling the predecessor's
+  // `topic_branch` -- a value a reader could guess a relationship from, which
+  // is what `D-0027` rule 9 deferred and rondo#33 asked for.
+  const second = await admit(ports, successor.plan, START_POLICY, successorId, record.id);
   sayReport(second);
   if (second.status === "awaiting_human") {
     say("");
@@ -2470,6 +2485,19 @@ function composeBody(input: PullRequestTextInput, withRequest: boolean): string 
     `- rondo walked run \`${listed(runId, "run id")}\` (iteration \`${listed(record.id, "id")}\`) ` +
       `on \`${listed(topicBranch, "branch name")}\`, for \`${listed(baseBranch, "branch name")}\`.`,
   );
+  if (record.supersedesIterationId !== null) {
+    // **The lineage, stated rather than left to the branch names** (D-0030
+    // rule 4). This is the reader who most needs it: the branch being merged
+    // carries every lap's commits, so a reviewer looking at a revision is
+    // looking at work that was already answered for once, and nothing else in
+    // this body would say so. It sits above the gate sentence because "which
+    // gate closed this" is about the last lap and this is about all of them.
+    lines.push(
+      `- It revises iteration \`${listed(record.supersedesIterationId, "id")}\`, whose commits ` +
+        "are on this branch too: it was cut from that lap's branch after a person asked for a " +
+        "change at its gate.",
+    );
+  }
   lines.push(`- ${gateSentence(record)}`);
   lines.push(
     `- Against continuo \`${listed(record.continuoRevision ?? "an unrecorded revision", "revision")}\`` +

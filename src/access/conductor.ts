@@ -333,8 +333,9 @@ export async function admit(
   plan: RunPlan,
   policy: LoopPolicy,
   id: string,
+  supersedesIterationId: string | null = null,
 ): Promise<ConductorReport> {
-  return await admitIteration(ports, plan, policy, id);
+  return await admitIteration(ports, plan, policy, id, supersedesIterationId);
 }
 
 /**

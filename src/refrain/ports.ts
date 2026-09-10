@@ -323,6 +323,15 @@ export interface ReserveInput {
   readonly runId: string;
   readonly topicBranch: string;
   readonly workspace: string;
+  /**
+   * The iteration this one revises, or null for a first lap (D-0030 rule 1).
+   *
+   * Written by `reserve()` in the same transaction as the row and by nothing
+   * afterwards, which is why it is here and not in `IterationFields`: it is a
+   * fact about how the row came to exist, and one a later write could rewrite
+   * would be an assertion rather than a record.
+   */
+  readonly supersedesIterationId: string | null;
   readonly nowMs: number;
 }
 
