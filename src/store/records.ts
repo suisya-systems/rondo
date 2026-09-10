@@ -453,3 +453,327 @@ export interface LapReading extends LapReadingDraft {
   readonly iterationId: string;
   readonly readAtMs: number;
 }
+
+/**
+ * The five voices a proposal may speak in (D-0022 rule 4's closed union).
+ *
+ * A closed union rather than free text because an unrecognised kind is a row
+ * the reader refuses rather than guesses at, and because D-0032 rule 5 makes
+ * this column the **only** thing that decides whether a proposal can be
+ * answered at all. Written once, here, for the reason
+ * {@link TERMINAL_STATUSES} is: the set has one spelling, and
+ * {@link APPROVABLE_PROPOSAL_KINDS} is a subset of it the compiler checks.
+ */
+export const PROPOSAL_KINDS = Object.freeze([
+  "agent_type",
+  "run_plan",
+  "contract_keys",
+  "widening_successor",
+  "explanation",
+] as const);
+
+export type ProposalKind = (typeof PROPOSAL_KINDS)[number];
+
+/**
+ * The four kinds a human may answer, and the whole of D-0032 rule 5's authority
+ * rule.
+ *
+ * **`explanation` is the one that is absent, and its absence is the rule.** An
+ * explanation binds nothing, ever: it is the third voice, and D-0032 rule 8
+ * keeps explaining and reviewing apart so that *"it was explained well"* can
+ * never come to function as *"it passed"*.
+ *
+ * **There is deliberately no `approvable` column** (D-0032 rule 5, for `A-11`'s
+ * reason). Two authorities with no precedence is not stricter, it is
+ * unanswerable: a row whose `kind` says `explanation` and whose flag says
+ * approvable has no rule for which wins. And a flag can be flipped by a writer
+ * that meant well, where a closed union plus a writer refusal cannot.
+ *
+ * **`drafter` is excluded on purpose**, for D-0022 rule 13's reason: the record
+ * is identical whichever drafter produced it, and authority that followed
+ * `drafter` would reverse that rule by implication the first time a model
+ * drafted an approvable kind.
+ */
+export const APPROVABLE_PROPOSAL_KINDS = Object.freeze([
+  "agent_type",
+  "run_plan",
+  "contract_keys",
+  "widening_successor",
+] as const satisfies readonly ProposalKind[]);
+
+/**
+ * Whether a human decision may name this kind at all.
+ *
+ * Total over `string` rather than over {@link ProposalKind}, because the value
+ * it is asked about comes out of a database column and a row a person edited
+ * with `sqlite3` is one edit away from any string. An unrecognised kind is not
+ * approvable, which is the same answer D-0022 rule 4's reader refusal gives and
+ * is reached here without a second spelling of the union.
+ */
+export function isApprovableKind(kind: string): kind is ProposalKind {
+  return (APPROVABLE_PROPOSAL_KINDS as readonly string[]).includes(kind);
+}
+
+/**
+ * One proposal, as the caller hands it to the store (D-0022 rule 4).
+ *
+ * Immutable and append-only once written: there is no `status` column and no
+ * writer that updates, which is the grade D-0022 rule 4 claims and the reason a
+ * proposal that was never approved stays readable for ever as the thing that
+ * was not taken.
+ *
+ * **`payload` carries the alternatives and the recommendation, and it is one
+ * document rather than sibling rows** (D-0032 rule 1). The store holds it
+ * verbatim beside a digest of those bytes and never reads into it, exactly as
+ * it holds a plan: a group of option rows can be half-written, so a reader
+ * could see a recommendation without the options it was chosen against -- and
+ * the framing #39 identifies as the hazard *is* the set of alternatives, so
+ * splitting it across rows would make the framing the one part of the proposal
+ * `proposalDigest` does not cover.
+ *
+ * **There is no rendered `summary`, and its absence is D-0032 rule 3.** What a
+ * gate shows is composed at render time from the option set and its bases; a
+ * stored summary is a framing that outlives the material it was drawn from and
+ * can drift from it silently.
+ *
+ * **`candidateContractDigest` is absent rather than nullable**, which is
+ * D-0022 rule 4's "null on a proposal, always" taken at its word: a digest here
+ * would be the advisory claiming to have composed something. The column exists
+ * in the schema under a `CHECK` that keeps it null, so the claim is enforced
+ * rather than merely written down, and no field here can fill it.
+ */
+export interface ProposalDraft {
+  /** The reference every other row uses. Minted by the caller. */
+  readonly proposalId: string;
+  readonly kind: ProposalKind;
+  /** Who or what drafted it (D-0022 rule 13), as an identifier and never as an authority. */
+  readonly drafter: string;
+  /** The ordered option set, verbatim (D-0032 rule 1). */
+  readonly payload: JsonRecord;
+  /**
+   * The snapshot the advisory was handed, **verbatim**, so a proposal can be
+   * re-derived and not only re-read (D-0022 rule 4).
+   *
+   * It is also what makes D-0032 rule 2 affordable: a basis that points into
+   * this snapshot renders inline with no copy and no second source of truth,
+   * because the material the advisory actually read is in the row. The snapshot
+   * **never carries a gate answer's body** -- that fact's one home is continuo.
+   */
+  readonly snapshot: JsonRecord;
+  /**
+   * How an `explanation` was derived, and null for every other kind
+   * (D-0032 rule 8).
+   *
+   * A diagram drawn from identifier names and one derived from call structure
+   * or from tests that actually ran render identically, and without this the
+   * reader cannot spot-check -- fluency reads as understanding. It is a closed
+   * union whose **members** D-0032 leaves to the entry that admits a model
+   * explainer, so the store holds the string and the schema holds only the one
+   * property the entry fixed: non-null exactly when `kind` is `explanation`.
+   */
+  readonly derivation: string | null;
+  /** The lineage of `advisory.md` sections 6.2 and 7. */
+  readonly iterationId: string | null;
+  readonly supersedesIterationId: string | null;
+  readonly supersedesProposalId: string | null;
+  /** What the diff or the widening is *against*, so a later reader is not diffing an unknown. */
+  readonly predecessorPlanDigest: string | null;
+  readonly predecessorContractDigest: string | null;
+  /** The three cadenza digests the referenced iteration was classified under. */
+  readonly agentTypeDigest: string | null;
+  readonly configDigest: string | null;
+  readonly contractDigest: string | null;
+  /** The observed continuo build, and the pin the facade was compiled against. */
+  readonly continuoRevision: string | null;
+  readonly cadenzaRevision: string | null;
+  /**
+   * The message an operator elevated into this proposal, and who elevated it
+   * (D-0032 rule 7). **Null together**, and the schema holds that.
+   *
+   * #41's chain -- observation, elevation, proposal, approval, contract -- has
+   * one link nothing recorded, and it is the link where authority enters: an
+   * observation constrains nothing until a human takes it up. There is no new
+   * table because the observation already has a home (`D-0020` rule 5), and the
+   * one constraint D-0032 places on that unwritten schema is that the message
+   * id be durable and immutable.
+   */
+  readonly elevatedFromMessageId: string | null;
+  readonly elevatedByActorId: string | null;
+  /** The caller's clock, never the store's. */
+  readonly createdAtMs: number;
+}
+
+/**
+ * The contract the human was **shown**, written before it is presented
+ * (D-0022 rule 18).
+ *
+ * A proposal carries candidate *inputs*; the contract on the screen is a
+ * different fact with a different author, and it must outlive both a refusal
+ * and a crash -- otherwise a refused widening leaves a ledger recording which
+ * keys were suggested and not which contract was presented. Immutable, like
+ * everything else in `advisory.md` 6.2.
+ */
+export interface CompositionDraft {
+  readonly compositionId: string;
+  /** The proposal whose candidate inputs this was composed from. */
+  readonly proposalId: string;
+  /** The `DelegationContract`'s fields **as issued**, verbatim, so the digest can be recomputed. */
+  readonly contract: JsonRecord;
+  /**
+   * The digest of the contract as cadenza computed it.
+   *
+   * The caller's rather than the store's: the digest a human approves is
+   * cadenza's own, and a second one taken here over a different rendering would
+   * be a second authority for the one value `D-0020` rule 4 fact 1 says must be
+   * recomputable rather than trusted.
+   */
+  readonly contractDigest: string;
+  /** The predecessor this supersedes, where there is one. */
+  readonly supersedesContractDigest: string | null;
+  /** The cadenza pin that composed it -- the pin's mobility is a fact, not a forecast. */
+  readonly cadenzaRevision: string;
+  readonly composedAtMs: number;
+}
+
+/**
+ * What a person answered, and it is a fact about a person (D-0032 rule 6).
+ *
+ * **`declined` is a row rather than an absence**, which is the whole of the
+ * rule: without it #41's inbox cannot tell what is waiting on the operator from
+ * what the operator has already settled. A declined decision writes no
+ * `decision_consumption` row and no delegation row, which is what D-0022
+ * rule 18 already assumes when it says the composition must outlive a refusal.
+ */
+export type DecisionOutcome = "approved" | "declined";
+
+/**
+ * One human decision, immutable and single-use (D-0022 rule 9).
+ *
+ * The row is never updated. Single use is a `decision_consumption` row whose
+ * primary key is the decision id, taken in the same `BEGIN IMMEDIATE` as the
+ * issuance it authorises -- a second attempt collides on the primary key and is
+ * refused by the database rather than by a check somebody remembered to write
+ * (`advisory.md` 6.3).
+ *
+ * **It does not carry #40's count of what reached the operator** (D-0032
+ * rule 6): an answer is a fact about a person and a presentation is a fact
+ * about the surface, and {@link OperatorAttention} holds the second.
+ */
+export interface HumanDecisionDraft {
+  readonly decisionId: string;
+  /**
+   * The proposal answered, and the whole of what D-0032 rule 5 refuses on.
+   *
+   * The writer reads this row's `kind` inside its own transaction and refuses
+   * the decision when the kind is one an answer cannot bind -- so authority is
+   * a function of `kind` alone, enforced where a restart cannot argue with it.
+   */
+  readonly proposalId: string;
+  readonly outcome: DecisionOutcome;
+  /**
+   * The `composition.contract_digest` the person approved, and null on a
+   * `declined`.
+   *
+   * A reference into the composition table rather than a copy of the contract,
+   * so *"what did the human actually see"* is answerable without a delegation
+   * row existing at all.
+   */
+  readonly approved: string | null;
+  /** The predecessor digest the approved contract supersedes, or null. */
+  readonly predecessor: string | null;
+  /** The approver: an OIDC subject on rondo's allowlist (`D-0020` rule 2). */
+  readonly actorId: string;
+  /** The surface's own identity, which is not the approver's. */
+  readonly recordedBy: string;
+  /**
+   * continuo's transition, on route G, and null together on route S.
+   *
+   * A reference and never a copy: the body is continuo's and `A-8` gives that
+   * fact exactly one home (`advisory.md` 5.1). Route S has no gate to name, and
+   * inventing one would be rondo manufacturing the appearance of a question a
+   * run never asked.
+   */
+  readonly gateId: string | null;
+  readonly gateTransitionSeq: number | null;
+  readonly decidedAtMs: number;
+}
+
+/** Whether a subject was put in front of the operator, or kept from them. */
+export type AttentionDisposition = "presented" | "withheld";
+
+/**
+ * One row of both sides of the silence (D-0032 rule 10).
+ *
+ * **One table rather than two, because the numerator and the denominator have
+ * to come from the same place.** A withheld-only table makes the count of what
+ * *was* put to the operator somebody else's problem, and the only candidate is
+ * {@link HumanDecisionDraft}, which counts answers and not presentations: with
+ * six proposals on the screen and none answered yet it reports zero.
+ *
+ * **A row rather than a column on the thing presented**, for two reasons. The
+ * most common withholding has nothing to carry a column -- it was never
+ * composed into a proposal at all, which is why {@link subjectId} is nullable.
+ * And a `presented_at_ms` written onto a proposal row would be an update to a
+ * record D-0022 rule 4 makes immutable. `admission_refusal` is the precedent
+ * and the shape is deliberately its.
+ *
+ * **What this cannot prove, stated rather than implied**: a suppression that
+ * writes no row is invisible here, so the table bounds the *accountable*
+ * silence and not the total.
+ */
+export interface OperatorAttention {
+  readonly atMs: number;
+  /** What sort of thing this was: a proposal, an iteration, a reading. */
+  readonly subjectKind: string;
+  /** Its id, or null when nothing was ever composed to have one. */
+  readonly subjectId: string | null;
+  readonly disposition: AttentionDisposition;
+  /**
+   * The policy behind a withholding. **Required on a `withheld` row, and it is
+   * the point of the table.**
+   *
+   * *"Suppressed 40"* is a number; *"suppressed 40, of which 31 by the
+   * duplicate-delivery rule"* is a record. A withholding whose rule cannot be
+   * named is a judgement with no policy behind it, and the writer refuses it.
+   */
+  readonly ruleName: string | null;
+}
+
+/**
+ * An approval that was never spent (D-0022 rule 19's acceptance criterion).
+ *
+ * Under D-0022 rule 17 an approved plan that is never admitted leaves no trace
+ * anywhere else: cadenza holds nothing, continuo was never told, and the
+ * iteration that would have carried it does not exist. Without this query,
+ * *"the human approved something that never ran"* is a state the ledger cannot
+ * report.
+ *
+ * A `declined` decision is **not** listed, and that is rule 6 rather than a
+ * filter chosen here: a refusal consumes nothing by design, so listing one as
+ * an unspent approval would report every refusal as an outstanding issuance.
+ */
+export interface UnconsumedDecision {
+  readonly decisionId: string;
+  readonly proposalId: string;
+  /** The digest that was approved and never issued against. */
+  readonly approved: string;
+  readonly actorId: string;
+  readonly decidedAtMs: number;
+}
+
+/**
+ * One record that landed at or after a mark (D-0032 rule 11's third query).
+ *
+ * A pointer rather than a record, for {@link UnconsumedDecision}'s opposite
+ * reason: the question *"what changed since I last looked"* is a count and a
+ * list to go look at, and returning eight row shapes as a union would make one
+ * row that will not decode able to break the census of the rows that do.
+ */
+export interface RecordChange {
+  /** Which table it came from. */
+  readonly kind: string;
+  /** Its own reference, or null for a row whose subject never had one. */
+  readonly id: string | null;
+  /** The caller's clock, as that record kind spells it. */
+  readonly atMs: number;
+}
