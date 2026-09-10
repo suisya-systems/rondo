@@ -342,7 +342,7 @@ export type RetrySnapshot = {
  * `CHECK ((derivation IS NOT NULL) = (kind = 'explanation'))` read from this
  * side, so a payload that could not be recorded cannot be composed either.
  */
-export type Proposal = Explanation | RunPlanProposal;
+export type Proposal = Explanation | RunPlanProposal | AgentTypeProposal | ContractKeysProposal;
 
 /** The third voice: claims, a derivation, and nothing to approve. */
 export type Explanation = {
@@ -354,6 +354,20 @@ export type Explanation = {
 /** The first approvable kind: an option set, and no derivation. */
 export type RunPlanProposal = {
   readonly kind: "run_plan";
+  readonly derivation: null;
+  readonly payload: OptionSetPayload;
+};
+
+/** Which agent type the retry runs under -- the widening D-0022 rule 17 names. */
+export type AgentTypeProposal = {
+  readonly kind: "agent_type";
+  readonly derivation: null;
+  readonly payload: OptionSetPayload;
+};
+
+/** Which capability keys that agent type carries as granted rather than askable. */
+export type ContractKeysProposal = {
+  readonly kind: "contract_keys";
   readonly derivation: null;
   readonly payload: OptionSetPayload;
 };
@@ -460,6 +474,170 @@ export function propose(snapshot: AdvisorySnapshot): Explanation {
 }
 
 /**
+ * Where one candidate contract came from, as a closed union.
+ *
+ * **The closure is {@link Basis}'s argument applied to provenance**: a
+ * candidate whose origin a reader does not recognise is one they cannot judge,
+ * and the two members are the only two ways rondo composes a candidate at all.
+ *
+ * `iteration` is a **selection**: the agent type some iteration really ran
+ * under, chosen and not written. `promotedKey` is the one thing rondo composes
+ * rather than selects, and it is bounded to the single motion D-0022 rule 17
+ * calls the widening -- *"a different agent type, whose grants are what
+ * widens"*. Even that invents nothing: the key moved is one the agent type's
+ * own author already listed as `askable`, which is that list's whole meaning
+ * (D-0022 rule 11: `granted` and `askable` are **inputs to contract
+ * construction**, consumed before the contract exists, never a second answer
+ * standing beside one).
+ */
+export type CandidateSource =
+  | { readonly form: "iteration"; readonly iterationId: string }
+  | { readonly form: "promotedKey"; readonly key: string };
+
+/**
+ * One candidate contract, as the snapshot carries it.
+ *
+ * **One shape for two kinds, because they differ in where the candidate comes
+ * from and in nothing else.** `agent_type` varies which agent type the retry
+ * runs under; `contract_keys` varies which keys that agent type carries as
+ * granted. Both end in the same place -- a contract issued to the successor's
+ * identity, with a digest a person approves -- so a second shape would be a
+ * second spelling of the thing `human_decision.approved` points at.
+ *
+ * `granted` and `askable` are carried because they are what the option is
+ * *about*: an operator judging a widening is judging those two lists, and a
+ * basis that pointed at a digest alone would be a citation of the answer rather
+ * than of the material.
+ */
+export type SnapshotContractCandidate = {
+  readonly from: CandidateSource;
+  readonly agentTypeId: string;
+  readonly agentTypeDigest: string;
+  /** Sorted and frozen by cadenza; rondo copies rather than re-deriving. */
+  readonly granted: readonly string[];
+  readonly askable: readonly string[];
+  /** The contract the successor would run under with it. */
+  readonly contractDigest: string;
+};
+
+/**
+ * What the composition root gathered for an `agent_type` or `contract_keys`
+ * proposal.
+ *
+ * A third snapshot shape, for {@link RetrySnapshot}'s reason exactly: a
+ * `snapshot` basis is a pointer into **this row's own** snapshot, so the
+ * document is per proposal. **Nothing in {@link AdvisorySnapshot} moves**, and
+ * that is load-bearing rather than incidental -- every pointer an `explanation`
+ * has ever written resolves against the document that kind still gathers.
+ */
+export type ContractSnapshot = {
+  readonly iteration: SnapshotIteration;
+  readonly successor: SnapshotSuccessor;
+  /** Non-empty: the subject's own contract is always one of them. */
+  readonly candidates: readonly [SnapshotContractCandidate, ...SnapshotContractCandidate[]];
+};
+
+/**
+ * The candidate that changes nothing, which is the one rondo recommends.
+ *
+ * **Written once and used by both kinds, because it is one rule**: the
+ * recommendation is the row's own agent type, unchanged -- an
+ * `iteration`-sourced candidate naming the subject. So rondo never recommends
+ * more authority than the iteration already had, and a widening is something a
+ * person reaches for rather than something they accept by taking the default.
+ * That is `D-0009`'s division kept at the level of the screen: the advisory
+ * proposes candidates, and *widening* is a human's decision.
+ *
+ * Total: where the subject's own candidate is not in the set -- which the
+ * gatherer does not produce, but the drafter must survive -- the first is
+ * recommended, because a set with no recommendation is the one shape D-0032
+ * rule 1 does not admit.
+ */
+function unchangedIndex(snapshot: ContractSnapshot): number {
+  const at = snapshot.candidates.findIndex(
+    (candidate) =>
+      candidate.from.form === "iteration" && candidate.from.iterationId === snapshot.iteration.id,
+  );
+  return at === -1 ? 0 : at;
+}
+
+/** One candidate as an option: the digest, cited where the snapshot keeps it. */
+function optionFor(candidate: SnapshotContractCandidate, index: number, label: string): Option {
+  return {
+    label,
+    value: candidate.contractDigest,
+    basis: { form: "snapshot", pointer: `/candidates/${String(index)}/contractDigest` },
+  };
+}
+
+/** `k, k2` -- or `none`, which is a fact about the list and not an empty line. */
+function keyList(keys: readonly string[]): string {
+  return keys.length === 0 ? ABSENT : keys.join(", ");
+}
+
+/**
+ * Which agent type the retry should run under (D-0022 rule 17's widening).
+ *
+ * **A selection among the agent types the lineage actually ran under**, on
+ * `proposeRetryPlan`'s terms: rondo authors no agent type here, because an
+ * agent type rondo wrote would be rondo deciding what a delegate may do. The
+ * option set is therefore short by construction, and short is the honest
+ * answer -- rondo has no catalog of agent types to offer, and `D-0019` rule 3
+ * says it gains no configuration layer to acquire one in.
+ *
+ * Total and pure over the snapshot, like every other drafter here.
+ */
+export function proposeAgentType(snapshot: ContractSnapshot): AgentTypeProposal {
+  const options = snapshot.candidates.map((candidate, index) =>
+    optionFor(
+      candidate,
+      index,
+      `run '${snapshot.successor.iterationId}' under agent type '${candidate.agentTypeId}' ` +
+        `(${candidate.agentTypeDigest}), granting ${keyList(candidate.granted)} and asking for ` +
+        `${keyList(candidate.askable)}`,
+    ),
+  );
+  return {
+    kind: "agent_type",
+    derivation: null,
+    payload: { options, recommended: unchangedIndex(snapshot) },
+  };
+}
+
+/**
+ * Which keys the retry's contract carries as granted rather than askable.
+ *
+ * **One key at a time, and only a key the agent type already declared
+ * askable.** Both halves are the bound: a proposal that promoted two keys at
+ * once would ask a person to approve two widenings with one answer, which is
+ * the *"answerable in one sentence"* #39 measures failing in the other
+ * direction; and a key from outside `askable` would be rondo inventing a grant
+ * its author never offered, which is the amplification `D-0022` rule 17 says
+ * nothing bounds once the successor contract is gone.
+ *
+ * The candidate that promotes nothing is the recommendation, by
+ * {@link unchangedIndex}'s rule.
+ */
+export function proposeContractKeys(snapshot: ContractSnapshot): ContractKeysProposal {
+  const options = snapshot.candidates.map((candidate, index) =>
+    optionFor(
+      candidate,
+      index,
+      candidate.from.form === "promotedKey"
+        ? `grant '${candidate.from.key}' to '${snapshot.successor.iterationId}' instead of ` +
+            `leaving it askable, so it is granted without asking: ${keyList(candidate.granted)}`
+        : `leave the keys as they are: granting ${keyList(candidate.granted)} and asking for ` +
+            `${keyList(candidate.askable)}`,
+    ),
+  );
+  return {
+    kind: "contract_keys",
+    derivation: null,
+    payload: { options, recommended: unchangedIndex(snapshot) },
+  };
+}
+
+/**
  * What a retry could run under, as an ordered option set a person can answer.
  *
  * **A selection among persisted plans, which is the first of D-0022 rule 7's
@@ -518,7 +696,9 @@ export function proposeRetryPlan(snapshot: RetrySnapshot): RunPlanProposal {
  * compiling, which is where that mistake should be caught rather than at the
  * insert that silently dropped a field.
  */
-export function snapshotDocument(snapshot: AdvisorySnapshot | RetrySnapshot): JsonRecord {
+export function snapshotDocument(
+  snapshot: AdvisorySnapshot | RetrySnapshot | ContractSnapshot,
+): JsonRecord {
   return snapshot;
 }
 

@@ -23,20 +23,30 @@
  */
 import {
   type AdvisorySnapshot,
+  type AgentTypeProposal,
   type Basis,
+  type CandidateSource,
   type Claim,
+  type ContractKeysProposal,
+  type ContractSnapshot,
   type Explanation,
   type Option,
+  type OptionSetPayload,
   payloadDocument,
   propose,
+  proposeAgentType,
+  proposeContractKeys,
   proposeRetryPlan,
   type RetrySnapshot,
   type RunPlanProposal,
   type SnapshotCandidate,
+  type SnapshotContractCandidate,
   type SnapshotIteration,
+  type SnapshotSuccessor,
   snapshotDocument,
 } from "../advisory/proposal.js";
 import {
+  type AgentTypeInput,
   agentTypeRecord,
   contractDigest,
   contractPayload,
@@ -44,7 +54,7 @@ import {
   resolveProject,
 } from "../cadenza/facade.js";
 import { allocate } from "../refrain/allocator.js";
-import { admittedPlan, readPlan } from "../refrain/plan.js";
+import { type AdmittedPlan, admittedPlan, readPlan } from "../refrain/plan.js";
 import type { DecisionOutcome, IterationRecord, JsonRecord, LapReading } from "../store/records.js";
 import type { AdvisoryRecord, IterationStore } from "../store/sqlite.js";
 
@@ -184,7 +194,10 @@ const CITATION_CEILING = 200;
  * the claim and the snapshot have drifted apart, which is the one failure a
  * locator is supposed to make impossible.
  */
-function cited(snapshot: AdvisorySnapshot | RetrySnapshot, pointer: string): string {
+function cited(
+  snapshot: AdvisorySnapshot | RetrySnapshot | ContractSnapshot,
+  pointer: string,
+): string {
   const found = pointer
     .split("/")
     .slice(1)
@@ -202,7 +215,10 @@ function cited(snapshot: AdvisorySnapshot | RetrySnapshot, pointer: string): str
 }
 
 /** One basis, as the line under the claim it supports. */
-function basisLine(basis: Basis, snapshot: AdvisorySnapshot | RetrySnapshot): string {
+function basisLine(
+  basis: Basis,
+  snapshot: AdvisorySnapshot | RetrySnapshot | ContractSnapshot,
+): string {
   switch (basis.form) {
     case "snapshot":
       // **The inline form** (D-0032 rule 2): the snapshot is in the row, so the
@@ -384,51 +400,20 @@ export interface ProposePorts extends ExplainPorts {
 }
 
 /**
- * One candidate composed: the plan a retry could take and the contract it fixes.
- *
- * The contract travels beside the snapshot entry because two different rows are
- * written from it -- the option's digest goes in the `proposal`, and the
- * contract's own fields go in the `composition` -- and recomposing it for the
- * second write would be a second issuance of a value a person is about to
- * approve.
- */
-type ComposedCandidate = {
-  readonly candidate: SnapshotCandidate;
-  readonly contract: JsonRecord;
-  readonly runId: string;
-  readonly topicBranch: string;
-};
-
-/** A candidate composed, or the first reason this plan cannot be one. */
-type ComposeOutcome =
-  | { readonly kind: "composed"; readonly composed: ComposedCandidate }
-  | { readonly kind: "refused"; readonly reason: string };
-
-/**
- * Compose the contract one persisted plan would run under as `successorId`.
+ * Admit one persisted plan under the successor's identity.
  *
  * **This is D-0022 rule 17's replacement carried out.** A retry is not a
  * successor contract over the predecessor: it is an ordinary initial contract
  * issued to a *fresh* identity, and because `D-0023` derives the run id from
- * the iteration id, choosing the successor's id fixes its grantee before
+ * the iteration id, choosing the successor's id fixes the grantee before
  * anything is admitted -- so the exact contract the retry would run under can
- * be composed, digested and shown **before** a person approves it. The three
- * cadenza calls are the ones `classifyPlan` already makes, in cadenza's order.
+ * be composed, digested and shown **before** a person approves it.
  *
- * **Nothing is admitted, nothing is issued and no row is reserved here.** The
- * value is a contract and a digest; what turns either into a run is admission,
- * which this cut does not build (see {@link proposeRetry}).
- *
- * A refusal names the plan it could not compose from. **A candidate is never
- * dropped quietly**: the set of alternatives *is* the framing #39 identifies as
- * the hazard, so a proposal quietly short one option is a worse answer than a
- * refusal that says which row it could not read.
+ * **Nothing is admitted for real, nothing is issued and no row is reserved.**
+ * The value is a plan with the successor's identity folded on; what turns one
+ * into a run is `admit()`, which no path here calls.
  */
-function compose(
-  record: IterationRecord,
-  successorId: string,
-  ownIterationId: string,
-): ComposeOutcome {
+function admitFor(record: IterationRecord, successorId: string): AdmitOutcome {
   const decoded = readPlan(record.plan);
   if (decoded.kind !== "planned") {
     return {
@@ -448,26 +433,60 @@ function compose(
   // rondo acquiring the second authority for the run id that its own refusal
   // message names.
   const successor = admittedPlan(decoded.plan, allocation.allocation);
-  if (successor.kind !== "planned") {
-    return { kind: "refused", reason: successor.reason };
-  }
-  const plan = successor.plan;
+  return successor.kind === "planned"
+    ? { kind: "admitted", plan: successor.plan }
+    : { kind: "refused", reason: successor.reason };
+}
+
+/** A plan under the successor's identity, or why this row cannot supply one. */
+type AdmitOutcome =
+  | { readonly kind: "admitted"; readonly plan: AdmittedPlan }
+  | { readonly kind: "refused"; readonly reason: string };
+
+/** One contract as both halves of what is written from it. */
+type IssuedContract = {
+  readonly contract: JsonRecord;
+  readonly contractDigest: string;
+  readonly agentTypeDigest: string;
+  readonly granted: readonly string[];
+  readonly askable: readonly string[];
+};
+
+/** A contract issued, or cadenza's own refusal to issue one. */
+type IssueOutcome =
+  | { readonly kind: "issued"; readonly issued: IssuedContract }
+  | { readonly kind: "refused"; readonly reason: string };
+
+/**
+ * Issue the contract one plan and one agent-type input compose.
+ *
+ * **The one path to a contract in this module**, which is why `agent_type` and
+ * `contract_keys` vary an *input* to it rather than composing a contract of
+ * their own: two ways to reach a digest a person approves would be two things
+ * that can disagree about what they approved. The three cadenza calls are the
+ * ones `classifyPlan` already makes, in cadenza's order.
+ *
+ * The contract travels back beside its digest because two different rows are
+ * written from it -- the option's digest goes in the `proposal`, the contract's
+ * own fields in the `composition` -- and recomposing it for the second write
+ * would be a second issuance of the value a person is about to approve.
+ */
+function issueFor(plan: AdmittedPlan, input: AgentTypeInput, about: string): IssueOutcome {
   try {
     const project = resolveProject(plan.catalogLayers, plan.projectName);
-    const agentType = agentTypeRecord(plan.agentTypeInput);
+    const agentType = agentTypeRecord(input);
     const contract = issueInitialContract(agentType, project, plan.parties);
     return {
-      kind: "composed",
-      composed: {
-        candidate: {
-          iterationId: record.id,
-          status: record.status,
-          planDigest: record.planDigest,
-          contractDigest: contractDigest(contract),
-        },
+      kind: "issued",
+      issued: {
         contract: contractPayload(contract) as JsonRecord,
-        runId: plan.runId,
-        topicBranch: plan.topicBranch,
+        contractDigest: contractDigest(contract),
+        agentTypeDigest: agentType.agentTypeDigest,
+        // cadenza's own lists, sorted and frozen by it. Copied rather than read
+        // off the input: what an operator judges is what the *record* carries,
+        // and `agentType()` is what settles order and duplication.
+        granted: [...agentType.granted],
+        askable: [...agentType.askable],
       },
     };
   } catch (error) {
@@ -476,8 +495,8 @@ function compose(
     return {
       kind: "refused",
       reason:
-        `cadenza refused to issue a contract for iteration '${ownIterationId}'s retry from ` +
-        `iteration '${record.id}'s plan: ${error instanceof Error ? error.message : String(error)}`,
+        `cadenza refused to issue a contract for ${about}: ` +
+        `${error instanceof Error ? error.message : String(error)}`,
     };
   }
 }
@@ -494,22 +513,23 @@ function compose(
  */
 export function optionLines(
   iterationId: string,
-  proposal: RunPlanProposal,
-  snapshot: RetrySnapshot,
+  kind: ProposableKind,
+  payload: OptionSetPayload,
+  snapshot: RetrySnapshot | ContractSnapshot,
 ): readonly string[] {
   const successor = snapshot.successor;
   return [
-    `a retry of iteration '${iterationId}', as iteration '${successor.iterationId}'`,
+    `a retry of iteration '${iterationId}', as iteration '${successor.iterationId}' (${kind})`,
     `  drafter: ${DETERMINISTIC_DRAFTER}`,
     `  the retry would run as ${successor.runId} on ${successor.topicBranch}`,
     // **Said out loud because it is what the person is answering.** The value
     // of each option is the contract digest an approval names, and approving is
-    // the whole of what this kind does today -- nothing consumes the answer, so
+    // the whole of what these kinds do today -- nothing consumes the answer, so
     // a line claiming the retry will start would be false.
     "  approving one of these records that you approved its contract. It starts nothing yet:",
     "  no admission reads this decision (D-0022 rule 17's consumer is not built).",
-    ...proposal.payload.options.flatMap((option, index) => [
-      `  [${index === proposal.payload.recommended ? "recommended" : "alternative"}] ${option.label}`,
+    ...payload.options.flatMap((option, index) => [
+      `  [${index === payload.recommended ? "recommended" : "alternative"}] ${option.label}`,
       `      contract: ${option.value}`,
       `      basis: ${basisLine(option.basis, snapshot)}`,
     ]),
@@ -517,8 +537,229 @@ export function optionLines(
 }
 
 /**
- * Propose the plans a retry of one iteration could run under, and record what
- * was put on the screen.
+ * The three kinds this surface can put to an operator.
+ *
+ * A subset of `APPROVABLE_PROPOSAL_KINDS` and not a second spelling of it:
+ * `widening_successor` is absent because nothing composes one yet, and the
+ * store's own union is what decides whether a kind can be answered at all
+ * (D-0032 rule 5). This list is only what `propose` knows how to draft.
+ */
+export const PROPOSABLE_KINDS = Object.freeze(["run_plan", "agent_type", "contract_keys"] as const);
+
+export type ProposableKind = (typeof PROPOSABLE_KINDS)[number];
+
+/** One drafted proposal: the option set, the snapshot it cites, and the contracts behind it. */
+type Drafted = {
+  readonly proposal: RunPlanProposal | AgentTypeProposal | ContractKeysProposal;
+  readonly snapshot: RetrySnapshot | ContractSnapshot;
+  /** In option order: the contract each option's digest was taken over. */
+  readonly contracts: readonly JsonRecord[];
+};
+
+type DraftOutcome =
+  | { readonly kind: "drafted"; readonly drafted: Drafted }
+  | { readonly kind: "refused"; readonly reason: string };
+
+/**
+ * The rows a proposal draws its alternatives from: the subject, and the one it
+ * superseded.
+ *
+ * ponytail: one generation, not the whole lineage. A row five revisions deep
+ * would otherwise offer five options, of which four were each superseded for a
+ * reason the operator already acted on -- and the set of alternatives *is* the
+ * framing #39 measures, so a longer list is not a better one. What a person can
+ * act on is what has just failed and what it was revised from. Walk further
+ * when an operator asks for an ancestor this does not offer; the walk needs a
+ * bound and a cycle guard that one generation does not.
+ *
+ * **A predecessor that will not read is a refusal rather than a shorter list**:
+ * an alternative that silently went missing is the framing hazard, and the
+ * operator can see the lineage in `explain` either way. An *older* ancestor is
+ * not consulted at all, by the ceiling above, so it cannot go missing from a
+ * set it was never in.
+ */
+async function lineage(
+  ports: ProposePorts,
+  subject: IterationRecord,
+): Promise<{ rows: readonly IterationRecord[] } | { refusal: string }> {
+  const previousId = subject.supersedesIterationId;
+  if (previousId === null) {
+    return { rows: [subject] };
+  }
+  const previous = await ports.store.read(previousId);
+  if (previous.kind !== "read") {
+    return {
+      refusal:
+        `Iteration '${subject.id}' supersedes '${previousId}', and that row cannot be read, so ` +
+        "the alternatives rondo would offer are not all of them. A proposal quietly short one " +
+        "option is a framing, which is the thing this record exists to prevent.",
+    };
+  }
+  return { rows: [subject, previous.record] };
+}
+
+/** Draft `run_plan`: one option per persisted plan in the lineage. */
+function draftRunPlan(
+  subject: IterationRecord,
+  rows: readonly IterationRecord[],
+  successorId: string,
+): DraftOutcome {
+  const candidates: SnapshotCandidate[] = [];
+  const contracts: JsonRecord[] = [];
+  let successor: SnapshotSuccessor | null = null;
+  for (const row of rows) {
+    const admitted = admitFor(row, successorId);
+    if (admitted.kind !== "admitted") {
+      return { kind: "refused", reason: admitted.reason };
+    }
+    const issued = issueFor(admitted.plan, admitted.plan.agentTypeInput, `iteration '${row.id}'`);
+    if (issued.kind !== "issued") {
+      return { kind: "refused", reason: issued.reason };
+    }
+    successor ??= {
+      iterationId: successorId,
+      runId: admitted.plan.runId,
+      topicBranch: admitted.plan.topicBranch,
+    };
+    candidates.push({
+      iterationId: row.id,
+      status: row.status,
+      planDigest: row.planDigest,
+      contractDigest: issued.issued.contractDigest,
+    });
+    contracts.push(issued.issued.contract);
+  }
+  const head = candidates[0];
+  if (head === undefined || successor === null) {
+    return { kind: "refused", reason: `Iteration '${subject.id}' has no plan to propose.` };
+  }
+  const snapshot: RetrySnapshot = {
+    iteration: snapshotIteration(subject),
+    successor,
+    candidates: [head, ...candidates.slice(1)],
+  };
+  return {
+    kind: "drafted",
+    drafted: { proposal: proposeRetryPlan(snapshot), snapshot, contracts },
+  };
+}
+
+/**
+ * Draft `agent_type` or `contract_keys`: one option per candidate contract.
+ *
+ * **Both hold the plan fixed and vary an input to the contract**, which is the
+ * difference from `run_plan` and the reason they are one function. The subject's
+ * own plan is the one every candidate is issued against: a proposal that varied
+ * the agent type *and* the plan at once would ask a person to approve two
+ * changes with one answer.
+ *
+ * `agent_type` draws its alternatives from the lineage -- agent types some
+ * iteration really ran under, selected and not written. `contract_keys` composes
+ * its alternatives, one at a time, by moving a single key the agent type's own
+ * author already listed as `askable` (see {@link CandidateSource}).
+ *
+ * **Candidates that reach the same contract are one candidate.** Two agent
+ * types with one digest issue one contract, and two options carrying one value
+ * would be two ways to record an approval the ledger cannot tell apart --
+ * `human_decision.approved` names a digest, so distinct options must name
+ * distinct digests or the answer is ambiguous.
+ */
+function draftContracts(
+  kind: "agent_type" | "contract_keys",
+  subject: IterationRecord,
+  rows: readonly IterationRecord[],
+  successorId: string,
+): DraftOutcome {
+  const admitted = admitFor(subject, successorId);
+  if (admitted.kind !== "admitted") {
+    return { kind: "refused", reason: admitted.reason };
+  }
+  const plan = admitted.plan;
+  const own = plan.agentTypeInput;
+  const inputs: { readonly from: CandidateSource; readonly input: AgentTypeInput }[] =
+    kind === "agent_type"
+      ? rows.flatMap((row) => {
+          const decoded = readPlan(row.plan);
+          return decoded.kind === "planned"
+            ? [
+                {
+                  from: { form: "iteration", iterationId: row.id } as const,
+                  input: decoded.plan.agentTypeInput,
+                },
+              ]
+            : [];
+        })
+      : [
+          { from: { form: "iteration", iterationId: subject.id } as const, input: own },
+          ...own.askable.map((key) => ({
+            from: { form: "promotedKey", key } as const,
+            // **One key, and only one the author already offered.** cadenza
+            // requires `granted` and `askable` to be disjoint, so the key moves
+            // rather than being copied -- which is what makes this a promotion
+            // and not an invention.
+            input: {
+              ...own,
+              granted: [...own.granted, key],
+              askable: own.askable.filter((other) => other !== key),
+            },
+          })),
+        ];
+
+  const candidates: SnapshotContractCandidate[] = [];
+  const contracts: JsonRecord[] = [];
+  for (const { from, input } of inputs) {
+    const about =
+      from.form === "iteration"
+        ? `the agent type iteration '${from.iterationId}' ran under`
+        : `the agent type with '${from.key}' granted`;
+    const issued = issueFor(plan, input, about);
+    if (issued.kind !== "issued") {
+      return { kind: "refused", reason: issued.reason };
+    }
+    if (candidates.some((seen) => seen.contractDigest === issued.issued.contractDigest)) {
+      // The same contract reached twice: one option, not two identical ones.
+      // The first is kept, and the first is always the subject's own.
+      continue;
+    }
+    candidates.push({
+      from,
+      agentTypeId: input.agentTypeId,
+      agentTypeDigest: issued.issued.agentTypeDigest,
+      granted: issued.issued.granted,
+      askable: issued.issued.askable,
+      contractDigest: issued.issued.contractDigest,
+    });
+    contracts.push(issued.issued.contract);
+  }
+  const head = candidates[0];
+  if (head === undefined) {
+    // Unreachable: the subject's own agent type is always a candidate. Written
+    // as a refusal because the alternative is an option set with no
+    // recommendation, which is the one shape D-0032 rule 1 does not admit.
+    return { kind: "refused", reason: `Iteration '${subject.id}' has no agent type to propose.` };
+  }
+  const snapshot: ContractSnapshot = {
+    iteration: snapshotIteration(subject),
+    successor: {
+      iterationId: successorId,
+      runId: plan.runId,
+      topicBranch: plan.topicBranch,
+    },
+    candidates: [head, ...candidates.slice(1)],
+  };
+  return {
+    kind: "drafted",
+    drafted: {
+      proposal: kind === "agent_type" ? proposeAgentType(snapshot) : proposeContractKeys(snapshot),
+      snapshot,
+      contracts,
+    },
+  };
+}
+
+/**
+ * Propose what a retry of one iteration could run under, and record what was
+ * put on the screen.
  *
  * **The order is the property, and it is D-0022 rule 18's** (`advisory.md`
  * 6.2): the proposal row and every composition row are written **before**
@@ -526,6 +767,12 @@ export function optionLines(
  * ledger holds -- including when they refuse it, which is the case rule 18 says
  * the composition has to outlive. If any of those writes fails, nothing is
  * shown.
+ *
+ * **The three kinds differ in what they vary and in nothing else.**
+ * `run_plan` varies the plan, `agent_type` varies which agent type the retry
+ * runs under, `contract_keys` varies which keys that agent type carries as
+ * granted. All three end at a contract issued to the successor's identity, so
+ * all three record the same rows in the same order.
  *
  * **What this does not do, stated because the gap is the point.** Nothing
  * consumes the decision: no admission compares an approved digest against the
@@ -536,6 +783,7 @@ export function optionLines(
  */
 export async function proposeRetry(
   ports: ProposePorts,
+  kind: ProposableKind,
   iterationId: string,
   successorId: string,
 ): Promise<ProposeOutcome> {
@@ -569,74 +817,26 @@ export async function proposeRetry(
         "no admission could ever take. Name an unused --successor-id.",
     };
   }
-
-  // **Two candidates at most: the subject's own plan, then the one it
-  // superseded.** Order is the payload's own and the recommendation is found by
-  // identity rather than by position (see `proposeRetryPlan`), so this is the
-  // reading order and not the rule.
-  //
-  // ponytail: one generation, not the whole lineage. A row five revisions deep
-  // would otherwise offer five options, of which four were each superseded for
-  // a reason the operator already acted on -- and the set of alternatives *is*
-  // the framing #39 measures, so a longer list is not a better one. What a
-  // person can act on is the plan that has just failed and the one it was
-  // revised from. Walk further when an operator asks for an ancestor this does
-  // not offer; the walk needs a bound and a cycle guard that one generation
-  // does not.
-  const rows: IterationRecord[] = [subject.record];
-  const previousId = subject.record.supersedesIterationId;
-  if (previousId !== null) {
-    const previous = await ports.store.read(previousId);
-    if (previous.kind !== "read") {
-      // **A refusal rather than a shorter list**, for `compose`'s reason: an
-      // alternative that silently went missing is the framing hazard, and the
-      // operator can see the lineage in `explain` either way. This is about the
-      // one predecessor this proposal offers -- an *older* ancestor that will
-      // not read is not consulted at all, by the ceiling above, and so cannot
-      // go missing from a set it was never in.
-      return {
-        kind: "refused",
-        reason:
-          `Iteration '${iterationId}' supersedes '${previousId}', and that row cannot be read, ` +
-          "so the alternatives rondo would offer are not all of them. A proposal quietly short " +
-          "one option is a framing, which is the thing this record exists to prevent.",
-      };
-    }
-    rows.push(previous.record);
+  const rows = await lineage(ports, subject.record);
+  if ("refusal" in rows) {
+    return { kind: "refused", reason: rows.refusal };
   }
-  const composed: ComposedCandidate[] = [];
-  for (const row of rows) {
-    const outcome = compose(row, successorId, iterationId);
-    if (outcome.kind !== "composed") {
-      return {
-        kind: "refused",
-        reason: `No retry of '${iterationId}' can be proposed: ${outcome.reason}`,
-      };
-    }
-    composed.push(outcome.composed);
+  const draft =
+    kind === "run_plan"
+      ? draftRunPlan(subject.record, rows.rows, successorId)
+      : draftContracts(kind, subject.record, rows.rows, successorId);
+  if (draft.kind !== "drafted") {
+    return {
+      kind: "refused",
+      reason: `No ${kind} for a retry of '${iterationId}' can be proposed: ${draft.reason}`,
+    };
   }
-  const head = composed[0];
-  if (head === undefined) {
-    // Unreachable: `rows` always holds the subject. Written as a refusal rather
-    // than as an assertion because the alternative is an option set with no
-    // recommendation, which is the one shape D-0032 rule 1 does not admit.
-    return { kind: "refused", reason: `Iteration '${iterationId}' has no plan to propose.` };
-  }
-  const snapshot: RetrySnapshot = {
-    iteration: snapshotIteration(subject.record),
-    successor: {
-      iterationId: successorId,
-      runId: head.runId,
-      topicBranch: head.topicBranch,
-    },
-    candidates: [head.candidate, ...composed.slice(1).map((one) => one.candidate)],
-  };
-  const proposal = proposeRetryPlan(snapshot);
+  const { proposal, snapshot, contracts } = draft.drafted;
   const createdAtMs = ports.now();
-  const proposalId = `run_plan-${successorId}-${String(createdAtMs)}`;
+  const proposalId = `${kind}-${successorId}-${String(createdAtMs)}`;
   const recorded = await ports.record.recordProposal({
     proposalId,
-    kind: "run_plan",
+    kind,
     drafter: DETERMINISTIC_DRAFTER,
     payload: payloadDocument(proposal.payload),
     snapshot: snapshotDocument(snapshot),
@@ -655,7 +855,7 @@ export async function proposeRetry(
     configDigest: subject.record.configDigest,
     contractDigest: subject.record.contractDigest,
     continuoRevision: subject.record.continuoRevision,
-    // The pin that composed something -- and this kind composes. It is the one
+    // The pin that composed something -- and these kinds compose. It is the one
     // difference from `explain`'s row that is not a null (D-0022 rule 18).
     cadenzaRevision: ports.cadenzaRevision,
     // D-0032 rule 7's pair, null together: **nothing was elevated.** The
@@ -672,16 +872,32 @@ export async function proposeRetry(
     return {
       kind: "refused",
       reason:
-        `The retry of '${iterationId}' was composed and not recorded, so it is not being shown: ` +
-        `${recorded.reason}.`,
+        `The ${kind} proposal for '${iterationId}' was composed and not recorded, so it is not ` +
+        `being shown: ${recorded.reason}.`,
     };
   }
-  for (const [index, one] of composed.entries()) {
+  for (const [index, option] of proposal.payload.options.entries()) {
+    const contract = contracts[index];
+    if (contract === undefined) {
+      // Unreachable: the drafters build one contract per option, in order.
+      // Refused rather than asserted, because the failure it would otherwise
+      // produce is a composition row holding some other option's contract.
+      return {
+        kind: "refused",
+        reason: `Option ${String(index)} of '${proposalId}' has no contract behind it.`,
+      };
+    }
     const composition = await ports.record.recordComposition({
-      compositionId: `${proposalId}-${String(index)}`,
+      // **Zero-padded so the id sorts the way the options are ordered.** The
+      // suffix is the option's index -- it is what links a composition row back
+      // to the option whose digest it holds -- and `-10` sorts before `-2` in
+      // text, so an unpadded id would put the tenth option second for any
+      // reader that ordered by it. Three digits: an option set larger than that
+      // is not one a person is answering in one sentence.
+      compositionId: `${proposalId}-${String(index).padStart(3, "0")}`,
       proposalId,
-      contract: one.contract,
-      contractDigest: one.candidate.contractDigest,
+      contract,
+      contractDigest: option.value,
       // **Null, and D-0022 rule 17 is why.** The retry's contract supersedes
       // nothing: it is an *initial* contract, `supersedes` is null inside the
       // contract cadenza digested, and "cadenza links them not at all". A
@@ -701,7 +917,7 @@ export async function proposeRetry(
       };
     }
   }
-  ports.present(optionLines(iterationId, proposal, snapshot));
+  ports.present(optionLines(iterationId, kind, proposal.payload, snapshot));
   const counted = await ports.record.recordAttention({
     atMs: createdAtMs,
     subjectKind: PROPOSAL_SUBJECT,

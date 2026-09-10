@@ -603,34 +603,57 @@ things put to you comes from, and answers are counted elsewhere (`D-0032` rule 1
 ### 7.2 Propose and decide -- what a retry could run under, and answering it
 
 `explain` says what the store holds and binds nothing. `propose` is the other voice: it puts an
-**option set** in front of you -- the plans a retry of one iteration could run under, with exactly
-one recommended -- and each option names the **contract that retry would run under**, composed for
-the successor identity you name. `decide` records your answer.
+**option set** in front of you -- with exactly one recommended -- and each option names the
+**contract that retry would run under**, composed for the successor identity you name. `decide`
+records your answer.
 
-The options are **the iteration's own plan and the one it superseded**, and no further: a row five
-revisions deep would otherwise offer five plans, four of them already superseded for reasons you
-acted on, and the set of alternatives is the framing rather than a menu. An older ancestor's plan is
-still readable with `explain`, and can be proposed by naming that iteration instead.
+`--kind` picks the question, and there is no default because the three ask different things:
+
+| `--kind` | The question | The options |
+|---|---|---|
+| `run_plan` | Which plan does the retry run? | The iteration's own plan and the one it superseded |
+| `agent_type` | Which agent type does it run under? | The agent types those same iterations ran under |
+| `contract_keys` | Which keys does that agent type carry as **granted** rather than askable? | Leave them as they are, plus one option per askable key promoted |
+
+Two rules run through all three:
+
+- **The recommendation never widens.** It is always the row's own plan, agent type and key set. A
+  widening is something you reach for, never something you get by taking the default.
+- **The alternatives stop one generation back**: a row five revisions deep would otherwise offer five
+  options, four of them already superseded for reasons you acted on, and the set of alternatives is
+  the framing rather than a menu. An older ancestor is still readable with `explain`, and can be
+  proposed by naming that iteration instead.
+
+`contract_keys` promotes **one key at a time, and only a key the agent type's own author already
+listed as askable** -- promoting two at once would ask you to approve two widenings with one answer,
+and a key from outside that list would be rondo inventing a grant nobody offered. Options that reach
+the same contract are one option: an approval names a contract digest, so two options with one digest
+would be two ways to record an answer the ledger cannot tell apart.
 
 Both read rondo's own rows and drive **no continuo verb**, so they reach the same ended rows
 `explain` does.
 
 ```console
-$ node bin/rondo.mjs propose --iteration-id cli-lap-001 --successor-id cli-lap-002
-a retry of iteration 'cli-lap-001', as iteration 'cli-lap-002'
+$ node bin/rondo.mjs propose --iteration-id cli-lap-001 --successor-id cli-lap-002 \
+    --kind contract_keys
+a retry of iteration 'cli-lap-001', as iteration 'cli-lap-002' (contract_keys)
   drafter: rondo/advisory/deterministic
   the retry would run as rondo-cli-lap-002 on rondo/cli-lap-002
   approving one of these records that you approved its contract. It starts nothing yet:
   no admission reads this decision (D-0022 rule 17's consumer is not built).
-  [recommended] run 'cli-lap-002' under the plan this iteration ran (status abandoned, plan sha256:...)
+  [recommended] leave the keys as they are: granting command.run and asking for branch.push
       contract: sha256:15475d4c...
       basis: snapshot /candidates/0/contractDigest = "sha256:15475d4c..."
-recorded as proposal 'run_plan-cli-lap-002-1757500000000'
-Next: rondo decide --proposal-id run_plan-cli-lap-002-1757500000000 --actor-id ID --outcome approved --contract-digest DIGEST
+  [alternative] grant 'branch.push' to 'cli-lap-002' instead of leaving it askable, so it is
+      granted without asking: branch.push, command.run
+      contract: sha256:9ab31f02...
+      basis: snapshot /candidates/1/contractDigest = "sha256:9ab31f02..."
+recorded as proposal 'contract_keys-cli-lap-002-1757500000000'
+Next: rondo decide --proposal-id contract_keys-cli-lap-002-1757500000000 --actor-id ID --outcome approved --contract-digest DIGEST
 
 $ node bin/rondo.mjs decide --proposal-id run_plan-cli-lap-002-1757500000000 \
     --actor-id "$RONDO_APPROVER" --outcome approved --contract-digest sha256:15475d4c...
-recorded as decision 'decision-run_plan-cli-lap-002-1757500000000-1757500060000'
+recorded as decision 'decision-contract_keys-cli-lap-002-1757500000000-1757500060000'
 This records that you approved that contract. Nothing runs on it yet: no admission compares it
 against a plan, so the approval stands unspent.
 ```
@@ -653,6 +676,7 @@ Three properties of `propose` are the point:
 | What you see | What it means | What to do |
 |---|---|---|
 | `propose needs --iteration-id ID and --successor-id ID` | Neither has a default: the second is the identity the retry runs as, and rondo derives the run id and branch from it. | Name both. The successor id must be unused. |
+| `propose needs --kind, one of ...` | The three kinds ask different questions, so one would be put to you as confidently as the one you meant. | Say which question you are asking. |
 | `the plan iteration '<id>' ran will not decode` | The row's plan is not a plan, so no contract can be composed from it. | Nothing was written. The row needs a person. |
 | `that row cannot be read, so the alternatives rondo would offer are not all of them` | The iteration this one superseded is missing or corrupt, so the second option cannot be offered -- and a proposal short one alternative is a framing. | Nothing was written. `explain` the lineage first. |
 | `cadenza refused to issue a contract` | cadenza's own refusal, verbatim -- usually an unknown project name in the plan's catalog. | Fix the plan the retry would run under; nothing was written. |
@@ -697,7 +721,7 @@ Recorded so that "it works" is not read more broadly than it was tested.
   tests, but no fork has been published through this command yet.
 - After the walk, continuo's run row was still `created` and rondo's row still recorded no publish,
   which is the correct state for work that was approved but not yet submitted.
-- **`propose` and `decide`: not walked at all.** Both are exercised end to end against a real
+- **`propose` (all three kinds) and `decide`: not walked at all.** Both are exercised end to end against a real
   SQLite store in `test/access/advisory.test.ts` -- the proposal row, every composition row, the
   digests on the screen and the decision that names one -- and neither has been run by an operator
   on real infrastructure. There is also nothing downstream of them to walk: no admission reads an

@@ -60,7 +60,7 @@ import {
   openIterationStore,
   type ReadOutcome,
 } from "../store/sqlite.js";
-import { explainIteration, proposeRetry, recordAnswer } from "./advisory.js";
+import { explainIteration, PROPOSABLE_KINDS, proposeRetry, recordAnswer } from "./advisory.js";
 import { abandon, admit, conductorPorts, resume } from "./conductor.js";
 import { asciiEscape, consoleSeams, relayUpstream } from "./console.js";
 import {
@@ -117,12 +117,16 @@ export const USAGE = `rondo - the operator surface for delegated work
   rondo abandon --iteration-id ID --reason TEXT
                           end an iteration rondo cannot finish
   rondo propose --iteration-id ID --successor-id ID
-                          propose the plans a retry of one iteration could run
-                          under, one option per persisted plan, with exactly one
-                          recommended and the contract each one would run under.
-                          Records the proposal and every contract before it
-                          shows them. Approving one starts nothing: no admission
-                          reads the decision yet
+                --kind run_plan|agent_type|contract_keys
+                          propose what a retry of one iteration could run under,
+                          as an option set with exactly one recommended and the
+                          contract each option would run under. --kind picks the
+                          question: which plan it runs (run_plan), which agent
+                          type it runs under (agent_type), or which keys that
+                          agent type carries as granted rather than askable
+                          (contract_keys). Records the proposal and every
+                          contract before it shows them. Approving one starts
+                          nothing: no admission reads the decision yet
   rondo decide --proposal-id ID --actor-id ID --outcome approved|declined
                [--contract-digest DIGEST]
                           answer a proposal. --contract-digest is the contract
@@ -239,6 +243,7 @@ export interface ParsedCommand {
   readonly remote: string | null;
   readonly reason: string | null;
   readonly successorId: string | null;
+  readonly kind: string | null;
   readonly proposalId: string | null;
   readonly contractDigest: string | null;
   readonly outcome: string | null;
@@ -262,6 +267,7 @@ const FLAGS = {
   remote: { type: "string" },
   reason: { type: "string" },
   "successor-id": { type: "string" },
+  kind: { type: "string" },
   "proposal-id": { type: "string" },
   "contract-digest": { type: "string" },
   outcome: { type: "string" },
@@ -326,7 +332,7 @@ export const FLAGS_BY_COMMAND: Readonly<Record<string, readonly string[]>> = {
   // because the run id, the topic branch and the workspace are derived from it.
   // A default for either would be rondo proposing something about a row nobody
   // named, under an identity nobody chose.
-  propose: ["iteration-id", "successor-id"],
+  propose: ["iteration-id", "successor-id", "kind"],
   // `--outcome` is typed rather than implied by the verb: D-0032 rule 6 makes
   // "declined" a row and not an absence, so refusing has to be as sayable as
   // approving. `--contract-digest` is the option's own value, which is why it
@@ -407,6 +413,7 @@ export function parseCommand(argv: readonly string[]): ParseOutcome {
       remote: text("remote"),
       reason: text("reason"),
       successorId: text("successor-id"),
+      kind: text("kind"),
       proposalId: text("proposal-id"),
       contractDigest: text("contract-digest"),
       outcome: text("outcome"),
@@ -429,6 +436,7 @@ function emptyCommand(command: ParsedCommand["command"]): ParsedCommand {
     remote: null,
     reason: null,
     successorId: null,
+    kind: null,
     proposalId: null,
     contractDigest: null,
     outcome: null,
@@ -1205,15 +1213,20 @@ function cadenzaRevision(): { revision: string } | { refusal: string } {
 }
 
 /**
- * Door seven: propose the plans a retry could run under, and record what was
- * shown.
+ * Door seven: propose what a retry could run under, and record what was shown.
  *
- * **The first approvable kind reaches an operator here** (D-0022 rule 4's
- * union, D-0032 rule 1's option set). Unlike `explain`, this path composes: it
- * issues the exact contract each option would run under, for the successor
- * identity the operator names, and records it before showing the digest --
- * which is D-0022 rules 17 and 18 taken together, and the reason `src/access`
- * finally takes the cadenza arrow rule 5 granted it.
+ * **The approvable kinds reach an operator here** (D-0022 rule 4's union,
+ * D-0032 rule 1's option set). Unlike `explain`, this path composes: it issues
+ * the exact contract each option would run under, for the successor identity
+ * the operator names, and records it before showing the digest -- which is
+ * D-0022 rules 17 and 18 taken together, and the reason `src/access` takes the
+ * cadenza arrow rule 5 granted it.
+ *
+ * **`--kind` is required and has no default.** The three kinds ask three
+ * different questions -- which plan, which agent type, which keys -- and a
+ * default would put one of them to a person who meant another, with the same
+ * confident option set either way. It is `explain --iteration-id`'s rule
+ * applied to a second flag.
  */
 async function commandPropose(
   parsed: ParsedCommand,
@@ -1225,6 +1238,15 @@ async function commandPropose(
       "propose needs --iteration-id ID and --successor-id ID: the first names the iteration " +
         "whose work was not taken, and the second is the identity the retry would run as. rondo " +
         "derives the run id and the topic branch from the second, so it is a person's to choose.",
+    );
+  }
+  const kind = PROPOSABLE_KINDS.find((one) => one === parsed.kind);
+  if (kind === undefined) {
+    return refuse(
+      `propose needs --kind, one of ${PROPOSABLE_KINDS.join(", ")}. They ask three different ` +
+        "questions -- which plan the retry runs, which agent type it runs under, and which keys " +
+        "that agent type carries as granted -- so there is no default: one of them would be put " +
+        "to you as confidently as the one you meant.",
     );
   }
   const pin = cadenzaRevision();
@@ -1243,6 +1265,7 @@ async function commandPropose(
         }
       },
     },
+    kind,
     parsed.iterationId,
     parsed.successorId,
   );
