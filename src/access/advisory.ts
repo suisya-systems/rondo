@@ -570,10 +570,19 @@ export async function proposeRetry(
     };
   }
 
-  // **The subject's own plan first, then its predecessor's.** Order is the
-  // payload's own and the recommendation is found by identity rather than by
-  // position (see `proposeRetryPlan`), so this is the reading order and not the
-  // rule.
+  // **Two candidates at most: the subject's own plan, then the one it
+  // superseded.** Order is the payload's own and the recommendation is found by
+  // identity rather than by position (see `proposeRetryPlan`), so this is the
+  // reading order and not the rule.
+  //
+  // ponytail: one generation, not the whole lineage. A row five revisions deep
+  // would otherwise offer five options, of which four were each superseded for
+  // a reason the operator already acted on -- and the set of alternatives *is*
+  // the framing #39 measures, so a longer list is not a better one. What a
+  // person can act on is the plan that has just failed and the one it was
+  // revised from. Walk further when an operator asks for an ancestor this does
+  // not offer; the walk needs a bound and a cycle guard that one generation
+  // does not.
   const rows: IterationRecord[] = [subject.record];
   const previousId = subject.record.supersedesIterationId;
   if (previousId !== null) {
@@ -581,7 +590,10 @@ export async function proposeRetry(
     if (previous.kind !== "read") {
       // **A refusal rather than a shorter list**, for `compose`'s reason: an
       // alternative that silently went missing is the framing hazard, and the
-      // operator can see the lineage in `explain` either way.
+      // operator can see the lineage in `explain` either way. This is about the
+      // one predecessor this proposal offers -- an *older* ancestor that will
+      // not read is not consulted at all, by the ceiling above, and so cannot
+      // go missing from a set it was never in.
       return {
         kind: "refused",
         reason:

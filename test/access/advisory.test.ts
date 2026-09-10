@@ -432,6 +432,33 @@ test("it proposes the plans a retry could run under, and records both before sho
   }
 });
 
+test("a lineage deeper than one generation offers two plans and not five", async () => {
+  // **The ceiling stated as a test rather than only as a comment.** The set of
+  // alternatives is the framing #39 measures, so the options are the plan that
+  // has just failed and the one it was revised from -- an older ancestor is not
+  // consulted, and is not silently missing from a set it was never in. This is
+  // the case that goes red if the gatherer is ever taught to walk the lineage
+  // without someone deciding it should.
+  const { store, record } = fresh();
+  await reserveWithPlan(store, "iter-0", null);
+  await store.settle("iter-0", "the work was not taken", 2_000);
+  await reserveWithPlan(store, "iter-1", "iter-0");
+  await store.settle("iter-1", "the work was not taken", 2_500);
+  await reserveWithPlan(store, "iter-2", "iter-1");
+
+  const outcome = await proposeRetry(
+    { ...PROPOSE_PORTS, store, record, present: screen().present },
+    "iter-2",
+    "iter-3",
+  );
+  expect(outcome.kind === "refused" ? outcome.reason : "proposed").toBe("proposed");
+  if (outcome.kind !== "proposed") {
+    return;
+  }
+  expect(outcome.options.length).toBe(2);
+  expect(outcome.options.map((option) => option.label).join(" ")).not.toContain("iter-0");
+});
+
 test("a proposal whose alternatives are not all readable is refused, not shortened", async () => {
   // **The set of alternatives is the framing** #39 identifies as the hazard, so
   // a proposal quietly short one option is a worse answer than a refusal. The

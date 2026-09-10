@@ -603,9 +603,14 @@ things put to you comes from, and answers are counted elsewhere (`D-0032` rule 1
 ### 7.2 Propose and decide -- what a retry could run under, and answering it
 
 `explain` says what the store holds and binds nothing. `propose` is the other voice: it puts an
-**option set** in front of you -- the plans a retry of one iteration could run under, one per
-persisted plan, with exactly one recommended -- and each option names the **contract that retry would
-run under**, composed for the successor identity you name. `decide` records your answer.
+**option set** in front of you -- the plans a retry of one iteration could run under, with exactly
+one recommended -- and each option names the **contract that retry would run under**, composed for
+the successor identity you name. `decide` records your answer.
+
+The options are **the iteration's own plan and the one it superseded**, and no further: a row five
+revisions deep would otherwise offer five plans, four of them already superseded for reasons you
+acted on, and the set of alternatives is the framing rather than a menu. An older ancestor's plan is
+still readable with `explain`, and can be proposed by naming that iteration instead.
 
 Both read rondo's own rows and drive **no continuo verb**, so they reach the same ended rows
 `explain` does.
@@ -649,7 +654,7 @@ Three properties of `propose` are the point:
 |---|---|---|
 | `propose needs --iteration-id ID and --successor-id ID` | Neither has a default: the second is the identity the retry runs as, and rondo derives the run id and branch from it. | Name both. The successor id must be unused. |
 | `the plan iteration '<id>' ran will not decode` | The row's plan is not a plan, so no contract can be composed from it. | Nothing was written. The row needs a person. |
-| `that row cannot be read, so the alternatives rondo would offer are not all of them` | A predecessor in the lineage is missing or corrupt. | Nothing was written. `explain` the lineage first. |
+| `that row cannot be read, so the alternatives rondo would offer are not all of them` | The iteration this one superseded is missing or corrupt, so the second option cannot be offered -- and a proposal short one alternative is a framing. | Nothing was written. `explain` the lineage first. |
 | `cadenza refused to issue a contract` | cadenza's own refusal, verbatim -- usually an unknown project name in the plan's catalog. | Fix the plan the retry would run under; nothing was written. |
 | `decide needs --outcome approved or --outcome declined` | Declining is written down rather than left as silence (`D-0032` rule 6). | Say which. Both are rows. |
 | `approving needs --contract-digest DIGEST` | An approval names the contract you were shown, not a position in a list. | Copy the `contract:` line of the option you are approving. |
