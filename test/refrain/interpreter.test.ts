@@ -640,6 +640,23 @@ test("the row at the open gate carries the gate, the session and the walk's name
   expect(row?.neutralRoleName).toBe("worker");
 });
 
+test("the suspended row says what stage its gate is at, without a call to continuo", async () => {
+  // Issue #21. The stage is written with the gate id, so the whole of the
+  // suspend -- the open-ended half of an iteration's life -- a surface can tell
+  // `received` from `presented` off the row alone. Asserted on the row and on
+  // the effects together: a stage learned by calling `showGate` here would pass
+  // the first expectation and defeat the point of the second.
+  const h = harness();
+  await admitOnce(h);
+  const row = await readRow(h.store, "i-0001");
+  expect(row?.status).toBe("awaiting_human");
+  expect(row?.gateStage).toBe("received");
+  // Still open: the outcome is `resume()`'s to observe and no stage rondo
+  // writes may imply one.
+  expect(row?.gateOutcome).toBe(null);
+  expect(effectCalls(h.calls)).not.toContain("showGate");
+});
+
 test("what a lap reported that the row has no column for is not lost", async () => {
   const h = harness({
     performLap: {
