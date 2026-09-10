@@ -152,12 +152,28 @@ const ALLOWED_INTERNAL_BY_LAYER: Readonly<Record<string, readonly string[]>> = {
   // here, because an allowance says what a layer may reach and not who may
   // reach it.
   "src/cadenza": ["src/cadenza"],
+  // The advisory (D-0022 rule 1). **The one layer in this table that exists to
+  // remove reach rather than to add it**, which is why it is a layer at all:
+  // internals are granted per layer and externals per module, so "this one
+  // module may not import cadenza while its neighbours may" is a rule this
+  // table cannot express -- and in `src/access` the component that must never
+  // compose a contract would sit in the layer that may. It gets `src/store` for
+  // the record types it cites and nothing else, and it is absent from the
+  // external table below, which *is* its empty external allowance: no file, no
+  // socket, no process, no clock it did not receive. The planted cases are what
+  // make that a mechanism instead of this comment.
+  "src/advisory": ["src/advisory", "src/store"],
   // The access points: the web UI and the localhost MCP surface, when they
   // exist. They compose the other three and are composed by nobody. cadenza is
   // NOT among them: an access point that needed a delegation contract would be
   // an access point taking a domain decision, and D-0018 rule 5 says the arrow
   // to add first is the loop's.
-  "src/access": ["src/access", "src/continuo", "src/refrain", "src/store"],
+  //
+  // `src/advisory` joined the row with D-0022 rule 1: gathering the snapshot,
+  // recording the proposal and rendering it are all the composition root's, and
+  // the arrow runs this way only -- the advisory names neither this layer nor
+  // any other but the store.
+  "src/access": ["src/access", "src/advisory", "src/continuo", "src/refrain", "src/store"],
 };
 
 /**
@@ -316,9 +332,11 @@ const SQLITE_OWNER = "src/store/sqlite.ts";
  * can see.
  */
 const EXPECTED_MODULES: readonly string[] = [
+  "src/access/advisory.ts",
   "src/access/conductor.ts",
   "src/access/console.ts",
   "src/access/local.ts",
+  "src/advisory/proposal.ts",
   "src/cadenza/facade.ts",
   "src/continuo/invoker.ts",
   "src/continuo/pin.ts",
@@ -1697,6 +1715,82 @@ const PLANTED: ReadonlyArray<
     "export function take(handler: Function): Function {\n  return handler;\n}\n",
     null,
   ],
+  [
+    // **D-0022 rule 1's whole reason for choosing a layer over a module**, and
+    // the case rule 14 calls the only one in the table that can fail when
+    // somebody later adds one import in good faith. Composing a contract is
+    // authority (b) and lives with the presenting surface; an advisory that
+    // could reach the facade would be the component that must never compose one
+    // sitting one import away from the machinery that does.
+    "advisory-reaches-the-cadenza-facade",
+    "src/advisory/probe.ts",
+    'import { issueInitialContract } from "../cadenza/facade.js";\nexport const x = issueInitialContract;\n',
+    "outside its allowance",
+  ],
+  [
+    // The other half of "expresses no authority": issuing is authority (c), it
+    // lives in `src/access`, and the arrow runs one way. An advisory that could
+    // reach the composition root could call the thing that issues.
+    "advisory-reaches-the-composition-root",
+    "src/advisory/probe.ts",
+    'import { admit } from "../access/conductor.js";\nexport const x = admit;\n',
+    "outside its allowance",
+  ],
+  [
+    // D-0022 rule 3: continuo reaches the advisory as decoded snapshot data
+    // handed over by the composition root, and never as a layer it can call.
+    // This is the pure half of that layer, which is the one that would be
+    // argued for.
+    "advisory-reaches-the-continuo-decoder",
+    "src/advisory/probe.ts",
+    'import type { ContinuoResult } from "../continuo/protocol.js";\nexport type X = ContinuoResult<string>;\n',
+    "outside its allowance",
+  ],
+  [
+    // The loop. An advisory that could call `nextStep` would be an advisory
+    // that could ask what happens next rather than describe what happened.
+    "advisory-reaches-the-loop",
+    "src/advisory/probe.ts",
+    'import { nextStep } from "../refrain/loop.js";\nexport const x = nextStep;\n',
+    "outside its allowance",
+  ],
+  [
+    // **The empty external allowance, planted.** D-0022 rule 2's property is
+    // that the advisory reads no world of its own: absence from the external
+    // table is the whole of that grant, and this is what proves the absence
+    // bites. A sibling checkout at runtime -- rule 3's "never" -- starts with
+    // exactly this import.
+    "advisory-opens-a-file",
+    "src/advisory/probe.ts",
+    'import { readFileSync } from "node:fs";\nexport const x = readFileSync;\n',
+    "which it is not granted",
+  ],
+  [
+    // The same refusal for the database file itself, which is `cadenza S-10`'s
+    // named hazard: the pane with no read path is exactly where somebody opens
+    // the database instead.
+    "advisory-opens-a-database",
+    "src/advisory/probe.ts",
+    'import { DatabaseSync } from "node:sqlite";\nexport const x = DatabaseSync;\n',
+    "the one module that owns durable state",
+  ],
+  [
+    // The control for the arrow rule 1 actually took. Without it every case
+    // above would be satisfied by a rule that refused the advisory everything,
+    // and the table would say nothing about what it may read.
+    "control-advisory-reads-the-store",
+    "src/advisory/probe.ts",
+    'import type { IterationRecord } from "../store/records.js";\nexport type X = IterationRecord;\n',
+    null,
+  ],
+  [
+    // And the control for the direction: the composition root may call the
+    // advisory, which is the arrow D-0022 rule 1 grants `src/access`.
+    "control-the-composition-root-reaches-the-advisory",
+    "src/access/probe.ts",
+    'import { propose } from "../advisory/proposal.js";\nexport const x = propose;\n',
+    null,
+  ],
 ];
 
 test("the planted corpus exercises the detector in both directions", () => {
@@ -1704,8 +1798,8 @@ test("the planted corpus exercises the detector in both directions", () => {
   const clean = PLANTED.filter(([, , , expected]) => expected === null);
   // A corpus that lost its controls, or lost its violations, would still pass
   // every case below by agreeing with itself.
-  expect(caught.length).toBeGreaterThanOrEqual(66);
-  expect(clean.length).toBeGreaterThanOrEqual(12);
+  expect(caught.length).toBeGreaterThanOrEqual(72);
+  expect(clean.length).toBeGreaterThanOrEqual(14);
   expect(new Set(PLANTED.map(([id]) => id)).size).toBe(PLANTED.length);
 });
 

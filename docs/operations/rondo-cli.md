@@ -1,8 +1,9 @@
-# The operator's five commands
+# The operator's six commands
 
 What a person types to get one request through rondo, from asking for it to publishing it -- and,
-in section 7, `abandon`, which is how a request that cannot get there is settled instead. Section
-5.1 is `revise`, which is what a person types when the answer to the gate is "not quite".
+in section 7, `abandon`, which is how a request that cannot get there is settled instead, and
+`explain`, which is how a person finds out what the store holds about a row that has stopped.
+Section 5.1 is `revise`, which is what a person types when the answer to the gate is "not quite".
 Everything here was run on 2026-09-06 against continuo `38c667b5126fdfdc0465e4a422e88b20a8b53044`
 (`continuo.pin.json`), and the transcripts are what actually came back.
 
@@ -550,6 +551,47 @@ yours.
 | `would not be about the same repository` on `publish` | The push remote and `--repo` are different repositories. | If that is deliberate (a fork), pass `--allow-remote-mismatch`; otherwise fix `--repo` or `--remote`. |
 | `--repo is '<x>', and it must be OWNER/NAME` | `--repo` is passed to the forge unchanged. | Spell it `owner/name`. |
 | `was not abandoned` (exit 2) | The row was absent, or the store refused the write. | The lock, if it was held, is still held. Read the row before trying again. |
+
+### 7.1 Explain -- what the store holds about one iteration, and what each claim rests on
+
+`abandon` ends a row; `explain` is how you find out what it was. It reads rondo's own rows, drives
+**no continuo verb** and starts no process, so it reaches the row that is stuck behind a continuo
+that will not start -- and the row it is most useful on has already ended, which is why
+`--iteration-id` is required and has no "the live one" default.
+
+```console
+$ node bin/rondo.mjs explain --iteration-id cli-lap-001
+explanation of iteration 'cli-lap-001'
+  drafter: rondo/advisory/deterministic; derivation: store_rows
+  this explanation binds nothing: it is not a proposal and cannot be approved
+  request: teach revise to name the flags it takes
+      basis: snapshot /iteration/request
+  status: abandoned
+      basis: snapshot /iteration/status
+  ...
+  continuo revision: undetermined
+      basis: snapshot /iteration/continuoRevision
+recorded as proposal 'explanation-cli-lap-001-1757500000000'
+```
+
+Three properties of that output are the point rather than the formatting:
+
+- **every claim carries what it rests on**, on the line under it. The pointer is into the snapshot
+  the proposal row keeps verbatim, so a citation can be followed without opening anything else;
+- **a field the row does not settle reads `undetermined` rather than going missing.** "rondo looked
+  and the column is null" and "rondo did not look" must not be the same thing on the screen;
+- **it binds nothing.** An explanation is not a proposal, cannot be approved, and the store refuses
+  an answer that names one (`D-0032` rule 5).
+
+It records what it said before it prints it: a framing a person read and the ledger does not hold is
+the failure the record exists to prevent, so if the row cannot be written, nothing is shown.
+
+| What you see | What it means | What to do |
+|---|---|---|
+| `explain needs --iteration-id ID` | There is no default, deliberately: the row worth explaining is usually not the live one. | Name the iteration. `answer` and `start` both print the id. |
+| `There is no iteration '<id>' in this store` | No such row, or `RONDO_STORE` names a different database. | Check the id and `RONDO_STORE`. Nothing was written. |
+| `is in the store and will not decode` | The row is corrupt, so nothing about it can be cited. | The refusal carries the store's own reason; the row needs a person, not a second explanation. |
+| `was composed and not recorded, so it is not being shown` | The proposal row could not be written. | Fix the store fault the message names; nothing was presented and nothing was kept. |
 
 ---
 

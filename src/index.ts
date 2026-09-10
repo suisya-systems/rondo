@@ -19,6 +19,8 @@
  * is "may reach the layers", not "may reach one of them" -- and because a test
  * that could only reach the tree through the root would be a test of the root.
  */
+
+export { type ExplainOutcome, explainIteration, explanationLines } from "./access/advisory.js";
 export {
   abandon,
   admit,
@@ -31,6 +33,15 @@ export {
 } from "./access/conductor.js";
 export { asciiEscape, relayUpstream } from "./access/console.js";
 export { describeNextStep } from "./access/local.js";
+export {
+  type AdvisorySnapshot,
+  type Basis,
+  type Claim,
+  type Derivation,
+  type ExplanationPayload,
+  type Proposal,
+  propose,
+} from "./advisory/proposal.js";
 export {
   type AgentType,
   type AgentTypeInput,
