@@ -48,17 +48,24 @@
  */
 import { DatabaseSync } from "node:sqlite";
 
-import { canonicalJson, planDigest } from "./plan.js";
+import { canonicalJson, contentDigest, planDigest } from "./plan.js";
 import {
+  type CompositionDraft,
+  type HumanDecisionDraft,
   type IterationFields,
   type IterationRecord,
   type IterationStatus,
+  isApprovableKind,
   type JsonRecord,
   type LapReading,
   type LapReadingDraft,
+  type OperatorAttention,
+  type ProposalDraft,
   type ReadingEvidence,
+  type RecordChange,
   SUSPENDED_STATUSES,
   TERMINAL_STATUSES,
+  type UnconsumedDecision,
 } from "./records.js";
 
 /**
@@ -283,6 +290,21 @@ export interface IterationStore {
    * list.
    */
   readLive(): Promise<readonly ReadOutcome[]>;
+  /**
+   * Every iteration that has reached a terminal status, oldest first.
+   *
+   * **D-0022's residual, discharged rather than carried** (D-0032 rule 11).
+   * {@link IterationStore.read} needs an id a caller already has and
+   * {@link IterationStore.readLive} filters terminal rows out, so the abandoned
+   * iteration the advisory component exists to explain could not be found at
+   * all. D-0029 rule 8 discharged the part its verdicts needed
+   * ({@link IterationStore.terminalWithoutReading}); #39's "what changed",
+   * #41's inbox and #40's breakdown all need the rest.
+   *
+   * A {@link ReadOutcome} per row for {@link IterationStore.readLive}'s reason:
+   * one row that will not decode must not make the others unreadable.
+   */
+  terminalIterations(): Promise<readonly ReadOutcome[]>;
   /**
    * Terminate a row by id alone, without decoding it.
    *
@@ -561,6 +583,208 @@ CREATE TABLE IF NOT EXISTS lap_reading (
 
 CREATE INDEX IF NOT EXISTS lap_reading_by_iteration
   ON lap_reading(iteration_id, read_at_ms);
+
+-- D-0032. The advisory record: what was proposed, what was composed from it,
+-- what a person answered, what that answer was spent on, where the operator's
+-- reading stopped, and what was put in front of them or kept from them.
+--
+-- **Six append-only tables and no status column anywhere.** D-0022 rule 4's
+-- grade is inherited exactly, and by the same means: immutability is a property
+-- of the schema and of the absence of any writer that updates, not of a
+-- trigger. There are no triggers in this file.
+--
+-- No foreign keys, for admission_refusal's reason above: this database
+-- declares none at all, and adding some here would make the schema claim that
+-- referential integrity is enforced somewhere it is not. What stands in their
+-- place, where it matters, is a read inside the writer's own BEGIN IMMEDIATE
+-- -- which is where D-0032 rule 5's refusal lives.
+--
+-- No indexes beyond the primary keys. Every query below is a full scan of a
+-- table rondo has never yet written a row to, and an index chosen before a
+-- measurement is a guess about a shape nobody has seen.
+
+-- D-0022 rule 4, extended by D-0032 rules 1, 2, 3, 7 and 8.
+--
+-- payload and snapshot are held verbatim beside a digest of their own bytes,
+-- for D-0019 rule 4's reason exactly: a digest detects that a source has moved
+-- and does not hand back the rows the proposal was made from. The snapshot is
+-- also what makes D-0032 rule 2 affordable -- a basis pointing into it renders
+-- inline with no copy -- and it never carries a gate answer's body, whose one
+-- home is continuo.
+--
+-- **The three CHECKs are the three properties D-0032 fixed and nothing more.**
+-- candidate_contract_digest exists and is kept null (D-0022 rule 4's "null on
+-- a proposal, always"), so the claim is enforced by the database rather than by
+-- a sentence in a design document. derivation is non-null exactly when the
+-- kind is explanation (rule 8). The two elevation columns are null together
+-- (rule 7), because an observation with no elevator and an elevator with no
+-- observation are each half a link.
+--
+-- **kind deliberately carries no CHECK.** It is a closed union whose
+-- unrecognised members are refused by the *reader* (D-0022 rule 4) and, for the
+-- one question that matters, by the writer of human_decision below: a kind
+-- this rondo does not know is not in the approvable set, so it cannot be
+-- answered. That is iteration.status's precedent, which is likewise unchecked
+-- in the schema and refused at decode.
+CREATE TABLE IF NOT EXISTS proposal (
+  proposal_id                 TEXT    PRIMARY KEY,
+  kind                        TEXT    NOT NULL,
+  drafter                     TEXT    NOT NULL,
+  payload                     TEXT    NOT NULL,
+  proposal_digest             TEXT    NOT NULL,
+  snapshot                    TEXT    NOT NULL,
+  snapshot_digest             TEXT    NOT NULL,
+  derivation                  TEXT,
+  iteration_id                TEXT,
+  supersedes_iteration_id     TEXT,
+  supersedes_proposal_id      TEXT,
+  predecessor_plan_digest     TEXT,
+  predecessor_contract_digest TEXT,
+  candidate_contract_digest   TEXT,
+  agent_type_digest           TEXT,
+  config_digest               TEXT,
+  contract_digest             TEXT,
+  continuo_revision           TEXT,
+  cadenza_revision            TEXT,
+  elevated_from_message_id    TEXT,
+  elevated_by_actor_id        TEXT,
+  created_at_ms               INTEGER NOT NULL,
+  CHECK (candidate_contract_digest IS NULL),
+  CHECK ((derivation IS NOT NULL) = (kind = 'explanation')),
+  CHECK ((elevated_from_message_id IS NULL) = (elevated_by_actor_id IS NULL))
+);
+
+-- D-0022 rule 18. The contract the human was **shown**, written before it is
+-- presented.
+--
+-- A proposal carries candidate *inputs*; this is the thing on the screen, and it
+-- must outlive both a refusal and a crash. contract holds the fields as
+-- issued so contract_digest can be recomputed rather than trusted (D-0020
+-- rule 4 fact 1), and cadenza_revision records which pin composed it -- the
+-- pin's mobility is a fact, having fired once already.
+CREATE TABLE IF NOT EXISTS composition (
+  composition_id              TEXT    PRIMARY KEY,
+  proposal_id                 TEXT    NOT NULL,
+  contract                    TEXT    NOT NULL,
+  contract_digest             TEXT    NOT NULL,
+  supersedes_contract_digest  TEXT,
+  cadenza_revision            TEXT    NOT NULL,
+  composed_at_ms              INTEGER NOT NULL
+);
+
+-- D-0022 rule 9 and D-0032 rules 5 and 6. What a person answered.
+--
+-- **outcome is why this is a row and not an absence** (D-0032 rule 6):
+-- "declined" and "never answered" are different facts, and without the
+-- distinction #41's inbox cannot tell what is waiting on the operator from what
+-- the operator has already settled. approved is a reference into
+-- composition.contract_digest and is non-null exactly on an approval -- a
+-- refusal approves no digest, and a digest with no approval behind it would be
+-- an issuance waiting to happen.
+--
+-- gate_id and gate_transition_seq are route G's reference to continuo's own
+-- record and are null together on route S, where no gate exists. They are a
+-- reference and never a copy: the body is continuo's, and A-8 gives that fact
+-- exactly one home.
+--
+-- actor_id is the approver and recorded_by is the surface. They are two
+-- columns because they are two facts, and a surface that recorded itself as the
+-- approver would be the one substitution this table exists to make visible.
+CREATE TABLE IF NOT EXISTS human_decision (
+  decision_id                 TEXT    PRIMARY KEY,
+  proposal_id                 TEXT    NOT NULL,
+  outcome                     TEXT    NOT NULL,
+  approved                    TEXT,
+  predecessor                 TEXT,
+  actor_id                    TEXT    NOT NULL,
+  recorded_by                 TEXT    NOT NULL,
+  gate_id                     TEXT,
+  gate_transition_seq         INTEGER,
+  decided_at_ms               INTEGER NOT NULL,
+  CHECK (outcome IN ('approved', 'declined')),
+  CHECK ((approved IS NOT NULL) = (outcome = 'approved')),
+  CHECK ((gate_id IS NULL) = (gate_transition_seq IS NULL))
+);
+
+-- advisory.md 6.4 / D-0022 rule 16. One continuo transition backs at most one
+-- decision.
+--
+-- Without it two decision rows may name one gate answer -- two surfaces, two
+-- browser tabs, one person answering once -- and each could then be spent
+-- independently, which is the single-use guarantee of D-0022 rule 9 defeated
+-- one level above the primary key that holds it. A person answered once, so
+-- there is one answer.
+--
+-- Partial, over the route-G rows only. Route S has no gate to name and its two
+-- columns are null together, and SQLite already treats NULLs in a unique index
+-- as distinct -- but the predicate is written out rather than inherited, for
+-- CLAIM_INDEXES' reason: a row that names no transition claims none, and
+-- several such rows are not a collision.
+CREATE UNIQUE INDEX IF NOT EXISTS human_decision_gate_transition
+  ON human_decision(gate_id, gate_transition_seq) WHERE gate_id IS NOT NULL;
+
+-- advisory.md 6.3 / D-0022 rule 9. Single use is a transaction, not a check.
+--
+-- decision_id is the **primary key**, so a second issuance against one answer
+-- collides on it and is refused by the database rather than by a check somebody
+-- remembered to write -- and human_decision stays a table nothing ever
+-- updates. An earlier draft set a consumed_by column on the decision, which
+-- would have made "immutable" a word this schema used about a row it rewrites.
+CREATE TABLE IF NOT EXISTS decision_consumption (
+  decision_id                 TEXT    PRIMARY KEY,
+  contract_digest             TEXT    NOT NULL,
+  consumed_at_ms              INTEGER NOT NULL
+);
+
+-- D-0032 rule 9. The durable last-look mark: one row per look.
+--
+-- viewed_at_ms is **the bound the render's own query used**, sampled before
+-- the render reads and written after it, not the clock at the end. Writing the
+-- end clock would lose every row committed while the render was running: it was
+-- never displayed, and its timestamp precedes the mark, so the "what changed"
+-- query would omit it for ever. The failure this shape accepts is showing
+-- something twice.
+--
+-- **Its ceiling is named rather than hidden.** A timestamp cursor is not
+-- lossless: these are the *caller's* clocks, taken before the writer enters
+-- BEGIN IMMEDIATE, so a writer that samples before the render's bound and
+-- commits after the render's query has produced a row the operator never saw
+-- and whose timestamp is already behind the mark. The upgrade path is a
+-- per-table commit-ordered cursor over rowid; it is not taken now because it
+-- makes this table's shape a function of the set of record kinds, and because
+-- rondo has one operator, one surface and one writer at a time.
+--
+-- **Per-item read/unread flags are refused**: one row per look answers the same
+-- question as N rows per item, and a per-item flag is a mutable column on an
+-- immutable record.
+CREATE TABLE IF NOT EXISTS operator_view (
+  actor_id                    TEXT    NOT NULL,
+  viewed_at_ms                INTEGER NOT NULL
+);
+
+-- D-0032 rule 10. Both sides of the silence, in one table.
+--
+-- One table rather than two because the numerator and the denominator have to
+-- come from the same place: a withheld-only table makes the count of what *was*
+-- put to the operator somebody else's problem, and the only candidate is
+-- human_decision, which counts answers and not presentations.
+--
+-- subject_id is nullable because the most common withholding has nothing to
+-- carry one: it was never composed into a proposal at all.
+--
+-- **rule_name is required on the withheld side, and it is the point of the
+-- table.** The CHECK refuses a null or an empty one from any writer, including
+-- one editing the file by hand; the writer below refuses a blank one and says
+-- why in rondo's own words.
+CREATE TABLE IF NOT EXISTS operator_attention (
+  at_ms                       INTEGER NOT NULL,
+  subject_kind                TEXT    NOT NULL,
+  subject_id                  TEXT,
+  disposition                 TEXT    NOT NULL,
+  rule_name                   TEXT,
+  CHECK (disposition IN ('presented', 'withheld')),
+  CHECK (disposition = 'presented' OR (rule_name IS NOT NULL AND rule_name <> ''))
+);
 `;
 
 /**
@@ -898,57 +1122,8 @@ export function iterationStore(connection: DatabaseSync, policy: HostPolicy): It
     }
   };
 
-  /**
-   * Run `body` inside `BEGIN IMMEDIATE`, committing it or rolling it back.
-   *
-   * `BEGIN IMMEDIATE` rather than the default deferred transaction for the
-   * reason continuo gives on its own admission path: under a deferred
-   * transaction the write lock is taken at the *first write*, which leaves a
-   * window in which two readers have both decided they may proceed. Taking the
-   * write lock at `BEGIN` closes it, and the serialisation is then the
-   * database's -- it holds across two processes, not merely across two callers
-   * in one.
-   */
-  const inTransaction = <T>(body: () => T): T => {
-    connection.exec("BEGIN IMMEDIATE");
-    try {
-      const value = body();
-      // **Enforced rather than assumed** (D-0023 rule 16). The type is
-      // `<T>(body: () => T) => T`, which happily admits a promise-returning
-      // body -- and then `COMMIT` runs *before* the awaited work, so the
-      // transaction is torn and the write lands outside it. Under one
-      // in-flight iteration the failure is invisible, because nothing else is
-      // ever inside a transaction at the same time; under a bound above one it
-      // is a corrupt row and a bound that was never really checked.
-      //
-      // The property the whole in-process side of N > 1 rests on is that every
-      // transaction body is synchronous, so two overlapping `admit()` calls
-      // cannot interleave inside one: `node:sqlite` is synchronous and
-      // JavaScript is single-threaded, so a body with no `await` in it runs to
-      // completion before any other continuation. That is a real guarantee and
-      // it is worth exactly as much as the promise that nobody adds an
-      // `await` -- which is why this refuses instead of trusting.
-      if (typeof (value as { readonly then?: unknown } | null)?.then === "function") {
-        throw new StoreDefect(
-          "a store transaction body returned a thenable, which would commit before the awaited " +
-            "work had happened. Every body here must be synchronous: that is what makes two " +
-            "overlapping admissions unable to interleave inside one transaction.",
-        );
-      }
-      connection.exec("COMMIT");
-      return value;
-    } catch (error) {
-      // Rolling back is best-effort on purpose: if the rollback itself fails
-      // the original error is the one worth reporting, and swallowing it to
-      // report the rollback would hide the cause behind its own cleanup.
-      try {
-        connection.exec("ROLLBACK");
-      } catch {
-        // The transaction was already resolved, or the connection is gone.
-      }
-      throw error;
-    }
-  };
+  /** {@link immediateTransaction}, bound to this store's connection. */
+  const inTransaction = <T>(body: () => T): T => immediateTransaction(connection, body);
 
   /**
    * Write one reading beside the transition that carries it.
@@ -1214,6 +1389,19 @@ export function iterationStore(connection: DatabaseSync, policy: HostPolicy): It
       return readLiveRows().map((row) => decode(row, idOf(row)));
     },
 
+    async terminalIterations(): Promise<readonly ReadOutcome[]> {
+      // `live IS NULL` is the generated column's own answer to "has this row
+      // reached a terminal status", read rather than restated: the terminal set
+      // is written once, in `records.ts`.
+      return connection
+        .prepare(
+          `SELECT ${SELECT_COLUMNS} FROM iteration WHERE live IS NULL ` +
+            "ORDER BY created_at_ms, id",
+        )
+        .all()
+        .map((row) => decode(row as SqlRow, idOf(row as SqlRow)));
+    },
+
     async readingsFor(iterationId: string): Promise<readonly LapReading[]> {
       return readingRows(iterationId);
     },
@@ -1267,6 +1455,554 @@ export function iterationStore(connection: DatabaseSync, policy: HostPolicy): It
       }
     },
   };
+}
+
+/**
+ * Run `body` inside `BEGIN IMMEDIATE`, committing it or rolling it back.
+ *
+ * `BEGIN IMMEDIATE` rather than the default deferred transaction for the
+ * reason continuo gives on its own admission path: under a deferred
+ * transaction the write lock is taken at the *first write*, which leaves a
+ * window in which two readers have both decided they may proceed. Taking the
+ * write lock at `BEGIN` closes it, and the serialisation is then the
+ * database's -- it holds across two processes, not merely across two callers
+ * in one.
+ *
+ * At module scope rather than inside {@link iterationStore} because
+ * {@link advisoryRecord} needs the same guarantee for D-0032 rule 5's refusal,
+ * and a second copy of this function would be a second answer to "what does
+ * this store do about concurrency".
+ */
+/**
+ * Whether a write to the advisory record landed, or why it did not.
+ *
+ * **`refused` and `defect` are two different answers and the split is
+ * load-bearing.** A refusal is this store declining to record something D-0032
+ * says must not be recorded -- an answer to a proposal that binds nothing, a
+ * withholding whose rule cannot be named -- and it is a fact about the caller's
+ * request, not a fault. A defect is the store failing. A caller that collapsed
+ * them would report a policy refusal as an outage, and the refusals are the
+ * whole of what rules 5 and 10 buy.
+ */
+export type RecordOutcome =
+  | { readonly kind: "recorded" }
+  | { readonly kind: "refused"; readonly reason: string }
+  | { readonly kind: "defect"; readonly reason: string };
+
+/**
+ * The advisory record, as D-0032 leaves it.
+ *
+ * A second port over the same connection rather than more methods on
+ * {@link IterationStore}, because they answer different questions for different
+ * callers: the loop drives one iteration and never reads a proposal, and the
+ * operator's surface reads proposals and drives no iteration. The one method
+ * that belongs to the iteration table -- {@link IterationStore.terminalIterations}
+ * -- stayed there, beside the two reads it completes.
+ *
+ * **There is no reader for a proposal, a composition or a decision here, and
+ * that is scope rather than an omission.** D-0032 rule 12 names the DDL, the
+ * writer refusals of rules 5 and 10, rule 5's planted case and rule 11's three
+ * queries as this work, in that order; reading a row back into a rendered shape
+ * is the surface's, and D-0032 rule 2's reader refusal -- a basis whose form is
+ * not one of the closed union's members -- belongs with it. What ships here is
+ * what the entry listed.
+ */
+export interface AdvisoryRecord {
+  /** Append one immutable proposal (D-0022 rule 4). */
+  recordProposal(draft: ProposalDraft): Promise<RecordOutcome>;
+  /** Append the contract that is about to be presented (D-0022 rule 18). */
+  recordComposition(draft: CompositionDraft): Promise<RecordOutcome>;
+  /**
+   * Append what a person answered -- **or refuse it** (D-0032 rules 5 and 6).
+   *
+   * The refusal is the rule: the proposal's `kind` is read inside this method's
+   * own `BEGIN IMMEDIATE` and an answer naming a kind that binds nothing is
+   * refused there. Authority is a function of `kind` alone, and this is where
+   * that stops being a sentence.
+   */
+  recordDecision(draft: HumanDecisionDraft): Promise<RecordOutcome>;
+  /**
+   * Spend one decision, once (`advisory.md` 6.3).
+   *
+   * The primary key on `decision_consumption.decision_id` is what makes a
+   * second issuance impossible, and it is the database's refusal rather than a
+   * check somebody remembered to write. **The delegation row joins this
+   * transaction when `D-0020` rule 4's table lands**; until then the
+   * consumption is the whole of what rondo has to write, and the guarantee it
+   * carries is unchanged.
+   */
+  consumeDecision(
+    decisionId: string,
+    contractDigest: string,
+    nowMs: number,
+  ): Promise<RecordOutcome>;
+  /**
+   * Append the mark for one look (D-0032 rule 9).
+   *
+   * `viewedAtMs` is **the bound the render's own query used**, sampled before
+   * the render read anything and written after it finished. Passing the clock
+   * at the end instead loses every row committed while the render was running.
+   */
+  recordView(actorId: string, viewedAtMs: number): Promise<RecordOutcome>;
+  /**
+   * Where one actor's reading stopped, or null if they have never looked.
+   *
+   * The `t` that {@link AdvisoryRecord.changedSince} is asked with, which is
+   * what makes rule 9's two columns worth storing. `MAX` rather than the last
+   * row inserted: the marks are the caller's clocks and this asks how far the
+   * reading has reached, which is the largest of them and not the newest row.
+   */
+  lastView(actorId: string): Promise<number | null>;
+  /**
+   * Append one side of the silence -- **or refuse it** (D-0032 rule 10).
+   *
+   * A `withheld` row whose `ruleName` is absent or blank is refused: a
+   * withholding whose rule cannot be named is a judgement with no policy behind
+   * it, and *"suppressed 40"* is a number where *"suppressed 40, of which 31 by
+   * the duplicate-delivery rule"* is a record.
+   */
+  recordAttention(row: OperatorAttention): Promise<RecordOutcome>;
+  /** Every approval that was never spent (D-0022 rule 19, D-0032 rule 11). */
+  unconsumedDecisions(): Promise<readonly UnconsumedDecision[]>;
+  /**
+   * Every record that landed at or after `tMs`, oldest first (D-0032 rule 11).
+   *
+   * **Inclusive of the bound**, which is rule 9's shape and not an off-by-one:
+   * the mark is the upper limit the render's own queries used, so a row bearing
+   * exactly that timestamp may or may not have been displayed. The failure this
+   * accepts is showing something twice; the failure it avoids is losing
+   * something for ever.
+   */
+  changedSince(tMs: number): Promise<readonly RecordChange[]>;
+}
+
+/**
+ * Every table a change can land in, beside how it spells its own identity and
+ * its own clock.
+ *
+ * Written once, as data, because {@link AdvisoryRecord.changedSince} is a
+ * `UNION ALL` over all of them and a list maintained in prose beside a list
+ * maintained in SQL is two lists. The rule for membership is **total rather
+ * than curated**: every append-only table in this schema that carries a
+ * caller-clock timestamp is here, so a record kind added later is one row here
+ * rather than a judgement about whether the operator would want to see it.
+ *
+ * **`operator_view` is the one exclusion, and it is the cursor itself.** A mark
+ * is written by the render at the end of the render, so including it would make
+ * every look report itself as a change the operator has not seen.
+ *
+ * `iteration` contributes `updated_at_ms` rather than `created_at_ms`: it is
+ * the one mutable row in the store, and what changed about it is when it last
+ * moved.
+ */
+const CHANGE_SOURCES = Object.freeze([
+  { kind: "iteration", table: "iteration", id: "id", at: "updated_at_ms" },
+  {
+    kind: "admission_refusal",
+    table: "admission_refusal",
+    id: "CAST(rowid AS TEXT)",
+    at: "refused_at_ms",
+  },
+  { kind: "lap_reading", table: "lap_reading", id: "iteration_id", at: "read_at_ms" },
+  { kind: "proposal", table: "proposal", id: "proposal_id", at: "created_at_ms" },
+  { kind: "composition", table: "composition", id: "composition_id", at: "composed_at_ms" },
+  { kind: "human_decision", table: "human_decision", id: "decision_id", at: "decided_at_ms" },
+  {
+    kind: "decision_consumption",
+    table: "decision_consumption",
+    id: "decision_id",
+    at: "consumed_at_ms",
+  },
+  { kind: "operator_attention", table: "operator_attention", id: "subject_id", at: "at_ms" },
+] as const);
+
+/**
+ * {@link AdvisoryRecord.changedSince}'s one statement, built from
+ * {@link CHANGE_SOURCES}.
+ *
+ * The only interpolation is table and column names chosen from the frozen tuple
+ * above -- never anything a caller supplies -- which is the same licence
+ * `TERMINAL_SQL_LITERALS` takes and under the same rule: `tMs` is a bound
+ * parameter, once per branch.
+ */
+const CHANGES_SINCE_SQL = `${CHANGE_SOURCES.map(
+  (source) =>
+    `SELECT '${source.kind}' AS kind, ${source.id} AS id, ${source.at} AS at_ms ` +
+    `FROM ${source.table} WHERE ${source.at} >= ?`,
+).join(" UNION ALL ")} ORDER BY at_ms, kind, id`;
+
+/**
+ * The advisory record over an open connection.
+ *
+ * Applies {@link SCHEMA} for {@link iterationStore}'s reason -- every statement
+ * in it is `IF NOT EXISTS`, so opening either port over either database is
+ * idempotent and neither has to be opened first. It does **not** run
+ * {@link migrate}: that is the `iteration` table's column history, and nothing
+ * here reads a column the migration adds.
+ */
+export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
+  connection.exec(SCHEMA);
+
+  /**
+   * Run one insert, translating a throw into an outcome.
+   *
+   * Bare rather than wrapped in `BEGIN IMMEDIATE`, and that is not a shortcut:
+   * a single statement takes the write lock for its own duration, so there is
+   * no window between a decision and a write to serialise. `recordDecision` is
+   * the one writer here that reads before it writes, and it is the one that
+   * takes a transaction.
+   */
+  const insert = (sql: string, values: readonly (string | number | null)[]): RecordOutcome => {
+    try {
+      connection.prepare(sql).run(...values);
+      return { kind: "recorded" };
+    } catch (error) {
+      return { kind: "defect", reason: describe(error) };
+    }
+  };
+
+  return {
+    async recordProposal(draft: ProposalDraft): Promise<RecordOutcome> {
+      let payload: string;
+      let snapshot: string;
+      try {
+        // Encoded before the insert and outside it: `canonicalJson` refuses a
+        // value it cannot round-trip, and a proposal whose payload cannot be
+        // encoded is rondo handing the store something rondo should not have
+        // built. That is a defect and not a refusal.
+        payload = canonicalJson(draft.payload);
+        snapshot = canonicalJson(draft.snapshot);
+      } catch (error) {
+        return { kind: "defect", reason: describe(error) };
+      }
+      return insert(
+        "INSERT INTO proposal (proposal_id, kind, drafter, payload, proposal_digest, snapshot, " +
+          "snapshot_digest, derivation, iteration_id, supersedes_iteration_id, " +
+          "supersedes_proposal_id, predecessor_plan_digest, predecessor_contract_digest, " +
+          "agent_type_digest, config_digest, contract_digest, continuo_revision, " +
+          "cadenza_revision, elevated_from_message_id, elevated_by_actor_id, created_at_ms) " +
+          "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        [
+          draft.proposalId,
+          draft.kind,
+          draft.drafter,
+          payload,
+          contentDigest(draft.payload),
+          snapshot,
+          contentDigest(draft.snapshot),
+          draft.derivation,
+          draft.iterationId,
+          draft.supersedesIterationId,
+          draft.supersedesProposalId,
+          draft.predecessorPlanDigest,
+          draft.predecessorContractDigest,
+          draft.agentTypeDigest,
+          draft.configDigest,
+          draft.contractDigest,
+          draft.continuoRevision,
+          draft.cadenzaRevision,
+          draft.elevatedFromMessageId,
+          draft.elevatedByActorId,
+          draft.createdAtMs,
+        ],
+      );
+      // `candidate_contract_digest` is named by no column list above, so the
+      // insert leaves it NULL and the schema's `CHECK` keeps it there
+      // (D-0022 rule 4).
+    },
+
+    async recordComposition(draft: CompositionDraft): Promise<RecordOutcome> {
+      let contract: string;
+      try {
+        contract = canonicalJson(draft.contract);
+      } catch (error) {
+        return { kind: "defect", reason: describe(error) };
+      }
+      return insert(
+        "INSERT INTO composition (composition_id, proposal_id, contract, contract_digest, " +
+          "supersedes_contract_digest, cadenza_revision, composed_at_ms) " +
+          "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        [
+          draft.compositionId,
+          draft.proposalId,
+          contract,
+          // cadenza's digest, stored as it was given. **Not recomputed here**:
+          // the digest a human approves is cadenza's own, and a second one
+          // taken over this module's rendering would be a second authority for
+          // the one value D-0020 rule 4 fact 1 says must be recomputable rather
+          // than trusted. The contract is beside it so a reader can do exactly
+          // that recomputation.
+          draft.contractDigest,
+          draft.supersedesContractDigest,
+          draft.cadenzaRevision,
+          draft.composedAtMs,
+        ],
+      );
+    },
+
+    async recordDecision(draft: HumanDecisionDraft): Promise<RecordOutcome> {
+      try {
+        return immediateTransaction<RecordOutcome>(connection, () => {
+          // **The read and the write in one `BEGIN IMMEDIATE`, and that is the
+          // whole of D-0032 rule 5.** The same question asked before the
+          // transaction would be a check with a window in it: the write lock is
+          // what makes the kind that was read the kind that is still there when
+          // the row lands.
+          const row = connection
+            .prepare("SELECT kind FROM proposal WHERE proposal_id = ?")
+            .get(draft.proposalId);
+          if (row === undefined) {
+            return {
+              kind: "refused",
+              reason:
+                `a human decision must name a proposal, and '${draft.proposalId}' is not a row ` +
+                "in this store: D-0032 rule 5 makes authority a function of the proposal's " +
+                "kind, and there is no kind here to read",
+            };
+          }
+          const proposalKind = String((row as SqlRow)["kind"]);
+          if (!isApprovableKind(proposalKind)) {
+            // **The refusal fires for an unrecognised kind too, and by the same
+            // line.** A kind this rondo does not know is not in the approvable
+            // set, so D-0022 rule 4's "refuse rather than guess at" is reached
+            // without a second spelling of the union -- and the one answer that
+            // must never be produced is "approvable".
+            return {
+              kind: "refused",
+              reason:
+                `proposal '${draft.proposalId}' has kind '${proposalKind}', which binds nothing ` +
+                "and cannot be answered: D-0032 rule 5 makes authority a function of kind " +
+                "alone, and an explanation is material a person reads rather than a thing a " +
+                "person approves",
+            };
+          }
+          connection
+            .prepare(
+              "INSERT INTO human_decision (decision_id, proposal_id, outcome, approved, " +
+                "predecessor, actor_id, recorded_by, gate_id, gate_transition_seq, " +
+                "decided_at_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            )
+            .run(
+              draft.decisionId,
+              draft.proposalId,
+              draft.outcome,
+              draft.approved,
+              draft.predecessor,
+              draft.actorId,
+              draft.recordedBy,
+              draft.gateId,
+              draft.gateTransitionSeq,
+              draft.decidedAtMs,
+            );
+          return { kind: "recorded" };
+        });
+      } catch (error) {
+        return { kind: "defect", reason: describe(error) };
+      }
+    },
+
+    async consumeDecision(
+      decisionId: string,
+      contractDigest: string,
+      nowMs: number,
+    ): Promise<RecordOutcome> {
+      try {
+        // **The read and the insert in one `BEGIN IMMEDIATE`**, for
+        // `recordDecision`'s reason: an approval checked in one transaction and
+        // spent in another is a check with a window in it.
+        return immediateTransaction<RecordOutcome>(connection, () => {
+          const row = connection
+            .prepare("SELECT outcome, approved FROM human_decision WHERE decision_id = ?")
+            .get(decisionId) as SqlRow | undefined;
+          if (row === undefined) {
+            // **Not a harmless dangling row.** `decision_consumption` is what
+            // `unconsumedDecisions` subtracts, so a consumption naming nothing
+            // is a subtraction from a set it was never in -- and the day the id
+            // is minted the approval it names is born already spent.
+            return {
+              kind: "refused",
+              reason:
+                `there is no human decision '${decisionId}' in this store to spend: a ` +
+                "consumption is the record of an issuance against an answer, and an answer " +
+                "that was never recorded cannot have authorised one",
+            };
+          }
+          if (String(row["outcome"]) !== "approved") {
+            // D-0032 rule 6 in as many words: a refusal writes no
+            // `decision_consumption` row and no delegation row, which is what
+            // D-0022 rule 18 assumes when it says the composition must outlive
+            // a refusal.
+            return {
+              kind: "refused",
+              reason:
+                `the human decision '${decisionId}' declined, and a refusal authorises ` +
+                "nothing: D-0032 rule 6 gives a declined answer its own row precisely so that " +
+                "it is not an absence somebody can spend",
+            };
+          }
+          const approved = String(row["approved"]);
+          if (approved !== contractDigest) {
+            // **The digest is what a person approved** (cadenza D-0036), so
+            // issuing a different one is issuing something nobody answered for
+            // -- and it would spend the real approval on the way past, removing
+            // it from `unconsumedDecisions` for ever.
+            return {
+              kind: "refused",
+              reason:
+                `the human decision '${decisionId}' approved '${approved}' and the issuance ` +
+                `names '${contractDigest}': the digest is what a person approved, so a ` +
+                "contract they did not see is not one this answer can be spent on",
+            };
+          }
+          connection
+            .prepare(
+              "INSERT INTO decision_consumption (decision_id, contract_digest, consumed_at_ms) " +
+                "VALUES (?, ?, ?)",
+            )
+            .run(decisionId, contractDigest, nowMs);
+          return { kind: "recorded" };
+        });
+      } catch (error) {
+        if (isUniqueViolation(error)) {
+          // The database's refusal, said in rondo's words rather than the
+          // driver's. One human decision authorises at most one issuance
+          // (D-0022 rule 9), and this is the collision that enforces it.
+          return {
+            kind: "refused",
+            reason:
+              `the human decision '${decisionId}' has already been spent, and one decision ` +
+              "authorises at most one issuance: D-0022 rule 9 makes single use the store's " +
+              "guarantee, and it is this row's primary key that holds it",
+          };
+        }
+        return { kind: "defect", reason: describe(error) };
+      }
+    },
+
+    async recordView(actorId: string, viewedAtMs: number): Promise<RecordOutcome> {
+      return insert("INSERT INTO operator_view (actor_id, viewed_at_ms) VALUES (?, ?)", [
+        actorId,
+        viewedAtMs,
+      ]);
+    },
+
+    async lastView(actorId: string): Promise<number | null> {
+      const row = connection
+        .prepare("SELECT MAX(viewed_at_ms) AS mark FROM operator_view WHERE actor_id = ?")
+        .get(actorId) as SqlRow | undefined;
+      const mark = row === undefined ? null : row["mark"];
+      // `MAX` over no rows is one row holding NULL rather than no row at all,
+      // so "never looked" arrives here as a null column and not as an absent
+      // result. Both are answered the same way, because both are the same fact.
+      return mark === null || mark === undefined ? null : Number(mark);
+    },
+
+    async recordAttention(row: OperatorAttention): Promise<RecordOutcome> {
+      if (row.disposition === "withheld" && (row.ruleName ?? "").trim() === "") {
+        // **D-0032 rule 10's writer refusal.** The schema's `CHECK` already
+        // refuses a null or an empty string, which covers a row inserted from
+        // outside this code; this covers the blank one it cannot see and, more
+        // to the point, says what happened in the vocabulary the caller reads.
+        return {
+          kind: "refused",
+          reason:
+            "an operator_attention row that withheld something must name the rule that " +
+            "withheld it: D-0032 rule 10 refuses a withholding whose rule cannot be named, " +
+            "because that is a judgement with no policy behind it and it is the named rule " +
+            "that turns a suppressed count into a record",
+        };
+      }
+      return insert(
+        "INSERT INTO operator_attention (at_ms, subject_kind, subject_id, disposition, " +
+          "rule_name) VALUES (?, ?, ?, ?, ?)",
+        [row.atMs, row.subjectKind, row.subjectId, row.disposition, row.ruleName],
+      );
+    },
+
+    async unconsumedDecisions(): Promise<readonly UnconsumedDecision[]> {
+      // **`outcome = 'approved'` is D-0032 rule 6 and not a filter chosen
+      // here.** A refusal consumes nothing by design, so without this clause
+      // every declined proposal would be reported as an approval that never
+      // ran -- which is the opposite of what D-0022 rule 19 asks the query for.
+      return connection
+        .prepare(
+          "SELECT decision_id, proposal_id, approved, actor_id, decided_at_ms " +
+            "FROM human_decision WHERE outcome = 'approved' AND decision_id NOT IN " +
+            "(SELECT decision_id FROM decision_consumption) ORDER BY decided_at_ms, decision_id",
+        )
+        .all()
+        .map((row) => {
+          const record = row as SqlRow;
+          return {
+            decisionId: String(record["decision_id"]),
+            proposalId: String(record["proposal_id"]),
+            approved: String(record["approved"]),
+            actorId: String(record["actor_id"]),
+            decidedAtMs: Number(record["decided_at_ms"]),
+          };
+        });
+    },
+
+    async changedSince(tMs: number): Promise<readonly RecordChange[]> {
+      return connection
+        .prepare(CHANGES_SINCE_SQL)
+        .all(...CHANGE_SOURCES.map(() => tMs))
+        .map((row) => {
+          const record = row as SqlRow;
+          const id = record["id"];
+          return {
+            kind: String(record["kind"]),
+            // Null rather than an empty string, and it is
+            // `operator_attention.subject_id` that produces it: the most common
+            // withholding was never composed into anything with an id, and a
+            // reader that saw `""` would go looking for a row named that.
+            id: id === null || id === undefined ? null : String(id),
+            atMs: Number(record["at_ms"]),
+          };
+        });
+    },
+  };
+}
+
+function immediateTransaction<T>(connection: DatabaseSync, body: () => T): T {
+  connection.exec("BEGIN IMMEDIATE");
+  try {
+    const value = body();
+    // **Enforced rather than assumed** (D-0023 rule 16). The type is
+    // `<T>(body: () => T) => T`, which happily admits a promise-returning
+    // body -- and then `COMMIT` runs *before* the awaited work, so the
+    // transaction is torn and the write lands outside it. Under one
+    // in-flight iteration the failure is invisible, because nothing else is
+    // ever inside a transaction at the same time; under a bound above one it
+    // is a corrupt row and a bound that was never really checked.
+    //
+    // The property the whole in-process side of N > 1 rests on is that every
+    // transaction body is synchronous, so two overlapping `admit()` calls
+    // cannot interleave inside one: `node:sqlite` is synchronous and
+    // JavaScript is single-threaded, so a body with no `await` in it runs to
+    // completion before any other continuation. That is a real guarantee and
+    // it is worth exactly as much as the promise that nobody adds an
+    // `await` -- which is why this refuses instead of trusting.
+    if (typeof (value as { readonly then?: unknown } | null)?.then === "function") {
+      throw new StoreDefect(
+        "a store transaction body returned a thenable, which would commit before the awaited " +
+          "work had happened. Every body here must be synchronous: that is what makes two " +
+          "overlapping admissions unable to interleave inside one transaction.",
+      );
+    }
+    connection.exec("COMMIT");
+    return value;
+  } catch (error) {
+    // Rolling back is best-effort on purpose: if the rollback itself fails
+    // the original error is the one worth reporting, and swallowing it to
+    // report the rollback would hide the cause behind its own cleanup.
+    try {
+      connection.exec("ROLLBACK");
+    } catch {
+      // The transaction was already resolved, or the connection is gone.
+    }
+    throw error;
+  }
 }
 
 /**
