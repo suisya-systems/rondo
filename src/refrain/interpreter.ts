@@ -1058,6 +1058,18 @@ async function admitStep(
 }
 
 /**
+ * The stage continuo opens a gate at, which is the only stage a lap's gate can
+ * be at when `lap perform` answers.
+ *
+ * A literal because the document does not carry one: continuo's
+ * `openGate` writes `received` and its own `gate list` said so at the moment
+ * the lap returned, twice, in the second lap-1 dogfood. Named here so that the
+ * one place rondo states a stage of its own is findable, and so a pin that ever
+ * opened gates elsewhere would be one edit away from being told about.
+ */
+const GATE_STAGE_AT_OPEN = "received";
+
+/**
  * `admitted` -> `performing` -> the suspend at the open gate.
  *
  * `performing` is committed **before** the lap is sent, for the same reason the
@@ -1209,6 +1221,22 @@ async function performStep(
         "awaiting_human",
         {
           gateId: lap.gateId,
+          // The stage a lap's gate is open at, written with the id rather than
+          // left for `resume()` (issue #21). Until now the row named the gate
+          // and said nothing about where it stood for the whole suspend --
+          // which F-13 measures as the open-ended half of an iteration's life
+          // -- so a surface reading the row had to call continuo to tell
+          // `received` from `presented`, which is the call the id is in the row
+          // to save.
+          //
+          // **The value is continuo's contract and not rondo's guess**, though
+          // it is a literal here because `lap perform`'s document has no stage
+          // key to read: continuo opens a gate at `received` and nothing else,
+          // and the second lap-1 dogfood observed `gate list` reporting
+          // `stage=received` the moment `lap perform` returned. It is a
+          // snapshot at the moment of the write, like every other column here,
+          // and the stage a later relay moves it to is `resume()`'s to record.
+          gateStage: GATE_STAGE_AT_OPEN,
           sessionId: lap.sessionId,
           // continuo's own header says this is the walk's own name -- `started`,
           // `respawned`, `resumed` -- and not a filesystem path. The record's

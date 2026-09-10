@@ -319,7 +319,17 @@ export interface IterationRecord {
    */
   readonly modelTier: string | null;
   readonly model: string | null;
-  /** The gate `lap perform` opened, and where it stands when last observed. */
+  /**
+   * The gate `lap perform` opened, and where it stood when the row was last
+   * written.
+   *
+   * `gateStage` is written at the suspend -- where continuo opens every gate,
+   * `received` -- and again by each observation, so a row that names a gate
+   * names a stage for it too (issue #21). A null stage beside a non-null id is
+   * a row written before that was true, not a gate whose stage is unknown.
+   * `gateOutcome` stays null until an observation finds one, because only a
+   * terminal gate has one.
+   */
   readonly gateId: string | null;
   readonly gateStage: string | null;
   readonly gateOutcome: string | null;
