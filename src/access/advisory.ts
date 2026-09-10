@@ -627,8 +627,12 @@ export async function proposeRetry(
     // The pin that composed something -- and this kind composes. It is the one
     // difference from `explain`'s row that is not a null (D-0022 rule 18).
     cadenzaRevision: ports.cadenzaRevision,
-    // D-0032 rule 7's pair, null together: nothing was elevated, because the
-    // conversation this would reference is still unwritten (`D-0036` rule 3).
+    // D-0032 rule 7's pair, null together: **nothing was elevated.** The
+    // conversation exists now (D-0036 rule 3) and the writer refuses a proposal
+    // naming a message that is not in it (rule 4), but this proposal was asked
+    // for on a command line rather than taken up from an observation -- and a
+    // message id written here to fill the column would be the dangling
+    // reference rule 4 exists to refuse.
     elevatedFromMessageId: null,
     elevatedByActorId: null,
     createdAtMs,
