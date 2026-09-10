@@ -98,7 +98,14 @@ test("it explains a row it can read, and records what it said", async () => {
   const rendered = shows.shown.join("\n");
   expect(rendered).toContain("explanation of iteration 'i-0001'");
   expect(rendered).toContain("status: planned");
-  expect(rendered).toContain("basis: snapshot /iteration/status");
+  // **The basis carries the material, not only the locator** (D-0032 rule 2).
+  expect(rendered).toContain('basis: snapshot /iteration/status = "planned"');
+  // And where the claim is rondo's word rather than the column's value, the line
+  // under it is what lets an operator tell a null from an empty string.
+  expect(rendered).toContain("continuo revision: undetermined");
+  expect(rendered).toContain("basis: snapshot /iteration/continuoRevision = null");
+  expect(rendered).toContain("revision of: none");
+  expect(rendered).toContain("basis: snapshot /iteration/supersedesIterationId = null");
   // D-0032 rule 5, said out loud on the screen as well as in the record.
   expect(rendered).toContain("binds nothing");
 });

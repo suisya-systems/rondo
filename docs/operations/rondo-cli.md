@@ -565,21 +565,25 @@ explanation of iteration 'cli-lap-001'
   drafter: rondo/advisory/deterministic; derivation: store_rows
   this explanation binds nothing: it is not a proposal and cannot be approved
   request: teach revise to name the flags it takes
-      basis: snapshot /iteration/request
+      basis: snapshot /iteration/request = "teach revise to name the flags it takes"
   status: abandoned
-      basis: snapshot /iteration/status
+      basis: snapshot /iteration/status = "abandoned"
+  revision of: none
+      basis: snapshot /iteration/supersedesIterationId = null
   ...
   continuo revision: undetermined
-      basis: snapshot /iteration/continuoRevision
+      basis: snapshot /iteration/continuoRevision = null
 recorded as proposal 'explanation-cli-lap-001-1757500000000'
 ```
 
 Three properties of that output are the point rather than the formatting:
 
-- **every claim carries what it rests on**, on the line under it. The pointer is into the snapshot
-  the proposal row keeps verbatim, so a citation can be followed without opening anything else;
-- **a field the row does not settle reads `undetermined` rather than going missing.** "rondo looked
-  and the column is null" and "rondo did not look" must not be the same thing on the screen;
+- **every claim carries what it rests on**, on the line under it, **and the material with it**. The
+  pointer is into the snapshot the proposal row keeps verbatim and the value beside it is what that
+  pointer resolves to, so a claim is checked against the row rather than against itself;
+- **a field the row does not settle reads `undetermined` rather than going missing**, and one the row
+  settles negatively reads `none`. "rondo looked and the column is null", "there is no predecessor"
+  and "rondo did not look" must not be the same thing on the screen;
 - **it binds nothing.** An explanation is not a proposal, cannot be approved, and the store refuses
   an answer that names one (`D-0032` rule 5).
 

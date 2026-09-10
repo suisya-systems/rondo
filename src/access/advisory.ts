@@ -140,13 +140,51 @@ function gather(record: IterationRecord, readings: readonly LapReading[]): Advis
   };
 }
 
+/**
+ * How much of a cited value is printed beside its pointer.
+ *
+ * ponytail: a fixed cap, raise it if an operator ever needs a longer citation
+ * inline. A citation that fills the screen stops being a citation, and what is
+ * cut is always still in the row the pointer names.
+ */
+const CITATION_CEILING = 200;
+
+/**
+ * Resolve one JSON pointer against the snapshot the proposal kept.
+ *
+ * Total: a pointer that leads nowhere says so rather than rendering as an empty
+ * citation, because a basis that does not resolve is worth seeing -- it means
+ * the claim and the snapshot have drifted apart, which is the one failure a
+ * locator is supposed to make impossible.
+ */
+function cited(snapshot: AdvisorySnapshot, pointer: string): string {
+  const found = pointer
+    .split("/")
+    .slice(1)
+    .reduce<unknown>(
+      (at, step) => (at === null || typeof at !== "object" ? undefined : Reflect.get(at, step)),
+      snapshot,
+    );
+  if (found === undefined) {
+    return "does not resolve";
+  }
+  const rendered = JSON.stringify(found);
+  return rendered.length > CITATION_CEILING
+    ? `${rendered.slice(0, CITATION_CEILING)}... (${String(rendered.length)} chars)`
+    : rendered;
+}
+
 /** One basis, as the line under the claim it supports. */
-function basisLine(basis: Basis): string {
+function basisLine(basis: Basis, snapshot: AdvisorySnapshot): string {
   switch (basis.form) {
     case "snapshot":
       // **The inline form** (D-0032 rule 2): the snapshot is in the row, so the
-      // pointer is a citation a reader can follow without opening anything.
-      return `snapshot ${basis.pointer}`;
+      // material renders *here* rather than as something to go and open -- and
+      // the value is printed beside the pointer rather than trusted to match the
+      // claim. Where the claim reads `undetermined` or `none` the two differ on
+      // purpose, and this is the line that lets an operator see whether the
+      // column was null, empty, or something rondo did not read.
+      return `snapshot ${basis.pointer} = ${cited(snapshot, basis.pointer)}`;
     case "iteration":
       return `iteration ${basis.iterationId}`;
     case "gateTransition":
@@ -158,19 +196,26 @@ function basisLine(basis: Basis): string {
   }
 }
 
-function claimLines(claim: Claim): readonly string[] {
-  return [`  ${claim.label}: ${claim.value}`, `      basis: ${basisLine(claim.basis)}`];
+function claimLines(claim: Claim, snapshot: AdvisorySnapshot): readonly string[] {
+  return [`  ${claim.label}: ${claim.value}`, `      basis: ${basisLine(claim.basis, snapshot)}`];
 }
 
 /**
  * The explanation as an operator reads it, composed at render time.
  *
- * **Every claim carries its basis on the line under it**, which is #39's
- * requirement taken literally: the citation is close enough to read without
- * opening anything, because the material the advisory read is in the row the
- * pointer names. Nothing here is stored (D-0032 rule 3).
+ * **Every claim carries its basis on the line under it, and a snapshot basis
+ * carries the material it names**, which is #39's requirement taken literally:
+ * close enough to read without opening anything. The snapshot is a parameter for
+ * exactly that reason -- a renderer that did not have it could print the pointer
+ * and could not print what the pointer resolves to, which would leave the
+ * operator checking a claim against itself. Nothing here is stored
+ * (D-0032 rule 3).
  */
-export function explanationLines(iterationId: string, proposal: Proposal): readonly string[] {
+export function explanationLines(
+  iterationId: string,
+  proposal: Proposal,
+  snapshot: AdvisorySnapshot,
+): readonly string[] {
   return [
     `explanation of iteration '${iterationId}'`,
     `  drafter: ${DETERMINISTIC_DRAFTER}; derivation: ${proposal.derivation}`,
@@ -178,7 +223,7 @@ export function explanationLines(iterationId: string, proposal: Proposal): reado
     // would be the confusion D-0032 rule 5 refuses**: this kind binds nothing,
     // and `recordDecision` will refuse an answer that names it.
     "  this explanation binds nothing: it is not a proposal and cannot be approved",
-    ...proposal.payload.claims.flatMap(claimLines),
+    ...proposal.payload.claims.flatMap((claim) => claimLines(claim, snapshot)),
   ];
 }
 
@@ -260,7 +305,7 @@ export async function explainIteration(
         "the thing the record exists to prevent.",
     };
   }
-  ports.present(explanationLines(iterationId, proposal));
+  ports.present(explanationLines(iterationId, proposal, snapshot));
   // **Counted after it was shown** (D-0032 rule 10). This is the first writer
   // that table has: `explain` withholds nothing, so only the `presented` side
   // fires here, and `rule_name` stays null because there is no policy to name.
