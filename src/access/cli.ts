@@ -66,6 +66,8 @@ import {
   type ExplainPorts,
   elevateObservation,
   explainIteration,
+  PROPOSABLE_KINDS,
+  type ProposeOutcome,
   proposeRetry,
   recordAnswer,
 } from "./advisory.js";
@@ -136,12 +138,16 @@ export const USAGE = `rondo - the operator surface for delegated work
                           repo:PATH@COMMIT#FIRST-LAST. Write --observation with
                           an equals sign: an observation may begin with a dash
   rondo propose --iteration-id ID --successor-id ID
-                          propose the plans a retry of one iteration could run
-                          under, one option per persisted plan, with exactly one
-                          recommended and the contract each one would run under.
-                          Records the proposal and every contract before it
-                          shows them. Approving one starts nothing: no admission
-                          reads the decision yet
+                --kind run_plan|agent_type|contract_keys
+                          propose what a retry of one iteration could run under,
+                          as an option set with exactly one recommended and the
+                          contract each option would run under. --kind picks the
+                          question: which plan it runs (run_plan), which agent
+                          type it runs under (agent_type), or which keys that
+                          agent type carries as granted rather than askable
+                          (contract_keys). Records the proposal and every
+                          contract before it shows them. Approving one starts
+                          nothing: no admission reads the decision yet
   rondo decide --proposal-id ID --actor-id ID --outcome approved|declined
                [--contract-digest DIGEST]
                           answer a proposal. --contract-digest is the contract
@@ -270,6 +276,7 @@ export interface ParsedCommand {
   readonly observation: string | null;
   readonly basis: string | null;
   readonly successorId: string | null;
+  readonly kind: string | null;
   readonly proposalId: string | null;
   readonly contractDigest: string | null;
   readonly outcome: string | null;
@@ -296,6 +303,7 @@ const FLAGS = {
   observation: { type: "string" },
   basis: { type: "string" },
   "successor-id": { type: "string" },
+  kind: { type: "string" },
   "proposal-id": { type: "string" },
   "contract-digest": { type: "string" },
   outcome: { type: "string" },
@@ -372,7 +380,7 @@ export const FLAGS_BY_COMMAND: Readonly<Record<string, readonly string[]>> = {
   // because the run id, the topic branch and the workspace are derived from it.
   // A default for either would be rondo proposing something about a row nobody
   // named, under an identity nobody chose.
-  propose: ["iteration-id", "successor-id"],
+  propose: ["iteration-id", "successor-id", "kind"],
   // `--outcome` is typed rather than implied by the verb: D-0032 rule 6 makes
   // "declined" a row and not an absence, so refusing has to be as sayable as
   // approving. `--contract-digest` is the option's own value, which is why it
@@ -456,6 +464,7 @@ export function parseCommand(argv: readonly string[]): ParseOutcome {
       observation: text("observation"),
       basis: text("basis"),
       successorId: text("successor-id"),
+      kind: text("kind"),
       proposalId: text("proposal-id"),
       contractDigest: text("contract-digest"),
       outcome: text("outcome"),
@@ -481,6 +490,7 @@ function emptyCommand(command: ParsedCommand["command"]): ParsedCommand {
     observation: null,
     basis: null,
     successorId: null,
+    kind: null,
     proposalId: null,
     contractDigest: null,
     outcome: null,
@@ -1202,6 +1212,7 @@ async function commandExplain(
   }
   return sayAdvisoryOutcome(
     await explainIteration(advisoryPorts(store, storePath), parsed.iterationId),
+    "explanation",
   );
 }
 
@@ -1219,21 +1230,39 @@ function advisoryPorts(store: IterationStore, storePath: string): ExplainPorts {
   };
 }
 
-/** What `explain` and `elevate` do with the answer they get back. */
-function sayAdvisoryOutcome(outcome: ExplainOutcome): number {
+/**
+ * What every advisory door does with the answer it gets back.
+ *
+ * One function for `explain`, `elevate` and `propose` because the one thing
+ * worth getting right is the same for all three: a subject that reached the
+ * screen and was not counted exits **1**, with the record kept and the lines
+ * still standing. Two copies of that rule are two places it can drift, and the
+ * quiet outcome of a drift is an under-counted ledger (D-0032 rule 10).
+ *
+ * `noun` is what the door calls what it showed, and `next` is the command that
+ * follows where there is one.
+ */
+function sayAdvisoryOutcome(
+  outcome: ExplainOutcome | ProposeOutcome,
+  noun: string,
+  next?: string,
+): number {
   if (outcome.kind === "refused") {
     return refuse(outcome.reason);
   }
   say(`recorded as proposal '${outcome.proposalId}'`);
+  if (next !== undefined) {
+    say(next);
+  }
   if (outcome.kind === "presentedUncounted") {
-    // **Status 1 rather than 0, and the explanation still stands on the
+    // **Status 1 rather than 0, and what was shown still stands on the
     // screen.** The operator has read it and the proposal is in the ledger; what
     // failed is the count of what was put to them, which is the one number
     // D-0032 rule 10 says nothing else can supply. Reporting success here would
     // make an under-counted ledger the quiet outcome.
     consoleSeams.writeError(
       asciiEscape(
-        `This explanation was shown and was not counted as presented: ${outcome.reason}. ` +
+        `This ${noun} was shown and was not counted as presented: ${outcome.reason}. ` +
           "The breakdown of what was put to you and what was not will be short by one.\n",
       ),
     );
@@ -1374,6 +1403,7 @@ async function commandElevate(
       actorId: actor.actorId,
       observation: { label: "observation", value: parsed.observation, basis },
     }),
+    "elevation",
   );
 }
 
@@ -1470,15 +1500,20 @@ function cadenzaRevision(): { revision: string } | { refusal: string } {
 }
 
 /**
- * Door seven: propose the plans a retry could run under, and record what was
- * shown.
+ * Door seven: propose what a retry could run under, and record what was shown.
  *
- * **The first approvable kind reaches an operator here** (D-0022 rule 4's
- * union, D-0032 rule 1's option set). Unlike `explain`, this path composes: it
- * issues the exact contract each option would run under, for the successor
- * identity the operator names, and records it before showing the digest --
- * which is D-0022 rules 17 and 18 taken together, and the reason `src/access`
- * finally takes the cadenza arrow rule 5 granted it.
+ * **The approvable kinds reach an operator here** (D-0022 rule 4's union,
+ * D-0032 rule 1's option set). Unlike `explain`, this path composes: it issues
+ * the exact contract each option would run under, for the successor identity
+ * the operator names, and records it before showing the digest -- which is
+ * D-0022 rules 17 and 18 taken together, and the reason `src/access` takes the
+ * cadenza arrow rule 5 granted it.
+ *
+ * **`--kind` is required and has no default.** The three kinds ask three
+ * different questions -- which plan, which agent type, which keys -- and a
+ * default would put one of them to a person who meant another, with the same
+ * confident option set either way. It is `explain --iteration-id`'s rule
+ * applied to a second flag.
  */
 async function commandPropose(
   parsed: ParsedCommand,
@@ -1492,46 +1527,35 @@ async function commandPropose(
         "derives the run id and the topic branch from the second, so it is a person's to choose.",
     );
   }
+  const kind = PROPOSABLE_KINDS.find((one) => one === parsed.kind);
+  if (kind === undefined) {
+    return refuse(
+      `propose needs --kind, one of ${PROPOSABLE_KINDS.join(", ")}. They ask three different ` +
+        "questions -- which plan the retry runs, which agent type it runs under, and which keys " +
+        "that agent type carries as granted -- so there is no default: one of them would be put " +
+        "to you as confidently as the one you meant.",
+    );
+  }
   const pin = cadenzaRevision();
   if ("refusal" in pin) {
     return refuse(pin.refusal);
   }
   const outcome = await proposeRetry(
-    {
-      store,
-      record: openAdvisoryRecord(storePath),
-      now: Date.now,
-      cadenzaRevision: pin.revision,
-      present: (lines) => {
-        for (const line of lines) {
-          say(line);
-        }
-      },
-    },
+    // The four ports every advisory door takes, plus the one this door needs:
+    // which cadenza composed the contracts it is about to show (D-0022 rule 18).
+    { ...advisoryPorts(store, storePath), cadenzaRevision: pin.revision },
+    kind,
     parsed.iterationId,
     parsed.successorId,
   );
-  if (outcome.kind === "refused") {
-    return refuse(outcome.reason);
-  }
-  say(`recorded as proposal '${outcome.proposalId}'`);
-  say(
-    `Next: rondo decide --proposal-id ${outcome.proposalId} --actor-id ID ` +
-      "--outcome approved --contract-digest DIGEST",
+  return sayAdvisoryOutcome(
+    outcome,
+    "proposal",
+    outcome.kind === "refused"
+      ? undefined
+      : `Next: rondo decide --proposal-id ${outcome.proposalId} --actor-id ID ` +
+          "--outcome approved --contract-digest DIGEST",
   );
-  if (outcome.kind === "presentedUncounted") {
-    // `explain`'s arm, for `explain`'s reason: the proposal and its contracts
-    // are in the ledger and the operator has read them; what failed is the
-    // count of what was put to them (D-0032 rule 10).
-    consoleSeams.writeError(
-      asciiEscape(
-        `This proposal was shown and was not counted as presented: ${outcome.reason}. ` +
-          "The breakdown of what was put to you and what was not will be short by one.\n",
-      ),
-    );
-    return 1;
-  }
-  return 0;
 }
 
 /**

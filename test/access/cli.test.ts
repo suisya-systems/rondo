@@ -1626,11 +1626,14 @@ test("propose and decide take their own flags and refuse the others", () => {
     "iter-1",
     "--successor-id",
     "iter-2",
+    "--kind",
+    "contract_keys",
   ]);
   expect(proposed.kind).toBe("parsed");
   if (proposed.kind === "parsed") {
     expect(proposed.parsed.command).toBe("propose");
     expect(proposed.parsed.successorId).toBe("iter-2");
+    expect(proposed.parsed.kind).toBe("contract_keys");
   }
 
   const decided = parseCommand([
