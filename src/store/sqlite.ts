@@ -1602,6 +1602,23 @@ export interface AdvisoryRecord {
    * reader went looking for.
    */
   recordProposal(draft: ProposalDraft): Promise<RecordOutcome>;
+  /**
+   * Append one message **and** the proposal elevated from it, or neither
+   * (#41 section 3, D-0036 rules 3 and 4).
+   *
+   * **One transaction, because it is one gesture.** A message id is spent for
+   * ever once appended (rule 3), so a message written beside a proposal that
+   * was not is an id the operator cannot retype and a row in the conversation
+   * with no observation behind it -- a conversation that lies about what was
+   * said, produced by a store fault rather than by anyone. Either both rows
+   * land or the operator retries with the name they already chose.
+   *
+   * It also makes D-0036 rule 4 unreachable from this writer rather than
+   * merely refused by it: the message the proposal names is inserted first, in
+   * the same transaction. The refusal still guards `recordProposal`, which is
+   * where a caller can hand over a reference it did not write.
+   */
+  recordElevation(messageId: string, draft: ProposalDraft): Promise<RecordOutcome>;
   /** Append the contract that is about to be presented (D-0022 rule 18). */
   recordComposition(draft: CompositionDraft): Promise<RecordOutcome>;
   /**
@@ -1779,53 +1796,86 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
     }
   };
 
-  return {
-    async recordMessage(messageId: string): Promise<RecordOutcome> {
-      try {
-        connection
-          .prepare("INSERT INTO conversation_message (message_id) VALUES (?)")
-          .run(messageId);
-        return { kind: "recorded" };
-      } catch (error) {
-        if (isUniqueViolation(error)) {
-          // The database's refusal, said in rondo's words rather than the
-          // driver's -- `consumeDecision`'s precedent. This is D-0036 rule 3's
-          // first property observed firing: an id already spoken for cannot be
-          // spoken for again, so nothing a proposal already elevated from can
-          // come to mean something else.
-          return {
-            kind: "refused",
-            reason:
-              `the message '${messageId}' is already in the conversation, and a message id is ` +
-              "durable and immutable (D-0036 rule 3): a second row under one id would let a " +
-              "reference that has already been elevated come to mean something else",
-          };
-        }
-        return { kind: "defect", reason: describe(error) };
+  /**
+   * Append one message, **inside whatever transaction the caller holds**.
+   *
+   * Shared by `recordMessage` and `recordElevation` so that "a message id is
+   * durable and immutable" (D-0036 rule 3) has one implementation and one
+   * refusal, whether the operator's observation arrives on its own or as half
+   * of an elevation.
+   */
+  const insertMessage = (messageId: string): RecordOutcome => {
+    try {
+      connection.prepare("INSERT INTO conversation_message (message_id) VALUES (?)").run(messageId);
+      return { kind: "recorded" };
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        // The database's refusal, said in rondo's words rather than the
+        // driver's -- `consumeDecision`'s precedent. This is D-0036 rule 3's
+        // first property observed firing: an id already spoken for cannot be
+        // spoken for again, so nothing a proposal already elevated from can
+        // come to mean something else.
+        return {
+          kind: "refused",
+          reason:
+            `the message '${messageId}' is already in the conversation, and a message id is ` +
+            "durable and immutable (D-0036 rule 3): a second row under one id would let a " +
+            "reference that has already been elevated come to mean something else",
+        };
       }
-    },
+      return { kind: "defect", reason: describe(error) };
+    }
+  };
 
-    async recordProposal(draft: ProposalDraft): Promise<RecordOutcome> {
-      let payload: string;
-      let snapshot: string;
-      try {
-        // Encoded before the insert and outside it: `canonicalJson` refuses a
-        // value it cannot round-trip, and a proposal whose payload cannot be
-        // encoded is rondo handing the store something rondo should not have
-        // built. That is a defect and not a refusal.
-        payload = canonicalJson(draft.payload);
-        snapshot = canonicalJson(draft.snapshot);
-      } catch (error) {
-        return { kind: "defect", reason: describe(error) };
+  /**
+   * Insert one proposal with D-0036 rule 4's lookup in front of it, **inside
+   * whatever transaction the caller holds**.
+   *
+   * The lookup and the insert must share a transaction -- the same question
+   * asked before it would be a check with a window in it, and the write lock is
+   * what makes the message that was there when the reference was checked the
+   * message that is still there when the row lands (`recordDecision`'s shape,
+   * for `recordDecision`'s reason). Which transaction that is belongs to the
+   * caller, because `recordElevation` writes the message inside the same one.
+   *
+   * A failing insert throws, which rolls the caller's transaction back.
+   */
+  const insertProposal = (draft: ProposalDraft): RecordOutcome => {
+    // Encoded before the insert: `canonicalJson` refuses a value it cannot
+    // round-trip, and a proposal whose payload cannot be encoded is rondo
+    // handing the store something rondo should not have built. That is a defect
+    // and not a refusal, and it reaches the caller's catch as one.
+    const payload = canonicalJson(draft.payload);
+    const snapshot = canonicalJson(draft.snapshot);
+    if (draft.elevatedFromMessageId !== null) {
+      const row = connection
+        .prepare("SELECT 1 FROM conversation_message WHERE message_id = ?")
+        .get(draft.elevatedFromMessageId);
+      if (row === undefined) {
+        return {
+          kind: "refused",
+          reason:
+            `the proposal '${draft.proposalId}' is elevated from ` +
+            `'${draft.elevatedFromMessageId}', which is no message in this conversation: ` +
+            "D-0036 rule 4 refuses a dangling elevation, because a reference to nothing " +
+            "is indistinguishable from a chain that was never recorded at exactly the " +
+            "moment a reader goes looking for what justified the proposal",
+        };
       }
-      const sql =
+    }
+    // `candidate_contract_digest` is named by no column list here, so the
+    // insert leaves it NULL and the schema's `CHECK` keeps it there
+    // (D-0022 rule 4).
+    connection
+      .prepare(
         "INSERT INTO proposal (proposal_id, kind, drafter, payload, proposal_digest, snapshot, " +
-        "snapshot_digest, derivation, iteration_id, supersedes_iteration_id, " +
-        "supersedes_proposal_id, predecessor_plan_digest, predecessor_contract_digest, " +
-        "agent_type_digest, config_digest, contract_digest, continuo_revision, " +
-        "cadenza_revision, elevated_from_message_id, elevated_by_actor_id, created_at_ms) " +
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-      const values = [
+          "snapshot_digest, derivation, iteration_id, supersedes_iteration_id, " +
+          "supersedes_proposal_id, predecessor_plan_digest, predecessor_contract_digest, " +
+          "agent_type_digest, config_digest, contract_digest, continuo_revision, " +
+          "cadenza_revision, elevated_from_message_id, elevated_by_actor_id, created_at_ms) " +
+          "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      )
+      .run(
         draft.proposalId,
         draft.kind,
         draft.drafter,
@@ -1847,41 +1897,49 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
         draft.elevatedFromMessageId,
         draft.elevatedByActorId,
         draft.createdAtMs,
-      ];
-      // `candidate_contract_digest` is named by no column list above, so the
-      // insert leaves it NULL and the schema's `CHECK` keeps it there
-      // (D-0022 rule 4).
+      );
+    return { kind: "recorded" };
+  };
+
+  return {
+    async recordMessage(messageId: string): Promise<RecordOutcome> {
+      return insertMessage(messageId);
+    },
+
+    async recordProposal(draft: ProposalDraft): Promise<RecordOutcome> {
+      // **The transaction is taken whether or not anything was elevated.** A
+      // single insert needs none, but two spellings of "record a proposal" --
+      // one transactional and one not -- would be two answers to what this
+      // writer does about concurrency, chosen by a column's nullness.
       try {
-        // **The lookup and the insert in one `BEGIN IMMEDIATE`, and that is
-        // D-0036 rule 4** -- `recordDecision`'s shape, for `recordDecision`'s
-        // reason. The same question asked before the transaction would be a
-        // check with a window in it: the write lock is what makes the message
-        // that was there when the reference was checked the message that is
-        // still there when the row lands.
-        //
-        // The transaction is taken whether or not anything was elevated. A
-        // single insert needs none, but two spellings of "record a proposal"
-        // -- one transactional and one not -- would be two answers to what this
-        // writer does about concurrency, chosen by a column's nullness.
+        return immediateTransaction<RecordOutcome>(connection, () => insertProposal(draft));
+      } catch (error) {
+        return { kind: "defect", reason: describe(error) };
+      }
+    },
+
+    async recordElevation(messageId: string, draft: ProposalDraft): Promise<RecordOutcome> {
+      try {
         return immediateTransaction<RecordOutcome>(connection, () => {
-          if (draft.elevatedFromMessageId !== null) {
-            const row = connection
-              .prepare("SELECT 1 FROM conversation_message WHERE message_id = ?")
-              .get(draft.elevatedFromMessageId);
-            if (row === undefined) {
-              return {
-                kind: "refused",
-                reason:
-                  `the proposal '${draft.proposalId}' is elevated from ` +
-                  `'${draft.elevatedFromMessageId}', which is no message in this conversation: ` +
-                  "D-0036 rule 4 refuses a dangling elevation, because a reference to nothing " +
-                  "is indistinguishable from a chain that was never recorded at exactly the " +
-                  "moment a reader goes looking for what justified the proposal",
-              };
-            }
+          const appended = insertMessage(messageId);
+          if (appended.kind !== "recorded") {
+            return appended;
           }
-          connection.prepare(sql).run(...values);
-          return { kind: "recorded" };
+          const recorded = insertProposal(draft);
+          if (recorded.kind !== "recorded") {
+            // **Unreachable by construction, and thrown rather than returned
+            // so that it cannot quietly commit.** The only non-recorded answer
+            // `insertProposal` gives is D-0036 rule 4's dangling refusal, and
+            // the message it would be dangling from was just inserted in this
+            // same transaction. A failing insert throws instead, which rolls
+            // back. If this is ever reached the two writers have drifted, and
+            // a spent message id would be the quietest possible symptom.
+            throw new StoreDefect(
+              `the elevation of '${messageId}' was refused after its message was appended, ` +
+                `which cannot happen while the two are one transaction: ${recorded.reason}`,
+            );
+          }
+          return recorded;
         });
       } catch (error) {
         return { kind: "defect", reason: describe(error) };

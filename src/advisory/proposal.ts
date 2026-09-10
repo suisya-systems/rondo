@@ -127,12 +127,18 @@ export type Claim = {
  * kind is `explanation` -- which the schema's own `CHECK` enforces.
  *
  * **The union's members are D-0032's residual**, left to "the entry that admits
- * a model explainer"; what ships here is the one member the deterministic
- * drafter can honestly claim. A diagram drawn from identifier names and one
- * derived from tests that actually ran render identically, so the attribute is
- * what lets a reader know which they are looking at.
+ * a model explainer"; what ships here is what the deterministic drafter can
+ * honestly claim. A diagram drawn from identifier names and one derived from
+ * tests that actually ran render identically, so the attribute is what lets a
+ * reader know which they are looking at.
+ *
+ * **`operator_elevation` is the second member, and it is here because the first
+ * one would be a lie.** An elevated proposal's claims are the store's *and* one
+ * an operator typed (D-0036 rule 3 property 2); calling that `store_rows` would
+ * report the operator's own observation as something rondo read out of the
+ * ledger, which is precisely the substitution the attribute exists to prevent.
  */
-export const DERIVATIONS = Object.freeze(["store_rows"] as const);
+export const DERIVATIONS = Object.freeze(["store_rows", "operator_elevation"] as const);
 
 export type Derivation = (typeof DERIVATIONS)[number];
 
@@ -634,6 +640,33 @@ export function proposeContractKeys(snapshot: ContractSnapshot): ContractKeysPro
     kind: "contract_keys",
     derivation: null,
     payload: { options, recommended: unchangedIndex(snapshot) },
+  };
+}
+
+/**
+ * What the operator handed over, and what the store holds about the row it is
+ * about (#41 section 3).
+ *
+ * **The observation is a {@link Claim} like every other one, and that is the
+ * whole of "what is elevated carries its basis with it".** #41 section 3 names
+ * the hazard in its own gesture -- one button, and a thinly-founded observation
+ * acquires the appearance of a proposal -- and D-0036 rule 4 says the answer to
+ * it is D-0032 rule 2 rather than a new mechanism: a claim's basis is a
+ * locator, so an observation resting on nothing is *visibly* resting on
+ * nothing. Requiring the operator's line to be a `Claim` is that requirement
+ * spelled as a type. There is no member of {@link Basis} that means "the
+ * operator said so".
+ *
+ * **It is prepended rather than appended**, because it is what the elevation is
+ * about; the store's claims follow as the context it was made in. Nothing is
+ * restated: the claims are {@link propose}'s own, unaltered, which is #39's
+ * discipline of pointing at material rather than re-narrating it.
+ */
+export function proposeElevated(snapshot: AdvisorySnapshot, observation: Claim): Explanation {
+  return {
+    kind: "explanation",
+    derivation: "operator_elevation",
+    payload: { claims: [observation, ...propose(snapshot).payload.claims] },
   };
 }
 

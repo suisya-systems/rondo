@@ -1,8 +1,9 @@
-# The operator's six commands
+# The operator's nine commands
 
 What a person types to get one request through rondo, from asking for it to publishing it -- and,
 in section 7, `abandon`, which is how a request that cannot get there is settled instead, and
-`explain`, which is how a person finds out what the store holds about a row that has stopped.
+`explain`, which is how a person finds out what the store holds about a row that has stopped, and
+`elevate`, which is how an observation of the operator's own becomes part of the record.
 Section 5.1 is `revise`, which is what a person types when the answer to the gate is "not quite".
 Everything here was run on 2026-09-06 against continuo `38c667b5126fdfdc0465e4a422e88b20a8b53044`
 (`continuo.pin.json`), and the transcripts are what actually came back.
@@ -683,6 +684,54 @@ Three properties of `propose` are the point:
 | `decide needs --outcome approved or --outcome declined` | Declining is written down rather than left as silence (`D-0032` rule 6). | Say which. Both are rows. |
 | `approving needs --contract-digest DIGEST` | An approval names the contract you were shown, not a position in a list. | Copy the `contract:` line of the option you are approving. |
 | `binds nothing and cannot be answered` | You named an `explanation`. Authority is a function of the proposal's kind alone (`D-0032` rule 5). | Nothing was written. Only the approvable kinds can be answered. |
+### 7.3 Elevate -- hand one observation to the advisory, and leave a trace that you did
+
+`explain` says what the store holds. `elevate` is the other direction: **you** noticed something,
+and you hand it over to be worked into a proposal. The gesture is recorded as part of the proposal
+rather than beside it -- which message the observation is, and who elevated it -- because an
+observation constrains nothing until a person takes it up, and that taking-up is where authority
+enters (#41 section 3).
+
+```console
+$ node bin/rondo.mjs elevate --iteration-id cli-lap-001 --actor-id "$RONDO_APPROVER" \
+    --message-id m-0007 --observation="this plan was already merged last week" \
+    --basis repo:docs/operations/rondo-cli.md@68f7067#1-4
+explanation of iteration 'cli-lap-001'
+  elevated from message 'm-0007' by 'operator-1'
+  drafter: rondo/advisory/deterministic; derivation: operator_elevation
+  this explanation binds nothing: it is not a proposal and cannot be approved
+  observation: this plan was already merged last week
+      basis: docs/operations/rondo-cli.md:1-4 at 68f7067
+  request: teach revise to name the flags it takes
+  ...
+recorded as proposal 'elevation-m-0007'
+```
+
+- **`--basis` is required, and there is no form meaning "because I say so".** Elevating is one
+  gesture, so a thinly-founded observation can acquire the appearance of a proposal; what stops that
+  is that a basis is a *locator* into material an operator can open. The five forms are
+  `snapshot:/pointer`, `iteration:ID`, `gate:ID#SEQ`, `run:ID` and `repo:PATH@COMMIT#FIRST-LAST`.
+- **`--message-id` names the observation in the conversation, and it is spent once.** The
+  conversation holds the id and no body, so a second elevation under one id is refused rather than
+  taken as a repeat -- rondo cannot tell a repeat from a different observation reusing the name. A
+  failed elevation spends nothing: the message and the proposal are one transaction, because they
+  are one gesture.
+- **The chain stops at the proposal in this cut.** `observation -> (you elevate) -> proposal` is
+  recorded; `proposal -> (you approve) -> contract` is not reachable from here, because the kind
+  produced is `explanation` and an explanation binds nothing. What the elevation columns record is
+  the same whichever kind arrives later.
+- **`elevate` drives no continuo**, for `explain`'s reason: the observation most worth elevating is
+  often about a lap that has already ended.
+
+| What you see | What it means | What to do |
+|---|---|---|
+| `elevate needs --iteration-id ID ... and --message-id ID` | Neither has a default: an elevation is an act by a person, and rondo will not supply half of one. | Name both. |
+| `elevate needs --basis LOCATOR` | An observation with no basis is the thing this verb exists to prevent. | Cite where you saw it, in one of the five forms above. |
+| `which is none of the forms a basis may take` | The locator did not parse; nothing was written. | Check the form. A malformed basis is refused rather than guessed at. |
+| `--actor-id is '<x>' and RONDO_APPROVER is '<y>'` | Elevation passes the same identity check as `answer` and `publish`. | Elevate as the approver, or fix `RONDO_APPROVER`. |
+| `already in the conversation, and a message id is durable and immutable` | That message id is spent. rondo holds no message body, so it cannot tell a repeat from a different observation reusing the name. | Choose an id that has not been used. Nothing was proposed. |
+| `was composed and not recorded, so it is not being shown` | The store refused or failed the write. | Nothing was written -- **the message id too was rolled back**, because the two are one transaction. Fix the fault the message names and retype the same command. |
+
 
 ---
 

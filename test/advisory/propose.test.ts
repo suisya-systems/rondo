@@ -29,6 +29,7 @@ import {
   propose,
   proposeAgentType,
   proposeContractKeys,
+  proposeElevated,
   proposeRetryPlan,
   type RetrySnapshot,
   UNDETERMINED,
@@ -257,6 +258,38 @@ test("it is pure: the same snapshot gives the same bytes", () => {
   // randomness, no ordering that depends on anything but the snapshot.
   expect(JSON.stringify(propose(FULL))).toBe(JSON.stringify(propose(FULL)));
   expect(JSON.stringify(propose(BARE))).not.toBe(JSON.stringify(propose(FULL)));
+});
+
+test("an elevated proposal carries the observation first and restates nothing", () => {
+  // #41 section 3, as the layer sees it: what is elevated travels with its
+  // basis, and the store's own claims follow **unaltered** rather than being
+  // re-narrated around it. The observation is first because it is what the
+  // elevation is about; everything after it is the context it was made in.
+  const observation: Claim = {
+    label: "observation",
+    value: "the classification reason names a file that is not in this plan",
+    basis: {
+      form: "repository",
+      path: "src/refrain/plan.ts",
+      commit: "c0ffee",
+      firstLine: 8,
+      lastLine: 12,
+    },
+  };
+  const elevated = proposeElevated(FULL, observation);
+
+  expect(elevated.kind).toBe("explanation");
+  // Not `store_rows`: one of these claims is the operator's, and saying
+  // otherwise would report a person's own words as something rondo read.
+  expect(elevated.derivation).toBe("operator_elevation");
+  expect(DERIVATIONS).toContain(elevated.derivation);
+  expect(elevated.payload.claims[0]).toEqual(observation);
+  expect(elevated.payload.claims.slice(1)).toEqual(propose(FULL).payload.claims);
+  // Every claim still carries a basis, the observation included: there is no
+  // form of `Basis` that means "the operator said so".
+  for (const claim of elevated.payload.claims) {
+    expect(BASIS_FORMS).toContain(claim.basis.form);
+  }
 });
 
 /**
