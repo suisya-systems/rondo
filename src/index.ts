@@ -67,8 +67,10 @@ export {
   RUN_CLOSE_OUTCOMES,
   SERVED_ENDPOINT_RECIPIENTS,
   type ShowGateRequest,
+  type ShowRunRequest,
   type StartupResult,
   showGate,
+  showRun,
   startContinuo,
   type VerifiedContinuo,
 } from "./continuo/invoker.js";
@@ -95,7 +97,9 @@ export {
   type LapPerformed,
   RUN_ADMIT,
   RUN_CLOSE,
+  RUN_SHOW,
   type RunClosed,
+  type RunObserved,
 } from "./continuo/protocol.js";
 export {
   CONTINUO_ROSTER,

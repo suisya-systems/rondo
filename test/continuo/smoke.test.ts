@@ -39,7 +39,13 @@ import {
   type VerifiedContinuo,
 } from "../../src/continuo/invoker.js";
 import { CONTINUO_REVISION } from "../../src/continuo/pin.js";
-import { DB_CREATE, GATE_LIST, GATE_SHOW, RUN_ADMIT } from "../../src/continuo/protocol.js";
+import {
+  DB_CREATE,
+  GATE_LIST,
+  GATE_SHOW,
+  RUN_ADMIT,
+  RUN_SHOW,
+} from "../../src/continuo/protocol.js";
 
 /** Whether this is a CI run, spelled as `vitest.config.ts` spells it (D-0003). */
 function inContinuousIntegration(): boolean {
@@ -144,6 +150,29 @@ test.skipIf(!available)(
       },
     });
 
+    // **Both answers of the verb `revise` reads an ABSENCE from** (D-0031), and
+    // this is the only place either is checked against a real continuo: the
+    // schema id, the nested `run` object and the shape of an unknown run's
+    // refusal are all facts about continuo's build rather than about rondo's
+    // model of it. A drift in any of them would leave the preflight reading
+    // "not taken" for a run that is, which is the failure it exists to prevent.
+    const shown = await run(continuo, RUN_SHOW, ["--db", database, "--run-id", "rondo-smoke-1"]);
+    expect(shown).toEqual({
+      kind: "answered",
+      db: database,
+      payload: { runId: "rondo-smoke-1", status: "created" },
+    });
+
+    const free = await run(continuo, RUN_SHOW, ["--db", database, "--run-id", "rondo-smoke-free"]);
+    // A refusal, decoded as one -- not a defect, and not an empty answer. This
+    // is the outcome a revision proceeds on.
+    expect(free).toEqual({
+      kind: "refused",
+      db: database,
+      errorClass: expect.any(String),
+      message: expect.stringContaining("rondo-smoke-free"),
+    });
+
     const gates = await run(continuo, GATE_LIST, ["--db", database]);
     // An admitted run has opened no gate, so the empty list is the answer -- and
     // it is a decoded success rather than an absence, which is the distinction
@@ -161,7 +190,7 @@ test.skipIf(!available)(
       message: expect.stringContaining("no-such-gate"),
     });
   },
-  // Six subprocesses on a cold Windows runner. The per-invocation cost measured
+  // Eight subprocesses on a cold Windows runner. The per-invocation cost measured
   // in D-0015 is about a tenth of a second; this cap is a floor under runner
   // variance, not a budget.
   120_000,

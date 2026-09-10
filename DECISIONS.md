@@ -68,6 +68,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0022 | The advisory component: a pure function in its own layer, three authorities, one ledger per fact — and the widening a lap-1 retry actually takes, which is a fresh plan and not a successor contract | accepted |
 | D-0029 | An independent reading of what a lap produced: material for the person at the gate, one refusal at `publish`, and a verdict that cannot certify what it never read | accepted |
 | D-0030 | The lineage `D-0027` deferred: one nullable column on the iteration row, written once at reservation, refused when it names nothing, and read where provenance is shown | accepted |
+| D-0031 | The last field `revise` could not see before it spends the gate: rondo reads one run, and only an answer counts | accepted |
 
 ---
 
@@ -3157,6 +3158,12 @@ surface that replaces all of that, and it is deliberately the smallest one that 
    fixture guessed `rationale: null, options: []` and was wrong on both counts, and passed only
    because no decoder read either field. `gate reconcile` is never driven; it is the one verb with
    no `--json`, and its prose must not be parsed.
+   > **Note (D-0031, 2026-09-11).** **Six verbs now**, and the sixth is a read: `RUN_SHOW`
+   > (`continuo.run.show/1`), driven only by `revise`, only to learn whether the successor's run id
+   > is already taken, and read so that only an *answered* document is a fact -- the class of a
+   > refusal is still never consulted. This rule's count is what `D-0027` rule 9 said would have to
+   > move before that check could exist.
+
 9. **The walk resumes from the stage continuo reports and never replays from the start**, and every
    message id it uses is read out of the payload that produced it rather than composed from the gate
    id. A walk that always began at `present` would be refused `InadmissibleTransitionRefused`
@@ -3450,6 +3457,17 @@ This entry is the smallest thing that makes the second option do what it says.
    complete answer is a continuo verb that validates an admission without performing one, which
    does not exist. Until then the preflight is a set of named checks rather than a guarantee, and
    the failure it leaves is loud — a spent gate and a settled predecessor — rather than silent.
+
+   > **Note (D-0031, 2026-09-11).** The run id half has been closed: `revise` drives `run show`
+   > before the walk and refuses when the control plane answers with the successor's run. `D-0023`
+   > had already narrowed the hole first -- the run id became a function of the iteration id, which
+   > this rule's preflight already checked -- so what the check catches is a control plane holding a
+   > run rondo's store does not know about. The paragraph's general claim stands, and `D-0031`
+   > rule 5 sharpens it: `run admit`'s two other caller-caused refusals (an unknown role, an
+   > unauthorised `--cli-arg`) remain reachable when continuo's roster or allowlist moves between
+   > laps, and the verb this rule imagines would not cover the topic branch or the workspace at all,
+   > because continuo checks those in the materialiser rather than at admission. The preflight is
+   > still a set of named checks rather than a guarantee.
 
 ### What was measured, and how
 
@@ -4827,3 +4845,131 @@ Measured at `46e30aa` on 2026-09-10, which is `origin/main` at the time this was
 - **`reserve()` ceasing to be the only insert into `iteration`.** Rule 3's refusals live there, so
   a second insert path is a second place a dangling lineage could enter the database — and out-of-band
   inserts are already what `D-0023` rule 11 recorded as the cost of the counted bound.
+
+---
+
+## D-0031 — The last field `revise` could not see before it spends the gate: rondo reads one run, and only an answer counts
+
+**Status:** accepted (2026-09-11, rondo's human gate)
+
+`D-0027` rule 6 orders `revise` so that everything refusable is refused *before* the gate is walked,
+because walking a gate cannot be undone. Rule 9 then names the one check missing from that list —
+whether the successor's run id is free in continuo's control plane — and says why it was left open:
+closing it means rondo consuming a run-reading verb, and `D-0025` rule 8 enumerates the verbs rondo
+consumes. This entry widens that set by one, for that one purpose. It is `#32`.
+
+**What `D-0023` already did to the gap, stated first because it changes the size of it.** The issue
+was written when `revise` took `--run-id`, and it does not any more: the allocator derives the
+triple from the iteration id, so the successor's run id is a pure function of a value `revise`
+already checks against rondo's own store (`revisionBlocker`'s first identifier check). A collision
+rondo *caused* is therefore impossible by construction, which is what `src/refrain/allocator.ts`
+says it is for. What remains is a control plane holding a run rondo's store does not know about — a
+store rebuilt or replaced, a `--db` naming a different database, a run created by hand — and
+`D-0019` rule 10's write order means a crash cannot produce it, because the row is committed before
+`run admit` is spawned. So this is a narrower hole than the issue describes, and the loss when it is
+hit is the same: a spent gate, a settled predecessor, and no lap.
+
+### Decision
+
+1. **rondo consumes `run show`, and `D-0025` rule 8's set becomes six verbs.** `RUN_SHOW`, schema
+   `continuo.run.show/1`, read off continuo's own source at the pinned revision
+   `38c667b5126fdfdc0465e4a422e88b20a8b53044`. It is the read half of `continuo D-0096`, it writes
+   nothing, and it takes no write lock — the one property that makes it safe to drive while another
+   lap holds the run lease.
+
+2. **Only an *answered* document is a fact this command acts on, and every other outcome leaves
+   `revise` behaving exactly as it did before the verb existed.** A run continuo describes is a run
+   that exists, so the id is taken and the revision is refused with the gate untouched. A refusal, a
+   database rondo cannot read, a protocol answer rondo does not recognise, a timeout — all of them
+   mean *this check learned nothing*, and the command proceeds to the walk on the strength of the
+   other four preflights.
+
+   **This asymmetry is what keeps `D-0015` rule 2 intact, and it is the whole design.** The obvious
+   shape is the other one: drive the verb, and read `UnknownRunRefused` as "free". That would make
+   rondo branch on `error.class` — which continuo says is a hint rather than a taxonomy, and which
+   `D-0015` answered by carrying the class through as an opaque string for a person to read.
+   Reading the *arrival of a document* instead needs no class and no message, and it fails in the
+   right direction: the failure mode of a mis-read refusal is a legitimate revision refused for a
+   reason that is not true, and the failure mode of this reading is the gap staying exactly as wide
+   as it was. One of those costs a person their gate and the other costs nothing.
+
+3. **It is a fifth entry in `revisionBlocker`, not a new mechanism.** The function already exists to
+   hold the refusals that must precede the walk; the run id joins the iteration row, the branch and
+   the workspace there, and is ordered after the store's own row because a person whose *iteration*
+   id is taken should hear that before they hear about a name rondo derived from it. The refusal
+   names the derived run id, the status continuo reported, and the one lever the operator has, which
+   is `--iteration-id`.
+
+4. **The decoder reads two fields of a large document, and the narrowing is deliberate.**
+   `run show` carries the run's lease, sessions, open gates, events and outbox rows, because
+   `continuo D-0096` withholds nothing on purpose. rondo reads `run.run_id` and `run.status` and
+   nothing else: the question is "does this run exist", whose answer is the document arriving, and
+   `status` is read only so the refusal can tell a person what the run it collided with is doing. A
+   decoder that read the other five keys would be rondo claiming to model rows it does nothing with,
+   and every one of them would become a field a future continuo release could break rondo on.
+
+5. **The shape of the gap is closed by one third, and the other two thirds are named rather than
+   implied.** `run admit` at the pinned revision refuses for exactly three reasons a caller can
+   cause: `RunAlreadyAdmitted`, `UnknownRoleRefused` and `CliArgsNotAuthorised`
+   (`src/control_plane/run_admission.ts`). This entry closes the first. The other two are reachable
+   for a revision only when continuo's role roster or its `--cli-arg` allowlist changed *between*
+   the predecessor's admission and the successor's, because `D-0027` rule 4 inherits every other
+   plan field verbatim from a plan that was already admitted once — a real hole, and one whose
+   trigger is a continuo upgrade rather than anything an operator typed.
+
+   **And the "complete answer" `D-0027` rule 9 imagines is bigger than the verb it names.** A
+   continuo verb that validated an admission without performing one would cover all three of the
+   above and still not cover the topic branch or the workspace, because continuo checks *those* in
+   the materialiser inside `lap perform`, not at admission. The complete answer is a preflight over
+   a lap, not over an admission. rondo already asks git and the filesystem those two questions
+   itself (`D-0027` rule 6), so the structural verb would replace one of this entry's five checks
+   and leave the other four standing. That is why it is not worth waiting for a cross-repository
+   decision to take the one-verb version, and why taking the one-verb version does not foreclose it:
+   the widening of rule 8 is the same widening either way.
+
+6. **The check-then-use window stays open, and this entry does not pretend otherwise.** `D-0023`
+   rejected allocating against observed state on exactly this ground — *"it buys an earlier refusal
+   and no guarantee"* — and that reasoning is untouched *for admission*, where the thing lost to a
+   late refusal is a row. It is the price that differs here: a revision's late refusal costs a
+   human's gate, which cannot be re-opened. So the same purchase is worth making at this one call
+   site and is still not worth making at the other, which is why this is a line in `commandRevise`
+   rather than a check inside `allocate()`.
+
+### What was measured, and how
+
+On **2026-09-11**, against the pinned continuo built from a clean clone at
+`38c667b5126fdfdc0465e4a422e88b20a8b53044` (`CONTINUO_REQUIRE_REVISION=1 npm run build`, whose
+`--version` reports that revision):
+
+- **Both answers the reading turns on were observed across the real process boundary**, in
+  `test/continuo/smoke.test.ts`. An admitted run answers `continuo.run.show/1` with its columns
+  nested under `run` — `{"run":{"run_id":"rondo-smoke-1","status":"created",...},"lease":null,...}`
+  — and decodes to rondo's two-field record. An id naming no run exits 2 with the ordinary refusal
+  envelope, whose message contains the id asked for. Five tests, green.
+- **The nesting is the fact a unit fixture would have guessed wrong**, and it was read off
+  `showPayload` rather than assumed: the run's columns are under `run`, beside the five table keys,
+  where `gate show` puts its fields at the top level. A decoder written to `gate show`'s shape would
+  have failed every call.
+- **The cost is one subprocess, on the `revise` path only.** No other command drives the verb.
+- **What was *not* walked:** a real revision against a control plane actually holding the colliding
+  run. The refusal is unit-tested and the verb is smoke-tested; the two have not been walked
+  together, because manufacturing the collision means a store and a control plane deliberately out
+  of step, which is the condition this entry exists for and not one the dogfood environment
+  produces.
+
+### What would falsify it
+
+- **`run show`'s schema id, or the nesting of the run's columns under `run`, moving.** The smoke is
+  where that shows, and it shows as a defect rather than as a quiet "not taken".
+- **continuo growing a verb that validates an admission without performing one**, which replaces
+  rule 5's first third — and, if it ever covers materialisation too, replaces three of
+  `revisionBlocker`'s five checks.
+- **`run admit` growing a fourth caller-caused refusal**, which widens rule 5's remainder without
+  anything in rondo turning red.
+- **A second call site for `showRun`.** The reading in rule 2 is justified by the irreversibility of
+  what follows it; a caller with nothing irreversible after it would be paying a subprocess for an
+  earlier refusal it does not need, and a caller that read a *refusal* as a fact would be the
+  taxonomy rule 2 exists to avoid.
+- **The allocator ceasing to derive the run id from the iteration id**, which is what makes the
+  store's own row check and this one two questions about two different authorities rather than one
+  question asked twice.

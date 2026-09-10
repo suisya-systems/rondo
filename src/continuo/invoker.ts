@@ -51,8 +51,10 @@ import {
   type LapPerformed,
   RUN_ADMIT,
   RUN_CLOSE,
+  RUN_SHOW,
   type RunAdmitted,
   type RunClosed,
+  type RunObserved,
   type VerbContract,
 } from "./protocol.js";
 import { mapModelTier, mapNeutralRole } from "./roles.js";
@@ -1180,6 +1182,49 @@ export async function closeRun(
     throw error;
   }
   return await run(continuo, RUN_CLOSE, argv);
+}
+
+/** What `run show` needs. One observation, and it mutates nothing. */
+export interface ShowRunRequest {
+  readonly db: string;
+  readonly runId: string;
+}
+
+/**
+ * Observe one run.
+ *
+ * **The one verb rondo drives to learn that something is *not* there**, and the
+ * asymmetry is the whole of its use. `revise` walks a gate it cannot take back,
+ * so every refusal it can make beforehand is worth a spawn; the successor's run
+ * id was the last field continuo checks at admission that rondo could not see
+ * (`D-0027` rule 9). An **answered** document means the id is taken and the
+ * revision is refused before the gate is touched. Anything else -- a refusal, a
+ * database rondo cannot read, a seam that did not answer -- leaves the command
+ * exactly as it behaved before this verb existed.
+ *
+ * That reading is what keeps `D-0015` rule 2 intact: the fact rondo acts on is
+ * the *arrival* of a document, so neither `error.class` nor `error.message` is
+ * read, and continuo's refusal vocabulary stays the hint it says it is.
+ */
+export async function showRun(
+  continuo: VerifiedContinuo,
+  request: ShowRunRequest,
+): Promise<ContinuoResult<RunObserved>> {
+  let argv: readonly string[];
+  try {
+    argv = [
+      "--db",
+      requireAbsolute("db", request.db),
+      "--run-id",
+      requireIdentifier("runId", request.runId),
+    ];
+  } catch (error) {
+    if (error instanceof ArgumentRefusal) {
+      return refusedArgument(RUN_SHOW, error);
+    }
+    throw error;
+  }
+  return await run(continuo, RUN_SHOW, argv);
 }
 
 /** What `gate show` needs. One observation, and it mutates nothing. */
