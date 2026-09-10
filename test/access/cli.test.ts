@@ -21,6 +21,7 @@ import { expect, test } from "vitest";
 import {
   approvedActor,
   approvedForPublication,
+  FLAGS_BY_COMMAND,
   forgeHost,
   type GateVerbs,
   type PreflightInput,
@@ -138,6 +139,88 @@ test("USAGE is printable ASCII, which is the only automatic check of D-0004", ()
   // em-dash here crashes a cp932 console on `--help`, and no other test in the
   // tree would go red.
   expect(USAGE).toMatch(/^[\x20-\x7E\n]*$/);
+});
+
+/** Every `--flag` a piece of operator-facing prose names, without the dashes. */
+function flagsNamedIn(text: string): readonly string[] {
+  return [...text.matchAll(/--([a-z][a-z-]*)/g)].map((match) => match[1] ?? "");
+}
+
+/**
+ * Every flag `--help` prints is a flag the command takes, and none is missing.
+ *
+ * `USAGE` is prose, and prose does not go red when a flag is retired: D-0023
+ * rule 9 removed `--run-id`, `--topic-branch` and `--workspace` from `revise`
+ * and the usage line kept advertising all three, so the one command line a
+ * person could copy from the help was the one that could never parse
+ * (issue #48). The comparison is against `FLAGS_BY_COMMAND` -- the table
+ * `parseCommand` actually refuses against -- rather than against expected
+ * strings written here, because an expectation written by hand agrees with the
+ * stale help as happily as with a correct one.
+ */
+test("USAGE names exactly the flags each command accepts", () => {
+  // The usage section only: `environment:` below it names variables, not flags,
+  // and the closing sentence names neither.
+  const usage = USAGE.slice(0, USAGE.indexOf("\nenvironment:"));
+  const blocks = usage.split(/\n(?= {2}rondo )/).slice(1);
+  const printed = new Map<string, Set<string>>();
+  for (const block of blocks) {
+    const command = /^ {2}rondo (\S+)/.exec(block)?.[1] ?? "";
+    const flags = printed.get(command) ?? new Set<string>();
+    for (const flag of flagsNamedIn(block)) {
+      flags.add(flag);
+    }
+    printed.set(command, flags);
+  }
+
+  expect([...printed.keys()].sort()).toEqual(Object.keys(FLAGS_BY_COMMAND).sort());
+  for (const [command, accepted] of Object.entries(FLAGS_BY_COMMAND)) {
+    expect({ command, flags: [...(printed.get(command) ?? [])].sort() }).toEqual({
+      command,
+      flags: [...accepted].sort(),
+    });
+  }
+});
+
+/**
+ * And every flag a refusal tells you to change is one you can type.
+ *
+ * The same staleness as above, one layer down and worse: `revise`'s refusals
+ * used to end "Choose another --run-id" for identifiers rondo now derives from
+ * the iteration id, so the advice printed at the moment a person is stuck was
+ * advice that could not be followed (issue #48).
+ */
+test("a revision's refusals only name flags revise accepts", () => {
+  const clear = {
+    predecessorId: "iter-1",
+    gateOutcome: null,
+    successorId: "iter-2",
+    successorRow: "absent",
+    successorRunId: "rondo-iter-2",
+    successorRunStatus: null,
+    topicBranch: "topic/iter-2",
+    topicBranchExists: false,
+    workspace: "/srv/ws/iter-2",
+    workspaceExists: false,
+  } as const;
+  const refusals = [
+    revisionBlocker({ ...clear, gateOutcome: "expired" }),
+    revisionBlocker({ ...clear, successorRow: "read" }),
+    revisionBlocker({ ...clear, successorRunStatus: "running" }),
+    revisionBlocker({ ...clear, topicBranchExists: true }),
+    revisionBlocker({ ...clear, workspaceExists: true }),
+  ];
+  for (const refusal of refusals) {
+    expect(refusal).not.toBe(null);
+    for (const flag of flagsNamedIn(refusal ?? "")) {
+      // `rondo start` is named by the closed-gate refusal as the way onward,
+      // so its flags are legitimate there too.
+      expect([
+        ...(FLAGS_BY_COMMAND["revise"] ?? []),
+        ...(FLAGS_BY_COMMAND["start"] ?? []),
+      ]).toContain(flag);
+    }
+  }
 });
 
 test("no argv, --help and help all reach the help command", () => {
