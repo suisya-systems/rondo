@@ -26,6 +26,7 @@ import {
   type GateVerbs,
   type PreflightInput,
   type PullRequestTextInput,
+  parseBasis,
   parseCommand,
   parseForgeSlug,
   publishPreflight,
@@ -40,6 +41,7 @@ import {
 } from "../../src/access/cli.js";
 import type { LapWorkInspection, PushTargetInspection } from "../../src/access/forge.js";
 import { evidenceOf } from "../../src/access/review.js";
+import { BASIS_FORMS } from "../../src/advisory/proposal.js";
 import type { VerifiedContinuo } from "../../src/continuo/invoker.js";
 import type { ContinuoResult } from "../../src/continuo/protocol.js";
 import type { IterationRecord, JsonRecord, LapReading } from "../../src/store/records.js";
@@ -1528,4 +1530,85 @@ test("explain takes an iteration id and refuses every other flag", () => {
   }
   const refused = parseCommand(["explain", "--iteration-id", "i-0001", "--actor-id", "me"]);
   expect(refused.kind).toBe("refused");
+});
+
+/**
+ * `--basis LOCATOR`, which is the one new piece of syntax `elevate` adds.
+ *
+ * **Checked against `BASIS_FORMS` rather than against a list written here**,
+ * for `FLAGS_BY_COMMAND`'s reason one layer down: a sixth form added to
+ * `Basis` and not given a spelling on the command line would be a basis an
+ * operator cannot type, and a hand-written expectation agrees with that as
+ * happily as with a complete one.
+ */
+test("every form of a basis can be typed, and nothing else parses", () => {
+  const typed = [
+    "snapshot:/iteration/status",
+    "iteration:i-0001",
+    "gate:g-1#3",
+    "run:r-0001",
+    "repo:src/refrain/plan.ts@c0ffee#8-12",
+  ].map((text) => parseBasis(text));
+  expect(typed.map((basis) => basis?.form)).toEqual([...BASIS_FORMS]);
+  expect(parseBasis("repo:src/refrain/plan.ts@c0ffee#8-12")).toEqual({
+    form: "repository",
+    path: "src/refrain/plan.ts",
+    commit: "c0ffee",
+    firstLine: 8,
+    lastLine: 12,
+  });
+  expect(parseBasis("gate:g-1#3")).toEqual({
+    form: "gateTransition",
+    gateId: "g-1",
+    transitionSeq: 3,
+  });
+
+  // **There is no form meaning "the operator said so"**, and the malformed
+  // tails read as null rather than as something half-understood: a basis rondo
+  // guessed at is a citation of material nobody can open.
+  for (const bad of [
+    "because I say so",
+    "",
+    "snapshot:",
+    "snapshot:iteration/status",
+    "gate:g-1",
+    "gate:#3",
+    "gate:g-1#later",
+    "gate:g-1#-1",
+    "repo:src/plan.ts@c0ffee",
+    "repo:src/plan.ts@c0ffee#12-8",
+    "repo:src/plan.ts@c0ffee#0-3",
+    "observation:it looked wrong",
+  ]) {
+    expect({ bad, basis: parseBasis(bad) }).toEqual({ bad, basis: null });
+  }
+});
+
+test("elevate takes five flags and refuses a sixth", () => {
+  const outcome = parseCommand([
+    "elevate",
+    "--iteration-id",
+    "i-0001",
+    "--actor-id",
+    "me",
+    "--message-id",
+    "m-0001",
+    "--observation=-- the plan was already merged",
+    "--basis",
+    "iteration:i-0001",
+  ]);
+  expect(outcome.kind).toBe("parsed");
+  if (outcome.kind !== "parsed") {
+    return;
+  }
+  expect(outcome.parsed.messageId).toBe("m-0001");
+  // Written with an equals sign for `--body`'s reason: an observation may
+  // legitimately begin with a dash.
+  expect(outcome.parsed.observation).toBe("-- the plan was already merged");
+  expect(outcome.parsed.basis).toBe("iteration:i-0001");
+
+  // `--body` is `answer`'s, and an observation quietly answering a gate is the
+  // one substitution D-0036 rule 3's third property exists to prevent.
+  const wrong = parseCommand(["elevate", "--iteration-id", "i-0001", "--body=approve"]);
+  expect(wrong.kind).toBe("refused");
 });

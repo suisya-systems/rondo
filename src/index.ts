@@ -20,7 +20,13 @@
  * that could only reach the tree through the root would be a test of the root.
  */
 
-export { type ExplainOutcome, explainIteration, explanationLines } from "./access/advisory.js";
+export {
+  type Elevation,
+  type ExplainOutcome,
+  elevateObservation,
+  explainIteration,
+  explanationLines,
+} from "./access/advisory.js";
 export {
   abandon,
   admit,

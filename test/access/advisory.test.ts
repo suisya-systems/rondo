@@ -13,7 +13,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { expect, test } from "vitest";
 
-import { explainIteration } from "../../src/access/advisory.js";
+import { type Elevation, elevateObservation, explainIteration } from "../../src/access/advisory.js";
 import { CONSERVATIVE_HOST_POLICY } from "../../src/refrain/policy.js";
 import type { JsonRecord } from "../../src/store/records.js";
 import {
@@ -233,4 +233,121 @@ test("two explanations of one row are two rows, and the later one cites the late
   expect(rows.length).toBe(2);
   expect(rows[0]?.snapshot).toContain('"classification":null');
   expect(rows[1]?.snapshot).toContain('"classification":"allowed"');
+});
+
+// --- elevate: the two columns, and the refusals on the way to them ---------
+
+/** One observation, as `elevate` hands it over. */
+const anObservation = (): Elevation => ({
+  messageId: "m-0001",
+  actorId: "operator-1",
+  observation: {
+    label: "observation",
+    value: "this plan was already merged last week",
+    basis: { form: "iteration", iterationId: "i-0001" },
+  },
+});
+
+test("it elevates an observation, and the row records which message and who", async () => {
+  // **D-0032 rule 7's pair, written for the first time** (#41 section 3): the
+  // chain observation -> proposal is a fact in the ledger rather than a
+  // convention, and it is a fact about *this* proposal rather than a separate
+  // table nobody joins.
+  const { connection, store, record } = fresh();
+  await reserveOne(store, "i-0001");
+
+  const shows = screen();
+  const outcome = await elevateObservation(
+    { store, record, now: () => 5_000, present: shows.present },
+    "i-0001",
+    anObservation(),
+  );
+  expect(outcome.kind).toBe("explained");
+
+  const row = onlyProposal(connection);
+  expect(row["elevated_from_message_id"]).toBe("m-0001");
+  expect(row["elevated_by_actor_id"]).toBe("operator-1");
+  // The message the reference names is in the conversation, which is what
+  // D-0036 rule 4 refuses a proposal for lacking.
+  expect(
+    connection
+      .prepare("SELECT count(*) AS n FROM conversation_message WHERE message_id = ?")
+      .get("m-0001"),
+  ).toEqual({ n: 1 });
+  // The derivation says a person is in this payload (D-0032 rule 8).
+  expect(row["derivation"]).toBe("operator_elevation");
+  // Still the kind that binds nothing: this cut reaches proposal and stops.
+  expect(row["kind"]).toBe("explanation");
+
+  const rendered = shows.shown.join("\n");
+  expect(rendered).toContain("elevated from message 'm-0001' by 'operator-1'");
+  expect(rendered).toContain("observation: this plan was already merged last week");
+  expect(rendered).toContain("basis: iteration i-0001");
+  expect(rendered).toContain("binds nothing");
+});
+
+test("an observation whose message id is already spoken for is refused, and nothing is proposed", async () => {
+  // **The CLI-reachable half of D-0036 rule 3.** A message id is immutable, and
+  // the store holds no body, so it cannot tell a repeat of one message from a
+  // different message reusing an id. Refusing is the answer that cannot
+  // silently be wrong -- and the proposal that would have cited it is not
+  // written either.
+  const { connection, store, record } = fresh();
+  await reserveOne(store, "i-0001");
+  expect(await record.recordMessage("m-0001")).toEqual({ kind: "recorded" });
+
+  const shows = screen();
+  const outcome = await elevateObservation(
+    { store, record, now: () => 5_000, present: shows.present },
+    "i-0001",
+    anObservation(),
+  );
+  expect(outcome.kind).toBe("refused");
+  expect(connection.prepare("SELECT count(*) AS n FROM proposal").get()).toEqual({ n: 0 });
+  expect(shows.shown).toEqual([]);
+});
+
+test("an iteration that is not there costs no message id", async () => {
+  // The order is deliberate: a message id is spent for ever once appended, so
+  // the commonest mistake -- a typo'd iteration id -- must not burn the name
+  // the operator is about to retype.
+  const { connection, store, record } = fresh();
+  const outcome = await elevateObservation(
+    { store, record, now: () => 5_000, present: screen().present },
+    "i-ghost",
+    anObservation(),
+  );
+  expect(outcome.kind).toBe("refused");
+  expect(connection.prepare("SELECT count(*) AS n FROM conversation_message").get()).toEqual({
+    n: 0,
+  });
+});
+
+test("a dangling elevation is refused by the writer, and the verb passes that refusal on", async () => {
+  // **D-0036 rule 4's planted case, from the verb's side.** The store's own
+  // proof is in `test/store/advisory-record.test.ts`; what is asserted here is
+  // that `elevate` composes a draft the refusal actually applies to, and that a
+  // proposal it stopped is a proposal nobody was shown. Planted with a port
+  // that reports the message appended without appending it, because the real
+  // pair cannot come apart.
+  const { connection, store, record } = fresh();
+  await reserveOne(store, "i-0001");
+  const lying: AdvisoryRecord = {
+    ...record,
+    recordMessage: async (): Promise<RecordOutcome> => ({ kind: "recorded" }),
+  };
+
+  const shows = screen();
+  const outcome = await elevateObservation(
+    { store, record: lying, now: () => 5_000, present: shows.present },
+    "i-0001",
+    anObservation(),
+  );
+  expect(outcome.kind).toBe("refused");
+  if (outcome.kind !== "refused") {
+    return;
+  }
+  expect(outcome.reason).toContain("no message in this conversation");
+  expect(connection.prepare("SELECT count(*) AS n FROM proposal").get()).toEqual({ n: 0 });
+  expect(shows.shown).toEqual([]);
 });
