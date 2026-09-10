@@ -151,6 +151,20 @@ function gather(record: IterationRecord, readings: readonly LapReading[]): Advis
 const CITATION_CEILING = 200;
 
 /**
+ * Whether one pointer token addresses something **in the JSON document**.
+ *
+ * Own properties only, and on an array only an index: `constructor` is on
+ * every object and `length` is on every array, and neither is in any snapshot.
+ * A pointer that walked into one would render a number or a function as a
+ * citation of material the row does not hold, which is the one thing a locator
+ * is supposed to make impossible -- and the pointer can now come from an
+ * operator's `--basis` (D-0032 rule 2, #41 section 3).
+ */
+function addressable(at: object, step: string): boolean {
+  return Array.isArray(at) ? /^(0|[1-9]\d*)$/.test(step) && step in at : Object.hasOwn(at, step);
+}
+
+/**
  * Resolve one JSON pointer against the snapshot the proposal kept.
  *
  * Total: a pointer that leads nowhere says so rather than rendering as an empty
@@ -164,14 +178,7 @@ function cited(snapshot: AdvisorySnapshot, pointer: string): string {
     .slice(1)
     .reduce<unknown>(
       (at, step) =>
-        // **Own properties only.** A pointer is a locator into the snapshot as
-        // persisted, and `constructor`, `toString` and `__proto__` are in no
-        // snapshot -- they are on every object. Walking into them would render
-        // a function as a citation of material the row does not hold, which is
-        // the one thing a locator is supposed to make impossible. It matters
-        // here rather than in the abstract because a pointer can now come from
-        // an operator's `--basis` (D-0032 rule 2, #41 section 3).
-        at === null || typeof at !== "object" || !Object.hasOwn(at, step)
+        at === null || typeof at !== "object" || !addressable(at, step)
           ? undefined
           : Reflect.get(at, step),
       snapshot,

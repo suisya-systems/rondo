@@ -380,4 +380,20 @@ test("a pointer at something no snapshot holds does not resolve, and does not th
   expect(outcome.kind).toBe("explained");
   expect(shows.shown.join("\n")).toContain("basis: snapshot /constructor = does not resolve");
   expect(connection.prepare("SELECT count(*) AS n FROM proposal").get()).toEqual({ n: 1 });
+
+  // The same for an array: `length` is on every array and is in no snapshot,
+  // and RFC 6901 addresses an array by index only. An index that is there
+  // still resolves, which is what keeps this a check rather than a ban.
+  const more = screen();
+  await elevateObservation({ store, record, now: () => 6_000, present: more.present }, "i-0001", {
+    ...anObservation(),
+    messageId: "m-0002",
+    observation: {
+      label: "observation",
+      value: "counted the readings",
+      basis: { form: "snapshot", pointer: "/readings/length" },
+    },
+  });
+  expect(more.shown.join("\n")).toContain("basis: snapshot /readings/length = does not resolve");
+  expect(more.shown.join("\n")).toContain('basis: snapshot /iteration/status = "planned"');
 });
