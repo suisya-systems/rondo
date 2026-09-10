@@ -92,13 +92,12 @@ export const USAGE = `rondo - the operator surface for delegated work
   rondo answer --actor-id ID --body=TEXT [--iteration-id ID]
                           answer it, and settle the iteration. Write --body
                           with an equals sign: an answer may begin with a dash
-  rondo revise --actor-id ID --body=TEXT --run-id ID --topic-branch NAME
-               --workspace PATH [--iteration-id ID]
+  rondo revise --actor-id ID --body=TEXT [--iteration-id ID]
                           answer the gate with a change to make, and run a
                           second lap that continues from the first one's
-                          branch. The three identifiers are yours to choose:
-                          rondo allocates none, and continuo refuses the ones
-                          the first lap spent
+                          branch. The second lap's run id, topic branch and
+                          workspace are derived from --iteration-id, the same
+                          way rondo start mints the first lap's
   rondo publish --repo OWNER/NAME --actor-id ID --iteration-id ID
                 [--remote NAME] [--dry-run] [--allow-remote-mismatch]
                 [--despite-review]
@@ -242,7 +241,7 @@ const COMMANDS = ["start", "answer", "revise", "publish", "abandon"] as const;
  * `publish` -- where a value silently doing nothing reads on the command line
  * as though it did something.
  */
-const FLAGS_BY_COMMAND: Readonly<Record<string, readonly string[]>> = {
+export const FLAGS_BY_COMMAND: Readonly<Record<string, readonly string[]>> = {
   // `--run-id`, `--topic-branch` and `--workspace` are gone from `start` and
   // from `revise` (D-0023 rule 9): rondo derives all three from the iteration
   // id, which is now required rather than defaulted. D-0027 typed them on
@@ -1424,8 +1423,7 @@ export function revisionBlocker(input: {
     return (
       `iteration '${input.successorId}' already exists in the store, so the second lap could ` +
       "not be reserved under it -- and the gate would have been answered first. Nothing was " +
-      "touched. Choose another --iteration-id, or another --run-id, which is what the " +
-      "iteration id defaults to."
+      "touched. Choose another --iteration-id."
     );
   }
   if (input.successorRunStatus !== null) {
@@ -1441,13 +1439,15 @@ export function revisionBlocker(input: {
     return (
       `branch '${input.topicBranch}' already exists in the repository, and continuo creates the ` +
       "topic branch rather than checking it out -- it requires one that is not there. Nothing " +
-      "was touched. Choose another --topic-branch."
+      "was touched. rondo derives the topic branch from the iteration id, so choose another " +
+      "--iteration-id."
     );
   }
   if (input.workspaceExists) {
     return (
       `'${input.workspace}' already exists, and continuo creates the worktree there -- it ` +
-      "requires the path not to exist. Nothing was touched. Choose another --workspace."
+      "requires the path not to exist. Nothing was touched. rondo derives the workspace from " +
+      "the iteration id, so choose another --iteration-id."
     );
   }
   return null;
