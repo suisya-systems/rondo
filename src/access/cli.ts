@@ -54,7 +54,13 @@ import {
   type JsonRecord,
   type LapReading,
 } from "../store/records.js";
-import { type IterationStore, openIterationStore, type ReadOutcome } from "../store/sqlite.js";
+import {
+  type IterationStore,
+  openAdvisoryRecord,
+  openIterationStore,
+  type ReadOutcome,
+} from "../store/sqlite.js";
+import { explainIteration } from "./advisory.js";
 import { abandon, admit, conductorPorts, resume } from "./conductor.js";
 import { asciiEscape, consoleSeams, relayUpstream } from "./console.js";
 import {
@@ -110,6 +116,13 @@ export const USAGE = `rondo - the operator surface for delegated work
                           --despite-review is how you overrule that last one
   rondo abandon --iteration-id ID --reason TEXT
                           end an iteration rondo cannot finish
+  rondo explain --iteration-id ID
+                          say what the store holds about one iteration, with
+                          what each claim rests on. Reads rondo's own rows and
+                          drives no continuo, so it reaches a row that is stuck
+                          or already ended. It records what it said and
+                          proposes nothing: an explanation binds nothing and
+                          cannot be approved
 
 environment:
   RONDO_CONTINUO_CLI  absolute path to continuo's built dist/cli.js
@@ -194,7 +207,7 @@ export function approvedForPublication(record: IterationRecord): boolean {
 
 /** One command, as the parser understood it. Pure: this type holds no I/O. */
 export interface ParsedCommand {
-  readonly command: "start" | "answer" | "revise" | "publish" | "abandon" | "help";
+  readonly command: "start" | "answer" | "revise" | "publish" | "abandon" | "explain" | "help";
   readonly planFile: string | null;
   readonly prompt: string | null;
   readonly iterationId: string | null;
@@ -227,7 +240,7 @@ const FLAGS = {
   "despite-review": { type: "boolean" },
 } as const;
 
-const COMMANDS = ["start", "answer", "revise", "publish", "abandon"] as const;
+const COMMANDS = ["start", "answer", "revise", "publish", "abandon", "explain"] as const;
 
 /**
  * Which flags each command actually reads.
@@ -261,6 +274,13 @@ export const FLAGS_BY_COMMAND: Readonly<Record<string, readonly string[]>> = {
     "despite-review",
   ],
   abandon: ["iteration-id", "reason"],
+  // **One flag, and `--iteration-id` is required rather than defaulted.** The
+  // row this command most exists to explain is terminal (D-0032 rule 11's
+  // enumeration is there because an abandoned iteration could not be found at
+  // all), and "the live one" does not name it. A default that quietly explained
+  // a different iteration would be the wrong answer rendered as confidently as
+  // the right one.
+  explain: ["iteration-id"],
 };
 
 /**
@@ -723,7 +743,7 @@ export function approvedActor(
 /** Open rondo's own store, or say why it cannot be opened. */
 function openStore(
   environment: Readonly<Record<string, string | undefined>>,
-): { store: IterationStore } | { refusal: string } {
+): { store: IterationStore; path: string } | { refusal: string } {
   const path = environment[STORE_ENV];
   if (path === undefined || path === "") {
     return {
@@ -758,7 +778,10 @@ function openStore(
     return bounds;
   }
   try {
-    return { store: openIterationStore(path, bounds.policy) };
+    // The path travels with the store because the advisory record is a second
+    // port over the same file (see `openAdvisoryRecord`), and re-reading the
+    // environment to find it would be a second place this value is validated.
+    return { store: openIterationStore(path, bounds.policy), path };
   } catch (error) {
     return {
       refusal: `The iteration store at ${path} could not be opened: ${error instanceof Error ? error.message : String(error)}`,
@@ -937,6 +960,15 @@ export async function main(
     return await commandAbandon(parsed, conductorPorts(unverifiedContinuo(), store));
   }
 
+  // **`explain` is dispatched before continuo is started, for `abandon`'s
+  // reason and one of its own.** It reads rondo's rows and drives no verb, so a
+  // continuo that will not start is not a reason to withhold an account of the
+  // row that is stuck behind it -- and the iteration this command most exists to
+  // explain has already ended, which is exactly when nothing is worth spawning.
+  if (parsed.command === "explain") {
+    return await commandExplain(parsed, store, opened.path);
+  }
+
   const startup = await startContinuo(environment);
   if (startup.kind === "refused") {
     return refuse(`continuo is not usable: ${startup.reason}`);
@@ -998,6 +1030,62 @@ async function commandStart(
     return 2;
   }
   return report.status === "closed" ? 0 : 1;
+}
+
+/**
+ * Door six: say what the store holds about one iteration, and record that it
+ * said it.
+ *
+ * **The advisory is reached here and nowhere else** (D-0022 rules 1 and 2): this
+ * function gathers, `src/advisory/` returns a value, and
+ * `src/access/advisory.ts` writes the row and composes the lines. Nothing on
+ * this path composes a contract or opens a gate, because `explanation` is the
+ * kind that binds nothing (D-0032 rule 5).
+ */
+async function commandExplain(
+  parsed: ParsedCommand,
+  store: IterationStore,
+  storePath: string,
+): Promise<number> {
+  if (parsed.iterationId === null) {
+    return refuse(
+      "explain needs --iteration-id ID. The row worth explaining is often one that has already " +
+        "ended, and 'the live iteration' does not name it -- so there is no default, because a " +
+        "default would explain a different row just as confidently.",
+    );
+  }
+  const outcome = await explainIteration(
+    {
+      store,
+      record: openAdvisoryRecord(storePath),
+      now: Date.now,
+      present: (lines) => {
+        for (const line of lines) {
+          say(line);
+        }
+      },
+    },
+    parsed.iterationId,
+  );
+  if (outcome.kind === "refused") {
+    return refuse(outcome.reason);
+  }
+  say(`recorded as proposal '${outcome.proposalId}'`);
+  if (outcome.kind === "presentedUncounted") {
+    // **Status 1 rather than 0, and the explanation still stands on the
+    // screen.** The operator has read it and the proposal is in the ledger; what
+    // failed is the count of what was put to them, which is the one number
+    // D-0032 rule 10 says nothing else can supply. Reporting success here would
+    // make an under-counted ledger the quiet outcome.
+    consoleSeams.writeError(
+      asciiEscape(
+        `This explanation was shown and was not counted as presented: ${outcome.reason}. ` +
+          "The breakdown of what was put to you and what was not will be short by one.\n",
+      ),
+    );
+    return 1;
+  }
+  return 0;
 }
 
 /** Door two: see what is waiting, and answer it. */

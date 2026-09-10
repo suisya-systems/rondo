@@ -71,6 +71,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0031 | The last field `revise` could not see before it spends the gate: rondo reads one run, and only an answer counts | accepted |
 | D-0032 | The record the operator's surface has to be able to show: alternatives inside one immutable proposal, a basis that is a locator, a durable last-look mark, and one table counting what was put to the operator and what was not | accepted |
 | D-0033 | Nothing new owns the work between laps: three existing owners, a snapshot that widens instead of a component that decides, and one gap named rather than filled | accepted |
+| D-0034 | An explanation carries claims and no recommendation: how `D-0032` rule 1 and rule 5 are read together | accepted |
 
 ---
 
@@ -5316,6 +5317,8 @@ cited here as requirements rather than re-verified.
   inline half of rule 2 and turns every basis into something to open.
 - Any measurement above failing to reproduce at `2e9db2b`.
 
+---
+
 ## D-0033 — Nothing new owns the work between laps: three existing owners, a snapshot that widens instead of a component that decides, and one gap named rather than filled
 
 **Status:** accepted (2026-09-11, rondo's human gate). Refs rondo#40, rondo#39, rondo#41.
@@ -5582,3 +5585,76 @@ material.
   arriving** (`D-0020` rule 5), each of which unblocks a residual above.
 - Any measurement above failing to reproduce at `e1a64ff`. The commits between that revision
   and this entry are the draft it was taken from, and they change no code.
+
+---
+
+## D-0034 — An explanation carries claims and no recommendation: how `D-0032` rule 1 and rule 5 are read together
+
+**Status:** accepted (2026-09-11, rondo's human gate). Refs rondo#39, rondo#40, rondo#41.
+
+`D-0032` rule 1 says a proposal's payload is an **ordered set of options**, each carrying a label, its
+candidate value and its basis, with **exactly one** marked as the recommendation. Rule 5 says an
+`explanation` **binds nothing, ever**: it is absent from `APPROVABLE_PROPOSAL_KINDS`, and the store's
+writer refuses a `human_decision` whose proposal names it (`src/store/records.ts`, the refusal in
+`advisoryRecord.recordDecision`). Read literally and together, the two require an explanation to carry
+a recommendation nobody may act on.
+
+**The question could not be deferred.** `D-0022` rule 20 and `D-0032` rule 12 both leave `src/` alone,
+and the `src/advisory` task is the first thing that has to emit a payload -- so the shape is decided
+by whatever that code does, with or without an entry. This entry is that decision recorded, taken at
+the gate rather than inside an implementation diff, and the reading it takes is the one the layer
+shipped under.
+
+### Decision
+
+1. **An `explanation`'s payload is an ordered list of claims, and it carries no recommendation.**
+   Rule 1's option set is the shape of the thing being **approved** -- #39's "answerable in one
+   sentence", which is a proposal, its alternatives and a recommendation -- and rule 2 names the two
+   as different members of a payload in its own words: *"every claim and every option in the payload
+   carries a `basis`"*. An explanation has nothing to approve, so a recommendation on one would be the
+   third voice acquiring the grammar of the first. That is the confusion rule 5 and rule 8 exist to
+   prevent, stated there as *"it was explained well"* never coming to function as *"it passed"*.
+
+2. **Options and the recommendation arrive with the four approvable kinds**, exactly as rule 1 states
+   them. Nothing here narrows that rule; it bounds its subject, which rule 1 did not need to do
+   because no kind had been built when it was written.
+
+3. **A claim carries a basis on the same terms an option does** (rule 2, unchanged): the closed union
+   of five locator forms, prose only where it travels with its basis, and a pointer into the row's own
+   verbatim snapshot as the one form that renders inline. A claim with no basis is the summary #39
+   measured an operator approving three times in one day, and the kind that binds nothing is not
+   exempt from that -- an explanation is read to decide something, even when it authorises nothing.
+
+4. **Nothing in `D-0032` is superseded or corrected.** Rules 1, 2, 5 and 8 all stand as written. This
+   is a reading of two of them where they meet, and it is a new entry rather than an annotation
+   because it settles a question `D-0032` left open rather than recording that one of its own claims
+   has moved.
+
+### What this does not do
+
+- **It does not decide what an `explanation` must claim.** Which facts an explanation is worth
+  composing from is the drafter's, and `D-0032` rule 3 keeps the rendering out of the record entirely.
+- **It does not make `undetermined` optional.** Rule 8 stands: a claim the snapshot does not settle
+  says so and is not dropped.
+- **It does not admit a model explainer**, or fix `derivation`'s members, which stays `D-0032`'s
+  residual for the entry that does.
+- **It does not touch the four approvable kinds**, whose option sets are unbuilt.
+
+### What was measured, and how
+
+At rondo `5ca6318` on 2026-09-11, against the schema and the writers `D-0032` produced in #51: the
+`proposal` table's `CHECK ((derivation IS NOT NULL) = (kind = 'explanation'))`, `PROPOSAL_KINDS` and
+`APPROVABLE_PROPOSAL_KINDS` in `src/store/records.ts`, and `recordDecision`'s refusal of a
+non-approvable kind inside its own `BEGIN IMMEDIATE`. The store holds `payload` verbatim and reads
+nothing into it, so nothing in the schema constrains the shape this entry takes -- which is why the
+shape had to be decided somewhere, and is why it is decided here.
+
+### What would falsify it
+
+- **An explanation somebody needs to approve**, which is `D-0032`'s own stated falsifier for rule 5
+  and would mean the third voice is not a third voice.
+- **A payload consumer that cannot render claims and options as different shapes**, which would make
+  one shape for both cheaper than the distinction is worth.
+- **A claim that is only meaningful as one of a set of alternatives** -- an explanation whose honest
+  form is "either of these two readings of the row fits" -- which would reopen whether an option set
+  without a recommendation is a third shape rather than a narrowing of rule 1.

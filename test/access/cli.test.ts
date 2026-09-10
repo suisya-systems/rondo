@@ -1514,3 +1514,18 @@ test("an empty branch is described rather than left silent", () => {
   expect(lines).toContain("no non-merge commits on the branch");
   expect(lines).toContain("no files changed");
 });
+
+test("explain takes an iteration id and refuses every other flag", () => {
+  // D-0022 rule 1's surface, at the only place an operator meets it. `explain`
+  // reads rondo's own rows and drives no continuo verb, so there is nothing for
+  // an actor id to authorise -- and a flag a command ignores reads on the
+  // command line as though it did something.
+  const parsed = parseCommand(["explain", "--iteration-id", "i-0001"]);
+  expect(parsed.kind).toBe("parsed");
+  if (parsed.kind === "parsed") {
+    expect(parsed.parsed.command).toBe("explain");
+    expect(parsed.parsed.iterationId).toBe("i-0001");
+  }
+  const refused = parseCommand(["explain", "--iteration-id", "i-0001", "--actor-id", "me"]);
+  expect(refused.kind).toBe("refused");
+});
