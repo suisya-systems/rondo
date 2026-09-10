@@ -160,6 +160,31 @@ function proposalLines(
  * where it decides what an approval means, which is why they are two sections
  * with two headings and not one list with a badge.
  */
+/**
+ * What actually releases one waiting row, and why it is not read off `gate_id`
+ * alone.
+ *
+ * **The status decides, and the gate id is context.** Two of the three waiting
+ * statuses suspend at a named continuo gate, and `rondo answer` releases them.
+ * `stalled` does not -- the interpreter's own words are *"a person must decide
+ * and there is no gate to observe"* -- and `stall()` changes the status without
+ * clearing `gate_id`, so a stalled row can still be carrying the gate it
+ * suspended at. Offering that gate as the recovery would send an operator to
+ * answer something `resume()` no longer observes, which is a line that reads
+ * like help and costs a round trip in exactly the state that already needs a
+ * person. The id is still printed, because it is where the row stopped.
+ */
+function unblockedBy(record: IterationRecord): string {
+  if (record.status === "stalled") {
+    return record.gateId === null
+      ? "no gate: a person has to decide"
+      : `no gate answer releases this (stopped at ${record.gateId}): a person has to decide`;
+  }
+  return record.gateId === null
+    ? "suspended with no gate id recorded: rondo cannot name the gate"
+    : `answer gate ${record.gateId}`;
+}
+
 function waitingOnYouLines(snapshot: InboxSnapshot): readonly string[] {
   const seenProposals = changedIds(snapshot.changed, "proposal");
   const seenIterations = changedIds(snapshot.changed, "iteration");
@@ -176,15 +201,7 @@ function waitingOnYouLines(snapshot: InboxSnapshot): readonly string[] {
     ...waiting.map(
       (record) =>
         `    ${record.id}  ${record.status}  ${ago(record.updatedAtMs, snapshot.atMs)}  ` +
-        // **Read off the row and not off the status.** Two of the three
-        // waiting statuses suspend at a named continuo gate and one does not
-        // (`stalled` means a person must decide and there is no gate), and the
-        // difference decides which command unblocks the work. Taking it from
-        // `gate_id` rather than from a second table of statuses is what keeps
-        // the line true for a row whose gate is not where its status implies.
-        (record.gateId === null
-          ? "no gate: a person has to decide"
-          : `answer gate ${record.gateId}`) +
+        unblockedBy(record) +
         newMark(seenIterations, record.id, snapshot.sinceMs),
     ),
   ];

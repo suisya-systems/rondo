@@ -414,3 +414,22 @@ test("a proposal that lands after the bound is not counted as presented before i
     at_ms: 9_000,
   });
 });
+
+test("a stalled row is never offered a gate to answer, even when it kept one", () => {
+  // `stall()` changes the status and leaves `gate_id` where it was, so a
+  // stalled row can still be carrying the gate it suspended at -- and
+  // `resume()` does not observe gates in that status. Offering it would send
+  // the operator to answer something that cannot release the row.
+  const stalled = { ...liveRow("i-0011", "stalled"), gateId: "g-0011" } as IterationRecord;
+  const suspended = { ...liveRow("i-0007", "awaiting_human"), gateId: "g-0007" } as IterationRecord;
+  const rendered = inboxLines("operator-1", {
+    ...EMPTY,
+    live: [
+      { kind: "read", record: stalled },
+      { kind: "read", record: suspended },
+    ],
+  }).join("\n");
+  expect(rendered).toContain("no gate answer releases this (stopped at g-0011)");
+  expect(rendered).toContain("i-0007  awaiting_human");
+  expect(rendered).toContain("answer gate g-0007");
+});
