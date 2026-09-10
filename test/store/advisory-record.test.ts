@@ -460,6 +460,60 @@ test("one decision authorises at most one issuance", async () => {
   expect(second.kind === "refused" && second.reason).toContain("already been spent");
 });
 
+test("a consumption must name a decision, an approval, and the digest it approved", async () => {
+  // **`decision_consumption` is what `unconsumedDecisions` subtracts**, so a
+  // consumption that names nothing, names a refusal, or names a digest nobody
+  // approved is not a harmless row: it is a subtraction that silently empties
+  // D-0022 rule 19's own detector. All three are refused, and each says which
+  // of the three it was.
+  const record = advisoryRecord(freshConnection());
+  await record.recordProposal(proposal());
+  await record.recordDecision(decision());
+  await record.recordDecision(
+    decision({ decisionId: "d-no", outcome: "declined", approved: null, decidedAtMs: 3_500 }),
+  );
+
+  const absent = await record.consumeDecision("d-absent", `sha256:${"e".repeat(64)}`, 4_000);
+  const declined = await record.consumeDecision("d-no", `sha256:${"e".repeat(64)}`, 4_000);
+  const wrong = await record.consumeDecision("d-0001", `sha256:${"f".repeat(64)}`, 4_000);
+
+  expect(absent.kind).toBe("refused");
+  expect(absent.kind === "refused" && absent.reason).toContain("no human decision");
+  expect(declined.kind).toBe("refused");
+  expect(declined.kind === "refused" && declined.reason).toContain("declined");
+  expect(wrong.kind).toBe("refused");
+  expect(wrong.kind === "refused" && wrong.reason).toContain("is what a person approved");
+  // The non-vacuity half: the approval is still unspent, and spending it on the
+  // digest it actually approved still works.
+  expect((await record.unconsumedDecisions()).map((row) => row.decisionId)).toEqual(["d-0001"]);
+  expect(await record.consumeDecision("d-0001", `sha256:${"e".repeat(64)}`, 5_000)).toEqual({
+    kind: "recorded",
+  });
+});
+
+test("one gate answer backs at most one decision", async () => {
+  // advisory.md 6.4 / D-0022 rule 16. Two rows naming one continuo transition
+  // would be one person's single answer turned into two spendable approvals,
+  // which defeats D-0022 rule 9 one level above the primary key that holds it.
+  const record = advisoryRecord(freshConnection());
+  await record.recordProposal(proposal());
+  const routeG = { gateId: "g-0001", gateTransitionSeq: 7 };
+
+  expect(await record.recordDecision(decision({ decisionId: "d-g1", ...routeG }))).toEqual({
+    kind: "recorded",
+  });
+  expect((await record.recordDecision(decision({ decisionId: "d-g2", ...routeG }))).kind).toBe(
+    "defect",
+  );
+  // Route S names no transition, so any number of its rows coexist.
+  expect(await record.recordDecision(decision({ decisionId: "d-s1" }))).toEqual({
+    kind: "recorded",
+  });
+  expect(await record.recordDecision(decision({ decisionId: "d-s2" }))).toEqual({
+    kind: "recorded",
+  });
+});
+
 test("terminal iterations are enumerable, which nothing else in the store does", async () => {
   // D-0022's residual, discharged (D-0032 rule 11). `read` needs an id already
   // known and `readLive` filters terminal rows out, so the abandoned iteration

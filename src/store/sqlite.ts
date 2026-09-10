@@ -706,6 +706,23 @@ CREATE TABLE IF NOT EXISTS human_decision (
   CHECK ((gate_id IS NULL) = (gate_transition_seq IS NULL))
 );
 
+-- advisory.md 6.4 / D-0022 rule 16. One continuo transition backs at most one
+-- decision.
+--
+-- Without it two decision rows may name one gate answer -- two surfaces, two
+-- browser tabs, one person answering once -- and each could then be spent
+-- independently, which is the single-use guarantee of D-0022 rule 9 defeated
+-- one level above the primary key that holds it. A person answered once, so
+-- there is one answer.
+--
+-- Partial, over the route-G rows only. Route S has no gate to name and its two
+-- columns are null together, and SQLite already treats NULLs in a unique index
+-- as distinct -- but the predicate is written out rather than inherited, for
+-- CLAIM_INDEXES' reason: a row that names no transition claims none, and
+-- several such rows are not a collision.
+CREATE UNIQUE INDEX IF NOT EXISTS human_decision_gate_transition
+  ON human_decision(gate_id, gate_transition_seq) WHERE gate_id IS NOT NULL;
+
 -- advisory.md 6.3 / D-0022 rule 9. Single use is a transaction, not a check.
 --
 -- decision_id is the **primary key**, so a second issuance against one answer
@@ -1790,13 +1807,61 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
       nowMs: number,
     ): Promise<RecordOutcome> {
       try {
-        connection
-          .prepare(
-            "INSERT INTO decision_consumption (decision_id, contract_digest, consumed_at_ms) " +
-              "VALUES (?, ?, ?)",
-          )
-          .run(decisionId, contractDigest, nowMs);
-        return { kind: "recorded" };
+        // **The read and the insert in one `BEGIN IMMEDIATE`**, for
+        // `recordDecision`'s reason: an approval checked in one transaction and
+        // spent in another is a check with a window in it.
+        return immediateTransaction<RecordOutcome>(connection, () => {
+          const row = connection
+            .prepare("SELECT outcome, approved FROM human_decision WHERE decision_id = ?")
+            .get(decisionId) as SqlRow | undefined;
+          if (row === undefined) {
+            // **Not a harmless dangling row.** `decision_consumption` is what
+            // `unconsumedDecisions` subtracts, so a consumption naming nothing
+            // is a subtraction from a set it was never in -- and the day the id
+            // is minted the approval it names is born already spent.
+            return {
+              kind: "refused",
+              reason:
+                `there is no human decision '${decisionId}' in this store to spend: a ` +
+                "consumption is the record of an issuance against an answer, and an answer " +
+                "that was never recorded cannot have authorised one",
+            };
+          }
+          if (String(row["outcome"]) !== "approved") {
+            // D-0032 rule 6 in as many words: a refusal writes no
+            // `decision_consumption` row and no delegation row, which is what
+            // D-0022 rule 18 assumes when it says the composition must outlive
+            // a refusal.
+            return {
+              kind: "refused",
+              reason:
+                `the human decision '${decisionId}' declined, and a refusal authorises ` +
+                "nothing: D-0032 rule 6 gives a declined answer its own row precisely so that " +
+                "it is not an absence somebody can spend",
+            };
+          }
+          const approved = String(row["approved"]);
+          if (approved !== contractDigest) {
+            // **The digest is what a person approved** (cadenza D-0036), so
+            // issuing a different one is issuing something nobody answered for
+            // -- and it would spend the real approval on the way past, removing
+            // it from `unconsumedDecisions` for ever.
+            return {
+              kind: "refused",
+              reason:
+                `the human decision '${decisionId}' approved '${approved}' and the issuance ` +
+                `names '${contractDigest}': the digest is what a person approved, so a ` +
+                "contract they did not see is not one this answer can be spent on",
+            };
+          }
+          connection
+            .prepare(
+              "INSERT INTO decision_consumption (decision_id, contract_digest, consumed_at_ms) " +
+                "VALUES (?, ?, ?)",
+            )
+            .run(decisionId, contractDigest, nowMs);
+          return { kind: "recorded" };
+        });
       } catch (error) {
         if (isUniqueViolation(error)) {
           // The database's refusal, said in rondo's words rather than the
