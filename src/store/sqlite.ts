@@ -803,6 +803,16 @@ CREATE TABLE IF NOT EXISTS operator_attention (
 -- wanted rather than one tolerated -- the most common withholding carries no
 -- subject_id at all, and those must never collide with each other.
 --
+-- **No backfill, and the reason is a fact about the writers rather than
+-- optimism.** Creating a unique index over rows that already collide fails, and
+-- both stores exec this schema on open -- so a database holding two presented
+-- rows for one subject would stop opening. There is exactly one presented
+-- writer (explain), and the subject_id it writes is the proposal primary key it
+-- has just inserted, so a second row for one subject was never reachable: the
+-- proposal insert collides first and nothing is presented. If a second writer
+-- ever counts a subject it did not just create, the backfill is that change's
+-- and not this one's.
+--
 -- **The ceiling, stated rather than hidden.** *When* a subject was first shown
 -- is preserved; *how often* is not, and is not recoverable afterwards. If that
 -- question ever has to be answered, this rule is what moves -- not a column
