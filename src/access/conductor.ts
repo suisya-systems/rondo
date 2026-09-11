@@ -65,6 +65,7 @@ import type {
 import type { LapReadingDraft } from "../store/records.js";
 import type { IterationStore } from "../store/sqlite.js";
 
+import { discard, writeDelegationRecord } from "./delegation.js";
 import { inspectLapWork } from "./forge.js";
 import { READING_REMOTE, readingOf } from "./review.js";
 
@@ -218,44 +219,67 @@ export function conductorPorts(
     classify: async (plan) => classifyPlan(plan),
     startContinuo: async () => ({ kind: "answered", value: { revision: continuo.revision } }),
     admitRun: async (plan, neutralRoleName): Promise<EffectOutcome<RunAdmission>> => {
-      const outcome = await admitRun(continuo, {
-        db: plan.db,
-        runId: plan.runId,
-        leaseClaimantId: plan.leaseClaimantId,
-        workspace: plan.workspace,
-        neutralRoleName,
-        baseBranch: plan.baseBranch,
-        topicBranch: plan.topicBranch,
-        prompt: plan.prompt,
-      });
-      const effect = asEffect(outcome.result, (payload) => payload);
-      if (effect.kind !== "answered") {
-        return effect;
+      // **Written before the verb and removed after it, whatever the verb
+      // answered** (D-0040 rule 7). continuo requires the record and does not
+      // default it, so a record rondo cannot compose or write is an admission
+      // that does not happen -- and the file is transport, so nothing
+      // downstream may depend on it still being there afterwards.
+      const written = writeDelegationRecord(plan);
+      if (written.kind !== "written") {
+        return { kind: "defect", reason: written.reason };
       }
-      // The mapped role is the adapter's answer and never this module's guess:
-      // `admitRun` owns the table, and it returns null exactly when it refused
-      // before mapping -- a branch that cannot also have answered. So the
-      // combination is unreachable, and it is reported as rondo's defect rather
-      // than papered over with an empty string, because a row carrying `''` as
-      // the continuo role would be a row that quietly lied about which fence the
-      // run was admitted under.
-      if (outcome.continuoRole === null) {
+      try {
+        const outcome = await admitRun(continuo, {
+          db: plan.db,
+          runId: plan.runId,
+          leaseClaimantId: plan.leaseClaimantId,
+          workspace: plan.workspace,
+          neutralRoleName,
+          baseBranch: plan.baseBranch,
+          topicBranch: plan.topicBranch,
+          prompt: plan.prompt,
+          // The plan's declaration, passed as the plan wrote it: the port's
+          // signature does not grow a parameter for it, because the plan is
+          // already what crosses and the declaration is a field of the plan
+          // rather than something the conductor decides (D-0039 rule 3).
+          allowedBash: plan.allowedBash,
+          // The envelope this admission was composed with, and its format
+          // name. Not read, not re-encoded and not validated here: the bytes
+          // are the record and continuo digests them as they arrive.
+          delegationRecordPath: written.record.path,
+          delegationRecordSchema: written.record.recordSchema,
+        });
+        const effect = asEffect(outcome.result, (payload) => payload);
+        if (effect.kind !== "answered") {
+          return effect;
+        }
+        // The mapped role is the adapter's answer and never this module's guess:
+        // `admitRun` owns the table, and it returns null exactly when it refused
+        // before mapping -- a branch that cannot also have answered. So the
+        // combination is unreachable, and it is reported as rondo's defect rather
+        // than papered over with an empty string, because a row carrying `''` as
+        // the continuo role would be a row that quietly lied about which fence the
+        // run was admitted under.
+        if (outcome.continuoRole === null) {
+          return {
+            kind: "defect",
+            reason:
+              "continuo run admit answered successfully through an adapter that reports no mapped " +
+              "role. rondo cannot say which role the run was admitted under, and recording one it " +
+              "did not observe would be worse than refusing.",
+          };
+        }
         return {
-          kind: "defect",
-          reason:
-            "continuo run admit answered successfully through an adapter that reports no mapped " +
-            "role. rondo cannot say which role the run was admitted under, and recording one it " +
-            "did not observe would be worse than refusing.",
+          kind: "answered",
+          value: {
+            runId: effect.value.runId,
+            status: effect.value.status,
+            continuoRole: outcome.continuoRole,
+          },
         };
+      } finally {
+        discard(written.record);
       }
-      return {
-        kind: "answered",
-        value: {
-          runId: effect.value.runId,
-          status: effect.value.status,
-          continuoRole: outcome.continuoRole,
-        },
-      };
     },
     performLap: async (plan, modelTier): Promise<EffectOutcome<LapPerformance>> => {
       const outcome = await performLap(continuo, lapRequestOf(plan, modelTier));

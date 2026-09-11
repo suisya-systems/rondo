@@ -43,6 +43,7 @@ const PLAN: RunPlan = {
   workspaceRoot: "/srv/work",
   baseBranch: "main",
   prompt: "do the thing",
+  allowedBash: ["npm run:*"],
   repository: "/srv/repo",
   artifactRoot: "/srv/artifacts",
   stateRoot: "/srv/state",

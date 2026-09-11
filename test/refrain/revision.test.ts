@@ -79,6 +79,7 @@ const FIRST_INPUT: RunPlan = {
   workspaceRoot: WORKSPACE_ROOT,
   baseBranch: "main",
   prompt: "teach rondo to count",
+  allowedBash: ["npm run:*"],
   repository: "/srv/rondo/repo",
   artifactRoot: "/srv/rondo/artifacts",
   stateRoot: "/srv/rondo/state",

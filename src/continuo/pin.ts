@@ -45,23 +45,33 @@ export const CONTINUO_REPOSITORY = "https://github.com/suisya-systems/continuo.g
  * read-back as a caller-supplied budget (`continuo D-0098`, the dogfood's F-1)
  * and `lap perform --model` (`continuo D-0099`, F-2).
  *
- * **The pin moves here to take `continuo D-1102`**: a `lap perform` refusal now
- * names its session in a top-level `session_id` key of the envelope, so the
- * identity of a failed lap is a field rondo reads rather than a fragment of a
- * sentence rondo is forbidden to parse (D-0015 rule 7). `src/continuo/protocol.ts`
- * is what reads it and `src/refrain/interpreter.ts` is what files it against the
- * iteration. Moving the pin is this edit and a green matrix rather than a
- * decision entry, which is what D-0017's open questions say it is; the envelope
- * property D-0017 pinned for is unchanged and still holds, because D-1102 adds
- * an optional key under the same `continuo.lap.perform/1`.
+ * **The pin moves here to take `continuo D-1110`**: `run admit` now takes a
+ * repeatable `--allow-bash SUBJECT`, and the subjects it carries are rendered
+ * into the role's `permissions.allow` as `Bash(<subject>)` for that one run. It
+ * is the input D-0039 said did not exist -- the entry's whole finding was that
+ * no input of `run admit` or `lap perform` reaches the worker fence's allow
+ * list -- so D-0039 rule 6's build order is satisfied by this edit and the
+ * declaration wiring lands on top of it. `src/continuo/invoker.ts` is what
+ * passes the flag and `src/refrain/classification.ts` is what refuses a plan
+ * whose grant and declaration disagree. Moving the pin is this edit and a green
+ * matrix rather than a decision entry, which is what D-0017's open questions
+ * say it is; the envelope property D-0017 pinned for is unchanged and still
+ * holds, because D-1110 adds `permission_denials` as a key under the same
+ * `continuo.lap.perform/1` and `protocol.ts` reads the keys it names.
  *
- * What this revision also carries and rondo does **not** consume: nothing on the
- * wire. The two commits between D-1102 and this sha are continuo's own
- * documentation and its own Windows CI budget (`continuo D-1103`); `src/` is
- * byte-identical across them, which is why the pin is taken at current main
- * rather than at the commit that landed the field.
+ * What this revision also carries and rondo does **not** consume. Twelve
+ * commits separate D-1102's sha from this one and three of them touch a value
+ * rondo hands over or reads back, all three compatibly: `continuo D-1104` makes
+ * the outbox delivery lease per run, which changes when
+ * `endpoint_lease_failure` can be non-null and not what the key is;
+ * `continuo D-1105` makes `--state-root` a *parent* and derives the lap's own
+ * root as `<parent>/<run id>`, which continuo creates itself, so the absolute
+ * directory a plan names is still the value rondo passes; and
+ * `continuo D-1107` moves the delegation record into the admitting
+ * transaction, which is where D-1110's `allowed_bash` then lives. The rest is
+ * continuo's own suite, its Windows CI budget and its documentation.
  */
-export const CONTINUO_REVISION = "38c667b5126fdfdc0465e4a422e88b20a8b53044";
+export const CONTINUO_REVISION = "fcf86eb2b7eb34d65bf73188b2b34544fab6820c";
 
 /**
  * The exact line the pinned build's `--version` prints.
@@ -70,13 +80,14 @@ export const CONTINUO_REVISION = "38c667b5126fdfdc0465e4a422e88b20a8b53044";
  * *measurement* of the pinned build and not a format rondo gets to define. If
  * continuo ever changes the line's shape, rondo's verification fails loudly at
  * startup against a value that says what was actually observed -- on 2026-09-05
- * for the revision D-0017 pinned, and on 2026-09-06 for D-0021's and again for
- * this one, by building the pinned checkout with `CONTINUO_REQUIRE_REVISION=1`
- * and running `node dist/cli.js --version` -- instead of quietly agreeing with a
- * template rondo wrote for itself.
+ * for the revision D-0017 pinned, on 2026-09-06 for D-0021's, and on
+ * 2026-09-12 for D-1102's and again for this one, by building the pinned
+ * checkout with `CONTINUO_REQUIRE_REVISION=1` and running
+ * `node dist/cli.js --version` -- instead of quietly agreeing with a template
+ * rondo wrote for itself.
  */
 export const CONTINUO_VERSION_LINE =
-  "@suisya-systems/continuo 0.0.0 (rev 38c667b5126fdfdc0465e4a422e88b20a8b53044)";
+  "@suisya-systems/continuo 0.0.0 (rev fcf86eb2b7eb34d65bf73188b2b34544fab6820c)";
 
 /** What a build reports when it has no git information (`continuo`'s literal). */
 const REVISION_UNKNOWN = "unknown";

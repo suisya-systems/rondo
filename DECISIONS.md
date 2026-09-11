@@ -7174,6 +7174,22 @@ written against the weaker signal fired on the stronger one.
    deleted, so a credential recorded there could not be removed afterwards, and the narrow
    inclusion is chosen against exactly that.
 
+   **Annotated 2026-09-12 by this entry's own implementation (rondo#67's second PR).** The shape
+   this rule names as *"the one value in reach that could carry a credential"* **cannot occur**:
+   cadenza refuses embedded credentials in a catalog source at issue time, in its own words — *"url
+   must not embed a password; a password in a catalog file is a leaked password"*, and separately
+   *"url must not embed credentials; the only accepted userinfo is the bare `git@` of an ssh url"*
+   (`domain/clone-source.ts` at the vendored revision). So a plan naming such a layer is answered
+   before an envelope exists at all, which is a stronger guarantee than rondo omitting the value —
+   the credential never reaches rondo's memory, let alone continuo's row.
+   `test/access/delegation.test.ts` carries that as a planted case, and it asserts that the producer
+   relays cadenza's message without quoting the token back into it.
+   **The rule's conclusion is unchanged and its cause is narrower than stated**: the layer documents
+   are still reduced to the project's identity, now on the ground that the envelope keeps no byte of
+   a document it does not need rather than on a leak that is reachable. The obligation
+   `continuo D-1107` rule 6 puts on the producer is also unchanged — it is an obligation about every
+   future fact the envelope grows, not only about today's four.
+
 7. **The envelope is transport, and rondo persists nothing new for it.** The file rondo writes
    exists to be read by the `run admit` it is passed to and is removed after that call answers; the
    durable copy is continuo's row, readable through `run show --json`. **No column, table or record

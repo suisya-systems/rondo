@@ -26,12 +26,13 @@
  * directory is open when it is removed -- which is not a nicety on Windows,
  * where an open handle makes the removal fail outright.
  */
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, expect, test } from "vitest";
 
 import {
+  admitRun,
   CLI_PATH_ENV,
   run,
   startContinuo,
@@ -119,6 +120,14 @@ test.skipIf(!available)(
     // continuo creates at head, so a fresh database is by definition current.
     expect(created.payload.schemaVersion).toBe(created.payload.headVersion);
 
+    // One record file for both admissions below. What is under test in this
+    // file is rondo's argv against a real continuo, and the envelope's
+    // *contents* are `test/access/delegation.test.ts`'s subject -- continuo
+    // reads no key of it (`continuo D-1107` rule 2), so the smallest JSON
+    // object that is one is the honest fixture here.
+    const recordPath = join(scratch(), "delegation-record.json");
+    writeFileSync(recordPath, '{"record_schema":"rondo.delegation-record/1"}\n', "utf8");
+
     const admitted = await run(continuo, RUN_ADMIT, [
       "--db",
       database,
@@ -139,12 +148,56 @@ test.skipIf(!available)(
       "feat/rondo-smoke",
       "--prompt",
       "a one-line request, from rondo's smoke",
+      // Required and undefaulted since `continuo D-1107`: a run whose
+      // authorisation nothing recorded is the case those two flags removed.
+      "--delegation-record",
+      recordPath,
+      "--delegation-record-schema",
+      "rondo.delegation-record/1",
     ]);
     expect(admitted).toEqual({
       kind: "answered",
       db: database,
       payload: {
         runId: "rondo-smoke-1",
+        status: "created",
+        createdAtMs: expect.any(Number),
+      },
+    });
+
+    // **The declaration, admitted by rondo's own adapter against the real
+    // build** (`continuo D-1110`, D-0039 rule 3). This is the one place the
+    // `--allow-bash` argv is checked against a continuo rather than against
+    // rondo's model of one: a pinned build without the flag answers this with a
+    // parser refusal, and a subject the role document forbids would be refused
+    // too -- so a green here is "the input D-0039 said did not exist is the
+    // input this build takes". `admitRun` is used rather than a hand-written
+    // argv precisely because the argv is what is under test.
+    const declared = await admitRun(continuo, {
+      db: database,
+      runId: "rondo-smoke-2",
+      leaseClaimantId: "rondo-smoke",
+      workspace: scratch(),
+      neutralRoleName: "worker",
+      baseBranch: "main",
+      topicBranch: "feat/rondo-smoke-declared",
+      prompt: "a declared request, from rondo's smoke",
+      // The two subjects continuo measured its own acceptance against, and
+      // `npm ci --ignore-scripts` exactly rather than `npm ci:*`: the flagless
+      // form runs package lifecycle scripts, which the fence's hook cannot see
+      // because it observes tool calls and not the subprocesses a tool starts.
+      allowedBash: ["npm ci --ignore-scripts", "npm run:*"],
+      // Required and undefaulted since `continuo D-1107`: a run whose
+      // authorisation nothing recorded is the case those flags removed.
+      delegationRecordPath: recordPath,
+      delegationRecordSchema: "rondo.delegation-record/1",
+    });
+    expect(declared.continuoRole).toBe("worker");
+    expect(declared.result).toEqual({
+      kind: "answered",
+      db: database,
+      payload: {
+        runId: "rondo-smoke-2",
         status: "created",
         createdAtMs: expect.any(Number),
       },

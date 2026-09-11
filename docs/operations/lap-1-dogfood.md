@@ -1412,3 +1412,65 @@ gets the `message_id` it needs and that the second ack is what closes the gate, 
 the other ending and which outcomes it takes, and what the step 7 clean-up commands actually are. Its
 "what one run of this actually did" section now points at two runs and leads with the fact that the
 lap completes.
+
+## 11. The run at continuo `fcf86eb` -- the lap verifies its own work (rondo#67)
+
+**2026-09-12, rondo `110c522`, continuo `fcf86eb2b7eb34d65bf73188b2b34544fab6820c`, one lap, one
+iteration `dogfood-067`, $0.58, 13 turns.** The target was a clone of rondo itself, provisioned with
+`scripts/dogfood-env.sh --target-repo`, and the request was the one AGENTS.md section 4 asks of a
+contributor: change a file, then run the repository's own check sequence and commit only if it is
+green.
+
+This is the acceptance measurement for rondo#67, which was found by the run in section 10: a lap
+that had edited and committed a repository could not build or test what it wrote, because every
+command answered `This command requires approval` to a `claude -p` child with nobody to ask.
+
+**What the plan declared** (`allowed_bash`, written by `dogfood-env.sh`):
+`npm ci --ignore-scripts`, `npm run:*`, `node vendor/pin.mjs:*`, `node --version`, `npm --version`.
+
+**What the child's fence actually carried.** Read off the rendered settings document the spawn was
+given (`artifacts/rondo-dogfood-067/settings.local.json`), `permissions.allow` was eleven entries:
+the worker role's own six git specs, then the five declared subjects, each wrapped by continuo into
+one `Bash(<subject>)` -- `Bash(npm ci --ignore-scripts)`, `Bash(npm run:*)`,
+`Bash(node vendor/pin.mjs:*)`, `Bash(node --version)`, `Bash(npm --version)`. The deny list was
+unchanged at thirteen entries.
+
+**What the child ran, and what it got back.** All three commands ran, none was refused, and the
+worker reported each exit status in its own final message:
+
+| Command | Result |
+|---|---|
+| `node vendor/pin.mjs check` | exit 0 -- `vendor/suisya-systems-cadenza-0.0.0.tgz is the pinned artifact` |
+| `npm ci --ignore-scripts` | exit 0 -- `added 73 packages in 2s` |
+| `npm run verify` | exit 0 -- build, lint, knip and typecheck clean; 32 test files, 798 passed, 1 skipped |
+
+It then committed `4c6087d` on `rondo/dogfood-067`, one file, and pushed nothing. **`This command
+requires approval` does not appear anywhere in the session**, and F-10's four refusals are gone.
+
+### F-17. The one denial in the session was a compound command, and it reached the report
+
+The child's first attempt was `node vendor/pin.mjs check; echo "EXIT:$?"`, which the CLI refused --
+*"This Bash command contains multiple operations. The following part requires approval:
+`echo "EXIT:$?"`"* -- and the worker re-ran the bare command, which was allowed. **This is the first
+observation of `continuo D-1110`'s sixth point in the wild**: the refusal appears as structured data
+in the `result` event's `permission_denials`, carrying the tool name, the tool-use id and the whole
+command, so a refused command is a field rather than a sentence inside a transcript. It is what
+`D-0039` rule 4's "loud" property asked continuo for.
+
+Two things follow, and neither is a defect of this run. A declaration bounds a *command*, so a
+declared subject inside a shell compound is still two operations to the CLI and the narrower half is
+refused -- which is the conservative direction. And **rondo does not read `permission_denials`
+today**: `D-0039` rule 5 leaves the consuming side to rondo#69, so the value is on what
+`lap perform` answers with and nothing in rondo's records or on its screens shows it yet.
+
+### F-18. The child's own sandbox failed to initialize, and the permission layer still held
+
+Reported by the worker unprompted: *"Sandbox is enabled but failed to initialize: EPERM: operation
+not permitted, listen '/tmp/claude-1000/srt-mux-80-1.sock'. Sandboxing is disabled for the rest of
+this session"*. So in this run the fence's **sandbox** axes (`denyRead` / `denyWrite`) were not in
+force, while its **permission** axes were -- the compound command above is the evidence, refused by
+the allow list rather than by a sandbox. The cause is the nesting this measurement was taken under:
+the operator session driving `rondo start` was itself sandboxed, and the socket the child's sandbox
+needs could not be created inside it. **What this run therefore measures is the allow list and not
+the sandbox**, and a measurement of the two together needs a `rondo start` run from an unsandboxed
+shell.

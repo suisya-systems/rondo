@@ -314,6 +314,24 @@ const ALLOWED_EXTERNALS_BY_MODULE: Readonly<
     // no filesystem, which is why it is here and `resolve` is not.
     "node:path": ["isAbsolute"],
   },
+  // The one module that writes a run's delegation record, granted the three
+  // builtins it takes to write one file (D-0040 rule 8). Keyed by module for
+  // `src/access/forge.ts`'s reason, and the grant is narrower than it looks:
+  // `continuo D-1107` requires every admitted run to carry the record, so the
+  // capability exists on the admission path whatever module holds it -- and
+  // holding it here is what keeps a filesystem *write* out of the module that
+  // reads argv, out of the composition root, and out of `src/continuo/`, whose
+  // narrowness is D-0017's whole point.
+  //
+  // `rmSync` is granted with the two writes because the file is transport: the
+  // durable copy is continuo's immutable row, and a record left behind after
+  // the verb that read it would be an authorisation document accumulating in a
+  // temporary directory.
+  "src/access/delegation.ts": {
+    "node:fs": ["mkdtempSync", "rmSync", "writeFileSync"],
+    "node:os": ["tmpdir"],
+    "node:path": ["join"],
+  },
   // The one module that runs a forge command, granted the one binding it needs
   // -- keyed by module for the reason `src/continuo/invoker.ts`'s spawn is, and
   // with more riding on it: `src/access/` holds the whole operator surface, so
