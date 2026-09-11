@@ -216,6 +216,26 @@ function waitingOnYouLines(snapshot: InboxSnapshot): readonly string[] {
   ];
 }
 
+/**
+ * Where a lap can be watched, read off the row and nothing computed (#71):
+ * the workspace a person `ls`s, and the session they `tail` once one is
+ * recorded.
+ *
+ * **The session half is absent, not merely unshown, for a row that is still
+ * `performing`.** `interpreter.ts`'s `performLap` step commits `performing`
+ * with no session fields and writes `sessionId` / `sessionPath` only once the
+ * lap has already answered and the row is moving to `awaiting_human` (or a
+ * terminal status) -- so there is nothing on the row for this line to read
+ * back while the lap is actually running. Naming a session rondo does not yet
+ * know would be inventing state D-0032 rule 3 refuses to hold, so the line
+ * says so instead of guessing.
+ */
+function whereItRuns(record: IterationRecord): string {
+  const session = record.sessionId ?? "(no session recorded on this row yet)";
+  const workspace = record.workspace ?? "(no workspace on the row)";
+  return `session ${session}  in ${workspace}`;
+}
+
 function inFlightLines(snapshot: InboxSnapshot): readonly string[] {
   const running = onSide(snapshot, "inFlight");
   const unreadable = snapshot.live.filter((row) => row.kind === "unreadable");
@@ -226,7 +246,9 @@ function inFlightLines(snapshot: InboxSnapshot): readonly string[] {
     // one reader who has to decide whether to start something else.
     `in flight (${String(running.length + unreadable.length)})`,
     ...running.map(
-      (record) => `  ${record.id}  ${record.status}  ${ago(record.updatedAtMs, snapshot.atMs)}`,
+      (record) =>
+        `  ${record.id}  ${record.status}  ${ago(record.updatedAtMs, snapshot.atMs)}  ` +
+        whereItRuns(record),
     ),
     // **A row that will not decode is on the screen rather than missing from
     // it.** It is live -- it holds a slot -- and an inbox that dropped it

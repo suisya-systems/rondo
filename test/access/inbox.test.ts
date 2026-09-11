@@ -71,6 +71,8 @@ const liveRow = (id: string, status: IterationStatus, updatedAtMs = 1_000): Iter
     runId: `rondo-${id}`,
     topicBranch: `rondo/${id}`,
     workspace: `/srv/work/${id}`,
+    sessionId: `session-${id}`,
+    sessionPath: `/srv/sessions/${id}`,
     plan: somePlan(),
     createdAtMs: updatedAtMs,
     updatedAtMs,
@@ -300,6 +302,46 @@ test("the wait is a two-way partition, and every live status is on one side", ()
   // would work.
   expect(rendered).toContain("no gate: a person has to decide");
   expect(rendered).toContain("in flight (5)");
+});
+
+test("an in-flight row names its workspace (#71)", () => {
+  // **The half of the brief's falsifier a `performing` row can actually
+  // carry.** `workspace` is written by `reserve()` before the lap starts, so
+  // it is on every in-flight row from the moment it exists.
+  const record = liveRow("i-running", "performing");
+  const rendered = inboxLines("operator-1", {
+    ...EMPTY,
+    live: [{ kind: "read", record }],
+  }).join("\n");
+  expect(rendered).toContain(`in ${String(record.workspace)}`);
+});
+
+test("an in-flight row with no session recorded says so rather than inventing one", () => {
+  // **The state every `performing` row is actually in.** `sessionId` is
+  // `null` on the row for the whole time a lap is genuinely running --
+  // `interpreter.ts`'s `performLap` step commits `performing` with no session
+  // fields and writes them only once the lap has already answered -- so the
+  // line says that plainly instead of printing `null` or nothing at all.
+  const record = { ...liveRow("i-running", "performing"), sessionId: null };
+  const rendered = inboxLines("operator-1", {
+    ...EMPTY,
+    live: [{ kind: "read", record }],
+  }).join("\n");
+  expect(rendered).toContain("session (no session recorded on this row yet)");
+  expect(rendered).toContain(`in ${String(record.workspace)}`);
+});
+
+test("whereItRuns reads back a session once the row carries one", () => {
+  // **Exercises the true branch, without claiming it is reachable today.**
+  // No in-flight status writes `sessionId` under the current interpreter (see
+  // the test above), so this is the fallback's counterpart rather than a
+  // scenario `rondo inbox` shows in practice.
+  const record = liveRow("i-running", "performing");
+  const rendered = inboxLines("operator-1", {
+    ...EMPTY,
+    live: [{ kind: "read", record }],
+  }).join("\n");
+  expect(rendered).toContain(`session ${String(record.sessionId)}`);
 });
 
 test("a live row that will not decode is on the screen", () => {
