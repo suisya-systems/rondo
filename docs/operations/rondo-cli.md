@@ -303,7 +303,7 @@ iteration 'cli-lap-001' is closed
   Iteration cli-lap-001 is closed.
   Gate outcome: answered_and_forwarded.
   Run id: cli-lap-001; continuo revision: 38c667b...
-  The run row is still 'created'. Nothing was pushed, nothing was landed, and publishing this work is the operator's, not rondo's (D-0010).
+  rondo did not close this run. Nothing was pushed, nothing was landed, and publishing this work is the operator's, not rondo's (D-0010).
 
 Next: rondo publish --iteration-id cli-lap-001 --repo OWNER/NAME --actor-id happy_ryo
 ```

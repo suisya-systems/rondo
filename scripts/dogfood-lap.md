@@ -271,10 +271,12 @@ costs on this machine, and that `resume` sees the outcome after a human answers.
    and it is cheap to check here and expensive to discover in production.
 
 6. **Read the report.** It must say the gate's outcome, the run id, the continuo
-   revision that drove it, and — plainly — that the run row is still `created`,
+   revision that drove it, and — plainly — that **rondo did not close this run**,
    that nothing was pushed, and that **publishing is the operator's** (D-0010).
    If it does not say the last part, the report is wrong, whatever else it got
-   right.
+   right. The line says what rondo did and not what continuo's run row holds:
+   step 7 below closes that row, and a report that claimed it was still
+   `created` would be false from then on.
 
 7. **Clean up what rondo did not.** rondo abandons; it does not close runs or
    gates it did not open (D-0010, D-0013). A worktree, a fence and a run row are
