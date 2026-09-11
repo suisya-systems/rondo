@@ -6483,6 +6483,18 @@ that was finished an hour ago.
    instructions. The finer unit costs nothing — the line is already being printed — and it is the
    only unit on which the operator's next act differs.
 
+   **The subject's own iteration record is compared as well, and it is not a basis.** Every snapshot
+   shape carries `/iteration` — the eighteen fields `snapshotIteration` copied of the row the
+   proposal is *about* — and on two of the three kinds no option points at it: a
+   `ContractSnapshot` candidate carries `from`, `agentTypeId`, `agentTypeDigest`, `granted`,
+   `askable` and `contractDigest` and **no status**, so a subject that finished while its plan and
+   the pin stood still would leave every cited candidate equal and every basis `unmoved`. The
+   premise of *"run this again under a different agent type"* is that there is something to run
+   again, and that fact lives in the subject's row rather than in any candidate. So the subject is
+   compared once per proposal and reported on the header line beside the three-way count — as the
+   subject and not as a basis, because no basis rests on it and inventing one would put a citation
+   in the payload that the drafter never wrote.
+
 2. **Freshness is decided by re-gathering and comparing values, never by comparing timestamps.** The
    left-hand side is the snapshot the row stores verbatim (`D-0022` rule 4) — the record of what the
    advisory read at composition. The right-hand side is what **the same gatherer produces now**,
@@ -6560,8 +6572,8 @@ that was finished an hour ago.
    not a screen that quietly says a premise held.
 
    **The screen may never round `undetermined` to unchanged.** The header is always the three-way
-   count, so a proposal every one of whose bases is `undetermined` says so in the same words it would
-   use to say nothing moved — which are different words. This is the rule the entry exists for: an
+   count and the subject's own verdict, so a proposal every one of whose bases is `undetermined` says
+   so in the same words it would use to say nothing moved — which are different words. This is the rule the entry exists for: an
    `undetermined` that is on the screen, per basis, next to the locator, tells the operator which
    citation they personally have to go and open. Saying nothing, or saying `unmoved` because nothing
    contradicted it, converts *rondo did not look* into *rondo looked and it is fine*, at the moment a
@@ -6697,8 +6709,10 @@ Named rather than done, so the gate can see the size of what it is approving.
    and which must read `moved`; a candidate removed from the set, and a set re-ordered, so that
    identity matching is proved rather than index matching; a broken pointer in the stored snapshot
    (`undetermined`, not `unmoved`); a gatherer made to refuse (`undetermined`, with the reason on the
-   screen); a differing cadenza pin; and a proposal all of whose bases are external, whose header
-   must say `undetermined` and must not say that nothing moved.
+   screen); a differing cadenza pin; a proposal all of whose bases are external, whose header must
+   say `undetermined` and must not say that nothing moved; and — for an `agent_type` or
+   `contract_keys` proposal, whose candidates carry no status — a subject finished underneath it,
+   whose every basis reads `unmoved` and whose header must still say the subject moved.
 
 ### Residuals, with who decides
 
@@ -6730,6 +6744,11 @@ is `D-0032`'s, `D-0036`'s and `D-0037`'s treatment of the same material.
   `status`, `planDigest` and `contractDigest` (`src/access/advisory.ts:744-750`); the option basis
   cites only the last of them, and `issueFor` (`:594-611`) makes that digest a function of the plan,
   the agent-type input, the project and the parties — none of which a merge moves.
+- **Why the subject is compared and is not a basis.** `SnapshotContractCandidate` carries `from`,
+  `agentTypeId`, `agentTypeDigest`, `granted`, `askable` and `contractDigest` and **no status**
+  (`src/advisory/proposal.ts:518-528`), so on the two contract kinds no option basis reaches the
+  subject's own state at all; `/iteration` is on all three snapshot shapes (`:198`, `:321`, `:539`)
+  and is what carries it.
 - **The snapshot is the stored record of the premise**, kept verbatim beside its digest and
   re-derived at every read: `verbatim()` at `src/store/sqlite.ts:2756-2777`, reached by
   `readProposal` at `:2244`.
@@ -6759,6 +6778,9 @@ is `D-0032`'s, `D-0036`'s and `D-0037`'s treatment of the same material.
 - **An operator treating `undetermined` as `unmoved`** — reading *rondo could not check this* as
   *this is fine* — which falsifies rule 4's central claim and means the three values need a stronger
   act than a word on a line.
+- **A proposal whose premise moved somewhere that is neither a cited record nor the subject's own
+  row**, which is rule 1's second comparison being the wrong second comparison rather than one too
+  few.
 - **A premise movement visible only as a changed option set and not as a changed record** — a
   candidate that should now exist and does not appear — which is what re-drafting would catch and
   rule 3 forbids, and is the price rule 3 is paying.
