@@ -888,6 +888,41 @@ export interface OpenProposal {
 }
 
 /**
+ * What stands against the two bounds right now (D-0037 rule 3c).
+ *
+ * **Read off the generated columns the bounds are defined against**, and that
+ * is D-0023 rule 8 rather than a convenience: `maxOccupying` counts the
+ * `occupying` column and `maxLive` counts `live`, so "the bound and the column
+ * are one definition". A caller that re-derived either from a status set it
+ * spelled itself would be a second definition of a bound, and the first time
+ * the two disagreed the screen would report a host at a capacity it is not at.
+ */
+export interface Occupancy {
+  readonly occupying: number;
+  readonly live: number;
+}
+
+/**
+ * One admission a bound refused (D-0023 rule 14), as a reader gets it back.
+ *
+ * **The only row in the store that records work deliberately not started**:
+ * a refusal costs no `iteration` row at all, so without this table the fact
+ * that somebody asked and was told no is not recoverable from anywhere.
+ *
+ * `boundName` is a plain string rather than {@link AttentionDisposition}'s kind
+ * of closed union, for `OpenProposal.kind`'s reason: a bound name this rondo
+ * does not know is still a refusal an operator was given, and the screen
+ * reports it rather than dropping it.
+ */
+export interface AdmissionRefusal {
+  readonly refusedAtMs: number;
+  readonly request: string;
+  readonly boundName: string;
+  readonly bound: number;
+  readonly occupancy: number;
+}
+
+/**
  * One line of the silence (D-0032 rule 10, #41 section 5).
  *
  * *"Six were put to you, forty were not, here is the breakdown"* is one
@@ -895,6 +930,33 @@ export interface OpenProposal {
  * the presented side, where there is no policy to name, and non-null on the
  * withheld side, where the writer refuses a row without one.
  */
+/**
+ * The interval one breakdown answers over (D-0037 rule 6).
+ *
+ * **A `WHERE` clause rather than a column, and rather than a second table.**
+ * #40 asks that an operator be able to reconstruct what was withheld from them
+ * *in a given interval*; `operator_attention` already carries `at_ms` on every
+ * row and is append-only, so the material was there and only the query was
+ * missing. A stored count would be a second home for a fact the rows already
+ * hold.
+ *
+ * **Both bounds are inclusive, and both may be null**, which is the shape every
+ * other bound in this store has: `changedSince` includes the mark because a row
+ * bearing exactly it may or may not have been displayed, and `openProposals`
+ * includes its upper bound because that is the moment the render wrote about.
+ * A null bound is "unbounded on that side", so an interval with two nulls is
+ * the count over all of time -- the answer this enumeration gave before it
+ * could be asked anything narrower.
+ *
+ * **What this cannot prove is unchanged** (D-0032 rule 10's own residue): a
+ * suppression that writes no row is invisible here, so an interval bounds the
+ * *accountable* silence and not the total.
+ */
+export interface AttentionInterval {
+  readonly fromMs: number | null;
+  readonly toMs: number | null;
+}
+
 export interface AttentionCount {
   readonly disposition: AttentionDisposition;
   readonly ruleName: string | null;

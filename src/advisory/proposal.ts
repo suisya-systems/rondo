@@ -720,6 +720,281 @@ export function proposeRetryPlan(snapshot: RetrySnapshot): RunPlanProposal {
 }
 
 /**
+ * Every live lap, as the host-wide snapshot carries one of them (D-0037
+ * rule 1).
+ *
+ * **The element is {@link SnapshotIteration} and not a second shape**, for the
+ * reason `gather` already gives about the per-lap snapshot: two copies of
+ * eighteen field names are two places a field can go missing from, and a
+ * `snapshot` basis is a pointer into the persisted bytes -- so a between-laps
+ * claim citing `/laps/3/iteration/status` must find the same document `explain`
+ * would have shown for that lap alone.
+ *
+ * **What is here and is not on {@link AdvisorySnapshot} is exactly what a
+ * cross-lap claim reads**: the `D-0023` triple, which is how an operator gets
+ * from an adjacency to the two working trees, and the plan's base branch, which
+ * is what rule 3a's adjacency is *against*. The plan itself is still cited by
+ * digest and not copied -- the base branch is what the claim rests on, and
+ * copying thirty fields to ground one of them would be paying for
+ * re-derivability nothing reads.
+ *
+ * Every one of the four is nullable because the row's own columns are:
+ * `runId`, `topicBranch` and `workspace` predate `D-0023` and are null on rows
+ * written before it, and `baseBranch` is null when the persisted plan will not
+ * decode. A null here is a claim that says `undetermined` rather than a lap
+ * quietly left out of a family.
+ */
+export type SnapshotLap = {
+  readonly iteration: SnapshotIteration;
+  readonly runId: string | null;
+  readonly topicBranch: string | null;
+  readonly workspace: string | null;
+  readonly baseBranch: string | null;
+  readonly readings: readonly SnapshotReading[];
+};
+
+/**
+ * The two bounds and what stands against them (D-0037 rule 3c).
+ *
+ * The bounds are the host's policy (`maxOccupying`, `maxLive`); the two
+ * occupancies are what the store counts over the generated columns those bounds
+ * are defined against. All four travel because the claim is about the *pair*:
+ * a bound with no occupancy beside it is a number an operator cannot act on.
+ */
+export type SnapshotBounds = {
+  readonly maxOccupying: number;
+  readonly maxLive: number;
+  readonly occupying: number;
+  readonly live: number;
+};
+
+/**
+ * One admission a bound refused, as the snapshot carries it (`D-0023` rule 14).
+ *
+ * **Work deliberately not started is #40's third measured case**, and this is
+ * the only row in the store that records it: a refusal costs no `iteration` row
+ * at all, so without this table the bound could only ever be raised because
+ * somebody complained.
+ */
+export type SnapshotRefusal = {
+  readonly refusedAtMs: number;
+  readonly request: string;
+  readonly boundName: string;
+  readonly bound: number;
+  readonly occupancy: number;
+};
+
+/**
+ * What the composition root gathered for a between-laps composition (D-0037
+ * rule 1).
+ *
+ * **A fourth snapshot type and not a fourth component.** It is more rows in the
+ * argument to a function that already exists: the gathering stays the
+ * composition root's (D-0022 rule 2), this layer's read allowance is not
+ * widened by a word, and what comes back is an {@link Explanation} -- the kind
+ * that binds nothing, which is what makes the type system rather than a review
+ * the thing that forbids a between-laps component with authority.
+ *
+ * **No cap, no paging and no "top ten"** (rule 5): every live lap enters. If a
+ * host-wide snapshot ever has to be bounded for size, that bound is a
+ * *withholding* -- it writes `withheld` rows under a rule the operator named --
+ * and not an implementation detail chosen inside a diff.
+ */
+export type HostSnapshot = {
+  readonly laps: readonly SnapshotLap[];
+  /**
+   * The live rows that would not decode, which hold a slot and have no claims.
+   *
+   * **On the screen rather than missing from it**, which is the inbox's rule
+   * applied where a family would otherwise be quietly short: a composition that
+   * dropped them would be wrong about what is running in exactly the case that
+   * needs a person, and the count of laps would silently stop matching the
+   * occupancy beside it.
+   */
+  readonly unreadable: readonly { readonly id: string; readonly reason: string }[];
+  readonly bounds: SnapshotBounds;
+  readonly refusals: readonly SnapshotRefusal[];
+};
+
+/**
+ * One lap and where it sits in the snapshot, carried together.
+ *
+ * The index is what a `snapshot` basis is built out of and the lap is what the
+ * claim is about, so the two travel as one value rather than as a number that
+ * has to be looked up again -- a second lookup is a second place the pointer
+ * and the lap can stop agreeing.
+ */
+type Placed = { readonly lap: SnapshotLap; readonly index: number };
+
+/** A lap's `D-0023` triple as one line, with `none` where the row has no value. */
+function triple(lap: SnapshotLap): string {
+  return (
+    `run ${lap.runId ?? ABSENT}, branch ${lap.topicBranch ?? ABSENT}, ` +
+    `workspace ${lap.workspace ?? ABSENT}`
+  );
+}
+
+/** The claim a family emits when it looked and found nothing (D-0037 rule 3). */
+function foundNothing(label: string, pointer: string): Claim {
+  return { label, value: ABSENT, basis: { form: "snapshot", pointer } };
+}
+
+/**
+ * Rule 3a: live laps open against the same base branch, and nothing more.
+ *
+ * **It says they are adjacent; it does not say they collided.** rondo
+ * de-conflicts only the identifiers it mints, and a decision id or a migration
+ * number lives *inside the work* -- reading that needs a reader across branches
+ * nothing in rondo has (`D-0033` rule 9). What an operator gets is the fact
+ * that sends them to look: these two are open against `main` right now, and
+ * here are the two workspaces. A claim that said more would be rondo asserting
+ * an absence it cannot observe.
+ *
+ * A lap whose base branch would not decode is {@link UNDETERMINED} rather than
+ * a lap silently missing from the grouping: "rondo looked and these are not
+ * adjacent" and "rondo could not tell" are different answers.
+ */
+function adjacencyClaims(laps: readonly SnapshotLap[]): readonly Claim[] {
+  const byBase = new Map<string, Placed[]>();
+  const unreadable: Claim[] = [];
+  laps.forEach((lap, index) => {
+    if (lap.baseBranch === null) {
+      unreadable.push(claim("open against", null, `/laps/${String(index)}/baseBranch`));
+      return;
+    }
+    byBase.set(lap.baseBranch, [...(byBase.get(lap.baseBranch) ?? []), { lap, index }]);
+  });
+  const adjacent = [...byBase]
+    .filter(([, placed]) => placed.length > 1)
+    .flatMap(([base, placed]) =>
+      placed.map(({ lap, index }): Claim => {
+        const others = placed
+          .filter((other) => other.index !== index)
+          .map((other) => `'${other.lap.iteration.id}'`)
+          .join(", ");
+        return {
+          label: `open against '${base}' beside ${others}`,
+          value: `${lap.iteration.id} (${triple(lap)})`,
+          basis: { form: "snapshot", pointer: `/laps/${String(index)}/iteration/id` },
+        };
+      }),
+    );
+  return [
+    ...(adjacent.length === 0
+      ? [foundNothing("two live laps open against one base branch", "/laps")]
+      : adjacent),
+    ...unreadable,
+  ];
+}
+
+/**
+ * Rule 3b: a finding that appears on more than one live lap's reading (D-0029).
+ *
+ * **The ceiling is equality over the finding's text, and it is stated rather
+ * than discovered.** This finds the same sentence written twice and nothing
+ * else; two readings that describe one defect in different words are invisible
+ * to it. The alternative refused is similarity scoring -- a {@link Claim} has
+ * three fields and no fourth for exactly that reason, and a confidence is a
+ * number the drafter would be narrating about its own material.
+ *
+ * Each side is cited by an `iteration` basis, because what an operator needs
+ * from a shared finding is the two laps to go and open.
+ */
+function sharedMaterialClaims(laps: readonly SnapshotLap[]): readonly Claim[] {
+  const sides = new Map<string, Placed[]>();
+  laps.forEach((lap, index) => {
+    // Per lap rather than per reading: two readers of one lap agreeing is one
+    // lap's finding, and counting it twice would report a lap as sharing
+    // material with itself.
+    const onThisLap = new Set(lap.readings.flatMap((reading) => [...reading.findings]));
+    for (const finding of onThisLap) {
+      sides.set(finding, [...(sides.get(finding) ?? []), { lap, index }]);
+    }
+  });
+  const shared = [...sides]
+    .filter(([, placed]) => placed.length > 1)
+    .flatMap(([finding, placed]) =>
+      placed.map(
+        ({ lap }): Claim => ({
+          label: `a finding on ${String(placed.length)} live laps`,
+          value: finding,
+          basis: { form: "iteration", iterationId: lap.iteration.id },
+        }),
+      ),
+    );
+  return shared.length === 0
+    ? [foundNothing("one finding read on more than one live lap", "/laps")]
+    : shared;
+}
+
+/**
+ * Rule 3c: the bounds, what stands against them, and what they refused.
+ *
+ * **rondo takes no act here** (`D-0033` rule 3). The refusal side is already
+ * owned and already counted; a person who reads this and does not run `start`
+ * is the other half, and an advisory that could withhold an admission by itself
+ * would be the advisory deciding.
+ */
+function capacityClaims(snapshot: HostSnapshot): readonly Claim[] {
+  const bounds = snapshot.bounds;
+  return [
+    claim("bound 'maxOccupying'", String(bounds.maxOccupying), "/bounds/maxOccupying"),
+    claim("occupying now", String(bounds.occupying), "/bounds/occupying"),
+    claim("bound 'maxLive'", String(bounds.maxLive), "/bounds/maxLive"),
+    claim("live now", String(bounds.live), "/bounds/live"),
+    ...(snapshot.refusals.length === 0
+      ? [foundNothing("an admission a bound refused", "/refusals")]
+      : snapshot.refusals.map(
+          (refusal, index): Claim => ({
+            label: "an admission a bound refused",
+            value:
+              `'${refusal.request}' against '${refusal.boundName}' ` +
+              `${String(refusal.bound)} at occupancy ${String(refusal.occupancy)}`,
+            basis: { form: "snapshot", pointer: `/refusals/${String(index)}` },
+          }),
+        )),
+  ];
+}
+
+/**
+ * What spans the live laps, as claims a person can check (D-0037 rules 1-3).
+ *
+ * **The between-laps composition, and it is an {@link Explanation} like every
+ * other one.** It proposes nothing and binds nothing: `D-0033` rule 3 says the
+ * one act rondo can take between laps is admission, and `D-0023`'s bound
+ * already owns and counts its refusal, so there is nothing here to approve.
+ *
+ * **Every family is emitted for every snapshot, including an empty one**, which
+ * is {@link propose}'s discipline and not a new rule: a family that fell silent
+ * when it found nothing would make *"rondo looked and there is no adjacency"*
+ * and *"rondo did not look"* the same screen.
+ *
+ * Total over the snapshot and pure, on {@link propose}'s terms exactly: no
+ * clock, no I/O, and the same bytes in give the same bytes out.
+ */
+export function proposeHost(snapshot: HostSnapshot): Explanation {
+  return {
+    kind: "explanation",
+    derivation: "store_rows",
+    payload: {
+      claims: [
+        claim("live laps", String(snapshot.laps.length), "/laps"),
+        ...snapshot.unreadable.map(
+          (row, index): Claim => ({
+            label: "a live lap rondo could not read",
+            value: `${row.id}: ${row.reason}`,
+            basis: { form: "snapshot", pointer: `/unreadable/${String(index)}` },
+          }),
+        ),
+        ...adjacencyClaims(snapshot.laps),
+        ...sharedMaterialClaims(snapshot.laps),
+        ...capacityClaims(snapshot),
+      ],
+    },
+  };
+}
+
+/**
  * The snapshot as the store takes it, and the one assertion that keeps the two
  * shapes from drifting.
  *
@@ -730,7 +1005,7 @@ export function proposeRetryPlan(snapshot: RetrySnapshot): RunPlanProposal {
  * insert that silently dropped a field.
  */
 export function snapshotDocument(
-  snapshot: AdvisorySnapshot | RetrySnapshot | ContractSnapshot,
+  snapshot: AdvisorySnapshot | RetrySnapshot | ContractSnapshot | HostSnapshot,
 ): JsonRecord {
   return snapshot;
 }

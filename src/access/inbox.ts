@@ -95,7 +95,20 @@ export interface InboxSnapshot {
   readonly live: readonly LiveRow[];
   readonly open: readonly OpenProposal[];
   readonly changed: readonly RecordChange[];
+  /** The accounting over all of time, which is the denominator #40 asks for. */
   readonly attention: readonly AttentionCount[];
+  /**
+   * The same accounting over `[sinceMs, atMs]`, or null when this actor has
+   * never looked (D-0037 rule 6).
+   *
+   * **Asked with the operator's own mark and with no second cursor.** The
+   * interval is the one the rest of this screen is already about -- from where
+   * their reading stopped to the bound this look used -- so the accounting
+   * section answers *since you last looked* beside the total rather than
+   * against a moment nobody marked. A first look has no lower bound to ask
+   * with, and reporting all of time twice would be a diff against nothing.
+   */
+  readonly attentionSince: readonly AttentionCount[] | null;
   readonly unspent: readonly UnconsumedDecision[];
 }
 
@@ -303,16 +316,48 @@ function changedLines(snapshot: InboxSnapshot): readonly string[] {
  * zero -- which is the honest answer rather than a missing section.
  */
 function silenceLines(snapshot: InboxSnapshot): readonly string[] {
+  return [
+    "what was put to you and what was not",
+    ...countedLines(snapshot.attention, "  ", "over all of time"),
+    ...(snapshot.attentionSince === null
+      ? ["  since your last look: you have never looked"]
+      : countedLines(
+          snapshot.attentionSince,
+          "  ",
+          `since your last look ${ago(snapshot.sinceMs ?? snapshot.atMs, snapshot.atMs)} ago`,
+        )),
+  ];
+}
+
+/**
+ * One breakdown, as the two lines an operator reconstructs a silence from.
+ *
+ * **The rule names are the unit, and that is what #40 asked for** (D-0037
+ * rule 6): *"suppressed 40"* is a number where *"suppressed 40, of which 31 by
+ * the duplicate-delivery rule"* is a record. Written once and called twice, so
+ * the total and the interval cannot drift into two different ways of counting
+ * the same rows -- which would be worse than having only one of them.
+ *
+ * Every rule that withheld anything is listed even at a count of zero rows in
+ * the interval -- the query simply returns no row for it, so the section says
+ * `withheld 0` and nothing beneath, which is *"rondo looked and nothing was
+ * withheld from you in that window"* rather than a section that disappeared.
+ */
+function countedLines(
+  counts: readonly AttentionCount[],
+  indent: string,
+  what: string,
+): readonly string[] {
   const total = (disposition: string): number =>
-    snapshot.attention
+    counts
       .filter((row) => row.disposition === disposition)
       .reduce((sum, row) => sum + row.count, 0);
   return [
-    "what was put to you and what was not",
-    `  presented ${String(total("presented"))}, withheld ${String(total("withheld"))}`,
-    ...snapshot.attention.flatMap((row) =>
+    `${indent}${what}: presented ${String(total("presented"))}, ` +
+      `withheld ${String(total("withheld"))}`,
+    ...counts.flatMap((row) =>
       row.disposition === "withheld"
-        ? [`    withheld by '${row.ruleName ?? "(unnamed)"}' ${String(row.count)}`]
+        ? [`${indent}  withheld by '${row.ruleName ?? "(unnamed)"}' ${String(row.count)}`]
         : [],
     ),
   ];
@@ -407,6 +452,14 @@ export async function showInbox(ports: InboxPorts, actorId: string): Promise<Inb
     open: await ports.record.openProposals(atMs),
     changed: sinceMs === null ? [] : await ports.record.changedSince(sinceMs),
     attention: await ports.record.attentionBreakdown(),
+    // **Asked with the mark and with the bound this look used** (D-0037
+    // rule 6). Both ends are inclusive, on `changedSince`'s and
+    // `openProposals`' terms: a row bearing exactly either bound is shown
+    // rather than lost, which is the trade D-0032 rule 11 names and takes.
+    attentionSince:
+      sinceMs === null
+        ? null
+        : await ports.record.attentionBreakdown({ fromMs: sinceMs, toMs: atMs }),
     unspent: await ports.record.unconsumedDecisions(),
   };
   ports.present(inboxLines(actorId, snapshot));
