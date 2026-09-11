@@ -1089,12 +1089,12 @@ test("a proposal is answerable from the row alone, long after it was drafted", a
   // and what answering forecloses. Nothing here re-composes the proposal: it is
   // the row, read back, which is the whole difference between a gate that is
   // answerable once and one that is answerable later.
-  const { record } = fresh();
+  const { store, record } = fresh();
   await record.recordProposal(storedProposal(storedOptions()));
 
   const shows = screen();
   const outcome = await showProposal(
-    { record, now: () => 9_000, present: shows.present },
+    { store, cadenzaRevision: "cadenza@abcdef0", record, now: () => 9_000, present: shows.present },
     "p-0001",
   );
 
@@ -1123,11 +1123,17 @@ test("showing one proposal twice counts one presentation", async () => {
   // render, so a proposal read five times before it is answered leaves the
   // ratio #40 asked for a count of subjects on both sides. The second write
   // stores nothing and reports success.
-  const { record } = fresh();
+  const { store, record } = fresh();
   await record.recordProposal(storedProposal(storedOptions()));
 
   const shows = screen();
-  const ports = { record, now: () => 9_000, present: shows.present };
+  const ports = {
+    store,
+    cadenzaRevision: "cadenza@abcdef0",
+    record,
+    now: () => 9_000,
+    present: shows.present,
+  };
   expect(await showProposal(ports, "p-0001")).toEqual({ kind: "shown" });
   expect(await showProposal(ports, "p-0001")).toEqual({ kind: "shown" });
 
@@ -1141,7 +1147,7 @@ test("a settled proposal says so, and an explanation says it cannot be answered"
   // already answered (D-0032 rule 6), and one that binds nothing at all
   // (rule 5). A settled proposal rendered like an open one is the screen that
   // gets answered twice.
-  const { record } = fresh();
+  const { store, record } = fresh();
   await record.recordProposal(storedProposal(storedOptions()));
   await record.recordComposition({
     compositionId: "c-0001",
@@ -1172,9 +1178,27 @@ test("a settled proposal says so, and an explanation says it cannot be answered"
   });
 
   const settled = screen();
-  await showProposal({ record, now: () => 9_000, present: settled.present }, "p-0001");
+  await showProposal(
+    {
+      store,
+      cadenzaRevision: "cadenza@abcdef0",
+      record,
+      now: () => 9_000,
+      present: settled.present,
+    },
+    "p-0001",
+  );
   const binding = screen();
-  await showProposal({ record, now: () => 9_000, present: binding.present }, "p-0002");
+  await showProposal(
+    {
+      store,
+      cadenzaRevision: "cadenza@abcdef0",
+      record,
+      now: () => 9_000,
+      present: binding.present,
+    },
+    "p-0002",
+  );
 
   expect(settled.shown.join("\n")).toContain("declined by 'oidc|operator-1'");
   expect(settled.shown.join("\n")).toContain("it is settled");
@@ -1187,12 +1211,18 @@ test("a settled proposal says so, and an explanation says it cannot be answered"
 test("a proposal that is not there, and one that will not read, are refusals", async () => {
   // The whole subject is one row here, so half a proposal is the failure mode
   // rather than the fallback: a person is about to approve one of its options.
-  const { connection, record } = fresh();
+  const { connection, store, record } = fresh();
   await record.recordProposal(storedProposal(storedOptions()));
   connection.prepare("UPDATE proposal SET snapshot = ? WHERE proposal_id = ?").run("{}", "p-0001");
 
   const shows = screen();
-  const ports = { record, now: () => 9_000, present: shows.present };
+  const ports = {
+    store,
+    cadenzaRevision: "cadenza@abcdef0",
+    record,
+    now: () => 9_000,
+    present: shows.present,
+  };
 
   expect(await showProposal(ports, "p-9999")).toEqual({
     kind: "refused",
@@ -1208,7 +1238,7 @@ test("a payload rondo cannot place is on the screen saying so", async () => {
   // union is refused rather than rendered as prose. The screen says the payload
   // will not read, because an operator who asked to see a proposal and got a
   // clean empty screen would read it as "there is nothing to decide".
-  const { record } = fresh();
+  const { store, record } = fresh();
   await record.recordProposal(
     storedProposal({
       options: [{ label: "widen", value: "sha256:x", basis: { form: "because I said so" } }],
@@ -1217,7 +1247,10 @@ test("a payload rondo cannot place is on the screen saying so", async () => {
   );
 
   const shows = screen();
-  await showProposal({ record, now: () => 9_000, present: shows.present }, "p-0001");
+  await showProposal(
+    { store, cadenzaRevision: "cadenza@abcdef0", record, now: () => 9_000, present: shows.present },
+    "p-0001",
+  );
 
   expect(shows.shown.join("\n")).toContain("will not read");
   expect(shows.shown.join("\n")).toContain("not one of");
@@ -1228,7 +1261,7 @@ test("two answers against one proposal are both on the screen, with the count", 
   // transition and not over `proposal_id` -- and nothing here can rank two
   // answers, because D-0022 rule 9 counts issuances per decision. So both are
   // shown and the number is said out loud, rather than the screen picking one.
-  const { record } = fresh();
+  const { store, record } = fresh();
   await record.recordProposal(storedProposal(storedOptions()));
   await record.recordComposition({
     compositionId: "c-0001",
@@ -1263,7 +1296,10 @@ test("two answers against one proposal are both on the screen, with the count", 
   });
 
   const shows = screen();
-  await showProposal({ record, now: () => 9_000, present: shows.present }, "p-0001");
+  await showProposal(
+    { store, cadenzaRevision: "cadenza@abcdef0", record, now: () => 9_000, present: shows.present },
+    "p-0001",
+  );
 
   const rendered = shows.shown.join("\n");
   expect(rendered).toContain("declined by 'oidc|operator-1' as decision 'd-0001'");

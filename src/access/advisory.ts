@@ -59,11 +59,13 @@ import {
 } from "../cadenza/facade.js";
 import { allocate } from "../refrain/allocator.js";
 import { type AdmittedPlan, admittedPlan, readPlan } from "../refrain/plan.js";
+import { canonicalJson } from "../store/plan.js";
 import {
   type DecisionOutcome,
   type IterationRecord,
   isApprovableKind,
   type JsonRecord,
+  type JsonValue,
   type LapReading,
   type ProposalDraft,
   type ProposalKind,
@@ -699,7 +701,7 @@ type DraftOutcome =
  * set it was never in.
  */
 async function lineage(
-  ports: ProposePorts,
+  ports: Pick<ExplainPorts, "store">,
   subject: IterationRecord,
 ): Promise<{ rows: readonly IterationRecord[] } | { refusal: string }> {
   const previousId = subject.supersedesIterationId;
@@ -718,12 +720,26 @@ async function lineage(
   return { rows: [subject, previous.record] };
 }
 
-/** Draft `run_plan`: one option per persisted plan in the lineage. */
-function draftRunPlan(
-  subject: IterationRecord,
+/** What re-gathering `run_plan`'s candidates produced, or the gatherer's own refusal. */
+type CandidateGather =
+  | {
+      readonly kind: "gathered";
+      readonly candidates: readonly SnapshotCandidate[];
+      readonly contracts: readonly JsonRecord[];
+      readonly successor: SnapshotSuccessor | null;
+    }
+  | { readonly kind: "refused"; readonly reason: string };
+
+/**
+ * The candidate loop `run_plan` drafts from, callable without the drafter
+ * (`D-0038` rule 3's re-gather seam). A re-gather at render time runs this
+ * exact function again, over the lineage read fresh, so that "what would be
+ * proposed now" and "what was proposed then" are produced by one gatherer.
+ */
+function gatherRunPlanCandidates(
   rows: readonly IterationRecord[],
   successorId: string,
-): DraftOutcome {
+): CandidateGather {
   const candidates: SnapshotCandidate[] = [];
   const contracts: JsonRecord[] = [];
   let successor: SnapshotSuccessor | null = null;
@@ -749,18 +765,31 @@ function draftRunPlan(
     });
     contracts.push(issued.issued.contract);
   }
-  const head = candidates[0];
-  if (head === undefined || successor === null) {
+  return { kind: "gathered", candidates, contracts, successor };
+}
+
+/** Draft `run_plan`: one option per persisted plan in the lineage. */
+function draftRunPlan(
+  subject: IterationRecord,
+  rows: readonly IterationRecord[],
+  successorId: string,
+): DraftOutcome {
+  const gathered = gatherRunPlanCandidates(rows, successorId);
+  if (gathered.kind !== "gathered") {
+    return { kind: "refused", reason: gathered.reason };
+  }
+  const head = gathered.candidates[0];
+  if (head === undefined || gathered.successor === null) {
     return { kind: "refused", reason: `Iteration '${subject.id}' has no plan to propose.` };
   }
   const snapshot: RetrySnapshot = {
     iteration: snapshotIteration(subject),
-    successor,
-    candidates: [head, ...candidates.slice(1)],
+    successor: gathered.successor,
+    candidates: [head, ...gathered.candidates.slice(1)],
   };
   return {
     kind: "drafted",
-    drafted: { proposal: proposeRetryPlan(snapshot), snapshot, contracts },
+    drafted: { proposal: proposeRetryPlan(snapshot), snapshot, contracts: gathered.contracts },
   };
 }
 
@@ -862,12 +891,27 @@ function promotionsOf(own: AgentTypeInput, subjectId: string): InputsOutcome {
  * `human_decision.approved` names a digest, so distinct options must name
  * distinct digests or the answer is ambiguous.
  */
-function draftContracts(
+/** What re-gathering `agent_type` or `contract_keys` candidates produced, or the refusal. */
+type ContractCandidateGather =
+  | {
+      readonly kind: "gathered";
+      readonly candidates: readonly SnapshotContractCandidate[];
+      readonly contracts: readonly JsonRecord[];
+      readonly successor: SnapshotSuccessor | null;
+    }
+  | { readonly kind: "refused"; readonly reason: string };
+
+/**
+ * The candidate loop `agent_type` and `contract_keys` draft from, callable
+ * without the drafter (`D-0038` rule 3's re-gather seam), for
+ * {@link gatherRunPlanCandidates}'s reason exactly.
+ */
+function gatherContractCandidates(
   kind: "agent_type" | "contract_keys",
   subject: IterationRecord,
   rows: readonly IterationRecord[],
   successorId: string,
-): DraftOutcome {
+): ContractCandidateGather {
   const admitted = admitFor(subject, successorId);
   if (admitted.kind !== "admitted") {
     return { kind: "refused", reason: admitted.reason };
@@ -906,8 +950,26 @@ function draftContracts(
     });
     contracts.push(issued.issued.contract);
   }
-  const head = candidates[0];
-  if (head === undefined) {
+  return {
+    kind: "gathered",
+    candidates,
+    contracts,
+    successor: { iterationId: successorId, runId: plan.runId, topicBranch: plan.topicBranch },
+  };
+}
+
+function draftContracts(
+  kind: "agent_type" | "contract_keys",
+  subject: IterationRecord,
+  rows: readonly IterationRecord[],
+  successorId: string,
+): DraftOutcome {
+  const gathered = gatherContractCandidates(kind, subject, rows, successorId);
+  if (gathered.kind !== "gathered") {
+    return { kind: "refused", reason: gathered.reason };
+  }
+  const head = gathered.candidates[0];
+  if (head === undefined || gathered.successor === null) {
     // Unreachable: the subject's own agent type is always a candidate. Written
     // as a refusal because the alternative is an option set with no
     // recommendation, which is the one shape D-0032 rule 1 does not admit.
@@ -915,19 +977,15 @@ function draftContracts(
   }
   const snapshot: ContractSnapshot = {
     iteration: snapshotIteration(subject),
-    successor: {
-      iterationId: successorId,
-      runId: plan.runId,
-      topicBranch: plan.topicBranch,
-    },
-    candidates: [head, ...candidates.slice(1)],
+    successor: gathered.successor,
+    candidates: [head, ...gathered.candidates.slice(1)],
   };
   return {
     kind: "drafted",
     drafted: {
       proposal: kind === "agent_type" ? proposeAgentType(snapshot) : proposeContractKeys(snapshot),
       snapshot,
-      contracts,
+      contracts: gathered.contracts,
     },
   };
 }
@@ -1227,6 +1285,431 @@ function foreclosureLines(kind: string): readonly string[] {
 }
 
 /**
+ * Whether the material a basis rests on still reads the way it did at
+ * composition (`D-0038`): decided by re-gathering and comparing records, never
+ * by comparing timestamps, and `undetermined` is a value the screen may never
+ * round to `unmoved`.
+ *
+ * `detail` carries which field differed on a `moved` verdict, or why rondo
+ * could not decide on an `undetermined` one; it is null on `unmoved`, where
+ * there is nothing to say beyond the word itself.
+ */
+export type Freshness = {
+  readonly verdict: "unmoved" | "moved" | "undetermined";
+  readonly detail: string | null;
+};
+
+function undetermined(detail: string): Freshness {
+  return { verdict: "undetermined", detail };
+}
+
+/** A record differing from itself: fields whose value changed, rendered `key: `old` -> `new``. */
+function renderValue(value: unknown): string {
+  return `\`${typeof value === "string" ? value : JSON.stringify(value)}\``;
+}
+
+/**
+ * A value, encoded so that equal values encode equally regardless of the key
+ * order either side happened to build it in.
+ *
+ * **Not `JSON.stringify`**, because the stored side is bytes read back out of
+ * the row and the re-gathered side is an object this module just built, and
+ * nothing promises the two construct their keys in the same order for what is
+ * otherwise one identical value -- codex's own finding, over `regatherPayload`
+ * building a `SnapshotReading` in a field order that need not match the
+ * store's. `canonicalJson` is the encoding the store itself digests proposals
+ * by, so two equal values are guaranteed to encode equally rather than merely
+ * expected to.
+ */
+function stableJson(value: unknown): string {
+  // `canonicalJson` refuses `undefined` (D-0019 rule 4's own encoder, whose job
+  // is a plan that must round-trip): a field one side has and the other does
+  // not is malformed input rather than a value, but this reader has to stay
+  // total over whatever a corrupted row holds, so it is a sentinel and not a
+  // throw. No real `canonicalJson` output starts with `\u0000`.
+  return value === undefined ? "\u0000undefined" : canonicalJson(value as JsonValue);
+}
+
+function recordDifferences(
+  before: Record<string, unknown>,
+  after: Record<string, unknown>,
+  ignoreKeys: ReadonlySet<string> = new Set(),
+): readonly string[] {
+  const keys = new Set([...Object.keys(before), ...Object.keys(after)]);
+  const diffs: string[] = [];
+  for (const key of keys) {
+    if (ignoreKeys.has(key)) {
+      continue;
+    }
+    if (stableJson(before[key]) !== stableJson(after[key])) {
+      diffs.push(`${key}: ${renderValue(before[key])} -> ${renderValue(after[key])}`);
+    }
+  }
+  return diffs;
+}
+
+/**
+ * Two records of the same identity, compared field by field (`D-0038` rule 1).
+ *
+ * `ignoreKeys` exists for rule 5's fourth edge alone: a `contractDigest` is a
+ * function of the cadenza pin (`issueFor`), so once the pin line has already
+ * said the pin moved, comparing that field again on every candidate would
+ * report the same one fact as though each candidate had moved independently
+ * -- exactly what rule 5 refuses. Every other field still compares normally,
+ * so material movement underneath a pin move is not hidden by it.
+ */
+function compareRecords(
+  before: Record<string, unknown>,
+  after: Record<string, unknown>,
+  ignoreKeys?: ReadonlySet<string>,
+): Freshness {
+  const diffs = recordDifferences(before, after, ignoreKeys);
+  return diffs.length === 0
+    ? { verdict: "unmoved", detail: null }
+    : { verdict: "moved", detail: diffs.join("; ") };
+}
+
+/**
+ * The record one pointer sits in, per `D-0038` rule 1: an array element by its
+ * own identity for a pointer into a record inside an array, the whole array
+ * for a pointer at the array itself (`propose()`'s `/readings`, cited exactly
+ * when there is no reading to point an element at), or the top-level record
+ * for a pointer into one.
+ *
+ * Untyped on purpose: the same logic has to walk both the stored snapshot and
+ * the re-gathered document, and typing this to any one snapshot shape would
+ * leave it unable to walk the other two.
+ */
+type Container =
+  | {
+      readonly kind: "record";
+      readonly top: string;
+      readonly identity: string | null;
+      readonly record: Record<string, unknown>;
+    }
+  | { readonly kind: "wholeArray"; readonly top: string; readonly array: readonly unknown[] };
+
+function containerOf(document: Record<string, unknown>, pointer: string): Container | null {
+  const segments = pointer.split("/").slice(1);
+  const top = segments[0];
+  if (top === undefined) {
+    return null;
+  }
+  const value = document[top];
+  if (Array.isArray(value)) {
+    if (segments.length === 1) {
+      return { kind: "wholeArray", top, array: value };
+    }
+    const index = segments[1];
+    if (index === undefined || !/^(0|[1-9]\d*)$/.test(index)) {
+      return null;
+    }
+    const at = Number(index);
+    const element = value[at];
+    if (typeof element !== "object" || element === null) {
+      return null;
+    }
+    return { kind: "record", top, identity: identityOf(top, value, at), record: element };
+  }
+  if (typeof value !== "object" || value === null) {
+    return null;
+  }
+  return { kind: "record", top, identity: null, record: value as Record<string, unknown> };
+}
+
+/**
+ * The identity the record at `array[at]` is matched by, never its index
+ * (`D-0038` rule 2): a candidate set is enumerated and de-duplicated by the
+ * gatherer, so candidate N today need not be candidate N at composition.
+ *
+ * **A reading's identity is the drafter *and* which of that drafter's
+ * readings this is.** D-0029 appends a second reading from one drafter beside
+ * the first rather than replacing it, so the drafter alone collapses two
+ * distinct rows onto one identity -- the occurrence count is what keeps them
+ * apart, over the one order the store ever produces them in: appended,
+ * oldest first, never reordered.
+ */
+function identityOf(top: string, array: readonly unknown[], at: number): string {
+  const value = array[at];
+  if (typeof value !== "object" || value === null) {
+    return "";
+  }
+  const record = value as Record<string, unknown>;
+  if (top === "candidates") {
+    if (typeof record["iterationId"] === "string") {
+      return `iteration:${record["iterationId"]}`;
+    }
+    const from = record["from"];
+    if (typeof from === "object" && from !== null) {
+      const source = from as Record<string, unknown>;
+      if (source["form"] === "iteration" && typeof source["iterationId"] === "string") {
+        return `iteration:${source["iterationId"]}`;
+      }
+      if (source["form"] === "promotedKey" && typeof source["key"] === "string") {
+        return `promotedKey:${source["key"]}`;
+      }
+    }
+    return "";
+  }
+  if (top === "readings" && typeof record["drafter"] === "string") {
+    let occurrence = 0;
+    for (let i = 0; i < at; i++) {
+      const other = array[i];
+      if (
+        typeof other === "object" &&
+        other !== null &&
+        (other as Record<string, unknown>)["drafter"] === record["drafter"]
+      ) {
+        occurrence += 1;
+      }
+    }
+    return `${record["drafter"]}#${String(occurrence)}`;
+  }
+  return "";
+}
+
+/** The record in the re-gathered document with the same identity, or null if it left the set. */
+function matchingRecord(
+  document: Record<string, unknown>,
+  container: { readonly top: string; readonly identity: string | null },
+): Record<string, unknown> | null {
+  const value = document[container.top];
+  if (container.identity === null) {
+    return typeof value === "object" && value !== null && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : null;
+  }
+  if (!Array.isArray(value)) {
+    return null;
+  }
+  for (let at = 0; at < value.length; at++) {
+    const element = value[at];
+    if (
+      typeof element === "object" &&
+      element !== null &&
+      identityOf(container.top, value, at) === container.identity
+    ) {
+      return element as Record<string, unknown>;
+    }
+  }
+  return null;
+}
+
+/** What re-gathering the material behind a proposal's bases produced, or the gatherer's refusal. */
+type RegatherOutcome =
+  | { readonly kind: "regathered"; readonly document: Record<string, unknown> }
+  | { readonly kind: "refused"; readonly reason: string };
+
+/** Everything one basis needs in order to decide its own freshness (`D-0038` rule 4's `Record`). */
+interface FreshnessContext {
+  readonly storedSnapshot: Record<string, unknown>;
+  readonly subjectId: string;
+  readonly subjectVerdict: Freshness;
+  readonly regathered: RegatherOutcome;
+  /** Whether the current cadenza pin differs from the one that composed this row (rule 5's fourth edge). */
+  readonly pinDiffers: boolean;
+}
+
+/** Fields a `contractDigest` compare ignores once the pin line has already said the pin moved. */
+const PIN_MOVED_IGNORES: ReadonlySet<string> = new Set(["contractDigest"]);
+
+/** A `snapshot` basis: re-gather, find the record the pointer sits in, and compare it. */
+function snapshotBasisFreshness(pointer: string, ctx: FreshnessContext): Freshness {
+  if (cited(ctx.storedSnapshot, pointer) === "does not resolve") {
+    // D-0038 rule 5's second edge: a citation already broken at composition is
+    // D-0032 rule 2's failure, not evidence about movement.
+    return undetermined("this citation does not resolve in the stored snapshot");
+  }
+  if (ctx.regathered.kind === "refused") {
+    // Rule 5's third edge: the refusal is whole-snapshot, not per basis.
+    return undetermined(`rondo could not re-gather to check: ${ctx.regathered.reason}`);
+  }
+  const container = containerOf(ctx.storedSnapshot, pointer);
+  if (container === null) {
+    return undetermined("rondo does not know how to compare the record this citation names");
+  }
+  if (container.kind === "wholeArray") {
+    // `propose()`'s `/readings`: cited exactly when there was nothing to point
+    // an element at, so what is compared is the collection itself rather than
+    // a record inside it.
+    const fresh = ctx.regathered.document[container.top];
+    if (!Array.isArray(fresh)) {
+      return undetermined("rondo does not know how to compare the record this citation names");
+    }
+    return stableJson(container.array) === stableJson(fresh)
+      ? { verdict: "unmoved", detail: null }
+      : {
+          verdict: "moved",
+          detail: `${String(container.array.length)} at composition, ${String(fresh.length)} now`,
+        };
+  }
+  const fresh = matchingRecord(ctx.regathered.document, container);
+  if (fresh === null) {
+    // Rule 5's first edge: the strongest signal rondo can observe.
+    return { verdict: "moved", detail: "no longer present in what rondo reads now" };
+  }
+  return compareRecords(
+    container.record,
+    fresh,
+    container.top === "candidates" && ctx.pinDiffers ? PIN_MOVED_IGNORES : undefined,
+  );
+}
+
+/**
+ * One basis's freshness, exhaustive over {@link Basis}'s five forms
+ * (`D-0038` rule 4). A sixth form added to the union and forgotten here is a
+ * type error, not a screen that quietly says a premise held.
+ */
+const BASIS_FRESHNESS: {
+  readonly [K in Basis["form"]]: (basis: Basis, ctx: FreshnessContext) => Freshness;
+} = {
+  snapshot: (basis, ctx) => snapshotBasisFreshness((basis as { pointer: string }).pointer, ctx),
+  iteration: (basis, ctx) => {
+    const iterationId = (basis as { iterationId: string }).iterationId;
+    return iterationId === ctx.subjectId
+      ? ctx.subjectVerdict
+      : undetermined(
+          `this basis names iteration '${iterationId}', not this proposal's own subject '${ctx.subjectId}', ` +
+            "so rondo has nothing recorded at composition to compare it against",
+        );
+  },
+  gateTransition: () =>
+    undetermined("rondo has no reader for a gate transition yet (D-0022's own named residual)"),
+  continuoRun: () =>
+    undetermined(
+      "nothing recorded what this continuo run said at composition, so there is no left-hand side",
+    ),
+  repository: () =>
+    undetermined(
+      "deciding a repository citation needs a ref to compare against, which is a policy nothing in " +
+        "rondo owns yet (D-0033 rule 9, D-0037's residual)",
+    ),
+};
+
+/** What re-gathering produced for a proposal's candidates or its readings, so bases can be compared. */
+async function regatherPayload(
+  ports: Pick<ProposePorts, "store">,
+  proposal: StoredProposal,
+  subject: IterationRecord,
+): Promise<RegatherOutcome> {
+  if (proposal.kind === "explanation") {
+    const readings = await ports.store.readingsFor(subject.id);
+    return {
+      kind: "regathered",
+      document: {
+        iteration: snapshotIteration(subject),
+        readings: readings.map((reading) => ({
+          drafter: reading.drafter,
+          verdict: reading.verdict,
+          findings: [...reading.findings],
+          unavailableReason: reading.unavailableReason,
+        })),
+      },
+    };
+  }
+  if (
+    proposal.kind !== "run_plan" &&
+    proposal.kind !== "agent_type" &&
+    proposal.kind !== "contract_keys"
+  ) {
+    // `widening_successor` and any kind rondo does not know: no drafter here
+    // composes one, so there is no gatherer to re-run either.
+    return {
+      kind: "refused",
+      reason: `rondo has no re-gather for proposal kind '${proposal.kind}'`,
+    };
+  }
+  const successor = (proposal.snapshot as Record<string, unknown>)["successor"];
+  const successorId =
+    typeof successor === "object" && successor !== null
+      ? (successor as Record<string, unknown>)["iterationId"]
+      : undefined;
+  if (typeof successorId !== "string") {
+    return {
+      kind: "refused",
+      reason: "the stored snapshot names no successor to re-gather candidates for",
+    };
+  }
+  const rows = await lineage(ports, subject);
+  if ("refusal" in rows) {
+    return { kind: "refused", reason: rows.refusal };
+  }
+  const gathered =
+    proposal.kind === "run_plan"
+      ? gatherRunPlanCandidates(rows.rows, successorId)
+      : gatherContractCandidates(proposal.kind, subject, rows.rows, successorId);
+  return gathered.kind === "gathered"
+    ? {
+        kind: "regathered",
+        document: { iteration: snapshotIteration(subject), candidates: gathered.candidates },
+      }
+    : { kind: "refused", reason: gathered.reason };
+}
+
+/** Every basis's freshness, plus the subject's own verdict and the cadenza pin line (`D-0038`). */
+export interface FreshnessReport {
+  readonly subject: Freshness;
+  /** Aligned by index to the payload's own `options` or `claims`. */
+  readonly perBasis: readonly Freshness[];
+  /** The pin line, said once, when the current pin differs from the one that composed this row. */
+  readonly pinLine: string | null;
+}
+
+/**
+ * Re-gather this proposal's material and decide every basis's freshness
+ * against it (`D-0038`). Null when there is no payload to check -- the row
+ * will not read, or names no iteration at all.
+ */
+async function gatherFreshness(
+  ports: Pick<ProposePorts, "store" | "cadenzaRevision">,
+  proposal: StoredProposal,
+  reading: PayloadReading,
+): Promise<FreshnessReport | null> {
+  if (reading.kind === "unreadable" || proposal.iterationId === null) {
+    return null;
+  }
+  const items: readonly { readonly basis: Basis }[] =
+    reading.kind === "options" ? reading.payload.options : reading.payload.claims;
+  const subjectOutcome = await ports.store.read(proposal.iterationId);
+  if (subjectOutcome.kind !== "read") {
+    const reason =
+      subjectOutcome.kind === "absent"
+        ? `iteration '${proposal.iterationId}' is no longer in this store`
+        : `iteration '${proposal.iterationId}' will not decode: ${subjectOutcome.reason}`;
+    const whole = undetermined(reason);
+    return { subject: whole, perBasis: items.map(() => whole), pinLine: null };
+  }
+  const freshIteration = snapshotIteration(subjectOutcome.record) as unknown as Record<
+    string,
+    unknown
+  >;
+  const storedIteration = (proposal.snapshot as Record<string, unknown>)["iteration"];
+  const subjectVerdict =
+    typeof storedIteration === "object" && storedIteration !== null
+      ? compareRecords(storedIteration as Record<string, unknown>, freshIteration)
+      : undetermined("the stored snapshot names no iteration to compare");
+
+  const regathered = await regatherPayload(ports, proposal, subjectOutcome.record);
+  const pinDiffers =
+    proposal.cadenzaRevision !== null && proposal.cadenzaRevision !== ports.cadenzaRevision;
+  const ctx: FreshnessContext = {
+    storedSnapshot: proposal.snapshot as Record<string, unknown>,
+    subjectId: proposal.iterationId,
+    subjectVerdict,
+    regathered,
+    pinDiffers,
+  };
+  const perBasis = items.map((item) => BASIS_FRESHNESS[item.basis.form](item.basis, ctx));
+
+  const pinLine = pinDiffers
+    ? `cadenza pin moved: this proposal's contracts were composed under '${proposal.cadenzaRevision}', ` +
+      `and rondo is running '${ports.cadenzaRevision}'`
+    : null;
+
+  return { subject: subjectVerdict, perBasis, pinLine };
+}
+
+/**
  * One stored proposal as an operator reads it, composed at render time from the
  * row and nothing else (#39, D-0032 rules 1, 2, 3 and 4).
  *
@@ -1246,6 +1729,7 @@ function foreclosureLines(kind: string): readonly string[] {
 export function storedProposalLines(
   proposal: StoredProposal,
   reading: PayloadReading,
+  freshness: FreshnessReport | null = null,
 ): readonly string[] {
   const about =
     proposal.iterationId === null
@@ -1263,8 +1747,14 @@ export function storedProposalLines(
             `'${proposal.elevatedByActorId}'`,
         ]),
     ...answerLines(proposal),
+    ...(freshness === null ? [] : freshnessHeaderLines(proposal.iterationId, freshness)),
     "",
-    ...payloadLines(reading, proposal.snapshot, isApprovableKind(proposal.kind)),
+    ...payloadLines(
+      reading,
+      proposal.snapshot,
+      isApprovableKind(proposal.kind),
+      freshness?.perBasis ?? null,
+    ),
     "",
     ...foreclosureLines(proposal.kind),
     // **The command that answers it, with the flag that carries the choice.**
@@ -1320,11 +1810,51 @@ function answerLines(proposal: StoredProposal): readonly string[] {
   ];
 }
 
+/**
+ * The header's three-way count and the subject's own verdict (`D-0038` rule 1
+ * and rule 4's closing paragraph): always the count, never a single word --
+ * including when nothing moved -- and the subject is said beside it because no
+ * basis on `agent_type` or `contract_keys` rests on it at all.
+ */
+function freshnessHeaderLines(
+  iterationId: string | null,
+  freshness: FreshnessReport,
+): readonly string[] {
+  const counts = { unmoved: 0, moved: 0, undetermined: 0 };
+  for (const one of freshness.perBasis) {
+    counts[one.verdict] += 1;
+  }
+  return [
+    `  freshness: ${String(counts.unmoved)} unmoved, ${String(counts.moved)} moved, ` +
+      `${String(counts.undetermined)} undetermined; subject '${String(iterationId)}': ` +
+      freshnessWord(freshness.subject),
+    ...(freshness.pinLine === null ? [] : [`  ${freshness.pinLine}`]),
+  ];
+}
+
+/**
+ * One verdict, with its detail beside it when there is one.
+ *
+ * `undefined` is unreachable -- `perBasis` is built one entry per option or
+ * claim -- and is read as `undetermined` rather than asserted away, so an
+ * index ever falling out of step is a wrong word on the screen and not a
+ * throw.
+ */
+function freshnessWord(freshness: Freshness | undefined): string {
+  if (freshness === undefined) {
+    return "undetermined";
+  }
+  return freshness.detail === null
+    ? freshness.verdict
+    : `${freshness.verdict} (${freshness.detail})`;
+}
+
 /** The options or the claims, each with its basis and the material under it. */
 function payloadLines(
   reading: PayloadReading,
   snapshot: object,
   approvable: boolean,
+  perBasis: readonly Freshness[] | null,
 ): readonly string[] {
   switch (reading.kind) {
     case "options":
@@ -1342,6 +1872,7 @@ function payloadLines(
           // operator matching two words nobody said were the same.
           `      ${approvable ? "contract" : "value"}: ${option.value}`,
           `      basis: ${basisLine(option.basis, snapshot)}`,
+          ...(perBasis === null ? [] : [`      freshness: ${freshnessWord(perBasis[index])}`]),
         ]),
       ];
     case "claims":
@@ -1349,9 +1880,10 @@ function payloadLines(
         `the claims, in the order the record holds them (${String(
           reading.payload.claims.length,
         )}):`,
-        ...reading.payload.claims.flatMap((claim) => [
+        ...reading.payload.claims.flatMap((claim, index) => [
           `  ${claim.label}: ${claim.value}`,
           `      basis: ${basisLine(claim.basis, snapshot)}`,
+          ...(perBasis === null ? [] : [`      freshness: ${freshnessWord(perBasis[index])}`]),
         ]),
       ];
     default:
@@ -1379,7 +1911,8 @@ export type ShowOutcome =
  * subjects on both sides.
  */
 export async function showProposal(
-  ports: Pick<ExplainPorts, "record" | "present" | "now">,
+  ports: Pick<ExplainPorts, "record" | "present" | "now"> &
+    Pick<ProposePorts, "store" | "cadenzaRevision">,
   proposalId: string,
 ): Promise<ShowOutcome> {
   const atMs = ports.now();
@@ -1397,7 +1930,12 @@ export async function showProposal(
       reason: `the proposal '${proposalId}' will not read: ${outcome.reason}`,
     };
   }
-  ports.present(storedProposalLines(outcome.proposal, readPayload(outcome.proposal.payload)));
+  const reading = readPayload(outcome.proposal.payload);
+  // **Re-gathered here, and never stored** (`D-0038` rule 6): whether the
+  // premise under this proposal still holds is a function of the row and of
+  // now, decided fresh at every render.
+  const freshness = await gatherFreshness(ports, outcome.proposal, reading);
+  ports.present(storedProposalLines(outcome.proposal, reading, freshness));
   const counted = await ports.record.recordAttention({
     atMs,
     subjectKind: PROPOSAL_SUBJECT,

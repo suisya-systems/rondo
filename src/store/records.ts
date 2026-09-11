@@ -961,6 +961,17 @@ export interface StoredProposal {
   readonly elevatedFromMessageId: string | null;
   readonly elevatedByActorId: string | null;
   readonly createdAtMs: number;
+  /**
+   * The pin that composed this proposal's contracts, and null on an
+   * `explanation` (D-0022 rule 18).
+   *
+   * **Read back so a re-gather at render time can say when it differs**
+   * (`D-0038` rule 5): a re-gather run under a different cadenza than the one
+   * that composed this row would report every candidate's digest as moved for
+   * a reason that has nothing to do with the material, so the screen states
+   * the pin difference once rather than as noise on every option.
+   */
+  readonly cadenzaRevision: string | null;
   /** What people answered, oldest first, and empty while nobody has (D-0032 rule 6). */
   readonly decisions: readonly StoredDecision[];
 }
