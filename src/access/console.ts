@@ -60,6 +60,57 @@ export function asciiEscape(text: string): string {
 }
 
 /**
+ * The non-ASCII punctuation a worker's prose actually contains, spelled in
+ * ASCII a person reads as the same mark rather than as an escape (rondo#68).
+ *
+ * Deliberately small. Whatever is not in this table still ends up ASCII --
+ * {@link legibleAsciiEscape} falls back to the same `\uXXXX` escape
+ * {@link asciiEscape} uses -- so growing this table is a readability
+ * improvement, never a D-0004 requirement.
+ */
+const READABLE_SUBSTITUTES: Readonly<Record<string, string>> = {
+  "–": "-", // en dash
+  "—": "--", // em dash
+  "‘": "'", // left single quote
+  "’": "'", // right single quote
+  "“": '"', // left double quote
+  "”": '"', // right double quote
+  "…": "...", // ellipsis
+  "•": "-", // bullet
+  " ": " ", // no-break space
+};
+
+/** Everything `asciiEscape` escapes, except a real newline. */
+const PRINTABLE_ASCII_OR_NEWLINE = /[^\x20-\x7E\n]/g;
+
+/**
+ * `asciiEscape`, except a paragraph stays a paragraph (rondo#68).
+ *
+ * `asciiEscape` escapes `\n` along with everything else non-ASCII, which is
+ * right for a value folded into one line of rondo's own composing (a joined
+ * list, a prefix) but wrong for a value that *is* the whole of what is shown --
+ * continuo's `rationale` on the gate screen, which D-0029 rule 2 asks a person
+ * to actually read. There the embedded newlines are the worker's own paragraph
+ * breaks, and escaping them turns several paragraphs into one unreadable line
+ * of `
+`.
+ *
+ * The two escaped classes stay separate rather than one shared "not ASCII"
+ * bucket: a control character other than `\n` (a tab, an escape sequence) is
+ * still spelled `\uXXXX`, because nothing about it is meant to be read; a
+ * non-ASCII printable that a person would recognize is spelled with an ASCII
+ * lookalike from {@link READABLE_SUBSTITUTES} where one exists, and with the
+ * same `\uXXXX` escape otherwise. D-0004 -- no non-ASCII on a cp932 console --
+ * holds either way, because the fallback is the same escape `asciiEscape` uses.
+ */
+export function legibleAsciiEscape(text: string): string {
+  return text.replace(PRINTABLE_ASCII_OR_NEWLINE, (character) => {
+    const substitute = READABLE_SUBSTITUTES[character];
+    return substitute ?? `\\u${character.charCodeAt(0).toString(16).padStart(4, "0")}`;
+  });
+}
+
+/**
  * Where a relayed line goes.
  *
  * A record rather than a direct `process.stderr.write`, for the reason
