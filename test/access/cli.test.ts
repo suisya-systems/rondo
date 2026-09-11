@@ -79,6 +79,7 @@ function answered<T>(payload: T): ContinuoResult<T> {
 function fakeVerbs(
   stage: string,
   outcome: string | null = null,
+  runId: string | null = "r1",
 ): { verbs: GateVerbs; calls: string[] } {
   const calls: string[] = [];
   const verbs: GateVerbs = {
@@ -87,7 +88,7 @@ function fakeVerbs(
       return answered({
         gateId: request.gateId,
         gateType: "worker_escalation",
-        runId: "r1",
+        runId,
         stage,
         outcome,
         rationale: "Ready to land. Land it?",
@@ -105,7 +106,10 @@ function fakeVerbs(
       });
     },
     deliver: async (_continuo, request) => {
-      calls.push(`deliver:${request.holder}`);
+      // The run id is recorded because it is the argument this whole walk was
+      // silently getting wrong: it must be the one `show` handed back, not one
+      // composed from the request. `global` marks the flag being left off.
+      calls.push(`deliver:${request.holder}:${request.runId ?? "global"}`);
       return answered({
         recipient: "external-notify",
         epoch: 1,
@@ -370,14 +374,31 @@ test("from 'received' the walk is six verbs, in continuo's order", () => {
     expect(calls).toEqual([
       "show:g1",
       "present:g1",
-      "deliver:rondo-operator",
+      "deliver:rondo-operator:r1",
       // The ack of the *presented* relay is what moves the stage; the present
       // did not.
       "ack:m-presented-relay",
       "answer:approve",
-      "deliver:rondo-operator",
+      "deliver:rondo-operator:r1",
       // And the ack of the *forwarded* relay is what closes the gate.
       "ack:m-forwarded-relay",
+    ]);
+  })();
+});
+
+test("a gate scoped to no run is delivered on the global resource", () => {
+  return (async () => {
+    // continuo's own word for the case (`gate deliver --run-id`'s help): rows
+    // belonging to no run live on the global resource, so the flag is left off
+    // for exactly those gates and for no others. The walk reads which it is
+    // from `show`, so this is the whole of rondo's decision.
+    const { verbs, calls } = fakeVerbs("received", null, null);
+    const outcome = await walkGate(continuo, walkRequest, verbs);
+
+    expect(outcome).toEqual({ kind: "walked", closed: true, answerSent: true });
+    expect(calls.filter((call) => call.startsWith("deliver:"))).toEqual([
+      "deliver:rondo-operator:global",
+      "deliver:rondo-operator:global",
     ]);
   })();
 });
@@ -391,7 +412,7 @@ test("from 'presented' the walk skips straight to the answer", () => {
     expect(calls).toEqual([
       "show:g1",
       "answer:approve",
-      "deliver:rondo-operator",
+      "deliver:rondo-operator:r1",
       "ack:m-forwarded-relay",
     ]);
     // Replaying from `present` here is what continuo refuses
@@ -412,7 +433,7 @@ test("from 'answered' the walk re-issues the identical body to recover the relay
     expect(calls).toEqual([
       "show:g1",
       "answer:approve",
-      "deliver:rondo-operator",
+      "deliver:rondo-operator:r1",
       "ack:m-forwarded-relay",
     ]);
   })();

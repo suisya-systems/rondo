@@ -1047,6 +1047,19 @@ export interface DeliverGateRequest {
   readonly db: string;
   readonly destinationDir: string;
   readonly holder: string;
+  /**
+   * The run whose relays to drain. Null means the global delivery resource.
+   *
+   * **Required as a field although the flag is optional**, so that a caller has
+   * to say which of the two it means rather than reach the global one by
+   * forgetting. Since `continuo D-1104` a gate's relays are queued on its run's
+   * resource, so a caller that omitted this for a gate that has a run drains an
+   * empty queue, reports success, and is then refused by `gate ack` -- which is
+   * what cost a whole lap of dogfooding two hand-typed deliveries and three
+   * `rondo answer` invocations (`docs/operations/lap-2-dogfood.md` N-1). Null
+   * is for the gates continuo itself calls runless, whose rows do live there.
+   */
+  readonly runId: string | null;
 }
 
 /**
@@ -1057,10 +1070,17 @@ export interface DeliverGateRequest {
  * whether *its* message went out reads {@link GateDelivered.deliveredMessageIds}
  * rather than assuming its own was the only one queued.
  *
- * It takes the global `outbox-delivery` lease, which is the same lease
- * `lap perform` holds for the length of a lap -- so a deliver racing a lap is
- * refused `LeaseHeld`, and that refusal is an ordinary answer to relay rather
- * than a defect.
+ * It takes the delivery lease **of the run named in the request**, which is the
+ * same lease `lap perform` holds for the length of that lap -- so a deliver
+ * racing its lap is refused `LeaseHeld`, and that refusal is an ordinary answer
+ * to relay rather than a defect. It was the *global* lease until
+ * `continuo D-1104` moved gate relays onto the run's own resource; the sentence
+ * that said so outlived the pin that made it true, and a stale doc comment is
+ * part of why {@link DeliverGateRequest.runId} went unsent for a whole lap.
+ *
+ * A run id continuo does not know is refused `UnknownGateRefused` rather than
+ * answered with an empty queue, which is what makes this argument checkable
+ * from outside (`test/continuo/smoke.test.ts`).
  */
 export async function deliverGate(
   continuo: VerifiedContinuo,
@@ -1075,6 +1095,7 @@ export async function deliverGate(
       requireAbsolute("destinationDir", request.destinationDir),
       "--holder",
       requireIdentifier("holder", request.holder),
+      ...(request.runId === null ? [] : ["--run-id", requireIdentifier("runId", request.runId)]),
     ];
   } catch (error) {
     if (error instanceof ArgumentRefusal) {

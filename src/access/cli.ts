@@ -730,7 +730,7 @@ export async function walkGate(
       `  gate present   message ${presented.payload.messageId} (enqueued: ${String(presented.payload.enqueued)})`,
     );
 
-    const delivered = await deliverOnce(continuo, request, verbs);
+    const delivered = await deliverOnce(continuo, request, gate.runId, verbs);
     if (delivered !== null) {
       return { kind: "failed", status: delivered };
     }
@@ -775,7 +775,7 @@ export async function walkGate(
       `(advanced: ${String(answered.payload.advanced)})`,
   );
 
-  const deliveredAgain = await deliverOnce(continuo, request, verbs);
+  const deliveredAgain = await deliverOnce(continuo, request, gate.runId, verbs);
   if (deliveredAgain !== null) {
     return { kind: "failed", status: deliveredAgain };
   }
@@ -795,16 +795,28 @@ export async function walkGate(
   return { kind: "walked", closed: finalAck.payload.closed, answerSent: true };
 }
 
-/** One delivery pass. Null when it worked; an exit status when it did not. */
+/**
+ * One delivery pass. Null when it worked; an exit status when it did not.
+ *
+ * `runId` is **the gate's own**, taken from the `gate show` payload rather than
+ * from rondo's iteration row, for the reason {@link walkGate} gives about
+ * message ids: the resource a relay is queued on is continuo's to decide, and a
+ * run id sourced from anywhere else is a guess that happens to agree until it
+ * does not. Null is continuo's answer for a gate scoped to no run, and then the
+ * flag is left off -- which names the global resource, which is exactly where a
+ * runless gate's relays live.
+ */
 async function deliverOnce(
   continuo: VerifiedContinuo,
   request: WalkRequest,
+  runId: string | null,
   verbs: GateVerbs,
 ): Promise<number | null> {
   const delivered = await verbs.deliver(continuo, {
     db: request.db,
     destinationDir: request.destinationDir,
     holder: request.holder,
+    runId,
   });
   if (delivered.kind !== "answered") {
     return relayFailure("gate deliver", delivered);

@@ -390,18 +390,44 @@ describe("the gate walk's verbs, at the argument boundary", () => {
       db: "/srv/rondo/cp.sqlite3",
       destinationDir: "dropbox",
       holder: "rondo-operator",
+      runId: "rondo-1",
     });
     expect(defectReason(result)).toContain("destinationDir");
     expect(defectReason(result)).not.toContain(REACHED_RUN);
   });
 
-  test("gate deliver with every field absolute reaches run", async () => {
+  test("gate deliver refuses an unusable run id", async () => {
     const result = await deliverGate(unissued, {
       db: "/srv/rondo/cp.sqlite3",
       destinationDir: "/srv/rondo/dropbox",
       holder: "rondo-operator",
+      runId: "",
     });
-    expect(defectReason(result)).toContain(REACHED_RUN);
+    // An empty run id is not the same request as `null`: null asks for the
+    // global delivery resource on purpose, and "" is a value nobody meant.
+    expect(defectReason(result)).toContain("runId");
+    expect(defectReason(result)).not.toContain(REACHED_RUN);
+  });
+
+  test("gate deliver with every field absolute reaches run, with or without a run", async () => {
+    const scoped = await deliverGate(unissued, {
+      db: "/srv/rondo/cp.sqlite3",
+      destinationDir: "/srv/rondo/dropbox",
+      holder: "rondo-operator",
+      runId: "rondo-1",
+    });
+    expect(defectReason(scoped)).toContain(REACHED_RUN);
+
+    // The runless gate's form. It is the *only* way to reach the global
+    // resource from rondo, which is the point of the field being required
+    // while the flag is not (`continuo D-1104`).
+    const global = await deliverGate(unissued, {
+      db: "/srv/rondo/cp.sqlite3",
+      destinationDir: "/srv/rondo/dropbox",
+      holder: "rondo-operator",
+      runId: null,
+    });
+    expect(defectReason(global)).toContain(REACHED_RUN);
   });
 
   test("gate ack accepts a path-shaped relay id and refuses an option-shaped one", async () => {
