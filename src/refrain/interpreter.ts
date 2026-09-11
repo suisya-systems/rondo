@@ -51,7 +51,7 @@ import type {
   IterationStatus,
   LapReadingDraft,
 } from "../store/records.js";
-import { isTerminal } from "../store/records.js";
+import { isTerminal, readingCoverage } from "../store/records.js";
 import { allocate } from "./allocator.js";
 import { nextStep, type Step } from "./loop.js";
 import {
@@ -1464,6 +1464,13 @@ const UNREAD_DRAFTER = "rondo/none";
  * shown nothing cannot tell a clean reading from a stage that did not run,
  * which is the distinction the row keeps and the one `publish` refuses on.
  * Every string here is rondo's own and is ASCII (D-0004).
+ *
+ * **What the reading did not look at is said beside what it found** (rondo#69),
+ * out of `readingCoverage` so that this report and `rondo answer`'s gate screen
+ * make the same statement about the same drafter. "Found nothing to raise" is
+ * read as "a check happened", and the check that matters most to the person
+ * reading it -- whether the work was built or tested -- is one this reader
+ * cannot make and does not make.
  */
 function readingLines(reading: LapReadingDraft): readonly string[] {
   switch (reading.verdict) {
@@ -1473,12 +1480,14 @@ function readingLines(reading: LapReadingDraft): readonly string[] {
           `${String(reading.evidence?.commitCount ?? 0)} commit(s) and ` +
           `${String(reading.evidence?.fileCount ?? 0)} file(s); this is material for you, not an ` +
           "approval.",
+        ...readingCoverage(reading.drafter),
       ];
     case "concerns":
       return [
         `An independent reading of the work raised ${String(reading.findings.length)} point(s) ` +
           `(${reading.drafter}):`,
         ...reading.findings.map((finding) => `  - ${finding}`),
+        ...readingCoverage(reading.drafter),
         "That is material for you to weigh. It settles nothing, and the answer is still yours.",
       ];
     default:

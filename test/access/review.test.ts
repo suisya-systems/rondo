@@ -9,12 +9,8 @@
 import { expect, test } from "vitest";
 
 import type { LapWorkInspection } from "../../src/access/forge.js";
-import {
-  DETERMINISTIC_DRAFTER,
-  evidenceOf,
-  materialDigestOf,
-  readingOf,
-} from "../../src/access/review.js";
+import { evidenceOf, materialDigestOf, readingOf } from "../../src/access/review.js";
+import { DETERMINISTIC_READING_DRAFTER } from "../../src/store/records.js";
 
 const BASE = "b".repeat(40);
 const TIP = "a".repeat(40);
@@ -54,7 +50,7 @@ test("a lap that added commits and files reads clear, with its evidence", () => 
   expect(reading.verdict).toBe("clear");
   expect(reading.findings).toEqual([]);
   expect(reading.unavailableReason).toBeNull();
-  expect(reading.drafter).toBe(DETERMINISTIC_DRAFTER);
+  expect(reading.drafter).toBe(DETERMINISTIC_READING_DRAFTER);
   expect(reading.evidence).toEqual({
     baseRef: "refs/remotes/origin/main",
     baseCommit: BASE,
@@ -128,5 +124,5 @@ test("evidenceOf and readingOf compute the same measurement", () => {
 });
 
 test("the drafter is versioned, so an old row does not read as today's rules", () => {
-  expect(DETERMINISTIC_DRAFTER).toMatch(/^rondo\/deterministic\/\d+$/);
+  expect(DETERMINISTIC_READING_DRAFTER).toMatch(/^rondo\/deterministic\/\d+$/);
 });

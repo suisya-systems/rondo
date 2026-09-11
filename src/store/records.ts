@@ -501,6 +501,60 @@ export interface LapReading extends LapReadingDraft {
 }
 
 /**
+ * Who produced a reading when rondo's own deterministic reader did (D-0029
+ * rule 5).
+ *
+ * **A version is in the string on purpose.** The row is append-only and
+ * outlives the code that wrote it, so "which reader said this" has to be
+ * answerable from the row alone; a bare `"deterministic"` would make every past
+ * verdict appear to have been taken under today's rules.
+ *
+ * It lives beside the row rather than beside the reader because
+ * {@link readingCoverage} is read from two layers that may not import each
+ * other, and a second spelling of this string is a mislabelled row nobody would
+ * notice.
+ */
+export const DETERMINISTIC_READING_DRAFTER = "rondo/deterministic/1";
+
+/**
+ * What a reading by this drafter did *not* look at, said wherever it says what
+ * it found (rondo#69).
+ *
+ * **The defect this answers is a claim of coverage, not a claim of authority.**
+ * Every screen that prints a reading already labels it material rather than an
+ * approval. On 2026-09-12 one of them printed `read and nothing raised`
+ * directly beneath the worker's own account of not having been able to run the
+ * verification at all, and only a human noticed that the two lines contradicted
+ * each other: what a reader takes from "nothing raised" is that a check
+ * happened, and the check that mattered most had not. D-0029 rule 9 had already
+ * decided the reach -- *"green but not upholding it"* is in its list of what
+ * this stage cannot catch, because no module under `src/` may run a test suite
+ * -- and recorded it in a file nobody reads while a gate is open. This says it
+ * where the claim is made.
+ *
+ * **Keyed by the drafter, because the rows outlive the reader.** A fixed line
+ * would itself be a fixed claim about what some later reader looked at, which
+ * is this same defect one turn on; so an unrecognised drafter -- a model one
+ * under rule 6, or the `rondo/none` an absent reading is attributed to -- says
+ * that its reach is not recorded rather than guessing at it.
+ */
+export function readingCoverage(drafter: string): readonly string[] {
+  if (drafter !== DETERMINISTIC_READING_DRAFTER) {
+    return Object.freeze([
+      "What this reader looked at is not recorded, so nothing here says what it covered.",
+    ]);
+  }
+  // Wrapped where a terminal would otherwise wrap it, in the shape the
+  // neighbouring screens use: the caller indents these, and a sentence that ran
+  // past the width would be the one line on the screen that folded.
+  return Object.freeze([
+    "It built nothing, ran nothing and tested nothing: rondo cannot run a lap's work.",
+    "Whether the verification this lap was asked for ran is neither checked nor claimed here.",
+    "It read committed history only, and it cannot tell whether the lap did what was asked.",
+  ]);
+}
+
+/**
  * The five voices a proposal may speak in (D-0022 rule 4's closed union).
  *
  * A closed union rather than free text because an unrecognised kind is a row

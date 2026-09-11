@@ -13,6 +13,7 @@ import { expect, test } from "vitest";
 
 import { CONSERVATIVE_HOST_POLICY } from "../../src/refrain/policy.js";
 import type { JsonRecord, LapReadingDraft, ReadingEvidence } from "../../src/store/records.js";
+import { DETERMINISTIC_READING_DRAFTER, readingCoverage } from "../../src/store/records.js";
 import { iterationStore } from "../../src/store/sqlite.js";
 
 const somePlan = (): JsonRecord => ({
@@ -300,4 +301,19 @@ test("the reading table arrives on a database that predates it", async () => {
   await store.transition("i-0001", "planned", "closed", {}, 2_000, clear());
 
   expect((await store.readingsFor("i-0001"))[0]?.verdict).toBe("clear");
+});
+
+test("the coverage of a reading is keyed by its drafter, and states the same ceiling twice", () => {
+  // **One spelling for two layers** (rondo#69). `rondo answer` renders a stored
+  // reading and the conductor renders a draft, and they may not import each
+  // other, so the sentence that says what the reader did not look at lives
+  // beside the row. What it must never become is a fixed claim about a reader
+  // nobody has written yet: rows are append-only, a model drafter arrives under
+  // D-0029 rule 6, and it may well be handed more than this one is.
+  const deterministic = readingCoverage(DETERMINISTIC_READING_DRAFTER).join("\n");
+
+  expect(deterministic).toContain("built nothing, ran nothing and tested nothing");
+  expect(deterministic).toContain("neither checked nor claimed");
+  expect(readingCoverage("rondo/none").join("\n")).toContain("is not recorded");
+  expect(readingCoverage("rondo/model/1").join("\n")).not.toContain("built nothing");
 });
