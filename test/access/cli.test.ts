@@ -1613,6 +1613,25 @@ test("an empty branch is described rather than left silent", () => {
   expect(lines).toContain("no files changed");
 });
 
+test("between takes no flags at all, and refuses the ones that look plausible", () => {
+  // **The shape of the question is the shape of the command line** (D-0037
+  // rules 4 and 5): a between-laps composition is about every live lap and
+  // about no single one of them, so there is nothing to name -- and a `--limit`
+  // would be a cap on what an operator is shown, which is a withholding that
+  // names a rule rather than a flag.
+  const parsed = parseCommand(["between"]);
+  expect(parsed.kind).toBe("parsed");
+  if (parsed.kind === "parsed") {
+    expect(parsed.parsed.command).toBe("between");
+    expect(parsed.parsed.iterationId).toBe(null);
+    expect(parsed.parsed.actorId).toBe(null);
+  }
+  // An iteration id would be a narrower question that this verb does not ask,
+  // and an actor id would imply a mark it does not move.
+  expect(parseCommand(["between", "--iteration-id", "i-0001"]).kind).toBe("refused");
+  expect(parseCommand(["between", "--actor-id", "me"]).kind).toBe("refused");
+});
+
 test("explain takes an iteration id and refuses every other flag", () => {
   // D-0022 rule 1's surface, at the only place an operator meets it. `explain`
   // reads rondo's own rows and drives no continuo verb, so there is nothing for

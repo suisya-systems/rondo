@@ -30,6 +30,7 @@ import {
   type ContractKeysProposal,
   type ContractSnapshot,
   type Explanation,
+  type HostSnapshot,
   type Option,
   type OptionSetPayload,
   type PayloadReading,
@@ -38,6 +39,7 @@ import {
   proposeAgentType,
   proposeContractKeys,
   proposeElevated,
+  proposeHost,
   proposeRetryPlan,
   type RetrySnapshot,
   type RunPlanProposal,
@@ -45,6 +47,8 @@ import {
   type SnapshotCandidate,
   type SnapshotContractCandidate,
   type SnapshotIteration,
+  type SnapshotLap,
+  type SnapshotReading,
   type SnapshotSuccessor,
   snapshotDocument,
 } from "../advisory/proposal.js";
@@ -59,6 +63,7 @@ import {
 } from "../cadenza/facade.js";
 import { allocate } from "../refrain/allocator.js";
 import { type AdmittedPlan, admittedPlan, readPlan } from "../refrain/plan.js";
+import type { HostPolicy } from "../refrain/policy.js";
 import { canonicalJson } from "../store/plan.js";
 import {
   type DecisionOutcome,
@@ -181,15 +186,7 @@ function snapshotIteration(record: IterationRecord): SnapshotIteration {
  * kind and not on the other.
  */
 function gather(record: IterationRecord, readings: readonly LapReading[]): AdvisorySnapshot {
-  return {
-    iteration: snapshotIteration(record),
-    readings: readings.map((reading) => ({
-      drafter: reading.drafter,
-      verdict: reading.verdict,
-      findings: [...reading.findings],
-      unavailableReason: reading.unavailableReason,
-    })),
-  };
+  return { iteration: snapshotIteration(record), readings: snapshotReadings(readings) };
 }
 
 /**
@@ -274,7 +271,7 @@ function basisLine(basis: Basis, snapshot: object): string {
   }
 }
 
-function claimLines(claim: Claim, snapshot: AdvisorySnapshot): readonly string[] {
+function claimLines(claim: Claim, snapshot: object): readonly string[] {
   return [`  ${claim.label}: ${claim.value}`, `      basis: ${basisLine(claim.basis, snapshot)}`];
 }
 
@@ -1948,4 +1945,190 @@ export async function showProposal(
   return counted.kind === "recorded"
     ? { kind: "shown" }
     : { kind: "shownUncounted", reason: counted.reason };
+}
+
+/**
+ * Everything the between-laps composition is handed: `explain`'s four ports and
+ * the host's own bounds.
+ *
+ * **The bounds are a parameter for `ProposePorts.cadenzaRevision`'s reason.**
+ * They are the operator's policy, read where the environment is readable --
+ * which is the command line -- and not a constant this module could invent. A
+ * default taken here would report a host as running under bounds nobody set.
+ */
+export interface HostPorts extends ExplainPorts {
+  readonly policy: HostPolicy;
+}
+
+/** The readings of one lap, copied into the snapshot shape. */
+function snapshotReadings(readings: readonly LapReading[]): readonly SnapshotReading[] {
+  return readings.map((reading) => ({
+    drafter: reading.drafter,
+    verdict: reading.verdict,
+    findings: [...reading.findings],
+    unavailableReason: reading.unavailableReason,
+  }));
+}
+
+/**
+ * Every live lap, its readings, the bounds and the refusals, copied field by
+ * field into the snapshot shape (D-0037 rule 1, the gathering D-0022 rule 2
+ * assigns to this layer).
+ *
+ * **The iteration half is {@link snapshotIteration}**, the same function the
+ * per-lap gather uses, which is what makes `/laps/3/iteration/status` resolve
+ * to the same document `explain` would have shown for that lap alone.
+ *
+ * **The base branch is read out of the persisted plan and the plan is not
+ * copied** (rule 1): what rule 3a claims rests on the base branch alone. A plan
+ * that will not decode leaves it null, which the drafter renders as
+ * `undetermined` rather than as a lap quietly missing from the grouping.
+ *
+ * **The occupancies come from the store rather than from the rows just read**,
+ * because `maxOccupying` and `maxLive` are defined over the generated columns
+ * (D-0023 rule 8) and a live row that will not decode has no status this layer
+ * could classify.
+ */
+async function gatherHost(ports: HostPorts): Promise<HostSnapshot> {
+  const live = await ports.store.readLive();
+  const laps: SnapshotLap[] = [];
+  const unreadable: HostSnapshot["unreadable"][number][] = [];
+  for (const outcome of live) {
+    if (outcome.kind !== "read") {
+      // **A live row that will not decode is in the snapshot rather than
+      // missing from it**, which is the inbox's rule applied where a family
+      // would otherwise be quietly short: it holds a slot, so a composition
+      // that dropped it would be wrong about what is running in exactly the
+      // case that needs a person.
+      if (outcome.kind === "unreadable") {
+        unreadable.push({ id: outcome.id, reason: outcome.reason });
+      }
+      continue;
+    }
+    const record = outcome.record;
+    const plan = readPlan(record.plan);
+    laps.push({
+      iteration: snapshotIteration(record),
+      runId: record.runId,
+      topicBranch: record.topicBranch,
+      workspace: record.workspace,
+      baseBranch: plan.kind === "planned" ? plan.plan.baseBranch : null,
+      readings: snapshotReadings(await ports.store.readingsFor(record.id)),
+    });
+  }
+  const occupancy = await ports.store.occupancy();
+  return {
+    laps,
+    unreadable,
+    bounds: {
+      maxOccupying: ports.policy.maxOccupying,
+      maxLive: ports.policy.maxLive,
+      occupying: occupancy.occupying,
+      live: occupancy.live,
+    },
+    refusals: await ports.record.admissionRefusals(),
+  };
+}
+
+/**
+ * The between-laps composition as an operator reads it, composed at render
+ * time (D-0032 rule 3).
+ *
+ * **The line about adjacency is here and not in a claim's label**, because it
+ * is a property of the whole family rather than of any one of its claims:
+ * D-0037's own falsifier is *"an adjacency claim an operator acts on as though
+ * it were a collision"*, and the place that fails is the screen. What rondo can
+ * observe is that two laps are open against one base branch; a collision inside
+ * the work needs a reader across branches nothing in rondo has.
+ */
+export function hostLines(proposal: Explanation, snapshot: HostSnapshot): readonly string[] {
+  return [
+    "what spans the live laps",
+    `  drafter: ${DETERMINISTIC_DRAFTER}; derivation: ${proposal.derivation}`,
+    "  this explanation binds nothing: it is not a proposal and cannot be approved",
+    "  an adjacency is not a collision: rondo de-conflicts only the identifiers it mints, so " +
+      "two laps open against one base branch is where to look and not what was found",
+    ...proposal.payload.claims.flatMap((claim) => claimLines(claim, snapshot)),
+  ];
+}
+
+/**
+ * Compose what spans every live lap: gather, compose, record, render, count.
+ *
+ * **`explain`'s order, for `explain`'s reason** (D-0037 rule 4): the proposal is
+ * recorded with its snapshot verbatim before anything reaches the screen, so a
+ * composition whose recording failed is a refusal rather than a framing the
+ * ledger does not hold; the presentation is counted after it was shown, so
+ * *presented* is a claim about something that has already reached the screen.
+ *
+ * **It is run when an operator asks, and by nothing else.** There is no
+ * schedule, no daemon and no second loop: deciding *when* a person is
+ * interrupted is the authority `D-0033` refused, and it is the same authority
+ * whether it arrives through a component or through a timer.
+ *
+ * **It withholds nothing** (rule 5). Every live lap enters the snapshot: no
+ * cap, no paging, no *"top ten"*. If a host-wide snapshot ever has to be
+ * bounded for size, that bound is a withholding under a rule the operator named
+ * and writes `withheld` rows -- not a number chosen inside this function.
+ */
+export async function composeBetweenLaps(ports: HostPorts): Promise<ExplainOutcome> {
+  const snapshot = await gatherHost(ports);
+  const proposal = proposeHost(snapshot);
+  const createdAtMs = ports.now();
+  // Clock-derived, on `explain`'s terms: two compositions in one millisecond
+  // carry the same bytes, so the primary key collides exactly when the second
+  // row would have said what the first one says.
+  const proposalId = `between-${String(createdAtMs)}`;
+  const draft: ProposalDraft = {
+    proposalId,
+    kind: "explanation",
+    drafter: DETERMINISTIC_DRAFTER,
+    payload: payloadDocument(proposal.payload),
+    snapshot: snapshotDocument(snapshot),
+    derivation: proposal.derivation,
+    // **Null, and it is the one field that says what kind of subject this is.**
+    // A between-laps composition is about the laps between which it sits and
+    // about no single row; naming one of them here would make the row read as
+    // an explanation of that lap, which is a different and narrower claim.
+    iterationId: null,
+    supersedesIterationId: null,
+    supersedesProposalId: null,
+    predecessorPlanDigest: null,
+    predecessorContractDigest: null,
+    // The three digests describe *one* row's classification, and this proposal
+    // is about no one row. Filling them from an arbitrary lap would be a
+    // citation of material the claims do not rest on.
+    agentTypeDigest: null,
+    configDigest: null,
+    contractDigest: null,
+    continuoRevision: null,
+    cadenzaRevision: null,
+    elevatedFromMessageId: null,
+    elevatedByActorId: null,
+    createdAtMs,
+  };
+  const recorded = await ports.record.recordProposal(draft);
+  if (recorded.kind !== "recorded") {
+    return {
+      kind: "refused",
+      reason:
+        `The between-laps composition was composed and not recorded, so it is not being ` +
+        `shown: ${recorded.reason}. A framing an operator reads and the ledger does not hold ` +
+        "is the thing the record exists to prevent.",
+    };
+  }
+  ports.present(hostLines(proposal, snapshot));
+  const counted = await ports.record.recordAttention({
+    atMs: createdAtMs,
+    subjectKind: PROPOSAL_SUBJECT,
+    subjectId: proposalId,
+    disposition: "presented",
+    // Null because this verb withholds nothing: every live lap entered the
+    // snapshot and every family was emitted, so there is no policy to name
+    // (D-0037 rule 5).
+    ruleName: null,
+  });
+  return counted.kind === "recorded"
+    ? { kind: "explained", proposalId }
+    : { kind: "presentedUncounted", proposalId, reason: counted.reason };
 }

@@ -85,6 +85,7 @@ const EMPTY: InboxSnapshot = {
   open: [],
   changed: [],
   attention: [],
+  attentionSince: null,
   unspent: [],
 };
 
@@ -400,6 +401,107 @@ test("the silence is both sides of one table, broken down by the rule", () => {
   expect(rendered).toContain("presented 6, withheld 40");
   expect(rendered).toContain("withheld by 'duplicate-delivery' 31");
   expect(rendered).toContain("withheld by 'already-answered' 9");
+});
+
+test("the second look's accounting counts only what was withheld since the first", async () => {
+  const { store, record } = fresh();
+  const withheld = async (atMs: number, subjectId: string, ruleName: string): Promise<void> => {
+    const outcome = await record.recordAttention({
+      atMs,
+      subjectKind: "proposal",
+      subjectId,
+      disposition: "withheld",
+      ruleName,
+    });
+    expect(outcome.kind).toBe("recorded");
+  };
+
+  // **#40's falsifier, end to end and through the operator's own mark.** The
+  // rows are planted because nothing in the tree writes a `withheld` row yet
+  // (D-0032 rule 5's precedent); what is being asserted is that the interval
+  // the inbox asks with is the mark it wrote, and not a second cursor.
+  await withheld(1_000, "p-1", "quiet-hours");
+  await withheld(1_500, "p-2", "quiet-hours");
+
+  const first = await showInbox(
+    { store, record, present: screen().present, now: () => 2_000 },
+    "operator-1",
+  );
+  expect(first.kind).toBe("shown");
+
+  await withheld(3_000, "p-3", "duplicate-delivery");
+  await withheld(3_500, "p-4", "duplicate-delivery");
+  await withheld(3_600, "p-5", "quiet-hours");
+
+  const shows = screen();
+  const second = await showInbox(
+    { store, record, present: shows.present, now: () => 4_000 },
+    "operator-1",
+  );
+  expect(second.kind).toBe("shown");
+
+  const rendered = shows.shown.join("\n");
+  // Since the mark: three withholdings, two by one rule and one by the other.
+  expect(rendered).toContain("since your last look 2s ago: presented 0, withheld 3");
+  expect(rendered).toContain("withheld by 'duplicate-delivery' 2");
+  // Over all of time: five, which is the control that says the two before the
+  // mark are in the table and were excluded by the interval.
+  expect(rendered).toContain("over all of time: presented 0, withheld 5");
+});
+
+test("the accounting answers since your last look beside the total (D-0037 rule 6)", () => {
+  const rendered = inboxLines("operator-1", {
+    ...EMPTY,
+    atMs: 100_000,
+    sinceMs: 40_000,
+    attention: [
+      { disposition: "presented", ruleName: null, count: 6 },
+      { disposition: "withheld", ruleName: "duplicate-delivery", count: 31 },
+    ],
+    attentionSince: [
+      { disposition: "presented", ruleName: null, count: 2 },
+      { disposition: "withheld", ruleName: "duplicate-delivery", count: 4 },
+    ],
+  }).join("\n");
+
+  // #40 asks what was withheld **in a given interval**, and the interval an
+  // operator has is the one the rest of this screen is already about.
+  expect(rendered).toContain("over all of time: presented 6, withheld 31");
+  expect(rendered).toContain("since your last look 1m ago: presented 2, withheld 4");
+  // By rule and by count on both, because *"suppressed 4"* is a number where
+  // *"suppressed 4, all by the duplicate-delivery rule"* is a record.
+  expect(rendered).toContain("withheld by 'duplicate-delivery' 31");
+  expect(rendered).toContain("withheld by 'duplicate-delivery' 4");
+});
+
+test("a quiet interval says nothing was withheld from you, rather than dropping the section", () => {
+  const rendered = inboxLines("operator-1", {
+    ...EMPTY,
+    sinceMs: 5_000,
+    attention: [{ disposition: "withheld", ruleName: "quiet-hours", count: 12 }],
+    attentionSince: [],
+  }).join("\n");
+
+  // A section that disappeared when empty would make "nothing was withheld from
+  // you since you last looked" and "rondo did not look" the same screen.
+  expect(rendered).toContain("since your last look");
+  expect(rendered).toContain("presented 0, withheld 0");
+  // And the total is still there, so the quiet window is quiet *against*
+  // something rather than against nothing.
+  expect(rendered).toContain("over all of time: presented 0, withheld 12");
+});
+
+test("a first look has no interval to report, and says so rather than repeating the total", () => {
+  const rendered = inboxLines("operator-1", {
+    ...EMPTY,
+    attention: [{ disposition: "withheld", ruleName: "quiet-hours", count: 12 }],
+    attentionSince: null,
+  }).join("\n");
+
+  // Reporting all of time twice would be a diff against nothing, which is
+  // `changedLines`' own rule applied to the section beside it.
+  expect(rendered).toContain("since your last look: you have never looked");
+  expect(rendered).not.toContain("since your last look: presented");
 });
 
 test("NEW marks only what landed since the mark, and only when there is a mark", () => {

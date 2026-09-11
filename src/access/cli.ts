@@ -63,6 +63,7 @@ import {
   type ReadOutcome,
 } from "../store/sqlite.js";
 import {
+  composeBetweenLaps,
   type ExplainOutcome,
   type ExplainPorts,
   elevateObservation,
@@ -175,6 +176,14 @@ export const USAGE = `rondo - the operator surface for delegated work
                           has answered, and what answering forecloses. Composed
                           from the row, so a proposal stays answerable long
                           after the screen that drafted it has scrolled away
+  rondo between            say what spans every live lap: which are open against
+                          the same base branch (with their run, branch and
+                          workspace), which findings were read on more than one,
+                          and what the two concurrency bounds have refused.
+                          Reads rondo's own rows and drives no continuo. It
+                          records what it said and proposes nothing: an
+                          adjacency is where to look, not a collision rondo
+                          observed
   rondo explain --iteration-id ID
                           say what the store holds about one iteration, with
                           what each claim rests on. Reads rondo's own rows and
@@ -273,6 +282,7 @@ export interface ParsedCommand {
     | "publish"
     | "abandon"
     | "explain"
+    | "between"
     | "elevate"
     | "inbox"
     | "propose"
@@ -336,6 +346,7 @@ const COMMANDS = [
   "publish",
   "abandon",
   "explain",
+  "between",
   "elevate",
   "inbox",
   "propose",
@@ -382,6 +393,13 @@ export const FLAGS_BY_COMMAND: Readonly<Record<string, readonly string[]>> = {
   // a different iteration would be the wrong answer rendered as confidently as
   // the right one.
   explain: ["iteration-id"],
+  // **No flags at all, and that is the shape of the question.** A between-laps
+  // composition is about every live lap and about no single one of them, so
+  // there is nothing to name -- and no `--limit`, because a cap on what an
+  // operator is shown is a withholding that names a rule (D-0037 rule 5) and
+  // not a flag. It takes no `--actor-id` for `show`'s reason: it moves no
+  // last-look mark.
+  between: [],
   // **Five flags and every one of them required**, for `explain`'s reason and
   // one of elevation's own: this is where authority enters (#41 section 3), and
   // a default here would be rondo supplying part of an act it is recording a
@@ -1167,6 +1185,24 @@ export async function main(
   // explain has already ended, which is exactly when nothing is worth spawning.
   if (parsed.command === "explain") {
     return await commandExplain(parsed, store, opened.path);
+  }
+
+  // **`between` is dispatched here for `explain`'s reason.** It reads rondo's
+  // own rows across every live lap and drives no continuo verb, and the moment
+  // an operator most wants to know what spans the laps is the moment one of
+  // them is stuck behind something that will not start.
+  if (parsed.command === "between") {
+    const bounds = hostPolicyOf(environment);
+    if ("refusal" in bounds) {
+      return refuse(bounds.refusal);
+    }
+    return sayAdvisoryOutcome(
+      await composeBetweenLaps({
+        ...advisoryPorts(store, opened.path),
+        policy: bounds.policy,
+      }),
+      "composition",
+    );
   }
 
   // **`elevate` is dispatched here for `explain`'s reason exactly.** It reads

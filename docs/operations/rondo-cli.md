@@ -1,9 +1,10 @@
-# The operator's ten commands
+# The operator's twelve commands
 
 What a person types to get one request through rondo, from asking for it to publishing it -- and,
 in section 7, `abandon`, which is how a request that cannot get there is settled instead, and
 `explain`, which is how a person finds out what the store holds about a row that has stopped, and
-`elevate`, which is how an observation of the operator's own becomes part of the record.
+`elevate`, which is how an observation of the operator's own becomes part of the record, and
+`between`, which is what spans every live lap once more than one is open.
 Section 5.1 is `revise`, which is what a person types when the answer to the gate is "not quite".
 Everything here was run on 2026-09-06 against continuo `38c667b5126fdfdc0465e4a422e88b20a8b53044`
 (`continuo.pin.json`), and the transcripts are what actually came back.
@@ -837,6 +838,80 @@ and prints the `Next:` line only while the proposal is still open.
 | `N answers were recorded against this proposal, and each is spendable on its own` | Nothing makes `human_decision` unique per proposal -- its one unique index is over a continuo gate transition, which a route-S answer does not name -- so a decline and a later approval are two rows. All of them are shown, oldest first. | rondo does not rank them, and neither should a reader. `rondo inbox` reports any approval that is still unspent. |
 | `this proposal binds nothing: it is read, not answered` | An `explanation`. Authority is a function of `kind` alone (`D-0032` rule 5). | Read it. It cannot be approved, and the store refuses a decision that names it. |
 
+### 7.5 Between -- what spans every live lap, once you are running more than one
+
+`explain` says what the store holds about **one** row. Once more than one lap is open, the questions
+that matter are *relations between* rows -- two laps open against the same base branch, one finding
+read on both, work somebody asked for and a bound refused -- and a screen you have to do the
+comparison on yourself is the part nothing owned (#40, `D-0037`).
+
+It takes no flags, because it is about every live lap and about no single one of them. There is no
+schedule and no daemon behind it: nothing in rondo runs periodically, and you asking costs nothing.
+
+```console
+$ node bin/rondo.mjs between
+what spans the live laps
+  drafter: rondo/advisory/deterministic; derivation: store_rows
+  this explanation binds nothing: it is not a proposal and cannot be approved
+  an adjacency is not a collision: rondo de-conflicts only the identifiers it mints, so two laps
+    open against one base branch is where to look and not what was found
+  live laps: 3
+      basis: snapshot /laps = [{"iteration":{"id":"i-0012", ...
+  open against 'main' beside 'i-0013': i-0012 (run rondo-i-0012, branch rondo/i-0012, workspace /srv/work/i-0012)
+      basis: snapshot /laps/0/iteration/id = "i-0012"
+  open against 'main' beside 'i-0012': i-0013 (run rondo-i-0013, branch rondo/i-0013, workspace /srv/work/i-0013)
+      basis: snapshot /laps/1/iteration/id = "i-0013"
+  a finding on 2 live laps: the retry fence is not fenced
+      basis: iteration i-0012
+  a finding on 2 live laps: the retry fence is not fenced
+      basis: iteration i-0013
+  bound 'maxOccupying': 1
+      basis: snapshot /bounds/maxOccupying = 1
+  occupying now: 1
+      basis: snapshot /bounds/occupying = 1
+  bound 'maxLive': 3
+      basis: snapshot /bounds/maxLive = 3
+  live now: 3
+      basis: snapshot /bounds/live = 3
+  an admission a bound refused: 'teach revise to name its flags' against 'maxLive' 3 at occupancy 3
+      basis: snapshot /refusals/0
+recorded as proposal 'between-1757500000000'
+```
+
+Four things about that screen are the point:
+
+- **An adjacency is where to look, not what was found.** rondo de-conflicts only the identifiers it
+  mints. A decision id or a migration number lives *inside the work*, and reading that needs a
+  reader across branches rondo does not have (`D-0033` rule 9). What you are given is the fact that
+  sends you to look -- these two are open against `main` right now, and here are the two workspaces
+  -- and nothing stronger. A claim that said *collision* would be rondo asserting an absence it
+  cannot observe.
+- **A shared finding is the same sentence, read twice.** The match is equality over the finding's
+  text. Two readings that describe one defect in different words are invisible to it, and that is
+  the stated ceiling rather than a bug: the alternative is a similarity score, which is a confidence
+  rondo would be narrating about its own material.
+- **Every family speaks, even when it found nothing.** `none` is *rondo looked and there is no
+  adjacency*; a section that disappeared when empty would be indistinguishable from *rondo did not
+  look*. A lap whose persisted plan will not decode reads `undetermined` rather than being dropped
+  out of the grouping.
+- **It withholds nothing.** Every live lap enters, with no cap and no paging. If a host-wide
+  snapshot ever has to be bounded for size, that bound is a **withholding** under a rule you named
+  -- it writes rows you can count in the inbox -- and not a number chosen inside a diff
+  (`D-0037` rule 5).
+
+Like `explain`, it records what it said before it shows it, and counts the presentation after: the
+proposal row carries the snapshot verbatim, so every `/laps/n/...` pointer above resolves against
+bytes the ledger kept.
+
+| What you see | What it means | What to do |
+|---|---|---|
+| `live laps: 0` with three `none` lines | Nothing is running. The families still speak, which is how you tell this from a screen that failed to look. | Nothing. |
+| `open against: undetermined` | That lap's persisted plan will not decode, so rondo cannot say which branch it is against. | `rondo explain --iteration-id ID`. The row itself may still be readable. |
+| `a live lap rondo could not read` | A live row whose columns will not decode. It holds a slot and has no claims of its own. | `rondo abandon --iteration-id ID --reason ...`. |
+| `was composed and not recorded, so it is not being shown` | The store refused or failed the write. | Nothing was written and nothing was shown. A framing you read and the ledger does not hold is what that order exists to prevent. |
+
+---
+
 ---
 
 ## 8. Inbox -- what is waiting on you, and what changed while you were away
@@ -869,7 +944,8 @@ since your last look 4h ago (7 records)
     ...
 
 what was put to you and what was not
-  presented 6, withheld 0
+  over all of time: presented 6, withheld 0
+  since your last look 4h ago: presented 2, withheld 0
 
 approved and never spent (1)
   d-0004  proposal p-retry-i-0006  sha256:...  by 'operator-1' 2h ago
@@ -900,6 +976,13 @@ Five things about that screen are the point rather than the formatting:
   (`D-0036` rule 1). Otherwise one unanswered proposal, looked at twenty times over a morning,
   would report twenty presentations and the *"six were put to you, forty were not"* ratio would
   stop being a sentence.
+- **The accounting answers over an interval, not only over all time.** #40's own requirement is
+  that you can reconstruct what was withheld from you **in a given interval**, by rule and by
+  count. `operator_attention` carries `at_ms` on every row and is never deleted, so what was
+  missing was a bound on the query rather than a table (`D-0037` rule 6): the second line is the
+  same breakdown asked with your own mark, which is why there is still no `--since`. What it
+  cannot prove is unchanged -- a suppression that writes no row is invisible here, so an interval
+  bounds the *accountable* silence and not the total.
 - **The mark moves last.** The bound is sampled before anything is read and written after the
   screen is rendered, so a row that lands while the render is running is shown again next time
   rather than lost for ever (`D-0032` rules 9 and 11). There is deliberately no `--since`: the mark
@@ -910,6 +993,7 @@ Five things about that screen are the point rather than the formatting:
 |---|---|---|
 | `This command needs --actor-id ID` | The last-look mark is per person, so a look has to say whose it is. | Name yourself. It is checked against `RONDO_APPROVER`, the same as `answer` and `publish`. |
 | `you have never looked` | No mark for this actor yet. Nothing is marked `NEW`, because everything would be. | Nothing. The next look is a diff against this one. |
+| `since your last look: you have never looked` | Same mark, in the accounting section. A first look has no interval to report, and repeating the total there would be a diff against nothing. | Nothing. The next look answers over the window between the two. |
 | `will not decode` in *in flight* | A live row whose columns rondo cannot read. It still holds a slot. | `rondo abandon --iteration-id ID --reason ...`; `explain` will refuse it for the same reason. |
 | `This look was not fully recorded` (exit 1) | You read the screen; what failed was the count of what was shown, or the mark. | The screen stands. If the mark did not move, the next inbox repeats this diff. |
 

@@ -50,7 +50,9 @@ import { DatabaseSync } from "node:sqlite";
 
 import { canonicalJson, contentDigest, planDigest } from "./plan.js";
 import {
+  type AdmissionRefusal,
   type AttentionCount,
+  type AttentionInterval,
   type CompositionDraft,
   type HumanDecisionDraft,
   type IterationFields,
@@ -60,6 +62,7 @@ import {
   type JsonRecord,
   type LapReading,
   type LapReadingDraft,
+  type Occupancy,
   type OpenProposal,
   type OperatorAttention,
   type ProposalDraft,
@@ -307,6 +310,20 @@ export interface IterationStore {
    * list.
    */
   readLive(): Promise<readonly ReadOutcome[]>;
+  /**
+   * What stands against the two bounds right now (D-0037 rule 3c).
+   *
+   * **Counted over the same generated columns `reserve` counts**, which is what
+   * keeps D-0023 rule 8's *"the bound and the column are one definition"* true
+   * for a reader as well as for the writer. Deriving either number from
+   * {@link IterationStore.readLive} would be a second definition -- and would
+   * also be wrong about a row that will not decode, which holds a slot and has
+   * no status a caller can classify.
+   *
+   * It is a read and not a reservation: nothing is locked and nothing is
+   * admitted, so the answer is what was true when it was asked.
+   */
+  occupancy(): Promise<Occupancy>;
   /**
    * Every iteration that has reached a terminal status, oldest first.
    *
@@ -1474,6 +1491,9 @@ export function iterationStore(connection: DatabaseSync, policy: HostPolicy): It
       return readLiveRows().map((row) => decode(row, idOf(row)));
     },
 
+    async occupancy(): Promise<Occupancy> {
+      return { occupying: occupancyOf("occupying"), live: occupancyOf("live") };
+    },
     async terminalIterations(): Promise<readonly ReadOutcome[]> {
       // `live IS NULL` is the generated column's own answer to "has this row
       // reached a terminal status", read rather than restated: the terminal set
@@ -1725,8 +1745,29 @@ export interface AdvisoryRecord {
    * Both dispositions in one answer, because the ratio is the point: a
    * numerator counted here and a denominator counted somewhere else would be
    * two quantities with no sentence between them.
+   *
+   * **`interval` bounds it, and that is #40's falsifier rather than a
+   * convenience** (D-0037 rule 6). #40 asks that an operator be able to
+   * reconstruct what was withheld from them *in a given interval*, by rule and
+   * by count; without a bound this answers over all of time, which is a number
+   * nobody can attach to a morning. Omitting it is the unbounded count, which
+   * is what the inbox still shows beside the narrower one.
    */
-  attentionBreakdown(): Promise<readonly AttentionCount[]>;
+  attentionBreakdown(interval?: AttentionInterval): Promise<readonly AttentionCount[]>;
+  /**
+   * Every admission a bound refused, oldest first (D-0023 rule 14, D-0037
+   * rule 3c).
+   *
+   * **The rows are already written and nothing has ever read them**:
+   * {@link AdvisoryRecord.changedSince} counts one as a change and says nothing
+   * about what it was, so *"work deliberately not started"* -- #40's third
+   * measured case -- has had no reader at all. This is that reader and nothing
+   * more: no bound is raised here and no admission is retried.
+   *
+   * Unbounded, for D-0037 rule 5's reason: this surface withholds nothing, and
+   * a cap taken inside a query would be a withholding that names no rule.
+   */
+  admissionRefusals(): Promise<readonly AdmissionRefusal[]>;
   /** Every approval that was never spent (D-0022 rule 19, D-0032 rule 11). */
   unconsumedDecisions(): Promise<readonly UnconsumedDecision[]>;
   /**
@@ -2283,13 +2324,22 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
       }
     },
 
-    async attentionBreakdown(): Promise<readonly AttentionCount[]> {
+    async attentionBreakdown(interval?: AttentionInterval): Promise<readonly AttentionCount[]> {
+      const fromMs = interval?.fromMs ?? null;
+      const toMs = interval?.toMs ?? null;
       return connection
         .prepare(
+          // **Both bounds inclusive, and a null bound is no bound** -- see
+          // {@link AttentionInterval}. Written as `? IS NULL OR` rather than as
+          // a statement assembled per case so that there is one query and one
+          // place the two comparisons can be read: four bound parameters and no
+          // interpolation, which is this file's rule everywhere but the two
+          // column names chosen from a frozen tuple.
           "SELECT disposition, rule_name, count(*) AS n FROM operator_attention " +
+            "WHERE (? IS NULL OR at_ms >= ?) AND (? IS NULL OR at_ms <= ?) " +
             "GROUP BY disposition, rule_name ORDER BY disposition, rule_name",
         )
-        .all()
+        .all(fromMs, fromMs, toMs, toMs)
         .map((row) => {
           const record = row as SqlRow;
           const ruleName = record["rule_name"];
@@ -2297,6 +2347,25 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
             disposition: record["disposition"] === "withheld" ? "withheld" : "presented",
             ruleName: ruleName === null ? null : String(ruleName),
             count: Number(record["n"]),
+          } as const;
+        });
+    },
+
+    async admissionRefusals(): Promise<readonly AdmissionRefusal[]> {
+      return connection
+        .prepare(
+          "SELECT refused_at_ms, request, bound_name, bound, occupancy FROM admission_refusal " +
+            "ORDER BY refused_at_ms, rowid",
+        )
+        .all()
+        .map((row) => {
+          const record = row as SqlRow;
+          return {
+            refusedAtMs: Number(record["refused_at_ms"]),
+            request: String(record["request"]),
+            boundName: String(record["bound_name"]),
+            bound: Number(record["bound"]),
+            occupancy: Number(record["occupancy"]),
           } as const;
         });
     },
