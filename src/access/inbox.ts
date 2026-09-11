@@ -34,12 +34,28 @@ import {
 import type { AdvisoryRecord, IterationStore } from "../store/sqlite.js";
 import { PROPOSAL_SUBJECT } from "./advisory.js";
 
+/**
+ * Everything reading the inbox needs, and nothing that writes.
+ *
+ * The two ports are narrowed to the methods {@link gatherInbox} calls, so a
+ * surface that may only read -- `src/access/web.ts` -- is handed a value the
+ * compiler will not let it write through. {@link InboxPorts} widens them back
+ * for the command line, which does write the two rows a look creates.
+ */
+export interface InboxReadPorts {
+  readonly store: Pick<IterationStore, "readLive">;
+  readonly record: Pick<
+    AdvisoryRecord,
+    "lastView" | "openProposals" | "attentionBreakdown" | "unconsumedDecisions" | "changedSince"
+  >;
+  readonly now: () => number;
+}
+
 /** Everything the inbox is handed: two ports over the store, a clock, a screen. */
-export interface InboxPorts {
+export interface InboxPorts extends InboxReadPorts {
   readonly store: IterationStore;
   readonly record: AdvisoryRecord;
   readonly present: (lines: readonly string[]) => void;
-  readonly now: () => number;
 }
 
 /**
@@ -399,36 +415,15 @@ export function inboxLines(actorId: string, snapshot: InboxSnapshot): readonly s
 }
 
 /**
- * Show one operator what is waiting, and write down that they looked.
+ * Everything one look reads, and not one of the two rows it writes.
  *
- * **The order is the property D-0036 rule 9 fixes, and it is why this function
- * reads a clock before it reads a row:**
- *
- *  1. sample the bound (`now()`), before anything is read;
- *  2. read the mark, and everything the screen is made of;
- *  3. render;
- *  4. count what was presented (rule 10, once per subject);
- *  5. write the mark (rule 9), last.
- *
- * Sampling at the end instead would lose every row committed while the render
- * was running -- silently and for ever, because the next look asks for changes
- * *after* the mark. Sampling first accepts the opposite failure: a row that
- * landed during the render is shown again next time. D-0032 rule 11 names that
- * trade and takes this side of it.
- *
- * **The bound is applied to the read this look writes about, and deliberately
- * not to the rest.** `openProposals(atMs)` is bounded because each of its rows
- * becomes an `operator_attention` row stamped `atMs`, and a presentation
- * recorded before its subject existed is a row no clock explains. The display
- * reads are left unbounded on purpose: bounding `readLive` would *hide* an
- * iteration that started between the sample and the read, and a live row
- * missing from "in flight" understates what is running to the one reader
- * deciding whether to start something else -- which is the failure the
- * undecodable-row line exists to prevent, arriving by a different door. Those
- * rows are shown early and shown again next look, which is rule 11's accepted
- * duplicate.
+ * Steps 1 to 3 of {@link showInbox}'s order, lifted out so that a read-only
+ * surface can have the same screen without the bookkeeping: counting a
+ * presentation and moving the last-look mark are claims about an operator
+ * having been shown something, and a page that redraws itself every few seconds
+ * would make both of them lies.
  */
-export async function showInbox(ports: InboxPorts, actorId: string): Promise<InboxOutcome> {
+export async function gatherInbox(ports: InboxReadPorts, actorId: string): Promise<InboxSnapshot> {
   const atMs = ports.now();
   const sinceMs = await ports.record.lastView(actorId);
   const live = (await ports.store.readLive()).flatMap((outcome): LiveRow[] => {
@@ -462,6 +457,42 @@ export async function showInbox(ports: InboxPorts, actorId: string): Promise<Inb
         : await ports.record.attentionBreakdown({ fromMs: sinceMs, toMs: atMs }),
     unspent: await ports.record.unconsumedDecisions(),
   };
+  return snapshot;
+}
+
+/**
+ * Show one operator what is waiting, and write down that they looked.
+ *
+ * **The order is the property D-0036 rule 9 fixes, and it is why this function
+ * reads a clock before it reads a row:**
+ *
+ *  1. sample the bound (`now()`), before anything is read;
+ *  2. read the mark, and everything the screen is made of;
+ *  3. render;
+ *  4. count what was presented (rule 10, once per subject);
+ *  5. write the mark (rule 9), last.
+ *
+ * Sampling at the end instead would lose every row committed while the render
+ * was running -- silently and for ever, because the next look asks for changes
+ * *after* the mark. Sampling first accepts the opposite failure: a row that
+ * landed during the render is shown again next time. D-0032 rule 11 names that
+ * trade and takes this side of it.
+ *
+ * **The bound is applied to the read this look writes about, and deliberately
+ * not to the rest.** `openProposals(atMs)` is bounded because each of its rows
+ * becomes an `operator_attention` row stamped `atMs`, and a presentation
+ * recorded before its subject existed is a row no clock explains. The display
+ * reads are left unbounded on purpose: bounding `readLive` would *hide* an
+ * iteration that started between the sample and the read, and a live row
+ * missing from "in flight" understates what is running to the one reader
+ * deciding whether to start something else -- which is the failure the
+ * undecodable-row line exists to prevent, arriving by a different door. Those
+ * rows are shown early and shown again next look, which is rule 11's accepted
+ * duplicate.
+ */
+export async function showInbox(ports: InboxPorts, actorId: string): Promise<InboxOutcome> {
+  const snapshot = await gatherInbox(ports, actorId);
+  const atMs = snapshot.atMs;
   ports.present(inboxLines(actorId, snapshot));
 
   const reasons: string[] = [];

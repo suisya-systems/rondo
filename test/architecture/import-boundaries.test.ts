@@ -338,6 +338,15 @@ const ALLOWED_EXTERNALS_BY_MODULE: Readonly<
   // a layer-wide grant would have put a spawn in reach of every command rather
   // than of the one an operator has to type the word `publish` to reach.
   "src/access/forge.ts": { "node:child_process": ["spawn"] },
+  // The HTTP access point this file's own note promised, granted the one
+  // binding that starts a server and keyed by module for every reason the
+  // spawn is: `src/access/` holds the whole operator surface, and a layer-wide
+  // grant would put a listening socket in reach of the module that reads argv
+  // and of the one that drives continuo. What is *absent* is the rest of the
+  // page's hazards -- no `node:fs`, so a read-only page cannot serve a file
+  // off this machine, and no `node:child_process`, so nothing an HTTP request
+  // reaches can start a process.
+  "src/access/web.ts": { "node:http": ["createServer"] },
 };
 
 /**
@@ -376,6 +385,7 @@ const EXPECTED_MODULES: readonly string[] = [
   "src/access/conductor.ts",
   "src/access/console.ts",
   "src/access/local.ts",
+  "src/access/web.ts",
   "src/advisory/proposal.ts",
   "src/cadenza/facade.ts",
   "src/continuo/invoker.ts",

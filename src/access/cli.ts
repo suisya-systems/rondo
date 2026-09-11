@@ -89,6 +89,7 @@ import {
 } from "./forge.js";
 import { type InboxOutcome, showInbox } from "./inbox.js";
 import { evidenceOf, READING_REMOTE } from "./review.js";
+import { serveOperatorPage } from "./web.js";
 
 /**
  * The whole surface on one screen.
@@ -99,6 +100,15 @@ import { evidenceOf, READING_REMOTE } from "./review.js";
  * vitest captures stdout through a UTF-8 path -- so a test that reads this
  * string is the only thing that catches an em-dash before an operator does.
  */
+/**
+ * Where the read-only page listens when nobody says.
+ *
+ * Above 1024 so it needs no privilege, and outside the ranges a browser
+ * refuses outright. Nothing depends on the number: it is printed on the line
+ * that starts the server.
+ */
+const DEFAULT_WEB_PORT = 7333;
+
 export const USAGE = `rondo - the operator surface for delegated work
 
   rondo start --plan FILE --iteration-id ID [--prompt TEXT]
@@ -184,6 +194,15 @@ export const USAGE = `rondo - the operator surface for delegated work
                           records what it said and proposes nothing: an
                           adjacency is where to look, not a collision rondo
                           observed
+  rondo web [--port N]
+                          serve one read-only page on 127.0.0.1 (default port
+                          ${String(DEFAULT_WEB_PORT)}) showing what inbox, between and explain
+                          show, redrawn every few seconds. It reads rondo's own
+                          rows and writes none of them: looking at the page
+                          moves no last-look mark and counts no presentation,
+                          and nothing on it answers a gate. There is no
+                          authentication because there is no route in from
+                          anywhere but this machine
   rondo explain --iteration-id ID
                           say what the store holds about one iteration, with
                           what each claim rests on. Reads rondo's own rows and
@@ -288,6 +307,7 @@ export interface ParsedCommand {
     | "propose"
     | "decide"
     | "show"
+    | "web"
     | "help";
   readonly planFile: string | null;
   readonly prompt: string | null;
@@ -306,6 +326,7 @@ export interface ParsedCommand {
   readonly proposalId: string | null;
   readonly contractDigest: string | null;
   readonly outcome: string | null;
+  readonly port: number | null;
   readonly dryRun: boolean;
   readonly allowRemoteMismatch: boolean;
   readonly despiteReview: boolean;
@@ -334,6 +355,7 @@ const FLAGS = {
   "proposal-id": { type: "string" },
   "contract-digest": { type: "string" },
   outcome: { type: "string" },
+  port: { type: "string" },
   "dry-run": { type: "boolean" },
   "allow-remote-mismatch": { type: "boolean" },
   "despite-review": { type: "boolean" },
@@ -352,6 +374,7 @@ const COMMANDS = [
   "propose",
   "decide",
   "show",
+  "web",
 ] as const;
 
 /**
@@ -428,6 +451,11 @@ export const FLAGS_BY_COMMAND: Readonly<Record<string, readonly string[]>> = {
   // identity. What it does write is the presentation (D-0036 rule 1), which is
   // a fact about the surface rather than about a person.
   show: ["proposal-id"],
+  // One flag, and no `--actor-id`: whose inbox the page draws is
+  // `RONDO_APPROVER`, the same identity every other command checks against, and
+  // a second way to name it would be a way to read somebody else's inbox by
+  // typing their name. The page writes nothing, so there is nothing to approve.
+  web: ["port"],
 };
 
 /**
@@ -505,6 +533,19 @@ export function parseCommand(argv: readonly string[]): ParseOutcome {
     return typeof value === "string" ? value : null;
   };
 
+  // **Checked here rather than handed to `listen`.** A port that is not a port
+  // is refused before a server exists, and the range is the one an operating
+  // system has: `Number("8080x")` is NaN and `Number("")` is 0, so a typo would
+  // otherwise bind a port nobody typed.
+  const rawPort = text("port");
+  const port = rawPort === null ? null : Number(rawPort);
+  if (port !== null && (!Number.isInteger(port) || port < 1 || port > 65535)) {
+    return {
+      kind: "refused",
+      reason: `--port is '${String(rawPort)}', and a port is a whole number from 1 to 65535.`,
+    };
+  }
+
   return {
     kind: "parsed",
     parsed: {
@@ -526,6 +567,7 @@ export function parseCommand(argv: readonly string[]): ParseOutcome {
       proposalId: text("proposal-id"),
       contractDigest: text("contract-digest"),
       outcome: text("outcome"),
+      port,
       dryRun: values["dry-run"] === true,
       allowRemoteMismatch: values["allow-remote-mismatch"] === true,
       despiteReview: values["despite-review"] === true,
@@ -553,6 +595,7 @@ function emptyCommand(command: ParsedCommand["command"]): ParsedCommand {
     proposalId: null,
     contractDigest: null,
     outcome: null,
+    port: null,
     dryRun: false,
     allowRemoteMismatch: false,
     despiteReview: false,
@@ -1230,6 +1273,35 @@ export async function main(
   // and a continuo that will not start is one of the things it exists to show.
   if (parsed.command === "inbox") {
     return await commandInbox(parsed, environment, store, opened.path);
+  }
+
+  // **`web` is dispatched here for `inbox`'s reason, and it writes even less.**
+  // The page is a second view of `inbox`, `between` and `explain`, all three of
+  // which read rondo's own rows and drive no continuo verb -- so requiring a
+  // working continuo to *look* at what is stuck would withhold the screen in
+  // exactly the state it exists for.
+  if (parsed.command === "web") {
+    const bounds = hostPolicyOf(environment);
+    if ("refusal" in bounds) {
+      return refuse(bounds.refusal);
+    }
+    return await serveOperatorPage(
+      {
+        store,
+        record: openAdvisoryRecord(opened.path),
+        policy: bounds.policy,
+        // **The approver and not an `--actor-id`.** An inbox is one person's,
+        // and the identity rondo already trusts to answer a gate is the one
+        // whose inbox this host draws. Unset is not a refusal: the other two
+        // sections are about the host rather than about a person, so the page
+        // still has most of itself to show.
+        actorId: environment[APPROVER_ENV] ?? null,
+        now: Date.now,
+      },
+      parsed.port ?? DEFAULT_WEB_PORT,
+      say,
+      (line) => refuse(line),
+    );
   }
 
   // **`propose` and `decide` are dispatched here for `explain`'s reason.** Both
