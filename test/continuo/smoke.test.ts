@@ -26,7 +26,7 @@
  * directory is open when it is removed -- which is not a nicety on Windows,
  * where an open handle makes the removal fail outright.
  */
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, expect, test } from "vitest";
@@ -120,6 +120,14 @@ test.skipIf(!available)(
     // continuo creates at head, so a fresh database is by definition current.
     expect(created.payload.schemaVersion).toBe(created.payload.headVersion);
 
+    // One record file for both admissions below. What is under test in this
+    // file is rondo's argv against a real continuo, and the envelope's
+    // *contents* are `test/access/delegation.test.ts`'s subject -- continuo
+    // reads no key of it (`continuo D-1107` rule 2), so the smallest JSON
+    // object that is one is the honest fixture here.
+    const recordPath = join(scratch(), "delegation-record.json");
+    writeFileSync(recordPath, '{"record_schema":"rondo.delegation-record/1"}\n', "utf8");
+
     const admitted = await run(continuo, RUN_ADMIT, [
       "--db",
       database,
@@ -140,6 +148,12 @@ test.skipIf(!available)(
       "feat/rondo-smoke",
       "--prompt",
       "a one-line request, from rondo's smoke",
+      // Required and undefaulted since `continuo D-1107`: a run whose
+      // authorisation nothing recorded is the case those two flags removed.
+      "--delegation-record",
+      recordPath,
+      "--delegation-record-schema",
+      "rondo.delegation-record/1",
     ]);
     expect(admitted).toEqual({
       kind: "answered",
@@ -173,6 +187,10 @@ test.skipIf(!available)(
       // form runs package lifecycle scripts, which the fence's hook cannot see
       // because it observes tool calls and not the subprocesses a tool starts.
       allowedBash: ["npm ci --ignore-scripts", "npm run:*"],
+      // Required and undefaulted since `continuo D-1107`: a run whose
+      // authorisation nothing recorded is the case those flags removed.
+      delegationRecordPath: recordPath,
+      delegationRecordSchema: "rondo.delegation-record/1",
     });
     expect(declared.continuoRole).toBe("worker");
     expect(declared.result).toEqual({

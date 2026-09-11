@@ -119,6 +119,8 @@ describe("a name outside the table", () => {
       topicBranch: "topic/one",
       prompt: "do the thing",
       allowedBash: [],
+      delegationRecordPath: "/srv/rondo/delegation/record.json",
+      delegationRecordSchema: "rondo.delegation-record/1",
     });
     expect(outcome.result.kind).toBe("invokerDefect");
     if (outcome.result.kind !== "invokerDefect") {
@@ -149,6 +151,8 @@ describe("a name outside the table", () => {
       topicBranch: "topic/one",
       prompt: "do the thing",
       allowedBash: [],
+      delegationRecordPath: "/srv/rondo/delegation/record.json",
+      delegationRecordSchema: "rondo.delegation-record/1",
     });
     expect(outcome.continuoRole).toBe("worker");
     expect(outcome.result.kind).toBe("invokerDefect");

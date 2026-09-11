@@ -626,6 +626,23 @@ export interface AdmitRunRequest {
   /** The request text. Arbitrary, and the only field here that is prose. */
   readonly prompt: string;
   /**
+   * The file holding this run's delegation record, and the name of the format
+   * it is written in (`continuo D-1107`, D-0040). Absolute.
+   *
+   * **A path rather than the document**, which is continuo's rule and its
+   * reason: the record is measured in kilobytes, and a value passed through
+   * `argv` reaches the process table with it. The bytes are stored verbatim and
+   * digested as they arrive, so what this module must not do is read, re-encode
+   * or validate the file -- `src/access/delegation.ts` wrote it and owns its
+   * meaning, and this layer has no filesystem at all (D-0040 rule 8).
+   *
+   * Both are required and neither has a default, because continuo's flags are:
+   * an optional record is a supported way to admit a run whose authorisation
+   * nothing recorded, which is the defect `continuo D-1107` closed.
+   */
+  readonly delegationRecordPath: string;
+  readonly delegationRecordSchema: string;
+  /**
    * The Bash subjects this run's child may run, one `--allow-bash` each
    * (`continuo D-1110`).
    *
@@ -730,6 +747,10 @@ export async function admitRun(
       // identifiers and paths that are already refused when they are
       // option-shaped, and joining them would hide that check behind a spelling.
       `--prompt=${requireText("prompt", request.prompt)}`,
+      "--delegation-record",
+      requireAbsolute("delegationRecordPath", request.delegationRecordPath),
+      "--delegation-record-schema",
+      requireText("delegationRecordSchema", request.delegationRecordSchema),
       // One flag per subject, appended after the prompt so that the joined
       // `--prompt=` form above stays the last thing a reader has to think about
       // when the argv is read aloud. continuo's parser appends, exactly as it

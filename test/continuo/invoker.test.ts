@@ -278,6 +278,8 @@ describe("run admit's own fields", () => {
       topicBranch: "topic/r1",
       prompt: "add the thing",
       allowedBash: [],
+      delegationRecordPath: "/srv/rondo/delegation/record.json",
+      delegationRecordSchema: "rondo.delegation-record/1",
       ...overrides,
     };
   }
