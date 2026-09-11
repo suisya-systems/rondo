@@ -11,7 +11,14 @@
  * **What it deliberately does not do.** `lap perform` spawns a worker, which
  * would put an agent session inside rondo's test suite; the sequence proves
  * process invocation, mutation, read-back, per-verb decoding and stderr
- * handling without it.
+ * handling without it. So the gate *walk* is not end-to-end here: without a lap
+ * there is no gate, and `present`, `ack` and `answer` are still checked against
+ * fakes only. What is checked here is the one argument of that walk whose fake
+ * and whose original disagree -- `gate deliver`'s delivery resource -- because
+ * that disagreement is what let rondo ship a walk that could not close a gate
+ * (`docs/operations/lap-2-dogfood.md` N-1). The rule this file is written under
+ * is not "drive everything for real"; it is **drive the seams whose two sides
+ * are known to answer differently**.
  *
  * **Mandatory in CI, capability-gated locally.** The build the smoke needs is
  * provisioned by the workflow in every double-green cell, so under CI a missing
@@ -34,6 +41,7 @@ import { afterAll, expect, test } from "vitest";
 import {
   admitRun,
   CLI_PATH_ENV,
+  deliverGate,
   run,
   startContinuo,
   unusableArgument,
@@ -231,6 +239,78 @@ test.skipIf(!available)(
     // it is a decoded success rather than an absence, which is the distinction
     // a host that read exit codes alone could not make.
     expect(gates).toEqual({ kind: "answered", db: database, payload: [] });
+
+    // **The delivery resource rondo's gate walk names, checked against the
+    // build that decides what a resource is.** This is the one verb on the
+    // answer path whose fake and whose original give *different* answers: the
+    // fake in `test/access/cli.test.ts` hands back a delivered message id
+    // whatever it is asked, so a rondo that drained the wrong queue passed it,
+    // and passed it for a whole lap of dogfooding
+    // (`docs/operations/lap-2-dogfood.md` N-1). What distinguishes the two
+    // queues without a lap to fill them is the epoch: continuo advances one per
+    // *resource*, so two passes on the run's resource number themselves 1 and 2
+    // while the global resource -- the one a `--run-id`-less rondo would have
+    // drained -- stays at 1.
+    const dropbox = scratch();
+    const firstPass = await deliverGate(continuo, {
+      db: database,
+      destinationDir: dropbox,
+      holder: "rondo-smoke",
+      runId: "rondo-smoke-1",
+    });
+    expect(firstPass).toEqual({
+      kind: "answered",
+      db: database,
+      // Nothing is queued: an admitted run that never performed opened no gate,
+      // and the empty drain is the answer. The epoch is the assertion.
+      payload: { recipient: expect.any(String), epoch: 1, deliveredMessageIds: [] },
+    });
+    const secondPass = await deliverGate(continuo, {
+      db: database,
+      destinationDir: dropbox,
+      holder: "rondo-smoke",
+      runId: "rondo-smoke-1",
+    });
+    expect(secondPass).toEqual({
+      kind: "answered",
+      db: database,
+      payload: { recipient: expect.any(String), epoch: 2, deliveredMessageIds: [] },
+    });
+
+    // The global resource, untouched by the two passes above -- which is what
+    // says they went to the run's. Driven through `deliverGate` with a null
+    // run id rather than a hand-written argv, because the null branch is
+    // rondo's own and the runless gate is the case it exists for.
+    const globalPass = await deliverGate(continuo, {
+      db: database,
+      destinationDir: dropbox,
+      holder: "rondo-smoke",
+      runId: null,
+    });
+    expect(globalPass).toEqual({
+      kind: "answered",
+      db: database,
+      payload: { recipient: expect.any(String), epoch: 1, deliveredMessageIds: [] },
+    });
+
+    // **And the run id is carried far enough to be checked.** A run this plane
+    // does not know is refused rather than answered with an empty queue, and
+    // continuo's message says why in the terms of the defect this file exists
+    // to catch. A pinned build that ignored `--run-id` -- or one that dropped
+    // the flag, which would reach here as a parser refusal in prose instead --
+    // could not produce this.
+    const unknownRun = await deliverGate(continuo, {
+      db: database,
+      destinationDir: dropbox,
+      holder: "rondo-smoke",
+      runId: "rondo-smoke-free",
+    });
+    expect(unknownRun).toEqual({
+      kind: "refused",
+      db: database,
+      errorClass: expect.any(String),
+      message: expect.stringContaining("rondo-smoke-free"),
+    });
 
     const missing = await run(continuo, GATE_SHOW, ["--db", database, "--gate-id", "no-such-gate"]);
     expect(missing).toEqual({
