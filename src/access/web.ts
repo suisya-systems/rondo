@@ -229,12 +229,42 @@ ${sections.join("\n")}
 }
 
 /**
+ * Whether a request's `Host` names this machine.
+ *
+ * **Binding to loopback is not by itself enough, and this is the gap it
+ * leaves.** A browser will happily send a page from `evil.example` a request to
+ * a name the attacker has re-pointed at `127.0.0.1` -- DNS rebinding -- and the
+ * socket cannot tell that request from the operator's own, because it arrives
+ * on loopback either way. What differs is the `Host` header: the operator's
+ * browser sends the address they typed, and a rebound page sends the attacker's
+ * name. So the page is served to the three spellings of this machine and to
+ * nothing else, which is the whole of what an unauthenticated surface can
+ * check.
+ *
+ * A request with no `Host` at all is refused rather than admitted: HTTP/1.1
+ * requires one, and the only clients that omit it are not browsers.
+ */
+function fromThisMachine(host: string | undefined): boolean {
+  if (host === undefined) {
+    return false;
+  }
+  // The port is whatever this server was asked to listen on, so only the name
+  // is checked. `[::1]:7333` keeps its brackets; `127.0.0.1:7333` does not.
+  const name = host.startsWith("[")
+    ? host.slice(0, host.indexOf("]") + 1)
+    : (host.split(":")[0] ?? "");
+  return name === "127.0.0.1" || name === "localhost" || name === "[::1]";
+}
+
+/**
  * Serve the page on localhost until the server is closed.
  *
  * `127.0.0.1` is written here rather than taken as an argument: an address is
  * the one thing about this surface that must not be configurable, because a
  * page with no authentication bound to anything else is a page anybody on the
- * network can read.
+ * network can read. {@link fromThisMachine} is the other half of that, and it
+ * is not redundant: the bind decides which sockets arrive, and the `Host` check
+ * decides which *pages* may have sent them.
  *
  * Resolves 0 when the server closes and 1 when it cannot listen, so the
  * command line has a status without this module knowing what a status is.
@@ -253,6 +283,11 @@ export function serveOperatorPage(
   const server = createServer((request, response) => {
     if (request.method !== "GET" && request.method !== "HEAD") {
       response.writeHead(405, { allow: "GET, HEAD" }).end();
+      return;
+    }
+    if (!fromThisMachine(request.headers.host)) {
+      response.writeHead(421, { "content-type": "text/plain; charset=utf-8" });
+      response.end("rondo serves this page to 127.0.0.1 and localhost only\n");
       return;
     }
     // One page and no router: every other path is a 404 rather than a redirect,

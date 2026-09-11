@@ -8,6 +8,7 @@
  * terminal got wrong and this page must not (rondo#90's paragraphs, rondo#91's
  * repeated basis), and both are properties of the bytes that reach a browser.
  */
+import { request as httpRequest } from "node:http";
 import { DatabaseSync } from "node:sqlite";
 import { expect, test } from "vitest";
 
@@ -108,6 +109,24 @@ async function reserve(
 
 const rows = (connection: DatabaseSync, table: string): number =>
   Number((connection.prepare(`SELECT count(*) AS n FROM ${table}`).get() as { n: number }).n);
+
+/** One request carrying a `Host` of our choosing, which `fetch` will not send. */
+function withHost(base: string, host: string): Promise<{ status: number; body: string }> {
+  return new Promise((resolve, reject) => {
+    const request = httpRequest(`${base}/`, { headers: { host } }, (response) => {
+      let body = "";
+      response.setEncoding("utf8");
+      response.on("data", (chunk: string) => {
+        body += chunk;
+      });
+      response.on("end", () => {
+        resolve({ status: response.statusCode ?? 0, body });
+      });
+    });
+    request.on("error", reject);
+    request.end();
+  });
+}
 
 test("the page shows what inbox, between and explain show", async () => {
   const world = fresh();
@@ -217,6 +236,15 @@ test("it serves the page on localhost, and only the one page", async () => {
   expect((await fetch(`${base}/inbox`)).status).toBe(404);
   // Read-only reaches the method too: nothing here answers a POST.
   expect((await fetch(`${base}/`, { method: "POST" })).status).toBe(405);
+
+  // **A page on an attacker's domain, rebound to 127.0.0.1, gets nothing.**
+  // The socket cannot tell that request from the operator's own -- both arrive
+  // on loopback -- and the `Host` header is what does.
+  // `fetch` refuses to send a `Host` of its caller's choosing, which is exactly
+  // the header under test -- so this one request is made with `node:http`.
+  const rebound = await withHost(base, "evil.example");
+  expect(rebound.status).toBe(421);
+  expect(rebound.body).not.toContain("i-0001");
 
   stop.abort();
   expect(await served).toBe(0);
