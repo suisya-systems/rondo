@@ -410,6 +410,77 @@ test("a cadenza pin that differs from the one that composed this row is said onc
   );
 });
 
+test(
+  "a differing pin does not also report every candidate as independently moved, but a real " +
+    "material change beside it still reads moved",
+  async () => {
+    // **Rule 5's fourth edge, taken literally.** A digest is a function of the
+    // pin (`issueFor`), so once the pin line has already said the pin moved,
+    // comparing `contractDigest` again on every candidate would report the
+    // same one fact as though each candidate had moved on its own -- the
+    // "reporting each option as though it had moved on its own" the entry
+    // refuses. The candidate's digest here is rewritten as a stand-in for what
+    // an old pin would have produced; a real field beside it (`status`) is
+    // also wrong, and that one must still surface.
+    const { connection, store, record } = fresh();
+    await reserveWithPlan(store, "iter-1", null);
+
+    const proposed = await proposeRetry(
+      { ...PROPOSE_PORTS, store, record, present: screen().present },
+      "run_plan",
+      "iter-1",
+      "iter-2",
+    );
+    expect(proposed.kind === "refused" ? proposed.reason : "proposed").toBe("proposed");
+    if (proposed.kind !== "proposed") {
+      return;
+    }
+
+    const row = onlyProposalRow(connection);
+    const snapshot = JSON.parse(String(row["snapshot"])) as {
+      iteration: unknown;
+      successor: unknown;
+      candidates: Record<string, unknown>[];
+    };
+    const [real0] = snapshot.candidates;
+    if (real0 === undefined) {
+      throw new Error("the fixture proposal did not compose a candidate");
+    }
+    const rewritten = {
+      ...snapshot,
+      candidates: [
+        {
+          ...real0,
+          status: "no-longer-the-real-status",
+          contractDigest: `sha256:${"1".repeat(64)}`,
+        },
+      ],
+    } as unknown as JsonRecord;
+    rewriteProposal(connection, proposed.proposalId, { snapshot: rewritten });
+
+    const shows = screen();
+    await showProposal(
+      {
+        store,
+        cadenzaRevision: "a-different-pin",
+        record,
+        now: () => 9_000,
+        present: shows.present,
+      },
+      proposed.proposalId,
+    );
+    const rendered = shows.shown.join("\n");
+    expect(rendered).toContain("cadenza pin moved:");
+    const basisIndex = shows.shown.findIndex((line) => line.includes("[recommended]"));
+    expect(basisIndex).toBeGreaterThanOrEqual(0);
+    const block = shows.shown.slice(basisIndex, basisIndex + 4).join("\n");
+    // Moved, and for the real field -- not for the digest the pin already explains.
+    expect(block).toContain("freshness: moved");
+    expect(block).toContain("status: `no-longer-the-real-status` -> `");
+    expect(block).not.toContain("contractDigest:");
+  },
+);
+
 test("a proposal whose bases are all external reads undetermined, never as though nothing moved", async () => {
   const { store, record } = fresh();
   await reserveWithPlan(store, "iter-1", null);

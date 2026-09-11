@@ -1309,10 +1309,14 @@ function renderValue(value: unknown): string {
 function recordDifferences(
   before: Record<string, unknown>,
   after: Record<string, unknown>,
+  ignoreKeys: ReadonlySet<string> = new Set(),
 ): readonly string[] {
   const keys = new Set([...Object.keys(before), ...Object.keys(after)]);
   const diffs: string[] = [];
   for (const key of keys) {
+    if (ignoreKeys.has(key)) {
+      continue;
+    }
     if (JSON.stringify(before[key]) !== JSON.stringify(after[key])) {
       diffs.push(`${key}: ${renderValue(before[key])} -> ${renderValue(after[key])}`);
     }
@@ -1320,12 +1324,22 @@ function recordDifferences(
   return diffs;
 }
 
-/** Two records of the same identity, compared field by field (`D-0038` rule 1). */
+/**
+ * Two records of the same identity, compared field by field (`D-0038` rule 1).
+ *
+ * `ignoreKeys` exists for rule 5's fourth edge alone: a `contractDigest` is a
+ * function of the cadenza pin (`issueFor`), so once the pin line has already
+ * said the pin moved, comparing that field again on every candidate would
+ * report the same one fact as though each candidate had moved independently
+ * -- exactly what rule 5 refuses. Every other field still compares normally,
+ * so material movement underneath a pin move is not hidden by it.
+ */
 function compareRecords(
   before: Record<string, unknown>,
   after: Record<string, unknown>,
+  ignoreKeys?: ReadonlySet<string>,
 ): Freshness {
-  const diffs = recordDifferences(before, after);
+  const diffs = recordDifferences(before, after, ignoreKeys);
   return diffs.length === 0
     ? { verdict: "unmoved", detail: null }
     : { verdict: "moved", detail: diffs.join("; ") };
@@ -1436,7 +1450,12 @@ interface FreshnessContext {
   readonly subjectId: string;
   readonly subjectVerdict: Freshness;
   readonly regathered: RegatherOutcome;
+  /** Whether the current cadenza pin differs from the one that composed this row (rule 5's fourth edge). */
+  readonly pinDiffers: boolean;
 }
+
+/** Fields a `contractDigest` compare ignores once the pin line has already said the pin moved. */
+const PIN_MOVED_IGNORES: ReadonlySet<string> = new Set(["contractDigest"]);
 
 /** A `snapshot` basis: re-gather, find the record the pointer sits in, and compare it. */
 function snapshotBasisFreshness(pointer: string, ctx: FreshnessContext): Freshness {
@@ -1458,7 +1477,11 @@ function snapshotBasisFreshness(pointer: string, ctx: FreshnessContext): Freshne
     // Rule 5's first edge: the strongest signal rondo can observe.
     return { verdict: "moved", detail: "no longer present in what rondo reads now" };
   }
-  return compareRecords(container.record, fresh);
+  return compareRecords(
+    container.record,
+    fresh,
+    container.top === "candidates" && ctx.pinDiffers ? PIN_MOVED_IGNORES : undefined,
+  );
 }
 
 /**
@@ -1596,19 +1619,21 @@ async function gatherFreshness(
       : undetermined("the stored snapshot names no iteration to compare");
 
   const regathered = await regatherPayload(ports, proposal, subjectOutcome.record);
+  const pinDiffers =
+    proposal.cadenzaRevision !== null && proposal.cadenzaRevision !== ports.cadenzaRevision;
   const ctx: FreshnessContext = {
     storedSnapshot: proposal.snapshot as Record<string, unknown>,
     subjectId: proposal.iterationId,
     subjectVerdict,
     regathered,
+    pinDiffers,
   };
   const perBasis = items.map((item) => BASIS_FRESHNESS[item.basis.form](item.basis, ctx));
 
-  const pinLine =
-    proposal.cadenzaRevision !== null && proposal.cadenzaRevision !== ports.cadenzaRevision
-      ? `cadenza pin moved: this proposal's contracts were composed under '${proposal.cadenzaRevision}', ` +
-        `and rondo is running '${ports.cadenzaRevision}'`
-      : null;
+  const pinLine = pinDiffers
+    ? `cadenza pin moved: this proposal's contracts were composed under '${proposal.cadenzaRevision}', ` +
+      `and rondo is running '${ports.cadenzaRevision}'`
+    : null;
 
   return { subject: subjectVerdict, perBasis, pinLine };
 }
