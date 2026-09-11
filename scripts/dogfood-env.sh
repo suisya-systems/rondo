@@ -471,6 +471,38 @@ node -e '
     base_branch: baseBranch,
     prompt,
 
+    // **What the worker of this lap may run** (`continuo D-1110`, D-0039 rule
+    // 3). Each entry is a Bash *subject*: continuo renders `Bash(<subject>)`
+    // and merges it into the allow list of the role the agent type names, for
+    // this run only. It has to agree with `granted` -- a plan that grants
+    // `command.run` and declares nothing is refused at `classify`, which is
+    // what rondo#67 measured -- so the two are written together here.
+    //
+    // The pair below is the node/npm shape, and `npm ci --ignore-scripts` is
+    // named exactly rather than as `npm ci:*` because the flagless form runs
+    // package lifecycle scripts, which the fence hook cannot observe: it sees
+    // tool calls, not the subprocesses a tool starts. **A target repository
+    // that builds some other way needs a declaration of its own**, which is
+    // the one field of this generated plan a person may have to edit -- rondo
+    // does not decide the command vocabulary of a project (D-0039 rule 2).
+    //
+    // No apostrophes in this comment: the whole program is a single-quoted
+    // shell argument, so one would end the string.
+    // `node vendor/pin.mjs:*` is here because the repository this script
+    // dogfoods is rondo, whose own AGENTS.md puts that check *before*
+    // `npm ci`: npm enforces its integrity hash against its cache, so a
+    // drifted tarball is a loud failure on a cold cache and a silent install
+    // of the previously pinned bytes on a warm one. A worker that may run the
+    // suite and may not run the check is a worker that cannot follow the rules
+    // of the repository it was given.
+    allowed_bash: [
+      "npm ci --ignore-scripts",
+      "npm run:*",
+      "node vendor/pin.mjs:*",
+      "node --version",
+      "npm --version",
+    ],
+
     repository: target,
     artifact_root: `${envRoot}/artifacts`,
     state_root: `${envRoot}/session-state`,
