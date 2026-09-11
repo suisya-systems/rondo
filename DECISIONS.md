@@ -77,6 +77,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0037 | The between-laps composition: a fourth snapshot rather than a fourth component, three claim families rondo can ground, one verb an operator runs, and a breakdown that answers over an interval | accepted |
 | D-0038 | Whether the premise under a proposal has moved, decided per basis and at render time: the record and not the field as the unit, re-gathered rather than remembered, and `undetermined` as a value the screen may never round to unchanged | accepted |
 | D-0039 | A lap cannot verify what it wrote, and `--allowedTools` is not the way out: `D-0011`'s first falsifier fires, the fence input rondo asks continuo for, and what `granted` maps to once it exists | accepted |
+| D-0040 | Where a run's authorisation is written down now that continuo owns a table for it: `D-0020` rule 4's falsifier fires in substance, the durable home does not move, and the envelope carries only facts that exist today | accepted |
 
 ---
 
@@ -6881,6 +6882,30 @@ escalate to continuo about the fence — is both the narrower route and the one 
    The table is a transcription of continuo's document at a revision, exactly as `CONTINUO_ROSTER`
    is, with the same falsifiers.
 
+   **Annotated 2026-09-12 by the implementation of rondo#67 (`continuo D-1110` at continuo
+   `fcf86eb`).** This rule's **first falsifier fired**: *"a role turning out to be the wrong
+   carrier ... which is rule 3's named cost arriving, and moves the fence profile off the role name
+   and onto a field of its own"*. continuo answered the escalation by **declining the second-role
+   shape this entry recommends**, on three grounds of its own (`continuo D-1110`, first
+   alternative), of which the load-bearing one is that **a role is what a worker *is*, not what runs
+   it** — the same distinction `continuo D-0099` used to refuse a model key in `roles.json`, so a
+   role meaning *"worker, with a build"* would make the `role` column answer two questions. That is
+   the cost this rule named and accepted; continuo declined to pay it. What arrived instead is
+   `run admit --allow-bash SUBJECT`, repeatable, per run.
+
+   **Consequence, and it is a change of subject rather than a correction.** The pair rondo refuses
+   over is now **(the grant, the declaration)** and no longer (the grant, the role): a plan that
+   grants `command.run` and declares no subject is refused before the spawn, and so is the mirror
+   image — a plan that declares subjects under an agent type that does not grant `command.run`. The
+   refusal lives in `classifyPlan` beside `D-0025`'s catalog check, which is the step before
+   `admit`, and `executorPolicy.roleName`'s arrow in `src/continuo/roles.ts` is **unchanged and
+   still the identity**: there is no command-capable role for it to point at, because continuo chose
+   not to grow one. **Nothing in this rule is corrected**: its reasoning, its two properties and the
+   place it puts the refusal all stand exactly as written, and rule 4's two requirements are both
+   met by the shape that arrived — (a) by `allowed_bash` on the `run_delegation_recorded` payload,
+   readable through `run show --json`, and (b) by `permission_denials` on what `lap perform`
+   answers with. Rule 5 is untouched: rondo still records `continuo_role` and no column is added.
+
 4. **Two properties are required of whatever shape continuo grows, and they are not the
    implementation's to negotiate.**
 
@@ -7033,3 +7058,207 @@ same continuo; they are cited as the observation and were not re-run here.
   an input; the entry is written so that a single counter-example to "no input reaches the allow
   list" falsifies it outright.
 - Any measurement above failing to reproduce at continuo `38c667b5` and rondo `ba98cfe`.
+
+
+---
+
+## D-0040 — Where a run's authorisation is written down now that continuo owns a table for it: `D-0020` rule 4's falsifier fires in substance, the durable home does not move, and the envelope carries only facts that exist today
+
+**Status:** accepted (2026-09-12, rondo's human gate). Refs rondo#67, rondo#69, `continuo D-1107`.
+
+Moving the pin to take `continuo D-1110` — the fence declaration `D-0039` rule 6 says rondo waits
+for — moves it across `continuo D-1107` as well, and that entry made two flags on `run admit`
+**required**: `--delegation-record PATH` and `--delegation-record-schema NAME`. So rondo cannot admit
+a single run at the new pin without producing a document it has never produced, and the shape of that
+document lands on a decision rondo has already taken about where a delegation record lives.
+
+**This is a decision-only entry** in `D-0037`'s and `D-0039` rule 6's sense: nothing under `src/`
+moves in the diff that carries it.
+
+### What fired
+
+`D-0020` rule 4 put the delegation record **in rondo's store and not in continuo**, and its argument
+was continuo's own restraint: continuo stated that neither `task` nor `assessment` had DDL and that
+they were *"not designed by implication"*. `D-0020`'s falsifier list names the end of that argument:
+
+> **continuo writing DDL for `task`.** Rule 4 rests on continuo declining to design it by
+> implication; if continuo's own first Issue writes it, where the delegation record belongs is a live
+> question again.
+
+**The falsifier fired in substance and not in its letter, and the difference is recorded rather than
+smoothed over.** continuo did *not* write `task`'s DDL — `continuo D-1107` rule 7 keeps `task` a
+hole on purpose and says why a mutable task row could not hold what an individual run was authorised
+to do. What it wrote instead is a **new table of its own**, `delegation_record`, keyed by `run_id`,
+immutable by three triggers and `WITHOUT ROWID`, written inside the transaction that admits the run.
+And the part rule 4's falsifier was really about — whether continuo would take this record — was
+settled deliberately: `continuo D-1107`'s context records that ownership was *"genuinely unsettled"*,
+that three documents named three different owners (including `cadenza S-7`, which is rule 4's own
+source), and that **the operator settled it** in continuo's favour for that record. A falsifier
+written against the weaker signal fired on the stronger one.
+
+### Decision
+
+1. **Rule 4 is not superseded, because the two records are not the same record.** What
+   `continuo D-1107` owns is the **per-run authorisation envelope**: the values *one run* was
+   permitted to act under, written atomically with the row that admits it. What `D-0020` rule 4
+   describes is the **durable, queryable home** of the delegation facts across runs — its facts 4
+   and 5 are *superseded agent-type records* and *the lineage of contracts*, which are histories
+   rather than a per-run snapshot, and its fact 6 is the single-use consumption of a human decision,
+   which is a thing only a store that can refuse a replay can enforce. A per-run row in continuo
+   answers none of those three, and rondo's store answers none of continuo's atomicity. So both
+   stand, and rule 4's implementation remains rondo's work rather than work continuo has now done.
+
+2. **Atomicity is why the envelope goes to continuo, and it is a structural fact rather than a
+   preference.** There must be no moment in which a run exists and what it was permitted to do does
+   not. continuo holds the only `INSERT INTO run` in the system, and rondo is on the far side of a
+   subprocess boundary and cannot join that transaction at all (`continuo D-1107` rule 1). A rondo
+   that wrote its own copy *first* would be writing an authorisation for a run that may never be
+   admitted; one that wrote it *after* would leave the window. Neither is available to rondo, and
+   the one place the two writes can be one write is the place that now takes them.
+
+3. **The two do not conflict, and the reason is that continuo does not read the envelope.**
+   `continuo D-1107` rule 2 is a structural commitment: the envelope is opaque text, the schema
+   constrains its form only (a non-empty JSON object within a size bound), no column is extracted
+   from inside it, no `CHECK` reads a key, no code path branches on one, and **the format name is
+   stored and printed back and never recognised**. So handing continuo the envelope does not move
+   cadenza's semantics into the control plane, which is the collapse `D-0018`'s layering exists to
+   prevent from either side. rondo remains the layer that owns the meaning, which is also why
+   canonicalisation is rondo's: continuo digests the bytes as they arrive (`verbatim-utf8`) and is
+   explicitly not the layer that may declare two spellings equal.
+
+4. **The envelope's format name is `rondo.delegation-record/1`, and the name is rondo's because the
+   format is.** continuo keeps no list of names and refuses none, so the name is a claim rondo makes
+   about its own document and the version is rondo's to move. It is **not** cadenza's schema: cadenza
+   has no wire schema for a contract, and its own scoping note makes serialisation a decision that
+   waits until the contract cannot be exercised as an in-memory value. That condition has now been
+   met by events, and `continuo D-1107`'s context says so — but it has been met for *continuo's*
+   record, and cadenza has not yet answered it. So `rondo.delegation-record/1` is deliberately a
+   **host format**, and a cadenza serialisation arriving later replaces it under a new version rather
+   than being retrofitted into this one.
+
+5. **The envelope carries the facts that exist today, as values, and nothing that would have to be
+   invented to fill a field.** Which is `D-0020` rule 4's facts 1 to 3, plus the identity of the
+   catalog the grant was issued against:
+
+   a. **the contract's fields as issued**, taken from cadenza's own rendering
+      (`contractPayload`) rather than re-encoded, so the digest can be recomputed over the same
+      bytes rather than trusted — rule 4 fact 1's stated reason, and the same rendering
+      `D-0022` rule 18 already persists in the `composition` row;
+
+   b. **`contract_digest`** beside them (fact 2);
+
+   c. **`agentTypeId`, `vocabularyVersion` and `agent_type_digest`**, plus the two policy bags the
+      record carries (`loopPolicy` and `executorPolicy`) — the policy that was *applied*, which is
+      what makes "under what policy did it do that" answerable (fact 3);
+
+   d. **the project's identity**: the project name, the `configDigest` the contract was issued
+      against, and the base branch — the catalog snapshot reduced to what identifies it.
+
+   **Facts 4, 5 and 6 of rule 4 are absent because they do not exist**, and their absence is the
+   honest record rather than a gap: no agent-type record has been superseded, no contract has a
+   `supersedes` chain with anything in it, and no widening has been issued, which rondo may not
+   compose anyway (`D-0009` part 2). A field carrying an empty list of things that have never
+   happened is a field a later reader would mistake for a measurement.
+
+6. **The catalog's layer documents are recorded by identity and not verbatim, and the reason is the
+   secret rule.** `continuo D-1107` rule 6 puts an obligation on the producer — secrets by
+   identifier and version, never by value — and states plainly that continuo cannot enforce it,
+   because enforcing it would mean reading the envelope. **Checked by name against rule 5's four
+   facts: none of them is, or can carry, a credential.** A contract's fields are capability keys,
+   identities rondo mints and digests; an agent-type record is an id, a vocabulary version, two
+   policy bags of numbers and neutral names, and a digest; a project name, a config digest and a
+   branch name are names. The **one** value in reach that could carry a credential is a catalog
+   layer's `source` when its kind is `git_url` — a URL whose userinfo can hold a token — which is
+   why the layer documents are reduced to (d) above rather than carried whole. An envelope is
+   unforgettable once continuo has it: the row is immutable by design and is not backfilled or
+   deleted, so a credential recorded there could not be removed afterwards, and the narrow
+   inclusion is chosen against exactly that.
+
+7. **The envelope is transport, and rondo persists nothing new for it.** The file rondo writes
+   exists to be read by the `run admit` it is passed to and is removed after that call answers; the
+   durable copy is continuo's row, readable through `run show --json`. **No column, table or record
+   kind is added to rondo's store** — `continuo D-1107`'s `admit` answer carries an
+   `envelope_digest`, and recording it would be a column, which this entry does not take
+   (`D-0039` rule 5's posture, for the same reason: the consuming side is not designed here).
+
+8. **The producer is the composition root, and `src/continuo/` gains no filesystem.** `D-0017`
+   makes that layer the one place under `src/` that starts a process, and its modules are otherwise
+   pure; a record written from inside it would add a second capability to the layer whose narrowness
+   is the point. So `src/access/` composes the envelope, writes it, and hands `admitRun` a path,
+   which is also where the two statements that it is one document — cadenza's rendering and the
+   bytes continuo digests — are made in one place (`D-0018` rule 5's shape).
+
+9. **Nothing is backfilled.** Runs admitted before continuo's `0006_delegation_record.sql` carry no
+   record and never will (`continuo D-1107` rule 11). rondo neither invents one for them nor reads
+   the table for a run it did not admit at this pin or later.
+
+### What this entry does not do
+
+- **It does not supersede `D-0020` rule 4**, move the six facts, or build the schema that holds
+  them. Rule 4's implementation is still unwritten work in rondo's store, and this entry narrows
+  what that work is *for* rather than cancelling it.
+- **It does not make rondo a reader of continuo's record.** `run show` is a verb rondo does not
+  drive, and what a surface does with a recorded authorisation is rondo#69's question.
+- **It does not decide cadenza's serialisation.** Rule 4's version exists so that cadenza's answer,
+  when it comes, replaces a format rather than editing one.
+- **It does not widen `--cli-arg` or touch `D-0011` rule 3.** The two new flags are required inputs
+  of a verb rondo already drives, and neither reaches the child's tool permissions.
+
+### Residuals
+
+| Residual | Why not here | Who decides |
+|---|---|---|
+| The store-side schema of `D-0020` rule 4's six facts | It is that rule's own unwritten implementation, and this entry deliberately does not design a second home | a later rondo entry, with rondo#69 |
+| Whether `envelope_digest` becomes a column on the iteration row | It is a record rondo would keep about continuo's record, and nothing reads it yet | the first surface that has to show it |
+| A canonicalisation for `rondo.delegation-record/1` | continuo digests bytes verbatim and states that canonicalisation belongs to whoever owns the meaning; rondo has one producer today, so two spellings of one grant cannot yet arise | the second producer, or cadenza's serialisation |
+| What the envelope carries once a widening can be issued | Rule 4's fact 6 does not exist and rondo may not compose one | `cadenza S-1`, then a rondo entry |
+
+### What was measured, and how
+
+At continuo `fcf86eb2b7eb34d65bf73188b2b34544fab6820c` — the revision the pin moves to — and at
+rondo `09830d6`, on **2026-09-12**, by running as well as by reading.
+
+- **The two flags are required, and the failure is a parser refusal rather than a decode.** rondo's
+  own end-to-end smoke against the built pin answered
+  `continuo run admit: error: the following arguments are required: --delegation-record,
+  --delegation-record-schema` — exit 2 with prose, which is the one shape `--json` does not reach
+  (`D-0015`).
+- **A JSON object in a file and any format name is enough to admit, and the declaration rides with
+  it.** `run admit --delegation-record <file> --delegation-record-schema 'rondo.delegation-record/1'
+  --allow-bash 'npm ci --ignore-scripts' --allow-bash 'npm run:*' --json` answered
+  `continuo.run.admit/1` with `ok: true` and a `delegation_record` object carrying
+  `record_schema`, `envelope_digest`, `digest_algorithm: sha256` and
+  `canonicalization: verbatim-utf8`. The format name was echoed back unrecognised, which is rule 3's
+  opacity observed rather than assumed.
+- **No other verb rondo drives grew a required flag.** `lap perform --help` at this revision carries
+  the same required set rondo already passes; `--state-root` is now a *parent* whose per-run child
+  continuo derives and creates itself (`continuo D-1105`), so the absolute directory a plan names is
+  unchanged.
+- **`continuo.run.admit/1` did not move**, so rondo's decoder is unaffected: it reads the keys it
+  names and a grown key is one every JSON reader already handles (`continuo D-1107` rule 12).
+- **cadenza's rendering is already what rondo persists elsewhere.** `src/access/advisory.ts`'s
+  `issueFor` writes `contractPayload(contract)` into the `composition` row beside
+  `contractDigest(contract)` (`D-0022` rule 18, citing `D-0020` rule 4 fact 1), so rule 5's (a) and
+  (b) are an existing assembly reused rather than a second encoding of the same contract.
+- **What was not measured**: no envelope composed by rondo has been admitted yet — the probe above
+  used a hand-written file — and no lap has run under one. That is the implementation's measurement
+  and rondo#67's acceptance, which is a lap whose worker greens the target repository's own verify.
+
+### What would falsify it
+
+- **continuo acquiring an opinion about the envelope's contents** — a recognised format name, a key
+  read, an index over something inside it — which is `continuo D-1107` rule 2's own commitment
+  breaking and would make rule 3's argument for handing the document over false.
+- **cadenza publishing a serialisation and a digest canonicalisation for a contract**, which is
+  cadenza's own waiting decision arriving; `rondo.delegation-record/1` then becomes a transcription
+  of cadenza's format under a new version, and rule 4's "the format is rondo's" stops being true.
+- **A fact rule 5 omits turning out to be required by an audit that actually happens.** The entry
+  chooses today's facts over placeholder fields; an incident review that needed the catalog's layer
+  documents verbatim would move rule 6's reduction to a redaction step rather than an omission.
+- **`D-0020` rule 4's store-side schema being built as a projection of continuo's row** rather than
+  beside it, which would mean the two records were one after all and rule 1 drew the line in the
+  wrong place.
+- **A run admitted with an envelope whose digest cannot be reproduced from the stored bytes**, which
+  would make the whole record decoration — continuo refuses that case as `DelegationRecordTampered`,
+  and rondo's reliance on that refusal is what rule 7 rests on.
+- Any measurement above failing to reproduce at continuo `fcf86eb2` and rondo `09830d6`.
