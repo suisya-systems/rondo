@@ -1284,9 +1284,15 @@ async function performStep(
         // about and then never named is a worker that may still be running with
         // nobody able to name it. The line is in the report on both paths; only
         // the column is claimed after the write.
+        // The line names the id and claims nothing further for it (`S-5` of
+        // `docs/design/refusal-session-lock.md`): reading the transcript is
+        // what it is actually good for. It used to cite a 'session stop' as
+        // well, which is not a command at the pin -- continuo's subparsers are
+        // `measure`, `attention`, `db`, `run`, `lap` and `gate`, and `stop` is
+        // a `SessionProvider` method an operator cannot reach.
         lines.push(
           `continuo names the session the lap refused over: ${session}. It is what a transcript ` +
-            "read or a 'session stop' is keyed on.",
+            "read is keyed on.",
         );
       }
       return terminal(
