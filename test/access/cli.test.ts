@@ -34,6 +34,7 @@ import {
   readingRangeOf,
   repositoryFromRemoteUrl,
   reviewGate,
+  reviewLines,
   revisionBlocker,
   USAGE,
   walkGate,
@@ -1420,6 +1421,56 @@ test("--despite-review overrules every one of those refusals, and only those", (
     expect(reviewGate(reading, work, false).kind).toBe("refused");
     expect(reviewGate(reading, work, true)).toEqual({ kind: "ready" });
   }
+});
+
+test("a clean reading says on the gate screen that it ran nothing (rondo#69)", () => {
+  // **The falsifier of this fix, held as a case.** On 2026-09-12 the gate
+  // screen printed `read and nothing raised` under a `rationale` in which the
+  // worker reported that it had not been able to run the verification at all,
+  // and the contradiction was visible only to the person reading both. A lap
+  // that ran no test looks exactly like a lap that ran a green suite to this
+  // reader -- it cannot tell, and D-0029 rule 9 says so -- so the screen has to
+  // say that where it says what it found. If a human cannot read *"whether
+  // anything was built or tested was not checked"* off this block, the fix is
+  // not done.
+  const said = reviewLines(reviewed()).join("\n");
+
+  expect(said).toContain("built nothing, ran nothing and tested nothing");
+  expect(said).toContain("neither checked nor claimed");
+  // The old headline claimed coverage it does not have. It must not come back
+  // unnoticed, in the shape #73 used for the same species of defect.
+  expect(said).not.toContain("read and nothing raised");
+});
+
+test("a reading that raised points says what it did not look at as well", () => {
+  // A verdict of `concerns` overstates coverage exactly as `clear` does: two
+  // points raised reads as "it looked, and here is everything it found".
+  const said = reviewLines(
+    reviewed({ verdict: "concerns", findings: ["the topic branch changes no files"] }),
+  ).join("\n");
+
+  expect(said).toContain("built nothing, ran nothing and tested nothing");
+});
+
+test("an unavailable reading states no coverage, because nothing was read", () => {
+  // The distinction D-0029 rule 10 turns on, one layer up: an absence must not
+  // be dressed as a bounded check by listing what it did not look at.
+  const said = reviewLines(
+    reviewed({ verdict: "unavailable", evidence: null, unavailableReason: "no such directory" }),
+  ).join("\n");
+
+  expect(said).toContain("no reading could be taken");
+  expect(said).not.toContain("built nothing");
+});
+
+test("a reader rondo does not know does not get the deterministic reader's coverage", () => {
+  // The rows are append-only and outlive this code, so a fixed sentence about
+  // what "the reader" looked at would be the same defect one turn on -- a
+  // model drafter (D-0029 rule 6) may well be handed test output.
+  const said = reviewLines(reviewed({ drafter: "rondo/model/1" })).join("\n");
+
+  expect(said).toContain("is not recorded");
+  expect(said).not.toContain("built nothing");
 });
 
 test("the range a reading was taken across is the plan's base, never the pull request's", () => {

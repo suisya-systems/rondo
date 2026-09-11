@@ -1845,6 +1845,22 @@ test("the operator is told what the reading found, above the gate id", async () 
   expect(said.indexOf("independent reading")).toBeLessThan(said.indexOf("is already open"));
 });
 
+test("the reading also says what it did not look at, in the same report (rondo#69)", async () => {
+  // **The falsifier of rondo#69, on the conductor's side.** "Found nothing to
+  // raise" is read as "a check happened"; this reader cannot tell a lap that
+  // ran a green suite from one that ran nothing at all, and on 2026-09-12 it
+  // said so beside a worker reporting that every `npm` invocation had been
+  // refused. The same sentence is on `rondo answer`'s gate screen, out of the
+  // same function, because two spellings would drift.
+  const h = harness();
+
+  const report = await admitOnce(h);
+
+  const said = report.lines.join("\n");
+  expect(said).toContain("built nothing, ran nothing and tested nothing");
+  expect(said).toContain("neither checked nor claimed");
+});
+
 test("a reading that raised something says so and still calls it the person's", async () => {
   const h = harness({
     readLapWork: {

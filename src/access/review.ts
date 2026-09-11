@@ -31,18 +31,9 @@
 
 import { contentDigest } from "../store/plan.js";
 import type { LapReadingDraft, ReadingEvidence } from "../store/records.js";
+import { DETERMINISTIC_READING_DRAFTER } from "../store/records.js";
 
 import type { LapWorkInspection } from "./forge.js";
-
-/**
- * Who produced a reading, when this file did.
- *
- * A version is in the string on purpose. The row is append-only and outlives
- * the code that wrote it, so "which reader said this" has to be answerable
- * from the row alone; a bare `"deterministic"` would make every past verdict
- * appear to have been taken under today's rules.
- */
-export const DETERMINISTIC_DRAFTER = "rondo/deterministic/1";
 
 /**
  * The remote whose tracking ref a reading prefers when it resolves the base.
@@ -124,7 +115,7 @@ export function evidenceOf(
 export function readingOf(inspection: LapWorkInspection): LapReadingDraft {
   if (inspection.kind === "unreadable") {
     return {
-      drafter: DETERMINISTIC_DRAFTER,
+      drafter: DETERMINISTIC_READING_DRAFTER,
       verdict: "unavailable",
       findings: Object.freeze([]),
       evidence: null,
@@ -153,7 +144,7 @@ export function readingOf(inspection: LapWorkInspection): LapReadingDraft {
   }
 
   return {
-    drafter: DETERMINISTIC_DRAFTER,
+    drafter: DETERMINISTIC_READING_DRAFTER,
     verdict: findings.length === 0 ? "clear" : "concerns",
     findings: Object.freeze([...findings]),
     evidence: evidenceOf(inspection),

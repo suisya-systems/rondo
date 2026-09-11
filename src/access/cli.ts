@@ -54,6 +54,7 @@ import {
   isTerminal,
   type JsonRecord,
   type LapReading,
+  readingCoverage,
 } from "../store/records.js";
 import {
   type IterationStore,
@@ -1813,21 +1814,40 @@ export function readingRangeOf(record: IterationRecord): LapWorkRequest | null {
   return { workspace, remote: READING_REMOTE, baseBranch, topicBranch };
 }
 
-/** One stored reading, as an operator reads it. ASCII, one line at a time (D-0004). */
-function reviewLines(reading: LapReading): readonly string[] {
+/**
+ * One stored reading, as an operator reads it. ASCII, one line at a time
+ * (D-0004).
+ *
+ * **What it did not look at is printed beside what it found** (rondo#69). The
+ * headline used to be `read and nothing raised`, which is a claim about
+ * coverage that this reader has no standing to make: it read commit subjects
+ * and per-file counts, and on 2026-09-12 it said that under a gate whose own
+ * `rationale` reported that the verification could not be run at all. The two
+ * blocks are printed by the same command, and only the person spotted that they
+ * disagreed. `readingCoverage` is the store's, so this screen and the
+ * conductor's report say the same thing about the same drafter.
+ *
+ * **`unavailable` gets no coverage lines**, because nothing was read and the
+ * branch already says so. Stating what an absent reading did not look at would
+ * dress an absence up as a bounded check.
+ */
+export function reviewLines(reading: LapReading): readonly string[] {
   const evidence = reading.evidence;
+  const coverage = readingCoverage(reading.drafter).map((line) => `        ${line}`);
   switch (reading.verdict) {
     case "clear":
       return [
-        `review  read and nothing raised (${reading.drafter}).`,
+        `review  read the commits and the files, and raised nothing (${reading.drafter}).`,
         `        ${String(evidence?.commitCount ?? 0)} commit(s), ` +
           `${String(evidence?.fileCount ?? 0)} file(s), tip ${evidence?.tipCommit ?? "(none)"}.`,
+        ...coverage,
         "        This is material for you. It is not an approval and it permits nothing.",
       ];
     case "concerns":
       return [
         `review  ${String(reading.findings.length)} point(s) raised (${reading.drafter}):`,
         ...reading.findings.map((finding) => `        - ${finding}`),
+        ...coverage,
         "        Material for you to weigh. The answer is still yours.",
       ];
     default:
