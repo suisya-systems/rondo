@@ -32,6 +32,7 @@ import { join } from "node:path";
 import { afterAll, expect, test } from "vitest";
 
 import {
+  admitRun,
   CLI_PATH_ENV,
   run,
   startContinuo,
@@ -145,6 +146,40 @@ test.skipIf(!available)(
       db: database,
       payload: {
         runId: "rondo-smoke-1",
+        status: "created",
+        createdAtMs: expect.any(Number),
+      },
+    });
+
+    // **The declaration, admitted by rondo's own adapter against the real
+    // build** (`continuo D-1110`, D-0039 rule 3). This is the one place the
+    // `--allow-bash` argv is checked against a continuo rather than against
+    // rondo's model of one: a pinned build without the flag answers this with a
+    // parser refusal, and a subject the role document forbids would be refused
+    // too -- so a green here is "the input D-0039 said did not exist is the
+    // input this build takes". `admitRun` is used rather than a hand-written
+    // argv precisely because the argv is what is under test.
+    const declared = await admitRun(continuo, {
+      db: database,
+      runId: "rondo-smoke-2",
+      leaseClaimantId: "rondo-smoke",
+      workspace: scratch(),
+      neutralRoleName: "worker",
+      baseBranch: "main",
+      topicBranch: "feat/rondo-smoke-declared",
+      prompt: "a declared request, from rondo's smoke",
+      // The two subjects continuo measured its own acceptance against, and
+      // `npm ci --ignore-scripts` exactly rather than `npm ci:*`: the flagless
+      // form runs package lifecycle scripts, which the fence's hook cannot see
+      // because it observes tool calls and not the subprocesses a tool starts.
+      allowedBash: ["npm ci --ignore-scripts", "npm run:*"],
+    });
+    expect(declared.continuoRole).toBe("worker");
+    expect(declared.result).toEqual({
+      kind: "answered",
+      db: database,
+      payload: {
+        runId: "rondo-smoke-2",
         status: "created",
         createdAtMs: expect.any(Number),
       },

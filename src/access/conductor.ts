@@ -227,6 +227,11 @@ export function conductorPorts(
         baseBranch: plan.baseBranch,
         topicBranch: plan.topicBranch,
         prompt: plan.prompt,
+        // The plan's declaration, passed as the plan wrote it: the port's
+        // signature does not grow a parameter for it, because the plan is
+        // already what crosses and the declaration is a field of the plan
+        // rather than something the conductor decides (D-0039 rule 3).
+        allowedBash: plan.allowedBash,
       });
       const effect = asEffect(outcome.result, (payload) => payload);
       if (effect.kind !== "answered") {

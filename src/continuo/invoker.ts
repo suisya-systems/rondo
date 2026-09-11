@@ -625,6 +625,27 @@ export interface AdmitRunRequest {
   readonly topicBranch: string;
   /** The request text. Arbitrary, and the only field here that is prose. */
   readonly prompt: string;
+  /**
+   * The Bash subjects this run's child may run, one `--allow-bash` each
+   * (`continuo D-1110`).
+   *
+   * **Carried, never composed.** The set arrives on the plan and this module
+   * passes it through: a subject rondo added would be rondo naming a command,
+   * which D-0039 rule 2 refuses for the same reason `roles.ts` refuses to
+   * derive a role from a model. The shape of each subject is already refused by
+   * `runPlan` -- before a process exists, because continuo's own refusal for a
+   * malformed one is a stack and exit 1 -- so what reaches here is a list of
+   * strings continuo will accept or refuse on its own document's terms.
+   *
+   * **Not `--cli-arg` by another name.** D-0011 rule 3's four flags stay
+   * refused and rondo's `--cli-arg` allowlist stays empty; a declared subject
+   * is rendered by continuo into one `Bash(<subject>)` entry of the role's
+   * `permissions.allow` and is gated by that document's own
+   * `global.forbidden_allow_*`. It cannot name a tool, cannot remove a deny
+   * rule, a sandbox path or a hook decision, and is the input D-0011's first
+   * falsifier said to escalate for rather than the flag it refused.
+   */
+  readonly allowedBash: readonly string[];
 }
 
 /**
@@ -709,6 +730,17 @@ export async function admitRun(
       // identifiers and paths that are already refused when they are
       // option-shaped, and joining them would hide that check behind a spelling.
       `--prompt=${requireText("prompt", request.prompt)}`,
+      // One flag per subject, appended after the prompt so that the joined
+      // `--prompt=` form above stays the last thing a reader has to think about
+      // when the argv is read aloud. continuo's parser appends, exactly as it
+      // does for `--claude-command`, so the order of the subjects is the plan's
+      // order and rondo neither sorts nor de-duplicates them: a declaration is
+      // a record of what was asked for, and continuo's own constructor is what
+      // refuses one it will not carry.
+      ...request.allowedBash.flatMap((subject, position) => [
+        "--allow-bash",
+        requireText(`allowedBash[${String(position)}]`, subject),
+      ]),
     ];
   } catch (error) {
     if (error instanceof ArgumentRefusal) {

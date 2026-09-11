@@ -508,6 +508,7 @@ const PLAN: RunPlan = (() => {
     workspaceRoot: "/srv/rondo/work",
     baseBranch: "main",
     prompt: "do the thing",
+    allowedBash: ["npm run:*"],
     repository: "/srv/rondo/repo",
     artifactRoot: "/srv/rondo/artifacts",
     stateRoot: "/srv/rondo/state",

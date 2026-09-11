@@ -112,6 +112,32 @@ export interface RunPlan {
   readonly baseBranch: string;
   /** The request text. The one field of eight that the one-liner supplies. */
   readonly prompt: string;
+  /**
+   * The Bash subjects this lap's worker may run, declared by the plan and
+   * widening the fence of the role the agent type names (`continuo D-1110`).
+   *
+   * **The plan declares them because rondo may not invent them.** D-0039 rule 2
+   * is why: `command.run` is a capability key and says *that* commands may be
+   * run, and deriving *which* from it would be rondo minting a command
+   * vocabulary neither cadenza nor continuo has. So the set arrives as an input
+   * on the plan -- written by whoever knows the target repository's own build --
+   * and rondo carries it to `run admit --allow-bash`, one flag per subject,
+   * without reading a command out of it.
+   *
+   * **A subject, not a permission spec.** continuo renders `Bash(<subject>)`
+   * itself, so a declaration cannot name `Read`, `Edit` or an MCP tool, and the
+   * role document's own `global.forbidden_allow_*` still refuses the render if
+   * the merged list collides with it. `npm run:*` is a subject; `Bash(npm
+   * run:*)` is not, and the parenthesis rule below refuses the second spelling.
+   *
+   * **Empty is the honest default and is not a widening.** A run admitted with
+   * no declaration renders the fence every run before `continuo D-1110`
+   * rendered. What an empty declaration may *not* be is silently paired with a
+   * `command.run` grant: `classifyPlan` refuses that pair before the spawn
+   * (D-0039 rule 3), because a plan that grants the capability and declares
+   * nothing is the disagreement rondo#67 was.
+   */
+  readonly allowedBash: readonly string[];
 
   // --- continuo: the lap ----------------------------------------------------
   /** The repository the workspace is cut from. Absolute. */
@@ -269,6 +295,27 @@ export interface RunPlan {
 const MAX_TIMER_MS = 2_147_483_647;
 
 /**
+ * Whether a value carries a character continuo's own rule calls a control
+ * character: anything below U+0020, and U+007F.
+ *
+ * **A code-point test rather than a character class**, because a regular
+ * expression spelling the class is the one shape the linter refuses -- a
+ * control character inside a pattern is usually a typo -- and suppressing that
+ * rule to keep a one-liner would be trading a real check for a shorter
+ * expression. The set is the rule: a subject carrying a newline would put a
+ * second line into the settings document continuo renders.
+ */
+function hasControlCharacter(value: string): boolean {
+  for (const character of value) {
+    const code = character.codePointAt(0) ?? 0;
+    if (code < 0x20 || code === 0x7f) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
  * A validated plan with the allocator's three identifiers on it.
  *
  * The shape everything downstream of `admit()` actually needs: continuo's two
@@ -389,6 +436,7 @@ export function runPlan(input: RunPlan): PlanOutcome {
       workspaceRoot: requireAbsolute("workspaceRoot", input.workspaceRoot),
       baseBranch: requireNotOptionShaped("baseBranch", input.baseBranch),
       prompt: requireNonEmpty("prompt", input.prompt),
+      allowedBash: requireAllowedBash(input.allowedBash),
       repository: requireAbsolute("repository", input.repository),
       artifactRoot: requireAbsolute("artifactRoot", input.artifactRoot),
       stateRoot: requireAbsolute("stateRoot", input.stateRoot),
@@ -452,6 +500,64 @@ function requireClaudeCommand(tokens: readonly string[]): readonly string[] {
   }
   return Object.freeze(
     tokens.map((token, index) => requireAbsolute(`claudeCommand[${String(index)}]`, token)),
+  );
+}
+
+/**
+ * The declared subjects, checked against `LapRunIntent`'s own rules.
+ *
+ * **Restated here for D-0015 exception 2's reason, and that reason is
+ * measured rather than assumed**: `LapRunIntentUsageError` -- the error
+ * `run admit` raises for a malformed `--allow-bash` -- is outside the refusal
+ * family continuo answers as a document, and `src/control_plane/run_cli.ts`
+ * says so in its own words at the pinned revision: it "still escape[s] as a
+ * stack trace and exit 1". So a subject an operator mistyped is the exact shape
+ * of fault this function exists to answer before a process starts.
+ *
+ * **Every rule below is continuo's, read off `LapRunIntent`'s constructor at
+ * the pinned revision**, and each is here because a mistyped subject would
+ * otherwise arrive as a stack: a non-string, a subject that is empty or only
+ * whitespace (which renders `Bash()`, authorising nothing while reading as a
+ * grant), a control character, a `(` or `)` (the spec grammar's own delimiters,
+ * which would spell half of a rule the record did not authorise), and a subject
+ * that is nothing but wildcard punctuation (which authorises every command,
+ * and which the role document's `forbidden_allow_exact` would refuse at the
+ * render anyway). Nothing here judges *which* commands are reasonable: that is
+ * the declaration's own content and the plan's author's to write.
+ */
+function requireAllowedBash(subjects: readonly string[]): readonly string[] {
+  const value: unknown = subjects;
+  if (!Array.isArray(value)) {
+    return refuse("'allowedBash' is not an array, and a declaration is a list of Bash subjects");
+  }
+  return Object.freeze(
+    value.map((subject, index) => {
+      const field = `allowedBash[${String(index)}]`;
+      if (typeof subject !== "string") {
+        return refuse(`'${field}' is not a string`);
+      }
+      requireNonEmpty(field, subject);
+      if (hasControlCharacter(subject)) {
+        return refuse(
+          `'${field}' is '${subject}', and a Bash subject carries no control character`,
+        );
+      }
+      if (subject.includes("(") || subject.includes(")")) {
+        return refuse(
+          `'${field}' is '${subject}', and a subject is interpolated into Bash(<subject>) by ` +
+            "continuo: a parenthesis inside it spells part of a rule this plan did not declare. " +
+            "Declare the subject alone -- 'npm run:*' rather than 'Bash(npm run:*)'.",
+        );
+      }
+      if (/^[*:\s]+$/.test(subject)) {
+        return refuse(
+          `'${field}' is '${subject}', which authorises every command. A declaration has to be ` +
+            "narrower than 'anything' (continuo D-1110), and continuo's role document refuses " +
+            "the render if it is not.",
+        );
+      }
+      return subject;
+    }),
   );
 }
 
@@ -621,6 +727,7 @@ export function planPayload(plan: AdmittedPlan): JsonRecord {
     base_branch: plan.baseBranch,
     topic_branch: plan.topicBranch,
     prompt: plan.prompt,
+    allowed_bash: [...plan.allowedBash],
     repository: plan.repository,
     artifact_root: plan.artifactRoot,
     state_root: plan.stateRoot,
@@ -752,6 +859,23 @@ const PAYLOAD_UPGRADES: readonly ((payload: JsonRecord) => JsonRecord)[] = [
    * already existed, not a speculative one.
    */
   (payload) => withWorkspaceRoot(withPullRequestBaseBranch(payload)),
+  /**
+   * v1 -> v2: the declaration, which every payload written before it lacks.
+   *
+   * **Absent means "this plan declared nothing"**, which is the empty list and
+   * which is also what every run admitted before `continuo D-1110` actually
+   * got: no `--allow-bash` was passed, so no entry reached the rendered allow
+   * list. The upgrade is therefore a faithful reading of the older bytes rather
+   * than a default chosen for convenience -- and it is the reading that keeps a
+   * live iteration readable across the pin move, which is what this ladder is
+   * for.
+   *
+   * It is **not** a relaxation of the grant check: a v1 payload whose agent
+   * type grants `command.run` climbs to an empty declaration and is then
+   * refused by `classifyPlan` for the disagreement, which is the correct answer
+   * -- that plan's lap could never have run a command either.
+   */
+  (payload) => withAllowedBash(payload),
 ];
 
 /**
@@ -907,6 +1031,23 @@ function withWorkspaceRoot(payload: JsonRecord): JsonRecord {
 }
 
 /**
+ * A payload from before `allowedBash` existed, given the declaration it had.
+ *
+ * Absent is the empty list, for the reason the ladder's second entry states: a
+ * run admitted before `continuo D-1110` passed no `--allow-bash` and its child
+ * got the role's own six git specs. A key that is *present* is left exactly as
+ * it is, including a present non-array, which {@link readStringArray} still
+ * refuses by name -- the ladder supplies what an older shape omitted and never
+ * repairs what a newer one got wrong.
+ */
+function withAllowedBash(payload: JsonRecord): JsonRecord {
+  if (payload["allowed_bash"] !== undefined) {
+    return payload;
+  }
+  return { ...payload, allowed_bash: [] };
+}
+
+/**
  * The caller's half of a plan, read from a document (D-0023 rule 9).
  *
  * What an operator's plan file holds: everything except the three identifiers
@@ -929,6 +1070,7 @@ export function readRunPlan(payload: JsonRecord): PlanOutcome {
       workspaceRoot: readString(current, "workspace_root"),
       baseBranch: readString(current, "base_branch"),
       prompt: readString(current, "prompt"),
+      allowedBash: readStringArray(current, "allowed_bash"),
       repository: readString(current, "repository"),
       artifactRoot: readString(current, "artifact_root"),
       stateRoot: readString(current, "state_root"),

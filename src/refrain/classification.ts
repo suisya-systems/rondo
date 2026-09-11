@@ -23,6 +23,7 @@
  * is one cadenza computed. rondo reads the answer; it never re-derives it.
  */
 import {
+  type AgentType,
   agentTypeRecord,
   classifyAction,
   issueInitialContract,
@@ -74,6 +75,10 @@ export function classifyPlan(plan: AdmittedPlan): EffectOutcome<ClassificationRe
       return { kind: "refused", message: disagreement };
     }
     const record = agentTypeRecord(plan.agentTypeInput);
+    const fenceDisagreement = grantDisagreement(plan, record);
+    if (fenceDisagreement !== null) {
+      return { kind: "refused", message: fenceDisagreement };
+    }
     const contract = issueInitialContract(record, project, plan.parties);
     const answer = classifyAction(contract, plan.intendedAction, {
       runId: plan.runId,
@@ -159,6 +164,85 @@ function catalogDisagreement(plan: AdmittedPlan, project: ResolvedProject): stri
       `the plan disagrees with itself about which branch this lap is cut from: 'base_branch' ` +
       `is '${plan.baseBranch}', and project '${plan.projectName}' in the catalog has ` +
       `base_branch '${project.baseBranch}'`
+    );
+  }
+  return null;
+}
+
+/**
+ * The capability key that says a lap's worker runs commands.
+ *
+ * cadenza's own vocabulary and spelled once here: `command.run` "names the
+ * execution and never an effect", which is why it is the key the fence has to
+ * agree with and why no other key is consulted.
+ */
+const COMMAND_RUN = "command.run";
+
+/**
+ * The second thing rondo checks *about* its own inputs: that the capability an
+ * agent type grants and the fence a plan declares are the same statement
+ * (D-0039 rule 3).
+ *
+ * **Two halves that were both real and disagreed silently.** rondo#67 ran a lap
+ * whose agent type granted `command.run` and whose worker could not run
+ * `npm ci --ignore-scripts`, `npm run verify`, `npm --version` or
+ * `node vendor/pin.mjs check`: every one answered `This command requires
+ * approval` to a `claude -p` child with nobody to ask. The plan was admitted
+ * *because* it held the grant, and then rendered a fence that could not run a
+ * command. D-0039 rule 2 is why the grant cannot simply *become* the allow list
+ * -- a capability key says *that* commands may be run and an allow rule says
+ * *which*, and deriving the second from the first would be rondo inventing a
+ * command vocabulary -- so the two are stated separately and this is where they
+ * are made to agree.
+ *
+ * **The pair is the grant and the declaration, and no longer the grant and the
+ * role.** D-0039 rule 3 wrote the check over `executorPolicy.roleName`, on the
+ * expectation that continuo would answer the escalation with a second
+ * command-capable role for that name to point at. continuo declined that shape
+ * (`continuo D-1110`, first alternative: a role is what a worker *is*, not what
+ * runs it) and answered with a per-run declaration instead, which is rule 3's
+ * named cost arriving -- the role turning out to be the wrong carrier -- so the
+ * fence profile sits on a field of the plan's own and the refusal is stated
+ * over that field. The dated annotation on D-0039 records the move; the rule's
+ * text is unchanged.
+ *
+ * **Both directions, because either one is a plan lying about itself.** A grant
+ * with nothing declared is rondo#67 exactly: a lap that may run commands under
+ * a fence that allows none. A declaration with no grant is the mirror image and
+ * is worse for being quiet -- the fence would be widened for a lap cadenza was
+ * never asked to authorise for execution, which is a widening that appears in
+ * no contract.
+ *
+ * **Where it fires is the point.** This is `classify`, which runs before
+ * `admit`: no run exists at continuo, no fence has been rendered, no worktree
+ * has been cut and no worker has been spawned. `mapNeutralRole`'s manner and
+ * `mapModelTier`'s reason (D-0039 rule 3): an agent type an operator wrote,
+ * answered with a value rather than a throw, before money is spent.
+ *
+ * `record.granted` and not `plan.agentTypeInput.granted`: the record is the set
+ * cadenza validated, sorted and made unique, and reading the raw input would be
+ * rondo deciding what a capability set is.
+ */
+function grantDisagreement(plan: AdmittedPlan, record: AgentType): string | null {
+  const granted = record.granted.includes(COMMAND_RUN);
+  const declared = plan.allowedBash.length > 0;
+  if (granted && !declared) {
+    return (
+      `the plan disagrees with itself about whether this lap runs commands: agent type ` +
+      `'${record.agentTypeId}' grants '${COMMAND_RUN}' and 'allowed_bash' is empty, so the ` +
+      `worker would be admitted to run commands under a fence that allows none. That is the ` +
+      `defect rondo#67 measured: every command came back 'This command requires approval' to a ` +
+      `session with nobody to ask. Declare the commands this lap needs, or stop granting ` +
+      `'${COMMAND_RUN}'`
+    );
+  }
+  if (declared && !granted) {
+    return (
+      `the plan disagrees with itself about whether this lap runs commands: 'allowed_bash' ` +
+      `declares ${String(plan.allowedBash.length)} subject(s) and agent type ` +
+      `'${record.agentTypeId}' does not grant '${COMMAND_RUN}', so the fence would be widened ` +
+      `for a capability no contract carries. Grant '${COMMAND_RUN}' on the agent type, or drop ` +
+      `the declaration`
     );
   }
   return null;

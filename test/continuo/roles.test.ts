@@ -118,6 +118,7 @@ describe("a name outside the table", () => {
       baseBranch: "main",
       topicBranch: "topic/one",
       prompt: "do the thing",
+      allowedBash: [],
     });
     expect(outcome.result.kind).toBe("invokerDefect");
     if (outcome.result.kind !== "invokerDefect") {
@@ -147,6 +148,7 @@ describe("a name outside the table", () => {
       baseBranch: "main",
       topicBranch: "topic/one",
       prompt: "do the thing",
+      allowedBash: [],
     });
     expect(outcome.continuoRole).toBe("worker");
     expect(outcome.result.kind).toBe("invokerDefect");

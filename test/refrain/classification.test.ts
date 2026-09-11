@@ -74,12 +74,17 @@ function planWith(overrides: {
   readonly catalogBaseBranch?: string;
   readonly pullRequestBaseBranch?: string | null;
   readonly projectName?: string;
+  /** The plan's declaration (`continuo D-1110`); one subject by default. */
+  readonly allowedBash?: readonly string[];
+  /** The agent type's capability keys; `command.run` by default. */
+  readonly granted?: readonly string[];
 }): AdmittedPlan {
   const input: RunPlan = {
     db: resolve("/srv/rondo/control.db"),
     workspaceRoot: WORKSPACE_ROOT,
     baseBranch: overrides.baseBranch ?? "main",
     prompt: "teach rondo to count",
+    allowedBash: overrides.allowedBash ?? ["npm run:*"],
     repository: overrides.repository ?? REPOSITORY,
     artifactRoot: resolve("/srv/rondo/artifacts"),
     stateRoot: resolve("/srv/rondo/state"),
@@ -108,7 +113,7 @@ function planWith(overrides: {
     agentTypeInput: {
       agentTypeId: "worker-basic",
       vocabularyVersion: 1,
-      granted: ["command.run"],
+      granted: [...(overrides.granted ?? ["command.run"])],
       askable: ["branch.push"],
       loopPolicy: { maxReviewRounds: 2, noProgressWindow: 3, noProgressRepeat: 2 },
       executorPolicy: { roleName: "worker", modelTier: "standard", reportingDuties: [] },
@@ -211,6 +216,62 @@ describe("classifyPlan, on a Windows-shaped path", () => {
       expect(outcome.kind).toBe("answered");
     },
   );
+});
+
+describe("classifyPlan, when the grant and the fence disagree", () => {
+  /**
+   * **rondo#67, as a case that costs nothing.** The lap that found this granted
+   * `command.run` and ran under a fence whose allow list is six git specs, so
+   * `npm ci --ignore-scripts`, `npm run verify`, `npm --version` and
+   * `node vendor/pin.mjs check` each answered `This command requires approval`
+   * to a `claude -p` child with nobody to ask. Both halves were real and they
+   * disagreed silently (D-0039 rule 2). This is the planted case that the
+   * disagreement is now answered at `classify` -- before the run exists at
+   * continuo, before a worktree, before a worker.
+   */
+  test("refuses a plan that grants command.run and declares no command", () => {
+    const outcome = classifyPlan(planWith({ allowedBash: [] }));
+    expect(outcome.kind).toBe("refused");
+    if (outcome.kind !== "refused") {
+      return;
+    }
+    // The message names the grant, the field and the fault, because the person
+    // reading it has to choose which of the two halves to change.
+    expect(outcome.message).toContain("command.run");
+    expect(outcome.message).toContain("allowed_bash");
+    expect(outcome.message).toContain("rondo#67");
+  });
+
+  /**
+   * The mirror image, and the quieter of the two: a fence widened for a lap
+   * cadenza was never asked to authorise for execution is a widening that
+   * appears in no contract.
+   */
+  test("refuses a declaration the agent type does not grant command.run for", () => {
+    const outcome = classifyPlan(planWith({ granted: ["worktree.write"] }));
+    expect(outcome.kind).toBe("refused");
+    if (outcome.kind !== "refused") {
+      return;
+    }
+    expect(outcome.message).toContain("command.run");
+    expect(outcome.message).toContain("allowed_bash");
+  });
+
+  test("a lap that neither grants nor declares is not a disagreement", () => {
+    // The pair is what is checked, not the presence of either: an agent type
+    // that does not run commands and declares none is a plan cadenza answers
+    // for, and the answer is cadenza's rather than this check's.
+    const outcome = classifyPlan(planWith({ granted: ["worktree.write"], allowedBash: [] }));
+    expect(outcome.kind).toBe("answered");
+  });
+
+  test("the check runs before the contract, so it is not cadenza's refusal", () => {
+    // Both halves of the plan are otherwise valid here, and cadenza is never
+    // asked: the refusal is rondo's own words about rondo's own inputs, which
+    // is what makes it actionable before a spawn (D-0039 rule 3).
+    const outcome = classifyPlan(planWith({ allowedBash: [] }));
+    expect(outcome.kind === "refused" && outcome.message).toContain("disagrees with itself");
+  });
 });
 
 describe("classifyPlan, when the plan disagrees with itself", () => {

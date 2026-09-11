@@ -20,6 +20,7 @@
 import { describe, expect, test } from "vitest";
 
 import {
+  type AdmitRunRequest,
   ackGate,
   admitRun,
   answerGate,
@@ -266,7 +267,7 @@ describe("the model tier, which only rondo can price", () => {
 
 describe("run admit's own fields", () => {
   /** A valid admission, plus the case's edit. */
-  function admitRequest(overrides: Record<string, string> = {}) {
+  function admitRequest(overrides: Partial<AdmitRunRequest> = {}): AdmitRunRequest {
     return {
       db: "/srv/rondo/cp.sqlite3",
       runId: "r1",
@@ -276,6 +277,7 @@ describe("run admit's own fields", () => {
       baseBranch: "main",
       topicBranch: "topic/r1",
       prompt: "add the thing",
+      allowedBash: [],
       ...overrides,
     };
   }
@@ -313,6 +315,28 @@ describe("run admit's own fields", () => {
       const outcome = await admitRun(unissued, admitRequest({ prompt }));
       expect(defectReason(outcome.result)).toContain(REACHED_RUN);
     }
+  });
+
+  test("a declared Bash subject is carried, and an unusable one is refused by index", async () => {
+    // The declaration is carried rather than composed (`continuo D-1110`):
+    // `runPlan` is what refuses a malformed subject before a process exists,
+    // and this is the second line -- a request built by something other than a
+    // validated plan still cannot reach `spawn` with a subject continuo would
+    // answer with a stack. The index is in the message because a declaration is
+    // a list and "one of them is empty" is not actionable.
+    const refused = await admitRun(unissued, admitRequest({ allowedBash: ["npm run:*", "  "] }));
+    expect(defectReason(refused.result)).toContain("allowedBash[1]");
+    expect(refused.continuoRole).toBeNull();
+
+    // And a usable declaration reaches the drive, which is as far as a test
+    // without a build can see. `test/continuo/smoke.test.ts` is what admits a
+    // declared run against the pinned build, where the flag either exists or
+    // the argv is refused by continuo's own parser.
+    const carried = await admitRun(
+      unissued,
+      admitRequest({ allowedBash: ["npm ci --ignore-scripts", "npm run:*"] }),
+    );
+    expect(defectReason(carried.result)).toContain(REACHED_RUN);
   });
 
   test("a valid admission reaches the drive and reports the role it used", async () => {
