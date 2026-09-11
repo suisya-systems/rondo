@@ -32,6 +32,7 @@ import {
   type Explanation,
   type Option,
   type OptionSetPayload,
+  type PayloadReading,
   payloadDocument,
   propose,
   proposeAgentType,
@@ -40,6 +41,7 @@ import {
   proposeRetryPlan,
   type RetrySnapshot,
   type RunPlanProposal,
+  readPayload,
   type SnapshotCandidate,
   type SnapshotContractCandidate,
   type SnapshotIteration,
@@ -57,12 +59,15 @@ import {
 } from "../cadenza/facade.js";
 import { allocate } from "../refrain/allocator.js";
 import { type AdmittedPlan, admittedPlan, readPlan } from "../refrain/plan.js";
-import type {
-  DecisionOutcome,
-  IterationRecord,
-  JsonRecord,
-  LapReading,
-  ProposalDraft,
+import {
+  type DecisionOutcome,
+  type IterationRecord,
+  isApprovableKind,
+  type JsonRecord,
+  type LapReading,
+  type ProposalDraft,
+  type ProposalKind,
+  type StoredProposal,
 } from "../store/records.js";
 import type { AdvisoryRecord, IterationStore } from "../store/sqlite.js";
 
@@ -215,11 +220,14 @@ function addressable(at: object, step: string): boolean {
  * citation, because a basis that does not resolve is worth seeing -- it means
  * the claim and the snapshot have drifted apart, which is the one failure a
  * locator is supposed to make impossible.
+ *
+ * **The parameter is the JSON document and not the typed snapshot**, because
+ * the same pointer has to resolve against a snapshot just composed and against
+ * one read back out of a row (#39): the store holds it verbatim, so the two are
+ * the same bytes, and typing this to the composed shape would leave the reader
+ * able to print a pointer and unable to print what it resolves to.
  */
-function cited(
-  snapshot: AdvisorySnapshot | RetrySnapshot | ContractSnapshot,
-  pointer: string,
-): string {
+function cited(snapshot: object, pointer: string): string {
   const found = pointer
     .split("/")
     .slice(1)
@@ -243,10 +251,7 @@ function cited(
 }
 
 /** One basis, as the line under the claim it supports. */
-function basisLine(
-  basis: Basis,
-  snapshot: AdvisorySnapshot | RetrySnapshot | ContractSnapshot,
-): string {
+function basisLine(basis: Basis, snapshot: object): string {
   switch (basis.form) {
     case "snapshot":
       // **The inline form** (D-0032 rule 2): the snapshot is in the row, so the
@@ -1165,4 +1170,244 @@ export async function recordAnswer(
   return recorded.kind === "recorded"
     ? { kind: "answered", decisionId }
     : { kind: "refused", reason: recorded.reason };
+}
+
+/**
+ * What answering forecloses, **computed from `kind` and never stored**
+ * (D-0032 rule 4).
+ *
+ * #39's fourth requirement, and the reason it is a function rather than a
+ * column: a free-text *"this forecloses ..."* on the row would be the drafter
+ * narrating the consequence of its own recommendation, which is rule 3's hazard
+ * applied to the most load-bearing sentence on the screen. Every consequence
+ * below is a property of the act and of the ledger that records it, readable in
+ * the schema rather than in anybody's prose.
+ *
+ * **A `Record` over the union, for `RELEASED_BY`'s reason**: a sixth kind added
+ * to `PROPOSAL_KINDS` and forgotten here is a type error rather than a screen
+ * that quietly says nothing about what a person is about to spend.
+ */
+const FORECLOSES: Record<ProposalKind, readonly string[]> = {
+  // The three widenings the surface can draft, and one it cannot: what an
+  // approval of any of them *is* is the same act -- D-0022 rule 9's single
+  // issuance -- so the sentence that differs is what the issuance would widen.
+  run_plan: ["the retry would run under the plan you pick, and not under the other options"],
+  agent_type: ["the retry would run under the agent type you pick, with the grants it carries"],
+  contract_keys: ["the retry would carry the keys you pick as granted rather than as askable"],
+  widening_successor: ["the successor would carry the widening you pick"],
+  explanation: [],
+};
+
+/**
+ * The irreversibility block, as the lines under an option set.
+ *
+ * Three sentences and no more, because all three are facts about the ledger:
+ * an approval is spendable **once** (`decision_consumption.decision_id` is a
+ * primary key, D-0022 rule 9); the answer row is append-only, so changing your
+ * mind is a new proposal rather than an edit; and nothing consumes an approval
+ * in this cut, so approving starts nothing today. The last is the one that
+ * stops the screen from overstating what it is asking for.
+ */
+function foreclosureLines(kind: string): readonly string[] {
+  if (!isApprovableKind(kind)) {
+    return [
+      "what answering forecloses: nothing. This kind binds nothing and cannot be answered",
+      "  (D-0032 rule 5: the store refuses a decision that names it).",
+    ];
+  }
+  return [
+    "what answering forecloses:",
+    ...FORECLOSES[kind].map((line) => `  ${line};`),
+    "  an approval is spendable once and can never be spent twice (D-0022 rule 9), and the",
+    "  answer is appended rather than edited -- changing your mind is a new proposal;",
+    "  declining is recorded too, so nobody later reads a refusal as an unanswered question.",
+    "  It starts nothing yet: no admission reads this decision (D-0022 rule 17's consumer",
+    "  is not built).",
+  ];
+}
+
+/**
+ * One stored proposal as an operator reads it, composed at render time from the
+ * row and nothing else (#39, D-0032 rules 1, 2, 3 and 4).
+ *
+ * **This is the screen #39 asks for, and the reason it needs a reader at all.**
+ * The drafting verbs render an option set once, to the terminal that drafted
+ * it; a gate answered an hour later was, until this, answerable only by
+ * scrolling back or by reading the lap. Everything here comes out of the row:
+ * the options and the recommendation from `payload`, the material under each
+ * basis from the row's own verbatim `snapshot`, the voice from `kind`, and what
+ * answering forecloses from `kind` again.
+ *
+ * **The recommendation is marked where it sits.** The order is the payload's,
+ * and a renderer that moved the recommendation to the top would be composing a
+ * framing of its own over the one the record holds -- which is the hazard #39
+ * measures rather than a nicety.
+ */
+export function storedProposalLines(
+  proposal: StoredProposal,
+  reading: PayloadReading,
+): readonly string[] {
+  const about =
+    proposal.iterationId === null
+      ? "about no iteration"
+      : `about iteration '${proposal.iterationId}'`;
+  return [
+    `proposal '${proposal.proposalId}'  ${proposal.kind}  ${about}`,
+    `  drafter: ${proposal.drafter}${
+      proposal.derivation === null ? "" : `; derivation: ${proposal.derivation}`
+    }`,
+    ...(proposal.elevatedFromMessageId === null || proposal.elevatedByActorId === null
+      ? []
+      : [
+          `  elevated from message '${proposal.elevatedFromMessageId}' by ` +
+            `'${proposal.elevatedByActorId}'`,
+        ]),
+    ...answerLines(proposal),
+    "",
+    ...payloadLines(reading, proposal.snapshot, isApprovableKind(proposal.kind)),
+    "",
+    ...foreclosureLines(proposal.kind),
+    // **The command that answers it, with the flag that carries the choice.**
+    // #39 asks for a decision answerable in one sentence, and a screen that
+    // shows the options without saying how to say one of them back leaves the
+    // operator composing a command line from the usage text. It is printed only
+    // where there is something to answer: on a settled proposal it would invite
+    // a second answer the store will refuse.
+    ...(isApprovableKind(proposal.kind) && proposal.decisions.length === 0
+      ? [
+          "",
+          `Next: rondo decide --proposal-id ${proposal.proposalId} --actor-id ID ` +
+            "--outcome approved --contract-digest DIGEST, where DIGEST is the contract line " +
+            "of the option you are approving",
+        ]
+      : []),
+  ];
+}
+
+/**
+ * Answered, declined, or still open (D-0032 rule 6).
+ *
+ * **Every answer, oldest first, and never only the last one.** Nothing makes
+ * `human_decision` unique per proposal, so a decline followed by an approval is
+ * two rows and both of them are facts about what a person did. A screen that
+ * showed one would be choosing which of them the ledger meant.
+ */
+function answerLines(proposal: StoredProposal): readonly string[] {
+  if (proposal.decisions.length === 0) {
+    return isApprovableKind(proposal.kind)
+      ? ["  nobody has answered this yet"]
+      : ["  this proposal binds nothing: it is read, not answered"];
+  }
+  return [
+    ...proposal.decisions.map(
+      (decision) =>
+        `  ${decision.outcome} by '${decision.actorId}' as decision '${decision.decisionId}'` +
+        `${decision.approved === null ? "" : `, approving contract ${decision.approved}`}`,
+    ),
+    // **Said out loud rather than left to be discovered.** A settled proposal
+    // rendered exactly like an open one is the screen that gets answered twice.
+    ...(proposal.decisions.length === 1
+      ? ["  it is settled: this screen is the record of what was answered, not a question"]
+      : [
+          // **The count is on the screen rather than reconciled silently.** Two
+          // answers to one proposal is a state the schema permits and nothing
+          // here can rank: each is spendable on its own terms (D-0022 rule 9
+          // counts issuances per decision, not per proposal), so the honest
+          // rendering is all of them and the number.
+          `  ${String(proposal.decisions.length)} answers were recorded against this proposal, ` +
+            "and each is spendable on its own; rondo does not rank them",
+        ]),
+  ];
+}
+
+/** The options or the claims, each with its basis and the material under it. */
+function payloadLines(
+  reading: PayloadReading,
+  snapshot: object,
+  approvable: boolean,
+): readonly string[] {
+  switch (reading.kind) {
+    case "options":
+      return [
+        `the options, in the order the record holds them (${String(
+          reading.payload.options.length,
+        )}):`,
+        ...reading.payload.options.flatMap((option, index) => [
+          `  [${index === reading.payload.recommended ? "recommended" : "alternative"}] ` +
+            option.label,
+          // **`contract:` on an approvable kind, because that is the word the
+          // flag uses.** An option's value *is* the digest an approval names
+          // (D-0032 rule 1), and `decide --contract-digest` is copied off this
+          // line: a screen that called it something else would leave the
+          // operator matching two words nobody said were the same.
+          `      ${approvable ? "contract" : "value"}: ${option.value}`,
+          `      basis: ${basisLine(option.basis, snapshot)}`,
+        ]),
+      ];
+    case "claims":
+      return [
+        `the claims, in the order the record holds them (${String(
+          reading.payload.claims.length,
+        )}):`,
+        ...reading.payload.claims.flatMap((claim) => [
+          `  ${claim.label}: ${claim.value}`,
+          `      basis: ${basisLine(claim.basis, snapshot)}`,
+        ]),
+      ];
+    default:
+      // **The row is on the screen saying it will not read, rather than
+      // missing from it.** An operator who asked to see a proposal and got a
+      // clean empty screen would read it as "there is nothing to decide".
+      return [`this proposal's payload will not read: ${reading.reason}`];
+  }
+}
+
+/** What showing one proposal did, or the way its own bookkeeping fell short. */
+export type ShowOutcome =
+  | { readonly kind: "shown" }
+  | { readonly kind: "shownUncounted"; readonly reason: string }
+  | { readonly kind: "refused"; readonly reason: string };
+
+/**
+ * Door eleven: show one stored proposal, and count that it was put to the
+ * operator.
+ *
+ * **The order is `explain`'s and the inbox's**: read, render, then count
+ * (D-0036 rule 1). A presentation is counted once per subject, so a proposal
+ * read five times before it is answered is one row -- the second write stores
+ * nothing and reports success, which is what keeps #40's ratio a count of
+ * subjects on both sides.
+ */
+export async function showProposal(
+  ports: Pick<ExplainPorts, "record" | "present" | "now">,
+  proposalId: string,
+): Promise<ShowOutcome> {
+  const atMs = ports.now();
+  const outcome = await ports.record.readProposal(proposalId);
+  if (outcome.kind === "absent") {
+    return { kind: "refused", reason: `there is no proposal '${proposalId}'` };
+  }
+  if (outcome.kind === "unreadable") {
+    // **A refusal and not a screen.** Every other decode fault in this tree
+    // renders as a line, because the alternative is hiding a live row; here the
+    // whole subject is the one row, and rendering half of a proposal somebody
+    // is about to approve is the failure mode, not the fallback.
+    return {
+      kind: "refused",
+      reason: `the proposal '${proposalId}' will not read: ${outcome.reason}`,
+    };
+  }
+  ports.present(storedProposalLines(outcome.proposal, readPayload(outcome.proposal.payload)));
+  const counted = await ports.record.recordAttention({
+    atMs,
+    subjectKind: PROPOSAL_SUBJECT,
+    subjectId: proposalId,
+    disposition: "presented",
+    // Null for the inbox's reason: this surface withholds nothing, so there is
+    // no policy to name.
+    ruleName: null,
+  });
+  return counted.kind === "recorded"
+    ? { kind: "shown" }
+    : { kind: "shownUncounted", reason: counted.reason };
 }

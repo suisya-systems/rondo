@@ -863,3 +863,60 @@ export interface RecordChange {
   /** The caller's clock, as that record kind spells it. */
   readonly atMs: number;
 }
+
+/**
+ * One proposal read back out of the store, so that a person can answer it
+ * later than the moment it was drafted (#39).
+ *
+ * **The fields are the row's, and the screen is composed from them** (D-0032
+ * rule 3). What makes this worth a reader at all is that `payload` and
+ * `snapshot` are the two the store holds **verbatim**: the options, the
+ * recommendation and every basis are in the first, and the material a
+ * `snapshot` basis points into is in the second. Without a reader over those
+ * two, #39's answerable shape exists only in the terminal the drafter printed
+ * it to, and a gate is answerable exactly once.
+ *
+ * **`kind` is not decoded against {@link PROPOSAL_KINDS}**, for
+ * {@link OpenProposal}'s reason: a kind this rondo does not know is still a row
+ * an operator is waiting on, and the reader that decides what may be *approved*
+ * is `recordDecision` rather than this one.
+ *
+ * **`decisions` is the rows and not a boolean**, because D-0032 rule 6 makes
+ * *declined* and *never answered* different facts. A screen that showed only
+ * whether an answer exists would put the same word on a proposal the operator
+ * settled and one nobody has looked at.
+ *
+ * **It is a list, and the schema is why.** Nothing makes `human_decision`
+ * unique per `proposal_id`: the one uniqueness the table carries is over a
+ * continuo gate transition, and a route-S answer names none. So a decline and
+ * a later approval are two rows, and a reader that returned the first would
+ * report a proposal as refused while `unconsumedDecisions` reports a spendable
+ * approval against it. Every answer is read, oldest first, and the screen shows
+ * them all.
+ */
+export interface StoredProposal {
+  readonly proposalId: string;
+  readonly kind: string;
+  readonly drafter: string;
+  /** The ordered option set or the claim list, verbatim (D-0032 rule 1). */
+  readonly payload: JsonRecord;
+  /** What the advisory read, verbatim: what a `snapshot` basis resolves against. */
+  readonly snapshot: JsonRecord;
+  readonly derivation: string | null;
+  readonly iterationId: string | null;
+  readonly elevatedFromMessageId: string | null;
+  readonly elevatedByActorId: string | null;
+  readonly createdAtMs: number;
+  /** What people answered, oldest first, and empty while nobody has (D-0032 rule 6). */
+  readonly decisions: readonly StoredDecision[];
+}
+
+/** One answer, as the ledger holds it (D-0022 rule 9, D-0032 rule 6). */
+export interface StoredDecision {
+  readonly decisionId: string;
+  readonly outcome: string;
+  /** The contract digest an approval names, and null on a refusal. */
+  readonly approved: string | null;
+  readonly actorId: string;
+  readonly decidedAtMs: number;
+}

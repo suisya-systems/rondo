@@ -745,3 +745,156 @@ export function snapshotDocument(
 export function payloadDocument(payload: ExplanationPayload | OptionSetPayload): JsonRecord {
   return payload;
 }
+
+/**
+ * A payload read back out of a stored row, or the reason it will not read
+ * (#39).
+ *
+ * **The inverse of {@link payloadDocument}, and the refusal is the point.** The
+ * store holds a payload verbatim and never reads into it, so a reader is where
+ * D-0032 rule 2's closure stops being a sentence: *"an unrecognised form is a
+ * row the reader refuses rather than guesses at"*. A basis rondo cannot place
+ * is a citation an operator would read as though rondo had checked it.
+ *
+ * **Which arm is decided by the document's own shape, never by the row's
+ * `kind`.** The two are separate facts and the screen prints both: authority
+ * comes from `kind` alone (D-0032 rule 5) and what is on the screen comes from
+ * the payload, so a row whose two disagree renders visibly rather than as one
+ * of them quietly winning.
+ */
+export type PayloadReading =
+  | { readonly kind: "options"; readonly payload: OptionSetPayload }
+  | { readonly kind: "claims"; readonly payload: ExplanationPayload }
+  | { readonly kind: "unreadable"; readonly reason: string };
+
+/** What a decoder returns when it will not guess. */
+class PayloadDefect extends Error {}
+
+function object(at: unknown, what: string): Record<string, unknown> {
+  if (typeof at !== "object" || at === null || Array.isArray(at)) {
+    throw new PayloadDefect(`${what} is not an object`);
+  }
+  return at as Record<string, unknown>;
+}
+
+function text(at: Record<string, unknown>, field: string, what: string): string {
+  const value = at[field];
+  if (typeof value !== "string") {
+    throw new PayloadDefect(`${what} has no '${field}' string`);
+  }
+  return value;
+}
+
+function whole(at: Record<string, unknown>, field: string, what: string): number {
+  const value = at[field];
+  if (typeof value !== "number" || !Number.isSafeInteger(value)) {
+    throw new PayloadDefect(`${what} has no '${field}' whole number`);
+  }
+  return value;
+}
+
+/**
+ * One basis, read back as the closed union (D-0032 rule 2).
+ *
+ * A form outside {@link BASIS_FORMS} is refused rather than rendered as prose,
+ * and so is a form whose own fields are missing: *"the basis is prose"* is
+ * deliberately not a member, and a half-read locator would become one.
+ */
+function readBasis(at: unknown, what: string): Basis {
+  const row = object(at, `${what}'s basis`);
+  const form = text(row, "form", `${what}'s basis`);
+  switch (form) {
+    case "snapshot":
+      return { form, pointer: text(row, "pointer", `${what}'s basis`) };
+    case "iteration":
+      return { form, iterationId: text(row, "iterationId", `${what}'s basis`) };
+    case "gateTransition":
+      return {
+        form,
+        gateId: text(row, "gateId", `${what}'s basis`),
+        transitionSeq: whole(row, "transitionSeq", `${what}'s basis`),
+      };
+    case "continuoRun":
+      return { form, runId: text(row, "runId", `${what}'s basis`) };
+    case "repository":
+      return {
+        form,
+        path: text(row, "path", `${what}'s basis`),
+        commit: text(row, "commit", `${what}'s basis`),
+        firstLine: whole(row, "firstLine", `${what}'s basis`),
+        lastLine: whole(row, "lastLine", `${what}'s basis`),
+      };
+    default:
+      throw new PayloadDefect(
+        `${what}'s basis is of form '${form}', which is not one of ${BASIS_FORMS.join(", ")}. ` +
+          "D-0032 rule 2 closes the union, so rondo refuses it rather than showing you a " +
+          "citation it cannot place.",
+      );
+  }
+}
+
+/** The three fields a claim and an option both carry, on D-0034 rule 3's terms. */
+function readCited(at: unknown, what: string): Claim {
+  const row = object(at, what);
+  return {
+    label: text(row, "label", what),
+    value: text(row, "value", what),
+    basis: readBasis(row.basis, what),
+  };
+}
+
+function readList(at: unknown, field: string): readonly unknown[] {
+  if (!Array.isArray(at)) {
+    throw new PayloadDefect(`the payload's '${field}' is not a list`);
+  }
+  return at;
+}
+
+/**
+ * One stored payload, read back (#39, D-0032 rules 1 and 2, D-0034 rule 1).
+ *
+ * Total; never throws. A payload that is neither an option set nor a claim
+ * list, and one whose recommendation names no option, both read as
+ * `unreadable`: *"exactly one marked as the recommendation"* is rule 1's own
+ * words, and an index out of range is a proposal with no recommendation at all.
+ */
+export function readPayload(document: JsonRecord): PayloadReading {
+  try {
+    const row = object(document, "the payload");
+    if ("options" in row) {
+      const options = readList(row.options, "options").map((one, index) =>
+        readCited(one, `option ${String(index)}`),
+      );
+      const recommended = whole(row, "recommended", "the payload");
+      if (options.length === 0) {
+        throw new PayloadDefect("the payload's 'options' is empty, so there is nothing to answer");
+      }
+      if (recommended < 0 || recommended >= options.length) {
+        throw new PayloadDefect(
+          `the payload recommends option ${String(recommended)} of ${String(options.length)}, ` +
+            "which is no option in it",
+        );
+      }
+      return { kind: "options", payload: { options, recommended } };
+    }
+    if ("claims" in row) {
+      return {
+        kind: "claims",
+        payload: {
+          claims: readList(row.claims, "claims").map((one, index) =>
+            readCited(one, `claim ${String(index)}`),
+          ),
+        },
+      };
+    }
+    throw new PayloadDefect(
+      "the payload carries neither 'options' nor 'claims', so rondo cannot tell whether it is " +
+        "something to answer or something to read",
+    );
+  } catch (error) {
+    if (error instanceof PayloadDefect) {
+      return { kind: "unreadable", reason: error.message };
+    }
+    throw error;
+  }
+}

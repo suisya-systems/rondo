@@ -70,6 +70,7 @@ import {
   type ProposeOutcome,
   proposeRetry,
   recordAnswer,
+  showProposal,
 } from "./advisory.js";
 import { abandon, admit, conductorPorts, resume } from "./conductor.js";
 import { asciiEscape, consoleSeams, relayUpstream } from "./console.js";
@@ -161,6 +162,13 @@ export const USAGE = `rondo - the operator surface for delegated work
                           continuo. Looking is recorded: it counts what it
                           showed you (once per thing, however often it is
                           drawn) and moves your last-look mark
+  rondo show --proposal-id ID
+                          read one proposal back: its options in the order the
+                          record holds them, which one is recommended, what each
+                          rests on with the material under it, whether anybody
+                          has answered, and what answering forecloses. Composed
+                          from the row, so a proposal stays answerable long
+                          after the screen that drafted it has scrolled away
   rondo explain --iteration-id ID
                           say what the store holds about one iteration, with
                           what each claim rests on. Reads rondo's own rows and
@@ -263,6 +271,7 @@ export interface ParsedCommand {
     | "inbox"
     | "propose"
     | "decide"
+    | "show"
     | "help";
   readonly planFile: string | null;
   readonly prompt: string | null;
@@ -323,6 +332,7 @@ const COMMANDS = [
   "inbox",
   "propose",
   "decide",
+  "show",
 ] as const;
 
 /**
@@ -387,6 +397,11 @@ export const FLAGS_BY_COMMAND: Readonly<Record<string, readonly string[]>> = {
   // is copied off the screen rather than chosen by an index -- an index is a
   // position in a list that could have been re-rendered since.
   decide: ["proposal-id", "actor-id", "outcome", "contract-digest"],
+  // One flag, and no `--actor-id`: reading a proposal back is not answering it
+  // and not looking at the inbox, so it moves no last-look mark and needs no
+  // identity. What it does write is the presentation (D-0036 rule 1), which is
+  // a fact about the surface rather than about a person.
+  show: ["proposal-id"],
 };
 
 /**
@@ -1125,6 +1140,13 @@ export async function main(
     return await commandDecide(parsed, environment, opened.path);
   }
 
+  // **`show` is dispatched here for `explain`'s reason.** It reads one of
+  // rondo's own rows and drives no continuo verb, and the proposal most worth
+  // reading back is often about a lap that has already ended.
+  if (parsed.command === "show") {
+    return await commandShow(parsed, opened.path);
+  }
+
   const startup = await startContinuo(environment);
   if (startup.kind === "refused") {
     return refuse(`continuo is not usable: ${startup.reason}`);
@@ -1420,6 +1442,54 @@ async function commandElevate(
  * moves, and the mark it writes is already per actor
  * (`operator_view.actor_id`), so nothing below it has to.
  */
+/**
+ * Door eleven: read one proposal back, so a gate is answerable later.
+ *
+ * **The whole of #39 is that this exists.** `propose` renders an option set
+ * once, to the terminal that drafted it; everything a person needs in order to
+ * answer -- the alternatives, the recommendation, what each rests on, what
+ * answering forecloses -- is in the row, and until this verb nothing read it
+ * back. The falsifier #39 names is whether an operator can answer correctly
+ * while reading only the composed decision, and a decision that can only be
+ * read while it is being composed does not meet it.
+ */
+async function commandShow(parsed: ParsedCommand, storePath: string): Promise<number> {
+  if (parsed.proposalId === null) {
+    return refuse(
+      "show needs --proposal-id ID, naming the proposal to read back. The ids are on the " +
+        "inbox, under what is waiting on you.",
+    );
+  }
+  const outcome = await showProposal(
+    {
+      record: openAdvisoryRecord(storePath),
+      now: Date.now,
+      present: (lines) => {
+        for (const line of lines) {
+          say(line);
+        }
+      },
+    },
+    parsed.proposalId,
+  );
+  if (outcome.kind === "refused") {
+    return refuse(outcome.reason);
+  }
+  if (outcome.kind === "shownUncounted") {
+    // Status 1 for `sayAdvisoryOutcome`'s reason exactly: the operator has read
+    // it and what failed is the count of what was put to them, which is the one
+    // number D-0032 rule 10 says nothing else can supply.
+    consoleSeams.writeError(
+      asciiEscape(
+        `This proposal was shown and was not counted as presented: ${outcome.reason}. ` +
+          "The breakdown of what was put to you and what was not will be short by one.\n",
+      ),
+    );
+    return 1;
+  }
+  return 0;
+}
+
 async function commandInbox(
   parsed: ParsedCommand,
   environment: Readonly<Record<string, string | undefined>>,

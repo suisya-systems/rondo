@@ -815,3 +815,96 @@ test("the advisory tables arrive on a database that predates them", async () => 
   expect(await record.recordProposal(proposal())).toEqual({ kind: "recorded" });
   expect(await record.unconsumedDecisions()).toEqual([]);
 });
+
+// --- Reading one proposal back (#39) --------------------------------------
+
+test("a proposal reads back whole, with the answer that settled it", async () => {
+  // #39. The alternatives, the recommendation and every basis are in `payload`
+  // and the material they point into is in `snapshot`, so a reader over those
+  // two is what makes a gate answerable later than the moment it was drafted.
+  const record = advisoryRecord(freshConnection());
+  await record.recordProposal(proposal());
+  await record.recordComposition(composition());
+  await record.recordDecision(decision());
+
+  const outcome = await record.readProposal("p-0001");
+
+  expect(outcome).toEqual({
+    kind: "read",
+    proposal: {
+      proposalId: "p-0001",
+      kind: "widening_successor",
+      drafter: "rondo/deterministic/1",
+      payload: PAYLOAD,
+      snapshot: SNAPSHOT,
+      derivation: null,
+      iterationId: "i-0001",
+      elevatedFromMessageId: null,
+      elevatedByActorId: null,
+      createdAtMs: 1_000,
+      decisions: [
+        {
+          decisionId: "d-0001",
+          outcome: "approved",
+          approved: `sha256:${"e".repeat(64)}`,
+          actorId: "oidc|operator-1",
+          decidedAtMs: 3_000,
+        },
+      ],
+    },
+  });
+});
+
+test("an unanswered proposal reads back with no decision, and an unknown id is absent", async () => {
+  // D-0032 rule 6: "declined" and "never answered" are different rows rather
+  // than the same absence, and a screen that could not tell them apart would
+  // put the same word on a proposal the operator settled and one nobody has
+  // looked at.
+  const record = advisoryRecord(freshConnection());
+  await record.recordProposal(proposal());
+
+  const outcome = await record.readProposal("p-0001");
+
+  expect(outcome.kind === "read" && outcome.proposal.decisions).toEqual([]);
+  expect(await record.readProposal("p-9999")).toEqual({ kind: "absent" });
+});
+
+test("a payload whose digest no longer describes it is unreadable rather than shown", async () => {
+  // D-0022 rule 4's "re-derived and not only re-read", planted: the row is
+  // edited underneath the store, which is the case the digest exists for. A
+  // half-true option set is the one thing that must never reach the person who
+  // is about to approve one of its options.
+  const connection = freshConnection();
+  const record = advisoryRecord(connection);
+  await record.recordProposal(proposal());
+
+  connection
+    .prepare("UPDATE proposal SET payload = ? WHERE proposal_id = ?")
+    .run(canonicalJson({ options: [] }), "p-0001");
+
+  const outcome = await record.readProposal("p-0001");
+
+  expect(outcome.kind).toBe("unreadable");
+  expect(outcome.kind === "unreadable" && outcome.reason).toContain("proposal_digest");
+});
+
+test("every answer against one proposal is read, not the earliest one", async () => {
+  // Nothing makes `human_decision` unique per `proposal_id` -- its one unique
+  // index is over a continuo gate transition, which a route-S answer does not
+  // name -- so a decline followed by an approval is two rows. Returning the
+  // first would report the proposal as refused while `unconsumedDecisions`
+  // reports a spendable approval against it.
+  const record = advisoryRecord(freshConnection());
+  await record.recordProposal(proposal());
+  await record.recordComposition(composition());
+  await record.recordDecision(
+    decision({ decisionId: "d-0001", outcome: "declined", approved: null, decidedAtMs: 3_000 }),
+  );
+  await record.recordDecision(decision({ decisionId: "d-0002", decidedAtMs: 4_000 }));
+
+  const outcome = await record.readProposal("p-0001");
+
+  expect(
+    outcome.kind === "read" && outcome.proposal.decisions.map((one) => one.decisionId),
+  ).toEqual(["d-0001", "d-0002"]);
+});

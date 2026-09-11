@@ -65,6 +65,8 @@ import {
   type ProposalDraft,
   type ReadingEvidence,
   type RecordChange,
+  type StoredDecision,
+  type StoredProposal,
   SUSPENDED_STATUSES,
   TERMINAL_STATUSES,
   type UnconsumedDecision,
@@ -205,6 +207,19 @@ export type ReadOutcome =
   | { readonly kind: "read"; readonly record: IterationRecord }
   | { readonly kind: "absent" }
   | { readonly kind: "unreadable"; readonly id: string; readonly reason: string };
+
+/**
+ * One proposal read back, absent, or a row that will not decode (#39).
+ *
+ * {@link ReadOutcome}'s three arms, over a different table and for the same
+ * reason: the reader that shows an operator what they are answering has to be
+ * able to say *"this row is corrupt"* without throwing, because the caller is
+ * a screen and the alternative is a stack trace where the decision was.
+ */
+export type ProposalReadOutcome =
+  | { readonly kind: "read"; readonly proposal: StoredProposal }
+  | { readonly kind: "absent" }
+  | { readonly kind: "unreadable"; readonly reason: string };
 
 /** Whether the status-blind termination of {@link IterationStore.settle} landed. */
 export type SettleOutcome =
@@ -1688,6 +1703,23 @@ export interface AdvisoryRecord {
    */
   openProposals(uptoMs: number): Promise<readonly OpenProposal[]>;
   /**
+   * One proposal, read back whole, so a gate is answerable later than the
+   * moment it was drafted (#39).
+   *
+   * **Total, like {@link IterationStore.read} and for its reason**: a row whose
+   * `payload` or `snapshot` will not parse is `unreadable` carrying why, not a
+   * throw and not an empty screen. The operator is being asked to approve
+   * something, and a renderer that silently showed fewer options than the row
+   * holds would be the worst possible outcome of a decode fault.
+   *
+   * **Both digests are re-derived rather than re-read** (D-0022 rule 4's
+   * *"re-derived and not only re-read"*, `requireMatchingDigest`'s precedent
+   * for the plan). A payload whose bytes no longer digest to the value stored
+   * beside them is not a proposal an operator should be answering, and the one
+   * moment that is worth finding out is the moment before they answer it.
+   */
+  readProposal(proposalId: string): Promise<ProposalReadOutcome>;
+  /**
    * The silence, as one `GROUP BY` over one table (D-0032 rule 10).
    *
    * Both dispositions in one answer, because the ratio is the point: a
@@ -2209,6 +2241,48 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
         });
     },
 
+    async readProposal(proposalId: string): Promise<ProposalReadOutcome> {
+      const row = connection
+        .prepare(
+          "SELECT proposal_id, kind, drafter, payload, proposal_digest, snapshot, " +
+            "snapshot_digest, derivation, iteration_id, elevated_from_message_id, " +
+            "elevated_by_actor_id, created_at_ms FROM proposal WHERE proposal_id = ?",
+        )
+        .get(proposalId);
+      if (row === undefined) {
+        return { kind: "absent" };
+      }
+      // The answers are read in the same call rather than left to the caller:
+      // "what is this" and "has it been settled" are one question at the only
+      // screen that asks either, and two reads would let a proposal render as
+      // open because the second one was forgotten (D-0032 rule 6).
+      //
+      // **All of them, and not the first.** Nothing makes `human_decision`
+      // unique per `proposal_id` -- its one unique index is over a continuo
+      // gate transition, which a route-S answer does not name -- so a decline
+      // followed by an approval is two rows. Returning the earliest would
+      // report the proposal as refused while `unconsumedDecisions` reports a
+      // spendable approval against it, which is the ledger contradicting the
+      // screen at the point where both are about what a person did.
+      const answers = connection
+        .prepare(
+          "SELECT decision_id, outcome, approved, actor_id, decided_at_ms FROM human_decision " +
+            "WHERE proposal_id = ? ORDER BY decided_at_ms, decision_id",
+        )
+        .all(proposalId);
+      try {
+        return {
+          kind: "read",
+          proposal: toProposal(row as SqlRow, answers as SqlRow[]),
+        };
+      } catch (error) {
+        if (error instanceof StoreDefect) {
+          return { kind: "unreadable", reason: error.message };
+        }
+        throw error;
+      }
+    },
+
     async attentionBreakdown(): Promise<readonly AttentionCount[]> {
       return connection
         .prepare(
@@ -2669,6 +2743,67 @@ function requireMatchingDigest(row: SqlRow): string {
   return recorded;
 }
 
+/**
+ * One verbatim JSON column, **checked against the digest stored beside it**.
+ *
+ * D-0022 rule 4 keeps `payload` and `snapshot` as bytes with a digest of those
+ * bytes, so that a proposal can be re-derived and not only re-read. Re-reading
+ * both and comparing is what turns that from a property of the writer into a
+ * property of the read: the row either still describes one document or it is
+ * refused, and the moment worth finding out is the moment before an operator
+ * answers it.
+ */
+function verbatim(row: SqlRow, column: string, digestColumn: string): JsonRecord {
+  const text = requireText(row, column, "proposal");
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch (error) {
+    throw new StoreDefect(`the proposal row's '${column}' is not JSON: ${describe(error)}`);
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    throw new StoreDefect(`the proposal row's '${column}' is JSON, but it is not an object`);
+  }
+  const recorded = requireText(row, digestColumn, "proposal");
+  const recomputed = contentDigest(parsed as JsonRecord);
+  if (recorded !== recomputed) {
+    throw new StoreDefect(
+      `the proposal row's '${digestColumn}' is '${recorded}' and its '${column}' digests to ` +
+        `'${recomputed}'. The pair no longer describes one document, so rondo cannot say what ` +
+        "this proposal was composed from.",
+    );
+  }
+  return parsed as JsonRecord;
+}
+
+/** One proposal row, read into a record, or a refusal to read it at all (#39). */
+function toProposal(row: SqlRow, answers: readonly SqlRow[]): StoredProposal {
+  return {
+    proposalId: requireText(row, "proposal_id", "proposal"),
+    kind: requireText(row, "kind", "proposal"),
+    drafter: requireText(row, "drafter", "proposal"),
+    payload: verbatim(row, "payload", "proposal_digest"),
+    snapshot: verbatim(row, "snapshot", "snapshot_digest"),
+    derivation: optionalText(row, "derivation", "proposal"),
+    iterationId: optionalText(row, "iteration_id", "proposal"),
+    elevatedFromMessageId: optionalText(row, "elevated_from_message_id", "proposal"),
+    elevatedByActorId: optionalText(row, "elevated_by_actor_id", "proposal"),
+    createdAtMs: requireInteger(row, "created_at_ms", "proposal"),
+    decisions: answers.map(toDecision),
+  };
+}
+
+/** One answer, read into a record (D-0032 rule 6). */
+function toDecision(row: SqlRow): StoredDecision {
+  return {
+    decisionId: requireText(row, "decision_id", "decision"),
+    outcome: requireText(row, "outcome", "decision"),
+    approved: optionalText(row, "approved", "decision"),
+    actorId: requireText(row, "actor_id", "decision"),
+    decidedAtMs: requireInteger(row, "decided_at_ms", "decision"),
+  };
+}
+
 function requirePlan(row: SqlRow): JsonRecord {
   const text = requireText(row, "plan");
   let parsed: unknown;
@@ -2683,20 +2818,20 @@ function requirePlan(row: SqlRow): JsonRecord {
   return parsed as JsonRecord;
 }
 
-function requireText(row: SqlRow, column: string): string {
+function requireText(row: SqlRow, column: string, subject = "iteration"): string {
   const value = row[column];
   if (typeof value !== "string") {
-    throw new StoreDefect(`the iteration row's '${column}' is not text`);
+    throw new StoreDefect(`the ${subject} row's '${column}' is not text`);
   }
   return value;
 }
 
-function optionalText(row: SqlRow, column: string): string | null {
+function optionalText(row: SqlRow, column: string, subject = "iteration"): string | null {
   const value = row[column];
   if (value === null || value === undefined) {
     return null;
   }
-  return requireText(row, column);
+  return requireText(row, column, subject);
 }
 
 /**
@@ -2706,10 +2841,10 @@ function optionalText(row: SqlRow, column: string): string | null {
  * for a value outside the double-safe range, and a timestamp or an attempt
  * count that far out is a row nobody should be reading past.
  */
-function requireInteger(row: SqlRow, column: string): number {
+function requireInteger(row: SqlRow, column: string, subject = "iteration"): number {
   const value = row[column];
   if (typeof value !== "number" || !Number.isSafeInteger(value)) {
-    throw new StoreDefect(`the iteration row's '${column}' is not a whole number`);
+    throw new StoreDefect(`the ${subject} row's '${column}' is not a whole number`);
   }
   return value;
 }
