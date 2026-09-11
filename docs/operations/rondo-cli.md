@@ -733,6 +733,57 @@ recorded as proposal 'elevation-m-0007'
 | `was composed and not recorded, so it is not being shown` | The store refused or failed the write. | Nothing was written -- **the message id too was rolled back**, because the two are one transaction. Fix the fault the message names and retype the same command. |
 
 
+### 7.4 Show -- read one proposal back, so a gate is answerable later
+
+`propose` renders an option set **once**, to the terminal that drafted it. `show` reads it back out
+of the row, which is what makes a gate answerable an hour later without opening the lap (#39): the
+options in the order the record holds them, which one is recommended, what each rests on **with the
+material under it**, whether anybody has answered, and what answering forecloses.
+
+Nothing on this screen is stored (`D-0032` rule 3). Every line is composed from the proposal row at
+the moment it is shown: the options and the recommendation from its verbatim `payload`, the material
+under each basis from its verbatim `snapshot`, and the consequence from its `kind` alone
+(`D-0032` rule 4). There is no stored summary to drift from the material it was drawn from.
+
+```console
+$ node bin/rondo.mjs show --proposal-id contract_keys-cli-lap-002-1757500000000
+proposal 'contract_keys-cli-lap-002-1757500000000'  contract_keys  about iteration 'cli-lap-001'
+  drafter: rondo/advisory/deterministic
+  nobody has answered this yet
+
+the options, in the order the record holds them (2):
+  [recommended] leave the keys as they are: granting command.run and asking for branch.push
+      contract: sha256:15475d4c...
+      basis: snapshot /candidates/0/contractDigest = "sha256:15475d4c..."
+  [alternative] grant 'branch.push' to 'cli-lap-002' instead of leaving it askable: branch.push, command.run
+      contract: sha256:9ab31f02...
+      basis: snapshot /candidates/1/contractDigest = "sha256:9ab31f02..."
+
+what answering forecloses:
+  the retry would carry the keys you pick as granted rather than as askable;
+  an approval is spendable once and can never be spent twice (D-0022 rule 9), and the
+  answer is appended rather than edited -- changing your mind is a new proposal;
+  declining is recorded too, so nobody later reads a refusal as an unanswered question.
+  It starts nothing yet: no admission reads this decision (D-0022 rule 17's consumer
+  is not built).
+
+Next: rondo decide --proposal-id contract_keys-cli-lap-002-1757500000000 --actor-id ID --outcome approved --contract-digest DIGEST, where DIGEST is the contract line of the option you are approving
+```
+
+**Looking is counted, once per proposal however often you look** (`D-0036` rule 1). The second and
+twentieth `show` of one proposal write nothing and report success, so the *"six were put to you,
+forty were not"* breakdown in the inbox stays a count of subjects rather than a count of screens.
+Reading a proposal back is **not** answering it: it takes no `--actor-id`, moves no last-look mark,
+and prints the `Next:` line only while the proposal is still open.
+
+| What you see | What it means | What to do |
+|---|---|---|
+| `there is no proposal '<id>'` | No row carries that id. | Copy the id from `rondo inbox`, under what is waiting on you. |
+| `will not read: the proposal row's 'proposal_digest' is ... and its 'payload' digests to ...` | The row's bytes and the digest stored beside them no longer describe one document. rondo refuses rather than showing you half an option set. | Nothing is shown, and nothing was written. The row needs a person. |
+| `this proposal's payload will not read: ... is of form '<x>', which is not one of ...` | A basis outside the closed union (`D-0032` rule 2). A citation rondo cannot place would read as one it had checked. | The rest of the screen still stands. Do not answer it on the strength of a citation nobody can resolve. |
+| `it is settled: this screen is the record of what was answered` | Somebody already answered this proposal (`D-0032` rule 6). | Nothing to do. A change of mind is a new proposal, never an edit. |
+| `this proposal binds nothing: it is read, not answered` | An `explanation`. Authority is a function of `kind` alone (`D-0032` rule 5). | Read it. It cannot be approved, and the store refuses a decision that names it. |
+
 ---
 
 ## 8. Inbox -- what is waiting on you, and what changed while you were away
@@ -750,6 +801,7 @@ waiting on you
     p-retry-i-0007  run_plan  about 'i-0007'  waiting 41m  NEW
   proposals that bind nothing (1)
     explanation-i-0003-1757500000000  explanation  about 'i-0003'  waiting 3h
+    read one back, with its options and what each rests on: rondo show --proposal-id ID
   iterations waiting on you (2)
     i-0007  awaiting_human  41m  answer gate g-0007
     i-0011  stalled  2h  no gate answer releases this (stopped at g-0011): a person has to decide

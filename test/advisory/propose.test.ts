@@ -32,6 +32,7 @@ import {
   proposeElevated,
   proposeRetryPlan,
   type RetrySnapshot,
+  readPayload,
   UNDETERMINED,
 } from "../../src/advisory/proposal.js";
 
@@ -456,4 +457,62 @@ test("an agent_type option names the agent type and both of its lists", () => {
   // An empty list is a fact about the list rather than a blank on the screen,
   // which is `ABSENT`'s job everywhere else in this payload.
   expect(options[0]?.label).toContain(`asking for ${ABSENT}`);
+});
+
+// --- Reading a payload back (#39) -----------------------------------------
+
+test("an option set round-trips, and the recommendation survives the trip", () => {
+  // The reader is the inverse of `payloadDocument`, and what it has to preserve
+  // is rule 1's *"exactly one marked as the recommendation"*: an option set
+  // that read back with the recommendation somewhere else would be a framing
+  // composed by the reader, which is the hazard #39 measures.
+  const payload = {
+    options: [
+      { label: "widen", value: "sha256:aa", basis: { form: "iteration", iterationId: "i-1" } },
+      { label: "leave it", value: "sha256:bb", basis: { form: "snapshot", pointer: "/a" } },
+    ],
+    recommended: 1,
+  };
+
+  expect(readPayload(payload)).toEqual({ kind: "options", payload });
+});
+
+test("a claim list reads back as claims, which is a different shape", () => {
+  // D-0034 rule 1: an explanation carries claims and no recommendation, so the
+  // two shapes are two arms rather than one shape with an optional field.
+  const payload = {
+    claims: [{ label: "status", value: "planned", basis: { form: "continuoRun", runId: "r-1" } }],
+  };
+
+  expect(readPayload(payload)).toEqual({ kind: "claims", payload });
+});
+
+test("a basis form outside the union is refused rather than guessed at", () => {
+  // D-0032 rule 2. The closure is the point: a citation rondo cannot place
+  // would be read by an operator as one rondo had checked.
+  const outcome = readPayload({
+    options: [{ label: "widen", value: "sha256:aa", basis: { form: "hearsay" } }],
+    recommended: 0,
+  });
+
+  expect(outcome.kind).toBe("unreadable");
+  expect(outcome.kind === "unreadable" && outcome.reason).toContain("hearsay");
+});
+
+test("a recommendation that names no option is unreadable", () => {
+  // Rule 1 says exactly one option is the recommendation. An index out of range
+  // is a proposal with none, and rendering it would silently promote whichever
+  // option happened to be first.
+  expect(
+    readPayload({
+      options: [
+        { label: "widen", value: "sha256:aa", basis: { form: "iteration", iterationId: "i" } },
+      ],
+      recommended: 3,
+    }).kind,
+  ).toBe("unreadable");
+  expect(readPayload({ options: [], recommended: 0 }).kind).toBe("unreadable");
+  expect(readPayload({ neither: true }).kind).toBe("unreadable");
+  // A claim with no basis is the summary #39 measured an operator approving on.
+  expect(readPayload({ claims: [{ label: "a", value: "b" }] }).kind).toBe("unreadable");
 });

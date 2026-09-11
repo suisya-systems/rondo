@@ -21,12 +21,13 @@ import {
   explainIteration,
   proposeRetry,
   recordAnswer,
+  showProposal,
 } from "../../src/access/advisory.js";
 import type { CatalogLayer } from "../../src/cadenza/facade.js";
 import { allocate } from "../../src/refrain/allocator.js";
 import { admittedPlan, planPayload, type RunPlan, runPlan } from "../../src/refrain/plan.js";
 import { CONSERVATIVE_HOST_POLICY } from "../../src/refrain/policy.js";
-import type { JsonRecord } from "../../src/store/records.js";
+import type { JsonRecord, ProposalDraft } from "../../src/store/records.js";
 import {
   type AdvisoryRecord,
   advisoryRecord,
@@ -1038,4 +1039,186 @@ test("an agent type cadenza will not build is a refusal and not a crash", async 
   );
   expect(outcome.kind).toBe("refused");
   expect(connection.prepare("SELECT count(*) AS n FROM proposal").get()).toEqual({ n: 0 });
+});
+
+// --- Reading one stored proposal back (#39) -------------------------------
+
+/** One stored option set, in the shape the drafters emit (D-0032 rules 1 and 2). */
+const storedOptions = (): JsonRecord => ({
+  options: [
+    {
+      label: "run the retry under the plan of i-0001",
+      value: `sha256:${"a".repeat(64)}`,
+      basis: { form: "snapshot", pointer: "/iteration/status" },
+    },
+    {
+      label: "run it under the predecessor's plan",
+      value: `sha256:${"b".repeat(64)}`,
+      basis: { form: "iteration", iterationId: "i-0000" },
+    },
+  ],
+  recommended: 0,
+});
+
+const storedProposal = (payload: JsonRecord): ProposalDraft => ({
+  proposalId: "p-0001",
+  kind: "run_plan",
+  drafter: "rondo/advisory/deterministic",
+  payload,
+  snapshot: { iteration: { id: "i-0001", status: "needs_approval" } },
+  derivation: null,
+  iterationId: "i-0001",
+  supersedesIterationId: null,
+  supersedesProposalId: null,
+  predecessorPlanDigest: null,
+  predecessorContractDigest: null,
+  agentTypeDigest: null,
+  configDigest: null,
+  contractDigest: null,
+  continuoRevision: null,
+  cadenzaRevision: null,
+  elevatedFromMessageId: null,
+  elevatedByActorId: null,
+  createdAtMs: 5_000,
+});
+
+test("a proposal is answerable from the row alone, long after it was drafted", async () => {
+  // **#39's falsifier, taken literally.** An operator reading only this screen
+  // sees the options in the record's own order, which one is recommended, what
+  // each rests on *with the material under it*, whether anybody has answered,
+  // and what answering forecloses. Nothing here re-composes the proposal: it is
+  // the row, read back, which is the whole difference between a gate that is
+  // answerable once and one that is answerable later.
+  const { record } = fresh();
+  await record.recordProposal(storedProposal(storedOptions()));
+
+  const shows = screen();
+  const outcome = await showProposal(
+    { record, now: () => 9_000, present: shows.present },
+    "p-0001",
+  );
+
+  expect(outcome).toEqual({ kind: "shown" });
+  const rendered = shows.shown.join("\n");
+  expect(rendered).toContain("proposal 'p-0001'  run_plan  about iteration 'i-0001'");
+  // The order is the payload's, and the recommendation is marked where it sits.
+  expect(rendered).toContain("[recommended] run the retry under the plan of i-0001");
+  expect(rendered).toContain("[alternative] run it under the predecessor's plan");
+  // D-0032 rule 2: the inline form carries the material, resolved against the
+  // row's own verbatim snapshot rather than against anything re-read.
+  expect(rendered).toContain('basis: snapshot /iteration/status = "needs_approval"');
+  expect(rendered).toContain("basis: iteration i-0000");
+  // D-0032 rule 6, and rule 4's consequence computed from `kind`.
+  expect(rendered).toContain("nobody has answered this yet");
+  expect(rendered).toContain("what answering forecloses:");
+  // The line that says how to answer it, which is what makes the screen
+  // answerable rather than merely readable.
+  expect(rendered).toContain("Next: rondo decide --proposal-id p-0001");
+  expect(rendered).toContain(`contract: sha256:${"a".repeat(64)}`);
+  expect(rendered).toContain("an approval is spendable once");
+});
+
+test("showing one proposal twice counts one presentation", async () => {
+  // D-0036 rule 1: a presentation is counted once per subject and not once per
+  // render, so a proposal read five times before it is answered leaves the
+  // ratio #40 asked for a count of subjects on both sides. The second write
+  // stores nothing and reports success.
+  const { record } = fresh();
+  await record.recordProposal(storedProposal(storedOptions()));
+
+  const shows = screen();
+  const ports = { record, now: () => 9_000, present: shows.present };
+  expect(await showProposal(ports, "p-0001")).toEqual({ kind: "shown" });
+  expect(await showProposal(ports, "p-0001")).toEqual({ kind: "shown" });
+
+  expect(await record.attentionBreakdown()).toEqual([
+    { disposition: "presented", ruleName: null, count: 1 },
+  ]);
+});
+
+test("a settled proposal says so, and an explanation says it cannot be answered", async () => {
+  // Two screens that must not read like an open question: one the operator has
+  // already answered (D-0032 rule 6), and one that binds nothing at all
+  // (rule 5). A settled proposal rendered like an open one is the screen that
+  // gets answered twice.
+  const { record } = fresh();
+  await record.recordProposal(storedProposal(storedOptions()));
+  await record.recordComposition({
+    compositionId: "c-0001",
+    proposalId: "p-0001",
+    contract: { grantee: "rondo/i-0001" },
+    contractDigest: `sha256:${"a".repeat(64)}`,
+    supersedesContractDigest: null,
+    cadenzaRevision: "cadenza@abcdef0",
+    composedAtMs: 6_000,
+  });
+  await record.recordDecision({
+    decisionId: "d-0001",
+    proposalId: "p-0001",
+    outcome: "declined",
+    approved: null,
+    predecessor: null,
+    actorId: "oidc|operator-1",
+    recordedBy: COMMAND_LINE_SURFACE,
+    gateId: null,
+    gateTransitionSeq: null,
+    decidedAtMs: 7_000,
+  });
+  await record.recordProposal({
+    ...storedProposal({ claims: [] }),
+    proposalId: "p-0002",
+    kind: "explanation",
+    derivation: "store_rows",
+  });
+
+  const settled = screen();
+  await showProposal({ record, now: () => 9_000, present: settled.present }, "p-0001");
+  const binding = screen();
+  await showProposal({ record, now: () => 9_000, present: binding.present }, "p-0002");
+
+  expect(settled.shown.join("\n")).toContain("declined by 'oidc|operator-1'");
+  expect(settled.shown.join("\n")).toContain("it is settled");
+  // No "Next:" on a settled proposal: it would invite a second answer the
+  // store refuses, after the person has already decided.
+  expect(settled.shown.join("\n")).not.toContain("Next:");
+  expect(binding.shown.join("\n")).toContain("cannot be answered");
+});
+
+test("a proposal that is not there, and one that will not read, are refusals", async () => {
+  // The whole subject is one row here, so half a proposal is the failure mode
+  // rather than the fallback: a person is about to approve one of its options.
+  const { connection, record } = fresh();
+  await record.recordProposal(storedProposal(storedOptions()));
+  connection.prepare("UPDATE proposal SET snapshot = ? WHERE proposal_id = ?").run("{}", "p-0001");
+
+  const shows = screen();
+  const ports = { record, now: () => 9_000, present: shows.present };
+
+  expect(await showProposal(ports, "p-9999")).toEqual({
+    kind: "refused",
+    reason: "there is no proposal 'p-9999'",
+  });
+  const unreadable = await showProposal(ports, "p-0001");
+  expect(unreadable.kind).toBe("refused");
+  expect(shows.shown).toEqual([]);
+});
+
+test("a payload rondo cannot place is on the screen saying so", async () => {
+  // D-0032 rule 2's closure, from the reader's side: a basis form outside the
+  // union is refused rather than rendered as prose. The screen says the payload
+  // will not read, because an operator who asked to see a proposal and got a
+  // clean empty screen would read it as "there is nothing to decide".
+  const { record } = fresh();
+  await record.recordProposal(
+    storedProposal({
+      options: [{ label: "widen", value: "sha256:x", basis: { form: "because I said so" } }],
+      recommended: 0,
+    }),
+  );
+
+  const shows = screen();
+  await showProposal({ record, now: () => 9_000, present: shows.present }, "p-0001");
+
+  expect(shows.shown.join("\n")).toContain("will not read");
+  expect(shows.shown.join("\n")).toContain("not one of");
 });

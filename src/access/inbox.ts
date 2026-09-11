@@ -197,6 +197,15 @@ function waitingOnYouLines(snapshot: InboxSnapshot): readonly string[] {
     ...proposalLines(binding, snapshot, seenProposals),
     `  proposals that bind nothing (${String(nonBinding.length)})`,
     ...proposalLines(nonBinding, snapshot, seenProposals),
+    // **The verb that makes one of those lines answerable** (#39). The list
+    // above is ids and kinds; what a person answers is the option set, its
+    // bases and what approving forecloses, and that screen is one command away
+    // rather than in the scrollback of whoever drafted it.
+    ...(snapshot.open.length === 0
+      ? []
+      : [
+          "    read one back, with its options and what each rests on: rondo show --proposal-id ID",
+        ]),
     `  iterations waiting on you (${String(waiting.length)})`,
     ...waiting.map(
       (record) =>

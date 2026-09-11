@@ -1661,3 +1661,18 @@ test("propose and decide take their own flags and refuse the others", () => {
     expect(parseCommand(argv).kind).toBe("refused");
   }
 });
+
+test("show takes one proposal id and nothing that would read as an answer", () => {
+  // Reading a proposal back is not answering it (#39): `--outcome` and
+  // `--actor-id` belong to `decide`, and a flag that reads as though it did
+  // something is worse than one that is rejected.
+  const parsed = parseCommand(["show", "--proposal-id", "p-0001"]);
+  expect(parsed.kind).toBe("parsed");
+  if (parsed.kind === "parsed") {
+    expect(parsed.parsed).toMatchObject({ command: "show", proposalId: "p-0001" });
+  }
+
+  expect(parseCommand(["show", "--proposal-id", "p-1", "--outcome", "approved"]).kind).toBe(
+    "refused",
+  );
+});
