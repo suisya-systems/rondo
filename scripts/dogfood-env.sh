@@ -229,8 +229,20 @@ if [ -n "$target_repo" ]; then
   # scratch directory, and the checks below are reads.
   [ -d "$target_repo" ] || die "target repo '$target_repo' is not a directory"
   target=$(cd -- "$target_repo" && pwd)
-  git -C "$target" rev-parse --git-dir >/dev/null 2>&1 ||
-    die "target repo '$target' is not a git repository"
+  # **The repository root, not the directory that was named.** `rev-parse`
+  # succeeds from anywhere inside a repository, so `--target-repo /repo/pkg/app`
+  # would pass this check and write `/repo/pkg/app` into all four plan fields --
+  # consistently, so the consistency check would be satisfied -- while continuo
+  # materialises a worktree of the whole repository. The contract would then be
+  # about a subdirectory and the lap about the repository, which is the same
+  # class of disagreement this flag exists to remove, just moved one level out
+  # where nothing compares it.
+  target=$(git -C "$target" rev-parse --show-toplevel 2>/dev/null || true)
+  [ -n "$target" ] ||
+    die "target repo '$target_repo' is not inside a git repository"
+  if [ "$target" != "$(cd -- "$target_repo" && pwd)" ]; then
+    note "'$target_repo' is inside a repository; using its root"
+  fi
   if [ -z "$target_base_branch" ]; then
     # The branch its HEAD is on. A detached HEAD names none, and guessing
     # `main` there would write a plan whose lap cannot cut a topic branch.

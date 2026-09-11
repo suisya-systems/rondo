@@ -289,6 +289,7 @@ const ALLOWED_EXTERNALS_BY_MODULE: Readonly<
       "contractPayload",
       "delegationContract",
       "layerDocument",
+      "nativePath",
       "resolveProject",
     ],
   },

@@ -54,6 +54,7 @@ import {
   contractPayload as cadenzaContractPayload,
   delegationContract as cadenzaDelegationContract,
   layerDocument as cadenzaLayerDocument,
+  nativePath as cadenzaNativePath,
   resolveProject as cadenzaResolveProject,
   type DelegationContract,
   type IntendedAction,
@@ -120,6 +121,32 @@ export function resolveProject(layers: readonly CatalogLayer[], name: string): R
     cadenzaLayerDocument(layer.layer, layer.origin, layer.baseDir, layer.data),
   );
   return cadenzaResolveProject(cadenzaComposeCatalog(documents), name);
+}
+
+/**
+ * One path, lexically normalised exactly as cadenza normalises its own.
+ *
+ * **The point is that it is the same function, not an equivalent one.** cadenza
+ * runs every `local_path` source through `nativePath.normpath` on the way into
+ * a `ResolvedProject`; anything comparing rondo's `repository` against that
+ * value has to spell a path the same way cadenza does, and a second
+ * implementation is a second thing that can disagree -- which is D-0016's drift
+ * warning and D-0018 rule 7's rule, here on exactly the surface where a
+ * disagreement is silent: a comparison that no longer holds just stops
+ * catching the fault it was added for.
+ *
+ * A hand-written version of this was the alternative, and it was tried: the
+ * conductor's layer may import nothing external, so it had no `node:path`. Three
+ * rounds of review found three separate ways it differed from `normpath` -- a
+ * `.` segment, a backslash that is a separator on one platform and a file-name
+ * character on the other, and a UNC root that is a server and a share rather
+ * than two leading slashes. cadenza exports the function; rondo uses it.
+ *
+ * Lexical, like cadenza's: no symlink resolved, nothing stat'd, so it answers
+ * the same in CI on a machine that has none of these directories.
+ */
+export function normalisePath(value: string): string {
+  return cadenzaNativePath.normpath(value);
 }
 
 /**

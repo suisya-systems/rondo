@@ -26,6 +26,7 @@ import {
   agentTypeRecord,
   classifyAction,
   issueInitialContract,
+  normalisePath,
   type ResolvedProject,
   resolveProject,
 } from "../cadenza/facade.js";
@@ -164,98 +165,23 @@ function catalogDisagreement(plan: AdmittedPlan, project: ResolvedProject): stri
 }
 
 /**
- * Whether two absolute paths name the same directory, lexically.
+ * Whether two absolute paths name the same directory.
  *
- * `src/refrain/`'s external allowance is empty -- no `node:path`, by design --
- * so this is the comparison rather than `resolve()`. It has to be a real
- * normalisation rather than a string equality, because the two sides arrive
- * spelled by two different rules: cadenza runs its `local_path` through a
- * `normpath` (no trailing separator, no `.` segment, no doubled separator),
- * while `readPlan` checks `repository` is absolute and otherwise keeps whatever
- * the operator typed. A plan that said `/srv/repo/.` in both places would
- * otherwise be refused for disagreeing with itself, which is the opposite of
- * this check's purpose.
+ * Both sides go through {@link normalisePath}, which is cadenza's own
+ * `normpath` -- the same function cadenza ran over the `local_path` before it
+ * became a `ResolvedProject`. That is what makes this a comparison of two
+ * directories rather than of two strings: `readPlan` keeps whatever spelling
+ * the operator typed, so the two sides arrive normalised by different rules
+ * unless one of them is applied to both.
  *
- * **Lexical, and nothing else.** No symlink is resolved and nothing is stat'd,
- * for cadenza's own reason: this has to give the same answer in CI on a machine
- * that has none of these directories. Two paths that reach one directory
- * through a symlink are therefore *not* folded together here, and the refusal
- * that follows names both spellings, which is the failure an operator can act
- * on.
- *
- * Case is deliberately not folded either. A fold would call two paths the same
- * on a case-sensitive filesystem where they are not, and the direction of that
- * error is the wrong one for a check that exists to catch a disagreement.
+ * Case is deliberately not folded, and neither is a symlink resolved. Both
+ * would call two paths the same where a case-sensitive filesystem says they are
+ * not, and the direction of that error is the wrong one for a check that exists
+ * to catch a disagreement: the refusal names both spellings, which is something
+ * an operator can act on.
  */
 function samePath(left: string, right: string): boolean {
   return normalisePath(left) === normalisePath(right);
-}
-
-/**
- * Whether a path is spelled in Windows's own shape: a drive letter, or a UNC
- * root.
- *
- * The same decision-by-shape `plan.ts`'s `isAbsolutePath` makes, and for the
- * same reason: `path.sep` answers for the platform this process is running on,
- * which is the wrong question to ask about a path written into a plan. It
- * governs one thing here -- whether a backslash is a separator. On Windows it
- * is; on POSIX `\` is an ordinary character in a file name, so folding it would
- * make `/srv/a\b` and `/srv/a/b` compare equal when they are two directories.
- */
-function isWindowsShaped(value: string): boolean {
-  return /^(?:\\\\|[A-Za-z]:[\\/])/.test(value);
-}
-
-/**
- * One absolute path, lexically normalised: cadenza's `normpath` as far as two
- * paths need it to be compared.
- *
- * Empty and `.` segments are dropped, `..` pops the segment before it (and is
- * dropped at the root, which is what an absolute path means), and the root is
- * kept whole.
- *
- * **A UNC root is `//server/share`, not `//`**, and that is why the prefix is
- * matched rather than cut at the first separator. `\\server\share\..\repo`
- * normalises to `\\server\share\repo` -- the share is not a directory `..`
- * can climb out of -- so treating `server` and `share` as ordinary segments
- * would answer `/server/repo` for the plan's spelling and `/server/share/repo`
- * for cadenza's, and refuse a plan that says the same path twice.
- */
-function normalisePath(value: string): string {
-  const windows = isWindowsShaped(value);
-  const unified = windows ? value.replace(/\\/g, "/") : value;
-  // Only on a Windows-shaped path. A leading `//` on POSIX is not a UNC root,
-  // and treating it as one would make the first two segments unclimbable for a
-  // `..` that is entitled to climb them.
-  const unc = windows ? /^\/\/[^/]+\/[^/]+/.exec(unified) : null;
-  if (unc !== null) {
-    return unc[0] + joinSegments(unified.slice(unc[0].length));
-  }
-  const slash = unified.indexOf("/");
-  // Everything up to and including the first separator is the root, and it is
-  // never a segment: dropping it would turn an absolute path into a relative
-  // one and would compare two different drives as the same directory.
-  const prefix = unified.slice(0, slash + 1);
-  return prefix + joinSegments(unified.slice(slash + 1));
-}
-
-/** The segments of one rooted remainder, with `.` and `..` resolved. */
-function joinSegments(rest: string): string {
-  const segments: string[] = [];
-  for (const segment of rest.split("/")) {
-    if (segment === "" || segment === ".") {
-      continue;
-    }
-    if (segment === "..") {
-      // At the root there is nowhere to climb to, so `..` is dropped rather
-      // than kept -- which is what an absolute path means and what `normpath`
-      // answers.
-      segments.pop();
-      continue;
-    }
-    segments.push(segment);
-  }
-  return segments.join("/");
 }
 
 /**
