@@ -43,8 +43,11 @@ same walk needed a hand-written driver script and six verbs typed in order.
 
 What does **not** exist yet, and is not merely unfinished but undecided:
 
-- the web UI and the localhost MCP surface — `src/access/` now holds the
-  composition root, the ASCII escaper and the operator's command line. D-0020
+- the web UI beyond one read-only page, and the localhost MCP surface —
+  `src/access/` now holds the composition root, the ASCII escaper, the
+  operator's command line and `rondo web`, which serves a single localhost page
+  showing what `inbox`, `between` and `explain` show and writing nothing.
+  Answering a gate, and every other act, is still the command line's. D-0020
   takes the five operating-surface rows cadenza sent to rondo's gate and
   **decides only**: the gate panes, the OIDC adapter and the conversation store
   are a later diff, and D-0025 rule 4 records what a command line can and cannot

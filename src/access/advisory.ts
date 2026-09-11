@@ -189,7 +189,7 @@ function snapshotIteration(record: IterationRecord): SnapshotIteration {
  * can go missing from -- the pointer that cited it would then resolve on one
  * kind and not on the other.
  */
-function gather(record: IterationRecord, readings: readonly LapReading[]): AdvisorySnapshot {
+export function gather(record: IterationRecord, readings: readonly LapReading[]): AdvisorySnapshot {
   return { iteration: snapshotIteration(record), readings: snapshotReadings(readings) };
 }
 
@@ -265,8 +265,14 @@ function cited(snapshot: object, pointer: string): string {
     : rendered;
 }
 
-/** One basis, as the line under the claim it supports. */
-function basisLine(basis: Basis, snapshot: object): string {
+/**
+ * One basis, as the line under the claim it supports.
+ *
+ * Exported because a second surface renders the same claims -- `src/access/`
+ * holds the terminal today and the web page beside it -- and a second spelling
+ * of a basis would be a second thing an operator has to learn to trust.
+ */
+export function basisLine(basis: Basis, snapshot: object): string {
   switch (basis.form) {
     case "snapshot":
       // **The inline form** (D-0032 rule 2): the snapshot is in the row, so the
@@ -2159,8 +2165,15 @@ export async function showProposal(
  * which is the command line -- and not a constant this module could invent. A
  * default taken here would report a host as running under bounds nobody set.
  */
-export interface HostPorts extends ExplainPorts {
+export interface HostReadPorts {
+  readonly store: Pick<IterationStore, "readLive" | "readingsFor" | "occupancy">;
+  readonly record: Pick<AdvisoryRecord, "admissionRefusals">;
   readonly policy: HostPolicy;
+}
+
+export interface HostPorts extends ExplainPorts, HostReadPorts {
+  readonly store: IterationStore;
+  readonly record: AdvisoryRecord;
 }
 
 /** The readings of one lap, copied into the snapshot shape. */
@@ -2192,7 +2205,7 @@ function snapshotReadings(readings: readonly LapReading[]): readonly SnapshotRea
  * (D-0023 rule 8) and a live row that will not decode has no status this layer
  * could classify.
  */
-async function gatherHost(ports: HostPorts): Promise<HostSnapshot> {
+export async function gatherHost(ports: HostReadPorts): Promise<HostSnapshot> {
   const live = await ports.store.readLive();
   const laps: SnapshotLap[] = [];
   const unreadable: HostSnapshot["unreadable"][number][] = [];
