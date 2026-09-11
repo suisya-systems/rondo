@@ -76,6 +76,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0036 | The operator's inbox, decided as three open questions and not as a fourth record design: a presentation counted once per subject, the conversation only as far as elevation reaches, and a two-way wait that admits it is not three | accepted |
 | D-0037 | The between-laps composition: a fourth snapshot rather than a fourth component, three claim families rondo can ground, one verb an operator runs, and a breakdown that answers over an interval | accepted |
 | D-0038 | Whether the premise under a proposal has moved, decided per basis and at render time: the record and not the field as the unit, re-gathered rather than remembered, and `undetermined` as a value the screen may never round to unchanged | accepted |
+| D-0039 | A lap cannot verify what it wrote, and `--allowedTools` is not the way out: `D-0011`'s first falsifier fires, the fence input rondo asks continuo for, and what `granted` maps to once it exists | accepted |
 
 ---
 
@@ -6803,3 +6804,232 @@ is `D-0032`'s, `D-0036`'s and `D-0037`'s treatment of the same material.
   which is option D's argument arriving on evidence, and `D-0037` rule 4's trigger as much as this
   entry's.
 - Any measurement above failing to reproduce at `0e9d4f4`.
+
+---
+
+## D-0039 — A lap cannot verify what it wrote, and `--allowedTools` is not the way out: `D-0011`'s first falsifier fires, the fence input rondo asks continuo for, and what `granted` maps to once it exists
+
+**Status:** accepted (2026-09-12, rondo's human gate). Refs rondo#67, rondo#69.
+
+rondo#67 observed a lap that edited a repository, committed to it, and could not run
+`npm ci --ignore-scripts`, `npm run verify`, `npm --version` or `node vendor/pin.mjs check` — every
+one of them answered `This command requires approval` to a `claude -p` child that has nobody to ask.
+For a repository whose `AGENTS.md` requires a green verify before a commit, no lap can comply, and
+the lap that found this said so at its gate only because its worker chose to.
+
+The issue reads as a rondo defect with a rondo fix: map the agent type's `granted: ["command.run"]`
+onto the fence's Bash allow list. **This entry is the finding that there is nothing on the other end
+of that map.** At the pinned continuo the worker fence's allow list is a bundled document selected
+by role name, and no input of `run admit` or `lap perform` reaches it. So the question the issue
+asks — how should `granted` become an allow rule — cannot be answered inside this repository, and
+the entry that says what to do instead is this one.
+
+**It is also a decision rondo has already written down the answer to**, which is why this entry is
+short on options and long on citation. `D-0011` refused four executor flags permanently, named the
+one case that would make the refusal untenable, and said what to do when it arrived.
+
+### What fired
+
+`D-0011`'s first falsifier, verbatim:
+
+> **A run rondo must admit that cannot be expressed without one of the four refused flags.** That is
+> the case this entry claims does not exist; if it appears, the right response is an escalation to
+> continuo about the fence rather than an entry here, and this entry is what forces that route.
+
+rondo#67 is that case. The only input continuo accepts today that reaches the child's tool
+permissions is `run admit --cli-arg` carrying `--allowedTools` — `FENCE_OWNED_FLAGS` does not cover
+it, which is the gap `D-0011`'s "Why an empty start" section is about — and `D-0011` rule 3 refuses
+that option in every spelling, permanently, with reversal spelled out as a supersession rather than
+an entry.
+
+**The refusal is not being reconsidered here.** `D-0011` rule 3 exists so that the human gate stays
+binding rather than advisory, and rondo#67 is a bad reason to spend it: the lap does not need
+arbitrary executor authority handed past the gate, it needs a fence that can run a build. Those are
+different asks, and only the first is what `--allowedTools` grants. The falsifier's own instruction —
+escalate to continuo about the fence — is both the narrower route and the one already ratified.
+
+### Decision
+
+1. **rondo does not close rondo#67 from inside rondo, and `D-0011` rule 3 stands unweakened.** No
+   entry authorises any spelling of `--allowedTools`, `--disallowedTools`, `--add-dir` or
+   `--dangerously-skip-permissions`, and rondo's `--cli-arg` allowlist stays empty (`D-0011`
+   rules 1 and 2). The escalation to continuo is the route, and this entry is rondo's half of it.
+
+2. **`granted` is a precondition on the fence, not a source of allow rules.** `command.run` is a
+   capability key, and a capability key says *that* commands may be run; an allow rule says *which*.
+   Deriving the second from the first would be rondo inventing a command vocabulary that neither
+   cadenza nor continuo has — the shape `D-0014` rule 1 forbids for roles and models, applied to a
+   third vocabulary. So `granted` keeps the job it has: it is what cadenza classifies
+   `intendedAction` against, and it decides whether the lap is admitted at all.
+
+   **What rondo#67 exposes is that the two halves were never checked against each other.** Today a
+   plan granting `command.run` is admitted *because* it holds `command.run`, and then renders a
+   fence that cannot run a command. The grant and the fence are both real and they disagree,
+   silently, and nothing in either repository notices.
+
+3. **The concrete command set is a property of the fence the role names, and rondo's mapping is over
+   the pair.** `executorPolicy.roleName` already maps to a continuo role in
+   `src/continuo/roles.ts` (`D-0019` rule 13), and a continuo role already *is* a fence document
+   entry — `roles.json` is keyed by role and carries `permissions.allow` per role. So the mapping
+   rondo#67 asks for is not a new arrow: it is the existing role arrow, pointed at a role whose
+   fence can run commands.
+
+   rondo's own half of the check is then statable and total: **a plan that grants `command.run` and
+   names a role rondo's table records as having no command allow list is refused before the spawn**,
+   in `mapNeutralRole`'s manner and for `mapModelTier`'s reason — an agent type an operator wrote,
+   answered with a value rather than a throw, before a worktree exists and before money is spent.
+   The table is a transcription of continuo's document at a revision, exactly as `CONTINUO_ROSTER`
+   is, with the same falsifiers.
+
+4. **Two properties are required of whatever shape continuo grows, and they are not the
+   implementation's to negotiate.**
+
+   a. **Recorded.** What a lap was allowed to run must be readable from the admitted run's own
+      record, not reconstructed from a build's bundled bytes by somebody who knows which revision
+      ran. A fence widened by a name that appears on the row satisfies this; a fence widened by an
+      environment variable or a build-time default does not.
+
+   b. **Loud.** A command the fence does not allow must reach the lap's report — and therefore the
+      gate — rather than existing only inside the worker's prose. rondo#67 was found because a
+      worker volunteered it; a worker that did not would have handed the operator an unverified
+      commit that reads as finished work. That is the failure mode this property exists to remove,
+      and it is required of continuo whichever widening shape it picks.
+
+5. **What rondo records is `continuo_role`, and no column is added.** The iteration row already
+   carries it (`src/store/sqlite.ts:538`, written from `AdmitRunOutcome.continuoRole`), and under
+   rule 3 that one value names the fence the lap ran under. This is deliberately the whole of
+   rondo's "leave it behind" duty: **the consuming side — what a review stage or a gate screen does
+   with the fact that a verification did or did not run — is rondo#69's, and this entry does not
+   design it.**
+
+6. **Build order: nothing under `src/` moves until continuo grows the input and the pin moves.**
+   This is a decision-only entry in `D-0037`'s and `D-0033`'s sense. Rule 3's table row and rule 3's
+   refusal are implementable only against a continuo that has a command-capable worker fence to
+   name; writing them against a roster that has none would be a refusal that fires on every plan,
+   which is the tree in a worse state than it is now.
+
+### What rondo asks continuo for
+
+Stated so that continuo's issue can quote it. rondo is the consumer here and does not decide
+continuo's shape; what follows is the requirement, one candidate rondo prefers, and why.
+
+**The requirement.** A lap's worker must be able to run the build and test commands of the
+repository it is changing, under a fence that (i) was chosen by the admitted run rather than by the
+build's defaults, (ii) names what it allowed in a value that appears on the run's record, (iii)
+allows a bounded, curated set rather than commands in general, and (iv) reports a refused command
+into the lap's outcome instead of leaving it in the child's transcript.
+
+**The candidate rondo prefers: a second worker-kind role in `src/fencing/roles.json`.** The document
+is already keyed by role, already carries `permissions.allow` and `permissions.deny` per role, and
+already distinguishes what a role *is* from what it *may do* via `role_kind`. `run admit --role` is
+validated against that document's own roster (`roleNames`), so a role added to it is admissible with
+no other code change, and the role name is already on continuo's run record and on rondo's iteration
+row. Measured against the four requirements: (i) the run names the role; (ii) the role name is the
+value on the record; (iii) the allow list is curated in continuo's tree, reviewed as an edit there,
+and pinned with the document; (iv) is the one requirement it does not supply on its own.
+
+**Its cost, named rather than buried.** A role would then carry two things at once — what the
+executor is for, and which fence it gets — where today it carries one. `D-0014` rule 3 keeps
+continuo's roster out of rondo's callers precisely so that a second executor is a change to one
+table, and this widens what that table's codomain means. rondo accepts that cost because the
+alternative costs more: a per-run declared command vector needs a new document, a new allowlist
+check, a new refusal, a new record field and a new place for a widening to be introduced without
+review — five new mechanisms to reach a place two existing ones already reach.
+
+**The requirement continuo must meet in either shape is (iv).** A `Bash` call the fence refuses
+currently ends as text inside a `claude -p` transcript. rondo asks that it become part of what
+`lap perform` answers with, so that a surface reading the lap's outcome can tell an operator "this
+lap attempted a command its fence does not allow" without reading the session.
+
+### What this entry does not do
+
+- **It does not re-open `D-0011` rule 3**, in any direction. The four flags stay refused, and this
+  entry is an instance of the route rule 3's falsifier prescribes rather than an exception to it.
+- **It does not widen `D-0022` rule 3's read allowance**, grant an arrow, add a layer, add a record
+  kind or add a column. Rule 5 uses a column that exists.
+- **It does not name the commands.** Which specs a verify-capable fence allows is continuo's to
+  author and continuo's gate to take; rondo#67's four observed refusals are evidence of the need,
+  not a proposed allow list.
+- **It does not design the consuming side** of rule 5's record. That is rondo#69.
+- **It does not close rondo#67.** The issue is closed by a lap that greens a verify, which needs
+  continuo's input and a pin move first.
+
+### Residuals
+
+| Residual | Why not here | Who decides |
+|---|---|---|
+| The command specs a verify-capable fence allows | continuo authors its own fence document, and a list written here would be rondo authoring it by proposal | continuo's gate |
+| How a refused command reaches the lap's outcome (requirement iv) | It is a change to what `lap perform` answers with, which is continuo's protocol and rondo's decoder second | continuo, then a rondo entry if the answer shape moves |
+| Rule 3's refusal and its table row | Unimplementable against a roster with no command-capable role; rule 6 is why | the implementation, once the pin has moved |
+| Whether a fence profile should be separable from an executor role at all | The cost is named above and paid knowingly; nothing has yet needed two profiles for one purpose or two purposes on one profile | the first agent type that needs the pair to come apart |
+| What a surface does with the fact that a lap did or did not verify | rondo#69's scope by the brief that opened both | rondo#69 |
+
+### What was measured, and how
+
+At continuo `38c667b5126fdfdc0465e4a422e88b20a8b53044` — the revision `continuo.pin.json` pins — and
+at rondo `ba98cfe`, on **2026-09-12**, by reading rather than by running, and **each rondo-side
+citation below was re-read unchanged at `df67e72`** when this entry was rebased onto `D-0038`.
+rondo#67's own four refusals were observed by running, on 2026-09-12, at rondo `0e9d4f4` and the
+same continuo; they are cited as the observation and were not re-run here.
+
+- **The allow list is six git specs.** `src/fencing/roles.json:28-35`: `Bash(git add:*)`,
+  `Bash(git commit:*)`, `Bash(git status:*)`, `Bash(git diff:*)`, `Bash(git log:*)`,
+  `Bash(git show:*)`. The issue's description of it is exact.
+- **`acceptEdits` cannot cover a Bash call, by the promotion's own design.** The worker role is
+  authored `"permission_mode": "default"` (`:26`) and promoted for a non-interactive spawn
+  (`src/fencing/renderer.ts:716`, the constant at `:387`). The comment at `:710-714` states the
+  scope: *"the allow list is not widened and the deny list is untouched, so the mode is the only
+  byte that moves."*
+- **The document is bundled and selected by role name only.** `bundledDocumentPath`
+  (`src/fencing/renderer.ts:295`) resolves `roles.json` beside the compiled module.
+- **No input of the lap path reaches it.** `FenceContext` (`src/fencing/renderer.ts:172-211`)
+  carries six path substitutions and nothing else — `interlockRoot`, `workerDir`, `claudeOrgPath`,
+  `hookScript`, `fencePath`, `python` — plus a string-to-string `extra`. `FencedSpawner` does take an
+  injectable `document` (`src/fencing/spawn.ts:769-786`, `document === undefined` meaning "the
+  bundled one"), and the **only** construction site in the tree is
+  `src/workspace/materializer.ts:1309`, which passes no document.
+- **`--allowedTools` is not a fence-owned flag.** `FENCE_OWNED_FLAGS`
+  (`src/control_plane/lap_run_intent.ts:188-194`) holds `--settings`, `--permission-mode`,
+  `--mcp-config`, `--setting-sources`, `--strict-mcp-config`.
+- **The `cli_args` allowlist authorises nothing.** `src/fencing/cli_args_allow.json` is
+  `{"entries": []}`, unchanged from the measurement `D-0011` recorded at `13c7b1a1`.
+- **A role added to the document is admissible with no other change.** `run admit` checks `--role`
+  against `roleNames()`, the fence renderer's own reader of the same document
+  (`src/control_plane/run_admission.ts:359-370`), refusing before its transaction opens.
+- **`Bash(npm:*)`-shaped specs are not on the global forbidden-allow lists.** `roles.json:6-19`
+  forbids `Bash(git *)`, `Bash(git push *)`, `Bash(git push:*)`, `Bash(gh *)`, `Bash(gh:*)`,
+  `Bash(rm -rf *)` and `Bash`, plus three regexes over `Bash(*)`, `Read(*)` and
+  `mcp__claude-peers__`.
+- **`granted` never leaves rondo toward continuo.** `classifyPlan`
+  (`src/refrain/classification.ts:68-75`) hands `plan.agentTypeInput` to `agentTypeRecord`, the
+  record to `issueInitialContract`, and the contract to `classifyAction` against
+  `plan.intendedAction`. What the classification record keeps is `agentTypeDigest`, not the key list
+  (`:78-95`), and `admitRun` (`src/continuo/invoker.ts:672-714`) builds its argv from the role, the
+  branches and the prompt — there is no capability argument on it and, as its doc comment records,
+  no `--cli-arg` anywhere in the lap-1 API.
+- **The role is already on the row.** `continuo_role` (`src/store/sqlite.ts:538`, read at `:2585`,
+  typed at `src/store/records.ts:344`).
+- **What was not measured**: no fence has been rendered for a role that does not exist yet; no
+  refused-command report has been observed, because continuo emits none; and nothing here re-derives
+  why the CLI answered `This command requires approval` for a read-only `npm --version` under a
+  sandbox `repairSandbox` switches on (`src/fencing/renderer.ts:519`). The observation stands; its
+  mechanism is continuo's to explain and is part of what the escalation asks.
+
+### What would falsify it
+
+- **A command-capable worker fence arriving by a shape rule 4's two properties do not fit** — an
+  environment variable, a build-time default, a per-machine file — which would mean the properties
+  were stated against a route continuo had no intention of taking, and rule 3's mapping has nothing
+  to name.
+- **continuo declining the escalation**, which sends rondo#67 back to a choice between an unverified
+  lap and superseding `D-0011` rule 3, and makes this entry the record of the first option having
+  been tried.
+- **A role turning out to be the wrong carrier** — the first agent type that needs one purpose under
+  two fences, or one fence under two purposes — which is rule 3's named cost arriving, and moves the
+  fence profile off the role name and onto a field of its own.
+- **`FENCE_OWNED_FLAGS` growing to cover the four**, which is already `D-0011`'s second falsifier
+  and would make rule 1's restatement redundant rather than load-bearing.
+- **A lap that greens a verify without any of this**, which would mean the measurement above missed
+  an input; the entry is written so that a single counter-example to "no input reaches the allow
+  list" falsifies it outright.
+- Any measurement above failing to reproduce at continuo `38c667b5` and rondo `ba98cfe`.
