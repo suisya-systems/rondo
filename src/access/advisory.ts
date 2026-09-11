@@ -1347,21 +1347,25 @@ function compareRecords(
 
 /**
  * The record one pointer sits in, per `D-0038` rule 1: an array element by its
- * own identity for a pointer into an array of records, or the top-level record
- * itself for a pointer into one.
+ * own identity for a pointer into a record inside an array, the whole array
+ * for a pointer at the array itself (`propose()`'s `/readings`, cited exactly
+ * when there is no reading to point an element at), or the top-level record
+ * for a pointer into one.
  *
  * Untyped on purpose: the same logic has to walk both the stored snapshot and
  * the re-gathered document, and typing this to any one snapshot shape would
  * leave it unable to walk the other two.
  */
-function containerOf(
-  document: Record<string, unknown>,
-  pointer: string,
-): {
-  readonly top: string;
-  readonly identity: string | null;
-  readonly record: Record<string, unknown>;
-} | null {
+type Container =
+  | {
+      readonly kind: "record";
+      readonly top: string;
+      readonly identity: string | null;
+      readonly record: Record<string, unknown>;
+    }
+  | { readonly kind: "wholeArray"; readonly top: string; readonly array: readonly unknown[] };
+
+function containerOf(document: Record<string, unknown>, pointer: string): Container | null {
   const segments = pointer.split("/").slice(1);
   const top = segments[0];
   if (top === undefined) {
@@ -1369,29 +1373,44 @@ function containerOf(
   }
   const value = document[top];
   if (Array.isArray(value)) {
+    if (segments.length === 1) {
+      return { kind: "wholeArray", top, array: value };
+    }
     const index = segments[1];
     if (index === undefined || !/^(0|[1-9]\d*)$/.test(index)) {
       return null;
     }
-    const element = value[Number(index)];
+    const at = Number(index);
+    const element = value[at];
     if (typeof element !== "object" || element === null) {
       return null;
     }
-    const record = element as Record<string, unknown>;
-    return { top, identity: identityOf(top, record), record };
+    return { kind: "record", top, identity: identityOf(top, value, at), record: element };
   }
   if (typeof value !== "object" || value === null) {
     return null;
   }
-  return { top, identity: null, record: value as Record<string, unknown> };
+  return { kind: "record", top, identity: null, record: value as Record<string, unknown> };
 }
 
 /**
- * The identity a record in an array is matched by, never its index
+ * The identity the record at `array[at]` is matched by, never its index
  * (`D-0038` rule 2): a candidate set is enumerated and de-duplicated by the
  * gatherer, so candidate N today need not be candidate N at composition.
+ *
+ * **A reading's identity is the drafter *and* which of that drafter's
+ * readings this is.** D-0029 appends a second reading from one drafter beside
+ * the first rather than replacing it, so the drafter alone collapses two
+ * distinct rows onto one identity -- the occurrence count is what keeps them
+ * apart, over the one order the store ever produces them in: appended,
+ * oldest first, never reordered.
  */
-function identityOf(top: string, record: Record<string, unknown>): string {
+function identityOf(top: string, array: readonly unknown[], at: number): string {
+  const value = array[at];
+  if (typeof value !== "object" || value === null) {
+    return "";
+  }
+  const record = value as Record<string, unknown>;
   if (top === "candidates") {
     if (typeof record["iterationId"] === "string") {
       return `iteration:${record["iterationId"]}`;
@@ -1406,9 +1425,21 @@ function identityOf(top: string, record: Record<string, unknown>): string {
         return `promotedKey:${source["key"]}`;
       }
     }
+    return "";
   }
   if (top === "readings" && typeof record["drafter"] === "string") {
-    return record["drafter"];
+    let occurrence = 0;
+    for (let i = 0; i < at; i++) {
+      const other = array[i];
+      if (
+        typeof other === "object" &&
+        other !== null &&
+        (other as Record<string, unknown>)["drafter"] === record["drafter"]
+      ) {
+        occurrence += 1;
+      }
+    }
+    return `${record["drafter"]}#${String(occurrence)}`;
   }
   return "";
 }
@@ -1427,11 +1458,12 @@ function matchingRecord(
   if (!Array.isArray(value)) {
     return null;
   }
-  for (const element of value) {
+  for (let at = 0; at < value.length; at++) {
+    const element = value[at];
     if (
       typeof element === "object" &&
       element !== null &&
-      identityOf(container.top, element as Record<string, unknown>) === container.identity
+      identityOf(container.top, value, at) === container.identity
     ) {
       return element as Record<string, unknown>;
     }
@@ -1471,6 +1503,21 @@ function snapshotBasisFreshness(pointer: string, ctx: FreshnessContext): Freshne
   const container = containerOf(ctx.storedSnapshot, pointer);
   if (container === null) {
     return undetermined("rondo does not know how to compare the record this citation names");
+  }
+  if (container.kind === "wholeArray") {
+    // `propose()`'s `/readings`: cited exactly when there was nothing to point
+    // an element at, so what is compared is the collection itself rather than
+    // a record inside it.
+    const fresh = ctx.regathered.document[container.top];
+    if (!Array.isArray(fresh)) {
+      return undetermined("rondo does not know how to compare the record this citation names");
+    }
+    return JSON.stringify(container.array) === JSON.stringify(fresh)
+      ? { verdict: "unmoved", detail: null }
+      : {
+          verdict: "moved",
+          detail: `${String(container.array.length)} at composition, ${String(fresh.length)} now`,
+        };
   }
   const fresh = matchingRecord(ctx.regathered.document, container);
   if (fresh === null) {

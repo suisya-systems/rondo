@@ -11,13 +11,13 @@ import { resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { expect, test } from "vitest";
 
-import { proposeRetry, showProposal } from "../../src/access/advisory.js";
+import { explainIteration, proposeRetry, showProposal } from "../../src/access/advisory.js";
 import type { CatalogLayer } from "../../src/cadenza/facade.js";
 import { allocate } from "../../src/refrain/allocator.js";
 import { admittedPlan, planPayload, type RunPlan, runPlan } from "../../src/refrain/plan.js";
 import { CONSERVATIVE_HOST_POLICY } from "../../src/refrain/policy.js";
 import { canonicalJson, contentDigest, planDigest } from "../../src/store/plan.js";
-import type { JsonRecord } from "../../src/store/records.js";
+import type { JsonRecord, LapReadingDraft } from "../../src/store/records.js";
 import { advisoryRecord, iterationStore } from "../../src/store/sqlite.js";
 
 const fresh = () => {
@@ -576,3 +576,94 @@ test(
     expect(rendered).toMatch(/\d+ unmoved, 0 moved, 0 undetermined/);
   },
 );
+
+const CLEAR: LapReadingDraft = {
+  drafter: "rondo/deterministic/1",
+  verdict: "clear",
+  findings: [],
+  evidence: {
+    baseRef: "refs/remotes/origin/main",
+    baseCommit: "b".repeat(40),
+    tipCommit: "a".repeat(40),
+    materialDigest: `sha256:${"c".repeat(64)}`,
+    commitCount: 2,
+    fileCount: 5,
+  },
+  unavailableReason: null,
+};
+
+test("two readings from the same drafter are matched by which reading each is, not by drafter alone", async () => {
+  // **The identity a reading is matched by is the drafter *and* which of that
+  // drafter's readings this is.** D-0029 appends a second reading beside the
+  // first rather than replacing it, so matching by drafter alone would pair
+  // both stored claims to whichever fresh reading happens to come first --
+  // reporting the unchanged second reading as moved the instant it was
+  // composed, which is exactly the false alarm rule 6 refuses to manufacture.
+  const { store, record } = fresh();
+  await reserveWithPlan(store, "iter-1", null);
+  await store.transition("iter-1", "planned", "classified", {}, 2_000, {
+    ...CLEAR,
+    verdict: "concerns",
+    findings: ["first reading's own finding"],
+  });
+  await store.transition("iter-1", "classified", "admitting", {}, 3_000, {
+    ...CLEAR,
+    verdict: "clear",
+  });
+
+  const explained = await explainIteration(
+    { store, record, now: () => 4_000, present: screen().present },
+    "iter-1",
+  );
+  expect(explained.kind).toBe("explained");
+  if (explained.kind !== "explained") {
+    return;
+  }
+
+  const shows = screen();
+  await showProposal(
+    { store, cadenzaRevision: "cadenza@abcdef0", record, now: () => 5_000, present: shows.present },
+    explained.proposalId,
+  );
+  const rendered = shows.shown.join("\n");
+  // Nothing changed between composition and this render, so nothing may read
+  // moved -- including the two same-drafter readings, whose verdicts differ
+  // from each other and would be reported as moved if either were compared
+  // against the other's fresh row instead of its own.
+  expect(rendered).not.toContain("freshness: moved");
+  expect(rendered).toContain("independent reading (rondo/deterministic/1): concerns");
+  expect(rendered).toContain("independent reading (rondo/deterministic/1): clear");
+});
+
+test("a `/readings` citation for no reading at all reads moved once a reading arrives", async () => {
+  // **`propose()`'s whole-array citation, per rule 1's other case: a pointer
+  // into a top-level record is that record**, and here the "record" pointed at
+  // is the readings collection itself -- cited exactly when there was nothing
+  // to point an element at.
+  const { store, record } = fresh();
+  await reserveWithPlan(store, "iter-1", null);
+
+  const explained = await explainIteration(
+    { store, record, now: () => 4_000, present: screen().present },
+    "iter-1",
+  );
+  expect(explained.kind).toBe("explained");
+  if (explained.kind !== "explained") {
+    return;
+  }
+
+  await store.transition("iter-1", "planned", "classified", {}, 5_000, CLEAR);
+
+  const shows = screen();
+  await showProposal(
+    { store, cadenzaRevision: "cadenza@abcdef0", record, now: () => 6_000, present: shows.present },
+    explained.proposalId,
+  );
+  const rendered = shows.shown.join("\n");
+  expect(rendered).toContain("independent reading: undetermined");
+  const basisIndex = shows.shown.findIndex((line) => line.includes("basis: snapshot /readings ="));
+  expect(basisIndex).toBeGreaterThanOrEqual(0);
+  expect(shows.shown.slice(basisIndex, basisIndex + 2).join("\n")).toContain(
+    "freshness: moved (0 at composition, 1 now)",
+  );
+});
