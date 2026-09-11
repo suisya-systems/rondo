@@ -98,6 +98,14 @@ be closed through rondo's own surface at this pin.** It was not caught because `
 against a real control plane, and lap 1 ran before `D-1104` moved gate relays onto the run's
 resource.
 
+**Repaired in #86, and re-measured on this environment.** The run id now comes off the `gate show`
+payload and goes onto the `gate deliver` argv, and one `rondo answer` closes the gate
+`answered_and_forwarded` with no hand-typed continuo command: `gate deliver 1 message(s)` on both
+passes where this record has `0 message(s)`. The test hole is closed at the seam rather than at the
+`answer` path as a whole -- `test/continuo/smoke.test.ts` drives `deliverGate` against the pinned
+build and reads the per-resource delivery epoch, which is what tells the run's queue apart from the
+global one without a lap to fill either.
+
 ### N-2. A lap may run its verification but may not read its exit status
 
 `npm run verify` was refused **four times** before it ran, in three distinct shapes, all recorded in
