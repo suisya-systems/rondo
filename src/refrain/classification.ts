@@ -211,32 +211,51 @@ function isWindowsShaped(value: string): boolean {
  * paths need it to be compared.
  *
  * Empty and `.` segments are dropped, `..` pops the segment before it (and is
- * dropped at the root, which is what an absolute path means), and the prefix --
- * `/`, a drive, a UNC root -- is kept as it was written.
+ * dropped at the root, which is what an absolute path means), and the root is
+ * kept whole.
+ *
+ * **A UNC root is `//server/share`, not `//`**, and that is why the prefix is
+ * matched rather than cut at the first separator. `\\server\share\..\repo`
+ * normalises to `\\server\share\repo` -- the share is not a directory `..`
+ * can climb out of -- so treating `server` and `share` as ordinary segments
+ * would answer `/server/repo` for the plan's spelling and `/server/share/repo`
+ * for cadenza's, and refuse a plan that says the same path twice.
  */
 function normalisePath(value: string): string {
   const windows = isWindowsShaped(value);
   const unified = windows ? value.replace(/\\/g, "/") : value;
+  // Only on a Windows-shaped path. A leading `//` on POSIX is not a UNC root,
+  // and treating it as one would make the first two segments unclimbable for a
+  // `..` that is entitled to climb them.
+  const unc = windows ? /^\/\/[^/]+\/[^/]+/.exec(unified) : null;
+  if (unc !== null) {
+    return unc[0] + joinSegments(unified.slice(unc[0].length));
+  }
   const slash = unified.indexOf("/");
   // Everything up to and including the first separator is the root, and it is
   // never a segment: dropping it would turn an absolute path into a relative
   // one and would compare two different drives as the same directory.
   const prefix = unified.slice(0, slash + 1);
+  return prefix + joinSegments(unified.slice(slash + 1));
+}
+
+/** The segments of one rooted remainder, with `.` and `..` resolved. */
+function joinSegments(rest: string): string {
   const segments: string[] = [];
-  for (const segment of unified.slice(slash + 1).split("/")) {
+  for (const segment of rest.split("/")) {
     if (segment === "" || segment === ".") {
       continue;
     }
-    if (segment === ".." && segments.length > 0) {
-      segments.pop();
-      continue;
-    }
     if (segment === "..") {
+      // At the root there is nowhere to climb to, so `..` is dropped rather
+      // than kept -- which is what an absolute path means and what `normpath`
+      // answers.
+      segments.pop();
       continue;
     }
     segments.push(segment);
   }
-  return prefix + segments.join("/");
+  return segments.join("/");
 }
 
 /**

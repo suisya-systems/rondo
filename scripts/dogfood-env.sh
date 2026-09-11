@@ -291,8 +291,25 @@ fi
 # is a name that can be typed differently twice. The scratch target keeps the
 # name it has always had so that the runbook's worked commands still read.
 if [ -n "$target_repo" ]; then
+  # cadenza's identifier rule, which a directory name does not have to satisfy:
+  # a lowercase letter followed by up to 63 more of [a-z0-9_-]. A repository
+  # called `123-app` or `.config` produces a name that is legal as a directory
+  # and refused as a project id -- and refused at `classify`, minutes later,
+  # rather than here. So the derivation ends inside the rule: case folded,
+  # anything else turned into `-`, a `repo-` prefix when it does not begin with
+  # a letter, and cut to 64.
   project_name=$(printf %s "$(basename -- "$target")" | tr 'A-Z' 'a-z' | tr -c 'a-z0-9_-' '-')
-  [ -n "$project_name" ] || die "could not derive a project name from '$target'"
+  case "$project_name" in
+    [a-z]*) ;;
+    *) project_name="repo-$project_name" ;;
+  esac
+  project_name=$(printf %s "$project_name" | cut -c1-64)
+  # Checked rather than assumed: the rule above is cadenza's and this script
+  # restates it, so the one thing worth doing is failing here if the restatement
+  # ever stops matching -- a setup that reports success and hands over a plan
+  # `classify` refuses is worse than one that stops.
+  printf %s "$project_name" | grep -qE '^[a-z][a-z0-9_-]{0,63}$' ||
+    die "could not derive a usable project name from '$target' (got '$project_name')"
 else
   project_name=dogfood-target
 fi

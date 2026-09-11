@@ -173,6 +173,35 @@ describe("classifyPlan, when the catalog and the lap name one repository", () =>
   });
 });
 
+describe("classifyPlan, on a Windows-shaped path", () => {
+  /**
+   * A UNC root is `\\\\server\\share`, not `\\\\`: the share is not a directory a
+   * `..` can climb out of, so cadenza's normalisation keeps both components.
+   * Treating them as ordinary segments would answer one thing for the plan's
+   * spelling and another for cadenza's, and refuse a plan that says the same
+   * path twice.
+   *
+   * **This one runs in the windows cell only**, and that is a property of the
+   * subject rather than a convenience. On a POSIX host cadenza reads a UNC
+   * string as a *relative* path and anchors it to the layer's `baseDir`, so the
+   * two sides are not two spellings of one path there and the case cannot be
+   * reached through `classifyPlan` at all. The matrix runs a windows cell
+   * (`D-0003`), which is where this is exercised.
+   */
+  test.skipIf(process.platform !== "win32")(
+    "a UNC root keeps its server and share through a '..'",
+    () => {
+      const outcome = classifyPlan(
+        planWith({
+          repository: "\\\\\\\\server\\\\share\\\\sub\\\\..\\\\repo",
+          catalogPath: "\\\\\\\\server\\\\share\\\\repo",
+        }),
+      );
+      expect(outcome.kind).toBe("answered");
+    },
+  );
+});
+
 describe("classifyPlan, when the plan disagrees with itself", () => {
   test("refuses a repository the catalog does not name, and names both values", () => {
     const outcome = classifyPlan(planWith({ catalogPath: ELSEWHERE }));
