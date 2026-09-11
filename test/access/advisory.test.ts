@@ -122,6 +122,82 @@ test("it explains a row it can read, and records what it said", async () => {
   expect(rendered).toContain("binds nothing");
 });
 
+/**
+ * rondo#90, measured as finding N-5 of `docs/operations/lap-2-dogfood.md`.
+ *
+ * `--prompt-file` (#72) exists so that a request can be more than one
+ * paragraph, and this line rendered all 2154 characters of one through
+ * `asciiEscape`: a literal `\n` at every paragraph break, unwrapped, and then a
+ * 200-character prefix of the same text under it as its basis. It is #68's
+ * distinction one screen over -- a value that *is* the whole of what is shown
+ * keeps its paragraphs, where a value folded into a line rondo composed may
+ * not.
+ *
+ * **The non-ASCII check runs over the bytes and not over the string**, for
+ * `console.test.ts`'s reason exactly: vitest captures stdout through a UTF-8
+ * path, which is how an escape that D-0004 forbids would ship green.
+ */
+test("a multi-paragraph request is quoted over its own lines rather than escaped onto one", async () => {
+  const { store, record } = fresh();
+  const request = [
+    "Repair the rendering defect measured as N-5.",
+    "",
+    "The request reaches the operator through the advisory — and the em-dash in this " +
+      "sentence is the other half of what #68 repaired one screen over, which is why a " +
+      "paragraph this long is here to be wrapped.",
+  ].join("\n");
+  const reserved = await store.reserve({
+    id: "i-0001",
+    request,
+    plan: somePlan(),
+    nowMs: 1_000,
+    supersedesIterationId: null,
+    runId: "rondo-i-0001",
+    topicBranch: "rondo/i-0001",
+    workspace: "/srv/work/iter-i-0001",
+  });
+  expect(reserved.kind).toBe("reserved");
+
+  const shows = screen();
+  const outcome = await explainIteration(
+    { store, record, now: () => 5_000, present: shows.present },
+    "i-0001",
+  );
+  expect(outcome.kind).toBe("explained");
+
+  const rendered = shows.shown.join("\n");
+  // The defect's own signature: a paragraph break spelled as an escape.
+  expect(rendered).not.toContain("\\u000a");
+  expect(rendered).toContain(
+    `request: 3 lines, ${String(request.length)} characters, quoted in full:`,
+  );
+  expect(shows.shown).toContain("    | Repair the rendering defect measured as N-5.");
+  // The em-dash is spelled with the ASCII lookalike rather than `—`
+  // (rondo#68's table), which is the second half of the same repair.
+  expect(rendered).toContain("advisory -- and the em-dash");
+  expect(rendered).not.toContain("\\u2014");
+  // Wrapped: the third paragraph is wider than the column, so it reaches the
+  // screen as more than one line and none of them is wider than the column.
+  const quoted = shows.shown.filter((line) => line.startsWith("    |"));
+  expect(quoted.length).toBeGreaterThan(3);
+  for (const line of quoted) {
+    expect(line.length).toBeLessThanOrEqual("    | ".length + 88);
+  }
+  // **The basis is still there** (D-0032 rule 2) and stops repeating a prefix
+  // of the value quoted immediately above it.
+  expect(rendered).toContain(
+    "basis: snapshot /iteration/request = the value quoted above, in full",
+  );
+  // A claim whose value fits on its line is unmoved: the quoting is for the
+  // value that could not fit, not a new shape for every claim.
+  expect(rendered).toContain("  status: planned");
+  expect(rendered).toContain('basis: snapshot /iteration/status = "planned"');
+  // D-0004, over the bytes of everything this screen composed itself.
+  expect(
+    Buffer.from(rendered, "utf8").every((byte) => byte === 0x0a || (byte >= 0x20 && byte <= 0x7e)),
+  ).toBe(true);
+});
+
 test("it refuses an iteration the store does not hold, and writes nothing", async () => {
   const { connection, store, record } = fresh();
   const outcome = await explainIteration(

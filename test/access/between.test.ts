@@ -232,6 +232,52 @@ test("terminal laps are not gathered, and the occupancies come from the store", 
   expect(rendered).toContain("two live laps open against one base branch: none");
 });
 
+/**
+ * rondo#91, measured as finding N-6 of `docs/operations/lap-2-dogfood.md`.
+ *
+ * Three families rest on `/laps` -- `live laps` and the two that report having
+ * found nothing -- and each of them printed the whole snapshot of the live laps
+ * under it: 3104 characters of request text, three times, in the measured run.
+ * The three claims differ and their basis does not, so the repetition pushed
+ * the facts apart and buried them in a repeated citation of one document.
+ *
+ * **What may not be repaired by dropping a basis** (D-0037 rule 1's "each claim
+ * carries a basis"), which is why the count of claims carrying the locator is
+ * asserted beside the count of citations of the material.
+ */
+test("the basis three families share is cited once, with the claims that rest on it named", async () => {
+  const world = fresh();
+  await reserve(world.store, "i-0001");
+
+  const shows = screen();
+  expect((await composeBetweenLaps(portsOver(world, shows))).kind).toBe("explained");
+
+  const rendered = shows.shown.join("\n");
+  // The material is beside its pointer exactly once, however many claims rest
+  // on it.
+  expect(rendered.split("snapshot /laps = ")).toHaveLength(2);
+  // And all three claims still carry the basis, as the locator.
+  expect(
+    shows.shown.filter((line) => line.endsWith("basis: snapshot /laps (cited once below)")),
+  ).toHaveLength(3);
+  expect(rendered).toContain(
+    "3 claims rest on it: 'live laps', 'two live laps open against one base branch', " +
+      "'one finding read on more than one live lap'",
+  );
+  // **The facts are adjacent on the screen**, which is what the repetition
+  // cost: each claim is one line with one line of basis under it, so the next
+  // claim is two lines down rather than a screen away.
+  const at = (label: string) => shows.shown.findIndex((line) => line.startsWith(`  ${label}:`));
+  expect(at("two live laps open against one base branch") - at("live laps")).toBe(2);
+  expect(
+    at("one finding read on more than one live lap") -
+      at("two live laps open against one base branch"),
+  ).toBe(2);
+  // A pointer only one claim rests on keeps its material where it was: this is
+  // a repair to a repeated citation, not to citing at all.
+  expect(rendered).toContain("basis: snapshot /bounds/maxLive = 6");
+});
+
 test("the admission refusals the bound wrote are gathered and claimed", async () => {
   const connection = new DatabaseSync(":memory:");
   const world = {
