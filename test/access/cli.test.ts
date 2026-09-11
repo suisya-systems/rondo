@@ -288,6 +288,49 @@ test("each command's flags land on the parsed record", () => {
   });
 });
 
+test("--prompt-file lands on the parsed record", () => {
+  const outcome = parseCommand([
+    "start",
+    "--plan",
+    "/tmp/plan.json",
+    "--iteration-id",
+    "iter-9",
+    "--prompt-file",
+    "/tmp/request.txt",
+  ]);
+  expect(outcome.kind).toBe("parsed");
+  if (outcome.kind !== "parsed") {
+    return;
+  }
+  expect(outcome.parsed).toMatchObject({
+    command: "start",
+    prompt: null,
+    promptFile: "/tmp/request.txt",
+  });
+});
+
+test("--prompt and --prompt-file together are refused rather than ranked", () => {
+  // They overwrite the same field, so a command line carrying both has said the
+  // request twice and one of the two sayings is not on the screen. A precedence
+  // rule would be a rule to remember at the moment it is least checkable, which
+  // is the same shape of fault #72 is about.
+  const outcome = parseCommand([
+    "start",
+    "--plan",
+    "/tmp/plan.json",
+    "--iteration-id",
+    "iter-9",
+    "--prompt",
+    "one",
+    "--prompt-file",
+    "/tmp/request.txt",
+  ]);
+  expect(outcome.kind).toBe("refused");
+  if (outcome.kind === "refused") {
+    expect(outcome.reason).toContain("--prompt-file");
+  }
+});
+
 test("--dry-run is a boolean and reaches the record", () => {
   const outcome = parseCommand(["publish", "--repo", "o/n", "--actor-id", "me", "--dry-run"]);
   expect(outcome.kind).toBe("parsed");
@@ -479,6 +522,7 @@ test("a flag the command does not read is refused, not ignored", () => {
     // which is composed from the first lap's request and the instruction.
     ["revise", "--actor-id", "me", "--body=x", "--dry-run"],
     ["revise", "--actor-id", "me", "--body=x", "--prompt", "p"],
+    ["revise", "--actor-id", "me", "--body=x", "--prompt-file", "/tmp/r.txt"],
     ["revise", "--actor-id", "me", "--body=x", "--plan", "/tmp/p.json"],
   ]) {
     const outcome = parseCommand(argv);
@@ -491,6 +535,7 @@ test("each command still accepts every flag it does read", () => {
   // worse defect than the one it fixed, and would not show up above.
   for (const argv of [
     ["start", "--plan", "/tmp/p.json", "--prompt", "p", "--iteration-id", "i"],
+    ["start", "--plan", "/tmp/p.json", "--prompt-file", "/tmp/request.txt", "--iteration-id", "i"],
     ["answer", "--actor-id", "me", "--body=approve"],
     ["answer", "--actor-id", "me", "--body=approve", "--iteration-id", "i"],
     [

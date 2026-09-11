@@ -101,7 +101,12 @@ import { evidenceOf, READING_REMOTE } from "./review.js";
 export const USAGE = `rondo - the operator surface for delegated work
 
   rondo start --plan FILE --iteration-id ID [--prompt TEXT]
+              [--prompt-file FILE]
                           take one request and run a lap, and stop at the gate.
+                          --prompt-file reads the request from a file, byte for
+                          byte, for a request too long or too many paragraphs
+                          to type as a shell argument. It and --prompt say the
+                          same thing two ways, so only one of them may be given.
                           The run id, the topic branch and the workspace are
                           derived from --iteration-id; rondo mints them, so
                           there is no flag to type them
@@ -276,6 +281,7 @@ export interface ParsedCommand {
     | "help";
   readonly planFile: string | null;
   readonly prompt: string | null;
+  readonly promptFile: string | null;
   readonly iterationId: string | null;
   readonly actorId: string | null;
   readonly body: string | null;
@@ -303,6 +309,7 @@ export type ParseOutcome =
 const FLAGS = {
   plan: { type: "string" },
   prompt: { type: "string" },
+  "prompt-file": { type: "string" },
   "iteration-id": { type: "string" },
   "actor-id": { type: "string" },
   body: { type: "string" },
@@ -353,7 +360,7 @@ export const FLAGS_BY_COMMAND: Readonly<Record<string, readonly string[]>> = {
   // from `revise` (D-0023 rule 9): rondo derives all three from the iteration
   // id, which is now required rather than defaulted. D-0027 typed them on
   // `revise` because no allocator existed when it was written.
-  start: ["plan", "prompt", "iteration-id"],
+  start: ["plan", "prompt", "prompt-file", "iteration-id"],
   // `answer` gained `--iteration-id` because more than one iteration may be
   // waiting at once now, which is the whole point of D-0023.
   answer: ["actor-id", "body", "iteration-id"],
@@ -459,6 +466,22 @@ export function parseCommand(argv: readonly string[]): ParseOutcome {
     };
   }
 
+  // **Two spellings of one value, and rondo takes neither rather than
+  // guessing.** `--prompt` and `--prompt-file` overwrite the same field of the
+  // plan, so a command line carrying both has said the request twice and the
+  // second saying is not visible on the screen -- which is the same shape of
+  // fault this whole command exists to remove. Refused here rather than
+  // resolved by precedence: a rule about which one wins is a rule an operator
+  // has to remember at the moment they are least able to check it.
+  if (values["prompt"] !== undefined && values["prompt-file"] !== undefined) {
+    return {
+      kind: "refused",
+      reason:
+        "--prompt and --prompt-file both name the request, so only one of them may be given. " +
+        "Drop whichever one is not the request you meant to run.",
+    };
+  }
+
   const text = (name: string): string | null => {
     const value = values[name];
     return typeof value === "string" ? value : null;
@@ -470,6 +493,7 @@ export function parseCommand(argv: readonly string[]): ParseOutcome {
       command: command as ParsedCommand["command"],
       planFile: text("plan"),
       prompt: text("prompt"),
+      promptFile: text("prompt-file"),
       iterationId: text("iteration-id"),
       actorId: text("actor-id"),
       body: text("body"),
@@ -496,6 +520,7 @@ function emptyCommand(command: ParsedCommand["command"]): ParsedCommand {
     command,
     planFile: null,
     prompt: null,
+    promptFile: null,
     iterationId: null,
     actorId: null,
     body: null,
@@ -830,6 +855,23 @@ function loadPlan(parsed: ParsedCommand): { plan: RunPlan } | { refusal: string 
   const payload = { ...(document as JsonRecord) };
   if (parsed.prompt !== null) {
     payload["prompt"] = parsed.prompt;
+  }
+  // **Read byte for byte, and not trimmed.** The request is a prompt written to
+  // an agent: its paragraph breaks are the instruction's structure, and a
+  // trailing newline a text editor wrote is not rondo's to remove either. This
+  // is the same rule `--body` runs under (D-0025 rule 3) applied to the one
+  // other field an operator supplies as prose. Before this flag existed, a
+  // multi-paragraph request could not be typed as a shell argument at all, and
+  // the operator wrote a throwaway script to inject it into the plan JSON --
+  // which is the class of workaround the command line replaced.
+  if (parsed.promptFile !== null) {
+    try {
+      payload["prompt"] = readFileSync(parsed.promptFile, "utf8");
+    } catch (error) {
+      return {
+        refusal: `The prompt file could not be read: ${error instanceof Error ? error.message : String(error)}`,
+      };
+    }
   }
 
   // **`--run-id`, `--topic-branch` and `--workspace` are gone, and so is the

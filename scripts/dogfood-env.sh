@@ -21,12 +21,27 @@ set -euo pipefail
 
 usage() {
   cat <<'USAGE'
-usage: scripts/dogfood-env.sh [--root DIR] [--iteration-id ID] [--force-continuo-rebuild]
+usage: scripts/dogfood-env.sh [--root DIR] [--iteration-id ID]
+                              [--target-repo DIR] [--target-base-branch NAME]
+                              [--force-continuo-rebuild]
 
 Provision a working environment for the rondo operator CLI and print the
 commands that drive it.
 
 options:
+  --target-repo DIR
+      point the lap at a repository that already exists, instead of creating a
+      scratch one. This is the only place the target is named: the four plan
+      fields that have to agree about it -- `repository`, `base_branch`, and
+      `source.path` and `base_branch` inside the catalog layer, plus
+      `project_name` to select it -- are all written from this one value, so
+      they cannot disagree. Two of them saying different things is a mistake a
+      hand-edited plan does not report until the lap has already run.
+      DIR is used as it stands and is never modified: no seed commit, no
+      `git config`, and its remotes are left exactly as they are.
+  --target-base-branch NAME
+      the branch a lap is cut from. Default: `main` for the scratch target, and
+      for --target-repo the branch that repository's own HEAD is on.
   --root DIR
       where the environment lives. Created if absent. Default: $RONDO_DOGFOOD_ROOT,
       or <repo>/.worker-scratch/dogfood-env when that is unset -- which is the
@@ -73,11 +88,16 @@ repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 env_root=${RONDO_DOGFOOD_ROOT:-"$repo_root/.worker-scratch/dogfood-env"}
 run_id=dogfood-001
 force_continuo_rebuild=0
+target_repo=
+target_base_branch=
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --root) [ $# -ge 2 ] || die "--root needs a value"; env_root=$2; shift 2 ;;
     --iteration-id) [ $# -ge 2 ] || die "--iteration-id needs a value"; run_id=$2; shift 2 ;;
+    --target-repo) [ $# -ge 2 ] || die "--target-repo needs a value"; target_repo=$2; shift 2 ;;
+    --target-base-branch)
+      [ $# -ge 2 ] || die "--target-base-branch needs a value"; target_base_branch=$2; shift 2 ;;
     --force-continuo-rebuild) force_continuo_rebuild=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) usage >&2; die "unknown argument '$1'" ;;
@@ -194,96 +214,162 @@ else
 fi
 
 step "Target repository (the repository a lap is allowed to touch)"
-target="$env_root/target"
-# Written into the repository rather than passed as `-c` on the seed commit,
-# because the seed commit is not the only one made here: the lap commits in a
-# *worktree* of this repository, and git config is per-repository, so a worktree
-# inherits what is set here and inherits nothing from a `-c` that has ended. A
-# machine with no global identity, or with signing on, would otherwise pass
-# setup and fail inside the paid lap -- on exactly the configuration setup
-# thought it had handled. A scratch target is also not a place to inherit a
-# machine's commit policy.
-set_target_commit_config() {
-  git -C "$target" config user.name rondo-dogfood
-  git -C "$target" config user.email rondo-dogfood@invalid
-  git -C "$target" config commit.gpgsign false
-}
+# **One name for the target, and everything else derived from it.** A plan has
+# to say which repository this is in four places -- `repository`, `base_branch`,
+# and `source.path` and `base_branch` again inside the catalog layer, plus
+# `project_name` to select the project -- and two of those pairs are the same
+# fact written twice. Hand-editing them is how a plan comes to disagree with
+# itself, and a disagreement is not visible until the lap has been admitted and
+# a worker has run (rondo #72). So they are all written below out of
+# `$target`, `$target_base_branch` and `$project_name`, and this step is the
+# only place those three are decided.
+if [ -n "$target_repo" ]; then
+  # An existing repository. It is read and never written: no seed commit, no
+  # `git config`, no remote added or moved. Somebody else's repository is not a
+  # scratch directory, and the checks below are reads.
+  [ -d "$target_repo" ] || die "target repo '$target_repo' is not a directory"
+  target=$(cd -- "$target_repo" && pwd)
+  git -C "$target" rev-parse --git-dir >/dev/null 2>&1 ||
+    die "target repo '$target' is not a git repository"
+  if [ -z "$target_base_branch" ]; then
+    # The branch its HEAD is on. A detached HEAD names none, and guessing
+    # `main` there would write a plan whose lap cannot cut a topic branch.
+    target_base_branch=$(git -C "$target" symbolic-ref --quiet --short HEAD || true)
+    [ -n "$target_base_branch" ] ||
+      die "target repo '$target' has a detached HEAD; name the branch with --target-base-branch"
+  fi
+  git -C "$target" rev-parse --verify --quiet "refs/heads/$target_base_branch" >/dev/null 2>&1 ||
+    die "target repo '$target' has no branch '$target_base_branch'"
+  note "using $target at branch $target_base_branch (left unmodified)"
+else
+  target="$env_root/target"
+  target_base_branch=${target_base_branch:-main}
+  # Written into the repository rather than passed as `-c` on the seed commit,
+  # because the seed commit is not the only one made here: the lap commits in a
+  # *worktree* of this repository, and git config is per-repository, so a worktree
+  # inherits what is set here and inherits nothing from a `-c` that has ended. A
+  # machine with no global identity, or with signing on, would otherwise pass
+  # setup and fail inside the paid lap -- on exactly the configuration setup
+  # thought it had handled. A scratch target is also not a place to inherit a
+  # machine's commit policy.
+  set_target_commit_config() {
+    git -C "$target" config user.name rondo-dogfood
+    git -C "$target" config user.email rondo-dogfood@invalid
+    git -C "$target" config commit.gpgsign false
+  }
 
-# The test is "main resolves to a commit", not "a .git exists". An interrupted
-# first run -- a seed commit that failed on configured signing is the easy way
-# to get one -- leaves a repository a `.git` check calls finished and a lap
-# cannot materialise a workspace from, because there is no `main` to cut the
-# topic branch off. Repairing it is a rerun; that is what this branch is for.
-if [ -d "$target/.git" ] && git -C "$target" rev-parse --verify --quiet refs/heads/main >/dev/null 2>&1; then
-  set_target_commit_config
-  note "already at $target"
-else
-  mkdir -p -- "$target/docs"
-  [ -d "$target/.git" ] || git -C "$target" init --quiet --initial-branch=main
-  set_target_commit_config
-  # A repository left with an unborn HEAD may be pointing at whatever
-  # `init.defaultBranch` says rather than at main; the seed commit has to land
-  # on the branch the plan names.
-  git -C "$target" rev-parse --verify --quiet HEAD >/dev/null 2>&1 ||
-    git -C "$target" symbolic-ref HEAD refs/heads/main
-  [ -f "$target/docs/NOTES.md" ] ||
-    printf '# Notes\n\nA scratch target for walking the rondo operator CLI.\n' > "$target/docs/NOTES.md"
-  git -C "$target" add docs/NOTES.md
-  git -C "$target" commit --quiet -m 'docs: seed the dogfood target'
-  note "created $target on branch main"
+  # The test is "the base branch resolves to a commit", not "a .git exists". An
+  # interrupted first run -- a seed commit that failed on configured signing is
+  # the easy way to get one -- leaves a repository a `.git` check calls finished
+  # and a lap cannot materialise a workspace from, because there is no branch to
+  # cut the topic branch off. Repairing it is a rerun; that is what this branch
+  # is for.
+  if [ -d "$target/.git" ] &&
+     git -C "$target" rev-parse --verify --quiet "refs/heads/$target_base_branch" >/dev/null 2>&1; then
+    set_target_commit_config
+    note "already at $target"
+  else
+    mkdir -p -- "$target/docs"
+    [ -d "$target/.git" ] ||
+      git -C "$target" init --quiet --initial-branch="$target_base_branch"
+    set_target_commit_config
+    # A repository left with an unborn HEAD may be pointing at whatever
+    # `init.defaultBranch` says rather than at the branch the plan names; the
+    # seed commit has to land on that branch.
+    git -C "$target" rev-parse --verify --quiet HEAD >/dev/null 2>&1 ||
+      git -C "$target" symbolic-ref HEAD "refs/heads/$target_base_branch"
+    [ -f "$target/docs/NOTES.md" ] ||
+      printf '# Notes\n\nA scratch target for walking the rondo operator CLI.\n' > "$target/docs/NOTES.md"
+    git -C "$target" add docs/NOTES.md
+    git -C "$target" commit --quiet -m 'docs: seed the dogfood target'
+    note "created $target on branch $target_base_branch"
+  fi
 fi
 
-step "Push target (a bare repository on this disk, so the push leg is real)"
-# **Why this exists.** `rondo publish` asks the workspace whether its plan can
-# run before it prints or runs anything, and a workspace with no remote is
-# refused -- rightly, because `git push origin` cannot resolve `origin`. Before
-# this step the target had no remotes at all, so the walk stopped at that
-# refusal and the push leg was never seen. A bare repository on the same disk is
-# a real push target: a push to it does everything a push does, and the lap's
-# workspace is a worktree of this repository, so it inherits this remote.
-#
-# **What it is still not is a forge.** `gh pr create` cannot be demonstrated
-# against a directory, so the pull-request leg cannot be walked in this
-# environment at all. That is stated here, in the READY block below and in
-# section 8 of docs/operations/rondo-cli.md rather than left to be discovered by
-# an operator reading a plan that cannot run.
-push_origin="$env_root/target-origin.git"
-if [ -d "$push_origin" ]; then
-  note "already at $push_origin"
+# The project the catalog declares and `project_name` selects. Derived from the
+# directory rather than typed, for the reason the paths are: a name typed twice
+# is a name that can be typed differently twice. The scratch target keeps the
+# name it has always had so that the runbook's worked commands still read.
+if [ -n "$target_repo" ]; then
+  project_name=$(printf %s "$(basename -- "$target")" | tr 'A-Z' 'a-z' | tr -c 'a-z0-9_-' '-')
+  [ -n "$project_name" ] || die "could not derive a project name from '$target'"
 else
-  git init --quiet --bare -- "$push_origin"
-  note "created $push_origin"
+  project_name=dogfood-target
 fi
-# `get-url --push --all` rather than a grep of `remote -v`: these are the URLs
-# the push would actually reach -- `pushurl` overrides `url` and may be set more
-# than once -- and they are what rondo's preflight compares against.
-current_origin=$(git -C "$target" remote get-url --push --all origin 2>/dev/null || true)
-if [ "$current_origin" = "$push_origin" ]; then
-  note "target's origin already points at it"
-elif [ -z "$current_origin" ]; then
-  git -C "$target" remote add origin "$push_origin"
-  note "target's origin -> $push_origin"
+note "project '$project_name'"
+
+if [ -n "$target_repo" ]; then
+  step "Push target"
+  # Skipped on purpose. The scratch target gets a bare repository on this disk
+  # wired up as its origin so the push leg of `publish` is real; a repository
+  # somebody else owns keeps the remotes it has. Rewiring those would be this
+  # script reaching outside its own --root, which is the one thing its header
+  # promises it does not do.
+  push_origin=$(git -C "$target" remote get-url --push --all origin 2>/dev/null | head -n 1 || true)
+  if [ -n "$push_origin" ]; then
+    note "origin already points at $push_origin; left as it is"
+  else
+    note "this repository has no 'origin'; 'publish' will refuse until it has one"
+  fi
 else
-  # A --root reused from an environment that lived somewhere else. Moving the
-  # URL is the repair; refusing would strand a rerun on the one thing a rerun is
-  # for. `set-url` writes `remote.origin.url`, which an explicit `pushurl` would
-  # still override, so any of those are dropped first -- otherwise the repair
-  # would report a move while pushes kept reaching the old place.
-  git -C "$target" config --unset-all remote.origin.pushurl 2>/dev/null || true
-  git -C "$target" remote set-url origin "$push_origin"
-  note "target's origin moved from '$(printf '%s' "$current_origin" | tr '\n' ' ')' to $push_origin"
+  step "Push target (a bare repository on this disk, so the push leg is real)"
+  # **Why this exists.** `rondo publish` asks the workspace whether its plan can
+  # run before it prints or runs anything, and a workspace with no remote is
+  # refused -- rightly, because `git push origin` cannot resolve `origin`. Before
+  # this step the target had no remotes at all, so the walk stopped at that
+  # refusal and the push leg was never seen. A bare repository on the same disk is
+  # a real push target: a push to it does everything a push does, and the lap's
+  # workspace is a worktree of this repository, so it inherits this remote.
+  #
+  # **What it is still not is a forge.** `gh pr create` cannot be demonstrated
+  # against a directory, so the pull-request leg cannot be walked in this
+  # environment at all. That is stated here, in the READY block below and in
+  # section 8 of docs/operations/rondo-cli.md rather than left to be discovered by
+  # an operator reading a plan that cannot run.
+  push_origin="$env_root/target-origin.git"
+  if [ -d "$push_origin" ]; then
+    note "already at $push_origin"
+  else
+    git init --quiet --bare -- "$push_origin"
+    note "created $push_origin"
+  fi
+  # `get-url --push --all` rather than a grep of `remote -v`: these are the URLs
+  # the push would actually reach -- `pushurl` overrides `url` and may be set more
+  # than once -- and they are what rondo's preflight compares against.
+  current_origin=$(git -C "$target" remote get-url --push --all origin 2>/dev/null || true)
+  if [ "$current_origin" = "$push_origin" ]; then
+    note "target's origin already points at it"
+  elif [ -z "$current_origin" ]; then
+    git -C "$target" remote add origin "$push_origin"
+    note "target's origin -> $push_origin"
+  else
+    # A --root reused from an environment that lived somewhere else. Moving the
+    # URL is the repair; refusing would strand a rerun on the one thing a rerun is
+    # for. `set-url` writes `remote.origin.url`, which an explicit `pushurl` would
+    # still override, so any of those are dropped first -- otherwise the repair
+    # would report a move while pushes kept reaching the old place.
+    git -C "$target" config --unset-all remote.origin.pushurl 2>/dev/null || true
+    git -C "$target" remote set-url origin "$push_origin"
+    note "target's origin moved from '$(printf '%s' "$current_origin" | tr '\n' ' ')' to $push_origin"
+  fi
+  # Confirmed, not assumed. This is the one place the script makes a claim about
+  # where a push goes, and the claim is what the runbook and the output below rest
+  # on.
+  verified_origin=$(git -C "$target" remote get-url --push --all origin)
+  [ "$verified_origin" = "$push_origin" ] ||
+    die "target's origin still pushes to '$(printf '%s' "$verified_origin" | tr '\n' ' ')'"
 fi
-# Confirmed, not assumed. This is the one place the script makes a claim about
-# where a push goes, and the claim is what the runbook and the output below rest
-# on.
-verified_origin=$(git -C "$target" remote get-url --push --all origin)
-[ "$verified_origin" = "$push_origin" ] ||
-  die "target's origin still pushes to '$(printf '%s' "$verified_origin" | tr '\n' ' ')'"
 
 step "Catalog"
 # cadenza resolves the project through this layer. `data` is what it reads;
 # `origin` and `base_dir` name where the layer came from, so the file is written
 # out to keep the two honest even though nothing reads it back.
+#
+# The target is listed in `allowed_local_roots` as a root of its own, beside
+# --root. cadenza requires a `local_path` source to lie under a root the layer
+# that declares it declares, and a path is under itself -- so naming the target
+# exactly admits the target and nothing beside it, which a parent directory
+# would not.
 catalog_origin="$env_root/catalog/projects.toml"
 cat > "$catalog_origin" <<TOML
 # Written by scripts/dogfood-env.sh. The plan file carries this same content
@@ -291,13 +377,13 @@ cat > "$catalog_origin" <<TOML
 schema_version = 1
 
 [catalog]
-allowed_local_roots = ["$env_root"]
+allowed_local_roots = ["$env_root", "$target"]
 
-[project.dogfood-target]
-base_branch = "main"
+[project.$project_name]
+base_branch = "$target_base_branch"
 aliases = []
 
-[project.dogfood-target.source]
+[project.$project_name.source]
 kind = "local_path"
 path = "$target"
 TOML
@@ -310,10 +396,23 @@ plan="$env_root/plan.json"
 # verbs as a lap that rewrites a module, and costs the same one dollar-ish.
 # It is passed in as an argument because it is the one value here that contains
 # quotes, and `node -e` is already inside a quoted shell string.
-prompt="Append one line to docs/NOTES.md reading exactly: 'Touched by the rondo operator CLI.' Then commit it with the message 'docs: touched by the rondo operator CLI'. Do nothing else."
+#
+# For a --target-repo it is a placeholder instead, because this script does not
+# know what somebody wants done in a repository it did not create -- and a
+# default that reads like an instruction is worse than one that reads like a
+# placeholder. The request for a real target is supplied at `start` time with
+# --prompt-file, which is what a multi-paragraph request needs: it cannot be
+# typed as a shell argument, and before that flag existed the way through was a
+# throwaway script that edited this plan's JSON.
+if [ -n "$target_repo" ]; then
+  prompt="Replace this with the request. 'rondo start --prompt-file FILE' overwrites it, and is the way to pass a request of more than one paragraph."
+else
+  prompt="Append one line to docs/NOTES.md reading exactly: 'Touched by the rondo operator CLI.' Then commit it with the message 'docs: touched by the rondo operator CLI'. Do nothing else."
+fi
 node -e '
   const [out, envRoot, runId, controlPlane, target, catalogOrigin, interlockRoot,
-         claudeOrgPath, claudeBin, nodeBin, prompt] = process.argv.slice(1);
+         claudeOrgPath, claudeBin, nodeBin, prompt, baseBranch,
+         projectName] = process.argv.slice(1);
 
   // The three budgets are stated rather than inherited. `invocation_ceiling_ms`
   // must be strictly greater than their sum; rondo refuses a ceiling that
@@ -329,7 +428,12 @@ node -e '
   const plan = {
     db: controlPlane,
     workspace_root: `${envRoot}/workspaces`,
-    base_branch: "main",
+    // The four places below that have to agree about the target -- this,
+    // `repository`, and `base_branch` and `source.path` inside the catalog
+    // layer -- are written from the same two variables, plus `project_name`
+    // from a third. That is the point of writing the plan rather than editing
+    // one: there is no second spelling to get wrong.
+    base_branch: baseBranch,
     prompt,
 
     repository: target,
@@ -370,18 +474,18 @@ node -e '
         base_dir: `${envRoot}/catalog`,
         data: {
           schema_version: 1,
-          catalog: { allowed_local_roots: [envRoot] },
+          catalog: { allowed_local_roots: [envRoot, target] },
           project: {
-            "dogfood-target": {
+            [projectName]: {
               source: { kind: "local_path", path: target },
-              base_branch: "main",
+              base_branch: baseBranch,
               aliases: [],
             },
           },
         },
       },
     ],
-    project_name: "dogfood-target",
+    project_name: projectName,
 
     agent_type_input: {
       agentTypeId: "worker-basic",
@@ -401,7 +505,8 @@ node -e '
 
   require("node:fs").writeFileSync(out, `${JSON.stringify(plan, null, 2)}\n`);
 ' "$plan" "$env_root" "$run_id" "$control_plane" "$target" "$catalog_origin" \
-  "$interlock_root" "$claude_org_path" "$claude_bin" "$node_bin" "$prompt"
+  "$interlock_root" "$claude_org_path" "$claude_bin" "$node_bin" "$prompt" \
+  "$target_base_branch" "$project_name"
 note "$plan"
 
 step "Environment"
@@ -433,9 +538,39 @@ q_plan=$(printf %q "$plan")
 q_approver=$(printf %q "$approver")
 q_run_id=$(printf %q "$run_id")
 
+# The paragraph about `publish` differs by target, so it is composed here rather
+# than written twice inside the heredoc.
+if [ -n "$target_repo" ]; then
+  publish_note="** Where 'publish' would push, and where it would open the pull request. **
+The target is a repository this script did not create, so its remotes are its
+own and were left alone. 'publish' pushes the lap's branch to that repository's
+origin and opens the pull request against the --repo you name, and it refuses
+before printing anything if those two are different repositories. Nothing here
+makes that call for you."
+else
+  publish_note="** publish cannot be walked to the end in this environment, and here is why. **
+'publish' checks the workspace before it prints anything. The push leg is real:
+origin is the bare repository at
+  $push_origin
+and a push to it works. The pull-request leg is not: a bare repository on this
+disk is not a forge, so no OWNER/NAME names it and 'gh pr create' has nothing to
+create against. That is why --allow-remote-mismatch is on the line above --
+without it rondo refuses, correctly, because the push and the pull request would
+be about different repositories. Run it without the flag once to see the
+refusal; it is the check working.
+
+Walking publish to the end needs a workspace whose origin is a real repository
+on a forge you can open a pull request in. This environment is not one, and no
+flag makes it one."
+fi
+
+
 cat <<READY
 
 Ready. The environment is at $env_root
+The lap is pointed at $target, branch $target_base_branch, as project '$project_name'.
+That is written into all four places the plan has to say it, from the one value
+you named, so there is nothing in the plan file to hand-edit.
 
   cd $q_repo_root
   . $q_env_file
@@ -450,24 +585,16 @@ Ready. The environment is at $env_root
 line did. 'publish' without --dry-run pushes the branch and opens a pull request
 as you, so it is left with --dry-run here.
 
-** publish cannot be walked to the end in this environment, and here is why. **
-'publish' checks the workspace before it prints anything. The push leg is real:
-origin is the bare repository at
-  $push_origin
-and a push to it works. The pull-request leg is not: a bare repository on this
-disk is not a forge, so no OWNER/NAME names it and 'gh pr create' has nothing to
-create against. That is why --allow-remote-mismatch is on the line above --
-without it rondo refuses, correctly, because the push and the pull request would
-be about different repositories. Run it without the flag once to see the
-refusal; it is the check working.
-
-Walking publish to the end needs a workspace whose origin is a real repository
-on a forge you can open a pull request in. This environment is not one, and no
-flag makes it one.
+$publish_note
 
 A second lap needs no second plan file, and no second set of identifiers:
 
   node bin/rondo.mjs start --plan $q_plan --iteration-id dogfood-002 --prompt "..."
+  node bin/rondo.mjs start --plan $q_plan --iteration-id dogfood-003 --prompt-file ./request.txt
+
+--prompt-file is the one to reach for when the request runs to more than one
+paragraph: it is read byte for byte, so a request that cannot be typed as a
+shell argument no longer needs a script written to inject it into the plan.
 
 rondo derives run id 'rondo-dogfood-002', branch 'rondo/dogfood-002' and
 workspace '$env_root/workspaces/iter-dogfood-002' from that one name (D-0023).
