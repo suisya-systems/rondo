@@ -167,28 +167,76 @@ function catalogDisagreement(plan: AdmittedPlan, project: ResolvedProject): stri
  * Whether two absolute paths name the same directory, lexically.
  *
  * `src/refrain/`'s external allowance is empty -- no `node:path`, by design --
- * so this is the comparison rather than `resolve()`. Both values are already
- * absolute (`readPlan` refuses a relative `repository`, and cadenza refuses a
- * `local_path` that is not a normalised absolute path), which leaves exactly two
- * ways for the same directory to be spelled twice: a trailing separator, and the
- * separator itself on Windows. Both are folded away here.
+ * so this is the comparison rather than `resolve()`. It has to be a real
+ * normalisation rather than a string equality, because the two sides arrive
+ * spelled by two different rules: cadenza runs its `local_path` through a
+ * `normpath` (no trailing separator, no `.` segment, no doubled separator),
+ * while `readPlan` checks `repository` is absolute and otherwise keeps whatever
+ * the operator typed. A plan that said `/srv/repo/.` in both places would
+ * otherwise be refused for disagreeing with itself, which is the opposite of
+ * this check's purpose.
  *
- * What is deliberately not folded is case. A comparison that ignored it would
- * call two paths the same on a case-sensitive filesystem where they are not, and
- * the direction of that error is the wrong one: this function exists to catch a
- * disagreement, and a fold that hides one is worse than one that reports a
- * difference an operator can see on their own screen.
+ * **Lexical, and nothing else.** No symlink is resolved and nothing is stat'd,
+ * for cadenza's own reason: this has to give the same answer in CI on a machine
+ * that has none of these directories. Two paths that reach one directory
+ * through a symlink are therefore *not* folded together here, and the refusal
+ * that follows names both spellings, which is the failure an operator can act
+ * on.
+ *
+ * Case is deliberately not folded either. A fold would call two paths the same
+ * on a case-sensitive filesystem where they are not, and the direction of that
+ * error is the wrong one for a check that exists to catch a disagreement.
  */
 function samePath(left: string, right: string): boolean {
   return normalisePath(left) === normalisePath(right);
 }
 
+/**
+ * Whether a path is spelled in Windows's own shape: a drive letter, or a UNC
+ * root.
+ *
+ * The same decision-by-shape `plan.ts`'s `isAbsolutePath` makes, and for the
+ * same reason: `path.sep` answers for the platform this process is running on,
+ * which is the wrong question to ask about a path written into a plan. It
+ * governs one thing here -- whether a backslash is a separator. On Windows it
+ * is; on POSIX `\` is an ordinary character in a file name, so folding it would
+ * make `/srv/a\b` and `/srv/a/b` compare equal when they are two directories.
+ */
+function isWindowsShaped(value: string): boolean {
+  return /^(?:\\\\|[A-Za-z]:[\\/])/.test(value);
+}
+
+/**
+ * One absolute path, lexically normalised: cadenza's `normpath` as far as two
+ * paths need it to be compared.
+ *
+ * Empty and `.` segments are dropped, `..` pops the segment before it (and is
+ * dropped at the root, which is what an absolute path means), and the prefix --
+ * `/`, a drive, a UNC root -- is kept as it was written.
+ */
 function normalisePath(value: string): string {
-  const slashed = value.replace(/\\/g, "/");
-  // The root itself is `/`, and stripping its one separator would leave the
-  // empty string -- so the trailing separator comes off only while something
-  // else is left.
-  return slashed.length > 1 ? slashed.replace(/\/+$/, "") : slashed;
+  const windows = isWindowsShaped(value);
+  const unified = windows ? value.replace(/\\/g, "/") : value;
+  const slash = unified.indexOf("/");
+  // Everything up to and including the first separator is the root, and it is
+  // never a segment: dropping it would turn an absolute path into a relative
+  // one and would compare two different drives as the same directory.
+  const prefix = unified.slice(0, slash + 1);
+  const segments: string[] = [];
+  for (const segment of unified.slice(slash + 1).split("/")) {
+    if (segment === "" || segment === ".") {
+      continue;
+    }
+    if (segment === ".." && segments.length > 0) {
+      segments.pop();
+      continue;
+    }
+    if (segment === "..") {
+      continue;
+    }
+    segments.push(segment);
+  }
+  return prefix + segments.join("/");
 }
 
 /**

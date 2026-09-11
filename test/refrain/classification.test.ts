@@ -141,6 +141,36 @@ describe("classifyPlan, when the catalog and the lap name one repository", () =>
     const outcome = classifyPlan(planWith({ repository: `${REPOSITORY}/` }));
     expect(outcome.kind).toBe("answered");
   });
+
+  /**
+   * The two sides are spelled by two different rules: cadenza runs its
+   * `local_path` through a `normpath`, while `readPlan` checks `repository` is
+   * absolute and otherwise keeps what the operator typed. A comparison that
+   * only trimmed the end would refuse these plans for disagreeing with
+   * themselves, which is the opposite of what this check is for.
+   */
+  test("a '.' segment and a doubled separator are the same directory too", () => {
+    for (const spelling of [`${REPOSITORY}/.`, REPOSITORY.replace(/\/([^/]+)$/, "//$1")]) {
+      const outcome = classifyPlan(planWith({ repository: spelling }));
+      expect(outcome.kind, spelling).toBe("answered");
+    }
+  });
+
+  /**
+   * On POSIX a backslash is an ordinary character in a file name, so folding it
+   * to a separator would let a contract issued about one repository pass while
+   * the lap runs in another. Windows is where a backslash *is* a separator, and
+   * the shape of the path is what decides -- not the platform this test happens
+   * to run on.
+   */
+  test("a backslash is not a separator in a POSIX path", () => {
+    // Two different directories on POSIX. Folding the backslash would call them
+    // one, and a contract issued about the first would pass while the lap ran
+    // in the second -- the exact fault this check exists to catch, let through
+    // by the check itself.
+    const outcome = classifyPlan(planWith({ repository: "/srv/a\\b", catalogPath: "/srv/a/b" }));
+    expect(outcome.kind).toBe("refused");
+  });
 });
 
 describe("classifyPlan, when the plan disagrees with itself", () => {

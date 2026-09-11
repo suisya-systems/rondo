@@ -538,9 +538,19 @@ q_plan=$(printf %q "$plan")
 q_approver=$(printf %q "$approver")
 q_run_id=$(printf %q "$run_id")
 
-# The paragraph about `publish` differs by target, so it is composed here rather
-# than written twice inside the heredoc.
+# The `publish` line and the paragraph under it differ by target, so both are
+# composed here rather than written twice inside the heredoc.
+#
+# **--allow-remote-mismatch is printed only for the scratch target.** It turns
+# off the preflight that refuses to push to one repository while opening a pull
+# request about another, and it belongs on that line only because the scratch
+# target's origin is a bare repository on this disk that no OWNER/NAME can name.
+# For a repository that has a real origin the check is exactly the one you want
+# on, so printing the flag would hand an operator a command that disables a
+# safeguard this script's own output promises.
 if [ -n "$target_repo" ]; then
+  publish_command="  node bin/rondo.mjs publish --iteration-id $q_run_id --repo OWNER/NAME --actor-id $q_approver \\
+    --dry-run"
   publish_note="** Where 'publish' would push, and where it would open the pull request. **
 The target is a repository this script did not create, so its remotes are its
 own and were left alone. 'publish' pushes the lap's branch to that repository's
@@ -548,6 +558,8 @@ origin and opens the pull request against the --repo you name, and it refuses
 before printing anything if those two are different repositories. Nothing here
 makes that call for you."
 else
+  publish_command="  node bin/rondo.mjs publish --iteration-id $q_run_id --repo OWNER/NAME --actor-id $q_approver \\
+    --dry-run --allow-remote-mismatch"
   publish_note="** publish cannot be walked to the end in this environment, and here is why. **
 'publish' checks the workspace before it prints anything. The push leg is real:
 origin is the bare repository at
@@ -578,8 +590,7 @@ you named, so there is nothing in the plan file to hand-edit.
   node bin/rondo.mjs start --plan $q_plan --iteration-id $q_run_id
   node bin/rondo.mjs answer
   node bin/rondo.mjs answer --actor-id $q_approver --body=approve
-  node bin/rondo.mjs publish --iteration-id $q_run_id --repo OWNER/NAME --actor-id $q_approver \\
-    --dry-run --allow-remote-mismatch
+$publish_command
 
 'start' spawns a real worker session and costs real money; nothing above this
 line did. 'publish' without --dry-run pushes the branch and opens a pull request
