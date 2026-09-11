@@ -77,6 +77,10 @@ import {
   type StoredProposal,
 } from "../store/records.js";
 import type { AdvisoryRecord, IterationStore } from "../store/sqlite.js";
+// The same layer, and the reason this module reaches for it is the reason that
+// function exists: a value a person is meant to *read* keeps its paragraphs,
+// where a value folded into a line rondo composed may not (rondo#68, rondo#90).
+import { legibleAsciiEscape } from "./console.js";
 
 /**
  * Who drafted it (D-0022 rule 13).
@@ -226,8 +230,8 @@ function addressable(at: object, step: string): boolean {
  * the same bytes, and typing this to the composed shape would leave the reader
  * able to print a pointer and unable to print what it resolves to.
  */
-function cited(snapshot: object, pointer: string): string {
-  const found = pointer
+function resolved(snapshot: object, pointer: string): unknown {
+  return pointer
     .split("/")
     .slice(1)
     .reduce<unknown>(
@@ -237,6 +241,18 @@ function cited(snapshot: object, pointer: string): string {
           : Reflect.get(at, step),
       snapshot,
     );
+}
+
+/**
+ * What {@link resolved} found, rendered as the citation beside its pointer.
+ *
+ * Separate from the walk because a renderer sometimes has to compare what the
+ * pointer found against what the claim already showed (rondo#90) rather than
+ * only print it, and a comparison against a truncated rendering would be a
+ * comparison of two prefixes.
+ */
+function cited(snapshot: object, pointer: string): string {
+  const found = resolved(snapshot, pointer);
   // `JSON.stringify` answers `undefined` for a value JSON has no form for as
   // well as for an absent one, and the two are the same answer to a reader: a
   // pointer that leads to nothing they can open.
@@ -271,8 +287,191 @@ function basisLine(basis: Basis, snapshot: object): string {
   }
 }
 
-function claimLines(claim: Claim, snapshot: object): readonly string[] {
-  return [`  ${claim.label}: ${claim.value}`, `      basis: ${basisLine(claim.basis, snapshot)}`];
+/**
+ * How wide a quoted value is wrapped (rondo#90).
+ *
+ * ponytail: a fixed width rather than the terminal's, for `asciiEscape`'s
+ * reason one layer up -- what rondo writes has to read the same in the Windows
+ * cell, in a pipe and in a file, and none of those has a width to ask for.
+ */
+const QUOTED_WIDTH = 88;
+
+/**
+ * One paragraph, broken at spaces so that no line is wider than
+ * {@link QUOTED_WIDTH}.
+ *
+ * **An unbroken run is left whole rather than cut.** A digest, a path or a URL
+ * that is wider than the column is still one token a person copies, and a line
+ * break inside it would produce two halves neither of which is what the row
+ * holds. So a run with no space in the column overflows it and the wrap
+ * resumes at the next space.
+ */
+function wrapped(paragraph: string): readonly string[] {
+  const lines: string[] = [];
+  let rest = paragraph;
+  while (rest.length > QUOTED_WIDTH) {
+    const at = rest.slice(0, QUOTED_WIDTH + 1).lastIndexOf(" ");
+    const cut = at > 0 ? at : rest.indexOf(" ", QUOTED_WIDTH);
+    if (cut === -1) {
+      break;
+    }
+    lines.push(rest.slice(0, cut));
+    rest = rest.slice(cut + 1);
+  }
+  lines.push(rest);
+  return lines;
+}
+
+/** A labelled value and whether it was quoted over lines of its own. */
+type Labelled = { readonly lines: readonly string[]; readonly quoted: boolean };
+
+/**
+ * One labelled value, quoted over as many lines as it takes (rondo#90).
+ *
+ * **A value with a newline in it is the whole of what the line shows, so its
+ * newlines are the worker's paragraph breaks and not bytes to escape.** This is
+ * #68's distinction arriving at the advisory screen: `--prompt-file` exists so
+ * that a request can be more than one paragraph (#72), and a request folded
+ * through `asciiEscape` reaches the operator as one line of `\n` literals
+ * -- 2154 characters of it in the run rondo#90 measured. Broken into its own
+ * lines here, nothing rondo hands the seam holds a newline, so the `say` above
+ * still escapes a line at a time and D-0004 is unmoved.
+ *
+ * {@link legibleAsciiEscape} is applied *here* rather than left to the seam
+ * because the seam cannot tell a quoted value from a value folded into a line
+ * rondo composed, and the two want opposite answers. It is safe to apply twice:
+ * its output is printable ASCII, which `asciiEscape` passes through unchanged.
+ *
+ * The short single-line case keeps its exact shape -- `  label: value` -- so a
+ * claim that always fitted still reads the way it did.
+ */
+function labelled(label: string, value: string): Labelled {
+  // **Escaped first and wrapped second**, because the column is measured in
+  // what is printed: an escape is six characters where the value had one, and
+  // wrapping the unescaped text would put lines over the column exactly where
+  // the value was hardest to read.
+  const paragraphs = legibleAsciiEscape(value).split("\n");
+  const first = paragraphs[0] ?? "";
+  if (paragraphs.length === 1 && first.length <= QUOTED_WIDTH) {
+    return { lines: [`  ${label}: ${first}`], quoted: false };
+  }
+  // The size is the row's own, counted in the characters it holds rather than
+  // in the ones the escaping spelled them with.
+  const size =
+    paragraphs.length === 1
+      ? `${String(value.length)} characters`
+      : `${String(paragraphs.length)} lines, ${String(value.length)} characters`;
+  return {
+    lines: [
+      `  ${label}: ${size}, quoted in full:`,
+      // **The quotation is marked on every line of it.** What is quoted here is
+      // a worker's own prose, and a line of it that began with two spaces and a
+      // colon would otherwise read as a claim of rondo's own.
+      ...paragraphs.flatMap(wrapped).map((line) => (line === "" ? "    |" : `    | ${line}`)),
+    ],
+    quoted: true,
+  };
+}
+
+/**
+ * One claim, its value, and the basis under it.
+ *
+ * `sharedPointers` is the pointers this screen cites once below rather than
+ * under each claim (rondo#91); every claim still carries its basis, because
+ * D-0037 requires it -- what the shared ones carry is the locator and a pointer
+ * to where the material it names is printed.
+ */
+function claimLines(
+  claim: Claim,
+  snapshot: object,
+  sharedPointers: readonly string[] = [],
+): readonly string[] {
+  const shown = labelled(claim.label, claim.value);
+  return [
+    ...shown.lines,
+    `      basis: ${claimBasis(claim, snapshot, shown.quoted, sharedPointers)}`,
+  ];
+}
+
+/**
+ * The basis line under one claim, which is {@link basisLine} except where the
+ * material it names is already on the screen.
+ *
+ * **Two ways it can already be there, and both of them are a repetition
+ * rondo#90 and rondo#91 measured.** The claim's own value, quoted above in
+ * full, does not want a 200-character prefix of itself printed under it; and a
+ * pointer several claims rest on does not want its whole document printed once
+ * per claim. Neither case drops the basis -- the locator is what a basis *is*
+ * (D-0032 rule 2) -- and both say where the material went.
+ */
+function claimBasis(
+  claim: Claim,
+  snapshot: object,
+  quoted: boolean,
+  sharedPointers: readonly string[],
+): string {
+  if (claim.basis.form !== "snapshot") {
+    return basisLine(claim.basis, snapshot);
+  }
+  const pointer = claim.basis.pointer;
+  if (sharedPointers.includes(pointer)) {
+    return `snapshot ${pointer} (cited once below)`;
+  }
+  // Compared against what the pointer resolves to rather than against the
+  // citation, which is truncated: two values whose first 200 characters agree
+  // are not the same value, and saying they were would be the citation
+  // claiming more than it checked.
+  return quoted && resolved(snapshot, pointer) === claim.value
+    ? `snapshot ${pointer} = the value quoted above, in full`
+    : basisLine(claim.basis, snapshot);
+}
+
+/**
+ * The pointers more than one of these claims rests on, in the order the claims
+ * first cite them (rondo#91).
+ */
+function sharedSnapshotPointers(claims: readonly Claim[]): readonly string[] {
+  const counted = new Map<string, number>();
+  for (const claim of claims) {
+    if (claim.basis.form === "snapshot") {
+      counted.set(claim.basis.pointer, (counted.get(claim.basis.pointer) ?? 0) + 1);
+    }
+  }
+  return [...counted].filter(([, times]) => times > 1).map(([pointer]) => pointer);
+}
+
+/**
+ * The material several claims share, cited once, with the claims that rest on
+ * it named (rondo#91).
+ *
+ * **The citation is what moved, not the basis.** `rondo between` printed the
+ * whole `/laps` snapshot under each of three claims that rest on it -- 3104
+ * characters, three times, in the run rondo#91 measured -- which pushed the
+ * three facts apart and buried them in a repeated citation of one document.
+ * Naming the claims here is what keeps the citation a citation: a block of
+ * material with nothing resting on it would be a document the screen printed
+ * for its own sake.
+ */
+function citedOnceLines(
+  claims: readonly Claim[],
+  snapshot: object,
+  sharedPointers: readonly string[],
+): readonly string[] {
+  if (sharedPointers.length === 0) {
+    return [];
+  }
+  return [
+    "  cited once, because more than one claim above rests on it:",
+    ...sharedPointers.flatMap((pointer) => {
+      const resting = claims
+        .filter((claim) => claim.basis.form === "snapshot" && claim.basis.pointer === pointer)
+        .map((claim) => `'${claim.label}'`);
+      return [
+        `    snapshot ${pointer} = ${cited(snapshot, pointer)}`,
+        `        ${String(resting.length)} claims rest on it: ${resting.join(", ")}`,
+      ];
+    }),
+  ];
 }
 
 /**
@@ -1877,9 +2076,13 @@ function payloadLines(
         `the claims, in the order the record holds them (${String(
           reading.payload.claims.length,
         )}):`,
+        // **{@link claimLines}, and not a second spelling of it.** A stored
+        // explanation is the same claim on the same terms as the screen that
+        // drafted it, and a request quoted over its own lines there and folded
+        // into one here would be rondo#90 half-repaired (D-0032 rule 3: the
+        // screen is composed from the row at render time, by one renderer).
         ...reading.payload.claims.flatMap((claim, index) => [
-          `  ${claim.label}: ${claim.value}`,
-          `      basis: ${basisLine(claim.basis, snapshot)}`,
+          ...claimLines(claim, snapshot),
           ...(perBasis === null ? [] : [`      freshness: ${freshnessWord(perBasis[index])}`]),
         ]),
       ];
@@ -2040,15 +2243,26 @@ async function gatherHost(ports: HostPorts): Promise<HostSnapshot> {
  * it were a collision"*, and the place that fails is the screen. What rondo can
  * observe is that two laps are open against one base branch; a collision inside
  * the work needs a reader across branches nothing in rondo has.
+ *
+ * **The families of this composition rest on one another's material, so the
+ * shared part is cited once** (rondo#91). `live laps` and the two families that
+ * found nothing all rest on `/laps`, and the whole snapshot of the live laps
+ * printed under each of them is the same document three times -- the three
+ * facts differ and their basis does not. Each claim still carries its basis,
+ * which is what D-0037 requires; what it carries is the locator, and the
+ * material it names is below with the claims that rest on it named beside it.
  */
 export function hostLines(proposal: Explanation, snapshot: HostSnapshot): readonly string[] {
+  const claims = proposal.payload.claims;
+  const shared = sharedSnapshotPointers(claims);
   return [
     "what spans the live laps",
     `  drafter: ${DETERMINISTIC_DRAFTER}; derivation: ${proposal.derivation}`,
     "  this explanation binds nothing: it is not a proposal and cannot be approved",
     "  an adjacency is not a collision: rondo de-conflicts only the identifiers it mints, so " +
       "two laps open against one base branch is where to look and not what was found",
-    ...proposal.payload.claims.flatMap((claim) => claimLines(claim, snapshot)),
+    ...claims.flatMap((claim) => claimLines(claim, snapshot, shared)),
+    ...citedOnceLines(claims, snapshot, shared),
   ];
 }
 

@@ -662,6 +662,12 @@ Three properties of that output are the point rather than the formatting:
 - **it binds nothing.** An explanation is not a proposal, cannot be approved, and the store refuses
   an answer that names one (`D-0032` rule 5).
 
+A value too long or too many-lined for its claim's line -- a request passed with `--prompt-file`,
+which is the kind that is several paragraphs -- is quoted under the claim instead, one `|`-marked
+line at a time, wrapped, with its size said first. Its paragraphs are paragraphs there rather than
+`\n` escapes, and the basis under it says `the value quoted above, in full` instead of repeating a
+prefix of what you have just read (rondo#90).
+
 It records what it said before it prints it: a framing a person read and the ledger does not hold is
 the failure the record exists to prevent, so if the row cannot be written, nothing is shown. After it
 prints, it counts the explanation as **presented** -- that table is the only place the number of
@@ -923,6 +929,12 @@ Four things about that screen are the point:
 Like `explain`, it records what it said before it shows it, and counts the presentation after: the
 proposal row carries the snapshot verbatim, so every `/laps/n/...` pointer above resolves against
 bytes the ledger kept.
+
+Where more than one claim rests on the **same** pointer -- `live laps` and the two families that
+found nothing all rest on `/laps` -- the claims carry the locator and the material is printed once,
+at the foot of the screen, naming the claims that rest on it. Every claim still carries its basis,
+which is what `D-0037` requires; what it no longer carries is a third copy of one document
+(rondo#91).
 
 | What you see | What it means | What to do |
 |---|---|---|
