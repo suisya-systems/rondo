@@ -11,7 +11,12 @@ import { resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { expect, test } from "vitest";
 
-import { explainIteration, proposeRetry, showProposal } from "../../src/access/advisory.js";
+import {
+  elevateObservation,
+  explainIteration,
+  proposeRetry,
+  showProposal,
+} from "../../src/access/advisory.js";
 import type { CatalogLayer } from "../../src/cadenza/facade.js";
 import { allocate } from "../../src/refrain/allocator.js";
 import { admittedPlan, planPayload, type RunPlan, runPlan } from "../../src/refrain/plan.js";
@@ -666,4 +671,44 @@ test("a `/readings` citation for no reading at all reads moved once a reading ar
   expect(shows.shown.slice(basisIndex, basisIndex + 2).join("\n")).toContain(
     "freshness: moved (0 at composition, 1 now)",
   );
+});
+
+test("an operator's whole-array `/readings` citation over unchanged readings reads unmoved", async () => {
+  // **Key order is not content.** The row holds this array however the store
+  // wrote it (`canonicalJson`'s alphabetised keys); the re-gather builds each
+  // reading as a fresh object literal in its own field order. Comparing the
+  // two by `JSON.stringify` would read the identical content as moved for no
+  // reason but which one built its keys first -- codex's own finding.
+  const { store, record } = fresh();
+  await reserveWithPlan(store, "iter-1", null);
+  await store.transition("iter-1", "planned", "classified", {}, 2_000, CLEAR);
+
+  const elevated = await elevateObservation(
+    { store, record, now: () => 3_000, present: screen().present },
+    "iter-1",
+    {
+      messageId: "m-0001",
+      actorId: "operator-1",
+      observation: {
+        label: "observation",
+        value: "none of the readings raised a concern",
+        basis: { form: "snapshot", pointer: "/readings" },
+      },
+    },
+  );
+  expect(elevated.kind).toBe("explained");
+  if (elevated.kind !== "explained") {
+    return;
+  }
+
+  const shows = screen();
+  await showProposal(
+    { store, cadenzaRevision: "cadenza@abcdef0", record, now: () => 4_000, present: shows.present },
+    elevated.proposalId,
+  );
+  const rendered = shows.shown.join("\n");
+  const basisIndex = shows.shown.findIndex((line) => line.includes("basis: snapshot /readings ="));
+  expect(basisIndex).toBeGreaterThanOrEqual(0);
+  expect(shows.shown.slice(basisIndex, basisIndex + 2).join("\n")).toContain("freshness: unmoved");
+  expect(rendered).not.toContain("freshness: moved");
 });

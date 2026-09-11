@@ -59,11 +59,13 @@ import {
 } from "../cadenza/facade.js";
 import { allocate } from "../refrain/allocator.js";
 import { type AdmittedPlan, admittedPlan, readPlan } from "../refrain/plan.js";
+import { canonicalJson } from "../store/plan.js";
 import {
   type DecisionOutcome,
   type IterationRecord,
   isApprovableKind,
   type JsonRecord,
+  type JsonValue,
   type LapReading,
   type ProposalDraft,
   type ProposalKind,
@@ -1306,6 +1308,28 @@ function renderValue(value: unknown): string {
   return `\`${typeof value === "string" ? value : JSON.stringify(value)}\``;
 }
 
+/**
+ * A value, encoded so that equal values encode equally regardless of the key
+ * order either side happened to build it in.
+ *
+ * **Not `JSON.stringify`**, because the stored side is bytes read back out of
+ * the row and the re-gathered side is an object this module just built, and
+ * nothing promises the two construct their keys in the same order for what is
+ * otherwise one identical value -- codex's own finding, over `regatherPayload`
+ * building a `SnapshotReading` in a field order that need not match the
+ * store's. `canonicalJson` is the encoding the store itself digests proposals
+ * by, so two equal values are guaranteed to encode equally rather than merely
+ * expected to.
+ */
+function stableJson(value: unknown): string {
+  // `canonicalJson` refuses `undefined` (D-0019 rule 4's own encoder, whose job
+  // is a plan that must round-trip): a field one side has and the other does
+  // not is malformed input rather than a value, but this reader has to stay
+  // total over whatever a corrupted row holds, so it is a sentinel and not a
+  // throw. No real `canonicalJson` output starts with `\u0000`.
+  return value === undefined ? "\u0000undefined" : canonicalJson(value as JsonValue);
+}
+
 function recordDifferences(
   before: Record<string, unknown>,
   after: Record<string, unknown>,
@@ -1317,7 +1341,7 @@ function recordDifferences(
     if (ignoreKeys.has(key)) {
       continue;
     }
-    if (JSON.stringify(before[key]) !== JSON.stringify(after[key])) {
+    if (stableJson(before[key]) !== stableJson(after[key])) {
       diffs.push(`${key}: ${renderValue(before[key])} -> ${renderValue(after[key])}`);
     }
   }
@@ -1512,7 +1536,7 @@ function snapshotBasisFreshness(pointer: string, ctx: FreshnessContext): Freshne
     if (!Array.isArray(fresh)) {
       return undetermined("rondo does not know how to compare the record this citation names");
     }
-    return JSON.stringify(container.array) === JSON.stringify(fresh)
+    return stableJson(container.array) === stableJson(fresh)
       ? { verdict: "unmoved", detail: null }
       : {
           verdict: "moved",
