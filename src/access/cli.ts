@@ -74,7 +74,7 @@ import {
   showProposal,
 } from "./advisory.js";
 import { abandon, admit, conductorPorts, resume } from "./conductor.js";
-import { asciiEscape, consoleSeams, relayUpstream } from "./console.js";
+import { asciiEscape, consoleSeams, legibleAsciiEscape, relayUpstream } from "./console.js";
 import {
   inspectLapWork,
   inspectPushTarget,
@@ -519,6 +519,19 @@ function emptyCommand(command: ParsedCommand["command"]): ParsedCommand {
 /** Write one line of rondo's own words, escaped like every other line. */
 function say(line: string): void {
   consoleSeams.write(`${asciiEscape(line)}\n`);
+}
+
+/**
+ * Write one value of continuo's own words, keeping its paragraphs legible.
+ *
+ * Only for a value that is the whole of what a line shows -- today that is
+ * the gate's `rationale` -- and never for a value folded alongside others on a
+ * line rondo composes, where an embedded newline must stay `\uXXXX` (see
+ * `pickWaiting`'s comment on the ambiguous-iteration list, further down this
+ * file). rondo#68.
+ */
+function sayLegible(line: string): void {
+  consoleSeams.write(`${legibleAsciiEscape(line)}\n`);
 }
 
 /** Write one refusal of rondo's own. Exit status 2 goes with these. */
@@ -2006,7 +2019,7 @@ async function commandAnswer(
       say(`revises ${record.supersedesIterationId}`);
     }
     say(`gate    ${gate.gateId}  (${gate.gateType})  stage '${gate.stage}'`);
-    say(`why     ${gate.rationale}`);
+    sayLegible(`why     ${gate.rationale}`);
     say(`options ${gate.options}`);
     // **`why` is the worker's account of its own work; what follows is not.**
     // The two are printed adjacently on purpose, so that a person can see which

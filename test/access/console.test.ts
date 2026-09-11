@@ -11,7 +11,12 @@
  */
 import { describe, expect, test } from "vitest";
 
-import { asciiEscape, consoleSeams, relayUpstream } from "../../src/access/console.js";
+import {
+  asciiEscape,
+  consoleSeams,
+  legibleAsciiEscape,
+  relayUpstream,
+} from "../../src/access/console.js";
 
 describe("asciiEscape", () => {
   test("printable ASCII is left exactly as it was", () => {
@@ -41,6 +46,52 @@ describe("asciiEscape", () => {
 
   test("the empty string is not a special case", () => {
     expect(asciiEscape("")).toBe("");
+  });
+});
+
+describe("legibleAsciiEscape", () => {
+  test("a real newline passes through instead of becoming \\u000a", () => {
+    expect(legibleAsciiEscape("first paragraph\n\nsecond paragraph")).toBe(
+      "first paragraph\n\nsecond paragraph",
+    );
+  });
+
+  test("an em-dash is spelled with an ASCII lookalike, not an escape", () => {
+    expect(legibleAsciiEscape("could not run it — every attempt was refused")).toBe(
+      "could not run it -- every attempt was refused",
+    );
+  });
+
+  test("a control character other than newline is still escaped", () => {
+    expect(legibleAsciiEscape("a\tbc")).toBe("a\\u0009b\\u001bc");
+  });
+
+  test("a printable with no ASCII lookalike still becomes an escape", () => {
+    expect(legibleAsciiEscape("/tmp/日本.sqlite3")).toBe("/tmp/\\u65e5\\u672c.sqlite3");
+  });
+
+  // rondo#68: the reported failure was a worker's multi-paragraph rationale,
+  // with an em-dash, reaching the gate screen as one line of newline escapes.
+  // Both halves of the fix are checked on the same input: the paragraphs read
+  // as paragraphs, and -- because vitest captures stdout through a UTF-8 path,
+  // which is exactly what let the original bug ship green -- the check for
+  // non-ASCII runs against the output's bytes, not a string comparison.
+  test("a multi-paragraph rationale with an em-dash reads as paragraphs and is all ASCII bytes", () => {
+    const rationale =
+      "The fix is committed, but I could not run the verification — every " +
+      "npm invocation was refused.\n\nWhat changed:\n\n- src/access/console.ts\n" +
+      "- src/access/cli.ts";
+    const escaped = legibleAsciiEscape(rationale);
+    expect(escaped.split("\n")).toEqual([
+      "The fix is committed, but I could not run the verification -- every " +
+        "npm invocation was refused.",
+      "",
+      "What changed:",
+      "",
+      "- src/access/console.ts",
+      "- src/access/cli.ts",
+    ]);
+    expect(Buffer.from(escaped, "utf8").every((byte) => byte <= 0x7e)).toBe(true);
   });
 });
 
