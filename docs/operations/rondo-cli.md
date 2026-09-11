@@ -192,6 +192,7 @@ shim.
   "workspace_root": "/abs/workspaces",
   "base_branch": "main",
   "prompt": "Append one line to docs/NOTES.md reading exactly: 'Touched by the rondo operator CLI.' Then commit it with the message 'docs: touched by the rondo operator CLI'. Do nothing else.",
+  "allowed_bash": ["npm ci --ignore-scripts", "npm run:*"],
 
   "repository": "/abs/target",
   "artifact_root": "/abs/artifacts",
@@ -250,6 +251,26 @@ shim.
   "intended_action": { "capabilities": ["command.run"] }
 }
 ```
+
+**`allowed_bash` is what the lap's worker may run, and it is paired with the grant.** Each entry is
+a Bash *subject*, never a permission spec: continuo renders `Bash(<subject>)` itself and merges the
+result into the allow list of the role the agent type names, for this run only (`continuo D-1110`).
+So a subject cannot name `Read`, `Edit` or an MCP tool, and the role document's own forbidden list
+still refuses the render if the merged list collides with it.
+
+Two rules about the field are worth knowing before the lap that teaches them:
+
+- **It must agree with `granted`.** A plan that grants `command.run` and declares nothing is refused
+  at `classify`, before any run exists at continuo, and so is a plan that declares subjects without
+  the grant. That pair disagreeing silently is the defect rondo#67 measured: a worker that could
+  edit and commit a repository and could not run `npm ci --ignore-scripts` or `npm run verify`,
+  because every command answered `This command requires approval` to a session with nobody to ask.
+  Declaring nothing is correct for a lap that runs nothing; it is not correct beside the grant.
+- **Name `npm ci --ignore-scripts` exactly rather than `npm ci:*`.** The flagless form executes
+  package lifecycle scripts, which the fence's hook cannot observe -- it sees tool calls, not the
+  subprocesses a tool starts. `npm run:*` is deliberately wider: it authorises whatever the target
+  repository's own `package.json` says those scripts are, which is the boundary a declaration can
+  state once for two repositories.
 
 `parties.grantee` must equal the run id, and **the run id is no longer yours to write**
 (`D-0023` rule 9). Whatever you put in `grantee` is overwritten with the run id rondo derived, so
