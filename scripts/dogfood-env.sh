@@ -281,6 +281,12 @@ else
     set_target_commit_config
     note "already at $target"
   else
+    # An existing scratch target that has commits but not the branch asked for:
+    # the seed below would commit onto whatever branch it does have, reporting
+    # success for a base branch it never created. A scratch target is
+    # disposable, so the repair is a fresh --root rather than a rename here.
+    git -C "$target" rev-parse --verify --quiet HEAD >/dev/null 2>&1 &&
+      die "scratch target '$target' has commits but no branch '$target_base_branch'; use a fresh --root"
     mkdir -p -- "$target/docs"
     [ -d "$target/.git" ] ||
       git -C "$target" init --quiet --initial-branch="$target_base_branch"
@@ -578,6 +584,13 @@ q_run_id=$(printf %q "$run_id")
 # on, so printing the flag would hand an operator a command that disables a
 # safeguard this script's own output promises.
 if [ -n "$target_repo" ]; then
+  # **The printed `start` carries --prompt-file, and that is not decoration.**
+  # For a --target-repo the plan's prompt is a placeholder, so the line without
+  # an override would start a paid worker in a real repository with a request
+  # that asks for nothing. The commands below this line are meant to be copied
+  # verbatim, so the one that spends money has to be right as written.
+  start_command="  node bin/rondo.mjs start --plan $q_plan --iteration-id $q_run_id \\
+    --prompt-file ./request.txt      # write your request here first"
   publish_command="  node bin/rondo.mjs publish --iteration-id $q_run_id --repo OWNER/NAME --actor-id $q_approver \\
     --dry-run"
   publish_note="** Where 'publish' would push, and where it would open the pull request. **
@@ -587,6 +600,7 @@ origin and opens the pull request against the --repo you name, and it refuses
 before printing anything if those two are different repositories. Nothing here
 makes that call for you."
 else
+  start_command="  node bin/rondo.mjs start --plan $q_plan --iteration-id $q_run_id"
   publish_command="  node bin/rondo.mjs publish --iteration-id $q_run_id --repo OWNER/NAME --actor-id $q_approver \\
     --dry-run --allow-remote-mismatch"
   publish_note="** publish cannot be walked to the end in this environment, and here is why. **
@@ -616,7 +630,7 @@ you named, so there is nothing in the plan file to hand-edit.
   cd $q_repo_root
   . $q_env_file
 
-  node bin/rondo.mjs start --plan $q_plan --iteration-id $q_run_id
+$start_command
   node bin/rondo.mjs answer
   node bin/rondo.mjs answer --actor-id $q_approver --body=approve
 $publish_command
