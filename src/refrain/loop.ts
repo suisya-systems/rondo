@@ -138,8 +138,8 @@ export function nextStep(
     case "closed":
       // The gate reached an outcome, and there is one thing left that is not an
       // effect: saying so. The report names the outcome, the run id, the
-      // continuo revision that drove it and -- plainly -- that the run row is
-      // still `created`, that nothing was pushed, and that publishing is the
+      // continuo revision that drove it and -- plainly -- that rondo did not
+      // close this run, that nothing was pushed, and that publishing is the
       // operator's (D-0010).
       return { kind: "report", about: record.id };
     case "abandoned":

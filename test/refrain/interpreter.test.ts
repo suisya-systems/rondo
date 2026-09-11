@@ -993,8 +993,13 @@ test("the report on a closed iteration says publishing is the operator's", async
   };
   const report = await resume(h.ports, "i-0001");
 
-  expect(says(report, "still 'created'")).toBe(true);
+  // The line states what rondo did, and never what continuo's run row holds:
+  // that row is closed by the operator after this report is read, so a claim
+  // about it would be false exactly when someone acts on it.
+  expect(says(report, "rondo did not close this run")).toBe(true);
+  expect(says(report, "still 'created'")).toBe(false);
   expect(says(report, "Nothing was pushed")).toBe(true);
+  expect(says(report, "nothing was landed")).toBe(true);
   expect(says(report, "D-0010")).toBe(true);
   expect(says(report, "44f62336")).toBe(true);
 });

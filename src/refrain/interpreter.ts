@@ -1801,14 +1801,26 @@ function describeStep(step: Step): string {
   return step.kind === "ask_human" ? `the policy asks about ${step.about}` : step.kind;
 }
 
-/** The report a `closed` iteration owes, and D-0010 is most of it. */
+/**
+ * The report a `closed` iteration owes, and D-0010 is most of it.
+ *
+ * The last line says what rondo did, not what continuo's run row holds. It used
+ * to read "the run row is still 'created'", which is a claim about another
+ * system's table that this function never looks at -- and after the operator
+ * closes the run, as the dogfood script's step 7 tells them to, it is false in
+ * the direction that matters: a reader concludes there is a run left to settle
+ * when there is not. "rondo did not close this run" is the same fact from the
+ * side rondo owns, and it stays true whatever continuo's table says. Reading
+ * that table instead is not the fix: this report is composed from rondo's own
+ * row and takes no port.
+ */
 function closedReportLines(record: IterationRecord): readonly string[] {
   return [
     `Iteration ${record.id} is closed.`,
     `Gate outcome: ${record.gateOutcome ?? "not recorded"}.`,
     `Run id: ${record.runId ?? "not recorded"}; continuo revision: ` +
       `${record.continuoRevision ?? "not recorded"}.`,
-    "The run row is still 'created'. Nothing was pushed, nothing was landed, and publishing " +
+    "rondo did not close this run. Nothing was pushed, nothing was landed, and publishing " +
       "this work is the operator's, not rondo's (D-0010).",
   ];
 }
