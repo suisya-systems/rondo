@@ -1144,7 +1144,7 @@ export async function main(
   // rondo's own rows and drives no continuo verb, and the proposal most worth
   // reading back is often about a lap that has already ended.
   if (parsed.command === "show") {
-    return await commandShow(parsed, opened.path);
+    return await commandShow(parsed, store, opened.path);
   }
 
   const startup = await startContinuo(environment);
@@ -1453,15 +1453,25 @@ async function commandElevate(
  * while reading only the composed decision, and a decision that can only be
  * read while it is being composed does not meet it.
  */
-async function commandShow(parsed: ParsedCommand, storePath: string): Promise<number> {
+async function commandShow(
+  parsed: ParsedCommand,
+  store: IterationStore,
+  storePath: string,
+): Promise<number> {
   if (parsed.proposalId === null) {
     return refuse(
       "show needs --proposal-id ID, naming the proposal to read back. The ids are on the " +
         "inbox, under what is waiting on you.",
     );
   }
+  const pin = cadenzaRevision();
+  if ("refusal" in pin) {
+    return refuse(pin.refusal);
+  }
   const outcome = await showProposal(
     {
+      store,
+      cadenzaRevision: pin.revision,
       record: openAdvisoryRecord(storePath),
       now: Date.now,
       present: (lines) => {

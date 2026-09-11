@@ -2246,7 +2246,7 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
         .prepare(
           "SELECT proposal_id, kind, drafter, payload, proposal_digest, snapshot, " +
             "snapshot_digest, derivation, iteration_id, elevated_from_message_id, " +
-            "elevated_by_actor_id, created_at_ms FROM proposal WHERE proposal_id = ?",
+            "elevated_by_actor_id, cadenza_revision, created_at_ms FROM proposal WHERE proposal_id = ?",
         )
         .get(proposalId);
       if (row === undefined) {
@@ -2788,6 +2788,7 @@ function toProposal(row: SqlRow, answers: readonly SqlRow[]): StoredProposal {
     iterationId: optionalText(row, "iteration_id", "proposal"),
     elevatedFromMessageId: optionalText(row, "elevated_from_message_id", "proposal"),
     elevatedByActorId: optionalText(row, "elevated_by_actor_id", "proposal"),
+    cadenzaRevision: optionalText(row, "cadenza_revision", "proposal"),
     createdAtMs: requireInteger(row, "created_at_ms", "proposal"),
     decisions: answers.map(toDecision),
   };

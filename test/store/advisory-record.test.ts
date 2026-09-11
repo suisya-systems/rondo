@@ -841,6 +841,7 @@ test("a proposal reads back whole, with the answer that settled it", async () =>
       iterationId: "i-0001",
       elevatedFromMessageId: null,
       elevatedByActorId: null,
+      cadenzaRevision: null,
       createdAtMs: 1_000,
       decisions: [
         {
