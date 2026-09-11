@@ -270,9 +270,9 @@ describe("continuo's own refusals", () => {
   test("a lap refusal names its session in a field, and rondo reads the field", () => {
     // `continuo D-1102`: the id is a top-level key beside `db` and outside
     // `error`, present exactly when the lap held a confirmed identity. It is
-    // what a transcript read or a `session stop` is keyed on, so a decoder that
-    // dropped it would leave a possibly-live worker with no name on rondo's
-    // side.
+    // what a transcript read is keyed on, so a decoder that dropped it would
+    // leave a possibly-live worker with no name on rondo's side. (It is not
+    // what any `stop` is keyed on: the pin has no session verb on its CLI.)
     const result = decode(
       LAP_PERFORM,
       output({

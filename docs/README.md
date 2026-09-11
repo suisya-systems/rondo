@@ -66,6 +66,7 @@ continuo's control plane would be a second copy with no rule for which copy wins
 | File | What it is |
 |---|---|
 | [`operations/lap-1-dogfood.md`](operations/lap-1-dogfood.md) | What happened when one real request was driven through the lap-1 loop on 2026-09-06, at the pinned revisions: the 31-field `RunPlan` and where each field came from, the wall clock, eleven findings, and six proposed issues. **The lap did not complete**, and the record says exactly where and why. |
+| [`operations/lap-2-dogfood.md`](operations/lap-2-dogfood.md) | The second walk, on 2026-09-12, with rondo itself as the target: what the day's nine changes moved against lap 1's F-1 to F-18, and six new findings. The lap produced its commit and reached `closed`, but **`rondo answer` needed two hand-typed continuo commands to settle the gate** (`N-1`). |
 | [`../scripts/dogfood-lap.md`](../scripts/dogfood-lap.md) | The procedure that record was produced by. `R-16`'s answer to "where does a real lap run": a documented manual script, deliberately not a `vitest` suite. |
 
 ## Where the enforced rules are
