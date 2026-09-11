@@ -75,6 +75,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0035 | What actually releases the conductor's slot: the exit status continuo's contract defines, and an abnormal end that keeps it | accepted |
 | D-0036 | The operator's inbox, decided as three open questions and not as a fourth record design: a presentation counted once per subject, the conversation only as far as elevation reaches, and a two-way wait that admits it is not three | accepted |
 | D-0037 | The between-laps composition: a fourth snapshot rather than a fourth component, three claim families rondo can ground, one verb an operator runs, and a breakdown that answers over an interval | accepted |
+| D-0038 | Whether the premise under a proposal has moved, decided per basis and at render time: the record and not the field as the unit, re-gathered rather than remembered, and `undetermined` as a value the screen may never round to unchanged | accepted |
 
 ---
 
@@ -5174,6 +5175,14 @@ field - a column for a computable value is a second home for a fact (`D-0022` ru
    person read anything - the same grade as `D-0029` rule 11's third clause, and it is recorded here
    rather than left to be discovered.
 
+   **Annotated 2026-09-12 by `D-0038`.** This rule's *"uses that same bound as the upper limit of
+   every query in the render"* is scoped to the queries that answer *what changed since the mark*.
+   `D-0038`'s per-proposal freshness re-gather is a query in a render that is deliberately
+   **unbounded** - it reads past the mark by design, because its question is whether a proposal's
+   own premise still holds and not what is new to the operator - so a `moved` verdict there is not
+   evidence that the row falls inside this rule's changed-since set. **Nothing in this rule is
+   corrected**: its shape, its stated ceiling and its upgrade path stand exactly as written.
+
 10. **Both sides of the silence are one append-only table:
     `operator_attention(at_ms, subject_kind, subject_id, disposition, rule_name)`, where
     `disposition` is `presented` or `withheld` and `rule_name` is required on a `withheld` row.**
@@ -6381,3 +6390,394 @@ which is `D-0032`'s and `D-0033`'s treatment of the same material.
 - **An interval breakdown that cannot answer #40's question at the granularity an operator asks it**
   — per-rule counts turning out to be the wrong unit — which moves rule 6 rather than the table.
 - Any measurement above failing to reproduce at `6a6f706`.
+
+---
+
+## D-0038 — Whether the premise under a proposal has moved, decided per basis and at render time: the record and not the field as the unit, re-gathered rather than remembered, and `undetermined` as a value the screen may never round to unchanged
+
+**Status:** accepted (2026-09-12, rondo's human gate). Refs rondo#39.
+
+**The draft of this entry has been removed rather than kept**, for `D-0029`'s reason and by
+`D-0032`'s, `D-0036`'s and `D-0037`'s precedent: `docs/design/` carried it as
+`premise-freshness-decision-draft.md` so the gate could approve text instead of a promise of text,
+and once appended here it would be a second copy of an accepted decision with no rule for which
+copy wins. Its history, including the adversarial review round that moved the comparison's unit
+from the field to the record, is in the pull request that added it. **It leaves no design document
+behind**: everything it measures is in `DECISIONS.md` and in `src/` already.
+
+rondo#39 states four requirements on what a gate must show. Requirements 1, 2 and 4 — the
+answerable shape, the basis that travels with every claim, and what answering forecloses — are
+decided by `D-0032` rules 1, 2 and 4 with `D-0034`, and read back and rendered by #66. **The third
+is *"it shows what changed since the operator last looked"*, and it is shipped at the wrong unit.**
+`D-0032` rules 9 and 11 answer it for the *inbox*: a durable mark and one ordered read across the
+record kinds, so an operator returning after an interval sees what the store did meanwhile (#64).
+#66's own Known limitations say what that leaves:
+
+> **#39's third requirement is answered at the inbox and not per proposal.** *"What changed since
+> the operator last looked"* ships as `operator_view` and `changedSince` (`D-0032` rules 9 and 11,
+> #64). A per-proposal form of it — whether the material a proposal rests on has moved since it was
+> composed, which is the stale-premise case #39 measures — is **deliberately not in this diff**: it
+> is a screen element no decided rule names, so it is left for the gate rather than settled inside
+> an implementation diff scoped to something else (`AGENTS.md` section 7).
+
+This entry decides that screen element, and nothing else.
+
+**The unit is the whole argument.** One of #39's three measured framings from 2026-09-07 is premise
+movement: a candidate proposed as the next work that had **already been finished and merged**. (The
+other two — a corruption that existed only in the summary's own prose, an instruction contradicting
+a repository's convention — are the summariser hazards `D-0032` rules 2 and 3 already answer, and
+nothing here would catch them.) An inbox reporting *twelve things changed since you last looked*
+does not tell an operator that **this** recommendation rests on something that is no longer there,
+and the person answering the gate is looking at the proposal, not at the count.
+
+**What it closes and what it leaves.** It closes requirement 3 for citations into material rondo
+itself read at composition — which is every basis rondo's own drafters emit. Citations into
+material rondo never read reach a proposal only when an operator types one at `elevate`, and for
+those this entry delivers a word and a locator rather than a check; that half stays in the residuals
+below.
+
+It adds no table, no column, no record kind, no authority, no layer and no read allowance.
+
+### What #39's requirement 3 asks that is already answered
+
+Listed rather than re-decided. Nothing in this section adds a rule.
+
+| What it asks | Where it is answered | State in the tree |
+|---|---|---|
+| What the store did since the operator last looked | `D-0032` rule 9 (`operator_view`, the bound sampled *before* the read) and rule 11 (`changedSince(t)`, inclusive of `t`) | Shipped, and read by the inbox (#64) |
+| That the material under a claim be close enough to read without opening anything | `D-0032` rule 2, on `D-0022` rule 4's verbatim snapshot | Shipped: `basisLine` renders a `snapshot` basis inline with the value beside the pointer (`src/access/advisory.ts:254-273`) |
+| That the row being answered is the row that was composed | `D-0022` rule 4, re-derived rather than re-read at every read (#66) | Shipped: `verbatim()` refuses a payload or a snapshot whose bytes no longer digest to the value stored beside them (`src/store/sqlite.ts:2756-2777`) |
+| That a citation which leads nowhere says so | `D-0032` rule 2's closure, taken on the reading side | Shipped: `cited()` is total and answers `does not resolve` (`src/access/advisory.ts:230-251`) |
+
+**What none of them answers** is the one question this entry takes: *the material this proposal
+cites was true when it was composed — is it still true now?* Every mechanism above is about the
+row's own integrity or about the store's activity. A proposal whose snapshot is byte-perfect, whose
+digests both re-derive, and whose every pointer resolves cleanly can still be recommending work
+that was finished an hour ago.
+
+### Decision
+
+1. **The unit is the basis, and a basis rests on a record rather than on a field.** Every option and
+   every claim already carries a basis (`D-0032` rule 2), so freshness is decided **per basis** and
+   rendered on the basis line that is already under each one. What is compared is **the record the
+   pointer sits in, not the pointer's own field**: for a pointer into an array of records it is that
+   element, for a pointer into a top-level record it is that record.
+
+   **The field alone is not the premise, and taking it as the unit would have produced a screen that
+   is wrong in exactly #39's case.** Every option of every approvable proposal rondo composes cites
+   `/candidates/N/contractDigest` (`src/advisory/proposal.ts:575`, `:706`), and that digest is a
+   function of the plan, the agent-type input, the project and the parties (`issueFor`,
+   `src/access/advisory.ts:594-611`). A candidate that has since been **finished and merged** leaves
+   that digest byte-identical: the movement is carried by the sibling field `status`, which the
+   snapshot stores (`src/access/advisory.ts:744-750`) and which no basis points at. Comparing the
+   field would have told the operator the premise held, in the one case the entry exists for.
+   Comparing the candidate — `iterationId`, `status`, `planDigest`, `contractDigest` together — says
+   what actually happened, and the line prints **which field differs**, so *"status: `performing` ->
+   `succeeded`"* is what the operator reads rather than the word `moved`.
+
+   **The proposal's header line is the three-way count of rule 4's values and never a single word** —
+   `4 unmoved, 1 moved, 0 undetermined` — including when nothing moved. A per-proposal verdict is
+   refused for `D-0032` rule 3's reason: collapsing five bases into *"this proposal is stale"* is a
+   composed framing that outlives the material it was drawn from, and an operator reading it cannot
+   tell whether the recommendation moved or one alternative's citation did, which are opposite
+   instructions. The finer unit costs nothing — the line is already being printed — and it is the
+   only unit on which the operator's next act differs.
+
+2. **Freshness is decided by re-gathering and comparing values, never by comparing timestamps.** The
+   left-hand side is the snapshot the row stores verbatim (`D-0022` rule 4) — the record of what the
+   advisory read at composition. The right-hand side is what **the same gatherer produces now**,
+   compared record by record as rule 1 says, by **deep equality over the untruncated values**.
+   `cited()` stays what it is, a renderer: its 200-character ceiling and its `does not resolve`
+   sentinel (`src/access/advisory.ts:230-251`) are right for a line and wrong for a comparator, and
+   two long values agreeing on their first 200 characters are not the same value.
+
+   **Records in an array are matched by their own identity and never by index.** The pointers are
+   positional (`/candidates/${index}/...`), but the candidate set is enumerated and de-duplicated by
+   the gatherer (`lineage`, `promotionsOf`, and the dedup in `draftContracts`), so candidate N today
+   need not be candidate N at composition. Identity is `iterationId` on a `RetrySnapshot` candidate
+   and `from` on a `ContractSnapshot` candidate — which is why `CandidateSource` being a closed union
+   is load-bearing here as well as where it was written.
+
+   **The re-gather reuses what the row records, and does not re-run composition's preconditions.**
+   It takes the successor identity out of the stored snapshot (`/successor/iterationId`), because
+   every candidate digest is a function of it, and it runs **below** `propose`'s freeness check
+   (`src/access/advisory.ts:985-994`): that check refuses a successor id already present in the
+   store, which is correct when composing a retry and would refuse every proposal whose retry was
+   actually admitted — which is to say, exactly the proposals whose premise has most obviously moved.
+
+   **The timestamp alternative is refused on two grounds, and the second is the load-bearing one.**
+   Comparing `proposal.created_at_ms` against `changedSince` inherits `D-0032` rule 9's named ceiling
+   exactly — these are caller clocks sampled before `BEGIN IMMEDIATE`, so a row can land behind a
+   mark taken before it — and it would inherit it at the screen where #39 says the loss matters most.
+   But worse, it answers a **different question**: *a row touching this iteration was written* is not
+   *the material this option cites now reads differently*. Most writes to a live iteration change
+   nothing any basis rests on, so the timestamp form reports movement constantly and
+   correctly-by-its-own-definition, and an operator learns within a day to skip the line. **A mark
+   that cries wolf is worse than no mark**, because it consumes the same attention #39 exists to
+   protect and returns nothing for it.
+
+3. **Re-gather, and never re-draft — and nothing of the re-gathered composition reaches the screen
+   except a difference at material the row already holds.** What is re-run is the *gathering*
+   (`D-0022` rule 2's duty); what is never re-run is the pure drafter over it (`propose`,
+   `proposeRetryPlan`, `proposeAgentType`, `proposeContractKeys`).
+
+   **The line is drawn over what is compared, because it cannot be drawn over what is called.** The
+   gatherers decide how many candidates there are, in what order, and which are de-duplicated away
+   (`agentTypesOf`, `promotionsOf`, `draftContracts`), so a re-gather does reconstruct a set that
+   exists in no record. The rule is therefore that only identities the **stored** document holds are
+   looked up in the re-gathered one: an extra candidate, a different order, a different
+   recommendation and every label are read by nothing and reach no screen.
+
+   **This is what keeps the check out of the hands of the thing under suspicion.** #39's hazard is
+   the summariser framing the decision; a screen that re-drafted and diffed the option sets would be
+   asking the drafter whether the drafter is still right, and would put an option set carrying no
+   digest beside one that does.
+
+4. **Three values — `unmoved`, `moved`, `undetermined` — and which basis forms can take the first
+   two is fixed here rather than left to the implementation.** The precedent for the third is in the
+   tree twice: `D-0029` rule 10's `unavailable` is a verdict rather than a missing row, and
+   `D-0032` rule 8's `undetermined` is a value a claim may take rather than an empty field. An
+   absence and a negative answer must not be the same thing at the only point where either matters.
+
+   - **`snapshot` — decided.** The row holds the left-hand side by construction.
+   - **`iteration` — decided when it names the snapshot's own iteration**, which is what rondo's
+     drafter emits (`src/advisory/proposal.ts:444`, the `gate` claim on any iteration that reached
+     one): the eighteen fields `snapshotIteration` copied are the left-hand side and the row is
+     re-readable. An `iteration` basis naming **another** iteration is `undetermined` — nothing
+     recorded that row's state at composition, so there is nothing to compare a re-read against.
+   - **`gateTransition` — `undetermined`**, because the gate-transition reader is `D-0022`'s own
+     named residual; this is a reader rondo does not have, not a widening it declines.
+   - **`continuoRun` — `undetermined`**, because nothing recorded what the run said at composition:
+     there is no stored left-hand side, and the arrow that exists would answer a question the row
+     cannot be compared against.
+   - **`repository` — `undetermined`**, and this one is under-specified rather than merely
+     unreachable: the basis pins a `commit`, so re-reading it *at its own commit* is `unmoved` by
+     construction, and deciding it means reading at some **other** ref, which is a policy nothing in
+     rondo owns (`D-0033` rule 9, `D-0037`'s residual).
+
+   The mapping is a `Record` over `Basis["form"]`, for `RELEASED_BY`'s reason
+   (`src/store/records.ts:172`): a sixth form added to the union and forgotten here is a type error,
+   not a screen that quietly says a premise held.
+
+   **The screen may never round `undetermined` to unchanged.** The header is always the three-way
+   count, so a proposal every one of whose bases is `undetermined` says so in the same words it would
+   use to say nothing moved — which are different words. This is the rule the entry exists for: an
+   `undetermined` that is on the screen, per basis, next to the locator, tells the operator which
+   citation they personally have to go and open. Saying nothing, or saying `unmoved` because nothing
+   contradicted it, converts *rondo did not look* into *rondo looked and it is fine*, at the moment a
+   person is about to spend an irreversible answer.
+
+   **What the three forms above cost, said plainly.** In rondo today they reach a proposal only as a
+   basis an operator typed at `elevate` (`parseBasis`, `src/access/cli.ts:1311-1358`, feeding
+   `proposeElevated`). Every basis rondo's own drafters compose is `snapshot` or the decidable
+   `iteration` form, so the decisive half covers the proposals rondo composes, and the
+   `undetermined` half is exactly the material an operator brought in from outside and is best placed
+   to check.
+
+5. **Four edges are decided here, because each has a plausible wrong answer and each is the
+   stale-premise case in its most concrete form.**
+
+   - **An identity in the stored document that is absent from the re-gathered one is `moved`** — a
+     candidate that left the set, a reading that is no longer produced. This is what "the material
+     this option names is gone" actually looks like, and it is the strongest signal rondo can
+     observe; filing it under `undetermined` would put the clearest answer available under the value
+     that means *rondo could not look*.
+   - **A pointer that does not resolve in the stored document is `undetermined`, never `unmoved`.**
+     A citation that was already broken at composition is `D-0032` rule 2's failure and not evidence
+     about movement; there is no left-hand side to compare.
+   - **A gathering that refuses is `undetermined` for every basis on that proposal, with the
+     gatherer's own reason printed.** The refusals are real and named: a lineage row that will not
+     read, a plan that will not decode, cadenza refusing to issue. They happen before any candidate
+     exists, so the refusal is whole-snapshot rather than per basis — and a screen that printed only
+     *undetermined* there would be hiding the most informative sentence rondo had.
+   - **A re-gather taken under a different cadenza pin than the row records is movement, and it is
+     said once as the pin.** Two of the three snapshots are built by issuing contracts through the
+     pinned cadenza (`draftRunPlan`, `draftContracts` via `issueFor`), and the proposal row already
+     records `cadenza_revision` for `D-0022` rule 18's reason. After a pin move every candidate
+     digest differs, and that **is** a moved premise — the contract an approval would bind is not
+     the one that was composed — so the screen states the pin difference as one line above the
+     options rather than reporting each option as though it had moved on its own.
+
+6. **Computed at render and stored nowhere.** No column, no table, no writer, no periodic
+   re-checker.
+
+   **`D-0032` rule 3 and rule 4 are the precedent, and they do not conflict with rule 9.** Rules 3
+   and 4 refuse to store a rendered summary and a stored consequence because both are framings that
+   outlive the material they were drawn from; rule 9 stores `operator_view` because *where a person's
+   reading stopped* is derivable from nothing. Freshness is on rule 3's side of that line twice over:
+   it is derivable from rows that exist, and **a stored freshness mark is stale by construction the
+   moment after it is written** — rule 3's drifting summary, compressed into one word, about the one
+   property whose whole point is that it changes underneath. `D-0036` rule 2 is the same argument
+   already applied once: *how long it sat unanswered* gets no column because it is a subtraction over
+   rows that already exist.
+
+   **The right-hand value is material and not a framing**, which is what separates rule 1's
+   difference line from option G below: it is re-read through the same gatherer, is never persisted,
+   digests to nothing, and is labelled on the screen as today's reading rather than as part of the
+   proposal. Printing both values is free — both documents are in hand — and it is the anti-summary
+   move: the operator judges the movement from the material rather than from rondo's word for it.
+
+   **The consequence is accepted rather than hidden**: the answer is a function of the record *and*
+   of now, so two renders of one proposal may differ, and rondo says *that* the material moved rather
+   than *when*.
+
+   **`D-0022` rule 20's build order is why there is no record here**: the rows this reads all exist,
+   and a table for a judgement that is worthless the instant after it is stored is the speculative
+   record that order exists to prevent.
+
+   **This annotates `D-0032` rule 9 and corrects nothing in it.** Rule 9's words are *"uses that same
+   bound as the upper limit of every query in the render"*. That scope is the queries answering
+   *what changed since the mark*. A freshness re-gather is deliberately **unbounded**, reads past the
+   mark by design, and may therefore show material the mark's own queries omit — so a `moved` verdict
+   is not evidence that the row is inside the operator's changed-since set, and the two are not to be
+   reconciled. Under `AGENTS.md` section 3 this is an annotation rather than a supersession: rule 9's
+   shape, its ceiling and its upgrade path all stand exactly as written.
+
+**Three questions are kept apart, and none of them replaces another.** They are adjacent enough that
+a later change could collapse two of them innocently, so they are written out: *was this row
+tampered with or corrupted* is `D-0022` rule 4's digests re-derived at every read (#66), answered by
+refusing to render at all; *has the premise under this proposal moved* is this entry, answered by
+rendering with a verdict per basis; *what has the store done since the operator last looked* is
+`D-0032` rules 9 and 11 at the inbox (#64), answered over subjects rather than over premises. The
+second is the only one that can be true while the other two are clean, which is why #66 could ship
+the first and third and leave a gate answerable on a dead premise.
+
+### The options, and why the others were refused
+
+| Option | Outcome |
+|---|---|
+| **A. Per-basis re-gather and compare at render, record-wise, three-valued** | **Taken** (rules 1-6). One mechanism, no storage, no clock, and the comparison is over the material rather than over the drafter's word for it |
+| **B. Compare `proposal.created_at_ms` against `changedSince(t)`** | **Refused** (rule 2). Inherits `D-0032` rule 9's sample-to-commit ceiling at the screen where losing a row matters most, and answers *a row was written* rather than *the cited material differs* — so it reports movement constantly and teaches the operator to skip the line |
+| **C. A `premise_digest` column written at composition and re-checked later** | **Refused.** `D-0022` rule 4's verbatim snapshot already **is** the stored left-hand side, so a second digest is a second home for a fact (`D-0022` rule 8) that adds nothing to compare against — and it answers *something moved* without answering *what*, which rule 1 needs. **This is not `D-0029` rule 10 being contradicted**: that rule stores a digest for staleness because its material lives outside rondo's store — a git branch, with no verbatim copy — so a recorded digest is the only left-hand side it can have |
+| **D. A background re-checker that marks proposals stale** | **Refused.** Nothing in rondo runs periodically and one operator asking is enough (`D-0037` rule 4), and the mark it writes is rule 6's mark that is stale the moment after it is written |
+| **E. Withhold or hide a proposal whose premise moved** | **Refused.** A withholding needs a named rule and an owner (`D-0032` rule 10, `D-0036` residual, `D-0033` rule 6), and hiding the stale item removes from the screen the exact thing #39 says the operator must see. A moved premise is information for the decision, not a reason to take the decision away |
+| **F. Read the repository and continuo, and decide the three remaining forms** | **Refused today** (rule 4), and under-specified rather than merely expensive: a `repository` basis pins its own commit, so deciding it requires an entry to name **which ref** it is compared against, and `D-0033` rule 9 with `D-0037`'s residual already own the reader that would do it. `gateTransition` needs `D-0022`'s own named residual; `continuoRun` has no stored left-hand side to compare to at all |
+| **G. Re-draft the proposal and diff the option sets** | **Refused** (rule 3). It asks the drafter whether the drafter is still right, and puts an option set carrying no digest on the screen beside one that does |
+| **H. Do nothing per proposal; the inbox's `changedSince` is enough** | **Refused** (rule 1) for proposals rondo composes over its own rows, which is where #39's measured case lands: the inbox answers over subjects in an interval, and the operator answering a gate is reading one proposal. For an operator-elevated observation citing material rondo never read, H is what remains, and rule 4 says so in the only way that helps — by naming which citation the operator has to open |
+
+### What this does not do
+
+- **It does not build anything.** No file under `src/` changes on this entry; the implementation
+  list below is what it leaves.
+- **It does not widen `D-0022` rule 3**, grant an arrow, add an external dependency or touch
+  `src/advisory/`'s allowance. Re-gathering an explanation re-reads rondo's own rows; re-gathering a
+  retry or contract snapshot additionally issues contracts through the **pinned cadenza**, which is
+  the allowance the composition root already has and the same call it already makes.
+- **It does not add a table, a column, a record kind, a voice or an authority.** `D-0032` rules 4 and
+  5 and `D-0034` stand exactly.
+- **It does not change what a proposal is or what it cites.** The `Basis` union is unchanged and
+  stays closed at five forms; this entry decides only what can be *said about* each form.
+- **It does not decide what may be withheld or batched.** `D-0032`, `D-0033` and `D-0036` all refuse
+  a policy with no owner, and option E's refusal above is that refusal applied to the tempting case.
+- **It does not reopen or soften the digest refusal of #66**: a row whose digests do not re-derive is
+  still refused rather than rendered with a mark.
+- **It does not claim the operator read anything.** A rendered verdict is a claim by the surface, the
+  same grade as `D-0032` rule 9's *"What this does not claim"*, which is `D-0029` rule 11's third
+  clause.
+
+### The implementation this leaves, in order
+
+Named rather than done, so the gate can see the size of what it is approving.
+
+1. **The verdict function in the composition root** — total, over (the stored snapshot document, the
+   re-gathered document, one basis), exhaustive over `Basis["form"]` as a `Record`, comparing records
+   by identity as rule 1 and rule 2 say. Rule 5's four edges are four of its arms.
+2. **The re-gather seam** — the gatherers callable without their drafters. This is a real
+   separation and not a tidy-up: `gather` is already one function, but the two proposal snapshots are
+   built inside `draftRunPlan` and `draftContracts`, entangled with `admitFor` and `issueFor`, and
+   take a successor id that must come from the stored snapshot rather than from a caller.
+3. **The render, and the ports it needs.** `showProposal` today takes
+   `Pick<ExplainPorts, "record" | "present" | "now">` (`src/access/advisory.ts:1381-1384`) and its
+   own comment says the screen is composed *"from the row and nothing else"* (`:1229-1241`) — this
+   entry deliberately retires that sentence, and the verb gains the store and the cadenza pin.
+   Nothing is reordered: `D-0032` rule 1's order and #66's *"the recommendation is marked where it
+   sits"* are untouched.
+4. **The planted cases** — `D-0032` rule 5's precedent, a refusal proved rather than asserted: a
+   candidate finished and merged underneath a composed proposal, whose `contractDigest` is unchanged
+   and which must read `moved`; a candidate removed from the set, and a set re-ordered, so that
+   identity matching is proved rather than index matching; a broken pointer in the stored snapshot
+   (`undetermined`, not `unmoved`); a gatherer made to refuse (`undetermined`, with the reason on the
+   screen); a differing cadenza pin; and a proposal all of whose bases are external, whose header
+   must say `undetermined` and must not say that nothing moved.
+
+### Residuals, with who decides
+
+| Residual | Why not here | Who decides |
+|---|---|---|
+| The three undecidable basis forms (`gateTransition`, `continuoRun`, `repository`) | Rule 4: one needs `D-0022`'s own named gate-transition residual, one has no stored left-hand side, and one needs an entry to name the ref it is compared against | the entry that gives rondo that reader and that ref |
+| *When* a premise moved, and what moved it | Rule 6: the verdict is a function of now, and the two values on the line are what a person judges from. A history of movements is a record of a derivation | an operator who needs the sequence rather than the fact |
+| Whether re-gathering stays affordable at render | `D-0032`'s and `D-0037`'s snapshot-size residual, sharpened: this is a lineage read plus one cadenza contract issuance **per option, per render**, and nothing has measured either | the implementation, which is the first thing that can measure it |
+| Whether a per-basis mark is too much on the screen | Rule 1 takes the finer unit because it is the one the operator acts on; no operator has read either | the first operator who reads one |
+| A gatherer refusal turning out to be how *"already settled elsewhere"* usually presents | Rule 5 files it under `undetermined` with the reason printed; if it is the common case it is its own value | the entry that has counted them |
+
+### What was measured, and how
+
+At rondo `0e9d4f4` on **2026-09-12**, by reading rather than by running — **this entry measures
+documents, schema and the writers already in `src/`, and no behaviour**. #39's measurements are of a
+**different organisation** on 2026-09-07 and are cited as requirements rather than re-verified, which
+is `D-0032`'s, `D-0036`'s and `D-0037`'s treatment of the same material.
+
+- **The basis union is closed at five forms**, one of which renders inline:
+  `src/advisory/proposal.ts:47-66`, with `BASIS_FORMS` at `:69-75`.
+- **Which forms reach a proposal, and from where.** Every option of `proposeAgentType` (`:596`),
+  `proposeContractKeys` (`:627`) and `proposeRetryPlan` (`:695`) carries a `snapshot` basis
+  (`:575`, `:706`); every claim `propose` composes (`:416-480`) carries a `snapshot` basis **except**
+  the `gate` claim on a gated iteration, which carries an `iteration` basis (`:444`). Nothing under
+  `src/` composes a `gateTransition`, `continuoRun` or `repository` basis: their only producer is
+  `parseBasis` on an operator-typed `--basis` at `elevate` (`src/access/cli.ts:1311-1358`), feeding
+  `proposeElevated` (`src/advisory/proposal.ts:665`).
+- **Why the record and not the field is the unit.** `SnapshotCandidate` carries `iterationId`,
+  `status`, `planDigest` and `contractDigest` (`src/access/advisory.ts:744-750`); the option basis
+  cites only the last of them, and `issueFor` (`:594-611`) makes that digest a function of the plan,
+  the agent-type input, the project and the parties — none of which a merge moves.
+- **The snapshot is the stored record of the premise**, kept verbatim beside its digest and
+  re-derived at every read: `verbatim()` at `src/store/sqlite.ts:2756-2777`, reached by
+  `readProposal` at `:2244`.
+- **`cited()` is a renderer and not a comparator**: the 200-character ceiling and the `does not
+  resolve` sentinel, `src/access/advisory.ts:230-251`.
+- **The gatherers, their inputs and their cadenza reach**: `snapshotIteration` (`:150`), `gather`
+  (`:181`), `draftRunPlan` (`:722-763`) and `draftContracts` (`:865-933`), both of which reach the
+  snapshot through `admitFor` and `issueFor` and take a `successorId`; `propose`'s freeness check at
+  `:985-994`; and the proposal row's `cadenza_revision` column (`src/store/sqlite.ts:699`).
+- **The screen this entry changes**: `showProposal` and its ports (`src/access/advisory.ts:1381`),
+  and the doc comment it retires (`:1229-1241`).
+- **What ships for the inbox and answers a different question**: `operator_view` and `changedSince`
+  (`D-0032` rules 9 and 11), read by `src/access/inbox.ts`.
+- **What was not measured**: no proposal has ever been shown after its premise moved; no gathering
+  has been timed or sized, and no re-gather has ever been run; no operator has read a freshness mark,
+  so rule 4's central claim — that an `undetermined` next to a locator changes what a person does —
+  is argued from #39's measurement of another organisation and not from rondo.
+
+### What would falsify it
+
+- **An operator answering a gate where every basis read `unmoved` while the premise had in fact
+  moved.** #39's own falsifier at this entry's unit; it falsifies rule 1's choice of record, meaning
+  the premise is not carried by the record the pointer sits in either.
+- **Two bases on one proposal whose marks differ and whose correct next act is the same** — or an
+  operator who reads only the header count and never the per-basis marks — which is rule 1's finer
+  unit failing to earn itself.
+- **An operator treating `undetermined` as `unmoved`** — reading *rondo could not check this* as
+  *this is fine* — which falsifies rule 4's central claim and means the three values need a stronger
+  act than a word on a line.
+- **A premise movement visible only as a changed option set and not as a changed record** — a
+  candidate that should now exist and does not appear — which is what re-drafting would catch and
+  rule 3 forbids, and is the price rule 3 is paying.
+- **A gatherer that is not a pure function of rows and the pin** — one that takes a clock, an
+  unstable ordering, or anything else differing between two gatherings of unchanged material. Every
+  basis would read `moved` and the mark becomes noise, and it would fail *quietly*, which is why it
+  is named here rather than left to be found.
+- **A cadenza pin moving often enough that rule 5's pin line is the usual screen**, which makes the
+  entry report movement nobody can act on and sends rule 5's last arm back to the gate.
+- **A `does not resolve` in the re-gathered document caused by the gatherer's own shape changing
+  rather than by material leaving**, which would make rule 5's strongest signal its wrongest one.
+- **A non-`snapshot`, non-`iteration` basis form rondo can decide** — a named ref for `repository`, a
+  gate-transition reader, a recorded left-hand side for a run — which reopens rule 4's mapping, and
+  neither the union nor the three values.
+- **Re-gathering proving unaffordable at render**, which moves rule 6 toward a stored mark and
+  obliges whatever stores it to answer rule 3's drift argument rather than to skip it.
+- **`D-0022` rule 4 being superseded so the snapshot stops being stored verbatim**, which removes the
+  left-hand side of every comparison here and takes the whole entry with it.
+- **An operator who wants the check without asking for it** — a standing re-check, a notification —
+  which is option D's argument arriving on evidence, and `D-0037` rule 4's trigger as much as this
+  entry's.
+- Any measurement above failing to reproduce at `0e9d4f4`.
