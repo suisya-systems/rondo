@@ -784,18 +784,25 @@ async function classifyStep(
     case "answered":
       return classifiedBy(ports, record, lines, outcome.value);
     case "refused":
-      // cadenza refused the *inputs* -- an unknown project, an agent-type input
-      // it will not build a record from. The request ends correctly without a
-      // run and nothing was spawned, so this is `abandoned` rather than
-      // `failed`: filing a working refusal as a defect is the thing
-      // `records.ts` says `abandoned` exists to avoid.
+      // The inputs were refused before a classification could be made -- an
+      // unknown project, an agent-type input cadenza will not build a record
+      // from, or a plan that disagrees with itself about which repository this
+      // is. The request ends correctly without a run and nothing was spawned,
+      // so this is `abandoned` rather than `failed`: filing a working refusal
+      // as a defect is the thing `records.ts` says `abandoned` exists to avoid.
+      //
+      // **The line no longer says "cadenza refused".** Most of these are
+      // cadenza's and one of them is rondo's own (`classifyPlan`'s check that
+      // the catalog and the lap name one repository), and a line that named
+      // cadenza for rondo's refusal would send whoever read it to the wrong
+      // repository's rules.
       return terminal(
         ports,
         record,
         lines,
         "abandoned",
         { reason: outcome.message },
-        `cadenza refused before any classification could be made: ${outcome.message}`,
+        `refused before any classification could be made: ${outcome.message}`,
       );
     case "defect":
       // rondo's own fault, and nothing external happened: no run, no child, no

@@ -23,6 +23,27 @@ is the same setup as a command, for when you want the environment rather than th
 scripts/dogfood-env.sh --root /abs/where/the/environment/lives
 ```
 
+To point the lap at a repository you already have, rather than at the scratch one it would
+otherwise create:
+
+```sh
+scripts/dogfood-env.sh --root /abs/where/the/environment/lives --target-repo /abs/your/repo
+```
+
+**That flag is the only place the target is named, and that is the point of it.** A plan has to
+say which repository this is in four places -- `repository`, `base_branch`, and `source.path` and
+`base_branch` again inside the catalog layer, plus `project_name` to select the project -- and two
+of those pairs are the same fact written twice. Written from one value they cannot disagree; edited
+by hand they can, and a plan that disagrees with itself used to be found out only after the lap had
+run. (rondo now refuses such a plan at `classify`, before it admits anything -- see section 3 -- but
+not writing the disagreement in the first place is the better half of the fix.)
+
+The repository you name is **read and never modified**: no seed commit, no `git config`, and its
+remotes are left exactly as they are. The base branch defaults to whichever branch its HEAD is on,
+and `--target-base-branch` names another. The `prompt` in the generated plan is a placeholder for a
+target the script did not create, because it does not know what you want done there; supply the
+real one at `start` with `--prompt-file` (section 4).
+
 `--root` is optional; it defaults to `.worker-scratch/dogfood-env`, which `.gitignore` already
 excludes -- an environment is a continuo clone, two SQLite databases, a worktree and captured
 session output, and none of that is a thing to stage by accident.
@@ -132,7 +153,26 @@ things follow, and they are the whole of what an operator needs to know:
 `workspace`. rondo derives all three from the iteration id now, so a plan file cannot name them and
 there is no flag to override them. What replaces them is one `workspace_root` -- the directory the
 workspaces are cut under. Two values change per run and have flags:
-`--iteration-id` and `--prompt`.
+`--iteration-id` and `--prompt` (or `--prompt-file`, which is the same field read out of a file --
+see section 4).
+
+**Four of the fields have to agree with each other, and rondo checks that they do.**
+`repository` names the directory a lap's workspace is cut from; `catalog_layers[].data.project.<name>`
+-- the project `project_name` selects -- names the same repository again as `source.path` when its
+source is a `local_path`, and names the same branch again as `base_branch`. A plan where those
+disagree is a plan whose contract was issued about one repository and whose worker is turned loose
+in another. rondo compares them at the `classify` step, which is **before** it admits a run at
+continuo: the disagreement costs an iteration row and nothing else -- no fence, no worker, no money.
+It refuses rather than picking a winner, because choosing one field as the truth would be rondo
+inferring a plan's contents, which it does not do (`D-0025` rule 5).
+
+The comparison is skipped where it would be wrong: a `git_url` or `new` source names no directory on
+this machine, and a second lap's `base_branch` is its predecessor's topic branch by design, so the
+branch is compared only on a first lap (`pull_request_base_branch` is null).
+
+The way not to have the problem at all is not to write the four by hand:
+[`scripts/dogfood-env.sh --target-repo DIR`](../../scripts/dogfood-env.sh) writes all four from that
+one value (section 0).
 
 A complete working example follows, and [`scripts/dogfood-env.sh`](../../scripts/dogfood-env.sh)
 generates one filled in for the machine it runs on. Every path must be absolute, and
@@ -257,6 +297,18 @@ iteration 'cli-lap-001' is awaiting_human
 
 A person has to answer this before anything lands. Next: rondo answer
 ```
+
+**A request of more than one paragraph is passed as a file**, because it cannot be typed as a shell
+argument:
+
+```sh
+node bin/rondo.mjs start --plan "$S/plan.json" --iteration-id cli-lap-002 --prompt-file ./request.txt
+```
+
+`--prompt-file` overwrites the plan's `prompt` with the file's bytes -- byte for byte, not trimmed
+and not reflowed, the same rule `--body` runs under (`D-0025` rule 3), because a request's paragraph
+breaks are part of the instruction. It and `--prompt` say the same thing two ways, so giving both is
+refused rather than resolved by precedence.
 
 **22.8 seconds**, measured. The process exits and the gate stays open; there is no daemon to leave
 running. The iteration id has no default and is the only identifier you type: rondo mints the run

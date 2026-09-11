@@ -26,6 +26,8 @@ import {
   agentTypeRecord,
   classifyAction,
   issueInitialContract,
+  normalisePath,
+  type ResolvedProject,
   resolveProject,
 } from "../cadenza/facade.js";
 
@@ -67,6 +69,10 @@ import type { ClassificationRecord, EffectOutcome } from "./ports.js";
 export function classifyPlan(plan: AdmittedPlan): EffectOutcome<ClassificationRecord> {
   try {
     const project = resolveProject(plan.catalogLayers, plan.projectName);
+    const disagreement = catalogDisagreement(plan, project);
+    if (disagreement !== null) {
+      return { kind: "refused", message: disagreement };
+    }
     const record = agentTypeRecord(plan.agentTypeInput);
     const contract = issueInitialContract(record, project, plan.parties);
     const answer = classifyAction(contract, plan.intendedAction, {
@@ -99,6 +105,83 @@ export function classifyPlan(plan: AdmittedPlan): EffectOutcome<ClassificationRe
   } catch (error) {
     return { kind: "refused", message: cadenzaMessage(error) };
   }
+}
+
+/**
+ * The one thing rondo checks *about* cadenza's answer rather than reading out
+ * of it: that the catalog and the lap are talking about the same repository.
+ *
+ * **Two fields of the plan say the same thing, and nothing compared them.** The
+ * lap is cut from `plan.repository` -- continuo's input, the directory a
+ * workspace is materialised from -- while the contract is issued against the
+ * project cadenza resolved out of `plan.catalogLayers`. When that project's
+ * source is a `local_path`, the two are the same repository stated twice, and a
+ * plan where they disagree is a plan whose contract was issued about one
+ * repository and whose worker is turned loose in another. Before this check
+ * nothing noticed: the run was admitted, a worker was spawned, and the
+ * disagreement was discovered by reading the commits it left in the wrong
+ * place (rondo #72).
+ *
+ * **It refuses rather than choosing a winner.** Picking one field as the truth
+ * would be rondo inferring a plan's contents, which `D-0025` rule 5 says it does
+ * not do; the plan file is the whole of the configuration and this is the plan
+ * file being self-contradictory. Deriving one from the other belongs to whoever
+ * *writes* the plan -- `scripts/dogfood-env.sh` writes all four places from one
+ * `--target-repo` -- and this is the backstop under a plan written by hand.
+ *
+ * **Where it fires matters as much as what it says.** This is the `classify`
+ * step, which is before `admit`: no run exists at continuo yet, no fence has
+ * been rendered and no worker has been spawned. The iteration ends at terminal
+ * `abandoned` the way cadenza's own refusals do (D-0019 rule 15), having cost a
+ * row and nothing else.
+ *
+ * `null` when there is nothing to say, which is every plan whose source is a
+ * `git_url` or a `new` -- neither of those names a directory on this machine, so
+ * neither is the same statement as `repository` and neither is compared.
+ */
+function catalogDisagreement(plan: AdmittedPlan, project: ResolvedProject): string | null {
+  if (project.source.kind === "local_path" && !samePath(project.source.path, plan.repository)) {
+    return (
+      `the plan disagrees with itself about which repository this is: 'repository' is ` +
+      `'${plan.repository}', and project '${plan.projectName}' in the catalog has ` +
+      `source.path '${project.source.path}'. Both name the repository a lap is cut from, so ` +
+      `they have to be the same directory`
+    );
+  }
+  // **Only on a first lap.** A revision is cut from its predecessor's topic
+  // branch rather than from the project's base branch -- that is what makes it
+  // a continuation and not a restart (D-0027) -- and it carries the branch the
+  // first lap was cut from in `pullRequestBaseBranch`. So a second lap's
+  // `baseBranch` differing from the catalog's is correct, and comparing it
+  // would refuse every revision rondo runs.
+  if (plan.pullRequestBaseBranch === null && project.baseBranch !== plan.baseBranch) {
+    return (
+      `the plan disagrees with itself about which branch this lap is cut from: 'base_branch' ` +
+      `is '${plan.baseBranch}', and project '${plan.projectName}' in the catalog has ` +
+      `base_branch '${project.baseBranch}'`
+    );
+  }
+  return null;
+}
+
+/**
+ * Whether two absolute paths name the same directory.
+ *
+ * Both sides go through {@link normalisePath}, which is cadenza's own
+ * `normpath` -- the same function cadenza ran over the `local_path` before it
+ * became a `ResolvedProject`. That is what makes this a comparison of two
+ * directories rather than of two strings: `readPlan` keeps whatever spelling
+ * the operator typed, so the two sides arrive normalised by different rules
+ * unless one of them is applied to both.
+ *
+ * Case is deliberately not folded, and neither is a symlink resolved. Both
+ * would call two paths the same where a case-sensitive filesystem says they are
+ * not, and the direction of that error is the wrong one for a check that exists
+ * to catch a disagreement: the refusal names both spellings, which is something
+ * an operator can act on.
+ */
+function samePath(left: string, right: string): boolean {
+  return normalisePath(left) === normalisePath(right);
 }
 
 /**
