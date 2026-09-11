@@ -57,7 +57,7 @@ Nothing before the gate needed a hand, as in lap 2 -- and this time nothing afte
 
 ## 3. New findings
 
-### N-7. A lap cannot run one test file, so it cannot look at the screen it is repairing
+### N-7. A lap cannot run one test file, so it cannot look at the screen it is repairing (#97)
 
 Lap 2 measured N-2 as *"a lap may run its verification but may not read its exit status"* (#87) and
 counted four refusals in 29 turns. This lap took **10 refusals over 69 Bash calls**, and the
@@ -96,7 +96,7 @@ This is adjacent to #87 and is not it: #87 is a lap that cannot read an exit sta
 that cannot run one test. The shared cause is that a declared Bash vocabulary is a list of whole
 commands while a lap's real work is argument-shaped.
 
-### N-8. Nothing rondo records says what a lap cost
+### N-8. Nothing rondo records says what a lap cost (#96)
 
 The `result` event carries `total_cost_usd`, `num_turns` and `duration_ms`. **rondo persists none of
 them.** Not the `iteration` row, not `explain`, not `inbox`, not `between`. The only way to learn
