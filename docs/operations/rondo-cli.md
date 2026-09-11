@@ -782,6 +782,7 @@ and prints the `Next:` line only while the proposal is still open.
 | `will not read: the proposal row's 'proposal_digest' is ... and its 'payload' digests to ...` | The row's bytes and the digest stored beside them no longer describe one document. rondo refuses rather than showing you half an option set. | Nothing is shown, and nothing was written. The row needs a person. |
 | `this proposal's payload will not read: ... is of form '<x>', which is not one of ...` | A basis outside the closed union (`D-0032` rule 2). A citation rondo cannot place would read as one it had checked. | The rest of the screen still stands. Do not answer it on the strength of a citation nobody can resolve. |
 | `it is settled: this screen is the record of what was answered` | Somebody already answered this proposal (`D-0032` rule 6). | Nothing to do. A change of mind is a new proposal, never an edit. |
+| `N answers were recorded against this proposal, and each is spendable on its own` | Nothing makes `human_decision` unique per proposal -- its one unique index is over a continuo gate transition, which a route-S answer does not name -- so a decline and a later approval are two rows. All of them are shown, oldest first. | rondo does not rank them, and neither should a reader. `rondo inbox` reports any approval that is still unspent. |
 | `this proposal binds nothing: it is read, not answered` | An `explanation`. Authority is a function of `kind` alone (`D-0032` rule 5). | Read it. It cannot be approved, and the store refuses a decision that names it. |
 
 ---

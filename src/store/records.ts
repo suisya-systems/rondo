@@ -881,10 +881,18 @@ export interface RecordChange {
  * an operator is waiting on, and the reader that decides what may be *approved*
  * is `recordDecision` rather than this one.
  *
- * **`decision` is the row and not a boolean**, because D-0032 rule 6 makes
+ * **`decisions` is the rows and not a boolean**, because D-0032 rule 6 makes
  * *declined* and *never answered* different facts. A screen that showed only
  * whether an answer exists would put the same word on a proposal the operator
  * settled and one nobody has looked at.
+ *
+ * **It is a list, and the schema is why.** Nothing makes `human_decision`
+ * unique per `proposal_id`: the one uniqueness the table carries is over a
+ * continuo gate transition, and a route-S answer names none. So a decline and
+ * a later approval are two rows, and a reader that returned the first would
+ * report a proposal as refused while `unconsumedDecisions` reports a spendable
+ * approval against it. Every answer is read, oldest first, and the screen shows
+ * them all.
  */
 export interface StoredProposal {
   readonly proposalId: string;
@@ -899,8 +907,8 @@ export interface StoredProposal {
   readonly elevatedFromMessageId: string | null;
   readonly elevatedByActorId: string | null;
   readonly createdAtMs: number;
-  /** What a person answered, or null while nobody has (D-0032 rule 6). */
-  readonly decision: StoredDecision | null;
+  /** What people answered, oldest first, and empty while nobody has (D-0032 rule 6). */
+  readonly decisions: readonly StoredDecision[];
 }
 
 /** One answer, as the ledger holds it (D-0022 rule 9, D-0032 rule 6). */

@@ -842,13 +842,15 @@ test("a proposal reads back whole, with the answer that settled it", async () =>
       elevatedFromMessageId: null,
       elevatedByActorId: null,
       createdAtMs: 1_000,
-      decision: {
-        decisionId: "d-0001",
-        outcome: "approved",
-        approved: `sha256:${"e".repeat(64)}`,
-        actorId: "oidc|operator-1",
-        decidedAtMs: 3_000,
-      },
+      decisions: [
+        {
+          decisionId: "d-0001",
+          outcome: "approved",
+          approved: `sha256:${"e".repeat(64)}`,
+          actorId: "oidc|operator-1",
+          decidedAtMs: 3_000,
+        },
+      ],
     },
   });
 });
@@ -863,7 +865,7 @@ test("an unanswered proposal reads back with no decision, and an unknown id is a
 
   const outcome = await record.readProposal("p-0001");
 
-  expect(outcome.kind === "read" && outcome.proposal.decision).toBeNull();
+  expect(outcome.kind === "read" && outcome.proposal.decisions).toEqual([]);
   expect(await record.readProposal("p-9999")).toEqual({ kind: "absent" });
 });
 
@@ -884,4 +886,25 @@ test("a payload whose digest no longer describes it is unreadable rather than sh
 
   expect(outcome.kind).toBe("unreadable");
   expect(outcome.kind === "unreadable" && outcome.reason).toContain("proposal_digest");
+});
+
+test("every answer against one proposal is read, not the earliest one", async () => {
+  // Nothing makes `human_decision` unique per `proposal_id` -- its one unique
+  // index is over a continuo gate transition, which a route-S answer does not
+  // name -- so a decline followed by an approval is two rows. Returning the
+  // first would report the proposal as refused while `unconsumedDecisions`
+  // reports a spendable approval against it.
+  const record = advisoryRecord(freshConnection());
+  await record.recordProposal(proposal());
+  await record.recordComposition(composition());
+  await record.recordDecision(
+    decision({ decisionId: "d-0001", outcome: "declined", approved: null, decidedAtMs: 3_000 }),
+  );
+  await record.recordDecision(decision({ decisionId: "d-0002", decidedAtMs: 4_000 }));
+
+  const outcome = await record.readProposal("p-0001");
+
+  expect(
+    outcome.kind === "read" && outcome.proposal.decisions.map((one) => one.decisionId),
+  ).toEqual(["d-0001", "d-0002"]);
 });

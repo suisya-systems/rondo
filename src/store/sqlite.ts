@@ -2252,20 +2252,28 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
       if (row === undefined) {
         return { kind: "absent" };
       }
-      // The answer is read in the same call rather than left to the caller:
+      // The answers are read in the same call rather than left to the caller:
       // "what is this" and "has it been settled" are one question at the only
       // screen that asks either, and two reads would let a proposal render as
       // open because the second one was forgotten (D-0032 rule 6).
-      const answer = connection
+      //
+      // **All of them, and not the first.** Nothing makes `human_decision`
+      // unique per `proposal_id` -- its one unique index is over a continuo
+      // gate transition, which a route-S answer does not name -- so a decline
+      // followed by an approval is two rows. Returning the earliest would
+      // report the proposal as refused while `unconsumedDecisions` reports a
+      // spendable approval against it, which is the ledger contradicting the
+      // screen at the point where both are about what a person did.
+      const answers = connection
         .prepare(
           "SELECT decision_id, outcome, approved, actor_id, decided_at_ms FROM human_decision " +
-            "WHERE proposal_id = ? ORDER BY decided_at_ms, decision_id LIMIT 1",
+            "WHERE proposal_id = ? ORDER BY decided_at_ms, decision_id",
         )
-        .get(proposalId);
+        .all(proposalId);
       try {
         return {
           kind: "read",
-          proposal: toProposal(row as SqlRow, answer === undefined ? null : (answer as SqlRow)),
+          proposal: toProposal(row as SqlRow, answers as SqlRow[]),
         };
       } catch (error) {
         if (error instanceof StoreDefect) {
@@ -2769,7 +2777,7 @@ function verbatim(row: SqlRow, column: string, digestColumn: string): JsonRecord
 }
 
 /** One proposal row, read into a record, or a refusal to read it at all (#39). */
-function toProposal(row: SqlRow, answer: SqlRow | null): StoredProposal {
+function toProposal(row: SqlRow, answers: readonly SqlRow[]): StoredProposal {
   return {
     proposalId: requireText(row, "proposal_id", "proposal"),
     kind: requireText(row, "kind", "proposal"),
@@ -2781,7 +2789,7 @@ function toProposal(row: SqlRow, answer: SqlRow | null): StoredProposal {
     elevatedFromMessageId: optionalText(row, "elevated_from_message_id", "proposal"),
     elevatedByActorId: optionalText(row, "elevated_by_actor_id", "proposal"),
     createdAtMs: requireInteger(row, "created_at_ms", "proposal"),
-    decision: answer === null ? null : toDecision(answer),
+    decisions: answers.map(toDecision),
   };
 }
 

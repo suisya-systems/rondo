@@ -1222,3 +1222,52 @@ test("a payload rondo cannot place is on the screen saying so", async () => {
   expect(shows.shown.join("\n")).toContain("will not read");
   expect(shows.shown.join("\n")).toContain("not one of");
 });
+
+test("two answers against one proposal are both on the screen, with the count", async () => {
+  // The schema permits it -- `human_decision` is unique over a continuo gate
+  // transition and not over `proposal_id` -- and nothing here can rank two
+  // answers, because D-0022 rule 9 counts issuances per decision. So both are
+  // shown and the number is said out loud, rather than the screen picking one.
+  const { record } = fresh();
+  await record.recordProposal(storedProposal(storedOptions()));
+  await record.recordComposition({
+    compositionId: "c-0001",
+    proposalId: "p-0001",
+    contract: { grantee: "rondo/i-0001" },
+    contractDigest: `sha256:${"a".repeat(64)}`,
+    supersedesContractDigest: null,
+    cadenzaRevision: "cadenza@abcdef0",
+    composedAtMs: 6_000,
+  });
+  const answer = {
+    proposalId: "p-0001",
+    predecessor: null,
+    actorId: "oidc|operator-1",
+    recordedBy: COMMAND_LINE_SURFACE,
+    gateId: null,
+    gateTransitionSeq: null,
+  };
+  await record.recordDecision({
+    ...answer,
+    decisionId: "d-0001",
+    outcome: "declined",
+    approved: null,
+    decidedAtMs: 7_000,
+  });
+  await record.recordDecision({
+    ...answer,
+    decisionId: "d-0002",
+    outcome: "approved",
+    approved: `sha256:${"a".repeat(64)}`,
+    decidedAtMs: 8_000,
+  });
+
+  const shows = screen();
+  await showProposal({ record, now: () => 9_000, present: shows.present }, "p-0001");
+
+  const rendered = shows.shown.join("\n");
+  expect(rendered).toContain("declined by 'oidc|operator-1' as decision 'd-0001'");
+  expect(rendered).toContain("approved by 'oidc|operator-1' as decision 'd-0002'");
+  expect(rendered).toContain("2 answers were recorded against this proposal");
+  expect(rendered).not.toContain("Next:");
+});

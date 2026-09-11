@@ -1273,7 +1273,7 @@ export function storedProposalLines(
     // operator composing a command line from the usage text. It is printed only
     // where there is something to answer: on a settled proposal it would invite
     // a second answer the store will refuse.
-    ...(isApprovableKind(proposal.kind) && proposal.decision === null
+    ...(isApprovableKind(proposal.kind) && proposal.decisions.length === 0
       ? [
           "",
           `Next: rondo decide --proposal-id ${proposal.proposalId} --actor-id ID ` +
@@ -1284,22 +1284,39 @@ export function storedProposalLines(
   ];
 }
 
-/** Answered, declined, or still open (D-0032 rule 6). */
+/**
+ * Answered, declined, or still open (D-0032 rule 6).
+ *
+ * **Every answer, oldest first, and never only the last one.** Nothing makes
+ * `human_decision` unique per proposal, so a decline followed by an approval is
+ * two rows and both of them are facts about what a person did. A screen that
+ * showed one would be choosing which of them the ledger meant.
+ */
 function answerLines(proposal: StoredProposal): readonly string[] {
-  const decision = proposal.decision;
-  if (decision === null) {
+  if (proposal.decisions.length === 0) {
     return isApprovableKind(proposal.kind)
       ? ["  nobody has answered this yet"]
       : ["  this proposal binds nothing: it is read, not answered"];
   }
   return [
-    `  ${decision.outcome} by '${decision.actorId}' as decision '${decision.decisionId}'` +
-      `${decision.approved === null ? "" : `, approving contract ${decision.approved}`}`,
+    ...proposal.decisions.map(
+      (decision) =>
+        `  ${decision.outcome} by '${decision.actorId}' as decision '${decision.decisionId}'` +
+        `${decision.approved === null ? "" : `, approving contract ${decision.approved}`}`,
+    ),
     // **Said out loud rather than left to be discovered.** A settled proposal
-    // rendered exactly like an open one is the screen that gets answered twice,
-    // and the second answer is refused by the store after the person has
-    // already decided.
-    "  it is settled: this screen is the record of what was answered, not a question",
+    // rendered exactly like an open one is the screen that gets answered twice.
+    ...(proposal.decisions.length === 1
+      ? ["  it is settled: this screen is the record of what was answered, not a question"]
+      : [
+          // **The count is on the screen rather than reconciled silently.** Two
+          // answers to one proposal is a state the schema permits and nothing
+          // here can rank: each is spendable on its own terms (D-0022 rule 9
+          // counts issuances per decision, not per proposal), so the honest
+          // rendering is all of them and the number.
+          `  ${String(proposal.decisions.length)} answers were recorded against this proposal, ` +
+            "and each is spendable on its own; rondo does not rank them",
+        ]),
   ];
 }
 
