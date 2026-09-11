@@ -163,14 +163,25 @@ describe("classifyPlan, when the catalog and the lap name one repository", () =>
    * the shape of the path is what decides -- not the platform this test happens
    * to run on.
    */
-  test("a backslash is not a separator in a POSIX path", () => {
-    // Two different directories on POSIX. Folding the backslash would call them
-    // one, and a contract issued about the first would pass while the lap ran
-    // in the second -- the exact fault this check exists to catch, let through
-    // by the check itself.
-    const outcome = classifyPlan(planWith({ repository: "/srv/a\\b", catalogPath: "/srv/a/b" }));
-    expect(outcome.kind).toBe("refused");
-  });
+  /**
+   * **A POSIX-cell test, and its Windows half is the UNC one below.** Whether a
+   * backslash separates two directories or is a character inside one name is
+   * the platform's answer, not rondo's, and `normalisePath` gets it from
+   * cadenza's `nativePath` -- which is the flavour of the machine it runs on.
+   * So this asserts what is true where it runs rather than asserting one
+   * platform's answer everywhere: on POSIX `/srv/a\b` and `/srv/a/b` are two
+   * directories, and folding them together would let a contract issued about
+   * the first pass while the lap ran in the second -- the exact fault this
+   * check exists to catch, let through by the check itself. On Windows they are
+   * one directory and `answered` is the right answer there.
+   */
+  test.skipIf(process.platform === "win32")(
+    "a backslash is not a separator in a POSIX path",
+    () => {
+      const outcome = classifyPlan(planWith({ repository: "/srv/a\\b", catalogPath: "/srv/a/b" }));
+      expect(outcome.kind).toBe("refused");
+    },
+  );
 });
 
 describe("classifyPlan, on a Windows-shaped path", () => {
