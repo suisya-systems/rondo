@@ -2305,7 +2305,19 @@ async function commandAnswer(
   // recorded as the operator's own account and never as rondo's: rondo did not
   // run this and has no way to check it, so the row holds who said it and what
   // they said, and every reader of it says whose word it is (#70).
-  if (parsed.verified !== null) {
+  //
+  // **Not on a gate that is already closed.** `walkGate` sends nothing for one
+  // of those and says so, so a claim written here would sit on the row saying a
+  // person checked the work before answering a gate they did not answer -- the
+  // exact false attribution this record exists to make impossible. The gate
+  // rondo already read is what decides it, and the answer is said out loud
+  // rather than dropped.
+  if (parsed.verified !== null && gate.outcome !== null) {
+    say(
+      `Gate ${gate.gateId} is already closed as '${gate.outcome}', so what you said you ` +
+        "verified was not recorded: nothing here is being answered.",
+    );
+  } else if (parsed.verified !== null) {
     try {
       await store.recordVerificationClaim(record.id, actor.actorId, parsed.verified, Date.now());
     } catch (error) {
