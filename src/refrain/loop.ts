@@ -58,7 +58,7 @@ export type Step =
   | { readonly kind: "classify"; readonly about: string }
   /** Verify the continuo build, record what it observed, and admit the run. */
   | { readonly kind: "admit"; readonly about: string }
-  /** Walk one lap. The one step that takes minutes. */
+  /** Walk one lap. The slow step, and no two take the same time. */
   | { readonly kind: "perform"; readonly about: string }
   /** Observe the gate once. Idempotent, and safe to take on a gate that is
    *  still open (D-0019 rule 5). */

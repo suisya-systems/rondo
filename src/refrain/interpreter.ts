@@ -1100,7 +1100,7 @@ const GATE_STAGE_AT_OPEN = "received";
  *
  * `performing` is committed **before** the lap is sent, for the same reason the
  * revision is: nothing is sent to continuo until the row that will explain it is
- * committed. This is the one step that takes minutes.
+ * committed. This is the slow step, and no two laps take the same time.
  *
  * The three answers are the whole of D-0019 rule 10's two `performing` rows:
  *
@@ -1167,10 +1167,10 @@ async function performStep(
       if (lap.runId !== plan.plan.runId) {
         // The same check `admitStep` makes on `run admit`'s answer and
         // `gateSeen` makes on the gate's, and it belongs here most of all: this
-        // is the one step that takes minutes, and its answer is what supplies
-        // the gate id the iteration then suspends on. Attaching another run's
-        // gate to this row would mean a later `resume()` closing this iteration
-        // on an outcome that was never about it.
+        // is the slow step, and its answer is what supplies the gate id the
+        // iteration then suspends on. Attaching another run's gate to this row
+        // would mean a later `resume()` closing this iteration on an outcome
+        // that was never about it.
         return {
           kind: "finished",
           report: await stall(
