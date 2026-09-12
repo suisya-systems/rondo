@@ -12918,10 +12918,10 @@ sections 5.6 and 5.7 take effect for O6 only through that entry.
 
 ## D-0059 — The page is judged by the screen and rides an off-the-shelf stack: the bar named by three tools, prototypes that reach it only by design work, Hono with htmx and Tailwind for what is generic, rondo's own code for what is rondo's, and four relaxations put to the human gate rather than taken
 
-**Status:** proposed (2026-09-13). **Not accepted until rondo's human gate ratifies the four
+**Status:** proposed (2026-09-13; section 5a and R3/R4 revised after `D-0064` the same day). **Not accepted until rondo's human gate ratifies the four
 relaxations in rule 6**; on ratification this becomes `accepted` and `D-0057` gains
 `Status: superseded by D-0059`. Refs rondo#172, `D-0057`, `D-0054`, `D-0041`, `D-0042`, `D-0007`,
-`D-0055`, `D-0056`, `D-0002`, `D-0006`.
+`D-0055`, `D-0056`, `D-0002`, `D-0006`, `D-0061`, `D-0064`.
 
 `D-0057` priced four frameworks by **the lines they take over** (96 of 1,233) and by **whether the
 served bytes can still be checked without a build**, and kept the page hand-written. It never asked
@@ -13025,7 +13025,7 @@ measured exception.**
 
 | Concern | `D-0057` lines | Class | Why |
 |---|---|---|---|
-| The ledger and gate semantics: what a press records (`D-0042`), one write verb (`D-0041`), recorded bytes independent of the reader's language (`D-0055` rule 4) | -- | **rondo's** | This is what rondo is; no stack supplies it and it is the thing the substitutes in rule 6 protect |
+| The ledger and gate semantics: what a press records (`D-0042`), a person's act as the only writer (`D-0041` rule 1), recorded bytes independent of the reader's language (`D-0055` rule 4) | -- | **rondo's** | This is what rondo is; no stack supplies it and it is the thing the substitutes in rule 6 protect |
 | Rendering rondo's record: claims, bases, lap rows, fence lines | 396 | **rondo's content, generic markup** | The words and what they claim are rondo's; the elements they sit in (rows, pills, tables, buttons) are a component vocabulary |
 | The catalogue: rondo's sentences in two languages | 323 | **rondo's content** | Prose nobody else writes; the holder (a typed record of strings and functions) is trivial and shared with the CLI |
 | i18n negotiation: `Accept-Language`, lookup, cookie, canonical redirect | 141 | generic -- **exception, see rule 4** | Generic by nature; every library measured gets the refusal case wrong |
@@ -13117,6 +13117,62 @@ the headers -- which the per-process token and the loopback check already bound,
 mechanism about browsers; the headers are sent by every current engine but are not mandatory for a
 client to send.
 
+### 5a. Which writes need a press, now that the page writes more than one word (revised after `D-0064`)
+
+This section was first written when the page's writing vocabulary was the one word `approve`
+(`D-0041` rule 7, `D-0054` rule 8). `D-0064` supersedes both rules. Its section 6 lists what the
+page answers: approving a scope (P1), answering a question by option (P2, P3), approving an
+irreversible act (P4), and writing a request or a message into its thread (`D-0061` rule 4). It keeps
+`D-0041` rule 1: every one of those writes is still a person's act at the moment it was made. That
+leaves the question this section answers: **which of those write kinds need a navigation press.**
+
+The conversation-screen prototype on H measured the collision (2026-09-13,
+`rondo-conversation-screen-prototype`, its note section 2.2). An htmx `hx-post` arrives with
+`Sec-Fetch-Mode: cors` and no `Sec-Fetch-User`, whether a person clicked or pressed Ctrl+Enter, and
+`hx-boost` sends the same way. A native form submit arrives with `navigate` and `?1`. A thread whose
+send is a navigation works, but **an unsent draft is lost when the person presses another button on
+the same thread**, which happens routinely in a thread that carries both a text box and option
+buttons. Section 5's check applied to every write therefore makes an in-place conversation
+impossible.
+
+**The press check is kept for approvals only, and a message to the conversation becomes a second
+write kind that does not require one.**
+
+| Write kind | Needs a press (section 5) | What it is minted from |
+|---|---|---|
+| **`approve` at a lap's end gate**, the person's press (`D-0064` O6 names the organisation's own answer, which is not this) | **yes** | `POST`, same-origin, `Sec-Fetch-Mode: navigate`, `Sec-Fetch-User: ?1`, per-process token |
+| **Approving an irreversible act** (`D-0064` P4) | **yes** | the same |
+| **A message into a request thread**, including a new request's text and a reply (`D-0061` rule 4) | **no** | a *send* value: `POST`, same-origin `Sec-Fetch-Site`, per-process token; `Sec-Fetch-Mode` may be `cors` |
+
+**What a send keeps.** The `say` port accepts no call without a send value, and the only function
+that mints one reads the live request. It refuses any method other than `POST`, so the four `GET`-side
+writers the audit planted still cannot write, because the request they hold is a `GET`. It also
+refuses a request that is not same-origin or lacks the token. `D-0041` rule 1 holds as far as a
+browser can show it: the request came from this page, in a person's session.
+
+**What a send gives up, stated rather than hidden.**
+- *Only a navigation can write* is no longer true of the page. It is true of approvals. A same-origin
+  script -- an htmx trigger fired by a redraw, a key handler, a defect -- can post a message **no
+  person typed**, and it will be recorded as the person's. The residual is bounded rather than
+  closed. A message is append-only and is not an act: it cannot answer a gate, approve anything,
+  spend an approval or widen a scope, because every one of those is an approval kind with its own
+  port. The substitutes are the send value and the route enumeration test (R4), not a header a
+  script cannot set.
+- **The page's writing vocabulary is no longer one word.** It is a closed list of write kinds, each
+  with its own port and its own minting rule, and the list is what R4's route enumeration test
+  checks against. `D-0057` rule 2(a)'s *one sentence long* becomes *one table long*.
+
+**Two write kinds are not settled by this entry and are put to the gate with Q5**, because the
+instruction this revision was written under names approvals as P4 and the lap-end press:
+- **Approving a scope (P1).** It is the act by which the person delegates, and the most consequential
+  approval on the page. A script that could post one unattended would grant authority nobody
+  granted. **Recommendation: press required**, as an approval.
+- **Answering a question by option (P2, P3).** It chooses between things the person owns, and it
+  moves work. It is also an in-thread act that loses a draft if it navigates. **Recommendation: press
+  required**, and a draft kept in the page (`sessionStorage`, the prototype's option (i)) so that
+  pressing an option does not cost the text beside it. That widens R3 by one more rondo-owned
+  script duty. The alternative is to treat it as a send and accept the residual above for choices.
+
 ### Decision
 
 1. **The operator's page is judged first by its screen, against GitHub's run list and checks panel,
@@ -13157,8 +13213,8 @@ client to send.
    maintained library refuses `q=0` and checks the tag grammar (a falsifier below).
 
 5. **What stays rondo's own code is the originality side and nothing else**: the payload a press
-   records and its import boundary (`D-0006`, `D-0022` rule 1), the one `approve` handler and what it
-   checks, the catalogue's sentences in both languages, the claims and lap rows as content, the
+   records and its import boundary (`D-0006`, `D-0022` rule 1), the write handlers of section 5a and
+   what each checks, the catalogue's sentences in both languages, the claims and lap rows as content, the
    negotiation of rule 4, and keyboard row navigation (10-17 lines in every stack measured; nothing
    supplies it). `D-0057` rules 5 and 6 -- that the accumulation was 141 lines and that no registry
    package did both RFC halves -- remain true measurements and are reused here.
@@ -13191,8 +13247,10 @@ client to send.
 
    **R3. `D-0054` rule 6 -- the script's vocabulary is `GET` of its own address.** Widened to: htmx's
    polling `GET` of the page's own address (measured: the only method and the only URL the page
-   requested over 11.5 s), and a rondo-owned key script that moves focus between server-rendered rows
-   and follows server-rendered links.
+   requested over 11.5 s), a rondo-owned key script that moves focus between server-rendered rows
+   and follows server-rendered links, and -- after `D-0064` -- htmx's `hx-post` of a message into a
+   request thread, the one non-`GET` request the library issues, which section 5a mints as a send and
+   not as a press. (If the gate answers Q5 with a kept draft, the key script also gains that duty.)
    - *Substitute*: R4; and `D-0054` rule 7 is **kept** -- every view is complete and pressable with
      script off (both stacks' script-off screenshots and a JS-disabled `POST`), and the key hints and
      live indicator are rendered hidden until the script runs.
@@ -13200,18 +13258,23 @@ client to send.
 
    **R4. `D-0041` rule 4 and `D-0057` rule 2(a) -- the writing vocabulary is enumerable from one
    type.** H keeps the type split (rule 3a), but a Hono app is a router any module holding it can
-   register on, and the audit showed a source sweep cannot close that.
-   - *Substitute* (new, section 5): **the `answer` port itself refuses any call not carrying a press
-     minted from the live request, and a press is minted only for a `POST` that is a same-origin
-     navigation carrying `Sec-Fetch-User: ?1` and the per-process token.** That covers a writer
-     reached through a request the browser issued *and* a `GET`-side handler calling the port
-     directly. Beside it, a runtime check in the test suite enumerates the running app's registered
-     routes (`app.routes`) and fails on any non-`GET` route other than `approve`, so the enumerable
-     vocabulary is a question asked of the program rather than a source sweep.
-   - *Lost*: the property is no longer read off one declaration; it is a check inside the port and a
-     route enumeration. Residuals: a script inside a person's transient-activation window; a writer
-     running inside the handling of a real press; and the placement is reasoned from the audit's
-     mutants, not yet re-run against them (rule 9).
+   register on, and the audit showed a source sweep cannot close that. After `D-0064` the vocabulary
+   is also no longer one word: it is section 5a's closed table of write kinds.
+   - *Substitute* (new, sections 5 and 5a): **every write port refuses any call without a value
+     minted from the live request.** Approval ports require a *press*: a `POST` that is a same-origin
+     navigation carrying `Sec-Fetch-User: ?1` and the per-process token. The message port requires a
+     *send*: a same-origin `POST` carrying the token, in any fetch mode. Both refuse a `GET`, so a
+     `GET`-side handler calling a port directly writes nothing, and an approval additionally refuses a
+     script-issued request. Beside them, a runtime check in the test suite enumerates the running
+     app's registered routes (`app.routes`) and fails on any non-`GET` route that is not a row of
+     section 5a's table, so the enumerable vocabulary is a question asked of the program rather than a
+     source sweep.
+   - *Lost*: the property is no longer read off one declaration; it is a check inside each port and a
+     route enumeration, and the vocabulary is a table, not a word. **A same-origin script can post a
+     message no person typed, recorded as the person's** (section 5a); it cannot approve anything.
+     Further residuals: a script inside a person's transient-activation window; a writer running
+     inside the handling of a real press; and the placement is reasoned from the audit's mutants, not
+     yet re-run against them (rule 9).
 
 7. **If the gate chooses T instead**, the same four relaxations apply and are larger: R1 covers
    about 407 KB of bundled JavaScript and 122 production packages; R2 and R3 become a client
@@ -13227,14 +13290,16 @@ client to send.
    new ID and supersession. Its **measurements** stay true and are cited here as facts rather than
    re-derived: the 1,233-line inventory, the survey table, the i18n library survey, and the finding
    that a build leaves a digest pin nothing to check (which R1's manifest is the answer to).
-   `D-0054` and `D-0041` are **not** superseded: their decisions about liveness per view, the one
-   write and the press as the presentation stand, and on ratification each gains a dated annotation
-   naming the rule R2, R3 or R4 amends.
+   `D-0041` rule 7 and `D-0054` rule 8 (the one word `approve`) are already superseded by `D-0064`
+   and are not this entry's to move. The rest of `D-0054` and `D-0041` -- liveness per view, a
+   person's act as the only writer (`D-0041` rule 1), the press as the presentation -- stands, and on
+   ratification each gains a dated annotation naming the rule R2, R3 or R4 amends.
 
 9. **The implementing change is a separate pull request, after ratification, and it is gated on the
    screen.** It carries the port of the three views to H, the relaxation substitutes (served-file
-   manifest and its CI check, the press-minting check inside the `answer` port with a test in each
-   direction, the route enumeration test, and **every writer the two audits planted -- the `GET`
+   manifest and its CI check, the press and send minting checks inside each write port of section 5a
+   with a test in each direction -- including an htmx `hx-post` refused at an approval port and
+   accepted at the message port -- the route enumeration test, and **every writer the two audits planted -- the `GET`
    handler, the middleware, the mounted sub-app, the loader, the `fetch` -- carried as a test that
    must fail to write**), the negotiation moved onto `hono/accepts` / `hono/cookie` with its existing
    342 lines of tests passing unchanged, and the screenshot set of rule 1.
@@ -13249,8 +13314,9 @@ client to send.
 - **It does not redesign the claims.** The answer view's 21-claim table is long and mostly
   `undetermined`; both critics noticed, and it is a content question for `D-0032`'s owners, not a
   stack question.
-- **It does not change what any recorded byte says**, the language behaviour of `D-0056`, or the
-  single verb `approve`.
+- **It does not change what any recorded byte says** or the language behaviour of `D-0056`. It does
+  not decide which write kinds exist -- `D-0064` does; section 5a decides only which of them need a
+  press.
 
 ### Residuals
 
@@ -13286,6 +13352,12 @@ On **2026-09-13**, on this machine, in the worker's uncommitted scratch director
 - **`Sec-Fetch-*`.** A `node:http` server logging request headers, driven by Playwright Chromium
   through page-owned scripts (not CDP evaluation, which carries a user gesture and passed `?1` for
   every script submit in a first run that was discarded for that reason).
+- **htmx's `hx-post` headers.** Measured by the conversation-screen prototype on H
+  (`rondo-conversation-screen-prototype`, its note section 2.2): a server route recording
+  `Sec-Fetch-*` per write while Playwright clicked and pressed Ctrl+Enter; `hx-post` arrived `cors`
+  with no `Sec-Fetch-User`, a native submit `navigate` with `?1`, and a navigating send lost an unsent
+  draft when another button on the thread was pressed. This entry cites that measurement and did not
+  re-run it.
 - **What was not measured**: any browser other than Chromium for section 5; any machine other than
   this one for reproducibility; the reading view in either stack; a Japanese operator's real fonts.
 
@@ -13301,8 +13373,12 @@ On **2026-09-13**, on this machine, in the worker's uncommitted scratch director
   stated.
 - **A maintained library that refuses `q=0`, checks the tag grammar and writes the cookie only on a
   switch.** Rule 4's exception ends.
-- **htmx needing `hx-post` or any non-`GET` attribute anywhere on the page.** R2 and R3 were priced
-  on a `GET`-only use.
+- **htmx needing a non-`GET` request anywhere other than the message port.** R2 and R3 were first
+  priced on a `GET`-only use and widened by exactly one write kind in section 5a; a second one is a
+  new row in that table and has to be argued there.
+- **A message posted with no person typing it being acted on as if the person had said it.**
+  Section 5a accepts that residual because a message cannot approve anything. If a later entry lets
+  a message move work -- a drafter treating a reply as an answer -- the send needs a press too.
 - **Hono's API breaking under the implementation the way TanStack Start's did under the prototype.**
   Rule 3(d) rests on one prototype's observation.
 - **The implementing change's screenshots not reaching "yes"** from the gate. Rule 1 is the bar, and
