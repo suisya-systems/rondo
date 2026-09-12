@@ -14397,15 +14397,19 @@ scratch directory (the "prototype source"). Line numbers drift; re-measure the c
 2. **"Why is this waiting" and "what is moving" are answered from one reading, the wait reading.**
    1. **A wait reading** is a pure function in `src/advisory` over a snapshot of rows and a clock. For
       each line (a lineage, `D-0030`, or a plan not yet admitted, named as `D-0067` rule 3.2 names it)
-      it returns **exactly one reason from a closed list**, with the rows that make it true as bases:
+      it returns **exactly one reason from a closed list**, with the rows that make it true as bases.
+      **A basis that cannot be read makes the reason `undetermined` whatever else holds; otherwise the
+      reason is the first row of the table, in the order written, whose test holds.** So an overdue
+      lap with an unanswered patrol message is `overdue`, and a lap at a person's gate that a
+      `sequence` also holds is `waiting_on_you`, since releasing the order would not move it:
 
       | Reason | True when | Bases |
       |---|---|---|
+      | **`overdue`** | the latest lap is on the *in flight* side and `now - updated_at_ms` exceeds its plan's `invocationCeilingMs` (section 2, finding F1) | the iteration and its plan |
       | **`waiting_on_you`** | the latest lap's status is on `D-0036` rule 5's *waiting on you* side; or a message with `asks` set and no reply stands over the line (`D-0066` rule 4.2's reading of bases); or a scope that would cover the plan is presented and has no `scope_decision`; or the lap is `closed` and its lineage is open in `D-0067` rule 2's sense, since `publish` and merge are a person's today | the iteration, the message or the scope row |
       | **`held_by_order`** | an in-force `sequence` names the line as `then` and its `until` fact is not recorded (`D-0067` rule 4) | the `sequence` row, `first`'s latest `iteration_id`, and **`first`'s own wait reading**, followed along `first` until a line not held by order |
       | **`held_by_bound`** | the plan's last admission attempt wrote an `admission_refusal` row and no admission has followed (`D-0023`) | the refusal row |
       | **`in_flight`** | the latest lap is on the *in flight* side and `now - updated_at_ms` is within its plan's `invocationCeilingMs` | the iteration and its plan |
-      | **`overdue`** | the latest lap is on the *in flight* side and `now - updated_at_ms` exceeds its plan's `invocationCeilingMs` (section 2, finding F1) | the iteration and its plan |
       | **`undetermined`** | no row above holds, a basis cannot be read, or following `first` returns to a line already visited (two `sequence` rows holding each other) | whatever was read, and the line revisited |
 
    2. **`in_flight` says since when and until when, and never "progressing".** It is "rondo is waiting
@@ -14442,7 +14446,7 @@ scratch directory (the "prototype source"). Line numbers drift; re-measure the c
    | Finding | Test | Where it goes |
    |---|---|---|
    | **F1. `overdue`**: rondo is waiting for an answer past the patience the lap declared | an iteration on the *in flight* side whose `now - updated_at_ms` exceeds its plan's `invocationCeilingMs`; **or** the conductor has just taken a `noAnswer` arm and held the row (section 2, rule 2.2) | **P3** inside a scope; outside one, an `explanation`-shaped message with `asks` unset (section 2, rule 3.3). **Subject to the gate's second point** |
-   | **F2. `held_behind_stopped`**: a line held by order whose `first` will not end by itself | an in-force `sequence` whose `then` reads `held_by_order` and whose `first` reads `waiting_on_you`, `overdue` or `undetermined` | by `first`'s reason: **`waiting_on_you`** writes nothing new, and `first`'s item shows what it releases (section 1, rule 2.6); **`overdue`** is F1's message on `first`, with `then`'s latest `iteration_id` or plan as a basis and "`then` waits on this" in what each option gives up; **`undetermined`** is **P3** into `then`'s thread |
+   | **F2. `held_behind_stopped`**: a line held by order whose `first` will not end by itself | an in-force `sequence` whose `until` fact is not recorded and whose `first` reads `waiting_on_you`, `overdue` or `undetermined`, whatever `then` itself reads. Two `sequence` rows holding each other make `first` read `undetermined`, so a cycle is always this finding | by `first`'s reason: **`waiting_on_you`** writes nothing new, and `first`'s item shows what it releases (section 1, rule 2.6); **`overdue`** is F1's message on `first`, with `then`'s latest `iteration_id` or plan as a basis and "`then` waits on this" in what each option gives up; **`undetermined`** is **P3** into `then`'s thread |
    | **F3. `hold_cannot_release_inside`**: a held act that can only be `outside` when released | an in-force `sequence` whose `then` sits under a scope approval that has an approved successor, whose `expires_at_ms` has passed, or whose `laps` are spent (`D-0066` rule 3.4) | **P3** into `then`'s thread: the message `D-0066` rule 4.4 would write when the act is attempted, written when the fact becomes true. Cost is not tested here, because a read cost can fall below its reserve and bring an admission back inside |
    | **F4. `reserve_never_read`**: a lap whose reserve stays spent for good | an iteration under a scope approval, no longer in flight, whose `lap_cost_usd` is null (`D-0066` gate answer 1, `D-0046`) | **P5**: listed in the request's report with the reserve it holds. When it is what makes an admission `outside`, `D-0066` section 4 already stops the line as P3 |
 
