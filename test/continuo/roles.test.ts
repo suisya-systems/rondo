@@ -120,6 +120,7 @@ describe("a name outside the table", () => {
       topicBranch: "topic/one",
       prompt: "do the thing",
       allowedBash: [],
+      materialLanguage: null,
       delegationRecordPath: "/srv/rondo/delegation/record.json",
       delegationRecordSchema: "rondo.delegation-record/1",
     });
@@ -152,6 +153,7 @@ describe("a name outside the table", () => {
       topicBranch: "topic/one",
       prompt: "do the thing",
       allowedBash: [],
+      materialLanguage: null,
       delegationRecordPath: "/srv/rondo/delegation/record.json",
       delegationRecordSchema: "rondo.delegation-record/1",
     });

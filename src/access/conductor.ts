@@ -272,6 +272,9 @@ export function conductorPorts(
           // already what crosses and the declaration is a field of the plan
           // rather than something the conductor decides (D-0039 rule 3).
           allowedBash: plan.allowedBash,
+          // The plan's ask, carried the same way: rondo does not decide it and
+          // does not read it back (D-0053 rules 6 and 8).
+          materialLanguage: plan.materialLanguage,
           // The envelope this admission was composed with, and its format
           // name. Not read, not re-encoded and not validated here: the bytes
           // are the record and continuo digests them as they arrive.

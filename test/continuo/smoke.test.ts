@@ -195,6 +195,7 @@ test.skipIf(!available)(
       // form runs package lifecycle scripts, which the fence's hook cannot see
       // because it observes tool calls and not the subprocesses a tool starts.
       allowedBash: ["npm ci --ignore-scripts", "npm run:*"],
+      materialLanguage: null,
       // Required and undefaulted since `continuo D-1107`: a run whose
       // authorisation nothing recorded is the case those flags removed.
       delegationRecordPath: recordPath,
