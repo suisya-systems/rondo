@@ -75,6 +75,10 @@ export function classifyPlan(plan: AdmittedPlan): EffectOutcome<ClassificationRe
       return { kind: "refused", message: disagreement };
     }
     const record = agentTypeRecord(plan.agentTypeInput);
+    const tierDisagreement = unpricedModelTier(record);
+    if (tierDisagreement !== null) {
+      return { kind: "refused", message: tierDisagreement };
+    }
     const fenceDisagreement = grantDisagreement(plan, record);
     if (fenceDisagreement !== null) {
       return { kind: "refused", message: fenceDisagreement };
@@ -167,6 +171,55 @@ function catalogDisagreement(plan: AdmittedPlan, project: ResolvedProject): stri
     );
   }
   return null;
+}
+
+/**
+ * The tiers rondo prices, transcribed from `src/continuo/roles.ts`'s
+ * `MODEL_TIER_TABLE` -- the *keys* only, and nothing about what any of them
+ * cost (D-0052 rule 3).
+ *
+ * **Why a transcription and not an import.** `src/refrain` may not import
+ * `src/continuo` (D-0017 rule 2), and this is the same move `SERVED_RECIPIENTS`
+ * in `./plan.ts` already makes for continuo's outbox: a frozen list of names
+ * held in the loop, with the revision it agrees with proved by a test rather
+ * than by an arrow. `test/continuo/roles.test.ts` asserts this list equal, as a
+ * set, to `mappedModelTiers()` -- both directions, because a name only here
+ * would refuse a tier rondo can in fact run, and a name only in the table would
+ * admit a lap onto a tier with no price (D-0052 rule 4).
+ *
+ * A tier name is a cadenza neutral name and already crosses this boundary on
+ * `ClassificationRecord.modelTier`; no model id is added here (D-0014 rule 1).
+ */
+export const PRICED_MODEL_TIERS = Object.freeze(["standard"] as const);
+
+/**
+ * The third thing rondo checks about its own inputs: that the agent type names
+ * a model tier rondo prices (D-0052).
+ *
+ * **Why this and not `mapModelTier` itself.** `mapModelTier` lives in
+ * `src/continuo/roles.ts` and answering with it here would be the arrow D-0052
+ * declines. This function asks the same question in the loop's own vocabulary,
+ * off the record cadenza already built -- the tier is read from
+ * `record.executorPolicy.modelTier` and never from `plan.agentTypeInput`, for
+ * `grantDisagreement`'s reason: the record is what cadenza validated.
+ *
+ * **A refusal, not a defect.** Before this rule the same fact reached
+ * `performLap`'s `mapModelTier` after `run admit`, with a run already admitted
+ * at continuo and nobody to close it. Answering here ends the iteration at
+ * terminal `abandoned`, before `startContinuo`, before a build is verified,
+ * before `run admit` -- rondo#138's falsifier, answered before the row that
+ * falsified it.
+ */
+function unpricedModelTier(record: AgentType): string | null {
+  const tier = record.executorPolicy.modelTier;
+  if ((PRICED_MODEL_TIERS as readonly string[]).includes(tier)) {
+    return null;
+  }
+  return (
+    `agent type '${record.agentTypeId}' names a model tier rondo does not price: '${tier}'. ` +
+    `The tiers rondo prices are ${PRICED_MODEL_TIERS.join(", ")}. Give the agent type one of ` +
+    "those tiers, or ratify a price for it in src/continuo/roles.ts under a new decision entry."
+  );
 }
 
 /**

@@ -24,6 +24,7 @@ import {
   mappedModelTiers,
   mappedNeutralRoleNames,
 } from "../../src/continuo/roles.js";
+import { PRICED_MODEL_TIERS } from "../../src/refrain/classification.js";
 
 /** The mapping, or a failure naming the name that did not map. */
 function mappedRole(neutralRoleName: string): string {
@@ -212,6 +213,21 @@ describe("the model table, which is a policy rather than a transcription", () =>
   test("a prototype name is an unknown tier, not a function found on the object", () => {
     for (const name of ["constructor", "toString", "hasOwnProperty", "__proto__"]) {
       expect(mapModelTier(name).kind).toBe("unknown");
+    }
+  });
+
+  test("the loop's transcription of priced tiers agrees with the table, as a set", () => {
+    // D-0052 rule 4's test: `src/refrain/classification.ts` cannot import this
+    // module (D-0017 rule 2) so it holds its own copy of the tier names, and
+    // this is the assertion that stands in for the arrow. Both directions,
+    // because each disagreement is a different bug -- a name only in the
+    // loop's copy is a tier admitted onto with no price behind it, and a name
+    // only in the table is a tier rondo can run but refuses.
+    for (const tier of mappedModelTiers()) {
+      expect(PRICED_MODEL_TIERS as readonly string[]).toContain(tier);
+    }
+    for (const tier of PRICED_MODEL_TIERS) {
+      expect(mappedModelTiers()).toContain(tier);
     }
   });
 
