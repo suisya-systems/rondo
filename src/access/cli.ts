@@ -1306,7 +1306,7 @@ export async function main(
           approver === undefined || approver === ""
             ? null
             : async (iterationId, body) =>
-                await answerFromPage(environment, store, approver, iterationId, body),
+                await answerFromPage(environment, store, opened.path, approver, iterationId, body),
         // Read for the same reason and on the same condition: the material is
         // what a person is shown before they press, so it is drawn exactly
         // where the button is (D-0029 rule 2 and D-0041 rule 6).
@@ -1438,17 +1438,29 @@ async function commandExplain(
   );
 }
 
-/** The four things both advisory doors are handed, assembled once. */
-function advisoryPorts(store: IterationStore, storePath: string): ExplainPorts {
+/**
+ * The four things both advisory doors are handed, assembled once.
+ *
+ * `present` is overridable for the one caller whose surface is not this
+ * process's stdout: the page has already rendered the claims, and a second copy
+ * printed into the terminal `rondo web` runs in would be noise.
+ */
+function advisoryPorts(
+  store: IterationStore,
+  storePath: string,
+  present?: (lines: readonly string[]) => void,
+): ExplainPorts {
   return {
     store,
     record: openAdvisoryRecord(storePath),
     now: Date.now,
-    present: (lines) => {
-      for (const line of lines) {
-        say(line);
-      }
-    },
+    present:
+      present ??
+      ((lines) => {
+        for (const line of lines) {
+          say(line);
+        }
+      }),
   };
 }
 
@@ -2350,6 +2362,55 @@ async function pageMaterial(
 }
 
 /**
+ * The framing a press rests on, recorded before the press is acted on (D-0042).
+ *
+ * **It is `explain`'s own writer and not a second one.** The page composed its
+ * claims with `propose`, which is what {@link explainIteration} composes; a
+ * second path to the same rows would be two things to keep agreeing. What
+ * differs is only where the lines go: the page rendered them up to five seconds
+ * ago, so `present` drops them here rather than printing a copy to the terminal
+ * `rondo web` happens to be running in.
+ *
+ * **The press is what makes it a presentation** (D-0042 rule 1). An unattended
+ * redraw reaches none of this -- it is a `GET`, and only the `POST` path a
+ * person's click produces gets here -- so `operator_attention` counts a row for
+ * a human who pressed and never for a page redrawing at an empty desk.
+ *
+ * **A framing recorded and not counted does not withhold the gate.** That is
+ * `sayAdvisoryOutcome`'s treatment of the same outcome -- the record is kept and
+ * what was shown still stands -- differing only in where the complaint goes: a
+ * command exits **1**, and a person at a browser cannot read an exit status, so
+ * the line is said in the terminal `rondo web` runs in, beside the other two
+ * things this surface already says there (`walkGate`'s diagnostics and
+ * `sayReport`). Refusing the press instead would stop an operator answering a
+ * gate over rondo's own accounting, which is a worse failure than an
+ * under-counted table (D-0032 rule 10).
+ */
+export async function recordPagePress(
+  ports: ExplainPorts,
+  iterationId: string,
+  complain: (line: string) => void = say,
+): Promise<{ ok: boolean; note: string }> {
+  const shown = await explainIteration(ports, iterationId);
+  if (shown.kind === "refused") {
+    return {
+      ok: false,
+      // `explainIteration`'s own reason ends with why this matters, so this
+      // adds the half it cannot know: on a page the framing was shown before
+      // the press, and what the failure costs is the *act*, not the showing.
+      note: `The framing you pressed on was not recorded, so nothing was answered. ${shown.reason}`,
+    };
+  }
+  if (shown.kind === "presentedUncounted") {
+    complain(
+      `proposal '${shown.proposalId}' was recorded and not counted as presented: ` +
+        `${shown.reason}. The press went through; operator_attention is short by one row.`,
+    );
+  }
+  return { ok: true, note: "" };
+}
+
+/**
  * One press of the page's approve button, in the terminal's own verbs.
  *
  * **It is `commandAnswer`'s writing half over a row it did not parse for.**
@@ -2371,6 +2432,7 @@ async function pageMaterial(
 async function answerFromPage(
   environment: Readonly<Record<string, string | undefined>>,
   store: IterationStore,
+  storePath: string,
   approver: string,
   iterationId: string,
   body: string,
@@ -2405,6 +2467,17 @@ async function answerFromPage(
       ok: false,
       note: `iteration '${record.id}' is ${record.status}, and no gate is open on it.`,
     };
+  }
+  // **Written before the press acts on it** (D-0042 rules 2 and 3). Here rather
+  // than at the top of this function so that the three refusals above -- which
+  // are a stale page rather than a person answering -- do not each put a
+  // framing in the ledger that nobody acted on.
+  const shown = await recordPagePress(
+    advisoryPorts(store, storePath, () => {}),
+    iterationId,
+  );
+  if (!shown.ok) {
+    return shown;
   }
   const startup = await startContinuo(environment);
   if (startup.kind === "refused") {

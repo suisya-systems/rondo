@@ -7,7 +7,10 @@
  * database rather than about a mock's call log. The one write it may do is
  * asserted the other way round, against a recorded call, because what is under
  * test there is the door rather than the ledger: `answerFromPage` is the
- * command line's own `walkGate` and `resume`, and this file has no continuo. The other two are what the
+ * command line's own `walkGate` and `resume`, and this file has no continuo.
+ * The half of that press which *is* a ledger write -- the framing it rests on
+ * (D-0042) -- is asserted against the database, because it is reachable without
+ * one. The other two are what the
  * terminal got wrong and this page must not (rondo#90's paragraphs, rondo#91's
  * repeated basis), and both are properties of the bytes that reach a browser.
  */
@@ -15,6 +18,7 @@ import { request as httpRequest } from "node:http";
 import { DatabaseSync } from "node:sqlite";
 import { expect, test } from "vitest";
 
+import { recordPagePress } from "../../src/access/cli.js";
 import { operatorPage, serveOperatorPage, type WebPorts } from "../../src/access/web.js";
 import { allocate } from "../../src/refrain/allocator.js";
 import { admittedPlan, planPayload, type RunPlan, runPlan } from "../../src/refrain/plan.js";
@@ -271,6 +275,59 @@ test("looking at the page writes nothing", async () => {
   expect(rows(world.connection, "operator_attention")).toBe(0);
   expect(rows(world.connection, "operator_view")).toBe(0);
   expect(rows(world.connection, "human_decision")).toBe(0);
+});
+
+test("a press records the framing it rests on, and one that cannot be recorded answers nothing", async () => {
+  const world = fresh();
+  await reserve(world, "i-0001", "do the thing");
+  await openGate(world, "i-0001");
+  const ports = {
+    store: world.store,
+    record: world.record,
+    now: () => 6_000,
+    present: () => undefined,
+  };
+
+  expect(await recordPagePress(ports, "i-0001")).toEqual({ ok: true, note: "" });
+
+  // The two rows the page drew and never held: the framing itself, and the
+  // count of it having reached somebody (D-0042 rule 1). Written on the press
+  // and on nothing else -- "looking at the page writes nothing" above is the
+  // other half of the same claim, over the same tables.
+  expect(rows(world.connection, "proposal")).toBe(1);
+  expect(rows(world.connection, "operator_attention")).toBe(1);
+  // The mark stays where `rondo inbox` left it: a press is proof one row was
+  // read and not proof an inbox was (rule 2).
+  expect(rows(world.connection, "operator_view")).toBe(0);
+
+  // Rule 3: a framing that will not record is a sentence the person reads, and
+  // the caller stops there rather than walking the gate.
+  const missing = await recordPagePress(ports, "i-0404");
+  expect(missing.ok).toBe(false);
+  expect(missing.note).toContain("nothing was answered");
+  expect(rows(world.connection, "proposal")).toBe(1);
+
+  // A framing recorded and not counted complains and lets the press through:
+  // the command line exits 1 on the same outcome, and a browser cannot read an
+  // exit status, so the line goes to the terminal `rondo web` runs in.
+  const said: string[] = [];
+  const uncounted = await recordPagePress(
+    {
+      ...ports,
+      now: () => 7_000,
+      record: {
+        ...world.record,
+        recordAttention: async () =>
+          await Promise.resolve({ kind: "refused" as const, reason: "the table is locked" }),
+      },
+    },
+    "i-0001",
+    (line) => said.push(line),
+  );
+  expect(uncounted.ok).toBe(true);
+  expect(said.join("\n")).toContain("recorded and not counted as presented");
+  expect(rows(world.connection, "proposal")).toBe(2);
+  expect(rows(world.connection, "operator_attention")).toBe(1);
 });
 
 test("an empty store renders a page rather than an error", async () => {
