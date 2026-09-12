@@ -88,6 +88,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0048 | Naming a running lap's transcript: one identifier read off a live run, three liveness-shaped fields refused by name, and a directory printed where the hole already is | accepted |
 | D-0049 | An approval that names a contract the proposal never carried: refused at the door as a dangling reference, and not as a spendability check | accepted |
 | D-0050 | The second fence rondo never sees: no column for the worker's own sandbox, `D-0045`'s form declined because the silence points the other way, one standing sentence on the fence block, and the report asked of continuo | accepted |
+| D-0052 | A tier nothing prices is refused at `classify`, off the record cadenza just built: the tier names in the loop, the prices behind the seam, and `D-0017` rule 2 unamended | accepted |
 
 ---
 
@@ -2885,6 +2886,15 @@ to take, and rule 4's sixth fact is written conditionally for exactly that reaso
 > "a second tier arriving in an agent type before the table has a pair for it" is answered in
 > advance rather than fired: the refusal still stands, and the tier that would trip it now has a
 > decision saying what it means.
+
+> **Annotation (2026-09-12, from D-0052).** Added after this entry was accepted, and additive: no
+> claim, measurement or date below is changed, and the table in rule 3 is untouched. **Rule 3's
+> refusal gains a place rather than moving.** "An unpriced tier is refused before the spawn" still
+> holds in `performLap`, and after `D-0052` the plan carrying that tier is refused one verb earlier,
+> at `classify`, so the spawn is no longer the first thing the tier is checked against -- which is
+> what stops an unpriced tier costing an admitted run at continuo (rondo#138). The prices stay in
+> `src/continuo/roles.ts`; only the tier *names* are transcribed into the loop, the way
+> `SERVED_RECIPIENTS` already is.
 
 The lap-1 dogfood ([`docs/operations/lap-1-dogfood.md`](docs/operations/lap-1-dogfood.md)) stopped
 on two facts about continuo rather than about rondo, and recorded both. `F-1` was blocking: the
@@ -7829,6 +7839,13 @@ want. It is not closed here because nothing has yet run long enough to say what 
 
 **Status:** accepted (2026-09-12, rondo's human gate). Refs rondo#89, rondo#96, `D-0021`.
 
+> **Annotation (2026-09-12, from D-0052).** Added after this entry was accepted, and additive:
+> nothing below is removed or rewritten, and **how a tier is chosen does not change**. Rule 3's "an
+> unpriced tier is still refused before the spawn (`D-0021` rule 3, unchanged)" reads the same, and
+> gains one place: the plan is refused at `classify`, before a run is admitted. Rule 5's waiting
+> pair, when it arrives, arrives as a row in `MODEL_TIER_TABLE` **and** a name in the loop's
+> `PRICED_MODEL_TIERS`, in one diff -- `D-0052` rule 4 is the test that makes a half-added tier red.
+
 `MODEL_TIER_TABLE` (`src/continuo/roles.ts`) has one row, `standard -> claude-opus-5`, so every lap
 runs on the most expensive model whatever it is doing. `D-0021` rule 3 built the table and said the
 pairs are provisional; rondo#89 is the observation that one row means the provision is unusable, and
@@ -8908,3 +8925,175 @@ a lap.
   is claimed here for a second class of fact — **a containment that was meant to be in force and was
   not**. The property does not hold for that class at the pin `fcf86eb`, and rule 7 above is rondo's
   half of the second escalation.
+
+---
+
+## D-0052 — A tier nothing prices is refused at `classify`, off the record cadenza just built: the tier names in the loop, the prices behind the seam, and `D-0017` rule 2 unamended
+
+**Status:** accepted (2026-09-12, rondo's human gate). Refs rondo#138, rondo#103, `D-0014`,
+`D-0017`, `D-0019`, `D-0021`, `D-0039`, `D-0044`.
+
+rondo#138 is one ordering fact, and the whole entry turns on it. cadenza validates
+`executorPolicy.modelTier` structurally and answers `allowed`; the conductor verifies the continuo
+build, admits the run, and commits the row to `performing`; and **only then** does
+`performLap` read `mapModelTier` and answer `invokerDefect`. Nothing is spawned. But a run *was*
+admitted: the iteration ends terminal at `failed`, and continuo is left holding a `created` run for
+an operator to close by hand.
+
+**The two tables are read at different moments, and that is the entire defect.**
+`src/continuo/roles.ts` holds them side by side and `src/continuo/invoker.ts` reads both:
+`mapNeutralRole` in `admitRun`, before `run admit` is spawned, so an unmapped role costs an
+abandoned iteration and nothing else; `mapModelTier` in `performLap`, one verb later, by which time
+the run exists. The role's refusal is early *by accident of which verb needs it*, not by design. The
+tier's is late for the same accident.
+
+`scripts/dogfood-lap.md` documents a preflight for exactly this and rondo#103 made it runnable as
+`npm run preflight:model-tier`. A preflight is a step somebody has to remember. Refusing is a
+property, and this entry is where the property is put.
+
+### Why it is not a line in `runPlan()`, and not the boundary's fault
+
+rondo#103 named the obvious fix — refuse in `runPlan()` — and named the obstacle: `src/refrain`
+may not import `src/continuo` (`D-0017` rule 2, with a planted-violation corpus in
+`test/architecture/import-boundaries.test.ts`). Both halves of that framing need correcting, and
+the corrections point at the same place.
+
+**The boundary forbids an arrow, not a fact.** `src/refrain/plan.ts` already carries
+`SERVED_RECIPIENTS` — the two recipients continuo's outbox has a handler for, transcribed by hand
+with the revision they were observed at, refused in `runPlan()` "before any worktree or fence is
+created". That is knowledge about continuo, held in the loop, refused in the loop, and it is not an
+import of anything. Rule 2's stated purpose is that **the loop stays testable on a machine with no
+continuo on it**, and a frozen list of strings costs that purpose nothing. So the boundary is not
+what stops the check from being early.
+
+**What stops it being in `runPlan()` is that the field is not a field yet.** `runPlan` passes
+`agentTypeInput` through untouched, deliberately: it is cadenza's input, cadenza's validating
+constructor has not run, and nothing has said the value is an executor policy at all. Reading
+`.executorPolicy.modelTier` off it would be rondo deciding what an executor policy is — the same
+move `grantDisagreement` refuses one function over, where the comment says `record.granted` and not
+`plan.agentTypeInput.granted`, "because the record is the set cadenza validated, and reading the raw
+input would be rondo deciding what a capability set is".
+
+One function call later, at `classify`, the record exists, `classifyPlan` already reads
+`record.executorPolicy.modelTier` off it, and already puts it on the `ClassificationRecord`. **The
+loop is holding the tier at the moment it needs to be judged.** What it is missing is not access —
+it is the answer to one question: *is this a tier rondo prices?*
+
+### Decision
+
+1. **The refusal is at `classify`, in `classifyPlan`, beside `grantDisagreement`.** A plan whose
+   agent type names a tier rondo does not price is `refused` there and the iteration ends at
+   terminal `abandoned` — before `startContinuo`, before the build is verified, before `run admit`,
+   before a fence, a worktree or a child. **No run is created at continuo, so there is nothing for
+   an operator to close**, which is rondo#138's falsifier answered directly.
+
+   The tier is read off the `AgentType` cadenza built and never off `plan.agentTypeInput`, for
+   `grantDisagreement`'s reason, unchanged.
+
+   **The cost is stated rather than buried: one reserved row, ending `abandoned`.** `classify` runs
+   after the reservation and the single-flight lock, so this is not free the way a `runPlan()`
+   refusal is free. It is exactly what a cadenza `refused` already costs today, it is the earliest
+   point at which the question is well-formed, and an abandoned row is a record of a plan somebody
+   should fix — which a silently-rejected plan is not.
+
+2. **It is a refusal and no longer a defect.** Today the same fact arrives as `invokerDefect` and
+   the iteration reads `failed`, which says rondo broke. It did not: an agent type named a tier
+   rondo has no price for, and that is an input an operator wrote and can fix. `mapModelTier`'s
+   own header has called it "rondo's own policy gap" since `D-0021`; this rule makes the *record*
+   say what the header says.
+
+3. **The loop learns the tier names. It never learns a model id.** `src/refrain/classification.ts`
+   gains a frozen `PRICED_MODEL_TIERS` — the *keys* of `MODEL_TIER_TABLE`, nothing else — written
+   in `SERVED_RECIPIENTS`' shape and refused in its manner: the refusal names the tier that was
+   given and the tiers rondo prices, and names no model. `D-0014` rule 1 is the reason and it is
+   untouched by this entry: executor vocabulary — continuo roles and model ids — stops at
+   `src/continuo/roles.ts`, and everything upstream speaks cadenza's neutral names. A *tier name*
+   **is** a cadenza neutral name; it is already on the `ClassificationRecord` and already persisted
+   to `model_tier`. Nothing new crosses.
+
+   **`D-0017` rule 2 is not amended, and no arrow is added.** The table in
+   `test/architecture/import-boundaries.test.ts` keeps `"src/refrain": ["src/refrain", "src/store",
+   "src/cadenza"]`, and the planted violations keep failing in both tempting forms.
+
+4. **The price of rule 3 is one duplicated list, and a test is what holds it.** There is no module
+   both layers may read — `src/continuo` names only itself, and neither `src/store` nor
+   `src/cadenza` is a place a model-tier table belongs — so a tier name added to
+   `MODEL_TIER_TABLE` and not to `PRICED_MODEL_TIERS` would be a tier rondo prices and refuses.
+   `test/continuo/roles.test.ts`, which already asserts that table in both directions, gains the
+   third assertion: the two lists are equal as sets. **Both directions**, because each disagreement
+   is a different bug — a name only in the loop is a plan admitted onto a tier with no price, and a
+   name only in the table is a plan refused for a tier rondo can in fact run.
+
+   Two alternatives were available and are declined. **A per-module exception in the boundary
+   table** (`src/refrain` may import `src/continuo/roles.ts` alone) buys away the duplicated list
+   and pays with the first file-scoped arrow in a table that is deliberately by layer — and it
+   would put the model ids themselves within the loop's reach, which rule 3 exists to prevent.
+   **Moving the tables to a layer both may read** unpicks `D-0021` rule 3's "it lives in one
+   module" and gives the executor vocabulary two addresses to be looked for at.
+
+5. **"Nonexistent tier" and "tier the table does not price yet" are not distinguished, and there is
+   nothing to distinguish them with.** cadenza validates the spelling and states that it knows no
+   tier vocabulary; continuo never sees a tier at all. So no authority anywhere can say a tier
+   *exists* but is unpriced — **priced is the only definition of existence rondo has**, and a
+   second list of known-but-unpriced names would be a table with no reader and a second place to
+   drift. `D-0044` stands unchanged: the tier is chosen by naming an agent type, `standard` is the
+   default, and `mechanical` waits on rondo#96 — and the day a pair is added for it, that pair
+   arrives in `MODEL_TIER_TABLE` and its name in `PRICED_MODEL_TIERS`, in one diff, under the new
+   entry `D-0021` rule 3 already requires.
+
+6. **`performLap` keeps its refusal, and rondo#103's preflight stays.** Neither is now the thing
+   standing between an operator and a `created` run, and both have a job left.
+
+   `mapModelTier`'s check in `performLap` becomes unreachable *through the loop* and is kept as the
+   invoker's own precondition: `src/continuo/` is a library with its own callers, `--model` is on
+   every lap rondo drives (`D-0021` rule 3), and a verb that would otherwise fall through to the
+   worker CLI's default must refuse on its own authority rather than on a caller's diligence. It is
+   a second fence, not a duplicated check.
+
+   `npm run preflight:model-tier` keeps three things the classify refusal does not have: it answers
+   **before any row, lock or database exists**; it is the only check available to somebody
+   composing or reviewing an agent type outside a lap; and it reads the **built** table through
+   `mapModelTier` rather than the loop's transcription of its keys, so it is the drift of rule 4
+   caught from the other side, against the artifact. What changes is its billing:
+   `scripts/dogfood-lap.md` presents it as the step that prevents this failure, and it is now a
+   cheap early answer to a question that is refused anyway.
+
+### What this does not do
+
+- **It does not move where a tier is priced.** `MODEL_TIER_TABLE` stays in
+  `src/continuo/roles.ts`, beside `NEUTRAL_ROLE_TABLE`, with `D-0021` rule 3's rule intact that
+  changing a pair is a new entry and not an edit.
+- **It does not make `classify` the general home of continuo-shaped checks.** The reason this one
+  belongs there is specific: the value is a cadenza field on a cadenza record, and the question
+  asked of it is a membership question in rondo's own vocabulary. A check that needed to know what
+  continuo would *do* with a value still belongs at the seam.
+- **It does not touch the role's path.** `mapNeutralRole` keeps its refusal in `admitRun`, where it
+  already fires before continuo is reached. Pulling it forward to `classify` for symmetry would add
+  a second reader of a table for no defect anybody has measured.
+- **It does not give rondo a way to run an unpriced tier.** There is no override flag, and
+  `D-0044` rule 2's "no per-request tier override" is the reason.
+
+### What would falsify it
+
+- **A plan naming a tier nothing prices is still admitted, and a `created` run is still left
+  behind.** rondo#138's own falsifier, unchanged and kept as the first one.
+- **An unpriced tier ending an iteration at `failed` rather than `abandoned`** — rule 2 not
+  holding, and the record saying rondo broke when an operator's agent type named a tier.
+- **The two lists disagreeing while the suite is green**, which is rule 4's test asserting one
+  direction, or asserting the direction it thought of.
+- **A model id appearing in `src/refrain`.** Rule 3 failing, and `D-0014` rule 1 with it.
+- **cadenza growing a tier vocabulary of its own.** Then the tier names are cadenza's to state and
+  `agentTypeRecord` refuses an unknown one before rondo asks anything; `PRICED_MODEL_TIERS` is
+  deleted and this entry's rule 3 is superseded rather than repaired. This is `D-0021` rule 3's
+  first falsifier arriving, and it makes this check redundant in the good way.
+
+### Annotations this entry adds to earlier entries
+
+- **`D-0021`** gains a dated annotation: rule 3's "an unpriced tier is refused before the spawn"
+  stands, and the refusal is now *also* taken one verb earlier, at `classify`, so that the spawn is
+  no longer the first thing the tier is checked against. The rule's text, its table and its
+  provisional ids are unchanged.
+- **`D-0044`** gains a dated annotation: rule 3's "an unpriced tier is still refused before the
+  spawn (`D-0021` rule 3, unchanged)" reads the same after this entry, and gains one place — the
+  plan is refused at `classify` before a run is admitted. Nothing about how a tier is chosen
+  changes.
