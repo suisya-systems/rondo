@@ -9645,6 +9645,10 @@ lap, plus one escape reproduced directly.
 - **An operator answering from the terminal often enough that the escapes matter.** Rule 3's
   subsection calls the page the surface this is about; if the terminal is where the answering actually
   happens, `D-0004`'s scope is the decision to take and this entry has improved the wrong screen.
+  **Asked and answered at the window on 2026-09-12, before this entry was accepted: the page is where
+  answering happens.** That is what makes the terminal's escapes a residual rather than a deferral
+  with nothing behind it -- the premise was confirmed at a date by a person, and a later reader
+  wanting to reopen this should check whether it still holds rather than whether it was ever checked.
 - **`plan_digest` ceasing to be verified on read, or the payload stopping being stored verbatim**,
   which is what rule 9 rests on for "recorded" meaning anything.
 - **Someone wanting to know what language an old lap's material was actually in.** Rule 8 records the
