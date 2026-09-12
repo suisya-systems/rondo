@@ -7367,10 +7367,15 @@ the one write that is being let through.
    the identity is still asserted by whoever controls the host rather than authenticated, which is
    the same reduction the terminal carries and ends by the same adapter.
 
-6. **A person is shown what a person at the terminal is shown, before they press.** `D-0029`
-   rule 2's material -- the topic branch, the workspace, the commit subjects, the paths and the
-   independent reading -- is rendered beside the button, from the same list of lines
-   `rondo answer` prints. The screen that is easier to reach than a terminal must not also be the
+6. **A person is shown what a person at the terminal is shown, before they press.** That is the
+   gate's own question -- its type, its stage, the worker's rationale and the options it was asked
+   -- and then `D-0029` rule 2's material: the topic branch, the workspace, the commit subjects,
+   the paths and the independent reading. Both are rendered beside the button, from the same lines
+   `rondo answer`'s reading mode prints. The question is not in rondo's store and is read with one
+   `gate show`; a continuo that will not start is a **line saying the question could not be read**
+   and never a refusal, because `web` is dispatched ahead of `startContinuo` so that the screen
+   saying what is stuck stays reachable when continuo is one of the stuck things -- and a person
+   who presses on a page that says so is pressing knowingly. The screen that is easier to reach than a terminal must not also be the
    screen that asks for less before it writes, and two renderings of that material would be two
    things to keep true. It is read only for the row that carries a button, because it shells out to
    `git` and a page redrawing every five seconds must not inspect every workspace it can see.
@@ -7458,12 +7463,16 @@ from the press onward is the real path: continuo's own CLI, six verbs, and rondo
   `status: closed`, `gate_outcome: answered_and_forwarded`. **Row 9 is rule 5 observed**: the actor
   the press wrote is `happy_ryo` under `actor_kind: human`, which is `RONDO_APPROVER` and is spelled
   exactly as the terminal spells it.
-- **The work is shown beside the button** (added after the second Codex round, which found this
-  missing). The page's `<pre class="material">` for the seeded row carried the topic branch, the
-  workspace path, the unreadable-workspace line for a workspace that does not exist, and
-  `review  no independent reading of this work was recorded.` -- which is `rondo answer`'s own
-  material, from one list of lines rather than a second rendering. The press that followed it was
-  **303**, and the walk and the close reproduced exactly as above.
+- **The question and the work are shown beside the button** (both added after Codex rounds two and
+  three, which found each missing in turn). The page's `<pre class="material">` for the seeded row
+  carried, in order: `gate g-web-approve-005 (merge_approval) stage 'received'`, the worker's
+  rationale, `options ["approve","revise"]`, then the topic branch, the workspace path, the
+  unreadable-workspace line for a workspace that does not exist, and `review  no independent
+  reading of this work was recorded.` -- `rondo answer`'s own reading mode, from one list of lines
+  rather than a second rendering. The press that followed was **303**, and the ledger reproduced
+  exactly: seq 19 `presented -> answered`, `actor_kind: human`, `actor_id: happy_ryo`,
+  `body: approve` at `2026-09-12 00:27:24`; the gate `answered_and_forwarded`; rondo's row
+  `closed`.
 - **What was not measured**: no lap has been answered from the page — the gate above was seeded
   rather than raised by a worker — and no browser was driven. The token, the `Origin` check and the
   redirect were exercised with `curl`, which sends the headers a browser sends but is not one.

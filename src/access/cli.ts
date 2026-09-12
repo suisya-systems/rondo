@@ -1309,11 +1309,11 @@ export async function main(
                 await answerFromPage(environment, store, approver, iterationId, body),
         // Read for the same reason and on the same condition: the material is
         // what a person is shown before they press, so it is drawn exactly
-        // where the button is (D-0029 rule 2).
+        // where the button is (D-0029 rule 2 and D-0041 rule 6).
         material:
           approver === undefined || approver === ""
             ? null
-            : async (record) => await lapMaterialLines(store, record),
+            : async (record) => await pageMaterial(environment, store, record),
         // **The approver and not an `--actor-id`.** An inbox is one person's,
         // and the identity rondo already trusts to answer a gate is the one
         // whose inbox this host draws. Unset is not a refusal: the other two
@@ -2295,6 +2295,58 @@ async function commandAnswer(
     );
   }
   return 0;
+}
+
+/**
+ * Everything a person is shown before they may press: the question, then the work.
+ *
+ * **The gate's own words come first, and they are not in rondo's store.** The
+ * rationale is the worker's account of why it stopped, and the options are what
+ * it was asked -- `commandAnswer`'s reading mode prints both above the material,
+ * and a page offering approval without them would be offering approval of a
+ * question nobody read. Only continuo has them, so this reads one `gate show`.
+ *
+ * **A continuo that will not start is a line and never a refusal**, which is
+ * `inspectLapWork`'s treatment of an unreadable workspace and the same argument:
+ * `web` is dispatched ahead of `startContinuo` so that the screen saying what is
+ * stuck stays reachable when continuo is one of the stuck things, and a render
+ * that threw on it would undo that. What the person loses is the question, and
+ * they are told that is what they lost -- so a press on a page that says the
+ * question could not be read is a press made knowingly.
+ *
+ * ponytail: one `gate show` per open gate per redraw, which at five seconds is a
+ * subprocess every five seconds for each row with a button. Acceptable while the
+ * host has one operator and a handful of live laps; the upgrade is a rondo-side
+ * column holding the question, written when the row reaches `awaiting_human`.
+ */
+async function pageMaterial(
+  environment: Readonly<Record<string, string | undefined>>,
+  store: IterationStore,
+  record: IterationRecord,
+): Promise<readonly string[]> {
+  const lines: string[] = [];
+  const startup = await startContinuo(environment);
+  if (startup.kind === "refused") {
+    lines.push("why     the gate question could not be read: continuo is not usable");
+    lines.push(`        ${startup.reason}`);
+  } else if (record.gateId !== null) {
+    const observed = await showGate(startup.continuo, {
+      db: planField(record, "db"),
+      gateId: record.gateId,
+    });
+    if (observed.kind === "answered") {
+      const gate = observed.payload;
+      lines.push(`gate    ${gate.gateId}  (${gate.gateType})  stage '${gate.stage}'`);
+      // Not `legibleAsciiEscape`d: that exists because a cp932 console may not
+      // encode what a worker wrote, and a browser has no such problem. The
+      // paragraphs survive, which is rondo#90 on the path that matters most.
+      lines.push(`why     ${gate.rationale}`);
+      lines.push(`options ${String(gate.options)}`);
+    } else {
+      lines.push(`why     the gate question could not be read (${observed.kind})`);
+    }
+  }
+  return [...lines, ...(await lapMaterialLines(store, record))];
 }
 
 /**
