@@ -1355,6 +1355,58 @@ test("a claim longer than a listed value is printed rather than replaced (#131)"
   expect(cut).not.toContain(huge);
 });
 
+test("a claim with newlines is quoted under its bullet rather than breaking it (#140)", () => {
+  const claim =
+    "ran npm run verify: green\n\nthen read the diff twice, and the `docs/` hunk\nby hand";
+  const body = text({
+    verificationClaims: [
+      {
+        iterationId: "dogfood-001",
+        claimedAtMs: 1_700_000_000_000,
+        actorId: "operator-1",
+        claim,
+      },
+    ],
+  }).body;
+  // The bullet is one line and says where the claim is; every line of the claim
+  // is inside a fence indented into that bullet, so the list is still a list.
+  expect(body).toContain(
+    "- Before answering, `operator-1` said they had checked, quoted below (4 lines). That is " +
+      "their own account, recorded before rondo walked the gate; rondo did not run it and did " +
+      "not see it run.\n\n  ```\n  ran npm run verify: green\n\n  then read the diff twice, " +
+      "and the `docs/` hunk\n  by hand\n  ```\n",
+  );
+  // No line of the claim is left at the margin, where it would end the list.
+  expect(body).not.toContain("\nby hand");
+
+  // A claim that carries a fence of its own cannot end the quotation early.
+  const fenced = text({
+    verificationClaims: [
+      {
+        iterationId: "dogfood-001",
+        claimedAtMs: 1_700_000_000_000,
+        actorId: "operator-1",
+        claim: "ran:\n```sh\nnpm run verify\n```",
+      },
+    ],
+  }).body;
+  expect(fenced).toContain("  ````\n  ran:\n  ```sh\n  npm run verify\n  ```\n  ````");
+
+  // Bounded as before (#139), with the cut on a line of its own so nothing
+  // inside the quotation is rondo's words wearing the operator's.
+  const cut = text({
+    verificationClaims: [
+      {
+        iterationId: "dogfood-001",
+        claimedAtMs: 1_700_000_000_000,
+        actorId: "operator-1",
+        claim: `first line\n${"x".repeat(4000)}`,
+      },
+    ],
+  }).body;
+  expect(cut).toContain("  [...11 more characters. The whole of it is on this iteration's row");
+});
+
 test("a request that contains a code block cannot end the quotation it is inside", () => {
   const body = text({
     record: published({ request: "Run this:\n\n```sh\nnpm run verify\n```\n\nThen stop." }),
