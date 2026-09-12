@@ -690,3 +690,32 @@ test("a lap that has ended is on the page it just left (rondo#145)", async () =>
   expect(lead(html)).toContain("waiting for your answer (0)");
   expect(lead(html)).toContain("running now (0)");
 });
+
+test("an explanation nobody can answer is not a thing waiting on you (rondo#145)", async () => {
+  const world = fresh();
+  await reserve(world, "i-0001", "do the thing");
+  await openGate(world, "i-0001");
+
+  // Every press records one of these (D-0042 rule 1), and `openProposals`
+  // returns it for ever: `recordDecision` refuses the non-binding kinds, so
+  // nothing can ever settle it. Counting it as waiting would make the queue
+  // climb by one with each approval and never come back down.
+  expect(
+    await recordPagePress(
+      // Before the bound this page's clock reads: `openProposals` is asked
+      // `uptoMs`, so a proposal recorded after it would be outside the window
+      // for a reason that has nothing to do with what is under test here.
+      { store: world.store, record: world.record, now: () => 4_000, present: () => undefined },
+      "i-0001",
+    ),
+  ).toEqual({ ok: true, note: "" });
+  expect(rows(world.connection, "proposal")).toBe(1);
+
+  const html = await operatorPage(portsOver(world));
+  const opened = await operatorPage(portsOver(world), null, { kind: "reading" });
+
+  // One row waits: the iteration at its gate. The explanation is material, and
+  // it is in the reading where the inbox already lists it by authority.
+  expect(lead(html)).toContain("waiting for your answer (1)");
+  expect(reading(opened)).toContain("proposals that bind nothing (1)");
+});

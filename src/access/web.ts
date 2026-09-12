@@ -73,6 +73,7 @@ import {
 import type { HostPolicy } from "../refrain/policy.js";
 import {
   type IterationRecord,
+  isApprovableKind,
   isTerminal,
   type NonTerminalStatus,
   type OpenProposal,
@@ -700,7 +701,15 @@ export async function operatorPage(
     (side === "waitingOnYou" ? waiting : running).push(row.record);
   }
   const unreadable = live.filter((row) => row.kind === "unreadable");
-  const open = inbox?.open ?? [];
+  // **Only the ones an answer can settle** (D-0032 rule 5). `openProposals`
+  // returns every proposal nobody has decided, and an explanation is
+  // undecidable by construction -- `recordDecision` refuses the non-binding
+  // kinds -- so every press this page makes would leave a row here for ever and
+  // the count would climb with each approval. The test is
+  // {@link isApprovableKind}, the closed set the compiler checks, which is what
+  // `inbox` splits on too; the rest are in the reading, in the inbox's own two
+  // sections, where they are material rather than a queue.
+  const open = (inbox?.open ?? []).filter((proposal) => isApprovableKind(proposal.kind));
   // Reused rather than asked again when the inbox already asked: it is a
   // continuo subprocess per running lap, and this page redraws itself.
   const transcripts = inbox?.transcripts ?? (await locateRunning(ports, live));
