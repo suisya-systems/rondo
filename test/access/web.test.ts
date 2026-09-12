@@ -254,11 +254,14 @@ test("the page shows what inbox, between and explain show", async () => {
   await reserve(world, "i-0001", "do the thing");
 
   const html = await operatorPage(portsOver(world));
+  const opened = await operatorPage(portsOver(world), null, { kind: "reading" });
 
-  expect(html).toContain("inbox for 'ada'");
-  expect(html).toContain("what spans the live laps");
-  expect(html).toContain("iteration 'i-0001'");
+  // The lead answers the operator's questions; the reading is where the three
+  // commands' own compositions are, whole (rondo#145).
   expect(html).toContain("do the thing");
+  expect(opened).toContain("inbox for 'ada'");
+  expect(opened).toContain("what spans the live laps");
+  expect(opened).toContain("iteration 'i-0001'");
   // The page says out loud what a redraw does, because a screen that moves a
   // last-look mark by being left open is worse than one that says it does not.
   expect(html).toContain("a redraw writes nothing");
@@ -268,12 +271,21 @@ test("the page shows what inbox, between and explain show", async () => {
 test("looking at the page writes nothing", async () => {
   const world = fresh();
   await reserve(world, "i-0001", "do the thing");
+  await openGate(world, "i-0001");
 
-  // Three draws, which is what a page that refreshes itself does while nobody
-  // is at the desk. Each of them would have been a presentation counted and a
-  // last-look mark moved if this surface had the command line's ports.
+  // Three draws of each view, which is what a page that refreshes itself does
+  // while nobody is at the desk -- and the redraw of an answering view left
+  // open on a desk is the one that matters most, because that view composes the
+  // very framing a press records. Each of them would have been a presentation
+  // counted and a last-look mark moved if this surface had the command line's
+  // ports (D-0041).
   for (let draw = 0; draw < 3; draw += 1) {
-    await operatorPage(portsOver(world));
+    await operatorPage(portsOver(world, "ada", []), "t");
+    await operatorPage(portsOver(world, "ada", []), "t", { kind: "reading" });
+    await operatorPage(portsOver(world, "ada", []), "t", {
+      kind: "answer",
+      iterationId: "i-0001",
+    });
   }
 
   expect(rows(world.connection, "proposal")).toBe(0);
@@ -338,10 +350,14 @@ test("a press records the framing it rests on, and one that cannot be recorded a
 test("an empty store renders a page rather than an error", async () => {
   const html = await operatorPage(portsOver(fresh(), null));
 
-  expect(html).toContain("what spans the live laps");
-  // No approver, no inbox -- and the page says which, rather than drawing
-  // somebody else's or showing an empty one as though it were theirs.
-  expect(html).toContain("RONDO_APPROVER is not set");
+  expect(html).toContain("Nothing is waiting on you");
+  // No approver, no inbox -- and the page says which **where it is visible**,
+  // rather than drawing somebody else's, showing an empty one as though it were
+  // theirs, or explaining a missing button only inside the fold.
+  expect(lead(html)).toContain("RONDO_APPROVER is not set");
+  expect(await operatorPage(portsOver(fresh(), null), null, { kind: "reading" })).toContain(
+    "what spans the live laps",
+  );
 });
 
 test("a request keeps its paragraphs and its markup is text (rondo#90)", async () => {
@@ -391,7 +407,16 @@ test("it serves the page on localhost, and only the one page", async () => {
   // carries the genuine token from the loopback origin. The browser is what
   // refuses that, and only if it is told to.
   expect(page.headers.get("content-security-policy")).toBe("frame-ancestors 'none'");
-  expect(await page.text()).toContain("what spans the live laps");
+  expect(await page.text()).toContain("waiting for your answer");
+
+  // **The reading is the same page at a second address**, and the redraw it
+  // serves points back at that address -- so the fold an operator opened is
+  // still open five seconds later, which is what makes it a fold (rondo#145).
+  const withReading = await fetch(`${base}/?reading=open`);
+  expect(withReading.status).toBe(200);
+  const readingHtml = await withReading.text();
+  expect(readingHtml).toContain("what spans the live laps");
+  expect(readingHtml).toContain('content="5;url=/?reading=open"');
 
   // One page and no router: a typo'd path says so rather than quietly showing
   // the only page there is.
@@ -420,21 +445,43 @@ test("the button is drawn only where there is a gate and somebody to answer it",
   await reserve(world, "i-0001", "do the thing");
   const pressed: Pressed = [];
 
-  // Reserved and not yet at a gate: nothing is asking, so nothing is offered.
+  const answering = { kind: "answer", iterationId: "i-0001" } as const;
+
+  // Reserved and not yet at a gate: nothing is asking, so nothing is offered --
+  // and the view that would carry a button does not invent one either.
   expect(await operatorPage(portsOver(world, "ada", pressed), "t")).not.toContain("<form");
+  expect(await operatorPage(portsOver(world, "ada", pressed), "t", answering)).not.toContain(
+    "<form",
+  );
 
   await openGate(world, "i-0001");
-  const offered = await operatorPage(portsOver(world, "ada", pressed), "t");
+  // The summary is the way to the button and not the button: it names the row
+  // and points at the address that carries the framing a press records.
+  const summary = await operatorPage(portsOver(world, "ada", pressed), "t");
+  expect(summary).not.toContain("<form");
+  expect(summary).toContain('href="/?answer=i-0001"');
+
+  const offered = await operatorPage(portsOver(world, "ada", pressed), "t", answering);
   expect(offered).toContain('method="post"');
   expect(offered).toContain("gate-i-0001");
   // **What the press would approve over, beside the press** (D-0029 rule 2).
   // The screen that is easier to reach than the terminal must not also be the
   // screen that asks for less before it writes.
   expect(offered).toContain("work    rondo/i-0001");
+  // And a row named by the query that is not at a gate gets neither: the
+  // conditions are the same ones `rondo answer` refuses on.
+  expect(
+    await operatorPage(portsOver(world, "ada", pressed), "t", {
+      kind: "answer",
+      iterationId: "i-0404",
+    }),
+  ).not.toContain("<form");
 
-  // No approver, no write port, no button -- even at the same open gate. The
-  // page is not a second place rondo will act for an unnamed person.
+  // No approver, no write port, no button -- even at the same open gate, and
+  // not on the answering view either. The page is not a second place rondo will
+  // act for an unnamed person.
   expect(await operatorPage(portsOver(world, null), "t")).not.toContain("<form");
+  expect(await operatorPage(portsOver(world, null), "t", answering)).not.toContain("<form");
 });
 
 test("a person's press answers the gate and an unattended redraw cannot", async () => {
@@ -451,7 +498,7 @@ test("a person's press answers the gate and an unattended redraw cannot", async 
   }
   expect(pressed).toEqual([]);
 
-  const token = tokenIn(await (await fetch(`${base}/`)).text());
+  const token = tokenIn(await (await fetch(`${base}/?answer=i-0001`)).text());
   const answered = await post(base, { token, iteration: "i-0001", body: "revise" });
 
   // The body the form carried is ignored: the button's word is the module's
@@ -471,7 +518,7 @@ test("a form from another page is refused, token first and origin too", async ()
   await openGate(world, "i-0001");
   const pressed: Pressed = [];
   const { base, stop, served } = await serving(portsOver(world, "ada", pressed));
-  const token = tokenIn(await (await fetch(`${base}/`)).text());
+  const token = tokenIn(await (await fetch(`${base}/?answer=i-0001`)).text());
 
   // **The attack the `Host` check does not reach.** A form on evil.example
   // posting to http://127.0.0.1:7333/ sends exactly the `Host` the operator's
@@ -504,7 +551,7 @@ test("a refusal from the write port is shown rather than redirected away", async
       await Promise.resolve({ ok: false, note: "continuo is not usable: no CLI" }),
   };
   const { base, stop, served } = await serving(ports);
-  const token = tokenIn(await (await fetch(`${base}/`)).text());
+  const token = tokenIn(await (await fetch(`${base}/?answer=i-0001`)).text());
 
   const refused = await post(base, { token, iteration: "i-0001" });
   // 303 back to a page still showing the same open gate would be the one answer
@@ -515,4 +562,160 @@ test("a refusal from the write port is shown rather than redirected away", async
 
   stop.abort();
   expect(await served).toBe(0);
+});
+
+/** The visible page: everything a browser draws before the fold is opened. */
+function lead(html: string): string {
+  return html.slice(0, html.indexOf('<p class="fold">'));
+}
+
+/** The fold: what the second address of the page adds below the link. */
+function reading(html: string): string {
+  return html.slice(html.indexOf('<p class="fold">'));
+}
+
+test("an idle store says zero once rather than nine times (rondo#145)", async () => {
+  const html = await operatorPage(portsOver(fresh()));
+  const opened = await operatorPage(portsOver(fresh()), null, { kind: "reading" });
+
+  // The measurement in the issue: nine phrasings of nothing, of which this is
+  // the shape. One sentence now stands where they did, and it carries what it
+  // rests on -- which is not the same as the page having stopped saying it.
+  expect(lead(html)).toContain(
+    "Nothing is waiting on you, nothing is running, and nothing has finished.",
+  );
+  expect(lead(html)).not.toContain("proposals that bind nothing");
+  expect(lead(html)).not.toContain("an admission a bound refused");
+  expect(lead(html)).not.toContain("you have never looked");
+  // Folded and not hidden (D-0032): every one of them is still on the page,
+  // under the basis it always had.
+  expect(reading(opened)).toContain("proposals that bind nothing (0)");
+  expect(reading(opened)).toContain("an admission a bound refused");
+  expect(reading(opened)).toContain("snapshot /refusals = []");
+  // **The fold survives the redraw, because the URL holds it open and not the
+  // browser.** A `<details>` would be shut again five seconds later, and a page
+  // with no script could not reopen it -- which would make this a hiding.
+  expect(opened).toContain('content="5;url=/?reading=open"');
+  expect(html).toContain('content="5;url=/"');
+});
+
+test("the page is ordered by the operator's three questions (rondo#145)", async () => {
+  const world = fresh();
+  await reserve(world, "i-0001", "do the thing");
+
+  const html = await operatorPage(portsOver(world));
+  const at = (heading: string) => lead(html).indexOf(heading);
+  const opened = await operatorPage(portsOver(world), null, { kind: "reading" });
+
+  expect(at("waiting for your answer")).toBeGreaterThan(-1);
+  expect(at("running now")).toBeGreaterThan(at("waiting for your answer"));
+  expect(at("just finished")).toBeGreaterThan(at("running now"));
+  // rondo's own vocabulary is below the questions, not in place of them.
+  expect(at("what spans the live laps")).toBe(-1);
+  expect(html).toContain('href="/?reading=open"');
+  expect(reading(opened)).toContain("what spans the live laps");
+});
+
+test("a lap at a gate carries its cost and its fence beside the button (rondo#145)", async () => {
+  const world = fresh();
+  await reserve(world, "i-0001", "do the thing");
+  await openGate(world, "i-0001");
+  const settled = await world.store.transition(
+    "i-0001",
+    "awaiting_human",
+    "awaiting_human",
+    { lapCostUsd: 1.42, lapTurns: 18, permissionDenials: '["Bash(rm:*)"]' },
+    3_000,
+  );
+  expect(settled.kind).toBe("transitioned");
+
+  const html = await operatorPage(portsOver(world, "ada", []), "t");
+  const answering = await operatorPage(portsOver(world, "ada", []), "t", {
+    kind: "answer",
+    iterationId: "i-0001",
+  });
+
+  // What it cost (#124), what its fence refused (#122) and what releases it,
+  // on the row a person came to act on -- and the row cited once above them
+  // rather than a basis under each (rondo#91).
+  expect(lead(html)).toContain("cost $1.42, 18 turns, duration not read");
+  // The bytes continuo wrote, as HTML text: the array is quoted in the column
+  // and the page escapes rather than re-encodes it.
+  expect(lead(html)).toContain("the fence refused [&quot;Bash(rm:*)&quot;]");
+  expect(lead(html)).toContain("answer gate gate-i-0001");
+  expect(lead(html)).toContain('<p class="basis">iteration i-0001</p>');
+
+  // **The button is on the page that showed what a press records** (D-0042
+  // rules 1 and 4). `recordPagePress` stores `explainIteration`'s entire claim
+  // set and counts it as presented, so every one of those claims has to have
+  // reached the browser: a summary with a button would record a presentation
+  // that did not happen, and two dozen claims per waiting row on the summary is
+  // the screen rondo#145 is about. So the summary is the way there and the
+  // answering view is the press.
+  expect(html).not.toContain("<form");
+  expect(lead(html)).toContain('href="/?answer=i-0001"');
+  expect(answering).toContain('method="post"');
+  expect(answering).toContain("What pressing approve records as shown");
+  expect(answering).toContain("snapshot /iteration/lapCostUsd = 1.42");
+  expect(answering).toContain("snapshot /iteration/lapDurationMs = null");
+  expect(answering).toContain("work    rondo/i-0001");
+  // The redraw is pointed back at the view being read, so the page an operator
+  // is deciding on is still there five seconds later.
+  expect(answering).toContain('content="5;url=/?answer=i-0001"');
+
+  // A summary reads neither the framing nor the material: both cost a read per
+  // row, on a surface that redraws every five seconds.
+  expect(html).not.toContain("What pressing approve records as shown");
+  expect(html).not.toContain("work    rondo/i-0001");
+});
+
+test("a lap that has ended is on the page it just left (rondo#145)", async () => {
+  const world = fresh();
+  await reserve(world, "i-0001", "do the thing");
+  await openGate(world, "i-0001");
+  const closed = await world.store.transition(
+    "i-0001",
+    "awaiting_human",
+    "closed",
+    { gateOutcome: "approve" },
+    4_000,
+  );
+  expect(closed.kind).toBe("transitioned");
+
+  const html = await operatorPage(portsOver(world));
+
+  expect(lead(html)).toContain("just finished (1)");
+  expect(lead(html)).toContain("closed 1s ago -- gate answered 'approve'");
+  // Nothing is running and nothing is waiting, and the page says each once.
+  expect(lead(html)).toContain("waiting for your answer (0)");
+  expect(lead(html)).toContain("running now (0)");
+});
+
+test("an explanation nobody can answer is not a thing waiting on you (rondo#145)", async () => {
+  const world = fresh();
+  await reserve(world, "i-0001", "do the thing");
+  await openGate(world, "i-0001");
+
+  // Every press records one of these (D-0042 rule 1), and `openProposals`
+  // returns it for ever: `recordDecision` refuses the non-binding kinds, so
+  // nothing can ever settle it. Counting it as waiting would make the queue
+  // climb by one with each approval and never come back down.
+  expect(
+    await recordPagePress(
+      // Before the bound this page's clock reads: `openProposals` is asked
+      // `uptoMs`, so a proposal recorded after it would be outside the window
+      // for a reason that has nothing to do with what is under test here.
+      { store: world.store, record: world.record, now: () => 4_000, present: () => undefined },
+      "i-0001",
+    ),
+  ).toEqual({ ok: true, note: "" });
+  expect(rows(world.connection, "proposal")).toBe(1);
+
+  const html = await operatorPage(portsOver(world));
+  const opened = await operatorPage(portsOver(world), null, { kind: "reading" });
+
+  // One row waits: the iteration at its gate. The explanation is material, and
+  // it is in the reading where the inbox already lists it by authority.
+  expect(lead(html)).toContain("waiting for your answer (1)");
+  expect(reading(opened)).toContain("proposals that bind nothing (1)");
 });
