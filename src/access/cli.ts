@@ -93,7 +93,7 @@ import {
   pushTopicBranch,
 } from "./forge.js";
 import { type InboxOutcome, showInbox, type TranscriptLocation } from "./inbox.js";
-import { evidenceOf, READING_REMOTE } from "./review.js";
+import { evidenceOf, LIST_LIMIT, READING_REMOTE, uncommittedPaths } from "./review.js";
 import { serveOperatorPage } from "./web.js";
 import { type Chrome, EN } from "./wording.js";
 
@@ -2527,6 +2527,45 @@ export function reviewLines(reading: LapReading): readonly string[] {
 }
 
 /**
+ * Why `publish` will not push a workspace that still holds uncommitted paths,
+ * or null when it holds none (D-0060 rules 4 to 6).
+ *
+ * **Pure, and it takes no `despiteReview`.** That flag overrules a judgement;
+ * this is git reporting that the push would leave named files behind, the
+ * class of `publishPreflight`'s "has no branch", which no flag reaches either.
+ * An unreadable workspace is not refused here: `reviewGate` already refuses it,
+ * and the preflight has read the branch this would push.
+ *
+ * rondo commits nothing on the lap's behalf, so the refusal names the remedies
+ * that already exist, in the decision's order, and says up front what the
+ * hand-commit remedy will cost on the next attempt.
+ */
+export function uncommittedRefusal(
+  work: LapWorkInspection,
+  workspace: string,
+  topicBranch: string,
+): string | null {
+  if (work.kind !== "read" || work.uncommitted.length === 0) {
+    return null;
+  }
+  const branchNote =
+    work.checkedOut === topicBranch
+      ? ""
+      : ` (the workspace has '${work.checkedOut}' checked out, not '${topicBranch}')`;
+  return (
+    `the workspace ${workspace} holds ` +
+    `${uncommittedPaths(work.uncommitted, `that are not on the branch '${topicBranch}'`)}` +
+    `${branchNote}. The push would leave them behind, and --despite-review does not change ` +
+    "that. Answer it about the paths, not the publish: " +
+    "(1) retry the lap ('rondo propose', then 'rondo retry'), so the lap commits its own work and " +
+    "a new reading reads it; " +
+    "(2) commit them by hand in the workspace -- that moves the branch, so the recorded reading " +
+    "no longer describes it and publishing then takes --despite-review; " +
+    "(3) discard them, or add them to the workspace's .git/info/exclude, if they are not work."
+  );
+}
+
+/**
  * Whether the recorded reading lets `publish` run without being overruled.
  *
  * **Pure, and over both halves of the comparison**, for the reason
@@ -3881,6 +3920,15 @@ async function commandPublish(
   // composed later would preview everything except the part a person can only
   // check by reading it.
   const work = await inspectLapWork({ workspace, remote, baseBranch, topicBranch });
+  // **Before the reading is weighed, and not reachable by `--despite-review`**
+  // (D-0060 rules 4 and 5). Checked on this fresh read rather than trusted from
+  // the reading, because work added to the worktree after a clean reading is a
+  // staleness the material digest cannot see. First among the review refusals
+  // so an operator is not sent to a flag that cannot answer it.
+  const left = uncommittedRefusal(work, workspace, topicBranch);
+  if (left !== null) {
+    return refuse(left);
+  }
   // **The predecessor is read, not assumed** (#132). Whether that lap's commits
   // are on this branch is a fact about its row, and since D-0047 a predecessor
   // is as likely to be a retry's abandoned subject as a revision's answered
@@ -4047,9 +4095,6 @@ function reportCommand(
  * middle of a sentence**, which is the defect the first real publish printed.
  */
 const TITLE_LIMIT = 120;
-
-/** How many commits, and how many paths, a body lists before it counts the rest. */
-const LIST_LIMIT = 20;
 
 /**
  * How long one listed commit subject or path may be before it is described
