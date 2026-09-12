@@ -94,6 +94,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0054 | The page may run one script, and it is a poller and a morph rather than a framework: liveness decided per view, `D-0041` rule 3a re-founded on the server's types, and one vendored 10 KB file no build ever touches | accepted |
 | D-0055 | The chrome is prose the operator reads, and its language comes from the host's one operator: the line drawn at the span rather than at the string, recorded words left in English, and `<html lang>` naming what rondo actually wrote | accepted |
 | D-0056 | The chrome's language follows the browser and is remembered, and the resolution is never silent: five steps with the first answer winning, the resolved tag put back into the URL, and one cookie that is a memory and not a record | accepted |
+| D-0057 | The page is priced against four frameworks and stays hand-written: 96 lines of 1,233 taken over, three invariants that stop being types, and `D-0007` kept because a build leaves the pin check nothing to check | accepted |
 | D-0058 | The second `resume` leaves the handbook: idempotence is a property the suite already proves more strongly than a walk can observe it, the surface keeps one `resume` per answering act on purpose, and no verb is added on the strength of a sentence | accepted |
 
 ---
@@ -9710,6 +9711,21 @@ lap, plus one escape reproduced directly.
 **Status:** accepted (2026-09-12, rondo's human gate). Refs rondo#163, rondo#160, rondo#95, `D-0041`,
 `D-0042`, `D-0007`, `D-0032`.
 
+> **Annotation (2026-09-13, from D-0057).** Added after this entry was accepted, and additive:
+> nothing below is removed or rewritten, and **nothing this entry decided is changed**. Rule 3's
+> supporting sentence -- *"an unattended redraw writes nothing because the code path a `GET` reaches
+> cannot write, and the compiler says so (`D-0041` rule 4's `Pick`ed ports, untouched here)"* -- is
+> **more precise than the type supports, and `D-0057` measured which half**. The `Pick` makes the
+> **store** unwritable from `src/access/web.ts`, exactly as claimed. But `WebPorts` also carries
+> `answer`, the one write function, and `operatorPage` is handed the whole object -- so the compiler
+> does **not** forbid the render path from writing; the method branch in `serveOperatorPage`, and
+> `handleApprove` being `answer`'s only caller, are what do. What the type gives is `D-0041` rule
+> 4's own and narrower claim: the page's writing vocabulary is one sentence long, readable off one
+> declaration, and widening it is a visible change to that declaration. **Rule 3's conclusion stands
+> unchanged** -- an unattended redraw writes nothing, and 3(a)'s work did move to the server -- so
+> this is an annotation and not a supersession. `D-0057` rule 2(a) is written against the precise
+> version, and `D-0057`'s falsifier *"the render path calling `ports.answer`"* is the thing to watch.
+
 `D-0041` rule 3(a) carries rondo#95's constraint verbatim: *"there is no script on the page -- no
 `fetch`, no `XMLHttpRequest`, no client-side build"*, and it is load-bearing there as one of three
 runtime facts standing between an unattended redraw and the ledger. rondo#160 is what that
@@ -10907,3 +10923,475 @@ At `f869657`, in this worktree:
 - **`D-0023` rule 15** gains one: its terminal-row refusal is what makes a second press impossible on
   both the command and the page, and `D-0058` reads that as intended rather than as the gap rondo#161
   might have been describing.
+
+---
+
+## D-0057 — The page is priced against four frameworks and stays hand-written: 96 lines of 1,233 taken over, three invariants that stop being types, and `D-0007` kept because a build leaves the pin check nothing to check
+
+**Status:** accepted (2026-09-13, rondo's human gate). Refs rondo#172, `D-0054`, `D-0055`, `D-0056`,
+`D-0041`, `D-0042`, `D-0007`, `D-0020`, `D-0006`, `D-0002`.
+
+`D-0054` decided *no framework, one vendored morph*, and priced htmx, Datastar, Alpine and Web
+Awesome against a page that had no script on it. Three entries later the page also owns
+`Accept-Language` parsing with `q`-ordering and `q=0` as a refusal, BCP 47 lookup with the singleton
+rule, a language cookie and its write condition, a canonicalising redirect so a credential-less
+redraw cannot revert the language, `vary` bookkeeping, a wording catalogue with an English fallback,
+and an asset route with a digest discipline of its own. rondo#172's observation is the honest one:
+each step was the minimal answer to the question in front of it, and **summed they look like a small
+framework somebody wrote by hand** -- including two defects Codex caught on the way (`ja-!!`
+truncating into the `ja` set; a browser's explicitly refused language being served) that a mature
+implementation would not have had.
+
+The operator named **TanStack Start** and authorised UI components. This entry is a **pricing** and
+not an adoption: it measures what rondo owns, measures what each candidate takes over, and decides.
+It adopts nothing, and the reason is not thrift -- it is that the deciding constraint turns out to
+be the one #172 named as the hard one, and every candidate that removes a material number of lines
+fails it in the same way.
+
+**A morph sat under this page; a framework sits over it, and that difference is the whole entry.**
+`idiomorph` is a function the page calls with two documents. TanStack Start, Next, Astro and
+SvelteKit are composition roots: they own the process, the request, the routing table, the render
+and the boundary between server and client. rondo's invariants are not properties of its markup --
+they are properties of **who holds the ports** (`D-0041` rule 4) and of **which module can reach
+which** (`D-0006`). A library under the page cannot touch either. A framework over the page owns
+both by construction. So the question is never "is the framework good"; it is "can rondo still say
+the three things it says, on a runtime rondo does not own", and that question has a measured answer.
+
+### What rondo owns today, in lines
+
+Measured on **2026-09-13** from this tree. The unit is **non-blank, non-comment lines**, counted
+over the named ranges; this repository's comment-to-code ratio is high on purpose, so a raw `wc -l`
+would price documentation as machinery. `src/access/web.ts` is 1,703 lines and 826 of them are code,
+and the buckets below partition those 826 exactly.
+
+| Concern | Where | Lines |
+|---|---|---|
+| **i18n -- the catalogue** (`Chrome`'s shape, the `EN` set, the `JA` set) | `src/access/wording.ts:51-497` | **323** |
+| **i18n -- negotiation and selection** | `wording.ts:498-586` (32) + `web.ts` (106) + `refrain/plan.ts:546-548` (3) | **141** |
+| **Routing** -- three views in one address, the 404, the method allow-list | `web.ts`: `PageView` 4, `viewHref` 8, `viewOf` 8, path 404 4, method 405 4 | **28** |
+| **Asset serving** -- the two files this process serves to a browser | `web.ts`: `ASSETS` 4 + the read branch 17 | **21** |
+| **Update in place** -- the poll and the morph | `page/poll.js` 15 + `web.ts` script/`<noscript>` 9, `REFRESH_SECONDS` 1, `isLive` 3 | **28** |
+| Loopback identity -- the `Host` and `Origin` checks | `web.ts:1357-1401` + the 421 branch | 24 |
+| The one write -- form read, per-process token, `approve` | `web.ts`: `readForm` 19, `handleApprove` 40, the rest 10 | 69 |
+| Server lifecycle -- bind, announce, close | `web.ts` | 22 |
+| **Rendering rondo's own record as HTML** | `web.ts` | 396 |
+| The page's CSS | `web.ts:1160-1289` | 96 |
+| Port types and module documentation | `web.ts:1-204` | 51 |
+| The supply-chain check | `vendor/pin.mjs` | 37 |
+
+`src/access/web.ts` 826 + `src/access/wording.ts` 355 + `page/poll.js` 15 + `vendor/pin.mjs` 37 =
+**1,233 lines**. The four concerns rondo#172 names are **541** of them, and 323 of those 541 are the
+catalogue -- rondo's own sentences, in two languages, which nothing on this market writes.
+
+Beside them sits the one artifact rondo does not own: `vendor/idiomorph-0.8.0.min.js`, **10,587
+bytes**, sha256 `4cbd535caf7663a51eda9bce6595371c384fc430d54b8d414e29a61167f19f96`, re-verified in
+the tree today and identical to what `D-0054` recorded.
+
+### What a candidate actually takes over
+
+Read against the table above rather than against an impression. Taking TanStack Start as the named
+candidate and the most generous case:
+
+| Concern | rondo lines | Taken over | Why |
+|---|---|---|---|
+| Routing | 28 | **yes, 28** | file-based routing replaces `viewOf`, `viewHref` and the 404 |
+| Asset serving | 21 | **yes, 21** | Vite owns the client build and its serving |
+| Update in place | 28 | **yes, 28** | React reconciliation plus router invalidation replaces poll + morph, and preserves nodes for the same reason idiomorph was bought |
+| The form read | 19 | **yes, 19** | a server function with `method: 'POST'` parses the body |
+| i18n -- negotiation | 141 | **no** | TanStack Start ships none; the ecosystem answer is a third-party library (Paraglide JS, Intlayer, i18next), which is a dependency and not a deletion |
+| i18n -- catalogue | 323 | **no** | rondo's own prose |
+| Rendering the record | 396 | **no** | rondo's own claims, bases, lap rows and fence lines |
+| CSS | 96 | **no** | rondo#153's audited system |
+| Loopback identity, token, `approve` | 74 | **no** | `Host`, `Origin`, the per-process token and the one verb are rondo's whatever serves the page |
+| Server lifecycle | 22 | **no** | replaced rather than removed: a Nitro server instead of `createServer` |
+
+**96 lines of 1,233, or about 8 per cent.** The price of those 96 lines, measured below, is **131
+production packages**, a build step, and the three invariants in the next section.
+
+### The survey, on 2026-09-13
+
+Read from `https://registry.npmjs.org` on this machine. "Packages resolved" is a real
+`npm install --package-lock-only --ignore-scripts` into a scratch directory, counting
+`node_modules/*` entries in the resulting lockfile: it is the production tree, not a download size
+or a bundle estimate. For scale, **rondo's own production tree today is 2 packages** -- the vendored
+cadenza tarball and its one transitive dependency, `smol-toml` -- with 159 further packages dev-only.
+
+| Candidate | Latest, and when | Licence | Packages resolved | Build | i18n included |
+|---|---|---|---|---|---|
+| **TanStack Start** `@tanstack/react-start` | `1.168.52`, **2026-09-10** | MIT | **131** (with `@tanstack/react-router` `1.170.35`, `react` `19.3.0`, `react-dom`, `vite` `8.3.0`) | **required** -- Vite or Rsbuild | **no** |
+| Next.js `next` | `16.3.5`, 2026-09-11 | MIT | 54 (with `react`, `react-dom`) -- but `next` is itself **184.8 MB unpacked over 8,531 files** | required | routing only |
+| Astro `astro` + `@astrojs/node` | `7.3.2`, 2026-09-08 | MIT | **305** | required | i18n routing |
+| SvelteKit `@sveltejs/kit` | `2.70.3`, 2026-08-18 (with `svelte` `5.57.0`, `vite` `8.3.0`) | MIT | 74 | required | no |
+| **Hono** `hono` | `4.13.7`, 2026-09-04 | MIT | **1** | none | no |
+| htmx `htmx.org` | `2.0.10` is `latest` (2026-04-21); `4.0.0` still on `next` | 0BSD | 1 | none | no |
+| Datastar `@starfederation/datastar` | still `1.0.0-beta.11`, **2025-03-30** | MIT | 1 | none | no |
+
+Two readings, before the invariants decide anything.
+
+- **Astro is the candidate whose *shape* is closest to rondo's** -- server-first, zero client
+  JavaScript by default, islands opted into rather than out of -- and it is the most expensive tree
+  on the table at 305 packages. Shape does not predict cost.
+- **`D-0054`'s dated table has not moved in the direction that would reopen it.** htmx 4 is still
+  not `latest` five months on, and Datastar's released v1 is still not on npm under a pinnable name
+  -- the same gap `D-0054` measured on 2026-09-12, unchanged a year after the beta was published.
+  The two entries that would have re-priced those candidates have not arrived.
+
+### The deciding constraint: whether rondo can still say what it says
+
+rondo#172 is right that this is the only hard one. Three invariants, each with **today's mechanism
+measured rather than described**, and each with what it becomes on a framework's runtime.
+
+**1. A redraw writes nothing (`D-0042`; `D-0041` rules 1 and 3(a) as amended).** What the type
+buys, stated exactly, because the loose version of this sentence is wrong and the argument does not
+need it. `WebPorts.store` is `Pick<IterationStore, "read" | "readLive" | "readingsFor" |
+"occupancy" | "terminalIterations">` (`src/access/web.ts:117-120`), so **nothing this module holds
+can write to the store at all**. The one write it can perform arrives as a second, optional field on
+the same object -- `answer: AnswerFromWeb | null`, one function, "carry this body to this
+iteration's open gate" -- and `operatorPage` is handed the whole of `WebPorts`, so **the compiler
+does not forbid the render path from calling it**. What separates the two paths at runtime is the
+method branch in `serveOperatorPage` and `handleApprove` being the only caller, which is a fact
+about the code and not about the type.
+
+So the guarantee is not *unrepresentable*; it is **enumerable**. rondo's whole writing vocabulary on
+this surface is one named function on an injected port, readable off one type in one file, and
+`D-0041` rule 4 says exactly that and no more -- *"the page's whole writing vocabulary is one
+sentence long and widening it is a visible change to a type"*. That is the property, and it is a
+strong one: a reviewer can answer *what can this surface write* by reading `WebPorts`, and any
+answer larger than one sentence shows up in a diff of a type.
+
+On TanStack Start the enumeration is what goes, and this is documented rather than inferred: server
+functions are created with `createServerFn()`, are **statically importable in any file**, are called
+from route loaders that run on a `GET` navigation -- and **`method: 'GET'` and `method: 'POST'`
+server functions share a type signature, so there is no type-level distinction between a reading and
+a writing one**. There is then no type to read: the surface's writing vocabulary is *every writer in
+the program*, and widening it is an import rather than a change to a declaration. `D-0041` rule 4
+argued this case in advance -- *"with a store on the ports, every future edit to this module can
+write anything the store can write and the compiler will agree"* -- and ambient server functions are
+that sentence with the store replaced by the whole program.
+
+**2. Only a person's act writes (`D-0041` rule 1).** Same mechanism, so the same loss. Worth stating
+separately because its consequence is different: rule 1 exists so that `operator_attention` and the
+last-look mark are not lies (`D-0032` rules 9 and 10). A loader that re-runs on invalidation is
+exactly the unattended redraw rule 1 is about, and it would reach the same imports a submit handler
+reaches.
+
+**3. The bytes the ledger records do not depend on the reader's language (`D-0055` rule 4,
+`D-0056` rule 13).** This one is held by **two independent mechanisms today, and only one of them is
+a test.**
+
+- The behavioural half: `test/access/web.test.ts:1136` draws and presses on an `en` host and a `ja`
+  host and asserts the recorded `proposal` and `operator_attention` bytes are equal -- non-vacuously,
+  asserting also that both presses wrote and that the two documents genuinely differed.
+  `:1649` does it again over three hosts that reach `ja` by the query, by the cookie and by
+  `Accept-Language` respectively.
+- The **structural** half, which is the one worth measuring here:
+  `test/architecture/import-boundaries.test.ts` grants `src/advisory` exactly
+  `["src/advisory", "src/store"]`. The wording catalogue lives in `src/access/wording.ts`, and
+  `src/advisory/proposal.ts` composes the recorded payload. **The catalogue is not merely unused
+  from the payload's composition site -- it is unreachable, by a boundary the tree enforces**
+  (`D-0006`), and the boundary was drawn for `D-0022` rule 1's reason and happens to carry this too.
+
+What changes under a library is the **cost and the reach** of that boundary, not its existence, and
+the difference is worth stating precisely because the overstated version is false.
+`ALLOWED_EXTERNALS_BY_MODULE` grants externals **per module and per binding**, so an i18n package
+could be refused to `src/advisory` exactly as `node:child_process` is refused to everything but
+`src/continuo/invoker.ts`. The checker does not stop working. What stops is the *freeness*: today
+the property is a **consequence of a layer rule that already existed** for `D-0022` rule 1's reason
+and that nobody has to remember, and the catalogue is one directory. Under a library it becomes a
+grant somebody adds and maintains per package, and two of the shapes on offer are harder to name
+than a directory is -- Paraglide's compiled `m.*` modules are generated output imported like
+first-party code, and a framework-provided request context is reached through the framework's own
+re-export rather than through the i18n package's name. Both are refusable; both require the refusal
+to be written, kept and re-derived whenever the toolchain regenerates.
+
+So: one invariant goes from a type to a convention plus a test (1 and 2), and one goes from free to
+maintained (3). rondo#172 states the price rule and this entry applies it: **a framework that makes
+those harder to assert than they are today is more expensive than the code it removes.** 96 lines is
+the code it removes.
+
+### `D-0007` under a build: the discipline is kept, and that is what removes the candidates
+
+`D-0007` is two properties. *Upstream code does not execute merely because something was installed*
+(`--ignore-scripts`), and -- since `D-0054` rule 5 and `vendor/pin.mjs` -- *the bytes in the tree are
+the bytes somebody pinned*. Today the second one is total on the browser's side: the page loads
+exactly two files, `idiomorph-0.8.0.min.js` (10,587 pinned bytes) and `page/poll.js` (15 lines rondo
+wrote), and `ASSETS` is a fixed map so no request can name a third.
+
+Under a framework the browser receives **build output**: bytes that existed in no tarball, produced
+by a toolchain of 131 packages. The interesting part is what happens to the check rather than to the
+rule.
+
+- **`--ignore-scripts` is not weakened and stops being the relevant question.** It governs
+  `install`. `vite build` is a script rondo would run deliberately, with the whole dependency tree in
+  scope, and no flag covers it.
+- **`vendor/pin.mjs` would still pass, and would be checking nothing.** It verifies the artifacts it
+  lists; under a build, none of the bytes the browser executes is one of them. A check that passes
+  while establishing nothing is worse than a check that fails, because the green is read as the
+  property.
+
+That is the decision to take rather than discover, and rondo#172 says so in as many words. **The
+discipline is kept, unamended.** Its consequence is stated as a rule below and it is what removes
+TanStack Start, Next, Astro and SvelteKit together -- not one at a time on their merits, but as a
+class, for a property all four share and Hono and htmx do not.
+
+### UI components, in the same decision
+
+The operator has authorised bringing components in, and the bar named is *what engineers now hold a
+developer tool to*. Measured on 2026-09-13:
+
+| Candidate | Latest, and when | Licence | Kind | Verdict |
+|---|---|---|---|---|
+| Web Awesome `@awesome.me/webawesome` | `3.12.0`, 2026-08-21 | MIT | custom elements | 35 packages; refused by `D-0054` rule 7 |
+| Shoelace `@shoelace-style/shoelace` (archived 2026-05-14) | `2.20.1`, **2025-03-11** | MIT | custom elements | refused by rule 7, and unmaintained |
+| Radix Themes `@radix-ui/themes` | `3.3.0`, 2026-01-31 | MIT | React components | refused by rule 3; rule 7 for the interactive members |
+| Base UI `@base-ui-components/react` | `1.0.0-rc.0`, **2025-12-04** | MIT | React components, still `rc` | refused by rule 3; and `rc` nine months on |
+| shadcn | `4.21.0`, 2026-09-04 | MIT | a CLI that copies React source in | refused by rule 3 |
+| daisyUI | `5.7.37`, 2026-09-11 | MIT | a Tailwind plugin, i.e. CSS | 0 dependencies, but refused by rule 3 |
+| Pico CSS `@picocss/pico` | `2.1.1`, **2025-03-15** | MIT | classless CSS | survives both rules |
+| Open Props | `1.7.23`, 2026-01-31 | MIT | CSS custom properties | survives both rules |
+
+**Two different refusals, and conflating them would be the mistake**, because they cut the market in
+different places and only one of them is about `D-0054` rule 7.
+
+- **Custom elements are refused by rule 7, and the refusal is about the kind.** That rule says the
+  page is legible, complete and correct with the script absent, blocked or broken, and that *nothing
+  the operator must read or press may be produced by script*. `<wa-button>` is markup that is inert
+  until its definition is registered and upgraded; with the bundle blocked or 404ing, the approve
+  button is a custom tag the browser renders as an unstyled inline box with no submit behaviour.
+  That is the precise failure rule 7 exists to prevent, on the one screen where it means a person
+  cannot answer a gate. Not a judgement about quality: Web Awesome is the healthy choice in that
+  market and `D-0054` already said so.
+- **React sets are refused by rule 3, and rule 7 reaches only some of their members.** Said plainly
+  because the blanket version is false: a server-rendered React component can emit
+  `<button type="submit">` inside an ordinary `POST` form, and that button is readable and pressable
+  with scripting off, exactly as today's is. What needs hydration is the interactive furniture --
+  a dialog, a combobox, a dropdown -- and this page has none and wants none. So the disqualifier for
+  Radix Themes, Base UI and shadcn is not rule 7 at all: it is rule 3, because reaching a React
+  component's server output at all requires JSX, which requires a build, which puts unpinned bytes in
+  front of the browser. Rule 7 would then decide, per component, whether the component may be used --
+  and that question never arises, because rule 3 answered first.
+
+What survives both rules is CSS, and **the page already is 96 lines of it**: two type
+roles, one spacing scale, both palettes written out, contrast checked against all three grounds
+(rondo#153). Pico styles the semantic elements this page already styles; Open Props ships a token
+scale this page already has. Adopting either would re-express working, audited, zero-dependency CSS
+as somebody else's, and would buy nothing this page is short of.
+
+So the authorisation is **banked and not spent**, and the entry names what spends it rather than
+leaving it open: the first screen those 96 lines cannot express -- a table, a diff, a form with more
+than one control. When that arrives, this survey says where to start: Open Props while rules 3 and 7
+both stand; a server-rendered React set if rule 3 is what is being re-argued, with rule 7 then
+deciding member by member; Web Awesome if rule 7 is.
+
+### Decision
+
+1. **No framework.** TanStack Start, Next.js, Astro and SvelteKit are declined -- not on size, and
+   not one at a time. Each requires a build, which is rule 3; and each replaces the composition root,
+   which is rule 2. The 96 lines they take over are measured above and are about 8 per cent of the
+   surface, none of it i18n.
+
+2. **The reason a framework is refused is that it owns the composition root, and rondo's three
+   invariants are properties of that root.** A morph library sits under the page and cannot reach
+   the ports; a framework sits over it and holds them. Two properties, each stated as what it
+   actually is rather than as the stronger thing it is easy to write:
+
+   a. **This surface's writing vocabulary is enumerable from one type.** It is one named function on
+      an injected port (`D-0041` rule 4), so *what can this page write* is answered by reading
+      `WebPorts`, and any larger answer is a diff of a declaration. It is **not** that the compiler
+      forbids the render path from writing -- `operatorPage` is handed the same object `answer` sits
+      on, and what separates the paths is the method branch. Under ambient server functions there is
+      no type to read at all, and `method: 'GET'` and `method: 'POST'` share a signature.
+
+   b. **The ledger's bytes not depending on the reader's language is free today and would become
+      maintained.** `src/advisory` may reach only `src/advisory` and `src/store` (`D-0006`), a layer
+      rule drawn for `D-0022` rule 1 that carries this one for nothing. The checker would still work
+      under a library -- externals are granted per module and per binding -- but the grant becomes
+      something somebody writes and keeps, against generated modules and framework re-exports rather
+      than against one directory.
+
+   **A candidate that turns an enumeration into a convention, or a free property into a maintained
+   one, is priced as more expensive than the lines it deletes**, and this is the rule that decided
+   the entry. It is a price and not a prohibition: rule 2 is why 96 lines is not enough, and it says
+   what a candidate would have to keep in order to be worth re-pricing.
+
+3. **`D-0007` is kept unamended, and its consequence is stated as a rule rather than left to be
+   rediscovered: the browser receives only bytes this tree holds, and every third-party byte among
+   them is digest-pinned in `vendor/pin.mjs`.** A build breaks this by making the check inapplicable
+   while leaving it green, which is the failure mode worth naming. Any candidate that puts generated
+   bytes in front of the browser is refused by this rule before its merits are reached, and adopting
+   one is an amendment to `D-0007` taken deliberately in an entry of its own.
+
+4. **No UI component library, and there are two disqualifiers rather than one.** A **custom
+   element** is refused by `D-0054` rule 7: it is inert until it is upgraded, so with the bundle
+   blocked the approve button is a tag the browser cannot submit. A **React set** is refused by rule
+   3, because reaching its server-rendered output at all needs JSX and therefore a build -- and not
+   by rule 7, since a server-rendered `<button type="submit">` in a `POST` form is pressable with
+   scripting off exactly as today's is; rule 7 would decide member by member, and never gets asked.
+   A Tailwind plugin is refused by rule 3. What is left is CSS the page already has. The operator's
+   authorisation stands and is unspent, and the trigger
+   that spends it is named above.
+
+5. **rondo#172's accumulation is 141 lines, not a framework, and the entry says which 141.** The
+   four concerns are 541 lines, of which **323 are the catalogue** -- rondo's own prose in two
+   languages, which no framework, library or component set writes. The machinery is 141: 44 of those
+   implement the two RFCs (`tagsByWeight` 24, `setFor` 20), and the rest is the cookie, the five
+   steps, the canonical redirect and the threading of one tag through the addresses the page
+   composes. Calling 141 lines a hand-written framework is what makes the answer look like adoption;
+   measuring them is what makes it look like what it is.
+
+6. **The registry has no adoptable answer for the 44 lines that earned the defects, and this was
+   checked rather than assumed.** Measured on 2026-09-13: `bcp-47-match` `2.0.3` does RFC 4647
+   lookup and not `q`-ordering, 0 dependencies, **last published 2022-11-15**; `negotiator` `1.1.0`
+   (2026-08-20) does `q`-ordering and not lookup, 1 dependency; `@formatjs/intl-localematcher`
+   `0.9.0` (2026-09-12) does lookup plus a best-fit `D-0056` rule 6 declined by name, 1 dependency,
+   and is `0.x`. **Two dependencies to delete 44 tested lines is not a trade**, and one of them would
+   bring back the algorithm rule 6 refused. What bought the maturity instead is tests: 342 code lines
+   over the language suite, with a named case per clause of rule 6.
+
+7. **The accumulation is capped, and the cap is the concrete answer to rondo#172 rather than a
+   hope.** Each of the four concerns grew because a **request-shaped** question arrived -- which
+   language, which view, which file, how fresh -- and each was answered in code because the answer
+   had to be checkable at a type boundary. `D-0056` rule 6 already closed the language algorithm by
+   name (*no basic filtering, no alternatives list, no best-fit*), so that one is finished rather
+   than paused. The cap on the rest: **this page gets no fifth request-shaped concern without an
+   entry.** No client-side routing, no client state beyond `D-0056` rule 5's one cookie, no second
+   transport, no content negotiation other than language. A fifth one arriving is the signal to
+   re-price against this table, and it is a falsifier below rather than something to absorb quietly.
+
+8. **Nothing is adopted, nothing is installed, and no source changes.** rondo's production tree stays
+   at 2 packages; the browser keeps receiving two files, one of them pinned; `D-0002`'s "no build
+   output yet" stands.
+
+### What this entry does not do
+
+- **It does not say a framework is wrong, or foreclose one.** It says what it costs *this* page in
+  September 2026: 96 lines removed, 131 packages and a build added, three invariants demoted. A
+  second operator, a screen that must be current within a second, or a surface with real forms on it
+  changes the numerator and is the change of premise that reopens the table.
+- **It does not re-argue `D-0054`.** htmx, Datastar, Alpine and Web Awesome were priced there and
+  their facts are re-checked above rather than re-reasoned; the two entries `D-0054` said would
+  reopen them have not arrived.
+- **It does not adopt Hono, and the omission is deliberate.** It is on the table because it is the
+  one server candidate that fits `D-0007` and rule 3 exactly -- 1 package, 0 dependencies, no build
+  -- and it is declined for the ordinary reason: it would replace `node:http` under 28 lines of
+  routing rondo already has and that nothing has reported a defect in. It is where to start if this
+  page ever needs a router rather than a `switch`.
+- **It does not touch the language behaviour.** `D-0056` is settled and shipped; nothing here is
+  translated at display time and no recorded byte moves.
+- **It does not amend `D-0041`, `D-0042`, `D-0054`, `D-0055`, `D-0056` or `D-0007`.** It cites them
+  as the constraints that decided a survey, and adds one dated annotation below that makes a
+  supporting sentence of `D-0054` rule 3 precise without changing what that rule decided.
+  `D-0054`'s falsifier count on `D-0041` stays at two.
+- **It does not turn its own reasoning into a check.** The facts rule 2 leans on are already
+  enforced as far as they go -- the store's unwritability by the compiler, `src/advisory`'s
+  allowance by `test/architecture/import-boundaries.test.ts` -- and adding a test that asserts *no
+  framework is installed* would be a rule about the future defended by machinery, which is the shape
+  this entry spends itself refusing.
+
+### What the implementing change contains
+
+**Nothing under `src/`, `test/`, `page/` or `vendor/`.** This entry is a pricing; the change is this
+file and its index row. There is no follow-on implementation pull request, which is the difference
+between this entry and `D-0054`, `D-0055` and `D-0056`.
+
+### Residuals
+
+| Residual | Why not here | Who decides |
+|---|---|---|
+| An i18n library for the 44 RFC lines | Priced above: no single package on the registry does both halves at rondo's terms, and two would bring back an algorithm `D-0056` rule 6 refused | whoever finds one that does both, 0-dependency and currently published |
+| A component system for a screen the 96 lines cannot express | Named as the trigger in rule 4; no such screen exists today | whoever draws it |
+| Hono under the routing | 1 package, 0 dependencies, fits every rule here, and replaces 28 lines nothing has complained about | whoever needs a router |
+| `ETag` / `304` on the poll | Carried unchanged from `D-0054`; still nothing has measured the read as expensive | whoever measures it |
+| A build step for anything at all | Rule 3 refuses it for browser bytes and says nothing about the server, where `tsc` already runs (`D-0002`) | the entry that wants one |
+| The `answer` view gaining liveness | `D-0054` rule 1; unchanged and unaffected by this survey | whoever wants it |
+
+### What was measured, and how
+
+On **2026-09-13**, on this machine. **This entry changes no code**: what was measured is this tree
+and the registry.
+
+- **The line inventory is counted from the tree, not estimated.** Non-blank, non-comment lines over
+  named ranges, with block and line comments stripped: `src/access/web.ts` 826 of 1,703;
+  `src/access/wording.ts` 355 of 586; `page/poll.js` 15 of 64; `vendor/pin.mjs` 37 of 79. The web.ts
+  buckets in the first table sum to 826 exactly, which is the check that nothing was counted twice or
+  dropped.
+- **The dependency counts are resolved installs, not reputations.**
+  `npm install --package-lock-only --ignore-scripts` into a scratch directory per candidate, counting
+  `node_modules/*` entries in the resulting lockfile: TanStack Start **131**, Astro + `@astrojs/node`
+  **305**, SvelteKit **74**, Next + React **54**, Hono **1**, Web Awesome **35**,
+  `@inlang/paraglide-js` **30**. rondo's own `package-lock.json` yields **2** production packages
+  against 159 dev-only, which is the baseline every number above is a multiple of.
+- **Versions, publish dates, licences and dist-tags are the registry's.** Read from
+  `https://registry.npmjs.org` for `@tanstack/react-start`, `@tanstack/react-router`, `next`,
+  `astro`, `@sveltejs/kit`, `svelte`, `react`, `vite`, `hono`, `htmx.org`, `alpinejs`,
+  `@starfederation/datastar`, `idiomorph`, `@awesome.me/webawesome`, `@radix-ui/themes`,
+  `@base-ui-components/react`, `shadcn`, `daisyui`, `@picocss/pico`, `open-props`, `negotiator`,
+  `bcp-47-match` and `@formatjs/intl-localematcher`.
+- **The TanStack Start claims are the project's own documentation, not inference.** That it requires
+  Vite or Rsbuild; that server functions are created with `createServerFn()` and are statically
+  importable in any file; that they are called from route loaders on a `GET` navigation; and that
+  **`method: 'GET'` and `method: 'POST'` server functions share a type signature, so there is no
+  type-level distinction between a reading and a writing one**. That last fact is what rule 2 rests
+  on and it was read rather than assumed. That TanStack Start ships no i18n was checked the same way:
+  the answers are third-party (Paraglide JS, Intlayer, i18next, use-intl), and TanStack Router
+  documents routing primitives rather than negotiation.
+- **The invariants' current mechanisms were read out of the tree.** `WebPorts.store`'s `Pick`ed
+  methods at `src/access/web.ts:117-120`; `ALLOWED_INTERNAL_BY_LAYER["src/advisory"]` being exactly
+  `["src/advisory", "src/store"]` in `test/architecture/import-boundaries.test.ts`; and the two
+  ledger-language tests at `test/access/web.test.ts:1136` and `:1649`, both of which assert
+  non-vacuously.
+- **The one pinned artifact was re-verified.** `vendor/idiomorph-0.8.0.min.js` is 10,587 bytes and
+  hashes to `4cbd535caf7663a51eda9bce6595371c384fc430d54b8d414e29a61167f19f96`, matching both the
+  recorded digest beside it and the value `D-0054` wrote down.
+- **What was not measured**: nothing was built with any candidate, no framework was installed into
+  this tree, no page was served by one, and no benchmark was run. Every claim about what a candidate
+  *would* cost rondo is a reading of its documentation and its resolved tree, and rule 2's claim
+  about invariants is an argument from the mechanisms above rather than an experiment.
+
+### What would falsify it
+
+- **A framework that leaves the write verb behind a type rondo holds.** Rule 2 is the whole entry,
+  and it is a claim about today's candidates rather than about frameworks. A composition root that
+  takes rondo's ports as an argument -- so that a `GET`'s code path still cannot write and the
+  compiler still says so -- is priced on its lines and not refused on its kind.
+- **A fifth request-shaped concern arriving on this page.** Rule 7's cap is the answer to rondo#172,
+  and the cap being reached is the signal to re-price rather than to write the fifth one. So is a
+  second cookie, client-side routing, or any client state beyond `D-0056` rule 5's.
+- **A third defect in the 141 lines.** Two were caught before they shipped, which is what rule 6's
+  342 test lines are for. A third -- particularly one that reaches an operator rather than a review
+  -- means the tests are buying less maturity than claimed and that rule 6's trade should be re-run.
+- **`src/advisory`'s import allowance widening for any reason.** It is one of the two mechanisms
+  rule 2 leans on, and it was drawn for `D-0022` rule 1 rather than for this. If it widens, the
+  ledger-language invariant is down to its behavioural tests, and half of rule 2's argument against a
+  framework has already happened without one.
+- **`WebPorts` ceasing to be `Pick`ed, or the write arriving as anything other than one function.**
+  `D-0041` rule 4's own falsifier, restated here because rule 2 spends it as an asset.
+- **A screen the page's 96 lines of CSS cannot express.** Rule 4's named trigger, and the thing that
+  spends the operator's unspent authorisation.
+- **The registry table moving.** In particular: htmx 4 becoming `latest`; Datastar publishing its
+  released line under a pinnable name; a zero-dependency, currently maintained package doing both
+  RFC 4647 lookup and `q`-ordering; or a component set that renders without script. Each is dated
+  above for exactly this reason.
+- **rondo ceasing to be a server that renders whole documents.** Every number here is priced against
+  a page whose entire state is its address and whose whole client vocabulary is one `GET`. A surface
+  with real client state is a different page and this entry does not price it.
+- **The render path calling `ports.answer`.** Rule 2(a) prices an *enumeration* rather than a
+  prohibition, and it is honest about the compiler not forbidding this. The day `operatorPage`
+  reaches the write function is the day the enumeration is worth less than this entry says, and it
+  should be answered by narrowing what the renderer is handed rather than by re-pricing the market.
+
+### Annotations this entry adds to earlier entries
+
+- **`D-0054` rule 3** gains a dated annotation (2026-09-13), and it is a correction to a *reason*
+  rather than to a decision. That rule says an unattended redraw writes nothing *"because the code
+  path a `GET` reaches cannot write, and the compiler says so (`D-0041` rule 4's `Pick`ed ports,
+  untouched here)"*. Measured today: the `Pick` makes the **store** unwritable from this module, and
+  that half is exact -- but `WebPorts` also carries `answer`, the one write function, and
+  `operatorPage` is handed the whole object. So the compiler does not forbid a write on the `GET`
+  path; **the method branch and `handleApprove` being its only caller do**, and what the type gives
+  is `D-0041` rule 4's own and narrower claim: the writing vocabulary is one sentence long and
+  widening it is a visible change to a declaration. **What rule 3 decided is unchanged and still
+  holds** -- 3(a)'s work did move to the server, and an unattended redraw does write nothing -- so
+  this is an annotation and not a supersession. It is recorded because `D-0057` rule 2(a) leans on
+  the precise version, and because a reader who took rule 3's sentence literally would believe a
+  guarantee the tree does not provide.
