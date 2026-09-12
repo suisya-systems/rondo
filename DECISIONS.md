@@ -84,6 +84,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0044 | The second model tier is `mechanical`, it is reached by naming an agent type and never by rondo reading a request, and its model id waits on rondo recording what a lap costs | accepted |
 | D-0045 | What the record may say about a verification rondo did not watch: the operator's claim held as a claim, no column for a result, a silence that reads as a silence, and a row `publish` may print and may not be satisfied by | accepted |
 | D-0046 | Where rondo reads what a lap cost: off the lap's own transcript, three columns rather than one, and an unread cost that is not a zero | accepted |
+| D-0047 | Where an approval is spent: inside the admission's own transaction, with the contract recomposed from today's material, and by a verb of its own | accepted |
 
 ---
 
@@ -8242,3 +8243,154 @@ costs one module and one grant, and the falsifiers below say what would move it.
 - **`D-0021`** gains one too: rule 5 recorded the model beside the tier so that a person could see
   "which model a tier was worth on the day the lap ran", and the price of that day was the one thing
   the row could not say. It can now.
+
+---
+
+## D-0047 — Where an approval is spent: inside the admission's own transaction, with the contract recomposed from today's material, and by a verb of its own
+
+**Status:** accepted (2026-09-12, rondo's human gate). Refs rondo#105, rondo#107, `D-0022`, `D-0030`,
+`D-0032`, `D-0038`, `D-0043`.
+
+rondo#107 measures the last hole in #41 section 3's chain. `rondo decide` writes a `human_decision`
+row and nothing reads it; the screen says so to the operator in its own words
+(`src/access/advisory.ts:853-854` at `210a98e`), and `decision_consumption` stays empty.
+`D-0043` put the proposing half on the lap's own path the same day (rondo#119); this entry decides
+**where the consuming half goes, what it compares, and who types it.**
+
+### What was measured, and where
+
+At `210a98e` on 2026-09-12, by reading the tree and running it.
+
+- **The store already refuses everything the comparison needs.** `consumeDecision`
+  (`src/store/sqlite.ts:2136-2210`) reads `human_decision` and the consumption insert in one
+  `BEGIN IMMEDIATE`, and refuses an absent decision, a declined one, a digest that is not the
+  approved one, and — on the primary key — a second issuance. **Nothing called it.**
+- **`admit()`'s reservation is the only transaction an admission has.** `reserve()`
+  (`src/store/sqlite.ts:1291`) takes the write lock, counts both bounds, checks the lineage and
+  writes the row; every later transition is its own transaction, after the row exists.
+- **The exact contract a retry will run under is composable before admission.** `admitFor` and
+  `issueFor` (`src/access/advisory.ts:740`, `:798`) make cadenza's three calls on the successor's
+  own identity, which is what `D-0022` rule 17 says they make possible, and which is how the
+  digests on the screen were composed in the first place.
+- **`D-0038` rule 3's re-gather seam is already a function.** `gatherContractCandidates` and
+  `gatherRunPlanCandidates` are callable without the drafter, over a lineage read fresh.
+
+### Decision
+
+1. **The consumption is written inside the admission's own transaction, beside the row it
+   authorised.** `ReserveInput` carries the approval and `reserve()` spends it under the same write
+   lock that writes the iteration row: both land or neither does. This is `advisory.md` 6.3 carried
+   out with **the iteration row standing where the delegation row stands** — under `D-0022` rule 17
+   a retry is an ordinary admission rather than a successor contract, so the row rondo writes *is*
+   the issuance the consumption accompanies.
+
+   **The alternative was two transactions in some order, and both orders are wrong.** Consume then
+   admit loses the approval to any failure in between; admit then consume lets one approval be spent
+   twice. Neither is recoverable from the ledger afterwards, because both produce exactly the row
+   pattern a correct run also produces.
+
+2. **`src/refrain` carries the approval and never reads it, and this annotates `D-0022` rule 17.**
+   That rule says *"`src/refrain` is unchanged by this rule"*, of the comparison — and the comparison
+   is still the composition root's and the store's. What changed is that the value has to *reach*
+   `reserve()`, and the loop is the only thing between the two. It is an opaque pass-through: the
+   interpreter never reads the digest, never reads the decision, and has one new branch, which
+   reports the store's refusal and writes nothing. **Where rule 17's placement of the comparison at
+   the classification step and rule 9's single transaction cannot both be literal, rule 9 wins**,
+   because the atomicity is the guarantee and the placement was an illustration.
+
+3. **The digest the store compares against is composed from the plan being admitted, never copied
+   off the decision row.** A caller that read `human_decision.approved` and handed it straight back
+   would be asking the store to check a value against itself. What is handed over is what the
+   candidate this plan came from composes, so the store's comparison has two independent sides.
+
+4. **The option set is recomposed at spend time, by the proposal's own gatherer, over the lineage
+   read fresh** (`D-0038` rule 3's seam, used for a second purpose). If no candidate composes the
+   approved digest any more — the catalog moved, the agent type's author withdrew a key, the pin
+   moved — **nothing runs and nothing is spent.** It is a refusal and never a re-selection: the
+   nearest contract is not the approved one, and choosing it would be composing a person's answer
+   (`D-0009` part 3).
+
+   **And two options carrying one digest are refused by the same rule, for the same reason.**
+   `issueFor` composes a contract from the project, the agent type and the parties, so two plans in
+   one lineage differing only in their prompt or their base branch reach one contract — and
+   `gatherRunPlanCandidates` offers both, where the contract gatherer folds equal digests into one
+   candidate. `human_decision.approved` names a digest and nothing else, so such an approval does
+   not say which set of instructions was taken, and resolving it by the order of an array would run
+   a prompt nobody approved. The advisory already states the property this protects — *"distinct
+   options must name distinct digests or the answer is ambiguous"* — and this is the consumer
+   refusing rather than trusting it.
+
+5. **Spending is a verb of its own — `rondo retry --proposal-id ID` — and not a side effect of
+   `rondo decide`.** `D-0032` rule 6 makes approving an entry in a ledger rather than a command, and
+   an approval that started a lap the moment it was typed would make "I approve this contract" and
+   "run it now" one act that cannot be taken apart afterwards. It also keeps the approval spendable
+   later, which is what makes `D-0022` rule 19's *"approved and never spent"* query mean anything.
+
+6. **The approval is named by the proposal it answers, and two unspent approvals against one
+   proposal are refused.** A decision id is minted rather than typed, so the proposal is the name an
+   operator has from the screen. Where a proposal carries two unspent approvals, rondo refuses
+   rather than choosing between two answers a person gave.
+
+   **This one check is made before the transaction, and deliberately not inside it** -- which is a
+   difference from rule 1 and is stated rather than left to be found. A second approval recorded
+   between the read and the reservation is not caught, and the retry runs on the approval it
+   resolved. What that costs is bounded and is not what rule 1 protects: the decision spent is one a
+   person really took, for a contract that really composes, the second approval stays unspent and
+   stays reported by `D-0022` rule 19's query, and the primary key still makes double spending
+   impossible. Moving the check inside would mean teaching the store what a proposal is and what
+   counts as ambiguity among its answers, for a race whose worst outcome is rondo acting on an
+   answer instead of asking about two.
+
+7. **Every refusal on this path is fail closed and costs nothing.** A mismatched digest, a spent
+   approval, a successor identity somebody took, a proposal that will not decode: each ends with no
+   iteration row, no consumption row and the approval still standing. **`D-0043` rule 8's third
+   refusal is this one**, and with it all three of that rule's refusals exist.
+
+8. **All three approvable kinds are spendable, not only the one the automatic door emits.**
+   `contract_keys` is what `D-0043`'s trigger records, but `run_plan` and `agent_type` are proposals
+   an operator can already make, and leaving them unspendable would keep rondo#107's hole open for
+   two kinds out of three while reporting it closed.
+
+### What this does not do
+
+- **It does not write a delegation row.** `D-0020` rule 4's table is still not built and `D-0040`
+  left the durable home where it is; the consumption is the whole of what rondo writes, which is
+  what `consumeDecision`'s own header already said.
+- **It does not touch route G.** A gate answer is still continuo's, and `revise` still carries an
+  instruction to it; this entry is route S's end, where the approval is rondo's own row.
+- **It does not add an approver check of its own.** Who may approve is `rondo decide`'s question and
+  `D-0020` rule 2's allowlist; spending an approval that exists is not a second place to ask it.
+- **It does not re-present anything.** `rondo retry` shows no option set, so it writes no
+  `operator_attention` row (`D-0042`).
+
+### What would falsify it
+
+- **A store that is not one file.** The consumption and the iteration row are one transaction
+  because one connection holds both tables. A ledger split across two databases makes rule 1
+  unimplementable as written, and the entry that splits it owes the replacement.
+- **An admission that is not a reservation** — a path that writes an iteration row outside
+  `reserve()`, or a retry that re-enters an existing row rather than reserving a new one
+  (`D-0019` rule 6's back edge). Rule 1 names `reserve()` because it is the only transaction an
+  admission has; a second one moves the question.
+- **Recomposition at spend time being routinely unequal to composition at propose time** for reasons
+  nobody acted on — a cadenza pin that moves under every operator, say. Rule 4 would then be
+  refusing work for noise rather than for drift, and what it needs is `D-0038`'s pin line rather
+  than a refusal.
+- **An operator wanting to spend an approval on a plan they edited afterwards.** Rule 3 makes that
+  impossible by construction, and deliberately: the edited plan composes a different contract. If
+  the ask is common, what it wants is a new proposal, and the claim to re-argue is that saying so is
+  not an obstruction.
+- **A second unspent approval against one proposal turning out to be ordinary.** Rule 6 refuses it
+  as ambiguous; if operators reach it by accident often, the ledger wants a rule about which answer
+  supersedes which, which is an entry rather than a tie-break in a verb.
+
+### Annotations this entry adds to earlier entries
+
+- **`D-0022` rule 17** gains a dated annotation: its *"`src/refrain` is unchanged by this rule"* is
+  true of the comparison and not of the carriage, and its comparison against `classifyPlan`'s
+  answer is made one step earlier — before any row exists — for rule 1's reason. Its own words
+  license that: *"The surface can compose the exact contract the retry will run under ... before
+  anything is admitted."*
+- **`D-0043` rule 8** gains one: its third refusal, *"`D-0022` rule 17's comparison of the approved
+  digest against the classification"*, is built here, so the rule's "three refusals, all of them
+  already decided" is now three refusals all of them implemented.
