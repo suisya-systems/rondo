@@ -104,6 +104,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0064 | rondo is run the way a product manager runs an organisation: a person approves a scope once, the organisation decides everything inside it, and what reaches the person is a question with a recommendation, an irreversible act, a scope exit or a report | accepted |
 | D-0065 | The model reviewer: a reader of another model family that rondo runs outside the lap over bytes it hands over and digests, graded findings with bases on the reading record, a round budget and a threshold that are the scope's, and the three defects a person caught sorted into caught, half caught and not caught | accepted |
 | D-0066 | The scope record: one immutable row with a digest, approved by a row of its own and never by `human_decision`, spent once per act inside the act's own transaction, refused at one point that stops one line, and `D-0062` rule 3 and `D-0022` rule 9 restated for it | accepted |
+| D-0067 | The secretary's running half has no new owner: the advisory reads lines against each other and drafts an order, the surface attempts acts in that order, the store keeps the person's standing policies, and review extensions and merges still reach the person | accepted |
 
 ---
 
@@ -5164,6 +5165,10 @@ field - a column for a computable value is a second home for a fact (`D-0022` ru
    **Prose is permitted in a payload only where it travels with its basis.** A claim with no basis
    is the summary #39 says an operator would have approved three times on the day it measures.
 
+   > **Annotation (2026-09-13, from D-0067).** Added after this entry was accepted, and additive. The
+   > union gains `policy:ID`, a locator into a `standing_policy` row (`D-0067` rule 6.5), as `D-0061`
+   > rule 2.6 added `message:ID`. The list above is unedited.
+
 3. **There is no rendered `summary` column, and its absence is the decision.** What the gate shows
    is **composed at render time** from the option set and its bases. A stored summary is a framing
    that outlives the material it was drawn from and can drift from it silently, which is the exact
@@ -5605,6 +5610,11 @@ that already exists.
    paragraph got its shape. Rule 4's host-wide snapshot is the **detection point when
    somebody builds one**: two live iterations are two rows in it, and rondo's own
    `D-0023` triple is what tells them apart.
+
+   > **Annotation (2026-09-13, from D-0067).** Added after this entry was accepted, and additive. The
+   > residual this rule names is carried out by `D-0067` rule 2 for collisions that **share a path**:
+   > the advisory compares the paths changed by open lineages. Collisions that share no path stay
+   > unowned. This rule's text is unedited.
 
 10. **Whatever is built first for #40 writes to `operator_attention` or does not
     ship.** `D-0032` rule 10 designed the table with one writer in mind and this
@@ -12270,6 +12280,11 @@ work, not about who is asking or how large the work is:
 (rule 3.3), what reaches the person is the reason it stopped, the options for going on (widen the
 scope, change the work, stop), and a recommendation.
 
+> **Annotation (2026-09-13, from D-0067).** Added after this entry was accepted, and additive, by the
+> answer of rondo's human gate to `D-0067`'s first point. P3's "things the person owns" include **an
+> in-force `standing_policy`** (`D-0067` rule 6): a choice whose options differ in whether they go
+> against one is in dispute. The table above is not edited.
+
 ### 2. What the organisation decides without asking
 
 Inside an approved scope, the organisation decides these and **records each decision** (rule 3.5),
@@ -13718,6 +13733,11 @@ number.
 
 ### 4. The one point where the organisation stops
 
+> **Annotation (2026-09-13, from D-0067).** Added after this entry was accepted, and additive. A
+> `sequence` proposal (`D-0067` rules 3 and 4) delays **when** the surface attempts an act, until the
+> fact it names is recorded; it does not change the verdict below, which is computed unchanged when the
+> act is attempted. Nothing below is edited.
+
 1. **Before every act under a scope, `src/access` computes one verdict**: `inside`, `outside` with a
    reason, or `undecidable` with a reason. It is a pure function of the scope row, the act and a
    snapshot gathered for it, called from one place, and **anything but `inside` takes no act and
@@ -13927,3 +13947,341 @@ predecessor's); those are part of the text accepted.
 - **cadenza or continuo changing so that `agentTypeDigest` stops covering the tier or the grants.**
   Section 1.2.3's single field no longer bounds both.
 - Any measurement in "What was measured" failing to reproduce at rondo `f2edf3f`.
+
+---
+
+## D-0067 — The secretary's running half has no new owner: the advisory reads lines against each other and drafts an order, the surface attempts acts in that order, the store keeps the person's standing policies, and review extensions and merges still reach the person
+
+**Status:** accepted (2026-09-13, rondo's human gate). Two points were put to the gate and it chose the
+recommended option on both, and named `D-0068` as the entry for two of the losses in section 4; the
+answers are recorded in section "What was put to the human gate, and its answer". Refs `D-0012`, `D-0023`, `D-0027`, `D-0030`, `D-0032`, `D-0033`, `D-0036`,
+`D-0038`, `D-0061`, `D-0063`, `D-0064`, `D-0065`, `D-0066`.
+
+**This entry decides and does not build.** Nothing in `src/` changes with it. The earlier entries it
+annotates are listed in section "Annotations this entry adds".
+
+claude-org-ja's secretary does two kinds of work. The **drafting half** reads a request, asks back,
+splits the work, writes the instruction a worker runs on and gathers the reports. The **running half**
+keeps several lines of work going at once: it notices when two lines collide, decides which lands
+first, makes a line wait when another line's result will change its premise, remembers what the person
+has said they want across requests and holds each new recommendation up against it, and keeps all of
+that in its head between messages. `D-0063` gave the drafting half to the advisory, and decided that
+the advisory hands nothing over and holds no state (`D-0063` section 1, rule 1). So the running half has
+no owner. `D-0033` rule 9 named cross-lap collisions as owned by nobody, and `D-0064` section 5 lists
+patrolling, parallel workers and the curator as empty roles.
+
+On **2026-09-13** the secretary did this work five times while this entry's own neighbours were being
+drafted (the brief of this task, 2026-09-13):
+
+1. **A policy conflict.** A worker's recommendation ran against the person's standing policy that the
+   successor stack must run work in parallel.
+2. **A reversal.** A recommendation ran the opposite way to a ratified rule (`D-0064` rule 3.3).
+3. **A review extension.** A Major fix had not been reviewed when the round budget ran out, and the
+   review was extended to read it.
+4. **A merge order.** Several tasks appending to `DECISIONS.md` in parallel were put in an order, and
+   each later task was told to rebase only after the earlier one merged.
+5. **A ratification hold.** Ratifying one task was held because another task's result would change its
+   premise.
+
+This entry decides who in rondo holds each of these, what is recorded, and which of them the
+organisation decides without asking (`D-0064` O) and which reach the person (`D-0064` P3). It keeps
+`D-0064`'s two lines and **adds no third**:
+
+- **Every summary and proposal leads back to its material** (`bases`, `D-0032` rule 2, `D-0061`
+  rule 2.6).
+- **An act that cannot be undone is approved by a person**, at the time, for that act (`D-0064`
+  rule 3.4).
+
+### What was measured, and how
+
+At rondo `278cd89` on **2026-09-13**, by reading; `D-0066` was first read on its branch at `b01fe54`,
+and its rules cited here are unchanged where it merged. The baseline is claude-org-ja's
+working tree on the same date, read only (`JA/`). The secretary's saved notes on the person's policies
+were read **for their shape only**; no content of them is copied here beyond the one policy the brief
+names. Line numbers drift; re-measure the claim, not the number.
+
+- **Who holds the running half in claude-org-ja.** The secretary splits the work, hands it over,
+  receives reports and manages `.state/` and `registry/` (`JA/CLAUDE.md`, "Role boundaries"). The
+  dispatcher spawns workers, records state and patrols panes for stalls and silent deadlocks, and never
+  approves or refuses anything by itself (`JA/.dispatcher/CLAUDE.md`, "Role" and "Worker pane
+  monitoring"). The curator runs once on demand to fold retrospectives into curated knowledge
+  (`JA/.curator/CLAUDE.md`). **Merge order is the secretary's**: when parallel workers edit one file,
+  the brief tells each to wait for the secretary's follow-up, and the follow-up is sent only after the
+  earlier pull request has merged, "so the secretary's remaining work shrinks to deciding the merge
+  order and sending the follow-up" (`JA/.claude/skills/org-delegate/SKILL.md`, "parallel delegation
+  editing the same file").
+- **How the person's policies are kept there.** An index of one line per note, and one note per fact,
+  with a name, a one-line description, a type (`user`, `feedback`, `project` or `reference`), a body
+  stating the fact with the date the person said it, a **Why** and a **How to apply**, and links to
+  related notes. **The secretary writes them from what the person said**; the person does not write
+  them. 71 notes on 2026-09-13. They are read by the secretary's model at the start of a session and
+  matched against a draft by that model's judgement; nothing checks the match.
+- **rondo reads no two lines together.** `D-0029`'s reading and `D-0065`'s reviewer each read one lap.
+  `D-0066` section 4's verdict tests one act against its scope and its own lineage (`D-0030`). `D-0033`
+  rule 9 records the collision as reachable at today's defaults (`maxLive` three) and names its decider
+  as "a later entry, once something can read two laps' material together".
+- **What rondo records about a line's end.** An iteration's status, three of which are terminal:
+  `closed`, `abandoned`, `failed` (`TERMINAL_STATUSES`, `src/store/records.ts`). **`publish` writes no
+  row** in `src/store/sqlite.ts`, and no merge is observed (`D-0064` section 5, survey G5). Merging is on
+  `D-0064` rule 3.4's list and approved per act until rondo observes CI.
+- **The only act `D-0066` makes writable under a scope is `admission`** (`D-0066` rule 3.2). Push, pull
+  request, gate answer and `revise` wait on later entries.
+- **A basis is a closed union** (`D-0032` rule 2), which `D-0061` rule 2.6 widened by `message:ID` and
+  which already holds an `iteration_id` (`D-0066` rule 4.2). **Freshness is decided per basis at
+  render**, and `undetermined` is never shown as unchanged (`D-0038` rules 1, 4 and 6).
+
+### 1. The running half, duty by duty
+
+| Duty | claude-org-ja | rondo | New in this entry |
+|---|---|---|---|
+| **R1. Notice that two lines collide** | Secretary, from the briefs it wrote | **The advisory**, from a reading across open lineages (rule 2) | the cross-lineage reading, which fills `D-0033` rule 9 |
+| **R2. Decide which lands first** | Secretary | **The organisation, drafted by the advisory as a `sequence` proposal** (rule 3) and **carried out by the surface**, which attempts acts in that order (rule 4) | one proposal kind |
+| **R3. Make a line wait when another line's result changes its premise** | Secretary | The same `sequence`, with a premise claim as its basis (rules 3 and 4). Shown with `D-0038`'s per-basis freshness | nothing beyond R2 |
+| **R4. Remember what the person wants across requests** | Secretary's notes | **rondo's store**, as `standing_policy` rows (rule 6) | one record kind and one basis form |
+| **R5. Hold drafts up against policies and ratified entries** | Secretary's model | **The advisory when it drafts** (rule 7); **the model reviewer** for a lap's own work, over what its criterion hands it (`D-0065` section 1.2.6) | nothing beyond R4 |
+| **R6. Extend a review past its budget** | Secretary | **Not the organisation's.** The budget is the scope's (`D-0064` rule 3.1.4); a spent budget with a finding at or above the threshold stops the line as P3 (`D-0065` rule 4.3) | nothing |
+| **R7. Keep all of this between messages** | Secretary's session, `.state/`, and a handover file when the session is cleared | **rondo's store.** The advisory and the surface re-gather from rows at every draft and every act (`D-0033` rule 4, `D-0066` rule 4.1); no session holds coordination state | nothing |
+| **R8. Patrol for stalls** | Dispatcher | **Stays empty** (`D-0064` section 5) | nothing |
+| **R9. Curate retrospectives** | Curator | **Stays empty** (`D-0064` section 5). A standing policy is the person's words, not a curated lesson, and is not this role | nothing |
+
+### Decision
+
+1. **No new role, no new layer and no new authority.** The running half is placed on three parts that
+   exist: **the advisory drafts** (R1, R2, R3, R5), **the operating surface acts** (R2, R3), and **the
+   store remembers** (R4, R7). This is `D-0033` rule 1 kept, and `D-0063` rule 1's line kept: the
+   advisory produces material and holds none of the acts. There is no "coordinator" part a reader can
+   point to; what the person sees of the running half is the `sequence` rows and the report (P5).
+
+2. **The cross-lineage reading (R1), deterministic.** An **open lineage** is one whose latest lap is not
+   terminal, **or is `closed`, its topic branch (`D-0023`) still exists in the repository, and its
+   `tipCommit` is not an ancestor of the default branch**: a closed lap's work still waits on
+   `publish` and a merge (`D-0025`), and rondo records neither, so the branch and ancestry are what the
+   reading can check. When a lap reaches its gate, and before the
+   surface attempts an act on a lineage, the advisory's snapshot holds, for every other open lineage in
+   the same repository, the set of paths
+   changed in `baseCommit..tipCommit` (`D-0065` rule 1.2.1's range). **Two lineages collide when the
+   sets share a path.** The finding is material with bases: the path, and both lineages' latest
+   `iteration_id`. No scheduler runs it; it is gathered at the two points above (`D-0033` rule 4).
+   A lap that has not yet committed has an empty set and collides with nothing.
+
+3. **An order is a `sequence` proposal (R2, R3).** A new proposal kind, immutable like every proposal
+   (`D-0022` rule 4). Its payload:
+   1. **`first`**: an open lineage (rule 2), named by its latest `iteration_id`;
+   2. **`then`**: either an open lineage, named the same way, or **a plan not yet admitted**, named by
+      its split proposal's `proposal_id` and the plan's position in it (`D-0063` rule 4). A plan has no
+      iteration until its admission writes one (`D-0066` rule 3.2), so this is the only way to name
+      the first admission of a line;
+   3. **`holds`**: the act on `then` that waits, from `D-0066` rule 3.2's `act_kind` union. Today that is
+      `admission`: a plan's first admission, or a redo of a open lineage;
+   4. **`until`**: the fact that releases it, **from a closed list of facts rondo records: today one
+      member, `first_terminal`** (the latest lap of `first` is in `TERMINAL_STATUSES`). A later entry
+      adds `first_merged` once merge is observed;
+   5. **`bases`**: the collision finding (rule 2) or a premise claim (a model drafter's claim that
+      `then`'s work rests on something `first` will change, with bases into both), and every
+      `standing_policy` it rests on or goes against (rule 7).
+
+   **The deterministic drafter drafts a sequence from a collision**, with `first` the lineage that
+   reached its gate earlier. **A model drafter may draft one from a premise claim**, and may propose the
+   other order with its grounds. A changed order is a new row naming the old one in its bases. A
+   `sequence` is not approvable (`D-0032` rule 5): like a split under a scope, it is decided without
+   asking and is recorded by being a row.
+
+4. **The surface attempts a held act only after its release fact is recorded.** While an in-force
+   `sequence` names a lineage or a plan as `then`, the surface does not attempt the `holds` act on it until the
+   `until` fact is in the store. **It writes nothing while it waits**: no consumption, no message, no
+   attention row. When the surface itself writes the releasing fact (the iteration's terminal status),
+   it attempts the held act, and **`D-0066` section 4's verdict is computed then, unchanged**. A hold is
+   an order among acts the verdict would otherwise allow, not a fourth verdict value.
+   **The writer refuses a `sequence` whose `until` is not on the list.** When the release a drafter
+   needs is not a fact rondo records (a merge, today), it drafts no sequence: it writes a drafter
+   message with `asks` set, with the held lineage's `iteration_id` as a basis or, for a plan not yet
+   admitted, with none, which holds the line as a P3 through `D-0066` rule 4.2's `asks` test and rule
+   4.4's reading of which line a message stands over.
+
+5. **What the organisation decides about order, and what reaches the person (answering the third
+   question).**
+   1. **Decided without asking** (`D-0064` O1, read across lines): which of two colliding lines under
+      approved scopes lands first, and holding one until the other ends, **when the options differ
+      only in which lands first**. The `sequence` row and its bases are the record `D-0064` rule 3.5
+      asks for, and the report (P5) lists every sequence that held a line and for how long (a
+      subtraction over rows, `D-0036` rule 2).
+   2. **Put to the person as P3**: an order whose options give up different things the person owns,
+      which is `D-0064` P3's test unchanged. In particular: a premise claim that one line's result
+      would make the other line's finished work wrong in a way the person sees; a release fact rondo
+      does not record (rule 4); and a hold that would carry a line past its scope's expiry or budget,
+      which `D-0066` rule 4.2 already makes `outside` when the act is attempted.
+   3. **Outside any scope nothing is decided.** A collision or a premise claim over lines no scope
+      covers is an `explanation` to the person and binds nothing, which is `D-0033` rule 2 as written.
+
+6. **A standing policy is a row of its own (R4).** A new record kind, `standing_policy`, immutable and
+   append-only with no status column:
+   1. **Columns**: `policy_id`; `body`, the policy as written, never paraphrased after it is stored;
+      `author_kind` (`operator` or `drafter`) and `author_id` (`D-0061` rule 2.3's voice column);
+      `bases`; `supersedes_policy_id`, nullable; `created_at_ms`.
+   2. **A drafter may write a new one from what the person said**, as claude-org-ja's secretary does,
+      and then **`bases` is required and holds the `message:` ids the person said it in**, refused by
+      the writer otherwise (`D-0061` rule 2.6's shape). A drafted policy is listed in the next report
+      (P5). An operator may write one directly, with no bases.
+   3. **A change is a successor; retiring one is a successor with an empty `body`.** The in-force
+      policies are the rows no successor names. **Only an operator writes a successor**: the writer
+      refuses a `drafter` row with `supersedes_policy_id` set, so a drafter can add a policy and can
+      never weaken or retire one.
+   4. **A policy authorises nothing and withholds nothing.** It is not a scope field and never widens
+      one (`D-0064` rule 3.1: a scope never widens itself). A rule for not showing the person something
+      is `D-0033` rule 7's attention policy, not this record.
+   5. **`policy:ID` joins the basis union**, as `message:ID` did in `D-0061` rule 2.6.
+
+7. **How drafts meet policies and ratified entries (R5).**
+   1. **Every draft that recommends** (a P2 or P3, a split, a `sequence`, a drafted scope, a report)
+      is drafted from a snapshot that holds the in-force policies, which are rondo's store and within
+      `D-0063` rule 3's read list unchanged. It carries a `policy:` basis for each policy it rests on
+      and for each it goes against, and **an option that goes against a policy says so in what it gives
+      up** (`D-0064` rule 4.1).
+   2. **A conflict with an in-force policy by itself makes a choice P3**, by the gate's answer to the
+      first point (below) and the annotation it adds to `D-0064` rule 1.
+   3. **A draft that would change a ratified entry** carries the entry as a basis and reaches the
+      person as P3, which is `D-0064` rule 3.3's last bullet and `D-0066` rule 4.2's closing sentence,
+      unchanged.
+   4. **A lap's own work** is held up against policies and entries only by the model reviewer, and only
+      over what the review criterion hands it (`D-0065` section 1.2.6). Which policies and entries a
+      criterion hands is the plan's field, not this entry's.
+   5. **Nothing checks that the matching is complete.** A missed conflict is not caught. This is
+      `D-0063` rule 7's declined truth check, inherited.
+
+8. **What stays empty, by name:** patrolling for stalls (R8), the curator (R9), and the relay of a
+   question raised mid-lap (`D-0061` rule 6). None is taken here.
+
+### 2. The five cases of 2026-09-13, under this entry
+
+| Case | What rondo does | Handled? |
+|---|---|---|
+| **1. A recommendation against the parallel-work policy** | The policy is a `standing_policy` row, drafted from the message the person said it in. A drafter's recommendation carries `policy:` bases and names the conflict in what its option gives up (rule 7.1). By the gate's first answer the choice is P3 | **Yes, for a draft.** **Half for a lap's own recommendation**: the reviewer sees the policy only if the criterion hands it (rule 7.4). A drafter that fails to cite the policy is not caught (rule 7.5) |
+| **2. A recommendation reversing `D-0064` rule 3.3** | A draft that would change a ratified entry is P3 with the entry as a basis (rule 7.3). A lap whose diff reverses an entry is a reviewer finding when the criterion hands that entry | **Yes for a draft; half for a lap.** Handing all of `DECISIONS.md` would likely pass the reviewer's input bound and make the reading `unavailable` (`D-0065` rule 1.4), so the criterion has to name the entries the lap cites |
+| **3. A review extended to read an unreviewed Major fix** | The case does not arise in the same form: every lap rondo carries onward is read after it ends (`D-0065` rule 2.6), so no fix goes unread. What does arise is a budget spent with a finding at or above the threshold, which stops the line as P3 (`D-0065` rule 4.3), recommending a successor scope with one more round (`D-0066` rule 1.4) | **Yes, but by the person.** The secretary decided this alone; rondo asks |
+| **4. A merge order for tasks appending to one ledger** | The shared path is a collision (rule 2), and the deterministic drafter drafts `first` and `then`. **The release a merge order needs is `first_merged`, which rondo does not record**, and merging is a person's act per merge (`D-0064` rule 3.4). So today the order is a P3 message and the recommendation beside each merge the person approves. The later line's rebase is a `revise`, which waits on `D-0064` rule 3.6 | **Detected and ordered; carried out by the person** until merge observation adds `first_merged` and O4's `revise` opens. Then it is decided without asking |
+| **5. A ratification held on another task's result** | A model drafter's premise claim drafts a `sequence`. If `then` is a plan not yet admitted, named by its split proposal (rule 3.2), its admission waits for `first_terminal` (rule 4). If `then` is already at its gate, the gate is a person's press, which nothing holds: the claim is shown as a basis whose freshness is `undetermined` until `first` ends (`D-0038`) | **Yes before the line starts; material after.** Once O6 exists, the organisation's own gate answer would be a held act; that kind is the O6 entry's to add (`D-0066` rule 3.2) |
+
+### 3. The options, and why the others were refused
+
+| Option | Outcome |
+|---|---|
+| **A. A coordinator role of its own**, the dispatcher reproduced: a component that watches every line, decides order and holds lines | **Refused.** It would be a second place, beside `D-0066` section 4's verdict, where the organisation decides that an act does not happen, and the only part with a view of all lines, which is `D-0033`'s option A. **What it would have kept**: one part a person can ask "why is this waiting", and a place for patrolling (R8) to land later |
+| **B. The advisory widened to hold the running half**: it decides order and holds lines itself | **Refused.** `D-0063` rule 1 and `D-0022` rule 2 make the advisory a function that decides nothing, and the owner's view of the advisory as a secretary-like support is met by its drafting, which rule 3 widens to draft an order. **What it would have kept**: the secretary's two halves in one part, which is the owner's picture most literally |
+| **C. Three roles, as claude-org-ja has** (secretary, dispatcher, curator) | **Refused.** claude-org-ja splits them because each is a model session with a context limit and a pane. rondo's parts are functions over one store, so a split buys no context and costs a message between parts for every act |
+| **D. Every order put to the person** (a hold is always an `asks` message) | **Refused.** It uses `D-0066` as it stands and adds no kind, but the person is asked which of two ledger appends lands first, which `D-0064` P3's test says is not in dispute. It is kept for the one case rondo cannot release by itself (rule 4) |
+| **E. Policies as scope fields** | **Refused.** A scope is approved per record, expires and has fields a machine tests (`D-0064` rule 3.1). A policy outlives scopes and is prose a model holds a draft up against |
+| **F. Placed on existing parts: a cross-lineage reading, a `sequence` proposal, a surface that attempts acts in order, and `standing_policy` rows** | **Taken** (rules 1-7) |
+
+### 4. What this gives up
+
+- **One place to ask "why is this line waiting".** The answer is a join from the lineage to the
+  `sequence` that holds it and its bases. The person sees it in the report (P5), not while it waits,
+  because a hold writes nothing (rule 4).
+- **A held line behind a stalled line waits unnoticed.** `until` is `first_terminal`, and nothing
+  patrols a lap that never ends (R8 stays empty). claude-org-ja's dispatcher would flag the stall and the
+  secretary would reorder.
+- **What the person said and nobody wrote down is forgotten across requests.** The secretary's session
+  also carries unwritten context until it is cleared; rondo carries only rows. A drafted policy is the
+  drafter's reading of the person's words, with the words one basis away.
+- **Collisions that share no path are not detected.** Two lines that break each other through an import,
+  a renamed identifier or two migration files with one number in different paths are seen only as a
+  model drafter's premise claim, or not at all.
+- **A squash-merged line whose branch is kept stays open to the reading.** Its `tipCommit` never
+  becomes an ancestor of the default branch (rule 2), so it keeps colliding with later lines on the
+  paths it touched until someone deletes the branch, which is cleanup `D-0064` section 5 lists as
+  empty.
+- **A review extension and a merge order reach the person** where claude-org-ja's secretary decided
+  alone (cases 3 and 4), until `D-0064` rule 3.6's `revise` and merge observation exist.
+- **The advisory's snapshot spans every open lineage in a repository.** `D-0033`'s residual "whether a
+  host-wide snapshot stays affordable" becomes a cost paid at every gate and every attempted act.
+- **For the owner's view of the advisory as the secretary**: the advisory drafts the order and never
+  carries it out, so rondo's secretary is two parts and a store, and the person cannot address the
+  running half as one voice.
+
+### What was put to the human gate, and its answer
+
+The points are kept as put, and the answer follows them.
+
+1. **Does a conflict with a standing policy by itself make a choice P3?** `D-0064` P3's test lists what
+   the person owns as "behaviour a user sees, a ratified entry, a grant, a cost past the scope's
+   budget". A policy is not on that list, and `D-0064` section 6 does not name `D-0064` itself for a
+   change. **This point changes how a ratified entry reads, so it is put to the gate rather than
+   taken.**
+   - **(a) Yes: an in-force `standing_policy` is read as something the person owns under P3**, added by
+     a dated annotation on `D-0064` rule 1 (recommended). An organisation choice that goes against a
+     policy reaches the person with a recommendation, which is what the secretary did in case 1.
+     *Loses:* a policy written loosely turns routine choices into questions, and a drafted policy (rule
+     6.2) can add questions the person never asked for until they retire it.
+   - **(b) No: policies are material only.** Drafts cite them (rule 7.1) and nothing stops on them.
+     *Loses:* case 1 reaches the person only as a line in a report after the organisation went against
+     the policy.
+2. **May a drafter write a standing policy without the person confirming it?**
+   - **(a) Yes, with `message:` bases, listed in the next report** (recommended, as rule 6.2 is
+     written). This is how claude-org-ja's notes are made. A drafter writes no successor (rule 6.3), so
+     under point 1 (a) an unconfirmed policy can only add questions, never remove one, and costs the
+     person attention and not control.
+     *Loses:* a policy the person did not mean stands until they notice it in a report and retire it.
+   - **(b) No: only an operator writes one.** *Loses:* the person has to type every policy they have
+     already said in a thread, and the policies the secretary would have kept are not kept.
+
+**The gate's answer (2026-09-13):**
+
+1. **(a).** A conflict with an in-force `standing_policy` makes a choice P3, and `D-0064` rule 1 gains a
+   dated annotation reading the policy as something the person owns. Rule 7.2 is written for it.
+2. **(a).** A drafter may write a new policy without the person confirming it, with `message:` bases,
+   and **every drafted policy is listed in the next report (P5)**. Only an operator writes a successor
+   (rule 6.3).
+
+The gate also decided that two of the losses in section 4, **"one place to ask why this line is
+waiting"** (rondo's secretary is parts, not one voice the person addresses) and **"a held line behind a
+stalled line waits unnoticed"** (patrolling stays empty), are `D-0068`'s. This entry names them in its
+residuals and says nothing about how `D-0068` answers them.
+
+### Annotations this entry adds
+
+- **`D-0033` rule 9**: its residual is carried out by `D-0067` rule 2, for collisions that share a path.
+  Collisions that share none stay unowned.
+- **`D-0032` rule 2**: the basis union gains `policy:ID` (`D-0067` rule 6.5).
+- **`D-0064` rule 1**, by the gate's first answer: P3's "things the person owns" include an in-force
+  `standing_policy`.
+- **`D-0066` section 4**: a `sequence` (`D-0067` rules 3 and 4) delays when an act is attempted and does
+  not change the verdict computed when it is.
+
+### What this does not do
+
+- **It does not build** the reading, the proposal kind, the record kind, the writer refusals or any
+  verb.
+- **It does not observe merges or CI**, add `first_merged`, or open O4's `revise` or O6.
+- **It does not fill patrolling, the curator or the mid-lap relay** (rule 8).
+- **It does not import claude-org-ja's notes.** The person or a drafter writes rondo's policies from
+  what is said to rondo.
+- **It does not add an invariant beyond `D-0064`'s two lines.** No completeness check on policy
+  matching, no cap on how long a hold may last, no rule that a person read a `sequence`.
+
+### Residuals, with who decides
+
+| Residual | Why not here | Who decides |
+|---|---|---|
+| `first_merged` as a release fact | rondo observes no merge (survey G5) | the entry that builds merge observation |
+| A hold whose `first` stalls, which nothing notices (section 4) | Nothing patrols (R8) | `D-0068` |
+| One place, and one voice, where the person asks why a line is waiting (section 4) | The running half is placed on parts and the answer is a join shown in a report | `D-0068` |
+| Collisions that share no path | Needs a reader of what the work means, not where it is | a later entry, if premise claims miss them in practice |
+| Which policies and entries a review criterion hands the reviewer | The criterion is a plan field (`D-0065` section 1.2.6), bounded by the input bound | the reviewer's building change |
+| How a person retires or edits a policy on the page | A screen question | the conversation screen's entry |
+
+### What would falsify it
+
+- **Lines routinely held behind a line that never ends**, so that R8's emptiness costs more than a
+  patrol would. Patrolling is then the next role to fill, ahead of its place in `D-0064` section 5.
+- **Collisions found after merge between lines that shared no path** often enough that rule 2's path
+  test reads as the wrong unit.
+- **A choice the organisation made against a standing policy, found afterwards**, under the gate's
+  point 1 (a): rule 7's matching is then too weak for a model, and the truth check `D-0063` rule 7
+  declines is the entry to write.
+- **Policies drafted from the person's words that the person routinely retires**, under point 2 (a).
+  Point 2 moves to (b).
+- **The person asking "why is this waiting" often enough that the report is too late an answer.** Rule
+  4's silence while waiting is what moves, and option A's single place is the entry to reconsider.
+- **A cross-lineage snapshot too costly to gather at every attempted act.** Rule 2's second gathering
+  point moves.
+- Any measurement in "What was measured" failing to reproduce at rondo `278cd89`.
