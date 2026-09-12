@@ -777,6 +777,14 @@ rather than by drift.
 
 **Status:** accepted (2026-09-05, rondo's human gate)
 
+> **Annotation (2026-09-13, from D-0064).** Added after this entry was accepted, and additive. This
+> entry is kept as `D-0064` section 6 says. `D-0064` rule 3.6 bounds how it is read against O6 (the
+> organisation answering a lap's end gate inside a scope): **a delegated answer is not a carried
+> human answer.** It may not be written through `presented -> answered` under the approver's actor
+> id; it waits on a continuo seam that records it as delegated, naming the scope approval it was
+> taken under, and until that seam exists every lap's end gate stays a person's press. Nothing below
+> is edited.
+
 ### The gate this entry opens
 
 `cadenza C-17` put the conductor in this repository (`cadenza D-0029`), and section 11 of cadenza's
@@ -897,6 +905,12 @@ That is the price of the property, and it is taken deliberately.
 ## D-0010 — No mechanical step 11 in lap 1: rondo holds no push credentials and stops at the closed gate (cadenza `C-5`)
 
 **Status:** accepted (2026-09-05, rondo's human gate)
+
+> **Annotation (2026-09-13, from D-0064).** Added after this entry was accepted, and additive.
+> `D-0064` O7 lets a scope include pushing a lap's own branch and opening its pull request, and its
+> section 6 moves `D-0025` rule 6 for that, not this entry. **rondo still holds no credential of its
+> own.** Merging stays on `D-0064` rule 3.4's list of irreversible acts, approved by a person per
+> act, until that rule's transition condition holds. Nothing below is edited.
 
 ### Decision
 
@@ -4025,6 +4039,11 @@ next field would have faced the same choice with no rule to appeal to.
 > `D-0066` rule 5.2 from that date: a `human_decision` still authorises at most one issuance, and a
 > scope's approval authorises many acts, each recorded once. The text of rule 9 below is unedited.
 
+> **Annotation (2026-09-13, from D-0064).** Rule 15 is carried as written and annotated as `D-0064`
+> section 6 says. **Route S gains the scope as a thing it approves** (`D-0064` P1 and rule 3.1), and
+> route G's gate is answered by the organisation only under `D-0064` rule 3.6. **"rondo never mints a
+> gate" is kept.** The text of rule 15 below is unedited.
+
 The design is [`docs/design/advisory.md`](docs/design/advisory.md), whose rows `A-1` … `A-18` this
 entry takes. It answers rondo#9: whether the component that proposes contracts and explains state
 exists in rondo at all, in which layer, what it may read, what it may propose, and where the line
@@ -4401,6 +4420,14 @@ next reader has no way to tell a citation that was verified from one that merely
 ## D-0029 — An independent reading of what a lap produced: material for the person at the gate, one refusal at `publish`, and a verdict that cannot certify what it never read
 
 **Status:** accepted (2026-09-07, rondo's human gate)
+
+> **Annotation (2026-09-13, from D-0065).** Added after this entry was accepted, and additive.
+> **Rule 14 (`V-14`) is superseded by `D-0065` rule 4.2**, as `D-0064` section 6 said the model
+> reviewer entry would do: a round is one model reading over one tip commit, and the budget is the
+> scope's review-round budget (`D-0064` rule 3.1.4, default 3), whose cap is a scope exit that
+> reaches the person as P3. **This entry is not superseded**, and every other rule, `V-3` included
+> (the `--despite-review` override stays a person's act), is read as written. Nothing below is
+> edited.
 
 This entry records the outcome of the fourteen decision rows `V-1` … `V-14` that
 [`docs/design/lap-review-stage.md`](docs/design/lap-review-stage.md) put to the
@@ -5066,6 +5093,12 @@ On **2026-09-11**, against the pinned continuo built from a clean clone at
 
 **Status:** accepted (2026-09-11, rondo's human gate). Refs rondo#39, rondo#40, rondo#41.
 
+> **Annotation (2026-09-13, from D-0064).** Added after this entry was accepted, and additive. Rules
+> 1, 2 and 10 are kept, and `D-0064` relies on them (section 4 on rule 1, O8 on rule 10). **Rule 4 is
+> annotated**: the list of acts that are irreversible is `D-0064` rule 3.4's, a closed list that grows
+> only by an entry, and not a function of `kind`. A split whose plans differ in what they make
+> irreversible (the prototype note's G-5) is rule 4's own named falsifier. Nothing below is edited.
+
 **One rule was put to the gate as a decision point rather than as text, and the gate's own reason is
 recorded here because it is a human's judgement and not a restatement of this entry's case.** Rule 9
 accepts a known hole - a timestamp cursor cannot be lossless - and the alternative offered was the
@@ -5690,6 +5723,12 @@ material.
 ## D-0034 — An explanation carries claims and no recommendation: how `D-0032` rule 1 and rule 5 are read together
 
 **Status:** accepted (2026-09-11, rondo's human gate). Refs rondo#39, rondo#40, rondo#41.
+
+> **Annotation (2026-09-13, from D-0064).** Added after this entry was accepted, and additive. This
+> entry is not reversed: an `explanation` still binds nothing and carries no recommendation, and it is
+> a report (`D-0064` P5). **Its scope is the `explanation` kind; a question put to the person is never
+> one** (`D-0064` rule 4.3). Every P2 and P3 carries options, what each gives up and exactly one
+> recommendation (`D-0064` rule 4.1). Nothing below is edited.
 
 `D-0032` rule 1 says a proposal's payload is an **ordered set of options**, each carrying a label, its
 candidate value and its basis, with **exactly one** marked as the recommendation. Rule 5 says an
@@ -7363,6 +7402,14 @@ rondo `09830d6`, on **2026-09-12**, by running as well as by reading.
 ## D-0041 — The one write the operator's page may do: an unattended redraw and a person's click are told apart at runtime and never by type, the approver is the only actor, and the write is a single function rather than a store
 
 **Status:** accepted (2026-09-12, rondo's human gate). Refs rondo#95, `D-0032`, `D-0036`, `D-0020`.
+
+> **Annotation (2026-09-13, from D-0064).** Added after this entry was accepted, and additive.
+> **Rule 7 is superseded by `D-0064`** (section 6): the page no longer writes only the word
+> `approve`. P1-P4 are answered on the page -- approving a scope, answering a question by option,
+> approving an irreversible act, and writing a request -- so the page has write kinds, not one.
+> **Rule 1 is kept**, since every one of those writes is still a person's act at that moment. **This
+> entry is not superseded**: one sub-rule is named as superseded, in the form `D-0054`'s annotation
+> below uses for rule 3(a), and every other rule is read as written. Nothing below is edited.
 
 > **Annotation (2026-09-13, from D-0059).** Added after this entry was accepted, and additive.
 > `D-0059` R4 and section 5a, ratified by rondo's human gate, amend **rule 4**'s "the page's whole
@@ -9767,6 +9814,13 @@ lap, plus one escape reproduced directly.
 **Status:** accepted (2026-09-12, rondo's human gate). Refs rondo#163, rondo#160, rondo#95, `D-0041`,
 `D-0042`, `D-0007`, `D-0032`.
 
+> **Annotation (2026-09-13, from D-0064).** Added after this entry was accepted, and additive.
+> **Rule 8 is superseded by `D-0064`** (section 6), for the reason it supersedes `D-0041` rule 7:
+> P1-P4 are answered on the page, so the page's vocabulary is no longer the single word `approve`.
+> `D-0041` rule 1 is kept: every such write is still a person's act at that moment. **This entry is
+> not superseded**, and every other rule is read as the annotations below leave it. Nothing below is
+> edited.
+
 > **Annotation (2026-09-13, from D-0059).** Added after this entry was accepted, and additive.
 > `D-0059`, ratified by rondo's human gate, amends two rules below. **Rule 5** (one vendored morph)
 > by R2: htmx replaces idiomorph and `page/poll.js`. **Rule 6** (the script's vocabulary is a `GET` of
@@ -11651,6 +11705,11 @@ the gate function and the push were exercised directly, which is where the outco
 
 **Status:** accepted (2026-09-13, rondo's human gate). The gate also answered the question this
 entry put to it; the answer is recorded in section "What was put to the human gate, and its answer".
+
+> **Annotation (2026-09-13, from D-0064).** Added after this entry was accepted, and additive. **Step
+> 5.4's split is decided inside a scope** (`D-0064` O1), bounded by the scope's request predicate and
+> lap budget, and not per request. **Rule 6's mid-lap question becomes a P3 with no home**, the first
+> of the empty roles `D-0064` section 5 lists (relaying a mid-work question). Nothing below is edited.
 
 > **Annotation (2026-09-13, from D-0062).** `D-0062` was accepted, and it names agent types in a
 > proposal, so this entry's falsifier about `D-0062` did not fire and the split stays on option (b).
