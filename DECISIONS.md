@@ -96,6 +96,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0056 | The chrome's language follows the browser and is remembered, and the resolution is never silent: five steps with the first answer winning, the resolved tag put back into the URL, and one cookie that is a memory and not a record | accepted |
 | D-0057 | The page is priced against four frameworks and stays hand-written: 96 lines of 1,233 taken over, three invariants that stop being types, and `D-0007` kept because a build leaves the pin check nothing to check | accepted |
 | D-0058 | The second `resume` leaves the handbook: idempotence is a property the suite already proves more strongly than a walk can observe it, the surface keeps one `resume` per answering act on purpose, and no verb is added on the strength of a sentence | accepted |
+| D-0060 | Work left uncommitted is a fact rondo reads and names: `git status` joins the reading as a finding, `publish` refuses a workspace that still holds any, `--despite-review` does not reach it, and rondo commits nothing on a lap's behalf | accepted |
 
 ---
 
@@ -11395,3 +11396,179 @@ and the registry.
   this is an annotation and not a supersession. It is recorded because `D-0057` rule 2(a) leans on
   the precise version, and because a reader who took rule 3's sentence literally would believe a
   guarantee the tree does not provide.
+
+---
+
+## D-0060 — Work left uncommitted is a fact rondo reads and names: `git status` joins the reading as a finding, `publish` refuses a workspace that still holds any, `--despite-review` does not reach it, and rondo commits nothing on a lap's behalf
+
+**Status:** accepted (2026-09-13, rondo's human gate). Refs `D-0029`, `D-0045`, `D-0043`, `D-0051`,
+`D-0050`, `D-0025`.
+
+`D-0029` named this and left it: among its residuals, *"Uncommitted work reads as empty to every
+reader in the tree, and `publish` pushes a branch without it"*, owned by *"rondo's gate, or the issue
+it becomes"*. `docs/design/lap-review-stage.md` section 9.2 says the same thing from the reader's
+side: *"there is no `git status` anywhere in `src/`"*. Lap 4 is the case that happened -- the lap's
+work sat uncommitted in its workspace, the reading said, correctly, *"the topic branch is at the same
+commit as `refs/remotes/origin/main`, so this lap left nothing"*, and the only way to keep the work
+was an operator's hand commit onto a different branch (`docs/operations/lap-4-dogfood.md` section 6).
+
+What was known before this entry was half a fact and half a guess. The half that was a fact: when
+**everything** is uncommitted, the reader raises `concerns` and `publish` refuses unless
+`--despite-review` is passed. The refusal is right and its words are not -- it says the branch left
+nothing, never that the workspace still holds something, and a person reading it has no reason to
+look. The half that was a guess: that a lap which committed **some** of its work and left the rest
+would pass the reading and be published without the rest. This entry measured the guess first.
+
+### The partial case passes, and the push leaves the rest behind
+
+Measured with the tree's own functions over real git (see *What was measured*). A topic branch with
+one commit adding `b.txt`, then -- uncommitted -- a modification to a tracked `a.txt`, a staged
+second edit to `b.txt`, and an untracked `c.txt`:
+
+- `inspectLapWork` reports 1 commit and 1 file (`b.txt`); `readingOf` returns **`clear`** with no
+  findings.
+- `reviewGate` over that reading and a fresh inspection returns **`ready`**: the material digest
+  covers the base, the commits and the diff between refs, so nothing that is not committed can make
+  it stale.
+- `git push origin topic` then publishes a tree in which `a.txt` is the base's, `b.txt` is the
+  committed half, and `c.txt` does not exist. `git status --porcelain` in the workspace still lists
+  all three.
+
+So the guess is a fact, and it is the worse half: the all-uncommitted case is stopped with the wrong
+words, and the partly-committed case is **not stopped at all** -- a pull request goes out under a
+`clear` reading, and nothing on rondo's surface says that part of the lap is still on disk.
+
+### Decision
+
+1. **Uncommitted state becomes something rondo reads, in the module that already reads the lap's
+   work.** `inspectLapWork` (`src/access/forge.ts`) gains one more query, `git status --porcelain`
+   over the workspace, and its `read` value gains the list of paths it reported. What counts is what
+   git counts: tracked files modified, staged or deleted, and untracked files that are not ignored.
+   Ignored files are out, because a repository's ignore rules are its own statement that those files
+   are not work. No new module is granted `spawn`; `D-0029` rule 5's division stays exactly where it
+   is. A `git status` that fails makes the inspection `unreadable`, and therefore the reading
+   `unavailable` -- the same fail-closed arm every other query in that function already takes.
+
+2. **The reader says it, as a finding, and the finding is what turns a `clear` into `concerns`.**
+   `readingOf` adds *"the workspace holds N uncommitted paths that are not on the topic branch"*, with
+   the first paths named and the rest counted. In the all-uncommitted case this sits beside the
+   existing *"left nothing"* finding and is the sentence that was missing; in the partial case it is
+   the only finding and the one that stops a silent `clear`. The reading is where the person at the
+   gate first sees it, which is the earliest point anyone can still ask the lap to finish.
+
+3. **The material digest does not change.** `materialDigestOf` stays over the base, the commits and
+   the files between refs. Uncommitted paths are not material that would be pushed -- they are
+   exactly what would not be -- and folding them in would change the identity of every reading
+   already in a store, which `D-0051` makes "what the reading says". The recorded finding carries the
+   fact; `publish` re-reads the fact itself (rule 4) rather than trusting a count taken hours before.
+
+4. **`publish` refuses a workspace that holds uncommitted paths, on a fresh read, before its first
+   line -- and therefore before `--dry-run` returns.** The refusal names the workspace, the count and
+   the first paths, and says in so many words that the branch it would push does not contain them.
+   It is checked independently of the reading, because a clean reading followed by more work in the
+   worktree is the same staleness `D-0029` rule 10 exists for, arriving through a door the digest
+   cannot see.
+
+5. **`--despite-review` does not reach this refusal.** That flag overrules a *judgement* -- a verdict
+   that "settles nothing and is not a veto". This is not a judgement: it is git reporting that the
+   push would leave named files behind, the same class as `publishPreflight`'s *"has no branch"*,
+   which no flag overrules either. An operator who has decided a path is not work has three one-command
+   answers that say so about the path rather than about the publish: commit it, discard it, or add it
+   to the workspace's `.git/info/exclude`. **No new flag is added.** A flag that pushes while leaving
+   work behind would be a switch whose only effect is the defect this entry exists to remove.
+
+6. **rondo commits nothing on a lap's behalf, and no verb is added to do it.** A commit rondo made
+   would put content on the topic branch that no lap claimed as finished, under an author that did not
+   write it, and it would then be read and published as the lap's product. That is `D-0045`'s line
+   crossed from the other side: the record may not say more than rondo watched, and rondo did not
+   watch this work being finished -- it only saw it left behind. The refusal prints the remedies that
+   already exist, in this order:
+   - **Retry the lap** (`rondo propose`, then `rondo retry`, `D-0043`), so the lap itself finishes and
+     commits its work, and the new reading reads it.
+   - **Commit it by hand in the workspace**, as lap 4 did. This moves the topic branch's tip, so the
+     recorded reading no longer describes it and `reviewGate` refuses it as stale -- which is right:
+     an operator's commit is work nothing independent has read, and publishing it then takes
+     `--despite-review`, visibly, on the run that used it. The refusal says so rather than letting the
+     operator discover it on the next attempt.
+   - **Discard or exclude it**, when the paths are not work.
+
+7. **How this squares with `D-0045`.** The finding and the refusal state an observation rondo made
+   itself: at this moment `git status` in this workspace listed these paths. They say nothing about
+   what the paths contain, whether they were meant for the branch, or whether they pass anything --
+   rondo did not look, and the words do not imply it did. Nothing is written into the pull request
+   body, because the refusal means no pull request is opened while the fact holds.
+
+8. **This entry decides and changes no file but this one.** The change to `src/access/forge.ts`,
+   `src/access/review.ts` and `src/access/cli.ts`, with its tests, is a separate pull request, per
+   the standing convention that a decision lands before its implementation.
+
+### What the implementing change contains
+
+- `inspectLapWork`: one `git status --porcelain=v1 -z` query, paths carried on the `read` value.
+  `-z` because paths are read by a person and must not arrive as C string literals, the reason the
+  `diff --numstat` query already gives for `core.quotePath=false`.
+- `readingOf`: the finding of rule 2, bounded the way pull request lists already are (`LIST_LIMIT`),
+  and the hidden count stated.
+- `publish`: the refusal of rules 4 to 6, evaluated before the first printed line and not affected by
+  `--despite-review`.
+- Tests: the two cases measured below as unit cases over `LapWorkInspection` values, and one case
+  over a real temporary repository proving `inspectLapWork` reports modified, staged and untracked
+  paths and omits ignored ones.
+
+### What this entry does not do
+
+- **It does not make a lap commit.** Why a lap leaves work behind -- a fence refusing its
+  verification (lap 4, N-10), an escalation, a ceiling -- is the lap's and the fence's question. This
+  entry makes the consequence visible and unpublishable; it does not remove the cause.
+- **It does not add a verb, a flag, or a column.**
+- **It does not re-read a reading.** There is still no way to take a new reading of hand-committed
+  work, which is why rule 6's second remedy ends at `--despite-review`.
+- **It does not look at what the uncommitted paths contain.**
+
+### Residuals, with who decides
+
+| Residual | Why not here | Who decides |
+|---|---|---|
+| A verb that takes a fresh reading of a topic branch after an operator commits into it | It is the missing half of rule 6's second remedy, and it is a surface change with its own authority question | rondo's gate, if hand commits turn out to be routine |
+| A workspace whose checked-out branch is not the topic branch | `git status` then describes some other branch's worktree; rule 4 still refuses, which is safe but may name the wrong reason | the implementing change, which should say which branch it read |
+| Paths a lap's fence or tooling leaves in every workspace (scratch files, masks) | Whether they exist in practice is unmeasured; rule 5's `.git/info/exclude` answer covers them one workspace at a time | rondo's gate, on the trigger below |
+
+### What was measured, and at which revision
+
+At rondo `d65cd9e`, on 2026-09-13, `node v22.17.0`, `git version 2.43.0`, after `npm run build`.
+A throwaway script (not committed) imported `inspectLapWork` from `dist/access/forge.js`,
+`readingOf` from `dist/access/review.js` and `reviewGate` from `dist/access/cli.js`, and for each
+case built a bare remote and a workspace in `$TMPDIR`, committed a base on `main`, pushed it, switched
+to `topic`, applied the case, inspected, read, gated with `despiteReview=false`, pushed `topic`, and
+listed the remote's tree:
+
+| Case | Workspace after the lap (`git status --porcelain`) | Commits / files read | Verdict | Gate | Pushed tree |
+|---|---|---|---|---|---|
+| All uncommitted | ` M a.txt`, `?? new.txt` | 0 / none | `concerns` (*left nothing*; *changes no files*) | `refused` | `a.txt` (base content) |
+| Partly committed | ` M a.txt`, `M  b.txt`, `?? c.txt` | 1 / `b.txt` | `clear` | `ready` | `a.txt` (base), `b.txt` (committed half only) |
+
+The first row's refusal text was read in full and contains neither "uncommitted" nor the workspace's
+paths. Not measured: a real lap reaching the partial case, and `publish` end to end against a forge --
+the gate function and the push were exercised directly, which is where the outcome is decided.
+
+### What would falsify it
+
+- **Rule 5's refusal firing on paths nobody considers work, routinely** -- the third residual's
+  trigger. If most refusals are answered by exclusion rather than by commit or retry, the refusal is
+  noise and an override (or a declared ignore set on the plan) is the entry that supersedes rule 5.
+- **A legitimate lap whose product is deliberately uncommitted** -- a lap whose output is a report
+  read from the workspace rather than a branch. None exists today; `publish` is the only consumer and
+  it pushes branches.
+- **`git status` proving an unreliable reader of a workspace rondo publishes from** -- a worktree
+  layout, sparse checkout or fence mask under which it reports paths the push would in fact carry, or
+  omits ones it would not.
+- **The reading's identity turning out to need the uncommitted state** -- a case where two readings
+  with the same digest must be told apart by what was left on disk, which would contradict rule 3.
+- Either row of the table failing to reproduce at `d65cd9e`.
+
+### Annotations this entry adds to earlier entries
+
+- **`D-0029`** gains a dated annotation: its residual *"Uncommitted work reads as empty to every
+  reader in the tree, and `publish` pushes a branch without it"* is decided by `D-0060`, which
+  measured that the partly-committed case reads `clear` and publishes. Nothing in `D-0029` is amended;
+  its rule 10 is what rule 6's hand-commit remedy leans on.
