@@ -103,6 +103,7 @@ import {
   unblockedBy,
   whereItRuns,
 } from "./inbox.js";
+import type { Chrome } from "./wording.js";
 
 /**
  * Everything the page is handed: the reading half of the two ports, the host's
@@ -120,6 +121,20 @@ export interface WebPorts extends InboxReadPorts {
   readonly record: InboxReadPorts["record"] & Pick<AdvisoryRecord, "admissionRefusals">;
   readonly policy: HostPolicy;
   readonly actorId: string | null;
+  /**
+   * The language rondo writes this page in (D-0055 rules 5 and 10).
+   *
+   * **A host fact handed in, and not a lookup this module makes.** It is read
+   * from `RONDO_OPERATOR_LANGUAGE` beside `RONDO_APPROVER`, in the one place
+   * rondo's other deployment facts are read, and arrives here already selected
+   * -- so `inboxLines` and the fence block, which the terminal also composes,
+   * take a set as an argument rather than consulting one, and the terminal
+   * stays English while this page does not.
+   *
+   * Never null: a host that asked for nothing gets `EN`, which is the same set
+   * the terminal is handed and the same document this page was before.
+   */
+  readonly wording: Chrome;
   /**
    * The whole of what this surface may write (D-0041 rules 4 and 7), or null
    * when there is nobody to write as.
@@ -352,10 +367,18 @@ const RECENT_ENDED = 5;
  * rule 12).
  *
  * **The field's one use at render time, and it is markup rather than a claim.**
- * The document keeps `<html lang="en">` because the chrome is rondo's own
- * vocabulary and is English; the request paragraph and the material block carry
- * the tag, which is what a browser uses to pick a font and break a line. That
- * is the legibility complaint rondo#155 opened with, met with an attribute.
+ * The request paragraph and the material block carry the tag, which is what a
+ * browser uses to pick a font and break a line. That is the legibility
+ * complaint rondo#155 opened with, met with an attribute.
+ *
+ * **Where no ask was made the attribute is `lang=""`** (D-0055 rule 8), which
+ * is HTML's own way of saying *the language here is unknown*. It used to be
+ * absent, and an absent attribute inherits the document: harmless while the
+ * document was always `en` and a guess once the chrome can be the operator's
+ * language, because *rondo does not know* would arrive on the screen as *this
+ * is Japanese*. The chrome and a row's material may disagree and nothing
+ * reconciles them -- each is true about a different thing -- so the one thing
+ * this attribute must not do is inherit an answer to a question nobody asked.
  *
  * **Derived from the ask and from nothing else.** rondo never reads material to
  * find out what language it is in (rule 8), so where a worker ignored the ask
@@ -373,7 +396,7 @@ const RECENT_ENDED = 5;
  */
 function langAttribute(record: IterationRecord): string {
   const asked = record.plan["material_language"];
-  return typeof asked === "string" ? ` lang="${escapeHtml(asked)}"` : "";
+  return typeof asked === "string" ? ` lang="${escapeHtml(asked)}"` : ' lang=""';
 }
 
 /**
@@ -432,18 +455,22 @@ function lapHtml(
  * survives where it is checkable. Where any one of them **was** read the line
  * is drawn and the other two say so by name.
  */
-function spentLine(record: IterationRecord): string | null {
+function spentLine(wording: Chrome, record: IterationRecord): string | null {
   if (record.lapCostUsd === null && record.lapTurns === null && record.lapDurationMs === null) {
     return null;
   }
   const cost =
-    record.lapCostUsd === null ? "cost not read" : `cost $${record.lapCostUsd.toFixed(2)}`;
-  const turns = record.lapTurns === null ? "turns not read" : `${String(record.lapTurns)} turns`;
+    record.lapCostUsd === null
+      ? wording.costNotRead
+      : wording.costRead(record.lapCostUsd.toFixed(2));
+  const turns =
+    record.lapTurns === null ? wording.turnsNotRead : wording.turnsRead(record.lapTurns);
   // `ago` over a duration rather than over a clock: the same reading of the
   // same number of milliseconds, which is what keeps `7m` on this page the
   // same `7m` the inbox prints.
-  const took = record.lapDurationMs === null ? "duration not read" : ago(0, record.lapDurationMs);
-  return `${cost}, ${turns}, ${took}`;
+  const took =
+    record.lapDurationMs === null ? wording.durationNotRead : ago(0, record.lapDurationMs);
+  return wording.spent(cost, turns, took);
 }
 
 /**
@@ -456,24 +483,24 @@ function spentLine(record: IterationRecord): string | null {
  * refused and is the distinction the column was added to carry -- so it gets a
  * line of its own. The bytes are printed as continuo wrote them.
  */
-function fenceLine(record: IterationRecord): string | null {
+function fenceLine(wording: Chrome, record: IterationRecord): string | null {
   const refused = record.permissionDenials;
   if (refused === null) {
     return null;
   }
   if (refused === "null") {
-    return "the fence: continuo could not tell what it refused";
+    return wording.fenceUnknown;
   }
-  return refused === "[]" ? "the fence refused nothing" : `the fence refused ${refused}`;
+  return refused === "[]" ? wording.fenceRefusedNothing : wording.fenceRefused(refused);
 }
 
 /** How an ended lap ended: the status, and the answer or reason beside it. */
-function endedHow(record: IterationRecord, nowMs: number): string {
+function endedHow(wording: Chrome, record: IterationRecord, nowMs: number): string {
   const why =
     record.gateOutcome !== null
-      ? `gate answered '${record.gateOutcome}'`
-      : (record.reason ?? "no reason recorded");
-  return `${record.status} ${ago(record.updatedAtMs, nowMs)} ago -- ${why}`;
+      ? wording.gateAnswered(record.gateOutcome)
+      : (record.reason ?? wording.noReasonRecorded);
+  return wording.endedHead(record.status, ago(record.updatedAtMs, nowMs), why);
 }
 
 /**
@@ -486,6 +513,7 @@ function endedHow(record: IterationRecord, nowMs: number): string {
  * before they write has to be beside the thing they press.
  */
 function waitingHtml(
+  wording: Chrome,
   waiting: readonly IterationRecord[],
   open: readonly OpenProposal[],
   nowMs: number,
@@ -493,17 +521,17 @@ function waitingHtml(
   shown: ReadonlyMap<string, string>,
 ): string {
   return section(
-    `waiting for your answer (${String(waiting.length + open.length)})`,
+    wording.waitingHeading(waiting.length + open.length),
     "",
     waiting
       .map((record) =>
         lapHtml(
           record,
-          `${record.status} -- waiting ${ago(record.updatedAtMs, nowMs)}`,
-          [unblockedBy(record), spentLine(record), fenceLine(record)],
+          wording.waitingHead(record.status, ago(record.updatedAtMs, nowMs)),
+          [unblockedBy(wording, record), spentLine(wording, record), fenceLine(wording, record)],
           shown.has(record.id)
-            ? approveHtml(record, token, shown.get(record.id) ?? "")
-            : answerHref(record, token),
+            ? approveHtml(wording, record, token, shown.get(record.id) ?? "")
+            : answerHref(wording, record, token),
         ),
       )
       .join("") +
@@ -511,16 +539,11 @@ function waitingHtml(
         .map(
           (proposal) =>
             `<div class="lap" id="proposal-${escapeHtml(proposal.proposalId)}">` +
-            `<p class="basis">read it back with its options and ` +
-            `what each rests on: rondo show --proposal-id ${escapeHtml(proposal.proposalId)}</p>` +
+            `<p class="basis">${escapeHtml(wording.proposalBasis(proposal.proposalId))}</p>` +
             `<p class="head">${escapeHtml(
-              `${proposal.kind} -- waiting ${ago(proposal.createdAtMs, nowMs)}`,
+              wording.proposalHead(proposal.kind, ago(proposal.createdAtMs, nowMs)),
             )}</p>` +
-            `<p class="line">${escapeHtml(
-              proposal.iterationId === null
-                ? "about no iteration"
-                : `about '${proposal.iterationId}'`,
-            )}</p></div>`,
+            `<p class="line">${escapeHtml(wording.aboutIteration(proposal.iterationId))}</p></div>`,
         )
         .join(""),
     "waiting",
@@ -539,20 +562,21 @@ function waitingHtml(
  * reason: it holds a slot, so leaving it out would understate what is running.
  */
 function runningHtml(
+  wording: Chrome,
   running: readonly IterationRecord[],
   unreadable: readonly LiveRow[],
   transcripts: ReadonlyMap<string, TranscriptLocation>,
   nowMs: number,
 ): string {
   return section(
-    `running now (${String(running.length + unreadable.length)})`,
+    wording.runningHeading(running.length + unreadable.length),
     "",
     running
       .map((record) =>
-        lapHtml(record, `${record.status} -- running ${ago(record.updatedAtMs, nowMs)}`, [
-          whereItRuns(record, transcripts.get(record.id)),
-          spentLine(record),
-          fenceLine(record),
+        lapHtml(record, wording.runningHead(record.status, ago(record.updatedAtMs, nowMs)), [
+          whereItRuns(wording, record, transcripts.get(record.id)),
+          spentLine(wording, record),
+          fenceLine(wording, record),
         ]),
       )
       .join("") +
@@ -561,7 +585,7 @@ function runningHtml(
           row.kind === "unreadable"
             ? `<div class="lap" id="unreadable-${escapeHtml(row.id)}">` +
               `<p class="head">${escapeHtml(row.id)}</p>` +
-              `<p class="line">${escapeHtml(`will not decode: ${row.reason}`)}</p></div>`
+              `<p class="line">${escapeHtml(wording.willNotDecode(row.reason))}</p></div>`
             : "",
         )
         .join(""),
@@ -570,13 +594,16 @@ function runningHtml(
 }
 
 /** *What just finished* -- the last few endings, newest first (rondo#145). */
-function endedHtml(ended: readonly IterationRecord[], nowMs: number): string {
+function endedHtml(wording: Chrome, ended: readonly IterationRecord[], nowMs: number): string {
   return section(
-    `just finished (${String(ended.length)})`,
+    wording.endedHeading(ended.length),
     "",
     ended
       .map((record) =>
-        lapHtml(record, endedHow(record, nowMs), [spentLine(record), fenceLine(record)]),
+        lapHtml(record, endedHow(wording, record, nowMs), [
+          spentLine(wording, record),
+          fenceLine(wording, record),
+        ]),
       )
       .join(""),
     "ended",
@@ -595,37 +622,31 @@ function endedHtml(ended: readonly IterationRecord[], nowMs: number): string {
  * is that the basis is cited once for the three claims instead of once per
  * phrasing of zero.
  */
-function nothingHtml(): string {
+function nothingHtml(wording: Chrome): string {
   return (
-    `<section class="idle"><p class="nothing">Nothing is waiting on you, nothing is running, and ` +
-    `nothing has finished.</p>` +
-    `<p class="basis">every live row and every ended row in this ledger; the reading below ` +
-    `cites what each read found</p></section>`
+    `<section class="idle"><p class="nothing">${escapeHtml(wording.nothingAtAll)}</p>` +
+    `<p class="basis">${escapeHtml(wording.nothingBasis)}</p></section>`
   );
 }
 
 /** The inbox section: the same lines `rondo inbox` prints, and no mark moved. */
 function inboxHtml(ports: WebPorts, snapshot: InboxSnapshot | null): string {
+  const wording = ports.wording;
   if (snapshot === null || ports.actorId === null) {
-    return section(
-      "the inbox",
-      "RONDO_APPROVER is not set, so there is no identity whose inbox this would be.",
-      "",
-    );
+    return section(wording.inboxHeading, wording.inboxNoApprover, "");
   }
   return section(
-    "the inbox",
-    "Reading this does not move your last-look mark: that is what rondo inbox does.",
-    `<pre>${escapeHtml(inboxLines(ports.actorId, snapshot).join("\n"))}</pre>`,
+    wording.inboxHeading,
+    wording.inboxNote,
+    `<pre>${escapeHtml(inboxLines(wording, ports.actorId, snapshot).join("\n"))}</pre>`,
   );
 }
 
 /** The between-laps section: `rondo between`'s composition, unrecorded. */
-function betweenHtml(snapshot: HostSnapshot): string {
+function betweenHtml(wording: Chrome, snapshot: HostSnapshot): string {
   return section(
-    "what spans the live laps",
-    "An adjacency is not a collision: two laps open against one base branch is where to " +
-      "look, not what was found.",
+    wording.betweenHeading,
+    wording.betweenNote,
     claimsHtml(proposeHost(snapshot).payload.claims, snapshot),
   );
 }
@@ -642,7 +663,12 @@ function betweenHtml(snapshot: HostSnapshot): string {
  * `method="post"` is not decoration: the redraw above is a document `GET`, and
  * this form is the only thing on the page that can produce anything else.
  */
-function approveHtml(record: IterationRecord, token: string | null, material: string): string {
+function approveHtml(
+  wording: Chrome,
+  record: IterationRecord,
+  token: string | null,
+  material: string,
+): string {
   if (token === null || record.status !== "awaiting_human" || record.gateId === null) {
     return "";
   }
@@ -652,8 +678,7 @@ function approveHtml(record: IterationRecord, token: string | null, material: st
     `<input type="hidden" name="token" value="${escapeHtml(token)}">` +
     `<input type="hidden" name="iteration" value="${escapeHtml(record.id)}">` +
     `<button type="submit">${escapeHtml(APPROVE_BODY)}</button>` +
-    `<span class="note">answers gate ${escapeHtml(record.gateId)} as ` +
-    `'${escapeHtml(APPROVE_BODY)}', which is what rondo answer does</span>` +
+    `<span class="note">${escapeHtml(wording.approveNote(record.gateId, APPROVE_BODY))}</span>` +
     `</form>`
   );
 }
@@ -666,20 +691,20 @@ function approveHtml(record: IterationRecord, token: string | null, material: st
  * address adds, because *"answer"* on its own would read as though the press
  * were here.
  */
-function answerHref(record: IterationRecord, token: string | null): string {
+function answerHref(wording: Chrome, record: IterationRecord, token: string | null): string {
   if (token === null || record.status !== "awaiting_human" || record.gateId === null) {
     return "";
   }
   return `<p class="line"><a href="${escapeHtml(
     viewHref({ kind: "answer", iterationId: record.id }),
-  )}">read what a press would record, and answer there</a></p>`;
+  )}">${escapeHtml(wording.answerHere)}</a></p>`;
 }
 
 /** One iteration, explained the way `rondo explain` explains it. */
-function explainHtml(record: IterationRecord, snapshot: AdvisorySnapshot): string {
+function explainHtml(wording: Chrome, record: IterationRecord, snapshot: AdvisorySnapshot): string {
   return section(
-    `iteration '${record.id}'`,
-    "This explanation binds nothing: it is not a proposal and cannot be approved.",
+    wording.iterationHeading(record.id),
+    wording.explainNote,
     claimsHtml(propose(snapshot).payload.claims, snapshot),
   );
 }
@@ -726,7 +751,7 @@ async function shownBeforePress(
     const material = ports.material === null ? null : (await ports.material(record)).join("\n");
     shown.set(
       record.id,
-      `<p class="note">What pressing approve records as shown, and what it would be over:</p>` +
+      `<p class="note">${escapeHtml(ports.wording.pressNote)}</p>` +
         claimsHtml(propose(snapshot).payload.claims, snapshot) +
         (material === null
           ? ""
@@ -824,13 +849,14 @@ export async function operatorPage(
   const pressToken = ports.answer === null ? null : token;
   const shown = await shownBeforePress(ports, waiting, pressToken, view);
 
+  const wording = ports.wording;
   const lead =
     waiting.length + running.length + ended.length + open.length + unreadable.length === 0
-      ? nothingHtml()
+      ? nothingHtml(wording)
       : [
-          waitingHtml(waiting, open, nowMs, pressToken, shown),
-          runningHtml(running, unreadable, transcripts, nowMs),
-          endedHtml(ended, nowMs),
+          waitingHtml(wording, waiting, open, nowMs, pressToken, shown),
+          runningHtml(wording, running, unreadable, transcripts, nowMs),
+          endedHtml(wording, ended, nowMs),
         ].join("\n");
 
   const reading =
@@ -838,27 +864,42 @@ export async function operatorPage(
       ? ""
       : [
           inboxHtml(ports, inbox),
-          betweenHtml(host),
+          betweenHtml(wording, host),
           ...(await Promise.all(
             [...waiting, ...running, ...ended]
               .filter((record) => !shown.has(record.id))
               .map(async (record) =>
-                explainHtml(record, gather(record, await ports.store.readingsFor(record.id))),
+                explainHtml(
+                  wording,
+                  record,
+                  gather(record, await ports.store.readingsFor(record.id)),
+                ),
               ),
           )),
           ...unreadable.map((row) =>
             row.kind === "unreadable"
               ? section(
-                  `iteration '${row.id}'`,
+                  wording.iterationHeading(row.id),
                   "",
-                  `<pre>will not decode: ${escapeHtml(row.reason)}</pre>`,
+                  `<pre>${escapeHtml(wording.willNotDecode(row.reason))}</pre>`,
                 )
               : "",
           ),
         ].join("\n");
 
   return `<!doctype html>
-<html lang="en">
+${
+  // **The document declares the language rondo actually wrote it in, and never
+  // the one that was asked for** (D-0055 rule 7). `wording.lang` is the tag of
+  // the set that was selected, so a well-formed tag this tree ships no set for
+  // renders an English page that says `en` -- which is what the document *is*.
+  // rondo does not declare an intention as a fact.
+  //
+  // Escaped like anything else that reaches markup: the tag was already refused
+  // outside `[A-Za-z0-9-]` where it was read, and the escaping is what makes
+  // that a property of this line rather than of a file two modules away.
+  `<html lang="${escapeHtml(wording.lang)}">`
+}
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -1024,32 +1065,20 @@ ${
   // about writing, which is the fact that did not change: a read writes
   // nothing, whoever or whatever issued it.
   keepsCurrent
-    ? `<p class="note">Redraws every ${String(REFRESH_SECONDS)}s, and a redraw writes nothing: no last-look
-mark moves and no presentation is counted. The one thing that writes is the approve button, which
-records the explanation you pressed on and then answers the gate.</p>`
-    : `<p class="note">This view does not update itself: what a press records is the framing you are
-reading, so it holds still while you read it. Reading it writes nothing -- no last-look mark moves
-and no presentation is counted. The one thing that writes is the approve button, which records the
-explanation you pressed on and then answers the gate.</p>`
+    ? `<p class="note">${escapeHtml(wording.liveNote(REFRESH_SECONDS))}</p>`
+    : `<p class="note">${escapeHtml(wording.stillNote)}</p>`
 }
 ${
   // **Said on the visible page and not only in the reading.** With no approver
   // there is no write port and so no button anywhere, and a page that explained
   // that only inside the fold would leave an operator looking for a button that
   // is missing for a reason rondo knows and did not say (D-0020 rule 2).
-  ports.actorId === null
-    ? '<p class="note">RONDO_APPROVER is not set, so there is nobody this page could answer ' +
-      "as, and no inbox of theirs to draw.</p>"
-    : ""
+  ports.actorId === null ? `<p class="note">${escapeHtml(wording.noApproverNote)}</p>` : ""
 }
 ${lead}
 <p class="fold"><a href="${
     view.kind === "reading" ? "/" : escapeHtml(viewHref({ kind: "reading" }))
-  }">${
-    view.kind === "reading"
-      ? "hide the reading"
-      : "the reading these rest on: every claim with its basis, and rondo's own accounting"
-  }</a></p>
+  }">${escapeHtml(view.kind === "reading" ? wording.hideReading : wording.openReading)}</a></p>
 ${reading}
 </body>
 </html>

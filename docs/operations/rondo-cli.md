@@ -112,7 +112,7 @@ is the reason the script guards it rather than re-running it.
 least one commit on it. A lap materialises a worktree from it and cuts the topic branch; an empty
 repository has no `main` to cut from. The script creates a scratch one for exactly this reason.
 
-## 2. Three environment variables
+## 2. Three environment variables, and one more if you want the page in your own language
 
 ```sh
 export RONDO_CONTINUO_CLI="$S/continuo-$REV/dist/cli.js"   # the built CLI above
@@ -124,6 +124,38 @@ export RONDO_APPROVER=happy_ryo                            # the one identity al
 rows are rondo's; the run, gate and relay rows are continuo's. It must be an **absolute** path and
 must not be `:memory:` -- each command is a separate process, so a row that does not outlive one is
 a lap that ran, cost money, and then vanished. rondo refuses both by name.
+
+**The language rondo writes its own prose to you in** is a fourth variable, and it is optional
+(`D-0055`):
+
+```sh
+export RONDO_OPERATOR_LANGUAGE=ja   # an IETF language tag; unset means English
+```
+
+It is a **host** fact, beside `RONDO_APPROVER`, because the host has one operator and their language
+is a property of the host in the same way the store's path is. There is no file, no precedence
+order, no per-lap override and no plan field; and it is recorded nowhere.
+
+What it changes is **`rondo web`'s own sentences** -- the headings, the notes, the inbox's lines, the
+fence block's two standing paragraphs. What it does not change:
+
+- **the terminal**, which stays English. `rondo inbox` and `rondo answer` go through the ASCII
+  escape `D-0004` mandates for the Windows cell, which has no substitutes for CJK and would print a
+  Japanese screen as `\uXXXX`.
+- **what a lap wrote.** Material is quoted byte for byte and is never translated; the language it was
+  *asked* for is the plan's own `materialLanguage`, which is a separate field about a separate thing
+  and may disagree with this one. Nothing reconciles them, because each is true about something else.
+- **what the ledger records.** The claim labels and values a press writes are English whatever the
+  page is in, so the ledger holds one version of one claim and *which version was under the button*
+  stays answerable. The bytes a press records are byte-identical under an English host and a Japanese
+  one, and a test asserts exactly that.
+
+`ja` is the one language other than English this build ships wording for. **A well-formed tag rondo
+has no wording for is not a refusal**: the page is English and says so in `<html lang>`, because the
+attribute names the language rondo actually wrote the page in rather than the one that was asked
+for. A screen added ahead of its translation renders English inside an otherwise Japanese page for
+the same reason. What *is* refused, before the page is served, is a string that is not a language tag
+at all -- `ja_JP`, a sentence, a bare letter.
 
 ## 3. The plan file
 
@@ -674,6 +706,7 @@ yours.
 | `continuo gate deliver refused (LeaseHeld)` | A lap holds the global delivery lease. | Wait; the lease is 60 s. |
 | `continuo is not usable: ...` | The build is not the pinned revision, or is dirty. | Rebuild the pinned continuo (section 1). |
 | `RONDO_APPROVER is not set` | rondo will not act for an unnamed person. | Export it. |
+| `RONDO_OPERATOR_LANGUAGE is '<x>', which is not an IETF language tag` | The page's language is a tag (`ja`, `zh-Hant`), not a locale (`ja_JP`) or a sentence. | Fix it, or unset it for English. |
 | `No iteration is live` on `publish` | Answering closed the iteration, so it is no longer live. | Pass `--iteration-id`, which the `answer` output prints for you. |
 | `closed at gate outcome 'withdrawn'` on `publish` | The gate ended without a person answering it. | Nothing to publish; the work was not approved. |
 | `has no remote 'origin'` on `publish` | The workspace cannot push where the plan says. The refusal lists the remotes it does have. | Name one that is there with `--remote NAME`, or add the remote to the workspace. |

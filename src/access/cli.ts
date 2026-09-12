@@ -42,7 +42,7 @@ import {
 import type { ContinuoResult, ObservedSession } from "../continuo/protocol.js";
 import { lapTranscriptDirectory } from "../continuo/transcript.js";
 import { allocate } from "../refrain/allocator.js";
-import { type RunPlan, readRunPlan } from "../refrain/plan.js";
+import { isLanguageTag, type RunPlan, readRunPlan } from "../refrain/plan.js";
 import {
   CONSERVATIVE_HOST_POLICY,
   type HostPolicy,
@@ -95,6 +95,7 @@ import {
 import { type InboxOutcome, showInbox, type TranscriptLocation } from "./inbox.js";
 import { evidenceOf, READING_REMOTE } from "./review.js";
 import { serveOperatorPage } from "./web.js";
+import { type Chrome, chromeFor, EN } from "./wording.js";
 
 /**
  * The whole surface on one screen.
@@ -285,6 +286,62 @@ const STORE_ENV = "RONDO_STORE";
 const MAX_LIVE_ENV = "RONDO_MAX_LIVE";
 const MAX_OCCUPYING_ENV = "RONDO_MAX_OCCUPYING";
 const APPROVER_ENV = "RONDO_APPROVER";
+
+/**
+ * The language rondo writes its own prose to the operator in (D-0055 rule 5).
+ *
+ * **A host fact, read where the host's other facts are read, and recorded
+ * nowhere.** The host has one operator (D-0020), so their language is a
+ * property of the host in the same way the store's path and the approver's name
+ * are -- one variable in the set that already holds `RONDO_STORE`,
+ * `RONDO_APPROVER`, `RONDO_CONTINUO_CLI` and the two bounds. There is no file,
+ * no precedence order, no per-lap override and no plan field, which is what
+ * keeps D-0019 rule 3's refusal of a configuration *layer* intact.
+ *
+ * **Not `Accept-Language`, and not derived from the rows on screen.** A page
+ * whose bytes depend on who asked is a second version of one claim by another
+ * name, on a surface whose premise is one operator over loopback; and a chrome
+ * whose language followed the newest lap would change as laps come and go and
+ * would have no language at all on an idle host.
+ *
+ * **Absent means nobody asked, which renders English.** So does a well-formed
+ * tag this tree ships no wording for -- and the document then declares `en`,
+ * because that is the language it is in (rule 7).
+ */
+const OPERATOR_LANGUAGE_ENV = "RONDO_OPERATOR_LANGUAGE";
+
+/**
+ * The wording set one host writes in, or a refusal naming this variable.
+ *
+ * **Refused before a page is served rather than ignored**, which is the
+ * treatment the two capacity bounds already get: a mistyped tag is an operator
+ * who asked for something and would otherwise get an English page with no
+ * account of why. The grammar is `src/refrain/plan.ts`'s, shared because both
+ * fields need the same answer; the message is this caller's, because one naming
+ * `materialLanguage` would send an operator to the plan file to fix an
+ * environment variable (D-0055 rule 5).
+ *
+ * An empty string is `unset` and not a refusal, on `hostPolicyOf`'s reading of
+ * the same shape: `export RONDO_OPERATOR_LANGUAGE=` is how a shell says *never
+ * mind*.
+ */
+export function operatorWording(
+  environment: Readonly<Record<string, string | undefined>>,
+): { readonly wording: Chrome } | { readonly refusal: string } {
+  const asked = environment[OPERATOR_LANGUAGE_ENV];
+  if (asked === undefined || asked.trim() === "") {
+    return { wording: EN };
+  }
+  if (!isLanguageTag(asked)) {
+    return {
+      refusal:
+        `${OPERATOR_LANGUAGE_ENV} is '${asked}', which is not an IETF language tag. A tag is a ` +
+        "primary subtag and optional hyphenated subtags -- 'ja', 'zh-Hant' -- and unset means " +
+        "rondo writes its own prose in English.",
+    };
+  }
+  return { wording: chromeFor(asked) };
+}
 
 /** The remote a push goes to when the operator does not name one. */
 const DEFAULT_REMOTE = "origin";
@@ -1326,6 +1383,12 @@ export async function main(
     if ("refusal" in bounds) {
       return refuse(bounds.refusal);
     }
+    // **The language is read once, here, beside the other host facts, and a tag
+    // that is not one refuses before a socket is opened** (D-0055 rule 5).
+    const selected = operatorWording(environment);
+    if ("refusal" in selected) {
+      return refuse(selected.refusal);
+    }
     // **The approver is read once, here, and decides whether there is a write
     // port at all** (D-0041 rules 4 and 5). Building the function and letting
     // the page decide not to draw a button would leave a door with nobody's
@@ -1336,6 +1399,12 @@ export async function main(
         store,
         record: openAdvisoryRecord(opened.path),
         policy: bounds.policy,
+        // **The page's own language, and the terminal's is not this** (D-0055
+        // rule 10). `pageMaterial` below is handed the same set, so the fence
+        // block's two standing sentences follow the page; `sayLapMaterial` is
+        // handed `EN`, because the console's strings go through D-0004's escape
+        // and it has no CJK substitutes.
+        wording: selected.wording,
         answer:
           approver === undefined || approver === ""
             ? null
@@ -1347,7 +1416,7 @@ export async function main(
         material:
           approver === undefined || approver === ""
             ? null
-            : async (record) => await pageMaterial(environment, store, record),
+            : async (record) => await pageMaterial(selected.wording, environment, store, record),
         // **The approver and not an `--actor-id`.** An inbox is one person's,
         // and the identity rondo already trusts to answer a gate is the one
         // whose inbox this host draws. Unset is not a refusal: the other two
@@ -2105,7 +2174,11 @@ async function sayLapMaterial(
   record: IterationRecord,
   continuo: VerifiedContinuo | null,
 ): Promise<void> {
-  for (const line of await lapMaterialLines(store, record, continuo)) {
+  // **`EN` and not the host's set** (D-0055 rule 10). This is the console, and
+  // D-0004's escape has no CJK substitutes: a Japanese fence block would print
+  // here as `\uXXXX`. The page's copy of the same lines is handed the
+  // operator's set in `pageMaterial`.
+  for (const line of await lapMaterialLines(EN, store, record, continuo)) {
     say(line);
   }
 }
@@ -2122,6 +2195,7 @@ async function sayLapMaterial(
  * and put in a `<pre>` by the page, is one.
  */
 export async function lapMaterialLines(
+  wording: Chrome,
   store: IterationStore,
   record: IterationRecord,
   continuo: VerifiedContinuo | null,
@@ -2144,7 +2218,7 @@ export async function lapMaterialLines(
   } else {
     lines.push(...workLines(await inspectLapWork(range)));
   }
-  lines.push(...(await fenceLines(continuo, record)));
+  lines.push(...(await fenceLines(wording, continuo, record)));
   const readings = await store.readingsFor(record.id);
   const latest = readings.at(-1);
   if (latest === undefined) {
@@ -2181,7 +2255,9 @@ export async function lapMaterialLines(
  * three states of the column are spelled out on `IterationRecord`.
  *
  * **A third thing is said here and it is neither fact**: what this block does
- * not cover. See {@link SECOND_FENCE_LINES}.
+ * not cover. It is `Chrome.secondFence`, which is where that sentence's own
+ * argument for being unconditional is written down -- and, after D-0055
+ * rule 11, the place it is also written in the operator's language.
  *
  * ponytail: one more `run show` per redraw, on top of the `gate show` that
  * `pageMaterial` already pays. Same ceiling and same upgrade as that one -- a
@@ -2189,59 +2265,24 @@ export async function lapMaterialLines(
  * value of this half is that the bytes come back from continuo.
  */
 async function fenceLines(
+  wording: Chrome,
   continuo: VerifiedContinuo | null,
   record: IterationRecord,
 ): Promise<readonly string[]> {
   const lines = [
-    ...(await allowanceLines(continuo, record)),
+    ...(await allowanceLines(wording, continuo, record)),
     ...denialLines(record),
     // Appended here rather than inside either half, which is what makes it
     // unconditional: neither the allowance's six answers nor the denials' five
     // can leave it out, and a later branch added to either cannot either.
-    ...SECOND_FENCE_LINES,
+    ...wording.secondFence,
   ];
   return lines.map((line, index) => (index === 0 ? `fence   ${line}` : `        ${line}`));
 }
 
-/**
- * The containment rondo does not observe, said on every lap and derived from
- * nothing (`D-0050` rules 3 and 4).
- *
- * **Why the worker's sandbox reaches neither half of this block.** It fails
- * *open*: the call runs, with weaker containment than it was meant to have, and
- * nothing is refused. So it cannot appear in `permission_denials`, which records
- * calls the fence turned *down* -- the field's own shape says so, every entry
- * carrying a `tool_name` and the `tool_input` of a call that did not happen --
- * and it is not in the declaration either, because the declaration is a list of
- * subjects and this is not about a subject. N-16 (`docs/operations/lap-6-dogfood.md`)
- * measured the consequence: a lap whose first Bash call left the sandbox
- * disabled for four more, printing here as a clean run. Only the worker's own
- * paragraph at the gate said otherwise.
- *
- * **Why a frozen constant and not a line of `provenance`.** The caveat beside it
- * -- *"this is the run's own declaration"* -- is composed on the paths where the
- * delegation record was actually read, so a lap whose continuo could not be
- * reached prints none of it. This sentence has to survive all of those, and it
- * must survive them for a reason rather than by luck: it is a claim about
- * **rondo's record**, which rondo is the authority on, and not about this lap,
- * which rondo has nothing to suspect with (`D-0050` rule 4). A sentence printed
- * only when rondo suspected something would be the second kind. Held as a
- * constant so that "it is not derived from the lap" is a property of one
- * expression rather than of every branch above it.
- *
- * **It does not report that a lap failed open.** It reports that this screen
- * cannot tell, and says where the only account of it has ever been
- * (`D-0050` rule 5b: the gate's own `rationale`, which the same commands print).
- */
-const SECOND_FENCE_LINES: readonly string[] = Object.freeze([
-  "The worker's own sandbox is a second containment, and rondo does not observe",
-  "it: it can fail to start without refusing anything, so a lap that ran with it",
-  "disabled prints here exactly like one that did not. The worker's own account",
-  "at the gate is the only place that has ever reported it (D-0050).",
-]);
-
 /** What the run was admitted as permitted to run, read back from continuo. */
 async function allowanceLines(
+  wording: Chrome,
   continuo: VerifiedContinuo | null,
   record: IterationRecord,
 ): Promise<readonly string[]> {
@@ -2281,13 +2322,10 @@ async function allowanceLines(
     "continuo re-checked that digest against the stored bytes: " +
       `${stored.digestVerified ? "it matches" : "IT DOES NOT MATCH"}.`,
     // **The declaration is not the fence, and saying so is the whole point of
-    // the screen.** continuo renders the role's own template into the same
-    // `permissions.allow` -- on a worker that is six `git` specs rondo never
-    // declared and cannot see from here. A list headed "allowed to run" would
-    // have been rondo asserting a fence it did not read, which is the habit
-    // this block exists to break.
-    "This is the run's own declaration, not the whole fence: continuo renders the",
-    "role's template into the same allow list, and rondo does not read that here.",
+    // the screen.** The sentence and its argument are `Chrome.declarationCaveat`
+    // -- composed only on the paths where the delegation record was actually
+    // read, which is why it is not beside `Chrome.secondFence` above.
+    ...wording.declarationCaveat,
   ];
   if (subjects.length === 0) {
     return ["this run declared no Bash subject of its own.", ...provenance];
@@ -2752,6 +2790,7 @@ async function commandAnswer(
  * column holding the question, written when the row reaches `awaiting_human`.
  */
 async function pageMaterial(
+  wording: Chrome,
   environment: Readonly<Record<string, string | undefined>>,
   store: IterationStore,
   record: IterationRecord,
@@ -2781,6 +2820,7 @@ async function pageMaterial(
   return [
     ...lines,
     ...(await lapMaterialLines(
+      wording,
       store,
       record,
       startup.kind === "refused" ? null : startup.continuo,

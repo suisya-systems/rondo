@@ -18,6 +18,7 @@ import { DatabaseSync } from "node:sqlite";
 import { expect, test } from "vitest";
 
 import { lapMaterialLines } from "../../src/access/cli.js";
+import { EN } from "../../src/access/wording.js";
 import { CONSERVATIVE_HOST_POLICY } from "../../src/refrain/policy.js";
 import { iterationStore } from "../../src/store/sqlite.js";
 
@@ -40,7 +41,7 @@ async function fenceBlock(permissionDenials: string | null): Promise<string> {
   if (outcome.kind !== "read") {
     throw new Error(`the fixture row did not decode: ${outcome.kind}`);
   }
-  return (await lapMaterialLines(store, outcome.record, null)).join("\n");
+  return (await lapMaterialLines(EN, store, outcome.record, null)).join("\n");
 }
 
 test("a fence that refused nothing says so, and says it as a reading", async () => {
