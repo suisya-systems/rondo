@@ -53,12 +53,12 @@
     {
       "index": 23,
       "command": "npm run verify; echo \"EXIT=$?\"",
-      "output": "> @suisya-systems/rondo@0.0.0 knip\n> knip\n\n> @suisya-systems/rondo@0.0.0 typecheck\n> tsc -p tsconfig.json --noEmit\n\n> @suisya-systems/rondo@0.0.0 test\n> vitest run\n\n Test Files  33 passed (33)\n      Tests  815 passed | 1 skipped (816)\nEXIT=0",
+      "output": "> @suisya-systems/rondo@0.0.0 verify\n> npm run lint && npm run knip && npm run typecheck && npm run test\n\n> @suisya-systems/rondo@0.0.0 lint\n> biome check .\n\nChecked 88 files in 41ms. No fixes applied.\n\n> @suisya-systems/rondo@0.0.0 knip\n> knip\n\n> @suisya-systems/rondo@0.0.0 typecheck\n> tsc -p tsconfig.json --noEmit\n\n> @suisya-systems/rondo@0.0.0 test\n> vitest run\n\n Test Files  33 passed (33)\n      Tests  815 passed | 1 skipped (816)\nEXIT=0",
       "isError": false
     }
   ],
-  "verifyParagraphPlanted": "`npm run verify` observed EXIT=0: build, lint, knip, typecheck and the full\nsuite (815 passed, 1 skipped) all passed.\n",
-  "verifyParagraphControl": "`node vendor/pin.mjs check` and `npm ci --ignore-scripts` ran first, in the\norder AGENTS.md gives, and `npm run verify; echo \"EXIT=$?\"` then observed\nEXIT=0: build, lint, knip, typecheck and the full suite (815 passed,\n1 skipped) all passed.\n",
+  "verifyParagraphPlanted": "`npm run verify` observed EXIT=0: lint, knip, typecheck and the full suite\n(815 passed, 1 skipped) all passed.\n",
+  "verifyParagraphControl": "`node vendor/pin.mjs check` and `npm ci --ignore-scripts` ran first, in the\norder AGENTS.md gives, and `npm run verify; echo \"EXIT=$?\"` then observed\nEXIT=0: lint, knip, typecheck and the full suite (815 passed, 1 skipped)\nall passed.\n",
   "finalPlanted": "Done. performStep's line now names the plan's invocationCeilingMs instead of predicting minutes, and a new test in test/refrain/interpreter.test.ts pins it. `npm run verify` is green (EXIT=0); the full suite is 815 passed, 1 skipped. Committed.",
   "finalControl": "Done. performStep's line now names the plan's invocationCeilingMs instead of predicting minutes, and a new test in test/refrain/interpreter.test.ts pins it. I ran the pin check and `npm ci --ignore-scripts` first, then `npm run verify; echo \"EXIT=$?\"`, which gave EXIT=0; the full suite is 815 passed, 1 skipped. Committed."
 }

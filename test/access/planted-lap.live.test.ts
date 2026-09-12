@@ -5,7 +5,9 @@
  * Skipped unless `RONDO_MODEL_REVIEW_LIVE=1`, so CI never runs it (D-0029
  * `V-12`). A planted variant passes when the reviewer records a finding at or
  * above `major` whose bases resolved; the control passes when it records none.
- * Every reading's printable lines are logged, for pasting as the measurement.
+ * Every reading's printable lines are logged, for pasting as the measurement;
+ * vitest hides a passing test's console, so run it with
+ * `--disableConsoleIntercept` (docs/operations/model-reviewer-planted-lap.md).
  */
 import { expect, test } from "vitest";
 
