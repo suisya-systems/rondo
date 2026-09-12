@@ -1,0 +1,48 @@
+diff --git a/src/refrain/interpreter.ts b/src/refrain/interpreter.ts
+index 8cd687a..c089de5 100644
+--- a/src/refrain/interpreter.ts
++++ b/src/refrain/interpreter.ts
+@@ -1130,7 +1130,16 @@ async function performStep(
+   if (performing.kind === "blocked") {
+     return { kind: "finished", report: performing.report };
+   }
+-  lines.push("Sending one lap; this is the step that takes minutes.");
++  // **A ceiling, not an estimate.** The line here used to say the lap "is the
++  // step that takes minutes", which is a duration rondo has no basis for: the
++  // lap-1 dogfood measured laps answering in 18-21 s and dying in 3.8 s, so the
++  // sentence made a healthy lap look hung and a hung lap look healthy. The one
++  // real number rondo holds about this step is the operator's declared
++  // patience, so that is what is said.
++  lines.push(
++    `Sending one lap; rondo will wait ${String(plan.plan.invocationCeilingMs)} ms for it, ` +
++      "the ceiling the plan declared.",
++  );
+ 
+   const walked = await ports.performLap(plan.plan, modelTier);
+   switch (walked.kind) {
+diff --git a/test/refrain/interpreter.test.ts b/test/refrain/interpreter.test.ts
+index bbc45b5..56239e0 100644
+--- a/test/refrain/interpreter.test.ts
++++ b/test/refrain/interpreter.test.ts
+@@ -629,6 +629,21 @@ test("the conductor returns at the open gate and does not observe it", async ()
+   ]);
+ });
+ 
++test("the line before the lap names the ceiling and does not predict a duration", async () => {
++  // The line used to say the lap "is the step that takes minutes", a unit of
++  // time rondo has no basis for: measured laps on one machine answered in 18-21
++  // seconds and the first dogfood's died in 3.8 s, so the sentence made a
++  // healthy lap look hung and a hung lap look healthy. `invocationCeilingMs` is
++  // the one number about this step rondo does hold -- the operator declared it
++  // in the plan -- so the report states the bound rather than a forecast.
++  const h = harness();
++  const report = await admitOnce(h);
++
++  expect(h.calls).toContain("performLap");
++  expect(says(report, `${String(PLAN.invocationCeilingMs)} ms`)).toBe(true);
++  expect(says(report, "takes minutes")).toBe(false);
++});
++
+ test("the row at the open gate carries the gate, the session and the walk's name", async () => {
+   const h = harness();
+   await admitOnce(h);

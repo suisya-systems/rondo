@@ -1,0 +1,29 @@
+The line before a lap states its ceiling instead of predicting minutes (#22)
+
+`performStep` announced the lap as "Sending one lap; this is the step that
+takes minutes." Minutes is a unit rondo has no basis for: measured laps on
+this machine answered in 18-21 s and the first dogfood lap died in 3.8 s, so
+the sentence made a healthy lap look hung and a hung lap look healthy.
+
+The line now says "Sending one lap; rondo will wait <n> ms for it, the ceiling
+the plan declared", where <n> is the plan's `invocationCeilingMs` -- the
+operator's declared patience, which `performStep` already holds and which is a
+bound rondo is actually holding the lap to rather than a forecast of how long
+the lap will take.
+
+`test/refrain/interpreter.test.ts` gains a case that reads the report of a lap
+reaching `performLap` and asserts it names the ceiling and does not say "takes
+minutes", so the line cannot quietly go back to predicting a duration.
+
+The transcript in `docs/operations/rondo-cli.md` still quotes the old line, and
+so do the `docs/operations/lap-*-dogfood.md` records: those are transcripts of
+runs that happened, and they are left as they stood on the day.
+
+`npm run verify` observed EXIT=1. The failing step is `knip`, on package.json
+findings that predate this change (unused devDependency `@biomejs/biome`,
+unlisted binaries `tsc`, `biome`, `knip`, `vitest`) and that this two-file diff
+does not touch. `build`, `lint` and `typecheck` each exited 0, and the full
+suite is 815 passed, 1 skipped.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+
