@@ -9711,6 +9711,21 @@ lap, plus one escape reproduced directly.
 **Status:** accepted (2026-09-12, rondo's human gate). Refs rondo#163, rondo#160, rondo#95, `D-0041`,
 `D-0042`, `D-0007`, `D-0032`.
 
+> **Annotation (2026-09-13, from D-0057).** Added after this entry was accepted, and additive:
+> nothing below is removed or rewritten, and **nothing this entry decided is changed**. Rule 3's
+> supporting sentence -- *"an unattended redraw writes nothing because the code path a `GET` reaches
+> cannot write, and the compiler says so (`D-0041` rule 4's `Pick`ed ports, untouched here)"* -- is
+> **more precise than the type supports, and `D-0057` measured which half**. The `Pick` makes the
+> **store** unwritable from `src/access/web.ts`, exactly as claimed. But `WebPorts` also carries
+> `answer`, the one write function, and `operatorPage` is handed the whole object -- so the compiler
+> does **not** forbid the render path from writing; the method branch in `serveOperatorPage`, and
+> `handleApprove` being `answer`'s only caller, are what do. What the type gives is `D-0041` rule
+> 4's own and narrower claim: the page's writing vocabulary is one sentence long, readable off one
+> declaration, and widening it is a visible change to that declaration. **Rule 3's conclusion stands
+> unchanged** -- an unattended redraw writes nothing, and 3(a)'s work did move to the server -- so
+> this is an annotation and not a supersession. `D-0057` rule 2(a) is written against the precise
+> version, and `D-0057`'s falsifier *"the render path calling `ports.answer`"* is the thing to watch.
+
 `D-0041` rule 3(a) carries rondo#95's constraint verbatim: *"there is no script on the page -- no
 `fetch`, no `XMLHttpRequest`, no client-side build"*, and it is load-bearing there as one of three
 runtime facts standing between an unattended redraw and the ledger. rondo#160 is what that
@@ -11264,7 +11279,9 @@ deciding member by member; Web Awesome if rule 7 is.
 - **It does not touch the language behaviour.** `D-0056` is settled and shipped; nothing here is
   translated at display time and no recorded byte moves.
 - **It does not amend `D-0041`, `D-0042`, `D-0054`, `D-0055`, `D-0056` or `D-0007`.** It cites them
-  as the constraints that decided a survey. `D-0054`'s falsifier count on `D-0041` stays at two.
+  as the constraints that decided a survey, and adds one dated annotation below that makes a
+  supporting sentence of `D-0054` rule 3 precise without changing what that rule decided.
+  `D-0054`'s falsifier count on `D-0041` stays at two.
 - **It does not turn its own reasoning into a check.** The facts rule 2 leans on are already
   enforced as far as they go -- the store's unwritability by the compiler, `src/advisory`'s
   allowance by `test/architecture/import-boundaries.test.ts` -- and adding a test that asserts *no
@@ -11365,4 +11382,16 @@ and the registry.
 
 ### Annotations this entry adds to earlier entries
 
-- **`D-0054` rule 3** gains a dated annotation (2026-09-13), and it is a correction to a
+- **`D-0054` rule 3** gains a dated annotation (2026-09-13), and it is a correction to a *reason*
+  rather than to a decision. That rule says an unattended redraw writes nothing *"because the code
+  path a `GET` reaches cannot write, and the compiler says so (`D-0041` rule 4's `Pick`ed ports,
+  untouched here)"*. Measured today: the `Pick` makes the **store** unwritable from this module, and
+  that half is exact -- but `WebPorts` also carries `answer`, the one write function, and
+  `operatorPage` is handed the whole object. So the compiler does not forbid a write on the `GET`
+  path; **the method branch and `handleApprove` being its only caller do**, and what the type gives
+  is `D-0041` rule 4's own and narrower claim: the writing vocabulary is one sentence long and
+  widening it is a visible change to a declaration. **What rule 3 decided is unchanged and still
+  holds** -- 3(a)'s work did move to the server, and an unattended redraw does write nothing -- so
+  this is an annotation and not a supersession. It is recorded because `D-0057` rule 2(a) leans on
+  the precise version, and because a reader who took rule 3's sentence literally would believe a
+  guarantee the tree does not provide.
