@@ -163,18 +163,22 @@ costs on this machine, and that `resume` sees the outcome after a human answers.
    first costs nothing:
 
    ```sh
-   # DIST is step 3's emitted tree -- the `outDir` of your tsconfig.dogfood.json,
-   # resolved, and the same tree the driver in step 2 imports from. PLAN is the
-   # module holding the plan you are about to run.
-   DIST=/absolute/path/to/dist
-   PLAN=/absolute/path/to/plan.mjs
+   # DIST is step 3's emitted tree -- `dist/` in the repository root, as
+   # `npm run build` leaves it, spelled absolute. PLAN is the JSON plan file the
+   # run will use, which is the one `scripts/dogfood-env.sh` writes. Its top
+   # level is snake_case, but `agent_type_input` is carried to cadenza verbatim
+   # and keeps cadenza's own spelling inside, which is why the path below
+   # changes case halfway down.
+   DIST=/absolute/path/to/rondo/dist
+   PLAN=/absolute/path/to/plan.json
 
    # The tier is read out of the plan rather than typed here on purpose: a
    # preflight that checks a tier the run will not use is a preflight that passes
    # and then lets the run fail.
    node -e "
-   Promise.all([import('file://$DIST/continuo/roles.js'), import('file://$PLAN')]).then(
-     ([roles, plan]) => console.log(roles.mapModelTier(plan.PLAN_INPUT.agentTypeInput.executorPolicy.modelTier)));
+   const plan = JSON.parse(require('node:fs').readFileSync('$PLAN', 'utf8'));
+   import('file://$DIST/continuo/roles.js').then(
+     (roles) => console.log(roles.mapModelTier(plan.agent_type_input.executorPolicy.modelTier)));
    "
    # { kind: 'selected', model: 'claude-opus-5' }   -- 'unknown' means stop and fix the agent type
    ```
