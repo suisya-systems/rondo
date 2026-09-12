@@ -373,6 +373,23 @@ export interface IterationRecord {
   readonly sessionId: string | null;
   readonly sessionPath: string | null;
   /**
+   * What the worker's fence refused, as continuo reported it with the lap (#88).
+   *
+   * **Three states, and no two of them may be read alike.** SQL `null` is rondo
+   * holding no reading at all -- a row that never reached a suspend, or one
+   * written before this column existed. The text `"null"` is continuo saying it
+   * could not tell, and the text of an array is continuo saying what was
+   * refused, `[]` included. `continuo D-1110` argues the last distinction and
+   * this column exists to carry it: a screen that showed "we cannot tell whether
+   * the verification ran" as "nothing was refused" is the mistake the key was
+   * added for.
+   *
+   * continuo's own document rather than a rondo shape, for the reason
+   * {@link plan} is stored verbatim: what a reader gets is the bytes rondo read,
+   * and a re-encoding would be a second rendering to keep true.
+   */
+  readonly permissionDenials: string | null;
+  /**
    * Why this iteration failed, stalled, or is asking for a withdrawal.
    *
    * One column for all three because the question a reader asks is the same --

@@ -1263,6 +1263,11 @@ async function performStep(
           // makes that check able to fail (D-0015 rule 6's habit, applied to a
           // second measured field).
           model: lap.model,
+          // **Written at the suspend, where the gate id is** (#88). The row a
+          // person is about to be asked to answer is the row that has to carry
+          // what the fence refused; a column filled in later would be one the
+          // gate screen could find empty.
+          permissionDenials: lap.permissionDenials,
           ...lapNoteFields(
             performing.record.reason,
             lap.endpointLeaseFailure,

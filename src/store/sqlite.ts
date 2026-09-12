@@ -436,6 +436,7 @@ const COLUMN_BY_FIELD = {
   gateOutcome: "gate_outcome",
   sessionId: "session_id",
   sessionPath: "session_path",
+  permissionDenials: "permission_denials",
   reason: "reason",
 } as const satisfies Record<keyof IterationFields, string>;
 
@@ -560,6 +561,7 @@ CREATE TABLE IF NOT EXISTS iteration (
   gate_outcome          TEXT,
   session_id            TEXT,
   session_path          TEXT,
+  permission_denials    TEXT,
   reason                TEXT,
   created_at_ms         INTEGER NOT NULL,
   updated_at_ms         INTEGER NOT NULL,
@@ -962,6 +964,7 @@ const ADDED_COLUMNS = Object.freeze({
   workspace: "TEXT",
   identifiers_spent: "INTEGER NOT NULL DEFAULT 0",
   supersedes_iteration_id: "TEXT",
+  permission_denials: "TEXT",
   occupying: GENERATED_COLUMNS.occupying,
   holds_identifiers: GENERATED_COLUMNS.holds_identifiers,
 });
@@ -1114,6 +1117,7 @@ const SELECT_COLUMNS = [
   "gate_outcome",
   "session_id",
   "session_path",
+  "permission_denials",
   "reason",
   "created_at_ms",
   "updated_at_ms",
@@ -2659,6 +2663,7 @@ function toRecord(row: SqlRow): IterationRecord {
     gateOutcome: optionalText(row, "gate_outcome"),
     sessionId: optionalText(row, "session_id"),
     sessionPath: optionalText(row, "session_path"),
+    permissionDenials: optionalText(row, "permission_denials"),
     reason: optionalText(row, "reason"),
     createdAtMs: requireInteger(row, "created_at_ms"),
     updatedAtMs: requireInteger(row, "updated_at_ms"),

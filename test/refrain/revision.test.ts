@@ -174,6 +174,7 @@ function closedRecord(id: string, plan: AdmittedPlan): IterationRecord {
     gateOutcome: "answered_and_forwarded",
     sessionId: "session-1",
     sessionPath: "walk-1",
+    permissionDenials: null,
     reason: null,
     createdAtMs: 1_000,
     updatedAtMs: 2_000,

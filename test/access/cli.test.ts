@@ -1109,6 +1109,7 @@ function published(parts: Partial<IterationRecord> = {}): IterationRecord {
     gateOutcome: "answered_and_forwarded",
     sessionId: "s-1",
     sessionPath: null,
+    permissionDenials: null,
     reason: null,
     createdAtMs: 0,
     updatedAtMs: 0,
