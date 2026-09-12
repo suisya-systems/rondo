@@ -61,7 +61,7 @@ import {
   issueInitialContract,
   resolveProject,
 } from "../cadenza/facade.js";
-import { allocate } from "../refrain/allocator.js";
+import { allocate, ITERATION_ID_PATTERN } from "../refrain/allocator.js";
 import { type AdmittedPlan, admittedPlan, readPlan } from "../refrain/plan.js";
 import type { HostPolicy } from "../refrain/policy.js";
 import { canonicalJson } from "../store/plan.js";
@@ -1192,6 +1192,118 @@ function draftContracts(
   };
 }
 
+/** What recording one drafted proposal did, or the first reason it did not. */
+type RecordOutcome =
+  | { readonly kind: "recorded" }
+  | { readonly kind: "refused"; readonly reason: string };
+
+/**
+ * Write one drafted proposal and every contract behind it, in that order.
+ *
+ * **Lifted out of {@link proposeRetry} so that the unprompted door writes the
+ * same rows** (`D-0043` rule 9): the two writers, their order and their
+ * refusals are the half of `D-0022` rule 18 that is about the ledger, and the
+ * half that is about a screen -- the `present` call and the attention row --
+ * stays with the door that has a screen. Two copies of the order would be two
+ * places it can drift, and a drift here is a contract an operator approves that
+ * the ledger does not hold.
+ */
+async function recordDraft(
+  ports: ProposePorts,
+  kind: ProposableKind,
+  subject: IterationRecord,
+  drafted: Drafted,
+  proposalId: string,
+  createdAtMs: number,
+): Promise<RecordOutcome> {
+  const { proposal, snapshot, contracts } = drafted;
+  const iterationId = subject.id;
+  const recorded = await ports.record.recordProposal({
+    proposalId,
+    kind,
+    drafter: DETERMINISTIC_DRAFTER,
+    payload: payloadDocument(proposal.payload),
+    snapshot: snapshotDocument(snapshot),
+    // Null on every kind but `explanation` (D-0032 rule 8), which the schema's
+    // own CHECK enforces from the other side.
+    derivation: null,
+    iterationId,
+    supersedesIterationId: subject.supersedesIterationId,
+    supersedesProposalId: null,
+    // **What the retry is measured against.** These two say what a diff or a
+    // widening is *against*, and here there is one: the plan and the contract
+    // the subject actually ran under.
+    predecessorPlanDigest: subject.planDigest,
+    predecessorContractDigest: subject.contractDigest,
+    agentTypeDigest: subject.agentTypeDigest,
+    configDigest: subject.configDigest,
+    contractDigest: subject.contractDigest,
+    continuoRevision: subject.continuoRevision,
+    // The pin that composed something -- and these kinds compose. It is the one
+    // difference from `explain`'s row that is not a null (D-0022 rule 18).
+    cadenzaRevision: ports.cadenzaRevision,
+    // D-0032 rule 7's pair, null together: **nothing was elevated.** The
+    // conversation exists now (D-0036 rule 3) and the writer refuses a proposal
+    // naming a message that is not in it (rule 4), but this proposal was asked
+    // for on a command line rather than taken up from an observation -- and a
+    // message id written here to fill the column would be the dangling
+    // reference rule 4 exists to refuse.
+    elevatedFromMessageId: null,
+    elevatedByActorId: null,
+    createdAtMs,
+  });
+  if (recorded.kind !== "recorded") {
+    return {
+      kind: "refused",
+      reason:
+        `The ${kind} proposal for '${iterationId}' was composed and not recorded, so it is not ` +
+        `being shown: ${recorded.reason}.`,
+    };
+  }
+  for (const [index, option] of proposal.payload.options.entries()) {
+    const contract = contracts[index];
+    if (contract === undefined) {
+      // Unreachable: the drafters build one contract per option, in order.
+      // Refused rather than asserted, because the failure it would otherwise
+      // produce is a composition row holding some other option's contract.
+      return {
+        kind: "refused",
+        reason: `Option ${String(index)} of '${proposalId}' has no contract behind it.`,
+      };
+    }
+    const composition = await ports.record.recordComposition({
+      // **Zero-padded so the id sorts the way the options are ordered.** The
+      // suffix is the option's index -- it is what links a composition row back
+      // to the option whose digest it holds -- and `-10` sorts before `-2` in
+      // text, so an unpadded id would put the tenth option second for any
+      // reader that ordered by it. Three digits: an option set larger than that
+      // is not one a person is answering in one sentence.
+      compositionId: `${proposalId}-${String(index).padStart(3, "0")}`,
+      proposalId,
+      contract,
+      contractDigest: option.value,
+      // **Null, and D-0022 rule 17 is why.** The retry's contract supersedes
+      // nothing: it is an *initial* contract, `supersedes` is null inside the
+      // contract cadenza digested, and "cadenza links them not at all". A
+      // predecessor digest written here would make the row claim a lineage
+      // cadenza does not hold -- and would disagree with the bytes beside it.
+      supersedesContractDigest: null,
+      cadenzaRevision: ports.cadenzaRevision,
+      composedAtMs: createdAtMs,
+    });
+    if (composition.kind !== "recorded") {
+      return {
+        kind: "refused",
+        reason:
+          `The contract for option ${String(index)} of '${proposalId}' was composed and not ` +
+          `recorded, so nothing is being shown: ${composition.reason}. A contract an operator ` +
+          "approves and the ledger does not hold is what rule 18 exists to prevent.",
+      };
+    }
+  }
+  return { kind: "recorded" };
+}
+
 /**
  * Propose what a retry of one iteration could run under, and record what was
  * put on the screen.
@@ -1266,91 +1378,19 @@ export async function proposeRetry(
       reason: `No ${kind} for a retry of '${iterationId}' can be proposed: ${draft.reason}`,
     };
   }
-  const { proposal, snapshot, contracts } = draft.drafted;
+  const { proposal, snapshot } = draft.drafted;
   const createdAtMs = ports.now();
   const proposalId = `${kind}-${successorId}-${String(createdAtMs)}`;
-  const recorded = await ports.record.recordProposal({
-    proposalId,
+  const written = await recordDraft(
+    ports,
     kind,
-    drafter: DETERMINISTIC_DRAFTER,
-    payload: payloadDocument(proposal.payload),
-    snapshot: snapshotDocument(snapshot),
-    // Null on every kind but `explanation` (D-0032 rule 8), which the schema's
-    // own CHECK enforces from the other side.
-    derivation: null,
-    iterationId,
-    supersedesIterationId: subject.record.supersedesIterationId,
-    supersedesProposalId: null,
-    // **What the retry is measured against.** These two say what a diff or a
-    // widening is *against*, and here there is one: the plan and the contract
-    // the subject actually ran under.
-    predecessorPlanDigest: subject.record.planDigest,
-    predecessorContractDigest: subject.record.contractDigest,
-    agentTypeDigest: subject.record.agentTypeDigest,
-    configDigest: subject.record.configDigest,
-    contractDigest: subject.record.contractDigest,
-    continuoRevision: subject.record.continuoRevision,
-    // The pin that composed something -- and these kinds compose. It is the one
-    // difference from `explain`'s row that is not a null (D-0022 rule 18).
-    cadenzaRevision: ports.cadenzaRevision,
-    // D-0032 rule 7's pair, null together: **nothing was elevated.** The
-    // conversation exists now (D-0036 rule 3) and the writer refuses a proposal
-    // naming a message that is not in it (rule 4), but this proposal was asked
-    // for on a command line rather than taken up from an observation -- and a
-    // message id written here to fill the column would be the dangling
-    // reference rule 4 exists to refuse.
-    elevatedFromMessageId: null,
-    elevatedByActorId: null,
+    subject.record,
+    draft.drafted,
+    proposalId,
     createdAtMs,
-  });
-  if (recorded.kind !== "recorded") {
-    return {
-      kind: "refused",
-      reason:
-        `The ${kind} proposal for '${iterationId}' was composed and not recorded, so it is not ` +
-        `being shown: ${recorded.reason}.`,
-    };
-  }
-  for (const [index, option] of proposal.payload.options.entries()) {
-    const contract = contracts[index];
-    if (contract === undefined) {
-      // Unreachable: the drafters build one contract per option, in order.
-      // Refused rather than asserted, because the failure it would otherwise
-      // produce is a composition row holding some other option's contract.
-      return {
-        kind: "refused",
-        reason: `Option ${String(index)} of '${proposalId}' has no contract behind it.`,
-      };
-    }
-    const composition = await ports.record.recordComposition({
-      // **Zero-padded so the id sorts the way the options are ordered.** The
-      // suffix is the option's index -- it is what links a composition row back
-      // to the option whose digest it holds -- and `-10` sorts before `-2` in
-      // text, so an unpadded id would put the tenth option second for any
-      // reader that ordered by it. Three digits: an option set larger than that
-      // is not one a person is answering in one sentence.
-      compositionId: `${proposalId}-${String(index).padStart(3, "0")}`,
-      proposalId,
-      contract,
-      contractDigest: option.value,
-      // **Null, and D-0022 rule 17 is why.** The retry's contract supersedes
-      // nothing: it is an *initial* contract, `supersedes` is null inside the
-      // contract cadenza digested, and "cadenza links them not at all". A
-      // predecessor digest written here would make the row claim a lineage
-      // cadenza does not hold -- and would disagree with the bytes beside it.
-      supersedesContractDigest: null,
-      cadenzaRevision: ports.cadenzaRevision,
-      composedAtMs: createdAtMs,
-    });
-    if (composition.kind !== "recorded") {
-      return {
-        kind: "refused",
-        reason:
-          `The contract for option ${String(index)} of '${proposalId}' was composed and not ` +
-          `recorded, so nothing is being shown: ${composition.reason}. A contract an operator ` +
-          "approves and the ledger does not hold is what rule 18 exists to prevent.",
-      };
-    }
+  );
+  if (written.kind === "refused") {
+    return written;
   }
   ports.present(optionLines(iterationId, kind, proposal.payload, snapshot));
   const counted = await ports.record.recordAttention({
@@ -2358,4 +2398,173 @@ export async function composeBetweenLaps(ports: HostPorts): Promise<ExplainOutco
   return counted.kind === "recorded"
     ? { kind: "explained", proposalId }
     : { kind: "presentedUncounted", proposalId, reason: counted.reason };
+}
+
+// --- the unprompted door (D-0043) --------------------------------------------
+
+/**
+ * The ports the unprompted door takes, or the reason it has none.
+ *
+ * **The composition root has to be able to say "not this time" without
+ * refusing the lap** (`D-0043` rule 11). The one input this door needs that a
+ * lap does not is the cadenza pin, and it is read from a file: a pin that will
+ * not read must not turn an admission that would otherwise have run into a
+ * refusal, and it must not be papered over with an empty string either, because
+ * `composition.cadenza_revision` is what says which cadenza composed the
+ * contract a person may later approve. So the absence is a value, it carries
+ * its own sentence, and the sentence reaches the report.
+ */
+export type UnpromptedPorts = ProposePorts | { readonly unavailable: string };
+
+/** What the unprompted door did, or why it did nothing. */
+export type UnpromptedOutcome =
+  | {
+      readonly kind: "proposed";
+      readonly proposalId: string;
+      readonly successorId: string;
+      readonly options: number;
+    }
+  | { readonly kind: "silent"; readonly reason: string };
+
+/** The suffix this door mints, and the one it strips so a chain does not grow its own name. */
+const RETRY_SUFFIX = /-r[0-9]+$/;
+
+/** The largest retry index this door will mint (`D-0043` rule 6). */
+const LAST_RETRY_INDEX = 99;
+
+/**
+ * Mint the identity a retry would run as, by derivation from the subject's own
+ * (`D-0043` rule 6).
+ *
+ * **Derived and not invented, which is what keeps `D-0019` rule 3 intact.**
+ * What is minted here is a *candidate*: `admit()` still takes its iteration id
+ * from its caller, and this value becomes an identifier only when a person
+ * approves the digest composed under it. The base is the subject's id with a
+ * trailing `-r<n>` removed, so a retry of a retry is `-r3` and not `-r2-r2` --
+ * a name that grew a segment per attempt would run into the alphabet's own
+ * bound after a handful of them, and would stop being readable well before
+ * that.
+ *
+ * **Two refusals, and neither one truncates a name to make it fit.** An id that
+ * cannot pass {@link ITERATION_ID_PATTERN} is one `allocate()` would refuse at
+ * the far end, and an id shortened to pass it is a different iteration's name.
+ */
+async function mintSuccessorId(
+  store: IterationStore,
+  subjectId: string,
+): Promise<{ readonly id: string } | { readonly refusal: string }> {
+  const base = subjectId.replace(RETRY_SUFFIX, "");
+  for (let index = 2; index <= LAST_RETRY_INDEX; index += 1) {
+    const candidate = `${base}-r${String(index)}`;
+    if (!ITERATION_ID_PATTERN.test(candidate)) {
+      return {
+        refusal:
+          `the identity a retry would run as, '${candidate}', is not a rondo identifier, and ` +
+          "rondo does not shorten a name to make one fit",
+      };
+    }
+    // Anything but `absent` is taken: an id that will not decode is still a
+    // primary key this store holds, and admitting under it is impossible.
+    const held = await store.read(candidate);
+    if (held.kind === "absent") {
+      return { id: candidate };
+    }
+  }
+  return {
+    refusal:
+      `every identity from '${base}-r2' to '${base}-r${String(LAST_RETRY_INDEX)}' is already in ` +
+      "this store",
+  };
+}
+
+/**
+ * Propose what a retry could run under, with nobody having asked (`D-0043`).
+ *
+ * **The door the lap's own path reaches, and the four differences from
+ * {@link proposeRetry} are the whole of it.** The successor's identity is
+ * minted rather than typed (rule 6); the kind is fixed at `contract_keys`,
+ * because it is the only one whose alternatives do not come from a lineage the
+ * subject of a first stop does not have (rule 4); nothing is recorded when the
+ * only candidate is the contract the subject already ran under, since an option
+ * set of one is not a choice (rule 5); and **nothing is presented and no
+ * attention row is written** (rule 9) -- `D-0042` settled that a presentation is
+ * a person's act, and here there is not even a rendering, so a `presented` row
+ * would be a claim about nobody.
+ *
+ * **Every ending is a value and none is an exception.** The caller is a
+ * conductor verb that has already committed a terminal transition, and rule 11
+ * is that nothing here may change what that transition decided: what this door
+ * could not do comes back as a sentence for the report.
+ */
+export async function proposeAfterAbandon(
+  ports: UnpromptedPorts,
+  iterationId: string,
+): Promise<UnpromptedOutcome> {
+  const silent = (reason: string): UnpromptedOutcome => ({
+    kind: "silent",
+    reason: `No retry was proposed for '${iterationId}': ${reason}.`,
+  });
+  if ("unavailable" in ports) {
+    return silent(ports.unavailable);
+  }
+  const subject = await ports.store.read(iterationId);
+  if (subject.kind !== "read") {
+    return silent(
+      subject.kind === "absent"
+        ? "the row this admission just wrote is not in the store"
+        : `the row this admission just wrote will not decode: ${subject.reason}`,
+    );
+  }
+  const minted = await mintSuccessorId(ports.store, iterationId);
+  if ("refusal" in minted) {
+    return silent(`${minted.refusal}. Name one with 'rondo propose --successor-id'`);
+  }
+  const rows = await lineage(ports, subject.record);
+  if ("refusal" in rows) {
+    return silent(rows.refusal);
+  }
+  const draft = draftContracts("contract_keys", subject.record, rows.rows, minted.id);
+  if (draft.kind !== "drafted") {
+    return silent(draft.reason);
+  }
+  const options = draft.drafted.proposal.payload.options;
+  if (options.length < 2) {
+    // Rule 5. `promotionsOf` offers the subject's own contract plus one option
+    // per key its agent type declared askable, so a set of one means the author
+    // offered none -- there is nothing to widen, and a proposal saying "run it
+    // again exactly as it ran" is a row nobody can answer.
+    return silent(
+      "the agent type it ran under declares no askable key, so the only candidate is the " +
+        "contract it already ran under",
+    );
+  }
+  // **Derived from the subject, and carrying no clock** (rule 10), unlike the
+  // operator door's id one line of this file away. A second attempt about the
+  // same subject composes the same id and collides on the proposal table's
+  // primary key, which is the whole of the idempotence this needs: the store
+  // refuses the duplicate rather than this function remembering anything.
+  //
+  // **The subject and not the successor**, because a successor identity is not
+  // unique to one subject: `job` and `job-r1` both mint `job-r2` while that
+  // name is free, and an id naming only the minted successor would have let the
+  // first of them silently suppress the second's proposal. The subject is the
+  // thing this door proposes about, and it proposes about one subject once.
+  const proposalId = `contract_keys-${iterationId}`;
+  const written = await recordDraft(
+    ports,
+    "contract_keys",
+    subject.record,
+    draft.drafted,
+    proposalId,
+    ports.now(),
+  );
+  if (written.kind === "refused") {
+    return silent(written.reason);
+  }
+  return {
+    kind: "proposed",
+    proposalId,
+    successorId: minted.id,
+    options: options.length,
+  };
 }

@@ -73,6 +73,7 @@ import {
   proposeRetry,
   recordAnswer,
   showProposal,
+  type UnpromptedPorts,
 } from "./advisory.js";
 import { abandon, admit, conductorPorts, resume } from "./conductor.js";
 import { asciiEscape, consoleSeams, legibleAsciiEscape, relayUpstream } from "./console.js";
@@ -1356,11 +1357,18 @@ export async function main(
 
   switch (parsed.command) {
     case "start":
-      return await commandStart(parsed, ports, continuo);
+      return await commandStart(parsed, ports, unpromptedPorts(store, opened.path), continuo);
     case "answer":
       return await commandAnswer(parsed, environment, store, ports, continuo);
     case "revise":
-      return await commandRevise(parsed, environment, store, ports, continuo);
+      return await commandRevise(
+        parsed,
+        environment,
+        store,
+        ports,
+        unpromptedPorts(store, opened.path),
+        continuo,
+      );
     default:
       return await commandPublish(parsed, environment, store, continuo);
   }
@@ -1370,6 +1378,7 @@ export async function main(
 async function commandStart(
   parsed: ParsedCommand,
   ports: ReturnType<typeof conductorPorts>,
+  advisory: UnpromptedPorts,
   continuo: VerifiedContinuo,
 ): Promise<number> {
   const loaded = loadPlan(parsed);
@@ -1397,7 +1406,7 @@ async function commandStart(
   const iterationId = parsed.iterationId;
   say(`starting iteration '${iterationId}'; the lap is the step that is slow`);
 
-  const report = await admit(ports, plan, START_POLICY, iterationId);
+  const report = await admit(ports, advisory, plan, START_POLICY, iterationId);
   sayReport(report);
   if (report.status === "awaiting_human") {
     say("");
@@ -1462,6 +1471,39 @@ function advisoryPorts(
         }
       }),
   };
+}
+
+/**
+ * The ports the trigger a stopped lap pulls is handed (D-0043 rule 3).
+ *
+ * **Nothing here may stop a lap that would otherwise have run** (rule 11), and
+ * there are two ways it could. The pin is a file, and a `cadenza.pin.json` that
+ * will not read leaves nothing able to say which cadenza composed a contract;
+ * the advisory's record is a **second connection to the store**, opened here
+ * rather than shared, and opening it runs a schema. Neither is anything the lap
+ * itself needs, so both absences travel as a value with their own sentence in
+ * it instead of as a refusal or a throw -- the catch in the conductor cannot
+ * help with either, because both happen before the admission it wraps.
+ *
+ * `present` is a no-op and is never called: this door shows nobody anything,
+ * which is rule 9. It is passed because {@link ExplainPorts} is one bundle for
+ * every door, and a second bundle differing by one field would be two things to
+ * keep in step.
+ */
+export function unpromptedPorts(store: IterationStore, storePath: string): UnpromptedPorts {
+  const pin = cadenzaRevision();
+  if ("refusal" in pin) {
+    return { unavailable: pin.refusal };
+  }
+  try {
+    return { ...advisoryPorts(store, storePath, () => {}), cadenzaRevision: pin.revision };
+  } catch (error) {
+    return {
+      unavailable:
+        "the advisory's own connection to the store could not be opened: " +
+        `${error instanceof Error ? error.message : String(error)}`,
+    };
+  }
 }
 
 /**
@@ -2659,6 +2701,7 @@ async function commandRevise(
   environment: Readonly<Record<string, string | undefined>>,
   store: IterationStore,
   ports: ReturnType<typeof conductorPorts>,
+  advisory: UnpromptedPorts,
   continuo: VerifiedContinuo,
 ): Promise<number> {
   const actor = approvedActor(parsed.actorId, environment);
@@ -2854,7 +2897,7 @@ async function commandRevise(
   // the succession survived only as `base_branch` equalling the predecessor's
   // `topic_branch` -- a value a reader could guess a relationship from, which
   // is what `D-0027` rule 9 deferred and rondo#33 asked for.
-  const second = await admit(ports, successor.plan, START_POLICY, successorId, record.id);
+  const second = await admit(ports, advisory, successor.plan, START_POLICY, successorId, record.id);
   sayReport(second);
   if (second.status === "awaiting_human") {
     say("");
