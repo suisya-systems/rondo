@@ -2533,8 +2533,11 @@ export function reviewLines(reading: LapReading): readonly string[] {
  * **Pure, and it takes no `despiteReview`.** That flag overrules a judgement;
  * this is git reporting that the push would leave named files behind, the
  * class of `publishPreflight`'s "has no branch", which no flag reaches either.
- * An unreadable workspace is not refused here: `reviewGate` already refuses it,
- * and the preflight has read the branch this would push.
+ * An unreadable workspace is not refused here, which is a known edge: it is
+ * `reviewGate`'s refusal, and `--despite-review` passes it, as it did before
+ * D-0060 -- `inspectLapWork` holds that a publish whose history could not be
+ * read stays publishable. So a `git status` that fails does not stop a publish
+ * the operator has already overridden.
  *
  * rondo commits nothing on the lap's behalf, so the refusal names the remedies
  * that already exist, in the decision's order, and says up front what the

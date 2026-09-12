@@ -317,6 +317,10 @@ test("the coverage of a reading is keyed by its drafter, and states the same cei
   expect(deterministic).toContain("neither checked nor claimed");
   expect(readingCoverage("rondo/none").join("\n")).toContain("is not recorded");
   expect(readingCoverage("rondo/model/1").join("\n")).not.toContain("built nothing");
+  // D-0060 changed what the reader reads, so the version moved and an old row
+  // still says what its reader covered.
+  expect(deterministic).toContain("git status");
+  expect(readingCoverage("rondo/deterministic/1").join("\n")).toContain("committed history only");
 });
 
 test("an operator's verification claim is stored as their word, and its absence is nothing", async () => {
