@@ -14446,8 +14446,8 @@ scratch directory (the "prototype source"). Line numbers drift; re-measure the c
    | Finding | Test | Where it goes |
    |---|---|---|
    | **F1. `overdue`**: rondo is waiting for an answer past the patience the lap declared | an iteration on the *in flight* side whose `now - updated_at_ms` exceeds its plan's `invocationCeilingMs`; **or** the conductor has just taken a `noAnswer` arm and held the row (section 2, rule 2.2) | **P3** inside a scope; outside one, an `explanation`-shaped message with `asks` unset (section 2, rule 3.3). **Subject to the gate's second point** |
-   | **F2. `held_behind_stopped`**: a line held by order whose `first` will not end by itself | an in-force `sequence` whose `until` fact is not recorded and whose `first` reads `waiting_on_you`, `overdue` or `undetermined`, whatever `then` itself reads. Two `sequence` rows holding each other make `first` read `undetermined`, so a cycle is always this finding | by `first`'s reason: **`waiting_on_you`** writes nothing new, and `first`'s item shows what it releases (section 1, rule 2.6); **`overdue`** is F1's message on `first`, with `then`'s latest `iteration_id` or plan as a basis and "`then` waits on this" in what each option gives up; **`undetermined`** is **P3** into `then`'s thread |
-   | **F3. `hold_cannot_release_inside`**: a held act that can only be `outside` when released | an in-force `sequence` whose `then` sits under a scope approval that has an approved successor, whose `expires_at_ms` has passed, or whose `laps` are spent (`D-0066` rule 3.4) | **P3** into `then`'s thread: the message `D-0066` rule 4.4 would write when the act is attempted, written when the fact becomes true. Cost is not tested here, because a read cost can fall below its reserve and bring an admission back inside |
+   | **F2. `held_behind_stopped`**: a line held by order whose `first` will not end by itself | an in-force `sequence` whose `until` fact is not recorded and whose `first` reads `waiting_on_you`, `overdue` or `undetermined`, whatever `then` itself reads. Two `sequence` rows holding each other make `first` read `undetermined`, so a cycle is always this finding | by `first`'s reason: **`waiting_on_you`** writes nothing new, and `first`'s item shows what it releases (section 1, rule 2.6); **`overdue`** is F1's message on `first`, with the `sequence` row as a basis and "`then` waits on this" in what each option gives up; **`undetermined`** is a **P5 report presented at once** into `then`'s thread, with `asks` unset |
+   | **F3. `hold_cannot_release_inside`**: a held act that can only be `outside` when released | an in-force `sequence` whose `then` sits under a scope approval that has an approved successor, whose `expires_at_ms` has passed, or whose `laps` are spent (`D-0066` rule 3.4) | a **P5 report presented at once** into `then`'s thread, with `asks` unset: it says the P3 `D-0066` rule 4.4 will write when the act is attempted, and writes none itself. Cost is not tested here, because a read cost can fall below its reserve and bring an admission back inside |
    | **F4. `reserve_never_read`**: a lap whose reserve stays spent for good | an iteration under a scope approval, no longer in flight, whose `lap_cost_usd` is null (`D-0066` gate answer 1, `D-0046`) | **P5**: listed in the request's report with the reserve it holds. When it is what makes an admission `outside`, `D-0066` section 4 already stops the line as P3 |
 
 2. **Who runs it, and when.**
@@ -14471,17 +14471,22 @@ scratch directory (the "prototype source"). Line numbers drift; re-measure the c
       out rather than guarded. **While no resident host runs, nothing patrols** (section 5).
 3. **What it writes, and what it never does.**
    1. **A finding reaches the person once per episode.** Before writing a message, the tick writes a
-      `presented` row with `subject_kind` `patrol` and `subject_id`
-      `<finding>:<subject id>:<the subject iteration's updated_at_ms>` (F3's subject is the `sequence`
-      id alone, since its facts cannot un-happen), through `D-0036` rule 1's index. **The message is
-      written in the same transaction, only when that row was inserted.** A lap that moves and later
-      overdues again is a new episode; a finding that stays true is not re-sent. No table and no column
-      is added.
+      `presented` row with `subject_kind` `patrol` and `subject_id` `<finding>:<subject id>:<the
+      subject's status>`, through `D-0036` rule 1's index. **The message is written in the same
+      transaction, only when that row was inserted.** For F1 the subject is the iteration, and **both
+      triggers (section 2, rule 2.2) write the same key**: `holdAt`'s same-status write refreshes
+      `updated_at_ms` and not the status, so a tick that sees the ceiling pass and the `noAnswer` arm
+      that follows are one episode. An iteration walks its in-flight statuses forward and never
+      re-enters one (`nextStep`, `src/refrain/loop.ts`), so a lap overdue at `admitting` and later at
+      `performing` is two episodes. For F2 and F3 the subject is the `sequence` row and the status is
+      `first`'s. A finding that stays true is not re-sent. No table and no column is added.
    2. **A P3 finding carries options, what each gives up and one recommendation** (`D-0064` rule 4.1),
       fixed per finding by the building change. F1's are at least: wait one more ceiling; `abandon()`
       after reading the transcript the inbox names (`D-0048` rule 5), which releases the lock and any
-      line `held_by_order` behind it; and `abandon()` with a successor `sequence` drafted. Its bases hold
-      the iteration's `iteration_id`, so it stands over that lineage (`D-0066` rule 4.4).
+      line `held_by_order` behind it; and `abandon()` with a successor `sequence` drafted. **Its only
+      `iteration_id` basis is the overdue iteration's**, so it stands over that lineage alone
+      (`D-0066` rule 4.4). A line held behind it is named through the `sequence` row, a basis that
+      stands over no line, so abandoning `first` releases `then` without waiting for the reply.
    3. **Outside a scope nothing is decided** (`D-0067` rule 5.3, `D-0033` rule 2): the finding is a
       message with `asks` unset and no recommendation (`D-0034`), and it is presented in the inbox. A
       line with no request link has no thread; its finding is the `presented` row and the inbox mark
@@ -14489,15 +14494,18 @@ scratch directory (the "prototype source"). Line numbers drift; re-measure the c
    4. **The patrol takes no act.** It does not `abandon()`, retry, redraft or release a `sequence`,
       and it does not re-notify a finding that stays true. The dispatcher's P5 carried over: a sharper
       detection is not a licence to act. **This is why it does not fire `D-0033`'s falsifier** "a
-      self-started act that reaches a lap": what it writes is a message, and the one thing a P3 message
-      does to a line (`D-0066` rule 4.2's `asks` test) withholds only acts that could not happen
-      anyway. An `overdue` lap keeps its status and lock, so no organisation act continues its lineage
-      until a person's `abandon()`; F2's `then` is already held; F3's held act would be `outside`.
+      self-started act that reaches a lap": what it writes is a message. The only message that holds
+      anything is F1's P3 (`D-0066` rule 4.2's `asks` test), and it stands over the overdue lap's own
+      lineage alone. That lap keeps its status and lock, so no organisation act can continue the
+      lineage until a person runs `abandon()`; after that, a redo of it waits for the person's reply,
+      which is `D-0066` rule 4.4's stop and not an act. F2's and F3's reports hold nothing.
 4. **Nothing the patrol finds is `D-0064` O.** O is what the organisation decides without asking, and
    the patrol decides and does nothing (section 2, rule 3.4). Handling a finding silently would be
    a withholding, and until the operator writes an attention policy nothing is withheld (`D-0033`
-   rules 6 and 7). So every finding is either put to the person now (P3, or its `explanation` form
-   outside a scope) or listed in the report (P5).
+   rules 6 and 7). So every finding is put to the person now as P3 (F1; its `explanation` form
+   outside a scope), presented now as a report that binds nothing (F2 when `first` is
+   `undetermined`, and F3), or listed in the request's report (F4). The last two are P5: they do
+   not wait on the person.
 5. **What the patrol does not detect, by name.**
    - **A lap inside its ceiling that has stopped making progress.** The ceiling is the only statement
      rondo holds of when an answer is due; telling "slow" from "wedged" inside it needs a liveness
@@ -14596,8 +14604,8 @@ scratch directory (the "prototype source"). Line numbers drift; re-measure the c
    meaning of `stalled`) than to a point in dispute. **This point changes how a ratified entry reads,
    so it is put to the gate rather than taken.**
    - **(a) Yes: a line that only a person's act can continue is read as P3**, added by a dated
-     annotation on `D-0064` rule 1, as `D-0067`'s first answer added one (recommended). F1 and F2's
-     `undetermined` case are then P3 as section 2 writes them.
+     annotation on `D-0064` rule 1, as `D-0067`'s first answer added one (recommended). F1 is then P3 as
+     section 2 writes it.
    - **(b) No: F1 is an inbox mark and a report line (P5).** *Loses:* `D-0067`'s second loss is filled
      only for a person who looks; a held line behind an overdue lap still waits unnoticed by a person
      who does not.
@@ -14647,8 +14655,8 @@ scratch directory (the "prototype source"). Line numbers drift; re-measure the c
   voice. The wait reading's "never stored" (section 1, rule 2.4) is what to reconsider.
 - **An F1 finding for a lap that answered normally**, which would mean `updated_at_ms` plus the ceiling
   does not bound when an answer is due.
-- **A patrol message that withheld an act that could otherwise have happened**, which falsifies section 2
-  rule 3.4's reading of `D-0033`'s falsifier.
+- **A patrol message that withheld an act on a line other than the overdue lap's own lineage**, which
+  falsifies section 2 rule 3.4's reading of `D-0033`'s falsifier.
 - **A finding sent twice for one episode, or never sent for one**, which falsifies section 2 rule
   3.1's key.
 - Any measurement in "What was measured" failing to reproduce at rondo `1db9112`.
