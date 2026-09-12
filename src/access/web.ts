@@ -167,6 +167,16 @@ const APPROVE_BODY = "approve";
 /** How often the page redraws itself, in seconds. */
 const REFRESH_SECONDS = 5;
 
+/**
+ * The second address of the one page: the same rows, with the fold open.
+ *
+ * A query on `/` rather than a second path, because the router refuses every
+ * path but `/` and a second one would be a second URL to get wrong. It is read
+ * on the way in and rendered into two links and the redraw, so the whole of
+ * this surface's state is in the address bar where a reload can carry it.
+ */
+const READING_PATH = "/?reading=open";
+
 /** Text as HTML text: the four characters that would otherwise be markup. */
 export function escapeHtml(text: string): string {
   return text
@@ -585,7 +595,20 @@ function endedRecently(outcomes: readonly ReadOutcome[]): readonly IterationReco
  * is a browser's own element and carries no script, and the only thing on the
  * page that can produce anything but a `GET` is still the one form.
  */
-export async function operatorPage(ports: WebPorts, token: string | null = null): Promise<string> {
+export async function operatorPage(
+  ports: WebPorts,
+  token: string | null = null,
+  // **Whether the fold is open is a fact about the URL and not about the
+  // browser** (rondo#145). A `<details>` the operator opened would be slammed
+  // shut by the next `<meta refresh>` five seconds later, which turns a fold
+  // into a thing that cannot be read -- and a page with no script has no way to
+  // reopen it. So the reading is a second address of the same page, the redraw
+  // is pointed back at the address that is being read, and the state survives
+  // every redraw because the server is the one holding it. A `GET` to either
+  // address writes exactly what a `GET` to the other one writes, which is
+  // nothing (D-0041).
+  readingOpen = false,
+): Promise<string> {
   const nowMs = ports.now();
   const host = await gatherHost(ports);
   const inbox = ports.actorId === null ? null : await gatherInbox(ports, ports.actorId);
@@ -632,31 +655,33 @@ export async function operatorPage(ports: WebPorts, token: string | null = null)
           endedHtml(ended, nowMs),
         ].join("\n");
 
-  const reading = [
-    inboxHtml(ports, inbox),
-    betweenHtml(host),
-    ...(await Promise.all(
-      [...waiting, ...running, ...ended].map(async (record) =>
-        explainHtml(record, gather(record, await ports.store.readingsFor(record.id))),
-      ),
-    )),
-    ...unreadable.map((row) =>
-      row.kind === "unreadable"
-        ? section(
-            `iteration '${row.id}'`,
-            "",
-            `<pre>will not decode: ${escapeHtml(row.reason)}</pre>`,
-          )
-        : "",
-    ),
-  ].join("\n");
+  const reading = !readingOpen
+    ? ""
+    : [
+        inboxHtml(ports, inbox),
+        betweenHtml(host),
+        ...(await Promise.all(
+          [...waiting, ...running, ...ended].map(async (record) =>
+            explainHtml(record, gather(record, await ports.store.readingsFor(record.id))),
+          ),
+        )),
+        ...unreadable.map((row) =>
+          row.kind === "unreadable"
+            ? section(
+                `iteration '${row.id}'`,
+                "",
+                `<pre>will not decode: ${escapeHtml(row.reason)}</pre>`,
+              )
+            : "",
+        ),
+      ].join("\n");
 
   return `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="refresh" content="${String(REFRESH_SECONDS)}">
+<meta http-equiv="refresh" content="${String(REFRESH_SECONDS)};url=${readingOpen ? READING_PATH : "/"}">
 <title>rondo</title>
 <style>
 :root { color-scheme: light dark; }
@@ -679,8 +704,7 @@ pre { white-space: pre-wrap; word-break: break-word; margin: 0; }
 .approve .note { margin: 0; }
 .material { margin: .75rem 0 0; opacity: .85; }
 .value { white-space: pre-wrap; word-break: break-word; }
-.reading { border-top: 1px solid currentColor; margin-top: 2rem; padding-top: .75rem; }
-.reading summary { cursor: pointer; opacity: .7; }
+.fold { border-top: 1px solid currentColor; margin: 2rem 0 0; padding-top: .75rem; }
 @media (max-width: 40rem) { .claim { grid-template-columns: 1fr; gap: 0; } }
 </style>
 </head>
@@ -689,11 +713,23 @@ pre { white-space: pre-wrap; word-break: break-word; margin: 0; }
 <p class="note">Redraws every ${String(REFRESH_SECONDS)}s, and a redraw writes nothing: no last-look
 mark moves and no presentation is counted. The one thing that writes is the approve button, which
 records the explanation you pressed on and then answers the gate.</p>
+${
+  // **Said on the visible page and not only in the reading.** With no approver
+  // there is no write port and so no button anywhere, and a page that explained
+  // that only inside the fold would leave an operator looking for a button that
+  // is missing for a reason rondo knows and did not say (D-0020 rule 2).
+  ports.actorId === null
+    ? '<p class="note">RONDO_APPROVER is not set, so there is nobody this page could answer ' +
+      "as, and no inbox of theirs to draw.</p>"
+    : ""
+}
 ${lead}
-<details class="reading">
-<summary>the reading these rest on: every claim with its basis, and rondo's own accounting</summary>
-${reading}
-</details>
+<p class="fold"><a href="${readingOpen ? "/" : READING_PATH}">${
+    readingOpen
+      ? "hide the reading"
+      : "the reading these rest on: every claim with its basis, and rondo's own accounting"
+  }</a></p>
+${readingOpen ? reading : ""}
 </body>
 </html>
 `;
@@ -889,7 +925,11 @@ export function serveOperatorPage(
       });
       return;
     }
-    operatorPage(ports, token)
+    operatorPage(
+      ports,
+      token,
+      new URL(request.url ?? "/", "http://127.0.0.1").searchParams.get("reading") === "open",
+    )
       .then((html) => {
         response.writeHead(200, {
           "content-type": "text/html; charset=utf-8",

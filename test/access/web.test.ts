@@ -254,11 +254,14 @@ test("the page shows what inbox, between and explain show", async () => {
   await reserve(world, "i-0001", "do the thing");
 
   const html = await operatorPage(portsOver(world));
+  const opened = await operatorPage(portsOver(world), null, true);
 
-  expect(html).toContain("inbox for 'ada'");
-  expect(html).toContain("what spans the live laps");
-  expect(html).toContain("iteration 'i-0001'");
+  // The lead answers the operator's questions; the reading is where the three
+  // commands' own compositions are, whole (rondo#145).
   expect(html).toContain("do the thing");
+  expect(opened).toContain("inbox for 'ada'");
+  expect(opened).toContain("what spans the live laps");
+  expect(opened).toContain("iteration 'i-0001'");
   // The page says out loud what a redraw does, because a screen that moves a
   // last-look mark by being left open is worse than one that says it does not.
   expect(html).toContain("a redraw writes nothing");
@@ -338,10 +341,14 @@ test("a press records the framing it rests on, and one that cannot be recorded a
 test("an empty store renders a page rather than an error", async () => {
   const html = await operatorPage(portsOver(fresh(), null));
 
-  expect(html).toContain("what spans the live laps");
-  // No approver, no inbox -- and the page says which, rather than drawing
-  // somebody else's or showing an empty one as though it were theirs.
-  expect(html).toContain("RONDO_APPROVER is not set");
+  expect(html).toContain("Nothing is waiting on you");
+  // No approver, no inbox -- and the page says which **where it is visible**,
+  // rather than drawing somebody else's, showing an empty one as though it were
+  // theirs, or explaining a missing button only inside the fold.
+  expect(lead(html)).toContain("RONDO_APPROVER is not set");
+  expect(await operatorPage(portsOver(fresh(), null), null, true)).toContain(
+    "what spans the live laps",
+  );
 });
 
 test("a request keeps its paragraphs and its markup is text (rondo#90)", async () => {
@@ -391,7 +398,16 @@ test("it serves the page on localhost, and only the one page", async () => {
   // carries the genuine token from the loopback origin. The browser is what
   // refuses that, and only if it is told to.
   expect(page.headers.get("content-security-policy")).toBe("frame-ancestors 'none'");
-  expect(await page.text()).toContain("what spans the live laps");
+  expect(await page.text()).toContain("waiting for your answer");
+
+  // **The reading is the same page at a second address**, and the redraw it
+  // serves points back at that address -- so the fold an operator opened is
+  // still open five seconds later, which is what makes it a fold (rondo#145).
+  const withReading = await fetch(`${base}/?reading=open`);
+  expect(withReading.status).toBe(200);
+  const readingHtml = await withReading.text();
+  expect(readingHtml).toContain("what spans the live laps");
+  expect(readingHtml).toContain('content="5;url=/?reading=open"');
 
   // One page and no router: a typo'd path says so rather than quietly showing
   // the only page there is.
@@ -519,16 +535,17 @@ test("a refusal from the write port is shown rather than redirected away", async
 
 /** The visible page: everything a browser draws before the fold is opened. */
 function lead(html: string): string {
-  return html.slice(0, html.indexOf('<details class="reading">'));
+  return html.slice(0, html.indexOf('<p class="fold">'));
 }
 
-/** The fold: what an operator opens when they want rondo's own reading. */
+/** The fold: what the second address of the page adds below the link. */
 function reading(html: string): string {
-  return html.slice(html.indexOf('<details class="reading">'));
+  return html.slice(html.indexOf('<p class="fold">'));
 }
 
 test("an idle store says zero once rather than nine times (rondo#145)", async () => {
   const html = await operatorPage(portsOver(fresh()));
+  const opened = await operatorPage(portsOver(fresh()), null, true);
 
   // The measurement in the issue: nine phrasings of nothing, of which this is
   // the shape. One sentence now stands where they did, and it carries what it
@@ -541,9 +558,14 @@ test("an idle store says zero once rather than nine times (rondo#145)", async ()
   expect(lead(html)).not.toContain("you have never looked");
   // Folded and not hidden (D-0032): every one of them is still on the page,
   // under the basis it always had.
-  expect(reading(html)).toContain("proposals that bind nothing (0)");
-  expect(reading(html)).toContain("an admission a bound refused");
-  expect(reading(html)).toContain("snapshot /refusals = []");
+  expect(reading(opened)).toContain("proposals that bind nothing (0)");
+  expect(reading(opened)).toContain("an admission a bound refused");
+  expect(reading(opened)).toContain("snapshot /refusals = []");
+  // **The fold survives the redraw, because the URL holds it open and not the
+  // browser.** A `<details>` would be shut again five seconds later, and a page
+  // with no script could not reopen it -- which would make this a hiding.
+  expect(opened).toContain('content="5;url=/?reading=open"');
+  expect(html).toContain('content="5;url=/"');
 });
 
 test("the page is ordered by the operator's three questions (rondo#145)", async () => {
@@ -552,13 +574,15 @@ test("the page is ordered by the operator's three questions (rondo#145)", async 
 
   const html = await operatorPage(portsOver(world));
   const at = (heading: string) => lead(html).indexOf(heading);
+  const opened = await operatorPage(portsOver(world), null, true);
 
   expect(at("waiting for your answer")).toBeGreaterThan(-1);
   expect(at("running now")).toBeGreaterThan(at("waiting for your answer"));
   expect(at("just finished")).toBeGreaterThan(at("running now"));
   // rondo's own vocabulary is below the questions, not in place of them.
   expect(at("what spans the live laps")).toBe(-1);
-  expect(reading(html)).toContain("what spans the live laps");
+  expect(html).toContain('href="/?reading=open"');
+  expect(reading(opened)).toContain("what spans the live laps");
 });
 
 test("a lap at a gate carries its cost and its fence beside the button (rondo#145)", async () => {
@@ -575,6 +599,7 @@ test("a lap at a gate carries its cost and its fence beside the button (rondo#14
   expect(settled.kind).toBe("transitioned");
 
   const html = await operatorPage(portsOver(world, "ada", []), "t");
+  const opened = await operatorPage(portsOver(world, "ada", []), "t", true);
 
   // What it cost (#124), what its fence refused (#122) and what releases it,
   // on the row a person is about to press -- and the row cited once above them
@@ -588,8 +613,8 @@ test("a lap at a gate carries its cost and its fence beside the button (rondo#14
   expect(lead(html)).toContain('method="post"');
   // The field-level locators survive the fold: a number in the lead is
   // checkable against the row it was read off.
-  expect(reading(html)).toContain("snapshot /iteration/lapCostUsd = 1.42");
-  expect(reading(html)).toContain("snapshot /iteration/lapDurationMs = null");
+  expect(reading(opened)).toContain("snapshot /iteration/lapCostUsd = 1.42");
+  expect(reading(opened)).toContain("snapshot /iteration/lapDurationMs = null");
 });
 
 test("a lap that has ended is on the page it just left (rondo#145)", async () => {
