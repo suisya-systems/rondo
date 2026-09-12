@@ -10376,8 +10376,10 @@ decided here rather than left to the reader who hits it next.
    away. **What the host has not said, rondo does not guess.**
 
 4. **A tag is resolved by BCP 47 lookup, so `ja-JP` is the `ja` set.** RFC 4647 section 3.4: truncate
-   the tag at its last hyphen and try again until a set matches, dropping a trailing single-character
-   subtag together with the subtag before it, and English is the last stop. **The same resolution for
+   the tag at its last hyphen and try again until a set matches, and **truncate once more whenever
+   that leaves a trailing single-character subtag** -- `ja-x-private` goes to `ja` and never to a bare
+   `ja-x`, which is the RFC's own worked example (`zh-Hant-CN-x-private1-private2` reaching `zh`) and
+   the one step of it that is easy to write backwards. English is the last stop. **The same resolution for
    the host's variable and for the request's parameter**, because the two carry the same kind of thing
    and a host that says `ja-JP` has the same papercut as a link that does. No quality values, no
    ordered list of alternatives, no best-fit: lookup is the whole algorithm, it is four lines, and it
@@ -10445,8 +10447,8 @@ decided here rather than left to the reader who hits it next.
 One pull request:
 
 - Lookup resolution in `src/access/wording.ts`, replacing the exact `SETS.get` in `chromeFor`
-  (`:502`): truncate at the last hyphen until a set matches, dropping a trailing single-character
-  subtag with its predecessor, English last. One function, used by the variable and by the parameter.
+  (`:502`): truncate at the last hyphen until a set matches, truncating again whenever that leaves a
+  trailing single-character subtag, English last. One function, used by the variable and by the parameter.
 - `?lang=` parsed off the request beside `?reading=` and `?answer=` (`src/access/web.ts:1229`),
   resolved through the same function, and the host's set as the fallback. `WebPorts` carries the
   host's default rather than the page's one set, and the renderer takes the request's.
@@ -10460,7 +10462,7 @@ One pull request:
 - `docs/operations/rondo-cli.md` gaining the parameter beside the variable, said as *the host states
   the default and one request may ask for another*.
 - Tests: `?lang=ja-JP` renders the `ja` set and `<html lang="ja">`; `RONDO_OPERATOR_LANGUAGE=ja-JP`
-  does the same at boot; `?lang=en` on a `ja` host renders English; `?lang=de` and `?lang=!!` render
+  does the same at boot; `?lang=ja-x-private` reaches `ja` rather than stopping short of it; `?lang=en` on a `ja` host renders English; `?lang=de` and `?lang=!!` render
   the host's default and declare the set actually used; the fold's link, the refresh, the form action
   and the `303` from a `ja`-asked page all still ask for `ja`; and **the recorded `proposal` and
   `operator_attention` bytes are identical whether the press came from an `en` page or a `ja` one**
