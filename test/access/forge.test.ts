@@ -132,74 +132,89 @@ test("a git status that fails makes the inspection unreadable, never clean", asy
 
 // D-0065: the facts a model reading hands over, and the process it hands them to.
 
-test("the review material is the range's diff, full messages and rule files at the base", async () => {
-  const work = workspace();
-  writeFileSync(join(work, "AGENTS.md"), "rule one\nrule two\n");
-  git(work, "add", "AGENTS.md");
-  git(work, "commit", "-m", "rules");
-  git(work, "push", "origin", "topic:main");
-  git(work, "fetch", "origin");
-  writeFileSync(join(work, "a.txt"), "changed\n");
-  git(work, "commit", "-am", "subject line\n\nbody that says why\nsecond body line");
-  writeFileSync(join(work, "AGENTS.md"), "rule rewritten on the topic\n");
-  git(work, "commit", "-am", "second");
+/**
+ * The two review-material tests make a real repository and run a dozen git
+ * processes. On the Windows CI cell one of them took 1.4 s under one seed and
+ * ran past the 10 s default under the next (PR #191), so they are given room.
+ */
+const REAL_GIT_TIMEOUT_MS = 60_000;
 
-  const inspection = await inspectLapWork(request(work));
-  if (inspection.kind !== "read") throw new Error(inspection.reason);
-  const evidence = evidenceOf(inspection);
+test(
+  "the review material is the range's diff, full messages and rule files at the base",
+  async () => {
+    const work = workspace();
+    writeFileSync(join(work, "AGENTS.md"), "rule one\nrule two\n");
+    git(work, "add", "AGENTS.md");
+    git(work, "commit", "-m", "rules");
+    git(work, "push", "origin", "topic:main");
+    git(work, "fetch", "origin");
+    writeFileSync(join(work, "a.txt"), "changed\n");
+    git(work, "commit", "-am", "subject line\n\nbody that says why\nsecond body line");
+    writeFileSync(join(work, "AGENTS.md"), "rule rewritten on the topic\n");
+    git(work, "commit", "-am", "second");
 
-  const facts = await gatherReviewMaterialFacts({
-    workspace: work,
-    evidence,
-    ruleFiles: ["AGENTS.md"],
-  });
+    const inspection = await inspectLapWork(request(work));
+    if (inspection.kind !== "read") throw new Error(inspection.reason);
+    const evidence = evidenceOf(inspection);
 
-  expect(facts.kind).toBe("read");
-  if (facts.kind !== "read") return;
-  expect(facts.commits.map((commit) => commit.message)).toEqual([
-    "subject line\n\nbody that says why\nsecond body line",
-    "second",
-  ]);
-  expect(facts.commits[1]?.sha).toBe(evidence.tipCommit);
-  expect(facts.diff).toContain("+++ b/a.txt");
-  expect(facts.diff).toContain("+changed");
-  // At the base, not at the tip.
-  expect(facts.ruleFiles).toEqual([{ path: "AGENTS.md", content: "rule one\nrule two\n" }]);
+    const facts = await gatherReviewMaterialFacts({
+      workspace: work,
+      evidence,
+      ruleFiles: ["AGENTS.md"],
+    });
 
-  const missing = await gatherReviewMaterialFacts({
-    workspace: work,
-    evidence,
-    ruleFiles: ["NOPE.md"],
-  });
-  expect(missing.kind).toBe("unreadable");
-  expect(missing.kind === "unreadable" && missing.reason).toContain("NOPE.md");
-});
+    expect(facts.kind).toBe("read");
+    if (facts.kind !== "read") return;
+    expect(facts.commits.map((commit) => commit.message)).toEqual([
+      "subject line\n\nbody that says why\nsecond body line",
+      "second",
+    ]);
+    expect(facts.commits[1]?.sha).toBe(evidence.tipCommit);
+    expect(facts.diff).toContain("+++ b/a.txt");
+    expect(facts.diff).toContain("+changed");
+    // At the base, not at the tip.
+    expect(facts.ruleFiles).toEqual([{ path: "AGENTS.md", content: "rule one\nrule two\n" }]);
 
-test("a commit message holding an RS byte reaches the reviewer whole", async () => {
-  // The format used to separate commits with 0x1E, which cut such a message
-  // at the byte and dropped the rest without a word.
-  const work = workspace();
-  writeFileSync(join(work, "a.txt"), "changed\n");
-  git(work, "commit", "-am", "before\x1eafter\n\nbody \x1e too");
-  writeFileSync(join(work, "a.txt"), "again\n");
-  git(work, "commit", "-am", "second");
+    const missing = await gatherReviewMaterialFacts({
+      workspace: work,
+      evidence,
+      ruleFiles: ["NOPE.md"],
+    });
+    expect(missing.kind).toBe("unreadable");
+    expect(missing.kind === "unreadable" && missing.reason).toContain("NOPE.md");
+  },
+  REAL_GIT_TIMEOUT_MS,
+);
 
-  const inspection = await inspectLapWork(request(work));
-  if (inspection.kind !== "read") throw new Error(inspection.reason);
-  const facts = await gatherReviewMaterialFacts({
-    workspace: work,
-    evidence: evidenceOf(inspection),
-    ruleFiles: [],
-  });
+test(
+  "a commit message holding an RS byte reaches the reviewer whole",
+  async () => {
+    // The format used to separate commits with 0x1E, which cut such a message
+    // at the byte and dropped the rest without a word.
+    const work = workspace();
+    writeFileSync(join(work, "a.txt"), "changed\n");
+    git(work, "commit", "-am", "before\x1eafter\n\nbody \x1e too");
+    writeFileSync(join(work, "a.txt"), "again\n");
+    git(work, "commit", "-am", "second");
 
-  expect(facts.kind).toBe("read");
-  if (facts.kind !== "read") return;
-  expect(facts.commits.map((commit) => commit.message)).toEqual([
-    "before\x1eafter\n\nbody \x1e too",
-    "second",
-  ]);
-  expect(facts.commits.every((commit) => /^[0-9a-f]{40}$/.test(commit.sha))).toBe(true);
-});
+    const inspection = await inspectLapWork(request(work));
+    if (inspection.kind !== "read") throw new Error(inspection.reason);
+    const facts = await gatherReviewMaterialFacts({
+      workspace: work,
+      evidence: evidenceOf(inspection),
+      ruleFiles: [],
+    });
+
+    expect(facts.kind).toBe("read");
+    if (facts.kind !== "read") return;
+    expect(facts.commits.map((commit) => commit.message)).toEqual([
+      "before\x1eafter\n\nbody \x1e too",
+      "second",
+    ]);
+    expect(facts.commits.every((commit) => /^[0-9a-f]{40}$/.test(commit.sha))).toBe(true);
+  },
+  REAL_GIT_TIMEOUT_MS,
+);
 
 /** One `codex exec --json` event line. */
 const event = (value: unknown): string => `${JSON.stringify(value)}\n`;
