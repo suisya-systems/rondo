@@ -221,7 +221,25 @@ test.skipIf(!available)(
     expect(shown).toEqual({
       kind: "answered",
       db: database,
-      payload: { runId: "rondo-smoke-1", status: "created" },
+      payload: {
+        runId: "rondo-smoke-1",
+        status: "created",
+        // **The envelope this run was admitted under, back from continuo**
+        // (#88), and the one place the round trip is checked end to end: rondo
+        // wrote these bytes a few lines up, continuo digested them on the way
+        // in, and the gate screen prints what is read back here. `envelope` is
+        // matched loosely because the fixture above is a minimal record rather
+        // than a composed one; the digest is continuo's over whatever arrived,
+        // and `digestVerified` is continuo re-checking it rather than rondo
+        // claiming it.
+        delegationRecord: {
+          recordSchema: "rondo.delegation-record/1",
+          envelope: expect.stringContaining("rondo.delegation-record/1"),
+          envelopeDigest: expect.any(String),
+          digestAlgorithm: "sha256",
+          digestVerified: true,
+        },
+      },
     });
 
     const free = await run(continuo, RUN_SHOW, ["--db", database, "--run-id", "rondo-smoke-free"]);
