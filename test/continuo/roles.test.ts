@@ -23,6 +23,9 @@ import {
   mapNeutralRole,
   mappedModelTiers,
   mappedNeutralRoleNames,
+  modelFamilyOf,
+  reviewerFamilyCheck,
+  reviewerRow,
 } from "../../src/continuo/roles.js";
 import { PRICED_MODEL_TIERS } from "../../src/refrain/classification.js";
 
@@ -242,6 +245,56 @@ describe("the model table, which is a policy rather than a transcription", () =>
     }
     for (const tier of mappedModelTiers()) {
       expect(mapNeutralRole(tier).kind).toBe("unknown");
+    }
+  });
+});
+
+describe("the reviewer table and the family check (D-0065 section 3)", () => {
+  test("the reviewer row in force is the one D-0065 rule 3.2 records", () => {
+    expect(reviewerRow()).toEqual({ model: "gpt-6-astra", family: "gpt", executable: "codex" });
+    expect(Object.isFrozen(reviewerRow())).toBe(true);
+  });
+
+  test("families come from rondo's own tables, and an id neither holds is unknown", () => {
+    expect(modelFamilyOf("claude-opus-5")).toBe("claude");
+    expect(modelFamilyOf("gpt-6-astra")).toBe("gpt");
+    // Not read off the spelling: an id that looks like a family is still unknown.
+    expect(modelFamilyOf("claude-sonnet-9")).toBeNull();
+    expect(modelFamilyOf("constructor")).toBeNull();
+  });
+
+  test("every tier model has a family, so the lap side of the check is never unknown today", () => {
+    for (const tier of mappedModelTiers()) {
+      const selection = mapModelTier(tier);
+      expect(selection.kind).toBe("selected");
+      if (selection.kind === "selected") {
+        expect(modelFamilyOf(selection.model)).not.toBeNull();
+      }
+    }
+  });
+
+  test("the reviewer and the standard tier are of different families", () => {
+    expect(reviewerFamilyCheck(reviewerRow(), "claude-opus-5")).toEqual({ kind: "distinct" });
+  });
+
+  test("the same family, an unknown lap model, or no lap model is refused, in ASCII", () => {
+    const sameFamily = reviewerFamilyCheck(reviewerRow(), "gpt-6-astra");
+    const unknown = reviewerFamilyCheck(reviewerRow(), "mystery-1");
+    const absent = reviewerFamilyCheck(reviewerRow(), null);
+    // A row not in the table is not trusted for the family its caller wrote on it.
+    const forged = reviewerFamilyCheck(
+      { model: "claude-opus-5", family: "gpt", executable: "codex" },
+      "claude-opus-5",
+    );
+    for (const check of [sameFamily, unknown, absent, forged]) {
+      expect(check.kind).toBe("refused");
+      if (check.kind === "refused") {
+        expect(check.reason).toMatch(/^[\x20-\x7e]+$/);
+        expect(check.reason).toContain("D-0065 rule 3.3");
+      }
+    }
+    if (unknown.kind === "refused") {
+      expect(unknown.reason).toContain("mystery-1");
     }
   });
 });

@@ -52,9 +52,12 @@ import {
 import { revisionPlan } from "../refrain/revision.js";
 import {
   type IterationRecord,
+  isDeterministicReadingDrafter,
+  isModelReadingDrafter,
   isTerminal,
   type JsonRecord,
   type LapReading,
+  latestReading,
   type OperatorVerificationClaim,
   readingCoverage,
 } from "../store/records.js";
@@ -93,6 +96,8 @@ import {
   pushTopicBranch,
 } from "./forge.js";
 import { type InboxOutcome, showInbox, type TranscriptLocation } from "./inbox.js";
+import { modelReadingLines } from "./model-review.js";
+import { modelReviewPorts, takeModelReading } from "./model-reviewer.js";
 import { evidenceOf, LIST_LIMIT, READING_REMOTE, uncommittedPaths } from "./review.js";
 import { serveOperatorPage } from "./web.js";
 import { type Chrome, EN } from "./wording.js";
@@ -1477,7 +1482,13 @@ export async function main(
 
   switch (parsed.command) {
     case "start":
-      return await commandStart(parsed, ports, unpromptedPorts(store, opened.path), continuo);
+      return await commandStart(
+        parsed,
+        store,
+        ports,
+        unpromptedPorts(store, opened.path),
+        continuo,
+      );
     case "answer":
       return await commandAnswer(parsed, environment, store, ports, continuo);
     case "retry":
@@ -1487,6 +1498,7 @@ export async function main(
         opened.path,
         ports,
         unpromptedPorts(store, opened.path),
+        continuo,
       );
     case "revise":
       return await commandRevise(
@@ -1505,6 +1517,7 @@ export async function main(
 /** Door one: take one request and run a lap. */
 async function commandStart(
   parsed: ParsedCommand,
+  store: IterationStore,
   ports: ReturnType<typeof conductorPorts>,
   advisory: UnpromptedPorts,
   continuo: VerifiedContinuo,
@@ -1537,6 +1550,7 @@ async function commandStart(
   const report = await admit(ports, advisory, plan, START_POLICY, iterationId);
   sayReport(report);
   if (report.status === "awaiting_human") {
+    await sayModelReading(continuo, store, report.iterationId ?? iterationId);
     say("");
     say("A person has to answer this before anything lands. Next: rondo answer");
     return 0;
@@ -2114,6 +2128,7 @@ async function commandRetry(
   storePath: string,
   ports: ReturnType<typeof conductorPorts>,
   advisory: UnpromptedPorts,
+  continuo: VerifiedContinuo,
 ): Promise<number> {
   if (parsed.proposalId === null) {
     return refuse(
@@ -2154,6 +2169,7 @@ async function commandRetry(
   );
   sayReport(report);
   if (report.status === "awaiting_human") {
+    await sayModelReading(continuo, store, report.iterationId ?? retry.successorId);
     say("");
     say("A person has to answer this before anything lands. Next: rondo answer");
     return 0;
@@ -2162,6 +2178,30 @@ async function commandRetry(
     return 2;
   }
   return report.status === "closed" ? 0 : 1;
+}
+
+/**
+ * Take the model reading of a lap that has just reached its gate, and print it
+ * (D-0065 2.6).
+ *
+ * **After `drive()` returned**, so the deterministic reading is already on the
+ * row and the gate is already open: a person may answer from another terminal
+ * while this runs, and answers without it. That is D-0029 rule 3's information
+ * where the clock runs, not a wait in front of the gate.
+ */
+async function sayModelReading(
+  continuo: VerifiedContinuo,
+  store: IterationStore,
+  iterationId: string,
+): Promise<void> {
+  say("");
+  say(
+    "model review  taking a model reading of this work; the gate is already open and does " +
+      "not wait for it",
+  );
+  for (const line of await takeModelReading(modelReviewPorts(continuo, store), iterationId)) {
+    say(line);
+  }
 }
 
 /** Door two: see what is waiting, and answer it. */
@@ -2234,15 +2274,24 @@ export async function lapMaterialLines(
   }
   lines.push(...(await fenceLines(wording, continuo, record)));
   const readings = await store.readingsFor(record.id);
-  const latest = readings.at(-1);
-  if (latest === undefined) {
+  // **The deterministic reading, and the model reading beside it as material**
+  // (D-0065 5.5). They are picked by drafter rather than by position: a model
+  // reading appended after the gate opened is the newest row, and taking the
+  // newest row as "the review" would print the model's words where `publish`'s
+  // refusal reads the deterministic one.
+  const latest = latestReading(readings, isDeterministicReadingDrafter);
+  if (latest === null) {
     lines.push(
       "review  no independent reading of this work was recorded.",
       "        'rondo publish' will refuse once on that, and --despite-review is the way past.",
     );
-    return lines;
+  } else {
+    lines.push(...reviewLines(latest));
   }
-  lines.push(...reviewLines(latest));
+  const model = latestReading(readings, isModelReadingDrafter);
+  if (model !== null) {
+    lines.push(...modelReadingLines(model));
+  }
   return lines;
 }
 
@@ -2811,6 +2860,9 @@ async function commandAnswer(
   // so a walk that half-failed and was retried settles here exactly once.
   const report = await resume(ports, record.id);
   sayReport(report);
+  if (report.status === "awaiting_human") {
+    await sayModelReading(continuo, store, record.id);
+  }
   if (report.status === "closed") {
     say("");
     // The id is spelled out because closing the iteration is what stops it
@@ -3465,6 +3517,7 @@ async function commandRevise(
   const second = await admit(ports, advisory, successor.plan, START_POLICY, successorId, record.id);
   sayReport(second);
   if (second.status === "awaiting_human") {
+    await sayModelReading(continuo, store, second.iterationId ?? successorId);
     say("");
     say("A person has to answer this before anything lands. Next: rondo answer");
     return 0;
@@ -3971,7 +4024,13 @@ async function commandPublish(
     range === null
       ? { kind: "unreadable", reason: "the row does not name the range a reading was taken across" }
       : await inspectLapWork(range);
-  const gateOnReview = reviewGate(readings.at(-1) ?? null, asRead, parsed.despiteReview);
+  // The deterministic reading only (D-0065 5.5): a model reading is material
+  // beside it and is not part of this refusal.
+  const gateOnReview = reviewGate(
+    latestReading(readings, isDeterministicReadingDrafter),
+    asRead,
+    parsed.despiteReview,
+  );
   if (gateOnReview.kind === "refused") {
     return refuse(gateOnReview.reason);
   }

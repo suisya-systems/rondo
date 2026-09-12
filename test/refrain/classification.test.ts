@@ -88,6 +88,7 @@ function planWith(overrides: {
     prompt: "teach rondo to count",
     allowedBash: overrides.allowedBash ?? ["npm run:*"],
     materialLanguage: null,
+    reviewCriterion: null,
     repository: overrides.repository ?? REPOSITORY,
     artifactRoot: resolve("/srv/rondo/artifacts"),
     stateRoot: resolve("/srv/rondo/state"),

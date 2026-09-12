@@ -41,6 +41,7 @@ const PLAN: RunPlan = {
   prompt: "do the thing",
   allowedBash: ["npm run:*"],
   materialLanguage: null,
+  reviewCriterion: null,
   repository: "/srv/repo",
   artifactRoot: "/srv/artifacts",
   stateRoot: "/srv/state",

@@ -348,7 +348,19 @@ const ALLOWED_EXTERNALS_BY_MODULE: Readonly<
   // with more riding on it: `src/access/` holds the whole operator surface, so
   // a layer-wide grant would have put a spawn in reach of every command rather
   // than of the one an operator has to type the word `publish` to reach.
-  "src/access/forge.ts": { "node:child_process": ["spawn"] },
+  //
+  // **D-0065 added an empty directory, and only that.** The model reviewer is
+  // run over a document on standard input in a fresh empty directory, so that
+  // nothing it could read is the workspace (D-0065 1.1). Making and removing
+  // that directory is `mkdtempSync` and `rmSync` under `tmpdir()`, named one by
+  // one: there is still no write and no read, so the module that spawns cannot
+  // also put a file where a process will find it or open one it was not handed.
+  "src/access/forge.ts": {
+    "node:child_process": ["spawn"],
+    "node:fs": ["mkdtempSync", "rmSync"],
+    "node:os": ["tmpdir"],
+    "node:path": ["join"],
+  },
   // The HTTP access point this file's own note promised, granted the one
   // binding that starts a server and keyed by module for every reason the
   // spawn is: `src/access/` holds the whole operator surface, and a layer-wide
@@ -1505,6 +1517,40 @@ const PLANTED: ReadonlyArray<
     "src/access/forge.ts",
     'import { spawn, execSync } from "node:child_process";\nexport const x = [spawn, execSync];\n',
     "takes execSync from node:child_process",
+  ],
+  [
+    // D-0065's directory grant is two bindings. A write beside them would let
+    // the module that starts the reviewer leave a file in the directory it
+    // starts it in, which is the reviewer reading something rondo did not hand
+    // over and digest.
+    "the-forge-cannot-write-into-the-reviewer-directory",
+    "src/access/forge.ts",
+    'import { mkdtempSync, writeFileSync } from "node:fs";\nexport const x = [mkdtempSync, writeFileSync];\n',
+    "takes writeFileSync from node:fs",
+  ],
+  [
+    // Nor read: the document is assembled from git's answers, not from files
+    // the forge opens.
+    "the-forge-cannot-read-files",
+    "src/access/forge.ts",
+    'import { readFileSync } from "node:fs";\nexport const x = readFileSync;\n',
+    "takes readFileSync from node:fs",
+  ],
+  [
+    // The control: exactly what D-0065 granted is accepted, so the two cases
+    // above are caught for the binding and not for the module.
+    "control-the-forge-may-make-and-remove-an-empty-directory",
+    "src/access/forge.ts",
+    'import { mkdtempSync, rmSync } from "node:fs";\nimport { tmpdir } from "node:os";\nimport { join } from "node:path";\nexport const x = [mkdtempSync, rmSync, tmpdir, join];\n',
+    null,
+  ],
+  [
+    // The composition that takes a model reading must not spawn for itself:
+    // its processes are the forge's, where every command line is spelled out.
+    "the-model-reviewer-composition-cannot-spawn",
+    "src/access/model-reviewer.ts",
+    'import { spawn } from "node:child_process";\nexport const x = spawn;\n',
+    "which it is not granted",
   ],
   [
     // `node:path` is granted one predicate. Reaching for a resolver beside it

@@ -54,11 +54,16 @@ import {
   type AttentionCount,
   type AttentionInterval,
   type CompositionDraft,
+  FINDING_SEVERITIES,
+  type FindingBasis,
+  type FindingSeverity,
+  type GradedFinding,
   type HumanDecisionDraft,
   type IterationFields,
   type IterationRecord,
   type IterationStatus,
   isApprovableKind,
+  isModelReadingDrafter,
   type JsonRecord,
   type LapReading,
   type LapReadingDraft,
@@ -262,6 +267,12 @@ export type SettleOutcome =
   | { readonly kind: "missing" }
   | { readonly kind: "defect"; readonly reason: string };
 
+/** Whether {@link IterationStore.appendReading} wrote its row. */
+export type AppendReadingOutcome =
+  | { readonly kind: "appended" }
+  | { readonly kind: "absent" }
+  | { readonly kind: "defect"; readonly reason: string };
+
 /**
  * The durable surface, as the loop is allowed to see it.
  *
@@ -303,6 +314,23 @@ export interface IterationStore {
    * readings; {@link IterationStore.readLive} filters terminal rows out.
    */
   readingsFor(iterationId: string): Promise<readonly LapReading[]>;
+  /**
+   * Append a reading that no transition carries: the model reading, which
+   * arrives after `drive()` returned while the gate's clock runs (D-0065 2.6).
+   *
+   * **The opposite of `transition`'s `reading`, and for D-0065's reason.** The
+   * deterministic reading must land with the `awaiting_human` transaction
+   * (D-0029 rule 8); a model reading taken minutes later has no transition to
+   * ride, and holding one open for it would put a model inside `drive()`, which
+   * D-0029 rule 6 refuses. Append-only like every reading: it never updates, and
+   * the writer's `clear` refusals apply unchanged. An id with no iteration row is
+   * `absent` and writes nothing.
+   */
+  appendReading(
+    iterationId: string,
+    draft: LapReadingDraft,
+    nowMs: number,
+  ): Promise<AppendReadingOutcome>;
   /**
    * Record what an operator says they checked, before they are let past the gate.
    *
@@ -672,7 +700,13 @@ CREATE TABLE IF NOT EXISTS lap_reading (
   material_digest       TEXT,
   commit_count          INTEGER,
   file_count            INTEGER,
-  unavailable_reason    TEXT
+  unavailable_reason    TEXT,
+  -- D-0065 2.2: a model reading's per-finding severity and bases (canonical JSON
+  -- of an array parallel to findings) and rondo's digest of the document it
+  -- delivered. Both NULL on a deterministic reading. Also in
+  -- LAP_READING_ADDED_COLUMNS, for a table created before them.
+  graded                TEXT,
+  delivered_digest      TEXT
 );
 
 CREATE INDEX IF NOT EXISTS lap_reading_by_iteration
@@ -1064,6 +1098,17 @@ const ADDED_COLUMNS = Object.freeze({
 });
 
 /**
+ * {@link ADDED_COLUMNS} for the second table to grow one: `lap_reading`'s two
+ * D-0065 columns. Nullable and without back-fill, for D-0046's reason: no row
+ * written before them was a model reading, so an existing row's NULL is the
+ * truth about it.
+ */
+const LAP_READING_ADDED_COLUMNS = Object.freeze({
+  graded: "TEXT",
+  delivered_digest: "TEXT",
+});
+
+/**
  * Bring an existing database up to the schema above.
  *
  * Idempotent, and safe on a database that has just been created by
@@ -1111,6 +1156,17 @@ function migrate(connection: DatabaseSync): void {
     }
     if (added.includes("identifiers_spent")) {
       backfill(connection);
+    }
+    const readingPresent = new Set(
+      connection
+        .prepare("SELECT name FROM pragma_table_xinfo('lap_reading')")
+        .all()
+        .map((row) => String((row as SqlRow)["name"])),
+    );
+    for (const [column, declaration] of Object.entries(LAP_READING_ADDED_COLUMNS)) {
+      if (!readingPresent.has(column)) {
+        connection.exec(`ALTER TABLE lap_reading ADD COLUMN ${column} ${declaration}`);
+      }
     }
     connection.exec("DROP INDEX IF EXISTS iteration_one_live");
     connection.exec("COMMIT");
@@ -1348,19 +1404,33 @@ export function iterationStore(connection: DatabaseSync, policy: HostPolicy): It
    * than in nobody's hands.
    */
   const writeReading = (iterationId: string, nowMs: number, draft: LapReadingDraft): void => {
+    // D-0029 V-11's second clause, as D-0065 2.2 gave it a field: a model
+    // drafter's `clear` also needs rondo's digest of what it delivered, and one
+    // without it is refused in the same way and for the same reason.
+    const undelivered =
+      draft.verdict === "clear" &&
+      isModelReadingDrafter(draft.drafter) &&
+      (draft.evidence?.deliveredDigest ?? "") === "";
     const evidence =
-      draft.verdict === "clear" && !hasEvidence(draft.evidence) ? null : draft.evidence;
+      draft.verdict === "clear" && (!hasEvidence(draft.evidence) || undelivered)
+        ? null
+        : draft.evidence;
     const verdict = draft.verdict === "clear" && evidence === null ? "unavailable" : draft.verdict;
     const unavailableReason =
       verdict === draft.verdict
         ? draft.unavailableReason
-        : "a 'clear' reading arrived with no measurement of what was read, so the store refused " +
-          "it: D-0029 rule 11 admits a clear verdict only beside rondo's own reading of the work";
+        : undelivered && hasEvidence(draft.evidence)
+          ? "a model reader's 'clear' arrived with no digest of the material rondo delivered, so " +
+            "the store refused it: D-0029 rule 11 admits a model drafter's clear only beside " +
+            "rondo's own digest of the bytes it handed over"
+          : "a 'clear' reading arrived with no measurement of what was read, so the store refused " +
+            "it: D-0029 rule 11 admits a clear verdict only beside rondo's own reading of the work";
     connection
       .prepare(
         "INSERT INTO lap_reading (iteration_id, read_at_ms, drafter, verdict, findings, " +
           "base_ref, base_commit, tip_commit, material_digest, commit_count, file_count, " +
-          "unavailable_reason) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+          "unavailable_reason, graded, delivered_digest) " +
+          "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       )
       .run(
         iterationId,
@@ -1375,6 +1445,8 @@ export function iterationStore(connection: DatabaseSync, policy: HostPolicy): It
         evidence === null ? null : evidence.commitCount,
         evidence === null ? null : evidence.fileCount,
         unavailableReason,
+        draft.graded === undefined ? null : canonicalJson(draft.graded.map(gradedJson)),
+        evidence?.deliveredDigest ?? null,
       );
   };
 
@@ -1382,7 +1454,8 @@ export function iterationStore(connection: DatabaseSync, policy: HostPolicy): It
     connection
       .prepare(
         "SELECT iteration_id, read_at_ms, drafter, verdict, findings, base_ref, base_commit, " +
-          "tip_commit, material_digest, commit_count, file_count, unavailable_reason " +
+          "tip_commit, material_digest, commit_count, file_count, unavailable_reason, " +
+          "graded, delivered_digest " +
           "FROM lap_reading WHERE iteration_id = ? ORDER BY read_at_ms, rowid",
       )
       .all(iterationId)
@@ -1625,6 +1698,24 @@ export function iterationStore(connection: DatabaseSync, policy: HostPolicy): It
 
     async readingsFor(iterationId: string): Promise<readonly LapReading[]> {
       return readingRows(iterationId);
+    },
+
+    async appendReading(
+      iterationId: string,
+      draft: LapReadingDraft,
+      nowMs: number,
+    ): Promise<AppendReadingOutcome> {
+      try {
+        return inTransaction<AppendReadingOutcome>(() => {
+          if (readRow(iterationId) === null) {
+            return { kind: "absent" };
+          }
+          writeReading(iterationId, nowMs, draft);
+          return { kind: "appended" };
+        });
+      } catch (error) {
+        return { kind: "defect", reason: describe(error) };
+      }
     },
 
     async recordVerificationClaim(
@@ -2971,19 +3062,118 @@ function toReading(row: SqlRow): LapReading {
         }
       : null;
   const findings = readFindings(row["findings"]);
+  const delivered = row["delivered_digest"];
+  const graded = readGraded(row["graded"], findings.length);
   return {
     iterationId: idOfReading(row),
     readAtMs: typeof row["read_at_ms"] === "number" ? row["read_at_ms"] : 0,
     drafter: typeof row["drafter"] === "string" ? row["drafter"] : "(unrecorded)",
     verdict: known ? verdict : "unavailable",
     findings,
-    evidence: known ? evidence : null,
+    ...(graded === null ? {} : { graded }),
+    evidence:
+      known && evidence !== null && typeof delivered === "string" && delivered !== ""
+        ? { ...evidence, deliveredDigest: delivered }
+        : known
+          ? evidence
+          : null,
     unavailableReason: known
       ? typeof row["unavailable_reason"] === "string"
         ? row["unavailable_reason"]
         : null
       : `the stored verdict is ${JSON.stringify(verdict)}, which this rondo does not know`,
   };
+}
+
+/** A {@link GradedFinding} as the `graded` column holds it. */
+function gradedJson(finding: GradedFinding): JsonRecord {
+  return {
+    severity: finding.severity,
+    bases: finding.bases.map((basis): JsonRecord => ({ ...basis })),
+    basisResolved: finding.basisResolved,
+  };
+}
+
+/**
+ * The `graded` column, or null when it is NULL or does not decode.
+ *
+ * **Total, and honest by omission rather than by invention.** A column that is
+ * not an array of well-formed graded findings parallel to `findings` (same
+ * length) yields no `graded` at all: the one-line findings stay as they were
+ * read, so nothing a reviewer raised disappears, and no severity is made up for
+ * a finding whose stored one cannot be read. A reader that needs severities
+ * (a scope's threshold) then sees none, which is the absence it already handles.
+ */
+function readGraded(value: unknown, findingCount: number): readonly GradedFinding[] | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    return null;
+  }
+  if (!Array.isArray(parsed) || parsed.length !== findingCount) {
+    return null;
+  }
+  const out: GradedFinding[] = [];
+  for (const entry of parsed as unknown[]) {
+    const finding = readGradedFinding(entry);
+    if (finding === null) {
+      return null;
+    }
+    out.push(finding);
+  }
+  return Object.freeze(out);
+}
+
+function readGradedFinding(entry: unknown): GradedFinding | null {
+  if (typeof entry !== "object" || entry === null) {
+    return null;
+  }
+  const { severity, bases, basisResolved } = entry as Record<string, unknown>;
+  if (
+    typeof severity !== "string" ||
+    !(FINDING_SEVERITIES as readonly string[]).includes(severity) ||
+    typeof basisResolved !== "boolean" ||
+    !Array.isArray(bases)
+  ) {
+    return null;
+  }
+  const read: FindingBasis[] = [];
+  for (const basis of bases as unknown[]) {
+    const one = readBasis(basis);
+    if (one === null) {
+      return null;
+    }
+    read.push(one);
+  }
+  return {
+    severity: severity as FindingSeverity,
+    bases: Object.freeze(read),
+    basisResolved,
+  };
+}
+
+function readBasis(basis: unknown): FindingBasis | null {
+  if (typeof basis !== "object" || basis === null) {
+    return null;
+  }
+  const b = basis as Record<string, unknown>;
+  const line = Number.isInteger(b["line"]) ? (b["line"] as number) : null;
+  const path = typeof b["path"] === "string" ? b["path"] : null;
+  switch (b["kind"]) {
+    case "file":
+    case "rule":
+      return path === null || line === null ? null : { kind: b["kind"], path, line };
+    case "commit":
+      return typeof b["sha"] === "string" ? { kind: "commit", sha: b["sha"] } : null;
+    case "event":
+      return Number.isInteger(b["index"]) ? { kind: "event", index: b["index"] as number } : null;
+    default:
+      return null;
+  }
 }
 
 /** A reading row's iteration id, named defensively for the reason `idOf` is. */

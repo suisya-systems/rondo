@@ -165,6 +165,161 @@ export function readLapSpend(request: LapSpendRequest): LapSpend {
   return transcript === null ? TRANSCRIPT_UNREAD : spendOf(transcript);
 }
 
+/**
+ * One command a lap ran, and what it returned (D-0065 rule 1.2.4).
+ *
+ * `index` is the 1-based line number of the `tool_use` event in the transcript
+ * file, which is how the docs cite a transcript (`events-000.jsonl L41`) and
+ * what a reviewer's `event` basis names. `output` is the matching
+ * `tool_result`'s text, or the empty string when the transcript holds none (a
+ * lap cut off mid-call); `isError` is that result's own flag, false when absent.
+ */
+export interface TranscriptCommand {
+  readonly index: number;
+  readonly command: string;
+  readonly output: string;
+  readonly isError: boolean;
+}
+
+/** A lap's transcript reduced to its commands and final message, or why not. */
+export type LapTranscriptReading =
+  | {
+      readonly kind: "read";
+      readonly commands: readonly TranscriptCommand[];
+      readonly finalMessage: string | null;
+    }
+  | { readonly kind: "unread"; readonly reason: string };
+
+/**
+ * Read a lap's transcript as the commands it ran, what they returned, and its
+ * final message -- the fourth thing D-0065 rule 1.2 hands the reviewer.
+ *
+ * **The same two named files {@link readLapSpend} reads, and nothing more**
+ * (D-0046 rule 4): `record.json` for the generation, then that generation's
+ * `events-NNN.jsonl`. No write, no directory walk, no throw.
+ *
+ * **The event shape is an assumption, stated as one.** No real worker
+ * transcript is kept in this repository, so the shape below is the Claude CLI's
+ * `stream-json` output as documented, not a sample read here:
+ * `{"type":"assistant","message":{"content":[{"type":"tool_use","id":X,"name":N,"input":{...}}]}}`
+ * and `{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":X,
+ * "content":string|[{"type":"text","text":T}],"is_error":bool}]}}`. Every
+ * `tool_use` is a command: a `Bash` call is its `input.command`, any other tool
+ * is its name and its JSON input. The final message is the last `result`
+ * event's `result` string, or null. If the CLI's shape differs, the commands
+ * come out empty rather than wrong -- which a reviewer then reads as a lap that
+ * ran nothing, so the building change's planted lap is what checks this.
+ */
+export function readLapCommands(request: LapSpendRequest): LapTranscriptReading {
+  const directory = lapTranscriptDirectory(request);
+  const generation = generationOf(readText(join(directory, "record.json")));
+  if (generation === null) {
+    return {
+      kind: "unread",
+      reason: "the lap's record.json could not be read or names no generation",
+    };
+  }
+  const name = `events-${String(generation).padStart(3, "0")}.jsonl`;
+  const transcript = readText(join(directory, name));
+  if (transcript === null) {
+    return { kind: "unread", reason: `the lap's transcript ${name} could not be read` };
+  }
+  return commandsOf(transcript);
+}
+
+/** Reduce a transcript's lines to tool calls paired with their results. */
+function commandsOf(transcript: string): LapTranscriptReading {
+  const commands: {
+    index: number;
+    id: unknown;
+    command: string;
+    output: string;
+    isError: boolean;
+  }[] = [];
+  let finalMessage: string | null = null;
+  transcript.split("\n").forEach((line, lineIndex) => {
+    const event = parseObject(line);
+    if (event === null) {
+      return;
+    }
+    if (event.type === "result") {
+      finalMessage = typeof event.result === "string" ? event.result : null;
+      return;
+    }
+    for (const block of contentBlocks(event)) {
+      if (block.type === "tool_use") {
+        commands.push({
+          index: lineIndex + 1,
+          id: block.id,
+          command: commandText(block),
+          output: "",
+          isError: false,
+        });
+      } else if (block.type === "tool_result") {
+        const call = commands.find((c) => c.id !== undefined && c.id === block.tool_use_id);
+        if (call !== undefined) {
+          call.output = resultText(block.content);
+          call.isError = block.is_error === true;
+        }
+      }
+    }
+  });
+  return {
+    kind: "read",
+    commands: commands.map(({ index, command, output, isError }) => ({
+      index,
+      command,
+      output,
+      isError,
+    })),
+    finalMessage,
+  };
+}
+
+/** An event's `message.content` blocks that are objects, or none. */
+function contentBlocks(event: Record<string, unknown>): Record<string, unknown>[] {
+  const message = event.message;
+  if (typeof message !== "object" || message === null) {
+    return [];
+  }
+  const content = (message as Record<string, unknown>).content;
+  return Array.isArray(content)
+    ? content.filter(
+        (block): block is Record<string, unknown> =>
+          typeof block === "object" && block !== null && !Array.isArray(block),
+      )
+    : [];
+}
+
+/** A `Bash` call's command, or any other tool's name and JSON input. */
+function commandText(block: Record<string, unknown>): string {
+  const name = typeof block.name === "string" ? block.name : "unknown-tool";
+  const input = block.input;
+  if (name === "Bash" && typeof input === "object" && input !== null) {
+    const command = (input as Record<string, unknown>).command;
+    if (typeof command === "string") {
+      return command;
+    }
+  }
+  return `${name} ${JSON.stringify(input ?? null)}`;
+}
+
+/** A `tool_result`'s content as text: a string, or its text blocks joined. */
+function resultText(content: unknown): string {
+  if (typeof content === "string") {
+    return content;
+  }
+  if (!Array.isArray(content)) {
+    return "";
+  }
+  return content
+    .map((part) =>
+      typeof part === "object" && part !== null && typeof part.text === "string" ? part.text : "",
+    )
+    .filter((text) => text !== "")
+    .join("\n");
+}
+
 /** One file, or null for every reason a read can fail. */
 function readText(path: string): string | null {
   try {

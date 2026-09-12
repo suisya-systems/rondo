@@ -7,14 +7,15 @@
  * a bare remote, a base pushed on `main`, a `topic` branch with the case applied.
  */
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { expect, test } from "vitest";
 
-import { inspectLapWork } from "../../src/access/forge.js";
-import { materialDigestOf, readingOf } from "../../src/access/review.js";
+import { gatherReviewMaterialFacts, inspectLapWork, runReviewer } from "../../src/access/forge.js";
+import { evidenceOf, materialDigestOf, readingOf } from "../../src/access/review.js";
+import { contentDigest } from "../../src/store/plan.js";
 
 function git(cwd: string, ...args: string[]): void {
   execFileSync(
@@ -128,3 +129,119 @@ test("a git status that fails makes the inspection unreadable, never clean", asy
   expect(inspection.kind === "unreadable" && inspection.reason).toContain("status");
   expect(readingOf(inspection).verdict).toBe("unavailable");
 });
+
+// D-0065: the facts a model reading hands over, and the process it hands them to.
+
+test("the review material is the range's diff, full messages and rule files at the base", async () => {
+  const work = workspace();
+  writeFileSync(join(work, "AGENTS.md"), "rule one\nrule two\n");
+  git(work, "add", "AGENTS.md");
+  git(work, "commit", "-m", "rules");
+  git(work, "push", "origin", "topic:main");
+  git(work, "fetch", "origin");
+  writeFileSync(join(work, "a.txt"), "changed\n");
+  git(work, "commit", "-am", "subject line\n\nbody that says why\nsecond body line");
+  writeFileSync(join(work, "AGENTS.md"), "rule rewritten on the topic\n");
+  git(work, "commit", "-am", "second");
+
+  const inspection = await inspectLapWork(request(work));
+  if (inspection.kind !== "read") throw new Error(inspection.reason);
+  const evidence = evidenceOf(inspection);
+
+  const facts = await gatherReviewMaterialFacts({
+    workspace: work,
+    evidence,
+    ruleFiles: ["AGENTS.md"],
+  });
+
+  expect(facts.kind).toBe("read");
+  if (facts.kind !== "read") return;
+  expect(facts.commits.map((commit) => commit.message)).toEqual([
+    "subject line\n\nbody that says why\nsecond body line",
+    "second",
+  ]);
+  expect(facts.commits[1]?.sha).toBe(evidence.tipCommit);
+  expect(facts.diff).toContain("+++ b/a.txt");
+  expect(facts.diff).toContain("+changed");
+  // At the base, not at the tip.
+  expect(facts.ruleFiles).toEqual([{ path: "AGENTS.md", content: "rule one\nrule two\n" }]);
+
+  const missing = await gatherReviewMaterialFacts({
+    workspace: work,
+    evidence,
+    ruleFiles: ["NOPE.md"],
+  });
+  expect(missing.kind).toBe("unreadable");
+  expect(missing.kind === "unreadable" && missing.reason).toContain("NOPE.md");
+});
+
+/** A stand-in reviewer: records its argv and stdin, and answers from a file. */
+function fakeReviewer(answer: string, status = 0): { executable: string; seen: string } {
+  const root = mkdtempSync(join(tmpdir(), "rondo-fake-reviewer-"));
+  const seen = join(root, "seen");
+  const executable = join(root, "reviewer");
+  writeFileSync(join(root, "answer"), answer);
+  writeFileSync(
+    executable,
+    `#!/bin/sh\nprintf '%s\\n' "$@" > '${seen}.argv'\ncat > '${seen}'\necho 'banner on stderr' >&2\ncat '${join(root, "answer")}'\nexit ${String(status)}\n`,
+    { mode: 0o755 },
+  );
+  return { executable, seen };
+}
+
+// The stand-in is a POSIX shell script.
+test.skipIf(process.platform === "win32")(
+  "the reviewer is handed the document on stdin, and stdout is its answer",
+  async () => {
+    const fake = fakeReviewer('\n  {"findings":[]}  \n');
+    const document = "review this: café — and nothing else\n";
+
+    const run = await runReviewer(
+      { model: "gpt-6-astra", family: "gpt", executable: fake.executable },
+      document,
+    );
+
+    expect(run).toEqual({
+      kind: "answered",
+      finalMessage: '{"findings":[]}',
+      deliveredDigest: contentDigest({ delivered: document }),
+    });
+    expect(readFileSync(fake.seen, "utf8")).toBe(document);
+    const argv = readFileSync(`${fake.seen}.argv`, "utf8").split("\n");
+    expect(argv.slice(0, 9)).toEqual([
+      "exec",
+      "-m",
+      "gpt-6-astra",
+      "-s",
+      "read-only",
+      "--skip-git-repo-check",
+      "--ephemeral",
+      "--color",
+      "never",
+    ]);
+    expect(argv[9]).toBe("-C");
+    expect(argv[11]).toBe("-");
+    // The directory it ran in was empty and is gone.
+    expect(existsSync(argv[10] ?? "")).toBe(false);
+  },
+);
+
+// The stand-in is a POSIX shell script.
+test.skipIf(process.platform === "win32")(
+  "a reviewer that exits non-zero or cannot start is a failed run",
+  async () => {
+    const fake = fakeReviewer("", 3);
+    const failed = await runReviewer(
+      { model: "gpt-6-astra", family: "gpt", executable: fake.executable },
+      "doc",
+    );
+    expect(failed.kind).toBe("failed");
+    expect(failed.kind === "failed" && failed.reason).toContain("exited 3");
+
+    const absent = await runReviewer(
+      { model: "gpt-6-astra", family: "gpt", executable: join(tmpdir(), "rondo-no-such-reviewer") },
+      "doc",
+    );
+    expect(absent.kind).toBe("failed");
+  },
+);

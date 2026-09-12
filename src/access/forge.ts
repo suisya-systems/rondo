@@ -33,6 +33,15 @@
  * went wrong far better than a translation of them would.
  */
 import { spawn } from "node:child_process";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+import type { ReviewerRow } from "../continuo/roles.js";
+import { contentDigest } from "../store/plan.js";
+import type { ReadingEvidence } from "../store/records.js";
+
+import type { ReviewerRun } from "./model-review.js";
 
 /** What one forge command did. Streams as they arrived, unparsed. */
 export interface CommandOutcome {
@@ -61,15 +70,23 @@ async function runCommand(
   executable: string,
   argv: readonly string[],
   timeoutMs: number = FORGE_TIMEOUT_MS,
+  options: { readonly input?: string } = {},
 ): Promise<CommandOutcome> {
   const commandLine = [executable, ...argv].join(" ");
   return await new Promise<CommandOutcome>((resolve) => {
     // `shell: false` is `spawn`'s default and is load-bearing: every argument
     // below reaches the process as one argv element, so a branch name or a
     // title containing a shell metacharacter is data rather than syntax.
-    const child = spawn(executable, [...argv], { stdio: ["ignore", "pipe", "pipe"] });
+    //
+    // Standard input is a pipe only when there is something to write to it
+    // (D-0065 1.1: the reviewer's document), so every other command keeps the
+    // closed stdin it always had and cannot sit waiting on a terminal.
+    const child = spawn(executable, [...argv], {
+      stdio: [options.input === undefined ? "ignore" : "pipe", "pipe", "pipe"],
+    });
     let stdout = "";
     let stderr = "";
+    let stdinError: string | null = null;
     let settled = false;
 
     const timer = setTimeout(() => {
@@ -86,17 +103,34 @@ async function runCommand(
       resolve(outcome);
     };
 
-    child.stdout.on("data", (chunk: Buffer) => {
+    if (options.input !== undefined && child.stdin !== null) {
+      // **A write that did not land is a spawn failure, not a warning.** A
+      // process that exits before reading all of its input raises EPIPE here;
+      // unhandled, that is an uncaught exception, and swallowed, it is a
+      // delivered digest over bytes the reader was never given (D-0065 1.4).
+      child.stdin.on("error", (error: Error) => {
+        stdinError = error.message;
+      });
+      child.stdin.end(options.input, "utf8");
+    }
+
+    child.stdout?.on("data", (chunk: Buffer) => {
       stdout += chunk.toString("utf8");
     });
-    child.stderr.on("data", (chunk: Buffer) => {
+    child.stderr?.on("data", (chunk: Buffer) => {
       stderr += chunk.toString("utf8");
     });
     child.on("error", (error: Error) => {
       finish({ commandLine, status: null, stdout, stderr, spawnError: error.message });
     });
     child.on("close", (status) => {
-      finish({ commandLine, status, stdout, stderr, spawnError: null });
+      finish({
+        commandLine,
+        status,
+        stdout,
+        stderr,
+        spawnError: stdinError === null ? null : `standard input was not delivered: ${stdinError}`,
+      });
     });
   });
 }
@@ -678,4 +712,193 @@ export async function inspectLapWork(request: LapWorkRequest): Promise<LapWorkIn
     uncommitted,
     checkedOut,
   };
+}
+
+/**
+ * What `git` handed over for a model reading (D-0065 1.2.1, 1.2.2, 1.2.6).
+ *
+ * Facts again, for `LapWorkInspection`'s reason: what the reviewer is handed and
+ * how it is laid out is decided in `./model-review.ts`, a pure function over this.
+ */
+export type ReviewMaterialFacts =
+  | {
+      readonly kind: "read";
+      /** `git diff base...tip`, the committed bytes (no textconv, no external diff). */
+      readonly diff: string;
+      /** Full sha and full message, oldest first. */
+      readonly commits: readonly { readonly sha: string; readonly message: string }[];
+      /** Each rule file's content at `baseCommit`, in the order the criterion named them. */
+      readonly ruleFiles: readonly { readonly path: string; readonly content: string }[];
+    }
+  | { readonly kind: "unreadable"; readonly reason: string };
+
+/**
+ * Read the range the deterministic reading resolved, by its shas and not by
+ * branch names, so the model reading is about the same commits (D-0065 1.2.1)
+ * even if the branch moved since.
+ *
+ * **A rule file the criterion names and the base does not hold is unreadable,
+ * not skipped.** A document that silently lacks a rule the plan said to grade
+ * against would carry a delivered digest over a criterion the reviewer never saw.
+ */
+export async function gatherReviewMaterialFacts(request: {
+  readonly workspace: string;
+  readonly evidence: ReadingEvidence;
+  readonly ruleFiles: readonly string[];
+}): Promise<ReviewMaterialFacts> {
+  const { workspace, evidence } = request;
+  const diffed = await runCommand(
+    "git",
+    [
+      "-C",
+      workspace,
+      "-c",
+      "core.quotePath=false",
+      "diff",
+      "--no-color",
+      "--no-ext-diff",
+      "--no-textconv",
+      `${evidence.baseCommit}...${evidence.tipCommit}`,
+    ],
+    PREFLIGHT_TIMEOUT_MS,
+  );
+  const diffFailure = queryFailure(diffed);
+  if (diffFailure !== null) {
+    return { kind: "unreadable", reason: diffFailure };
+  }
+
+  // NUL between sha and message, RS after each commit: neither can appear in a
+  // sha, and a commit message holding a NUL is one git itself refuses to write.
+  const logged = await runCommand(
+    "git",
+    [
+      "-C",
+      workspace,
+      "log",
+      "--no-merges",
+      "--reverse",
+      "--no-show-signature",
+      "--format=%H%x00%B%x1e",
+      `${evidence.baseCommit}..${evidence.tipCommit}`,
+    ],
+    PREFLIGHT_TIMEOUT_MS,
+  );
+  const logFailure = queryFailure(logged);
+  if (logFailure !== null) {
+    return { kind: "unreadable", reason: logFailure };
+  }
+  const commits: { sha: string; message: string }[] = [];
+  for (const entry of logged.stdout.split("\x1e")) {
+    const nul = entry.indexOf("\0");
+    if (nul < 0) {
+      continue;
+    }
+    commits.push({ sha: entry.slice(0, nul).trim(), message: entry.slice(nul + 1).trim() });
+  }
+
+  const ruleFiles: { path: string; content: string }[] = [];
+  for (const path of request.ruleFiles) {
+    const shown = await runCommand(
+      "git",
+      ["-C", workspace, "show", "--no-textconv", `${evidence.baseCommit}:${path}`],
+      PREFLIGHT_TIMEOUT_MS,
+    );
+    const showFailure = queryFailure(shown);
+    if (showFailure !== null) {
+      return {
+        kind: "unreadable",
+        reason: `rule file '${path}' could not be read at ${evidence.baseCommit}: ${showFailure}`,
+      };
+    }
+    ruleFiles.push({ path, content: shown.stdout });
+  }
+
+  return { kind: "read", diff: diffed.stdout, commits, ruleFiles };
+}
+
+/**
+ * How long a model reviewer may take over one document.
+ *
+ * ponytail: picked, not measured. A reasoning model over a few hundred kilobytes
+ * takes minutes; fifteen is past that and short of a hang nobody notices. The
+ * reading runs after `drive()` returned and occupies no capacity (D-0065 2.6),
+ * so what this bounds is the operator's terminal, not the loop.
+ */
+const REVIEWER_TIMEOUT_MS = 900_000;
+
+/** How much of a failed reviewer's stderr a reason carries. It echoes the whole document. */
+const REVIEWER_STDERR_TAIL = 600;
+
+/**
+ * Run the reviewer over one document, and nothing else (D-0065 1.1).
+ *
+ * **The document is on standard input and the directory is empty.** The review
+ * surface that lets the reviewer run `git` in the workspace is not used: what it
+ * read would be its own account. So the process is started in a fresh empty
+ * directory (`-C`), with its sandbox read-only, `--ephemeral` so no session is
+ * kept, and `-` so the prompt is exactly the bytes written. It inherits the
+ * environment, so the login is the operator's own codex login and rondo holds
+ * no credential (D-0010, D-0065 3.2).
+ *
+ * **The digest is over the string written, computed here beside the write**, so
+ * `modelReadingOf`'s comparison is against the bytes that went out rather than
+ * the bytes a caller meant to send (D-0029 rule 11).
+ *
+ * Measured on 2026-09-13 with codex-cli 0.153.4 and `gpt-6-astra`: `codex exec`
+ * prints only the final message on stdout and its banner, the echoed prompt and
+ * the token count on stderr, so stdout trimmed is the answer.
+ */
+export async function runReviewer(row: ReviewerRow, document: string): Promise<ReviewerRun> {
+  let directory: string;
+  try {
+    directory = mkdtempSync(join(tmpdir(), "rondo-reviewer-"));
+  } catch (error) {
+    return {
+      kind: "failed",
+      reason: `no empty directory for the reviewer: ${error instanceof Error ? error.message : String(error)}`,
+    };
+  }
+  try {
+    const outcome = await runCommand(
+      row.executable,
+      [
+        "exec",
+        "-m",
+        row.model,
+        "-s",
+        "read-only",
+        "--skip-git-repo-check",
+        "--ephemeral",
+        "--color",
+        "never",
+        "-C",
+        directory,
+        "-",
+      ],
+      REVIEWER_TIMEOUT_MS,
+      { input: document },
+    );
+    if (outcome.spawnError !== null) {
+      return { kind: "failed", reason: `${outcome.commandLine}: ${outcome.spawnError}` };
+    }
+    if (outcome.status !== 0) {
+      const tail = outcome.stderr.trim().slice(-REVIEWER_STDERR_TAIL);
+      return {
+        kind: "failed",
+        reason: `${outcome.commandLine} exited ${String(outcome.status)}${tail === "" ? "" : `: ${tail}`}`,
+      };
+    }
+    return {
+      kind: "answered",
+      finalMessage: outcome.stdout.trim(),
+      deliveredDigest: contentDigest({ delivered: document }),
+    };
+  } finally {
+    try {
+      rmSync(directory, { recursive: true, force: true });
+    } catch {
+      // An empty directory left in the temp dir costs nothing; a throw here
+      // would lose a reading that was already taken.
+    }
+  }
 }

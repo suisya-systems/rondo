@@ -19,7 +19,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test } from "vitest";
 
-import { lapTranscriptDirectory, readLapSpend } from "../../src/continuo/transcript.js";
+import {
+  lapTranscriptDirectory,
+  readLapCommands,
+  readLapSpend,
+} from "../../src/continuo/transcript.js";
 
 const SESSION = "59a9bc45-c34a-4a83-b234-2a7f648d3a6f";
 
@@ -257,4 +261,99 @@ test("the directory a screen names is the directory this module reads (D-0048 ru
   expect(lapTranscriptDirectory({ stateRoot: "/nowhere", runId: RUN, sessionId: SESSION })).toBe(
     join("/nowhere", RUN, SESSION),
   );
+});
+
+/** A Claude CLI stream-json tool call, as the module assumes the shape. */
+const toolUse = (id: string, name: string, input: unknown) => ({
+  type: "assistant",
+  message: {
+    content: [
+      { type: "text", text: "thinking aloud" },
+      { type: "tool_use", id, name, input },
+    ],
+  },
+});
+const toolResult = (id: string, content: unknown, isError?: boolean) => ({
+  type: "user",
+  message: {
+    content: [
+      {
+        type: "tool_result",
+        tool_use_id: id,
+        content,
+        ...(isError === undefined ? {} : { is_error: isError }),
+      },
+    ],
+  },
+});
+
+test("commands come out with their outputs, line numbers and the final message (D-0065 1.2.4)", () => {
+  const stateRoot = sessionDir({
+    generation: 0,
+    events: {
+      "000": transcript(
+        { type: "system", subtype: "init" },
+        toolUse("t1", "Bash", { command: "npm run verify" }),
+        toolResult("t1", "Sandbox is enabled but failed to initialize: EPERM", true),
+        toolUse("t2", "Read", { file_path: "AGENTS.md" }),
+        toolResult("t2", [
+          { type: "text", text: "line one" },
+          { type: "image" },
+          { type: "text", text: "line two" },
+        ]),
+        toolUse("t3", "Bash", { command: "git commit -m x" }),
+        { ...LAP_5, result: "verify is green" },
+      ),
+    },
+  });
+
+  expect(readLapCommands({ stateRoot, runId: RUN, sessionId: SESSION })).toEqual({
+    kind: "read",
+    commands: [
+      {
+        index: 2,
+        command: "npm run verify",
+        output: "Sandbox is enabled but failed to initialize: EPERM",
+        isError: true,
+      },
+      {
+        index: 4,
+        command: 'Read {"file_path":"AGENTS.md"}',
+        output: "line one\nline two",
+        isError: false,
+      },
+      // A call whose result never arrived: no output, and not claimed as an error.
+      { index: 6, command: "git commit -m x", output: "", isError: false },
+    ],
+    finalMessage: "verify is green",
+  });
+});
+
+test("a transcript with no result event has no final message, and unparseable lines are skipped", () => {
+  const stateRoot = sessionDir({
+    generation: 0,
+    events: {
+      "000": `${JSON.stringify(toolUse("t1", "Bash", { command: "ls" }))}\n{"type":"us`,
+    },
+  });
+
+  expect(readLapCommands({ stateRoot, runId: RUN, sessionId: SESSION })).toEqual({
+    kind: "read",
+    commands: [{ index: 1, command: "ls", output: "", isError: false }],
+    finalMessage: null,
+  });
+});
+
+test("a transcript that cannot be read is unread with a reason, never a throw", () => {
+  const noRecord = sessionDir({ events: { "000": transcript(LAP_5) } });
+  const noEvents = sessionDir({ generation: 3 });
+  for (const stateRoot of [noRecord, noEvents]) {
+    const reading = readLapCommands({ stateRoot, runId: RUN, sessionId: SESSION });
+    expect(reading.kind).toBe("unread");
+    if (reading.kind === "unread") {
+      expect(reading.reason).toMatch(/^[\x20-\x7e]+$/);
+    }
+  }
+  const noEventsReading = readLapCommands({ stateRoot: noEvents, runId: RUN, sessionId: SESSION });
+  expect(noEventsReading.kind === "unread" && noEventsReading.reason).toContain("events-003.jsonl");
 });

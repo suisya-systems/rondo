@@ -181,9 +181,23 @@ export function mappedNeutralRoleNames(): readonly string[] {
  * ratifying different ids (the pairs change under a new entry). A tier outside
  * the table is none of these -- it is the refusal below, working.
  */
-const MODEL_TIER_TABLE: Readonly<Record<string, string>> = Object.freeze({
-  standard: "claude-opus-5",
+const MODEL_TIER_TABLE: Readonly<Record<string, ModelRow>> = Object.freeze({
+  standard: Object.freeze({ model: "claude-opus-5", family: "claude" }),
 });
+
+/**
+ * One model rondo runs, and the family rondo files it under (D-0065 rule 3.3).
+ *
+ * **The family is rondo's own fact, written beside the model id**, never read
+ * off the id's spelling at run time and never taken from what a model says
+ * about itself. `claude-*` is one family and `gpt-*` another; the column exists
+ * so that the reviewer's "different model" is a comparison of two table cells
+ * rather than a string heuristic a new id could slip past.
+ */
+export interface ModelRow {
+  readonly model: string;
+  readonly family: string;
+}
 
 /**
  * What a model tier selected, or rondo's reason it selected nothing.
@@ -217,9 +231,9 @@ export function mapModelTier(modelTier: string): ModelSelection {
   // reason: `constructor` and every other prototype name is an unknown tier
   // rather than a function arriving where a string was expected.
   if (Object.hasOwn(MODEL_TIER_TABLE, modelTier)) {
-    const model = MODEL_TIER_TABLE[modelTier];
-    if (model !== undefined) {
-      return { kind: "selected", model };
+    const row = MODEL_TIER_TABLE[modelTier];
+    if (row !== undefined) {
+      return { kind: "selected", model: row.model };
     }
   }
   return {
@@ -242,4 +256,107 @@ export function mapModelTier(modelTier: string): ModelSelection {
  */
 export function mappedModelTiers(): readonly string[] {
   return Object.keys(MODEL_TIER_TABLE);
+}
+
+/**
+ * The model reviewer's executable, model and family (D-0065 rule 3.2).
+ *
+ * **Not an agent type and not a tier** (rule 3.1): the reviewer has no grants,
+ * runs no tools, and is spawned by rondo outside a lap, so it is not reached
+ * through {@link mapModelTier}. It sits beside that table because it is the
+ * same kind of fact -- a model somebody decided -- and it takes the same rule:
+ * **a changed row is a new decision entry**, not an edit.
+ *
+ * `executable` is the CLI rondo spawns; it runs under the operator's own login
+ * and rondo holds no credential for it (D-0010).
+ */
+export interface ReviewerRow {
+  readonly model: string;
+  readonly family: string;
+  readonly executable: string;
+}
+
+/**
+ * The reviewer table: one row, the model the organisation already reviews
+ * with (D-0065 rule 3.2). The first row is the one in force.
+ */
+const REVIEWER_TABLE: readonly ReviewerRow[] = Object.freeze([
+  Object.freeze({ model: "gpt-6-astra", family: "gpt", executable: "codex" }),
+]);
+
+/** The reviewer row in force. */
+export function reviewerRow(): ReviewerRow {
+  // The table is a frozen literal with one row, so the first row is always there.
+  return REVIEWER_TABLE[0] as ReviewerRow;
+}
+
+/**
+ * The family rondo files a model id under, looked up in rondo's own tables --
+ * the tier rows and the reviewer rows -- or null for an id neither table holds.
+ *
+ * Null is "unknown", and unknown is refused by {@link reviewerFamilyCheck}
+ * exactly as an equal family is (D-0065 rule 3.3): a model whose family rondo
+ * never wrote down cannot be shown to be a different model.
+ */
+export function modelFamilyOf(modelId: string): string | null {
+  for (const row of [...Object.values(MODEL_TIER_TABLE), ...REVIEWER_TABLE]) {
+    if (row.model === modelId) {
+      return row.family;
+    }
+  }
+  return null;
+}
+
+/** Whether the reviewer may read a lap: a distinct family, or rondo's reason not. */
+export type FamilyCheck =
+  | { readonly kind: "distinct" }
+  | { readonly kind: "refused"; readonly reason: string };
+
+/**
+ * The check D-0065 rule 3.3 makes before anything is spawned: the reviewer's
+ * family against the family of the model the lap ran under, both from rondo's
+ * tables. Equal or unknown on either side is refused; a refused check makes the
+ * model reading `unavailable` (rule 2.4).
+ *
+ * The reviewer's own family is looked up again by its model id rather than
+ * trusted off the row handed in, so a row that is not in the table is unknown
+ * rather than whatever family its caller wrote on it.
+ */
+export function reviewerFamilyCheck(reviewer: ReviewerRow, lapModel: string | null): FamilyCheck {
+  const reviewerFamily = modelFamilyOf(reviewer.model);
+  if (reviewerFamily === null || reviewerFamily !== reviewer.family) {
+    return {
+      kind: "refused",
+      reason:
+        `rondo's tables do not file the reviewer model '${reviewer.model}' under the family ` +
+        `'${reviewer.family}', so it cannot be shown to differ from the lap's model (D-0065 rule 3.3).`,
+    };
+  }
+  if (lapModel === null) {
+    return {
+      kind: "refused",
+      reason:
+        "rondo does not hold the model this lap ran under, so the reviewer cannot be shown to " +
+        "be a different family (D-0065 rule 3.3).",
+    };
+  }
+  const lapFamily = modelFamilyOf(lapModel);
+  if (lapFamily === null) {
+    return {
+      kind: "refused",
+      reason:
+        `rondo's tables name no family for the lap's model '${lapModel}', so the reviewer cannot ` +
+        "be shown to be a different family (D-0065 rule 3.3).",
+    };
+  }
+  if (lapFamily === reviewerFamily) {
+    return {
+      kind: "refused",
+      reason:
+        `the reviewer '${reviewer.model}' and the lap's model '${lapModel}' are both of the ` +
+        `family '${lapFamily}', and a reader of the worker's own family is not an independent ` +
+        "reading (D-0065 rule 3.3, D-0029 rule 6).",
+    };
+  }
+  return { kind: "distinct" };
 }
