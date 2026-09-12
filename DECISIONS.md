@@ -14042,13 +14042,17 @@ names. Line numbers drift; re-measure the claim, not the number.
 
 3. **An order is a `sequence` proposal (R2, R3).** A new proposal kind, immutable like every proposal
    (`D-0022` rule 4). Its payload:
-   1. **`first`** and **`then`**: two lineages, each named by an `iteration_id` basis;
-   2. **`holds`**: the act on `then` that waits, from `D-0066` rule 3.2's `act_kind` union. Today that is
-      `admission`, the only writable member;
-   3. **`until`**: the fact that releases it, **from a closed list of facts rondo records: today one
+   1. **`first`**: a live lineage, named by its latest `iteration_id`;
+   2. **`then`**: either a live lineage, named the same way, or **a plan not yet admitted**, named by
+      its split proposal's `proposal_id` and the plan's position in it (`D-0063` rule 4). A plan has no
+      iteration until its admission writes one (`D-0066` rule 3.2), so this is the only way to name
+      the first admission of a line;
+   3. **`holds`**: the act on `then` that waits, from `D-0066` rule 3.2's `act_kind` union. Today that is
+      `admission`: a plan's first admission, or a redo of a live lineage;
+   4. **`until`**: the fact that releases it, **from a closed list of facts rondo records: today one
       member, `first_terminal`** (the latest lap of `first` is in `TERMINAL_STATUSES`). A later entry
       adds `first_merged` once merge is observed;
-   4. **`bases`**: the collision finding (rule 2) or a premise claim (a model drafter's claim that
+   5. **`bases`**: the collision finding (rule 2) or a premise claim (a model drafter's claim that
       `then`'s work rests on something `first` will change, with bases into both), and every
       `standing_policy` it rests on or goes against (rule 7).
 
@@ -14059,15 +14063,16 @@ names. Line numbers drift; re-measure the claim, not the number.
    asking and is recorded by being a row.
 
 4. **The surface attempts a held act only after its release fact is recorded.** While an in-force
-   `sequence` names a lineage as `then`, the surface does not attempt the `holds` act on it until the
+   `sequence` names a lineage or a plan as `then`, the surface does not attempt the `holds` act on it until the
    `until` fact is in the store. **It writes nothing while it waits**: no consumption, no message, no
    attention row. When the surface itself writes the releasing fact (the iteration's terminal status),
    it attempts the held act, and **`D-0066` section 4's verdict is computed then, unchanged**. A hold is
    an order among acts the verdict would otherwise allow, not a fourth verdict value.
    **The writer refuses a `sequence` whose `until` is not on the list.** When the release a drafter
    needs is not a fact rondo records (a merge, today), it drafts no sequence: it writes a drafter
-   message with `asks` set and the held lineage's `iteration_id` as a basis, which holds the line as a
-   P3 through `D-0066` rule 4.2's `asks` test.
+   message with `asks` set, with the held lineage's `iteration_id` as a basis or, for a plan not yet
+   admitted, with none, which holds the line as a P3 through `D-0066` rule 4.2's `asks` test and rule
+   4.4's reading of which line a message stands over.
 
 5. **What the organisation decides about order, and what reaches the person (answering the third
    question).**
@@ -14089,12 +14094,14 @@ names. Line numbers drift; re-measure the claim, not the number.
    1. **Columns**: `policy_id`; `body`, the policy as written, never paraphrased after it is stored;
       `author_kind` (`operator` or `drafter`) and `author_id` (`D-0061` rule 2.3's voice column);
       `bases`; `supersedes_policy_id`, nullable; `created_at_ms`.
-   2. **A drafter may write one from what the person said**, as claude-org-ja's secretary does, and
-      then **`bases` is required and holds the `message:` ids the person said it in**, refused by the
-      writer otherwise (`D-0061` rule 2.6's shape). A drafted policy is listed in the next report (P5).
-      An operator may write one directly, with no bases.
+   2. **A drafter may write a new one from what the person said**, as claude-org-ja's secretary does,
+      and then **`bases` is required and holds the `message:` ids the person said it in**, refused by
+      the writer otherwise (`D-0061` rule 2.6's shape). A drafted policy is listed in the next report
+      (P5). An operator may write one directly, with no bases.
    3. **A change is a successor; retiring one is a successor with an empty `body`.** The in-force
-      policies are the rows no successor names.
+      policies are the rows no successor names. **Only an operator writes a successor**: the writer
+      refuses a `drafter` row with `supersedes_policy_id` set, so a drafter can add a policy and can
+      never weaken or retire one.
    4. **A policy authorises nothing and withholds nothing.** It is not a scope field and never widens
       one (`D-0064` rule 3.1: a scope never widens itself). A rule for not showing the person something
       is `D-0033` rule 7's attention policy, not this record.
@@ -14128,7 +14135,7 @@ names. Line numbers drift; re-measure the claim, not the number.
 | **2. A recommendation reversing `D-0064` rule 3.3** | A draft that would change a ratified entry is P3 with the entry as a basis (rule 7.3). A lap whose diff reverses an entry is a reviewer finding when the criterion hands that entry | **Yes for a draft; half for a lap.** Handing all of `DECISIONS.md` would likely pass the reviewer's input bound and make the reading `unavailable` (`D-0065` rule 1.4), so the criterion has to name the entries the lap cites |
 | **3. A review extended to read an unreviewed Major fix** | The case does not arise in the same form: every lap rondo carries onward is read after it ends (`D-0065` rule 2.6), so no fix goes unread. What does arise is a budget spent with a finding at or above the threshold, which stops the line as P3 (`D-0065` rule 4.3), recommending a successor scope with one more round (`D-0066` rule 1.4) | **Yes, but by the person.** The secretary decided this alone; rondo asks |
 | **4. A merge order for tasks appending to one ledger** | The shared path is a collision (rule 2), and the deterministic drafter drafts `first` and `then`. **The release a merge order needs is `first_merged`, which rondo does not record**, and merging is a person's act per merge (`D-0064` rule 3.4). So today the order is a P3 message and the recommendation beside each merge the person approves. The later line's rebase is a `revise`, which waits on `D-0064` rule 3.6 | **Detected and ordered; carried out by the person** until merge observation adds `first_merged` and O4's `revise` opens. Then it is decided without asking |
-| **5. A ratification held on another task's result** | A model drafter's premise claim drafts a `sequence`. If `then` has not started, its admission waits for `first_terminal` (rule 4). If `then` is already at its gate, the gate is a person's press, which nothing holds: the claim is shown as a basis whose freshness is `undetermined` until `first` ends (`D-0038`) | **Yes before the line starts; material after.** Once O6 exists, the organisation's own gate answer would be a held act; that kind is the O6 entry's to add (`D-0066` rule 3.2) |
+| **5. A ratification held on another task's result** | A model drafter's premise claim drafts a `sequence`. If `then` is a plan not yet admitted, named by its split proposal (rule 3.2), its admission waits for `first_terminal` (rule 4). If `then` is already at its gate, the gate is a person's press, which nothing holds: the claim is shown as a basis whose freshness is `undetermined` until `first` ends (`D-0038`) | **Yes before the line starts; material after.** Once O6 exists, the organisation's own gate answer would be a held act; that kind is the O6 entry's to add (`D-0066` rule 3.2) |
 
 ### 3. The options, and why the others were refused
 
@@ -14180,8 +14187,9 @@ names. Line numbers drift; re-measure the claim, not the number.
      the policy.
 2. **May a drafter write a standing policy without the person confirming it?**
    - **(a) Yes, with `message:` bases, listed in the next report** (recommended, as rule 6.2 is
-     written). This is how claude-org-ja's notes are made. Under point 1 (a) a policy can only add
-     questions, never remove one, so an unconfirmed policy costs the person attention and not control.
+     written). This is how claude-org-ja's notes are made. A drafter writes no successor (rule 6.3), so
+     under point 1 (a) an unconfirmed policy can only add questions, never remove one, and costs the
+     person attention and not control.
      *Loses:* a policy the person did not mean stands until they notice it in a report and retire it.
    - **(b) No: only an operator writes one.** *Loses:* the person has to type every policy they have
      already said in a thread, and the policies the secretary would have kept are not kept.
