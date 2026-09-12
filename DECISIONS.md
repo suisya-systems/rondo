@@ -81,6 +81,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0041 | The one write the operator's page may do: an unattended redraw and a person's click are told apart at runtime and never by type, the approver is the only actor, and the write is a single function rather than a store | accepted |
 | D-0042 | What counts as a presentation on a page that redraws itself: the press and not the render, recorded before the gate is answered, and the reader who does not press left uncounted | accepted |
 | D-0043 | The trigger a stopped lap pulls: one proposal at the abandon the conductor's own arc reaches, `contract_keys` because it is the only option set that is a choice, and a successor identity rondo mints and nobody has yet adopted | accepted |
+| D-0044 | The second model tier is `mechanical`, it is reached by naming an agent type and never by rondo reading a request, and its model id waits on rondo recording what a lap costs | accepted |
 
 ---
 
@@ -2868,6 +2869,16 @@ to take, and rule 4's sixth fact is written conditionally for exactly that reaso
 ## D-0021 — The pin moves to continuo `603843b`: a third explicit budget for the identity read-back, and the model tier priced into `lap perform --model`
 
 **Status:** accepted (2026-09-06, rondo's human gate)
+
+> **Annotation (2026-09-12, from D-0044).** Added after this entry was accepted, and additive: no
+> claim, measurement or date below is changed. **Rule 3's provision is taken up.** The concrete ids
+> were recorded as provisional "pending an operator's ratification", and `D-0043` is the policy a
+> second pair needs before one can be ratified: the second tier is named `mechanical`, it is chosen
+> by naming an agent type rather than by rondo or by a request, and **no pair is written into
+> `MODEL_TIER_TABLE` until rondo records what a lap costs (rondo#96)**. The falsifier below reading
+> "a second tier arriving in an agent type before the table has a pair for it" is answered in
+> advance rather than fired: the refusal still stands, and the tier that would trip it now has a
+> decision saying what it means.
 
 The lap-1 dogfood ([`docs/operations/lap-1-dogfood.md`](docs/operations/lap-1-dogfood.md)) stopped
 on two facts about continuo rather than about rondo, and recorded both. `F-1` was blocking: the
@@ -7805,3 +7816,173 @@ want. It is not closed here because nothing has yet run long enough to say what 
 - **`admit()` acquires a second caller and the required argument is a nuisance rather than a
   guard.** Rule 3's type-level enforcement would then be paid for by every caller and used by one,
   and the trigger moves to a wrapper the surfaces share.
+
+---
+
+## D-0044 — The second model tier is `mechanical`, it is reached by naming an agent type and never by rondo reading a request, and its model id waits on rondo recording what a lap costs
+
+**Status:** accepted (2026-09-12, rondo's human gate). Refs rondo#89, rondo#96, `D-0021`.
+
+`MODEL_TIER_TABLE` (`src/continuo/roles.ts`) has one row, `standard -> claude-opus-5`, so every lap
+runs on the most expensive model whatever it is doing. `D-0021` rule 3 built the table and said the
+pairs are provisional; rondo#89 is the observation that one row means the provision is unusable, and
+it says in its own words that the blocker is not the edit but the policy: *a tier table with a second
+entry needs someone to decide which work goes to which tier*. This entry is that decision.
+
+**It supersedes nothing.** `D-0021` rule 3's shape -- one module, two independent tables, an unpriced
+tier refused before the spawn -- is what makes a second row a three-line edit, and rules 4 and 5
+(the model continuo reports is checked and persisted beside the tier requested) are what make a
+second row auditable. This entry adds the policy those rules were built to carry, and one gate on
+when the row may be written.
+
+### What the four measured laps actually say
+
+The spread the issue points at is real and is **not** a spread in difficulty:
+
+| | lap 2 | lap 3 | lap 4 | lap 5 |
+|---|---|---|---|---|
+| `total_cost_usd` | 1.032 | **7.062** | 2.055 | 1.542 |
+| turns | 29 | **95** | 43 | 38 |
+| duration | 121.8 s | **724.4 s** | 253.6 s | 203.3 s |
+| refused Bash calls | 4 / 29 | 10 / 69 | **18 / 36** | 5 / 29 |
+
+[`lap-3-dogfood.md`](docs/operations/lap-3-dogfood.md) section 5 separates the 6.8x itself, and
+neither half is judgment: the work was bigger (`+355 -7` against lap 2's `+16 -4`), and **the fence
+charged for itself** -- seven refused calls spent trying to see one screen, bought in the end at the
+price of five full suite runs. Lap 4's cost is half lap 3's on half the refusal count and a seventh
+of the diff. What the four laps vary in is **volume and friction**, and cost tracks turns, not the
+density of the decisions inside them.
+
+That matters for this entry in one direction and it is the uncomfortable one: **turns are the
+dominant term, and a cheaper model buys turns back only if it does not spend more of them.** A lap
+that re-reads a file because it lost the thread, or retries a fence refusal it did not understand,
+pays the friction again at a lower unit price. Nothing rondo has measured says which way that lands,
+because rondo measures none of it (rondo#96, and rule 5 below).
+
+### Why this organisation's split does not transfer
+
+claude-org-ja runs a lead on a high tier with assistants on a middle one, and reserves the top tier
+for the most judgment-dense writing. That split works because the *unit* it splits is a step inside
+one piece of work. **rondo's unit is the whole lap.** One lap reads the request, plans an edit,
+writes it, runs the verification, reads the exit status, commits, and composes what the person at the
+gate will read -- on one model, chosen once, before the spawn. There is no seam inside a lap at which
+a cheaper executor could take the mechanical half and hand the judgment back.
+
+So the question "is this work mechanical?" has to be answered about the **entire arc**, and the arc's
+last step is the one a person's approval rests on. Lap 5 is the standing warning: that lap reported
+`EXIT=1`, attributed it confidently to a pre-existing defect, and **was wrong about its own failure**
+-- at the top tier. The account a lap gives of itself is judgment, it is in every lap, and it is the
+part the gate cannot cross-check cheaply.
+
+### Decision
+
+1. **Two tiers, and the axis is verifiability of the whole arc -- not speed, not price.**
+   `standard` keeps its meaning and its model. The second tier is `mechanical`, and it means: *every
+   step of this lap's arc, including the account the lap gives of its own work at the gate, can be
+   checked by something other than a person's reading.* Price is a consequence of that property and
+   never the reason for the name, because a tier named for its price invites the question "can we
+   afford the cheap one here", which is the question this entry exists to stop being asked per lap.
+   Concretely, `mechanical` is for work where the request names the files, the change is bounded, and
+   `npm run verify` passing is the whole of the acceptance -- lap 2's three-file wording repair is the
+   measured example. Anything whose acceptance includes *reading what the lap decided* is `standard`.
+2. **A tier is chosen by choosing an agent type. rondo never chooses, and neither does the person
+   writing the request -- per request.** The tier already lives on cadenza's
+   `executorPolicy.modelTier` (`src/refrain/classification.ts`), which is a field of an agent type,
+   and the plan names an agent type. That is the whole mechanism and it needs no new plumbing.
+   - **rondo does not decide, and cannot.** Deciding would mean reading the request body to judge
+     what the work is, and `D-0025` rule 5 says rondo does not infer a plan's contents; the plan file
+     is the whole of the configuration. rondo's job here is `D-0021` rule 3's: price the tier it is
+     handed, or refuse before the spawn.
+   - **There is no per-request tier override, and no `--model-tier` flag.** A tier attached to a
+     request is a judgment made once, under time pressure, by whoever happened to be typing; a tier
+     attached to an agent type is a judgment made once about a *kind* of work and reviewed with the
+     agent type. The second is the only one of the two that can be wrong in a way anybody notices.
+   - **Today both hats sit on one head, and that is stated rather than hidden.** The agent type is
+     inline in the plan (`agentTypeInput`, `scripts/dogfood-env.sh` writes `worker-basic` with
+     `modelTier: "standard"`), so the person writing the plan is also the person declaring the agent
+     type. What keeps rule 2 honest under that shape is that the tier travels with the *identity*:
+     `worker-basic` means one tier, and a plan that gives `worker-basic` a different tier is a
+     different agent type wearing a known name -- visible as a different `agentTypeDigest` on the
+     row, and a thing to notice. When agent types move into a catalog, the author declares and the
+     requester only names, and this rule is already written for that day.
+3. **`standard` is the default and the fallback direction is up.** An agent type that says nothing
+   gets `standard`; an unpriced tier is still refused before the spawn (`D-0021` rule 3, unchanged).
+   Nothing may route a lap to `mechanical` by inference, by absence, or by a global setting.
+4. **A wrong tier is recoverable, the recovery is a whole lap, and the asymmetry is why rule 3 points
+   up.** Too expensive wastes the difference between two tiers on one lap. Too cheap wastes the lap:
+   `D-0027` makes "revise" a second lap with fresh identifiers, so the recovery costs a full lap at
+   the tier that should have run in the first place, plus the human's read of the bad one. At the
+   measured $1.03--$7.06 per lap, a mis-routed lap costs more than a correctly-routed expensive one.
+   The failure that is *not* recoverable by a second lap is the one lap 5 showed: a lap that is wrong
+   about its own work and says so plausibly. That is the failure `mechanical`'s definition is drawn
+   to exclude, and it is why the definition is about the arc and not about the diff.
+5. **No pair is added to `MODEL_TIER_TABLE` until rondo records what a lap costs (rondo#96).** The
+   whole case for a second row is a saving, and rondo persists neither `total_cost_usd` nor
+   `num_turns` nor `duration_ms` -- five dogfood records have parsed them out of `events-000.jsonl`
+   by hand. Adding the row first would mean choosing a model id against numbers nobody can read back,
+   and then being unable to tell whether it helped: the section above says the dominant term is turns,
+   and a cheaper model that spends more of them is the outcome this gate exists to catch. `D-0021`
+   rule 3 already says the concrete ids are the operator's to ratify; this rule says what the
+   operator ratifies *against*. It is a gate on the pair, not on the policy -- rules 1--4 are in force
+   now, and the day #96 lands the second row is an edit and a test.
+6. **A `mechanical` lap is accepted at the same gate, on the same terms, and the tier is visible
+   there.** The bar does not move with the tier: if the work needed a lower bar, it was not
+   `mechanical`. `D-0029`'s independent reading and `D-0042`'s recorded press are unchanged and are
+   already indifferent to who produced the work. What the tier is for, at the gate, is *attribution*
+   -- `model_tier` and `model` are on the iteration row (`D-0021` rule 5) and `explain` prints them,
+   so a run of revisions concentrated on one tier is a fact somebody can see. **A second, lower
+   acceptance standard for cheap laps is refused explicitly**: it would make rule 1's definition
+   unfalsifiable, because any `mechanical` lap that came out badly could be re-read as having met the
+   lower bar.
+
+### The dispute this entry does not close
+
+**Whether `mechanical` is worth having at all.** The measurements say cost tracks turns and friction,
+not the density of judgment, and the strongest reading of them is that rondo's money goes to the
+fence and the size of the work rather than to the model's price -- in which case the right repair is
+rondo#87 / rondo#97's family (a lap that can cheaply see its own output) and a second tier is a
+distraction with a downside. This entry takes the weaker position deliberately: it settles *who
+decides and on what axis*, which is the part that cannot be measured into existence, and puts the
+part that can behind rule 5's gate. If #96's numbers show the model price is not the dominant term,
+rule 5's gate never opens and rules 1--4 cost nothing. **A human is asked to notice that this is the
+shape of the answer, not to ratify a model id.**
+
+### What this entry does not decide
+
+- **Which model `mechanical` is.** Rule 5 says not yet, and `D-0021` rule 3 says it is the operator's
+  in any case.
+- **Whether a third tier is ever wanted.** Two is what one distinction needs.
+- **Where agent types live.** Rule 2 is written for both the inline shape in force today and a
+  catalog, and moving them is its own decision.
+- **How cost is recorded.** rondo#96 is the gate, not this entry's design.
+
+### What would falsify it
+
+- **rondo#96's numbers showing model price is not the dominant term in a lap's cost.** Rule 5's gate
+  stays shut and the second tier is unjustified -- the dispute above resolving against this entry.
+- **A `mechanical` lap being revised measurably more often than a `standard` one**, once both are
+  running and cost is recorded. Rule 1's boundary is drawn in the wrong place, and rule 4's asymmetry
+  is being paid for real.
+- **A lap gaining sub-roles** -- an arc that splits into separately-executed steps with their own
+  models. The premise under "this organisation's split does not transfer" dies, and the unit of the
+  decision stops being the lap.
+- **An operator wanting to down-tier one particular request rather than a kind of work**, often
+  enough that refusing a per-request override reads as an obstruction. Rule 2's second bullet is the
+  claim to re-argue.
+- **cadenza growing a model-tier vocabulary of its own, or continuo taking a tier rather than a model
+  id.** `D-0021`'s falsifiers, inherited: the table moves and rule 2's "the tier is a field of the
+  agent type" is the part that survives either move.
+- **A second agent type never arriving.** Rule 2 answers "who chooses" with "whoever names the agent
+  type", and with exactly one agent type in existence that is nobody choosing anything; the entry
+  would be a policy for a plan shape that never happened.
+- The four cost figures failing to reproduce. They are `total_cost_usd` / `num_turns` /
+  `duration_ms` from each lap's terminal `result` event, dated 2026-09-06 through 2026-09-12, and
+  recorded in [`lap-2`](docs/operations/lap-2-dogfood.md) through
+  [`lap-5`](docs/operations/lap-5-dogfood.md) section 5.
+
+### Annotations this entry adds to earlier entries
+
+- **`D-0021`** gains a dated annotation on that entry: rule 3's "the concrete ids are provisional,
+  pending an operator's ratification" is taken up here, and its falsifier "a second tier arriving in
+  an agent type before the table has a pair for it" is answered in advance -- the policy for a second
+  tier exists from this date, and the pair itself waits on rondo#96.
