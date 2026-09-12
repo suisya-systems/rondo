@@ -1446,13 +1446,14 @@ export interface Answer {
  * a second surface could skip. What this function owns is the identity of the
  * decision and the two identities on the row.
  *
- * **What no writer checks, stated rather than assumed**: that `approved` names
- * a `composition` row of this proposal. D-0032 rule 12 fixed which properties
- * the schema enforces and said so -- *"the three CHECKs are the three
- * properties D-0032 fixed and nothing more"* -- so making that reference
- * enforceable is an entry's decision and not an implementation's. What stands
- * in its place today is that the digest an operator types is the one the
- * surface printed, from the option set in the row.
+ * **That `approved` names a `composition` row of this proposal is checked, and
+ * checked there too** (D-0049 rule 2). The entry that decided it kept D-0032
+ * rule 12's schema intact -- *"the three CHECKs are the three properties
+ * D-0032 fixed and nothing more"* -- so the reference is held by a writer
+ * refusal rather than by a fourth CHECK, beside rule 5's and under the same
+ * write lock. What that refuses is a digest this proposal never put on a
+ * screen; a digest that was on the screen and has since stopped composing is
+ * {@link approvedRetry}'s refusal and not this one.
  *
  * **A refusal is a row and not an absence** (D-0032 rule 6): `declined` is
  * written, so *"the operator settled this"* and *"nobody has answered"* stay

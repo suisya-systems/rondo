@@ -834,7 +834,10 @@ CREATE TABLE IF NOT EXISTS composition (
 -- the operator has already settled. approved is a reference into
 -- composition.contract_digest and is non-null exactly on an approval -- a
 -- refusal approves no digest, and a digest with no approval behind it would be
--- an issuance waiting to happen.
+-- an issuance waiting to happen. **The reference is enforced by the writer and
+-- not by a CHECK** (D-0049 rules 2 and 7): SQLite cannot state a cross-table
+-- reference here, and D-0032 rule 12 fixed which three properties this schema
+-- does state.
 --
 -- gate_id and gate_transition_seq are route G's reference to continuo's own
 -- record and are null together on route S, where no gate exists. They are a
@@ -1804,6 +1807,13 @@ export interface AdvisoryRecord {
    * own `BEGIN IMMEDIATE` and an answer naming a kind that binds nothing is
    * refused there. Authority is a function of `kind` alone, and this is where
    * that stops being a sentence.
+   *
+   * **A second refusal joins it in that transaction** (D-0049 rule 2): an
+   * approval whose `approved` is no `composition` row of the proposal it names
+   * is a dangling reference, and it is refused for D-0036 rule 4's reason --
+   * a reference to a row that is not there makes the chain unrecordable rather
+   * than recorded. It is a question about what was *presented* and never about
+   * what still composes; the second belongs to the spend (D-0047 rule 4).
    */
   recordDecision(draft: HumanDecisionDraft): Promise<RecordOutcome>;
   /**
@@ -2252,6 +2262,56 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
                 "alone, and an explanation is material a person reads rather than a thing a " +
                 "person approves",
             };
+          }
+          if (draft.outcome === "approved" && draft.approved !== null) {
+            // **D-0049 rule 2, in the transaction that is already open.** The
+            // schema calls `approved` a reference into `composition`, and
+            // nothing enforced it: an approval naming a digest this proposal
+            // never carried was recorded, refused one command later at the
+            // spend, and left on D-0022 rule 19's *approved and never spent*
+            // list for ever, where a real unspent approval also lives.
+            //
+            // **What is checked is that the contract was on this proposal's
+            // screen, and never that it still composes.** D-0022 rule 18 makes
+            // `composition` exactly the option set that was presented, and
+            // those rows are immutable -- so this question is settled for ever
+            // once settled. Whether some option composes the digest *today* is
+            // the other question, it is time-varying, and D-0047 rule 4 answers
+            // it at the spend over the lineage read fresh. Asking it here would
+            // make whether a person's answer can be recorded depend on the
+            // state of the world in the second they typed it (D-0049 rule 4).
+            //
+            // **The two column combinations the schema already refuses are left
+            // to it**: a decline carrying a digest, and an approval carrying
+            // none, are `human_decision`'s own CHECK (D-0032 rule 12), and a
+            // refusal spoken here first would answer them in this rule's words
+            // instead of in the schema's.
+            const digests = connection
+              .prepare(
+                "SELECT contract_digest FROM composition WHERE proposal_id = ? " +
+                  "ORDER BY composition_id",
+              )
+              .all(draft.proposalId)
+              .map((option) => String((option as SqlRow)["contract_digest"]));
+            if (!digests.includes(draft.approved)) {
+              // **The refusal names the digests, because the transaction has
+              // already read them** (D-0049 rule 3). An operator who mistyped
+              // one needs the option set, and a proposal that put nothing on a
+              // screen says so rather than listing an empty line.
+              return {
+                kind: "refused",
+                reason:
+                  `the approval of proposal '${draft.proposalId}' names contract ` +
+                  `'${draft.approved}', which is no option this proposal put on the screen: ` +
+                  "D-0032's schema makes human_decision.approved a reference into composition, " +
+                  "and D-0049 rule 2 refuses a dangling one -- an answer to a question this " +
+                  "proposal never asked is not a record of what a person decided. " +
+                  (digests.length === 0
+                    ? "This proposal recorded no contract at all, so there is nothing it can " +
+                      "be answered with (D-0022 rule 18)"
+                    : `Its contracts are: ${digests.join(", ")}`),
+              };
+            }
           }
           connection
             .prepare(

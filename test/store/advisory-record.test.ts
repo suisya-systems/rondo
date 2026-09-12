@@ -251,6 +251,11 @@ test("PLANTED: the same decision against an approvable kind is recorded", async 
   // working one. This is the neighbouring case that must still land.
   const record = advisoryRecord(freshConnection());
   await record.recordProposal(proposal({ proposalId: "p-widens" }));
+  // The contract this proposal put on the screen. An approval is a reference
+  // into it (D-0049 rule 2), so the neighbouring case needs the row it names.
+  await record.recordComposition(
+    composition({ compositionId: "c-widens", proposalId: "p-widens" }),
+  );
 
   expect(
     await record.recordDecision(decision({ decisionId: "d-widens", proposalId: "p-widens" })),
@@ -265,6 +270,9 @@ test("every approvable kind is answerable and explanation is the only one that i
   const answered: Record<string, string> = {};
   for (const kind of ["agent_type", "run_plan", "contract_keys", "widening_successor"] as const) {
     await record.recordProposal(proposal({ proposalId: `p-${kind}`, kind }));
+    await record.recordComposition(
+      composition({ compositionId: `c-${kind}`, proposalId: `p-${kind}` }),
+    );
     answered[kind] = (
       await record.recordDecision(decision({ decisionId: `d-${kind}`, proposalId: `p-${kind}` }))
     ).kind;
@@ -283,6 +291,89 @@ test("every approvable kind is answerable and explanation is the only one that i
     widening_successor: "recorded",
     explanation: "refused",
   });
+});
+
+test("PLANTED: an approval naming another proposal's contract is refused, and says which are this one's", async () => {
+  // **D-0049 rule 2's planted case, in the shape lap 6 measured it** (N-20):
+  // the digest typed was real and belonged to *another* proposal's option set,
+  // so nothing about it looks malformed -- and until this refusal it was
+  // recorded, refused one command later at the spend, and left on D-0022
+  // rule 19's "approved and never spent" list for ever.
+  const connection = freshConnection();
+  const record = advisoryRecord(connection);
+  const mine = `sha256:${"e".repeat(64)}`;
+  const theirs = `sha256:${"a".repeat(64)}`;
+  await record.recordProposal(proposal({ proposalId: "p-mine" }));
+  await record.recordComposition(composition({ compositionId: "c-mine", proposalId: "p-mine" }));
+  await record.recordProposal(proposal({ proposalId: "p-theirs" }));
+  await record.recordComposition(
+    composition({ compositionId: "c-theirs", proposalId: "p-theirs", contractDigest: theirs }),
+  );
+
+  const refused = await record.recordDecision(
+    decision({ decisionId: "d-crossed", proposalId: "p-mine", approved: theirs }),
+  );
+
+  expect(refused.kind).toBe("refused");
+  expect(refused.kind === "refused" && refused.reason).toContain("no option this proposal put on");
+  // **The refusal names this proposal's own digests** (rule 3): the operator
+  // who mistyped one needs the option set, and the transaction has read it
+  // already. The one they typed is not among them, which is why it is refused.
+  expect(refused.kind === "refused" && refused.reason).toContain(mine);
+  // Nothing was written: the refusal happens inside the transaction that would
+  // have carried the insert.
+  expect(
+    connection.prepare("SELECT COUNT(*) AS n FROM human_decision").get() as Record<string, unknown>,
+  ).toEqual({ n: 0 });
+});
+
+test("PLANTED: the same approval against a digest this proposal did carry is recorded", async () => {
+  // **The non-vacuity half.** A reference check that refused every approval
+  // would leave the same green suite as one that works, and would close route S
+  // altogether. One proposal, one composition, the digest of that composition.
+  const record = advisoryRecord(freshConnection());
+  await record.recordProposal(proposal({ proposalId: "p-mine" }));
+  await record.recordComposition(composition({ compositionId: "c-mine", proposalId: "p-mine" }));
+
+  expect(
+    await record.recordDecision(
+      decision({
+        decisionId: "d-straight",
+        proposalId: "p-mine",
+        approved: `sha256:${"e".repeat(64)}`,
+      }),
+    ),
+  ).toEqual({ kind: "recorded" });
+});
+
+test("a proposal that put no contract on a screen says so rather than listing nothing", async () => {
+  // D-0022 rule 18 from the other side: an approvable kind whose writer never
+  // recorded its option set cannot be answered at all, and the refusal says
+  // that rather than printing an empty list of digests. `widening_successor` is
+  // the kind this is true of today -- nothing drafts one, so nothing composes
+  // one either (PROPOSABLE_KINDS).
+  const record = advisoryRecord(freshConnection());
+  await record.recordProposal(proposal({ proposalId: "p-bare" }));
+
+  const refused = await record.recordDecision(
+    decision({ decisionId: "d-bare", proposalId: "p-bare" }),
+  );
+
+  expect(refused.kind).toBe("refused");
+  expect(refused.kind === "refused" && refused.reason).toContain("recorded no contract at all");
+});
+
+test("a decline is not measured against the option set, and a declined proposal needs no composition", async () => {
+  // D-0032 rule 6 is untouched by rule 2: a refusal approves no digest, so
+  // there is no reference to dangle, and the row lands with nothing composed.
+  const record = advisoryRecord(freshConnection());
+  await record.recordProposal(proposal({ proposalId: "p-bare" }));
+
+  expect(
+    await record.recordDecision(
+      decision({ decisionId: "d-nope", proposalId: "p-bare", outcome: "declined", approved: null }),
+    ),
+  ).toEqual({ kind: "recorded" });
 });
 
 test("PLANTED: a kind this rondo does not know is refused rather than guessed at", async () => {
@@ -614,6 +705,7 @@ test("one decision authorises at most one issuance", async () => {
   // the database rather than by a check somebody remembered to write.
   const record = advisoryRecord(freshConnection());
   await record.recordProposal(proposal());
+  await record.recordComposition(composition());
   await record.recordDecision(decision());
 
   expect(await record.consumeDecision("d-0001", `sha256:${"e".repeat(64)}`, 4_000)).toEqual({
@@ -633,6 +725,7 @@ test("a consumption must name a decision, an approval, and the digest it approve
   // of the three it was.
   const record = advisoryRecord(freshConnection());
   await record.recordProposal(proposal());
+  await record.recordComposition(composition());
   await record.recordDecision(decision());
   await record.recordDecision(
     decision({ decisionId: "d-no", outcome: "declined", approved: null, decidedAtMs: 3_500 }),
@@ -662,6 +755,7 @@ test("one gate answer backs at most one decision", async () => {
   // which defeats D-0022 rule 9 one level above the primary key that holds it.
   const record = advisoryRecord(freshConnection());
   await record.recordProposal(proposal());
+  await record.recordComposition(composition());
   const routeG = { gateId: "g-0001", gateTransitionSeq: 7 };
 
   expect(await record.recordDecision(decision({ decisionId: "d-g1", ...routeG }))).toEqual({
