@@ -306,6 +306,28 @@ test("a press records the framing it rests on, and one that cannot be recorded a
   expect(missing.ok).toBe(false);
   expect(missing.note).toContain("nothing was answered");
   expect(rows(world.connection, "proposal")).toBe(1);
+
+  // A framing recorded and not counted complains and lets the press through:
+  // the command line exits 1 on the same outcome, and a browser cannot read an
+  // exit status, so the line goes to the terminal `rondo web` runs in.
+  const said: string[] = [];
+  const uncounted = await recordPagePress(
+    {
+      ...ports,
+      now: () => 7_000,
+      record: {
+        ...world.record,
+        recordAttention: async () =>
+          await Promise.resolve({ kind: "refused" as const, reason: "the table is locked" }),
+      },
+    },
+    "i-0001",
+    (line) => said.push(line),
+  );
+  expect(uncounted.ok).toBe(true);
+  expect(said.join("\n")).toContain("recorded and not counted as presented");
+  expect(rows(world.connection, "proposal")).toBe(2);
+  expect(rows(world.connection, "operator_attention")).toBe(1);
 });
 
 test("an empty store renders a page rather than an error", async () => {

@@ -7590,6 +7590,7 @@ thing it is *before* moves.
 | Counting a page read that ends in no press | No runtime fact tells a reader from a redraw on a `GET`; a script or a second request would be the mechanism, and rondo#95's no-script constraint is load-bearing | the entry that wants a scripted page |
 | The recorded framing is re-composed at press time | `D-0032` rule 3 refuses a stored summary, so it is re-gathered rather than remembered; it can therefore differ from bytes drawn up to five seconds earlier. The terminal has the same property between composing and printing | whoever first needs byte-exact provenance of what was on a screen |
 | A press that is refused after the framing is recorded | Rows the page refused (terminal, no gate) never reach the write; a continuo that will not start does, so the ledger can hold a framing whose gate walk then failed. That is a framing a person *was* shown, so it is not a false row | -- |
+| A framing recorded and not counted is said in the host terminal and not on the page | `sayAdvisoryOutcome` keeps the record and exits **1** on the same outcome, and a browser cannot read an exit status; refusing the press instead would stop an operator answering a gate over rondo's own accounting | whoever first needs the page to carry a warning it did not refuse on |
 
 ### What was measured, and how
 

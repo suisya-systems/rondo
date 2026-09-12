@@ -2375,21 +2375,39 @@ async function pageMaterial(
  * redraw reaches none of this -- it is a `GET`, and only the `POST` path a
  * person's click produces gets here -- so `operator_attention` counts a row for
  * a human who pressed and never for a page redrawing at an empty desk.
+ *
+ * **A framing recorded and not counted does not withhold the gate.** That is
+ * `sayAdvisoryOutcome`'s treatment of the same outcome -- the record is kept and
+ * what was shown still stands -- differing only in where the complaint goes: a
+ * command exits **1**, and a person at a browser cannot read an exit status, so
+ * the line is said in the terminal `rondo web` runs in, beside the other two
+ * things this surface already says there (`walkGate`'s diagnostics and
+ * `sayReport`). Refusing the press instead would stop an operator answering a
+ * gate over rondo's own accounting, which is a worse failure than an
+ * under-counted table (D-0032 rule 10).
  */
 export async function recordPagePress(
   ports: ExplainPorts,
   iterationId: string,
+  complain: (line: string) => void = say,
 ): Promise<{ ok: boolean; note: string }> {
   const shown = await explainIteration(ports, iterationId);
-  return shown.kind === "refused"
-    ? {
-        ok: false,
-        // `explainIteration`'s own reason ends with why this matters, so this
-        // adds the half it cannot know: on a page the framing was shown before
-        // the press, and what the failure costs is the *act*, not the showing.
-        note: `The framing you pressed on was not recorded, so nothing was answered. ${shown.reason}`,
-      }
-    : { ok: true, note: "" };
+  if (shown.kind === "refused") {
+    return {
+      ok: false,
+      // `explainIteration`'s own reason ends with why this matters, so this
+      // adds the half it cannot know: on a page the framing was shown before
+      // the press, and what the failure costs is the *act*, not the showing.
+      note: `The framing you pressed on was not recorded, so nothing was answered. ${shown.reason}`,
+    };
+  }
+  if (shown.kind === "presentedUncounted") {
+    complain(
+      `proposal '${shown.proposalId}' was recorded and not counted as presented: ` +
+        `${shown.reason}. The press went through; operator_attention is short by one row.`,
+    );
+  }
+  return { ok: true, note: "" };
 }
 
 /**
