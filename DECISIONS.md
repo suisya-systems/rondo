@@ -99,10 +99,11 @@ C-NN`, so the spaces can never be read as one.
 | D-0059 | The page is judged by the screen and rides an off-the-shelf stack: the bar named by three tools, prototypes that reach it only by design work, Hono with htmx and Tailwind for what is generic, rondo's own code for what is rondo's, and four relaxations put to the human gate rather than taken | accepted |
 | D-0060 | Work left uncommitted is a fact rondo reads and names: `git status` joins the reading as a finding, `publish` refuses a workspace that still holds any, `--despite-review` does not reach it, and rondo commits nothing on a lap's behalf | accepted |
 | D-0061 | Where a request enters rondo: the organisation's five steps mapped onto parts that mostly exist, a request thread in the conversation as the first thing built, and the drafter that reads a request cleared by the human gate, with its split into plans waiting on `D-0062` | accepted |
-| D-0062 | A proposal may name an agent type, and only a split proposal from a request may: a record rondo already holds chosen by its digest, approved on route S with the tier bound by the option it came from, and the kind-to-tier judgment kept whole while the request-to-kind judgment moves to the gate | accepted |
+| D-0062 | A proposal may name an agent type, and only a split proposal from a request may: a record rondo already holds chosen by its digest, approved on route S with the tier bound by the option it came from, and the kind-to-tier judgment kept whole while the request-to-kind judgment moves to the gate | superseded by D-0066 |
 | D-0063 | The advisory is the secretary's drafting half: it reads, asks back, drafts a split, brings points in dispute with a recommendation and reports to a person, and proposes what comes next, while handing over and approving stay elsewhere; `D-0022` rules 1, 3, 4 and 7 widen for a model drafter and a split, and only two lines are kept | accepted |
 | D-0064 | rondo is run the way a product manager runs an organisation: a person approves a scope once, the organisation decides everything inside it, and what reaches the person is a question with a recommendation, an irreversible act, a scope exit or a report | accepted |
 | D-0065 | The model reviewer: a reader of another model family that rondo runs outside the lap over bytes it hands over and digests, graded findings with bases on the reading record, a round budget and a threshold that are the scope's, and the three defects a person caught sorted into caught, half caught and not caught | accepted |
+| D-0066 | The scope record: one immutable row with a digest, approved by a row of its own and never by `human_decision`, spent once per act inside the act's own transaction, refused at one point that stops one line, and `D-0062` rule 3 and `D-0022` rule 9 restated for it | accepted |
 
 ---
 
@@ -4019,6 +4020,10 @@ next field would have faced the same choice with no rule to appeal to.
 > still cited as `D-0022` rule N. Rules 1, 3, 4 and 7 are restated as `D-0063` rules 2, 3, 5 and 4.
 > Rule 9 is named for supersession by `D-0064` section 6, which is the scope entry's to take.
 > Nothing below is edited.
+
+> **Annotation (2026-09-13, from D-0066).** Rule 9 is restated by `D-0066` rule 5.2 and is cited as
+> `D-0066` rule 5.2 from that date: a `human_decision` still authorises at most one issuance, and a
+> scope's approval authorises many acts, each recorded once. The text of rule 9 below is unedited.
 
 The design is [`docs/design/advisory.md`](docs/design/advisory.md), whose rows `A-1` … `A-18` this
 entry takes. It answers rondo#9: whether the component that proposes contracts and explains state
@@ -8370,6 +8375,10 @@ costs one module and one grant, and the falsifiers below say what would move it.
 > `agentTypeDigest` its option named. If it does not, nothing runs and nothing is spent (`D-0062`
 > rule 3.3). A contract digest does not cover the agent type or its tier, so without this case an
 > approval would not bind the tier. It is a refusal and never a re-selection, as rule 4 already says.
+>
+> **Annotation (2026-09-13, from D-0066).** The case above is retired with `D-0062` rule 3.3: a split
+> is no longer spent through `human_decision`, but admitted under a scope whose list names the
+> `agentTypeDigest` itself (`D-0066` rule 5.1). Rule 4 is otherwise unchanged.
 
 rondo#107 measures the last hole in #41 section 3's chain. `rondo decide` writes a `human_decision`
 row and nothing reads it; the screen says so to the operator in its own words
@@ -11845,7 +11854,18 @@ entry, and the split waits on that entry and on `D-0062`.
 
 ## D-0062 — A proposal may name an agent type, and only a split proposal from a request may: a record rondo already holds chosen by its digest, approved on route S with the tier bound by the option it came from, and the kind-to-tier judgment kept whole while the request-to-kind judgment moves to the gate
 
-**Status:** accepted (2026-09-13, rondo's human gate). Refs `D-0014`, `D-0021`, `D-0022`,
+**Status:** superseded by D-0066 (2026-09-13). Accepted 2026-09-13 (rondo's human gate).
+
+> **Supersession note (2026-09-13, from D-0066).** `D-0066` records the scope `D-0064` decided on,
+> and a drafted split's agent type is approved by a scope that lists it, not per split. That changes
+> what rule 3 below asserted (route S per split, with rules 3.2-3.5 built around an approval that
+> names a contract digest). Supersession is whole-entry, per "How to use this file", so **rules 1, 2
+> and 4, the sections around them and the residuals are not retired with it**. They are carried as
+> written and are still cited as `D-0062` rule N; rule 2.1's "a person has approved it" is read as "a
+> person has approved a scope that lists it". Rule 3 is restated as `D-0066` rule 5.1. Nothing below
+> is edited.
+
+Refs `D-0014`, `D-0021`, `D-0022`,
 `D-0025`, `D-0032`, `D-0034`, `D-0043`, `D-0047`, `D-0049`, `D-0052`, `D-0061`.
 
 **Four points were put to the gate while this entry was drafted, and it confirmed all four as
@@ -12527,6 +12547,10 @@ against its scope.
 record, and `D-0062` rule 3's per-split approval stays in force until an entry supersedes it
 (`D-0064` section 6). This entry's rules do not depend on which of the two is in force: the draft is
 the same, and only the thing that authorises its admission differs.
+
+> **Annotation (2026-09-13, from D-0066).** The scope record exists as a decision: `D-0066`. A drafted
+> split is admitted under an approved scope that lists its agent types, and `D-0062` rule 3's per-split
+> approval is retired (`D-0066` rule 5.1). The paragraph above is unedited.
 
 ### Decision
 
@@ -13471,3 +13495,376 @@ On **2026-09-13**, on this machine, in the worker's uncommitted scratch director
   Rule 3(d) rests on one prototype's observation.
 - **The implementing change's screenshots not reaching "yes"** from the gate. Rule 1 is the bar, and
   a stack that cannot be designed up to it is re-priced, not excused.
+
+---
+
+## D-0066 — The scope record: one immutable row with a digest, approved by a row of its own and never by `human_decision`, spent once per act inside the act's own transaction, refused at one point that stops one line, and `D-0062` rule 3 and `D-0022` rule 9 restated for it
+
+**Status:** accepted (2026-09-13, rondo's human gate). Two points were put to the gate and it chose
+the recommended option on both, and confirmed section 5.1's reading of `D-0062` rule 2.1; the answers
+are recorded in section "What was put to the human gate, and its answer". The rest is decided inside
+`D-0064`. Refs `D-0009`, `D-0012`, `D-0020`,
+`D-0022`, `D-0023`, `D-0025`, `D-0030`, `D-0032`, `D-0036`, `D-0042`, `D-0046`, `D-0047`, `D-0049`,
+`D-0061`, `D-0062`, `D-0063`, `D-0064`, `D-0065`, `D-0059`.
+
+**This entry decides and does not build.** Nothing in `src/` changes with it. The earlier entries it
+annotates are listed in section "Annotations this entry adds".
+
+`D-0064` decided that delegation is a scope a person approves once, with fields a machine can test
+(rule 3.1), that every act inside it names it (rule 3.5), and that the organisation stops a line when
+the work leaves it (rule 3.3). It did not design the record, and left three moves to the entry that
+does: `D-0062` rule 3's per-split approval, `D-0022` rule 9's "one decision, one issuance", and
+`D-0047`'s spend for a scope (`D-0064` section 6). `D-0063` records that until this record exists
+nothing admits a drafted split. `D-0065` makes the review round budget and the severity threshold the
+scope's fields.
+
+This entry decides five things: the record's shape, how its approval is recorded, how an act inside
+it is recorded, the one point where the organisation stops, and how the two named rules are restated.
+It keeps `D-0064`'s two lines (bases; an irreversible act is approved by a person) and **adds no
+third**.
+
+### What was measured, and how
+
+At rondo `f2edf3f` on **2026-09-13**, by reading. Line numbers drift; re-measure the claim, not the
+number.
+
+- **rondo's store has no scope.** No table, record type or writer in `src/store` names one.
+- **The one approval record is contract-shaped.** `human_decision.approved` is a reference into
+  `composition.contract_digest`, enforced by the writer (`src/store/sqlite.ts:850-864`, `D-0049`
+  rule 2). A scope has no contract, so an approval of one cannot be a `human_decision` row without
+  that reference changing, and `D-0049`'s falsifier "a second writer of `human_decision`" names that
+  change as its own entry.
+- **Single use is a primary key.** `decision_consumption.decision_id` is the primary key
+  (`sqlite.ts:890-894`), written inside `reserve()`'s `BEGIN IMMEDIATE` (`sqlite.ts:1392`,
+  `D-0047` rule 1). A key on the decision alone allows one act per decision.
+- **What an act would be tested against is already on rows rondo writes.** The iteration row carries
+  `agent_type_digest` and `lap_cost_usd`, the latter nullable with null meaning "not read"
+  (`sqlite.ts:589-630`, `D-0046`). A plan carries `repository` and `workspaceRoot`
+  (`src/refrain/plan.ts:111`, `:166`). The request link (`D-0061` rule 4), the thread's `asks`
+  column (`D-0061` rule 2.7) and the split proposal kind (`D-0062`, `D-0063` rule 4) are decided and
+  not built; `PROPOSAL_KINDS` has no split (`src/store/records.ts:640`).
+- **The store has one content digest.** `contentDigest` is `sha256:` over `canonicalJson`
+  (`src/store/plan.ts:76`), which `plan_digest` already uses.
+- **The prototype's second pass** (the secretary's note `conversation-gap.md` section 5.2, v2 of the
+  conversation screen, 2026-09-13) names three gaps this entry meets: N-1 (no record the screen can
+  draw "decided without asking" from: the split, the agent type, the wording), N-3 (what "widen the
+  scope" does after a scope exit) and N-7 (no record of what a scope's budget has spent). It also
+  names N-2, taken under "What this does not do".
+
+### 1. The scope record
+
+1. **A scope is one row of a record kind of its own, `scope`, immutable and append-only, with no
+   status column** (`D-0022` rule 4's shape). Its columns: `scope_id`; `payload`, the fields below,
+   held verbatim; `scope_digest`, `contentDigest` over the payload; `supersedes_scope_id`, nullable;
+   `author_kind` (`operator` or `drafter`) and `author_id` (`D-0061` rule 2.3's voice column);
+   `bases`; `created_at_ms`.
+2. **The payload is `D-0064` rule 3.1's seven fields, each in a form an equality or a count can
+   test:**
+   1. **`requests`**: a non-empty list of message ids, each a message that opens a request
+      (`D-0061` rule 1). `D-0064` allows "named request threads, or a predicate over them"; **this
+      record takes the named form only.** A predicate is the form whose match can be undecidable,
+      and an undecidable match is outside (`D-0064` rule 3.3). A later entry may add one.
+   2. **`workspaces`**: a non-empty list of (`repository`, `workspaceRoot`) pairs, compared byte for
+      byte with the plan's two fields.
+   3. **`agent_types`**: a non-empty list of `agentTypeDigest` values, each a record rondo already
+      holds (`D-0062` rule 1.2). The digest covers `model_tier`, so the list bounds the tier and the
+      grants without a second field.
+   4. **`budgets`**: `laps` and `review_rounds` (integers; `review_rounds` defaults to 3),
+      `cost_usd` and `cost_reserve_usd` (numbers) and `expires_at_ms` (a clock). **All five are
+      required.** A scope with no expiry or no cost bound would be a standing grant, and `D-0064`
+      rule 3.1.4 lists the four budgets; `cost_reserve_usd` is the per-lap reserve the gate's first
+      answer adds (section 3.4).
+   5. **`severity_threshold`**: one of `D-0065` rule 2.2's four, default `major`.
+   6. **`outward_acts`**: a subset of a closed vocabulary, empty by default. It holds
+      `push_branch` and `open_pull_request` (`D-0064` O7). **`merge_default_branch` is refused by
+      the writer** until the entry that builds CI observation takes `D-0064` rule 3.4's transition.
+   7. **`irreversible_additions`**: names added to `D-0064` rule 3.4's list. The list itself is
+      not stored on the row, so **a scope cannot shorten it by construction**; the effective list is
+      rule 3.4's plus this field.
+3. **What is approved is the row, by `scope_digest`**, written before it is shown (`D-0022`
+   rule 18's order). Showing it writes a `presented` row in `operator_attention` with subject kind
+   `scope` (`D-0032` rule 10, `D-0036` rule 1, `D-0042`).
+4. **A scope is never edited. A change is a successor.** A new row with `supersedes_scope_id` set,
+   which needs its own approval (section 2), whether it widens or narrows: telling one from the other
+   is a comparison rondo does not need to make, because both go to the person. **Once a successor is
+   approved, the predecessor authorises no new act**; acts already recorded under it stay recorded
+   under it. Budgets are per approved row: a successor states its own, and the person approving it is
+   shown what the predecessor spent (section 3.4). This is how "widen the scope" after a scope exit is
+   carried out (the prototype's N-3): the drafter drafts a successor and it reaches the person as P1.
+   **Ending a scope early is a successor whose `requests` is the request being closed and whose `laps`
+   is 0**, and needs no verb of its own.
+5. **Who writes it.** A scope is drafted by the advisory (`D-0063` section 1: material, with bases
+   into the request thread, kept line 1) or written by an operator; `author_kind` says which. The
+   writer refuses a `drafter` row with no bases, as `D-0061` rule 2.6 does for a message. The
+   advisory still decides nothing: a drafted scope binds nothing until section 2's approval.
+
+### 2. The approval of a scope (P1)
+
+1. **A scope's approval is a row of its own, `scope_decision`, and never a `human_decision` row.**
+   Columns: `scope_decision_id`; `scope_id`; `scope_digest`; `outcome` (`approved` or `declined`,
+   `D-0032` rule 6's reason: a decline is a row and not an absence); `actor_id`, on the approver
+   allowlist (`D-0025` rule 4); `recorded_by`, the surface (`human_decision`'s two-column reason);
+   `decided_at_ms`. **Reusing `human_decision` is declined** because its `approved` references a
+   contract (measurement above), and changing that reference is `D-0049`'s falsifier, not this
+   entry's to fire.
+2. **The writer refuses a `scope_digest` that is not the named row's**, inside its transaction, in
+   `D-0049` rule 2's dangling-reference shape. This is the check that the approval names what was
+   shown.
+3. **One decision per scope row: `scope_id` is unique on `scope_decision`.** A person who declined
+   and changes their mind approves a new row with the same payload. This is `D-0047` rule 6's
+   refusal of two answers to one question, made structural because a scope row, unlike a proposal,
+   has nothing to choose among.
+4. **Approving is a person's act at that moment** (`D-0041` rule 1). On the command line it is a
+   typed verb, whose name the building change picks. **On the page it needs a navigation press**
+   (`D-0059` section 5a and its gate answer Q5b); this entry adds nothing to that and decides
+   nothing else about the page.
+
+### 3. What an act under a scope records
+
+1. **Every act taken under a scope writes one `scope_consumption` row, inside the act's own
+   transaction.** Columns: `scope_decision_id`; `act_kind`; `subject_id`; `proposal_id`, nullable;
+   `consumed_at_ms`. **The primary key is (`scope_decision_id`, `act_kind`, `subject_id`)**, so the
+   same act is never recorded twice against one approval, and the database refuses it rather than a
+   check (`decision_consumption`'s reason).
+2. **`act_kind` is a closed union the writer refuses outside of, and today it has one member that
+   can be written: `admission`.** `subject_id` is the iteration id, and the row is written in
+   `reserve()`'s `BEGIN IMMEDIATE` beside the iteration row, both or neither (`D-0047` rule 1). A
+   drafted split's plan and an in-scope `retry` (`D-0064` O4) are both admissions.
+   - `push_branch` and `open_pull_request` are **named and not writable** until the entry that
+     supersedes `D-0025` rule 6 lets the organisation publish (`D-0064` section 6). Until then
+     `publish` is typed by a person and writes no consumption.
+   - A gate answer (`D-0064` O6) and `revise` get their kinds from the entry that opens O6, since
+     both wait on continuo's delegated answer (`D-0064` rule 3.6).
+3. **`proposal_id` names the split proposal the admitted plan came from**, and is null for an
+   in-scope `retry`. **This is the record "decided without asking" is drawn from** (the prototype's
+   N-1): the split proposal row holds the plans, their agent types and the composed wording with
+   bases (`D-0063` rule 4); the consumption row says it was admitted under which approved scope; the
+   iteration row holds what ran. A split proposal under a scope is not approved per split, and it is
+   still a proposal row, because that is where a draft lives (`D-0022` rule 4). **No field is added to
+   a thread message**, so `D-0061` rule 3 and `D-0062` rule 1.1 stand.
+4. **Budgets are counted from rows, never kept as counters** (`D-0022` rule 8: one home per fact):
+   1. **laps**: the number of `admission` rows under the approval;
+   2. **cost**: the sum of `lap_cost_usd` over the iterations those rows name (`D-0046`). **A lap whose
+      cost is still null counts as `cost_reserve_usd`** until its cost is read, and then as what was
+      read; a lap whose cost is never read keeps its reserve (the gate's first answer). The admission
+      being tested counts its own reserve too;
+   3. **review rounds**: `D-0065` rule 4.1's count along the lineage, from `lap_reading` rows. No
+      consumption row is written for a reading, because the reading row already is one;
+   4. **expiry**: compared with the act's own clock. A lap admitted before expiry runs to its gate;
+      the expiry refuses the next act, and it stops nothing already running.
+5. **"Which scope authorised this" and "what was decided without asking under this scope" are
+   joins**: iteration to consumption to decision to scope, and consumption to proposal. With `D-0032`
+   rule 10's withheld rows this is the audit `D-0064` rule 3.5 names. No column is added to the
+   iteration row: the link has one home, the consumption row.
+
+### 4. The one point where the organisation stops
+
+1. **Before every act under a scope, `src/access` computes one verdict**: `inside`, `outside` with a
+   reason, or `undecidable` with a reason. It is a pure function of the scope row, the act and a
+   snapshot gathered for it, called from one place, and **anything but `inside` takes no act and
+   writes no consumption.** The advisory does not compute it (`D-0063` rule 1: testing a draft against
+   a scope is the surface's).
+2. **What it tests is `D-0064` rule 3.3's list, each as a field or a row:**
+   - the request is in `requests`; the plan's pair is in `workspaces`; the plan's `agentTypeDigest`
+     is in `agent_types`; an outward act is in `outward_acts`; an act on rule 3.4's list or
+     `irreversible_additions` is always `outside`;
+   - **the budgets, each for the acts it bounds**: `laps`, `cost_usd` and `expires_at_ms` for an
+     admission, spent (cost counted as section 3.4.2 says) or undecidable making it outside;
+     `review_rounds` only for an admission that redoes a lap, as the readings bullet below says. A
+     spent review budget never stops an act that carries a result onward whose latest reading
+     already clears the threshold (`D-0065` rule 4.3's exit);
+   - the approval is not superseded by an approved successor;
+   - **no message with `asks` set and no reply stands over the act's line** (`D-0061` rule 2.7). This
+     is how "a point in dispute or an unclear request comes up" becomes a row: the drafter's P2 or P3
+     is such a message. **Which line it stands over is read off its bases**, which are `D-0032`
+     rule 2's closed union and already include an `iteration_id`: a message with an `iteration_id`
+     basis stands over that iteration's lineage (`D-0030`); a message with none stands over the
+     request's acts that continue no lineage (section 4.4);
+   - the composed contract needs no grant beyond the agent type's (`D-0064` rule 3.2; cadenza's
+     `needs_approval` or a `contract_keys` widening is `outside`), **and, for an admission that
+     redoes a lap, no grant beyond the predecessor's contract** (`D-0064` O4: a redo runs under the
+     same grants, and one that needs a wider grant leaves the scope). The predecessor's
+     `contract_digest` is on its iteration row; its grants are read from the `composition` or
+     recomposed through the facade (`D-0047` rule 4's seam). A redo whose contract grants anything the
+     predecessor's did not, including by switching to another agent type the scope lists, is
+     `outside`, and one whose comparison cannot be made is `undecidable`;
+   - **the readings, tested per act and only for the lineage the act continues** (`D-0030`):
+     - **an admission that starts a lineage** (a drafted split's plan) has no reading to test, and
+       none is required;
+     - **an admission that redoes a lap** (an in-scope `retry`, and `revise` once O4 has it) reads
+       the predecessor's latest readings. A finding at or above `severity_threshold` is **inside**
+       while `review_rounds` remains, because the redo is the correction `D-0065` rule 5.3 requires,
+       and **outside** once it is spent (`D-0065` rule 4.3). A model reading that is `unavailable`
+       is outside (`D-0065` rule 5.4), since there is nothing to correct against;
+     - **an act that carries a lap's result onward** (a gate answer, `push_branch`,
+       `open_pull_request`; none writable today, section 3.2) is inside only when that lap's
+       deterministic reading does not refuse and its latest model reading is neither `unavailable`
+       nor holding a finding at or above `severity_threshold` (`D-0065` rule 5.7's reading).
+       Overriding a refusal stays a person's `--despite-review` (`D-0029` `V-3`).
+   "A ratified entry would have to change" has no field. It reaches the verdict only as a drafter's
+   P3 message, and so through the `asks` test.
+3. **The store's writer re-tests what lives in the store, inside the transaction that writes the
+   consumption**: the scope row's fields, the superseding approval, the budgets and the open `asks`.
+   This is the same verdict made again under the write lock, so that two admissions running at once
+   cannot both take the last lap (`D-0047` rule 1's reason). A refusal there is fail closed and
+   costs nothing (`D-0047` rule 7). The other tests (the agent type record, the grant, the readings)
+   are made before, from the snapshot, and their drift between the read and the write is the same
+   bounded race `D-0047` rule 6 accepts.
+4. **What stops is one line, and nothing else** (`D-0064` rule 3.3: "It stops **that line**; other
+   lines inside the scope carry on"). **A line is a lineage** (`D-0030`): a split's plan once
+   admitted, with the redos that continue it. On `outside` or `undecidable`, the surface writes one
+   drafter message with `asks` set into the request's thread, drafted by the advisory as `D-0064` P3:
+   the reason, the options (a successor scope under section 1.4, a change to the work, stopping), what
+   each gives up, and one recommendation (`D-0064` rule 4.1), with bases that include the scope row,
+   the refused test and **the `iteration_id` of the lineage's latest lap**. **That message is what
+   keeps the line stopped** (section 4.2's `asks` test), and the person's reply is what ends it.
+   Other lineages of the same request, and other requests, carry on. **No column is added for this**:
+   the link is a basis form `D-0032` rule 2 already has.
+   - **An act that continues no lineage** (a split plan's first admission) has no iteration to name.
+     Its refusal's message carries no `iteration_id` basis, and it holds back the request's other
+     not-yet-admitted plans until answered; lineages already running carry on. A P2 about the
+     request, which names no lap, does the same.
+   This is the gate's second answer.
+
+### 5. `D-0062` rule 3 and `D-0022` rule 9, restated
+
+1. **`D-0062` rule 3, restated: a drafted split's agent type is approved by the scope, not per
+   split.** A plan whose agent type the drafter named is admitted only by writing an `admission`
+   consumption under an approved scope whose `agent_types` holds that `agentTypeDigest`. **Outside a
+   scope, a drafted split is not admitted**: the per-split approval on route S is retired, which is
+   `D-0064` section 6's move. What follows:
+   - rule 3.1 (route S per split), 3.2 (no two options with one contract digest, refused when
+     written) and 3.3 (the spend-time `agentTypeDigest` check) are retired. They existed because the
+     approval named a contract digest, which does not cover the tier. **The scope names the agent
+     type's own digest, which does**, so the binding is direct;
+   - rule 3.4 (no column on `human_decision`) is moot, since no `human_decision` row is involved;
+   - rule 3.5 is carried in the form above: no drafted plan is admitted without spending something
+     that covered its agent type;
+   - rule 2.1's "until a person has approved it" is read as "until a person has approved a scope that
+     lists it". Rules 1, 2.2-2.4 and 4, and rule 1.4 (an operator names an agent type in a plan they
+     write, with no scope), stand as written.
+   `D-0062` is superseded as a whole, `D-0001`'s and `D-0063` rule 8's precedent: every rule not
+   restated here stays under `D-0062`'s heading and is cited as `D-0062` rule N.
+2. **`D-0022` rule 9, restated: no approval is spent twice for the same act, and the store's primary
+   keys are what guarantee it.** A `human_decision` authorises at most one issuance
+   (`decision_consumption`, primary key `decision_id`, unchanged). A `scope_decision` authorises many
+   acts, each recorded once (section 3.1's key). Neither decision row is ever updated. `D-0022` is
+   already superseded by `D-0063`, which carried rule 9 under `D-0022`'s heading and left its move to
+   this entry (`D-0063` rule 8); rule 9 is cited as `D-0066` rule 5.2 from acceptance.
+3. **`D-0047` is kept** for per-proposal approvals, as `D-0064` section 6 says. Section 3 is the
+   scope's spend "with its own entry, in rule 1's transactional shape".
+
+### What was put to the human gate, and its answer
+
+The points are kept as put, and the answer follows them.
+
+
+1. **An unread cost under a cost budget.** `lap_cost_usd` is null while a lap runs and when rondo
+   could not read it (`D-0046`), and the reviewer's cost is not read at all (`D-0065` rule 3.4).
+   In every option the reviewer's cost is not counted and the scope's screen says so, and a lap's
+   own cost is known only after it runs.
+   - **(c) A reserve per admission** (recommended). Under (c) `budgets` gains **`cost_reserve_usd`**,
+     a per-lap amount the person approves with the scope. An admission is inside when the cost read
+     so far, plus `cost_reserve_usd` for every lap under the approval whose cost is still null
+     (including the one being admitted), is within `cost_usd`; a lap's reserve is replaced by its read
+     cost once read. Laps run in parallel up to `D-0012` / `D-0023`'s bound, which `D-0064` section 5
+     lists as an empty role the organisation needs. *Loses:* the reserve is a number a person guesses,
+     not a measurement. A lap that costs more than its reserve overshoots by the difference, and
+     laps in flight together can overshoot by the sum of their differences, so `D-0064` rule 3.4's
+     "spending past a budget" is kept only as far as the reserve is right. A lap whose cost is never
+     read keeps its reserve for good.
+   - **(a) An admission is `undecidable` while any lap under the approval has a null cost, and the
+     lap that crosses the budget is let finish.** A lap's cost is not known before it runs, so "spending past
+     a budget" (`D-0064` rule 3.4) is read as admitting a lap once the budget is spent, which section
+     4 always refuses. *Loses:* under a cost budget, laps under one approval run one at a time, which
+     rules out the parallel workers `D-0064` section 5 names as needed, and the last lap may
+     overshoot by its own cost.
+   - **(b) An in-flight lap is counted as zero until read**, so laps run in parallel. *Loses:* the
+     overshoot is bounded only by the number running at once (`D-0023`), which is past a budget by
+     more than one lap and reads against `D-0064` rule 3.4's list.
+2. **What a scope exit stops.**
+   - **(b) The plan's lineage** (`D-0030`), as section 4.4 is written (recommended). It is `D-0064`
+     rule 3.3's "that line; other lines carry on", and the conversation screen's v2 (one line stops,
+     the others go on). The link to the lineage is an `iteration_id` basis on the stopping message,
+     a form `D-0032` rule 2 already has, so no column is needed. *Loses:* a split's other plans keep
+     running while one is put to the person, including when they share its cause; and a refused first
+     admission holds back the request's other unstarted plans (section 4.4).
+   - **(a) The request.** Every open question in the thread holds every act of the request. *Loses:*
+     it reads against `D-0064` rule 3.3, which stops one line and lets the others carry on, since a
+     request's healthy lineages would wait on an answer about one of them.
+
+**The gate's answer (2026-09-13):**
+
+1. **(c).** A reserve per admission, `cost_reserve_usd`, lets laps under one approval run in
+   parallel; section 1.2.4 and section 3.4.2 are written for it. What (c) was said to lose is accepted:
+   `D-0064` rule 3.4's "spending past a budget" holds only as far as the reserve is right.
+2. **(b).** What stops is the plan's lineage, as section 4.4 is written.
+
+The gate also confirmed section 5.1's reading of `D-0062` rule 2.1: "until a person has approved it"
+is "until a person has approved a scope that lists the agent type". Rounds of self-review before the
+gate refined section 4.2's per-act tests (the readings, each budget, and a redo's grants against its
+predecessor's); those are part of the text accepted.
+
+### What moving to this record gives up
+
+- **A per-split look at the agent type.** `D-0062` rule 3's approval let a person see each tier
+  choice; under a scope they see the list once and the choices in the report.
+- **An exact cost bound.** Under the reserve (the gate's first answer) laps in flight together can
+  overshoot by what each spends above its reserve.
+- **A predicate over requests** (section 1.2.1). A scope names its requests, so new work under a
+  standing area needs a successor and a P1 each time.
+
+### What this does not do
+
+- **It does not build** the three tables, the writers, the verdict function, the verb, or the split
+  proposal kind.
+- **It does not open O6 or O7.** No gate answer and no push is recorded under a scope until the
+  entries that `D-0064` rule 3.6 and section 6's `D-0025` row name.
+- **It does not record a P4 approval.** No act on `D-0064` rule 3.4's list is performed by rondo
+  today (`publish` pushes and opens a pull request; rondo never merges, `D-0010`), so there is no
+  act for such a row to name. The entry that lets rondo perform one owes it.
+- **It does not decide how the lap-end gate is shown when a split sends several** (the prototype's
+  N-2): whether they are bundled, and whether a gate may carry the organisation's recommendation.
+  A gate is continuo's and its answer is carried byte for byte (`D-0009`); `D-0064` rule 4 is about
+  P2 and P3. That belongs to the conversation screen's entry, or to an annotation on `D-0064`'s first
+  gate answer.
+- **It does not add an invariant beyond `D-0064`'s two lines.** No cap on a scope's size, no minimum
+  expiry, no second approver, no rule that a person read a report.
+
+### Residuals, with who decides
+
+| Residual | Why not here | Who decides |
+|---|---|---|
+| A predicate over requests in `requests` | Its match can be undecidable, and named requests cover the work rondo is given today | a later entry, if successors per request read as an obstruction |
+| `act_kind` values for push, pull request, gate answer, `revise` and merge | Each waits on an entry that lets the organisation perform the act | the entries `D-0064` section 6 names for `D-0025` rule 6, `D-0027` rule 2 and rule 3.6, and CI observation |
+| A record of a P4 approval | No such act is rondo's today | the entry that first lets rondo perform one |
+| The lap-end gate when a split sends several (prototype N-2) | A screen question about continuo's gate | the conversation screen's entry |
+| A voice for "lap X raised it, the organisation wrote the recommendation" (prototype N-4) | A `D-0061` rule 2.3 column, not a scope field | the entry that fills `D-0061` rule 6's mid-lap question |
+| The reviewer's cost against `cost_usd` | The codex login is not priced (`D-0065` rule 3.4) | not counted, by the gate's first answer; a later entry if it is ever priced |
+
+### Annotations this entry adds
+
+- **`D-0062`** gains `Status: superseded by D-0066` and a supersession note in `D-0063` rule 8's form.
+- **`D-0022`**'s supersession note gains a dated annotation: rule 9 is restated by `D-0066` rule 5.2.
+- **`D-0047` rule 4**'s `D-0062` annotation gains one: the `agentTypeDigest` spend check is retired
+  with `D-0062` rule 3.3, since no split is spent through `human_decision`.
+- **`D-0063`** section 1's "Until the scope record exists" paragraph gains one: the record is
+  `D-0066`, and `D-0062` rule 3's alternative is retired.
+
+### What would falsify it
+
+- **Scopes needing successors so often that each request gets its own P1**, because named requests
+  (section 1.2.1) or equality over workspaces is too narrow. Then a scope is a per-request approval
+  with more steps (`D-0064`'s first falsifier), and the predicate residual is the entry to write.
+- **Overshoots routinely past the reserve**, or reserves routinely set so high that they stop lines
+  that would have fit. The reading of an unread cost is what moves, or
+  `D-0046`'s read.
+- **Two in-scope acts recorded against one approval where one should have been refused**, found
+  afterwards: section 4.3's in-transaction re-test is then not covering what it claims.
+- **A drafted plan admitted with no `admission` row**, by any path. Section 5.1's carried rule 3.5 is
+  broken.
+- **Sibling lineages routinely going on to fail for the cause one lineage was stopped on**, under
+  the gate's second answer. The unit moves to the request.
+- **cadenza or continuo changing so that `agentTypeDigest` stops covering the tier or the grants.**
+  Section 1.2.3's single field no longer bounds both.
+- Any measurement in "What was measured" failing to reproduce at rondo `f2edf3f`.
