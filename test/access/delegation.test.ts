@@ -28,6 +28,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { expect, test } from "vitest";
 import {
+  allowedBashIn,
   DELEGATION_RECORD_SCHEMA,
   discard,
   writeDelegationRecord,
@@ -304,4 +305,39 @@ test("a plan naming a project the catalog does not have is rondo's defect, not a
     expect(outcome.reason).toContain("not-in-the-catalog");
     expect(outcome.reason).toContain("no run was admitted");
   }
+});
+
+test("the envelope reads back the subjects it was written with (rondo#88)", () => {
+  // **The writer and the reader in one case**, because the failure this guards
+  // is silent in both directions: a key renamed on one side alone turns "what
+  // this run was allowed to do" into "rondo cannot read this record" on the one
+  // screen a person answers a gate from.
+  const envelope = envelopeFor(LOCAL_LAYER, ["npm ci --ignore-scripts", "npm run:*"]);
+  try {
+    expect(allowedBashIn(envelope.text)).toEqual(["npm ci --ignore-scripts", "npm run:*"]);
+  } finally {
+    envelope.remove();
+  }
+});
+
+test("a declaration of nothing and a record rondo cannot read are different answers", () => {
+  const empty = envelopeFor(LOCAL_LAYER, []);
+  try {
+    // A run permitted to run no command at all: a fact, and not a failed read.
+    expect(allowedBashIn(empty.text)).toEqual([]);
+  } finally {
+    empty.remove();
+  }
+  // Null is every way the document is not one rondo wrote: not JSON, not an
+  // object, another producer's format, or a declaration that is not a list of
+  // subjects. Printed as "unknown", never as "allowed to run nothing".
+  expect(allowedBashIn("not json at all")).toBeNull();
+  expect(allowedBashIn("[]")).toBeNull();
+  expect(
+    allowedBashIn(JSON.stringify({ record_schema: "someone.else/1", allowed_bash: ["npm run:*"] })),
+  ).toBeNull();
+  expect(
+    allowedBashIn(JSON.stringify({ record_schema: DELEGATION_RECORD_SCHEMA, allowed_bash: [7] })),
+  ).toBeNull();
+  expect(allowedBashIn(JSON.stringify({ record_schema: DELEGATION_RECORD_SCHEMA }))).toBeNull();
 });

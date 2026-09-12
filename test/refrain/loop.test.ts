@@ -70,6 +70,7 @@ const recordWith = (status: IterationStatus, attempts = 1): IterationRecord => (
   gateOutcome: null,
   sessionId: null,
   sessionPath: null,
+  permissionDenials: null,
   reason: null,
   createdAtMs: 0,
   updatedAtMs: 0,

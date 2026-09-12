@@ -615,6 +615,7 @@ function lapPayload(overrides: Record<string, unknown> = {}): Record<string, unk
     endpoint_lease_failure: null,
     elapsed_deadline_at_ms: null,
     model: "claude-opus-5",
+    permission_denials: [],
     ...overrides,
   };
 }
@@ -644,8 +645,71 @@ describe("lap perform, the verb whose document is the only record of a lap", () 
         elapsedDeadlineAtMs: null,
         // The twelfth field, added under the same `/1` by `continuo D-0099`.
         model: "claude-opus-5",
+        // The thirteenth, added by `continuo D-1110` and read as text: `[]` is
+        // continuo saying the fence refused nothing.
+        permissionDenials: "[]",
       },
     });
+  });
+
+  test("no refusal and no reading of refusals are two different answers", () => {
+    // `continuo D-1110`'s whole argument for the key being nullable, held here
+    // as the property rondo's own column then carries: `[]` is "nothing was
+    // refused", `null` is "the backend cannot say", and an absent key is a
+    // document rondo will not read at all.
+    expect(
+      decode(LAP_PERFORM, output({ stdout: success(LAP_PERFORM.schema, lapPayload()) })),
+    ).toMatchObject({ kind: "answered", payload: { permissionDenials: "[]" } });
+
+    expect(
+      decode(
+        LAP_PERFORM,
+        output({ stdout: success(LAP_PERFORM.schema, lapPayload({ permission_denials: null })) }),
+      ),
+    ).toMatchObject({ kind: "answered", payload: { permissionDenials: "null" } });
+
+    const absent = lapPayload();
+    delete absent.permission_denials;
+    expect(
+      decode(LAP_PERFORM, output({ stdout: success(LAP_PERFORM.schema, absent) })),
+    ).toMatchObject({ kind: "invokerDefect" });
+  });
+
+  test("a refusal is carried with its tool name and the call's own input", () => {
+    const result = decode(
+      LAP_PERFORM,
+      output({
+        stdout: success(
+          LAP_PERFORM.schema,
+          lapPayload({
+            permission_denials: [
+              { tool_name: "Bash", tool_input: { command: "npm test" }, extra: "dropped" },
+            ],
+          }),
+        ),
+      }),
+    );
+    expect(result).toMatchObject({
+      kind: "answered",
+      payload: {
+        permissionDenials: '[{"tool_name":"Bash","tool_input":{"command":"npm test"}}]',
+      },
+    });
+
+    // A denial with no tool name is not a refusal rondo can put in front of a
+    // person, so the document is one it declines to read rather than one it
+    // renders half of.
+    expect(
+      decode(
+        LAP_PERFORM,
+        output({
+          stdout: success(
+            LAP_PERFORM.schema,
+            lapPayload({ permission_denials: [{ tool_input: {} }] }),
+          ),
+        }),
+      ),
+    ).toMatchObject({ kind: "invokerDefect" });
   });
 
   test("the model is always present, and null is the fact that nobody chose one", () => {
@@ -1010,6 +1074,15 @@ describe("the verbs that answer a gate and settle a run", () => {
             updated_at_ms: 1_757_000_000_001,
           },
           lease: null,
+          delegation_record: {
+            record_schema: "rondo.delegation-record/1",
+            envelope: '{"allowed_bash":["npm run:*"]}',
+            envelope_digest: "aa",
+            digest_algorithm: "sha256",
+            canonicalization: "none",
+            recorded_at_ms: 1_757_000_000_000,
+            digest_verified: true,
+          },
           sessions: [],
           gates: [],
           events: [],
@@ -1020,8 +1093,45 @@ describe("the verbs that answer a gate and settle a run", () => {
     expect(result).toEqual({
       kind: "answered",
       db: "/tmp/cp.sqlite3",
-      payload: { runId: "rondo-iter-2", status: "running" },
+      payload: {
+        runId: "rondo-iter-2",
+        status: "running",
+        // The sixth table is read now (#88): it is the only durable answer to
+        // what the run was permitted to do, and the digest beside it is
+        // continuo's own recomputation rather than rondo's claim.
+        delegationRecord: {
+          recordSchema: "rondo.delegation-record/1",
+          envelope: '{"allowed_bash":["npm run:*"]}',
+          envelopeDigest: "aa",
+          digestAlgorithm: "sha256",
+          digestVerified: true,
+        },
+      },
     });
+  });
+
+  test("a run with no delegation record reads as null rather than as an empty one", () => {
+    const result = decode(
+      RUN_SHOW,
+      output({
+        stdout: success(RUN_SHOW.schema, {
+          run: {
+            run_id: "rondo-iter-2",
+            status: "running",
+            writer_epoch: 1,
+            created_at_ms: 1_757_000_000_000,
+            updated_at_ms: 1_757_000_000_001,
+          },
+          lease: null,
+          delegation_record: null,
+          sessions: [],
+          gates: [],
+          events: [],
+          outbox: [],
+        }),
+      }),
+    );
+    expect(result).toMatchObject({ kind: "answered", payload: { delegationRecord: null } });
   });
 
   test("an unknown run is a refusal rather than a defect, whatever class it carries", () => {
