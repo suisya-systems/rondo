@@ -410,6 +410,29 @@ export interface RunAdmitted {
 export interface RunObserved {
   readonly runId: string;
   readonly status: string;
+  /**
+   * The envelope the run was admitted under, or null when continuo holds none.
+   *
+   * Read now because it is the only durable answer to "what was this run
+   * permitted to do" (D-0040): rondo composes the envelope, hands it over and
+   * discards it, so the copy that survives is continuo's row and reading it back
+   * is the only way rondo can say what was recorded rather than what it sent.
+   * Null is continuo saying the row has no record, which is a different fact
+   * from an empty one.
+   */
+  readonly delegationRecord: DelegationRecordObserved | null;
+}
+
+/** One stored envelope, as `run show` reports it. */
+export interface DelegationRecordObserved {
+  readonly recordSchema: string;
+  /** The envelope's bytes, verbatim: continuo carries the column's own text. */
+  readonly envelope: string;
+  readonly envelopeDigest: string;
+  /** What the digest was taken with; a bare hash says nothing on its own. */
+  readonly digestAlgorithm: string;
+  /** continuo's own recomputation of the digest over those bytes, not rondo's. */
+  readonly digestVerified: boolean;
 }
 
 /** One row of `gate list`. */
@@ -659,6 +682,23 @@ export interface LapPerformed {
    * say.
    */
   readonly model: string | null;
+  /**
+   * What the worker's fence refused, as the JSON text continuo sent.
+   *
+   * **Text rather than a decoded list, and three states rather than two.**
+   * `continuo D-1110` says `null` is the backend declining to say and `[]` is
+   * the backend saying nothing was refused, and that a host collapsing the two
+   * reads "we cannot tell whether the verification ran" as "nothing was
+   * refused". So this field is `"null"` or a JSON array's text, never a
+   * JavaScript null -- an absent key is still a mismatch, and a *caller* holding
+   * no text at all is a caller that never read a lap, which is the third fact.
+   *
+   * It is text because the value's durable home is a rondo column and its
+   * reader is a screen: decoding it into a type here and re-encoding it in the
+   * store would be two renderings of one document. What is validated on the way
+   * through is the two keys rondo reads; see {@link denialsText}.
+   */
+  readonly permissionDenials: string;
 }
 
 // --- the verb contracts -----------------------------------------------------
@@ -710,9 +750,20 @@ export const RUN_SHOW: VerbContract<RunObserved> = {
   // {@link RunObserved}.
   read: (payload) => {
     const row = requireObject(payload, "run");
+    const record = nullableObject(payload, "delegation_record");
     return {
       runId: requireString(row, "run_id"),
       status: requireString(row, "status"),
+      delegationRecord:
+        record === null
+          ? null
+          : {
+              recordSchema: requireString(record, "record_schema"),
+              envelope: requireString(record, "envelope"),
+              envelopeDigest: requireString(record, "envelope_digest"),
+              digestAlgorithm: requireString(record, "digest_algorithm"),
+              digestVerified: requireBoolean(record, "digest_verified"),
+            },
     };
   },
 };
@@ -857,8 +908,34 @@ export const LAP_PERFORM: VerbContract<LapPerformed> = {
     endpointLeaseFailure: leaseFailureMessage(payload),
     elapsedDeadlineAtMs: nullableNumber(payload, "elapsed_deadline_at_ms"),
     model: nullableString(payload, "model"),
+    permissionDenials: denialsText(payload),
   }),
 };
+
+/**
+ * `permission_denials`, kept as the text of what rondo read.
+ *
+ * The two keys below are the whole of what a reader acts on, and requiring them
+ * is what makes this a reading rather than a pass-through: a document whose
+ * denials are not objects with a tool name is one rondo cannot put in front of a
+ * person as "what the fence refused". `tool_input` is carried whole and
+ * unvalidated because it is the call's own input and its shape is the tool's.
+ */
+function denialsText(payload: JsonObject): string {
+  const value = fieldValue(payload, "permission_denials");
+  if (value === undefined) {
+    throw new PayloadMismatch("'permission_denials' is absent, and an array or null was required");
+  }
+  if (value === null) {
+    return "null";
+  }
+  return JSON.stringify(
+    requireObjectArray(payload, "permission_denials").map((denial) => ({
+      tool_name: requireString(denial, "tool_name"),
+      tool_input: requireObject(denial, "tool_input"),
+    })),
+  );
+}
 
 /**
  * `endpoint_lease_failure`, reduced to the message inside it.

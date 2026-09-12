@@ -300,6 +300,9 @@ export function conductorPorts(
         // run ids is.
         model: payload.model,
         requestedModel: outcome.model,
+        // continuo's own text, unread here: what it says is a person's to read
+        // and the loop's only job is to get it onto the row (#88).
+        permissionDenials: payload.permissionDenials,
       }));
     },
     showGate: async (plan, gateId): Promise<EffectOutcome<GateObservation>> =>

@@ -125,6 +125,14 @@ export interface LapPerformance {
    * as it compares the run id it planned against the run id the lap names.
    */
   readonly requestedModel: string | null;
+  /**
+   * What the worker's fence refused, as the text continuo sent (#88).
+   *
+   * Carried through the loop untouched and written to the row at the suspend:
+   * the conductor has nothing to decide about it, and the screen that shows it
+   * to a person is what needs it to be on the row rather than only in a log.
+   */
+  readonly permissionDenials: string;
 }
 
 /** What `gate show` hands back. `outcome` is null exactly while the gate is open. */

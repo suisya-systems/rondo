@@ -78,6 +78,7 @@ import {
 } from "./advisory.js";
 import { abandon, admit, conductorPorts, resume } from "./conductor.js";
 import { asciiEscape, consoleSeams, legibleAsciiEscape, relayUpstream } from "./console.js";
+import { allowedBashIn } from "./delegation.js";
 import {
   inspectLapWork,
   inspectPushTarget,
@@ -1991,8 +1992,12 @@ async function commandDecide(
  * refusal here, because a machine standing between a person and their own gate
  * answer is what D-0029 rule 3 refuses on the clock argument.
  */
-async function sayLapMaterial(store: IterationStore, record: IterationRecord): Promise<void> {
-  for (const line of await lapMaterialLines(store, record)) {
+async function sayLapMaterial(
+  store: IterationStore,
+  record: IterationRecord,
+  continuo: VerifiedContinuo | null,
+): Promise<void> {
+  for (const line of await lapMaterialLines(store, record, continuo)) {
     say(line);
   }
 }
@@ -2011,6 +2016,7 @@ async function sayLapMaterial(store: IterationStore, record: IterationRecord): P
 export async function lapMaterialLines(
   store: IterationStore,
   record: IterationRecord,
+  continuo: VerifiedContinuo | null,
 ): Promise<readonly string[]> {
   const workspace = planField(record, "workspace");
   const topicBranch = planField(record, "topic_branch");
@@ -2030,6 +2036,7 @@ export async function lapMaterialLines(
   } else {
     lines.push(...workLines(await inspectLapWork(range)));
   }
+  lines.push(...(await fenceLines(continuo, record)));
   const readings = await store.readingsFor(record.id);
   const latest = readings.at(-1);
   if (latest === undefined) {
@@ -2041,6 +2048,162 @@ export async function lapMaterialLines(
   }
   lines.push(...reviewLines(latest));
   return lines;
+}
+
+/**
+ * What the lap was allowed to run, and what its fence refused (rondo#88).
+ *
+ * **Two facts the operator already owned and could not see**, printed next to
+ * each other because neither answers "was this actually verified?" alone: a
+ * refusal only means something against the allowance it was measured by, and an
+ * allowance only means something beside what the run then hit. They go here --
+ * in the block `rondo answer` and the page both render -- rather than into
+ * `explain` or a verb of their own, because this is the one screen a person
+ * reads immediately before pressing approve, and it is already the screen whose
+ * purpose is to be the half of the gate the graded party did not write.
+ *
+ * **Every line says what rondo read and where from** (D-0032). The allowance is
+ * not the plan on rondo's own row -- that is what rondo asked for -- but the
+ * envelope continuo stored at admission, read back through `run show` beside the
+ * digest continuo recomputed over it (D-0040). The refusals are continuo's own
+ * `permission_denials`, carried to the row at the suspend and printed from it.
+ *
+ * **"None" and "not known" are never the same sentence**, on both halves. That
+ * is `continuo D-1110`'s whole argument for the key being nullable, and the
+ * three states of the column are spelled out on `IterationRecord`.
+ *
+ * ponytail: one more `run show` per redraw, on top of the `gate show` that
+ * `pageMaterial` already pays. Same ceiling and same upgrade as that one -- a
+ * rondo-side column written at admission -- not taken now because the whole
+ * value of this half is that the bytes come back from continuo.
+ */
+async function fenceLines(
+  continuo: VerifiedContinuo | null,
+  record: IterationRecord,
+): Promise<readonly string[]> {
+  const lines = [...(await allowanceLines(continuo, record)), ...denialLines(record)];
+  return lines.map((line, index) => (index === 0 ? `fence   ${line}` : `        ${line}`));
+}
+
+/** What the run was admitted as permitted to run, read back from continuo. */
+async function allowanceLines(
+  continuo: VerifiedContinuo | null,
+  record: IterationRecord,
+): Promise<readonly string[]> {
+  if (record.runId === null) {
+    return ["the row names no run, so there is no delegation record to read an allowance from."];
+  }
+  if (continuo === null) {
+    return [
+      `continuo is not usable here, so what run ${record.runId} was allowed to run was not`,
+      "read. That is unknown rather than nothing.",
+    ];
+  }
+  const observed = await showRun(continuo, { db: planField(record, "db"), runId: record.runId });
+  if (observed.kind !== "answered") {
+    return [
+      `the delegation record for run ${record.runId} could not be read (${observed.kind}), so`,
+      "what the lap was allowed to run is unknown rather than nothing.",
+    ];
+  }
+  const stored = observed.payload.delegationRecord;
+  if (stored === null) {
+    return [
+      `continuo holds no delegation record for run ${record.runId}, so what it was allowed to`,
+      "run was never recorded.",
+    ];
+  }
+  const subjects = allowedBashIn(stored.envelope);
+  if (subjects === null) {
+    return [
+      `the delegation record for run ${record.runId} is '${stored.recordSchema}', which rondo`,
+      "cannot read, so what the lap was allowed to run is unknown rather than nothing.",
+    ];
+  }
+  const provenance = [
+    `read from run ${record.runId}'s delegation record at continuo (${stored.recordSchema}).`,
+    `envelope ${stored.digestAlgorithm} ${stored.envelopeDigest}`,
+    "continuo re-checked that digest against the stored bytes: " +
+      `${stored.digestVerified ? "it matches" : "IT DOES NOT MATCH"}.`,
+    // **The declaration is not the fence, and saying so is the whole point of
+    // the screen.** continuo renders the role's own template into the same
+    // `permissions.allow` -- on a worker that is six `git` specs rondo never
+    // declared and cannot see from here. A list headed "allowed to run" would
+    // have been rondo asserting a fence it did not read, which is the habit
+    // this block exists to break.
+    "This is the run's own declaration, not the whole fence: continuo renders the",
+    "role's template into the same allow list, and rondo does not read that here.",
+  ];
+  if (subjects.length === 0) {
+    return ["this run declared no Bash subject of its own.", ...provenance];
+  }
+  return ["declared for this run:", ...subjects.map((subject) => `  ${subject}`), ...provenance];
+}
+
+/**
+ * What the fence refused, printed from the row rather than counted.
+ *
+ * Listed and not summarised for `workLines`'s reason: a count tells a person
+ * that something was refused and leaves them where the worker's own prose left
+ * them. The cap is `LIST_LIMIT` and says how many it hid. A call's input is the
+ * worker's own text and may carry newlines, so it is rendered as a JSON string
+ * -- on a line rondo composed, an embedded newline must not be ambiguous with
+ * the line around it (rondo#68).
+ */
+function denialLines(record: IterationRecord): readonly string[] {
+  const text = record.permissionDenials;
+  if (text === null) {
+    return ["what the fence refused was not recorded for this iteration, so it is unknown."];
+  }
+  if (text === "null") {
+    return ["continuo could not say what the fence refused, so it is unknown rather than none."];
+  }
+  let denials: unknown;
+  try {
+    denials = JSON.parse(text);
+  } catch {
+    denials = null;
+  }
+  if (!Array.isArray(denials)) {
+    return ["the recorded refusals will not decode, so what the fence refused is unknown."];
+  }
+  if (denials.length === 0) {
+    return ["continuo reported that the fence refused nothing."];
+  }
+  const hidden = denials.length - LIST_LIMIT;
+  return [
+    `the fence refused ${String(denials.length)} call(s), as continuo reported them:`,
+    ...denials.slice(0, LIST_LIMIT).map((denial) => `  ${denialLine(denial)}`),
+    ...(hidden > 0 ? [`  ...and ${String(hidden)} more`] : []),
+  ];
+}
+
+/** One refused call: the tool, and the input a reader acts on. */
+function denialLine(denial: unknown): string {
+  if (typeof denial !== "object" || denial === null || Array.isArray(denial)) {
+    return "(a refusal rondo cannot read)";
+  }
+  const fields = denial as Readonly<Record<string, unknown>>;
+  const name = fields["tool_name"];
+  const input = fields["tool_input"];
+  const command =
+    typeof input === "object" && input !== null && !Array.isArray(input)
+      ? (input as Readonly<Record<string, unknown>>)["command"]
+      : undefined;
+  return (
+    `${typeof name === "string" ? name : "(unnamed tool)"}  ` +
+    capped(JSON.stringify(typeof command === "string" ? command : input))
+  );
+}
+
+/** How much of a worker's own text one line of the gate screen carries. */
+const DENIAL_TEXT_LIMIT = 200;
+
+/** Say that a value was cut rather than trailing off, as `workLines` does. */
+function capped(text: string): string {
+  return text.length <= DENIAL_TEXT_LIMIT
+    ? text
+    : `${text.slice(0, DENIAL_TEXT_LIMIT)}... (${String(text.length)} chars)`;
 }
 
 /**
@@ -2319,7 +2482,7 @@ async function commandAnswer(
     // **`why` is the worker's account of its own work; what follows is not.**
     // The two are printed adjacently on purpose, so that a person can see which
     // of them is the graded party speaking (D-0029 rule 2).
-    await sayLapMaterial(store, record);
+    await sayLapMaterial(store, record, continuo);
     say("");
     say("to answer:");
     // **The id is always printed, not only when several are open.** A command
@@ -2353,7 +2516,7 @@ async function commandAnswer(
   // answer is already typed and `walkGate` below takes no further input, so
   // this cannot inform the decision the way the reading path's copy does. What
   // it does is leave the person holding a record of what they approved over.
-  await sayLapMaterial(store, record);
+  await sayLapMaterial(store, record, continuo);
   // **The claim is written before the gate is walked, and a write that fails
   // stops the answer** -- `D-0042` rule 3's order, for its reason: a record
   // written after the act it describes is one an operator can act past. It is
@@ -2460,7 +2623,14 @@ async function pageMaterial(
       lines.push(`why     the gate question could not be read (${observed.kind})`);
     }
   }
-  return [...lines, ...(await lapMaterialLines(store, record))];
+  return [
+    ...lines,
+    ...(await lapMaterialLines(
+      store,
+      record,
+      startup.kind === "refused" ? null : startup.continuo,
+    )),
+  ];
 }
 
 /**

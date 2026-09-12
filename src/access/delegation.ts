@@ -177,6 +177,42 @@ export function writeDelegationRecord(plan: AdmittedPlan): DelegationRecordOutco
 }
 
 /**
+ * The Bash subjects an envelope declares, or null when it is not one rondo can
+ * read (#88).
+ *
+ * **The reading half of the format this module writes**, and it lives here for
+ * the reason the writing half does: `rondo.delegation-record/1` is rondo's
+ * document, so one module owns both spellings of its keys and a reader
+ * elsewhere would be a second definition of the format.
+ *
+ * Null is "this is not a record rondo can read" -- absent, wrong schema,
+ * malformed, or an `allowed_bash` that is not a list of strings -- and it is
+ * kept apart from `[]`, which is a record that declares a run may run nothing.
+ * A caller that folded the two together would print "allowed to run nothing"
+ * over a document it had failed to parse.
+ */
+export function allowedBashIn(envelope: string): readonly string[] | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(envelope);
+  } catch {
+    return null;
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    return null;
+  }
+  const fields = parsed as Record<string, unknown>;
+  if (fields["record_schema"] !== DELEGATION_RECORD_SCHEMA) {
+    return null;
+  }
+  const subjects = fields["allowed_bash"];
+  if (!Array.isArray(subjects) || subjects.some((subject) => typeof subject !== "string")) {
+    return null;
+  }
+  return subjects as readonly string[];
+}
+
+/**
  * Remove a written envelope, having admitted the run or having failed to.
  *
  * **Silent on failure, and that is the honest behaviour rather than a

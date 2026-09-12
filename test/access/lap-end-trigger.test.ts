@@ -162,6 +162,10 @@ const LAP_OPENED_A_GATE: EffectOutcome<LapPerformance> = {
     elapsedDeadlineAtMs: null,
     model: "claude-fixture",
     requestedModel: "claude-fixture",
+    // Nothing here is about the fence, so the lap says what a clean one says:
+    // `[]` is continuo reporting that nothing was refused, which is a fact and
+    // not the absence of one (#88).
+    permissionDenials: "[]",
   },
 };
 
