@@ -85,6 +85,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0045 | What the record may say about a verification rondo did not watch: the operator's claim held as a claim, no column for a result, a silence that reads as a silence, and a row `publish` may print and may not be satisfied by | accepted |
 | D-0046 | Where rondo reads what a lap cost: off the lap's own transcript, three columns rather than one, and an unread cost that is not a zero | accepted |
 | D-0047 | Where an approval is spent: inside the admission's own transaction, with the contract recomposed from today's material, and by a verb of its own | accepted |
+| D-0048 | Naming a running lap's transcript: one identifier read off a live run, three liveness-shaped fields refused by name, and a directory printed where the hole already is | accepted |
 
 ---
 
@@ -8394,3 +8395,147 @@ At `210a98e` on 2026-09-12, by reading the tree and running it.
 - **`D-0043` rule 8** gains one: its third refusal, *"`D-0022` rule 17's comparison of the approved
   digest against the classification"*, is built here, so the rule's "three refusals, all of them
   already decided" is now three refusals all of them implemented.
+
+---
+
+## D-0048 — Naming a running lap's transcript: one identifier read off a live run, three liveness-shaped fields refused by name, and a directory printed where the hole already is
+
+**Status:** accepted (2026-09-12, rondo's human gate). Refs rondo#79, rondo#78, `D-0022` rule 3,
+`D-0036` rule 5, `D-0040`, `D-0046`, `D-0032` rule 3, `D-0038` rule 3.
+
+rondo#79 measures the step that is still manual: reaching a running lap's transcript means `ls`-ing a
+state root rondo never prints and hand-parsing `events-000.jsonl`. rondo#78 put the workspace on the
+in-flight row, which is a different directory, and left the session half of that row saying *"(no
+session recorded on this row yet)"* (`src/access/inbox.ts:263`) -- because `performLap` commits
+`performing` with no session fields and writes `sessionId` / `sessionPath` only when the row moves to
+`awaiting_human` or a terminal status. So for the whole window in which the question is asked,
+**rondo's own record has no session to name.** The issue files this as a decision rather than a
+patch because closing it widens what rondo reads about a run *in flight*, which is `D-0022` rule 3's
+allowance and the thing `D-0036` rule 5 declined for a different distinction.
+
+**This is a decision-only entry.** Nothing under `src/` moves in the diff that carries it.
+
+### What was measured, and where
+
+- **The identifier exists in continuo from the start of the lap, not the end.** `prepareBinding`
+  inserts the session row with its `session_id` and `bound_at_ms` *before* the spawn, and
+  `markSpawned` / `confirmIdentity` only advance `binding_phase` on that same row
+  (`src/control_plane/session_binding.ts`). `RUN_SHOW`'s `sessions` entries carry `session_id`,
+  `provider`, `binding_phase`, `observation`, `provider_state`, `observation_reason`, `bound_at_ms`
+  and `released_at_ms` (`src/control_plane/run_cli.ts`, `showPayload`).
+- **rondo's decoder reads none of them.** `RUN_SHOW` takes `run_id`, `status` and -- since `D-0040`,
+  shipped as rondo#122 -- `delegation_record`, and ignores `lease`, `sessions`, `gates`, `events`
+  and `outbox` (`src/continuo/protocol.ts`).
+- **continuo mints the session id and there is no way to pass one in.** `lap perform` has no
+  `--session-id` flag (`src/lap/cli.ts`, the `addRequired` / `addOptional` block), and reports the
+  identity only in its terminal payload. rondo cannot know the value earlier by choosing it.
+- **rondo already composes the transcript's directory.** `<state root>/<run id>/<session id>` is
+  `D-0046` rule 2's path, implemented in `src/continuo/transcript.ts`, out of two values rondo itself
+  passed on the command line plus the session id. The state root is on the plan (`state_root`,
+  `src/refrain/plan.ts`), so the row already carries two thirds of the answer.
+- **Two of those session fields were already measured as unable to answer liveness** and written up
+  in [`docs/design/refusal-session-lock.md`](docs/design/refusal-session-lock.md) section 5:
+  `released_at_ms` is never written by anything (`releaseBinding` is exported and has no caller), and
+  `provider_state` is a snapshot taken when the identity was confirmed. **A stopped session and a
+  running one read identically.**
+
+**One measurement caveat, stated rather than smoothed over.** The `sessions` payload shape above was
+read on a continuo checkout at `38c667b` (2026-09-06), not at the pin `fcf86eb` this repository
+drives, because the pinned object was not available locally on 2026-09-12. `D-0046`'s falsifier list
+records that continuo's layout had *already moved on main* by that date, so the field names are the
+first thing the implementing change re-reads at the pin. Nothing in the rules below depends on any
+field other than `session_id` and `bound_at_ms`.
+
+### Decision
+
+1. **rondo may read `sessions` from `RUN_SHOW` for a run in flight, and what it takes is
+   `session_id` and `bound_at_ms` and nothing else.** This is the second widening of that decoder
+   under `D-0022` rule 3, after `delegation_record`.
+
+2. **The precedent does not carry this on its own, and what does is stated.** `D-0040`'s read-back
+   reads a fact **rondo itself composed**, off a row that is **already settled**, to say what was
+   recorded rather than what was sent; none of those three properties holds here. The session id is
+   continuo's own fact, read while the run is still moving. What justifies it instead is that during
+   `performing` **continuo's row is the only copy of this identifier in the system** -- rondo's
+   column is null by construction, and no flag lets rondo supply one -- and that the operator's
+   action it changes is not a nuance but the difference between naming a directory and listing one.
+
+3. **Three fields of those same rows are refused by name: `provider_state`, `observation` and
+   `released_at_ms`.** The refusal is measured rather than cautious: they cannot distinguish a live
+   session from a stopped one, so reading them would let a screen answer "is it wedged?" from columns
+   that read identically in both cases. **rondo names where the lap is writing; it does not claim the
+   lap is alive.** `D-0036` rule 5's refusal of the third wait distinction stands untouched, and this
+   entry does not re-open it: what is read here is an *identifier*, not a *state*.
+
+4. **The answer is read at render time and never stored.** The `session_id` column keeps its single
+   writer at the suspend. Writing a live read into it would give one fact two homes (`D-0022` rule 8)
+   and the copy would be stale in exactly the window it is read in; it would also let a crash leave a
+   row claiming a session for a lap that never reached its suspend. Re-gathered rather than
+   remembered is `D-0038` rule 3's habit, used for a third purpose.
+
+5. **What the operator is shown is the transcript's directory, not the session id alone.** A session
+   id still leaves the layout to be known, which is the workaround the issue's falsifier is about, so
+   the line prints `<state root>/<run id>/<session id>`. **It is composed by
+   `src/continuo/transcript.ts`, the module that already owns that layout for `D-0046` rule 2**, and
+   exported from there for the screen to print: a second `join` elsewhere is the copy most likely to
+   drift from continuo's directory rules. **Composing the path is not reading it.** `D-0046` rule 4's
+   grant does not widen, nothing tails a running transcript, and the file is the operator's to open.
+
+6. **No new verb: the line goes on the in-flight row that already has the hole.** `rondo run show`
+   is declined. The question "is it progressing?" is asked while scanning `inbox`, and a second
+   command to run afterwards is the workaround with a nicer name; `showRun` stays internal. The
+   continuo call is made **once per row, only for rows that are `performing` with a null
+   `session_id`** -- every other row already carries the identifier -- so the cost is bounded by the
+   capacity ledger (`D-0023`) and not by the size of the history.
+
+7. **The read enters the render as part of the snapshot, and `inbox.ts` stays pure.** `gatherInbox`'s
+   ports gain one; the arrow to continuo is the composition root's, which is `D-0022` rule 3's own
+   shape (*"admitted continuo `--json` verbs ... handed over in the snapshot"*).
+
+8. **A continuo that cannot be reached, or a run that will not read, prints as unknown and never as
+   nothing** -- the words `explain` already uses for the delegation record. And where a run carries
+   several sessions (a respawn or a resume), **the newest by `bound_at_ms` is named and the count is
+   said**; nothing filters on `released_at_ms`, because a filter on a column nothing writes is a
+   filter that silently does nothing.
+
+### What this does not do
+
+- **It does not answer "progressing or wedged".** That is `D-0036` rule 5's third distinction and it
+  stays refused. This entry shortens the path to the evidence; the reading is still a person's.
+- **It does not read a running transcript.** No tail, no progress line, no partial cost: `D-0046`
+  rule 1 writes the cost once, at the suspend, and nothing here moves that.
+- **It does not add a column, and it does not move the `session_id` writer.**
+- **It does not move the pin**, and it takes no position on continuo reporting session identity
+  earlier.
+
+### What would falsify it
+
+- **The issue's own falsifier, accepted as written**: *if reading a running lap's transcript still
+  requires listing a directory rondo never named, this is not answered.* It is satisfied by rule 5
+  and **not** by rule 1 -- widening the decoder while printing only a session id would leave the
+  workaround standing with one step instead of two, and would count as this entry failing.
+- **`sessions` not carrying `session_id` at the pin `fcf86eb`.** The shape above was read at
+  `38c667b`; if the pinned build differs, rule 1 names a field that is not there and the entry needs
+  re-measuring before it needs re-arguing.
+- **continuo making a session's liveness readable** -- writing `released_at_ms`, or reporting a
+  process state that is not a stale snapshot. Rule 3's refusal is then refusing a fact that exists,
+  and `D-0036` rule 5's third distinction is live again with it.
+- **Operators reading the printed directory as proof the lap is alive.** Rule 3 keeps rondo from
+  claiming it, but a path on a screen is an implicit claim of its own; if that misreading happens,
+  what needs fixing is the line's wording rather than the read.
+- **continuo accepting a session id on `lap perform`, or reporting one before the lap ends.** Rule 1's
+  read goes away entirely and rondo writes the identifier on the row at admission -- the better shape,
+  and the one to prefer, exactly as `D-0046`'s first falsifier prefers a field over a path.
+- **The per-row continuo call becoming visible on `inbox`.** Rule 6's bound is the capacity ledger; if
+  the concurrent bound is raised far enough that a screen an operator runs constantly pays for it,
+  the line moves behind a verb after all and rule 6 is the rule that was wrong.
+
+### Annotations this entry adds to earlier entries
+
+- **`D-0036` rule 5** gains a dated annotation: its refusal to read continuo's view of a run in
+  flight was of a **state** rondo already holds a column for, and does not extend to an
+  **identifier** rondo holds nothing for. The third wait distinction stays refused; the sentence
+  *"a distinction that changes nothing the operator does is not worth an arrow to another system"*
+  is unchanged, and this read is taken because it changes what the operator does next.
+- **`D-0046`** gains one: rule 2's path composition acquires a second reader, on the screen rather
+  than at the suspend, and rule 4's filesystem grant is unchanged by it.
