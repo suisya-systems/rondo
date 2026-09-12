@@ -3690,6 +3690,13 @@ async function commandPublish(
   // composed later would preview everything except the part a person can only
   // check by reading it.
   const work = await inspectLapWork({ workspace, remote, baseBranch, topicBranch });
+  // **The predecessor is read, not assumed** (#132). Whether that lap's commits
+  // are on this branch is a fact about its row, and since D-0047 a predecessor
+  // is as likely to be a retry's abandoned subject as a revision's answered
+  // one. A row that will not read is left as null and said out loud, because a
+  // missing predecessor is not evidence for either lineage.
+  const predecessorRead =
+    record.supersedesIterationId === null ? null : await store.read(record.supersedesIterationId);
   const pullRequest = pullRequestText({
     record,
     runId,
@@ -3697,6 +3704,8 @@ async function commandPublish(
     baseBranch,
     headIsQualified: headRef !== topicBranch,
     work,
+    predecessor:
+      predecessorRead !== null && predecessorRead.kind === "read" ? predecessorRead.record : null,
     verificationClaims: await store.verificationClaimsFor(record.id),
   });
 
@@ -3899,6 +3908,18 @@ export interface PullRequestTextInput {
   readonly headIsQualified: boolean;
   readonly work: LapWorkInspection;
   /**
+   * The row `supersedesIterationId` names, read; null when there is no
+   * predecessor or when its row would not read.
+   *
+   * **Read rather than inferred, because the column now has two meanings.**
+   * Until #126 a predecessor meant `rondo revise`; since D-0047 it also means
+   * `rondo retry`, and the two lineages reach this branch by different routes.
+   * What separates them is a fact only the predecessor's row holds, so
+   * `publish` reads it rather than deciding from the column being non-null
+   * (D-0032: rondo says what it read).
+   */
+  readonly predecessor: IterationRecord | null;
+  /**
    * What the operator said they ran before answering the gate (#70). Empty when
    * they said nothing, which is what it means and not more than that.
    */
@@ -4081,16 +4102,9 @@ function composeBody(input: PullRequestTextInput, withRequest: boolean): string 
   );
   if (record.supersedesIterationId !== null) {
     // **The lineage, stated rather than left to the branch names** (D-0030
-    // rule 4). This is the reader who most needs it: the branch being merged
-    // carries every lap's commits, so a reviewer looking at a revision is
-    // looking at work that was already answered for once, and nothing else in
-    // this body would say so. It sits above the gate sentence because "which
-    // gate closed this" is about the last lap and this is about all of them.
-    lines.push(
-      `- It revises iteration \`${listed(record.supersedesIterationId, "id")}\`, whose commits ` +
-        "are on this branch too: it was cut from that lap's branch after a person asked for a " +
-        "change at its gate.",
-    );
+    // rule 4). It sits above the gate sentence because "which gate closed
+    // this" is about the last lap and this is about all of them.
+    lines.push(`- ${lineageSentence(record, input.predecessor)}`);
   }
   lines.push(`- ${gateSentence(record)}`);
   lines.push(...verificationLines(input.verificationClaims));
@@ -4167,7 +4181,51 @@ function fileCounts(file: LapFile): string {
   return `(+${String(file.added)} -${String(file.deleted)})`;
 }
 
-/** What the gate says about who approved this, in a reviewer's terms. */
+/**
+ * Which iteration this one supersedes, and whether that lap's work is under
+ * this pull request.
+ *
+ * **Two spellings, because `supersedesIterationId` has two meanings** (#132).
+ * `rondo revise` cuts the successor from the predecessor's own topic branch, so
+ * the predecessor's commits are on the branch being merged and a reviewer must
+ * be told. `rondo retry` (D-0047) starts a fresh lap from the same base the
+ * subject started from -- the subject may have been abandoned before a
+ * workspace existed, its branch may never have been materialised, and the
+ * person answered a *proposal* rather than a gate. One sentence for both said
+ * all of that about a retry and every clause of it was false.
+ *
+ * **The question that separates them is asked of the two rows, not of the
+ * verb**, which `publish` cannot see: was this lap cut from the branch that lap
+ * ran on? Both halves are read -- this row's plan and the predecessor's
+ * `topicBranch` -- so neither spelling claims anything rondo did not look at
+ * (D-0032). A predecessor that will not read gets a third sentence saying so,
+ * rather than the benefit of either doubt.
+ */
+function lineageSentence(record: IterationRecord, predecessor: IterationRecord | null): string {
+  const id = listed(record.supersedesIterationId ?? "", "id");
+  if (predecessor === null) {
+    return (
+      `It supersedes iteration \`${id}\`, whose row rondo could not read here, so this body does ` +
+      "not say whether that lap's work is on this branch."
+    );
+  }
+  // The branch this lap was cut from, which after `revise` is the predecessor's
+  // topic branch and is not the base the pull request is opened against (see
+  // `pull_request_base_branch` above).
+  const cutFrom = planField(record, "base_branch");
+  if (predecessor.topicBranch !== null && predecessor.topicBranch === cutFrom) {
+    return (
+      `It revises iteration \`${id}\`: this lap was cut from \`${listed(cutFrom, "branch name")}\`, ` +
+      "the branch that lap ran on, so whatever that lap committed is on this branch too."
+    );
+  }
+  return (
+    `It supersedes iteration \`${id}\`, which ended \`${listed(predecessor.status, "status")}\`: ` +
+    `this lap was cut from \`${listed(cutFrom, "branch name")}\` rather than from that lap's own ` +
+    "branch, so nothing it left is carried here."
+  );
+}
+
 /**
  * What the operator said they checked, or the fact that they said nothing (#70).
  *
@@ -4203,6 +4261,7 @@ function verificationLines(claims: readonly OperatorVerificationClaim[]): readon
   );
 }
 
+/** What the gate says about who approved this, in a reviewer's terms. */
 function gateSentence(record: IterationRecord): string {
   const gate =
     record.gateId === null || record.gateId === ""

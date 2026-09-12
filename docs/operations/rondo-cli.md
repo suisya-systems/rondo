@@ -468,8 +468,14 @@ look like somebody's topic branch. You see it in three places, and only on a lap
 
 - `rondo revise` says `It is a revision of iteration <id>.` under the reservation line.
 - `rondo answer` prints a `revises <id>` line above the gate.
-- the pull request body's `## How this got here` says
-  `- It revises iteration \`<id>\`, whose commits are on this branch too: ...`.
+- the pull request body's `## How this got here` says which iteration this one supersedes, in one
+  of two spellings. A lap cut from the predecessor's own topic branch -- which is what `rondo revise`
+  makes -- reads `- It revises iteration \`<id>\`: this lap was cut from \`<branch>\`, ...`. A lap
+  cut from anywhere else -- which is what `rondo retry` makes, since the subject it supersedes may
+  have been abandoned before it had a branch to inherit -- reads
+  `- It supersedes iteration \`<id>\`, which ended \`<status>\`: this lap was cut from ...`.
+  `publish` reads the predecessor's row to tell them apart, and says so rather than guessing when
+  that row will not read.
 
 A database written before `D-0030` gains the column on the next open and reads null on every row,
 which is the truth about those rows: `revise` had nowhere to write a predecessor, so none of them
