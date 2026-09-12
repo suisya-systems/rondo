@@ -79,6 +79,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0039 | A lap cannot verify what it wrote, and `--allowedTools` is not the way out: `D-0011`'s first falsifier fires, the fence input rondo asks continuo for, and what `granted` maps to once it exists | accepted |
 | D-0040 | Where a run's authorisation is written down now that continuo owns a table for it: `D-0020` rule 4's falsifier fires in substance, the durable home does not move, and the envelope carries only facts that exist today | accepted |
 | D-0041 | The one write the operator's page may do: an unattended redraw and a person's click are told apart at runtime and never by type, the approver is the only actor, and the write is a single function rather than a store | accepted |
+| D-0042 | What counts as a presentation on a page that redraws itself: the press and not the render, recorded before the gate is answered, and the reader who does not press left uncounted | accepted |
 
 ---
 
@@ -7500,3 +7501,120 @@ from the press onward is the real path: continuo's own CLI, six verbs, and rondo
 - **A browser that sends `Origin` on a same-origin form post but not the token**, or any evidence
   that the token can reach a cross-site page, which would mean rule 3(b) does not separate the two
   requests it claims to separate.
+
+---
+
+## D-0042 — What counts as a presentation on a page that redraws itself: the press and not the render, recorded before the gate is answered, and the reader who does not press left uncounted
+
+**Status:** accepted (2026-09-12, rondo's human gate). Refs rondo#106, `D-0041`, `D-0032`, `D-0022`.
+
+`D-0022` rule 18 puts the write before the showing, and `src/access/advisory.ts` states it for the
+terminal: *"the proposal row is written before it is presented ... if the insert fails, nothing is
+rendered"*. The page built by rondo#95 does the second half and not the first. `explainHtml` calls
+`propose(snapshot)` and renders its claims, and `src/access/web.ts` holds no `AdvisoryRecord`
+writer at all. So a framing reaches a person on the surface they actually read, and
+`operator_attention` cannot count it.
+
+The obvious repair breaks `D-0041`. That entry's rule 1 is that this surface *"may write only what
+a person actually did, and only at the moment they did it"*, and rule 7 spells out one consequence:
+the page *"does not move the last-look mark or count a presentation"*. A page that recorded before
+rendering would record every five seconds at an empty desk, and `D-0032` rules 9 and 10 say what
+that costs -- both rows are **claims that a person was shown something**, so an unattended redraw
+writing either puts a lie in the ledger.
+
+### The collision, stated
+
+Three accepted entries pull in different directions here, and the disagreement is real rather than
+apparent:
+
+- `D-0022` rule 18 wants the write **before** the showing.
+- `D-0032` rules 9 and 10 want the written row to be **true**: somebody was shown this.
+- `D-0041` rules 1 and 7 want this surface to write **only on a human act**, and say in as many
+  words that it counts no presentation.
+
+They collide because the page shows things without being asked to. Rule 18 was written for a
+command, where showing is something a person requested; on a surface that redraws itself, "before
+it is presented" names a moment that arrives with nobody there.
+
+**What gives way is rule 18's *placement*, and never rule 18's failure.** The failure it exists to
+prevent is a framing an operator acted on that the ledger does not hold. That failure is about the
+acting, not about the pixels: an explanation drawn on a screen at an empty desk and never read is
+not the hazard, and recording it would not be a record of anything. So the order is kept and the
+thing it is *before* moves.
+
+### Decision
+
+1. **On this surface the press is the presentation, and the render is not.** `D-0041` rule 1's own
+   criterion decides it: a press is a person doing something, at the moment they did it, and it is
+   the one available proof that the framing beside the button reached somebody. A redraw is not.
+   So `D-0041` rule 7's "does not ... count a presentation" is **amended to name the redraw
+   rather than the surface**: this page counts a presentation when a person presses, and never
+   otherwise.
+
+2. **Rule 9's last-look mark is untouched, and that half of `D-0041` is not amended.** A press is
+   proof that one row was read; it is not proof that an inbox was. `rondo inbox` remains the only
+   thing that moves the mark, exactly as rondo#95 and `D-0041` left it.
+
+3. **The write goes before the act, and a write that fails stops the act.** The framing is recorded
+   before the gate is walked, and if the insert fails nothing is answered and the person is shown
+   why. That is rule 18's order and rule 18's refusal, over the gesture rather than over the
+   rendering -- on a page, the rendering has already happened by the time anybody can press.
+
+4. **It is `explain`'s writer, reached through the one function this page already holds.** The
+   claims the page drew are `propose(snapshot)`'s, which is what `explainIteration` composes and
+   records; a second path to the same rows would be two implementations to keep agreeing, which is
+   `D-0041` rule 7's argument for the button reaching `walkGate`. And it happens inside
+   `AnswerFromWeb` rather than in `src/access/web.ts`, so `D-0041` rule 4 stands unweakened: the
+   page's whole writing vocabulary is still **one function**, and widening it is still a visible
+   change to a type.
+
+5. **A person who reads the page and does not press is not counted, and rondo says so rather than
+   guessing.** There is no runtime fact on a `GET` that separates a reader from a redraw -- the two
+   arrive identically, which is `D-0041` rule 2 -- so counting one would be the invention that
+   entry refuses. What the ledger now holds is *presentations that were acted on*, which is less
+   than every presentation and is the most this surface can claim truthfully.
+
+### What this entry does not do
+
+- **It does not make the page write more.** One function, one verb, one word; rules 4, 5, 7 and 8
+  of `D-0041` are otherwise unchanged, and no port was widened to carry this.
+- **It does not touch the terminal.** `rondo explain` records exactly as before, in exactly the
+  order `D-0022` rule 18 gives it.
+- **It does not count the rows the page explains beside the one that was pressed.** Every live row
+  is on the page; one of them was acted on, and only that one is recorded.
+
+### Residuals
+
+| Residual | Why not here | Who decides |
+|---|---|---|
+| Counting a page read that ends in no press | No runtime fact tells a reader from a redraw on a `GET`; a script or a second request would be the mechanism, and rondo#95's no-script constraint is load-bearing | the entry that wants a scripted page |
+| The recorded framing is re-composed at press time | `D-0032` rule 3 refuses a stored summary, so it is re-gathered rather than remembered; it can therefore differ from bytes drawn up to five seconds earlier. The terminal has the same property between composing and printing | whoever first needs byte-exact provenance of what was on a screen |
+| A press that is refused after the framing is recorded | Rows the page refused (terminal, no gate) never reach the write; a continuo that will not start does, so the ledger can hold a framing whose gate walk then failed. That is a framing a person *was* shown, so it is not a false row | -- |
+
+### What was measured, and how
+
+On **2026-09-12**, on this machine, against a real `node:sqlite` store on disk and a real `rondo
+web` process serving on `127.0.0.1`, with every request made by `curl` so that what is under test
+is what a browser would send. No continuo was built: none of the properties here is about the gate
+walk, and the press's own refusal when continuo is absent is what shows the ordering.
+
+- **Five unattended redraws wrote nothing.** Five plain `GET`s -- which is exactly what
+  `<meta http-equiv="refresh">` sends -- left `proposal`, `operator_attention`, `operator_view` and
+  `human_decision` at **0 rows each**. That is the half of `D-0041` this entry does not amend,
+  measured after the change rather than argued.
+- **One press wrote two rows, and wrote them before the gate was walked.** The `POST` returned
+  `409 continuo is not usable: RONDO_CONTINUO_CLI is not set` -- so nothing was answered -- and the
+  ledger nevertheless held `proposal` **1** and `operator_attention` **1**:
+  `explanation-i-live-1-1789176991585`, kind `explanation`, drafter
+  `rondo/advisory/deterministic`, and an attention row `presented` against that subject. Its
+  payload's first claims are `request = do the thing`, `status = awaiting_human`, `attempts = 1`,
+  which are the claims the page had drawn. `operator_view` and `human_decision` stayed **0**
+  (rule 2).
+- **A press the ledger could not take answered nothing.** With the database made read-only under
+  the running server, the press came back *"The framing you pressed on was not recorded, so nothing
+  was answered. The explanation of 'i-live-1' was composed and not recorded ...: attempt to write a
+  readonly database"*, and no gate walk was attempted. That is rule 3, and it is the page's
+  version of what `src/access/advisory.ts` does in a terminal.
+- **A press naming a row that is not there is refused before the ledger is touched.** `POST` with
+  `iteration=i-nope` returned `409 There is no iteration 'i-nope'.` and left both counts unmoved --
+  a stale page is not a framing somebody was shown.

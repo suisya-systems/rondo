@@ -29,6 +29,15 @@
  * when this process began listening is rendered into the form and checked on the
  * way in, so a `POST` that carries it came from a page this process served.
  *
+ * **So the press, and not the render, is this surface's presentation**
+ * (D-0042). The framing beside the button is written to the ledger before the
+ * gate is answered, by the same `explain` writer the terminal uses -- and if it
+ * cannot be written, nothing is answered and the person is told, which is
+ * D-0022 rule 18's order applied to a page that had already drawn what it was
+ * about to act on. It happens inside {@link AnswerFromWeb} rather than here for
+ * D-0041 rule 4's reason: one function is still the whole of what this surface
+ * may write.
+ *
  * **Two things the terminal got wrong are not repeated here** (rondo#90,
  * rondo#91). A request is shown with its paragraphs intact, because the page
  * has no cp932 console to protect and `white-space: pre-wrap` costs nothing;
@@ -100,11 +109,13 @@ export interface WebPorts extends InboxReadPorts {
 export type LapMaterial = (record: IterationRecord) => Promise<readonly string[]>;
 
 /**
- * Carry one body to one iteration's open gate, and say what happened.
+ * Record the framing this press rests on, carry one body to one iteration's
+ * open gate, and say what happened.
  *
- * The caller supplies this; nothing about continuo, a gate walk or an actor is
- * known here. `ok` false is a refusal a person can act on -- a row that ended,
- * a gate already closed, a continuo that will not start -- and the page shows
+ * The caller supplies this; nothing about continuo, a gate walk, an actor or
+ * the ledger is known here. `ok` false is a refusal a person can act on -- a
+ * row that ended, a gate already closed, a continuo that will not start, or a
+ * framing that could not be recorded (D-0042 rule 3) -- and the page shows
  * `note` rather than redrawing, because a redraw would show a gate that is
  * still open and no reason why.
  */
@@ -341,7 +352,7 @@ pre { white-space: pre-wrap; word-break: break-word; margin: 0; }
 <h1>rondo</h1>
 <p class="note">Redraws every ${String(REFRESH_SECONDS)}s, and a redraw writes nothing: no last-look
 mark moves and no presentation is counted. The one thing that writes is the approve button, which
-answers a gate only when a person presses it.</p>
+records the explanation you pressed on and then answers the gate.</p>
 ${sections.join("\n")}
 </body>
 </html>
