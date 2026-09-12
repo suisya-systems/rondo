@@ -11026,22 +11026,33 @@ Two readings, before the invariants decide anything.
 rondo#172 is right that this is the only hard one. Three invariants, each with **today's mechanism
 measured rather than described**, and each with what it becomes on a framework's runtime.
 
-**1. A redraw writes nothing (`D-0042`; `D-0041` rules 1 and 3(a) as amended).** Today this is a
-fact about types: `WebPorts.store` is `Pick<IterationStore, "read" | "readLive" | "readingsFor" |
-"occupancy" | "terminalIterations">` (`src/access/web.ts:117-120`), so the module that answers a
-`GET` **cannot be made to write, and the compiler says so**. `D-0054` rule 3 moved the whole weight
-of the invariant onto exactly this, when the page gained a script that can `fetch`.
+**1. A redraw writes nothing (`D-0042`; `D-0041` rules 1 and 3(a) as amended).** What the type
+buys, stated exactly, because the loose version of this sentence is wrong and the argument does not
+need it. `WebPorts.store` is `Pick<IterationStore, "read" | "readLive" | "readingsFor" |
+"occupancy" | "terminalIterations">` (`src/access/web.ts:117-120`), so **nothing this module holds
+can write to the store at all**. The one write it can perform arrives as a second, optional field on
+the same object -- `answer: AnswerFromWeb | null`, one function, "carry this body to this
+iteration's open gate" -- and `operatorPage` is handed the whole of `WebPorts`, so **the compiler
+does not forbid the render path from calling it**. What separates the two paths at runtime is the
+method branch in `serveOperatorPage` and `handleApprove` being the only caller, which is a fact
+about the code and not about the type.
 
-On TanStack Start the mechanism is gone, and this is documented rather than inferred: server
+So the guarantee is not *unrepresentable*; it is **enumerable**. rondo's whole writing vocabulary on
+this surface is one named function on an injected port, readable off one type in one file, and
+`D-0041` rule 4 says exactly that and no more -- *"the page's whole writing vocabulary is one
+sentence long and widening it is a visible change to a type"*. That is the property, and it is a
+strong one: a reviewer can answer *what can this surface write* by reading `WebPorts`, and any
+answer larger than one sentence shows up in a diff of a type.
+
+On TanStack Start the enumeration is what goes, and this is documented rather than inferred: server
 functions are created with `createServerFn()`, are **statically importable in any file**, are called
-from route loaders that run on a `GET` navigation -- and **there is no type-level distinction
-between a read-only and a writing server function**; `method: 'GET'` and `method: 'POST'` share a
-signature and the difference is a string the author chose. So the write is an ambient import rather
-than an injected port, there is no narrowed handle for the compiler to check, and *a redraw writes
-nothing* becomes a convention plus a test. `D-0041` rule 4 argued this exact case in advance --
-*"with a store on the ports, every future edit to this module can write anything the store can write
-and the compiler will agree"* -- and a framework whose data layer is ambient imports is that
-sentence, at the scale of the whole surface.
+from route loaders that run on a `GET` navigation -- and **`method: 'GET'` and `method: 'POST'`
+server functions share a type signature, so there is no type-level distinction between a reading and
+a writing one**. There is then no type to read: the surface's writing vocabulary is *every writer in
+the program*, and widening it is an import rather than a change to a declaration. `D-0041` rule 4
+argued this case in advance -- *"with a store on the ports, every future edit to this module can
+write anything the store can write and the compiler will agree"* -- and ambient server functions are
+that sentence with the store replaced by the whole program.
 
 **2. Only a person's act writes (`D-0041` rule 1).** Same mechanism, so the same loss. Worth stating
 separately because its consequence is different: rule 1 exists so that `operator_attention` and the
@@ -11065,16 +11076,23 @@ a test.**
   from the payload's composition site -- it is unreachable, by a boundary the tree enforces**
   (`D-0006`), and the boundary was drawn for `D-0022` rule 1's reason and happens to carry this too.
 
-The idiomatic shape of every i18n library the TanStack ecosystem offers is a request-scoped locale
-made available anywhere in the process -- a context, an async-local store, a compiled `m.*` module
-imported like any other. Under any of them **there is no arrow left to forbid**: the catalogue
-becomes reachable from every module by design, and `src/advisory`'s empty allowance stops meaning
-anything. The invariant survives as the behavioural test alone, which is a real test and is strictly
-less than what rondo has.
+What changes under a library is the **cost and the reach** of that boundary, not its existence, and
+the difference is worth stating precisely because the overstated version is false.
+`ALLOWED_EXTERNALS_BY_MODULE` grants externals **per module and per binding**, so an i18n package
+could be refused to `src/advisory` exactly as `node:child_process` is refused to everything but
+`src/continuo/invoker.ts`. The checker does not stop working. What stops is the *freeness*: today
+the property is a **consequence of a layer rule that already existed** for `D-0022` rule 1's reason
+and that nobody has to remember, and the catalogue is one directory. Under a library it becomes a
+grant somebody adds and maintains per package, and two of the shapes on offer are harder to name
+than a directory is -- Paraglide's compiled `m.*` modules are generated output imported like
+first-party code, and a framework-provided request context is reached through the framework's own
+re-export rather than through the i18n package's name. Both are refusable; both require the refusal
+to be written, kept and re-derived whenever the toolchain regenerates.
 
-So all three go from *structurally impossible* to *conventional and tested*. rondo#172 states the
-price rule and this entry applies it: **a framework that makes those harder to assert than they are
-today is more expensive than the code it removes.** 96 lines is the code it removes.
+So: one invariant goes from a type to a convention plus a test (1 and 2), and one goes from free to
+maintained (3). rondo#172 states the price rule and this entry applies it: **a framework that makes
+those harder to assert than they are today is more expensive than the code it removes.** 96 lines is
+the code it removes.
 
 ### `D-0007` under a build: the discipline is kept, and that is what removes the candidates
 
@@ -11109,22 +11127,36 @@ developer tool to*. Measured on 2026-09-13:
 | Candidate | Latest, and when | Licence | Kind | Verdict |
 |---|---|---|---|---|
 | Web Awesome `@awesome.me/webawesome` | `3.12.0`, 2026-08-21 | MIT | custom elements | 35 packages; refused by `D-0054` rule 7 |
-| Radix Themes `@radix-ui/themes` | `3.3.0`, 2026-01-31 | MIT | React components | refused by rule 7 |
-| Base UI `@base-ui-components/react` | `1.0.0-rc.0`, **2025-12-04** | MIT | React components, still `rc` | refused by rule 7 |
-| shadcn | `4.21.0`, 2026-09-04 | MIT | a CLI that copies React source in | refused by rule 7 |
-| daisyUI | `5.7.37`, 2026-09-11 | MIT | a Tailwind plugin, i.e. CSS | 0 dependencies, but needs a build |
-| Pico CSS `@picocss/pico` | `2.1.1`, **2025-03-15** | MIT | classless CSS | survives both |
-| Open Props | `1.7.23`, 2026-01-31 | MIT | CSS custom properties | survives both |
+| Shoelace `@shoelace-style/shoelace` (archived 2026-05-14) | `2.20.1`, **2025-03-11** | MIT | custom elements | refused by rule 7, and unmaintained |
+| Radix Themes `@radix-ui/themes` | `3.3.0`, 2026-01-31 | MIT | React components | refused by rule 3; rule 7 for the interactive members |
+| Base UI `@base-ui-components/react` | `1.0.0-rc.0`, **2025-12-04** | MIT | React components, still `rc` | refused by rule 3; and `rc` nine months on |
+| shadcn | `4.21.0`, 2026-09-04 | MIT | a CLI that copies React source in | refused by rule 3 |
+| daisyUI | `5.7.37`, 2026-09-11 | MIT | a Tailwind plugin, i.e. CSS | 0 dependencies, but refused by rule 3 |
+| Pico CSS `@picocss/pico` | `2.1.1`, **2025-03-15** | MIT | classless CSS | survives both rules |
+| Open Props | `1.7.23`, 2026-01-31 | MIT | CSS custom properties | survives both rules |
 
-**`D-0054` rule 7 is the disqualifier, and it disqualifies a kind rather than a product.** That rule
-says the page is legible, complete and correct with the script absent, blocked or broken, and that
-*nothing the operator must read or press may be produced by script*. A custom element is markup that
-is inert until an upgrade runs; a React component is markup that does not exist until a bundle does.
-Both put the approve button behind a script, which is the precise failure rule 7 exists to prevent
--- on the one screen where the failure is a person who cannot answer a gate. This is not a judgement
-about quality: Web Awesome is the healthy choice in that market and `D-0054` already said so.
+**Two different refusals, and conflating them would be the mistake**, because they cut the market in
+different places and only one of them is about `D-0054` rule 7.
 
-What survives rule 7 and the build rule is CSS, and **the page already is 96 lines of it**: two type
+- **Custom elements are refused by rule 7, and the refusal is about the kind.** That rule says the
+  page is legible, complete and correct with the script absent, blocked or broken, and that *nothing
+  the operator must read or press may be produced by script*. `<wa-button>` is markup that is inert
+  until its definition is registered and upgraded; with the bundle blocked or 404ing, the approve
+  button is a custom tag the browser renders as an unstyled inline box with no submit behaviour.
+  That is the precise failure rule 7 exists to prevent, on the one screen where it means a person
+  cannot answer a gate. Not a judgement about quality: Web Awesome is the healthy choice in that
+  market and `D-0054` already said so.
+- **React sets are refused by rule 3, and rule 7 reaches only some of their members.** Said plainly
+  because the blanket version is false: a server-rendered React component can emit
+  `<button type="submit">` inside an ordinary `POST` form, and that button is readable and pressable
+  with scripting off, exactly as today's is. What needs hydration is the interactive furniture --
+  a dialog, a combobox, a dropdown -- and this page has none and wants none. So the disqualifier for
+  Radix Themes, Base UI and shadcn is not rule 7 at all: it is rule 3, because reaching a React
+  component's server output at all requires JSX, which requires a build, which puts unpinned bytes in
+  front of the browser. Rule 7 would then decide, per component, whether the component may be used --
+  and that question never arises, because rule 3 answered first.
+
+What survives both rules is CSS, and **the page already is 96 lines of it**: two type
 roles, one spacing scale, both palettes written out, contrast checked against all three grounds
 (rondo#153). Pico styles the semantic elements this page already styles; Open Props ships a token
 scale this page already has. Adopting either would re-express working, audited, zero-dependency CSS
@@ -11132,8 +11164,9 @@ as somebody else's, and would buy nothing this page is short of.
 
 So the authorisation is **banked and not spent**, and the entry names what spends it rather than
 leaving it open: the first screen those 96 lines cannot express -- a table, a diff, a form with more
-than one control. When that arrives, this survey says where to start: Open Props if rule 7 still
-stands, Web Awesome if rule 7 is what is being re-argued.
+than one control. When that arrives, this survey says where to start: Open Props while rules 3 and 7
+both stand; a server-rendered React set if rule 3 is what is being re-argued, with rule 7 then
+deciding member by member; Web Awesome if rule 7 is.
 
 ### Decision
 
@@ -11144,12 +11177,27 @@ stands, Web Awesome if rule 7 is what is being re-argued.
 
 2. **The reason a framework is refused is that it owns the composition root, and rondo's three
    invariants are properties of that root.** A morph library sits under the page and cannot reach
-   the ports; a framework sits over it and holds them. Today *a redraw writes nothing* is a `Pick`ed
-   port the compiler checks (`D-0041` rule 4), and *the ledger's bytes do not depend on the reader's
-   language* is an import boundary the tree enforces (`D-0006`, `src/advisory`'s two-entry
-   allowance). On every candidate both become conventions defended by tests. **A candidate that
-   converts an invariant from a type into a convention is priced as more expensive than the lines it
-   deletes**, and this is the rule that decided the entry.
+   the ports; a framework sits over it and holds them. Two properties, each stated as what it
+   actually is rather than as the stronger thing it is easy to write:
+
+   a. **This surface's writing vocabulary is enumerable from one type.** It is one named function on
+      an injected port (`D-0041` rule 4), so *what can this page write* is answered by reading
+      `WebPorts`, and any larger answer is a diff of a declaration. It is **not** that the compiler
+      forbids the render path from writing -- `operatorPage` is handed the same object `answer` sits
+      on, and what separates the paths is the method branch. Under ambient server functions there is
+      no type to read at all, and `method: 'GET'` and `method: 'POST'` share a signature.
+
+   b. **The ledger's bytes not depending on the reader's language is free today and would become
+      maintained.** `src/advisory` may reach only `src/advisory` and `src/store` (`D-0006`), a layer
+      rule drawn for `D-0022` rule 1 that carries this one for nothing. The checker would still work
+      under a library -- externals are granted per module and per binding -- but the grant becomes
+      something somebody writes and keeps, against generated modules and framework re-exports rather
+      than against one directory.
+
+   **A candidate that turns an enumeration into a convention, or a free property into a maintained
+   one, is priced as more expensive than the lines it deletes**, and this is the rule that decided
+   the entry. It is a price and not a prohibition: rule 2 is why 96 lines is not enough, and it says
+   what a candidate would have to keep in order to be worth re-pricing.
 
 3. **`D-0007` is kept unamended, and its consequence is stated as a rule rather than left to be
    rediscovered: the browser receives only bytes this tree holds, and every third-party byte among
@@ -11158,10 +11206,14 @@ stands, Web Awesome if rule 7 is what is being re-argued.
    bytes in front of the browser is refused by this rule before its merits are reached, and adopting
    one is an amendment to `D-0007` taken deliberately in an entry of its own.
 
-4. **No UI component library, and the disqualifier is `D-0054` rule 7 rather than taste.** A
-   component that needs script to render puts the approve button behind a script. That removes every
-   custom-element and React set on the market; a Tailwind plugin is removed by rule 3; what is left
-   is CSS the page already has. The operator's authorisation stands and is unspent, and the trigger
+4. **No UI component library, and there are two disqualifiers rather than one.** A **custom
+   element** is refused by `D-0054` rule 7: it is inert until it is upgraded, so with the bundle
+   blocked the approve button is a tag the browser cannot submit. A **React set** is refused by rule
+   3, because reaching its server-rendered output at all needs JSX and therefore a build -- and not
+   by rule 7, since a server-rendered `<button type="submit">` in a `POST` form is pressable with
+   scripting off exactly as today's is; rule 7 would decide member by member, and never gets asked.
+   A Tailwind plugin is refused by rule 3. What is left is CSS the page already has. The operator's
+   authorisation stands and is unspent, and the trigger
    that spends it is named above.
 
 5. **rondo#172's accumulation is 141 lines, not a framework, and the entry says which 141.** The
@@ -11213,11 +11265,11 @@ stands, Web Awesome if rule 7 is what is being re-argued.
   translated at display time and no recorded byte moves.
 - **It does not amend `D-0041`, `D-0042`, `D-0054`, `D-0055`, `D-0056` or `D-0007`.** It cites them
   as the constraints that decided a survey. `D-0054`'s falsifier count on `D-0041` stays at two.
-- **It does not turn its own reasoning into a check.** The structural facts rule 2 leans on are
-  already enforced -- the `Pick`ed ports by the compiler, `src/advisory`'s allowance by
-  `test/architecture/import-boundaries.test.ts` -- and adding a test that asserts *no framework is
-  installed* would be a rule about the future defended by machinery, which is the shape this entry
-  spends itself refusing.
+- **It does not turn its own reasoning into a check.** The facts rule 2 leans on are already
+  enforced as far as they go -- the store's unwritability by the compiler, `src/advisory`'s
+  allowance by `test/architecture/import-boundaries.test.ts` -- and adding a test that asserts *no
+  framework is installed* would be a rule about the future defended by machinery, which is the shape
+  this entry spends itself refusing.
 
 ### What the implementing change contains
 
@@ -11306,3 +11358,11 @@ and the registry.
 - **rondo ceasing to be a server that renders whole documents.** Every number here is priced against
   a page whose entire state is its address and whose whole client vocabulary is one `GET`. A surface
   with real client state is a different page and this entry does not price it.
+- **The render path calling `ports.answer`.** Rule 2(a) prices an *enumeration* rather than a
+  prohibition, and it is honest about the compiler not forbidding this. The day `operatorPage`
+  reaches the write function is the day the enumeration is worth less than this entry says, and it
+  should be answered by narrowing what the renderer is handed rather than by re-pricing the market.
+
+### Annotations this entry adds to earlier entries
+
+- **`D-0054` rule 3** gains a dated annotation (2026-09-13), and it is a correction to a
