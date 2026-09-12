@@ -80,6 +80,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0040 | Where a run's authorisation is written down now that continuo owns a table for it: `D-0020` rule 4's falsifier fires in substance, the durable home does not move, and the envelope carries only facts that exist today | accepted |
 | D-0041 | The one write the operator's page may do: an unattended redraw and a person's click are told apart at runtime and never by type, the approver is the only actor, and the write is a single function rather than a store | accepted |
 | D-0042 | What counts as a presentation on a page that redraws itself: the press and not the render, recorded before the gate is answered, and the reader who does not press left uncounted | accepted |
+| D-0043 | The trigger a stopped lap pulls: one proposal at the abandon the conductor's own arc reaches, `contract_keys` because it is the only option set that is a choice, and a successor identity rondo mints and nobody has yet adopted | accepted |
 
 ---
 
@@ -7619,3 +7620,188 @@ walk, and the press's own refusal when continuo is absent is what shows the orde
 - **A press naming a row that is not there is refused before the ledger is touched.** `POST` with
   `iteration=i-nope` returned `409 There is no iteration 'i-nope'.` and left both counts unmoved --
   a stale page is not a framing somebody was shown.
+
+## D-0043 — The trigger a stopped lap pulls: one proposal at the abandon the conductor's own arc reaches, `contract_keys` because it is the only option set that is a choice, and a successor identity rondo mints and nobody has yet adopted
+
+**Status:** accepted (2026-09-12, rondo's human gate). Refs rondo#105, `D-0022`, `D-0023`, `D-0019`,
+`D-0032`, `D-0042`.
+
+rondo#105 measures a hole and names its blocker. The advisory works and every one of its writers is
+a verb a person types: `advisoryPorts()` is constructed at `src/access/cli.ts:1263`, `:1436`,
+`:1635` and `:1838`, and nowhere else. The lap's own path reaches none of them -- `src/refrain/` and
+`src/access/conductor.ts` hold no reference to `src/advisory` at all -- so after a real lap the
+`proposal` table is empty. The blocker is that the one door that binds anything, `proposeRetry`,
+takes a `--successor-id` from an operator and refuses one already in the store
+(`src/access/advisory.ts:1245-1256`), and an automatic caller has nobody to take it from.
+
+This entry decides **where the trigger goes, which endings pull it, what it emits, and who mints the
+successor's identity.** It takes no implementation.
+
+### What was measured, and where
+
+At `91e6fc3` on 2026-09-12, by reading the tree.
+
+- **`abandoned` is written inside the conductor's own arc in three places**, all reached from
+  `admit()`: a classification refusal (`src/refrain/interpreter.ts:803`), cadenza's `refused`
+  (`:873`) and cadenza's `needs_approval` (`:883`). `resume()` writes `closed` (`:1449`), `failed`
+  or `stalled`, and never `abandoned`. The fourth `abandoned` is the human verb `abandon()`
+  (`:497`), which is not part of the arc.
+- **`failed` is rondo's own fault or an unverifiable build** (`:817`, `:953`, `:1035`, `:1302`).
+- **A `closed` iteration is not therefore an approved one.** `approvedForPublication`
+  (`src/access/cli.ts:272-296`) already separates the one outcome that means a person answered,
+  `answered_and_forwarded`, from `withdrawn`, `expired` and `unanswerable`.
+- **Every call into the conductor is in `src/access/cli.ts`.** `src/access/web.ts` calls none of the
+  four verbs; the page's answer goes through `answerFromPage` (`cli.ts:2432`), which calls `resume`.
+- **The boundary needs no change.** `src/access` may import `src/advisory`
+  (`test/architecture/import-boundaries.test.ts:188`), the reverse is refused by planted cases, and
+  the arrow this entry uses has a control case at `:1858`. `src/access/advisory.ts` already imports
+  `allocate` from `src/refrain/allocator.js` and imports nothing else from its own layer but
+  `console.js`, so `conductor.ts -> advisory.ts` is acyclic.
+- **The three proposable kinds do not have equally useful option sets.** `agentTypesOf`
+  (`advisory.ts:1012`) draws agent types from the lineage rows and `proposeRetryPlan`
+  (`src/advisory/proposal.ts:695`) draws plans from the same place, so on a store whose subject has
+  no predecessor both yield exactly one option, which is the thing that just stopped.
+  `promotionsOf` (`advisory.ts:1046-1074`) does not read the lineage: it offers the subject's own
+  contract unchanged plus one option per key the agent type's author declared `askable`, one key at
+  a time, and `unchangedIndex` (`proposal.ts:562`) recommends the unchanged one.
+
+### Decision
+
+1. **The trigger fires on exactly one ending: `abandoned` reached inside the conductor's own arc.**
+   That set is cadenza's `refused`, cadenza's `needs_approval`, and a classification refusal -- all
+   three are grant-shaped endings, which is what makes an options-and-a-recommendation the right
+   answer to them rather than a sentence of prose.
+
+2. **The four endings that do not fire, each for its own reason.**
+   - **`closed` with `answered_and_forwarded`.** A person said yes; what follows is `publish`.
+   - **`closed` without it** (`withdrawn`, `expired`, `unanswerable`). This is the first widening
+     and it is deliberately not taken here: a withdrawal is a person's own act and an expiry is a
+     clock, and neither of them says the plan was wrong. Whoever takes it needs no new predicate --
+     `approvedForPublication` is it.
+   - **`failed`.** A rondo defect or a build that would not verify. A retry under a different
+     contract answers none of it, and a proposal there would file a bug report as an option set.
+   - **`awaiting_human`.** A gate is open and the *worker's* question is already on the table. A
+     second question standing beside it spends the one human contact `D-0036` rations, on rondo's
+     initiative, next to a question somebody else asked. `D-0022` rule 15's refusal to mint a gate
+     of rondo's own is not literally this, but it is the same instinct and this entry follows it.
+   - **The human verb `abandon()`.** A person with their hands on the keyboard can type
+     `rondo propose`. Placing the trigger on the arc rather than on the status is what tells these
+     two apart, and it costs no field and no parsing of a recorded reason.
+
+3. **The call site is `src/access/conductor.ts`'s `admit()`, and the advisory ports become a
+   required argument of it.** One site, because rule 1's ending occurs on one path; inside the
+   conductor rather than at its caller, so that a second caller -- a start button on the page --
+   inherits the trigger by construction; and *required* rather than optional, because a type is the
+   only thing that makes "a new caller cannot forget" true. `resume()`, `requestWithdrawal()` and
+   `abandon()` are unchanged, `src/refrain` is unchanged, and no port on `ConductorPorts` learns the
+   word advisory: an advisory reachable from the loop's port surface is what the planted cases
+   exist to keep out.
+
+4. **What it emits is at most one proposal, of kind `contract_keys`.** One, because two proposals
+   about one stop are two things to answer about one event. `contract_keys`, because on the measured
+   tree it is the only kind whose option set is a *choice* on the store where this ending actually
+   happens: the other two select from the lineage, and the subject of a first stop has none. Its
+   options are also the ones with a bound on them -- one key at a time, and only a key the agent
+   type's author already declared askable -- which is the nearest thing rondo has to the
+   amplification bound `D-0022` rule 17 gave up.
+
+5. **Nothing is recorded when the only candidate is the unchanged one.** An agent type with an empty
+   `askable` yields an option set of one, and an option set of one is not a choice. The report says
+   so in a line; the ledger gets no row. This is the answer to "when does it not propose", and it is
+   a property of the candidates rather than a threshold somebody tunes.
+
+6. **rondo mints the successor's identity, by derivation from the subject's.** The base is the
+   subject's iteration id with a trailing `-r<digits>` removed, so a chain of retries does not grow
+   its own name; the candidate is `<base>-r<n>` for the smallest `n >= 2` that the store does not
+   hold. If the result fails `ITERATION_ID_PATTERN` (`src/refrain/allocator.ts:59`) or `n` passes
+   `99`, **nothing is minted and nothing is recorded**, and the report names
+   `rondo propose --successor-id` as what a person types instead. rondo never truncates a name to
+   make one fit.
+
+7. **`D-0019` rule 3 is not overridden, because it does not reach this.** Its words are about the
+   conductor's interface -- *"the caller passes a complete `RunPlan`; rondo gains no allocator"* --
+   and its stated reason was that the missing allocator was an undecided decision. `D-0023` took
+   that decision: rondo has an allocator, and the run id, the topic branch and the workspace are
+   derived from the iteration id rather than typed beside it. What survives of rule 3 is that
+   `admit()` takes its identifier from its caller, and that is untouched here: an automatic proposal
+   composes a **candidate** id, `admit()` is not called, and the id becomes an identifier only when
+   a person approves the digest that contains it. **Under this entry rondo proposes an id and a
+   person adopts one.**
+
+   **The narrowing is real and is written down rather than argued away.** Before this entry every
+   iteration id in rondo's store was typed by a person. After it, one class of id is rondo's
+   suggestion. If a later reader holds that rule 3 and rule 6 collide anyway, **this entry takes
+   precedence for ids minted for an `abandoned`-triggered proposal and nowhere else**; rule 3 stands
+   over every other identifier rondo handles.
+
+8. **A successor id taken between the proposal and the admission fails closed, with no new
+   mechanism.** The iteration id is the `iteration` table's primary key, `proposeRetry` already
+   refuses a successor the store holds (`advisory.ts:1245-1256`), and `D-0022` rule 17's comparison
+   of the approved digest against the classification refuses an admission whose grantee moved. Three
+   refusals, all of them already decided.
+
+9. **The write is unaccompanied, and writes no attention row.** `D-0042` settled that a presentation
+   is a person's act and not a rendering; here there is not even a rendering, so the trigger records
+   a `proposal` and writes no `operator_attention`, moves no last-look mark, and counts nothing.
+   `D-0022` rule 18's order -- record before showing -- is kept in the only way it can be kept when
+   nothing is shown.
+
+10. **The automatic proposal's id is derived and carries no clock**, unlike the operator door's
+    `${kind}-${successorId}-${now}` (`advisory.ts:1271`). A second attempt to record the same
+    proposal about the same subject collides on the primary key and writes nothing, which is the
+    whole of the idempotence this needs.
+
+11. **A trigger that cannot do its work never changes the lap's outcome.** The terminal transition
+    is committed before `admit()` returns; whatever the trigger could not do is appended to the
+    report's lines and never thrown. **The lines go into the report and not to stdout**, because the
+    surface that called `admit()` may not be a terminal.
+
+12. **Nothing in `src/` changes on this entry.** The implementation is a separate pull request, in
+    the order rule 3, rule 6, rule 4.
+
+### What this does not do
+
+- **It does not close rondo#105's chain.** Nothing consumes an approved decision -- `D-0022`
+  rule 17's digest comparison at admission is still unbuilt -- so an approved automatic proposal
+  starts no retry. What this entry closes is the *proposal* half: after it, a stop leaves something
+  in the ledger a person can answer, which is what the issue measured as absent.
+- **It does not push anything at anybody.** The row is reachable where every other proposal is
+  reachable; no notification, no mail, no pane.
+- **It does not widen the advisory.** `propose`, `proposeContractKeys` and the gatherers are used as
+  they are; the new code is a minting rule and a call.
+
+### The argument this leaves open
+
+**Whether rondo should draft with nobody asking.** `D-0022` rule 19 made "approved and never spent"
+answerable because route C's concessions made it load-bearing. This entry creates the other half --
+*drafted and never looked at* -- and does it on rondo's own initiative. The only bound taken against
+it here is rule 5's: no row when there is nothing to choose between. Whether a cap per subject, per
+day or per store is needed is left open on purpose, for whoever first opens an inbox they did not
+want. It is not closed here because nothing has yet run long enough to say what the rate is.
+
+### Residuals, with who decides
+
+| Residual | Why not here | Who decides |
+|---|---|---|
+| `closed` without an answer as a second trigger | A withdrawal is a person's act and an expiry is a clock; neither says the plan was wrong, and the predicate already exists | whoever first wants a proposal after an expiry |
+| Which kind to emit once a store has a lineage | `agent_type`'s option set stops being degenerate as soon as a second iteration exists; this entry fixes one kind because the measured store has one row | the entry that first reads a store with lineage |
+| A cap on unspent drafted proposals | No rate has been observed; a threshold chosen before the measurement is a number nobody can defend | whoever first measures one |
+| The report line a page cannot read | Rule 11 puts the trigger's own outcome in the report's lines, and `D-0042`'s residual about `sayAdvisoryOutcome`'s exit status is the same shape one layer down | whoever first shows the trigger's outcome on the page |
+
+### What would falsify it
+
+- **A person answers the automatic proposal and the retry it authorises is not the one they meant.**
+  That falsifies rule 4's claim that `contract_keys` is the useful kind at this ending, and the
+  answer is the kind rule 4 set aside rather than a second proposal beside it.
+- **The `proposal` table fills with rows nobody ever decides.** Rule 5's bound is then not a bound,
+  and the open argument above stops being open: a cap is needed, and the rate is the measurement
+  that says which one.
+- **A minted `-r<n>` id collides with one a person meant to use.** The collision itself is refused
+  (rule 8), so what this falsifies is the *naming*: it would mean rondo's suffix is in a namespace
+  operators write by hand, and the derivation has to move to one they do not.
+- **An ending that is not `abandoned` turns out to be where people actually want this.** Rule 1 is
+  then too narrow, and the measurement is which endings operators run `rondo propose` after -- which
+  the `proposal` rows' subjects answer directly, since each names its iteration.
+- **`admit()` acquires a second caller and the required argument is a nuisance rather than a
+  guard.** Rule 3's type-level enforcement would then be paid for by every caller and used by one,
+  and the trigger moves to a wrapper the surfaces share.
