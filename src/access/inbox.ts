@@ -106,7 +106,7 @@ export type InboxOutcome =
     };
 
 /** How long ago, as a person reads it. */
-function ago(atMs: number, nowMs: number): string {
+export function ago(atMs: number, nowMs: number): string {
   const seconds = Math.max(0, Math.round((nowMs - atMs) / 1000));
   if (seconds < 60) {
     return `${String(seconds)}s`;
@@ -243,7 +243,7 @@ function proposalLines(
  * like help and costs a round trip in exactly the state that already needs a
  * person. The id is still printed, because it is where the row stopped.
  */
-function unblockedBy(record: IterationRecord): string {
+export function unblockedBy(record: IterationRecord): string {
   if (record.status === "stalled") {
     return record.gateId === null
       ? "no gate: a person has to decide"
@@ -302,7 +302,10 @@ function waitingOnYouLines(snapshot: InboxSnapshot): readonly string[] {
  * what the operator gets is the end of a manual `ls`, not an answer to "is it
  * wedged?", which `D-0036` rule 5 still refuses.
  */
-function whereItRuns(record: IterationRecord, located: TranscriptLocation | undefined): string {
+export function whereItRuns(
+  record: IterationRecord,
+  located: TranscriptLocation | undefined,
+): string {
   const workspace = record.workspace ?? "(no workspace on the row)";
   return `${transcriptPhrase(located)}  in ${workspace}`;
 }
@@ -533,7 +536,7 @@ export async function gatherInbox(ports: InboxReadPorts, actorId: string): Promi
  * and a screen that fanned out subprocesses would be spending a host's
  * concurrency on a read.
  */
-async function locateRunning(
+export async function locateRunning(
   ports: InboxReadPorts,
   live: readonly LiveRow[],
 ): Promise<ReadonlyMap<string, TranscriptLocation>> {

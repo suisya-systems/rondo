@@ -8,6 +8,17 @@
  * Nothing new is stored, nothing new is named, and no state exists that a
  * command cannot also show.
  *
+ * **What it is not is those three commands in the order they were written**
+ * (rondo#145). An operator arrives with three questions -- *what needs me, what
+ * is running, what just finished* -- and the page answers them in that order,
+ * out of the rows `inbox`, `between` and `explain` already read. rondo's own
+ * vocabulary -- bounds, adjacency, the last-look mark, a field-by-field reading
+ * of every row -- is one `<details>` below, complete and unchanged. Folded is
+ * not hidden: every claim that was on this page is still on it under the same
+ * basis, and the lead cites the row each of its lines is read off so that a
+ * number is checkable twice over rather than asserted once. The three terminal
+ * commands are untouched; this is the web face and only the web face.
+ *
  * **Reading is a type; the one write is a runtime fact** (D-0041). The two
  * ports are still `Pick`ed down to the methods that read ({@link WebPorts}), so
  * everything the renderer holds is unable to write and the compiler says so.
@@ -60,10 +71,27 @@ import {
   proposeHost,
 } from "../advisory/proposal.js";
 import type { HostPolicy } from "../refrain/policy.js";
-import type { IterationRecord } from "../store/records.js";
-import type { AdvisoryRecord, IterationStore } from "../store/sqlite.js";
+import {
+  type IterationRecord,
+  isTerminal,
+  type NonTerminalStatus,
+  type OpenProposal,
+  WAIT_SIDE,
+} from "../store/records.js";
+import type { AdvisoryRecord, IterationStore, ReadOutcome } from "../store/sqlite.js";
 import { basisLine, gather, gatherHost } from "./advisory.js";
-import { gatherInbox, type InboxReadPorts, inboxLines } from "./inbox.js";
+import {
+  ago,
+  gatherInbox,
+  type InboxReadPorts,
+  type InboxSnapshot,
+  inboxLines,
+  type LiveRow,
+  locateRunning,
+  type TranscriptLocation,
+  unblockedBy,
+  whereItRuns,
+} from "./inbox.js";
 
 /**
  * Everything the page is handed: the reading half of the two ports, the host's
@@ -74,7 +102,10 @@ import { gatherInbox, type InboxReadPorts, inboxLines } from "./inbox.js";
  * section could be about, and the page says so rather than drawing somebody's.
  */
 export interface WebPorts extends InboxReadPorts {
-  readonly store: Pick<IterationStore, "read" | "readLive" | "readingsFor" | "occupancy">;
+  readonly store: Pick<
+    IterationStore,
+    "read" | "readLive" | "readingsFor" | "occupancy" | "terminalIterations"
+  >;
   readonly record: InboxReadPorts["record"] & Pick<AdvisoryRecord, "admissionRefusals">;
   readonly policy: HostPolicy;
   readonly actorId: string | null;
@@ -204,26 +235,247 @@ function section(heading: string, note: string, body: string): string {
   );
 }
 
+/**
+ * How many ended laps the lead names before it stops counting back (rondo#145).
+ *
+ * ponytail: a fixed cap, and it caps the *rendering* rather than the read --
+ * `terminalIterations` answers the whole ledger and this page sorts it every
+ * five seconds. That is fine while a ledger is a session's worth of rows and is
+ * the first thing to change if one is not; the store is where a bounded reader
+ * would go, not here. *What just finished* is a question about the last few
+ * minutes, and every ended row is still readable with `rondo explain`.
+ */
+const RECENT_ENDED = 5;
+
+/**
+ * One lap in the lead, with the row it rests on cited once above it (D-0032,
+ * rondo#91).
+ *
+ * Every line in the block is read off **one iteration row**, so the basis is
+ * that row and it is written once -- the shape {@link claimsHtml} already uses
+ * for a shared snapshot pointer. The field-level pointers are not dropped: the
+ * reading below carries every one of these fields as its own claim under its own
+ * `snapshot /iteration/...` locator. That is what makes this a fold and not a
+ * hiding.
+ *
+ * {@link basisLine} is called rather than the string being spelled here,
+ * because a second spelling of a basis is a second thing an operator has to
+ * learn to trust. The `iteration` form reads no snapshot, so it is handed none.
+ */
+function lapHtml(
+  record: IterationRecord,
+  head: string,
+  lines: readonly (string | null)[],
+  tail = "",
+): string {
+  const basis = basisLine({ form: "iteration", iterationId: record.id }, {});
+  return (
+    `<div class="lap"><p class="basis">${escapeHtml(basis)}</p>` +
+    `<p class="head">${escapeHtml(head)}</p>` +
+    `<p class="request">${escapeHtml(record.request)}</p>` +
+    lines
+      .filter((line): line is string => line !== null)
+      .map((line) => `<p class="line">${escapeHtml(line)}</p>`)
+      .join("") +
+    tail +
+    `</div>`
+  );
+}
+
+/**
+ * What the lap spent, or nothing at all when rondo read none of it (`D-0046`).
+ *
+ * **Absent from the lead is not absent from the page.** All three columns are
+ * null until the lap suspends, and a running lap carrying three `undetermined`s
+ * is three lines that say nothing -- which is the failure rondo#145 measured.
+ * The reading below still prints each of the three under its own pointer, so
+ * the distinction between *rondo did not read this* and *this cost nothing*
+ * survives where it is checkable. Where any one of them **was** read the line
+ * is drawn and the other two say so by name.
+ */
+function spentLine(record: IterationRecord): string | null {
+  if (record.lapCostUsd === null && record.lapTurns === null && record.lapDurationMs === null) {
+    return null;
+  }
+  const cost =
+    record.lapCostUsd === null ? "cost not read" : `cost $${record.lapCostUsd.toFixed(2)}`;
+  const turns = record.lapTurns === null ? "turns not read" : `${String(record.lapTurns)} turns`;
+  // `ago` over a duration rather than over a clock: the same reading of the
+  // same number of milliseconds, which is what keeps `7m` on this page the
+  // same `7m` the inbox prints.
+  const took = record.lapDurationMs === null ? "duration not read" : ago(0, record.lapDurationMs);
+  return `${cost}, ${turns}, ${took}`;
+}
+
+/**
+ * What the worker's fence refused, in the three states the column has (#122).
+ *
+ * SQL null is rondo holding no reading, and is a line the lead does not draw:
+ * every row before its first suspend is in that state and a screen that said so
+ * on each of them would be back to counting zeros. The text `"null"` is continuo
+ * saying it could not tell, which is **not** the same as nothing having been
+ * refused and is the distinction the column was added to carry -- so it gets a
+ * line of its own. The bytes are printed as continuo wrote them.
+ */
+function fenceLine(record: IterationRecord): string | null {
+  const refused = record.permissionDenials;
+  if (refused === null) {
+    return null;
+  }
+  if (refused === "null") {
+    return "the fence: continuo could not tell what it refused";
+  }
+  return refused === "[]" ? "the fence refused nothing" : `the fence refused ${refused}`;
+}
+
+/** How an ended lap ended: the status, and the answer or reason beside it. */
+function endedHow(record: IterationRecord, nowMs: number): string {
+  const why =
+    record.gateOutcome !== null
+      ? `gate answered '${record.gateOutcome}'`
+      : (record.reason ?? "no reason recorded");
+  return `${record.status} ${ago(record.updatedAtMs, nowMs)} ago -- ${why}`;
+}
+
+/**
+ * *What needs me* -- the laps stopped at a question, and the proposals open.
+ *
+ * First because it is the only part of the page an operator can act on, which
+ * is `inbox`'s own argument for the same order. The button and the material it
+ * would be pressed over are **here** rather than in the reading below, because
+ * D-0042 makes the press this surface's presentation: what a person is shown
+ * before they write has to be beside the thing they press.
+ */
+function waitingHtml(
+  waiting: readonly IterationRecord[],
+  open: readonly OpenProposal[],
+  nowMs: number,
+  token: string | null,
+  material: ReadonlyMap<string, string>,
+): string {
+  return section(
+    `waiting for your answer (${String(waiting.length + open.length)})`,
+    "",
+    waiting
+      .map((record) =>
+        lapHtml(
+          record,
+          `${record.status} -- waiting ${ago(record.updatedAtMs, nowMs)}`,
+          [unblockedBy(record), spentLine(record), fenceLine(record)],
+          approveHtml(record, token, material.get(record.id) ?? ""),
+        ),
+      )
+      .join("") +
+      open
+        .map(
+          (proposal) =>
+            `<div class="lap"><p class="basis">read it back with its options and ` +
+            `what each rests on: rondo show --proposal-id ${escapeHtml(proposal.proposalId)}</p>` +
+            `<p class="head">${escapeHtml(
+              `${proposal.kind} -- waiting ${ago(proposal.createdAtMs, nowMs)}`,
+            )}</p>` +
+            `<p class="line">${escapeHtml(
+              proposal.iterationId === null
+                ? "about no iteration"
+                : `about '${proposal.iterationId}'`,
+            )}</p></div>`,
+        )
+        .join(""),
+  );
+}
+
+/**
+ * *What is running* -- every live lap that is not waiting on anybody.
+ *
+ * The line under each is {@link whereItRuns}: the transcript directory continuo
+ * is writing into and the workspace to `ls`. That is what rondo holds about a
+ * lap in flight -- it names a place and claims no liveness (D-0048 rule 3) --
+ * and it is what an operator asking *is this progressing* can actually open.
+ *
+ * A live row that will not decode is here rather than missing, for the inbox's
+ * reason: it holds a slot, so leaving it out would understate what is running.
+ */
+function runningHtml(
+  running: readonly IterationRecord[],
+  unreadable: readonly LiveRow[],
+  transcripts: ReadonlyMap<string, TranscriptLocation>,
+  nowMs: number,
+): string {
+  return section(
+    `running now (${String(running.length + unreadable.length)})`,
+    "",
+    running
+      .map((record) =>
+        lapHtml(record, `${record.status} -- running ${ago(record.updatedAtMs, nowMs)}`, [
+          whereItRuns(record, transcripts.get(record.id)),
+          spentLine(record),
+          fenceLine(record),
+        ]),
+      )
+      .join("") +
+      unreadable
+        .map((row) =>
+          row.kind === "unreadable"
+            ? `<div class="lap"><p class="head">${escapeHtml(row.id)}</p>` +
+              `<p class="line">${escapeHtml(`will not decode: ${row.reason}`)}</p></div>`
+            : "",
+        )
+        .join(""),
+  );
+}
+
+/** *What just finished* -- the last few endings, newest first (rondo#145). */
+function endedHtml(ended: readonly IterationRecord[], nowMs: number): string {
+  return section(
+    `just finished (${String(ended.length)})`,
+    "",
+    ended
+      .map((record) =>
+        lapHtml(record, endedHow(record, nowMs), [spentLine(record), fenceLine(record)]),
+      )
+      .join(""),
+  );
+}
+
+/**
+ * The one line an idle store gets, in place of nine ways of saying zero
+ * (rondo#145).
+ *
+ * **Its basis is the reading below, and the reading is on this page.** The
+ * three questions are answered off two reads -- every live row and every ended
+ * row -- and the locators for what those reads found (`snapshot /laps`,
+ * `snapshot /refusals`, and the rest) are in the fold, cited there exactly as
+ * they were before. So nothing is asserted here without a basis; what changed
+ * is that the basis is cited once for the three claims instead of once per
+ * phrasing of zero.
+ */
+function nothingHtml(): string {
+  return (
+    `<section><p class="nothing">Nothing is waiting on you, nothing is running, and ` +
+    `nothing has finished.</p>` +
+    `<p class="basis">every live row and every ended row in this ledger; the reading below ` +
+    `cites what each read found</p></section>`
+  );
+}
+
 /** The inbox section: the same lines `rondo inbox` prints, and no mark moved. */
-async function inboxHtml(ports: WebPorts): Promise<string> {
-  if (ports.actorId === null) {
+function inboxHtml(ports: WebPorts, snapshot: InboxSnapshot | null): string {
+  if (snapshot === null || ports.actorId === null) {
     return section(
-      "waiting on you",
+      "the inbox",
       "RONDO_APPROVER is not set, so there is no identity whose inbox this would be.",
       "",
     );
   }
-  const snapshot = await gatherInbox(ports, ports.actorId);
   return section(
-    "waiting on you",
+    "the inbox",
     "Reading this does not move your last-look mark: that is what rondo inbox does.",
     `<pre>${escapeHtml(inboxLines(ports.actorId, snapshot).join("\n"))}</pre>`,
   );
 }
 
 /** The between-laps section: `rondo between`'s composition, unrecorded. */
-async function betweenHtml(ports: WebPorts): Promise<string> {
-  const snapshot: HostSnapshot = await gatherHost(ports);
+function betweenHtml(snapshot: HostSnapshot): string {
   return section(
     "what spans the live laps",
     "An adjacency is not a collision: two laps open against one base branch is where to " +
@@ -260,66 +512,145 @@ function approveHtml(record: IterationRecord, token: string | null, material: st
   );
 }
 
-/** One live iteration, explained the way `rondo explain` explains it. */
-function explainHtml(
-  record: IterationRecord,
-  snapshot: AdvisorySnapshot,
-  token: string | null,
-  material: string,
-): string {
+/** One iteration, explained the way `rondo explain` explains it. */
+function explainHtml(record: IterationRecord, snapshot: AdvisorySnapshot): string {
   return section(
     `iteration '${record.id}'`,
     "This explanation binds nothing: it is not a proposal and cannot be approved.",
-    claimsHtml(propose(snapshot).payload.claims, snapshot) + approveHtml(record, token, material),
+    claimsHtml(propose(snapshot).payload.claims, snapshot),
   );
 }
 
 /**
  * The work a press would approve over, or nothing when there is no press.
  *
- * Read only for the row that carries the button: it shells out to `git` in the
+ * Read only for the rows that carry a button: it shells out to `git` in the
  * caller, and a page that redraws every five seconds must not inspect every
  * workspace it can see each time it does.
  */
-async function materialHtml(ports: WebPorts, record: IterationRecord): Promise<string> {
-  if (ports.material === null || record.status !== "awaiting_human" || record.gateId === null) {
-    return "";
+async function materialFor(
+  ports: WebPorts,
+  waiting: readonly IterationRecord[],
+): Promise<ReadonlyMap<string, string>> {
+  const material = new Map<string, string>();
+  if (ports.material === null) {
+    return material;
   }
-  const lines = await ports.material(record);
-  return `<pre class="material">${escapeHtml(lines.join("\n"))}</pre>`;
+  for (const record of waiting) {
+    if (record.status === "awaiting_human" && record.gateId !== null) {
+      const lines = await ports.material(record);
+      material.set(record.id, `<pre class="material">${escapeHtml(lines.join("\n"))}</pre>`);
+    }
+  }
+  return material;
 }
 
 /**
- * The whole page.
+ * The laps that have ended, newest first and only the last few (rondo#145).
  *
- * Every live row is explained rather than linked to, because one page with
- * everything on it is what an operator scrolls; a second page would be a second
- * thing to navigate and a second URL to get wrong.
+ * **An ended row that will not decode is dropped here and nowhere else.** The
+ * live side shows one, because it holds a slot and understating what is running
+ * misleads the one reader deciding whether to start something else; an ended row
+ * holds nothing and asks nothing, and it has no `updated_at_ms` to place in a
+ * "just finished" list at all. It stays in the ledger and `rondo explain` still
+ * refuses it by name.
+ */
+function endedRecently(outcomes: readonly ReadOutcome[]): readonly IterationRecord[] {
+  return outcomes
+    .flatMap((outcome) => (outcome.kind === "read" ? [outcome.record] : []))
+    .sort((left, right) => right.updatedAtMs - left.updatedAtMs)
+    .slice(0, RECENT_ENDED);
+}
+
+/**
+ * The whole page: the three questions an operator arrives with, and then the
+ * reading the answers rest on (rondo#145).
+ *
+ * **The order is the argument, and it is the operator's rather than rondo's.**
+ * What is on the screen first is what needs them, then what is running, then
+ * what just ended -- which is `inbox`'s own order carried to the surface a
+ * person actually looks at, and not the order `inbox`, `between` and `explain`
+ * happen to be laid out in. rondo's own vocabulary -- bounds, adjacency,
+ * last-look marks, a field-by-field reading of every row -- is one `<details>`
+ * below, unchanged and complete.
+ *
+ * **Folded is not hidden** (D-0032). Every claim that was on this page before
+ * is still on it, under the same basis, in the same words; what moved is which
+ * of them an operator has to read past to answer *does anything need me*. The
+ * lead cites the row each of its lines is read off, once, and the reading below
+ * cites the field -- so a number in the lead is checkable twice over rather
+ * than asserted once.
+ *
+ * **Nothing here writes** (D-0041). Every read above is a read, the `<details>`
+ * is a browser's own element and carries no script, and the only thing on the
+ * page that can produce anything but a `GET` is still the one form.
  */
 export async function operatorPage(ports: WebPorts, token: string | null = null): Promise<string> {
-  const sections: string[] = [await inboxHtml(ports), await betweenHtml(ports)];
-  for (const outcome of await ports.store.readLive()) {
-    if (outcome.kind === "read") {
-      sections.push(
-        explainHtml(
-          outcome.record,
-          gather(outcome.record, await ports.store.readingsFor(outcome.record.id)),
-          ports.answer === null ? null : token,
-          await materialHtml(ports, outcome.record),
-        ),
-      );
-    } else if (outcome.kind === "unreadable") {
-      // A live row that will not decode is on the page for the inbox's reason:
-      // it holds a slot, so leaving it out would understate what is running.
-      sections.push(
-        section(
-          `iteration '${outcome.id}'`,
-          "",
-          `<pre>will not decode: ${escapeHtml(outcome.reason)}</pre>`,
-        ),
-      );
+  const nowMs = ports.now();
+  const host = await gatherHost(ports);
+  const inbox = ports.actorId === null ? null : await gatherInbox(ports, ports.actorId);
+  const live: LiveRow[] = (await ports.store.readLive()).flatMap((outcome): LiveRow[] => {
+    switch (outcome.kind) {
+      case "read":
+        return [{ kind: "read", record: outcome.record }];
+      case "unreadable":
+        return [{ kind: "unreadable", id: outcome.id, reason: outcome.reason }];
+      default:
+        return [];
     }
+  });
+  const ended = endedRecently(await ports.store.terminalIterations());
+  const waiting: IterationRecord[] = [];
+  const running: IterationRecord[] = [];
+  for (const row of live) {
+    if (row.kind !== "read") {
+      continue;
+    }
+    const side = isTerminal(row.record.status)
+      ? null
+      : WAIT_SIDE[row.record.status as NonTerminalStatus];
+    (side === "waitingOnYou" ? waiting : running).push(row.record);
   }
+  const unreadable = live.filter((row) => row.kind === "unreadable");
+  const open = inbox?.open ?? [];
+  // Reused rather than asked again when the inbox already asked: it is a
+  // continuo subprocess per running lap, and this page redraws itself.
+  const transcripts = inbox?.transcripts ?? (await locateRunning(ports, live));
+
+  const lead =
+    waiting.length + running.length + ended.length + open.length + unreadable.length === 0
+      ? nothingHtml()
+      : [
+          waitingHtml(
+            waiting,
+            open,
+            nowMs,
+            ports.answer === null ? null : token,
+            await materialFor(ports, waiting),
+          ),
+          runningHtml(running, unreadable, transcripts, nowMs),
+          endedHtml(ended, nowMs),
+        ].join("\n");
+
+  const reading = [
+    inboxHtml(ports, inbox),
+    betweenHtml(host),
+    ...(await Promise.all(
+      [...waiting, ...running, ...ended].map(async (record) =>
+        explainHtml(record, gather(record, await ports.store.readingsFor(record.id))),
+      ),
+    )),
+    ...unreadable.map((row) =>
+      row.kind === "unreadable"
+        ? section(
+            `iteration '${row.id}'`,
+            "",
+            `<pre>will not decode: ${escapeHtml(row.reason)}</pre>`,
+          )
+        : "",
+    ),
+  ].join("\n");
+
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -336,8 +667,11 @@ h2 { font-size: 1rem; margin: 0 0 .25rem; }
 section { margin: 1.5rem 0; }
 pre { white-space: pre-wrap; word-break: break-word; margin: 0; }
 .note, .basis { opacity: .7; margin: .25rem 0; }
-.group { border-left: 2px solid currentColor; margin: .75rem 0; padding-left: .75rem; }
+.group, .lap { border-left: 2px solid currentColor; margin: .75rem 0; padding-left: .75rem; }
 .basis { font-size: .85rem; }
+.head { font-weight: 600; margin: .25rem 0; }
+.request, .line { margin: .25rem 0; white-space: pre-wrap; word-break: break-word; }
+.nothing { margin: .25rem 0; }
 .claim { display: grid; grid-template-columns: minmax(9rem, 14rem) 1fr; gap: .75rem; margin: .25rem 0; }
 .label { opacity: .7; }
 .approve { align-items: center; display: flex; flex-wrap: wrap; gap: .75rem; margin: .75rem 0 0; }
@@ -345,6 +679,8 @@ pre { white-space: pre-wrap; word-break: break-word; margin: 0; }
 .approve .note { margin: 0; }
 .material { margin: .75rem 0 0; opacity: .85; }
 .value { white-space: pre-wrap; word-break: break-word; }
+.reading { border-top: 1px solid currentColor; margin-top: 2rem; padding-top: .75rem; }
+.reading summary { cursor: pointer; opacity: .7; }
 @media (max-width: 40rem) { .claim { grid-template-columns: 1fr; gap: 0; } }
 </style>
 </head>
@@ -353,7 +689,11 @@ pre { white-space: pre-wrap; word-break: break-word; margin: 0; }
 <p class="note">Redraws every ${String(REFRESH_SECONDS)}s, and a redraw writes nothing: no last-look
 mark moves and no presentation is counted. The one thing that writes is the approve button, which
 records the explanation you pressed on and then answers the gate.</p>
-${sections.join("\n")}
+${lead}
+<details class="reading">
+<summary>the reading these rest on: every claim with its basis, and rondo's own accounting</summary>
+${reading}
+</details>
 </body>
 </html>
 `;

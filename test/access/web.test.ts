@@ -516,3 +516,100 @@ test("a refusal from the write port is shown rather than redirected away", async
   stop.abort();
   expect(await served).toBe(0);
 });
+
+/** The visible page: everything a browser draws before the fold is opened. */
+function lead(html: string): string {
+  return html.slice(0, html.indexOf('<details class="reading">'));
+}
+
+/** The fold: what an operator opens when they want rondo's own reading. */
+function reading(html: string): string {
+  return html.slice(html.indexOf('<details class="reading">'));
+}
+
+test("an idle store says zero once rather than nine times (rondo#145)", async () => {
+  const html = await operatorPage(portsOver(fresh()));
+
+  // The measurement in the issue: nine phrasings of nothing, of which this is
+  // the shape. One sentence now stands where they did, and it carries what it
+  // rests on -- which is not the same as the page having stopped saying it.
+  expect(lead(html)).toContain(
+    "Nothing is waiting on you, nothing is running, and nothing has finished.",
+  );
+  expect(lead(html)).not.toContain("proposals that bind nothing");
+  expect(lead(html)).not.toContain("an admission a bound refused");
+  expect(lead(html)).not.toContain("you have never looked");
+  // Folded and not hidden (D-0032): every one of them is still on the page,
+  // under the basis it always had.
+  expect(reading(html)).toContain("proposals that bind nothing (0)");
+  expect(reading(html)).toContain("an admission a bound refused");
+  expect(reading(html)).toContain("snapshot /refusals = []");
+});
+
+test("the page is ordered by the operator's three questions (rondo#145)", async () => {
+  const world = fresh();
+  await reserve(world, "i-0001", "do the thing");
+
+  const html = await operatorPage(portsOver(world));
+  const at = (heading: string) => lead(html).indexOf(heading);
+
+  expect(at("waiting for your answer")).toBeGreaterThan(-1);
+  expect(at("running now")).toBeGreaterThan(at("waiting for your answer"));
+  expect(at("just finished")).toBeGreaterThan(at("running now"));
+  // rondo's own vocabulary is below the questions, not in place of them.
+  expect(at("what spans the live laps")).toBe(-1);
+  expect(reading(html)).toContain("what spans the live laps");
+});
+
+test("a lap at a gate carries its cost and its fence beside the button (rondo#145)", async () => {
+  const world = fresh();
+  await reserve(world, "i-0001", "do the thing");
+  await openGate(world, "i-0001");
+  const settled = await world.store.transition(
+    "i-0001",
+    "awaiting_human",
+    "awaiting_human",
+    { lapCostUsd: 1.42, lapTurns: 18, permissionDenials: '["Bash(rm:*)"]' },
+    3_000,
+  );
+  expect(settled.kind).toBe("transitioned");
+
+  const html = await operatorPage(portsOver(world, "ada", []), "t");
+
+  // What it cost (#124), what its fence refused (#122) and what releases it,
+  // on the row a person is about to press -- and the row cited once above them
+  // rather than a basis under each (rondo#91).
+  expect(lead(html)).toContain("cost $1.42, 18 turns, duration not read");
+  // The bytes continuo wrote, as HTML text: the array is quoted in the column
+  // and the page escapes rather than re-encodes it.
+  expect(lead(html)).toContain("the fence refused [&quot;Bash(rm:*)&quot;]");
+  expect(lead(html)).toContain("answer gate gate-i-0001");
+  expect(lead(html)).toContain('<p class="basis">iteration i-0001</p>');
+  expect(lead(html)).toContain('method="post"');
+  // The field-level locators survive the fold: a number in the lead is
+  // checkable against the row it was read off.
+  expect(reading(html)).toContain("snapshot /iteration/lapCostUsd = 1.42");
+  expect(reading(html)).toContain("snapshot /iteration/lapDurationMs = null");
+});
+
+test("a lap that has ended is on the page it just left (rondo#145)", async () => {
+  const world = fresh();
+  await reserve(world, "i-0001", "do the thing");
+  await openGate(world, "i-0001");
+  const closed = await world.store.transition(
+    "i-0001",
+    "awaiting_human",
+    "closed",
+    { gateOutcome: "approve" },
+    4_000,
+  );
+  expect(closed.kind).toBe("transitioned");
+
+  const html = await operatorPage(portsOver(world));
+
+  expect(lead(html)).toContain("just finished (1)");
+  expect(lead(html)).toContain("closed 1s ago -- gate answered 'approve'");
+  // Nothing is running and nothing is waiting, and the page says each once.
+  expect(lead(html)).toContain("waiting for your answer (0)");
+  expect(lead(html)).toContain("running now (0)");
+});
