@@ -81,7 +81,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0041 | The one write the operator's page may do: an unattended redraw and a person's click are told apart at runtime and never by type, the approver is the only actor, and the write is a single function rather than a store | accepted |
 | D-0042 | What counts as a presentation on a page that redraws itself: the press and not the render, recorded before the gate is answered, and the reader who does not press left uncounted | accepted |
 | D-0043 | The trigger a stopped lap pulls: one proposal at the abandon the conductor's own arc reaches, `contract_keys` because it is the only option set that is a choice, and a successor identity rondo mints and nobody has yet adopted | accepted |
-| D-0044 | The second model tier is `mechanical`, it is reached by naming an agent type and never by rondo reading a request, and its model id waits on rondo recording what a lap costs | accepted |
+| D-0044 | The second model tier is `mechanical`, it is reached by naming an agent type and never by rondo reading a request, and its model id waits on rondo recording what a lap costs | superseded by D-0062 |
 | D-0045 | What the record may say about a verification rondo did not watch: the operator's claim held as a claim, no column for a result, a silence that reads as a silence, and a row `publish` may print and may not be satisfied by | accepted |
 | D-0046 | Where rondo reads what a lap cost: off the lap's own transcript, three columns rather than one, and an unread cost that is not a zero | accepted |
 | D-0047 | Where an approval is spent: inside the admission's own transaction, with the contract recomposed from today's material, and by a verb of its own | accepted |
@@ -98,7 +98,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0058 | The second `resume` leaves the handbook: idempotence is a property the suite already proves more strongly than a walk can observe it, the surface keeps one `resume` per answering act on purpose, and no verb is added on the strength of a sentence | accepted |
 | D-0060 | Work left uncommitted is a fact rondo reads and names: `git status` joins the reading as a finding, `publish` refuses a workspace that still holds any, `--despite-review` does not reach it, and rondo commits nothing on a lap's behalf | accepted |
 | D-0061 | Where a request enters rondo: the organisation's five steps mapped onto parts that mostly exist, a request thread in the conversation as the first thing built, and the drafter that reads a request cleared by the human gate, with its split into plans waiting on `D-0062` | accepted |
-| D-0062 | A proposal may name an agent type, and only a split proposal from a request may: a record rondo already holds chosen by its digest, approved on route S with the tier bound by the option it came from, and the kind-to-tier judgment kept whole while the request-to-kind judgment moves to the gate | proposed |
+| D-0062 | A proposal may name an agent type, and only a split proposal from a request may: a record rondo already holds chosen by its digest, approved on route S with the tier bound by the option it came from, and the kind-to-tier judgment kept whole while the request-to-kind judgment moves to the gate | accepted |
 
 ---
 
@@ -7877,7 +7877,16 @@ want. It is not closed here because nothing has yet run long enough to say what 
 
 ## D-0044 — The second model tier is `mechanical`, it is reached by naming an agent type and never by rondo reading a request, and its model id waits on rondo recording what a lap costs
 
-**Status:** accepted (2026-09-12, rondo's human gate). Refs rondo#89, rondo#96, `D-0021`.
+**Status:** superseded by D-0062 (2026-09-13). Accepted 2026-09-12 (rondo's human gate). Refs
+rondo#89, rondo#96, `D-0021`.
+
+> **Supersession note (2026-09-13, from D-0062).** `D-0061`'s gate chose to let a split proposal
+> name an agent type. That changes two assertions below: the heading's and rule 2's "never by rondo
+> reading a request", and rule 3's "by inference". Supersession is whole-entry, per "How to use this
+> file", so **rules 1, 4, 5 and 6 are not retired with it**. Neither are the sections "What the four
+> measured laps actually say" and "Why this organisation's split does not transfer", or the `D-0052`
+> annotation. `D-0062` carries all of them as written, and they are still cited as `D-0044` rule N.
+> Rules 2 and 3 are restated as `D-0062` rules 1 and 2. Nothing below is edited.
 
 > **Annotation (2026-09-12, from D-0052).** Added after this entry was accepted, and additive:
 > nothing below is removed or rewritten, and **how a tier is chosen does not change**. Rule 3's "an
@@ -8326,6 +8335,13 @@ costs one module and one grant, and the falsifiers below say what would move it.
 
 **Status:** accepted (2026-09-12, rondo's human gate). Refs rondo#105, rondo#107, `D-0022`, `D-0030`,
 `D-0032`, `D-0038`, `D-0043`.
+
+> **Annotation (2026-09-13, from D-0062).** Added after this entry was accepted, and additive.
+> Rule 4's refusal gains one case of the same kind. When the proposal is a split that names an agent
+> type (`D-0062` rule 1), the candidate that composes the approved digest must carry the
+> `agentTypeDigest` its option named. If it does not, nothing runs and nothing is spent (`D-0062`
+> rule 3.3). A contract digest does not cover the agent type or its tier, so without this case an
+> approval would not bind the tier. It is a refusal and never a re-selection, as rule 4 already says.
 
 rondo#107 measures the last hole in #41 section 3's chain. `rondo decide` writes a `human_decision`
 row and nothing reads it; the screen says so to the operator in its own words
@@ -11581,6 +11597,11 @@ the gate function and the push were exercised directly, which is where the outco
 
 **Status:** accepted (2026-09-13, rondo's human gate). The gate also answered the question this
 entry put to it; the answer is recorded in section "What was put to the human gate, and its answer".
+
+> **Annotation (2026-09-13, from D-0062).** `D-0062` was accepted, and it names agent types in a
+> proposal, so this entry's falsifier about `D-0062` did not fire and the split stays on option (b).
+> The split still waits on the model-drafter entry. `D-0063` reviews the advisory's role, including
+> `D-0022` rule 7, which a split into plans does not fit.
 Refs `D-0020`, `D-0022`, `D-0025`, `D-0026`, `D-0030`, `D-0032`, `D-0034`, `D-0036`, `D-0044`,
 `D-0062`.
 
@@ -11779,12 +11800,13 @@ entry, and the split waits on that entry and on `D-0062`.
 
 ## D-0062 — A proposal may name an agent type, and only a split proposal from a request may: a record rondo already holds chosen by its digest, approved on route S with the tier bound by the option it came from, and the kind-to-tier judgment kept whole while the request-to-kind judgment moves to the gate
 
-**Status:** proposed (2026-09-13), for rondo's human gate. Refs `D-0014`, `D-0021`, `D-0022`,
+**Status:** accepted (2026-09-13, rondo's human gate). Refs `D-0014`, `D-0021`, `D-0022`,
 `D-0025`, `D-0032`, `D-0034`, `D-0043`, `D-0047`, `D-0049`, `D-0052`, `D-0061`.
 
-**Four points are held open for the gate and are provisional until it answers:** the `D-0022`
-rule 7 residual, the spend-time check as an annotation on `D-0047` rule 4 (rule 3.3), the refused
-`human_decision` column (rule 3.4), and the whole-entry supersession form below.
+**Four points were put to the gate while this entry was drafted, and it confirmed all four as
+written:** the `D-0022` rule 7 collision is left as a residual for `D-0063`, the spend-time check
+is an annotation on `D-0047` rule 4 (rule 3.3), a `human_decision` column is recorded as refused
+(rule 3.4), and `D-0044` is superseded as a whole.
 
 **This entry decides and does not build.** Nothing in `src/` changes with it.
 
@@ -11847,8 +11869,8 @@ follows that precedent. It does not invent a partial status the file has never h
 actually say", its section "Why this organisation's split does not transfer", and the `D-0052`
 annotation on it are **carried into this entry as written** and keep being cited as `D-0044` rule N.
 Their text stays under `D-0044`'s heading and is not copied here, so that there is one text and no
-drift. Rules 2 and 3 are restated below as rules 1 and 2 of this entry. The gate is asked to read the
-supersession as retiring those two rules and the heading's "never", and nothing else.
+drift. Rules 2 and 3 are restated below as rules 1 and 2 of this entry. The supersession retires those two
+rules and the heading's "never", and nothing else.
 
 ### Decision
 
@@ -11974,10 +11996,11 @@ supersession as retiring those two rules and the heading's "never", and nothing 
   or several, or the verb that spends it. That belongs to the split entry `D-0061` step 5.4 names.
 - **It does not widen `D-0022` for the split.** A split proposes plans that are not a selection
   among persisted plans or a diff against a predecessor. `D-0022` rule 7 (`A-6`) allows a plan
-  proposal to be only those, together with a hole list. Rules 1 and 3 of that entry are already named by
-  `D-0061` as the model-drafter entry's widening. **Rule 7 is not named there, and it is not decided
-  here**: this entry keeps its own field (the agent type) inside rule 7, and leaves the rest of the
-  plan to the entry that owns the split. It is carried as a residual, for the gate.
+  proposal to be only those, together with a hole list. `D-0061` names rules 1 and 3 of that entry as
+  the model-drafter entry's widening. **Rule 7 is not named there, and it is not decided here.** This
+  entry keeps its own field, the agent type, inside rule 7. What the advisory is for as a whole,
+  including rule 7, is `D-0063`'s to decide. This entry reads the advisory only as the author of a
+  proposal and does not narrow that role.
 - **It does not choose a model id for `mechanical`**, or open `D-0044` rule 5's gate.
 - **It does not add a catalog of agent types.**
 - **It does not change `D-0025` rule 5.** The plan reader still infers nothing; the drafter is not
@@ -11989,22 +12012,15 @@ supersession as retiring those two rules and the heading's "never", and nothing 
 
 | Residual | Why not here | Who decides |
 |---|---|---|
-| `D-0022` rule 7's plan-proposal forms, which a split into plans does not fit | A ratified rule other than `D-0044`. The brief for this entry says such a change is raised, not settled in passing | rondo's gate, in the split entry or the model-drafter entry |
-| The spend-time agent-type check (rule 3.3), as an annotation on `D-0047` rule 4 | Additive (a further refusal in that rule's family, no claim edited). Written on acceptance, not before | this entry's acceptance commit |
+| `D-0022` rule 7's plan-proposal forms, which a split into plans does not fit | A ratified rule other than `D-0044`. The gate ruled that it belongs to a review of the advisory's role as a whole, which may treat the advisory as a support role that does more than propose | `D-0063` |
 | A recorded `agentTypeDigest` on `human_decision` | Would re-open `D-0049` rule 2 and `D-0032` rule 12 | a later entry, if the falsifier on tier-only alternatives fires |
 
-### What acceptance edits in this file
+### Annotations this entry adds to earlier entries
 
-Nothing below is edited before the gate accepts this entry. On acceptance, in the same commit that
-sets this entry's status:
-
-- **`D-0044`** gains `Status: superseded by D-0062 (date)` and a supersession note in `D-0001`'s form,
-  saying that rules 2 and 3 and the heading's "never" are retired, and that rules 1, 4, 5 and 6, the
-  two analysis sections and the `D-0052` annotation live on under this entry's "What survives".
+- **`D-0044`** gains `Status: superseded by D-0062` and a supersession note in `D-0001`'s form.
 - **`D-0047` rule 4** gains a dated annotation for rule 3.3's refusal.
-- **`D-0061`**'s third answer gains a dated annotation saying that `D-0062` was accepted, so its
-  last falsifier did not fire.
-- **The index** rows for `D-0044` and `D-0062` are updated to match.
+- **`D-0061`** gains a dated annotation: its falsifier about `D-0062` did not fire, and the split
+  stays on option (b).
 
 ### What would falsify it
 
