@@ -332,13 +332,29 @@ const LANG_COOKIE_SECONDS = 180 * 24 * 60 * 60;
  * cannot touch is a value a later script cannot start depending on.
  */
 function rememberLang(tag: string): string {
+  // Written raw for {@link cookieTag}'s reason: `tag` is a shipped set's own
+  // tag, so there is no escaping for the two sides to agree about.
   return (
-    `${LANG_COOKIE}=${encodeURIComponent(tag)}; Path=/; SameSite=Strict; HttpOnly; ` +
+    `${LANG_COOKIE}=${tag}; Path=/; SameSite=Strict; HttpOnly; ` +
     `Max-Age=${String(LANG_COOKIE_SECONDS)}`
   );
 }
 
-/** The remembered tag off a request's `Cookie` header, or null when there is none. */
+/**
+ * The remembered tag off a request's `Cookie` header, or null when there is
+ * none.
+ *
+ * **Read raw, and not percent-decoded.** The value rondo writes is a set's own
+ * tag -- `en` or `ja`, inside `[a-z]` -- so there is nothing to decode, and
+ * `decodeURIComponent` is a function that *throws* on input it does not like
+ * (`lang=%` is a `URIError`). This runs synchronously in the request callback,
+ * outside the two promise handlers below, so a throw here would take the
+ * process down rather than ignore a preference -- and the cookie jar for
+ * `localhost` is shared with whatever else on this machine has served a page,
+ * so the header is not rondo's to trust the shape of. A value that is not a
+ * tag resolves to nothing through {@link setFor}, which is the same answer
+ * decoding it would have reached.
+ */
 function cookieTag(header: string | undefined): string | null {
   if (header === undefined) {
     return null;
@@ -346,7 +362,7 @@ function cookieTag(header: string | undefined): string | null {
   for (const pair of header.split(";")) {
     const at = pair.indexOf("=");
     if (at !== -1 && pair.slice(0, at).trim() === LANG_COOKIE) {
-      return decodeURIComponent(pair.slice(at + 1).trim());
+      return pair.slice(at + 1).trim();
     }
   }
   return null;

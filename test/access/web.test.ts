@@ -1398,6 +1398,53 @@ function declaredIn(html: string): string {
   return /<html lang="([^"]*)">/.exec(html)?.[1] ?? "";
 }
 
+test("an ill-formed tag resolves to nothing rather than truncating into a set (rule 9)", () => {
+  // **The truncation is what makes this the wrong way round if the grammar is
+  // not checked first.** `ja-!!` and `ja-` each reach `ja` by cutting at a
+  // hyphen, so a syntax error would resolve -- and, being a language the other
+  // steps would not have answered, would write rule 5's memory on its way past.
+  // Rule 9 says an ill-formed `lang` resolves to nothing and leaves the memory
+  // alone, so the step must say nothing and the next one must answer.
+  for (const bad of ["ja-!!", "ja-", "-ja", "ja_JP", "j", "日本語", "ja ", "%", ""]) {
+    expect(resolvedTag({ query: bad })).toBe("en");
+    expect(resolveLanguage(askedWith({ query: bad, cookie: "lang=en" })).lang).toBe("en");
+    // The one that would have been a silent switch: an English memory must
+    // survive an ill-formed ask that happens to start with a shipped tag.
+    expect(resolveLanguage(askedWith({ query: bad, host: "ja" })).lang).toBe("ja");
+  }
+  // Every step is checked, not just the query: a header or a cookie carrying
+  // rubbish says nothing rather than truncating into a set.
+  expect(resolveLanguage(askedWith({ cookie: "lang=ja-!!", host: "en" })).lang).toBe("en");
+  expect(resolveLanguage(askedWith({ header: "ja-!!", host: "en" })).lang).toBe("en");
+  // And what the grammar admits still resolves, so this is a check and not a
+  // second, narrower lookup.
+  expect(resolvedTag({ query: "ja-JP" })).toBe("ja");
+  expect(resolvedTag({ query: "ja-x-private" })).toBe("ja");
+  expect(resolvedTag({ query: "zh-Hant" })).toBe("en");
+});
+
+test("a cookie that is not a tag is ignored and does not take the server down", async () => {
+  // **`decodeURIComponent` throws on `lang=%`**, and `resolveLanguage` runs
+  // synchronously in the request callback -- outside the two promise handlers
+  // -- so decoding the value would end the process rather than ignore a
+  // preference. The cookie jar for `localhost` is shared with whatever else on
+  // this machine has served a page, so this header is not rondo's to trust.
+  const world = fresh();
+  await reserve(world, "i-0001", "do the thing");
+  const { base, stop, served } = await serving(portsOver(world, "ada", null, "ja"));
+
+  for (const cookie of ["lang=%", "lang=%zz", "lang=", "lang", "lang=ja%2DJP", "other=%"]) {
+    const answered = await get(base, "/?lang=ja", { cookie });
+    expect(answered.status).toBe(200);
+    expect(declaredIn(answered.body)).toBe("ja");
+  }
+  // Still serving, which is the whole of the claim.
+  expect((await get(base, "/?lang=ja")).status).toBe(200);
+
+  stop.abort();
+  expect(await served).toBe(0);
+});
+
 test("the resolution is never silent: one 303 names the set, and a request naming it is served", async () => {
   const world = fresh();
   await reserve(world, "i-0001", "do the thing");

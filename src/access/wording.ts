@@ -38,6 +38,8 @@
  * somebody takes.
  */
 
+import { isLanguageTag } from "../refrain/plan.js";
+
 /**
  * Every sentence rondo composes for the operator to read, keyed by string.
  *
@@ -529,9 +531,21 @@ export const SHIPPED_SETS: ReadonlyMap<string, string> = new Map([
  * the *next* step answer rather than resolve to English itself, or the host's
  * variable saying `de` would silence the browser's list. English is the floor
  * of the resolution and not the answer of every step in it.
+ *
+ * **Ill-formed asks resolve to nothing, and the grammar is checked before the
+ * truncation rather than after it** (D-0056 rule 9). Truncation is what makes
+ * this the wrong way round if it is skipped: `ja-!!` and `ja-` each reach `ja`
+ * by cutting at a hyphen, so a syntax error would *resolve* -- and, being a
+ * language the other steps would not have answered, would write rule 5's
+ * memory. Rule 9 says an ill-formed `lang` resolves to nothing and does not
+ * overwrite the memory, so the check is here, where every step of rule 2 passes
+ * through it. The grammar is `src/refrain/plan.ts`'s, shared rather than
+ * restated, which is the grammar D-0056 cites when it says rule 9's
+ * unknown-tag case is about a well-formed tag rondo ships no set for and not
+ * about a syntax error.
  */
 export function setFor(tag: string | null): Chrome | null {
-  if (tag === null) {
+  if (tag === null || !isLanguageTag(tag)) {
     return null;
   }
   let candidate = tag.toLowerCase();
