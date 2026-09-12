@@ -1304,6 +1304,57 @@ test("the body distinguishes an approval that checked something from one that di
   expect(claimed).not.toContain("Nobody recorded what they checked");
 });
 
+test("a claim longer than a listed value is printed rather than replaced (#131)", () => {
+  // The 318-character claim of lap 6's N-18 came out as "(claim of 318
+  // characters, not printed here)": `listed()` replaces past 200, because for a
+  // subject or a path the thing itself is there to read. It is not, here. The
+  // body is where the claim was going, and the row is in a store this pull
+  // request's reviewer cannot open.
+  const long = `ran ${"npm ci --ignore-scripts and npm run verify, both green; ".repeat(6)}twice`;
+  expect(long.length).toBeGreaterThan(200);
+  const body = text({
+    verificationClaims: [
+      {
+        iterationId: "dogfood-001",
+        claimedAtMs: 1_700_000_000_000,
+        actorId: "operator-1",
+        claim: long,
+      },
+    ],
+  }).body;
+  expect(body).toContain(`said they had checked: ${long}. That is their own account`);
+  expect(body).not.toContain("not printed here");
+
+  // A claim that already ends in a full stop is not given a second one: two
+  // would be a mark the reader has to decide the operator did not type.
+  const ended = text({
+    verificationClaims: [
+      {
+        iterationId: "dogfood-001",
+        claimedAtMs: 1_700_000_000_000,
+        actorId: "operator-1",
+        claim: "I ran the suite. It was green.",
+      },
+    ],
+  }).body;
+  expect(ended).toContain("It was green. That is their own account");
+
+  // Bounded still, and the cut says so rather than ending mid-word in silence.
+  const huge = "x".repeat(4001);
+  const cut = text({
+    verificationClaims: [
+      {
+        iterationId: "dogfood-001",
+        claimedAtMs: 1_700_000_000_000,
+        actorId: "operator-1",
+        claim: huge,
+      },
+    ],
+  }).body;
+  expect(cut).toContain("[...1 more characters. The whole of it is on this iteration's row");
+  expect(cut).not.toContain(huge);
+});
+
 test("a request that contains a code block cannot end the quotation it is inside", () => {
   const body = text({
     record: published({ request: "Run this:\n\n```sh\nnpm run verify\n```\n\nThen stop." }),
