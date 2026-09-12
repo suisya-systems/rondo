@@ -101,6 +101,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0062 | A proposal may name an agent type, and only a split proposal from a request may: a record rondo already holds chosen by its digest, approved on route S with the tier bound by the option it came from, and the kind-to-tier judgment kept whole while the request-to-kind judgment moves to the gate | accepted |
 | D-0063 | The advisory is the secretary's drafting half: it reads, asks back, drafts a split, brings points in dispute with a recommendation and reports to a person, and proposes what comes next, while handing over and approving stay elsewhere; `D-0022` rules 1, 3, 4 and 7 widen for a model drafter and a split, and only two lines are kept | accepted |
 | D-0064 | rondo is run the way a product manager runs an organisation: a person approves a scope once, the organisation decides everything inside it, and what reaches the person is a question with a recommendation, an irreversible act, a scope exit or a report | accepted |
+| D-0065 | The model reviewer: a reader of another model family that rondo runs outside the lap over bytes it hands over and digests, graded findings with bases on the reading record, a round budget and a threshold that are the scope's, and the three defects a person caught sorted into caught, half caught and not caught | accepted |
 
 ---
 
@@ -12652,4 +12653,262 @@ the option that fits `D-0064`.** They are kept as put, and the answer follows th
   owner.
 - **`D-0064` being superseded** so that handover goes back to a per-request approval. Section 1's
   split and hand-over rows and rule 6.2 are what move.
+- Any measurement in "What was measured" failing to reproduce at rondo `f30351e`.
+
+---
+
+## D-0065 — The model reviewer: a reader of another model family that rondo runs outside the lap over bytes it hands over and digests, graded findings with bases on the reading record, a round budget and a threshold that are the scope's, and the three defects a person caught sorted into caught, half caught and not caught
+
+**Status:** accepted (2026-09-13, rondo's human gate). One point was put to the gate and it chose the
+recommended option; the answer is recorded in section "What was put to the human gate, and its
+answer". The rest is decided inside `D-0064`. Refs `D-0009`, `D-0010`, `D-0019`, `D-0022`,
+`D-0026`, `D-0027`, `D-0029`, `D-0030`, `D-0032`, `D-0045`, `D-0048`, `D-0050`, `D-0051`, `D-0052`,
+`D-0060`, `D-0064`.
+
+**This entry decides and does not build.** Nothing in `src/` changes with it, and no earlier entry
+is edited by it.
+
+`D-0064` made "a model reviewer exists" one of the two conditions under which a lap's end gate leaves
+the person's hands, and the gate put that reviewer first among the empty roles. Today rondo's only
+reader is the deterministic shape check (`src/access/review.ts`, drafter `rondo/deterministic/2`),
+and its own header says an authorisation check deleted inside a function reads there as
+`1 file, +0 -3`. The three defects `D-0064` section 7 lists as caught only by a person reading are
+lap 5's borrowed `node_modules` (N-14), lap 6 and 7's failed worker sandbox (N-16, N-21), and a wrong
+summary approved three times in one day (rondo#39).
+
+This entry decides six things: what the reviewer reads, what it writes, which model it is and how it
+is kept apart from the worker's, its rounds and exit, how it plugs into `D-0064`'s scope, and which of
+the three defects it would have caught. It keeps `D-0064`'s two lines (bases; an irreversible act is
+approved by a person) and adds no third.
+
+### What was measured, and how
+
+At rondo `f30351e` on **2026-09-13**, by reading, and re-checked after rebasing onto `2a35068` (`D-0063`, which carries `D-0022` rule 13 as written). The baseline is claude-org-ja's working tree on the
+same date, read only (`JA/`), and the survey `JA/notes/lap-gap-survey-2026-09-13.md` section G3.
+
+- **The reading record has no place for a severity, a basis or a delivered digest.** `LapReadingDraft`
+  is `drafter`, `verdict`, `findings: readonly string[]`, `evidence`, `unavailableReason`
+  (`src/store/records.ts`); `ReadingEvidence` is base ref, base and tip commit, material digest and
+  two counts. **The survey's "no schema change" is therefore not right**: `D-0029` rule 11 already
+  requires a model drafter's row to carry rondo's digest of the bytes it delivered, and no field holds
+  it. What `D-0022` rule 13 and `D-0029` rule 6 promise is the *same record kind* with a different
+  `drafter`, and that still holds.
+- **`readingCoverage` answers an unrecognised drafter with "What this reader looked at is not
+  recorded"** (`src/store/records.ts`), so a model drafter's row prints that until it is given lines.
+- **The worker's model is rondo's own fact.** `MODEL_TIER_TABLE` maps `standard` to `claude-opus-5`
+  (`src/continuo/roles.ts`) and is passed as `lap perform --model`; a change of pair is a new entry.
+  continuo spawns the Claude CLI, so any reviewer run *as a lap* is the worker's family.
+- **`maxReviewRounds` is carried on a plan and read by nothing in `src/`** (survey G3).
+- **The organisation's practice** (`JA/.claude/skills/org-delegate/references/worker-claude-template.md`,
+  "Codex self-review"): a different model (`codex exec review`, `gpt-6-astra`) over the branch diff,
+  Blocker/Major fixed and re-reviewed, at most 3 rounds, stop and ask a person at the cap, Minor/Nit
+  left and listed. Its empty-pass guard counts commands the reviewer actually ran, because an exit 0
+  and a clean text prove nothing.
+- **The three defects, where their evidence sat.** N-14: the worker never ran `npm ci`, `verify` went
+  green off an ancestor's `node_modules`, and the commit message states a wrong cause; the only
+  dissent was `knip`'s output (`docs/operations/lap-5-dogfood.md` N-14). N-16 / N-21: the first Bash
+  call's output reads `Sandbox is enabled but failed to initialize: EPERM ...`, and the worker said so
+  in its prose (`lap-6-dogfood.md` N-16, `lap-7-dogfood.md` N-21). rondo#39: a proposed candidate that
+  had already merged, a corruption that existed only in a summary's prose, and an instruction that
+  contradicted a repository convention (`D-0032` rule 3); all three were in summaries put to a person,
+  not in a lap's diff.
+
+### 1. What the reviewer reads, and what it does not
+
+1. **It reads bytes rondo hands it, and nothing it fetches itself.** rondo assembles one document,
+   digests it (`D-0029` rule 11's delivered digest), and hands it over on standard input to a reviewer
+   run in an empty directory with its own sandbox read-only. The review surface that lets the reviewer
+   run `git` in the workspace is not used: what it read would then be the reviewer's account, which
+   rule 11 refuses as evidence. What this gives up is the organisation's measured parity for that
+   surface; it is not claimed for this form.
+2. **The document holds six things**, each taken by rondo from its own source:
+   1. **the diff bodies** of the range the deterministic reading resolved (`baseCommit..tipCommit`), so
+      the model reading and the shape reading are about the same commits;
+   2. **the full commit messages** of that range (a message is a summary of the diff, and rondo#39's
+      class is a summary that contradicts its material);
+   3. **what the lap was asked**: the prompt it ran on, including a `revise` instruction (`D-0027`);
+   4. **the lap's transcript, reduced to the commands it ran and what they returned**, and its final
+      message (the gate's `rationale`), located by `D-0048`'s identifier. The rationale is handed as a
+      claim to check against the rest, not as a description of the work;
+   5. **the deterministic reading's findings** for the same lap, including `D-0060`'s uncommitted paths;
+   6. **the review criterion** (`D-0029` rule 13: a plan field): what each severity means, and the paths
+      of the target repository's rule files (for example `AGENTS.md`), whose content rondo reads at
+      `baseCommit` and includes.
+3. **It does not read:** the workspace's filesystem beyond the above; anything not committed (it gets
+   the uncommitted *list*, not contents); the worker's reasoning outside its tool calls; the network,
+   GitHub, CI or pull request state; other laps and earlier readings (a later round sees earlier
+   findings only as they appear in the `revise` instruction); the operator's conversation beyond the
+   prompt; and proposals, splits or summaries outside the lap.
+4. **Material over the reviewer's input bound makes the reading `unavailable`**, with the size as the
+   reason. It is never truncated: a truncated hand-over would carry a delivered digest over bytes the
+   reviewer was never given in full, which is the empty pass arriving through a size limit.
+
+### 2. What it writes, and where
+
+1. **A row of the same `lap_reading` kind**, appended, with no status and no updating writer
+   (`D-0029` rule 8, `D-0022` rule 4). Its `drafter` names the reviewer and its version and the model,
+   as `rondo/model/1/<model-id>`, so a later reader can tell which reviewer said it (the reason
+   `rondo/deterministic/2` carries a version) and so `D-0051`'s identity-by-content keeps two models'
+   readings apart.
+2. **Each finding carries a severity and at least one basis.** Severity is a closed four: `blocker`,
+   `major`, `minor`, `nit` (the organisation's Blocker/Major/Minor/Nit; its P1 reads as `major`). A
+   basis is a locator into the delivered document: a path and line at `tipCommit`, a commit, a
+   transcript event index, or a rule-file path and line at `baseCommit` (kept line 1, `D-0032` rule 2).
+   The one-line text stays in `findings`; severity and bases are new per-finding fields on the row, and
+   the delivered digest is a new evidence field. **That is the schema change this entry needs, and it
+   is additive to the kind.**
+3. **rondo checks each locator against what it delivered.** A finding whose bases all fail to resolve
+   is recorded as it came, marked as having no basis, and **keeps its severity**: dropping it could hide
+   a real blocker, and nothing in the organisation can fix what it cannot locate or dismiss what a
+   reviewer raised (section 5.3).
+4. **The verdict does not depend on a threshold.** `clear` is no findings; `concerns` is any finding;
+   `unavailable` is output that does not parse, a timeout, a delivered digest that does not match, a
+   same-family model (section 3.3), an absent criterion (`D-0029` rule 13), or over-bound material.
+   Where the threshold comes in is section 5, and it is the scope's.
+5. **`readingCoverage` gains lines for this drafter**, in the shape the deterministic ones have: it read
+   the committed diff, the commit messages, the prompt, the transcript's commands and outputs, and the
+   repository rules it was given; it ran nothing; the material was delivered, and that it was
+   understood is not provable (`D-0029` rule 11's three grades).
+6. **It runs after `drive()` returns, in `src/access`, and never inside it** (`D-0029` rule 6). The
+   deterministic reading is still written in the `awaiting_human` transaction; the model reading
+   arrives later as a second row, while the gate's clock runs, and a person who answers first answers
+   without it. That is rule 3's "information where the clock runs" as ratified. It occupies no capacity
+   (`D-0023`: `awaiting_human` does not), and the process it spawns is a new `spawn` site the building
+   change adds to the boundary table.
+
+### 3. Which model, and how it is kept apart from the worker's
+
+1. **The reviewer is not an agent type and not a tier.** An agent type composes a fenced worker's
+   grants through cadenza and runs as a continuo lap; the reviewer has no grants, runs no tools, and a
+   lap would put it in the worker's family, which `D-0029` rule 6 refuses as a substitute.
+2. **Its model is one row of a reviewer table beside `MODEL_TIER_TABLE`**, with the same rule: a
+   changed pair is a new entry. The first row is `gpt-6-astra` through the `codex` CLI, the model the
+   organisation uses, under the operator's own codex login. rondo holds no credential of its own
+   (`D-0010`), as with `gh` at `publish`.
+3. **Different model is checked, not assumed.** Each table row names a family (`claude-*` is one,
+   `gpt-*` another). Before running, rondo compares the reviewer's family with the family of the model
+   the lap ran under, both from its own tables and neither from what a model says about itself; equal or
+   unknown makes the reading `unavailable`.
+4. **What it costs is not read**, since the codex login is a subscription and not a priced tier
+   (`D-0052` prices tiers). Residual below.
+
+### 4. Rounds and exit
+
+1. **A round is one model reading over one tip commit.** Rounds are counted along a lap's revision
+   chain (`D-0030`'s lineage), so round 2 is the reading of the lap `revise` started from round 1's
+   findings.
+2. **The budget is the scope's review-round budget** (`D-0064` rule 3.1.4, default 3). **`D-0029`
+   `V-14` is superseded by this rule**, as `D-0064` section 6 said it would be. `V-14`'s first reason,
+   that the cap hands control to a person the unattended lap does not have, is answered by `D-0064`:
+   the cap is a scope exit, and a scope exit reaches the person as P3.
+3. **Exit is: no finding at or above the scope's threshold** in the latest reading. Findings below it
+   are left and listed (O5). A spent budget with a finding at or above the threshold still open stops
+   the line.
+4. **No separate "same finding recurs" rule.** The organisation's redesign signal (the same spot three
+   rounds running) is a person's judgement (`D-0029` `V-14`), and at the default budget of 3 it
+   coincides with the budget being spent. A scope with a larger budget gets no early stop from this
+   entry.
+5. **Outside a scope nothing is counted.** A person who types `revise` is the bound (`D-0027` rule 2),
+   and the model reading is material they read.
+
+### 5. How it plugs into `D-0064`
+
+1. **Under a scope, the threshold is the scope's field** (`D-0064` rule 3.1.5, default `major`).
+   The criterion on the plan (section 1.2.6) says what each severity means; the scope says which
+   severities have to be cleared. Neither overrides the other.
+2. **Below the threshold: O5.** The finding is left, and the report (P5) lists it with its bases.
+3. **At or above the threshold: fixed inside the round budget, or the line stops (`D-0064`
+   rule 3.3).** The organisation drafts a `revise` instruction that quotes the findings and their bases
+   (O4). It does not overrule a finding, including one it thinks wrong and one without a basis:
+   overruling a reading is `--despite-review`, which rule 3.3 keeps a person's. A finding the
+   organisation disputes therefore stops the line as P3, with the finding, the dispute and a
+   recommendation.
+4. **An `unavailable` model reading under a scope stops the line**, as rule 3.3's "the independent
+   reading refuses"; `D-0029` rule 10's "absence refuses as `concerns` does" read for this drafter.
+5. **Where the person publishes, nothing changes.** `publish`'s refusal (`D-0029` `V-3`, `V-10`, and
+   `D-0060` rule 4) stays on the deterministic reading; the model reading is printed beside it as
+   material. Adding it to `publish`'s refusal is not taken here.
+6. **What "a model reviewer exists" means for `D-0064`'s first gate answer.** Both of these, and then
+   the reviewer counts toward the O6 condition (continuo's delegated answer, rule 3.6, is still needed
+   as well):
+   1. the reviewer of sections 1 to 4 is built and writes readings with a matching delivered digest;
+   2. **a recorded lap with a planted readable defect** (for example a diff that deletes a check, and a
+      commit message that states a cause the transcript contradicts) produced a finding at or above
+      `major` on it, recorded in `docs/operations/`. `D-0029` `V-12` says CI cannot prove the model
+      half; this is the proof it can have, and it is the one guard against the empty pass that a
+      delivered digest does not give.
+7. **`D-0064` rule 3.6's "only when the reading is clear" is read as:** the deterministic reading is
+   `clear`, **and** the latest model reading is not `unavailable` and holds no finding at or above the
+   scope's threshold. Read literally as "the model reading is `clear`", O5 could never apply, since
+   any below-threshold finding would block. That this reading of rule 3.6 touches ratified rules
+   outside `D-0064` was put to the gate, and its answer is below.
+
+### 6. The three defects a person caught
+
+| Defect | Caught by this reviewer? | What it would see, and what it would not |
+|---|---|---|
+| **N-14**, lap 5: green on a borrowed `node_modules`, and a commit message stating a wrong cause | **Half** | It is handed the transcript's commands and outputs and `AGENTS.md`'s order (`pin check && npm ci --ignore-scripts && verify`), so "`verify` ran and install never did" and "`knip` lists `tsc`/`biome`/`vitest` as unlisted while the commit message blames `package.json`" are both settleable from the text. **It cannot see why** the suite went green: an ancestor's `node_modules/.bin` on `PATH` is the machine's, not the material's. It reports the symptom a person reported, not the mechanism |
+| **N-16 / N-21**, laps 6 and 7: the worker's sandbox failed to initialise and later calls ran without it | **Yes when the failure is in the transcript, and no otherwise** | The failure text is a command's output, so the reviewer can raise it with a transcript basis, if the criterion treats verification conditions as in scope. `D-0050` is kept: no column records the sandbox, and **the absence of such a finding says nothing** about whether the sandbox held, which is `D-0050`'s own ground. A failure that leaves no text is not caught |
+| **rondo#39**: a wrong summary approved three times in a day | **Inside a lap, yes for two of its three shapes; outside a lap, no** | A summary inside the lap (a commit message, the rationale, the pull request text `D-0026` builds from subjects) is handed with its material, so "a claim contradicting the diff" and "an instruction contradicting a rule file" are settleable. "A candidate that had already merged" needs world state the reviewer does not read. **The three #39 cases themselves were summaries put to a person outside any lap**, and this reviewer reads none of those; under `D-0064` O1 and O3 those summaries are the organisation's and are held only by kept line 1 |
+
+### What was put to the human gate, and its answer
+
+The point is kept as put, and the answer follows it.
+
+**Whether a model reading may stand on the path to an organisation's gate answer, and which entry
+says so.** Section 5.7 makes the model reading part of O6's condition. That is what `D-0064` asked
+for, but three ratified rules that `D-0064` section 6 does not list say otherwise: `D-0022` rule 13
+(a model draft "never reaches a gate as anything but material"; carried as written under
+`D-0063` rule 8), `D-0029` rule 6 (a model reader is
+material, and admitting it "as anything that decides would be a supersession"), and `D-0019` rule 7's
+first reason (no non-deterministic verdict on the path to the one human contact).
+
+- **(a) This entry keeps all three as they are, and the entry that opens O6 (after continuo records a
+  delegated answer) supersedes or annotates them** (recommended). Until O6 exists no gate is answered
+  by anything but a person, so the model reading is, in fact, only material; the change lands with the
+  act that makes it true. *Loses:* sections 5.6 and 5.7 are written against rules that still say the
+  opposite, until that entry.
+- **(b) This entry supersedes `D-0022` rule 13's "never reaches a gate as anything but material",
+  `D-0029` rule 6's "material" clause and `D-0019` rule 7's first reason now**, for O6 only. *Loses:*
+  three supersessions taken for an act that cannot happen yet, on a reviewer nobody has run.
+
+**The gate's answer (2026-09-13): (a).** `D-0022` rule 13, `D-0029` rule 6 and `D-0019` rule 7's first
+reason are kept as written. Wherever a person answers, a model reading is material and nothing more.
+The entry that opens O6 supersedes or annotates the three rules; this entry does neither, and
+sections 5.6 and 5.7 take effect for O6 only through that entry.
+
+### What this does not do
+
+- **It does not build the reviewer**, the reviewer table, the new row fields, the criterion field's
+  version or the planted lap.
+- **It does not put the model reading into `publish`'s refusal** (section 5.5).
+- **It does not review proposals, splits or summaries outside a lap** (section 6, third row).
+- **It does not add a design review before a lap starts** (the organisation's pre-work Codex review).
+- **It does not add an invariant beyond `D-0064`'s two lines.** No confidence score, no minimum number
+  of findings, no early stop on recurrence, and no rule that a person read a model reading.
+
+### Residuals, with who decides
+
+| Residual | Why not here | Who decides |
+|---|---|---|
+| A reviewer over proposals and summaries outside a lap (rondo#39's own cases) | This entry's material is a lap's; a split's material is a request thread | a later entry, after `D-0063` |
+| What the reviewer costs, against a scope's cost budget | The codex login is not a priced tier, and `D-0046` reads cost off a Claude transcript | rondo's gate, with the scope record |
+| The delivered bytes are digested and not stored, so a reading is re-derivable only while the transcript and the commits exist | Storing each hand-over is a storage decision | a later entry, if a reading is ever needed after its transcript is gone |
+| The input bound's value | It is a number to measure, not to decide | the building change |
+| The executable class (`D-0029` rule 9) | A reader still runs nothing; N-14's mechanism stays out of reach | `D-0029`'s residual, unchanged |
+
+### What would falsify it
+
+- **A model reading that is `clear` or below threshold on a lap where a person, or CI, later finds a
+  readable defect at `major` or above.** If the defect was in the delivered document, the reviewer is
+  too shallow; if it was not, section 1's material is what moves.
+- **The planted lap (section 5.6.2) passing without the planted finding**, or any empty pass found
+  afterwards: the delivered digest is then shown to buy delivery and nothing more (`D-0029`'s own
+  falsifier), and "a model reviewer exists" is not met.
+- **Readings routinely `unavailable` for size**, so that under a scope every large lap stops: the
+  no-truncation rule (1.4) is what moves.
+- **Lines stopping mostly on disputed or basis-less findings**: section 5.3's "the organisation does not
+  overrule" is what moves.
+- **The reviewer and the worker ending up in one family**, through a table change or a model whose id
+  does not tell its family: section 3.3's check is then too weak.
 - Any measurement in "What was measured" failing to reproduce at rondo `f30351e`.
