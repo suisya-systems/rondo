@@ -86,6 +86,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0046 | Where rondo reads what a lap cost: off the lap's own transcript, three columns rather than one, and an unread cost that is not a zero | accepted |
 | D-0047 | Where an approval is spent: inside the admission's own transaction, with the contract recomposed from today's material, and by a verb of its own | accepted |
 | D-0048 | Naming a running lap's transcript: one identifier read off a live run, three liveness-shaped fields refused by name, and a directory printed where the hole already is | accepted |
+| D-0049 | An approval that names a contract the proposal never carried: refused at the door as a dangling reference, and not as a spendability check | accepted |
 
 ---
 
@@ -8546,3 +8547,164 @@ field other than `session_id` and `bound_at_ms`.
   is unchanged, and this read is taken because it changes what the operator does next.
 - **`D-0046`** gains one: rule 2's path composition acquires a second reader, on the screen rather
   than at the suspend, and rule 4's filesystem grant is unchanged by it.
+
+---
+
+## D-0049 — An approval that names a contract the proposal never carried: refused at the door as a dangling reference, and not as a spendability check
+
+**Status:** accepted (2026-09-12, rondo's human gate). Refs rondo#133, `D-0022`, `D-0032`, `D-0036`,
+`D-0038`, `D-0047`.
+
+rondo#133 records that `rondo decide --contract-digest` accepts a digest no option of its proposal
+carries, and that the refusal arrives one command later at `rondo retry`, fail closed and costing
+nothing (`docs/operations/lap-6-dogfood.md` N-20). The issue files it as an observation rather than
+as a defect and asks a narrower question than "should `decide` refuse": **whether `D-0022` rule 19's
+*approved and never spent* query should be able to tell "waiting to be spent" from "cannot ever be
+spent".** This entry answers it, and the answer moves the refusal to the door — but for a reason
+that is not the one the question suggests.
+
+### What was measured, and where
+
+At `c357e3d` on 2026-09-12, by reading the tree.
+
+- **The reference already exists in the schema, in prose, unenforced.** `human_decision`'s DDL says
+  of its `approved` column: *"approved is a reference into `composition.contract_digest`"*
+  (`src/store/sqlite.ts:834-836`). Nothing checks it. `recordAnswer` names the same gap and says
+  whose it is to close: *"What no writer checks, stated rather than assumed: that `approved` names a
+  `composition` row of this proposal ... making that reference enforceable is an entry's decision
+  and not an implementation's"* (`src/access/advisory.ts:1449-1456`).
+- **The set the reference points into is exactly what was put on the screen.** `proposeFor` writes
+  one `composition` row per option, `contract_digest` being that option's own digest, **before**
+  anything is presented — `D-0022` rule 18's order, carried out at `src/access/advisory.ts:1281-1320`
+  and refusing the whole presentation if any row will not land.
+- **The writer already refuses one dangling reference, in the shape this would take.**
+  `recordProposal` refuses an `elevated_from_message_id` that is no message in the conversation,
+  the lookup and the insert inside one `BEGIN IMMEDIATE` (`D-0036` rule 4). `recordDecision` already
+  makes two refusals of its own under `D-0032` rule 5 — an unknown proposal, a non-approvable kind —
+  in that same transaction.
+- **One writer, one route.** `recordAnswer` is `recordDecision`'s only caller, and it writes
+  `gate_id` null on every row: no route-G path writes an approval today.
+- **The query is a two-table read and nothing else.** `unconsumedDecisions`
+  (`src/store/sqlite.ts:2458-2479`) is `human_decision` where the outcome is `approved` minus
+  `decision_consumption`, printed by `inbox.ts`'s last section.
+
+### Decision
+
+1. **It is fixed, and what is wrong with it is not that the approval is unspendable.** An approval
+   that will never be spent is an ordinary thing for a ledger to hold — `D-0047` rule 4 produces one
+   every time the material drifts under an honest answer. What N-20 actually caught is a row whose
+   `approved` column **points at nothing in this proposal**: the digest belonged to `lap6-001`'s
+   option set and was recorded against `lap6-003`. That is a dangling reference into a table the
+   schema already says it references, and it is wrong on its own terms, before any question about
+   spending is asked.
+
+   **The operator value is on the same axis.** *Approved and never spent* is read as a list of
+   things a person decided and rondo has not acted on. A mistyped digest is not on that list because
+   nobody acted on it; it is on that list because it never named anything. Keeping it there does not
+   inform the operator of a pending act — it costs them the meaning of every other row.
+
+2. **`recordDecision` refuses an approval whose `approved` is no `composition` row of the proposal
+   it names, inside the `BEGIN IMMEDIATE` it already holds.** This is `D-0036` rule 4's refusal used
+   a second time, for the same reason that entry gives: *"a dangling reference would make the chain
+   #41 section 3 asks to record indistinguishable from one that was never recorded"*. The refusal
+   names the proposal's own digests, which the transaction has already read.
+
+   **A proposal with no `composition` rows is therefore unapprovable, and that is `D-0022` rule 18
+   enforced rather than a new restriction.** `widening_successor` is approvable and nothing drafts
+   one (`PROPOSABLE_KINDS`, `src/access/advisory.ts:876`); whatever writer adds it owes the
+   composition rows rule 18 already requires of it.
+
+3. **This does not conflict with `D-0032` rule 6, and the boundary is stated rather than asserted.**
+   Rule 6's claim is about **outcome**: that a decision is an entry recording what a person said,
+   that `declined` is a row and not an absence, and that nothing is consumed by saying it. It is not
+   a claim that the writer accepts any bytes — the same door already refuses an unknown proposal and
+   a kind that binds nothing under rule 5, and rule 6 has never been read as objecting.
+
+   What separates them is **which question the row answers**. `composition` is, by `D-0022` rule 18,
+   precisely the set of contracts put to the operator for this proposal. A digest that is no row of
+   it is not an answer to this question, so refusing it is not rondo overruling a person — it is
+   rondo declining to file an answer under a question nobody asked. **Where the two cannot both be
+   literal, rule 6 governs the outcome and this rule governs the reference**: rondo never edits an
+   answer, never picks the nearest option, never turns an approval into a decline. It refuses the
+   write and says what the proposal's digests are.
+
+4. **Drift is not caught here, and stays where `D-0047` rule 4 put it.** Two different questions are
+   in play and only the first is settled at the door. *Was this contract on this proposal's screen?*
+   is a fact of immutable rows, true for ever once true. *Does some option still compose it?* is
+   time-varying by construction — the catalog moves, a key is withdrawn, the pin moves — and
+   `D-0047` rule 4 recomposes it over the lineage read fresh, at spend time, where nothing runs and
+   nothing is spent when the answer is no.
+
+   **Recomposing at `decide` time is refused, and it is the version that would collide with rule 6.**
+   It would make whether a person's answer can be recorded depend on the state of the world in the
+   second they typed it, in both directions: refusing an answer that would compose a minute later,
+   and admitting one that stops composing a minute after. The comparison belongs where the contract
+   is composed, which is `D-0047`'s own eye, and this entry does not move it.
+
+5. **The query is not taught a new distinction, and no column is added to the row.** After rule 2
+   the only unspendable approvals left are drifted ones, and **a drifted approval is a real item on
+   that list**: a person approved a contract the material moved under, nothing has run, and the
+   operator is the one who decides whether to re-propose. The list saying so is the list working.
+
+   A stored `spendable` mark is refused for `D-0022` rule 8's reason and `D-0048` rule 4's: it would
+   give a time-varying fact a second home, and the copy would be stale in exactly the window it is
+   read in. If the distinction is ever wanted on the screen it is computed at render time by
+   `D-0038` rule 3's seam, as a *drift* line and not as a spendability flag — and that is a later
+   entry, with `D-0048` rule 6's per-row cost to argue.
+
+6. **Rows already recorded stay on the list, and no verb retires them.** The ledger is append-only,
+   consumption is an approval's only exit (`D-0022` rule 9), and the exit needs an admission that
+   for these rows cannot happen. Rule 2 stops the class growing; it cleans nothing. **Whether a
+   later `declined` against the same proposal should retire an earlier unspent approval is left
+   open and is not decided here** — it is a rule about which answer supersedes which, which
+   `D-0047` rule 6's last falsifier already says is an entry rather than a tie-break in a verb.
+
+7. **The enforcement is the writer's and not the schema's, so `D-0032` rule 12 is untouched.** That
+   rule fixed which properties the DDL states — *"the three CHECKs are the three properties D-0032
+   fixed and nothing more"* — and a cross-table reference is not expressible as a `CHECK` in any
+   case. No fourth `CHECK`, no foreign key, no migration.
+
+8. **Nothing in `src/` changes on this entry.** It decides one writer refusal and its reason; the
+   implementation is separate work, in the shape `D-0022` rule 20 already used.
+
+### What this does not do
+
+- **It does not make `decide` verify anything about the world.** It reads two of its own tables.
+- **It does not move `D-0047`'s comparison, add a second one, or make `retry`'s refusal
+  unreachable.** A digest that was on the screen and no longer composes still reaches `retry` and is
+  still refused there.
+- **It does not change what `D-0022` rule 19's query selects**, or add a field to what it prints.
+- **It does not add an approver check, a supersession rule, or a way to withdraw an approval.**
+
+### What would falsify it
+
+- **A `composition` row written after presentation, or an approvable kind presented without one.**
+  Rule 2 rests entirely on `D-0022` rule 18's order; if a surface shows an option it has not
+  recorded, the refusal fires on a question that really was asked, and rule 18 is what needs fixing
+  rather than this.
+- **A second writer of `human_decision` — route G's gate answers most of all.** An approval naming a
+  continuo transition has no `composition` row of rondo's to point at, and rule 2 as written would
+  refuse it. The entry that opens that route owes either the composition rows or a refusal scoped to
+  route S, and it should say which.
+- **Operators approving digests they composed themselves**, off a script rather than off the screen.
+  Rule 2 makes that impossible by construction, as `D-0047` rule 3 does one step later; if the ask
+  turns out to be ordinary, what it wants is a proposal, and the claim to re-argue is that saying so
+  is not an obstruction.
+- **The list turning out to be noisy with drifted approvals rather than mistyped ones.** Rule 5 bets
+  that drift is rare and, when it happens, worth an operator's eye. If it is neither, the
+  distinction rondo#133 asks for is the drift one after all, and it is computed at render time — the
+  rule that was wrong is 5, not 2.
+- **A mistyped digest that happens to be a `composition` row of the same proposal** — a second
+  option of the same option set, approved by a slip of the eye. Rule 2 admits it and is right to:
+  that is an answer to this question, and no writer can tell it from the one the operator meant.
+
+### Annotations this entry adds to earlier entries
+
+- **`D-0032` rule 12** gains a dated annotation: the reference `recordAnswer` records as unchecked
+  becomes enforced, by a writer refusal in the shape of rule 5's and **not** by a fourth `CHECK`, so
+  the rule's statement of what the schema fixes stands unedited.
+- **`D-0022` rule 19** gains one: the population of its query is narrowed at the door rather than at
+  the query, and after this entry a row on that list is one a person can still spend or one the
+  material moved under — never one that named a contract the proposal never carried.
+- **`D-0036` rule 4** gains one: its dangling-reference refusal, taken for `elevated_from_message_id`
+  into the conversation, is used a second time for `approved` into `composition`.
