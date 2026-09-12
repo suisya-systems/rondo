@@ -199,6 +199,8 @@ export type ReserveOutcome =
       readonly limit: number;
       readonly occupancy: number;
     }
+  /** The approval this admission carried is one the store would not spend. */
+  | { readonly kind: "unapproved"; readonly reason: string }
   | { readonly kind: "defect"; readonly reason: string };
 
 /** Which of the host's two bounds an admission was refused by (D-0023 rule 8). */
@@ -356,7 +358,25 @@ export interface ReserveInput {
    * would be an assertion rather than a record.
    */
   readonly supersedesIterationId: string | null;
+  /**
+   * The approval this admission spends, or null when nobody approved anything.
+   *
+   * **The loop carries it and never reads it** (D-0022 rule 17): whose
+   * approval it is, and whether the digest matches the contract this plan
+   * composes, are the composition root's question and the store's answer. What
+   * `src/refrain` contributes is the one thing only it can -- that the value
+   * reaches `reserve()`, so the consumption lands in the same transaction as
+   * the row it authorised.
+   */
+  readonly spend: DecisionSpend | null;
   readonly nowMs: number;
+}
+
+/** One approval, as the admission that spends it names it (D-0022 rule 9). */
+export interface DecisionSpend {
+  readonly decisionId: string;
+  /** The contract **the plan being admitted composes**, for the store to compare. */
+  readonly contractDigest: string;
 }
 
 /**

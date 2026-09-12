@@ -116,7 +116,33 @@ export interface ReserveInput {
    * the one caller that passes an id today.
    */
   readonly supersedesIterationId: string | null;
+  /**
+   * The approval this admission spends, or null when nobody approved anything
+   * (D-0022 rule 9).
+   *
+   * **Here rather than in a call of its own, because that is the whole
+   * property.** The consumption row and the iteration row are written in one
+   * `BEGIN IMMEDIATE`: consuming outside it would produce either an approval
+   * spent on an admission that never happened or an admission that ran on an
+   * approval nobody subtracted, and both are unrecoverable from the ledger
+   * afterwards. Required rather than optional for `supersedesIterationId`'s
+   * reason -- a caller that can leave it off is a caller that forgets.
+   */
+  readonly spend: DecisionSpend | null;
   readonly nowMs: number;
+}
+
+/**
+ * One approval, as the admission that spends it names it.
+ *
+ * `contractDigest` is **the contract the plan being admitted composes**, not a
+ * value copied off the decision row: the store compares the two, and a caller
+ * that read the approved digest and handed it straight back would be asking
+ * the store to check a value against itself.
+ */
+export interface DecisionSpend {
+  readonly decisionId: string;
+  readonly contractDigest: string;
 }
 
 /**
@@ -172,6 +198,10 @@ export interface HostPolicy {
  * refused, because that is what a person needs in order to decide whether to
  * wait or to raise a number, and because the occupancy may legitimately read
  * *higher* than the bound (D-0023 rule 27).
+ *
+ * `unapproved` is the other ordinary refusal: an admission carrying a
+ * {@link DecisionSpend} the store would not spend. Nothing is written on it --
+ * no row and no consumption -- which is what "fail closed" means here.
  */
 export type ReserveOutcome =
   | { readonly kind: "reserved"; readonly record: IterationRecord }
@@ -181,6 +211,7 @@ export type ReserveOutcome =
       readonly limit: number;
       readonly occupancy: number;
     }
+  | { readonly kind: "unapproved"; readonly reason: string }
   | { readonly kind: "defect"; readonly reason: string };
 
 /** Which of {@link HostPolicy}'s two bounds an admission was refused by. */
@@ -1391,6 +1422,21 @@ export function iterationStore(connection: DatabaseSync, policy: HostPolicy): It
           if (lineage !== null) {
             return { kind: "defect", reason: lineage };
           }
+          // **The approval is spent here, before the row, and in the row's own
+          // transaction** (D-0022 rule 9, `advisory.md` 6.3). Under rule 17 a
+          // retry is an ordinary admission rather than a successor contract, so
+          // *this* row is the issuance the consumption is written beside --
+          // which makes "approved something that never ran" and "ran on an
+          // approval nobody subtracted" two states the ledger cannot reach,
+          // rather than two a caller has to avoid reaching. Before the insert
+          // rather than after only so that a refusal leaves the transaction
+          // with nothing in it to roll back.
+          if (input.spend !== null) {
+            const refusal = spendDecision(connection, input.spend, input.nowMs);
+            if (refusal !== null) {
+              return { kind: "unapproved", reason: refusal };
+            }
+          }
           connection
             .prepare(
               "INSERT INTO iteration (id, status, request, plan, plan_digest, attempts, " +
@@ -2242,70 +2288,10 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
         // `recordDecision`'s reason: an approval checked in one transaction and
         // spent in another is a check with a window in it.
         return immediateTransaction<RecordOutcome>(connection, () => {
-          const row = connection
-            .prepare("SELECT outcome, approved FROM human_decision WHERE decision_id = ?")
-            .get(decisionId) as SqlRow | undefined;
-          if (row === undefined) {
-            // **Not a harmless dangling row.** `decision_consumption` is what
-            // `unconsumedDecisions` subtracts, so a consumption naming nothing
-            // is a subtraction from a set it was never in -- and the day the id
-            // is minted the approval it names is born already spent.
-            return {
-              kind: "refused",
-              reason:
-                `there is no human decision '${decisionId}' in this store to spend: a ` +
-                "consumption is the record of an issuance against an answer, and an answer " +
-                "that was never recorded cannot have authorised one",
-            };
-          }
-          if (String(row["outcome"]) !== "approved") {
-            // D-0032 rule 6 in as many words: a refusal writes no
-            // `decision_consumption` row and no delegation row, which is what
-            // D-0022 rule 18 assumes when it says the composition must outlive
-            // a refusal.
-            return {
-              kind: "refused",
-              reason:
-                `the human decision '${decisionId}' declined, and a refusal authorises ` +
-                "nothing: D-0032 rule 6 gives a declined answer its own row precisely so that " +
-                "it is not an absence somebody can spend",
-            };
-          }
-          const approved = String(row["approved"]);
-          if (approved !== contractDigest) {
-            // **The digest is what a person approved** (cadenza D-0036), so
-            // issuing a different one is issuing something nobody answered for
-            // -- and it would spend the real approval on the way past, removing
-            // it from `unconsumedDecisions` for ever.
-            return {
-              kind: "refused",
-              reason:
-                `the human decision '${decisionId}' approved '${approved}' and the issuance ` +
-                `names '${contractDigest}': the digest is what a person approved, so a ` +
-                "contract they did not see is not one this answer can be spent on",
-            };
-          }
-          connection
-            .prepare(
-              "INSERT INTO decision_consumption (decision_id, contract_digest, consumed_at_ms) " +
-                "VALUES (?, ?, ?)",
-            )
-            .run(decisionId, contractDigest, nowMs);
-          return { kind: "recorded" };
+          const refusal = spendDecision(connection, { decisionId, contractDigest }, nowMs);
+          return refusal === null ? { kind: "recorded" } : { kind: "refused", reason: refusal };
         });
       } catch (error) {
-        if (isUniqueViolation(error)) {
-          // The database's refusal, said in rondo's words rather than the
-          // driver's. One human decision authorises at most one issuance
-          // (D-0022 rule 9), and this is the collision that enforces it.
-          return {
-            kind: "refused",
-            reason:
-              `the human decision '${decisionId}' has already been spent, and one decision ` +
-              "authorises at most one issuance: D-0022 rule 9 makes single use the store's " +
-              "guarantee, and it is this row's primary key that holds it",
-          };
-        }
         return { kind: "defect", reason: describe(error) };
       }
     },
@@ -2567,6 +2553,89 @@ function immediateTransaction<T>(connection: DatabaseSync, body: () => T): T {
  * both write statuses -- so "the predecessor is not there" means it was never
  * there, and that is a defect in the caller rather than a race it lost.
  */
+/**
+ * Spend one approval, inside a transaction the caller has already opened
+ * (`advisory.md` 6.3, D-0022 rule 9).
+ *
+ * Returns the refusal in rondo's own words, or null when the consumption row
+ * landed. **It opens no transaction of its own**, which is the point: two
+ * callers spend a decision -- `consumeDecision`, where the consumption is the
+ * whole of the write, and `reserve`, where it is written beside the iteration
+ * row that is the issuance under D-0022 rule 17 -- and both need the read, the
+ * comparison and the insert under one write lock.
+ *
+ * **Four refusals, and the fourth is the database's.** The first three are read
+ * out of `human_decision`; single use is the primary key on
+ * `decision_consumption.decision_id` colliding, caught here rather than
+ * checked first, because a check is a window and a key is not. A constraint
+ * violation rolls back the statement and not the transaction, so a caller
+ * holding an open one may go on to write its own refusal.
+ */
+function spendDecision(
+  connection: DatabaseSync,
+  spend: DecisionSpend,
+  nowMs: number,
+): string | null {
+  const { decisionId, contractDigest } = spend;
+  const row = connection
+    .prepare("SELECT outcome, approved FROM human_decision WHERE decision_id = ?")
+    .get(decisionId) as SqlRow | undefined;
+  if (row === undefined) {
+    // **Not a harmless dangling row.** `decision_consumption` is what
+    // `unconsumedDecisions` subtracts, so a consumption naming nothing is a
+    // subtraction from a set it was never in -- and the day the id is minted
+    // the approval it names is born already spent.
+    return (
+      `there is no human decision '${decisionId}' in this store to spend: a consumption is ` +
+      "the record of an issuance against an answer, and an answer that was never recorded " +
+      "cannot have authorised one"
+    );
+  }
+  if (String(row["outcome"]) !== "approved") {
+    // D-0032 rule 6 in as many words: a refusal writes no
+    // `decision_consumption` row and no delegation row, which is what D-0022
+    // rule 18 assumes when it says the composition must outlive a refusal.
+    return (
+      `the human decision '${decisionId}' declined, and a refusal authorises nothing: D-0032 ` +
+      "rule 6 gives a declined answer its own row precisely so that it is not an absence " +
+      "somebody can spend"
+    );
+  }
+  const approved = String(row["approved"]);
+  if (approved !== contractDigest) {
+    // **The digest is what a person approved** (cadenza D-0036), so issuing a
+    // different one is issuing something nobody answered for -- and it would
+    // spend the real approval on the way past, removing it from
+    // `unconsumedDecisions` for ever.
+    return (
+      `the human decision '${decisionId}' approved '${approved}' and the issuance names ` +
+      `'${contractDigest}': the digest is what a person approved, so a contract they did not ` +
+      "see is not one this answer can be spent on"
+    );
+  }
+  try {
+    connection
+      .prepare(
+        "INSERT INTO decision_consumption (decision_id, contract_digest, consumed_at_ms) " +
+          "VALUES (?, ?, ?)",
+      )
+      .run(decisionId, contractDigest, nowMs);
+  } catch (error) {
+    if (isUniqueViolation(error)) {
+      // The database's refusal, said in rondo's words rather than the driver's.
+      // One human decision authorises at most one issuance (D-0022 rule 9), and
+      // this is the collision that enforces it.
+      return (
+        `the human decision '${decisionId}' has already been spent, and one decision ` +
+        "authorises at most one issuance: D-0022 rule 9 makes single use the store's " +
+        "guarantee, and it is this row's primary key that holds it"
+      );
+    }
+    throw error;
+  }
+  return null;
+}
+
 function lineageDefect(connection: DatabaseSync, input: ReserveInput): string | null {
   const predecessor = input.supersedesIterationId;
   if (predecessor === null) {

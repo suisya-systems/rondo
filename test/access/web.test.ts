@@ -212,6 +212,7 @@ async function reserve(
     id,
     request,
     plan: planFor(id),
+    spend: null,
     nowMs: 1_000,
     supersedesIterationId: null,
     runId: `rondo-${id}`,

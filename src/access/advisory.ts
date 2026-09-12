@@ -62,7 +62,7 @@ import {
   resolveProject,
 } from "../cadenza/facade.js";
 import { allocate, ITERATION_ID_PATTERN } from "../refrain/allocator.js";
-import { type AdmittedPlan, admittedPlan, readPlan } from "../refrain/plan.js";
+import { type AdmittedPlan, admittedPlan, type RunPlan, readPlan } from "../refrain/plan.js";
 import type { HostPolicy } from "../refrain/policy.js";
 import { canonicalJson } from "../store/plan.js";
 import {
@@ -738,7 +738,9 @@ export interface ProposePorts extends ExplainPorts {
  *
  * **Nothing is admitted for real, nothing is issued and no row is reserved.**
  * The value is a plan with the successor's identity folded on; what turns one
- * into a run is `admit()`, which no path here calls.
+ * into a run is `admit()`, which this module reaches only through
+ * {@link approvedRetry} -- and then only against an approval, and only to hand
+ * the plan back to a caller that has one.
  */
 function admitFor(record: IterationRecord, successorId: string): AdmitOutcome {
   const decoded = readPlan(record.plan);
@@ -850,11 +852,11 @@ export function optionLines(
     `  drafter: ${DETERMINISTIC_DRAFTER}`,
     `  the retry would run as ${successor.runId} on ${successor.topicBranch}`,
     // **Said out loud because it is what the person is answering.** The value
-    // of each option is the contract digest an approval names, and approving is
-    // the whole of what these kinds do today -- nothing consumes the answer, so
-    // a line claiming the retry will start would be false.
-    "  approving one of these records that you approved its contract. It starts nothing yet:",
-    "  no admission reads this decision (D-0022 rule 17's consumer is not built).",
+    // of each option is the contract digest an approval names, and approving
+    // records that digest and nothing else: what starts the retry is a second
+    // verb, which recomposes the contract before it runs anything.
+    "  approving one of these records that you approved its contract. 'rondo retry' is what",
+    "  spends it, and it refuses unless the contract still composes to what you approved.",
     ...payload.options.flatMap((option, index) => [
       `  [${index === payload.recommended ? "recommended" : "alternative"}] ${option.label}`,
       `      contract: ${option.value}`,
@@ -1102,6 +1104,16 @@ type ContractCandidateGather =
       readonly kind: "gathered";
       readonly candidates: readonly SnapshotContractCandidate[];
       readonly contracts: readonly JsonRecord[];
+      /**
+       * The agent-type input each candidate was issued from, aligned to
+       * `candidates` by index.
+       *
+       * Carried for {@link approvedRetry} alone, which needs the *input* and
+       * not the record: what admits a retry is a plan, and the digest a person
+       * approved names the input that composes it. Not stored anywhere -- the
+       * snapshot keeps cadenza's own lists, which is what an operator judged.
+       */
+      readonly inputs: readonly AgentTypeInput[];
       readonly successor: SnapshotSuccessor | null;
     }
   | { readonly kind: "refused"; readonly reason: string };
@@ -1131,6 +1143,7 @@ function gatherContractCandidates(
 
   const candidates: SnapshotContractCandidate[] = [];
   const contracts: JsonRecord[] = [];
+  const issuedFrom: AgentTypeInput[] = [];
   for (const { from, input } of inputs) {
     const about =
       from.form === "iteration"
@@ -1154,11 +1167,13 @@ function gatherContractCandidates(
       contractDigest: issued.issued.contractDigest,
     });
     contracts.push(issued.issued.contract);
+    issuedFrom.push(input);
   }
   return {
     kind: "gathered",
     candidates,
     contracts,
+    inputs: issuedFrom,
     successor: { iterationId: successorId, runId: plan.runId, topicBranch: plan.topicBranch },
   };
 }
@@ -1324,12 +1339,11 @@ async function recordDraft(
  * granted. All three end at a contract issued to the successor's identity, so
  * all three record the same rows in the same order.
  *
- * **What this does not do, stated because the gap is the point.** Nothing
- * consumes the decision: no admission compares an approved digest against the
- * classification of a plan it is about to run (D-0022 rule 17's enforcement),
- * `decision_consumption` stays empty, and the retry does not start. The chain
- * #41 §3 draws -- observation, elevation, proposal, approval, contract -- gains
- * its proposal and its approval here and is not closed by them.
+ * **What this does not do.** It does not consume anything: an approval of what
+ * this records is spent by {@link approvedRetry} and `admit()`, in the store's
+ * own transaction, and the chain #41 §3 draws -- observation, elevation,
+ * proposal, approval, contract -- reaches its contract there rather than
+ * here.
  */
 export async function proposeRetry(
   ports: ProposePorts,
@@ -1443,7 +1457,8 @@ export interface Answer {
  * **A refusal is a row and not an absence** (D-0032 rule 6): `declined` is
  * written, so *"the operator settled this"* and *"nobody has answered"* stay
  * different facts. Nothing is consumed on either path -- `decision_consumption`
- * is written by the issuance an approval authorises, and there is no issuance.
+ * is written by the issuance an approval authorises, which is an admission and
+ * not an answer ({@link approvedRetry}).
  */
 export async function recordAnswer(
   ports: { readonly record: AdvisoryRecord; readonly now: () => number },
@@ -1473,6 +1488,258 @@ export async function recordAnswer(
   return recorded.kind === "recorded"
     ? { kind: "answered", decisionId }
     : { kind: "refused", reason: recorded.reason };
+}
+
+/**
+ * The successor identity one stored proposal was composed for, or null.
+ *
+ * Read out of the snapshot rather than re-minted: which identity a person
+ * approved a contract *for* is a fact of the row, and minting one again here
+ * would answer a different question -- "which identity is free now" -- and
+ * would silently move the grantee the digest was issued to.
+ */
+function storedSuccessorId(proposal: StoredProposal): string | null {
+  const successor = (proposal.snapshot as Record<string, unknown>)["successor"];
+  const id =
+    typeof successor === "object" && successor !== null
+      ? (successor as Record<string, unknown>)["iterationId"]
+      : undefined;
+  return typeof id === "string" ? id : null;
+}
+
+/** The plan one approval authorises, with the identities the ledger will need. */
+export interface ApprovedRetry {
+  readonly decisionId: string;
+  readonly proposalId: string;
+  /** The iteration the proposal was about, which the retry supersedes (D-0030 rule 1). */
+  readonly subjectId: string;
+  readonly successorId: string;
+  /**
+   * The contract **this plan composes**, re-derived here and equal to the
+   * digest on the decision row.
+   *
+   * Equal because it was matched on: the candidate whose digest is the
+   * approved one is the candidate this plan came from. It travels to
+   * `reserve()` so the store can make the comparison its own -- an equality
+   * asserted by the caller that also chose the plan is an equality with nobody
+   * on the other side of it.
+   */
+  readonly contractDigest: string;
+  readonly plan: RunPlan;
+}
+
+/** What resolving an approval produced, or the first reason it produced nothing. */
+export type ApprovedRetryOutcome =
+  | { readonly kind: "resolved"; readonly retry: ApprovedRetry }
+  | { readonly kind: "refused"; readonly reason: string };
+
+/**
+ * Resolve the one unspent approval against a proposal into the plan it
+ * authorises (D-0022 rules 9 and 17, D-0043 rule 8).
+ *
+ * **This is the consumer #107 says is missing**, minus the act: it reads the
+ * approval and re-derives, from the material as it stands *now*, the plan whose
+ * contract is the one a person approved. What spends the approval is
+ * `admit()`, in the store's own transaction, and nothing here writes a row.
+ *
+ * **Re-derived and not read back** (D-0022 rule 4's habit, `readProposal`'s
+ * precedent). The option set is recomposed by the same gatherer that drafted
+ * it, over the lineage read again, and the approved digest is matched against
+ * what that produces. So a catalog that moved, an agent type whose author
+ * changed a key, or a successor identity somebody took in between all end the
+ * same way: **no candidate carries the approved digest any more, and nothing
+ * runs.** That is D-0043 rule 8's third refusal, and it is a refusal rather
+ * than a re-selection because the nearest contract is not the approved one.
+ *
+ * **One approval, named by the proposal it answers.** A decision id is minted
+ * rather than typed, so naming the proposal is what an operator can do from
+ * the screen; two unspent approvals against one proposal is refused rather
+ * than resolved by order, because choosing between two answers a person gave
+ * is composing their answer (D-0009 part 3).
+ */
+export async function approvedRetry(
+  ports: Pick<ExplainPorts, "store" | "record">,
+  proposalId: string,
+): Promise<ApprovedRetryOutcome> {
+  const unspent = (await ports.record.unconsumedDecisions()).filter(
+    (row) => row.proposalId === proposalId,
+  );
+  const decision = unspent[0];
+  if (decision === undefined) {
+    return {
+      kind: "refused",
+      reason:
+        `No unspent approval names proposal '${proposalId}'. Either nobody has approved it, it ` +
+        "was declined, or the approval has already been spent on an admission -- 'rondo inbox' " +
+        "lists the approvals that are still spendable.",
+    };
+  }
+  if (unspent.length > 1) {
+    // **Read here and not under the reservation's write lock** (`D-0047` rule
+    // 6's own scope note). A second approval recorded between this read and
+    // `reserve()` is not caught, and what that costs is bounded: the decision
+    // spent is one a person took, for a contract that composes, and the other
+    // approval stays unspent and still reported. Widening the store to know
+    // what ambiguity among a proposal's answers is would be a large change for
+    // a race whose worst outcome is acting instead of asking.
+    return {
+      kind: "refused",
+      reason:
+        `Proposal '${proposalId}' carries ${String(unspent.length)} unspent approvals, and ` +
+        "rondo will not choose between two answers a person gave. Settle them before admitting " +
+        "anything under either.",
+    };
+  }
+  const stored = await ports.record.readProposal(proposalId);
+  if (stored.kind !== "read") {
+    return {
+      kind: "refused",
+      reason:
+        stored.kind === "absent"
+          ? `There is no proposal '${proposalId}' in this store, so the approval against it ` +
+            "names a contract nothing composed."
+          : `Proposal '${proposalId}' will not decode, so the contract its approval names ` +
+            `cannot be recomposed: ${stored.reason}`,
+    };
+  }
+  const proposal = stored.proposal;
+  const subjectId = proposal.iterationId;
+  if (subjectId === null) {
+    return {
+      kind: "refused",
+      reason:
+        `Proposal '${proposalId}' is about no iteration, so there is no plan to retry. Only a ` +
+        "proposal drafted from an iteration's own material carries one.",
+    };
+  }
+  const successorId = storedSuccessorId(proposal);
+  if (successorId === null) {
+    return {
+      kind: "refused",
+      reason:
+        `Proposal '${proposalId}' records no successor identity, so the contract its approval ` +
+        "names has no grantee rondo can admit under.",
+    };
+  }
+  const subject = await ports.store.read(subjectId);
+  if (subject.kind !== "read") {
+    return {
+      kind: "refused",
+      reason:
+        subject.kind === "absent"
+          ? `Proposal '${proposalId}' is about iteration '${subjectId}', which is not in this ` +
+            "store, so the plan a retry would start from cannot be read."
+          : `Iteration '${subjectId}' will not decode, so the plan a retry would start from ` +
+            `cannot be read: ${subject.reason}`,
+    };
+  }
+  const rows = await lineage(ports, subject.record);
+  if ("refusal" in rows) {
+    return { kind: "refused", reason: rows.refusal };
+  }
+  const approved = decision.approved;
+  const resolved = retryPlanFor(proposal.kind, subject.record, rows.rows, successorId, approved);
+  if ("refusal" in resolved) {
+    return { kind: "refused", reason: resolved.refusal };
+  }
+  return {
+    kind: "resolved",
+    retry: {
+      decisionId: decision.decisionId,
+      proposalId,
+      subjectId,
+      successorId,
+      contractDigest: approved,
+      plan: resolved.plan,
+    },
+  };
+}
+
+/**
+ * The plan behind the approved digest, re-gathered per kind.
+ *
+ * `run_plan` varies the plan, so the option *is* a lineage row's plan;
+ * `agent_type` and `contract_keys` hold the plan fixed and vary the agent-type
+ * input, so the option is the subject's plan with that input folded on. The
+ * split is the one the drafters already make, read backwards.
+ */
+function retryPlanFor(
+  kind: string,
+  subject: IterationRecord,
+  rows: readonly IterationRecord[],
+  successorId: string,
+  approved: string,
+): { readonly plan: RunPlan } | { readonly refusal: string } {
+  const missing = (): { readonly refusal: string } => ({
+    refusal:
+      `No option of this proposal composes '${approved}' any more, so the contract that was ` +
+      "approved is not one rondo can issue today -- the material behind it moved, or the " +
+      `identity '${successorId}' it was issued to is no longer free. Nothing was admitted and ` +
+      "the approval was not spent. Propose again against what the store holds now.",
+  });
+  // **Two options carrying one digest mean the ledger cannot say which was
+  // approved, and rondo refuses rather than taking the first.** `run_plan` is
+  // where this is reachable: `issueFor` composes a contract from the project,
+  // the agent type and the parties, so two plans in one lineage that differ
+  // only in their prompt or their base branch reach the same digest, and
+  // `gatherRunPlanCandidates` offers both -- unlike the contract gatherer,
+  // which folds equal digests into one candidate. `human_decision.approved`
+  // names a digest and nothing else, so picking by position would be rondo
+  // choosing which instructions a person meant (D-0009 part 3).
+  const ambiguous = (count: number): { readonly refusal: string } => ({
+    refusal:
+      `${String(count)} options of this proposal compose '${approved}', so the approval does not ` +
+      "say which of them was taken: a decision names a contract digest, and these plans issue " +
+      "one contract between them. Nothing was admitted and the approval was not spent. Propose " +
+      "the one you mean against a single iteration.",
+  });
+  if (kind === "run_plan") {
+    const gathered = gatherRunPlanCandidates(rows, successorId);
+    if (gathered.kind !== "gathered") {
+      return { refusal: gathered.reason };
+    }
+    const matches = gathered.candidates.filter((row) => row.contractDigest === approved);
+    const candidate = matches[0];
+    if (candidate === undefined) {
+      return missing();
+    }
+    if (matches.length > 1) {
+      return ambiguous(matches.length);
+    }
+    const row = rows.find((each) => each.id === candidate.iterationId);
+    if (row === undefined) {
+      // Unreachable: the gatherer enumerates exactly these rows.
+      return missing();
+    }
+    const decoded = readPlan(row.plan);
+    return decoded.kind === "planned" ? { plan: decoded.plan } : { refusal: decoded.reason };
+  }
+  if (kind !== "agent_type" && kind !== "contract_keys") {
+    return {
+      refusal:
+        `Proposal kind '${kind}' binds no plan rondo can admit: an approval of it authorises ` +
+        "nothing to start (D-0032 rule 5).",
+    };
+  }
+  const gathered = gatherContractCandidates(kind, subject, rows, successorId);
+  if (gathered.kind !== "gathered") {
+    return { refusal: gathered.reason };
+  }
+  const at = gathered.candidates.findIndex((row) => row.contractDigest === approved);
+  const input = gathered.inputs[at];
+  if (at < 0 || input === undefined) {
+    return missing();
+  }
+  // Unreachable today -- this gatherer folds equal digests into one candidate --
+  // and checked anyway, so that the refusal survives the fold being relaxed
+  // rather than turning into a silently chosen option.
+  if (gathered.candidates.filter((row) => row.contractDigest === approved).length > 1) {
+    return ambiguous(2);
+  }
+  const decoded = readPlan(subject.plan);
+  return decoded.kind === "planned"
+    ? { plan: { ...decoded.plan, agentTypeInput: input } }
+    : { refusal: decoded.reason };
 }
 
 /**
@@ -1524,8 +1791,8 @@ function foreclosureLines(kind: string): readonly string[] {
     "  an approval is spendable once and can never be spent twice (D-0022 rule 9), and the",
     "  answer is appended rather than edited -- changing your mind is a new proposal;",
     "  declining is recorded too, so nobody later reads a refusal as an unanswered question.",
-    "  It starts nothing yet: no admission reads this decision (D-0022 rule 17's consumer",
-    "  is not built).",
+    "  Approving starts nothing by itself: 'rondo retry --proposal-id' is the admission that",
+    "  reads this decision, and it spends it only if the plan still composes what you approved.",
   ];
 }
 
@@ -1864,12 +2131,8 @@ async function regatherPayload(
       reason: `rondo has no re-gather for proposal kind '${proposal.kind}'`,
     };
   }
-  const successor = (proposal.snapshot as Record<string, unknown>)["successor"];
-  const successorId =
-    typeof successor === "object" && successor !== null
-      ? (successor as Record<string, unknown>)["iterationId"]
-      : undefined;
-  if (typeof successorId !== "string") {
+  const successorId = storedSuccessorId(proposal);
+  if (successorId === null) {
     return {
       kind: "refused",
       reason: "the stored snapshot names no successor to re-gather candidates for",

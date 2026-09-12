@@ -67,6 +67,7 @@ import type {
   BoundName,
   ClassificationRecord,
   ConductorPorts,
+  DecisionSpend,
   EffectOutcome,
   GateObservation,
   LapPerformance,
@@ -167,6 +168,7 @@ export async function admit(
   policy: LoopPolicy,
   id: string,
   supersedesIterationId: string | null = null,
+  spend: DecisionSpend | null = null,
 ): Promise<ConductorReport> {
   const lines: string[] = [];
   const admission = nextStep(null, policy);
@@ -238,6 +240,10 @@ export async function admit(
     request: validated.plan.prompt,
     plan: planPayload(admitted.plan),
     supersedesIterationId,
+    // **Carried, never read** (D-0022 rule 17). The comparison this authorises
+    // is the store's, against the digest the composition root composed from
+    // this very plan; the loop's part is that the two writes are one.
+    spend,
     nowMs: ports.now(),
   });
   switch (reservation.kind) {
@@ -273,6 +279,18 @@ export async function admit(
               "abandon() before anything further can be admitted."
           : "Try again once one of them reaches a terminal status, settle one with abandon(), " +
               "or raise the bound if this host should be running more at once.",
+      );
+      return { iterationId: null, status: null, lines: Object.freeze(lines) };
+    case "unapproved":
+      // **Fail closed, and say so in the operator's terms** (D-0022 rule 9,
+      // D-0043 rule 8). The store refused to spend the approval this request
+      // carried, so nothing was written: no consumption, no row, and no run.
+      // The approval is still spendable -- refusing it is not spending it --
+      // which is what makes this an answer rather than a loss.
+      lines.push(
+        `Refused: the approval this admission would have spent was not spendable: ${reservation.reason}.`,
+        "Nothing was written and nothing was spent: no iteration was reserved, and the approval " +
+          "still stands wherever it stood.",
       );
       return { iterationId: null, status: null, lines: Object.freeze(lines) };
     case "defect":

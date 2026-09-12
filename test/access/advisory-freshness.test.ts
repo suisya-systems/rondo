@@ -126,6 +126,7 @@ const reserveWithPlan = async (
     id,
     request: "teach rondo to count",
     plan: realPlan(id, plan),
+    spend: null,
     nowMs: 1_000,
     supersedesIterationId,
     runId: `rondo-${id}`,
