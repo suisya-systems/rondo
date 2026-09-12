@@ -36,7 +36,20 @@ const LAP_5 = {
   duration_ms: 203_324,
 };
 
-const NOTHING = { totalCostUsd: null, numTurns: null, durationMs: null };
+/** Three nulls, and the read each of the three reasons for them came from. */
+const UNREAD = { totalCostUsd: null, numTurns: null, durationMs: null, source: "unread" };
+const NO_RESULT_EVENT = {
+  totalCostUsd: null,
+  numTurns: null,
+  durationMs: null,
+  source: "resultEventAbsent",
+};
+const NO_NUMBERS = {
+  totalCostUsd: null,
+  numTurns: null,
+  durationMs: null,
+  source: "resultEvent",
+};
 
 /**
  * A session directory, with whatever files the case wants in it.
@@ -85,6 +98,7 @@ test("the three numbers come off the terminal result event", () => {
     totalCostUsd: 1.542,
     numTurns: 38,
     durationMs: 203_324,
+    source: "resultEvent",
   });
 });
 
@@ -100,6 +114,7 @@ test("a lap that spent nothing reads as zero and not as unread", () => {
     totalCostUsd: 0,
     numTurns: 0,
     durationMs: 0,
+    source: "resultEvent",
   });
 });
 
@@ -134,9 +149,11 @@ test("a line that does not parse is skipped rather than refused", () => {
   expect(readLapSpend({ stateRoot, runId: RUN, sessionId: SESSION }).numTurns).toBe(38);
 });
 
-test("a result event that carries none of the three numbers reads as three nulls", () => {
+test("a result event that carries none of the three numbers is not an unread transcript", () => {
   // The fake worker continuo's own tests spawn writes exactly this shape: a
-  // terminal `result` event with an outcome and no accounting.
+  // terminal `result` event with an outcome and no accounting. It is the case
+  // rondo#130 is about: three nulls, and a transcript that was read perfectly
+  // well -- so the source has to say `resultEvent` and not `unread`.
   const stateRoot = sessionDir({
     generation: 0,
     events: {
@@ -144,7 +161,7 @@ test("a result event that carries none of the three numbers reads as three nulls
     },
   });
 
-  expect(readLapSpend({ stateRoot, runId: RUN, sessionId: SESSION })).toEqual(NOTHING);
+  expect(readLapSpend({ stateRoot, runId: RUN, sessionId: SESSION })).toEqual(NO_NUMBERS);
 });
 
 test("a number that is not a number is not coerced", () => {
@@ -157,19 +174,20 @@ test("a number that is not a number is not coerced", () => {
     totalCostUsd: null,
     numTurns: null,
     durationMs: 203_324,
+    source: "resultEvent",
   });
 });
 
-test("a transcript with no result event at all reads as three nulls", () => {
+test("a transcript with no result event at all reads as three nulls, and says so", () => {
   const stateRoot = sessionDir({
     generation: 0,
     events: { "000": transcript({ type: "system" }, { type: "assistant" }) },
   });
 
-  expect(readLapSpend({ stateRoot, runId: RUN, sessionId: SESSION })).toEqual(NOTHING);
+  expect(readLapSpend({ stateRoot, runId: RUN, sessionId: SESSION })).toEqual(NO_RESULT_EVENT);
 });
 
-test("every way the files can be missing or unusable reads as three nulls", () => {
+test("every way the files can be missing or unusable reads as an unread transcript", () => {
   const cases: Readonly<Record<string, string>> = {
     "no run directory": mkdtempSync(join(tmpdir(), "rondo-transcript-")),
     "no record": sessionDir({ events: { "000": transcript(LAP_5) } }),
@@ -189,12 +207,19 @@ test("every way the files can be missing or unusable reads as three nulls", () =
       generation: 2,
       events: { "000": transcript(LAP_5) },
     }),
-    "an empty transcript": sessionDir({ generation: 0, events: { "000": "" } }),
   };
 
   for (const [name, stateRoot] of Object.entries(cases)) {
-    expect(readLapSpend({ stateRoot, runId: RUN, sessionId: SESSION }), name).toEqual(NOTHING);
+    expect(readLapSpend({ stateRoot, runId: RUN, sessionId: SESSION }), name).toEqual(UNREAD);
   }
+});
+
+test("an empty transcript was read, so it is not a transcript rondo could not read", () => {
+  // The file opened and holds no `result` event, which is a different fact from
+  // a file that would not open -- the same distinction one line down.
+  const stateRoot = sessionDir({ generation: 0, events: { "000": "" } });
+
+  expect(readLapSpend({ stateRoot, runId: RUN, sessionId: SESSION })).toEqual(NO_RESULT_EVENT);
 });
 
 test("a run id under another run's directory is not this lap's cost", () => {
@@ -203,7 +228,7 @@ test("a run id under another run's directory is not this lap's cost", () => {
   // rather than the wrong lap's bill.
   const stateRoot = sessionDir({ generation: 0, events: { "000": transcript(LAP_5) } });
 
-  expect(readLapSpend({ stateRoot, runId: "rondo-other", sessionId: SESSION })).toEqual(NOTHING);
+  expect(readLapSpend({ stateRoot, runId: "rondo-other", sessionId: SESSION })).toEqual(UNREAD);
 });
 
 test("a generation above 999 is not truncated", () => {

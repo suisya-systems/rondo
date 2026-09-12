@@ -172,6 +172,7 @@ function harness(classify: EffectOutcome<ClassificationRecord>): Harness {
       costUsd: null,
       turns: null,
       durationMs: null,
+      spendSource: "unread",
     },
   });
   const admission = (plan: AdmittedPlan): EffectOutcome<RunAdmission> => ({
