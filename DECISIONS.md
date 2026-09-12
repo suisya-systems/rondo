@@ -99,7 +99,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0060 | Work left uncommitted is a fact rondo reads and names: `git status` joins the reading as a finding, `publish` refuses a workspace that still holds any, `--despite-review` does not reach it, and rondo commits nothing on a lap's behalf | accepted |
 | D-0061 | Where a request enters rondo: the organisation's five steps mapped onto parts that mostly exist, a request thread in the conversation as the first thing built, and the drafter that reads a request cleared by the human gate, with its split into plans waiting on `D-0062` | accepted |
 | D-0062 | A proposal may name an agent type, and only a split proposal from a request may: a record rondo already holds chosen by its digest, approved on route S with the tier bound by the option it came from, and the kind-to-tier judgment kept whole while the request-to-kind judgment moves to the gate | accepted |
-| D-0064 | rondo is run the way a product manager runs an organisation: a person approves a scope once, the organisation decides everything inside it, and what reaches the person is a question with a recommendation, an irreversible act, a scope exit or a report | proposed |
+| D-0064 | rondo is run the way a product manager runs an organisation: a person approves a scope once, the organisation decides everything inside it, and what reaches the person is a question with a recommendation, an irreversible act, a scope exit or a report | accepted |
 
 ---
 
@@ -12051,8 +12051,9 @@ rules and the heading's "never", and nothing else.
 
 ## D-0064 — rondo is run the way a product manager runs an organisation: a person approves a scope once, the organisation decides everything inside it, and what reaches the person is a question with a recommendation, an irreversible act, a scope exit or a report
 
-**Status:** proposed (2026-09-13). Three points are put to the human gate; see "What is put to the
-human gate". Refs `D-0009`, `D-0010`, `D-0012`, `D-0019`, `D-0020`, `D-0022`, `D-0025`, `D-0027`,
+**Status:** accepted (2026-09-13, rondo's human gate). Three points were put to the gate and it
+chose the recommended option on each, with one transition condition added to the second; the answers
+are recorded in section "What was put to the human gate, and its answer". Refs `D-0009`, `D-0010`, `D-0012`, `D-0019`, `D-0020`, `D-0022`, `D-0025`, `D-0027`,
 `D-0029`, `D-0032`, `D-0034`, `D-0036`, `D-0041`, `D-0043`, `D-0047`, `D-0054`, `D-0061`, `D-0062`,
 and the proposed `D-0059` and `D-0063`.
 
@@ -12159,7 +12160,7 @@ but does not put them to the person:
 | **O4** | **Doing it again**: `retry` of a stopped lap under the same grants, and `revise` with an instruction the organisation writes | The scope's round budget. A retry that needs a **wider grant** is not a redo and leaves the scope (rule 3.3). **`revise` answers the predecessor's open gate before it starts a lap** (`D-0027` rules 1 and 6), so the organisation may draft the instruction at once but may run `revise` itself only under rule 3.6, exactly as O6 |
 | **O5** | **Review findings below the scope's severity threshold**, which are left and listed in the report (P5) | Findings at or above the threshold are fixed by the organisation within the round budget; a finding still open when the budget is spent leaves the scope |
 | **O6** | **Answering a lap's end gate when the lap is inside the scope** | Rule 3.6: only when the reading is clear and nothing on P2-P4 is open, and only as the organisation's recorded answer, never as the person's |
-| **O7** | **Pushing a lap's own branch and opening its pull request**, when the scope includes it | Rule 3.4: these are not on the irreversible list. Merging is |
+| **O7** | **Pushing a lap's own branch and opening its pull request**, when the scope includes it | Rule 3.4: these are not on the irreversible list. Merging is, until rule 3.4's transition condition holds |
 | **O8** | **What is shown to the person and what is not** | Every item not shown is recorded as withheld with the rule that withheld it (`D-0032` rule 10). "Decided without asking" is exactly what that table's `withheld` side counts |
 
 ### 3. Delegation is a scope, not a request at a time
@@ -12205,6 +12206,15 @@ but does not put them to the person:
    it: closing the pull request and deleting the branch undo them and leave nothing others depend on.
    **The list grows only by an entry.** Each act on it is approved by a person at the time, for that
    act, which is kept line 2.
+
+   **Merge has a transition condition, set by the human gate (second answer below).** Once rondo
+   observes CI (survey G4), merging a scope's own pull request into its default branch **leaves the
+   list** and becomes a reversible outward act a scope may name under rule 3.1.6, **on the condition
+   that rondo itself observed CI green on the commit it merges**. This is claude-org-ja's standing
+   approval in the same form: once CI is green the organisation merges on its own, and points in
+   dispute and irreversible changes still come back. A merge whose CI rondo did not observe green, or
+   a pull request with a P2-P4 item open, stays a person's act. **Every other act on the list stays
+   on it**; the condition moves merge alone.
 
 5. **Every act taken inside a scope names the scope.** An admission, a redo, an agent-type choice, a
    gate answer, a push: each records the scope it was taken under, so "which scope authorised this"
@@ -12275,7 +12285,7 @@ changing a claim. "Keep" means the rule already fits.
 | **`D-0047`** rules 1, 5 and 6 | An approval is spent once, inside the admission's transaction, by `rondo retry` | Rule 3.5 | **Keep** for per-proposal approvals. The scope's spend record is a new record with its own entry, in rule 1's transactional shape |
 | **`D-0009`** | rondo carries a human's answer and never composes one | O6 | **Keep, and annotate** with rule 3.6: a delegated answer is not a carried human answer, and waits on a continuo seam that records it as delegated |
 | **`D-0019`** `R-5` | The loop suspends at `awaiting_human`; `resume` is separate | O6 | **Keep.** Who calls `resume` changes, the suspension does not |
-| **`D-0025`** rule 6, and **`D-0010`** | `publish` runs only when a person types it; the operator is the publisher | O7 | **Supersede `D-0025` rule 6's** "nothing here runs unless a person typed `publish`" for push and pull request inside a scope that names them. **Keep "never merges"**, now as rule 3.4's list. `D-0010` is **annotated**: rondo still holds no credential of its own |
+| **`D-0025`** rule 6, and **`D-0010`** | `publish` runs only when a person types it; the operator is the publisher | O7 | **Supersede `D-0025` rule 6's** "nothing here runs unless a person typed `publish`" for push and pull request inside a scope that names them. **Keep "never merges"**, now as rule 3.4's list, until rule 3.4's merge transition condition holds; the entry that builds CI observation then supersedes it. `D-0010` is **annotated**: rondo still holds no credential of its own |
 | **`D-0027`** rule 2 | "Nothing makes rondo revise on its own; a person types the command, once, per lap" | O4 | **Supersede** that sentence, once rule 3.6's seam exists: inside a scope the organisation may write the instruction and run `revise`, counted against the round budget. Rules 1 and 6 (`revise` answers the gate, and validates before it does) are kept, which is why O4's `revise` waits on rule 3.6 |
 | **`D-0029`** `V-3`, `V-14` | A refusal stops `publish` with a named override; no round budget in rondo | Rule 3.3; O5 | **Keep** `V-3` (the override stays a person's act). **`V-14` is superseded** when the model reviewer entry adds a round budget; not by this entry |
 | **`D-0032`** rules 1, 2, 4, 10 | Options with one recommendation; bases; irreversibility computed from `kind`; presented and withheld counted in one table | Section 4 relies on rule 1; O8 relies on rule 10; rule 3.4 is a list and not a function of `kind` | **Keep** rules 1, 2 and 10. **Annotate rule 4**: an irreversible act's list is rule 3.4's, and a split whose plans differ in what they make irreversible (prototype note G-5) is that rule's own named falsifier |
@@ -12306,15 +12316,17 @@ changing a claim. "Keep" means the rule already fits.
   until then O6 is not available and a person still presses once per lap.
 - **`D-0041` rule 7's one-sentence audit of the page's writes**, which becomes a list of write kinds.
 
-### What is put to the human gate
+### What was put to the human gate, and its answer
 
-**These three points are not settled inside the entry. It is proposed with them open.**
+Three points were put to the gate with the entry proposed. They are kept as put, and the answer
+follows them.
 
 1. **When the lap's end gate leaves the person's hands (O6).**
    - **(a) Only after a model reviewer exists (survey G3) and continuo records a delegated answer
      (rule 3.6)** (recommended). Until both, a scope covers O1-O3, O4's `retry`, O5, O7 and O8, and
-     the person still presses once per lap, including to send a `revise` the organisation drafted. *Loses:* the product manager position is not reached at the lap end until
-     two other pieces of work land.
+     the person still presses once per lap, including to send a `revise` the organisation drafted.
+     *Loses:* the product manager position is not reached at the lap end until two other pieces of
+     work land.
    - **(b) As soon as continuo's seam exists**, with no model reviewer. *Loses:* rondo's only review
      (section 7, second bullet), and the N-14 / N-16 class of defect goes unseen until a report.
 2. **Merge.** claude-org-ja's standing approval lets the organisation merge once CI is green.
@@ -12329,6 +12341,21 @@ changing a claim. "Keep" means the rule already fits.
      that widens the advisory is not accepted on a per-handover premise this entry replaces.
    - **(b) `D-0063` is accepted as written and superseded later.** *Loses:* an accepted entry whose
      section 1 states the opposite of this one, for as long as the scope entry takes.
+
+**The gate's answer (2026-09-13), on all three points:**
+
+1. **(a).** The lap's end gate stays a person's press. **It leaves the person's hands when, and only
+   when, both of these hold: a model reviewer exists (survey G3), and continuo records a delegated
+   answer as delegated (rule 3.6).** Neither alone is enough. The gate also agreed that the model
+   reviewer is the next piece of work, ahead of the other empty roles in section 5; this entry
+   records that priority and does not design the reviewer.
+2. **(a) now, and (b) once CI observation exists.** Merge stays on rule 3.4's list and is approved
+   per act. **When rondo observes CI (survey G4), a scope may include merge**, under the transition
+   condition written into rule 3.4: CI green observed by rondo on the merged commit, no P2-P4 item
+   open. This is claude-org-ja's standing approval in the same form. **What (b) was said to lose is
+   accepted by the gate for that one act and that condition**: a merge under it is no longer approved
+   per act, and kept line 2 applies to merge only while the condition does not hold.
+3. **(a).** `D-0063` is revised along section 6 before it is accepted.
 
 ### What this does not do
 
@@ -12356,6 +12383,9 @@ changing a claim. "Keep" means the rule already fits.
   criterion in rule 3.4 is re-read.
 - **Operators wanting to see the per-lap stream the prototype drew**, rather than a report per
   request. P5's "not once per lap" is what moves.
+- **A merge under rule 3.4's transition condition that has to be undone** (reverted, or found to
+  have broken something others depended on) often enough that "observed CI green" reads as too weak a
+  condition. The gate's second answer is what moves, and merge goes back on the list.
 - **continuo declining to record a delegated answer.** O6 then cannot exist without breaking
   `D-0009`, and the lap end stays a person's press for good.
 - Any measurement in "What was measured" failing to reproduce at rondo `7b76eea`.
