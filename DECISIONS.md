@@ -83,6 +83,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0043 | The trigger a stopped lap pulls: one proposal at the abandon the conductor's own arc reaches, `contract_keys` because it is the only option set that is a choice, and a successor identity rondo mints and nobody has yet adopted | accepted |
 | D-0044 | The second model tier is `mechanical`, it is reached by naming an agent type and never by rondo reading a request, and its model id waits on rondo recording what a lap costs | accepted |
 | D-0045 | What the record may say about a verification rondo did not watch: the operator's claim held as a claim, no column for a result, a silence that reads as a silence, and a row `publish` may print and may not be satisfied by | accepted |
+| D-0046 | Where rondo reads what a lap cost: off the lap's own transcript, three columns rather than one, and an unread cost that is not a zero | accepted |
 
 ---
 
@@ -8111,3 +8112,133 @@ seam (`D-0015`: `--json` is the wire protocol), because nothing measured here is
 - **`--verified` without `--body` is refused.** It is the reading mode, which answers nothing, so
   the flag is rejected before that mode returns rather than silently discarded -- measured as a
   refusal and **0 rows**.
+
+## D-0046 — Where rondo reads what a lap cost: off the lap's own transcript, three columns rather than one, and an unread cost that is not a zero
+
+**Status:** accepted (2026-09-12, rondo's human gate). Refs rondo#96, `D-0044` rule 5, `D-0017`,
+`D-0021`, `D-0029`, `D-0032`.
+
+Every lap's terminal `result` event carries `total_cost_usd`, `num_turns` and `duration_ms`. rondo
+kept none of them, so five dogfood records ([`lap-1`](docs/operations/lap-1-dogfood.md) through
+[`lap-5`](docs/operations/lap-5-dogfood.md), each section 5 or 11) parsed them out of
+`events-000.jsonl` by hand to write their cost sections, and `D-0044` rule 5 made this issue the gate
+on a second model tier: *"adding the row first would mean choosing a model id against numbers nobody
+can read back"*. This entry is how the numbers get read back.
+
+### What had to be decided, and it is not "add a column"
+
+rondo#96 says recording it is *"a column and a claim"*, and the claim half is: `explain` already
+renders claims with a basis (`D-0032`), so three more claims are three lines. The column half was
+also cheap. **What the issue's own sentence gets wrong is where the numbers are**: it says the
+`result` event *"is already decoded at the end of `performLap`"*, and it is -- inside **continuo**,
+whose `readTerminalReport` reads that event for the worker's prose report, its `is_error` and its
+`terminal_reason`, and keeps none of the three accounting numbers. `continuo.lap.perform/1` has
+twelve fields and no cost among them (`src/continuo/protocol.ts`). So there was nothing to read off
+the payload, and the decision is where rondo gets the numbers instead.
+
+**Measured, not assumed.** A lap was walked against the pinned continuo (`fcf86eb`) with a fake
+worker CLI that emits the three keys, and the first implementation read *nothing*: continuo's
+`--state-root` flag names a **parent**, and the directory the session provider is built over is
+`<state root>/<run id>` (`lapStateRoot` at the pinned revision), one per run so that two laps cannot
+share it. The unit tests were green over rondo's own assumption about somebody else's layout, and the
+live run is what falsified it -- which is `D-0015` rule 6's habit arriving at a filesystem instead of
+a version line.
+
+### The alternative, and why it is not taken yet
+
+**Ask continuo to report the three numbers in `lap perform`'s payload.** That is the better long-run
+shape: it is continuo's own file, continuo already parses the event, and rondo would read a field
+instead of a path. It is not taken here because it is an upstream change and a pin move -- a
+continuo decision, a release, `continuo.pin.json`, `src/continuo/pin.ts` and the version line
+together -- and `D-0044` rule 5's gate is shut until *rondo* holds the numbers. Taking the read now
+costs one module and one grant, and the falsifiers below say what would move it.
+
+### Decision
+
+1. **rondo reads the three numbers off the lap's own transcript, at the suspend, into three columns
+   of the iteration row.** The read happens in the composition root's `performLap` adapter, between
+   continuo's answer and the interpreter's suspend commit, and the columns are written inside the
+   same transaction as the gate id: that is the one moment the numbers exist and nobody has been
+   asked anything yet, and a row that named the gate and not the cost is the row five dogfood records
+   had to finish by hand.
+2. **The path is `<state root>/<run id>/<session id>/`, out of values rondo itself passed.** The
+   state root and the run id are what rondo put on the command line; the session id is what
+   `lap perform` answered with. The run id is **joined and not re-encoded**: continuo encodes a run
+   id into a directory name (`%XX` outside `[a-z0-9._-]`, a trailing dot escaped, a Windows device
+   name escaped), and every run id rondo mints is `rondo-` plus `[a-z][a-z0-9_-]{0,63}`
+   (`src/refrain/allocator.ts`), which that encoder maps to itself. A second copy of another
+   repository's filesystem rules is the thing most likely to drift from it, and the cost of being
+   wrong is bounded by rule 3: the directory is not found and rondo says it read nothing.
+3. **Three nullable columns, and `null` is never a zero.** `lap_cost_usd` (REAL), `lap_turns` and
+   `lap_duration_ms` (INTEGER), all nullable. A transcript that is missing, truncated, unreadable or
+   carries no `result` event leaves all three null, and a `result` event carrying only some of them
+   fills only those. **A lap rondo holds no cost for and a lap that cost nothing are different
+   facts**, and the cheaper of the two is the one a reader must never be handed by accident. Nothing
+   is coerced: a `total_cost_usd` that arrives as a string is null, because a cost read off a string
+   is a guess.
+4. **The read is a capability granted to one module, and it is not the module that owns the spawn.**
+   `src/continuo/transcript.ts` is granted `readFileSync` and `path.join` in
+   `test/architecture/import-boundaries.test.ts` and nothing else -- no write, no delete, no
+   `readdirSync`, so the module that reads what a lap cost cannot change what continuo wrote or walk
+   the state root looking for another session's transcript. It reads exactly two named files:
+   continuo's `record.json`, for the generation the report was read off, and that generation's
+   `events-NNN.jsonl`. `D-0017`'s shape is why this is a third module rather than a widening of
+   `invoker.ts`'s grant, and `src/refrain/`'s external allowance is untouched -- the loop receives
+   three numbers on a port, exactly as it receives the independent reading (`D-0029`).
+5. **Time and money are separate quantities, and all three are printed.** `invocationCeilingMs`
+   bounds a lap in time and lap 3 ran well inside it while costing seven times lap 2 (`D-0044`'s
+   table), so no one of the three stands in for another and none is derived from another. `explain`
+   gains three claims with `snapshot` bases, so the web page and every persisted explanation carry
+   them for free; the `start` report gains one line, which is said **even when nothing was read**,
+   because a report that is silent about cost is silent for two different reasons and a reader cannot
+   tell which.
+6. **`inbox` and `between` are left alone, deliberately.** `inbox` is a list of rows an operator
+   scans for what is waiting on them, and `between` answers over an interval; a per-lap cost on
+   either is a number nobody asked for in the place they are least able to act on it. The place to
+   read one lap's bill is the row's own explanation, and the place to read a period's spend is a
+   breakdown `D-0037`'s snapshot can already be widened to carry -- as its own entry, with a person
+   asking for it.
+
+### What this entry does not decide
+
+- **Which model `mechanical` is.** `D-0044` rule 5's gate is now open, and the pair is still the
+  operator's to ratify (`D-0021` rule 3).
+- **Whether a period's spend is reported anywhere.** Rule 6 declines to guess; `D-0037`'s breakdown
+  is where it would go.
+- **Whether cost belongs in a bound.** Nothing here refuses a lap for being expensive, and a ceiling
+  on money is a different decision from recording one: rondo cannot know a lap's cost until the lap
+  is over.
+- **What a lap's cost means across a revision chain.** `D-0027` makes a revision a second lap with
+  its own row, so two rows carry two costs and nothing here adds them up.
+
+### What would falsify it
+
+- **continuo reporting the three numbers in `lap perform`'s payload.** The read, the module and the
+  grant all go away and rondo reads a field; the columns and the claims survive unchanged. This is
+  the alternative above, and it is the outcome to prefer.
+- **continuo changing the state-root layout.** Rule 2's path stops resolving, every lap reports
+  three nulls, and the repair is one `join` plus a re-measurement. The layout was read at `fcf86eb`
+  on 2026-09-12 and is `lapStateRoot`'s, not a convention rondo invented -- and it had **already
+  moved on continuo's `main`** by that date (the per-run derivation is gone from `src/lap/cli.ts`
+  there), so this falsifier is live rather than theoretical and fires at the next pin move.
+- **rondo minting a run id outside `[a-z0-9._-]`, or one ending in a dot.** Rule 2's "the encoding is
+  the identity" stops holding, and the answer is to read continuo's encoder rather than to widen the
+  pattern.
+- **A worker CLI that stops emitting the three keys, or renames one.** The columns go null and the
+  line says so; nothing breaks, and nothing is invented. The keys were read off a real
+  `events-000.jsonl` at this date.
+- **An operator wanting the cost before the lap ends.** Rule 1 writes it once, at the suspend; a
+  live figure would need continuo to report progress, which is not a thing it does.
+- **The three nulls being read as a zero anywhere** -- a surface that sums costs, a report that
+  averages them. Rule 3 is then not enough on its own and the distinction needs a type rather than a
+  nullable column.
+
+### Annotations this entry adds to earlier entries
+
+- **`D-0044`** gains a dated annotation: rule 5's gate ("no pair is added to `MODEL_TIER_TABLE`
+  until rondo records what a lap costs") is **satisfied from 2026-09-12** by this entry's three
+  columns. What rule 5 asks a reader to compare against exists now; the pair itself is still
+  `D-0021` rule 3's ratification and is not taken here.
+- **`D-0021`** gains one too: rule 5 recorded the model beside the tier so that a person could see
+  "which model a tier was worth on the day the lap ran", and the price of that day was the one thing
+  the row could not say. It can now.
