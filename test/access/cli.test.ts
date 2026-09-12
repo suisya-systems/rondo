@@ -17,6 +17,8 @@
  * than of this module; the runbook's real walk is what covers that, and
  * `docs/operations/rondo-cli.md` records it.
  */
+import { join } from "node:path";
+
 import { expect, test } from "vitest";
 import {
   approvedActor,
@@ -1883,9 +1885,11 @@ test("a row that already names its session needs no continuo at all (D-0048 rule
       plan: { state_root: "/srv/state" } as JsonRecord,
     }),
   );
+  // `join` rather than a literal: the separator is the platform's, and the
+  // Windows cells of the matrix are as required as the others (AGENTS.md 4).
   expect(located).toEqual({
     kind: "named",
-    directory: "/srv/state/rondo-i-1/session-7",
+    directory: join("/srv/state", "rondo-i-1", "session-7"),
     sessions: 1,
   });
 });
