@@ -195,14 +195,17 @@ export const USAGE = `rondo - the operator surface for delegated work
                           adjacency is where to look, not a collision rondo
                           observed
   rondo web [--port N]
-                          serve one read-only page on 127.0.0.1 (default port
-                          ${String(DEFAULT_WEB_PORT)}) showing what inbox, between and explain
-                          show, redrawn every few seconds. It reads rondo's own
-                          rows and writes none of them: looking at the page
-                          moves no last-look mark and counts no presentation,
-                          and nothing on it answers a gate. There is no
-                          authentication because there is no route in from
-                          anywhere but this machine
+                          serve one page on 127.0.0.1 (default port ${String(DEFAULT_WEB_PORT)})
+                          showing what inbox, between and explain show, redrawn
+                          every few seconds. Looking at it moves no last-look
+                          mark and counts no presentation: a redraw writes
+                          nothing. The one thing that does is an approve button
+                          beside each open gate: it answers that gate 'approve'
+                          as RONDO_APPROVER, by the same path rondo answer
+                          takes, and is drawn only when that is set. There is
+                          no authentication
+                          because there is no route in from anywhere but this
+                          machine
   rondo explain --iteration-id ID
                           say what the store holds about one iteration, with
                           what each claim rests on. Reads rondo's own rows and
@@ -975,10 +978,14 @@ function loadPlan(parsed: ParsedCommand): { plan: RunPlan } | { refusal: string 
  * by the time an operator gets an actor wrong, the interesting states are gone.
  */
 export function approvedActor(
-  parsed: ParsedCommand,
+  // **The identity and not the whole parse.** The web surface has no
+  // `ParsedCommand` and takes its actor from `RONDO_APPROVER` directly
+  // (D-0041 rule 5); passing the one field this function ever read is what
+  // lets both surfaces reach the same allowlist rather than two copies of it.
+  actorId: string | null,
   environment: Readonly<Record<string, string | undefined>>,
 ): { actorId: string } | { refusal: string } {
-  if (parsed.actorId === null) {
+  if (actorId === null) {
     return { refusal: "This command needs --actor-id ID, naming who is acting." };
   }
   const approver = environment[APPROVER_ENV];
@@ -989,10 +996,10 @@ export function approvedActor(
         "publish, and rondo will not act for an unnamed person.",
     };
   }
-  if (parsed.actorId !== approver) {
+  if (actorId !== approver) {
     return {
       refusal:
-        `--actor-id is '${parsed.actorId}' and ${APPROVER_ENV} is '${approver}'. They must be ` +
+        `--actor-id is '${actorId}' and ${APPROVER_ENV} is '${approver}'. They must be ` +
         "the same identity.",
     };
   }
@@ -1002,15 +1009,15 @@ export function approvedActor(
   // `publish` has already pushed and opened a pull request, or after `answer`
   // has already presented and delivered. Rondo refuses before a process starts
   // when it can, and this is one of the places it can.
-  if (/\s/.test(parsed.actorId) || parsed.actorId.startsWith("-")) {
+  if (/\s/.test(actorId) || actorId.startsWith("-")) {
     return {
       refusal:
-        `--actor-id is '${parsed.actorId}', and continuo's identifiers carry no whitespace and ` +
+        `--actor-id is '${actorId}', and continuo's identifiers carry no whitespace and ` +
         "do not begin with a dash. It would be refused partway through, after the effects before " +
         "it had already happened.",
     };
   }
-  return { actorId: parsed.actorId };
+  return { actorId: actorId };
 }
 
 /** Open rondo's own store, or say why it cannot be opened. */
@@ -1285,11 +1292,28 @@ export async function main(
     if ("refusal" in bounds) {
       return refuse(bounds.refusal);
     }
+    // **The approver is read once, here, and decides whether there is a write
+    // port at all** (D-0041 rules 4 and 5). Building the function and letting
+    // the page decide not to draw a button would leave a door with nobody's
+    // name on it reachable by a hand-written POST.
+    const approver = environment[APPROVER_ENV];
     return await serveOperatorPage(
       {
         store,
         record: openAdvisoryRecord(opened.path),
         policy: bounds.policy,
+        answer:
+          approver === undefined || approver === ""
+            ? null
+            : async (iterationId, body) =>
+                await answerFromPage(environment, store, approver, iterationId, body),
+        // Read for the same reason and on the same condition: the material is
+        // what a person is shown before they press, so it is drawn exactly
+        // where the button is (D-0029 rule 2 and D-0041 rule 6).
+        material:
+          approver === undefined || approver === ""
+            ? null
+            : async (record) => await pageMaterial(environment, store, record),
         // **The approver and not an `--actor-id`.** An inbox is one person's,
         // and the identity rondo already trusts to answer a gate is the one
         // whose inbox this host draws. Unset is not a refusal: the other two
@@ -1591,7 +1615,7 @@ async function commandElevate(
         `${BASIS_FORMS_LINE}.`,
     );
   }
-  const actor = approvedActor(parsed, environment);
+  const actor = approvedActor(parsed.actorId, environment);
   if ("refusal" in actor) {
     return refuse(actor.refusal);
   }
@@ -1682,7 +1706,7 @@ async function commandInbox(
   store: IterationStore,
   storePath: string,
 ): Promise<number> {
-  const actor = approvedActor(parsed, environment);
+  const actor = approvedActor(parsed.actorId, environment);
   if ("refusal" in actor) {
     return refuse(actor.refusal);
   }
@@ -1857,7 +1881,7 @@ async function commandDecide(
         "and a digest on one would read as an approval that had been recorded as its opposite.",
     );
   }
-  const actor = approvedActor(parsed, environment);
+  const actor = approvedActor(parsed.actorId, environment);
   if ("refusal" in actor) {
     return refuse(actor.refusal);
   }
@@ -1903,10 +1927,32 @@ async function commandDecide(
  * answer is what D-0029 rule 3 refuses on the clock argument.
  */
 async function sayLapMaterial(store: IterationStore, record: IterationRecord): Promise<void> {
+  for (const line of await lapMaterialLines(store, record)) {
+    say(line);
+  }
+}
+
+/**
+ * The same material as lines, for a surface that is not a terminal.
+ *
+ * **Lifted out rather than copied**, which is D-0041 rule 6 itself:
+ * the page offers an approve button, and a person pressing it must be shown what
+ * `rondo answer` shows them -- the branch, the workspace, the commit subjects,
+ * the paths and the independent reading -- or the screen that is easier to reach
+ * is also the screen that asks for less before it writes. Two renderings of this
+ * would be two things to keep true; one list of lines, printed by the terminal
+ * and put in a `<pre>` by the page, is one.
+ */
+export async function lapMaterialLines(
+  store: IterationStore,
+  record: IterationRecord,
+): Promise<readonly string[]> {
   const workspace = planField(record, "workspace");
   const topicBranch = planField(record, "topic_branch");
-  say(`work    ${topicBranch === "" ? "(no topic branch on the row)" : topicBranch}`);
-  say(`        in ${workspace === "" ? "(no workspace on the row)" : workspace}`);
+  const lines: string[] = [
+    `work    ${topicBranch === "" ? "(no topic branch on the row)" : topicBranch}`,
+    `        in ${workspace === "" ? "(no workspace on the row)" : workspace}`,
+  ];
   // **The commits and the files, not a count of them.** A summary that said
   // "3 commits, 2 files" would leave the person exactly where the gate's own
   // `rationale` leaves them: told that work happened, and told it by a summary.
@@ -1915,22 +1961,21 @@ async function sayLapMaterial(store: IterationStore, record: IterationRecord): P
   // in words nobody generated for this screen.
   const range = readingRangeOf(record);
   if (range === null) {
-    say("        the row does not name a range, so there is nothing to list");
+    lines.push("        the row does not name a range, so there is nothing to list");
   } else {
-    for (const line of workLines(await inspectLapWork(range))) {
-      say(line);
-    }
+    lines.push(...workLines(await inspectLapWork(range)));
   }
   const readings = await store.readingsFor(record.id);
   const latest = readings.at(-1);
   if (latest === undefined) {
-    say("review  no independent reading of this work was recorded.");
-    say("        'rondo publish' will refuse once on that, and --despite-review is the way past.");
-    return;
+    lines.push(
+      "review  no independent reading of this work was recorded.",
+      "        'rondo publish' will refuse once on that, and --despite-review is the way past.",
+    );
+    return lines;
   }
-  for (const line of reviewLines(latest)) {
-    say(line);
-  }
+  lines.push(...reviewLines(latest));
+  return lines;
 }
 
 /**
@@ -2208,7 +2253,7 @@ async function commandAnswer(
     return 0;
   }
 
-  const actor = approvedActor(parsed, environment);
+  const actor = approvedActor(parsed.actorId, environment);
   if ("refusal" in actor) {
     return refuse(actor.refusal);
   }
@@ -2250,6 +2295,160 @@ async function commandAnswer(
     );
   }
   return 0;
+}
+
+/**
+ * Everything a person is shown before they may press: the question, then the work.
+ *
+ * **The gate's own words come first, and they are not in rondo's store.** The
+ * rationale is the worker's account of why it stopped, and the options are what
+ * it was asked -- `commandAnswer`'s reading mode prints both above the material,
+ * and a page offering approval without them would be offering approval of a
+ * question nobody read. Only continuo has them, so this reads one `gate show`.
+ *
+ * **A continuo that will not start is a line and never a refusal**, which is
+ * `inspectLapWork`'s treatment of an unreadable workspace and the same argument:
+ * `web` is dispatched ahead of `startContinuo` so that the screen saying what is
+ * stuck stays reachable when continuo is one of the stuck things, and a render
+ * that threw on it would undo that. What the person loses is the question, and
+ * they are told that is what they lost -- so a press on a page that says the
+ * question could not be read is a press made knowingly.
+ *
+ * ponytail: one `gate show` per open gate per redraw, which at five seconds is a
+ * subprocess every five seconds for each row with a button. Acceptable while the
+ * host has one operator and a handful of live laps; the upgrade is a rondo-side
+ * column holding the question, written when the row reaches `awaiting_human`.
+ */
+async function pageMaterial(
+  environment: Readonly<Record<string, string | undefined>>,
+  store: IterationStore,
+  record: IterationRecord,
+): Promise<readonly string[]> {
+  const lines: string[] = [];
+  const startup = await startContinuo(environment);
+  if (startup.kind === "refused") {
+    lines.push("why     the gate question could not be read: continuo is not usable");
+    lines.push(`        ${startup.reason}`);
+  } else if (record.gateId !== null) {
+    const observed = await showGate(startup.continuo, {
+      db: planField(record, "db"),
+      gateId: record.gateId,
+    });
+    if (observed.kind === "answered") {
+      const gate = observed.payload;
+      lines.push(`gate    ${gate.gateId}  (${gate.gateType})  stage '${gate.stage}'`);
+      // Not `legibleAsciiEscape`d: that exists because a cp932 console may not
+      // encode what a worker wrote, and a browser has no such problem. The
+      // paragraphs survive, which is rondo#90 on the path that matters most.
+      lines.push(`why     ${gate.rationale}`);
+      lines.push(`options ${String(gate.options)}`);
+    } else {
+      lines.push(`why     the gate question could not be read (${observed.kind})`);
+    }
+  }
+  return [...lines, ...(await lapMaterialLines(store, record))];
+}
+
+/**
+ * One press of the page's approve button, in the terminal's own verbs.
+ *
+ * **It is `commandAnswer`'s writing half over a row it did not parse for.**
+ * `walkGate` and `resume` are reached here by the same two calls the command
+ * line makes, so "the button does what `rondo answer` does" is a property of
+ * there being one implementation rather than two that have to keep agreeing
+ * (D-0041 rule 7). What differs is only what a screen can do with the answer: a
+ * refusal is a sentence handed back to be rendered rather than a line printed
+ * and an exit status returned, because the person who pressed the button is
+ * looking at a browser and not at this process's stdout.
+ *
+ * **continuo is started here rather than before the page is served**, and that
+ * is `dispatch`'s existing reasoning rather than a new one: `web` is dispatched
+ * ahead of `startContinuo` so that a screen which says what is stuck stays
+ * reachable when continuo is one of the stuck things. A press is the first
+ * moment this surface actually needs a continuo, and a start that fails is a
+ * refusal on the page instead of a page that never appeared.
+ */
+async function answerFromPage(
+  environment: Readonly<Record<string, string | undefined>>,
+  store: IterationStore,
+  approver: string,
+  iterationId: string,
+  body: string,
+): Promise<{ ok: boolean; note: string }> {
+  const actor = approvedActor(approver, environment);
+  if ("refusal" in actor) {
+    return { ok: false, note: actor.refusal };
+  }
+  const found = await store.read(iterationId);
+  if (found.kind === "absent") {
+    return { ok: false, note: `There is no iteration '${iterationId}'.` };
+  }
+  if (found.kind === "unreadable") {
+    return { ok: false, note: `That iteration row would not read: ${found.reason}` };
+  }
+  const record = found.record;
+  // The same two refusals `commandAnswer` makes, for the same reasons: a
+  // terminal row's gate is not this surface's to close (`D-0023` rule 15), and
+  // a row with no gate id has nothing for a person to answer. The button is not
+  // drawn in either case -- these catch a stale page, which is exactly what a
+  // page that redraws itself every five seconds will sometimes be.
+  if (isTerminal(record.status)) {
+    return {
+      ok: false,
+      note:
+        `iteration '${record.id}' is ${record.status}, which is terminal, so there is nothing ` +
+        "left to answer.",
+    };
+  }
+  if (record.gateId === null) {
+    return {
+      ok: false,
+      note: `iteration '${record.id}' is ${record.status}, and no gate is open on it.`,
+    };
+  }
+  const startup = await startContinuo(environment);
+  if (startup.kind === "refused") {
+    return { ok: false, note: `continuo is not usable: ${startup.reason}` };
+  }
+  const continuo = startup.continuo;
+  const walked = await walkGate(continuo, {
+    db: planField(record, "db"),
+    gateId: record.gateId,
+    destinationDir: planField(record, "endpoint_destination_dir"),
+    holder: planField(record, "lease_claimant_id"),
+    actorId: actor.actorId,
+    body,
+  });
+  if (walked.kind === "failed") {
+    // The relay's own words went to the terminal `rondo web` is running in --
+    // `walkGate` says what it did as it does it, and this surface does not
+    // intercept that. Said here rather than silently redirecting, because the
+    // page would otherwise redraw showing the same open gate and no reason.
+    return {
+      ok: false,
+      note:
+        `The gate walk for '${record.id}' did not finish. The terminal running 'rondo web' has ` +
+        "continuo's own diagnosis.",
+    };
+  }
+  const report = await resume(conductorPorts(continuo, store), record.id);
+  sayReport(report);
+  // **A walk that closed the gate and a row that settled are two facts**, and
+  // `resume` is total: a gate it cannot observe comes back as a report with
+  // diagnostic lines rather than as a throw. Redirecting on that would put the
+  // operator back on a page still offering the button, with the answer already
+  // spent and nothing saying why -- so the report's own lines are the response.
+  if (report.status !== "closed") {
+    return {
+      ok: false,
+      note: [
+        `The gate was answered, but iteration '${record.id}' is ` +
+          `${report.status ?? "in an unnamed state"} rather than closed.`,
+        ...report.lines,
+      ].join("\n"),
+    };
+  }
+  return { ok: true, note: `iteration '${record.id}' is closed` };
 }
 
 /**
@@ -2389,7 +2588,7 @@ async function commandRevise(
   ports: ReturnType<typeof conductorPorts>,
   continuo: VerifiedContinuo,
 ): Promise<number> {
-  const actor = approvedActor(parsed, environment);
+  const actor = approvedActor(parsed.actorId, environment);
   if ("refusal" in actor) {
     return refuse(actor.refusal);
   }
@@ -2926,7 +3125,7 @@ async function commandPublish(
         "about publishing that the plan does not carry.",
     );
   }
-  const actor = approvedActor(parsed, environment);
+  const actor = approvedActor(parsed.actorId, environment);
   if ("refusal" in actor) {
     return refuse(actor.refusal);
   }

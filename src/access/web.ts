@@ -8,14 +8,26 @@
  * Nothing new is stored, nothing new is named, and no state exists that a
  * command cannot also show.
  *
- * **Read-only is a type rather than a promise.** The two ports are `Pick`ed
- * down to the methods that read ({@link WebPorts}), so a write from this
- * surface does not compile. That matters more here than at the command line:
- * the page refreshes itself, and the two rows a terminal `inbox` writes -- the
- * count of what was presented (D-0032 rule 10) and the last-look mark (rule 9)
- * -- are claims about a person having been shown something. A page redrawing
- * every few seconds while nobody is at the desk would make both of them lies,
- * and the mark in particular would erase the diff the operator comes back for.
+ * **Reading is a type; the one write is a runtime fact** (D-0041). The two
+ * ports are still `Pick`ed down to the methods that read ({@link WebPorts}), so
+ * everything the renderer holds is unable to write and the compiler says so.
+ * That is not a preference about web surfaces: the two rows a terminal `inbox`
+ * writes -- the count of what was presented (D-0032 rule 10) and the last-look
+ * mark (rule 9) -- are claims about a person having been shown something, and a
+ * page redrawing every few seconds while nobody is at the desk would make both
+ * of them lies. A redraw did not read the inbox, so it still writes neither.
+ *
+ * **A click, though, is a person answering a gate.** So the page carries one
+ * button, and the whole of what it may write arrives as a *second* port holding
+ * a single function ({@link AnswerFromWeb}) rather than a store: the page's
+ * writing vocabulary is one sentence long, and widening it is a visible change
+ * to a type. No type can tell an unattended redraw from a human's click -- they
+ * differ in whether somebody was at the keyboard, which is not in the data -- so
+ * two runtime facts do it instead, and either alone would be enough. The redraw
+ * is `<meta http-equiv="refresh">` and the page carries no script, so nothing
+ * here can emit a `POST` without a person pressing something; and a token minted
+ * when this process began listening is rendered into the form and checked on the
+ * way in, so a `POST` that carries it came from a page this process served.
  *
  * **Two things the terminal got wrong are not repeated here** (rondo#90,
  * rondo#91). A request is shown with its paragraphs intact, because the page
@@ -29,7 +41,8 @@
  * it is not reachable rather than a password rondo would have to store,
  * rotate and get right.
  */
-import { createServer } from "node:http";
+import { randomUUID } from "node:crypto";
+import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import {
   type AdvisorySnapshot,
   type Claim,
@@ -56,7 +69,58 @@ export interface WebPorts extends InboxReadPorts {
   readonly record: InboxReadPorts["record"] & Pick<AdvisoryRecord, "admissionRefusals">;
   readonly policy: HostPolicy;
   readonly actorId: string | null;
+  /**
+   * The whole of what this surface may write (D-0041 rules 4 and 7), or null
+   * when there is nobody to write as.
+   *
+   * One function and not a store handle, deliberately: with an `IterationStore`
+   * here every later edit to this module could write anything a store can write
+   * and the compiler would agree, and the boundary would be back to being a
+   * promise. Null when `RONDO_APPROVER` is unset, which is also when no button
+   * is drawn -- rondo does not act for an unnamed person on a screen either
+   * (D-0020 rule 2).
+   */
+  readonly answer: AnswerFromWeb | null;
+  /**
+   * What the lap actually did, as `rondo answer` lists it (D-0029 rule 2).
+   *
+   * A function for {@link answer}'s reason turned the other way round: the
+   * material is read out of a workspace with `git`, and a page that could spawn
+   * one would have a capability nothing on this surface should hold. So the
+   * caller reads it and this module renders it.
+   *
+   * It is shown **where the button is** and nowhere else, because the button is
+   * where it is needed: a screen that is easier to reach than the terminal must
+   * not also be the screen that asks for less before it writes.
+   */
+  readonly material: LapMaterial | null;
 }
+
+/** The lines `rondo answer` prints about the work itself, for one iteration. */
+export type LapMaterial = (record: IterationRecord) => Promise<readonly string[]>;
+
+/**
+ * Carry one body to one iteration's open gate, and say what happened.
+ *
+ * The caller supplies this; nothing about continuo, a gate walk or an actor is
+ * known here. `ok` false is a refusal a person can act on -- a row that ended,
+ * a gate already closed, a continuo that will not start -- and the page shows
+ * `note` rather than redrawing, because a redraw would show a gate that is
+ * still open and no reason why.
+ */
+export type AnswerFromWeb = (
+  iterationId: string,
+  body: string,
+) => Promise<{ readonly ok: boolean; readonly note: string }>;
+
+/**
+ * The one word the button carries (D-0041 rule 7).
+ *
+ * Read from this constant on the way *in* rather than from the posted form: the
+ * form's own `body` field is not trusted, so the page's writing vocabulary is
+ * one word whatever a hand-written request says.
+ */
+const APPROVE_BODY = "approve";
 
 /** How often the page redraws itself, in seconds. */
 const REFRESH_SECONDS = 5;
@@ -157,13 +221,61 @@ async function betweenHtml(ports: WebPorts): Promise<string> {
   );
 }
 
+/**
+ * The one button, drawn only where there is something for it to answer.
+ *
+ * Three conditions, and each is a different way of not having a question in
+ * front of a person: no write port (nobody to act as), a status that is not
+ * `awaiting_human` (nothing is asking), or no gate id on the row (the status
+ * says a gate is open and the row does not name one, which `answer` refuses
+ * too). A button drawn anyway would be one that fails when pressed.
+ *
+ * `method="post"` is not decoration: the redraw above is a document `GET`, and
+ * this form is the only thing on the page that can produce anything else.
+ */
+function approveHtml(record: IterationRecord, token: string | null, material: string): string {
+  if (token === null || record.status !== "awaiting_human" || record.gateId === null) {
+    return "";
+  }
+  return (
+    material +
+    `<form class="approve" method="post" action="/">` +
+    `<input type="hidden" name="token" value="${escapeHtml(token)}">` +
+    `<input type="hidden" name="iteration" value="${escapeHtml(record.id)}">` +
+    `<button type="submit">${escapeHtml(APPROVE_BODY)}</button>` +
+    `<span class="note">answers gate ${escapeHtml(record.gateId)} as ` +
+    `'${escapeHtml(APPROVE_BODY)}', which is what rondo answer does</span>` +
+    `</form>`
+  );
+}
+
 /** One live iteration, explained the way `rondo explain` explains it. */
-function explainHtml(record: IterationRecord, snapshot: AdvisorySnapshot): string {
+function explainHtml(
+  record: IterationRecord,
+  snapshot: AdvisorySnapshot,
+  token: string | null,
+  material: string,
+): string {
   return section(
     `iteration '${record.id}'`,
     "This explanation binds nothing: it is not a proposal and cannot be approved.",
-    claimsHtml(propose(snapshot).payload.claims, snapshot),
+    claimsHtml(propose(snapshot).payload.claims, snapshot) + approveHtml(record, token, material),
   );
+}
+
+/**
+ * The work a press would approve over, or nothing when there is no press.
+ *
+ * Read only for the row that carries the button: it shells out to `git` in the
+ * caller, and a page that redraws every five seconds must not inspect every
+ * workspace it can see each time it does.
+ */
+async function materialHtml(ports: WebPorts, record: IterationRecord): Promise<string> {
+  if (ports.material === null || record.status !== "awaiting_human" || record.gateId === null) {
+    return "";
+  }
+  const lines = await ports.material(record);
+  return `<pre class="material">${escapeHtml(lines.join("\n"))}</pre>`;
 }
 
 /**
@@ -173,7 +285,7 @@ function explainHtml(record: IterationRecord, snapshot: AdvisorySnapshot): strin
  * everything on it is what an operator scrolls; a second page would be a second
  * thing to navigate and a second URL to get wrong.
  */
-export async function operatorPage(ports: WebPorts): Promise<string> {
+export async function operatorPage(ports: WebPorts, token: string | null = null): Promise<string> {
   const sections: string[] = [await inboxHtml(ports), await betweenHtml(ports)];
   for (const outcome of await ports.store.readLive()) {
     if (outcome.kind === "read") {
@@ -181,6 +293,8 @@ export async function operatorPage(ports: WebPorts): Promise<string> {
         explainHtml(
           outcome.record,
           gather(outcome.record, await ports.store.readingsFor(outcome.record.id)),
+          ports.answer === null ? null : token,
+          await materialHtml(ports, outcome.record),
         ),
       );
     } else if (outcome.kind === "unreadable") {
@@ -215,13 +329,19 @@ pre { white-space: pre-wrap; word-break: break-word; margin: 0; }
 .basis { font-size: .85rem; }
 .claim { display: grid; grid-template-columns: minmax(9rem, 14rem) 1fr; gap: .75rem; margin: .25rem 0; }
 .label { opacity: .7; }
+.approve { align-items: center; display: flex; flex-wrap: wrap; gap: .75rem; margin: .75rem 0 0; }
+.approve button { font: inherit; padding: .4rem 1.2rem; }
+.approve .note { margin: 0; }
+.material { margin: .75rem 0 0; opacity: .85; }
 .value { white-space: pre-wrap; word-break: break-word; }
 @media (max-width: 40rem) { .claim { grid-template-columns: 1fr; gap: 0; } }
 </style>
 </head>
 <body>
 <h1>rondo</h1>
-<p class="note">Read-only. Nothing here answers a gate or changes a row; it redraws every ${String(REFRESH_SECONDS)}s.</p>
+<p class="note">Redraws every ${String(REFRESH_SECONDS)}s, and a redraw writes nothing: no last-look
+mark moves and no presentation is counted. The one thing that writes is the approve button, which
+answers a gate only when a person presses it.</p>
 ${sections.join("\n")}
 </body>
 </html>
@@ -257,6 +377,111 @@ function fromThisMachine(host: string | undefined): boolean {
 }
 
 /**
+ * Whether a request's `Origin`, if it sent one, names this machine.
+ *
+ * Corroboration rather than the gate (D-0041 rule 3): a cross-site form post
+ * carries the attacker's origin and is refused here for free, but `Origin` is
+ * absent often enough -- and from enough legitimate requests -- that a surface
+ * resting on it would be resting on a header's presence. The token is what the
+ * refusal actually rests on; this closes the door one step earlier when the
+ * browser happens to say who sent the request.
+ *
+ * An `Origin` that will not parse is refused rather than admitted: `null` is
+ * what a browser sends for a sandboxed or redirected form post, and that is not
+ * the operator's own page.
+ */
+function originIsThisMachine(origin: string | undefined): boolean {
+  if (origin === undefined) {
+    return true;
+  }
+  try {
+    return fromThisMachine(new URL(origin).host);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The body of one form post, or null when it is longer than a form post is.
+ *
+ * The cap is not a performance measure. This surface accepts exactly two short
+ * fields, and a request that is bigger than that is not the page's form -- so
+ * reading it to the end would be this process buffering whatever anybody on
+ * loopback felt like sending.
+ */
+const MAX_FORM_BYTES = 4096;
+
+function readForm(request: IncomingMessage): Promise<URLSearchParams | null> {
+  return new Promise((resolve) => {
+    let body = "";
+    request.setEncoding("utf8");
+    request.on("data", (chunk: string) => {
+      body += chunk;
+      if (body.length > MAX_FORM_BYTES) {
+        resolve(null);
+        request.destroy();
+      }
+    });
+    request.on("end", () => {
+      resolve(new URLSearchParams(body));
+    });
+    request.on("error", () => {
+      resolve(null);
+    });
+  });
+}
+
+/**
+ * One press of the button, from the check that it was a person to the row it
+ * settles.
+ *
+ * The order is the point. Everything that decides *whether this request may
+ * write* happens before the write port is touched at all, and each refusal is
+ * a status a person can read rather than a silent redraw. A success answers
+ * `303` back to `/` (rule 8): the page refreshes itself, and a `POST` left on
+ * the history stack is one an F5 would send again.
+ */
+async function handleApprove(
+  ports: WebPorts,
+  token: string,
+  request: IncomingMessage,
+  response: ServerResponse,
+): Promise<void> {
+  const refuse = (status: number, line: string): void => {
+    response.writeHead(status, { "content-type": "text/plain; charset=utf-8" });
+    response.end(`${line}\n`);
+  };
+  if (ports.answer === null) {
+    refuse(403, "RONDO_APPROVER is not set, so there is nobody this page could answer as");
+    return;
+  }
+  if (!originIsThisMachine(request.headers.origin)) {
+    refuse(403, "that request came from another page");
+    return;
+  }
+  const form = await readForm(request);
+  if (form === null) {
+    refuse(413, "that is larger than this page's form");
+    return;
+  }
+  if (form.get("token") !== token) {
+    refuse(403, "that form did not come from this page; reload it and press the button again");
+    return;
+  }
+  const iterationId = form.get("iteration");
+  if (iterationId === null || iterationId === "") {
+    refuse(400, "that form named no iteration");
+    return;
+  }
+  const answered = await ports.answer(iterationId, APPROVE_BODY);
+  if (!answered.ok) {
+    refuse(409, answered.note);
+    return;
+  }
+  response.writeHead(303, { location: "/" }).end();
+}
+
+/**
  * Serve the page on localhost until the server is closed.
  *
  * `127.0.0.1` is written here rather than taken as an argument: an address is
@@ -280,9 +505,15 @@ export function serveOperatorPage(
   // function would otherwise have to hand back.
   signal?: AbortSignal,
 ): Promise<number> {
+  // **Minted once, when this process starts serving** (D-0041 rule 3b). Per
+  // process rather than per render, because a token that changed under the
+  // five-second redraw would expire every form before anybody could press it;
+  // and `randomUUID` rather than anything derived, because the whole property
+  // is that no other page can guess it.
+  const token = randomUUID();
   const server = createServer((request, response) => {
-    if (request.method !== "GET" && request.method !== "HEAD") {
-      response.writeHead(405, { allow: "GET, HEAD" }).end();
+    if (request.method !== "GET" && request.method !== "HEAD" && request.method !== "POST") {
+      response.writeHead(405, { allow: "GET, HEAD, POST" }).end();
       return;
     }
     if (!fromThisMachine(request.headers.host)) {
@@ -296,9 +527,33 @@ export function serveOperatorPage(
       response.writeHead(404, { "content-type": "text/plain; charset=utf-8" }).end("not found\n");
       return;
     }
-    operatorPage(ports)
+    if (request.method === "POST") {
+      handleApprove(ports, token, request, response).catch((error: unknown) => {
+        // Same reasoning as the render's catch below: every check above is
+        // total and the write port reports its own refusals, so a throw here is
+        // a defect. Shown rather than swallowed -- a redirect back to a page
+        // still showing an open gate is the one answer a person cannot act on.
+        response.writeHead(500, { "content-type": "text/plain; charset=utf-8" });
+        response.end(`${error instanceof Error ? error.message : String(error)}\n`);
+      });
+      return;
+    }
+    operatorPage(ports, token)
       .then((html) => {
-        response.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+        response.writeHead(200, {
+          "content-type": "text/html; charset=utf-8",
+          // **The third door, and the one the token cannot hold** (D-0041
+          // rule 3). A page on evil.example cannot *read* this one and so
+          // cannot steal the token -- but it can put this one in a transparent
+          // frame over a button of its own, and then the click that arrives
+          // carries the genuine token from the loopback origin and is
+          // indistinguishable from the operator pressing approve. It is the
+          // same shape as the other two: a browser doing what the operator
+          // asked, for a page the operator did not mean. What refuses it is the
+          // browser, told not to frame this page at all, which is why the
+          // header is sent even though nothing about rondo needs a frame.
+          "content-security-policy": "frame-ancestors 'none'",
+        });
         response.end(request.method === "HEAD" ? undefined : html);
       })
       .catch((error: unknown) => {
@@ -324,7 +579,10 @@ export function serveOperatorPage(
       // listening on is worse than no line at all.
       const bound = server.address();
       const at = bound !== null && typeof bound === "object" ? bound.port : port;
-      announce(`rondo is reading at http://127.0.0.1:${String(at)}/ -- ctrl-c to stop`);
+      announce(
+        `rondo is ${ports.answer === null ? "reading" : "reading and answering"} at ` +
+          `http://127.0.0.1:${String(at)}/ -- ctrl-c to stop`,
+      );
     });
   });
 }

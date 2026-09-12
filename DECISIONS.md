@@ -78,6 +78,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0038 | Whether the premise under a proposal has moved, decided per basis and at render time: the record and not the field as the unit, re-gathered rather than remembered, and `undetermined` as a value the screen may never round to unchanged | accepted |
 | D-0039 | A lap cannot verify what it wrote, and `--allowedTools` is not the way out: `D-0011`'s first falsifier fires, the fence input rondo asks continuo for, and what `granted` maps to once it exists | accepted |
 | D-0040 | Where a run's authorisation is written down now that continuo owns a table for it: `D-0020` rule 4's falsifier fires in substance, the durable home does not move, and the envelope carries only facts that exist today | accepted |
+| D-0041 | The one write the operator's page may do: an unattended redraw and a person's click are told apart at runtime and never by type, the approver is the only actor, and the write is a single function rather than a store | accepted |
 
 ---
 
@@ -7278,3 +7279,224 @@ rondo `09830d6`, on **2026-09-12**, by running as well as by reading.
   would make the whole record decoration — continuo refuses that case as `DelegationRecordTampered`,
   and rondo's reliance on that refusal is what rule 7 rests on.
 - Any measurement above failing to reproduce at continuo `fcf86eb2` and rondo `09830d6`.
+
+## D-0041 — The one write the operator's page may do: an unattended redraw and a person's click are told apart at runtime and never by type, the approver is the only actor, and the write is a single function rather than a store
+
+**Status:** accepted (2026-09-12, rondo's human gate). Refs rondo#95, `D-0032`, `D-0036`, `D-0020`.
+
+`D-0032` rule 1 says the operator's surface has to be able to show the record. rondo#95 built the
+first surface that is not a terminal — one page on `127.0.0.1` that redraws itself every five
+seconds — and drew its boundary at *reading*: the two ports it is handed are `Pick`ed down to the
+read methods, so a write from that module does not compile. The argument for that boundary was not
+"web surfaces should be read-only". It was narrower and it was about two specific rows:
+
+> A page redrawing every few seconds while nobody is at the desk would make both of them lies
+
+— the presentation counted once per subject (`D-0032` rule 10) and the durable last-look mark
+(rule 9), each of which is a **claim that a person was shown something**. An unattended redraw
+writing either one puts a lie in the ledger.
+
+The operator now wants to answer a gate from that page without opening a terminal. That is a write.
+This entry re-draws the boundary rondo#95 drew, and the re-drawing is the work: the old argument is
+not repealed, it is **scoped to what it was actually about**, and a second argument is written for
+the one write that is being let through.
+
+### Decision
+
+1. **The argument rondo#95 made was never about writes. It was about writes that assert a human
+   was present.** The two rows it named are exactly those; a gate answer is a third. So the rule
+   the boundary now carries is: *this surface may write only what a person actually did, and only
+   at the moment they did it.* A redraw did not read the inbox, so it may not count a
+   presentation or move the mark — that half of rondo#95 stands unchanged and unweakened. A click
+   *is* a person answering a gate, so it may write one.
+
+2. **The type cannot make this distinction, and pretending otherwise would be the mistake.** An
+   unattended redraw and a click arrive at the same process, over the same socket, into the same
+   module; there is no type that is inhabited by one and not the other, because the difference is
+   not in the data — it is in whether a human was at the keyboard. **So the distinction is made at
+   runtime and the type is used for what a type can do**: keep every path that *is not* the write
+   path structurally unable to write (rule 4).
+
+3. **Two runtime facts stand between a redraw and the ledger, and each one alone would be enough.**
+
+   a. **The method.** The redraw is `<meta http-equiv="refresh">`, which is a GET, and there is no
+      script on the page — no `fetch`, no `XMLHttpRequest`, no client-side build (rondo#95's
+      constraint, kept). **rondo's page has no mechanism that can issue a POST without a person
+      pressing something.** `GET` and `HEAD` reach only the renderer, which holds only the read
+      ports.
+
+   b. **A token minted per process.** The server mints one unguessable value when it starts
+      listening and renders it into the form; a `POST` whose token does not match it is refused
+      before anything is read. The token never leaves the page, and no other site can read the
+      page (no CORS header is sent, and a cross-origin form post cannot read the response), so a
+      request carrying it came from a page this process served.
+
+   c. **The browser, told not to frame this page.** `Content-Security-Policy: frame-ancestors
+      'none'` is served with the page, and it is not a third copy of the same defence: a page on
+      `evil.example` cannot *read* this one and so cannot steal the token, but it can put this one
+      in a transparent frame over a button of its own — and the click that follows carries the
+      genuine token from the loopback origin and is indistinguishable, at this process, from the
+      operator pressing approve. The only party that can tell those apart is the browser, and only
+      if it is told to. rondo needs no frame, so refusing every one costs nothing.
+
+   Fact (b) is the one that also answers the *other* attacker, and that is why both are kept rather
+   than just (a). rondo#95 established that a loopback bind decides which sockets arrive and not
+   which *pages* sent them, and defended against DNS rebinding with the `Host` check. A
+   cross-site **form** post is the same shape of attack one door further along: it survives the
+   `Host` check, because a browser posting to `http://127.0.0.1:7333/` sends exactly the `Host` the
+   operator's own browser would. The `Origin` header is checked too where the browser sends one,
+   but the token is what the refusal rests on, because `Origin` is absent from enough legitimate
+   and illegitimate requests to be a corroboration rather than a gate.
+
+4. **The read path and the write path are separate ports, and the write port is one function rather
+   than a handle.** `WebPorts` keeps its `Pick`ed read methods verbatim. The write arrives as a
+   *second, optional* field holding a single function — "carry this body to this iteration's open
+   gate" — and not as a widened `IterationStore` or a `VerifiedContinuo`. The difference is
+   load-bearing: with a store on the ports, every future edit to this module can write anything the
+   store can write and the compiler will agree; with one function, the page's whole writing
+   vocabulary is one sentence long and widening it is a visible change to a type. This is rondo#95's
+   "read-only is a type rather than a promise" kept in force for everything except the one verb, by
+   the same mechanism.
+
+5. **The actor is `RONDO_APPROVER`, and the page mints no identity of its own.** It is the same
+   value the terminal's `--actor-id` is checked against (`approvedActor`), so a gate answered from
+   the page and a gate answered from the terminal are the same person in the ledger, spelled the
+   same way. When it is unset there is **no button on the page at all** and a `POST` is refused:
+   `D-0020` rule 2's "rondo acts for a named person and refuses to act for an unnamed one" is not
+   relaxed for being on a screen. The page also does not *deepen* that rule's stated reduction —
+   the identity is still asserted by whoever controls the host rather than authenticated, which is
+   the same reduction the terminal carries and ends by the same adapter.
+
+6. **A person is shown what a person at the terminal is shown, before they press.** That is the
+   gate's own question -- its type, its stage, the worker's rationale and the options it was asked
+   -- and then `D-0029` rule 2's material: the topic branch, the workspace, the commit subjects,
+   the paths and the independent reading. Both are rendered beside the button, from the same lines
+   `rondo answer`'s reading mode prints. The question is not in rondo's store and is read with one
+   `gate show`; a continuo that will not start is a **line saying the question could not be read**
+   and never a refusal, because `web` is dispatched ahead of `startContinuo` so that the screen
+   saying what is stuck stays reachable when continuo is one of the stuck things -- and a person
+   who presses on a page that says so is pressing knowingly. The screen that is easier to reach than a terminal must not also be the
+   screen that asks for less before it writes, and two renderings of that material would be two
+   things to keep true. It is read only for the row that carries a button, because it shells out to
+   `git` and a page redrawing every five seconds must not inspect every workspace it can see.
+
+7. **What may be written is one sentence, and the button carries one word.** The page may answer an
+   open gate on a **live, non-terminal** iteration with the body `approve`, which is the option
+   rondo's own plans put first. It may not revise, publish, abandon, withdraw, start a lap, close a
+   run, or write a proposal decision; it does not move the last-look mark or count a presentation
+   (rule 1); and it renders a button only for a row that is `awaiting_human` with a gate id on it.
+   Everything past the click is the terminal's own path — `walkGate` and then `resume` — reached by
+   the same functions and not by a copy, so "the button does what `rondo answer` does" is a
+   property of there being one implementation rather than a claim two code paths have to keep
+   agreeing on.
+
+8. **A write is answered with a redirect and never with a page.** The `POST` replies `303` to `/`,
+   so the browser's own redraw and the operator's reload are GETs; a page whose refresh could
+   re-submit an answer would turn `D-0032`'s ledger into a count of how many times somebody pressed
+   F5. continuo's `answer` is idempotent for an identical body and `resume` settles once, so a
+   double click is absorbed rather than doubled — but that is continuo's property and this rule
+   does not rely on it.
+
+### What this entry does not do
+
+- **It does not make the page a second operating surface.** One page, one button, no router, no
+  dependency, no client-side build, loopback bind and `Host` check — every constraint rondo#95 took
+  is unchanged, and rule 4 is what stops the next verb arriving by habit.
+- **It does not touch `D-0032` rules 9 and 10.** The page still writes neither row, and `rondo
+  inbox` remains the only thing that does.
+- **It does not settle how a second operator would be told apart from the first.** The allowlist is
+  still size one and still asserted; a page reachable by two people would need `D-0020` rule 2's
+  other half, which is unbuilt.
+- **It does not widen the bind or add authentication.** What protects the page is still that it is
+  not reachable, and the token protects the *operator's own browser* from other pages rather than
+  the page from the network.
+
+### Residuals
+
+| Residual | Why not here | Who decides |
+|---|---|---|
+| A second button (revise, publish, withdraw) | Each is a different irreversible act with different inputs; `revise` needs an instruction typed, and `publish` pushes | the entry that wants one, against rule 4 |
+| Free-text answers from the page | The gate's options are a plan's field and a text box is a second input surface to validate; one word is what a person at a gate presses | the first gate whose options are not rondo's own |
+| Authenticated identity on this surface | `D-0020` rule 2's OIDC half is unbuilt everywhere, not just here | the adapter `D-0020` already specifies |
+| Showing the walk's six verbs as they happen | The page has no script and a redirect-then-redraw is what a scriptless page can do | whoever first needs progress rather than an outcome |
+
+### What was measured, and how
+
+On **2026-09-12**, on this machine, against the real dogfood environment
+(`scripts/dogfood-env.sh`) — continuo built at the pinned
+`fcf86eb2b7eb34d65bf73188b2b34544fab6820c`, a control plane and a rondo store on disk, `rondo web`
+serving on `127.0.0.1`, and every request made with `curl` so that the headers under test are the
+ones sent.
+
+**A gate was opened without spending a lap.** A lap spawns a real worker session and costs real
+money, and none of the properties here is about what a worker wrote: one runless gate was inserted
+into the control plane at stage `received`, and the iteration row was reserved and transitioned to
+`awaiting_human` through rondo's own store with a plan payload built by `readRunPlan` /
+`allocate` / `admittedPlan` / `planPayload` — the same four calls `rondo start` makes. Everything
+from the press onward is the real path: continuo's own CLI, six verbs, and rondo's own `resume`.
+
+- **The button is on the page, and it is the page's own form.** The served HTML carried
+  `<form class="approve" method="post" action="/">` with the process's token, the iteration id and
+  a single submit button reading `approve`, beside the gate id it answers.
+- **Five unattended redraws wrote nothing.** `operator_view` and `operator_attention` both held
+  **0** rows afterwards, which is rondo#95's property and the one this entry may not cost.
+- **The page refuses to be framed.** `Content-Security-Policy: frame-ancestors 'none'` is on the
+  200 response (found by the Codex review of this change, not by the author, and recorded here as
+  the third fact rule 3 now names).
+- **A form without the token is refused, and so is one from another origin.** `POST` with the
+  iteration and no token: **403**. `POST` with the correct token and `Origin: https://evil.example`:
+  **403**. Neither reached the write port.
+- **The press closed the gate.** `POST` with the token and a loopback `Origin`: **303** to `/`. The
+  terminal `rondo web` was running in showed the same six lines `rondo answer` prints — present,
+  deliver, ack, answer, deliver, ack — and then `iteration 'web-approve-003' is closed`.
+- **The ledger says who, when and what.** continuo's `gate_transition` rows for
+  `g-web-approve-003`:
+
+  | seq | kind | from → to | actor_kind | actor_id | body | at (UTC) |
+  |---|---|---|---|---|---|---|
+  | 8 | advance | received → presented | secretary | happy_ryo | — | 2026-09-12 00:17:35 |
+  | 9 | advance | presented → answered | **human** | **happy_ryo** | **approve** | 2026-09-12 00:17:35 |
+  | 10 | advance | answered → forwarded | secretary | happy_ryo | — | 2026-09-12 00:17:36 |
+  | 11 | close | forwarded → forwarded | system | happy_ryo | — | 2026-09-12 00:17:36 |
+
+  The gate row reads `outcome: answered_and_forwarded`, closed at `00:17:36`; rondo's own row reads
+  `status: closed`, `gate_outcome: answered_and_forwarded`. **Row 9 is rule 5 observed**: the actor
+  the press wrote is `happy_ryo` under `actor_kind: human`, which is `RONDO_APPROVER` and is spelled
+  exactly as the terminal spells it.
+- **The question and the work are shown beside the button** (both added after Codex rounds two and
+  three, which found each missing in turn). The page's `<pre class="material">` for the seeded row
+  carried, in order: `gate g-web-approve-005 (merge_approval) stage 'received'`, the worker's
+  rationale, `options ["approve","revise"]`, then the topic branch, the workspace path, the
+  unreadable-workspace line for a workspace that does not exist, and `review  no independent
+  reading of this work was recorded.` -- `rondo answer`'s own reading mode, from one list of lines
+  rather than a second rendering. The press that followed was **303**, and the ledger reproduced
+  exactly: seq 19 `presented -> answered`, `actor_kind: human`, `actor_id: happy_ryo`,
+  `body: approve` at `2026-09-12 00:27:24`; the gate `answered_and_forwarded`; rondo's row
+  `closed`.
+- **What was not measured**: no lap has been answered from the page — the gate above was seeded
+  rather than raised by a worker — and no browser was driven. The token, the `Origin` check and the
+  redirect were exercised with `curl`, which sends the headers a browser sends but is not one.
+
+### What would falsify it
+
+- **The page acquiring a script, a `fetch`, or any redraw that is not a document GET.** Rule 3(a)
+  is a structural claim about what this page *can* emit; a client-side refresh that could be made to
+  POST deletes half of rule 3 and leaves the token carrying it alone.
+- **A second write arriving and being handed the same door.** Rule 4's one-function port is the
+  whole boundary; the second verb is the point at which "one sentence" stops describing it and this
+  entry has to be re-argued rather than extended.
+- **`RONDO_APPROVER` ceasing to be an allowlist of one**, or the page becoming reachable by anyone
+  but the person at the host — either makes rule 5's "the same person, spelled the same way" false,
+  and the token starts being asked to do authentication's job.
+- **continuo's gate `answer` ceasing to be idempotent for an identical body**, which would make
+  rule 8's redirect the only thing between a double click and two answers, and a redirect is not a
+  lock.
+- **An unattended redraw turning out to have written anything**, which is rondo#95's original
+  property and the one thing this entry may not cost.
+- **A third way for a browser to be made to send a request the operator did not mean.** Rule 3
+  names three and refuses each where it can be refused (the method, the token, the frame); the
+  fourth one is this entry being incomplete rather than wrong, and the place to look is whatever a
+  browser will do for a page the operator is not looking at.
+- **A browser that sends `Origin` on a same-origin form post but not the token**, or any evidence
+  that the token can reach a cross-site page, which would mean rule 3(b) does not separate the two
+  requests it claims to separate.

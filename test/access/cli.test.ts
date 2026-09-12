@@ -490,27 +490,18 @@ test("a stage the walk cannot carry an answer from is refused, not guessed at", 
   })();
 });
 
-/** A parsed command carrying only the actor, for the approver cases. */
-function withActor(actorId: string | null) {
-  const outcome = parseCommand(actorId === null ? ["answer"] : ["answer", "--actor-id", actorId]);
-  if (outcome.kind !== "parsed") {
-    throw new Error("the fixture did not parse");
-  }
-  return outcome.parsed;
-}
-
 test("the approver allowlist refuses an unnamed actor, an unset allowlist and a mismatch", () => {
   // Three refusals rather than one, because they are three different mistakes
   // and an operator needs to be told which one they made.
-  expect(approvedActor(withActor(null), { RONDO_APPROVER: "happy_ryo" })).toHaveProperty("refusal");
+  expect(approvedActor(null, { RONDO_APPROVER: "happy_ryo" })).toHaveProperty("refusal");
 
-  const unset = approvedActor(withActor("happy_ryo"), {});
+  const unset = approvedActor("happy_ryo", {});
   expect(unset).toHaveProperty("refusal");
   if ("refusal" in unset) {
     expect(unset.refusal).toContain("RONDO_APPROVER");
   }
 
-  const mismatch = approvedActor(withActor("somebody-else"), { RONDO_APPROVER: "happy_ryo" });
+  const mismatch = approvedActor("somebody-else", { RONDO_APPROVER: "happy_ryo" });
   expect(mismatch).toHaveProperty("refusal");
   if ("refusal" in mismatch) {
     expect(mismatch.refusal).toContain("somebody-else");
@@ -519,11 +510,11 @@ test("the approver allowlist refuses an unnamed actor, an unset allowlist and a 
 
   // An empty allowlist is not an empty-string identity that something could
   // match: it is an unset allowlist, and it refuses.
-  expect(approvedActor(withActor(""), { RONDO_APPROVER: "" })).toHaveProperty("refusal");
+  expect(approvedActor("", { RONDO_APPROVER: "" })).toHaveProperty("refusal");
 });
 
 test("the approver allowlist admits the one identity it names", () => {
-  const allowed = approvedActor(withActor("happy_ryo"), { RONDO_APPROVER: "happy_ryo" });
+  const allowed = approvedActor("happy_ryo", { RONDO_APPROVER: "happy_ryo" });
   expect(allowed).toEqual({ actorId: "happy_ryo" });
 });
 
@@ -704,7 +695,7 @@ test("an actor id continuo would refuse is refused before any effect", () => {
   // at the argument boundary -- after `publish` has pushed and opened a pull
   // request, or after `answer` has presented and delivered. The shape is
   // checked with the allowlist so that never happens.
-  const spaced = approvedActor(withActor("Jane Doe"), { RONDO_APPROVER: "Jane Doe" });
+  const spaced = approvedActor("Jane Doe", { RONDO_APPROVER: "Jane Doe" });
   expect(spaced).toHaveProperty("refusal");
   if ("refusal" in spaced) {
     expect(spaced.refusal).toContain("whitespace");
@@ -715,7 +706,9 @@ test("an actor id continuo would refuse is refused before any effect", () => {
   const dashedParse = parseCommand(["answer", "--actor-id=--db", "--body=x"]);
   expect(dashedParse.kind).toBe("parsed");
   if (dashedParse.kind === "parsed") {
-    expect(approvedActor(dashedParse.parsed, { RONDO_APPROVER: "--db" })).toHaveProperty("refusal");
+    expect(approvedActor(dashedParse.parsed.actorId, { RONDO_APPROVER: "--db" })).toHaveProperty(
+      "refusal",
+    );
   }
 });
 

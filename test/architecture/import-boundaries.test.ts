@@ -346,7 +346,13 @@ const ALLOWED_EXTERNALS_BY_MODULE: Readonly<
   // page's hazards -- no `node:fs`, so a read-only page cannot serve a file
   // off this machine, and no `node:child_process`, so nothing an HTTP request
   // reaches can start a process.
-  "src/access/web.ts": { "node:http": ["createServer"] },
+  "src/access/web.ts": {
+    // The token that separates a person's click from an unattended redraw
+    // (D-0041 rule 3b) is the one value on this surface that must not be
+    // guessable, and nothing else in the module needs a random or a hash.
+    "node:crypto": ["randomUUID"],
+    "node:http": ["createServer", "IncomingMessage", "ServerResponse"],
+  },
 };
 
 /**
