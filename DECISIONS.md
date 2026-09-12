@@ -88,6 +88,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0048 | Naming a running lap's transcript: one identifier read off a live run, three liveness-shaped fields refused by name, and a directory printed where the hole already is | accepted |
 | D-0049 | An approval that names a contract the proposal never carried: refused at the door as a dangling reference, and not as a spendability check | accepted |
 | D-0050 | The second fence rondo never sees: no column for the worker's own sandbox, `D-0045`'s form declined because the silence points the other way, one standing sentence on the fence block, and the report asked of continuo | accepted |
+| D-0051 | A reading is identified by what it says, because the row can never say anything else: no identifier issued by the store, position and the clock out of the match entirely, and the one reading movement that can happen said once as a count | accepted |
 | D-0052 | A tier nothing prices is refused at `classify`, off the record cadenza just built: the tier names in the loop, the prices behind the seam, and `D-0017` rule 2 unamended | accepted |
 
 ---
@@ -9097,3 +9098,251 @@ it is the answer to one question: *is this a tier rondo prices?*
   spawn (`D-0021` rule 3, unchanged)" reads the same after this entry, and gains one place — the
   plan is refused at `classify` before a run is admitted. Nothing about how a tier is chosen
   changes.
+
+---
+
+## D-0051 — A reading is identified by what it says, because the row can never say anything else: no identifier issued by the store, position and the clock out of the match entirely, and the one reading movement that can happen said once as a count
+
+**Status:** accepted (2026-09-12, rondo's human gate). Refs rondo#81, `D-0022`, `D-0029`, `D-0032`,
+`D-0038`.
+
+rondo#81 records that `D-0038`'s freshness reader identifies a reading by **`drafter` plus which
+occurrence among that drafter's own readings it is** (`identityOf`, `src/access/advisory.ts:1967-1980`),
+and that this is stable only while `readAtMs` is monotonic: `readingsFor` orders by
+`(read_at_ms, rowid)` (`src/store/sqlite.ts:1386`), so a reading written later with an earlier
+`readAtMs` shifts the position of every same-drafter reading after it, the ordinals disagree between
+the stored side and the re-gathered side, and an unchanged reading can render `moved` — on the screen
+a person answers a gate from, where a wrong answer is least visible.
+
+The issue asks whether the fix is **a stable identity issued by the store**, `rowid` surfaced through
+`LapReading` being the obvious candidate, and whether such an identity falls inside `D-0038` rule 6's
+refusal of a new table, column or record kind for freshness, or beside it.
+
+**The answer is that no identifier is needed, and the reason is a property of the record kind rather
+than a budget.** A reading's content cannot change, so its content is its identity. `D-0038` rule 6's
+refusal is *beside* this question rather than over it, which matters for what a later entry is allowed
+to ask.
+
+### What was measured, and where
+
+At rondo `42148b5` on **2026-09-12**, by reading the tree.
+
+- **`lap_reading` is append-only in the strongest sense available: there is no writer.** The DDL
+  claims it (`src/store/sqlite.ts:663-677`: *"Append-only, and with no status column on purpose ...
+  Immutability here is a property of the schema and of there being no writer that updates"*), and
+  the tree bears it out — `writeReading` (`:1350-1379`) holds the only `INSERT`, every other mention
+  reads (`readingRows` at `:1381-1389`, `terminalWithoutReading`'s subquery at `:1662-1663`, the
+  `changedSince` descriptor at `:1967`), and no `UPDATE lap_reading` or `DELETE FROM lap_reading`
+  exists anywhere under `src/`.
+- **The row's clock is the caller's.** `writeReading` takes the `nowMs` its `transition` call was
+  given (`:1528`), which is why a clock regression can backdate one at all.
+- **The snapshot carries four of a reading's fields and not its evidence.** `SnapshotReading` is
+  `drafter`, `verdict`, `findings`, `unavailableReason` (`src/advisory/proposal.ts:187-193`);
+  `LapReading` additionally carries `iterationId`, `readAtMs` (`src/store/records.ts:535-538`) and
+  `ReadingEvidence` — `baseCommit`, `tipCommit`, `materialDigest` and the two counts
+  (`:490-501`) — and none of those three reach the snapshot, on either side of the comparison
+  (`snapshotReadings`, `src/access/advisory.ts:2487-2494`; the re-gather's own literal, `:2114-2120`).
+  **So a second `clear` reading from one drafter over new commits is content-identical to the first
+  in the snapshot**, and the fields that would have told them apart are the ones the snapshot drops.
+- **What a claim actually cites.** `propose()` emits one claim per reading per field —
+  `/readings/N/verdict`, `/readings/N/findings/M`, `/readings/N/unavailableReason` — and cites the
+  **whole** `/readings` array exactly when there is no reading to point an element at
+  (`src/advisory/proposal.ts:481-505`).
+- **`lap_reading` has no `INTEGER PRIMARY KEY`** (`src/store/sqlite.ts:663-677`), which is the class
+  of table SQLite documents `VACUUM` as free to renumber. Nothing under `src/` runs `VACUUM` today.
+- **A `rowid` is already used as an identity in this store, and the use is the opposite of the one
+  #81 proposes.** `CHANGE_SOURCES` reads `admission_refusal` by `CAST(rowid AS TEXT)`
+  (`src/store/sqlite.ts:1961-1966`) — computed inside one `changedSince` query, never written down
+  and never compared against a value from another moment.
+- **The reader this entry changes**: `identityOf` (`src/access/advisory.ts:1945-1982`),
+  `matchingRecord` (`:1985-2009`), the `wholeArray` arm of `snapshotBasisFreshness` (`:2044-2058`),
+  and `freshnessHeaderLines` (`:2328-2342`), which today prints the three-way count, the subject's
+  verdict and the pin line.
+- **What was not measured**: no reading has ever been backdated in a real store, so #81's own case
+  has never been observed; no operator has read a freshness line on a reading claim; and nothing has
+  counted how often a second reading arrives under an already-composed proposal, which is rule 5's
+  whole subject.
+
+### Decision
+
+1. **A reading is matched by what it says, and never by where it sits.** Its identity is its
+   `drafter` together with its own snapshot content, with an ordinal used **only** among siblings
+   that are indistinguishable after that. Array position and `readAtMs` leave the match entirely,
+   and `readingsFor`'s `ORDER BY` stops being load-bearing for the comparison.
+
+   **This is `D-0038` rule 2's own clause applied to a record kind that has no identity field.** That
+   rule says records in an array are matched by their own identity and never by index, and names the
+   field for each candidate form. A reading has no such field, so #80 reached for the one thing left,
+   which was its position. Its content was available the whole time.
+
+   **Content is a legitimate identity here and would be wrong for a candidate, and the difference is
+   the whole argument.** A candidate's content is the thing being measured — `D-0038` rule 1 exists
+   because a candidate's `status` moves underneath a composed proposal — so keying identity on
+   content would make every movement look like a departure. A reading's content **cannot** change
+   while remaining the same row: the table has no writer that updates, which the schema states and
+   `D-0029` rule 8 decided. So nothing the comparison could ever have detected is lost by keying on
+   it.
+
+   **The ordinal among equals is what the dropped `evidence` costs.** Two readings from one drafter
+   whose verdict, findings and reason all agree are one value twice as far as the snapshot is
+   concerned, and the ordinal keeps the count of them rather than telling them apart. It is
+   order-invariant precisely because they are interchangeable: any permutation yields the same
+   multiset of identities, which is what #81's regression needed and position could not give.
+
+2. **No identifier issued by the store, and `rowid` in particular is refused — on two grounds, of
+   which the second is the one that generalises.** Rule 1 makes it unnecessary, and a bare `rowid` is
+   not the stable identity it looks like. `lap_reading` has no `INTEGER PRIMARY KEY`, so `VACUUM` may
+   renumber it and a dump-and-reload will; and because the left-hand side of every comparison is the
+   **stored snapshot**, the identifier would have to be persisted into the payload and digested with
+   it (`D-0022` rule 4) — which is the difference from the `rowid` this store already uses: a key
+   computed inside one query and discarded is not the same object as a key a proposal carries for
+   its whole life. The silent failure would then survive the fix with a different trigger: *somebody
+   ran a maintenance command* instead of *a clock went backwards*, at the same screen and just as
+   quietly. Making it real means an explicit `id INTEGER PRIMARY KEY` column — a schema
+   change, for a match rule 1 already decides without one.
+
+3. **`D-0038` rule 6's refusal is beside this question, not over it, and #81 is answered `no` without
+   borrowing it.** Rule 6 refuses a column for **the freshness mark**, because a stored verdict is a
+   summary that is stale the instant after it is written. A reading identity is not a summary: it
+   names material rather than framing it, it does not outlive what it names, and it answers no part
+   of the freshness question — it only stabilises the match. Refusing it under rule 6 would be
+   borrowing an argument that does not fit, and would leave the tree with a precedent against
+   *identity* where the entry only ever meant to rule out a *judgement*.
+
+   **The consequence is deliberate.** A later entry that needs a durable per-reading identity for
+   another purpose — one record citing one reading, an operator naming a single reading at the CLI, a
+   second reader whose rows must be told apart in a way content cannot — is **not** foreclosed by
+   this entry or by `D-0038`. It has to argue its own need, and it should add the explicit primary key
+   rather than surface the `rowid`, for rule 2's second ground.
+
+4. **What a reading basis may say, stated so the line is not read for more than it holds.**
+   `unmoved`, or `moved` because the reading is absent from what rondo reads now (`D-0038` rule 5's
+   first edge); **never `undetermined` for this material** — the left-hand side is in the row and
+   rondo did re-read it.
+
+   **With rule 1 in place, a reading basis reads `unmoved` in every case the store can produce**, and
+   this is a true statement about immutable material rather than a rounding: the row cannot be edited
+   and nothing deletes it. It is `D-0038` rule 4's own shape for `repository` — re-reading a pinned
+   commit at its own commit is `unmoved` by construction — with the difference that here the value is
+   decidable rather than under-specified, so it is said rather than withheld. `D-0038` rule 4's
+   prohibition on rounding `undetermined` to unchanged is honoured and not dodged: there is no
+   `undetermined` here to round.
+
+   **This is also nearly information-free, and saying so is part of the decision.** Rule 5 is where
+   the information about readings actually is.
+
+5. **The one reading movement the store can produce is the set gaining a member, and it is said once
+   on the header line as a count** — `2 readings at composition, 3 now` — beside the subject's
+   verdict and the pin line, for explanation proposals and for no other kind.
+
+   **It is filed here because today the same fact reaches the screen or not depending on whether the
+   count was zero.** `propose()` cites the whole `/readings` array exactly when there were no
+   readings, so a proposal composed over zero readings reports `moved` the moment one arrives
+   (`D-0038` rule 5 via the `wholeArray` arm), and a proposal composed over one reports **nothing**
+   when a second arrives. One fact, opposite screens, decided by a length.
+
+   **It stays inside `D-0038` rule 3, and the reason it does is specific to readings.** Rule 3 reads
+   only identities the stored document holds so that the drafter is never asked whether the drafter
+   is still right — and for candidates that bites, because the gatherer enumerates and de-duplicates
+   the set, so an extra candidate is partly its composition. Readings are rows: one per row, no
+   dedup, no ordering the comparison depends on after rule 1. A count of them is a row count off the
+   store, the same grade as the subject's own verdict, and it invents no option and no claim.
+   **The same line is not extended to candidates**, where a changed count is not by itself movement
+   in the material.
+
+   **It is a count and not a listing.** What the newer reading *says* is material the stored document
+   does not hold, and putting its verdict on this screen would be rule 3's extra record reaching the
+   operator through the freshness line. The count says *go look*; the residual below is whether *go
+   look* is enough.
+
+### The options, and why the others were refused
+
+| Option | Outcome |
+|---|---|
+| **A. Content as identity, plus the header count line** | **Taken** (rules 1, 4, 5). No schema change, no identifier, position and clock out of the match, and the only movement that can happen is stated positively |
+| **B. Surface SQLite's `rowid` through `LapReading` into `SnapshotReading`** | **Refused** (rule 2). Unnecessary given rule 1, and not actually stable: `lap_reading` has no `INTEGER PRIMARY KEY`, so the identifier a proposal would carry for its whole life is one `VACUUM` or one dump-and-reload may renumber — the same silent wrong answer with a new trigger |
+| **C. Add an explicit `id INTEGER PRIMARY KEY` (or a minted reading id) column** | **Refused today** (rules 2 and 3). It is the right shape for a *different* need and rule 3 leaves that door open; as a fix for this match it is a schema change bought for a comparison that content decides |
+| **D. Carry `readAtMs` into `SnapshotReading` and match on `drafter` + time** | **Refused.** `D-0038` rule 2 keys the whole mechanism on no clock, and this is the very field whose regression #81 is about: it would make the match depend on the one value the bug corrupts |
+| **E. Order `readingsFor` by `rowid` alone so the ordinals agree** | **Refused**, and it is the closest competitor: insertion order is not moved by a backdated row, so it does align the ordinals. But it keeps position in the match and pays for it with an invariant that lives in an `ORDER BY` clause, load-bearing for a reader in another module that cannot see it — which is #81's failure with the tripwire moved rather than removed. Rule 1 takes position out instead, after which the ordering is free to be whatever a display wants |
+| **F. Detect non-monotonic `readAtMs` and report the affected bases `undetermined`** | **Refused.** It is the honest version of doing nothing, and #81 is right that it beats a silent wrong answer — but it needs the clock rule 2 excluded, it puts a condition on the screen that no operator can act on, and rule 1 removes the condition rather than reporting it. Kept as the fallback if rule 1's ground ever fails (see the falsifiers) |
+| **G. Decide nothing: the case needs a clock regression and no caller backdates** | **Refused.** The premise is true and is why this is an entry rather than an incident, but the cost of rule 1 is two lines in one function, and the failure it removes is silent at the one screen `D-0038` exists to make honest |
+
+### What this does not do
+
+- **It does not add a table, a column, a record kind or a writer.** `D-0029` rule 8's immutability,
+  `D-0022` rule 4's verbatim snapshot and `D-0038` rule 6's no-storage rule all stand exactly.
+- **It does not widen `SnapshotReading`.** The snapshot's four fields are unchanged; in particular
+  `ReadingEvidence` is still not copied, and rule 1's ordinal clause is the price of that rather than
+  an argument to revisit it here.
+- **It does not change what a proposal cites.** The `Basis` union is untouched and stays closed at
+  five forms; `propose()`'s pointers are unchanged.
+- **It does not change `readingsFor`'s ordering**, which after rule 1 is a display concern again.
+- **It does not decide a durable reading identity for any other purpose** (rule 3), and it does not
+  claim one is unavailable — only that freshness does not need it.
+- **It does not touch the candidate half of the comparison.** `D-0038` rules 1 and 2 decide it and
+  rule 5 explicitly declines to extend the count line to it.
+
+### The implementation this leaves, in order
+
+1. **`identityOf`'s `readings` arm** (`src/access/advisory.ts:1967-1980`): count earlier siblings
+   with the same drafter **and the same canonical content** rather than the same drafter alone.
+   `stableJson` (`:1837-1844`) is already the encoder, and `matchingRecord` needs no change — it
+   recomputes the identity over the re-gathered array, which is what makes the ordinal-among-equals
+   clause come out order-invariant for free.
+2. **The count line in `freshnessHeaderLines`** (`:2328-2342`), from the stored array's length and
+   the re-gathered one, printed for `explanation` proposals only and only when the two differ.
+3. **The planted cases**, `D-0032` rule 5's precedent and #81's own falsifier:
+   a reading backdated under an already-composed proposal, after which every stored basis must still
+   read `unmoved` and none may read `moved`; two content-identical readings from one drafter, matched
+   and not collapsed to one; a second reading arriving, whose header line must say the count changed;
+   and the existing case at `test/access/advisory-freshness.test.ts:602` — two same-drafter readings
+   whose verdicts differ — which must keep passing **unedited**, because its readings are
+   distinguishable by content and rule 1 is meant to be a strictly better identity rather than a
+   different one.
+
+### Residuals, with who decides
+
+| Residual | Why not here | Who decides |
+|---|---|---|
+| Whether the count line should carry the newer reading's verdict, not only that there is one | Rule 5: what a reading rondo has not stored says is material the stored document does not hold, and `D-0038` rule 3 keeps it off this screen. *Go look* may not be enough at a gate | the first operator who reads the count line and goes looking |
+| A durable per-reading identity for a purpose that is not freshness | Rule 3: not foreclosed, not needed here, and it should add an explicit primary key rather than surface a `rowid` | the entry that has the other need |
+| Two content-identical readings from one drafter being indistinguishable | Rule 1 accepts it as the cost of the snapshot's four fields; no claim yet depends on telling them apart | the entry that widens `SnapshotReading`, or the one that needs the distinction |
+| Whether a freshness line on a reading claim earns its place at all, now that rule 4 says it reads `unmoved` in every case the store can produce | `D-0038` rule 1 prints a mark per basis and no operator has read one; removing it for one basis form would be a per-form exception nothing has measured | the first operator who reads a proposal's reading claims |
+
+### What would falsify it
+
+- **A writer that updates or deletes a `lap_reading` row.** Rule 1's entire ground is that content
+  cannot change under a fixed row; the moment it can, content stops being an identity and the store
+  must issue one — which is option C arriving on evidence, and rule 3 already says it is allowed to.
+- **A reading basis reading `moved` in a store nobody edited by hand**, which says rule 4's *unmoved
+  in every case the store can produce* is wrong and that something mutates readings after all.
+- **Two content-identical readings from one drafter where an operator's next act depends on which of
+  the two a claim cites**, which is rule 1's accepted indistinguishability turning out to cost
+  something, and sends the question to `SnapshotReading`'s four fields rather than to the match.
+- **`SnapshotReading` widening to carry `evidence` or any field that differs between two otherwise
+  identical readings**, which makes rule 1's ordinal clause dead code. It falsifies the clause and
+  not the rule, and the rule gets stronger.
+- **The header count line being the usual screen** — readings arriving under composed proposals often
+  enough that the line is always there — which is `D-0038` rule 2's own *a mark that cries wolf is
+  worse than no mark* turned on rule 5, and means the count belongs somewhere other than the
+  freshness header.
+- **An operator reading the count line and having no way to act on it**, which sends rule 5's first
+  residual back to the gate as an entry.
+- **A `VACUUM`, backup or restore path entering rondo that preserves rowids under a table with no
+  `INTEGER PRIMARY KEY`**, which weakens rule 2's second ground to *unnecessary* alone — the refusal
+  stands on rule 1, but the argument a future entry has to answer gets shorter.
+- **#81's case arriving in a form rule 1 does not cover** — a reading whose identity is ambiguous for
+  a reason other than position, so that the match is wrong without any clock having moved.
+- Any measurement above failing to reproduce at `42148b5`.
+
+### Annotations this entry adds to earlier entries
+
+- **`D-0038` rule 2** gains a dated annotation: its *"matched by their own identity and never by
+  index"* clause now names readings as well as candidates, and their identity is their content —
+  which is what the rule always required and what #80 could not find a field for.
+- **`D-0038` rule 4** gains one: the `snapshot` form's *decided* is narrowed by rule 4 above for
+  readings specifically — decidable, and decidable to one value, for a reason about the record kind
+  rather than about the reader.
+- **`D-0038` rule 5's first edge** gains one: for readings it is reachable only through a hand-edited
+  store, so the strongest signal the rule names is, for this material, the one the store cannot
+  produce.
