@@ -103,7 +103,7 @@ import {
   unblockedBy,
   whereItRuns,
 } from "./inbox.js";
-import type { Chrome } from "./wording.js";
+import { type Chrome, EN, SHIPPED_SETS, setFor } from "./wording.js";
 
 /**
  * Everything the page is handed: the reading half of the two ports, the host's
@@ -122,19 +122,23 @@ export interface WebPorts extends InboxReadPorts {
   readonly policy: HostPolicy;
   readonly actorId: string | null;
   /**
-   * The language rondo writes this page in (D-0055 rules 5 and 10).
+   * The tag this host stated about its one operator, or null when it stated
+   * nothing (D-0055 rule 5, D-0056 rules 2 and 3).
    *
-   * **A host fact handed in, and not a lookup this module makes.** It is read
-   * from `RONDO_OPERATOR_LANGUAGE` beside `RONDO_APPROVER`, in the one place
-   * rondo's other deployment facts are read, and arrives here already selected
-   * -- so `inboxLines` and the fence block, which the terminal also composes,
-   * take a set as an argument rather than consulting one, and the terminal
-   * stays English while this page does not.
+   * **A tag and no longer a set, which is the whole of what D-0056 rule 3 costs
+   * this interface.** D-0055 resolved the variable at boot and handed the page
+   * the wording; under rule 2 the variable is one *step* of five, and a step
+   * that names a tag no set resolves to has to be a step that said nothing so
+   * that the browser's list answers instead. A `Chrome` cannot say that -- it
+   * is `EN` both for a host that asked for English and for a host that asked
+   * for German -- so what arrives is the tag, and {@link resolveLanguage} does
+   * the lookup once per request beside the other four steps.
    *
-   * Never null: a host that asked for nothing gets `EN`, which is the same set
-   * the terminal is handed and the same document this page was before.
+   * Still read from `RONDO_OPERATOR_LANGUAGE` beside `RONDO_APPROVER`, in the
+   * one place rondo's other deployment facts are read, and still refused there
+   * if it is not a tag (D-0056 rule 9).
    */
-  readonly wording: Chrome;
+  readonly hostLanguage: string | null;
   /**
    * The whole of what this surface may write (D-0041 rules 4 and 7), or null
    * when there is nobody to write as.
@@ -162,8 +166,18 @@ export interface WebPorts extends InboxReadPorts {
   readonly material: LapMaterial | null;
 }
 
-/** The lines `rondo answer` prints about the work itself, for one iteration. */
-export type LapMaterial = (record: IterationRecord) => Promise<readonly string[]>;
+/**
+ * The lines `rondo answer` prints about the work itself, for one iteration, in
+ * the language this request resolved to (D-0056 rule 12).
+ *
+ * **The set is an argument and not something the port was built with.** It was
+ * a closure over the host's set at `src/access/cli.ts`, which was correct while
+ * the page had one language for the life of the process and wrong the moment a
+ * request can switch it: the fence block's two standing sentences are prose
+ * (D-0055 rule 11), and a page that had switched would have shown them in the
+ * host's language inside a document declaring another.
+ */
+export type LapMaterial = (wording: Chrome, record: IterationRecord) => Promise<readonly string[]>;
 
 /**
  * Record the framing this press rests on, carry one body to one iteration's
@@ -258,16 +272,218 @@ function isLive(view: PageView): boolean {
   return view.kind !== "answer";
 }
 
-/** The address of one view, for the redraw and for the links between them. */
-function viewHref(view: PageView): string {
+/**
+ * The address of one view, for the redraw and for the links between them.
+ *
+ * **Every address this page composes for itself carries the tag** (D-0056 rule
+ * 11). The tag is not optional and there is no overload without it: rule 4
+ * makes the URL the only home of the language in force, so an address that
+ * dropped it is a page that silently re-resolves -- and with scripting on it
+ * would *appear* to stick, because the poller fetches whatever the address bar
+ * holds. A switch the fold drops is D-0055's failure reproduced by the entry
+ * that fixed it, so the parameter is required and the compiler is what asserts
+ * rule 11 rather than a comment.
+ *
+ * `lang` is written last on the two views that already carry a query, so the
+ * address reads as *the view, in this language* rather than the other way
+ * round.
+ */
+function viewHref(view: PageView, tag: string): string {
+  const lang = `lang=${encodeURIComponent(tag)}`;
   switch (view.kind) {
     case "reading":
-      return "/?reading=open";
+      return `/?reading=open&${lang}`;
     case "answer":
-      return `/?answer=${encodeURIComponent(view.iterationId)}`;
+      return `/?answer=${encodeURIComponent(view.iterationId)}&${lang}`;
     default:
-      return "/";
+      return `/?${lang}`;
   }
+}
+
+/**
+ * The name of the one cookie this surface holds (D-0056 rule 5).
+ *
+ * **One value, and the entry's three clauses about what it is not.** It never
+ * reaches the store, the ledger, a record kind, a plan field or a last-look
+ * mark; it authorises nothing, because D-0041 rule 3(b)'s per-process token
+ * stays in the form and is still the only thing that lets a `POST` write; and
+ * it is a seed rather than a second home of the state, because rule 4 means the
+ * tag in force is always the URL's.
+ */
+const LANG_COOKIE = "lang";
+
+/**
+ * How long the memory outlives the tab, in seconds.
+ *
+ * **Months rather than a session** (D-0056 rule 5): an operator who switched
+ * the page once is answering *what language do you read* and not *what language
+ * is this tab*, and a memory that died with the browser would ask them again
+ * every morning, which is the papercut the entry exists to close.
+ */
+const LANG_COOKIE_SECONDS = 180 * 24 * 60 * 60;
+
+/**
+ * The `Set-Cookie` that remembers one switch.
+ *
+ * The four attributes are named in D-0056 rule 5 and each is load-bearing:
+ * `Path=/` because this server serves one path; `SameSite=Strict` so no
+ * cross-site navigation can set the operator's language for them;
+ * `HttpOnly` because nothing in `page/poll.js` reads it and a value script
+ * cannot touch is a value a later script cannot start depending on.
+ */
+function rememberLang(tag: string): string {
+  // Written raw for {@link cookieTag}'s reason: `tag` is a shipped set's own
+  // tag, so there is no escaping for the two sides to agree about.
+  return (
+    `${LANG_COOKIE}=${tag}; Path=/; SameSite=Strict; HttpOnly; ` +
+    `Max-Age=${String(LANG_COOKIE_SECONDS)}`
+  );
+}
+
+/**
+ * The remembered tag off a request's `Cookie` header, or null when there is
+ * none.
+ *
+ * **Read raw, and not percent-decoded.** The value rondo writes is a set's own
+ * tag -- `en` or `ja`, inside `[a-z]` -- so there is nothing to decode, and
+ * `decodeURIComponent` is a function that *throws* on input it does not like
+ * (`lang=%` is a `URIError`). This runs synchronously in the request callback,
+ * outside the two promise handlers below, so a throw here would take the
+ * process down rather than ignore a preference -- and the cookie jar for
+ * `localhost` is shared with whatever else on this machine has served a page,
+ * so the header is not rondo's to trust the shape of. A value that is not a
+ * tag resolves to nothing through {@link setFor}, which is the same answer
+ * decoding it would have reached.
+ */
+function cookieTag(header: string | undefined): string | null {
+  if (header === undefined) {
+    return null;
+  }
+  for (const pair of header.split(";")) {
+    const at = pair.indexOf("=");
+    if (at !== -1 && pair.slice(0, at).trim() === LANG_COOKIE) {
+      return pair.slice(at + 1).trim();
+    }
+  }
+  return null;
+}
+
+/**
+ * The tags one `Accept-Language` header offers, best first.
+ *
+ * **`q` order, and that is the whole of the reading** (D-0056 rule 6). The
+ * header's grammar says it is a list with weights and not a ranking, so the
+ * tags are sorted by weight -- absent meaning `1`, ties keeping the order they
+ * were written in -- and then tried through lookup one at a time.
+ *
+ * **A `q` of zero is a refusal and not a low preference**, so those tags are
+ * dropped here rather than tried last: `de;q=1, ja;q=0` must not reach the `ja`
+ * set on its way past unsupported German. `*` is *no preference* and is
+ * skipped. No basic filtering, no alternatives list, no best-fit.
+ */
+function tagsByWeight(header: string | undefined): readonly string[] {
+  if (header === undefined) {
+    return [];
+  }
+  const offered: { tag: string; q: number; at: number }[] = [];
+  for (const [at, part] of header.split(",").entries()) {
+    const [named, ...parameters] = part.split(";");
+    const tag = (named ?? "").trim();
+    // `*` is the only member of the grammar that is not a tag, and it says
+    // nothing rather than something this page could look up.
+    if (tag === "" || tag === "*") {
+      continue;
+    }
+    const weight = parameters
+      // The fraction's digits are optional because RFC 9110's `qvalue` says so
+      // -- `0*3DIGIT` after the point -- so `q=0.` is a spelling of zero and
+      // must read as the refusal it is. A pattern demanding a digit there would
+      // leave it unparseable, fall back to the default weight of 1, and turn an
+      // explicit *do not send me this* into the strongest preference in the
+      // list, which is rule 6's q=0 case failing in the one direction that
+      // matters.
+      .map((parameter) => /^\s*q\s*=\s*(\d+(?:\.\d*)?)\s*$/i.exec(parameter)?.[1])
+      .find((found) => found !== undefined);
+    const q = weight === undefined ? 1 : Number(weight);
+    if (!Number.isFinite(q) || q <= 0) {
+      continue;
+    }
+    offered.push({ tag, q, at });
+  }
+  // `at` is compared explicitly rather than leaning on a stable sort: "stable
+  // within a weight" is the entry's wording and is a property of the result
+  // rather than of the engine running it.
+  return offered
+    .sort((left, right) => right.q - left.q || left.at - right.at)
+    .map((one) => one.tag);
+}
+
+/** Everything rule 2 reads, in one object so the order below is the only order. */
+export interface LanguageAsked {
+  /** `?lang=` on this request. */
+  readonly query: string | null;
+  /** The raw `Cookie` header, from which rule 5's one cookie is read. */
+  readonly cookie: string | undefined;
+  /** `RONDO_OPERATOR_LANGUAGE`, as the host stated it. */
+  readonly host: string | null;
+  /** The raw `Accept-Language` header. */
+  readonly header: string | undefined;
+}
+
+/**
+ * The wording set one request resolves to: rule 2's five steps, in order, first
+ * answer winning.
+ *
+ * **Five, not four and not a merge.** Each step is one party saying something,
+ * ordered by how specifically it was said about *this page and this reader* --
+ * the parameter on this request, then the operator's own remembered switch,
+ * then the host's statement about its one operator, then the browser's
+ * preference for the web at large -- and the last is a floor rather than a
+ * party. **A step that names a tag no set resolves to is a step that said
+ * nothing**, which is why every step goes through {@link setFor} and not
+ * `chromeFor`: English is reached once, at the bottom, and never four times on
+ * the way down.
+ *
+ * **The host's variable sits above the browser's list** (rule 3). A variable is
+ * a person stating a fact about this deployment's one operator and is what the
+ * terminal reads; a header is a browser-wide preference set for the web at
+ * large. So a host that has spoken is not overridden by a browser default, and
+ * the browser decides the first visit exactly when the host has said nothing --
+ * which is the common case and the one the operator was answering about.
+ *
+ * One readable function rather than a condition spread over the renderer, so
+ * that the order is a thing a reader can check against the entry.
+ */
+export function resolveLanguage(asked: LanguageAsked): Chrome {
+  const named = setFor(asked.query) ?? setFor(cookieTag(asked.cookie)) ?? setFor(asked.host);
+  if (named !== null) {
+    return named;
+  }
+  for (const tag of tagsByWeight(asked.header)) {
+    const set = setFor(tag);
+    if (set !== null) {
+      return set;
+    }
+  }
+  return EN;
+}
+
+/**
+ * Whether this request's URL asked for a language the rest of rule 2 would not
+ * have answered -- which is what a switch is, and what the canonicalising
+ * redirect of rule 4 is not.
+ *
+ * **The one condition the memory is written on** (D-0056 rule 5), and it is
+ * stated by comparing two resolutions rather than by trying to tell a click
+ * from anything else. `?lang=ja` on a host with no memory and no Japanese
+ * browser is a switch and is remembered. `?lang=ja` arrived at by a redirect
+ * from a `ja` cookie is the answer the other steps already gave, and writes
+ * nothing. `?lang=de` over a remembered `ja` resolves to nothing at step 1, so
+ * the other steps answer `ja` either way and **the memory is not touched**
+ * (rule 9) -- and `?lang=!!` does the same.
+ */
+function isSwitch(asked: LanguageAsked, resolved: Chrome): boolean {
+  return resolveLanguage({ ...asked, query: null }).lang !== resolved.lang;
 }
 
 /** Text as HTML text: the four characters that would otherwise be markup. */
@@ -630,8 +846,7 @@ function nothingHtml(wording: Chrome): string {
 }
 
 /** The inbox section: the same lines `rondo inbox` prints, and no mark moved. */
-function inboxHtml(ports: WebPorts, snapshot: InboxSnapshot | null): string {
-  const wording = ports.wording;
+function inboxHtml(ports: WebPorts, wording: Chrome, snapshot: InboxSnapshot | null): string {
   if (snapshot === null || ports.actorId === null) {
     return section(wording.inboxHeading, wording.inboxNoApprover, "");
   }
@@ -674,7 +889,9 @@ function approveHtml(
   }
   return (
     material +
-    `<form class="approve" method="post" action="/">` +
+    `<form class="approve" method="post" action="${escapeHtml(
+      viewHref({ kind: "summary" }, wording.lang),
+    )}">` +
     `<input type="hidden" name="token" value="${escapeHtml(token)}">` +
     `<input type="hidden" name="iteration" value="${escapeHtml(record.id)}">` +
     `<button type="submit">${escapeHtml(APPROVE_BODY)}</button>` +
@@ -696,7 +913,7 @@ function answerHref(wording: Chrome, record: IterationRecord, token: string | nu
     return "";
   }
   return `<p class="line"><a href="${escapeHtml(
-    viewHref({ kind: "answer", iterationId: record.id }),
+    viewHref({ kind: "answer", iterationId: record.id }, wording.lang),
   )}">${escapeHtml(wording.answerHere)}</a></p>`;
 }
 
@@ -731,6 +948,7 @@ function explainHtml(wording: Chrome, record: IterationRecord, snapshot: Advisor
  */
 async function shownBeforePress(
   ports: WebPorts,
+  wording: Chrome,
   waiting: readonly IterationRecord[],
   token: string | null,
   view: PageView,
@@ -748,10 +966,13 @@ async function shownBeforePress(
       continue;
     }
     const snapshot = gather(record, await ports.store.readingsFor(record.id));
-    const material = ports.material === null ? null : (await ports.material(record)).join("\n");
+    // The set this request resolved to and not the host's (D-0056 rule 12):
+    // the fence block's standing sentences are inside these lines.
+    const material =
+      ports.material === null ? null : (await ports.material(wording, record)).join("\n");
     shown.set(
       record.id,
-      `<p class="note">${escapeHtml(ports.wording.pressNote)}</p>` +
+      `<p class="note">${escapeHtml(wording.pressNote)}</p>` +
         claimsHtml(propose(snapshot).payload.claims, snapshot) +
         (material === null
           ? ""
@@ -805,6 +1026,13 @@ export async function operatorPage(
   ports: WebPorts,
   token: string | null = null,
   view: PageView = { kind: "summary" },
+  // **The set this request resolved to, and not a property of the process**
+  // (D-0056 rule 2). It was `ports.wording` while a host had one language for
+  // the life of the server; it is an argument now because five steps decide it
+  // per request and the renderer is downstream of that decision, not part of
+  // it. `EN` by default for the same reason `token` and `view` have defaults:
+  // a caller that has said nothing gets the page this was before.
+  wording: Chrome = EN,
 ): Promise<string> {
   const nowMs = ports.now();
   const host = await gatherHost(ports);
@@ -847,9 +1075,8 @@ export async function operatorPage(
 
   const keepsCurrent = isLive(view);
   const pressToken = ports.answer === null ? null : token;
-  const shown = await shownBeforePress(ports, waiting, pressToken, view);
+  const shown = await shownBeforePress(ports, wording, waiting, pressToken, view);
 
-  const wording = ports.wording;
   const lead =
     waiting.length + running.length + ended.length + open.length + unreadable.length === 0
       ? nothingHtml(wording)
@@ -863,7 +1090,7 @@ export async function operatorPage(
     view.kind !== "reading"
       ? ""
       : [
-          inboxHtml(ports, inbox),
+          inboxHtml(ports, wording, inbox),
           betweenHtml(wording, host),
           ...(await Promise.all(
             [...waiting, ...running, ...ended]
@@ -924,7 +1151,7 @@ ${
   keepsCurrent
     ? `<noscript><meta http-equiv="refresh" content="${String(
         REFRESH_SECONDS,
-      )};url=${escapeHtml(viewHref(view))}"></noscript>
+      )};url=${escapeHtml(viewHref(view, wording.lang))}"></noscript>
 <script src="/idiomorph-0.8.0.min.js" defer></script>
 <script src="/poll.js" defer></script>
 `
@@ -1049,6 +1276,11 @@ pre, .material { background: var(--bg); border: 1px solid var(--rule);
 :focus-visible { outline: 2px solid var(--wait-edge); outline-offset: 2px; }
 .fold { border-top: 1px solid var(--rule); font-family: var(--sans);
   font-size: .8125rem; margin-top: var(--s5); padding-top: var(--s3); }
+/* The switch sits with the fold's link and reads as the same kind of thing: the
+   two ways off this screen, in the same type at the same size (D-0056 rule 10).
+   No second rule above it -- one line separates the chrome from the ledger, and
+   a second would make the switch a footer of its own. */
+.switch { font-family: var(--sans); font-size: .8125rem; margin-top: var(--s2); }
 @media (max-width: 40rem) {
   body { padding: var(--s4) var(--s3); }
   section { padding: var(--s3); }
@@ -1076,9 +1308,30 @@ ${
   ports.actorId === null ? `<p class="note">${escapeHtml(wording.noApproverNote)}</p>` : ""
 }
 ${lead}
-<p class="fold"><a href="${
-    view.kind === "reading" ? "/" : escapeHtml(viewHref({ kind: "reading" }))
-  }">${escapeHtml(view.kind === "reading" ? wording.hideReading : wording.openReading)}</a></p>
+<p class="fold"><a href="${escapeHtml(
+    viewHref(view.kind === "reading" ? { kind: "summary" } : { kind: "reading" }, wording.lang),
+  )}">${escapeHtml(view.kind === "reading" ? wording.hideReading : wording.openReading)}</a></p>
+${
+  // **The switch, and it is the first element of this chrome that exists in
+  // order to be operated rather than read** (D-0056 rule 10). One link per
+  // shipped set other than the one on screen, beside the fold's link, labelled
+  // with that language's own name in its own language -- so the label is the
+  // same bytes in every set and needs no special case for going back.
+  //
+  // **It keeps the view it was pressed on**, because a switch that returned the
+  // reader to the summary would cost them their place to change a word; and it
+  // is a `GET` that writes nothing to the ledger, which is the whole of what
+  // D-0041 rule 4 asks of it. It is also the only thing on this page that
+  // writes rule 5's memory.
+  `<p class="switch">${[...SHIPPED_SETS]
+    .filter(([tag]) => tag !== wording.lang)
+    .map(
+      ([tag, endonym]) =>
+        `<a href="${escapeHtml(viewHref(view, tag))}" lang="${escapeHtml(tag)}">` +
+        `${escapeHtml(endonym)}</a>`,
+    )
+    .join(" ")}</p>`
+}
 ${reading}
 </body>
 </html>
@@ -1181,6 +1434,17 @@ function readForm(request: IncomingMessage): Promise<URLSearchParams | null> {
 async function handleApprove(
   ports: WebPorts,
   token: string,
+  // **The tag the press was made under, for the `303`** (D-0056 rule 11). The
+  // form's `action` already carries it, so this is the same tag read back off
+  // the request rather than a second decision -- and a redirect that dropped it
+  // would put the operator back on a page that re-resolves, which with a
+  // memory-less browser is the switch silently expiring at the one moment the
+  // operator was told something was written.
+  //
+  // The press writes no cookie: rule 10 makes the switch's link the only thing
+  // that writes the memory, and rule 5's *authorises nothing* clause is easier
+  // to keep true of a path that never mentions one.
+  tag: string,
   request: IncomingMessage,
   response: ServerResponse,
 ): Promise<void> {
@@ -1215,7 +1479,7 @@ async function handleApprove(
     refuse(409, answered.note);
     return;
   }
-  response.writeHead(303, { location: "/" }).end();
+  response.writeHead(303, { location: viewHref({ kind: "summary" }, tag) }).end();
 }
 
 /**
@@ -1233,6 +1497,22 @@ function viewOf(url: string): PageView {
     return { kind: "answer", iterationId: answering };
   }
   return query.get("reading") === "open" ? { kind: "reading" } : { kind: "summary" };
+}
+
+/**
+ * The language one request asked for, read off its query and nothing else.
+ *
+ * Total for {@link viewOf}'s reason, and D-0056 rule 9 says so in as many
+ * words: an ill-formed or unknown `lang` is not a refusal. It resolves to
+ * nothing, the next step of rule 2 answers, and rule 4 then redirects the
+ * address to the tag of the set that answered -- so `?lang=!!` is an operator
+ * who wanted the page, and a blank screen would be a worse answer than the
+ * page. The boot refusal stays where it is: a host statement is typed once, far
+ * from any screen, and deserves an account; a query is typed with the result in
+ * front of the person who typed it.
+ */
+function langOf(url: string): string | null {
+  return new URL(url, "http://127.0.0.1").searchParams.get("lang");
 }
 
 /**
@@ -1310,8 +1590,19 @@ export function serveOperatorPage(
       response.writeHead(404, { "content-type": "text/plain; charset=utf-8" }).end("not found\n");
       return;
     }
+    // **Rule 2's five steps, once per request, for both methods.** A press is
+    // answered with a `303` that has to carry the tag (rule 11), so the
+    // resolution is above the method split rather than inside the render.
+    const url = request.url ?? "/";
+    const asked: LanguageAsked = {
+      query: langOf(url),
+      cookie: request.headers.cookie,
+      host: ports.hostLanguage,
+      header: request.headers["accept-language"],
+    };
+    const wording = resolveLanguage(asked);
     if (request.method === "POST") {
-      handleApprove(ports, token, request, response).catch((error: unknown) => {
+      handleApprove(ports, token, wording.lang, request, response).catch((error: unknown) => {
         // Same reasoning as the render's catch below: every check above is
         // total and the write port reports its own refusals, so a throw here is
         // a defect. Shown rather than swallowed -- a redirect back to a page
@@ -1321,11 +1612,50 @@ export function serveOperatorPage(
       });
       return;
     }
-    operatorPage(ports, token, viewOf(request.url ?? "/"))
+    const view = viewOf(url);
+    // **The resolution is never silent** (D-0056 rule 4). A request is served
+    // only when its `lang` is the tag of the set rule 2 resolved; otherwise it
+    // is answered with one `303` to the same view carrying that tag. So a bare
+    // `/` gains one, `?lang=ja-JP` is canonicalised to `/?lang=ja`, and
+    // `?lang=de` over a remembered `ja` lands on `/?lang=ja` -- which is the
+    // case that matters, because a redraw of the address that named the *ask*
+    // is credential-less, would resolve `de` to nothing and would morph the
+    // page to the host's default five seconds after it rendered.
+    //
+    // **This cannot loop, because a set's own tag resolves to itself**: the
+    // redirect's target is served. That is one condition and it is asserted
+    // here rather than reasoned about -- it stays true only as long as nothing
+    // adds a second reason to redirect.
+    if (asked.query !== wording.lang) {
+      response
+        .writeHead(303, {
+          location: viewHref(view, wording.lang),
+          // Sent here for the same reason as on the render below: *where this
+          // goes* now depends on two request headers.
+          vary: "accept-language, cookie",
+          ...(isSwitch(asked, wording) ? { "set-cookie": rememberLang(wording.lang) } : {}),
+        })
+        .end();
+      return;
+    }
+    operatorPage(ports, token, view, wording)
 
       .then((html) => {
         response.writeHead(200, {
           "content-type": "text/html; charset=utf-8",
+          // **The bytes now depend on two request headers, and a shared cache
+          // is entitled to know** (D-0056). This page sent only a content type
+          // and a policy before: nothing about it varied by who asked.
+          vary: "accept-language, cookie",
+          // **Rule 5's one cookie, on the one condition rule 5 names**: this
+          // URL asked for a language the remaining steps would not have
+          // answered, which is what a switch is. A redraw reaches here with no
+          // cookie and so may well be answered with one -- and no browser ever
+          // stores it, because `page/poll.js` fetches with
+          // `credentials: "omit"` and that mode excludes cookies in *both*
+          // directions. rondo does not try to tell a redraw from a navigation
+          // and does not need to.
+          ...(isSwitch(asked, wording) ? { "set-cookie": rememberLang(wording.lang) } : {}),
           // **The third door, and the one the token cannot hold** (D-0041
           // rule 3). A page on evil.example cannot *read* this one and so
           // cannot steal the token -- but it can put this one in a transparent
