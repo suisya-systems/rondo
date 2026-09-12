@@ -97,7 +97,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0057 | The page is priced against four frameworks and stays hand-written: 96 lines of 1,233 taken over, three invariants that stop being types, and `D-0007` kept because a build leaves the pin check nothing to check | accepted |
 | D-0058 | The second `resume` leaves the handbook: idempotence is a property the suite already proves more strongly than a walk can observe it, the surface keeps one `resume` per answering act on purpose, and no verb is added on the strength of a sentence | accepted |
 | D-0060 | Work left uncommitted is a fact rondo reads and names: `git status` joins the reading as a finding, `publish` refuses a workspace that still holds any, `--despite-review` does not reach it, and rondo commits nothing on a lap's behalf | accepted |
-| D-0061 | Where a request enters rondo: the organisation's five steps mapped onto parts that mostly exist, a request thread in the conversation as the first thing built, and the drafter that reads a request held behind a human ruling on `D-0044` | proposed |
+| D-0061 | Where a request enters rondo: the organisation's five steps mapped onto parts that mostly exist, a request thread in the conversation as the first thing built, and the drafter that reads a request cleared by the human gate, with its split into plans waiting on `D-0062` | accepted |
 
 ---
 
@@ -11576,11 +11576,12 @@ the gate function and the push were exercised directly, which is where the outco
 
 ---
 
-## D-0061 — Where a request enters rondo: the organisation's five steps mapped onto parts that mostly exist, a request thread in the conversation as the first thing built, and the drafter that reads a request held behind a human ruling on `D-0044`
+## D-0061 — Where a request enters rondo: the organisation's five steps mapped onto parts that mostly exist, a request thread in the conversation as the first thing built, and the drafter that reads a request cleared by the human gate, with its split into plans waiting on `D-0062`
 
-**Status:** proposed (2026-09-13). Awaits rondo's human gate, and carries one question for it
-(section "What is put to the human gate") that this entry deliberately does not answer. Refs
-`D-0020`, `D-0022`, `D-0025`, `D-0026`, `D-0030`, `D-0032`, `D-0034`, `D-0036`, `D-0044`.
+**Status:** accepted (2026-09-13, rondo's human gate). The gate also answered the question this
+entry put to it; the answer is recorded in section "What was put to the human gate, and its answer".
+Refs `D-0020`, `D-0022`, `D-0025`, `D-0026`, `D-0030`, `D-0032`, `D-0034`, `D-0036`, `D-0044`,
+`D-0062`.
 
 **This entry decides and does not build.** Nothing in `src/` changes with it.
 
@@ -11690,8 +11691,9 @@ nowhere to write if it were built first.
       message, with `asks` unset, whose bases point at the iteration, the reading and the gate. **This step reads no
       request body** -- it reports on rows -- so it needs nothing from the question below.
    4. **The drafter that reads a request** -- the one-sentence summary, the question asked back, a
-      proposed split into plans. **Held behind the human gate's answer to the question below**, and
-      behind the model-drafter entry `D-0029`'s residuals already name, because summarising free
+      proposed split into plans. **The gate's answer below clears the summary and the question asked
+      back; the split additionally waits on `D-0062`.** All three still wait on the model-drafter
+      entry `D-0029`'s residuals already name, because summarising free
       text is not something the deterministic drafter can do and a model drafter is a widening of
       `D-0022` rules 1 and 3.
    5. **The screen**: the thread in `inbox` and on the page, with *waiting on you* extended to a
@@ -11703,7 +11705,7 @@ nowhere to write if it were built first.
    - **Finding the next request** (work-discovery; the lap-gap survey's `G6`). A request thread is
      where a proposed next request would be written, and choosing one is its own entry.
 
-### What is put to the human gate
+### What was put to the human gate, and its answer
 
 **`D-0044`'s heading says a tier "is reached by naming an agent type and never by rondo reading a
 request".** Rules 1-5.3 above store, link and quote a request and read none of it, and **this entry
@@ -11729,8 +11731,20 @@ does not settle it inside itself:
     ("an operator wanting to down-tier one particular request") would be answered by construction
     rather than by evidence.
 
-**Step 5.4 does not start until the gate answers this**, and whichever answer it gives is recorded
-as its own entry (an annotation for (a), a supersession of `D-0044` rule 2 for (b)), not here.
+**The gate's answer (2026-09-13), on all three points:**
+
+1. **Rules 1-5.3 do not collide with `D-0044` or `D-0025`.** Storing, linking and quoting a request is
+   not reading it in `D-0044`'s sense. The reading above is confirmed.
+2. **A summary and a question asked back need no change to a ratified rule**, because they read in
+   order to say something and decide nothing. The reading above is confirmed.
+3. **For a split into plans, the gate chose (b)**: `D-0044` rule 2 is to be amended so that a proposal
+   may name an agent type, approved at a gate. **The amendment is not made here.** It is `D-0062`'s,
+   an entry of its own that supersedes `D-0044` rule 2 and says what it keeps of that rule's
+   reasons. Until `D-0062` is accepted, `D-0044` rule 2 stands as written and no proposal from a
+   request names an agent type.
+
+So step 5.4's hold is lifted: the summary and the question asked back wait only on the model-drafter
+entry, and the split waits on that entry and on `D-0062`.
 
 ### What this does not do
 
@@ -11753,6 +11767,9 @@ as its own entry (an annotation for (a), a supersession of `D-0044` rule 2 for (
 - **Requests arriving somewhere other than rondo's store first** -- an issue tracker the operator
   prefers to type into -- which makes rule 1 a statement about a copy rather than about the home;
   `D-0020` rule 5's own falsifier, inherited.
-- **The human gate answering the question above in a way that also reaches rules 1-5.3** -- that is,
-  ruling that storing or quoting a request is already "reading" it in `D-0044`'s sense.
+- **A later ruling that storing or quoting a request is already "reading" it** in `D-0044`'s sense,
+  which would reverse the gate's first answer and reach rules 1-5.3.
+- **`D-0062` not being accepted**, or being accepted in a form that keeps agent types out of a
+  proposal. The split in step 5.4 then goes back to option (a), and the gate's third answer is
+  what moves.
 - Any line reference in section 1 failing to reproduce at `d65cd9e`.
