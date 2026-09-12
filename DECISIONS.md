@@ -105,6 +105,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0065 | The model reviewer: a reader of another model family that rondo runs outside the lap over bytes it hands over and digests, graded findings with bases on the reading record, a round budget and a threshold that are the scope's, and the three defects a person caught sorted into caught, half caught and not caught | accepted |
 | D-0066 | The scope record: one immutable row with a digest, approved by a row of its own and never by `human_decision`, spent once per act inside the act's own transaction, refused at one point that stops one line, and `D-0062` rule 3 and `D-0022` rule 9 restated for it | accepted |
 | D-0067 | The secretary's running half has no new owner: the advisory reads lines against each other and drafts an order, the surface attempts acts in that order, the store keeps the person's standing policies, and review extensions and merges still reach the person | accepted |
+| D-0068 | One voice and a patrol: the person asks rondo why a line waits and gets an answer joined from rows with bases, a timer in the resident host reads rows against each lap's own declared patience, and nothing it finds is handled silently | proposed |
 
 ---
 
@@ -14285,3 +14286,365 @@ residuals and says nothing about how `D-0068` answers them.
 - **A cross-lineage snapshot too costly to gather at every attempted act.** Rule 2's second gathering
   point moves.
 - Any measurement in "What was measured" failing to reproduce at rondo `278cd89`.
+
+---
+
+## D-0068 — One voice and a patrol: the person asks rondo why a line waits and gets an answer joined from rows with bases, a timer in the resident host reads rows against each lap's own declared patience, and nothing it finds is handled silently
+
+**Status:** proposed (2026-09-13). Two points are put to the human gate; see "What is put to the human
+gate". Refs `D-0019`, `D-0023`, `D-0032`, `D-0033`, `D-0034`, `D-0036`, `D-0038`, `D-0046`, `D-0048`,
+`D-0054`, `D-0061`, `D-0063`, `D-0064`, `D-0065`, `D-0066`, `D-0067`.
+
+**This entry decides and does not build.** Nothing in `src/` changes with it, and no earlier entry is
+edited by it. The annotations it would add on acceptance are listed in section "Annotations this entry
+adds when accepted".
+
+`D-0067` placed the secretary's running half on three existing parts (the advisory drafts an order,
+the surface attempts acts in that order, the store remembers) and, by its gate's answer, named two of
+its losses as this entry's:
+
+1. **One place, and one voice, where the person asks why a line is waiting.** Under `D-0067` the answer
+   is a join from the lineage to the `sequence` that holds it, and the person sees it only in the report
+   (P5), because a hold writes nothing (`D-0067` rule 4).
+2. **A held line behind a stalled line waits unnoticed.** `until` is `first_terminal`, and nothing
+   patrols a lap that never ends (`D-0067` section 1, R8; `D-0064` section 5).
+
+The product owner sees the advisory as a support role like claude-org-ja's secretary, and wants the
+feeling of **one someone to talk to**. The second pass of the conversation-screen prototype already
+draws every organisation message under the single speaker name `rondo`. This entry decides how the
+voice the person hears becomes one **without changing `D-0067`'s internal split**, what the patrol
+detects, who runs it and how often, and where each finding goes (`D-0064` O, P3 or P5). It keeps
+`D-0064`'s two lines and **adds no third**:
+
+- **Every summary and proposal leads back to its material** (`bases`, `D-0032` rule 2, `D-0061`
+  rule 2.6).
+- **An act that cannot be undone is approved by a person**, at the time, for that act (`D-0064`
+  rule 3.4).
+
+### What was measured, and how
+
+At rondo `1db9112` on **2026-09-13**, by reading. The baseline is claude-org-ja's working tree on the
+same date, read only (`JA/`). The prototype is the secretary's note
+`JA/notes/conversation-gap-v2-2026-09-13.md` (the "v2 note") and its source in the prototype task's
+scratch directory (the "prototype source"). Line numbers drift; re-measure the claim, not the number.
+
+- **The prototype speaks as one.** The prototype source's thread view renders the summary, the
+  question back, the scope card, the plan, the report and the next-work candidate each under a heading
+  whose speaker name is `rondo` (`src/view.tsx`, the `Head` calls with `name="rondo"`), and the
+  composer's help text (in Japanese) says that rondo summarises, asks back if needed, and confirms
+  once whether it may proceed within the scope. The v2 note records the heading's earlier label as
+  "organisation · draft" (its section 2, last row). Neither draws which part of rondo wrote a message.
+- **Who speaks is already a column.** A thread message carries `author_kind` (`operator` or `drafter`)
+  and `author_id` (`D-0061` rule 2.3), and authority is a function of a proposal's `kind`, never of its
+  drafter or its prose (`D-0032` rule 5). Neither rule constrains the name a screen prints above a
+  message.
+- **What rondo records about a line's progress.** An iteration row carries `status` and
+  `updated_at_ms`, and every status write sets `updated_at_ms` (`src/store/sqlite.ts`, the
+  `UPDATE iteration SET status = ?, updated_at_ms = ?` statement). Eight statuses are non-terminal, and
+  `D-0036` rule 5 partitions them into *waiting on you* (`awaiting_human`, `withdrawal_requested`,
+  `stalled`) and *in flight* (`planned`, `classified`, `admitting`, `admitted`, `performing`)
+  (`WAIT_SIDE`, `src/store/records.ts`).
+- **Each lap declares its own patience.** A plan carries `invocationCeilingMs`, validated as strictly
+  greater than `turnTimeoutMs + gitTimeoutMs + identityReadbackTimeoutMs` and at most 2^31 - 1 ms
+  (`src/refrain/plan.ts`, `requireCeiling`), stored with the plan as `invocation_ceiling_ms`.
+- **When that patience runs out, rondo knows nothing and says so only to whoever ran it.** rondo's
+  timer kills the CLI and not the fenced child (`D-0019` rule 12). The effect comes back as `noAnswer`,
+  the row **stays** `admitting` or `performing` and keeps the single-flight lock, and the interpreter
+  appends a reason and prints that an operator settles it with `abandon()` (`holdAt` and the
+  `noAnswer` arms, `src/refrain/interpreter.ts`). `holdAt` commits the same status again, which
+  refreshes `updated_at_ms`. **No row says "a person must look at this"**; the words go to the terminal
+  of the invocation that ended.
+- **What releases each non-terminal status** is `RELEASED_BY` (`src/store/records.ts`): `planned`,
+  `classified` and `admitted` by the interpreter immediately; `admitting` and `performing` by continuo
+  answering or an operator's `abandon()`; `stalled` only by an operator's `abandon()`.
+- **rondo reads no liveness.** `D-0048` rule 3 refuses continuo's `provider_state`, `observation` and
+  `released_at_ms` as unable to tell a live session from a stopped one, and that entry "does not read
+  a running transcript" and "does not answer 'progressing or wedged'"; `D-0036` rule 5 refuses the
+  third wait distinction.
+- **Presentation already de-duplicates per subject.** `operator_attention` has a partial unique index
+  on (`subject_kind`, `subject_id`) where `disposition = 'presented'`, and its writer takes a conflict
+  as a no-op (`src/store/sqlite.ts`, `operator_attention_presented_subject`; `D-0036` rule 1).
+- **Nothing in rondo runs on a timer except per-call timeouts** (`setTimeout` in
+  `src/continuo/invoker.ts` and `src/access/forge.ts`). `D-0033` left "what triggers a between-laps
+  composition" to "whichever surface first has a reason to want one", and `D-0067` rule 2's reading is
+  gathered at two points with no scheduler. The host already has a resident form: `serve` keeps one page
+  on 127.0.0.1 (`src/access/cli.ts`), polled by the page (`D-0054`).
+- **How claude-org-ja patrols.** The dispatcher runs a loop every 3 minutes while any worker pane is
+  open (`JA/.dispatcher/CLAUDE.md`, "Worker pane monitoring"). Each cycle drains pane lifecycle events,
+  reads worker messages and scrapes each pane's screen, and raises `STALL_SUSPECTED` (screen content
+  unchanged for three cycles with no worker-to-secretary trace in a 15-minute window, 60 minutes while a
+  pull request awaits merge), `PANE_OUTPUT_WITHOUT_PEER_MSG` (a silent deadlock: output with no report
+  after it) and approval-blocked prompts (`JA/.dispatcher/references/worker-monitoring.md`, Steps 4-5.2).
+  Its observation principles: **what cannot be observed is not evidence that nothing happened** (P1),
+  an anomaly is reported only when independent surfaces agree (P2), an unavailable surface is reported
+  as "we cannot see" and never as a state of the worker (P4), and **more precision never means more
+  action**: the dispatcher reports and never re-spawns, approves or closes on its own (P5). Its
+  event cursor, left unbound to the backend session, silently missed every pane exit after a restart on
+  2026-08-09 (Step 1). The secretary reads the dispatcher's notices and explains state to the human
+  (`JA/CLAUDE.md`).
+
+### 1. One voice
+
+1. **The person talks to one speaker, `rondo`, in the conversation, and the parts stay parts.** Every
+   drafter message, whichever drafter wrote it, and every message the surface or the patrol writes
+   (section 2, rule 3) is shown under the speaker name `rondo`. **Which part wrote it stays a column**
+   (`D-0061` rule 2.3's `author_kind` and `author_id`) and is shown one press away on the message, next
+   to its bases, never in the heading. `D-0067`'s split is unchanged: the advisory drafts, the surface
+   acts, the store remembers. What is one is the name the person hears, not a component. No column, no
+   kind and no authority is added, and `D-0032` rule 5 stands: authority is still a function of `kind`,
+   and a person's messages are still told from rondo's by `author_kind`, not by prose.
+
+2. **"Why is this waiting" and "what is moving" are answered from one reading, the wait reading.**
+   1. **A wait reading** is a pure function in `src/advisory` over a snapshot of rows and a clock. For
+      each line (a lineage, `D-0030`, or a plan not yet admitted, named as `D-0067` rule 3.2 names it)
+      it returns **exactly one reason from a closed list**, with the rows that make it true as bases:
+
+      | Reason | True when | Bases |
+      |---|---|---|
+      | **`waiting_on_you`** | the latest lap's status is on `D-0036` rule 5's *waiting on you* side; or a message with `asks` set and no reply stands over the line (`D-0066` rule 4.2's reading of bases); or a scope that would cover the plan is presented and has no `scope_decision`; or the lap is `closed` and its lineage is open in `D-0067` rule 2's sense, since `publish` and merge are a person's today | the iteration, the message or the scope row |
+      | **`held_by_order`** | an in-force `sequence` names the line as `then` and its `until` fact is not recorded (`D-0067` rule 4) | the `sequence` row, `first`'s latest `iteration_id`, and **`first`'s own wait reading**, followed along `first` until a line not held by order |
+      | **`held_by_bound`** | the plan's last admission attempt wrote an `admission_refusal` row and no admission has followed (`D-0023`) | the refusal row |
+      | **`in_flight`** | the latest lap is on the *in flight* side and `now - updated_at_ms` is within its plan's `invocationCeilingMs` | the iteration and its plan |
+      | **`overdue`** | the latest lap is on the *in flight* side and `now - updated_at_ms` exceeds its plan's `invocationCeilingMs` (section 2, finding F1) | the iteration and its plan |
+      | **`undetermined`** | no row above holds, a basis cannot be read, or following `first` returns to a line already visited (two `sequence` rows holding each other) | whatever was read, and the line revisited |
+
+   2. **`in_flight` says since when and until when, and never "progressing".** It is "rondo is waiting
+      for an answer it declared it would wait for until this time". `D-0048`'s refusal and `D-0036`
+      rule 5's stand: the wait reading reads no continuo liveness field and no transcript.
+   3. **`undetermined` is never shown as moving**, which is `D-0038` rule 4's habit applied to a reason,
+      and the dispatcher's P1: what rondo cannot read is said as unread.
+   4. **The wait reading is re-gathered and never stored** (`D-0038` rule 6's habit, `D-0048` rule 4's
+      reason): a stored reason would be stale exactly while a line waits.
+   5. **Where the answer appears.** A question is a message the person writes, and **the answer is a
+      `drafter` message in the same thread, with `asks` unset**:
+      - asked in a request thread, the answer covers that request's lines, and for every line
+        `held_by_order` it follows `first` into whichever request `first` belongs to;
+      - asked in a message that opens a thread, it covers every open line on the host. By `D-0061`
+        rule 2.4 such a thread is a request; it ends in this answer and proposes no split.
+      **The deterministic drafter composes the body**: one line per line of work, its reason, how long
+      it has held (a subtraction, `D-0036` rule 2), and its bases. A model drafter may put one summary
+      sentence above it, and that sentence passes `D-0063` rule 2.2's check with bases into the same
+      rows. Recognising that a message is a question is the model drafter's reading, and a message it
+      cannot place is asked back under `D-0064` P2. The answer is presented once (`D-0033` rule 10,
+      `D-0036` rule 1), and its bases' freshness is shown per basis at render (`D-0038`).
+   6. **The same reading is drawn without asking.** The inbox and the page show each line's reason
+      beside it, and a `waiting_on_you` item shows the lines `held_by_order` behind it ("answering this
+      releases B"). This is presentation of rows, not a message, and writes nothing.
+
+3. **Why this is not a hold that speaks.** `D-0067` rule 4's silence while waiting stays: a hold writes
+   no row. The person gets the answer when they ask or look (rule 2.5 and 2.6), and is written to
+   unasked only for section 2's findings.
+
+### 2. The patrol
+
+1. **What it detects: four findings, each a test over rows and a clock.**
+
+   | Finding | Test | Where it goes |
+   |---|---|---|
+   | **F1. `overdue`**: rondo is waiting for an answer past the patience the lap declared | an iteration on the *in flight* side whose `now - updated_at_ms` exceeds its plan's `invocationCeilingMs`; **or** the conductor has just taken a `noAnswer` arm and held the row (section 2, rule 2.2) | **P3** inside a scope; outside one, an `explanation`-shaped message with `asks` unset (section 2, rule 3.3). **Subject to the gate's second point** |
+   | **F2. `held_behind_stopped`**: a line held by order whose `first` will not end by itself | an in-force `sequence` whose `then` reads `held_by_order` and whose `first` reads `waiting_on_you`, `overdue` or `undetermined` | by `first`'s reason: **`waiting_on_you`** writes nothing new, and `first`'s item shows what it releases (section 1, rule 2.6); **`overdue`** is F1's message on `first`, with `then`'s latest `iteration_id` or plan as a basis and "`then` waits on this" in what each option gives up; **`undetermined`** is **P3** into `then`'s thread |
+   | **F3. `hold_cannot_release_inside`**: a held act that can only be `outside` when released | an in-force `sequence` whose `then` sits under a scope approval that has an approved successor, whose `expires_at_ms` has passed, or whose `laps` are spent (`D-0066` rule 3.4) | **P3** into `then`'s thread: the message `D-0066` rule 4.4 would write when the act is attempted, written when the fact becomes true. Cost is not tested here, because a read cost can fall below its reserve and bring an admission back inside |
+   | **F4. `reserve_never_read`**: a lap whose reserve stays spent for good | an iteration under a scope approval, no longer in flight, whose `lap_cost_usd` is null (`D-0066` gate answer 1, `D-0046`) | **P5**: listed in the request's report with the reserve it holds. When it is what makes an admission `outside`, `D-0066` section 4 already stops the line as P3 |
+
+2. **Who runs it, and when.**
+   1. **The detection is one pure function in `src/advisory`**, `patrol(snapshot, now) -> findings`,
+      deterministic and re-derivable (`D-0022` rule 4 for the deterministic drafter, as `D-0063` rule 5
+      keeps it). The messages it leads to are composed by the deterministic drafter, whose options per
+      finding are fixed (section 2, rule 3.2). **No model is called by the patrol**: a timer that
+      spends model money unasked is a cost no scope's budget bounds, since the patrol runs over every
+      line, in scope or not.
+   2. **Two triggers.** **The surface raises F1 at once** when the conductor takes a `noAnswer` arm,
+      since that is the one place that knows, and `holdAt`'s refreshed `updated_at_ms` would
+      otherwise put a second ceiling before the tick sees it. **A tick in rondo's resident host**
+      gathers the snapshot and runs `patrol` **once a minute**, a constant. The ceilings F1 tests
+      against are at least a turn timeout plus a git timeout, so a minute is small against them; the
+      dispatcher's 3 minutes were set by a model's token cost per cycle, and this tick is a read of
+      rondo's own store.
+   3. **The patrol is state-based and holds no cursor.** Every tick reads what the rows say now, so a
+      host that was down misses nothing it can later read: the first tick after start finds every
+      finding that became true while it was down, late but not lost. This is the dispatcher's
+      2026-08-09 accident (a cursor from a previous session silently skipping every event) designed
+      out rather than guarded. **While no resident host runs, nothing patrols** (section 5).
+3. **What it writes, and what it never does.**
+   1. **A finding reaches the person once per episode.** Before writing a message, the tick writes a
+      `presented` row with `subject_kind` `patrol` and `subject_id`
+      `<finding>:<subject id>:<the subject iteration's updated_at_ms>` (F3's subject is the `sequence`
+      id alone, since its facts cannot un-happen), through `D-0036` rule 1's index. **The message is
+      written in the same transaction, only when that row was inserted.** A lap that moves and later
+      overdues again is a new episode; a finding that stays true is not re-sent. No table and no column
+      is added.
+   2. **A P3 finding carries options, what each gives up and one recommendation** (`D-0064` rule 4.1),
+      fixed per finding by the building change. F1's are at least: wait one more ceiling; `abandon()`
+      after reading the transcript the inbox names (`D-0048` rule 5), which releases the lock and any
+      line `held_by_order` behind it; and `abandon()` with a successor `sequence` drafted. Its bases hold
+      the iteration's `iteration_id`, so it stands over that lineage (`D-0066` rule 4.4).
+   3. **Outside a scope nothing is decided** (`D-0067` rule 5.3, `D-0033` rule 2): the finding is a
+      message with `asks` unset and no recommendation (`D-0034`), and it is presented in the inbox. A
+      line with no request link has no thread; its finding is the `presented` row and the inbox mark
+      alone.
+   4. **The patrol takes no act.** It does not `abandon()`, retry, redraft or release a `sequence`,
+      and it does not re-notify a finding that stays true. The dispatcher's P5 carried over: a sharper
+      detection is not a licence to act. **This is why it does not fire `D-0033`'s falsifier** "a
+      self-started act that reaches a lap": what it writes is a message, and the one thing a P3 message
+      does to a line (`D-0066` rule 4.2's `asks` test) withholds only acts that could not happen
+      anyway. An `overdue` lap keeps its status and lock, so no organisation act continues its lineage
+      until a person's `abandon()`; F2's `then` is already held; F3's held act would be `outside`.
+4. **Nothing the patrol finds is `D-0064` O.** O is what the organisation decides without asking, and
+   the patrol decides and does nothing (section 2, rule 3.4). Handling a finding silently would be
+   a withholding, and until the operator writes an attention policy nothing is withheld (`D-0033`
+   rules 6 and 7). So every finding is either put to the person now (P3, or its `explanation` form
+   outside a scope) or listed in the report (P5).
+5. **What the patrol does not detect, by name.**
+   - **A lap inside its ceiling that has stopped making progress.** The ceiling is the only statement
+     rondo holds of when an answer is due; telling "slow" from "wedged" inside it needs a liveness
+     reading `D-0048` and `D-0036` rule 5 refuse. **This is the gate's first point.**
+   - **An `asks` message the person leaves unanswered for a long time.** It is already *waiting on
+     you*, its age is a subtraction (`D-0036` rule 2), and a reminder is an attention rule the operator
+     writes (`D-0033` rule 7).
+   - **A lineage whose review rounds keep finding the same thing.** The round budget stops it as P3
+     (`D-0065` rule 4.3); stopping it earlier would add a stop reason to `D-0066` section 4.
+   - **Collisions that share no path** (`D-0067` section 4), unchanged.
+
+### 2a. The dispatcher's patrol, detection by detection
+
+| claude-org-ja | rondo under this entry |
+|---|---|
+| `STALL_SUSPECTED`: the screen has not changed and no report came | **Not carried inside the ceiling** (section 2, rule 5; gate point 1). Past it, F1 |
+| `PANE_OUTPUT_WITHOUT_PEER_MSG`: work ended with no report | **No counterpart needed**: a lap that answers writes its own status (`RELEASED_BY`). The case where nothing answers is `noAnswer`, F1 raised at once |
+| Approval-blocked prompt | **No counterpart**: a fenced child has no prompt a person can answer mid-lap; what it was denied is recorded after it ends (`permission_denials`) |
+| Relay gap (the secretary did not pass a report on) | The `presented` row written with the message (section 2, rule 3.1) and `D-0033` rule 10's audit of what was and was not shown |
+| Re-arming after a restart, and the session-bound event cursor | No cursor (section 2, rule 2.3) |
+| P1 / P4: unobservable is reported as unobservable | `undetermined` is a reason of its own and never shown as moving (section 1, rule 2.3) |
+| P5: more precision, no more action | Section 2, rule 3.4 |
+
+### 3. How far `D-0067`'s two losses are filled
+
+| `D-0067` loss | Filled | Not filled |
+|---|---|---|
+| **One place, and one voice, to ask why a line waits** | **Yes, while it waits**: the person asks `rondo` in the thread or reads the inbox, and the answer names one reason per line with bases, following a hold to what holds `first` (section 1, rule 2). The report (P5) is no longer the first place it appears | **Why a lap in flight is not finishing** inside its ceiling: the answer is `in_flight` and a time, never a diagnosis. **Why a model drafter drafted an order**: its bases, not its reasoning (`D-0063` rule 5). **A question a worker raised mid-lap**: the relay stays empty (`D-0061` rule 6). The voice is one name over the same parts, so the person still cannot hand the running half an instruction as one addressee (section 5) |
+| **A held line behind a stalled line waits unnoticed** | **Yes, once `first` is past its own ceiling** (F1 with F2), **once `first` waits on the person** (shown on `first`'s item), **once the hold can only end `outside`** (F3), and **once rondo cannot tell why `first` does not end** (F2, `undetermined`) | **`first` in flight within its ceiling**: `then` waits up to that ceiling unnoticed, and a plan may declare a ceiling of up to about 24.8 days. **While no resident host runs**: noticed at the first tick after start. **A hold whose release is a merge** stays `D-0067` rule 4's P3 message, unchanged |
+
+### 4. The options, and why the others were refused
+
+| Option | Outcome |
+|---|---|
+| **A. A secretary component that speaks and holds the running half** (`D-0067`'s option A, revived for the voice) | **Refused.** It is `D-0067` option A with a name, and it would be the one part that decides what the person hears, which is `D-0033`'s hazard. **What it would have kept**: the person could address the running half as one agent and give it instructions, which a name over parts cannot take |
+| **B. The voice without a wait reading**: a model drafter answers "why" from the thread and its memory | **Refused.** The answer would rest on no rows, and a basis that resolves is `D-0064`'s first line. A model may phrase the summary sentence over the deterministic answer (section 1, rule 2.5) |
+| **C. Every hold announces itself** (a `sequence` writes a message when it holds) | **Refused.** It reverses `D-0067` rule 4's "writes nothing while it waits", a ratified rule, to tell the person about ordinary ordering the organisation decided without asking (`D-0064` O1). The pull answer and the inbox mark cover the same need without it |
+| **D. A patrol that acts**: it abandons an overdue lap or releases a hold on its own | **Refused.** `abandon()` is an operator's (`RELEASED_BY`), a live fenced child may still be writing (`D-0019` rule 12), and a self-started act that reaches a lap is `D-0033`'s falsifier |
+| **E. A patrol inside each act** (`D-0067` rule 2's two gathering points, no timer) | **Refused.** A stall is the absence of the next act, so a detector that runs only at acts never runs for it |
+| **F. A patrol that reads liveness** (transcript growth, continuo session fields) | **Put to the gate** (point 1), not taken: it changes what `D-0048` decided rondo reads |
+| **G. One name over the parts, a wait reading with bases, and a row-based patrol on a timer that writes and never acts** | **Proposed** (sections 1 and 2) |
+
+### 5. What this gives up
+
+**What one voice costs, concretely:**
+
+- **Who inside decided is no longer in the heading.** A recommendation a model drafter wrote, an order
+  the deterministic drafter drew by a fixed rule ("the lineage that reached its gate earlier goes
+  first", `D-0067` rule 3), a verdict the surface computed, and a patrol finding all read "rondo". The
+  person at a glance gives the mechanical rule the weight of judgment, or the model's judgment the
+  weight of a rule. The column is one press away (section 1, rule 1); a glance does not take it.
+- **One voice suggests one memory, and rondo has none between messages.** Each answer is re-gathered
+  (section 1, rule 2.4). Two answers in one thread minutes apart can disagree with no "I changed my
+  mind", because nothing remembers the first one. Per-basis freshness (`D-0038`) marks the old answer
+  stale; it does not explain the change.
+- **One voice suggests a secretary who can see everything.** The answer to "is lap X getting anywhere"
+  is `in_flight` and a time; the dispatcher would have looked at the screen. From one speaker "rondo
+  cannot see that" reads as evasion, where from a part it would read as a boundary.
+- **The person cannot address a part.** They cannot tell "the patrol" to stop mentioning a finding or
+  "the drafter" to redraw an order. A rule to withhold a finding has to name the finding kind
+  (`D-0033` rule 7), and the voice is exactly what hides the kinds.
+- **An order reads as rondo's choice even when the person's scope made it.** A line held under a scope
+  the person approved is "rondo held it", while the authority is the person's own approval (`D-0066`
+  rule 3.5's join), one more press away.
+
+**What the patrol costs:**
+
+- **Nothing patrols when rondo runs only as a command.** A person who never starts the resident host
+  gets F1 only at the moment the conductor takes `noAnswer`, as a row, and F2 to F4 only when they
+  ask or look.
+- **A crash at a fast status waits a whole ceiling.** `planned`, `classified` and `admitted` are
+  released "immediately", but the tick uses the plan's one ceiling for every in-flight status, so a
+  host that died there is noticed only when that ceiling has passed.
+- **A second ceiling after a noticed `noAnswer` is not re-noticed.** The finding is sent once per
+  episode (section 2, rule 3.1); an operator who waits past the recommendation hears nothing further.
+- **A tick is a snapshot of every open line once a minute**, the cost `D-0067` section 4 already
+  names for its reading, now paid on a clock as well as at acts.
+
+### What is put to the human gate
+
+1. **Whether the patrol looks inside a lap's ceiling.**
+   - **(a) No. The ceiling is the only bound, and inside it a lap is `in_flight`** (recommended). No
+     ratified entry moves. *Loses:* a wedged lap, and every line held behind it, waits until its own
+     ceiling, which the plan's author set as patience and not as a stall threshold; the dispatcher's
+     `STALL_SUSPECTED` has no counterpart.
+   - **(b) Yes: the patrol reads whether the lap's transcript has grown since the last tick** (the
+     directory `D-0048` rule 5 already composes), and a transcript unchanged for a set time is a finding.
+     *Loses:* `D-0048`'s "does not read a running transcript" and "does not answer 'progressing or
+     wedged'", which needs a superseding entry; the dispatcher's own record that an unchanging screen
+     was a long single turn, not a stall, more than once (its Step 5 false-positive types 1 and 2); and
+     a threshold nobody has measured for rondo's laps.
+2. **Whether an overdue lap reaches the person as P3.** `D-0064` rule 1 lists five things that reach
+   the person and "no others", and P3's test is options that give up different things the person owns.
+   F1's options differ in whether a live child's work is thrown away and whether every other line keeps
+   waiting for the execution slot, which is closer to "a person must act, and only a person may" (the
+   meaning of `stalled`) than to a point in dispute. **This point changes how a ratified entry reads,
+   so it is put to the gate rather than taken.**
+   - **(a) Yes: a line that only a person's act can continue is read as P3**, added by a dated
+     annotation on `D-0064` rule 1, as `D-0067`'s first answer added one (recommended). F1 and F2's
+     `undetermined` case are then P3 as section 2 writes them.
+   - **(b) No: F1 is an inbox mark and a report line (P5).** *Loses:* `D-0067`'s second loss is filled
+     only for a person who looks; a held line behind an overdue lap still waits unnoticed by a person
+     who does not.
+
+### Annotations this entry adds when accepted
+
+- **`D-0067`** residuals: the two rows naming `D-0068` are answered by `D-0068` sections 1 and 2, as far
+  as section 3 says.
+- **`D-0064` section 5**: the "Dispatcher: patrolling" row is filled by `D-0068` section 2, reading rows
+  and not panes, and acting on nothing.
+- **`D-0033`** residual "What triggers a between-laps composition": the patrol's tick is `D-0068`
+  rule 2.2, and it composes findings, not proposals.
+- **`D-0064` rule 1**, only if the gate answers (a) on point 2.
+
+### What this does not do
+
+- **It does not build** the wait reading, the patrol function, the tick, the F1 raise on `noAnswer`,
+  the answer's composition, the `patrol` subject kind or any screen.
+- **It does not change `D-0067`'s split**, the `sequence` payload, the release list, or rule 4's
+  silence while waiting.
+- **It does not read continuo liveness or a running transcript**, unless the gate answers (b) on point 1
+  and a later entry supersedes `D-0048` for it.
+- **It does not fill the mid-lap relay, the curator, or CI and merge watch** (`D-0064` section 5).
+- **It does not add an invariant beyond `D-0064`'s two lines.** No re-notification cadence, no cap on a
+  hold, no requirement that a person read a finding, no confidence on a reason.
+
+### Residuals, with who decides
+
+| Residual | Why not here | Who decides |
+|---|---|---|
+| Progress inside a lap's ceiling | Needs a liveness reading `D-0048` refuses | the gate's first point; under (b), the entry that supersedes `D-0048` for it |
+| A per-status bound for the fast in-flight statuses | The plan declares one ceiling; a second number is a field nobody has measured | a later entry, if crashes at `planned`, `classified` or `admitted` are seen waiting |
+| How the options of each P3 finding are worded, and which is recommended | Wording and the fixed recommendation per finding are the deterministic drafter's building | the building change |
+| A rule to withhold or re-send a finding | An attention rule the operator writes (`D-0033` rule 7) | the operator |
+| A patrol while only the command line runs | rondo has no resident process then | the entry that makes the host resident by default, if one does |
+| How "written by" is shown one press away on the page | A screen question | the conversation screen's entry |
+
+### What would falsify it
+
+- **The person asking "is it getting anywhere" about laps in flight often enough** that `in_flight` and
+  a time reads as no answer. The gate's first point moves to (b).
+- **Lines routinely held behind a lap that is within its ceiling but wedged**, found afterwards. Same
+  move.
+- **A person acting on a recommendation as if it were a rule, or on a rule as if it were a judgment**,
+  traced to the shared heading. Section 1 rule 1's "one press away" moves into the heading.
+- **Answers in one thread contradicting each other often enough** that the person stops trusting the
+  voice. The wait reading's "never stored" (section 1, rule 2.4) is what to reconsider.
+- **An F1 finding for a lap that answered normally**, which would mean `updated_at_ms` plus the ceiling
+  does not bound when an answer is due.
+- **A patrol message that withheld an act that could otherwise have happened**, which falsifies section 2
+  rule 3.4's reading of `D-0033`'s falsifier.
+- **A finding sent twice for one episode, or never sent for one**, which falsifies section 2 rule
+  3.1's key.
+- Any measurement in "What was measured" failing to reproduce at rondo `1db9112`.
