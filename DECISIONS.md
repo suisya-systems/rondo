@@ -10445,8 +10445,10 @@ itself one layer down, on the one operator the page has.
    the one step of it that is easy to write backwards. English is the last stop. **The same resolution
    at every one of rule 2's steps**, because they all carry the same kind of thing. In
    `Accept-Language` the tags are tried by their `q` -- highest first, absent meaning `1`, stable
-   within a weight -- because the header's grammar says the order is a list and not a ranking; `*` is
-   *no preference* and is skipped. That is the whole algorithm: **no basic filtering, no alternatives
+   within a weight -- because the header's grammar says the order is a list and not a ranking. **A
+   `q` of zero is a refusal and not a low preference**, so those tags are dropped before lookup runs
+   rather than tried last: `de;q=1, ja;q=0` must not reach the `ja` set on its way past unsupported
+   German. `*` is *no preference* and is skipped. That is the whole algorithm: **no basic filtering, no alternatives
    list, no best-fit.**
 
 7. **`<html lang>` names the set rondo wrote, and nothing a request carries can make it lie.**
@@ -10537,8 +10539,8 @@ One pull request:
 - Tests: each step of rule 2 wins over the one below it and loses to the one above it, including a
   cookie beating the host variable and the host variable beating `Accept-Language`; `?lang=ja-JP`,
   `RONDO_OPERATOR_LANGUAGE=ja-JP` and `accept-language: ja-JP` all reach the `ja` set, as does
-  `?lang=ja-x-private`; `accept-language: en;q=0.5, ja;q=0.9` reaches `ja` and a bare `*` reaches the
-  step below; a bare `/`, `?lang=ja-JP` and `?lang=de` each get one `303` naming the resolved set's
+  `?lang=ja-x-private`; `accept-language: en;q=0.5, ja;q=0.9` reaches `ja`, `de;q=1, ja;q=0` reaches the
+  step below rather than `ja`, and a bare `*` reaches the step below; a bare `/`, `?lang=ja-JP` and `?lang=de` each get one `303` naming the resolved set's
   tag, and a request already naming it gets none (**the no-loop property, asserted rather than
   reasoned**); `?lang=de` over a remembered `ja` lands on `/?lang=ja` and leaves the memory as it was,
   which is the case a credential-less redraw would otherwise morph to English; `?lang=!!` does the
