@@ -14014,7 +14014,7 @@ names. Line numbers drift; re-measure the claim, not the number.
 
 | Duty | claude-org-ja | rondo | New in this entry |
 |---|---|---|---|
-| **R1. Notice that two lines collide** | Secretary, from the briefs it wrote | **The advisory**, from a reading across live lineages (rule 2) | the cross-lineage reading, which fills `D-0033` rule 9 |
+| **R1. Notice that two lines collide** | Secretary, from the briefs it wrote | **The advisory**, from a reading across open lineages (rule 2) | the cross-lineage reading, which fills `D-0033` rule 9 |
 | **R2. Decide which lands first** | Secretary | **The organisation, drafted by the advisory as a `sequence` proposal** (rule 3) and **carried out by the surface**, which attempts acts in that order (rule 4) | one proposal kind |
 | **R3. Make a line wait when another line's result changes its premise** | Secretary | The same `sequence`, with a premise claim as its basis (rules 3 and 4). Shown with `D-0038`'s per-basis freshness | nothing beyond R2 |
 | **R4. Remember what the person wants across requests** | Secretary's notes | **rondo's store**, as `standing_policy` rows (rule 6) | one record kind and one basis form |
@@ -14032,9 +14032,13 @@ names. Line numbers drift; re-measure the claim, not the number.
    advisory produces material and holds none of the acts. There is no "coordinator" part a reader can
    point to; what the person sees of the running half is the `sequence` rows and the report (P5).
 
-2. **The cross-lineage reading (R1), deterministic.** A **live lineage** is one whose latest lap is not
-   terminal. When a lap reaches its gate, and before the surface attempts an act on a lineage, the
-   advisory's snapshot holds, for every other live lineage in the same repository, the set of paths
+2. **The cross-lineage reading (R1), deterministic.** An **open lineage** is one whose latest lap is not
+   terminal, **or is `closed`, its topic branch (`D-0023`) still exists in the repository, and its
+   `tipCommit` is not an ancestor of the default branch**: a closed lap's work still waits on
+   `publish` and a merge (`D-0025`), and rondo records neither, so the branch and ancestry are what the
+   reading can check. When a lap reaches its gate, and before the
+   surface attempts an act on a lineage, the advisory's snapshot holds, for every other open lineage in
+   the same repository, the set of paths
    changed in `baseCommit..tipCommit` (`D-0065` rule 1.2.1's range). **Two lineages collide when the
    sets share a path.** The finding is material with bases: the path, and both lineages' latest
    `iteration_id`. No scheduler runs it; it is gathered at the two points above (`D-0033` rule 4).
@@ -14042,13 +14046,13 @@ names. Line numbers drift; re-measure the claim, not the number.
 
 3. **An order is a `sequence` proposal (R2, R3).** A new proposal kind, immutable like every proposal
    (`D-0022` rule 4). Its payload:
-   1. **`first`**: a live lineage, named by its latest `iteration_id`;
-   2. **`then`**: either a live lineage, named the same way, or **a plan not yet admitted**, named by
+   1. **`first`**: an open lineage (rule 2), named by its latest `iteration_id`;
+   2. **`then`**: either an open lineage, named the same way, or **a plan not yet admitted**, named by
       its split proposal's `proposal_id` and the plan's position in it (`D-0063` rule 4). A plan has no
       iteration until its admission writes one (`D-0066` rule 3.2), so this is the only way to name
       the first admission of a line;
    3. **`holds`**: the act on `then` that waits, from `D-0066` rule 3.2's `act_kind` union. Today that is
-      `admission`: a plan's first admission, or a redo of a live lineage;
+      `admission`: a plan's first admission, or a redo of a open lineage;
    4. **`until`**: the fact that releases it, **from a closed list of facts rondo records: today one
       member, `first_terminal`** (the latest lap of `first` is in `TERMINAL_STATUSES`). A later entry
       adds `first_merged` once merge is observed;
@@ -14162,9 +14166,13 @@ names. Line numbers drift; re-measure the claim, not the number.
 - **Collisions that share no path are not detected.** Two lines that break each other through an import,
   a renamed identifier or two migration files with one number in different paths are seen only as a
   model drafter's premise claim, or not at all.
+- **A squash-merged line whose branch is kept stays open to the reading.** Its `tipCommit` never
+  becomes an ancestor of the default branch (rule 2), so it keeps colliding with later lines on the
+  paths it touched until someone deletes the branch, which is cleanup `D-0064` section 5 lists as
+  empty.
 - **A review extension and a merge order reach the person** where claude-org-ja's secretary decided
   alone (cases 3 and 4), until `D-0064` rule 3.6's `revise` and merge observation exist.
-- **The advisory's snapshot spans every live lineage in a repository.** `D-0033`'s residual "whether a
+- **The advisory's snapshot spans every open lineage in a repository.** `D-0033`'s residual "whether a
   host-wide snapshot stays affordable" becomes a cost paid at every gate and every attempted act.
 - **For the owner's view of the advisory as the secretary**: the advisory drafts the order and never
   carries it out, so rondo's secretary is two parts and a store, and the person cannot address the
