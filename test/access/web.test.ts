@@ -21,7 +21,13 @@ import { DatabaseSync } from "node:sqlite";
 import { expect, test } from "vitest";
 
 import { recordPagePress } from "../../src/access/cli.js";
-import { operatorPage, serveOperatorPage, type WebPorts } from "../../src/access/web.js";
+import {
+  type LanguageAsked,
+  operatorPage,
+  resolveLanguage,
+  serveOperatorPage,
+  type WebPorts,
+} from "../../src/access/web.js";
 import { type Chrome, chromeFor, EN } from "../../src/access/wording.js";
 import { allocate } from "../../src/refrain/allocator.js";
 import { admittedPlan, planPayload, type RunPlan, runPlan } from "../../src/refrain/plan.js";
@@ -95,12 +101,16 @@ function portsOver(
   world: ReturnType<typeof fresh>,
   actorId: string | null = "ada",
   pressed: Pressed | null = null,
-  wording: Chrome = EN,
+  // **The host's statement as a tag, and one step of five** (D-0056 rule 3).
+  // The set a page is rendered in is the fourth argument to `operatorPage`
+  // rather than a member of the ports, because five steps decide it per
+  // request; `null` is a host that said nothing.
+  hostLanguage: string | null = null,
 ): WebPorts {
   return {
     store: world.store,
     record: world.record,
-    wording,
+    hostLanguage,
     now: () => 5_000,
     // The page draws `inbox`'s lines, so it carries `inbox`'s one outward
     // port; nothing in these tests runs a lap, so it is never asked (D-0048
@@ -108,7 +118,7 @@ function portsOver(
     locateTranscript: async () => ({ kind: "unknown", reason: "no continuo in this test" }),
     policy: { maxOccupying: 4, maxLive: 6 },
     actorId,
-    material: pressed === null ? null : async (record) => [`work    rondo/${record.id}`],
+    material: pressed === null ? null : async (_wording, record) => [`work    rondo/${record.id}`],
     answer:
       pressed === null
         ? null
@@ -423,7 +433,7 @@ test("it serves the page on localhost, and only the one page", async () => {
   expect(withReading.status).toBe(200);
   const readingHtml = await withReading.text();
   expect(readingHtml).toContain("what spans the live laps");
-  expect(readingHtml).toContain('content="5;url=/?reading=open"');
+  expect(readingHtml).toContain('content="5;url=/?reading=open&amp;lang=en"');
 
   // One page and no router: a typo'd path says so rather than quietly showing
   // the only page there is.
@@ -466,7 +476,7 @@ test("the button is drawn only where there is a gate and somebody to answer it",
   // and points at the address that carries the framing a press records.
   const summary = await operatorPage(portsOver(world, "ada", pressed), "t");
   expect(summary).not.toContain("<form");
-  expect(summary).toContain('href="/?answer=i-0001"');
+  expect(summary).toContain('href="/?answer=i-0001&amp;lang=en"');
 
   const offered = await operatorPage(portsOver(world, "ada", pressed), "t", answering);
   expect(offered).toContain('method="post"');
@@ -511,9 +521,11 @@ test("a person's press answers the gate and an unattended redraw cannot", async 
   // The body the form carried is ignored: the button's word is the module's
   // constant, so a hand-written post cannot widen what this surface may say.
   expect(pressed).toEqual([{ iterationId: "i-0001", body: "approve" }]);
-  // A redirect and not a page, so a refresh re-reads rather than re-answers.
+  // A redirect and not a page, so a refresh re-reads rather than re-answers --
+  // and it carries the tag the press was made under (D-0056 rule 11), so the
+  // page the operator lands back on does not re-resolve its language.
   expect(answered.status).toBe(303);
-  expect(answered.location).toBe("/");
+  expect(answered.location).toBe("/?lang=en");
 
   stop.abort();
   expect(await served).toBe(0);
@@ -602,8 +614,8 @@ test("an idle store says zero once rather than nine times (rondo#145)", async ()
   // **The fold survives the redraw, because the URL holds it open and not the
   // browser.** A `<details>` would be shut again five seconds later, and a page
   // with no script could not reopen it -- which would make this a hiding.
-  expect(opened).toContain('content="5;url=/?reading=open"');
-  expect(html).toContain('content="5;url=/"');
+  expect(opened).toContain('content="5;url=/?reading=open&amp;lang=en"');
+  expect(html).toContain('content="5;url=/?lang=en"');
 });
 
 test("the page is ordered by the operator's three questions (rondo#145)", async () => {
@@ -619,7 +631,7 @@ test("the page is ordered by the operator's three questions (rondo#145)", async 
   expect(at("just finished")).toBeGreaterThan(at("running now"));
   // rondo's own vocabulary is below the questions, not in place of them.
   expect(at("what spans the live laps")).toBe(-1);
-  expect(html).toContain('href="/?reading=open"');
+  expect(html).toContain('href="/?reading=open&amp;lang=en"');
   expect(reading(opened)).toContain("what spans the live laps");
 });
 
@@ -683,7 +695,7 @@ test("a lap at a gate carries its cost and its fence beside the button (rondo#14
   // the screen rondo#145 is about. So the summary is the way there and the
   // answering view is the press.
   expect(html).not.toContain("<form");
-  expect(lead(html)).toContain('href="/?answer=i-0001"');
+  expect(lead(html)).toContain('href="/?answer=i-0001&amp;lang=en"');
   expect(answering).toContain('method="post"');
   expect(answering).toContain("What pressing approve records as shown");
   expect(answering).toContain("snapshot /iteration/lapCostUsd = 1.42");
@@ -801,7 +813,7 @@ test('a lap nobody asked a language of says so with `lang=""` (D-0055 rule 8)', 
   // It does not become the chrome's tag on a host that asked for one, which is
   // the whole of what the empty string is here to refuse: the two attributes
   // are true about different things and nothing reconciles them.
-  const inJapanese = await operatorPage({ ...ports, wording: chromeFor("ja") }, "t", view);
+  const inJapanese = await operatorPage(ports, "t", view, chromeFor("ja"));
   expect(inJapanese).toContain('<html lang="ja">');
   expect(inJapanese).toContain('<p class="request" lang="">');
   expect(inJapanese).toContain('<pre class="material" lang="">');
@@ -859,8 +871,8 @@ test("liveness is per view: two views poll and morph, and the answer view update
   const answering = await operatorPage(ports, "t", { kind: "answer", iterationId: "i-0001" });
 
   for (const [html, href] of [
-    [summary, "/"],
-    [opened, "/?reading=open"],
+    [summary, "/?lang=en"],
+    [opened, "/?reading=open&amp;lang=en"],
   ] as const) {
     // The two files, in the order that makes `Idiomorph` defined before the
     // poller runs, and both deferred so neither runs before the document.
@@ -911,8 +923,8 @@ test("every view is whole with the script gone", async () => {
   // scriptless browser has.
   expect(summary).toContain("do the thing");
   expect(summary).toContain("waiting for your answer");
-  expect(summary).toContain('href="/?answer=i-0001"');
-  expect(summary).toContain('<meta http-equiv="refresh" content="5;url=/">');
+  expect(summary).toContain('href="/?answer=i-0001&amp;lang=en"');
+  expect(summary).toContain('<meta http-equiv="refresh" content="5;url=/?lang=en">');
 
   // Every claim under its own basis, unchanged.
   expect(opened).toContain("inbox for 'ada'");
@@ -1133,10 +1145,10 @@ test("the bytes a press records do not depend on the host's language (D-0055 rul
   const drawn: string[] = [];
   for (const { world, wording } of worlds) {
     const ports = {
-      ...portsOver(world, "ada", [], wording),
+      ...portsOver(world, "ada", []),
       material: async () => await Promise.resolve(["why it stopped"]),
     };
-    drawn.push(await operatorPage(ports, "t", { kind: "answer", iterationId: "i-0001" }));
+    drawn.push(await operatorPage(ports, "t", { kind: "answer", iterationId: "i-0001" }, wording));
     expect(
       await recordPagePress(
         { store: world.store, record: world.record, now: () => 6_000, present: () => undefined },
@@ -1160,12 +1172,13 @@ test("the bytes a press records do not depend on the host's language (D-0055 rul
 
 test("a ja host reads in Japanese and leaves every token in its own bytes", async () => {
   const world = await waitingWorld();
+  const ja = chromeFor("ja");
   const ports = {
-    ...portsOver(world, "ada", [], chromeFor("ja")),
+    ...portsOver(world, "ada", []),
     material: async () => await Promise.resolve(["why it stopped"]),
   };
-  const summary = await operatorPage(ports, "t");
-  const reading = await operatorPage(ports, "t", { kind: "reading" });
+  const summary = await operatorPage(ports, "t", { kind: "summary" }, ja);
+  const reading = await operatorPage(ports, "t", { kind: "reading" }, ja);
 
   // Prose, on the three screens the operator actually reads -- including the
   // fold rule 3 of D-0053's falsifier fired on.
@@ -1191,10 +1204,7 @@ test("a ja host reads in Japanese and leaves every token in its own bytes", asyn
 
   // **What the ledger records stays English even here** (rule 4): the claim
   // labels beside the button are the bytes a press stores.
-  const answering = await operatorPage(ports, "t", {
-    kind: "answer",
-    iterationId: "i-0001",
-  });
+  const answering = await operatorPage(ports, "t", { kind: "answer", iterationId: "i-0001" }, ja);
   expect(answering).toContain("approve を押すと");
   expect(answering).toContain('<span class="label">request</span>');
 });
@@ -1202,8 +1212,9 @@ test("a ja host reads in Japanese and leaves every token in its own bytes", asyn
 test("<html lang> names the set rondo wrote, and never the tag that was asked for", async () => {
   const world = await waitingWorld();
   const declared = async (wording: Chrome): Promise<string> =>
-    /<html lang="([^"]*)">/.exec(await operatorPage(portsOver(world, "ada", [], wording)))?.[1] ??
-    "";
+    /<html lang="([^"]*)">/.exec(
+      await operatorPage(portsOver(world, "ada", []), null, { kind: "summary" }, wording),
+    )?.[1] ?? "";
 
   expect(await declared(EN)).toBe("en");
   expect(await declared(chromeFor("ja"))).toBe("ja");
@@ -1221,13 +1232,13 @@ test("every view is complete under each of the three answers to the language que
   const world = await waitingWorld();
   for (const wording of [chromeFor(null), chromeFor("de-CH-1901"), chromeFor("ja")]) {
     const ports = {
-      ...portsOver(world, "ada", [], wording),
+      ...portsOver(world, "ada", []),
       material: async () => await Promise.resolve(["why it stopped"]),
     };
     const views = [
-      await operatorPage(ports, "t"),
-      await operatorPage(ports, "t", { kind: "reading" }),
-      await operatorPage(ports, "t", { kind: "answer", iterationId: "i-0001" }),
+      await operatorPage(ports, "t", { kind: "summary" }, wording),
+      await operatorPage(ports, "t", { kind: "reading" }, wording),
+      await operatorPage(ports, "t", { kind: "answer", iterationId: "i-0001" }, wording),
     ];
     for (const html of views) {
       expect(html).toContain(`<html lang="${wording.lang}">`);
@@ -1239,5 +1250,386 @@ test("every view is complete under each of the three answers to the language que
     // The fold still carries rondo's own accounting, and the button its note.
     expect(views[1]).toContain(wording.inboxHeading);
     expect(views[2]).toContain(wording.approveNote("gate-i-0001", "approve"));
+  }
+});
+
+/**
+ * D-0056: the chrome's language follows the browser and is remembered, and the
+ * resolution is never silent.
+ *
+ * Three groups, and they are three different kinds of claim. **The five steps**
+ * are a pure function and are asserted as one, each step winning over the one
+ * below it and losing to the one above. **The redirect and the cookie** are
+ * properties of a response and are asserted over a socket, because "one 303
+ * and no loop" and "no `Set-Cookie` on this one" are claims about wire bytes.
+ * **What the press records** is asserted against the database, for D-0055 rule
+ * 4's reason with the query, the cookie and the header added to it (rule 13).
+ */
+
+/** Rule 2's four inputs, defaulted to a host and a browser that said nothing. */
+function askedWith(over: Partial<LanguageAsked> = {}): LanguageAsked {
+  return { query: null, cookie: undefined, host: null, header: undefined, ...over };
+}
+
+/** The tag one set of inputs resolves to. */
+function resolvedTag(over: Partial<LanguageAsked> = {}): string {
+  return resolveLanguage(askedWith(over)).lang;
+}
+
+test("rule 2 is five steps and the first answer wins, each step losing to the one above", () => {
+  // **Step 5 is the floor**: nobody said anything, so English.
+  expect(resolvedTag()).toBe("en");
+
+  // **Step 4, the browser's list**, which answers exactly when nothing above
+  // it did -- the case the operator was actually answering about.
+  expect(resolvedTag({ header: "ja" })).toBe("ja");
+
+  // **Step 3 beats step 4**: a host that has spoken is not overridden by a
+  // browser-wide default (rule 3). Both directions, so this is the order and
+  // not one lucky pair.
+  expect(resolvedTag({ host: "en", header: "ja" })).toBe("en");
+  expect(resolvedTag({ host: "ja", header: "en" })).toBe("ja");
+
+  // **Step 2 beats step 3**: the operator's own remembered switch outranks the
+  // host's statement about them.
+  expect(resolvedTag({ cookie: "lang=ja", host: "en", header: "en" })).toBe("ja");
+  expect(resolvedTag({ cookie: "lang=en", host: "ja", header: "ja" })).toBe("en");
+
+  // **Step 1 beats everything**, which is what makes rule 4's canonical URL the
+  // whole of the state and the poller's `credentials: "omit"` survivable.
+  expect(resolvedTag({ query: "ja", cookie: "lang=en", host: "en", header: "en" })).toBe("ja");
+  expect(resolvedTag({ query: "en", cookie: "lang=ja", host: "ja", header: "ja" })).toBe("en");
+
+  // **A step naming a tag no set resolves to is a step that said nothing**, so
+  // the next one answers rather than English being reached four times over.
+  expect(resolvedTag({ query: "de", host: "ja" })).toBe("ja");
+  expect(resolvedTag({ host: "de", header: "ja" })).toBe("ja");
+  expect(resolvedTag({ query: "de", cookie: "lang=de", host: "de", header: "de" })).toBe("en");
+  // The cookie is read out of a header that carries others beside it.
+  expect(resolvedTag({ cookie: "other=1; lang=ja; third=x", host: "en" })).toBe("ja");
+});
+
+test("a tag is resolved by BCP 47 lookup at every one of rule 2's steps (rule 6)", () => {
+  // `ja-JP` is what a host states and what a browser sends, and it is the
+  // papercut this entry exists to close -- at all four steps, because they all
+  // carry the same kind of thing.
+  expect(resolvedTag({ query: "ja-JP" })).toBe("ja");
+  expect(resolvedTag({ cookie: "lang=ja-JP" })).toBe("ja");
+  expect(resolvedTag({ host: "ja-JP" })).toBe("ja");
+  expect(resolvedTag({ header: "ja-JP" })).toBe("ja");
+  // Case folded, which is all BCP 47 says about comparing two tags.
+  expect(resolvedTag({ query: "JA-jp" })).toBe("ja");
+
+  // **The singleton step, which is the one that is easy to write backwards**
+  // (RFC 4647 section 3.4): truncating `ja-x-private` at its last hyphen leaves
+  // `ja-x`, and a trailing single-character subtag is dropped together with the
+  // subtag that introduced it rather than looked up as a set.
+  expect(resolvedTag({ query: "ja-x-private" })).toBe("ja");
+  // The RFC's own worked example's shape -- `zh-Hant-CN-x-private1-private2`
+  // reaching `zh` -- written against the one set this tree ships, so the
+  // assertion is about the truncation and not about a `zh` set that would have
+  // matched at the first step anyway.
+  expect(resolvedTag({ query: "ja-Hant-CN-x-private1-private2" })).toBe("ja");
+  // English is the last stop and is reachable by name, which is what keeps the
+  // switch from being a one-way door (rule 8).
+  expect(resolvedTag({ query: "en-GB" })).toBe("en");
+  expect(resolvedTag({ query: "en", host: "ja" })).toBe("en");
+  // Truncation stops at the primary subtag rather than wrapping to English via
+  // some shorter match: `de` is a step saying nothing, not a step saying `en`.
+  expect(resolveLanguage(askedWith({ query: "de-CH-1901", host: "ja" })).lang).toBe("ja");
+});
+
+test("Accept-Language is read by q, a q of zero is a refusal, and * says nothing (rule 6)", () => {
+  // Highest weight first, and not the order the list is written in.
+  expect(resolvedTag({ header: "en;q=0.5, ja;q=0.9" })).toBe("ja");
+  expect(resolvedTag({ header: "ja;q=0.1, en;q=0.8" })).toBe("en");
+  // Absent means 1.
+  expect(resolvedTag({ header: "ja, en;q=0.9" })).toBe("ja");
+  // **A q of zero is a refusal and not a low preference**, so `ja` is dropped
+  // before lookup runs rather than tried after unsupported German: this header
+  // must reach the step below rather than the `ja` set.
+  expect(resolvedTag({ header: "de;q=1, ja;q=0" })).toBe("en");
+  expect(resolveLanguage(askedWith({ header: "de;q=1, ja;q=0", host: "en" })).lang).toBe("en");
+  // And the refusal is of that tag only: a second tag still answers.
+  expect(resolvedTag({ header: "ja;q=0, en;q=0.3" })).toBe("en");
+  // **`*` is no preference and is skipped**, so a bare one reaches the step
+  // below rather than picking a set for the operator.
+  expect(resolvedTag({ header: "*" })).toBe("en");
+  expect(resolveLanguage(askedWith({ header: "*", host: "ja" })).lang).toBe("ja");
+  expect(resolvedTag({ header: "*;q=1, ja;q=0.2" })).toBe("ja");
+  // Whitespace and an unparseable weight are not a crash: the header is a
+  // browser's and this page is total about what it is handed.
+  expect(resolvedTag({ header: "  ja ; q=0.9 , en;q=0.3 " })).toBe("ja");
+  // An absent weight really is 1 and not a default below an explicit one, so
+  // the bare tag here outranks the weighted one whatever order they are in.
+  expect(resolvedTag({ header: "  ja ; q=0.9 , en " })).toBe("en");
+  // **A weight that is not a number is a weight that was not given**, and so
+  // the tag is offered at 1 rather than dropped: `q=0` is the only refusal in
+  // this grammar, and a garbled parameter is not the browser withdrawing a
+  // language the operator may well read.
+  expect(resolvedTag({ header: "ja;q=x" })).toBe("ja");
+  expect(resolvedTag({ header: "" })).toBe("en");
+});
+
+/** One `GET`, with headers of our choosing and the redirect left where it is. */
+async function get(
+  base: string,
+  path: string,
+  headers: Record<string, string> = {},
+): Promise<{
+  status: number;
+  location: string | null;
+  cookie: string | null;
+  vary: string | null;
+  body: string;
+}> {
+  const response = await fetch(`${base}${path}`, { headers, redirect: "manual" });
+  return {
+    status: response.status,
+    location: response.headers.get("location"),
+    cookie: response.headers.get("set-cookie"),
+    vary: response.headers.get("vary"),
+    body: await response.text(),
+  };
+}
+
+/** The tag one served document declares about itself (rule 7). */
+function declaredIn(html: string): string {
+  return /<html lang="([^"]*)">/.exec(html)?.[1] ?? "";
+}
+
+test("the resolution is never silent: one 303 names the set, and a request naming it is served", async () => {
+  const world = fresh();
+  await reserve(world, "i-0001", "do the thing");
+  const { base, stop, served } = await serving(portsOver(world, "ada", null, "ja"));
+
+  // **A bare `/` gains one** (rule 4): the operator can read, copy, bookmark
+  // and change whatever rondo resolved, which is the whole answer to a header
+  // being invisible on the screen it changes.
+  const bare = await get(base, "/");
+  expect(bare.status).toBe(303);
+  expect(bare.location).toBe("/?lang=ja");
+
+  // **`?lang=ja-JP` is canonicalised to the set it actually reached**, and
+  // `?lang=de` to whatever the remaining steps answered.
+  expect((await get(base, "/?lang=ja-JP")).location).toBe("/?lang=ja");
+  expect((await get(base, "/?lang=de")).location).toBe("/?lang=ja");
+  // An ill-formed tag is not a refusal: it resolves to nothing and the address
+  // is redirected to the tag of the set that answered (rule 9).
+  expect((await get(base, "/?lang=!!")).location).toBe("/?lang=ja");
+
+  // **The no-loop property, asserted rather than reasoned about**: the
+  // redirect's target is served, because a set's own tag resolves to itself.
+  const arrived = await get(base, "/?lang=ja");
+  expect(arrived.status).toBe(200);
+  expect(arrived.location).toBeNull();
+  expect(declaredIn(arrived.body)).toBe("ja");
+  // The same for English, in both directions of the switch (rule 8).
+  const english = await get(base, "/?lang=en");
+  expect(english.status).toBe(200);
+  expect(declaredIn(english.body)).toBe("en");
+
+  // The view survives the canonicalisation, so a redirect never costs the
+  // operator their place.
+  expect((await get(base, "/?reading=open")).location).toBe("/?reading=open&lang=ja");
+  expect((await get(base, "/?answer=i-0001")).location).toBe("/?answer=i-0001&lang=ja");
+
+  // **The bytes depend on two request headers now, and a shared cache is
+  // entitled to know.**
+  expect(arrived.vary).toBe("accept-language, cookie");
+
+  stop.abort();
+  expect(await served).toBe(0);
+});
+
+test("<html lang> names the set rondo wrote whichever of the four inputs chose it (rule 7)", async () => {
+  const world = fresh();
+  await reserve(world, "i-0001", "do the thing");
+  const { base, stop, served } = await serving(portsOver(world, "ada", null, null));
+
+  // The header, which is the input D-0055 refused and this entry takes.
+  expect(declaredIn((await get(base, "/?lang=ja", { "accept-language": "ja-JP" })).body)).toBe(
+    "ja",
+  );
+  // The cookie, and the query naming what it resolved to.
+  expect(declaredIn((await get(base, "/?lang=ja", { cookie: "lang=ja-JP" })).body)).toBe("ja");
+  // **Nothing a request carries can make the document lie**: a browser asking
+  // for German gets English and a document saying `en`.
+  const german = await get(base, "/", { "accept-language": "de" });
+  expect(german.location).toBe("/?lang=en");
+  expect(declaredIn((await get(base, "/?lang=en", { "accept-language": "de" })).body)).toBe("en");
+
+  stop.abort();
+  expect(await served).toBe(0);
+});
+
+test("the memory is one cookie, written by a switch and by nothing else (rule 5)", async () => {
+  const world = fresh();
+  await reserve(world, "i-0001", "do the thing");
+  const { base, stop, served } = await serving(portsOver(world, "ada", null, null));
+
+  // **A switch**: this URL asked for a language the remaining steps would not
+  // have answered, which is what the link in the chrome produces.
+  const switched = await get(base, "/?lang=ja");
+  expect(switched.status).toBe(200);
+  expect(switched.cookie).toContain("lang=ja");
+  // The four attributes rule 5 names, and an expiry in months rather than a
+  // session -- a switch answers *what language do you read*, not *this tab*.
+  expect(switched.cookie).toContain("Path=/");
+  expect(switched.cookie).toContain("SameSite=Strict");
+  expect(switched.cookie).toContain("HttpOnly");
+  expect(switched.cookie).toMatch(/Max-Age=\d{7,}/);
+
+  // **Not on a response whose language the other steps would have given
+  // anyway**: an address arrived at by canonicalisation is not a switch.
+  expect((await get(base, "/?lang=ja", { cookie: "lang=ja" })).cookie).toBeNull();
+  expect((await get(base, "/?lang=en")).cookie).toBeNull();
+  const remembered = await serving(portsOver(world, "ada", null, "ja"));
+  expect((await get(remembered.base, "/?lang=ja")).cookie).toBeNull();
+  remembered.stop.abort();
+  expect(await remembered.served).toBe(0);
+
+  // **`?lang=de` over a remembered `ja` lands on `/?lang=ja` and leaves the
+  // memory as it was** -- the case a credential-less redraw would otherwise
+  // morph to English five seconds after it rendered. `?lang=!!` does the same.
+  for (const asked of ["/?lang=de", "/?lang=!!"]) {
+    const over = await get(base, asked, { cookie: "lang=ja" });
+    expect(over.status).toBe(303);
+    expect(over.location).toBe("/?lang=ja");
+    expect(over.cookie).toBeNull();
+  }
+  // And the switch goes back: `en` is a tag any step may name (rule 8).
+  expect((await get(base, "/?lang=en", { cookie: "lang=ja" })).cookie).toContain("lang=en");
+
+  stop.abort();
+  expect(await served).toBe(0);
+});
+
+test("every address a ja page composes for itself carries ja (rule 11)", async () => {
+  const world = fresh();
+  await reserve(world, "i-0001", "do the thing", "ja");
+  await openGate(world, "i-0001");
+  const pressed: Pressed = [];
+  const { base, stop, served } = await serving(portsOver(world, "ada", pressed, "ja"));
+
+  const summary = (await get(base, "/?lang=ja")).body;
+  const opened = (await get(base, "/?reading=open&lang=ja")).body;
+  const answering = (await get(base, "/?answer=i-0001&lang=ja")).body;
+
+  // The fold's link, the answer view's link, and the `<noscript>` refresh.
+  expect(summary).toContain('href="/?reading=open&amp;lang=ja"');
+  expect(opened).toContain('href="/?lang=ja"');
+  expect(summary).toContain('href="/?answer=i-0001&amp;lang=ja"');
+  expect(summary).toContain('content="5;url=/?lang=ja"');
+  expect(opened).toContain('content="5;url=/?reading=open&amp;lang=ja"');
+  // The form's action.
+  expect(answering).toContain('action="/?lang=ja"');
+
+  // **And the `303` after a press**, which is the address the operator actually
+  // lands back on: a redirect that dropped the tag would re-resolve the page
+  // the moment rondo told them something was written.
+  const token = tokenIn(answering);
+  const answered = await post(base, { token, iteration: "i-0001" }, { origin: base });
+  expect(answered.status).toBe(303);
+  expect(answered.location).toBe("/?lang=ja");
+  expect(pressed).toEqual([{ iterationId: "i-0001", body: "approve" }]);
+
+  stop.abort();
+  expect(await served).toBe(0);
+});
+
+test("the switch is a link in the chrome, one per shipped set other than the one on screen (rule 10)", async () => {
+  const world = fresh();
+  await reserve(world, "i-0001", "do the thing");
+  const { base, stop, served } = await serving(portsOver(world, "ada", null, null));
+
+  // **Labelled with that language's own name in its own language**, which is
+  // what makes the label the same bytes in every set -- and the link carries
+  // the view, so switching never costs the reader their place.
+  const english = (await get(base, "/?lang=en")).body;
+  expect(english).toContain('<a href="/?lang=ja" lang="ja">日本語</a>');
+  expect(english).not.toContain(">English<");
+
+  const japanese = (await get(base, "/?lang=ja")).body;
+  expect(japanese).toContain('<a href="/?lang=en" lang="en">English</a>');
+  expect(japanese).not.toContain(">日本語<");
+
+  // Beside the fold's link and on every view, because a path the operator
+  // cannot find is a safeguard present in the markup and absent in practice.
+  const opened = (await get(base, "/?reading=open&lang=en")).body;
+  expect(opened).toContain('<a href="/?reading=open&amp;lang=ja" lang="ja">日本語</a>');
+
+  stop.abort();
+  expect(await served).toBe(0);
+});
+
+test("the resolved set reaches the material port and not only the chrome (rule 12)", async () => {
+  const world = fresh();
+  await reserve(world, "i-0001", "do the thing");
+  await openGate(world, "i-0001");
+  // The port is handed the set the *request* resolved to, so the fence block's
+  // standing sentences follow the page rather than the host it was started on.
+  const asked: string[] = [];
+  const ports: WebPorts = {
+    ...portsOver(world, "ada", [], "en"),
+    material: async (wording) => {
+      asked.push(wording.lang);
+      return await Promise.resolve([`set     ${wording.lang}`]);
+    },
+  };
+  const { base, stop, served } = await serving(ports);
+
+  expect((await get(base, "/?answer=i-0001&lang=ja")).body).toContain("set     ja");
+  expect((await get(base, "/?answer=i-0001&lang=en")).body).toContain("set     en");
+  expect(asked).toEqual(["ja", "en"]);
+
+  stop.abort();
+  expect(await served).toBe(0);
+});
+
+test("the bytes a press records depend on neither the query, the cookie nor the header (rule 13)", async () => {
+  // D-0055 rule 4's assertion with this entry's three new inputs added to it:
+  // one ledger, one wording of one claim, whatever the page read like. Each
+  // host reaches `ja` by a *different* one of the three, so what is asserted is
+  // the invariant and not one input being ignored.
+  const reachedJaBy: Record<string, string>[] = [
+    { cookie: "lang=ja" },
+    { "accept-language": "ja-JP" },
+    {},
+  ];
+  const worlds = [];
+  for (const [at, headers] of reachedJaBy.entries()) {
+    const world = await waitingWorld();
+    // The third host is the query's: `?lang=ja` with nothing else saying so.
+    const { base, stop, served } = await serving(portsOver(world, "ada", [], null));
+    const drawn = await get(base, at === 2 ? "/?answer=i-0001&lang=ja" : "/?answer=i-0001", {
+      ...headers,
+      ...(at === 2 ? {} : { cookie: headers.cookie ?? "" }),
+    });
+    // Whichever input chose it, the page that was read was Japanese.
+    const body =
+      drawn.status === 200 ? drawn.body : (await get(base, drawn.location ?? "/", headers)).body;
+    expect(declaredIn(body)).toBe("ja");
+    expect(
+      await recordPagePress(
+        { store: world.store, record: world.record, now: () => 6_000, present: () => undefined },
+        "i-0001",
+      ),
+    ).toEqual({ ok: true, note: "" });
+    stop.abort();
+    expect(await served).toBe(0);
+    worlds.push(world);
+  }
+
+  // One assertion over three hosts: the payload, the digest over it, the
+  // snapshot it was drawn from and the presentation counted beside it are the
+  // same bytes whichever of rule 2's steps chose the language.
+  const first = recorded(worlds[0]?.connection as DatabaseSync);
+  for (const world of worlds.slice(1)) {
+    expect(recorded(world.connection as DatabaseSync)).toEqual(first);
+  }
+  // Not vacuously: each press did write.
+  for (const world of worlds) {
+    expect(rows(world.connection as DatabaseSync, "proposal")).toBe(1);
   }
 });

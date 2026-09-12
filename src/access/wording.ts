@@ -481,25 +481,92 @@ const JA: Partial<Chrome> = Object.freeze({
 /**
  * The sets this tree ships, by the tag they are written in.
  *
- * `en` is not a member: it is the fallback every set is merged over, so a tag
- * of `en` and a tag nobody wrote a set for take the same path and produce the
- * same document. There is no registry here and no negotiation -- the tag is
- * matched as it is spelled, case folded, which is the whole of what BCP 47 says
- * about comparing two tags.
+ * **`en` is a member, and that is `D-0056` rule 8.** It is still the fallback
+ * every set is merged over -- its entry overrides nothing -- but it has to be
+ * reachable *by name* as well, or a `ja` host, a `ja` memory or a `ja` browser
+ * would be a one-way door and the switch of rule 10 would need a special case
+ * for going back. So `en` names the English set and a tag nobody wrote a set
+ * for names none, which are two different answers here even though they render
+ * the same document: one is a step of rule 2 answering and the other is a step
+ * saying nothing.
+ *
+ * There is still no registry and no negotiation. What replaced the exact match
+ * is lookup and nothing else ({@link setFor}).
  */
-const SETS: ReadonlyMap<string, Partial<Chrome>> = new Map([["ja", JA]]);
+const SETS: ReadonlyMap<string, Partial<Chrome>> = new Map([
+  ["en", {}],
+  ["ja", JA],
+]);
 
 /**
- * The wording one host writes in, for the tag its operator asked for.
+ * Every set this tree ships, named in its own language.
+ *
+ * **The label is the language's own name, which is what makes it the same bytes
+ * in every set** (`D-0056` rule 10): `English` reads as `English` on a Japanese
+ * page and `日本語` reads as `日本語` on an English one, so the switch is a
+ * list of names rather than an entry in {@link Chrome} that each set would
+ * translate into a word its reader cannot use. Not prose, and so not a member
+ * of the catalogue at all.
+ */
+export const SHIPPED_SETS: ReadonlyMap<string, string> = new Map([
+  ["en", "English"],
+  ["ja", "日本語"],
+]);
+
+/**
+ * The set a tag reaches by BCP 47 lookup, or null when no set does.
+ *
+ * **RFC 4647 section 3.4, and the whole of `D-0056` rule 6's algorithm.**
+ * Truncate the tag at its last hyphen and try again until a set matches, and
+ * **truncate once more whenever that leaves a trailing single-character
+ * subtag** -- so `ja-x-private` reaches `ja` and never stops at a bare `ja-x`,
+ * which is the RFC's own worked example (`zh-Hant-CN-x-private1-private2`
+ * reaching `zh`) and the one step of it that is easy to write backwards. No
+ * basic filtering, no alternatives list, no best-fit.
+ *
+ * **Null is a step of rule 2 saying nothing, and is why this is not
+ * {@link chromeFor}.** A well-formed tag this tree ships no set for has to let
+ * the *next* step answer rather than resolve to English itself, or the host's
+ * variable saying `de` would silence the browser's list. English is the floor
+ * of the resolution and not the answer of every step in it.
+ */
+export function setFor(tag: string | null): Chrome | null {
+  if (tag === null) {
+    return null;
+  }
+  let candidate = tag.toLowerCase();
+  for (;;) {
+    const set = SETS.get(candidate);
+    if (set !== undefined) {
+      return Object.freeze({ ...EN, ...set });
+    }
+    const cut = candidate.lastIndexOf("-");
+    if (cut === -1) {
+      return null;
+    }
+    candidate = candidate.slice(0, cut);
+    // The step above leaves `ja-x` from `ja-x-private`; a single-character
+    // subtag is a singleton and never a set anybody wrote, so the RFC drops it
+    // together with the subtag that introduced it.
+    if (/-.$/.test(candidate)) {
+      candidate = candidate.slice(0, candidate.lastIndexOf("-"));
+    }
+  }
+}
+
+/**
+ * The wording one tag reaches, with English as the last stop.
+ *
+ * {@link setFor} with `D-0056` rule 2's floor applied -- which is the whole
+ * resolution for a caller that has one tag and no further steps to fall to.
  *
  * **`lang` comes back naming what was selected and never what was asked**
- * (rule 7). A well-formed tag this tree ships no set for yields `en` and the
- * document then declares `en`, because that is what the document is: rondo does
- * not declare an intention as a fact. A set that is only half written is still
- * that set's tag -- the English strings inside it are the fallback rule 9 makes
- * shippable on purpose, and not a different document.
+ * (`D-0055` rule 7). A well-formed tag this tree ships no set for yields `en`
+ * and the document then declares `en`, because that is what the document is:
+ * rondo does not declare an intention as a fact. A set that is only half
+ * written is still that set's tag -- the English strings inside it are the
+ * fallback rule 9 makes shippable on purpose, and not a different document.
  */
 export function chromeFor(tag: string | null): Chrome {
-  const set = tag === null ? undefined : SETS.get(tag.toLowerCase());
-  return set === undefined ? EN : Object.freeze({ ...EN, ...set });
+  return setFor(tag) ?? EN;
 }

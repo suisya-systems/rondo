@@ -26,7 +26,7 @@ import {
   FLAGS_BY_COMMAND,
   forgeHost,
   type GateVerbs,
-  operatorWording,
+  operatorLanguage,
   type PreflightInput,
   type PullRequestTextInput,
   parseBasis,
@@ -2050,24 +2050,26 @@ test("a row that already names its session needs no continuo at all (D-0048 rule
  * to read before a page is served.
  */
 test("the operator's language is read off the host, and a tag that is not one is refused", () => {
-  const selected = (value: string | undefined): { wording?: Chrome; refusal?: string } =>
-    operatorWording(value === undefined ? {} : { RONDO_OPERATOR_LANGUAGE: value });
+  const selected = (value: string | undefined): { tag?: string | null; refusal?: string } =>
+    operatorLanguage(value === undefined ? {} : { RONDO_OPERATOR_LANGUAGE: value });
 
   // **Absent means nobody asked, and an empty variable is a shell saying the
-  // same thing.** Both are English, and both are the set the terminal is
-  // handed, so an unset host is the page it was before this entry.
-  expect(selected(undefined).wording).toBe(EN);
-  expect(selected("").wording).toBe(EN);
-  expect(selected("  ").wording).toBe(EN);
+  // same thing.** Both are `null`, which is the step of D-0056 rule 2 saying
+  // nothing so that the next one answers -- and not `EN`, which would be this
+  // step answering English over a browser that asked for Japanese.
+  expect(selected(undefined).tag).toBeNull();
+  expect(selected("").tag).toBeNull();
+  expect(selected("  ").tag).toBeNull();
 
-  // A tag with wording in the tree.
-  expect(selected("ja").wording?.lang).toBe("ja");
+  // A tag is carried as the host spelled it; the lookup is the page's (rule 3).
+  expect(selected("ja").tag).toBe("ja");
+  expect(chromeFor(selected("ja").tag ?? null).lang).toBe("ja");
 
   // **A well-formed tag rondo ships no wording for is not a refusal** (rule 7
-  // and rule 9): it is an English page that says `en`, because rondo does not
-  // declare an intention as a fact and does not block a host on a translation.
-  expect(selected("de-CH-1901").wording).toBe(EN);
-  expect(selected("zh-Hant").wording).toBe(EN);
+  // and rule 9), and is carried through as itself: whether it *resolves* is
+  // D-0056 rule 2's question and is asked per request, not here.
+  expect(selected("de-CH-1901").tag).toBe("de-CH-1901");
+  expect(selected("zh-Hant").tag).toBe("zh-Hant");
 
   // **Ill-formed is refused before a page exists**, in a message naming this
   // variable: the grammar is shared with the plan's `materialLanguage` and the
@@ -2078,7 +2080,7 @@ test("the operator's language is read off the host, and a tag that is not one is
     expect(refusal).toContain("RONDO_OPERATOR_LANGUAGE");
     expect(refusal).toContain(bad);
     expect(refusal).not.toContain("materialLanguage");
-    expect(selected(bad).wording).toBeUndefined();
+    expect(selected(bad).tag).toBeUndefined();
   }
 });
 

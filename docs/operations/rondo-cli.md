@@ -133,10 +133,38 @@ export RONDO_OPERATOR_LANGUAGE=ja   # an IETF language tag; unset means English
 ```
 
 It is a **host** fact, beside `RONDO_APPROVER`, because the host has one operator and their language
-is a property of the host in the same way the store's path is. There is no file, no precedence
-order, no per-lap override and no plan field; and it is recorded nowhere.
+is a property of the host in the same way the store's path is. There is no file, no per-lap override
+and no plan field; and it is recorded nowhere.
 
-What it changes is **`rondo web`'s own sentences** -- the headings, the notes, the inbox's lines, the
+**It is one of five steps, and the first answer wins** (`D-0056`). The page's language is resolved
+per request, in this order:
+
+1. **`?lang=<tag>` on the request** -- what the switch in the chrome sets, and what a bookmark holds.
+2. **the remembered tag**, from the one cookie this page keeps (`lang`; `Path=/`, `SameSite=Strict`,
+   `HttpOnly`, an expiry in months). It is written when you switch and by nothing else.
+3. **`RONDO_OPERATOR_LANGUAGE`**, this variable: the host's statement about its one operator.
+4. **`Accept-Language` on the request** -- the browser's list, read by `q` (highest first, absent
+   meaning `1`, `q=0` a refusal rather than a low preference, `*` skipped).
+5. **English**, which is the floor rather than a party.
+
+A step that names a tag rondo ships no wording for is a step that **said nothing**, and the next one
+answers. So the variable sits above the browser's list -- a host that has spoken is not overridden by
+a browser-wide default -- and the browser decides the first visit exactly when the host has said
+nothing. Tags are matched by **BCP 47 lookup** at every step, so `ja-JP` renders the `ja` wording and
+`ja-x-private` does too.
+
+**The resolution is never silent.** Whatever rondo resolved is put back into the address in one
+`303`, so a bare `/` becomes `/?lang=en`, `?lang=ja-JP` becomes `?lang=ja`, and an address that asked
+for a language rondo could not give is rewritten to the one it did. That is what makes an invisible
+input -- a browser setting you did not make for rondo -- readable, copyable and changeable from the
+screen it changed; it is also what keeps the five-second redraw correct, since the redraw is
+credential-less and the address is the only place the language lives.
+
+**The switch is a link in the chrome**, beside the link that opens the reading, labelled with each
+shipped language's own name (`English`, `日本語`). A browser that blocks cookies remembers nothing:
+the page works and the switch lasts as long as the address does.
+
+What the resolved language changes is **`rondo web`'s own sentences** -- the headings, the notes, the inbox's lines, the
 fence block's two standing paragraphs. What it does not change:
 
 - **the terminal**, which stays English. `rondo inbox` and `rondo answer` go through the ASCII
@@ -155,7 +183,10 @@ has no wording for is not a refusal**: the page is English and says so in `<html
 attribute names the language rondo actually wrote the page in rather than the one that was asked
 for. A screen added ahead of its translation renders English inside an otherwise Japanese page for
 the same reason. What *is* refused, before the page is served, is a string that is not a language tag
-at all -- `ja_JP`, a sentence, a bare letter.
+at all -- `ja_JP`, a sentence, a bare letter. **`?lang=` is not refused that way**: a typo in a query
+is an operator who wanted the page, so it resolves to nothing, the next step answers, and the address
+is rewritten to the tag that did. The variable keeps its boot refusal because a host statement is
+typed once, far from any screen; a query is typed with the result in front of the person typing it.
 
 ## 3. The plan file
 

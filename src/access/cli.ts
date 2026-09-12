@@ -95,7 +95,7 @@ import {
 import { type InboxOutcome, showInbox, type TranscriptLocation } from "./inbox.js";
 import { evidenceOf, READING_REMOTE } from "./review.js";
 import { serveOperatorPage } from "./web.js";
-import { type Chrome, chromeFor, EN } from "./wording.js";
+import { type Chrome, EN } from "./wording.js";
 
 /**
  * The whole surface on one screen.
@@ -298,20 +298,31 @@ const APPROVER_ENV = "RONDO_APPROVER";
  * no precedence order, no per-lap override and no plan field, which is what
  * keeps D-0019 rule 3's refusal of a configuration *layer* intact.
  *
- * **Not `Accept-Language`, and not derived from the rows on screen.** A page
- * whose bytes depend on who asked is a second version of one claim by another
- * name, on a surface whose premise is one operator over loopback; and a chrome
- * whose language followed the newest lap would change as laps come and go and
- * would have no language at all on an idle host.
+ * **Above `Accept-Language` rather than instead of it** (D-0056 rules 2 and 3).
+ * D-0055 refused the header; that refusal is withdrawn and the half of its
+ * argument that survived is what places this variable *above* the browser's
+ * list: a variable is a person stating a fact about this deployment's one
+ * operator and is what the terminal reads, while a header is a browser-wide
+ * preference set for the web at large. So a host that has spoken is not
+ * overridden by a browser default, and the browser decides the first visit
+ * exactly when the host has said nothing. Still no file, no precedence order of
+ * its own, and not derived from the rows on screen.
  *
- * **Absent means nobody asked, which renders English.** So does a well-formed
- * tag this tree ships no wording for -- and the document then declares `en`,
- * because that is the language it is in (rule 7).
+ * **Absent means nobody asked, and so does a well-formed tag this tree ships no
+ * wording for** -- which under D-0056 rule 2 is a step *saying nothing* rather
+ * than a step answering English, so the next one answers. That is why what is
+ * carried to the page is the tag and not a resolved set.
  */
 const OPERATOR_LANGUAGE_ENV = "RONDO_OPERATOR_LANGUAGE";
 
 /**
- * The wording set one host writes in, or a refusal naming this variable.
+ * The tag one host stated about its operator, or a refusal naming this
+ * variable.
+ *
+ * **A tag and not a set** (D-0056 rule 3): the lookup happens per request in
+ * `src/access/web.ts`, beside the other four steps of rule 2, because a step
+ * that resolved to `EN` here could not be told from a step that said nothing.
+ * `null` is *nobody asked*.
  *
  * **Refused before a page is served rather than ignored**, which is the
  * treatment the two capacity bounds already get: a mistyped tag is an operator
@@ -325,12 +336,12 @@ const OPERATOR_LANGUAGE_ENV = "RONDO_OPERATOR_LANGUAGE";
  * the same shape: `export RONDO_OPERATOR_LANGUAGE=` is how a shell says *never
  * mind*.
  */
-export function operatorWording(
+export function operatorLanguage(
   environment: Readonly<Record<string, string | undefined>>,
-): { readonly wording: Chrome } | { readonly refusal: string } {
+): { readonly tag: string | null } | { readonly refusal: string } {
   const asked = environment[OPERATOR_LANGUAGE_ENV];
   if (asked === undefined || asked.trim() === "") {
-    return { wording: EN };
+    return { tag: null };
   }
   if (!isLanguageTag(asked)) {
     return {
@@ -340,7 +351,7 @@ export function operatorWording(
         "rondo writes its own prose in English.",
     };
   }
-  return { wording: chromeFor(asked) };
+  return { tag: asked };
 }
 
 /** The remote a push goes to when the operator does not name one. */
@@ -1385,7 +1396,7 @@ export async function main(
     }
     // **The language is read once, here, beside the other host facts, and a tag
     // that is not one refuses before a socket is opened** (D-0055 rule 5).
-    const selected = operatorWording(environment);
+    const selected = operatorLanguage(environment);
     if ("refusal" in selected) {
       return refuse(selected.refusal);
     }
@@ -1399,12 +1410,15 @@ export async function main(
         store,
         record: openAdvisoryRecord(opened.path),
         policy: bounds.policy,
-        // **The page's own language, and the terminal's is not this** (D-0055
-        // rule 10). `pageMaterial` below is handed the same set, so the fence
-        // block's two standing sentences follow the page; `sayLapMaterial` is
-        // handed `EN`, because the console's strings go through D-0004's escape
-        // and it has no CJK substitutes.
-        wording: selected.wording,
+        // **The host's statement, as a tag, and one step of five** (D-0056
+        // rules 2 and 3). The page resolves it against the request's `?lang=`,
+        // the remembered cookie and `Accept-Language`; what it resolves to is
+        // handed back to `pageMaterial` below, so the fence block's two
+        // standing sentences follow the *page* and not the host. The terminal's
+        // language is still not this: `sayLapMaterial` is handed `EN`, because
+        // the console's strings go through D-0004's escape and it has no CJK
+        // substitutes (D-0055 rule 10).
+        hostLanguage: selected.tag,
         answer:
           approver === undefined || approver === ""
             ? null
@@ -1416,7 +1430,7 @@ export async function main(
         material:
           approver === undefined || approver === ""
             ? null
-            : async (record) => await pageMaterial(selected.wording, environment, store, record),
+            : async (wording, record) => await pageMaterial(wording, environment, store, record),
         // **The approver and not an `--actor-id`.** An inbox is one person's,
         // and the identity rondo already trusts to answer a gate is the one
         // whose inbox this host draws. Unset is not a refusal: the other two
