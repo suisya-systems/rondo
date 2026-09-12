@@ -2245,6 +2245,19 @@ async function commandAnswer(
   }
   const gate = observed.payload;
 
+  // **`--verified` without `--body` is refused rather than read past.** The
+  // reading mode answers nothing, so there is no act for a claim to go before
+  // and nothing would be written -- and a flag that reads as though it did
+  // something is worse than one that is rejected, which is the rule
+  // `parseCommand` already states about every flag rondo takes. Silently
+  // dropping it would leave an operator believing the record holds what they
+  // checked, and `publish` saying nobody recorded anything.
+  if (parsed.verified !== null && parsed.body === null) {
+    return refuse(
+      "--verified says what you checked before answering, and without --body nothing is being " +
+        "answered, so there is nothing to record it against. Give both, or neither.",
+    );
+  }
   if (parsed.body === null) {
     // The reading mode: what is being asked, and the command that answers it.
     say(`iteration '${record.id}' is ${record.status}`);
