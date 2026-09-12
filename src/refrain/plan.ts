@@ -527,19 +527,39 @@ function requireClaudeCommand(tokens: readonly string[]): readonly string[] {
 }
 
 /**
+ * Whether a string has the shape of an IETF language tag.
+ *
+ * **Shared because two callers need the same answer and neither owns it**
+ * (D-0055 rule 5). The plan's `materialLanguage` is one ask about one lap; the
+ * host's `RONDO_OPERATOR_LANGUAGE` is a fact about who reads the screen. They
+ * are different fields with different lifetimes and the same grammar, so what
+ * is lifted out is the grammar alone -- the refusal each caller writes names
+ * its own field, because a message naming `materialLanguage` on a host variable
+ * would send an operator to the plan file to fix an environment variable.
+ *
+ * BCP 47's subtag grammar reduced to its shape, and never a registry: `ja`,
+ * `zh-Hant` and `de-CH-1901` pass; a sentence, a locale spelled `ja_JP` and an
+ * empty string do not. Everything it admits is inside `[A-Za-z0-9-]`, which is
+ * what lets a tag be interpolated into an argv sentence and into a `lang`
+ * attribute without either use re-deriving what the other relies on.
+ */
+export function isLanguageTag(value: string): boolean {
+  return /^[A-Za-z]{2,8}(-[A-Za-z0-9]{1,8})*$/.test(value);
+}
+
+/**
  * The ask, checked for the shape of an IETF language tag (D-0053 rule 6).
  *
- * **Shape only, and deliberately not a registry.** rondo holds no table of
- * languages (rule 7), so this says what a *tag* looks like -- BCP 47's subtag
- * grammar reduced to its shape -- and never which tags exist. `ja`, `zh-Hant`
- * and `de-CH-1901` pass; a sentence, a locale spelled `ja_JP` and an empty
- * string do not.
+ * **Shape only, and deliberately not a registry.** The grammar is
+ * {@link isLanguageTag} and the refusal is this field's own (D-0055 rule 5):
+ * rondo holds no table of languages (rule 7), so what is checked is what a
+ * *tag* looks like and never which tags exist.
  *
  * **The check is here because both of the field's two uses need it.** The tag
  * is interpolated into an argv sentence rondo hands `run admit` (rule 7, which
- * says ASCII) and into a `lang` attribute (rule 12), and the grammar below
- * admits nothing outside `[A-Za-z0-9-]` -- so neither use has to re-derive what
- * the other already relies on, and a mistyped tag is refused before a process
+ * says ASCII) and into a `lang` attribute (rule 12), and the grammar admits
+ * nothing outside `[A-Za-z0-9-]` -- so neither use has to re-derive what the
+ * other already relies on, and a mistyped tag is refused before a process
  * exists rather than escaping as markup or as a stack.
  */
 function optionalLanguageTag(value: string | null): string | null {
@@ -549,7 +569,7 @@ function optionalLanguageTag(value: string | null): string | null {
   if (typeof (value as unknown) !== "string") {
     return refuse("'materialLanguage' is not a string, and a language tag is text");
   }
-  if (!/^[A-Za-z]{2,8}(-[A-Za-z0-9]{1,8})*$/.test(value)) {
+  if (!isLanguageTag(value)) {
     return refuse(
       `'materialLanguage' is '${value}', which is not an IETF language tag. A tag is a primary ` +
         "subtag and optional hyphenated subtags -- 'ja', 'zh-Hant' -- and null means no language " +

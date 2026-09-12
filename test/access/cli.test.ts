@@ -26,6 +26,7 @@ import {
   FLAGS_BY_COMMAND,
   forgeHost,
   type GateVerbs,
+  operatorWording,
   type PreflightInput,
   type PullRequestTextInput,
   parseBasis,
@@ -45,6 +46,7 @@ import {
 } from "../../src/access/cli.js";
 import type { LapWorkInspection, PushTargetInspection } from "../../src/access/forge.js";
 import { evidenceOf } from "../../src/access/review.js";
+import { type Chrome, chromeFor, EN } from "../../src/access/wording.js";
 import { BASIS_FORMS } from "../../src/advisory/proposal.js";
 import type { VerifiedContinuo } from "../../src/continuo/invoker.js";
 import type { ContinuoResult } from "../../src/continuo/protocol.js";
@@ -2036,4 +2038,86 @@ test("a row that already names its session needs no continuo at all (D-0048 rule
     directory: join("/srv/state", "rondo-i-1", "session-7"),
     sessions: 1,
   });
+});
+
+/**
+ * `RONDO_OPERATOR_LANGUAGE`, as the host states it (D-0055 rule 5).
+ *
+ * A pure function over an environment, which is why it is here rather than
+ * behind `main()`: the three answers the variable has -- nobody asked, a tag
+ * with no wording, a tag with one -- are each a different document, and a
+ * fourth answer (a tag that is not one) is a refusal an operator has to be able
+ * to read before a page is served.
+ */
+test("the operator's language is read off the host, and a tag that is not one is refused", () => {
+  const selected = (value: string | undefined): { wording?: Chrome; refusal?: string } =>
+    operatorWording(value === undefined ? {} : { RONDO_OPERATOR_LANGUAGE: value });
+
+  // **Absent means nobody asked, and an empty variable is a shell saying the
+  // same thing.** Both are English, and both are the set the terminal is
+  // handed, so an unset host is the page it was before this entry.
+  expect(selected(undefined).wording).toBe(EN);
+  expect(selected("").wording).toBe(EN);
+  expect(selected("  ").wording).toBe(EN);
+
+  // A tag with wording in the tree.
+  expect(selected("ja").wording?.lang).toBe("ja");
+
+  // **A well-formed tag rondo ships no wording for is not a refusal** (rule 7
+  // and rule 9): it is an English page that says `en`, because rondo does not
+  // declare an intention as a fact and does not block a host on a translation.
+  expect(selected("de-CH-1901").wording).toBe(EN);
+  expect(selected("zh-Hant").wording).toBe(EN);
+
+  // **Ill-formed is refused before a page exists**, in a message naming this
+  // variable: the grammar is shared with the plan's `materialLanguage` and the
+  // refusal is not, because one naming that field would send an operator to the
+  // plan file to fix an environment variable.
+  for (const bad of ["ja_JP", "日本語", "j", "ja-", "-ja", "in japanese please"]) {
+    const refusal = selected(bad).refusal ?? "";
+    expect(refusal).toContain("RONDO_OPERATOR_LANGUAGE");
+    expect(refusal).toContain(bad);
+    expect(refusal).not.toContain("materialLanguage");
+    expect(selected(bad).wording).toBeUndefined();
+  }
+});
+
+test("a wording set is merged over English, so a missing string is the English one", () => {
+  // Rule 9, which is what makes a partial translation shippable: the set is
+  // complete because the fallback completes it, and a screen added with `en`
+  // wording only renders English inside an otherwise Japanese page rather than
+  // blocking on somebody finishing the translation.
+  const ja = chromeFor("ja");
+  for (const key of Object.keys(EN) as (keyof Chrome)[]) {
+    expect(ja[key], `the ja set has no value for '${key}'`).toBeDefined();
+  }
+  // And the tokens the entry names stay ASCII inside the Japanese sentences
+  // that frame them (rule 3).
+  expect(ja.inboxNote).toContain("rondo inbox");
+  expect(ja.noApproverNote).toContain("RONDO_APPROVER");
+  expect(ja.readOneBack).toContain("rondo show --proposal-id ID");
+  expect(ja.approveNote("gate-1", "approve")).toContain("rondo answer");
+  expect(ja.answerGate("gate-1")).toContain("gate-1");
+});
+
+test("the terminal's wording is ASCII, which is what D-0004's escape needs", () => {
+  // Rule 10 as an alphabet check rather than as a promise. `inboxLines` and the
+  // fence block are handed `EN` by the command line, and `EN` is the only set
+  // that has to survive a cp932 console -- so if a CJK string ever lands in it,
+  // this fails here rather than as `\uXXXX` on somebody's screen.
+  const spelled: string[] = [];
+  for (const value of Object.values(EN)) {
+    if (typeof value === "string") {
+      spelled.push(value);
+    } else if (Array.isArray(value)) {
+      spelled.push(...(value as string[]));
+    } else if (typeof value === "function") {
+      // Called with placeholders: what is under test is the prose around them.
+      spelled.push(String((value as (...args: unknown[]) => string)("x", "x", "x", "x", "x")));
+    }
+  }
+  expect(spelled.length).toBeGreaterThan(40);
+  for (const line of spelled) {
+    expect(line, `not printable ASCII: ${line}`).toMatch(/^[ -~\n]*$/);
+  }
 });

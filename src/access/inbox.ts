@@ -33,6 +33,7 @@ import {
 } from "../store/records.js";
 import type { AdvisoryRecord, IterationStore } from "../store/sqlite.js";
 import { PROPOSAL_SUBJECT } from "./advisory.js";
+import { type Chrome, EN } from "./wording.js";
 
 /**
  * Everything reading the inbox needs, and nothing that writes.
@@ -198,24 +199,30 @@ function changedIds(changed: readonly RecordChange[], kind: string): ReadonlySet
 }
 
 /** `  NEW` on a row the operator has not seen, and nothing on one they have. */
-function newMark(seen: ReadonlySet<string>, id: string, sinceMs: number | null): string {
-  return sinceMs !== null && seen.has(id) ? "  NEW" : "";
+function newMark(
+  wording: Chrome,
+  seen: ReadonlySet<string>,
+  id: string,
+  sinceMs: number | null,
+): string {
+  return sinceMs !== null && seen.has(id) ? wording.newMark : "";
 }
 
 function proposalLines(
+  wording: Chrome,
   proposals: readonly OpenProposal[],
   snapshot: InboxSnapshot,
   seen: ReadonlySet<string>,
 ): readonly string[] {
-  return proposals.map((proposal) => {
-    const about =
-      proposal.iterationId === null ? "about no iteration" : `about '${proposal.iterationId}'`;
-    return (
-      `    ${proposal.proposalId}  ${proposal.kind}  ${about}  ` +
-      `waiting ${ago(proposal.createdAtMs, snapshot.atMs)}` +
-      newMark(seen, proposal.proposalId, snapshot.sinceMs)
-    );
-  });
+  return proposals.map(
+    (proposal) =>
+      wording.proposalLine(
+        proposal.proposalId,
+        proposal.kind,
+        wording.aboutIteration(proposal.iterationId),
+        ago(proposal.createdAtMs, snapshot.atMs),
+      ) + newMark(wording, seen, proposal.proposalId, snapshot.sinceMs),
+  );
 }
 
 /**
@@ -243,44 +250,39 @@ function proposalLines(
  * like help and costs a round trip in exactly the state that already needs a
  * person. The id is still printed, because it is where the row stopped.
  */
-export function unblockedBy(record: IterationRecord): string {
+export function unblockedBy(wording: Chrome, record: IterationRecord): string {
   if (record.status === "stalled") {
-    return record.gateId === null
-      ? "no gate: a person has to decide"
-      : `no gate answer releases this (stopped at ${record.gateId}): a person has to decide`;
+    return record.gateId === null ? wording.noGateDecide : wording.noGateReleases(record.gateId);
   }
-  return record.gateId === null
-    ? "suspended with no gate id recorded: rondo cannot name the gate"
-    : `answer gate ${record.gateId}`;
+  return record.gateId === null ? wording.suspendedNoGate : wording.answerGate(record.gateId);
 }
 
-function waitingOnYouLines(snapshot: InboxSnapshot): readonly string[] {
+function waitingOnYouLines(wording: Chrome, snapshot: InboxSnapshot): readonly string[] {
   const seenProposals = changedIds(snapshot.changed, "proposal");
   const seenIterations = changedIds(snapshot.changed, "iteration");
   const binding = snapshot.open.filter((proposal) => isApprovableKind(proposal.kind));
   const nonBinding = snapshot.open.filter((proposal) => !isApprovableKind(proposal.kind));
   const waiting = onSide(snapshot, "waitingOnYou");
   return [
-    "waiting on you",
-    `  proposals that become contracts when you approve them (${String(binding.length)})`,
-    ...proposalLines(binding, snapshot, seenProposals),
-    `  proposals that bind nothing (${String(nonBinding.length)})`,
-    ...proposalLines(nonBinding, snapshot, seenProposals),
+    wording.waitingOnYou,
+    wording.bindingProposals(binding.length),
+    ...proposalLines(wording, binding, snapshot, seenProposals),
+    wording.nonBindingProposals(nonBinding.length),
+    ...proposalLines(wording, nonBinding, snapshot, seenProposals),
     // **The verb that makes one of those lines answerable** (#39). The list
     // above is ids and kinds; what a person answers is the option set, its
     // bases and what approving forecloses, and that screen is one command away
     // rather than in the scrollback of whoever drafted it.
-    ...(snapshot.open.length === 0
-      ? []
-      : [
-          "    read one back, with its options and what each rests on: rondo show --proposal-id ID",
-        ]),
-    `  iterations waiting on you (${String(waiting.length)})`,
+    ...(snapshot.open.length === 0 ? [] : [wording.readOneBack]),
+    wording.iterationsWaiting(waiting.length),
     ...waiting.map(
       (record) =>
-        `    ${record.id}  ${record.status}  ${ago(record.updatedAtMs, snapshot.atMs)}  ` +
-        unblockedBy(record) +
-        newMark(seenIterations, record.id, snapshot.sinceMs),
+        wording.waitingLine(
+          record.id,
+          record.status,
+          ago(record.updatedAtMs, snapshot.atMs),
+          unblockedBy(wording, record),
+        ) + newMark(wording, seenIterations, record.id, snapshot.sinceMs),
     ),
   ];
 }
@@ -303,29 +305,31 @@ function waitingOnYouLines(snapshot: InboxSnapshot): readonly string[] {
  * wedged?", which `D-0036` rule 5 still refuses.
  */
 export function whereItRuns(
+  wording: Chrome,
   record: IterationRecord,
   located: TranscriptLocation | undefined,
 ): string {
-  const workspace = record.workspace ?? "(no workspace on the row)";
-  return `${transcriptPhrase(located)}  in ${workspace}`;
+  return wording.runsIn(
+    transcriptPhrase(wording, located),
+    record.workspace ?? wording.noWorkspace,
+  );
 }
 
 /** The transcript half of the line above, in the three states it has. */
-function transcriptPhrase(located: TranscriptLocation | undefined): string {
+function transcriptPhrase(wording: Chrome, located: TranscriptLocation | undefined): string {
   if (located === undefined) {
-    return "transcript (not looked for on a row that has not started one)";
+    return wording.transcriptNotLookedFor;
   }
   if (located.kind === "unknown") {
     // **Unknown and never nothing**, which is the wording `explain` already
     // uses for the delegation record: a continuo that will not answer and a run
     // with nothing to answer about are different facts (D-0048 rule 8).
-    return `transcript (not named: ${located.reason})`;
+    return wording.transcriptNotNamed(located.reason);
   }
-  const others = located.sessions > 1 ? `  (newest of ${String(located.sessions)} sessions)` : "";
-  return `transcript ${located.directory}${others}`;
+  return wording.transcriptAt(located.directory, located.sessions);
 }
 
-function inFlightLines(snapshot: InboxSnapshot): readonly string[] {
+function inFlightLines(wording: Chrome, snapshot: InboxSnapshot): readonly string[] {
   const running = onSide(snapshot, "inFlight");
   const unreadable = snapshot.live.filter((row) => row.kind === "unreadable");
   return [
@@ -333,18 +337,21 @@ function inFlightLines(snapshot: InboxSnapshot): readonly string[] {
     // included.** A live row rondo cannot read still holds a slot, so leaving
     // it out of the number would report capacity that is not there -- to the
     // one reader who has to decide whether to start something else.
-    `in flight (${String(running.length + unreadable.length)})`,
-    ...running.map(
-      (record) =>
-        `  ${record.id}  ${record.status}  ${ago(record.updatedAtMs, snapshot.atMs)}  ` +
-        whereItRuns(record, snapshot.transcripts.get(record.id)),
+    wording.inFlightHeading(running.length + unreadable.length),
+    ...running.map((record) =>
+      wording.inFlightLine(
+        record.id,
+        record.status,
+        ago(record.updatedAtMs, snapshot.atMs),
+        whereItRuns(wording, record, snapshot.transcripts.get(record.id)),
+      ),
     ),
     // **A row that will not decode is on the screen rather than missing from
     // it.** It is live -- it holds a slot -- and an inbox that dropped it
     // silently would be wrong about what is running in exactly the case where a
     // person has to intervene.
     ...unreadable.flatMap((row) =>
-      row.kind === "unreadable" ? [`  ${row.id}  will not decode: ${row.reason}`] : [],
+      row.kind === "unreadable" ? [wording.unreadableLine(row.id, row.reason)] : [],
     ),
   ];
 }
@@ -357,27 +364,25 @@ function inFlightLines(snapshot: InboxSnapshot): readonly string[] {
  * last time, and showing something twice is the failure this accepts in order
  * not to lose something for ever.
  */
-function changedLines(snapshot: InboxSnapshot): readonly string[] {
+function changedLines(wording: Chrome, snapshot: InboxSnapshot): readonly string[] {
   if (snapshot.sinceMs === null) {
     // **A first look reports no diff rather than the whole ledger.**
     // "Everything is new" is true and useless; what a first look owes the
     // operator is the two sections above, and the mark it writes is what makes
     // the next one a diff.
-    return ["since your last look", "  you have never looked: nothing below is marked new"];
+    return [wording.changedHeadingNever, wording.neverLooked];
   }
   const census = new Map<string, number>();
   for (const change of snapshot.changed) {
     census.set(change.kind, (census.get(change.kind) ?? 0) + 1);
   }
   return [
-    `since your last look ${ago(snapshot.sinceMs, snapshot.atMs)} ago ` +
-      `(${String(snapshot.changed.length)} records)`,
+    wording.changedHeading(ago(snapshot.sinceMs, snapshot.atMs), snapshot.changed.length),
     census.size === 0
-      ? "  nothing"
-      : `  ${[...census].map(([kind, count]) => `${kind} ${String(count)}`).join(", ")}`,
-    ...snapshot.changed.map(
-      (change) =>
-        `    ${change.kind}  ${change.id ?? "(no id)"}  ${ago(change.atMs, snapshot.atMs)} ago`,
+      ? wording.nothingChanged
+      : `  ${[...census].map(([kind, count]) => wording.censusEntry(kind, count)).join(", ")}`,
+    ...snapshot.changed.map((change) =>
+      wording.changeLine(change.kind, change.id, ago(change.atMs, snapshot.atMs)),
     ),
   ];
 }
@@ -391,16 +396,17 @@ function changedLines(snapshot: InboxSnapshot): readonly string[] {
  * a record. Nothing in this tree withholds anything yet, so that side reads
  * zero -- which is the honest answer rather than a missing section.
  */
-function silenceLines(snapshot: InboxSnapshot): readonly string[] {
+function silenceLines(wording: Chrome, snapshot: InboxSnapshot): readonly string[] {
   return [
-    "what was put to you and what was not",
-    ...countedLines(snapshot.attention, "  ", "over all of time"),
+    wording.silenceHeading,
+    ...countedLines(wording, snapshot.attention, "  ", wording.overAllTime),
     ...(snapshot.attentionSince === null
-      ? ["  since your last look: you have never looked"]
+      ? [wording.neverLookedSince]
       : countedLines(
+          wording,
           snapshot.attentionSince,
           "  ",
-          `since your last look ${ago(snapshot.sinceMs ?? snapshot.atMs, snapshot.atMs)} ago`,
+          wording.sinceLastLook(ago(snapshot.sinceMs ?? snapshot.atMs, snapshot.atMs)),
         )),
   ];
 }
@@ -420,6 +426,7 @@ function silenceLines(snapshot: InboxSnapshot): readonly string[] {
  * withheld from you in that window"* rather than a section that disappeared.
  */
 function countedLines(
+  wording: Chrome,
   counts: readonly AttentionCount[],
   indent: string,
   what: string,
@@ -429,24 +436,27 @@ function countedLines(
       .filter((row) => row.disposition === disposition)
       .reduce((sum, row) => sum + row.count, 0);
   return [
-    `${indent}${what}: presented ${String(total("presented"))}, ` +
-      `withheld ${String(total("withheld"))}`,
+    `${indent}${wording.countedLine(what, total("presented"), total("withheld"))}`,
     ...counts.flatMap((row) =>
       row.disposition === "withheld"
-        ? [`${indent}  withheld by '${row.ruleName ?? "(unnamed)"}' ${String(row.count)}`]
+        ? [`${indent}  ${wording.withheldBy(row.ruleName ?? wording.unnamedRule, row.count)}`]
         : [],
     ),
   ];
 }
 
 /** Approvals nobody has spent (D-0022 rule 19). */
-function unspentLines(snapshot: InboxSnapshot): readonly string[] {
+function unspentLines(wording: Chrome, snapshot: InboxSnapshot): readonly string[] {
   return [
-    `approved and never spent (${String(snapshot.unspent.length)})`,
-    ...snapshot.unspent.map(
-      (decision) =>
-        `  ${decision.decisionId}  proposal ${decision.proposalId}  ${decision.approved}  ` +
-        `by '${decision.actorId}' ${ago(decision.decidedAtMs, snapshot.atMs)} ago`,
+    wording.unspentHeading(snapshot.unspent.length),
+    ...snapshot.unspent.map((decision) =>
+      wording.unspentLine(
+        decision.decisionId,
+        decision.proposalId,
+        decision.approved,
+        decision.actorId,
+        ago(decision.decidedAtMs, snapshot.atMs),
+      ),
     ),
   ];
 }
@@ -458,19 +468,36 @@ function unspentLines(snapshot: InboxSnapshot): readonly string[] {
  * emitted even when its count is zero -- a section that disappeared when empty
  * would make "nothing is waiting on you" and "rondo did not look" the same
  * screen, which is the distinction `UNDETERMINED` exists for one layer down.
+ *
+ * **The wording is an argument because this composition serves two surfaces**
+ * (D-0055 rule 10). The page calls it and so does {@link showInbox}, and the
+ * terminal's lines go through D-0004's ASCII escape, which has no CJK
+ * substitutes and would render a Japanese inbox as `\uXXXX`. A lookup inside
+ * this function would have to know which surface asked; a parameter means the
+ * page hands it the host's set and the command line hands it `EN`, and the
+ * terminal stays English until D-0004's scope is a decision somebody takes.
+ *
+ * **Every token in these lines is still the token** (rule 3). Ids, kinds,
+ * statuses and gate names are interpolated into the wording rather than spelled
+ * inside it, so a translated set cannot rename something the operator matches
+ * against the store, `rondo show` or continuo's own output.
  */
-export function inboxLines(actorId: string, snapshot: InboxSnapshot): readonly string[] {
+export function inboxLines(
+  wording: Chrome,
+  actorId: string,
+  snapshot: InboxSnapshot,
+): readonly string[] {
   return [
-    `inbox for '${actorId}'`,
-    ...waitingOnYouLines(snapshot),
+    wording.inboxFor(actorId),
+    ...waitingOnYouLines(wording, snapshot),
     "",
-    ...inFlightLines(snapshot),
+    ...inFlightLines(wording, snapshot),
     "",
-    ...changedLines(snapshot),
+    ...changedLines(wording, snapshot),
     "",
-    ...silenceLines(snapshot),
+    ...silenceLines(wording, snapshot),
     "",
-    ...unspentLines(snapshot),
+    ...unspentLines(wording, snapshot),
   ];
 }
 
@@ -582,7 +609,7 @@ export async function locateRunning(
 export async function showInbox(ports: InboxPorts, actorId: string): Promise<InboxOutcome> {
   const snapshot = await gatherInbox(ports, actorId);
   const atMs = snapshot.atMs;
-  ports.present(inboxLines(actorId, snapshot));
+  ports.present(inboxLines(EN, actorId, snapshot));
 
   const reasons: string[] = [];
   // **The inbox is the second writer of `operator_attention`, and D-0036

@@ -19,6 +19,7 @@ import {
   showInbox,
   type TranscriptLocation,
 } from "../../src/access/inbox.js";
+import { EN } from "../../src/access/wording.js";
 import { CONSERVATIVE_HOST_POLICY } from "../../src/refrain/policy.js";
 import type { IterationRecord, IterationStatus, JsonRecord } from "../../src/store/records.js";
 import { WAIT_SIDE } from "../../src/store/records.js";
@@ -337,7 +338,7 @@ test("the wait is a two-way partition, and every live status is on one side", ()
   const live = Object.keys(WAIT_SIDE).map((status, index) =>
     liveRow(`i-${String(index)}`, status as IterationStatus),
   );
-  const rendered = inboxLines("operator-1", {
+  const rendered = inboxLines(EN, "operator-1", {
     ...EMPTY,
     live: live.map((record) => ({ kind: "read", record })),
   }).join("\n");
@@ -358,7 +359,7 @@ test("an in-flight row names its workspace (#71)", () => {
   // carry.** `workspace` is written by `reserve()` before the lap starts, so
   // it is on every in-flight row from the moment it exists.
   const record = liveRow("i-running", "performing");
-  const rendered = inboxLines("operator-1", {
+  const rendered = inboxLines(EN, "operator-1", {
     ...EMPTY,
     live: [{ kind: "read", record }],
   }).join("\n");
@@ -371,7 +372,7 @@ test("a running lap's transcript directory is named on its own row (#79)", () =>
   // line has to carry is the directory itself, because a session id alone
   // still leaves continuo's layout to be known (D-0048 rule 5).
   const record = { ...liveRow("i-running", "performing"), sessionId: null };
-  const rendered = inboxLines("operator-1", {
+  const rendered = inboxLines(EN, "operator-1", {
     ...EMPTY,
     live: [{ kind: "read", record }],
     transcripts: new Map([
@@ -390,7 +391,7 @@ test("a transcript that could not be located reads as unknown and never as nothi
   // and a run with no session yet are different facts, and neither of them is
   // "there is no transcript".
   const record = { ...liveRow("i-running", "performing"), sessionId: null };
-  const rendered = inboxLines("operator-1", {
+  const rendered = inboxLines(EN, "operator-1", {
     ...EMPTY,
     live: [{ kind: "read", record }],
     transcripts: new Map([
@@ -407,7 +408,7 @@ test("a transcript that could not be located reads as unknown and never as nothi
 
 test("a respawned run names its newest session and says there are others", () => {
   const record = { ...liveRow("i-running", "performing"), sessionId: null };
-  const rendered = inboxLines("operator-1", {
+  const rendered = inboxLines(EN, "operator-1", {
     ...EMPTY,
     live: [{ kind: "read", record }],
     transcripts: new Map([
@@ -477,7 +478,7 @@ test("what the port answered is not written to the row (D-0048 rule 4)", async (
 });
 
 test("a live row that will not decode is on the screen", () => {
-  const rendered = inboxLines("operator-1", {
+  const rendered = inboxLines(EN, "operator-1", {
     ...EMPTY,
     live: [{ kind: "unreadable", id: "i-0009", reason: "status column is 'wat'" }],
   }).join("\n");
@@ -492,7 +493,7 @@ test("the two voices are separated by kind and by nothing else", () => {
   // #41 section 2: the voice that becomes a contract and the voice that binds
   // nothing must be distinguishable **without reading their prose**. Both rows
   // below carry the same drafter and the same subject; only `kind` differs.
-  const rendered = inboxLines("operator-1", {
+  const rendered = inboxLines(EN, "operator-1", {
     ...EMPTY,
     open: [
       { proposalId: "p-plan", kind: "run_plan", iterationId: "i-1", createdAtMs: 9_000 },
@@ -512,7 +513,7 @@ test("the two voices are separated by kind and by nothing else", () => {
 });
 
 test("nothing waiting is a section that says zero, not a section that vanishes", () => {
-  const rendered = inboxLines("operator-1", EMPTY).join("\n");
+  const rendered = inboxLines(EN, "operator-1", EMPTY).join("\n");
   expect(rendered).toContain("become contracts when you approve them (0)");
   expect(rendered).toContain("iterations waiting on you (0)");
   expect(rendered).toContain("in flight (0)");
@@ -521,7 +522,7 @@ test("nothing waiting is a section that says zero, not a section that vanishes",
 });
 
 test("the silence is both sides of one table, broken down by the rule", () => {
-  const rendered = inboxLines("operator-1", {
+  const rendered = inboxLines(EN, "operator-1", {
     ...EMPTY,
     attention: [
       { disposition: "presented", ruleName: null, count: 6 },
@@ -593,7 +594,7 @@ test("the second look's accounting counts only what was withheld since the first
 });
 
 test("the accounting answers since your last look beside the total (D-0037 rule 6)", () => {
-  const rendered = inboxLines("operator-1", {
+  const rendered = inboxLines(EN, "operator-1", {
     ...EMPTY,
     atMs: 100_000,
     sinceMs: 40_000,
@@ -618,7 +619,7 @@ test("the accounting answers since your last look beside the total (D-0037 rule 
 });
 
 test("a quiet interval says nothing was withheld from you, rather than dropping the section", () => {
-  const rendered = inboxLines("operator-1", {
+  const rendered = inboxLines(EN, "operator-1", {
     ...EMPTY,
     sinceMs: 5_000,
     attention: [{ disposition: "withheld", ruleName: "quiet-hours", count: 12 }],
@@ -635,7 +636,7 @@ test("a quiet interval says nothing was withheld from you, rather than dropping 
 });
 
 test("a first look has no interval to report, and says so rather than repeating the total", () => {
-  const rendered = inboxLines("operator-1", {
+  const rendered = inboxLines(EN, "operator-1", {
     ...EMPTY,
     attention: [{ disposition: "withheld", ruleName: "quiet-hours", count: 12 }],
     attentionSince: null,
@@ -651,11 +652,11 @@ test("NEW marks only what landed since the mark, and only when there is a mark",
   const open = [{ proposalId: "p-new", kind: "run_plan", iterationId: "i-1", createdAtMs: 9_000 }];
   const changed = [{ kind: "proposal", id: "p-new", atMs: 9_000 }];
   expect(
-    inboxLines("operator-1", { ...EMPTY, open, changed, sinceMs: 8_000 }).join("\n"),
+    inboxLines(EN, "operator-1", { ...EMPTY, open, changed, sinceMs: 8_000 }).join("\n"),
   ).toContain("p-new  run_plan  about 'i-1'  waiting 1s  NEW");
   // A first look marks nothing new: everything would be, which is true and
   // useless.
-  expect(inboxLines("operator-1", { ...EMPTY, open }).join("\n")).not.toContain("NEW");
+  expect(inboxLines(EN, "operator-1", { ...EMPTY, open }).join("\n")).not.toContain("NEW");
 });
 
 test("a proposal that lands after the bound is not counted as presented before it existed", async () => {
@@ -727,7 +728,7 @@ test("a stalled row is never offered a gate to answer, even when it kept one", (
   // the operator to answer something that cannot release the row.
   const stalled = { ...liveRow("i-0011", "stalled"), gateId: "g-0011" } as IterationRecord;
   const suspended = { ...liveRow("i-0007", "awaiting_human"), gateId: "g-0007" } as IterationRecord;
-  const rendered = inboxLines("operator-1", {
+  const rendered = inboxLines(EN, "operator-1", {
     ...EMPTY,
     live: [
       { kind: "read", record: stalled },

@@ -22,6 +22,7 @@ import { expect, test } from "vitest";
 
 import { recordPagePress } from "../../src/access/cli.js";
 import { operatorPage, serveOperatorPage, type WebPorts } from "../../src/access/web.js";
+import { type Chrome, chromeFor, EN } from "../../src/access/wording.js";
 import { allocate } from "../../src/refrain/allocator.js";
 import { admittedPlan, planPayload, type RunPlan, runPlan } from "../../src/refrain/plan.js";
 import type { JsonRecord } from "../../src/store/records.js";
@@ -94,10 +95,12 @@ function portsOver(
   world: ReturnType<typeof fresh>,
   actorId: string | null = "ada",
   pressed: Pressed | null = null,
+  wording: Chrome = EN,
 ): WebPorts {
   return {
     store: world.store,
     record: world.record,
+    wording,
     now: () => 5_000,
     // The page draws `inbox`'s lines, so it carries `inbox`'s one outward
     // port; nothing in these tests runs a lap, so it is never asked (D-0048
@@ -768,34 +771,40 @@ test("the elements that quote material carry the lang the plan asked for (D-0053
   // lap wrote for this operator, and the block a press records as shown.
   expect(html).toContain('<p class="request" lang="ja">');
   expect(html).toContain('<pre class="material" lang="ja">');
-  // **The chrome stays English**, because it is rondo's own vocabulary about
-  // its own record and this entry gives it no language.
+  // **The chrome is `en` because this host asked for nothing**, which is what
+  // D-0055 rule 7 leaves unchanged: the document names the language rondo
+  // actually wrote it in, and with no ask that is still English.
   expect(html).toContain('<html lang="en">');
   // **Nothing is translated** (rule 11): the same bytes, with an attribute.
   expect(html).toContain("重みが足りない");
   expect(html).toContain("なぜ止まったか");
 });
 
-test("a lap nobody asked a language of carries no lang at all, and that is not `en`", async () => {
-  // Rule 10's distinction, on the surface where it is visible: null means
-  // *nobody asked*, so the element inherits the document and claims nothing --
-  // as against `lang="en"`, which would be rondo asserting an ask nobody made.
+test('a lap nobody asked a language of says so with `lang=""` (D-0055 rule 8)', async () => {
+  // **The empty string is HTML's own way of saying *the language here is
+  // unknown***, and it is what rondo has to say once the document stops being
+  // `en`. The absent attribute this carried before inherited the chrome, which
+  // was harmless while the chrome was always English and would turn *rondo does
+  // not know* into a guess on the way past under a `ja` host.
   const world = fresh();
   await reserve(world, "i-0001", "do the thing");
   await openGate(world, "i-0001");
-  const html = await operatorPage(
-    {
-      ...portsOver(world, "ada", []),
-      material: async () => await Promise.resolve(["why it stopped"]),
-    },
-    "t",
-    { kind: "answer", iterationId: "i-0001" },
-  );
+  const ports = {
+    ...portsOver(world, "ada", []),
+    material: async () => await Promise.resolve(["why it stopped"]),
+  };
+  const view = { kind: "answer", iterationId: "i-0001" } as const;
+  const html = await operatorPage(ports, "t", view);
 
-  expect(html).toContain('<p class="request">');
-  expect(html).toContain('<pre class="material">');
-  expect(html).not.toContain('class="request" lang=');
-  expect(html).not.toContain('class="material" lang=');
+  expect(html).toContain('<p class="request" lang="">');
+  expect(html).toContain('<pre class="material" lang="">');
+  // It does not become the chrome's tag on a host that asked for one, which is
+  // the whole of what the empty string is here to refuse: the two attributes
+  // are true about different things and nothing reconciles them.
+  const inJapanese = await operatorPage({ ...ports, wording: chromeFor("ja") }, "t", view);
+  expect(inJapanese).toContain('<html lang="ja">');
+  expect(inJapanese).toContain('<p class="request" lang="">');
+  expect(inJapanese).toContain('<pre class="material" lang="">');
 });
 
 /**
@@ -1073,4 +1082,162 @@ test("every repeated block in the lead carries the identity the morph merges on"
   // And no lap block without one: the fallback is silent, so a block that grew
   // back into the lead without an id would poll and morph and look fine.
   expect([...html.matchAll(/<div class="lap"(?! id=)/g)]).toEqual([]);
+});
+
+/**
+ * D-0055: rondo's chrome is prose the operator reads, and its language comes
+ * from the host's one operator.
+ *
+ * The four properties the entry asks the implementing change to show are below,
+ * and the middle one is the one that would cost something if it broke: the
+ * bytes a press records must not depend on the host's language, because a
+ * ledger holding two wordings of one claim cannot answer *which version was
+ * under the button* (rule 4, and D-0042's invariant with it).
+ */
+
+/** The same world twice, so two hosts can be pressed against separately. */
+async function waitingWorld(): Promise<ReturnType<typeof fresh>> {
+  const world = fresh();
+  await reserve(world, "i-0001", "重みが足りない", "ja");
+  await openGate(world, "i-0001");
+  return world;
+}
+
+/** Every stored byte of what a press wrote, in the order the rows were made. */
+function recorded(connection: DatabaseSync): unknown[] {
+  return [
+    connection
+      .prepare(
+        "SELECT kind, drafter, payload, proposal_digest, snapshot, snapshot_digest, " +
+          "iteration_id FROM proposal ORDER BY rowid",
+      )
+      .all(),
+    connection
+      .prepare(
+        "SELECT subject_kind, subject_id, disposition, rule_name FROM operator_attention " +
+          "ORDER BY rowid",
+      )
+      .all(),
+  ];
+}
+
+test("the bytes a press records do not depend on the host's language (D-0055 rule 4)", async () => {
+  // **Pressed on both hosts after both have drawn the row**, because the press
+  // is the presentation (D-0042): what is asserted is not that one function
+  // ignores an argument, but that the whole path an operator walks -- render,
+  // read, press -- writes the same ledger under `en` and under `ja`.
+  const worlds = [
+    { world: await waitingWorld(), wording: EN },
+    { world: await waitingWorld(), wording: chromeFor("ja") },
+  ];
+  const drawn: string[] = [];
+  for (const { world, wording } of worlds) {
+    const ports = {
+      ...portsOver(world, "ada", [], wording),
+      material: async () => await Promise.resolve(["why it stopped"]),
+    };
+    drawn.push(await operatorPage(ports, "t", { kind: "answer", iterationId: "i-0001" }));
+    expect(
+      await recordPagePress(
+        { store: world.store, record: world.record, now: () => 6_000, present: () => undefined },
+        "i-0001",
+      ),
+    ).toEqual({ ok: true, note: "" });
+  }
+
+  // The whole of rule 4 in one assertion: the payload, the digest over it, the
+  // snapshot it was drawn from and the presentation counted beside it are the
+  // same bytes on an English host and on a Japanese one.
+  expect(recorded(worlds[1]?.world.connection as DatabaseSync)).toEqual(
+    recorded(worlds[0]?.world.connection as DatabaseSync),
+  );
+  // Not vacuously, in both directions: each press did write, and the two hosts
+  // were reading genuinely different documents when they pressed.
+  expect(rows(worlds[0]?.world.connection as DatabaseSync, "proposal")).toBe(1);
+  expect(rows(worlds[1]?.world.connection as DatabaseSync, "proposal")).toBe(1);
+  expect(drawn[1]).not.toBe(drawn[0]);
+});
+
+test("a ja host reads in Japanese and leaves every token in its own bytes", async () => {
+  const world = await waitingWorld();
+  const ports = {
+    ...portsOver(world, "ada", [], chromeFor("ja")),
+    material: async () => await Promise.resolve(["why it stopped"]),
+  };
+  const summary = await operatorPage(ports, "t");
+  const reading = await operatorPage(ports, "t", { kind: "reading" });
+
+  // Prose, on the three screens the operator actually reads -- including the
+  // fold rule 3 of D-0053's falsifier fired on.
+  expect(summary).toContain("あなたの答えを待っているもの (1)");
+  expect(summary).toContain("描き直しは何も書き込みません");
+  expect(reading).toContain("ここを読んでも最後に見た印は動きません");
+  expect(reading).toContain("承認すると契約になる proposal (0)");
+  expect(reading).toContain("まだ一度も見ていません");
+
+  // **Tokens, verbatim and in the middle of the translated sentences** (rule 2
+  // and rule 3): what the operator types, and what they match against the
+  // store, `rondo show` and continuo's own output.
+  expect(reading).toContain("rondo inbox");
+  expect(summary).toContain("approve");
+  expect(summary).toContain("awaiting_human");
+  expect(summary).toContain("gate-i-0001");
+  expect(summary).toContain("i-0001");
+  // Nothing is transliterated, glossed, or given a parenthesis.
+  expect(reading).not.toContain("ロンド");
+  // Material is still quoted byte for byte, under the tag its plan asked for.
+  expect(summary).toContain("重みが足りない");
+  expect(summary).toContain('<p class="request" lang="ja">');
+
+  // **What the ledger records stays English even here** (rule 4): the claim
+  // labels beside the button are the bytes a press stores.
+  const answering = await operatorPage(ports, "t", {
+    kind: "answer",
+    iterationId: "i-0001",
+  });
+  expect(answering).toContain("approve を押すと");
+  expect(answering).toContain('<span class="label">request</span>');
+});
+
+test("<html lang> names the set rondo wrote, and never the tag that was asked for", async () => {
+  const world = await waitingWorld();
+  const declared = async (wording: Chrome): Promise<string> =>
+    /<html lang="([^"]*)">/.exec(await operatorPage(portsOver(world, "ada", [], wording)))?.[1] ??
+    "";
+
+  expect(await declared(EN)).toBe("en");
+  expect(await declared(chromeFor("ja"))).toBe("ja");
+  expect(await declared(chromeFor("JA"))).toBe("ja");
+  // **A well-formed tag this tree ships no wording for.** The page is English,
+  // so it says `en`: rondo does not declare an intention as a fact (rule 7).
+  expect(await declared(chromeFor("de-CH-1901"))).toBe("en");
+  expect(await declared(chromeFor(null))).toBe("en");
+});
+
+test("every view is complete under each of the three answers to the language question", async () => {
+  // Unset, a tag with no wording, and a tag with one: three hosts, three views
+  // each, and the same page in all nine -- rule 9's partial set is shippable
+  // because a missing string is the English one and never a missing screen.
+  const world = await waitingWorld();
+  for (const wording of [chromeFor(null), chromeFor("de-CH-1901"), chromeFor("ja")]) {
+    const ports = {
+      ...portsOver(world, "ada", [], wording),
+      material: async () => await Promise.resolve(["why it stopped"]),
+    };
+    const views = [
+      await operatorPage(ports, "t"),
+      await operatorPage(ports, "t", { kind: "reading" }),
+      await operatorPage(ports, "t", { kind: "answer", iterationId: "i-0001" }),
+    ];
+    for (const html of views) {
+      expect(html).toContain(`<html lang="${wording.lang}">`);
+      expect(html).toContain(wording.waitingHeading(1));
+      expect(html).toContain("</html>");
+      // No key went missing on the way through a set that does not hold it.
+      expect(html).not.toContain("undefined");
+    }
+    // The fold still carries rondo's own accounting, and the button its note.
+    expect(views[1]).toContain(wording.inboxHeading);
+    expect(views[2]).toContain(wording.approveNote("gate-i-0001", "approve"));
+  }
 });
