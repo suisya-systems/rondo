@@ -1350,6 +1350,18 @@ test("Accept-Language is read by q, a q of zero is a refusal, and * says nothing
   // must reach the step below rather than the `ja` set.
   expect(resolvedTag({ header: "de;q=1, ja;q=0" })).toBe("en");
   expect(resolveLanguage(askedWith({ header: "de;q=1, ja;q=0", host: "en" })).lang).toBe("en");
+  // **Zero has more than one legal spelling**, and each is a refusal: RFC
+  // 9110's `qvalue` allows zero digits after the point, so `q=0.` and `q=0.00`
+  // are the same *do not send me this*. Read as unparseable they would fall
+  // back to the default weight of 1 and make an explicit refusal the strongest
+  // preference in the list, which is this rule failing in the one direction
+  // that matters.
+  for (const zero of ["0", "0.", "0.0", "0.00", "0.000"]) {
+    expect(resolvedTag({ header: `ja;q=${zero}, en;q=0.5` })).toBe("en");
+    expect(resolveLanguage(askedWith({ header: `ja;q=${zero}` })).lang).toBe("en");
+  }
+  // A `1` with the same trailing point is still one, and not a refusal.
+  expect(resolvedTag({ header: "ja;q=1., en;q=0.5" })).toBe("ja");
   // And the refusal is of that tag only: a second tag still answers.
   expect(resolvedTag({ header: "ja;q=0, en;q=0.3" })).toBe("en");
   // **`*` is no preference and is skipped**, so a bare one reaches the step

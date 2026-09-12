@@ -395,7 +395,14 @@ function tagsByWeight(header: string | undefined): readonly string[] {
       continue;
     }
     const weight = parameters
-      .map((parameter) => /^\s*q\s*=\s*(\d+(?:\.\d+)?)\s*$/i.exec(parameter)?.[1])
+      // The fraction's digits are optional because RFC 9110's `qvalue` says so
+      // -- `0*3DIGIT` after the point -- so `q=0.` is a spelling of zero and
+      // must read as the refusal it is. A pattern demanding a digit there would
+      // leave it unparseable, fall back to the default weight of 1, and turn an
+      // explicit *do not send me this* into the strongest preference in the
+      // list, which is rule 6's q=0 case failing in the one direction that
+      // matters.
+      .map((parameter) => /^\s*q\s*=\s*(\d+(?:\.\d*)?)\s*$/i.exec(parameter)?.[1])
       .find((found) => found !== undefined);
     const q = weight === undefined ? 1 : Number(weight);
     if (!Number.isFinite(q) || q <= 0) {
