@@ -65,7 +65,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0023 | The identifier allocator and the capacity ledger: rondo mints the triple, `awaiting_human` stops occupying capacity, and the single-flight index becomes a counted bound | accepted |
 | D-0027 | "Revise" at the gate becomes a second lap: fresh identifiers, the predecessor's branch as the base, and the instruction carried into the prompt | accepted |
 | D-0028 | The plan payload carries its own version: an ordered read-side upgrade ladder, strict again at the version that introduced each field, and separate from the schema's migration on purpose | accepted |
-| D-0022 | The advisory component: a pure function in its own layer, three authorities, one ledger per fact — and the widening a lap-1 retry actually takes, which is a fresh plan and not a successor contract | accepted |
+| D-0022 | The advisory component: a pure function in its own layer, three authorities, one ledger per fact — and the widening a lap-1 retry actually takes, which is a fresh plan and not a successor contract | superseded by D-0063 |
 | D-0029 | An independent reading of what a lap produced: material for the person at the gate, one refusal at `publish`, and a verdict that cannot certify what it never read | accepted |
 | D-0030 | The lineage `D-0027` deferred: one nullable column on the iteration row, written once at reservation, refused when it names nothing, and read where provenance is shown | accepted |
 | D-0031 | The last field `revise` could not see before it spends the gate: rondo reads one run, and only an answer counts | accepted |
@@ -99,7 +99,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0060 | Work left uncommitted is a fact rondo reads and names: `git status` joins the reading as a finding, `publish` refuses a workspace that still holds any, `--despite-review` does not reach it, and rondo commits nothing on a lap's behalf | accepted |
 | D-0061 | Where a request enters rondo: the organisation's five steps mapped onto parts that mostly exist, a request thread in the conversation as the first thing built, and the drafter that reads a request cleared by the human gate, with its split into plans waiting on `D-0062` | accepted |
 | D-0062 | A proposal may name an agent type, and only a split proposal from a request may: a record rondo already holds chosen by its digest, approved on route S with the tier bound by the option it came from, and the kind-to-tier judgment kept whole while the request-to-kind judgment moves to the gate | accepted |
-| D-0063 | The advisory is the secretary's drafting half: it reads, asks back, drafts a split, brings points in dispute with a recommendation and reports to a person, and proposes what comes next, while handing over and approving stay elsewhere; `D-0022` rules 1, 3, 4 and 7 widen for a model drafter and a split, and only two lines are kept | proposed |
+| D-0063 | The advisory is the secretary's drafting half: it reads, asks back, drafts a split, brings points in dispute with a recommendation and reports to a person, and proposes what comes next, while handing over and approving stay elsewhere; `D-0022` rules 1, 3, 4 and 7 widen for a model drafter and a split, and only two lines are kept | accepted |
 | D-0064 | rondo is run the way a product manager runs an organisation: a person approves a scope once, the organisation decides everything inside it, and what reaches the person is a question with a recommendation, an irreversible act, a scope exit or a report | accepted |
 
 ---
@@ -3999,7 +3999,17 @@ next field would have faced the same choice with no rule to appeal to.
 
 ## D-0022 — The advisory component: a pure function in its own layer, three authorities, one ledger per fact — and the widening a lap-1 retry actually takes, which is a fresh plan and not a successor contract
 
-**Status:** accepted (2026-09-07, rondo's human gate)
+**Status:** superseded by D-0063 (2026-09-13). Accepted 2026-09-07 (rondo's human gate).
+
+> **Supersession note (2026-09-13, from D-0063).** `D-0063` makes the advisory the drafting half of
+> the secretary's role, admits a model drafter, and lets a split propose plans no iteration has run.
+> That changes what four rules below asserted: rule 1 (the advisory is one layer), rule 3 (what it
+> reads), rule 4 ("re-derivable", for a model draft) and rule 7 (three plan-proposal forms).
+> Supersession is whole-entry, per "How to use this file", so **rules 2, 5, 6 and 8-20, the sections
+> after the rules and the residuals are not retired with it**. They are carried as written and are
+> still cited as `D-0022` rule N. Rules 1, 3, 4 and 7 are restated as `D-0063` rules 2, 3, 5 and 4.
+> Rule 9 is named for supersession by `D-0064` section 6, which is the scope entry's to take.
+> Nothing below is edited.
 
 The design is [`docs/design/advisory.md`](docs/design/advisory.md), whose rows `A-1` … `A-18` this
 entry takes. It answers rondo#9: whether the component that proposes contracts and explains state
@@ -12395,9 +12405,9 @@ follows them.
 
 ## D-0063 — The advisory is the secretary's drafting half: it reads, asks back, drafts a split, brings points in dispute with a recommendation and reports to a person, and proposes what comes next, while handing over and approving stay elsewhere; `D-0022` rules 1, 3, 4 and 7 widen for a model drafter and a split, and only two lines are kept
 
-**Status:** proposed (2026-09-13). Revised along `D-0064` section 6 before acceptance, as that
-entry's third gate answer requires. Two points are put to the human gate with a recommendation that
-follows `D-0064`; see "What is put to the human gate". Refs `D-0009`, `D-0019`, `D-0020`, `D-0022`,
+**Status:** accepted (2026-09-13, rondo's human gate). Revised along `D-0064` section 6 before
+acceptance, as that entry's third gate answer requires. Two points were put to the gate and it chose
+the recommended option on both; see "What was put to the human gate, and its answer". Refs `D-0009`, `D-0019`, `D-0020`, `D-0022`,
 `D-0029`, `D-0032`, `D-0034`, `D-0036`, `D-0061`, `D-0062`, `D-0064`.
 
 **This entry decides and does not build.** Nothing in `src/` changes with it.
@@ -12580,10 +12590,10 @@ the same, and only the thing that authorises its admission differs.
   `D-0061` rule 4, and the bases point into them, but under a scope nobody reads the drafter's
   wording before the lap runs (`D-0064` O3). This is the second point put to the gate.
 
-### What is put to the human gate
+### What was put to the human gate, and its answer
 
-**These two points are not settled inside the entry. It is proposed with them open, and on each
-the recommendation is (a), which is the option that fits `D-0064`.**
+**Two points were put to the gate with the entry proposed, and on each the recommendation was (a),
+the option that fits `D-0064`.** They are kept as put, and the answer follows them.
 
 1. **Rule 5: accept that a model-drafted proposal is re-readable and not re-derivable.**
    - **(a) Accept** (recommended, following `D-0064`, whose section 7 already counts this loss). What
@@ -12601,10 +12611,16 @@ the recommendation is (a), which is the option that fits `D-0064`.**
      already divides, and a request written as one paragraph cannot be split. It also narrows
      `D-0064` O3, which would need its own change.
 
+**The gate's answer (2026-09-13): (a) on both points.**
+
+1. **(a).** A model-drafted proposal is re-readable and not re-derivable, and rule 5 stands as
+   written.
+2. **(a).** The drafter composes the `prompt` of a split lap, with `message:` bases, and rule 4.3
+   stands as written.
+
 ### Annotations this entry adds to earlier entries
 
-- **`D-0022`** gains `Status: superseded by D-0063` and a supersession note in `D-0062`'s form,
-  when this entry is accepted.
+- **`D-0022`** gains `Status: superseded by D-0063` and a supersession note in `D-0062`'s form.
 
 ### What this does not do
 
