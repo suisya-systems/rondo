@@ -329,19 +329,31 @@ test("commands come out with their outputs, line numbers and the final message (
   });
 });
 
-test("a transcript with no result event has no final message, and unparseable lines are skipped", () => {
+test("a transcript with no result event has no final message, and blank lines are not events", () => {
   const stateRoot = sessionDir({
     generation: 0,
-    events: {
-      "000": `${JSON.stringify(toolUse("t1", "Bash", { command: "ls" }))}\n{"type":"us`,
-    },
+    events: { "000": `\n${JSON.stringify(toolUse("t1", "Bash", { command: "ls" }))}\n\n` },
   });
 
   expect(readLapCommands({ stateRoot, runId: RUN, sessionId: SESSION })).toEqual({
     kind: "read",
-    commands: [{ index: 1, command: "ls", output: "", isError: false }],
+    commands: [{ index: 2, command: "ls", output: "", isError: false }],
     finalMessage: null,
   });
+});
+
+test("a line that is not an event makes the transcript unread, not shorter", () => {
+  // A truncated last line and a corrupt middle line: either would otherwise
+  // hand over fewer commands under a coverage line saying they were read.
+  for (const events of [
+    `${JSON.stringify(toolUse("t1", "Bash", { command: "ls" }))}\n{"type":"us`,
+    `not json\n${JSON.stringify(toolUse("t1", "Bash", { command: "ls" }))}\n`,
+  ]) {
+    const stateRoot = sessionDir({ generation: 0, events: { "000": events } });
+    const reading = readLapCommands({ stateRoot, runId: RUN, sessionId: SESSION });
+    expect(reading.kind).toBe("unread");
+    expect(reading.kind === "unread" && reading.reason).toContain("is not a JSON event");
+  }
 });
 
 test("a transcript that cannot be read is unread with a reason, never a throw", () => {

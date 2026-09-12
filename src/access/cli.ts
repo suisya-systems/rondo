@@ -2212,6 +2212,18 @@ export async function sayGateOpen(take: (() => Promise<readonly string[]>) | nul
 }
 
 /**
+ * The reading the answer screen calls "the review" and `publish` refuses on:
+ * the latest row that is not a model's (D-0065 5.5).
+ *
+ * "Not a model's" rather than "the deterministic drafter's": the interpreter
+ * writes its own `unavailable` row as `rondo/none` when the work could not be
+ * read, and that row carries the reason a person and `publish` must still see.
+ */
+export function reviewedReading(readings: readonly LapReading[]): LapReading | null {
+  return latestReading(readings, (drafter) => !isModelReadingDrafter(drafter));
+}
+
+/**
  * Whether a model reading is still due for the iteration's current tip (D-0065
  * 4.1: one round per tip).
  *
@@ -2304,8 +2316,10 @@ export async function lapMaterialLines(
   // (D-0065 5.5). They are picked by drafter rather than by position: a model
   // reading appended after the gate opened is the newest row, and taking the
   // newest row as "the review" would print the model's words where `publish`'s
-  // refusal reads the deterministic one.
-  const latest = latestReading(readings, isDeterministicReadingDrafter);
+  // refusal reads the deterministic one. "Not a model's" rather than "the
+  // deterministic drafter's", so the interpreter's own `unavailable` row
+  // (`rondo/none`, carrying why the work could not be read) still shows.
+  const latest = reviewedReading(readings);
   if (latest === null) {
     lines.push(
       "review  no independent reading of this work was recorded.",
@@ -4068,13 +4082,10 @@ async function commandPublish(
     range === null
       ? { kind: "unreadable", reason: "the row does not name the range a reading was taken across" }
       : await inspectLapWork(range);
-  // The deterministic reading only (D-0065 5.5): a model reading is material
-  // beside it and is not part of this refusal.
-  const gateOnReview = reviewGate(
-    latestReading(readings, isDeterministicReadingDrafter),
-    asRead,
-    parsed.despiteReview,
-  );
+  // Every reading but a model's (D-0065 5.5): a model reading is material
+  // beside it and is not part of this refusal, and the interpreter's
+  // `rondo/none` unavailable row still refuses with its own reason.
+  const gateOnReview = reviewGate(reviewedReading(readings), asRead, parsed.despiteReview);
   if (gateOnReview.kind === "refused") {
     return refuse(gateOnReview.reason);
   }

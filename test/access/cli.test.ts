@@ -38,6 +38,7 @@ import {
   pullRequestText,
   readingRangeOf,
   repositoryFromRemoteUrl,
+  reviewedReading,
   reviewGate,
   reviewLines,
   revisionBlocker,
@@ -2211,6 +2212,19 @@ test("the next step is said before the model reading is taken, not after it", as
   } finally {
     consoleSeams.write = original;
   }
+});
+
+test("the review is the latest reading that is not a model's, rondo/none included", () => {
+  const none = reviewed({
+    drafter: "rondo/none",
+    verdict: "unavailable",
+    evidence: null,
+    unavailableReason: "the workspace could not be read",
+    readAtMs: 2_500,
+  });
+  expect(reviewedReading([none, modelRead()])).toEqual(none);
+  expect(reviewedReading([modelRead()])).toBeNull();
+  expect(reviewedReading([reviewed(), modelRead()])?.drafter).toBe(reviewed().drafter);
 });
 
 test("a model reading is due once per deterministic tip (D-0065 4.1)", () => {

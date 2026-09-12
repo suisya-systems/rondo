@@ -237,14 +237,24 @@ function commandsOf(transcript: string): LapTranscriptReading {
     isError: boolean;
   }[] = [];
   let finalMessage: string | null = null;
-  transcript.split("\n").forEach((line, lineIndex) => {
+  for (const [lineIndex, line] of transcript.split("\n").entries()) {
+    if (line.trim() === "") {
+      continue;
+    }
     const event = parseObject(line);
+    // **A line that is not an event makes the whole transcript unread**, not a
+    // shorter one. Skipping it would hand the reviewer a transcript missing
+    // commands or outputs under a coverage line saying it read them, and a
+    // truncated file would pass as a complete one (D-0065 rule 1.2.4).
     if (event === null) {
-      return;
+      return {
+        kind: "unread",
+        reason: `the lap's transcript line ${String(lineIndex + 1)} is not a JSON event, so no part of it is read`,
+      };
     }
     if (event.type === "result") {
       finalMessage = typeof event.result === "string" ? event.result : null;
-      return;
+      continue;
     }
     for (const block of contentBlocks(event)) {
       if (block.type === "tool_use") {
@@ -263,7 +273,7 @@ function commandsOf(transcript: string): LapTranscriptReading {
         }
       }
     }
-  });
+  }
   return {
     kind: "read",
     commands: commands.map(({ index, command, output, isError }) => ({
