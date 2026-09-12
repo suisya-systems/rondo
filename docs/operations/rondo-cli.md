@@ -395,6 +395,21 @@ with a dash, and Node's argument parser will not guess.
 The answer is carried **byte for byte**. rondo does not trim, reflow, template or summarise it; the
 ASCII escaping applies to what rondo *prints*, never to what it sends.
 
+**`--verified` says what you ran before answering, and it is recorded as your claim.** When a lap
+cannot verify its own work the verification falls to you, in a terminal rondo has no view of -- so
+what the flag writes is who said what, and when, and never a result rondo did not observe:
+
+```sh
+node bin/rondo.mjs answer --iteration-id cli-lap-001 --actor-id happy_ryo --body=approve \
+  --verified="npm ci --ignore-scripts and npm run verify in the workspace, both green"
+```
+
+The row goes in before the gate is walked, and a write that fails stops the answer (`D-0042`
+rule 3). `rondo publish` then carries it into the pull request's `## How this got here` as your own
+account. Leave the flag off and the body says so instead -- *"Nobody recorded what they checked
+before answering"* -- which is the distinction the record could not make before: a closed gate on
+its own reads the same whether the suite was run or the diff was read.
+
 **Answering twice is safe.** The walk reads the stage continuo reports and resumes from it rather
 than replaying from the start, so a half-finished walk can simply be run again. A gate that already
 has an outcome is not walked at all, and says so.

@@ -65,6 +65,7 @@ import {
   type Occupancy,
   type OpenProposal,
   type OperatorAttention,
+  type OperatorVerificationClaim,
   type ProposalDraft,
   type ReadingEvidence,
   type RecordChange,
@@ -271,6 +272,23 @@ export interface IterationStore {
    * readings; {@link IterationStore.readLive} filters terminal rows out.
    */
   readingsFor(iterationId: string): Promise<readonly LapReading[]>;
+  /**
+   * Record what an operator says they checked, before they are let past the gate.
+   *
+   * Its own call rather than a parameter of `transition`, which is the opposite
+   * of what `reading` above does, and for the opposite reason: a reading is
+   * written *by* the transition that produced it, while this is written *before*
+   * the act it precedes -- `D-0042` rule 3's order, so that a claim rondo could
+   * not store stops the answer instead of vanishing behind it.
+   */
+  recordVerificationClaim(
+    iterationId: string,
+    actorId: string,
+    claim: string,
+    nowMs: number,
+  ): Promise<void>;
+  /** Every verification claim made on one iteration, oldest first. */
+  verificationClaimsFor(iterationId: string): Promise<readonly OperatorVerificationClaim[]>;
   /**
    * Every iteration that reached a terminal status carrying no reading at all.
    *
@@ -617,6 +635,32 @@ CREATE TABLE IF NOT EXISTS lap_reading (
 
 CREATE INDEX IF NOT EXISTS lap_reading_by_iteration
   ON lap_reading(iteration_id, read_at_ms);
+
+-- #70. What the person at the gate says they checked before answering it.
+--
+-- **Append-only, no status column, no writer that updates**: D-0022 rule 4's
+-- grade, by D-0022 rule 4's two means, exactly as lap_reading above.
+--
+-- **Every column is the operator's word or rondo's clock, and there is no
+-- column for a result.** rondo did not run what this row names and did not see
+-- it run, so a verdict column here would be a place to write an outcome nobody
+-- observed -- and a reader could not tell it from lap_reading's verdict, which
+-- rondo did reach itself. What rondo actually knows is who typed what, and
+-- when they typed it, so those are the columns and the table's name says which
+-- of them is load-bearing: it holds a claim.
+--
+-- Not unique per iteration, for lap_reading's reason: a second answer to a
+-- second gate on the same row is a later fact and not a correction of the
+-- first.
+CREATE TABLE IF NOT EXISTS operator_verification_claim (
+  iteration_id          TEXT    NOT NULL,
+  claimed_at_ms         INTEGER NOT NULL,
+  actor_id              TEXT    NOT NULL,
+  claim                 TEXT    NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS operator_verification_claim_by_iteration
+  ON operator_verification_claim(iteration_id, claimed_at_ms);
 
 -- D-0032. The advisory record: what was proposed, what was composed from it,
 -- what a person answered, what that answer was spent on, where the operator's
@@ -1511,6 +1555,32 @@ export function iterationStore(connection: DatabaseSync, policy: HostPolicy): It
       return readingRows(iterationId);
     },
 
+    async recordVerificationClaim(
+      iterationId: string,
+      actorId: string,
+      claim: string,
+      nowMs: number,
+    ): Promise<void> {
+      connection
+        .prepare(
+          "INSERT INTO operator_verification_claim (iteration_id, claimed_at_ms, actor_id, " +
+            "claim) VALUES (?, ?, ?, ?)",
+        )
+        .run(iterationId, nowMs, actorId, claim);
+    },
+
+    async verificationClaimsFor(
+      iterationId: string,
+    ): Promise<readonly OperatorVerificationClaim[]> {
+      return connection
+        .prepare(
+          "SELECT iteration_id, claimed_at_ms, actor_id, claim FROM " +
+            "operator_verification_claim WHERE iteration_id = ? ORDER BY claimed_at_ms, rowid",
+        )
+        .all(iterationId)
+        .map((row) => toVerificationClaim(row as SqlRow));
+    },
+
     async terminalWithoutReading(): Promise<readonly string[]> {
       // `live IS NULL` is the generated column's own answer to "has this row
       // reached a terminal status", read rather than restated: the terminal set
@@ -1816,6 +1886,12 @@ const CHANGE_SOURCES = Object.freeze([
     at: "refused_at_ms",
   },
   { kind: "lap_reading", table: "lap_reading", id: "iteration_id", at: "read_at_ms" },
+  {
+    kind: "operator_verification_claim",
+    table: "operator_verification_claim",
+    id: "iteration_id",
+    at: "claimed_at_ms",
+  },
   { kind: "proposal", table: "proposal", id: "proposal_id", at: "created_at_ms" },
   { kind: "composition", table: "composition", id: "composition_id", at: "composed_at_ms" },
   { kind: "human_decision", table: "human_decision", id: "decision_id", at: "decided_at_ms" },
@@ -2702,6 +2778,23 @@ function hasEvidence(evidence: ReadingEvidence | null): boolean {
  * found, which is exactly what `publish` refuses on. A row edited by hand into
  * something unrecognisable therefore cannot become a pass.
  */
+/**
+ * One `operator_verification_claim` row, read back.
+ *
+ * Total for `toReading`'s reason, and with one difference that matters: there
+ * is no verdict to fall back to here, so a column that will not decode reads as
+ * a stand-in a person can see is a stand-in rather than as an empty claim,
+ * which would render as though nobody had said anything.
+ */
+function toVerificationClaim(row: SqlRow): OperatorVerificationClaim {
+  return {
+    iterationId: typeof row["iteration_id"] === "string" ? row["iteration_id"] : "(unrecorded)",
+    claimedAtMs: typeof row["claimed_at_ms"] === "number" ? row["claimed_at_ms"] : 0,
+    actorId: typeof row["actor_id"] === "string" ? row["actor_id"] : "(unrecorded)",
+    claim: typeof row["claim"] === "string" ? row["claim"] : "(unreadable)",
+  };
+}
+
 function toReading(row: SqlRow): LapReading {
   const verdict = row["verdict"];
   const known = verdict === "clear" || verdict === "concerns" || verdict === "unavailable";
