@@ -94,8 +94,9 @@ C-NN`, so the spaces can never be read as one.
 | D-0054 | The page may run one script, and it is a poller and a morph rather than a framework: liveness decided per view, `D-0041` rule 3a re-founded on the server's types, and one vendored 10 KB file no build ever touches | accepted |
 | D-0055 | The chrome is prose the operator reads, and its language comes from the host's one operator: the line drawn at the span rather than at the string, recorded words left in English, and `<html lang>` naming what rondo actually wrote | accepted |
 | D-0056 | The chrome's language follows the browser and is remembered, and the resolution is never silent: five steps with the first answer winning, the resolved tag put back into the URL, and one cookie that is a memory and not a record | accepted |
-| D-0057 | The page is priced against four frameworks and stays hand-written: 96 lines of 1,233 taken over, three invariants that stop being types, and `D-0007` kept because a build leaves the pin check nothing to check | accepted |
+| D-0057 | The page is priced against four frameworks and stays hand-written: 96 lines of 1,233 taken over, three invariants that stop being types, and `D-0007` kept because a build leaves the pin check nothing to check | superseded by D-0059 |
 | D-0058 | The second `resume` leaves the handbook: idempotence is a property the suite already proves more strongly than a walk can observe it, the surface keeps one `resume` per answering act on purpose, and no verb is added on the strength of a sentence | accepted |
+| D-0059 | The page is judged by the screen and rides an off-the-shelf stack: the bar named by three tools, prototypes that reach it only by design work, Hono with htmx and Tailwind for what is generic, rondo's own code for what is rondo's, and four relaxations put to the human gate rather than taken | accepted |
 | D-0060 | Work left uncommitted is a fact rondo reads and names: `git status` joins the reading as a finding, `publish` refuses a workspace that still holds any, `--despite-review` does not reach it, and rondo commits nothing on a lap's behalf | accepted |
 | D-0061 | Where a request enters rondo: the organisation's five steps mapped onto parts that mostly exist, a request thread in the conversation as the first thing built, and the drafter that reads a request cleared by the human gate, with its split into plans waiting on `D-0062` | accepted |
 | D-0062 | A proposal may name an agent type, and only a split proposal from a request may: a record rondo already holds chosen by its digest, approved on route S with the tier bound by the option it came from, and the kind-to-tier judgment kept whole while the request-to-kind judgment moves to the gate | accepted |
@@ -708,6 +709,13 @@ whole file and finishes in under 300 ms.
 ## D-0007 — Install from the lockfile, with `--ignore-scripts`
 
 **Status:** accepted (2026-09-05, rondo#1)
+
+> **Annotation (2026-09-13, from D-0059).** Added after this entry was accepted, and additive.
+> `D-0059` R1, ratified by rondo's human gate, amends what `D-0054` rule 5 and `D-0057` rule 3 built on
+> this entry for **browser bytes**: the page may serve build output (a Tailwind-generated stylesheet)
+> and files copied from `node_modules`, held instead by a reproducible build and a manifest of the
+> sha256 of every served file checked in CI. **This entry's own decision is unchanged**: installs use
+> `npm ci --ignore-scripts` from the lockfile. Nothing below is edited.
 
 **Decision.** Every CI job installs with `npm ci --ignore-scripts`. `package-lock.json` is
 committed and is the pinned build input. `.npmrc` sets `save-exact=true`.
@@ -7351,6 +7359,13 @@ rondo `09830d6`, on **2026-09-12**, by running as well as by reading.
 
 **Status:** accepted (2026-09-12, rondo's human gate). Refs rondo#95, `D-0032`, `D-0036`, `D-0020`.
 
+> **Annotation (2026-09-13, from D-0059).** Added after this entry was accepted, and additive.
+> `D-0059` R4 and section 5a, ratified by rondo's human gate, amend **rule 4**'s "the page's whole
+> writing vocabulary is one sentence long": the vocabulary is a closed table of write kinds, each
+> write port refuses a call without a value minted from the live request (a press for approvals, a
+> send for a thread message), and a test enumerates the running app's routes against that table.
+> **Rule 1 stands**; rule 7 is `D-0064`'s to move. Nothing below is edited.
+
 > **Annotation (2026-09-12, from D-0054).** Added after this entry was accepted, and additive:
 > nothing below is removed or rewritten. **Rule 3(a) is repealed in half.** Its client-side claim --
 > "there is no script on the page" and "rondo's page has no mechanism that can issue a POST without a
@@ -9743,6 +9758,13 @@ lap, plus one escape reproduced directly.
 **Status:** accepted (2026-09-12, rondo's human gate). Refs rondo#163, rondo#160, rondo#95, `D-0041`,
 `D-0042`, `D-0007`, `D-0032`.
 
+> **Annotation (2026-09-13, from D-0059).** Added after this entry was accepted, and additive.
+> `D-0059`, ratified by rondo's human gate, amends two rules below. **Rule 5** (one vendored morph)
+> by R2: htmx replaces idiomorph and `page/poll.js`. **Rule 6** (the script's vocabulary is a `GET` of
+> its own address) by R3: htmx's polling `GET`, its `hx-post` of a thread message minted as a send,
+> a rondo-owned key script for row focus, and a composer script keeping an unsent draft and opened
+> folds. **Rules 1, 2 and 7 stand**; rule 8 is `D-0064`'s to move. Nothing below is edited.
+
 > **Annotation (2026-09-13, from D-0057).** Added after this entry was accepted, and additive:
 > nothing below is removed or rewritten, and **nothing this entry decided is changed**. Rule 3's
 > supporting sentence -- *"an unattended redraw writes nothing because the code path a `GET` reaches
@@ -10960,8 +10982,18 @@ At `f869657`, in this worktree:
 
 ## D-0057 — The page is priced against four frameworks and stays hand-written: 96 lines of 1,233 taken over, three invariants that stop being types, and `D-0007` kept because a build leaves the pin check nothing to check
 
-**Status:** accepted (2026-09-13, rondo's human gate). Refs rondo#172, `D-0054`, `D-0055`, `D-0056`,
-`D-0041`, `D-0042`, `D-0007`, `D-0020`, `D-0006`, `D-0002`.
+**Status:** superseded by D-0059 (2026-09-13). Accepted 2026-09-13 (rondo's human gate). Refs
+rondo#172, `D-0054`, `D-0055`, `D-0056`, `D-0041`, `D-0042`, `D-0007`, `D-0020`, `D-0006`, `D-0002`.
+
+> **Supersession note (2026-09-13, from D-0059).** The owner ruled that the page is judged first by
+> whether its screen reaches the bar of current developer tools, and that "we can build it ourselves"
+> is not a reason to hand-write what is not rondo's originality. `D-0059`'s gate then chose an
+> off-the-shelf stack and ratified four relaxations. That reverses what this entry decided: rule 1 (no
+> framework), rule 3 (`D-0007` unamended for browser bytes), rule 4 (no component library) and rule 8
+> (nothing adopted). Supersession is whole-entry, per "How to use this file", but **the measurements
+> are not retired with it**: the line inventory, the survey table, rules 5 and 6's i18n findings, and
+> the `D-0054` rule 3 annotation remain true as dated facts, and `D-0059` cites them as `D-0057`'s.
+> Nothing below is edited.
 
 `D-0054` decided *no framework, one vendored morph*, and priced htmx, Datastar, Alpine and Web
 Awesome against a page that had no script on it. Three entries later the page also owns
@@ -12912,3 +12944,530 @@ sections 5.6 and 5.7 take effect for O6 only through that entry.
 - **The reviewer and the worker ending up in one family**, through a table change or a model whose id
   does not tell its family: section 3.3's check is then too weak.
 - Any measurement in "What was measured" failing to reproduce at rondo `f30351e`.
+
+---
+
+## D-0059 — The page is judged by the screen and rides an off-the-shelf stack: the bar named by three tools, prototypes that reach it only by design work, Hono with htmx and Tailwind for what is generic, rondo's own code for what is rondo's, and four relaxations put to the human gate rather than taken
+
+**Status:** accepted (2026-09-13, rondo's human gate). Proposed and revised the same day (section 5a
+and R3/R4 after `D-0064`); the gate's answers are recorded in "What was put to the human gate, and its
+answer" below. Supersedes `D-0057`. Refs rondo#172, `D-0057`, `D-0054`, `D-0041`, `D-0042`, `D-0007`,
+`D-0055`, `D-0056`, `D-0002`, `D-0006`, `D-0061`, `D-0064`.
+
+`D-0057` priced four frameworks by **the lines they take over** (96 of 1,233) and by **whether the
+served bytes can still be checked without a build**, and kept the page hand-written. It never asked
+whether the screen an operator looks at reaches the level engineers now hold a developer tool to.
+The product owner was not satisfied with that, and this entry re-decides on two rulings given in
+this order:
+
+1. **The screen comes first.** The first axis is whether the operator's screen reaches the bar of
+   current developer tools; maintainability second; consistency with existing invariants third.
+   rondo#153 / PR #154 already did one hand-written visual pass, and its result is the starting
+   point because it does not reach the bar.
+2. **"We can build it ourselves" is not a reason** (owner, 2026-09-13). Re-inventing a wheel is
+   wrong wherever rondo is not being original. The burden of proof is reversed: if an off-the-shelf
+   stack reaches the same screen, riding it is the default, and hand-writing needs the reason *this
+   is rondo's originality*. The scope is `D-0057`'s whole scope -- visuals, routing, i18n, asset
+   delivery, update in place -- and an invariant is no longer a reason to hand-write: it is a
+   decision to relax or keep, with a substitute and a stated loss.
+
+**This entry is a decision and not an implementation.** No file under `src/`, `test/`, `page/` or
+`vendor/` changes. Every prototype below lives in the worker's uncommitted scratch directory and was
+built only to be measured.
+
+### 1. The bar, named
+
+The bar is three tools an engineer uses every day, and what each of them does that the screen has to
+do.
+
+| Tool | What makes it the bar |
+|---|---|
+| **GitHub** -- Actions run list, PR checks panel | One line per item; a status glyph in a leading column; ids, durations and ages right-aligned in tabular figures; a failure is red and everything else that finished is quiet; the one action (merge) is a single primary button kept in reach |
+| **Linear** -- inbox and issue list | Density without clutter: title on one line, metadata in muted aligned columns rather than stacked sentences; a sans UI face paired with mono only for identifiers; the item that wants you is findable at a glance; `j`/`k` row movement with a visible row focus, `Enter` to open, `Esc` to go back |
+| **Vercel** -- deployments dashboard | A real type pairing and scale; generous but consistent spacing and a clear hierarchy of group, row and metadata; light and dark palettes both designed rather than inverted; state shown by a small coloured pill, not by prose |
+
+Condensed into the seven sub-axes every screen below was scored on (1-5 each): **density and
+readability; state at a glance** (*waiting reads from across the room, what finished recedes*);
+**type pairing and scale; spacing and hierarchy; light and dark palettes; keyboard; integrity with
+script off**.
+
+### 2. The screens, drawn and scored
+
+Every candidate drew the **same information** as today's page -- the three questions (waiting for
+your answer / running now / just finished), the answer view for one gate with its claims, material
+and the one `approve` form, and the Japanese chrome -- over one fixture store rendered by today's
+built code (5 live laps, 5 ended). Screenshots were taken by Playwright Chromium with
+`prefers-color-scheme` emulated, light and dark, at 1280 and 420 wide, and with JavaScript disabled.
+Two independent critics scored every screenshot: one as *a senior product designer who ships
+developer tools*, one as *an operator who glances from across the room and answers by keyboard*.
+Scores are designer / operator.
+
+| Candidate | Density | At a glance | Type | Spacing | Palettes | Keyboard | Script off | Verdict |
+|---|---|---|---|---|---|---|---|---|
+| **Today's page** (rondo#153) | 1.5 / 2 | 2 / 2 | 1 / 1 | 1.5 / 2 | 2 / 2 | 2 / 1 | 4.5 / 5 | **no** / no |
+| A -- hand-written CSS pushed | 4 / 4 | 4.5 / 4 | 3.5 / 4 | 4 / 4 | 4 / 4 | 4 / 4 | 4 / 4 | nearly / nearly |
+| B -- Web Components (Web Awesome 3.12.0) | 3.5 / 2 | 4 / 3 | 2.5 / 3 | 3 / 3 | 3 / 3 | 4 / 4 | 2.5 / 3 | **no** / no |
+| C -- CSS component library (`@primer/css` 22.3.1 + `@primer/primitives` 11.10.0) | 3.5 / 4 | 3.5 / 3 | 3 / 3 | 3.5 / 4 | 4 / 4 | 3.5 / 3 | 4 / 4 | nearly / nearly |
+| D -- React 19 SSR + shadcn/ui + Tailwind 4.3.3 | 4 / 4 | 4.5 / 4 | 4.5 / 5 | 4.5 / 4 | 4.5 / 4 | 4.5 / 5 | 3.5 / 3 | nearly / nearly |
+
+A second round took D's visible advantages -- Inter and JetBrains Mono, a short filled call to
+action, the answered item hoisted with `approve` in a sticky bar, a calmer waiting treatment, hints
+that do not lie with script off -- and grafted them onto A by hand (**A+**), then re-scored A+
+against D:
+
+| Candidate | Density | At a glance | Type | Spacing | Palettes | Keyboard | Script off | Verdict |
+|---|---|---|---|---|---|---|---|---|
+| A+ | 3 / 3.5 | 4 / 4.5 | 3.5 / 3.5 | 3 / 4 | 4 / 4 | 3 / 3 | 4.5 / 5 | nearly / nearly |
+| D | 4 / 4.5 | 4 / 3.5 | 3.5 / 4 | 4 / 4 | 4 / 4.5 | 3.5 / 3.5 | 3 / 2.5 | nearly / nearly |
+
+Four readings, and they carry the rest of the entry.
+
+- **Today's page does not reach the bar, on every visual axis, by both critics.** All text in mono at
+  one size; five to six stacked lines per lap; raw `awaiting_human --` heads; the call to action an
+  underlined sentence; `approve` below a tall claim list. Its only high score is having no script
+  that could fail.
+- **The bar is reachable, and no screen reached "yes" yet.** Both critics put A, A+, C and D at
+  *nearly*. The gaps they name are shared by every candidate: one-line rows with aligned metadata
+  columns; a short primary call to action; `approve` in reach without scrolling; group labels and
+  counts legible at a distance; key hints and the live indicator hidden when script is off. These
+  are **design work for the implementing change in whatever stack it uses**, not a property of any
+  stack.
+- **What separates the screens is the design work, not the stack.** Both critics concluded so
+  independently in round 1, and in round 2 both answered *"anything visible in D that A+ could not
+  reproduce without a framework or build"* with **none**. The React build's lead in round 1 was
+  typeface, a flat section style and a filled button; all three are CSS.
+- **B is out on the screen itself, before any invariant, and C does not buy what it costs.** B's
+  narrow answer view
+  crushes the claim table to one or two characters per line; a row that arrives through a redraw
+  renders its `<wa-badge>` unstyled, because `DOMParser` ignores declarative shadow DOM; a
+  server-rendered `<wa-button type=submit>` draws but submits nothing with script off; and each
+  badge repeats about 7 KB of shadow styles in the HTML (101,811 bytes for the summary against
+  10,532 today). C reached *nearly* but reads as generic Primer, and `@primer/css` 22 is in keep-the-lights-on mode
+  and has already dropped the list components (`Box-row`, `Label`, `State`) the page would need,
+  while shipping about 460 KB of mostly unused CSS.
+
+Under the owner's first ruling, D and A/A+ tie on the screen. Under the second, a tie is decided for
+the off-the-shelf side, and that is what the rest of this entry is about.
+
+### 3. Where rondo is original, and where it is not
+
+Classified by concern, with `D-0057`'s line counts. **The owner's proposed split is adopted with one
+measured exception.**
+
+| Concern | `D-0057` lines | Class | Why |
+|---|---|---|---|
+| The ledger and gate semantics: what a press records (`D-0042`), a person's act as the only writer (`D-0041` rule 1), recorded bytes independent of the reader's language (`D-0055` rule 4) | -- | **rondo's** | This is what rondo is; no stack supplies it and it is the thing the substitutes in rule 6 protect |
+| Rendering rondo's record: claims, bases, lap rows, fence lines | 396 | **rondo's content, generic markup** | The words and what they claim are rondo's; the elements they sit in (rows, pills, tables, buttons) are a component vocabulary |
+| The catalogue: rondo's sentences in two languages | 323 | **rondo's content** | Prose nobody else writes; the holder (a typed record of strings and functions) is trivial and shared with the CLI |
+| i18n negotiation: `Accept-Language`, lookup, cookie, canonical redirect | 141 | generic -- **exception, see rule 4** | Generic by nature; every library measured gets the refusal case wrong |
+| Routing, 404/405 | 28 | generic | |
+| Asset serving | 21 | generic | |
+| Update in place: poll + morph | 28 | generic | |
+| Form read | 19 | generic | |
+| CSS and the visual system | 96 | generic | A token scale, pills, grids and focus rings are the most commodity thing on the page |
+| Loopback identity, token, security headers | 74 | generic mechanism, **rondo's policy** | `Host`/`Origin`/CSP/body-limit are middleware everywhere; *who may press* is rondo's |
+| Server lifecycle | 22 | generic | |
+| Keyboard row navigation | (new) | generic -- **no stack supplies it** | Measured: none of the stacks below ships it; 10-17 lines in every one |
+
+### 4. The stacks, built end to end
+
+Two off-the-shelf stacks were built to the same information, each with runnable checks for the
+semantic invariants, and each check was then **adversarially audited by a separate agent that tried
+to refute it**, including by planting writers into scratch copies.
+
+| | **H -- Hono + htmx + Tailwind** | **T -- TanStack Start** |
+|---|---|---|
+| Stack (measured 2026-09-13) | `hono` 4.13.7, `@hono/node-server` 2.1.1, server JSX via `hono/jsx` compiled by rondo's existing `tsc`; `htmx.org` 2.0.10 (`hx-get` + `every 5s` + `hx-select`); Tailwind 4.3.3 CLI; shadcn-style primitives with `class-variance-authority`/`clsx`/`tailwind-merge`; `lucide-static`; Inter and JetBrains Mono from `@fontsource-variable` 5.3.0; `hono/secure-headers`, `hono/csrf`, `hono/body-limit`, `hono/accepts`, `hono/cookie` | `@tanstack/react-start` 1.168.52, `@tanstack/react-router` 1.170.35, React 19.3.0, Vite 8.3.0, Tailwind 4.3.3, shadcn/ui (copied source), Paraglide JS 2.25.2, `srvx` 0.11.22 |
+| Production packages | **9** (today: 2) | **122** of 208 lockfile entries (`h3`, `seroval`, `isbot`, `zod`, `xmlbuilder2` among them) |
+| `npm ci --ignore-scripts` | works; the one install script (`@parcel/watcher`) is only used by `--watch` | works; the one install script is `fsevents` (macOS, optional) |
+| Browser build | **CSS only** (Tailwind CLI); JS is copied files | Vite client + SSR bundles |
+| Reproducible build | all 16 emitted files identical over two clean builds; audit: also at a different checkout path, same machine | all 5 client files identical over two clean trees at different paths; server bundle embeds absolute paths |
+| Bytes, summary view, first load | HTML 30,415 + CSS 20,634 + htmx 51,238 + keys 850 + fonts 88,660 = about 192 KB | HTML 32,733 + CSS 20,707 + JS 406,604 + fonts 88,660 = about 549 KB |
+| The 5 s refresh | a full-document `GET` of the page's own address; htmx keeps `#ledger` | `router.invalidate()` -> `GET /_serverFn/<build-derived id>`, seroval JSON |
+| rondo-owned lines, routing / assets / update / form | 28/21/28/19 -> about 10/2/5/5 | 28/21/28/19 -> about 20/2/6/4 |
+| i18n negotiation | 141 -> 47; `hono/accepts` parses `q`, `hono/cookie` serialises | 141 -> 49; Paraglide contributes nothing to negotiation |
+| Rendering / catalogue | 396 -> 292 / 323 -> 76 (views drawn only; reading view a placeholder; lines over 120 columns) | 396 -> 310 / 323 -> 97 (same caveats; `@ts-nocheck` on the page) |
+| Composition root | **rondo's**: `createApp(ports)` hands `ReadPorts` to read routes and `answer` to the one POST route | **the framework's**: ports arrive as request context; every server function sees the same object |
+| API stability seen while building | none noted | `inputValidator` deprecated mid-prototype; the documented `Register` augmentation module left `context` typed `undefined` -- it must target `@tanstack/router-core` |
+
+What each keeps of rondo's semantic invariants, **as audited**:
+
+| Invariant | H | T |
+|---|---|---|
+| Approve works with script off (native `POST`, hidden token and iteration, button `approve`) | **confirmed** (Playwright, JS disabled, Japanese page; one call recorded) | **confirmed** -- a server function is a valid native form target and answers `303` |
+| Token, `Host`/`Origin`, `frame-ancestors 'none'` as middleware | **confirmed**; `hono/csrf` also refuses a `POST` with neither `Origin` nor `Sec-Fetch-Site`, which today's page accepts | **confirmed**; a custom `createStart` drops TanStack's default CSRF middleware, so rondo's checks replace it |
+| Recorded bytes independent of language | **confirmed** structurally (payload closure is two files) and behaviourally (five presses, one body) | **confirmed** behaviourally (four presses, one body); static half bypassable |
+| A redraw writes nothing | behaviour **confirmed** (only `GET`s of its own address, 0 writes); **not structural** -- four planted GET paths reached `answer` and wrote | behaviour confirmed; **refuted structurally** -- a one-line call to `approve` in the route loader, with the token the loader returned, **wrote with no click** |
+| The write vocabulary is enumerable | the typed port split is the same property rondo has today; the source sweep added on top was **bypassed 9 ways out of 10** | server functions are ambient; the source sweep was **bypassed 9 ways out of 13** |
+
+The last two rows are the finding that matters. **A source-text sweep does not substitute for a
+property that used to be a type.** Today's page does not have it by construction either -- `D-0057`'s
+annotation to `D-0054` rule 3 records that `operatorPage` is handed the whole of `WebPorts` -- but
+today's surface has no client code that can call a writer, and T's does: the page must import
+`approve` to render its URL, and the RPC client that calls it ships to the browser. That is a
+difference in kind on the one side of the page that is rondo's, so it needs a runtime substitute
+rather than a better grep. It was measured.
+
+### 5. The substitute that holds: only a person's navigation can write
+
+On 2026-09-13, in Chromium via Playwright, a local server logged the `Sec-Fetch-*` headers of every
+`POST` to a form endpoint:
+
+| What issued the `POST` | `Sec-Fetch-Mode` | `Sec-Fetch-User` |
+|---|---|---|
+| A person's click on the native button | `navigate` | **`?1`** |
+| A page script's `form.submit()` on load, no gesture | `navigate` | **absent** |
+| A page script's synthetic `button.click()` on load | `navigate` | **absent** |
+| A page script's `requestSubmit()` six seconds after load, idle | `navigate` | **absent** |
+| `fetch(..., {method: "POST"})` | `cors` | absent |
+| A script's `form.submit()` one second after a person's unrelated click | `navigate` | `?1` |
+
+**Where the check sits decides what it covers, and a check at the route is not enough.** The audits
+planted two kinds of writer. The first kind makes the *browser* issue a request -- T's loader calling
+`approve` over RPC, a `fetch` in a key handler, an htmx `hx-post` -- and a header check on the `approve`
+route refuses all of them. The second kind never issues a request: four of H's planted writers were a
+`GET` handler, a middleware or a mounted sub-app calling the `answer` port **directly**, in the same
+process, during an ordinary `GET`. No check on the `approve` route sees those, and a route
+enumeration permits `GET` routes by design.
+
+So the check belongs **in the write capability itself**: `answer` accepts no call without a *press*
+value, and the only function that mints one does so from the live request, and only when that
+request is a `POST`, a same-origin `Sec-Fetch-Mode: navigate`, carries `Sec-Fetch-User: ?1`, and
+carries the per-process token. A `GET` path that reaches the port can then reach it only while
+handling a person's press, because the request it holds is a `GET` or lacks the header -- whichever
+module it sits in and however it got the port. **This placement was reasoned from the mutants and
+not yet re-run against them**; the implementing change carries the audit's planted writers as tests
+that must fail to write (rule 9).
+
+It is stronger than today's page, where a same-origin script holding the token could `fetch` a
+`POST` and be served. **Its residual is stated rather than hidden**: a script that submits inside the
+browser's transient-activation window after a person's unrelated gesture (last row) still passes; a
+writer that runs *inside* the handling of a real press could still write something other than what
+was pressed, which is `D-0042`'s framing check and not this one; and a non-browser client can forge
+the headers -- which the per-process token and the loopback check already bound, as today. It is a
+mechanism about browsers; the headers are sent by every current engine but are not mandatory for a
+client to send.
+
+### 5a. Which writes need a press, now that the page writes more than one word (revised after `D-0064`)
+
+This section was first written when the page's writing vocabulary was the one word `approve`
+(`D-0041` rule 7, `D-0054` rule 8). `D-0064` supersedes both rules. Its section 6 lists what the
+page answers: approving a scope (P1), answering a question by option (P2, P3), approving an
+irreversible act (P4), and writing a request or a message into its thread (`D-0061` rule 4). It keeps
+`D-0041` rule 1: every one of those writes is still a person's act at the moment it was made. That
+leaves the question this section answers: **which of those write kinds need a navigation press.**
+
+The conversation-screen prototype on H measured the collision (2026-09-13,
+`rondo-conversation-screen-prototype`, its note section 2.2). An htmx `hx-post` arrives with
+`Sec-Fetch-Mode: cors` and no `Sec-Fetch-User`, whether a person clicked or pressed Ctrl+Enter, and
+`hx-boost` sends the same way. A native form submit arrives with `navigate` and `?1`. A thread whose
+send is a navigation works, but **an unsent draft is lost when the person presses another button on
+the same thread**, which happens routinely in a thread that carries both a text box and option
+buttons. Section 5's check applied to every write therefore makes an in-place conversation
+impossible.
+
+**The press check is kept for approvals only, and a message to the conversation becomes a second
+write kind that does not require one.**
+
+| Write kind | Needs a press (section 5) | What it is minted from |
+|---|---|---|
+| **`approve` at a lap's end gate**, the person's press (`D-0064` O6 names the organisation's own answer, which is not this) | **yes** | `POST`, same-origin, `Sec-Fetch-Mode: navigate`, `Sec-Fetch-User: ?1`, per-process token |
+| **Approving an irreversible act** (`D-0064` P4) | **yes** | the same |
+| **Approving a scope** (`D-0064` P1), and widening one | **yes** (gate, Q5b) | the same |
+| **Answering a question by option** (`D-0064` P2, P3), including choosing among a dispute's candidates | **yes** (gate, Q5c) | the same |
+| **A message into a request thread**, including a new request's text and a reply (`D-0061` rule 4) | **no** | a *send* value: `POST`, same-origin `Sec-Fetch-Site`, per-process token; `Sec-Fetch-Mode` may be `cors` |
+
+**What a send keeps.** The `say` port accepts no call without a send value, and the only function
+that mints one reads the live request. It refuses any method other than `POST`, so the four `GET`-side
+writers the audit planted still cannot write, because the request they hold is a `GET`. It also
+refuses a request that is not same-origin or lacks the token. `D-0041` rule 1 holds as far as a
+browser can show it: the request came from this page, in a person's session.
+
+**What a send gives up, stated rather than hidden.**
+- *Only a navigation can write* is no longer true of the page. It is true of approvals. A same-origin
+  script -- an htmx trigger fired by a redraw, a key handler, a defect -- can post a message **no
+  person typed**, and it will be recorded as the person's. The residual is bounded rather than
+  closed. A message is append-only and is not an act: it cannot answer a gate, approve anything,
+  spend an approval or widen a scope, because every one of those is an approval kind with its own
+  port. The substitutes are the send value and the route enumeration test (R4), not a header a
+  script cannot set.
+- **The page's writing vocabulary is no longer one word.** It is a closed list of write kinds, each
+  with its own port and its own minting rule, and the list is what R4's route enumeration test
+  checks against. `D-0057` rule 2(a)'s *one sentence long* becomes *one table long*.
+
+**Two write kinds were put to the gate with Q5 and are settled as approvals** (gate's answer below):
+- **Approving a scope (P1)** needs a press. It is the act by which the person delegates, and the
+  most consequential approval on the page; a script that could post one unattended would grant
+  authority nobody granted.
+- **Answering a question by option (P2, P3)** needs a press. It chooses between things the person
+  owns, and it moves work.
+
+**What a navigating press costs on a conversation page, and the rondo-owned script that pays it.**
+The conversation-screen prototype, rebuilt in `D-0064`'s shape (its note's v2 table), measured two
+things a press navigation throws away, and a third that the in-place refresh throws away without any
+press:
+- **an unsent draft** in the thread's text box is empty after a press on any approval in the same
+  thread (`walk-native.mjs`: `""`);
+- **a fold the person opened** (`<details>`, which the server always renders closed) is closed after
+  that press (`walk-native.mjs`: `false`);
+- **the same fold is closed by the next 5 s in-place swap**, with no press at all (`walk.mjs`
+  observed `open=false`).
+
+So the page carries **one rondo-owned composer script with exactly two duties: keep the unsent
+draft, and keep the folds the person opened**, across both a press navigation (`sessionStorage`,
+restored on load) and an in-place swap (re-opened after the swap). The prototype's version is 23
+lines, 7 of them for the folds. It makes no request, builds no `POST` and holds nothing a server
+reads. **With script off neither survives**: the draft is lost on a press, and a `<noscript>` meta
+refresh reloads the whole page, so an opened fold closes within 5 s. That is a loss accepted under
+`D-0054` rule 7, which asks for a page that is complete and pressable without script, not one that
+keeps a reader's local state.
+
+### Decision
+
+1. **The operator's page is judged first by its screen, against GitHub's run list and checks panel,
+   Linear's inbox and Vercel's deployments** (section 1), on the seven sub-axes above. Today's page
+   does not reach that bar; the implementing change is not done until both critics' shared gaps
+   (section 2, second reading) are closed and a light, dark, narrow and script-off screenshot set is
+   attached to it for the human gate.
+
+2. **The page rides an off-the-shelf stack, and the recommended stack is H: Hono on
+   `@hono/node-server`, server JSX compiled by rondo's existing `tsc`, htmx for the in-place refresh,
+   Tailwind with shadcn-style primitives for the visual system, and Hono's own middleware for
+   security headers, CSRF/Origin, body limits, `Accept-Language` parsing and cookies.** Hand-writing
+   is declined on the owner's ruling: the screens tie (section 2) and none of routing, asset serving,
+   update in place, form reading, the visual system or header parsing is rondo's originality
+   (section 3). T is not refused; it is the alternative put to the gate, and its price is stated in
+   rule 7.
+
+3. **H over T, for four measured reasons.** (a) **The composition root stays rondo's**:
+   `createApp(ports)` is a function of rondo's ports, so the read routes are handed a type without
+   the writer, exactly as `D-0041` rule 4 and `D-0057` rule 2(a) describe today; on T the ports are
+   ambient request context. (b) **No client code can call the writer**: the browser receives htmx,
+   one key script and HTML, where T ships an RPC client and requires page code to import `approve`,
+   and the audit wrote through it with no click. (c) **The trust base and the bytes**: 9 production
+   packages against 122, and about 192 KB against 549 KB on a localhost page, with a CSS build
+   against a JavaScript build. (d) **Stability**: T's API moved under the prototype twice; nothing comparable was observed on H.
+   None of the four is about the screen, which ties.
+
+4. **One generic concern stays rondo's code, by measurement and not by preference: the language
+   negotiation of `D-0056`.** Every library that offers it serves a language the browser refused:
+   `hono/language`'s `languageDetector` serves `ja` for `ja;q=0, de`, resolves the ill-formed
+   `?lang=ja-!!` to `ja` by prefix, writes the cookie on a header detection, and marks it `Secure` on
+   an http loopback page; Paraglide's `extractLocaleFromHeader("ja;q=0, fr")` returns `ja` and it has
+   no query strategy and no `HttpOnly` cookie. These are the two defects Codex caught in rondo's own
+   first version (`D-0057`). **So rondo keeps its existing, tested `tagsByWeight` / `setFor` and the
+   five steps, ported onto `hono/accepts` and `hono/cookie` rather than rewritten** -- both fresh
+   prototypes, written against the libraries, reintroduced edge defects the existing code already
+   handles (`Q=0` with a capital `Q`; `q=-1` and `q=abc` read as `q=1`). The exception ends when a
+   maintained library refuses `q=0` and checks the tag grammar (a falsifier below).
+
+5. **What stays rondo's own code is the originality side and nothing else**: the payload a press
+   records and its import boundary (`D-0006`, `D-0022` rule 1), the write handlers of section 5a and
+   what each checks, the catalogue's sentences in both languages, the claims and lap rows as content, the
+   negotiation of rule 4, and keyboard row navigation (10-17 lines in every stack measured; nothing
+   supplies it). `D-0057` rules 5 and 6 -- that the accumulation was 141 lines and that no registry
+   package did both RFC halves -- remain true measurements and are reused here.
+
+6. **Four invariants are relaxed, and each is put to the human gate with its substitute and its
+   loss. None is taken by this entry.**
+
+   **R1. `D-0007` as extended by `D-0054` rule 5 and `D-0057` rule 3 -- the browser receives build
+   output.** H serves a Tailwind-generated CSS file and copies of `htmx.min.js` and two woff2 files
+   out of `node_modules`, instead of vendored files beside a `.sha256`.
+   - *Substitute*: the lockfile's `sha512` integrity verified by `npm ci --ignore-scripts` (kept
+     unchanged, and measured to work); a build shown reproducible over two clean builds; a checked-in
+     manifest of the sha256 of every served file, checked in CI after a clean build (a one-byte
+     tamper fails it); Tailwind's sources pinned with `source(none)` (without it the CSS silently grew
+     2.7x by scanning stray files -- measured in both stacks).
+   - *Lost*: a served byte is no longer traceable by one `sha256sum` to an upstream tarball; a
+     reviewer approves a digest change and class strings, not a readable CSS diff; the build-time
+     trust base grows from nothing to `tsc` plus Tailwind's native `oxide` and `lightningcss`
+     binaries; **reproducibility was measured on one machine only**, and those binaries are per
+     platform, so CI on another OS may emit different CSS bytes.
+   - `D-0002`'s *"no build output yet"* is already spent for the server (`D-0024`); this adds a CSS
+     build beside it.
+
+   **R2. `D-0054` rule 5 -- one vendored morph.** htmx 2.0.10 (51,238 bytes) replaces idiomorph
+   (10,587 bytes) and `page/poll.js`.
+   - *Substitute*: htmx configured `selfRequestsOnly: true`, `allowEval: false`,
+     `allowScriptTags: false`, `historyEnabled: false`; CSP `script-src 'self'`; and R4 at the door.
+   - *Lost*: *the script cannot write because it has no way to say `POST`* stops being true of the
+     library -- htmx issues any verb markup asks for. It becomes true of the door instead (R4).
+
+   **R3. `D-0054` rule 6 -- the script's vocabulary is `GET` of its own address.** Widened to: htmx's
+   polling `GET` of the page's own address (measured: the only method and the only URL the page
+   requested over 11.5 s), a rondo-owned key script that moves focus between server-rendered rows
+   and follows server-rendered links, and -- after `D-0064` -- htmx's `hx-post` of a message into a
+   request thread, the one non-`GET` request the library issues, which section 5a mints as a send and
+   not as a press; and the composer script of section 5a, whose two duties are keeping an unsent draft
+   and keeping the folds a person opened, across a press navigation and an in-place swap.
+   - *Substitute*: R4; and `D-0054` rule 7 is **kept** -- every view is complete and pressable with
+     script off (both stacks' script-off screenshots and a JS-disabled `POST`), and the key hints and
+     live indicator are rendered hidden until the script runs.
+   - *Lost*: the one-sentence audit of client script becomes a library and two rondo-owned scripts
+     with three duties between them (row focus; draft; open folds), and with script off a draft and an
+     opened fold do not survive a press or a reload.
+
+   **R4. `D-0041` rule 4 and `D-0057` rule 2(a) -- the writing vocabulary is enumerable from one
+   type.** H keeps the type split (rule 3a), but a Hono app is a router any module holding it can
+   register on, and the audit showed a source sweep cannot close that. After `D-0064` the vocabulary
+   is also no longer one word: it is section 5a's closed table of write kinds.
+   - *Substitute* (new, sections 5 and 5a): **every write port refuses any call without a value
+     minted from the live request.** Approval ports require a *press*: a `POST` that is a same-origin
+     navigation carrying `Sec-Fetch-User: ?1` and the per-process token. The message port requires a
+     *send*: a same-origin `POST` carrying the token, in any fetch mode. Both refuse a `GET`, so a
+     `GET`-side handler calling a port directly writes nothing, and an approval additionally refuses a
+     script-issued request. Beside them, a runtime check in the test suite enumerates the running
+     app's registered routes (`app.routes`) and fails on any non-`GET` route that is not a row of
+     section 5a's table, so the enumerable vocabulary is a question asked of the program rather than a
+     source sweep.
+   - *Lost*: the property is no longer read off one declaration; it is a check inside each port and a
+     route enumeration, and the vocabulary is a table, not a word. **A same-origin script can post a
+     message no person typed, recorded as the person's** (section 5a); it cannot approve anything.
+     Further residuals: a script inside a person's transient-activation window; a writer running
+     inside the handling of a real press; and the placement is reasoned from the audit's mutants, not
+     yet re-run against them (rule 9).
+
+7. **If the gate chooses T instead**, the same four relaxations apply and are larger: R1 covers
+   about 407 KB of bundled JavaScript and 122 production packages; R2 and R3 become a client
+   framework runtime with state and an RPC client that can build `POST`s; R4 is required rather than
+   advisable, because the audited no-click write exists; and T additionally needs the token kept out
+   of loader data (it is returned to the client today in the prototype) and `approve` refused when it
+   carries `x-tsr-serverFn`. What T buys over H is the stack the operator named and a larger
+   ecosystem; on this page it buys no pixel (section 2).
+
+8. **`D-0057` is superseded, not annotated.** What it *decided* -- no framework, the page stays
+   hand-written, `D-0007` unamended, the UI-component authorisation unspent -- is reversed by rules 2
+   and 6, and the ledger's rule is that changing what an entry asserted takes a new ID and
+   supersession. Its **measurements** stay true and are cited here as facts rather than re-derived:
+   the 1,233-line inventory, the survey table, the i18n library survey, and the finding that a build
+   leaves a digest pin nothing to check (which R1's manifest is the answer to). `D-0041` rule 7 and
+   `D-0054` rule 8 (the one word `approve`) are superseded by `D-0064` and are not this entry's to
+   move. The rest of `D-0054`, `D-0041` and `D-0007` stands, and each gains a dated annotation naming
+   the rule R1, R2, R3 or R4 amends (listed at the end of this entry).
+
+9. **The implementing change is a separate pull request, after ratification, and it is gated on the
+   screen.** It carries the port of the three views to H, the relaxation substitutes (served-file
+   manifest and its CI check, the press and send minting checks inside each write port of section 5a
+   with a test in each direction -- including an htmx `hx-post` refused at an approval port and
+   accepted at the message port -- the route enumeration test, and **every writer the two audits planted -- the `GET`
+   handler, the middleware, the mounted sub-app, the loader, the `fetch` -- carried as a test that
+   must fail to write**), the negotiation moved onto `hono/accepts` / `hono/cookie` with its existing
+   342 lines of tests passing unchanged, and the screenshot set of rule 1.
+
+### What was put to the human gate, and its answer
+
+Five questions, each with this entry's recommendation, the second half of Q5 split out by the
+revision after `D-0064`:
+
+- **Q1.** Which stack: H (Hono + htmx + Tailwind) or T (TanStack Start). *Recommended: H* (rule 3).
+- **Q2.** R1: the browser receives build output, under a lockfile, a reproducible build and a
+  served-file digest manifest. *Recommended: relax.*
+- **Q3.** R2: htmx replaces the vendored morph. *Recommended: relax.*
+- **Q4.** R3: the client script's vocabulary widens beyond a `GET` of its own address.
+  *Recommended: relax.*
+- **Q5a.** R4 and section 5a: a navigation press is required for approvals, and a message into a
+  request thread is a send that does not need one. *Recommended: yes.*
+- **Q5b.** Approving a scope (P1) needs a press. *Recommended: yes.*
+- **Q5c.** Answering by option (P2, P3) needs a press, with a rondo-owned script keeping the unsent
+  draft. *Recommended: yes.*
+
+Between the question and the answer, the gate had the conversation screen prototyped on H twice --
+once before `D-0064` and once in its shape -- to check that the stack and section 5a's table hold for
+a surface that is not a status list. That second prototype is where keeping an opened fold was found,
+and it was added to Q5c's script before the answer.
+
+**The gate's answer (2026-09-13): every question as recommended.** H is the stack; R1, R2, R3 and R4
+are ratified with the substitutes and losses stated in rule 6; approvals (the lap-end press, P1, P2,
+P3, P4) require a press and a thread message is a send; and the composer script keeps both the unsent
+draft and the folds a person opened.
+
+### Annotations and supersession this entry adds
+
+- **`D-0057`** gains `Status: superseded by D-0059` and a supersession note in `D-0062`'s form.
+- **`D-0007`** gains a dated annotation: R1 amends what `D-0054` rule 5 and `D-0057` rule 3 added to
+  it for browser bytes; `--ignore-scripts` and the lockfile are unchanged.
+- **`D-0054`** gains a dated annotation: rule 5 is amended by R2 and rule 6 by R3; rules 1, 2 and 7
+  stand.
+- **`D-0041`** gains a dated annotation: rule 4's enumeration is amended by R4 and section 5a; rule 1
+  stands.
+
+### What this entry does not do
+
+- **It does not implement anything or install anything into this tree.** rondo's production tree is
+  still 2 packages when this merges.
+- **It does not take its relaxations on its own authority.** R1-R4 were put to the gate with their
+  substitutes and losses, and are in force because the gate ratified them (below).
+- **It does not redesign the claims.** The answer view's 21-claim table is long and mostly
+  `undetermined`; both critics noticed, and it is a content question for `D-0032`'s owners, not a
+  stack question.
+- **It does not change what any recorded byte says** or the language behaviour of `D-0056`. It does
+  not decide which write kinds exist -- `D-0064` does; section 5a decides only which of them need a
+  press.
+
+### Residuals
+
+| Residual | Why not here | Who decides |
+|---|---|---|
+| Cross-platform build reproducibility | measured on one machine; native binaries per platform | the implementing change's CI |
+| A command palette or `?` help | beyond the bar's keyboard row; nothing asked for it | whoever wants it |
+| The claim table's length on the answer view | content, not stack | `D-0032`'s owners |
+| A CJK UI face | CJK stays on system fonts in every prototype | whoever measures a Japanese operator's screen |
+| The reading view (`?reading`) in the new stack | not ported by either prototype | the implementing change |
+
+### What was measured, and how
+
+On **2026-09-13**, on this machine, in the worker's uncommitted scratch directory.
+
+- **The fixture.** Today's `operatorPage` from `npm run build`'s output, over an in-memory store
+  holding 2 laps at the gate, 3 running and 5 ended, rendered as `summary` (en, ja), `answer` and
+  `reading`. Every prototype carried the same text; each prototype's author checked coverage
+  against these documents, with composite strings split into cells noted.
+- **Screenshots.** `playwright-core` Chromium headless shell with `prefers-color-scheme` emulated;
+  1280 and 420 wide; with `javaScriptEnabled: false` for the script-off set; Noto Sans CJK JP for
+  Japanese. The machine has no SF, Segoe or Mona Sans, so system-font candidates render in Ubuntu or
+  DejaVu Sans and understate those candidates' type.
+- **Scores.** Two independent critic agents, each reading every screenshot and the prototype
+  sources for keyboard claims, in two rounds; the tables in section 2 are their numbers unaltered.
+- **Stacks.** Installed with `npm ci --ignore-scripts` from lockfiles; package counts read from
+  those lockfiles; reproducibility by sha256 over two clean builds; bytes read off the served
+  responses; line counts non-blank and non-comment as in `D-0057`. Each stack's claims were audited
+  by a second agent that re-ran every check, built mutant copies with planted writers, and reported
+  each claim confirmed or refuted; section 4's table reports the audited result, not the author's.
+- **Registry facts.** Versions as listed in section 4 and section 2, installed on the date above.
+- **`Sec-Fetch-*`.** A `node:http` server logging request headers, driven by Playwright Chromium
+  through page-owned scripts (not CDP evaluation, which carries a user gesture and passed `?1` for
+  every script submit in a first run that was discarded for that reason).
+- **htmx's `hx-post` headers.** Measured by the conversation-screen prototype on H
+  (`rondo-conversation-screen-prototype`, its note section 2.2): a server route recording
+  `Sec-Fetch-*` per write while Playwright clicked and pressed Ctrl+Enter; `hx-post` arrived `cors`
+  with no `Sec-Fetch-User`, a native submit `navigate` with `?1`, and a navigating send lost an unsent
+  draft when another button on the thread was pressed. This entry cites that measurement and did not
+  re-run it.
+- **What was not measured**: any browser other than Chromium for section 5; any machine other than
+  this one for reproducibility; the reading view in either stack; a Japanese operator's real fonts.
+
+### What would falsify it
+
+- **A critic finding a visible difference only a framework can produce.** Section 2's "none" is what
+  lets rule 2 treat the stacks as a tie on the screen; a screen T can draw and H cannot re-opens
+  rule 3.
+- **`Sec-Fetch-User` not being sent on a person's form submit by a browser an operator uses**, or
+  being sent on an unattended one. R4's substitute is a claim about browsers measured in one engine.
+- **The CSS build not reproducing on CI's platform.** R1's substitute is reproducibility; if it holds
+  only on one machine the manifest becomes a per-platform artifact and R1's loss is larger than
+  stated.
+- **A maintained library that refuses `q=0`, checks the tag grammar and writes the cookie only on a
+  switch.** Rule 4's exception ends.
+- **htmx needing a non-`GET` request anywhere other than the message port.** R2 and R3 were first
+  priced on a `GET`-only use and widened by exactly one write kind in section 5a; a second one is a
+  new row in that table and has to be argued there.
+- **The composer script needing a third duty**, or a server needing to read what it keeps. Section 5a
+  bounds it at a draft and open folds held in the page; a third is a new argument, not an edit.
+- **A message posted with no person typing it being acted on as if the person had said it.**
+  Section 5a accepts that residual because a message cannot approve anything. If a later entry lets
+  a message move work -- a drafter treating a reply as an answer -- the send needs a press too.
+- **Hono's API breaking under the implementation the way TanStack Start's did under the prototype.**
+  Rule 3(d) rests on one prototype's observation.
+- **The implementing change's screenshots not reaching "yes"** from the gate. Rule 1 is the bar, and
+  a stack that cannot be designed up to it is re-priced, not excused.
