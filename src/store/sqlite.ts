@@ -67,6 +67,7 @@ import {
   type JsonRecord,
   type LapReading,
   type LapReadingDraft,
+  MODEL_READING_DRAFTER_PREFIX,
   type Occupancy,
   type OpenProposal,
   type OperatorAttention,
@@ -1407,6 +1408,13 @@ export function iterationStore(connection: DatabaseSync, policy: HostPolicy): It
     // D-0029 V-11's second clause, as D-0065 2.2 gave it a field: a model
     // drafter's `clear` also needs rondo's digest of what it delivered, and one
     // without it is refused in the same way and for the same reason.
+    // **Only `clear` is refused; a `concerns` without the digest is kept as it
+    // came.** A `clear` claims the material was read and nothing found, and
+    // that claim is what needs the delivered bytes behind it. Findings claim no
+    // coverage: dropping or demoting them because the digest is missing would
+    // lose what the reviewer did raise, which D-0065 5.3 refuses, so the
+    // asymmetry is the rule rather than a gap in it.
+
     const undelivered =
       draft.verdict === "clear" &&
       isModelReadingDrafter(draft.drafter) &&
@@ -1705,6 +1713,31 @@ export function iterationStore(connection: DatabaseSync, policy: HostPolicy): It
       draft: LapReadingDraft,
       nowMs: number,
     ): Promise<AppendReadingOutcome> {
+      // **Refused before the transaction, and as a defect rather than a row.**
+      // Only a model drafter may append: the deterministic reading lands with
+      // the `awaiting_human` transaction or not at all (D-0029 rule 8), and a
+      // deterministic row appended afterwards would reopen exactly the window
+      // `transition`'s `reading` parameter exists to make unreachable. A
+      // `graded` array whose length differs from `findings` is not parallel to
+      // them, and the reader would silently drop it (`readGraded`), so the
+      // severities would vanish after they were written; refusing here keeps
+      // that from being a write that looks like it succeeded.
+      if (!isModelReadingDrafter(draft.drafter)) {
+        return {
+          kind: "defect",
+          reason:
+            `appendReading admits only a model drafter, and '${draft.drafter}' is not one: ` +
+            "the deterministic reading lands with its transition (D-0029 rule 8).",
+        };
+      }
+      if (draft.graded !== undefined && draft.graded.length !== draft.findings.length) {
+        return {
+          kind: "defect",
+          reason:
+            `the reading grades ${String(draft.graded.length)} findings and carries ` +
+            `${String(draft.findings.length)}; graded must be parallel to findings (D-0065 2.2).`,
+        };
+      }
       try {
         return inTransaction<AppendReadingOutcome>(() => {
           if (readRow(iterationId) === null) {
@@ -1749,12 +1782,25 @@ export function iterationStore(connection: DatabaseSync, policy: HostPolicy): It
       // reached a terminal status", read rather than restated: the terminal set
       // is written once, in `records.ts`, and a second spelling here is exactly
       // what D-0019 rule 10 rejected shape A for.
+      // **A model reader's rows do not count** (D-0065 2.6): a model row is
+      // appended after the transition and does not ride it, so a lap whose
+      // transition-carried reading never landed is still the fail-open this
+      // detects, however many model rows sit beside it. The predicate is
+      // `isModelReadingDrafter`'s, spelled in SQL; excluding model rows rather
+      // than listing deterministic ones keeps the interpreter's `rondo/none`
+      // (a reading recorded as unavailable) counting as a reading that landed.
       return connection
         .prepare(
           "SELECT id FROM iteration WHERE live IS NULL AND id NOT IN " +
-            "(SELECT iteration_id FROM lap_reading) ORDER BY created_at_ms, id",
+            "(SELECT iteration_id FROM lap_reading WHERE NOT (length(drafter) > ? AND " +
+            "substr(drafter, 1, ?) = ?)) " +
+            "ORDER BY created_at_ms, id",
         )
-        .all()
+        .all(
+          MODEL_READING_DRAFTER_PREFIX.length,
+          MODEL_READING_DRAFTER_PREFIX.length,
+          MODEL_READING_DRAFTER_PREFIX,
+        )
         .map((row) => String((row as SqlRow)["id"]));
     },
 

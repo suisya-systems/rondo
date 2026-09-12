@@ -20,7 +20,7 @@
  */
 
 import { materialLanguageSentence, showGate, type VerifiedContinuo } from "../continuo/invoker.js";
-import { reviewerRow } from "../continuo/roles.js";
+import { reviewerFamilyCheck, reviewerRow } from "../continuo/roles.js";
 import { readLapCommands } from "../continuo/transcript.js";
 import { readPlan } from "../refrain/plan.js";
 import {
@@ -133,6 +133,17 @@ async function take(ports: ModelReviewPorts, iterationId: string): Promise<reado
       evidence: null,
       unavailableReason: reason,
     });
+
+  // **The family before anything spawns** (D-0065 rule 3.3). `prepareReview`
+  // asks the same question, but only after the material is gathered, and a lap
+  // the reviewer may not read would then have started `git`, read a transcript
+  // and asked continuo for a rationale for nothing. Asked here first, a
+  // same-family or unknown-model lap spawns nothing at all; `prepareReview`
+  // keeps its own check, so the pure function stays total on its own.
+  const family = reviewerFamilyCheck(reviewer, record.model);
+  if (family.kind === "refused") {
+    return await unavailable(family.reason);
+  }
 
   // **The deterministic reading's range, or no reading.** Both readings must be
   // about the same commits (D-0065 1.2.1); a model reading over a range rondo

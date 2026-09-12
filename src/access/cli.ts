@@ -1550,9 +1550,9 @@ async function commandStart(
   const report = await admit(ports, advisory, plan, START_POLICY, iterationId);
   sayReport(report);
   if (report.status === "awaiting_human") {
-    await sayModelReading(continuo, store, report.iterationId ?? iterationId);
-    say("");
-    say("A person has to answer this before anything lands. Next: rondo answer");
+    await sayGateOpen(() =>
+      takeModelReading(modelReviewPorts(continuo, store), report.iterationId ?? iterationId),
+    );
     return 0;
   }
   if (report.iterationId === null) {
@@ -2169,9 +2169,9 @@ async function commandRetry(
   );
   sayReport(report);
   if (report.status === "awaiting_human") {
-    await sayModelReading(continuo, store, report.iterationId ?? retry.successorId);
-    say("");
-    say("A person has to answer this before anything lands. Next: rondo answer");
+    await sayGateOpen(() =>
+      takeModelReading(modelReviewPorts(continuo, store), report.iterationId ?? retry.successorId),
+    );
     return 0;
   }
   if (report.iterationId === null) {
@@ -2181,27 +2181,53 @@ async function commandRetry(
 }
 
 /**
- * Take the model reading of a lap that has just reached its gate, and print it
- * (D-0065 2.6).
+ * Say that the gate is open, then take the model reading of the lap and print it
+ * (D-0065 2.6). Exported so the order is testable without a continuo.
  *
  * **After `drive()` returned**, so the deterministic reading is already on the
  * row and the gate is already open: a person may answer from another terminal
  * while this runs, and answers without it. That is D-0029 rule 3's information
  * where the clock runs, not a wait in front of the gate.
+ *
+ * **The next step is said first, and that order is the point.** The reviewer
+ * may run up to its timeout; an operator told "Next: rondo answer" only after
+ * it would sit in front of an open gate being told nothing, which is the wait
+ * D-0029 rule 3 refuses put back by the printing order. `take` is null when no
+ * reading is due, and then only the next step is said.
  */
-async function sayModelReading(
-  continuo: VerifiedContinuo,
-  store: IterationStore,
-  iterationId: string,
-): Promise<void> {
+export async function sayGateOpen(take: (() => Promise<readonly string[]>) | null): Promise<void> {
+  say("");
+  say("A person has to answer this before anything lands. Next: rondo answer");
+  if (take === null) {
+    return;
+  }
   say("");
   say(
     "model review  taking a model reading of this work; the gate is already open and does " +
       "not wait for it",
   );
-  for (const line of await takeModelReading(modelReviewPorts(continuo, store), iterationId)) {
+  for (const line of await take()) {
     say(line);
   }
+}
+
+/**
+ * Whether a model reading is still due for the iteration's current tip (D-0065
+ * 4.1: one round per tip).
+ *
+ * Not due when a model reading already carries the latest deterministic
+ * reading's tip: that round was taken over these commits. Due otherwise,
+ * including when the deterministic reading resolved no range, because then
+ * there is no tip to have taken a round over and the attempt records why.
+ */
+export function modelReadingDue(readings: readonly LapReading[]): boolean {
+  const tip = latestReading(readings, isDeterministicReadingDrafter)?.evidence?.tipCommit;
+  if (tip === undefined) {
+    return true;
+  }
+  return !readings.some(
+    (reading) => isModelReadingDrafter(reading.drafter) && reading.evidence?.tipCommit === tip,
+  );
 }
 
 /** Door two: see what is waiting, and answer it. */
@@ -2293,6 +2319,17 @@ export async function lapMaterialLines(
     lines.push(...modelReadingLines(model));
   }
   return lines;
+}
+
+/**
+ * The latest model reading as `publish` prints it, or nothing (D-0065 5.5).
+ *
+ * Material beside the deterministic reading `reviewGate` refuses on, never an
+ * input to it: publish's refusal stays the deterministic reader's alone.
+ */
+export function publishModelReadingLines(readings: readonly LapReading[]): readonly string[] {
+  const model = latestReading(readings, isModelReadingDrafter);
+  return model === null ? [] : modelReadingLines(model);
 }
 
 /**
@@ -2861,7 +2898,14 @@ async function commandAnswer(
   const report = await resume(ports, record.id);
   sayReport(report);
   if (report.status === "awaiting_human") {
-    await sayModelReading(continuo, store, record.id);
+    // **One model round per tip** (D-0065 4.1). Answering a gate that resumes
+    // into another gate over the same commits would otherwise hand the same
+    // bytes to the reviewer again and append a second round nobody asked for.
+    await sayGateOpen(
+      modelReadingDue(await store.readingsFor(record.id))
+        ? () => takeModelReading(modelReviewPorts(continuo, store), record.id)
+        : null,
+    );
   }
   if (report.status === "closed") {
     say("");
@@ -3517,9 +3561,9 @@ async function commandRevise(
   const second = await admit(ports, advisory, successor.plan, START_POLICY, successorId, record.id);
   sayReport(second);
   if (second.status === "awaiting_human") {
-    await sayModelReading(continuo, store, second.iterationId ?? successorId);
-    say("");
-    say("A person has to answer this before anything lands. Next: rondo answer");
+    await sayGateOpen(() =>
+      takeModelReading(modelReviewPorts(continuo, store), second.iterationId ?? successorId),
+    );
     return 0;
   }
   if (second.iterationId === null) {
@@ -4034,6 +4078,9 @@ async function commandPublish(
   if (gateOnReview.kind === "refused") {
     return refuse(gateOnReview.reason);
   }
+  // The model reading beside it, as material only (D-0065 5.5): printed, and
+  // read by nothing above.
+  const modelReading = publishModelReadingLines(readings);
 
   say(`iteration '${record.id}' is closed; gate outcome '${record.gateOutcome ?? "(none)"}'`);
   if (parsed.despiteReview) {
@@ -4049,6 +4096,12 @@ async function commandPublish(
   for (const warning of preflight.warnings) {
     say("");
     say(warning);
+  }
+  if (modelReading.length > 0) {
+    say("");
+    for (const line of modelReading) {
+      say(line);
+    }
   }
   say("");
   say("publish runs these three, in order, as you:");

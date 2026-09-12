@@ -357,3 +357,23 @@ test("a transcript that cannot be read is unread with a reason, never a throw", 
   const noEventsReading = readLapCommands({ stateRoot: noEvents, runId: RUN, sessionId: SESSION });
   expect(noEventsReading.kind === "unread" && noEventsReading.reason).toContain("events-003.jsonl");
 });
+
+test("two result events in one transcript: the final message is the last one's", () => {
+  // A resumed turn writes a second `result` event; the rationale the reviewer is
+  // handed is the lap's last word, as continuo reads it (`readLapSpend` above).
+  const stateRoot = sessionDir({
+    generation: 0,
+    events: {
+      "000": transcript(
+        { ...LAP_5, result: "first turn: verify could not run" },
+        toolUse("t1", "Bash", { command: "npm run verify" }),
+        toolResult("t1", "ok"),
+        { ...LAP_5, result: "second turn: verify is green" },
+      ),
+    },
+  });
+
+  const reading = readLapCommands({ stateRoot, runId: RUN, sessionId: SESSION });
+
+  expect(reading.kind === "read" && reading.finalMessage).toBe("second turn: verify is green");
+});

@@ -73,11 +73,15 @@ const CRITERION: ReviewCriterion = {
   ruleFiles: ["AGENTS.md"],
 };
 
-function planFor(id: string, criterion: ReviewCriterion | null): JsonRecord {
+function planFor(
+  id: string,
+  criterion: ReviewCriterion | null,
+  materialLanguage: RunPlan["materialLanguage"],
+): JsonRecord {
   const validated = runPlan({
     ...PLAN,
     reviewCriterion: criterion,
-    materialLanguage: "ja",
+    materialLanguage,
   });
   if (validated.kind !== "planned") throw new Error(validated.reason);
   const allocation = allocate(id, PLAN.workspaceRoot);
@@ -125,6 +129,8 @@ async function world(
     readonly criterion?: ReviewCriterion | null;
     readonly model?: string;
     readonly reading?: LapReadingDraft | null;
+    readonly sessionId?: string | null;
+    readonly materialLanguage?: RunPlan["materialLanguage"];
   } = {},
 ) {
   const store = iterationStore(new DatabaseSync(":memory:"), { maxOccupying: 4, maxLive: 6 });
@@ -132,7 +138,11 @@ async function world(
   await store.reserve({
     id,
     request: "do the thing",
-    plan: planFor(id, options.criterion === undefined ? CRITERION : options.criterion),
+    plan: planFor(
+      id,
+      options.criterion === undefined ? CRITERION : options.criterion,
+      options.materialLanguage === undefined ? "ja" : options.materialLanguage,
+    ),
     spend: null,
     nowMs: 1_000,
     supersedesIterationId: null,
@@ -144,11 +154,21 @@ async function world(
     id,
     "planned",
     "awaiting_human",
-    { model: options.model ?? "claude-opus-5", sessionId: "s-1", gateId: "g-1" },
+    {
+      model: options.model ?? "claude-opus-5",
+      sessionId: options.sessionId === undefined ? "s-1" : options.sessionId,
+      gateId: "g-1",
+    },
     2_000,
     options.reading === undefined ? DETERMINISTIC : options.reading,
   );
-  const calls = { gather: 0, run: [] as string[], commands: 0 };
+  const calls = {
+    gather: 0,
+    rationale: 0,
+    run: [] as string[],
+    commands: 0,
+    evidence: [] as ReadingEvidence[],
+  };
   const answer = (document: string): ReviewerRun => ({
     kind: "answered",
     finalMessage: JSON.stringify({
@@ -167,9 +187,13 @@ async function world(
   });
   const ports: ModelReviewPorts = {
     store,
-    rationale: async () => "I sped run up and verified it",
+    rationale: async () => {
+      calls.rationale += 1;
+      return "I sped run up and verified it";
+    },
     gather: async (request) => {
       calls.gather += 1;
+      calls.evidence.push(request.evidence);
       expect(request.evidence).toEqual(EVIDENCE);
       expect(request.ruleFiles).toEqual(["AGENTS.md"]);
       return FACTS;
@@ -244,6 +268,10 @@ test("a lap run under the reviewer's own family is refused without spawning", as
 
   await takeModelReading(ports, id);
 
+  // Nothing gathered either: no git, no transcript, no continuo (D-0065 rule 3.3).
+  expect(calls.gather).toBe(0);
+  expect(calls.rationale).toBe(0);
+  expect(calls.commands).toBe(0);
   expect(calls.run).toEqual([]);
   const model = (await store.readingsFor(id)).at(-1);
   expect(model?.verdict).toBe("unavailable");
@@ -329,5 +357,59 @@ test("the gate screen keeps the deterministic reading as the review and adds the
   // The deterministic `clear` is still the review line, although the model row is newer.
   expect(said).toContain("review  read the commits and the files, and raised nothing");
   expect(said).toContain("[blocker] the check is gone");
-  expect(said).toContain("no basis resolved");
+  expect(said).toContain("bases: none");
+});
+
+test("a lap whose model is not in the tables is refused before anything is gathered", async () => {
+  const { store, id, ports, calls } = await world({ model: "some-unknown-model" });
+
+  await takeModelReading(ports, id);
+
+  expect(calls.gather).toBe(0);
+  expect(calls.rationale).toBe(0);
+  expect(calls.commands).toBe(0);
+  expect(calls.run).toEqual([]);
+  expect((await store.readingsFor(id)).at(-1)?.unavailableReason).toContain("D-0065 rule 3.3");
+});
+
+test("a second reading of one iteration hands over the deterministic range again, not the model row", async () => {
+  // The first model row is the newest reading when the second is taken; its
+  // evidence carries a delivered digest and its findings are the model's own.
+  const { store, id, ports, calls } = await world();
+
+  await takeModelReading(ports, id);
+  await takeModelReading(ports, id);
+
+  expect(calls.evidence).toEqual([EVIDENCE, EVIDENCE]);
+  expect(calls.run).toHaveLength(2);
+  expect(calls.run[1]).not.toContain("deletes the authorisation check");
+  expect(calls.run[1]).toBe(calls.run[0]);
+  expect((await store.readingsFor(id)).map((r) => r.drafter)).toEqual([
+    "rondo/deterministic/2",
+    "rondo/model/1/gpt-6-astra",
+    "rondo/model/1/gpt-6-astra",
+  ]);
+});
+
+test("a row with no session reads no transcript and records why", async () => {
+  const { store, id, ports, calls } = await world({ sessionId: null });
+
+  await takeModelReading(ports, id);
+
+  expect(calls.commands).toBe(0);
+  expect(calls.run).toEqual([]);
+  const model = (await store.readingsFor(id)).at(-1);
+  expect(model?.verdict).toBe("unavailable");
+  expect(model?.unavailableReason).toContain("transcript");
+  expect(model?.unavailableReason).toContain("the row names no session");
+});
+
+test("a plan with no material language hands the prompt over as written", async () => {
+  const { ports, id, calls } = await world({ materialLanguage: null });
+
+  await takeModelReading(ports, id);
+
+  const document = calls.run[0] ?? "";
+  expect(document).toContain("do the thing");
+  expect(document).not.toContain("IETF language tag");
 });

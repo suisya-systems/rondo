@@ -175,31 +175,78 @@ test("the review material is the range's diff, full messages and rule files at t
   expect(missing.kind === "unreadable" && missing.reason).toContain("NOPE.md");
 });
 
-/** A stand-in reviewer: records its argv and stdin, and answers from a file. */
-function fakeReviewer(answer: string, status = 0): { executable: string; seen: string } {
+test("a commit message holding an RS byte reaches the reviewer whole", async () => {
+  // The format used to separate commits with 0x1E, which cut such a message
+  // at the byte and dropped the rest without a word.
+  const work = workspace();
+  writeFileSync(join(work, "a.txt"), "changed\n");
+  git(work, "commit", "-am", "before\x1eafter\n\nbody \x1e too");
+  writeFileSync(join(work, "a.txt"), "again\n");
+  git(work, "commit", "-am", "second");
+
+  const inspection = await inspectLapWork(request(work));
+  if (inspection.kind !== "read") throw new Error(inspection.reason);
+  const facts = await gatherReviewMaterialFacts({
+    workspace: work,
+    evidence: evidenceOf(inspection),
+    ruleFiles: [],
+  });
+
+  expect(facts.kind).toBe("read");
+  if (facts.kind !== "read") return;
+  expect(facts.commits.map((commit) => commit.message)).toEqual([
+    "before\x1eafter\n\nbody \x1e too",
+    "second",
+  ]);
+  expect(facts.commits.every((commit) => /^[0-9a-f]{40}$/.test(commit.sha))).toBe(true);
+});
+
+/** One `codex exec --json` event line. */
+const event = (value: unknown): string => `${JSON.stringify(value)}\n`;
+const agentMessage = (text: string): string =>
+  event({ type: "item.completed", item: { id: "m", type: "agent_message", text } });
+const opening = event({ type: "thread.started", thread_id: "t" }) + event({ type: "turn.started" });
+const closing = event({ type: "turn.completed", usage: { input_tokens: 1, output_tokens: 1 } });
+
+/**
+ * A stand-in reviewer: records its argv and (unless told not to read it) its
+ * stdin, echoes the document to stderr as codex does, and prints `events`.
+ */
+function fakeReviewer(
+  events: string,
+  options: { readonly status?: number; readonly readStdin?: boolean } = {},
+): { executable: string; seen: string } {
   const root = mkdtempSync(join(tmpdir(), "rondo-fake-reviewer-"));
   const seen = join(root, "seen");
   const executable = join(root, "reviewer");
-  writeFileSync(join(root, "answer"), answer);
+  writeFileSync(join(root, "events"), events);
+  const read = options.readStdin === false ? "" : `cat > '${seen}'\ncat '${seen}' >&2\n`;
   writeFileSync(
     executable,
-    `#!/bin/sh\nprintf '%s\\n' "$@" > '${seen}.argv'\ncat > '${seen}'\necho 'banner on stderr' >&2\ncat '${join(root, "answer")}'\nexit ${String(status)}\n`,
+    `#!/bin/sh\nprintf '%s\\n' "$@" > '${seen}.argv'\n${read}cat '${join(root, "events")}'\nexit ${String(options.status ?? 0)}\n`,
     { mode: 0o755 },
   );
   return { executable, seen };
 }
 
-// The stand-in is a POSIX shell script.
-test.skipIf(process.platform === "win32")(
-  "the reviewer is handed the document on stdin, and stdout is its answer",
-  async () => {
-    const fake = fakeReviewer('\n  {"findings":[]}  \n');
-    const document = "review this: café — and nothing else\n";
+const row = (executable: string) => ({ model: "gpt-6-astra", family: "gpt", executable });
 
-    const run = await runReviewer(
-      { model: "gpt-6-astra", family: "gpt", executable: fake.executable },
-      document,
+// The stand-ins below are POSIX shell scripts.
+const posix = test.skipIf(process.platform === "win32");
+
+posix(
+  "the reviewer is handed the document on stdin, and its last agent message is the answer",
+  async () => {
+    const fake = fakeReviewer(
+      opening +
+        event({ type: "item.completed", item: { id: "r", type: "reasoning", summary: [] } }) +
+        agentMessage("an earlier draft") +
+        agentMessage('\n  {"findings":[]}  \n') +
+        closing,
     );
+    const document = "review this: café -- and nothing else\n";
+
+    const run = await runReviewer(row(fake.executable), document);
 
     expect(run).toEqual({
       kind: "answered",
@@ -208,8 +255,9 @@ test.skipIf(process.platform === "win32")(
     });
     expect(readFileSync(fake.seen, "utf8")).toBe(document);
     const argv = readFileSync(`${fake.seen}.argv`, "utf8").split("\n");
-    expect(argv.slice(0, 9)).toEqual([
+    expect(argv.slice(0, 15)).toEqual([
       "exec",
+      "--json",
       "-m",
       "gpt-6-astra",
       "-s",
@@ -218,30 +266,127 @@ test.skipIf(process.platform === "win32")(
       "--ephemeral",
       "--color",
       "never",
+      "-c",
+      "features.shell_tool=false",
+      "-c",
+      "tools.web_search=false",
+      "-C",
     ]);
-    expect(argv[9]).toBe("-C");
-    expect(argv[11]).toBe("-");
+    expect(argv[16]).toBe("-");
     // The directory it ran in was empty and is gone.
-    expect(existsSync(argv[10] ?? "")).toBe(false);
+    expect(existsSync(argv[15] ?? "")).toBe(false);
   },
 );
 
-// The stand-in is a POSIX shell script.
-test.skipIf(process.platform === "win32")(
-  "a reviewer that exits non-zero or cannot start is a failed run",
-  async () => {
-    const fake = fakeReviewer("", 3);
-    const failed = await runReviewer(
-      { model: "gpt-6-astra", family: "gpt", executable: fake.executable },
-      "doc",
-    );
-    expect(failed.kind).toBe("failed");
-    expect(failed.kind === "failed" && failed.reason).toContain("exited 3");
+posix("output split inside multi-byte characters is decoded whole", async () => {
+  // Far past one pipe chunk, with 1-, 2-, 3- and 4-byte characters so chunk
+  // boundaries land inside characters at many offsets.
+  const text = "aé€😀".repeat(60_000);
+  const fake = fakeReviewer(opening + agentMessage(text) + closing);
 
-    const absent = await runReviewer(
-      { model: "gpt-6-astra", family: "gpt", executable: join(tmpdir(), "rondo-no-such-reviewer") },
+  const run = await runReviewer(row(fake.executable), "doc");
+
+  expect(run.kind).toBe("answered");
+  expect(run.kind === "answered" && run.finalMessage === text).toBe(true);
+});
+
+posix("a reviewer whose events show it ran a command is a failed run", async () => {
+  const fake = fakeReviewer(
+    opening +
+      event({ type: "item.started", item: { id: "c", type: "command_execution", command: "ls" } }) +
+      event({
+        type: "item.completed",
+        item: { id: "c", type: "command_execution", command: "ls", aggregated_output: "" },
+      }) +
+      agentMessage('{"findings":[]}') +
+      closing,
+  );
+
+  const run = await runReviewer(row(fake.executable), "doc");
+
+  expect(run).toEqual({
+    kind: "failed",
+    reason:
+      "the reviewer ran or fetched something (command_execution), so its reading is not over " +
+      "the delivered bytes only (D-0065 rule 1.1)",
+  });
+});
+
+posix("an unknown item type is failed the same way, not ignored", async () => {
+  const fake = fakeReviewer(
+    opening +
+      event({ type: "item.completed", item: { type: "web_search", query: "q" } }) +
+      agentMessage('{"findings":[]}') +
+      closing,
+  );
+  const run = await runReviewer(row(fake.executable), "doc");
+  expect(run.kind === "failed" && run.reason).toContain("(web_search)");
+});
+
+posix("no agent message, or a line that is not an event, is a failed run", async () => {
+  const silent = await runReviewer(row(fakeReviewer(opening + closing).executable), "doc");
+  expect(silent.kind === "failed" && silent.reason).toContain("no agent message");
+
+  // A plain-text answer (what `codex exec` without `--json` prints) is not an event.
+  const garbled = await runReviewer(
+    row(fakeReviewer(`${opening}not json\n${agentMessage("x")}${closing}`).executable),
+    "doc",
+  );
+  expect(garbled.kind === "failed" && garbled.reason).toContain(
+    "stdout line 3 is not a JSON event",
+  );
+  // Nor is JSON without an event type.
+  const untyped = await runReviewer(
+    row(fakeReviewer(`${opening}{"findings":[]}\n${agentMessage("x")}${closing}`).executable),
+    "doc",
+  );
+  expect(untyped.kind === "failed" && untyped.reason).toContain(
+    "stdout line 3 is not a JSON event",
+  );
+});
+
+posix(
+  "a failed run says its exit and error events, and never the document echoed on stderr",
+  async () => {
+    const fake = fakeReviewer(
+      opening + event({ type: "turn.failed", error: { message: "quota — exceeded" } }),
+      { status: 3 },
+    );
+
+    const failed = await runReviewer(row(fake.executable), "SECRET-DOCUMENT-BODY");
+
+    expect(failed.kind).toBe("failed");
+    if (failed.kind !== "failed") return;
+    expect(failed.reason).toContain("exited 3: quota ? exceeded");
+    expect(failed.reason).not.toContain("SECRET-DOCUMENT-BODY");
+
+    // Exit 0 with an error event is not an answer either.
+    const errored = await runReviewer(
+      row(
+        fakeReviewer(opening + event({ type: "error", message: "stream lost" }) + agentMessage("x"))
+          .executable,
+      ),
       "doc",
     );
+    expect(errored.kind === "failed" && errored.reason).toContain("exited 0: stream lost");
+
+    const absent = await runReviewer(row(join(tmpdir(), "rondo-no-such-reviewer")), "doc");
     expect(absent.kind).toBe("failed");
   },
 );
+
+posix("a reviewer that exits 0 without reading its document was not delivered it", async () => {
+  // Past any pipe buffer, so the write cannot finish into the kernel alone:
+  // the child exits with it pending and the write fails or is destroyed.
+  // Which of the two happens, and whether stdin closes before or after the
+  // process, is the event loop's to order and cannot be forced here; this
+  // pins the outcome both share -- `finish` never fires, so not delivered.
+  const fake = fakeReviewer(opening + agentMessage('{"findings":[]}') + closing, {
+    readStdin: false,
+  });
+
+  const run = await runReviewer(row(fake.executable), "x".repeat(8 * 1024 * 1024));
+
+  expect(run.kind).toBe("failed");
+  expect(run.kind === "failed" && run.reason).toContain("standard input was not delivered in full");
+});

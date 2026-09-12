@@ -49,6 +49,8 @@ export interface CommandOutcome {
   readonly commandLine: string;
   /** Null when the process was killed by a signal or never started. */
   readonly status: number | null;
+  /** The signal that ended the process, when one did (a timeout is SIGKILL). */
+  readonly signal: string | null;
   readonly stdout: string;
   readonly stderr: string;
   /** Set when the process could not be started at all. */
@@ -81,18 +83,35 @@ async function runCommand(
     // Standard input is a pipe only when there is something to write to it
     // (D-0065 1.1: the reviewer's document), so every other command keeps the
     // closed stdin it always had and cannot sit waiting on a terminal.
+    //
+    // **Windows.** Without a shell, `spawn` does not resolve an npm `.cmd`
+    // shim, so a `codex` installed that way fails to start (ENOENT). That is a
+    // `spawnError`, which every caller turns into an unreadable query or a
+    // failed reviewer run -- an unavailable reading, never a clear one.
     const child = spawn(executable, [...argv], {
       stdio: [options.input === undefined ? "ignore" : "pipe", "pipe", "pipe"],
     });
-    let stdout = "";
-    let stderr = "";
-    let stdinError: string | null = null;
+    // **Bytes, decoded once at the end.** A chunk boundary can fall inside a
+    // multi-byte UTF-8 character; decoding chunk by chunk would turn both
+    // halves into U+FFFD in text a reading is then taken over.
+    const stdoutChunks: Buffer[] = [];
+    const stderrChunks: Buffer[] = [];
+    let timedOut = false;
     let settled = false;
 
     const timer = setTimeout(() => {
-      stderr += `\nrondo stopped waiting after ${String(timeoutMs)} ms and killed the command.\n`;
+      timedOut = true;
       child.kill("SIGKILL");
     }, timeoutMs);
+
+    const streams = (): { stdout: string; stderr: string } => ({
+      stdout: Buffer.concat(stdoutChunks).toString("utf8"),
+      stderr:
+        Buffer.concat(stderrChunks).toString("utf8") +
+        (timedOut
+          ? `\nrondo stopped waiting after ${String(timeoutMs)} ms and killed the command.\n`
+          : ""),
+    });
 
     const finish = (outcome: CommandOutcome): void => {
       if (settled) {
@@ -103,33 +122,66 @@ async function runCommand(
       resolve(outcome);
     };
 
+    // **Delivered means the write finished, not that it was attempted.** A
+    // process that exits without reading all of its input makes the write fail
+    // with EPIPE, or is destroyed with the write still pending when Node reaps
+    // the child; either way `finish` never fires. Unhandled, the EPIPE is an
+    // uncaught exception; swallowed, it is a delivered digest over bytes the
+    // reader was never given (D-0065 1.4). So the outcome waits for standard
+    // input to close as well as the process, and the input counts as delivered
+    // only if `finish` fired first with no error.
+    let stdinClosed = options.input === undefined || child.stdin === null;
+    let stdinFinished = false;
+    let stdinError: string | null = null;
+    let exited: { status: number | null; signal: string | null } | null = null;
+    const settleIfDone = (): void => {
+      if (exited === null || !stdinClosed) {
+        return;
+      }
+      finish({
+        commandLine,
+        ...exited,
+        ...streams(),
+        spawnError:
+          options.input === undefined || (stdinFinished && stdinError === null)
+            ? null
+            : `standard input was not delivered in full: ${stdinError ?? "the process did not take it all"}`,
+      });
+    };
+
     if (options.input !== undefined && child.stdin !== null) {
-      // **A write that did not land is a spawn failure, not a warning.** A
-      // process that exits before reading all of its input raises EPIPE here;
-      // unhandled, that is an uncaught exception, and swallowed, it is a
-      // delivered digest over bytes the reader was never given (D-0065 1.4).
       child.stdin.on("error", (error: Error) => {
         stdinError = error.message;
+      });
+      child.stdin.on("finish", () => {
+        stdinFinished = true;
+      });
+      child.stdin.on("close", () => {
+        stdinClosed = true;
+        settleIfDone();
       });
       child.stdin.end(options.input, "utf8");
     }
 
     child.stdout?.on("data", (chunk: Buffer) => {
-      stdout += chunk.toString("utf8");
+      stdoutChunks.push(chunk);
     });
     child.stderr?.on("data", (chunk: Buffer) => {
-      stderr += chunk.toString("utf8");
+      stderrChunks.push(chunk);
     });
     child.on("error", (error: Error) => {
-      finish({ commandLine, status: null, stdout, stderr, spawnError: error.message });
+      finish({ commandLine, status: null, signal: null, ...streams(), spawnError: error.message });
     });
-    child.on("close", (status) => {
-      finish({
-        commandLine,
-        status,
-        stdout,
-        stderr,
-        spawnError: stdinError === null ? null : `standard input was not delivered: ${stdinError}`,
+    child.on("close", (status, signal) => {
+      exited = { status, signal };
+      settleIfDone();
+      // The process is gone, so nothing more will be read: a pipe still open
+      // after pending callbacks ran is closed here rather than waited on, and
+      // counts as undelivered unless `finish` already fired.
+      setImmediate(() => {
+        if (!stdinClosed) {
+          child.stdin?.destroy();
+        }
       });
     });
   });
@@ -767,8 +819,16 @@ export async function gatherReviewMaterialFacts(request: {
     return { kind: "unreadable", reason: diffFailure };
   }
 
-  // NUL between sha and message, RS after each commit: neither can appear in a
-  // sha, and a commit message holding a NUL is one git itself refuses to write.
+  // NUL after the sha and NUL after the message, and nothing else as a
+  // separator: a commit message holding a NUL is one git itself refuses to
+  // write, so every other byte of a message survives (an RS or any control byte
+  // a message may legitimately hold included). Output that is not exactly
+  // sha/message pairs is unreadable rather than skipped -- a skipped commit is a
+  // delivered digest over a range with a message missing.
+  //
+  // `--no-merges` keeps the commits the deterministic reading counted
+  // (`inspectLapWork`), so a merge commit's message is not handed over; its
+  // content still is, through the range's diff.
   const logged = await runCommand(
     "git",
     [
@@ -778,7 +838,7 @@ export async function gatherReviewMaterialFacts(request: {
       "--no-merges",
       "--reverse",
       "--no-show-signature",
-      "--format=%H%x00%B%x1e",
+      "--format=%H%x00%B%x00",
       `${evidence.baseCommit}..${evidence.tipCommit}`,
     ],
     PREFLIGHT_TIMEOUT_MS,
@@ -787,13 +847,23 @@ export async function gatherReviewMaterialFacts(request: {
   if (logFailure !== null) {
     return { kind: "unreadable", reason: logFailure };
   }
+  // `sha NUL message NUL` per commit, with the newline git puts between
+  // entries leading the next sha; the last field is what follows the last NUL.
+  const fields = logged.stdout.split("\0");
+  const trailer = fields.pop() ?? "";
+  if (fields.length % 2 !== 0 || trailer.trim() !== "") {
+    return { kind: "unreadable", reason: `${logged.commandLine}: output is not sha/message pairs` };
+  }
   const commits: { sha: string; message: string }[] = [];
-  for (const entry of logged.stdout.split("\x1e")) {
-    const nul = entry.indexOf("\0");
-    if (nul < 0) {
-      continue;
+  for (let index = 0; index < fields.length; index += 2) {
+    const sha = (fields[index] ?? "").replace(/^\n/, "");
+    if (!/^[0-9a-f]{40,64}$/.test(sha)) {
+      return {
+        kind: "unreadable",
+        reason: `${logged.commandLine}: output is not sha/message pairs`,
+      };
     }
-    commits.push({ sha: entry.slice(0, nul).trim(), message: entry.slice(nul + 1).trim() });
+    commits.push({ sha, message: (fields[index + 1] ?? "").trim() });
   }
 
   const ruleFiles: { path: string; content: string }[] = [];
@@ -826,8 +896,91 @@ export async function gatherReviewMaterialFacts(request: {
  */
 const REVIEWER_TIMEOUT_MS = 900_000;
 
-/** How much of a failed reviewer's stderr a reason carries. It echoes the whole document. */
-const REVIEWER_STDERR_TAIL = 600;
+/** How long one reviewer-supplied message may be inside a persisted reason. */
+const REVIEWER_MESSAGE_BOUND = 300;
+
+/**
+ * A reviewer-supplied string as a reason may carry it: printable ASCII, bounded.
+ * Never stderr -- codex echoes the whole handed-over document there, and a
+ * reason is persisted.
+ */
+function boundedAscii(text: string): string {
+  const ascii = text.replace(/[^\x20-\x7e]/g, "?");
+  return ascii.length > REVIEWER_MESSAGE_BOUND
+    ? `${ascii.slice(0, REVIEWER_MESSAGE_BOUND)}...`
+    : ascii;
+}
+
+/** The item types a reading over the delivered bytes alone may contain. */
+const READING_ITEM_TYPES: ReadonlySet<string> = new Set(["agent_message", "reasoning"]);
+
+/** What rondo reads out of `codex exec --json`'s event stream. */
+type ReviewerEvents =
+  | { readonly kind: "unparseable"; readonly line: number }
+  | {
+      readonly kind: "read";
+      /** The text of the last completed `agent_message`, if there was one. */
+      readonly finalMessage: string | null;
+      /** Item types outside `READING_ITEM_TYPES`, in first-seen order. */
+      readonly otherItems: readonly string[];
+      /** `turn.failed` and `error` events' messages. */
+      readonly errors: readonly string[];
+    };
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function readReviewerEvents(stdout: string): ReviewerEvents {
+  let finalMessage: string | null = null;
+  const otherItems: string[] = [];
+  const errors: string[] = [];
+  const lines = stdout.split("\n");
+  for (const [index, raw] of lines.entries()) {
+    const line = raw.trim();
+    if (line === "") {
+      continue;
+    }
+    let event: unknown;
+    try {
+      event = JSON.parse(line);
+    } catch {
+      return { kind: "unparseable", line: index + 1 };
+    }
+    if (!isObject(event) || typeof event.type !== "string") {
+      return { kind: "unparseable", line: index + 1 };
+    }
+    if (
+      event.type === "item.started" ||
+      event.type === "item.completed" ||
+      event.type === "item.updated"
+    ) {
+      const item = event.item;
+      const itemType =
+        isObject(item) && typeof item.type === "string" ? item.type : "(untyped item)";
+      if (!READING_ITEM_TYPES.has(itemType)) {
+        if (!otherItems.includes(itemType)) {
+          otherItems.push(itemType);
+        }
+      } else if (
+        event.type === "item.completed" &&
+        itemType === "agent_message" &&
+        isObject(item) &&
+        typeof item.text === "string"
+      ) {
+        finalMessage = item.text;
+      }
+    } else if (event.type === "turn.failed") {
+      const error = event.error;
+      errors.push(
+        isObject(error) && typeof error.message === "string" ? error.message : "turn.failed",
+      );
+    } else if (event.type === "error") {
+      errors.push(typeof event.message === "string" ? event.message : "error");
+    }
+  }
+  return { kind: "read", finalMessage, otherItems, errors };
+}
 
 /**
  * Run the reviewer over one document, and nothing else (D-0065 1.1).
@@ -835,18 +988,30 @@ const REVIEWER_STDERR_TAIL = 600;
  * **The document is on standard input and the directory is empty.** The review
  * surface that lets the reviewer run `git` in the workspace is not used: what it
  * read would be its own account. So the process is started in a fresh empty
- * directory (`-C`), with its sandbox read-only, `--ephemeral` so no session is
- * kept, and `-` so the prompt is exactly the bytes written. It inherits the
- * environment, so the login is the operator's own codex login and rondo holds
- * no credential (D-0010, D-0065 3.2).
+ * directory (`-C`), `--ephemeral` so no session is kept, and `-` so the prompt
+ * is exactly the bytes written. It inherits the environment, so the login is the
+ * operator's own codex login and rondo holds no credential (D-0010, D-0065 3.2).
  *
- * **The digest is over the string written, computed here beside the write**, so
- * `modelReadingOf`'s comparison is against the bytes that went out rather than
- * the bytes a caller meant to send (D-0029 rule 11).
+ * **"Ran nothing" is checked, not hoped for.** Measured on 2026-09-13 with
+ * codex-cli 0.153.4: `-s read-only` blocks writes but still runs shell
+ * commands, and `-c features.shell_tool=false` is what removes the shell tool
+ * (`tools.web_search=false` likewise the fetch). Those flags are the intent;
+ * the proof is `--json`, whose stdout is one event per line. A run whose events
+ * hold any item other than an agent message or reasoning -- a command, a tool
+ * call, a web search, a file change, a type rondo does not know -- is failed,
+ * because its reading is not over the delivered bytes only (D-0065 rule 1.1).
+ * So is a line that is not a JSON event, a run with no agent message, and a run
+ * reporting `turn.failed` or `error`. The answer is the last completed agent
+ * message.
  *
- * Measured on 2026-09-13 with codex-cli 0.153.4 and `gpt-6-astra`: `codex exec`
- * prints only the final message on stdout and its banner, the echoed prompt and
- * the token count on stderr, so stdout trimmed is the answer.
+ * **What the delivered digest proves.** It is over the string `runCommand`
+ * wrote, and a run is `answered` only when that write finished in full before
+ * the process was reaped: rondo wrote these bytes to the reviewer's standard
+ * input. It does not prove the model attended to them (D-0029 rule 11 compares
+ * it against the document prepared).
+ *
+ * A failed reason carries the exit status or signal and the event stream's
+ * error messages, bounded ASCII -- never stderr, where codex echoes the document.
  */
 export async function runReviewer(row: ReviewerRow, document: string): Promise<ReviewerRun> {
   let directory: string;
@@ -863,6 +1028,7 @@ export async function runReviewer(row: ReviewerRow, document: string): Promise<R
       row.executable,
       [
         "exec",
+        "--json",
         "-m",
         row.model,
         "-s",
@@ -871,6 +1037,10 @@ export async function runReviewer(row: ReviewerRow, document: string): Promise<R
         "--ephemeral",
         "--color",
         "never",
+        "-c",
+        "features.shell_tool=false",
+        "-c",
+        "tools.web_search=false",
         "-C",
         directory,
         "-",
@@ -881,16 +1051,38 @@ export async function runReviewer(row: ReviewerRow, document: string): Promise<R
     if (outcome.spawnError !== null) {
       return { kind: "failed", reason: `${outcome.commandLine}: ${outcome.spawnError}` };
     }
-    if (outcome.status !== 0) {
-      const tail = outcome.stderr.trim().slice(-REVIEWER_STDERR_TAIL);
+    const events = readReviewerEvents(outcome.stdout);
+    if (events.kind === "unparseable") {
       return {
         kind: "failed",
-        reason: `${outcome.commandLine} exited ${String(outcome.status)}${tail === "" ? "" : `: ${tail}`}`,
+        reason: `${outcome.commandLine}: stdout line ${String(events.line)} is not a JSON event, so the events are unparseable`,
       };
+    }
+    if (events.otherItems.length > 0) {
+      return {
+        kind: "failed",
+        reason:
+          `the reviewer ran or fetched something (${events.otherItems.map(boundedAscii).join(", ")}), ` +
+          "so its reading is not over the delivered bytes only (D-0065 rule 1.1)",
+      };
+    }
+    const said = events.errors.map(boundedAscii).join("; ");
+    if (outcome.status !== 0 || events.errors.length > 0) {
+      const ended =
+        outcome.signal !== null
+          ? `was killed by ${outcome.signal}`
+          : `exited ${String(outcome.status)}`;
+      return {
+        kind: "failed",
+        reason: `${outcome.commandLine} ${ended}${said === "" ? "" : `: ${said}`}`,
+      };
+    }
+    if (events.finalMessage === null) {
+      return { kind: "failed", reason: `${outcome.commandLine}: no agent message in its events` };
     }
     return {
       kind: "answered",
-      finalMessage: outcome.stdout.trim(),
+      finalMessage: events.finalMessage.trim(),
       deliveredDigest: contentDigest({ delivered: document }),
     };
   } finally {

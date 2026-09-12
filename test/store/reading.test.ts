@@ -476,7 +476,14 @@ test("a deterministic clear needs no delivered digest", async () => {
   const store = freshStore();
   await reserveOne(store, "i-0001");
 
-  await store.appendReading("i-0001", clear({ drafter: DETERMINISTIC_READING_DRAFTER }), 2_000);
+  await store.transition(
+    "i-0001",
+    "planned",
+    "classified",
+    {},
+    2_000,
+    clear({ drafter: DETERMINISTIC_READING_DRAFTER }),
+  );
 
   expect((await store.readingsFor("i-0001"))[0]?.verdict).toBe("clear");
 });
@@ -486,6 +493,62 @@ test("appendReading refuses an iteration id with no row and writes nothing", asy
 
   expect(await store.appendReading("i-nobody", graded(), 2_000)).toEqual({ kind: "absent" });
   expect(await store.readingsFor("i-nobody")).toEqual([]);
+});
+
+test("appendReading refuses a drafter that is not a model's, and writes nothing", async () => {
+  // D-0029 rule 8: the deterministic reading lands with its transition or not
+  // at all, so a second door for it would reopen the window that rule closes.
+  const store = freshStore();
+  await reserveOne(store, "i-0001");
+
+  for (const drafter of [DETERMINISTIC_READING_DRAFTER, "rondo/none", "rondo/model/1/"]) {
+    const outcome = await store.appendReading("i-0001", clear({ drafter }), 2_000);
+    expect(outcome.kind).toBe("defect");
+  }
+  expect(await store.readingsFor("i-0001")).toEqual([]);
+});
+
+test("appendReading refuses a graded array not parallel to the findings", async () => {
+  // The reader drops a graded column of the wrong length, so writing one would
+  // be severities that vanish after a write that said it succeeded.
+  const store = freshStore();
+  await reserveOne(store, "i-0001");
+  const draft = graded();
+
+  const outcome = await store.appendReading(
+    "i-0001",
+    { ...draft, findings: [...draft.findings, "a third, ungraded"] },
+    2_000,
+  );
+
+  expect(outcome.kind).toBe("defect");
+  expect(await store.readingsFor("i-0001")).toEqual([]);
+});
+
+test("a model row does not hide a terminal lap whose own reading never landed", async () => {
+  // D-0065 2.6: the model row is appended after the transition, so it is not
+  // the reading the fail-open detector asks about. A transition-carried
+  // unavailable (`rondo/none`) still is.
+  const store = freshStore();
+  await reserveOne(store, "i-model-only", 1_000);
+  await store.appendReading("i-model-only", graded(), 1_500);
+  await store.transition("i-model-only", "planned", "closed", {}, 2_000);
+  await reserveOne(store, "i-none", 3_000);
+  await store.transition(
+    "i-none",
+    "planned",
+    "closed",
+    {},
+    4_000,
+    clear({
+      drafter: "rondo/none",
+      verdict: "unavailable",
+      evidence: null,
+      unavailableReason: "x",
+    }),
+  );
+
+  expect(await store.terminalWithoutReading()).toEqual(["i-model-only"]);
 });
 
 test("a lap_reading table without the D-0065 columns gains them on open", async () => {
