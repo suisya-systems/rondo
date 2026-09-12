@@ -26,6 +26,7 @@ import {
   answerGate,
   closeRun,
   deliverGate,
+  materialLanguageSentence,
   type PerformLapRequest,
   performLap,
   presentGate,
@@ -278,6 +279,7 @@ describe("run admit's own fields", () => {
       topicBranch: "topic/r1",
       prompt: "add the thing",
       allowedBash: [],
+      materialLanguage: null,
       delegationRecordPath: "/srv/rondo/delegation/record.json",
       delegationRecordSchema: "rondo.delegation-record/1",
       ...overrides,
@@ -339,6 +341,34 @@ describe("run admit's own fields", () => {
       admitRequest({ allowedBash: ["npm ci --ignore-scripts", "npm run:*"] }),
     );
     expect(defectReason(carried.result)).toContain(REACHED_RUN);
+  });
+
+  test("the language ask is one ASCII sentence naming the tag, and rondo composes nothing else", () => {
+    // **Rule 7's two deliberate properties, asserted on the constant itself.**
+    // It names the tag and nothing else, so rondo holds no table of languages
+    // and a third language is not a rondo diff; and it is ASCII, so D-0004 is
+    // untouched on every path that could print an argv. The argv itself is only
+    // observable against a pinned build (`test/continuo/smoke.test.ts`).
+    for (const tag of ["ja", "zh-Hant"]) {
+      const sentence = materialLanguageSentence(tag);
+      expect(sentence).toContain(tag);
+      // eslint of the eye: every byte printable ASCII, no per-language wording.
+      expect(/^[\x20-\x7e]+$/.test(sentence)).toBe(true);
+      expect(sentence).toBe(materialLanguageSentence(tag));
+    }
+    // Two tags differ only by the tag: there is no per-language wording behind
+    // this, which is what "a third language is not a rondo diff" means.
+    expect(materialLanguageSentence("ja").replace("ja", "de")).toBe(materialLanguageSentence("de"));
+  });
+
+  test("a plan that asked for a language still reaches the drive, and one that asked for none does too", async () => {
+    // The ask is carried, never validated here: `runPlan` refused every tag
+    // that could reach a written payload, and this entry point's job is to put
+    // the operator's text plus the one known constant onto the argv.
+    const asked = await admitRun(unissued, admitRequest({ materialLanguage: "ja" }));
+    expect(defectReason(asked.result)).toContain(REACHED_RUN);
+    const unasked = await admitRun(unissued, admitRequest({ materialLanguage: null }));
+    expect(defectReason(unasked.result)).toContain(REACHED_RUN);
   });
 
   test("a valid admission reaches the drive and reports the role it used", async () => {

@@ -200,6 +200,7 @@ shim.
   "base_branch": "main",
   "prompt": "Append one line to docs/NOTES.md reading exactly: 'Touched by the rondo operator CLI.' Then commit it with the message 'docs: touched by the rondo operator CLI'. Do nothing else.",
   "allowed_bash": ["npm ci --ignore-scripts", "npm run:*"],
+  "material_language": null,
 
   "repository": "/abs/target",
   "artifact_root": "/abs/artifacts",
@@ -278,6 +279,25 @@ Two rules about the field are worth knowing before the lap that teaches them:
   subprocesses a tool starts. `npm run:*` is deliberately wider: it authorises whatever the target
   repository's own `package.json` says those scripts are, which is the boundary a declaration can
   state once for two repositories.
+
+**`material_language` is the language this lap asks its worker to write material in** (`D-0053`).
+An IETF language tag (`"ja"`, `"zh-Hant"`), or `null` for *nothing was asked*. It is a key you may
+omit: a plan file with no `material_language` reads as `null`, and so does every lap admitted before
+the field existed.
+
+- **`null` is not `en`.** A lap whose material happens to be English because that is what its worker
+  wrote is not a lap that was asked for English, and the record says which.
+- **What it changes is two things and no more.** One ASCII sentence naming the tag is appended to
+  the prompt rondo hands `run admit`, and the page puts `lang="<tag>"` on the two elements that
+  quote material -- the request paragraph and the block the approve button records as shown. The
+  document itself stays `<html lang="en">`, because rondo's own statuses, headings and labels are
+  rondo's vocabulary and this field gives them no language.
+- **rondo asks and does not verify.** Nothing is translated, at any time, and rondo never reads
+  material to find out what language it is in. A worker asked for `ja` that answers in English
+  leaves a record saying `ja` was asked for -- which is true -- and a screen showing English, which
+  is visible to the one person who reads both.
+- **Laps already recorded stay as they were recorded.** Nothing is backfilled and nothing is
+  re-translated, so the page will show a mix for a while.
 
 `parties.grantee` must equal the run id, and **the run id is no longer yours to write**
 (`D-0023` rule 9). Whatever you put in `grantee` is overwritten with the run id rondo derived, so

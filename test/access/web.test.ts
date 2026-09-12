@@ -31,6 +31,7 @@ const PLAN: RunPlan = {
   baseBranch: "main",
   prompt: "do the thing",
   allowedBash: ["npm run:*"],
+  materialLanguage: null,
   repository: "/srv/repo",
   artifactRoot: "/srv/artifacts",
   stateRoot: "/srv/state",
@@ -59,8 +60,8 @@ const PLAN: RunPlan = {
   intendedAction: {} as RunPlan["intendedAction"],
 };
 
-function planFor(id: string): JsonRecord {
-  const validated = runPlan(PLAN);
+function planFor(id: string, materialLanguage: string | null = null): JsonRecord {
+  const validated = runPlan({ ...PLAN, materialLanguage });
   if (validated.kind !== "planned") {
     throw new Error(`the fixture plan is not valid: ${validated.reason}`);
   }
@@ -211,11 +212,12 @@ async function reserve(
   world: ReturnType<typeof fresh>,
   id: string,
   request: string,
+  materialLanguage: string | null = null,
 ): Promise<void> {
   const outcome = await world.store.reserve({
     id,
     request,
-    plan: planFor(id),
+    plan: planFor(id, materialLanguage),
     spend: null,
     nowMs: 1_000,
     supersedesIterationId: null,
@@ -738,4 +740,51 @@ test("an explanation nobody can answer is not a thing waiting on you (rondo#145)
   // it is in the reading where the inbox already lists it by authority.
   expect(lead(html)).toContain("waiting for your answer (1)");
   expect(reading(opened)).toContain("proposals that bind nothing (1)");
+});
+
+test("the elements that quote material carry the lang the plan asked for (D-0053 rule 12)", async () => {
+  const world = fresh();
+  await reserve(world, "i-0001", "重みが足りない", "ja");
+  await openGate(world, "i-0001");
+  const html = await operatorPage(
+    {
+      ...portsOver(world, "ada", []),
+      material: async () => await Promise.resolve(["なぜ止まったか"]),
+    },
+    "t",
+    { kind: "answer", iterationId: "i-0001" },
+  );
+
+  // The two elements rule 12 names, and nothing else: the request paragraph the
+  // lap wrote for this operator, and the block a press records as shown.
+  expect(html).toContain('<p class="request" lang="ja">');
+  expect(html).toContain('<pre class="material" lang="ja">');
+  // **The chrome stays English**, because it is rondo's own vocabulary about
+  // its own record and this entry gives it no language.
+  expect(html).toContain('<html lang="en">');
+  // **Nothing is translated** (rule 11): the same bytes, with an attribute.
+  expect(html).toContain("重みが足りない");
+  expect(html).toContain("なぜ止まったか");
+});
+
+test("a lap nobody asked a language of carries no lang at all, and that is not `en`", async () => {
+  // Rule 10's distinction, on the surface where it is visible: null means
+  // *nobody asked*, so the element inherits the document and claims nothing --
+  // as against `lang="en"`, which would be rondo asserting an ask nobody made.
+  const world = fresh();
+  await reserve(world, "i-0001", "do the thing");
+  await openGate(world, "i-0001");
+  const html = await operatorPage(
+    {
+      ...portsOver(world, "ada", []),
+      material: async () => await Promise.resolve(["why it stopped"]),
+    },
+    "t",
+    { kind: "answer", iterationId: "i-0001" },
+  );
+
+  expect(html).toContain('<p class="request">');
+  expect(html).toContain('<pre class="material">');
+  expect(html).not.toContain('class="request" lang=');
+  expect(html).not.toContain('class="material" lang=');
 });

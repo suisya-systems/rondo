@@ -663,6 +663,44 @@ export interface AdmitRunRequest {
    * falsifier said to escalate for rather than the flag it refused.
    */
   readonly allowedBash: readonly string[];
+  /**
+   * The language this lap asks its worker to write material in, or null for
+   * *nothing was asked* (D-0053 rule 6).
+   *
+   * Null on every lap admitted before the field existed, and on every plan that
+   * names no language. It is the one thing rondo composes into a request, and
+   * {@link materialLanguageSentence} is the whole of that composition.
+   */
+  readonly materialLanguage: string | null;
+}
+
+/**
+ * The one sentence rondo composes into a request, and the only one (D-0053
+ * rule 7).
+ *
+ * **It names the tag and nothing else**, so rondo holds no table of languages
+ * and no per-language wording, and a third language is not a rondo diff. It is
+ * a directive about the *form* of what the worker writes back and carries no
+ * request content -- which is what keeps `--prompt` the operator's text plus a
+ * known constant rather than something rondo partly wrote.
+ *
+ * **ASCII**, so D-0004 is untouched on every path that could print an argv,
+ * even though this sentence is not printed to a console today. The tag itself
+ * is already `[A-Za-z0-9-]` by `runPlan`'s own check, so the whole sentence is
+ * ASCII for every tag that can reach here.
+ *
+ * The row's `request` does **not** carry it: `interpreter.ts` records
+ * `plan.prompt`, which is the request as a person wrote it (D-0053 rule 2a),
+ * and a row holding rondo's sentence would be a ledger claiming the operator
+ * asked for something they did not type.
+ *
+ * Exported so that the constant rule 7 rests on is asserted directly: the argv
+ * itself is only observable against a pinned build, and the property under test
+ * here -- that rondo composes this and nothing else, in ASCII -- is a property
+ * of the sentence rather than of the spawn.
+ */
+export function materialLanguageSentence(tag: string): string {
+  return `Write your gate rationale in the language with IETF language tag ${tag}.`;
 }
 
 /**
@@ -746,7 +784,15 @@ export async function admitRun(
       // like, which is why it is used here and only here: the other values are
       // identifiers and paths that are already refused when they are
       // option-shaped, and joining them would hide that check behind a spelling.
-      `--prompt=${requireText("prompt", request.prompt)}`,
+      // The operator's text, plus the one known constant above when the plan
+      // asked for a language. Appended rather than prefixed, and separated by a
+      // blank line, because the request is what the worker is here to do and the
+      // ask is a note about how to write the answer back.
+      `--prompt=${requireText("prompt", request.prompt)}${
+        request.materialLanguage === null
+          ? ""
+          : `\n\n${materialLanguageSentence(request.materialLanguage)}`
+      }`,
       "--delegation-record",
       requireAbsolute("delegationRecordPath", request.delegationRecordPath),
       "--delegation-record-schema",

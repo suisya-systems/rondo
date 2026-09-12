@@ -138,6 +138,28 @@ export interface RunPlan {
    * nothing is the disagreement rondo#67 was.
    */
   readonly allowedBash: readonly string[];
+  /**
+   * The language this lap asks its worker to write material in, as an IETF
+   * language tag (`ja`), or null for **rondo asks for nothing** (D-0053 rule 6).
+   *
+   * **Null is not `en`.** A lap whose material happens to be English because
+   * that is what its worker wrote is not a lap that was asked for English, and
+   * collapsing the two would put an ask in the record nobody made (rule 10).
+   *
+   * **The plan is the only home**, because the three others were refused on
+   * record: a host configuration (D-0019 rule 3's standing second half, and the
+   * wrong shape besides -- two laps on one host may want different languages),
+   * the page (D-0041 rule 4: `approve` is the whole write vocabulary), and
+   * continuo's role template (not rondo's document, and host-wide by a longer
+   * road).
+   *
+   * **What the record holds is the ask and never the language of the bytes**
+   * (rule 8). rondo does not read material to find out what language it is in,
+   * so a worker asked for `ja` that answers in English leaves a record saying
+   * `ja` was asked for -- which is true -- and a screen showing English, which
+   * is visible.
+   */
+  readonly materialLanguage: string | null;
 
   // --- continuo: the lap ----------------------------------------------------
   /** The repository the workspace is cut from. Absolute. */
@@ -437,6 +459,7 @@ export function runPlan(input: RunPlan): PlanOutcome {
       baseBranch: requireNotOptionShaped("baseBranch", input.baseBranch),
       prompt: requireNonEmpty("prompt", input.prompt),
       allowedBash: requireAllowedBash(input.allowedBash),
+      materialLanguage: optionalLanguageTag(input.materialLanguage),
       repository: requireAbsolute("repository", input.repository),
       artifactRoot: requireAbsolute("artifactRoot", input.artifactRoot),
       stateRoot: requireAbsolute("stateRoot", input.stateRoot),
@@ -501,6 +524,39 @@ function requireClaudeCommand(tokens: readonly string[]): readonly string[] {
   return Object.freeze(
     tokens.map((token, index) => requireAbsolute(`claudeCommand[${String(index)}]`, token)),
   );
+}
+
+/**
+ * The ask, checked for the shape of an IETF language tag (D-0053 rule 6).
+ *
+ * **Shape only, and deliberately not a registry.** rondo holds no table of
+ * languages (rule 7), so this says what a *tag* looks like -- BCP 47's subtag
+ * grammar reduced to its shape -- and never which tags exist. `ja`, `zh-Hant`
+ * and `de-CH-1901` pass; a sentence, a locale spelled `ja_JP` and an empty
+ * string do not.
+ *
+ * **The check is here because both of the field's two uses need it.** The tag
+ * is interpolated into an argv sentence rondo hands `run admit` (rule 7, which
+ * says ASCII) and into a `lang` attribute (rule 12), and the grammar below
+ * admits nothing outside `[A-Za-z0-9-]` -- so neither use has to re-derive what
+ * the other already relies on, and a mistyped tag is refused before a process
+ * exists rather than escaping as markup or as a stack.
+ */
+function optionalLanguageTag(value: string | null): string | null {
+  if (value === null) {
+    return null;
+  }
+  if (typeof (value as unknown) !== "string") {
+    return refuse("'materialLanguage' is not a string, and a language tag is text");
+  }
+  if (!/^[A-Za-z]{2,8}(-[A-Za-z0-9]{1,8})*$/.test(value)) {
+    return refuse(
+      `'materialLanguage' is '${value}', which is not an IETF language tag. A tag is a primary ` +
+        "subtag and optional hyphenated subtags -- 'ja', 'zh-Hant' -- and null means no language " +
+        "was asked for.",
+    );
+  }
+  return value;
 }
 
 /**
@@ -728,6 +784,7 @@ export function planPayload(plan: AdmittedPlan): JsonRecord {
     topic_branch: plan.topicBranch,
     prompt: plan.prompt,
     allowed_bash: [...plan.allowedBash],
+    material_language: plan.materialLanguage,
     repository: plan.repository,
     artifact_root: plan.artifactRoot,
     state_root: plan.stateRoot,
@@ -876,6 +933,22 @@ const PAYLOAD_UPGRADES: readonly ((payload: JsonRecord) => JsonRecord)[] = [
    * -- that plan's lap could never have run a command either.
    */
   (payload) => withAllowedBash(payload),
+  /**
+   * v2 -> v3: the operator's language, which no payload written before it could
+   * carry (D-0053 rule 10).
+   *
+   * **Absent means "nobody asked for a language"**, which is null, and which is
+   * what those laps actually got: there was no field to write it in, so no
+   * sentence reached any worker. It is **not** `en` -- a lap whose material
+   * happens to be English because that is what its worker wrote is not a lap
+   * that was asked for English, and supplying `en` here would put an ask into
+   * every already-written record that nobody ever made.
+   *
+   * The rung reads the older bytes and does not change them: rule 13's *laps
+   * already recorded stay exactly as they are* is this step doing nothing to
+   * the stored payload, exactly as the `allowed_bash` rung above it.
+   */
+  (payload) => withMaterialLanguage(payload),
 ];
 
 /**
@@ -1048,6 +1121,21 @@ function withAllowedBash(payload: JsonRecord): JsonRecord {
 }
 
 /**
+ * A payload from before the language ask existed, given the ask it made.
+ *
+ * Absent is null, for the reason the ladder's third entry states: nobody could
+ * ask, so nobody did. A key that is *present* is left exactly as it is --
+ * including a present non-string, which {@link readNullableString} still
+ * refuses by name.
+ */
+function withMaterialLanguage(payload: JsonRecord): JsonRecord {
+  if (payload["material_language"] !== undefined) {
+    return payload;
+  }
+  return { ...payload, material_language: null };
+}
+
+/**
  * The caller's half of a plan, read from a document (D-0023 rule 9).
  *
  * What an operator's plan file holds: everything except the three identifiers
@@ -1071,6 +1159,7 @@ export function readRunPlan(payload: JsonRecord): PlanOutcome {
       baseBranch: readString(current, "base_branch"),
       prompt: readString(current, "prompt"),
       allowedBash: readStringArray(current, "allowed_bash"),
+      materialLanguage: readNullableString(current, "material_language"),
       repository: readString(current, "repository"),
       artifactRoot: readString(current, "artifact_root"),
       stateRoot: readString(current, "state_root"),

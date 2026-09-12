@@ -300,6 +300,35 @@ function section(heading: string, note: string, body: string, weight = ""): stri
 const RECENT_ENDED = 5;
 
 /**
+ * The `lang` the plan asked for, on the elements that quote material (D-0053
+ * rule 12).
+ *
+ * **The field's one use at render time, and it is markup rather than a claim.**
+ * The document keeps `<html lang="en">` because the chrome is rondo's own
+ * vocabulary and is English; the request paragraph and the material block carry
+ * the tag, which is what a browser uses to pick a font and break a line. That
+ * is the legibility complaint rondo#155 opened with, met with an attribute.
+ *
+ * **Derived from the ask and from nothing else.** rondo never reads material to
+ * find out what language it is in (rule 8), so where a worker ignored the ask
+ * the attribute is wrong exactly as far as the ask was wrong and no further.
+ * Nothing is translated here or anywhere (rule 11): the tag decorates the same
+ * bytes the page already quoted.
+ *
+ * Read off the row's own plan payload rather than through `readRunPlan`,
+ * because a page that redraws every five seconds may not refuse a row over a
+ * field it is only decorating: absent, null and anything that is not a string
+ * all mean *no ask*, which is the same empty attribute list. `runPlan` already
+ * refused every tag that could reach a written payload, so what arrives here is
+ * `[A-Za-z0-9-]` -- escaped anyway, because the escaping is what makes that
+ * sentence a property of this function rather than of a file two modules away.
+ */
+function langAttribute(record: IterationRecord): string {
+  const asked = record.plan["material_language"];
+  return typeof asked === "string" ? ` lang="${escapeHtml(asked)}"` : "";
+}
+
+/**
  * One lap in the lead, with the row it rests on cited once above it (D-0032,
  * rondo#91).
  *
@@ -324,7 +353,7 @@ function lapHtml(
   return (
     `<div class="lap"><p class="basis">${escapeHtml(basis)}</p>` +
     `<p class="head">${escapeHtml(head)}</p>` +
-    `<p class="request">${escapeHtml(record.request)}</p>` +
+    `<p class="request"${langAttribute(record)}>${escapeHtml(record.request)}</p>` +
     lines
       .filter((line): line is string => line !== null)
       .map((line) => `<p class="line">${escapeHtml(line)}</p>`)
@@ -639,7 +668,9 @@ async function shownBeforePress(
       record.id,
       `<p class="note">What pressing approve records as shown, and what it would be over:</p>` +
         claimsHtml(propose(snapshot).payload.claims, snapshot) +
-        (material === null ? "" : `<pre class="material">${escapeHtml(material)}</pre>`),
+        (material === null
+          ? ""
+          : `<pre class="material"${langAttribute(record)}>${escapeHtml(material)}</pre>`),
     );
   }
   return shown;
