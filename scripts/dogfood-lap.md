@@ -163,25 +163,21 @@ costs on this machine, and that `resume` sees the outcome after a human answers.
    first costs nothing:
 
    ```sh
-   # DIST is step 3's emitted tree -- `dist/` in the repository root, as
-   # `npm run build` leaves it, spelled absolute. PLAN is the JSON plan file the
-   # run will use, which is the one `scripts/dogfood-env.sh` writes. Its top
-   # level is snake_case, but `agent_type_input` is carried to cadenza verbatim
-   # and keeps cadenza's own spelling inside, which is why the path below
-   # changes case halfway down.
-   DIST=/absolute/path/to/rondo/dist
-   PLAN=/absolute/path/to/plan.json
-
-   # The tier is read out of the plan rather than typed here on purpose: a
-   # preflight that checks a tier the run will not use is a preflight that passes
-   # and then lets the run fail.
-   node -e "
-   const plan = JSON.parse(require('node:fs').readFileSync('$PLAN', 'utf8'));
-   import('file://$DIST/continuo/roles.js').then(
-     (roles) => console.log(roles.mapModelTier(plan.agent_type_input.executorPolicy.modelTier)));
-   "
-   # { kind: 'selected', model: 'claude-opus-5' }   -- 'unknown' means stop and fix the agent type
+   # The plan file the run will use, which is the one `scripts/dogfood-env.sh`
+   # writes. The tier is read out of it rather than typed on the command line on
+   # purpose: a preflight that checks a tier the run will not use is a preflight
+   # that passes and then lets the run fail.
+   npm run preflight:model-tier -- /absolute/path/to/plan.json
+   # model tier 'standard' runs on claude-opus-5  -- exit 1 means fix the agent type, not the plan
    ```
+
+   **It is `npm run` and not the `node -e` one-liner this block used to carry,
+   and that is rondo#103.** `npm run:*` is in the plan's `allowed_bash` and
+   `node -e` is deliberately not, so the one-liner was a step this handbook
+   documented that a lap running inside this repository was refused ten times
+   (`../docs/operations/lap-4-dogfood.md` N-10). Naming the check makes it one
+   command for the operator and a command a lap may run; declaring `node -e:*`
+   instead would have widened the fence from a vocabulary to anything.
 
 2. **Admit.** Call the composition root's
    `admit(ports, plan, policy, iterationId)`, where `ports` comes from
