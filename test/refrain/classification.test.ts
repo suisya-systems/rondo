@@ -78,6 +78,8 @@ function planWith(overrides: {
   readonly allowedBash?: readonly string[];
   /** The agent type's capability keys; `command.run` by default. */
   readonly granted?: readonly string[];
+  /** The agent type's model tier; `standard` by default. */
+  readonly modelTier?: string;
 }): AdmittedPlan {
   const input: RunPlan = {
     db: resolve("/srv/rondo/control.db"),
@@ -116,7 +118,11 @@ function planWith(overrides: {
       granted: [...(overrides.granted ?? ["command.run"])],
       askable: ["branch.push"],
       loopPolicy: { maxReviewRounds: 2, noProgressWindow: 3, noProgressRepeat: 2 },
-      executorPolicy: { roleName: "worker", modelTier: "standard", reportingDuties: [] },
+      executorPolicy: {
+        roleName: "worker",
+        modelTier: overrides.modelTier ?? "standard",
+        reportingDuties: [],
+      },
     },
     parties: { issuer: "rondo-host", grantee: "unset" },
     intendedAction: { capabilities: ["command.run"] },
@@ -271,6 +277,35 @@ describe("classifyPlan, when the grant and the fence disagree", () => {
     // is what makes it actionable before a spawn (D-0039 rule 3).
     const outcome = classifyPlan(planWith({ allowedBash: [] }));
     expect(outcome.kind === "refused" && outcome.message).toContain("disagrees with itself");
+  });
+});
+
+describe("classifyPlan, when the agent type names a tier rondo does not price", () => {
+  /**
+   * rondo#138's falsifier, answered before the row that used to falsify it:
+   * before this rule the same fact reached `performLap` after `run admit`, with
+   * a run already admitted at continuo and nobody to close it. `classifyPlan`
+   * answers before `startContinuo`, so no run exists at continuo to leave
+   * behind.
+   */
+  test("refuses a tier the loop does not price, and names the tier and the priced set", () => {
+    const outcome = classifyPlan(planWith({ modelTier: "frugal" }));
+    expect(outcome.kind).toBe("refused");
+    if (outcome.kind !== "refused") {
+      return;
+    }
+    expect(outcome.message).toContain("frugal");
+    expect(outcome.message).toContain("standard");
+  });
+
+  test("a priced tier is not a disagreement", () => {
+    const outcome = classifyPlan(planWith({ modelTier: "standard" }));
+    expect(outcome.kind).toBe("answered");
+  });
+
+  test("the check runs before the contract, so it is not cadenza's refusal", () => {
+    const outcome = classifyPlan(planWith({ modelTier: "frugal" }));
+    expect(outcome.kind === "refused" && outcome.message).toContain("rondo does not price");
   });
 });
 
