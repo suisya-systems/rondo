@@ -91,6 +91,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0051 | A reading is identified by what it says, because the row can never say anything else: no identifier issued by the store, position and the clock out of the match entirely, and the one reading movement that can happen said once as a count | accepted |
 | D-0052 | A tier nothing prices is refused at `classify`, off the record cadenza just built: the tier names in the loop, the prices behind the seam, and `D-0017` rule 2 unamended | accepted |
 | D-0053 | The operator's language is a property of the lap: material is what a lap composed for the answer, the language is an ask carried on the plan and recorded as an ask, and the laps already written stay written | accepted |
+| D-0054 | The page may run one script, and it is a poller and a morph rather than a framework: liveness decided per view, `D-0041` rule 3a re-founded on the server's types, and one vendored 10 KB file no build ever touches | accepted |
 
 ---
 
@@ -7330,6 +7331,21 @@ rondo `09830d6`, on **2026-09-12**, by running as well as by reading.
 
 **Status:** accepted (2026-09-12, rondo's human gate). Refs rondo#95, `D-0032`, `D-0036`, `D-0020`.
 
+> **Annotation (2026-09-12, from D-0054).** Added after this entry was accepted, and additive:
+> nothing below is removed or rewritten. **Rule 3(a) is repealed in half.** Its client-side claim --
+> "there is no script on the page" and "rondo's page has no mechanism that can issue a POST without a
+> person pressing something" -- no longer holds for the `summary` and `reading` views, which gained
+> one script that issues `GET`s of their own address and morphs the result in place (`D-0054` rules 1,
+> 2 and 6). Its server-side claim -- "`GET` and `HEAD` reach only the renderer, which holds only the
+> read ports" -- is unchanged, is a fact about rondo's own types, and now carries `D-0042`'s
+> invariant by itself. Rule 3's preamble, "each one alone would be enough", is **narrowed**: 3(a)
+> alone still guarantees that an unattended redraw writes nothing, and contributes nothing further to
+> the forged cross-site `POST`, which after `D-0054` rests on 3(b) and 3(c) alone. The falsifier below
+> reading "the page acquiring a script, a `fetch`, or any redraw that is not a document GET" is
+> recorded as **fired deliberately**, by rondo#163 and `D-0054`, rather than discovered. **This entry
+> is not superseded**: one sub-rule is amended and named as amended, in the form `D-0042` already
+> used on rule 7, and every other rule below is read as written.
+
 `D-0032` rule 1 says the operator's surface has to be able to show the record. rondo#95 built the
 first surface that is not a terminal — one page on `127.0.0.1` that redraws itself every five
 seconds — and drew its boundary at *reading*: the two ports it is handed are `Pick`ed down to the
@@ -9665,3 +9681,250 @@ lap, plus one escape reproduced directly.
 - **`D-0050` rule 3's standing sentence** gains one: it is named here as **rondo's vocabulary** and
   stays English, and its *read as boilerplate* falsifier is recorded as having a second route --
   being skipped because it is in a language the reader does not read.
+
+---
+
+## D-0054 — The page may run one script, and it is a poller and a morph rather than a framework: liveness decided per view, `D-0041` rule 3a re-founded on the server's types, and one vendored 10 KB file no build ever touches
+
+**Status:** accepted (2026-09-12, rondo's human gate). Refs rondo#163, rondo#160, rondo#95, `D-0041`,
+`D-0042`, `D-0007`, `D-0032`.
+
+`D-0041` rule 3(a) carries rondo#95's constraint verbatim: *"there is no script on the page -- no
+`fetch`, no `XMLHttpRequest`, no client-side build"*, and it is load-bearing there as one of three
+runtime facts standing between an unattended redraw and the ledger. rondo#160 is what that
+constraint costs on the surface where answering actually happens (`D-0053`, terminal subsection):
+`<meta http-equiv="refresh" content="5;url=/">` is the only liveness a scriptless page has, so every
+five seconds the browser throws the document away and builds it again -- the standing note, every
+claim, every basis line, the fence block, the readings -- to report that a duration went from `17m`
+to `17m`. Observed on the first real lap (`lapja-001`, 2026-09-12): the operator's scroll position is
+not theirs to keep, and a long gate screen is re-laid-out under the reader while they read it in
+order to press.
+
+The operator authorised reopening the constraint, and authorised a framework or UI components chosen
+against what is current rather than written by hand (2026-09-12). This entry reopens it, surveys what
+is current (below, with dates and digests rather than impressions), and **adopts almost none of it** --
+not out of thrift, but because the survey says the thing rondo needs is a DOM merge and everything
+else on offer is a request vocabulary rondo already has in HTML.
+
+### What the survey found, on 2026-09-12
+
+Measured on this machine from `https://registry.npmjs.org` and the projects' own pages; sizes are
+bytes of the artifact named, licences and dates are the registry's own.
+
+| Candidate | Current, and when | Licence | Artifact | Distribution |
+|---|---|---|---|---|
+| **htmx** | `2.0.10` (2026-04-21) is `latest`; `4.0.0` (2026-08-28) ships under the `next` tag, with npm `latest` staying on 2.x until early 2027 | `0BSD` / `BSD-0-Clause` | `dist/htmx.min.js` **51,238** bytes | npm tarball |
+| **Datastar** | `1.0` shipped; the frontend is ~11 KiB and SSE is the transport | MIT core, with a commercial **Pro** tier | one file | npm `@starfederation/datastar` last published **`1.0.0-beta.11`, 2025-03-30**; the released v1 is not there. npm `datastar` is an unrelated GoDaddy package |
+| **Alpine.js** | `3.17.2` (2026-09-07) | MIT | ~7 kB gzipped core | npm tarball |
+| **Web Awesome** (Shoelace's successor; Shoelace archived 2026-05-14) | `3.11`, 70 free components | MIT free tier, paid Pro | custom elements | npm tarball |
+| **idiomorph** | `0.8.0` (2026-09-05), by htmx's authors; the morph under Turbo 8 | `0BSD` | `dist/idiomorph.min.js` **10,587** bytes | npm tarball |
+
+Three readings come out of that table, and they are why the adoption is as small as it is.
+
+- **What rondo lacks is not a way to ask.** htmx's value is a declarative request vocabulary on
+  attributes; rondo's page issues exactly one kind of request on its own -- *the view I am on, again* --
+  and the one request a person issues is an HTML form that already works. Buying 51 KB of vocabulary
+  for a single `fetch` would be paying in exactly the coin this decision is spending: **a general
+  mechanism for constructing requests, including `POST`s, is precisely what `D-0041` rule 3(a) was
+  protecting**. Nor is the version picture inviting: 4.0 is out and the project itself does not tag it
+  `latest` until 2027, so adopting today is choosing between a line about to be superseded and one its
+  maintainers have not yet called default.
+- **Datastar solves the problem one door further along than rondo has walked.** SSE plus client
+  signals is the right shape for a screen that must be current within a second and for state the client
+  owns; rondo's page owns no client state at all (the whole view is in the address, deliberately --
+  `src/access/web.ts`), one operator reads it over loopback, and five seconds is already the agreed
+  freshness. Its npm presence also fails `D-0007`'s discipline at the first step: the obvious package
+  name is somebody else's, and the scoped one's newest publish is a 2025 beta, so pinning the shipped
+  v1 would mean pinning something other than a registry tarball. A Pro tier is not disqualifying and is
+  not the reason; the reason is that rondo would adopt a transport it does not need.
+- **A component library would replace something that is already right.** The page's CSS is a
+  deliberate small system -- two type roles, one spacing scale, both palettes written out, contrast
+  checked against all three grounds (rondo#153). Web Awesome is the healthy choice in that market and
+  is free and MIT; adopting it here would mean re-expressing a working, audited, zero-dependency
+  design as custom elements, and making the page's legibility depend on element upgrade -- which is the
+  one property rule 7 below spends the entry protecting.
+
+What the survey leaves standing is the one job the platform genuinely does not do: **replacing a
+document's content without destroying the nodes the reader is standing on.** `innerHTML` on a region
+discards focus, selection, and any open element inside it; writing a merge by hand is writing a diff
+algorithm, which is the kind of code that is wrong at 3am and not the kind that is short. idiomorph is
+that algorithm, in 10,587 bytes, under `0BSD`, from the authors of the library rondo declined.
+
+### Decision
+
+1. **The constraint is repealed per view and never globally, because the three views do not want the
+   same thing** (rondo#160's own argument). `summary` and `reading` are *what is running*, and want to
+   be current. `answer` is one row's framing beside its button, read by a person in order to press --
+   **it auto-updates by nothing at all after this entry: no script, no meta refresh.** That is the
+   largest part of rondo#160 answered by deletion rather than by machinery, and it costs no staleness
+   risk: `D-0042` already re-composes the framing at press time and refuses a press naming a row that
+   is not there, so a page a minute old cannot answer a gate that moved.
+
+2. **Where liveness is kept, the request is the view's own address and the result is merged in
+   place.** The script fetches the URL it is already on -- the same document the server would send a
+   navigating browser, complete -- and morphs it into the live DOM. There is no fragment endpoint, no
+   partial template, no second rendering of anything: **the server's output is the same bytes whether
+   a browser navigated to it or a script asked for it**, so there is no second thing to keep true. The
+   cadence stays five seconds.
+
+3. **`D-0041` rule 3(a)'s work moves from the client to the server, where it was always safer.** Rule
+   3(a) asserted two things in one sentence, and only the second is structural: *the page cannot emit a
+   `POST`*, and *`GET` and `HEAD` reach only the renderer, which holds only the read ports*. The first
+   is now false by construction -- a client that can `fetch` can `fetch` anything. **The second is
+   unchanged, is a fact about rondo's types rather than about a browser, and is what now carries
+   `D-0042`'s invariant**: an unattended redraw writes nothing because the code path a `GET` reaches
+   cannot write, and the compiler says so (`D-0041` rule 4's `Pick`ed ports, untouched here). A
+   guarantee that rested on the client not asking now rests on the server not having the verb. That is
+   the amendment, and it is written into `D-0041` below rather than left implicit.
+
+4. **Rule 3's "each one alone would be enough" is narrowed, and this is the real price of the
+   repeal.** Amended 3(a) alone still guarantees the thing rondo#95 and `D-0042` care about -- *an
+   unattended redraw writes nothing*. It no longer contributes anything to the *other* defence, the
+   forged cross-site `POST`, because "there is no mechanism that can issue one" has stopped being true
+   of this page. After this entry that defence rests on **3(b), the per-process token**, and **3(c),
+   `frame-ancestors 'none'`** -- two facts, not three. rondo#163 predicted exactly this and it is
+   accepted knowingly.
+
+5. **What is adopted is one file: `idiomorph` `0.8.0`, vendored and digest-pinned. No framework, no
+   component library, no build step.** It arrives the way cadenza does (`D-0018`, `vendor/pin.mjs`):
+   the registry tarball is vendored, its sha256 recorded beside it, and CI checks the digest before it
+   is served -- so `vendor/pin.mjs` grows from one artifact to a list, which is the whole of the
+   implementation's dependency work. **A CDN tag is refused** (`D-0007`): rondo serves the bytes it
+   pinned, from its own process, or it serves none. `--ignore-scripts` is not weakened, because nothing
+   is installed -- the file is a static asset in the tree.
+
+6. **The script rondo runs is rondo's own, and its vocabulary is one method, one address, one
+   target.** It issues `GET`s of the address it is on and nothing else; it constructs no `POST` and
+   holds no client state; the only `POST` this page can produce remains the form's submit, which
+   requires a person to press. It is served as a file by this process -- the pinned bytes of rule 5
+   and rondo's own few lines beside them -- so what runs is what was vendored. **`D-0041` rule 3's
+   remaining two facts are untouched and no new defence is added here**: this entry fills the hole
+   rule 3(a) leaves and does not go looking for others.
+
+7. **The page is legible, complete and correct with the script absent, blocked, or broken, and that
+   is kept on purpose.** Every view is a whole document rendered by the server -- content, framing and
+   button included -- and the script only replaces what the server just sent again. A browser with
+   scripting disabled keeps today's liveness exactly, because the meta refresh moves inside
+   `<noscript>` on the views that have one. A script that is present but fails leaves a correct, static
+   page that stops updating; it never leaves a blank one. **Nothing the operator must read or press
+   may be produced by script**, and a view that needs script to be true is a violation of this rule
+   rather than a feature of it.
+
+8. **Nothing here widens what the page may write.** The vocabulary is still the single word `approve`
+   on a live, non-terminal iteration (`D-0041` rule 7); the write is still one function on the ports
+   (rule 4); the press is still the presentation and the redraw still counts none (`D-0042`). A second
+   verb is still the thing that re-argues `D-0041` rather than extends it.
+
+### What this entry does not do
+
+- **It does not make the page an application.** One script, one `GET`, one morph; no router, no client
+  state, no component model, no build, no bundler, no transpile. `D-0002`'s "no build output yet"
+  stands.
+- **It does not adopt a framework, and does not consider one foreclosed.** htmx and Datastar were
+  priced above against this page's actual needs on 2026-09-12; a second interactive verb, or a screen
+  that must be current within a second, is the change of premise that makes them worth re-pricing.
+- **It does not change the transport.** No SSE, no WebSocket, no long-lived connection: a five-second
+  poll of one document by one browser on loopback is what the traffic actually is.
+- **It does not reduce the work the server does per redraw.** rondo#160 names that too; a conditional
+  request is a residual below, because nothing has yet measured the read as costing anything.
+- **It does not give the page client-side state or routing.** `src/access/web.ts`'s "a view outlives
+  every redraw because the server is the one holding it" is a consequence of rule 2 -- the script
+  re-fetches the address it is on -- and stays true without being asserted as a fourth invariant.
+- **It does not supersede `D-0041`, and the choice is deliberate.** One sub-rule of one rule is
+  amended, and `D-0042` amended rule 7 the same way and left the entry accepted; a whole-entry
+  supersession would have to re-state rules 1, 2, 4, 5, 6, 7 and 8 unchanged to say nothing new about
+  any of them, and would leave `D-0042`'s citations pointing at a superseded entry. The falsifier
+  below says when that stops being the right call.
+- **It does not touch the terminal, `rondo inbox`, or `D-0032` rules 9 and 10.**
+
+### What the implementing change contains
+
+One pull request, not a sequence of them: `idiomorph-0.8.0.min.js` vendored beside its sha256 with
+`vendor/pin.mjs` extended to check a list; rondo's own script file served by this process; the meta
+refresh moved inside `<noscript>` on `summary` and `reading` and deleted outright on `answer`; and the
+tests that show a `GET` still writes nothing and that every view is complete with the script absent.
+
+### Residuals
+
+| Residual | Why not here | Who decides |
+|---|---|---|
+| `ETag` / `304` on the poll, so an unchanged ledger is answered without composing the page | It is the right answer to rondo#160's server-cost half and needs a change token the store does not have; nothing has measured the current read as expensive | whoever measures it |
+| Server-sent events instead of polling | Five seconds is the agreed freshness and a poll has no connection to keep alive; SSE is what a sub-second screen would need | the entry that needs sub-second |
+| The `reading` fold becoming a real `<details>` rather than a second address | Now possible, because a morph preserves an open element; keeping the view in the address is what makes today's second URL cheap, so this is a trade to argue rather than an oversight | whoever finds the second address costly |
+| A UI component library | Web Awesome is the healthy free choice and the page's own CSS is not the problem rondo#160 reported | the first screen this page's CSS cannot express |
+| Morphing the `answer` view too | Rule 1 says that view updates by nothing; if an operator ever wants it current, it wants rule 1 re-argued and not a quiet exception | whoever wants it |
+| `script-src 'self'` on the page's CSP | One header value, and nothing in this entry rests on it; it belongs to whoever is hardening the surface rather than to the decision to poll | whoever hardens it |
+| A `<noscript>` path for the `answer` view | It has no auto-update in either mode after rule 1, so there is nothing to degrade to | -- |
+
+### What was measured, and how
+
+On **2026-09-12**, on this machine. **This entry changes no code**: what was measured is the market
+and the artifacts, and the implementation is a separate change that will carry its own measurements of
+the properties rules 2, 3, 6 and 7 assert.
+
+- **The survey table above is registry data, not recollection.** Versions, dist-tags, licences and
+  publish dates were read from `https://registry.npmjs.org` for `htmx.org`, `idiomorph`, `alpinejs`,
+  `@starfederation/datastar` and `datastar`; sizes are byte counts of the named file inside the
+  published tarball.
+- **The one artifact this entry adopts was fetched and verified end to end.** The published
+  `idiomorph-0.8.0.tgz` hashes to `sha512-R47JBL+6jHDQvcnbppIUtXXcxi5h6+wuCEEZXnRhUltsgzPFKzThL5PuHppP9ypJuy+7WawcY1TsSBD/iQbMhw==`,
+  which is **exactly the `dist.integrity` the registry publishes** -- so the bytes measured are the
+  bytes shipped. Its sha256 is `c2b48584153f0167b5c98cb815576338ccd82a97378e53fbf29d139dfd67207e`; the
+  file to be vendored, `dist/idiomorph.min.js`, is **10,587 bytes**, sha256
+  `4cbd535caf7663a51eda9bce6595371c384fc430d54b8d414e29a61167f19f96`, and the package's own `LICENSE`
+  reads `Zero-Clause BSD`. That is `D-0007`'s discipline demonstrated on the candidate before it is
+  adopted rather than after.
+- **Datastar's distribution gap was checked and not inferred.** `@starfederation/datastar`'s newest
+  npm publish is `1.0.0-beta.11`, `2025-03-30`, while the project's own site describes a shipped 1.0 at
+  ~11.82 KiB; the unscoped `datastar` name on npm belongs to GoDaddy and is a different package.
+- **What was not measured**: no browser was driven, nothing was morphed, no page was served with a
+  script on it, and no poll was timed. Every claim about how the amended page *behaves* is an intention
+  this entry authorises and the implementing change must show.
+
+### What would falsify it
+
+- **The script acquiring a second address, a second method, or a `POST` it can construct.** Rule 6 is
+  the whole of what is left of rule 3(a)'s client-side half; a script that can be induced to write
+  makes the token the only defence in every direction, and rule 4's narrowing was priced on the
+  assumption that it is not.
+- **An unattended redraw turning out to have written anything.** This is rondo#95's original property,
+  restated on a client that can now ask on its own, and it is still the one thing this surface may not
+  cost.
+- **A view that stops being legible with the script off** -- a button that only script renders, a
+  claim only script fills in, a page that arrives blank when the vendored file 404s. Rule 7 is a
+  property somebody has to keep on purpose, and the first exception is the entry that has to re-argue
+  it rather than take it.
+- **idiomorph ceasing to be maintained, or its digest drifting under a version bump that is not
+  recorded.** The adoption's whole argument is "one small file whose bytes rondo pins"; an unpinned or
+  unread bump is the version of this that `D-0007` exists to prevent.
+- **A third entry amending `D-0041` rather than replacing it.** Two amendments (`D-0042` on rule 7,
+  this one on rule 3(a)) are still an entry a person can read top to bottom with two notes in hand; a
+  third is the point at which the accumulated reading is harder than a re-taken entry, and `D-0041`
+  should then be superseded whole with its survivors carried forward, as `D-0018` did for `D-0001`.
+- **A second operator, or the page ceasing to be loopback-only.** Rule 4 leaves the forged-`POST`
+  defence resting on the token and the frame refusal, both of which were argued for a single browser on
+  a host one person controls.
+- **The five-second poll turning out to cost something measurable**, which promotes the `ETag`
+  residual from "nothing has measured it" to the thing rondo#160 was actually about.
+- **htmx, Datastar, Alpine or Web Awesome changing the facts in the survey table** -- in particular
+  htmx 4 becoming `latest` with a materially smaller core, or Datastar publishing its released line to
+  npm under a pinnable name. The table is dated for exactly this reason.
+
+### Annotations this entry adds to earlier entries
+
+- **`D-0041` rule 3(a)** gains a dated annotation: its client-side half (*"there is no script on the
+  page"*, *"rondo's page has no mechanism that can issue a POST without a person pressing something"*)
+  is **repealed for the `summary` and `reading` views** by this entry's rules 1 and 3, and its
+  server-side half (*"`GET` and `HEAD` reach only the renderer, which holds only the read ports"*) is
+  unchanged and now carries the fact alone. Rule 3's preamble -- *"each one alone would be enough"* --
+  is narrowed as rule 4 above states: 3(a) alone still secures `D-0042`'s invariant and no longer
+  contributes to the cross-site-`POST` defence, which rests on 3(b) and 3(c).
+- **`D-0041`'s falsifier** *"the page acquiring a script, a `fetch`, or any redraw that is not a
+  document GET"* is recorded as **fired deliberately, by rondo#163 and this entry**, rather than
+  discovered. The falsifier's own words -- *"deletes half of rule 3 and leaves the token carrying it
+  alone"* -- are what rule 4 above accepts in as many words.
+- **`D-0042` rule 5** (*"there is no runtime fact on a `GET` that separates a reader from a redraw"*)
+  gains one: after this entry a scripted page *could* be made to report that a human is present, and
+  rondo declines to build it. What the ledger holds stays *presentations that were acted on*, and
+  `D-0041` rule 2's refusal to invent the distinction is the reason, unchanged by the client having
+  gained the ability to lie about it.
