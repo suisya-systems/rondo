@@ -4362,30 +4362,65 @@ function verificationLines(claims: readonly OperatorVerificationClaim[]): readon
         "the work was run or only read.",
     ];
   }
-  return claims.map(
-    (claim) =>
-      `- Before answering, \`${listed(claim.actorId, "actor id")}\` said they had checked: ` +
-      `${quotedClaim(claim.claim)} That is their own account, recorded before rondo ` +
-      "walked the gate; rondo did not run it and did not see it run.",
-  );
+  return claims.flatMap(claimBullet);
 }
 
 /**
- * The claim, whole, or cut with the cut said out loud, ended as a sentence.
+ * One claim as a bullet, with a multi-line claim quoted under it (rondo#140).
  *
- * See `CLAIM_LIMIT` for why it is not `listed()`. The terminator is added only
- * when the claim has none of its own: the sentence that follows says whose
- * account this is, and a claim that already ends in a full stop would otherwise
- * be printed with two -- a thing the reader has to decide is not part of what
- * the operator typed.
+ * **A claim with a newline in it is not one line of a list.** Rendered inside
+ * the bullet, its second line onwards leaves the bullet and the section's
+ * structure breaks around it -- which is rondo#90 arriving at the other screen:
+ * there a multi-paragraph request was folded into one escaped line, and PR #94
+ * gave it the width of its own lines. A claim is the other free text an
+ * operator types and this body is its only screen, so it is quoted the same
+ * way. Fenced rather than prefixed, because markdown is what this screen
+ * renders: inside a fence the operator's words are printed byte for byte, as
+ * `D-0045` rule 1 recorded them, and a claim that contains a heading or a list
+ * cannot lay itself out as one. The fence is indented into the list item and
+ * sized past the longest run of backticks inside it, for `requestBlock`'s
+ * reason -- a quotation a claim can end early is a claim that writes the body.
+ *
+ * The single-line case -- which is every claim typed at a terminal in one
+ * breath -- keeps its exact shape, so a claim that always read as a sentence
+ * still does. The terminator is added only there, and only when the claim has
+ * none of its own: the sentence after it says whose account this is, and a claim
+ * already ending in a full stop would otherwise be printed with two.
+ *
+ * The bound is `CLAIM_LIMIT`'s and is unchanged (#139): the cut says how much
+ * it left and where the whole of it still is. In the quoted form the note is a
+ * line of its own rather than a tail on the operator's last line, so nothing
+ * inside the fence is rondo's words wearing theirs.
  */
-function quotedClaim(claim: string): string {
-  const shown =
-    claim.length <= CLAIM_LIMIT
-      ? claim
-      : `${claim.slice(0, CLAIM_LIMIT)} [...${String(claim.length - CLAIM_LIMIT)} more ` +
-        "characters. The whole of it is on this iteration's row in rondo's store.]";
-  return /[.!?]$/.test(shown) ? shown : `${shown}.`;
+function claimBullet(claim: OperatorVerificationClaim): readonly string[] {
+  const cut = claim.claim.length - CLAIM_LIMIT;
+  const shown = cut > 0 ? claim.claim.slice(0, CLAIM_LIMIT) : claim.claim;
+  const note =
+    cut > 0
+      ? `[...${String(cut)} more characters. The whole of it is on this iteration's row in ` +
+        "rondo's store.]"
+      : null;
+  // **Attributed, not asserted** (D-0045 rule 3), in both shapes: the actor is
+  // named and rondo says it neither ran this nor saw it run.
+  const said = `- Before answering, \`${listed(claim.actorId, "actor id")}\` said they had checked`;
+  const account =
+    "That is their own account, recorded before rondo walked the gate; rondo did not run it " +
+    "and did not see it run.";
+  if (!shown.includes("\n")) {
+    const sentence = note === null ? shown : `${shown} ${note}`;
+    return [`${said}: ${/[.!?]$/.test(sentence) ? sentence : `${sentence}.`} ${account}`];
+  }
+  const lines = [...shown.split("\n"), ...(note === null ? [] : [note])];
+  const fence = "`".repeat(Math.max(3, longestBacktickRun(shown) + 1));
+  return [
+    `${said}, quoted below (${String(lines.length)} lines). ${account}`,
+    "",
+    // Indented into the item so the quotation stays part of the bullet. The
+    // indent is stripped from the content by the same rule that keeps the fence
+    // inside the list, so what a reader copies out is what the operator typed.
+    ...[fence, ...lines, fence].map((line) => (line === "" ? "" : `  ${line}`)),
+    "",
+  ];
 }
 
 /** What the gate says about who approved this, in a reviewer's terms. */
