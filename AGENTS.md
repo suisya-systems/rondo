@@ -200,6 +200,10 @@ Add the ID to the index table at the top of the file as well as to the body.
 `npm run verify` is the whole of it: `lint`, `knip`, `typecheck`, `test`. Run it
 before reporting anything as done. It takes a few seconds.
 
+Read its status from an unpiped run -- `npm run verify; echo "EXIT=$?"`, never
+`npm run verify 2>&1 | tail -40; echo "EXIT=$?"`, whose `EXIT=0` is `tail`'s and
+not the verification's (rondo#113, `docs/operations/lap-5-dogfood.md` N-15).
+
 Four things about it are not obvious:
 
 - **`node vendor/pin.mjs check` comes first, and `npm ci` second** (D-0018 rule
