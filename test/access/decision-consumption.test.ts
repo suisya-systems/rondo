@@ -487,6 +487,68 @@ test("a declined proposal resolves to nothing, and an unanswered one to nothing 
   expect(rowsIn(h.connection, "decision_consumption").length).toBe(0);
 });
 
+test("a digest from another proposal's option set is refused at the answer, on the real chain", async () => {
+  // **N-20, on the infrastructure that produced it** (D-0049 rule 2). Two laps
+  // stop, each leaving a `contract_keys` proposal with its own composed option
+  // set; the operator answers the second proposal with a digest off the first.
+  // Every value here was composed by the real cadenza facade, so nothing about
+  // the typed digest is malformed -- it is simply an answer to a question this
+  // proposal never asked.
+  const h = harness(answered("needs_approval"));
+  await admit(h.ports, h.advisory, PLAN, POLICY, "i-0000");
+  const first = composed(h.connection);
+  await admit(
+    h.ports,
+    h.advisory,
+    { ...PLAN, prompt: "teach rondo to count, but differently" },
+    POLICY,
+    "i-0001",
+    "i-0000",
+  );
+  const second = composed(h.connection).filter((digest) => !first.includes(digest));
+  // The premise, asserted rather than assumed: the two proposals put different
+  // contracts on the screen, so the crossed digest really is foreign to the
+  // second one.
+  expect(first.length).toBeGreaterThan(0);
+  expect(second.length).toBeGreaterThan(0);
+  const theirs = first[0] as string;
+  const proposals = rowsIn(h.connection, "proposal").map((row) => String(row["proposal_id"]));
+  const mine = proposals[proposals.length - 1] as string;
+
+  const crossed = await recordAnswer(
+    { record: h.advisory.record, now: () => NOW_MS },
+    { proposalId: mine, outcome: "approved", contractDigest: theirs, actorId: APPROVER },
+  );
+
+  expect(crossed.kind).toBe("refused");
+  if (crossed.kind === "refused") {
+    expect(crossed.reason).toContain("no option this proposal put on");
+    // The option set is printed, so the operator can retype off the refusal.
+    expect(crossed.reason).toContain(second[0] as string);
+  }
+  // **No row anywhere**: not the approval, and not the consumption it would
+  // have authorised. The state N-20 recorded was an approval that lived for
+  // ever on D-0022 rule 19's list; there is nothing here to live on it.
+  expect(rowsIn(h.connection, "human_decision").length).toBe(0);
+  expect(rowsIn(h.connection, "decision_consumption").length).toBe(0);
+
+  // **The control, one thing changed**: the same operator, the same proposal,
+  // a digest that proposal did put on the screen. It is recorded, and it is
+  // spendable -- which is what makes the refusal above a refusal of one case
+  // rather than of route S.
+  const straight = await recordAnswer(
+    { record: h.advisory.record, now: () => NOW_MS },
+    {
+      proposalId: mine,
+      outcome: "approved",
+      contractDigest: second[0] as string,
+      actorId: APPROVER,
+    },
+  );
+  expect(straight.kind).toBe("answered");
+  expect(rowsIn(h.connection, "human_decision").length).toBe(1);
+});
+
 test("an approval whose digest two options share is refused rather than resolved by order", async () => {
   // **`run_plan` is where one digest can name two plans.** `issueFor` composes a
   // contract from the project, the agent type and the parties, so two plans in
