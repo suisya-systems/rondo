@@ -34,7 +34,6 @@ import {
   closeRun,
   deliverGate,
   presentGate,
-  type StartupResult,
   showGate,
   showRun,
   startContinuo,
@@ -2751,10 +2750,10 @@ async function pageMaterial(
  * continuo is what is stuck, and a port that started one eagerly would undo
  * that; a host with nothing `performing` spawns nothing at all.
  */
-function transcriptPort(
+export function transcriptPort(
   environment: Readonly<Record<string, string | undefined>>,
 ): (record: IterationRecord) => Promise<TranscriptLocation> {
-  let startup: Promise<StartupResult> | null = null;
+  let verified: VerifiedContinuo | null = null;
   return async (record) => {
     const stateRoot = planField(record, "state_root");
     if (stateRoot === "") {
@@ -2778,12 +2777,22 @@ function transcriptPort(
         sessions: 1,
       };
     }
-    startup ??= startContinuo(environment);
-    const ready = await startup;
-    if (ready.kind === "refused") {
-      return { kind: "unknown", reason: `continuo is not usable here: ${ready.reason}` };
+    // **A working handle is remembered and a refusal is not.** The page is the
+    // caller that lives: it is built once and redraws itself every few seconds,
+    // so a startup cached after it failed would keep saying "continuo is not
+    // usable" long after continuo came back -- a stale answer on the one
+    // surface D-0048 rule 4's "read at render time" has to keep honest. The
+    // retry costs a `--version` per running lap while continuo is down, which
+    // is the same bound rule 6 already accepts and is paid only when the answer
+    // is unknown anyway.
+    if (verified === null) {
+      const startup = await startContinuo(environment);
+      if (startup.kind === "refused") {
+        return { kind: "unknown", reason: `continuo is not usable here: ${startup.reason}` };
+      }
+      verified = startup.continuo;
     }
-    const observed = await showRun(ready.continuo, {
+    const observed = await showRun(verified, {
       db: planField(record, "db"),
       runId: record.runId,
     });
