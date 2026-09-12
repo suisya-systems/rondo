@@ -629,6 +629,21 @@ test("the conductor returns at the open gate and does not observe it", async () 
   ]);
 });
 
+test("the line before the lap names the ceiling and does not predict a duration", async () => {
+  // The line used to say the lap "is the step that takes minutes", a unit of
+  // time rondo has no basis for: measured laps on one machine answered in 18-21
+  // seconds and the first dogfood's died in 3.8 s, so the sentence made a
+  // healthy lap look hung and a hung lap look healthy. `invocationCeilingMs` is
+  // the one number about this step rondo does hold -- the operator declared it
+  // in the plan -- so the report states the bound rather than a forecast.
+  const h = harness();
+  const report = await admitOnce(h);
+
+  expect(h.calls).toContain("performLap");
+  expect(says(report, `${String(PLAN.invocationCeilingMs)} ms`)).toBe(true);
+  expect(says(report, "takes minutes")).toBe(false);
+});
+
 test("the row at the open gate carries the gate, the session and the walk's name", async () => {
   const h = harness();
   await admitOnce(h);

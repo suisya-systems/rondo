@@ -1130,7 +1130,16 @@ async function performStep(
   if (performing.kind === "blocked") {
     return { kind: "finished", report: performing.report };
   }
-  lines.push("Sending one lap; this is the step that takes minutes.");
+  // **A ceiling, not an estimate.** The line here used to say the lap "is the
+  // step that takes minutes", which is a duration rondo has no basis for: the
+  // lap-1 dogfood measured laps answering in 18-21 s and dying in 3.8 s, so the
+  // sentence made a healthy lap look hung and a hung lap look healthy. The one
+  // real number rondo holds about this step is the operator's declared
+  // patience, so that is what is said.
+  lines.push(
+    `Sending one lap; rondo will wait ${String(plan.plan.invocationCeilingMs)} ms for it, ` +
+      "the ceiling the plan declared.",
+  );
 
   const walked = await ports.performLap(plan.plan, modelTier);
   switch (walked.kind) {
