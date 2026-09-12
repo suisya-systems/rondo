@@ -10700,3 +10700,209 @@ implementing change (rondo#168) left behind.
 - **`D-0042`** gains one: its *an unattended redraw writes nothing* now has a second surface to hold
   on, the cookie of `D-0056` rule 5, which is written only by a request that named a new `lang` and
   never by a redraw. Nothing in that entry is amended.
+
+## D-0058 — The second `resume` leaves the handbook: idempotence is a property the suite already proves more strongly than a walk can observe it, the surface keeps one `resume` per answering act on purpose, and no verb is added on the strength of a sentence
+
+**Status:** accepted (2026-09-13, rondo's human gate). Refs rondo#161, `D-0019`, `D-0025`, `D-0023`,
+`D-0041`, `D-0050`, `D-0029`, `D-0017`, `D-0013`, `D-0010`.
+
+`scripts/dogfood-lap.md` step 5 asks an operator to **call `resume` twice**, and to call it once
+before the answer as well: *"The first call after the answer transitions the iteration to `closed`;
+the second must change nothing and say so. Calling it before the answer must also change nothing --
+that is the idempotence `resume` promises to a surface that cannot be sure, and it is cheap to check
+here and expensive to discover in production."* rondo#161 observes that **no operation on rondo's
+surface does this**, and asks which of three things is true: that idempotence is the suite's business
+and the handbook should stop asking; that the check is worth a person's hands and the surface is
+missing a verb that reads a gate again without answering it; or that the step is a relic of a driver
+that no longer exists and should be deleted.
+
+All three describe something real, which is why the question was worth an entry rather than a commit
+message. The first is the true one; the third is right about where the step came from and wrong about
+what to do with it; the second names a need that exists and is **not this one**.
+
+### The step predates the surface, and it was walked exactly once
+
+It was written on **2026-09-06** at `9c76756`, the commit that recorded `D-0019` and created this
+handbook, and it then read `resume(iterationId)` -- no `ports`, because there was no composition root
+to hand one to and no CLI at all. `rondo start` / `answer` / `publish` arrived eighteen days of
+commits later at `18db9fe` (`D-0024`, `D-0025`). So the step was never a description of an operator
+doing something on a surface: it was an instruction to whoever was writing the JavaScript that drove
+the library that day.
+
+Whoever that was, they did it, once. `docs/operations/lap-1-dogfood.md` section 10.6 is the record --
+*"The script's step 5, in the order it asks for"* -- with three reports pasted in: 109 ms before the
+answer (`awaiting_human`, *"Nothing was written"*), 125 ms closing the iteration, and **1 ms for the
+second call**, annotated in the record as `# the second call`. The vehicle was
+`.worker-scratch/drive.mjs`, thirty lines reproduced in full in section 8 of that record and
+deliberately never committed; `scripts/dogfood-lap.md` says in its own step 3 that the driver and its
+throwaway `tsconfig` **are gone** and *"the commands below are the surface"*. Step 5 was not updated
+when that happened, and step 2's *"Call the composition root's `admit(...)`"* was not either.
+
+So the honest description of step 5 today is: **a walked, recorded, one-off check, written for a
+driver that was deleted, asking for an operation the surface has never offered.** Not a check somebody
+skips, and not a check somebody could perform if they tried.
+
+### Decision
+
+1. **The handbook stops asking, and the reason is `D-0019`'s own.** `D-0019` rule 17 enumerates what
+   `test/refrain/` proves with injected fakes and names **`resume` idempotence** in the list, in the
+   same entry whose rule 5 defines the property. Step 5 asks a person to re-establish by hand a
+   property that entry had already assigned to the suite two rules later. **Option (1) of rondo#161 is
+   adopted**: idempotence is a property of the code, it is the test suite's to defend, and a manual
+   procedure that asks after it is asking the wrong reader.
+
+2. **What the suite proves is strictly stronger than what any walk can observe, and this is the part
+   that settles it rather than merely supporting it.** `test/refrain/interpreter.test.ts:1114-1134`
+   asserts that the `awaiting_human->closed` move appears in the store's path **exactly once** across
+   two `resume` calls, and then asserts that the second call made **no `showGate` call at all** --
+   with the reason written beside it: *"the idempotence is not 'observe again and write the same
+   thing' -- it is 'do not observe again at all'."* An operator walking step 5 reads two reports that
+   say the same four lines. **Those two reports are equally consistent with both mechanisms**, so the
+   manual check cannot distinguish the property rondo actually holds from the weaker one, and the
+   1 ms in the lap-1 record is a timing, not an assertion. A check whose stronger version is already
+   green in `npm test` and whose manual version cannot see the distinction is not a check worth an
+   operator's hands.
+
+3. **The half of step 5 that is not idempotence is real, stays, and is already performed by the
+   surface.** *"`resume` sees the outcome after a human answers"* -- named in this handbook's own
+   *What this proves that the suite cannot* -- is an integration fact about a real continuo, a real
+   gate and a real answer, and the fakes cannot reach it. **It takes one call, and `rondo answer`
+   makes it** (`src/access/cli.ts:2770`), as does the page's press
+   (`src/access/cli.ts:3072`) and both of `revise`'s paths (`:3388`, `:3398`). What step 5 becomes is
+   therefore not a deletion but a **narrowing to the call the operator already makes**, and step 6 --
+   read the report -- is where its remaining content already lives.
+
+4. **One `resume` per answering act is the surface rondo meant to have, and this entry records it as
+   intended rather than as a gap.** Every call site on the surface is reached after a `walkGate` in
+   the same process: `commandAnswer`, `answerFromPage`, and `commandRevise` twice. There is no
+   standalone call and no verb that offers one -- `COMMANDS` (`src/access/cli.ts:458-473`) holds
+   fourteen words and none of them is `resume`. A second press is refused **before** the row is read
+   for its gate, because the row is `closed` and `closed` is terminal (`src/access/cli.ts:2641-2647`
+   for the command, `:3022-3029` for the page, `D-0023` rule 15). That refusal is the correct
+   behaviour and this entry does not touch it: the surface's word is *answer*, the act is an answer,
+   and the row settling is a consequence of the act rather than a second thing an operator does.
+
+5. **Option (2) is rejected: no verb is added to the surface to satisfy a sentence in a handbook.**
+   `D-0019` rule 3 refuses rondo-side defaults invented for rondo's own convenience, and a verb whose
+   only caller would be a procedure that exists to exercise it is the same error one layer up. The
+   operator's *look without answering* already has two spellings that write nothing -- `rondo answer`
+   with no `--body`, which is `D-0029` rule 2's reading mode, and `rondo inbox` -- and neither calls
+   `resume`, which is right, because looking is not settling.
+
+6. **The need a read-only verb would actually serve is named here so that it is not smuggled in under
+   this entry.** A row at `awaiting_human` whose gate somebody else closed -- `withdrawn`, `expired`,
+   or `unanswerable` through continuo's `gate close` -- settles today only by typing
+   `rondo answer --body <something>`, whose instruction `walkGate` then sends nowhere; `resume` runs
+   regardless and closes the row, and `commandRevise` even inspects `walked.answerSent` for exactly
+   this case (`src/access/cli.ts:3380-3395`). Asking an operator to type an answer that is not
+   delivered, in order to settle a row nobody is answering, is a genuine wart. **It is a different
+   question from idempotence, it was not what rondo#161 asked, and it is not decided here.** If a verb
+   is ever added, it is authorised by *that* need, on its own entry, with its own name -- and it will
+   be a verb that observes and settles, not one that exists to be called twice.
+
+7. **Option (3) is right about provenance and wrong about the remedy.** The step is a relic, and
+   section 10.6 of the lap-1 record is both the proof and the reason not to lose it: **delete the
+   sentence, keep the step.** The three sentences that ask for the second call and the
+   before-the-answer call go; what stays is the one call, made by `rondo answer`, and a pointer to the
+   record and the test that already hold the rest. Deleting step 5 outright would delete the
+   integration fact of rule 3 along with the idempotence, which is the one thing in it the suite
+   genuinely cannot prove.
+
+8. **This entry decides and changes no file but this one.** The edit to `scripts/dogfood-lap.md` is a
+   separate pull request, per the standing convention that a decision lands before its
+   implementation.
+
+### What the implementing change contains
+
+One pull request, one file:
+
+- `scripts/dogfood-lap.md` step 5 loses *"Call it twice"*, the sentence about the second call, and the
+  sentence about calling it before the answer. What replaces them says that `rondo answer` makes the
+  call, that what is being checked here is that `resume` reads a **real** gate's outcome, and that the
+  idempotence is `test/refrain/interpreter.test.ts`'s -- named, so a reader who wants it knows where
+  it is green.
+- The library spelling goes with it: step 5 stops saying *"Call `resume(ports, iterationId)`"*, for
+  the reason step 3 already gives about `drive.mjs`.
+- Nothing in `src/` is touched, no verb is added, no test is added or removed.
+
+### What this entry does not do
+
+- **It does not weaken the property.** `resume` stays idempotent, `D-0019` rule 5 is unamended, and
+  the suite keeps both cases plus the call-count assertion. What changes is who is asked to check it.
+- **It does not decide step 2.** *"Call the composition root's `admit(...)`"* is the same kind of
+  relic as step 5's first sentence and `rondo start` is its surface equivalent, but rondo#161 asked
+  about step 5 and this entry answers that.
+- **It does not add, remove or rename a verb**, and it does not touch the terminal-row refusals that
+  make a second press impossible.
+- **It does not delete `docs/operations/lap-1-dogfood.md` section 10.6.** The one walk that happened is
+  a measurement, and measurements are not edited when the procedure that produced them changes.
+
+### Residuals
+
+- **Step 2 and step 5 are the same defect and only one is being fixed.** Whoever next edits this
+  handbook should expect a second, smaller version of this question.
+- **The `withdrawn`/`expired` settlement path of rule 6** is open and now written down.
+- **Nothing in `npm test` fails if step 5 is edited wrongly**, because a Markdown procedure has no
+  greenness -- which is `D-0019` rule 17's own argument for it, and cuts both ways.
+
+### What was measured, and how
+
+At `f869657`, in this worktree:
+
+- **The three reports of the one walk** are in `docs/operations/lap-1-dogfood.md:1018-1040`, with the
+  timings in the table at `:929-931`, and the driver that produced them in section 8 at `:630-700`.
+- **The step's origin**: `git log -S'Call it *twice*' -- scripts/dogfood-lap.md` returns exactly one
+  commit, `9c76756` (2026-09-06), whose text reads `resume(iterationId)` with no `ports`. The CLI
+  arrives at `18db9fe`.
+- **The suite**: `npx vitest run test/refrain/interpreter.test.ts -t resume` -- 6 passed, 68 skipped,
+  314 ms. The two tests that matter are *"resume on a gate that is still open changes nothing and says
+  so"* and *"resume after the gate closes writes once, however many times it is called"*, the second
+  of which asserts `showGate` was called once.
+- **The surface inventory**: every `resume(` call site under `src/access/` is preceded by a `walkGate`
+  in the same function, and `COMMANDS` contains no `resume`. The page's press
+  (`src/access/cli.ts:3018-3080`, the handler rondo#161 asks about by line) was read in full: it
+  refuses a terminal row, records the framing, starts continuo, calls `walkGate`, and then calls
+  `resume` **once** in the same request -- so even the surface that redraws itself every five seconds
+  gets exactly one call per press.
+- **What was not measured**: nothing was run against a real continuo for this entry. The integration
+  fact rule 3 keeps is the one the lap-1 record already walked, and this entry re-reads that record
+  rather than re-walking the lap.
+
+### What would falsify it
+
+- **A second `resume` call site appearing on the surface that is not behind an answering act** --
+  which would mean rule 4 is describing an accident rather than a design, and that the verb of rule 5
+  was needed after all.
+- **The `withdrawn`/`expired` case turning out to be common rather than a corner**, at which point
+  rule 6's wart is the entry that supersedes this one's rejection of option (2).
+- **`resume` ceasing to be total** -- a gate it cannot observe throwing rather than reporting -- which
+  is the property `src/access/cli.ts:3072-3082` relies on to keep a failed observation from stranding
+  an operator on a page with a spent answer, and which would make an operator-run second call
+  meaningful again.
+- **The suite's call-count assertion being deleted as an implementation detail.** It is the whole of
+  rule 2's *strictly stronger*, and without it the manual walk and the test prove the same weaker
+  thing.
+- **A surface that cannot be sure appearing for real** -- `D-0019` rule 5's own phrase, written about
+  a caller that does not know whether a previous call landed. Lap 1 has one process per act and no
+  retrying client. A queue, a webhook, or an MCP client retrying a timed-out call would make
+  idempotence a property somebody exercises rather than one somebody asserts, and the handbook is
+  still the wrong place to check it -- but the entry that adds such a surface should say so itself.
+- Any measurement above failing to reproduce at `f869657`.
+
+### Annotations this entry adds to earlier entries
+
+- **`D-0019` rule 17** gains a dated annotation. Its list of what `test/refrain/` proves includes
+  *resume idempotence*, and `D-0058` records that the manual procedure the same rule establishes was
+  asking for it a second time from a reader who cannot observe the distinction the suite asserts. The
+  rule is **unamended**: the layering it describes is exactly what this entry applies. What is
+  corrected is `scripts/dogfood-lap.md`, not the rule that created it.
+- **`D-0019` rule 5** gains one: *"idempotent and safe to call from a surface that cannot be sure"*
+  stands as written and is **not** a promise that such a surface exists in lap 1. Every surface today
+  calls `resume` exactly once, behind an act, and the phrase describes what the function guarantees
+  rather than what an operator is expected to exercise.
+- **`D-0025`** gains one: the three commands it introduced (`start`, `answer`, `publish`) are what made
+  steps 2, 4, 5 and 7 of this handbook a surface rather than a driver, and `D-0058` records that step
+  5 was not rewritten at the time. Nothing in that entry is amended.
+- **`D-0023` rule 15** gains one: its terminal-row refusal is what makes a second press impossible on
+  both the command and the page, and `D-0058` reads that as intended rather than as the gap rondo#161
+  might have been describing.
