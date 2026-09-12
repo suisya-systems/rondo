@@ -1106,6 +1106,7 @@ describe("the verbs that answer a gate and settle a run", () => {
           digestAlgorithm: "sha256",
           digestVerified: true,
         },
+        sessions: [],
       },
     });
   });
@@ -1132,6 +1133,108 @@ describe("the verbs that answer a gate and settle a run", () => {
       }),
     );
     expect(result).toMatchObject({ kind: "answered", payload: { delegationRecord: null } });
+  });
+
+  /** One `run show` document, with the session rows the caller hands in. */
+  const runShowWith = (sessions: readonly Record<string, unknown>[]) =>
+    decode(
+      RUN_SHOW,
+      output({
+        stdout: success(RUN_SHOW.schema, {
+          run: {
+            run_id: "rondo-iter-2",
+            status: "running",
+            writer_epoch: 1,
+            created_at_ms: 1_757_000_000_000,
+            updated_at_ms: 1_757_000_000_001,
+          },
+          lease: null,
+          delegation_record: null,
+          sessions,
+          gates: [],
+          events: [],
+          outbox: [],
+        }),
+      }),
+    );
+
+  /** A session row as continuo writes it at the pin `fcf86eb`, eight keys. */
+  const sessionRow = (overrides: Record<string, unknown> = {}) => ({
+    session_id: "session-a",
+    provider: "claude_cli",
+    binding_phase: "identity_confirmed",
+    observation: "observed",
+    provider_state: "running",
+    observation_reason: null,
+    bound_at_ms: 1_757_000_000_100,
+    released_at_ms: null,
+    ...overrides,
+  });
+
+  test("a session is read as its identifier and its binding time, and nothing else", () => {
+    // D-0048 rule 1: the two fields the decoder may take off a session row.
+    expect(runShowWith([sessionRow()])).toMatchObject({
+      kind: "answered",
+      payload: { sessions: [{ sessionId: "session-a", boundAtMs: 1_757_000_000_100 }] },
+    });
+  });
+
+  test("the three liveness-shaped fields are not read (D-0048 rule 3)", () => {
+    // **A control rather than an assertion about absence.** Two documents that
+    // differ *only* in `provider_state`, `observation` and `released_at_ms`
+    // decode to the same value: a decoder that had taken any of them would
+    // have to disagree here. These are the fields that cannot tell a live
+    // session from a stopped one -- `released_at_ms` is written by nothing,
+    // `provider_state` is a snapshot from identity confirmation -- so reading
+    // them would let a screen answer "is it wedged?" from columns that cannot.
+    const running = runShowWith([
+      sessionRow({ provider_state: "running", observation: "observed", released_at_ms: null }),
+    ]);
+    const gone = runShowWith([
+      sessionRow({
+        provider_state: "exited",
+        observation: "unobserved",
+        released_at_ms: 1_757_000_000_900,
+      }),
+    ]);
+    expect(running).toEqual(gone);
+    // And said the other way round, so that the equality above cannot be
+    // satisfied by a decoder that read nothing at all.
+    const other = runShowWith([sessionRow({ session_id: "session-b" })]);
+    expect(other).not.toEqual(running);
+  });
+
+  test("a released session is still named, because nothing filters on that column", () => {
+    // D-0048 rule 8: `released_at_ms` is a column continuo writes nowhere, so
+    // a filter over it would silently be no filter at all -- and the failure
+    // it would cause is the screen naming no transcript for a lap that has one.
+    expect(runShowWith([sessionRow({ released_at_ms: 1_757_000_000_900 })])).toMatchObject({
+      kind: "answered",
+      payload: { sessions: [{ sessionId: "session-a" }] },
+    });
+  });
+
+  test("every session is decoded, so a caller can order them and count them", () => {
+    const result = runShowWith([
+      sessionRow({ session_id: "older", bound_at_ms: 1 }),
+      sessionRow({ session_id: "newest", bound_at_ms: 3 }),
+      sessionRow({ session_id: "middle", bound_at_ms: 2 }),
+    ]);
+    expect(result).toMatchObject({ kind: "answered" });
+    const sessions = result.kind === "answered" ? result.payload.sessions : [];
+    expect(sessions.map((session) => session.sessionId)).toEqual(["older", "newest", "middle"]);
+  });
+
+  test("a session row missing either field rondo reads does not decode", () => {
+    // The absent-is-not-null rule this module applies everywhere, and the
+    // classification it already uses for a document that will not read: a
+    // `sessions` array that has stopped carrying `session_id` is continuo's
+    // shape having moved, and rondo stops rather than naming a directory built
+    // out of `undefined`. D-0048's second falsifier is what this guards.
+    const { session_id: _dropped, ...withoutId } = sessionRow();
+    expect(runShowWith([withoutId])).toMatchObject({ kind: "invokerDefect" });
+    const { bound_at_ms: _alsoDropped, ...withoutBound } = sessionRow();
+    expect(runShowWith([withoutBound])).toMatchObject({ kind: "invokerDefect" });
   });
 
   test("an unknown run is a refusal rather than a defect, whatever class it carries", () => {

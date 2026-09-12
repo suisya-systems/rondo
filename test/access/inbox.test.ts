@@ -13,7 +13,12 @@
 import { DatabaseSync } from "node:sqlite";
 import { expect, test } from "vitest";
 
-import { type InboxSnapshot, inboxLines, showInbox } from "../../src/access/inbox.js";
+import {
+  type InboxSnapshot,
+  inboxLines,
+  showInbox,
+  type TranscriptLocation,
+} from "../../src/access/inbox.js";
 import { CONSERVATIVE_HOST_POLICY } from "../../src/refrain/policy.js";
 import type { IterationRecord, IterationStatus, JsonRecord } from "../../src/store/records.js";
 import { WAIT_SIDE } from "../../src/store/records.js";
@@ -88,6 +93,25 @@ const EMPTY: InboxSnapshot = {
   attention: [],
   attentionSince: null,
   unspent: [],
+  transcripts: new Map(),
+};
+
+/**
+ * The one port the screen has that reaches outside rondo's own rows (D-0048).
+ *
+ * A counter beside it, because "how many times was continuo asked" is a
+ * property of rule 6 and not an implementation detail: the tests below assert
+ * that a host with nothing running asks nothing.
+ */
+const transcriptPort = (located?: TranscriptLocation) => {
+  const asked: string[] = [];
+  return {
+    asked,
+    locateTranscript: async (record: { readonly id: string }): Promise<TranscriptLocation> => {
+      asked.push(record.id);
+      return located ?? { kind: "unknown", reason: "no continuo in this test" };
+    },
+  };
 };
 
 // --- the order of the writes (D-0032 rule 9) ------------------------------
@@ -134,6 +158,7 @@ test("the mark is sampled before the reads and written after the render", async 
     {
       store,
       record: watched,
+      locateTranscript: transcriptPort().locateTranscript,
       present: shows.present,
       now: () => {
         events.push("clock");
@@ -169,7 +194,16 @@ test("a second look reports what changed since the first, inclusive of the mark"
   const { store, record } = fresh();
   await reserveOne(store, "i-0001");
   const first = screen();
-  await showInbox({ store, record, present: first.present, now: () => 5_000 }, "operator-1");
+  await showInbox(
+    {
+      store,
+      record,
+      locateTranscript: transcriptPort().locateTranscript,
+      present: first.present,
+      now: () => 5_000,
+    },
+    "operator-1",
+  );
   expect(first.shown.join("\n")).toContain("you have never looked");
 
   // Recorded **after** the first look's mark, so it is what the diff is about.
@@ -196,7 +230,13 @@ test("a second look reports what changed since the first, inclusive of the mark"
   });
   const second = screen();
   const outcome = await showInbox(
-    { store, record, present: second.present, now: () => 6_000 },
+    {
+      store,
+      record,
+      locateTranscript: transcriptPort().locateTranscript,
+      present: second.present,
+      now: () => 6_000,
+    },
     "operator-1",
   );
   expect(outcome.kind).toBe("shown");
@@ -242,7 +282,13 @@ test("a subject drawn twice is counted once, and the second look still succeeds"
 
   for (const atMs of [5_000, 6_000, 7_000]) {
     const outcome = await showInbox(
-      { store, record, present: screen().present, now: () => atMs },
+      {
+        store,
+        record,
+        locateTranscript: transcriptPort().locateTranscript,
+        present: screen().present,
+        now: () => atMs,
+      },
       "operator-1",
     );
     expect(outcome.kind).toBe("shown");
@@ -265,6 +311,7 @@ test("a look whose mark could not be written says so, and the screen still stand
     {
       store,
       record: { ...record, recordView: async () => ({ kind: "defect", reason: "disk gone" }) },
+      locateTranscript: transcriptPort().locateTranscript,
       present: shows.present,
       now: () => 5_000,
     },
@@ -318,32 +365,115 @@ test("an in-flight row names its workspace (#71)", () => {
   expect(rendered).toContain(`in ${String(record.workspace)}`);
 });
 
-test("an in-flight row with no session recorded says so rather than inventing one", () => {
-  // **The state every `performing` row is actually in.** `sessionId` is
-  // `null` on the row for the whole time a lap is genuinely running --
-  // `interpreter.ts`'s `performLap` step commits `performing` with no session
-  // fields and writes them only once the lap has already answered -- so the
-  // line says that plainly instead of printing `null` or nothing at all.
+test("a running lap's transcript directory is named on its own row (#79)", () => {
+  // **The issue's falsifier, asserted on the screen it is about.** What an
+  // operator had to do was `ls` a state root rondo never printed; what this
+  // line has to carry is the directory itself, because a session id alone
+  // still leaves continuo's layout to be known (D-0048 rule 5).
   const record = { ...liveRow("i-running", "performing"), sessionId: null };
   const rendered = inboxLines("operator-1", {
     ...EMPTY,
     live: [{ kind: "read", record }],
+    transcripts: new Map([
+      [
+        record.id,
+        { kind: "named", directory: "/srv/state/rondo-i-running/session-9", sessions: 1 },
+      ],
+    ]),
   }).join("\n");
-  expect(rendered).toContain("session (no session recorded on this row yet)");
+  expect(rendered).toContain("transcript /srv/state/rondo-i-running/session-9");
   expect(rendered).toContain(`in ${String(record.workspace)}`);
 });
 
-test("whereItRuns reads back a session once the row carries one", () => {
-  // **Exercises the true branch, without claiming it is reachable today.**
-  // No in-flight status writes `sessionId` under the current interpreter (see
-  // the test above), so this is the fallback's counterpart rather than a
-  // scenario `rondo inbox` shows in practice.
-  const record = liveRow("i-running", "performing");
+test("a transcript that could not be located reads as unknown and never as nothing", () => {
+  // D-0048 rule 8, in `explain`'s own words: a continuo that will not answer
+  // and a run with no session yet are different facts, and neither of them is
+  // "there is no transcript".
+  const record = { ...liveRow("i-running", "performing"), sessionId: null };
   const rendered = inboxLines("operator-1", {
     ...EMPTY,
     live: [{ kind: "read", record }],
+    transcripts: new Map([
+      [record.id, { kind: "unknown", reason: "continuo is not usable here: no such file" }],
+    ]),
   }).join("\n");
-  expect(rendered).toContain(`session ${String(record.sessionId)}`);
+  expect(rendered).toContain("transcript (not named: continuo is not usable here: no such file)");
+  // The row is still on the screen, still counted, and still says where the
+  // workspace is: an unanswerable question about one field does not cost the
+  // operator the rest of the line.
+  expect(rendered).toContain("in flight (1)");
+  expect(rendered).toContain(`in ${String(record.workspace)}`);
+});
+
+test("a respawned run names its newest session and says there are others", () => {
+  const record = { ...liveRow("i-running", "performing"), sessionId: null };
+  const rendered = inboxLines("operator-1", {
+    ...EMPTY,
+    live: [{ kind: "read", record }],
+    transcripts: new Map([
+      [record.id, { kind: "named", directory: "/srv/state/run/session-2", sessions: 3 }],
+    ]),
+  }).join("\n");
+  expect(rendered).toContain("transcript /srv/state/run/session-2  (newest of 3 sessions)");
+});
+
+test("continuo is asked about the running laps and about nothing else (D-0048 rule 6)", async () => {
+  // **The cost of the line, asserted rather than argued.** `inbox` is the
+  // screen an operator runs constantly, and the rule that keeps it cheap is
+  // that only a `performing` row can have a transcript at all. This is the
+  // test that fails if the ask ever widens to "every in-flight row".
+  const { store, record } = fresh();
+  const port = transcriptPort({ kind: "named", directory: "/srv/state/d", sessions: 1 });
+  const live = Object.keys(WAIT_SIDE).map((status, index) => ({
+    kind: "read" as const,
+    record: liveRow(`i-${String(index)}`, status as IterationStatus),
+  }));
+  await showInbox(
+    {
+      store: { ...store, readLive: async () => live.map((row) => ({ ...row })) },
+      record,
+      locateTranscript: port.locateTranscript,
+      present: () => {},
+      now: () => 5_000,
+    },
+    "operator-1",
+  );
+  const performing = live.filter((row) => row.record.status === "performing");
+  expect(performing).toHaveLength(1);
+  expect(port.asked).toEqual(performing.map((row) => row.record.id));
+});
+
+test("what the port answered is not written to the row (D-0048 rule 4)", async () => {
+  // **Read at render time, and re-read next time.** The same row, looked at
+  // twice with two different answers, says two different things: nothing was
+  // remembered between the looks. The stronger half of this property is in the
+  // type -- `InboxReadPorts.store` is `Pick<IterationStore, "readLive">`, so
+  // this module could not write the row even if it tried -- and this is the
+  // behavioural half.
+  const { store, record } = fresh();
+  const reserved = await reserveOne(store, "i-0001");
+  expect(reserved.kind).toBe("reserved");
+  const row = { ...liveRow("i-0001", "performing"), sessionId: null };
+  const shownWith = async (directory: string) => {
+    const shows = screen();
+    await showInbox(
+      {
+        store: { ...store, readLive: async () => [{ kind: "read" as const, record: row }] },
+        record,
+        locateTranscript: async () => ({ kind: "named", directory, sessions: 1 }),
+        present: shows.present,
+        now: () => 5_000,
+      },
+      "operator-1",
+    );
+    return shows.shown.join("\n");
+  };
+  expect(await shownWith("/srv/state/first")).toContain("transcript /srv/state/first");
+  expect(await shownWith("/srv/state/second")).toContain("transcript /srv/state/second");
+  // And the row itself never gained a session: the column's writer is still
+  // the suspend, and a look did not become a write.
+  const stored = await store.read("i-0001");
+  expect(stored.kind === "read" ? stored.record.sessionId : "unread").toBeNull();
 });
 
 test("a live row that will not decode is on the screen", () => {
@@ -425,7 +555,13 @@ test("the second look's accounting counts only what was withheld since the first
   await withheld(1_500, "p-2", "quiet-hours");
 
   const first = await showInbox(
-    { store, record, present: screen().present, now: () => 2_000 },
+    {
+      store,
+      record,
+      locateTranscript: transcriptPort().locateTranscript,
+      present: screen().present,
+      now: () => 2_000,
+    },
     "operator-1",
   );
   expect(first.kind).toBe("shown");
@@ -436,7 +572,13 @@ test("the second look's accounting counts only what was withheld since the first
 
   const shows = screen();
   const second = await showInbox(
-    { store, record, present: shows.present, now: () => 4_000 },
+    {
+      store,
+      record,
+      locateTranscript: transcriptPort().locateTranscript,
+      present: shows.present,
+      now: () => 4_000,
+    },
     "operator-1",
   );
   expect(second.kind).toBe("shown");
@@ -546,14 +688,32 @@ test("a proposal that lands after the bound is not counted as presented before i
   });
 
   const early = screen();
-  await showInbox({ store, record, present: early.present, now: () => 5_000 }, "operator-1");
+  await showInbox(
+    {
+      store,
+      record,
+      locateTranscript: transcriptPort().locateTranscript,
+      present: early.present,
+      now: () => 5_000,
+    },
+    "operator-1",
+  );
   expect(early.shown.join("\n")).not.toContain("p-late");
   expect(connection.prepare("SELECT count(*) AS n FROM operator_attention").get()).toEqual({
     n: 0,
   });
 
   const later = screen();
-  await showInbox({ store, record, present: later.present, now: () => 9_000 }, "operator-1");
+  await showInbox(
+    {
+      store,
+      record,
+      locateTranscript: transcriptPort().locateTranscript,
+      present: later.present,
+      now: () => 9_000,
+    },
+    "operator-1",
+  );
   expect(later.shown.join("\n")).toContain("p-late");
   expect(connection.prepare("SELECT at_ms FROM operator_attention").get()).toEqual({
     at_ms: 9_000,

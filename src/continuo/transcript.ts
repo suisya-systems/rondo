@@ -84,8 +84,24 @@ export interface LapSpendRequest {
   readonly stateRoot: string;
   /** The `--run-id` rondo passed, which names the directory under it. */
   readonly runId: string;
-  /** The session `lap perform` answered with. */
+  /** The session: what `lap perform` answered with, or -- for a lap that is
+   *  still running -- what `run show` names (D-0048). */
   readonly sessionId: string;
+}
+
+/**
+ * Where a lap's transcript is, as a path and without opening anything.
+ *
+ * **Exported so that the screen naming the directory and the reader opening it
+ * compose it in one place** (D-0048 rule 5). A second `join` on a surface would
+ * be a second copy of continuo's directory rules -- the thing this module's own
+ * header says is most likely to drift from them -- and naming a path is not
+ * reading one, so this widens no capability: the grant D-0046 rule 4 gives this
+ * module is unchanged, and a caller holding this string has exactly what an
+ * operator has.
+ */
+export function lapTranscriptDirectory(request: LapSpendRequest): string {
+  return join(request.stateRoot, request.runId, request.sessionId);
 }
 
 /**
@@ -98,7 +114,7 @@ export interface LapSpendRequest {
  * what keeps this module's filesystem reach at two named files.
  */
 export function readLapSpend(request: LapSpendRequest): LapSpend {
-  const directory = join(request.stateRoot, request.runId, request.sessionId);
+  const directory = lapTranscriptDirectory(request);
   const generation = generationOf(readText(join(directory, "record.json")));
   if (generation === null) {
     return NOTHING_READ;

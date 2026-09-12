@@ -96,6 +96,10 @@ function portsOver(
     store: world.store,
     record: world.record,
     now: () => 5_000,
+    // The page draws `inbox`'s lines, so it carries `inbox`'s one outward
+    // port; nothing in these tests runs a lap, so it is never asked (D-0048
+    // rule 6 asks only of `performing` rows).
+    locateTranscript: async () => ({ kind: "unknown", reason: "no continuo in this test" }),
     policy: { maxOccupying: 4, maxLive: 6 },
     actorId,
     material: pressed === null ? null : async (record) => [`work    rondo/${record.id}`],

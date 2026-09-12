@@ -8446,6 +8446,13 @@ records that continuo's layout had *already moved on main* by that date, so the 
 first thing the implementing change re-reads at the pin. Nothing in the rules below depends on any
 field other than `session_id` and `bound_at_ms`.
 
+> **Annotation (2026-09-12, rondo#79's implementation).** The re-measurement asked for above was
+> made, at `fcf86eb` itself: `showPayload`'s `sessions` rows carry the same eight keys, including
+> `session_id` and `bound_at_ms`, and `prepareBinding` is documented there as committing the row
+> *"before the process exists"* -- so the identifier is in continuo's database from the start of the
+> lap, which is the premise rule 2 rests on. **The second falsifier did not fire**; nothing in this
+> entry changes.
+
 ### Decision
 
 1. **rondo may read `sessions` from `RUN_SHOW` for a run in flight, and what it takes is
