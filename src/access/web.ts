@@ -390,6 +390,16 @@ function langAttribute(record: IterationRecord): string {
  * {@link basisLine} is called rather than the string being spelled here,
  * because a second spelling of a basis is a second thing an operator has to
  * learn to trust. The `iteration` form reads no snapshot, so it is handed none.
+ *
+ * **The `id` is what makes the morph identity-based rather than positional**
+ * (D-0054 rule 2). These blocks come and go -- a lap ends, a gate opens -- and
+ * with no id on them idiomorph matches the repeated children by position: a
+ * list going from `[A, B]` to `[B]` is then A's node rewritten into B and B's
+ * own node removed, which takes the reader's focus with it if it was on the
+ * answer link inside. The row id is already unique per document and already the
+ * thing every line here is read off, so it is also the identity the merge
+ * should use. The two other repeated blocks in the lead (an open proposal, a
+ * row that will not decode) carry one for the same reason.
  */
 function lapHtml(
   record: IterationRecord,
@@ -399,7 +409,7 @@ function lapHtml(
 ): string {
   const basis = basisLine({ form: "iteration", iterationId: record.id }, {});
   return (
-    `<div class="lap"><p class="basis">${escapeHtml(basis)}</p>` +
+    `<div class="lap" id="lap-${escapeHtml(record.id)}"><p class="basis">${escapeHtml(basis)}</p>` +
     `<p class="head">${escapeHtml(head)}</p>` +
     `<p class="request"${langAttribute(record)}>${escapeHtml(record.request)}</p>` +
     lines
@@ -500,7 +510,8 @@ function waitingHtml(
       open
         .map(
           (proposal) =>
-            `<div class="lap"><p class="basis">read it back with its options and ` +
+            `<div class="lap" id="proposal-${escapeHtml(proposal.proposalId)}">` +
+            `<p class="basis">read it back with its options and ` +
             `what each rests on: rondo show --proposal-id ${escapeHtml(proposal.proposalId)}</p>` +
             `<p class="head">${escapeHtml(
               `${proposal.kind} -- waiting ${ago(proposal.createdAtMs, nowMs)}`,
@@ -548,7 +559,8 @@ function runningHtml(
       unreadable
         .map((row) =>
           row.kind === "unreadable"
-            ? `<div class="lap"><p class="head">${escapeHtml(row.id)}</p>` +
+            ? `<div class="lap" id="unreadable-${escapeHtml(row.id)}">` +
+              `<p class="head">${escapeHtml(row.id)}</p>` +
               `<p class="line">${escapeHtml(`will not decode: ${row.reason}`)}</p></div>`
             : "",
         )

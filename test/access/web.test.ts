@@ -1044,3 +1044,33 @@ test("rondo's own script has one method, one address and one target", () => {
     expect(code).not.toContain(forbidden);
   }
 });
+
+test("every repeated block in the lead carries the identity the morph merges on", async () => {
+  const world = fresh();
+  await reserve(world, "i-0001", "the one at a gate");
+  await reserve(world, "i-0002", "the one still running");
+  await openGate(world, "i-0001");
+  for (const [from, to] of [
+    ["planned", "admitting"],
+    ["admitting", "admitted"],
+    ["admitted", "performing"],
+  ] as const) {
+    expect((await world.store.transition("i-0002", from, to, {}, 2_000)).kind).toBe("transitioned");
+  }
+
+  const html = await operatorPage(portsOver(world, "ada", []), "t");
+
+  // **Identity and not position** (D-0054 rule 2). idiomorph matches by `id`
+  // first and falls back to matching repeated children by position, and these
+  // blocks come and go: a waiting lap ending while the operator's focus is on
+  // another lap's answer link is `[A, B]` becoming `[B]`, which positionally is
+  // A rewritten into B and B's own node -- the focused one -- removed.
+  const ids = [...html.matchAll(/<div class="lap" id="([^"]+)"/g)].map((found) => found[1]);
+  expect(ids).toContain("lap-i-0001");
+  expect(ids).toContain("lap-i-0002");
+  // Unique, because an id the document repeats is an id the merge cannot use.
+  expect(new Set(ids).size).toBe(ids.length);
+  // And no lap block without one: the fallback is silent, so a block that grew
+  // back into the lead without an id would poll and morph and look fine.
+  expect([...html.matchAll(/<div class="lap"(?! id=)/g)]).toEqual([]);
+});
