@@ -168,14 +168,43 @@ const APPROVE_BODY = "approve";
 const REFRESH_SECONDS = 5;
 
 /**
- * The second address of the one page: the same rows, with the fold open.
+ * Which of the one page's three views is being read.
  *
- * A query on `/` rather than a second path, because the router refuses every
- * path but `/` and a second one would be a second URL to get wrong. It is read
- * on the way in and rendered into two links and the redraw, so the whole of
- * this surface's state is in the address bar where a reload can carry it.
+ * **The whole of this surface's state is in the address**, which is what makes
+ * it survivable: a `<details>` the operator opened would be slammed shut by the
+ * next redraw five seconds later, and a page with no script could not reopen
+ * it. The redraw is pointed back at the address being read instead, so a view
+ * outlives every redraw because the server is the one holding it.
+ *
+ * `summary` answers the three questions and nothing else. `reading` adds
+ * rondo's own compositions -- the inbox, what spans the live laps, every row's
+ * claims under their own pointers. `answer` is one row's whole framing beside
+ * its button, and it exists because **the press is the presentation** (D-0042):
+ * what a press records is `explainIteration`'s entire claim set, counted as
+ * shown, so the page that carries the button has to be the page that carried
+ * every one of those claims. A summary with a button would record a
+ * presentation that did not happen.
+ *
+ * Queries on `/` rather than three paths, because the router refuses every path
+ * but `/` and a second URL is a second one to get wrong. All three are `GET`s
+ * and all three write nothing (D-0041).
  */
-const READING_PATH = "/?reading=open";
+export type PageView =
+  | { readonly kind: "summary" }
+  | { readonly kind: "reading" }
+  | { readonly kind: "answer"; readonly iterationId: string };
+
+/** The address of one view, for the redraw and for the links between them. */
+function viewHref(view: PageView): string {
+  switch (view.kind) {
+    case "reading":
+      return "/?reading=open";
+    case "answer":
+      return `/?answer=${encodeURIComponent(view.iterationId)}`;
+    default:
+      return "/";
+  }
+}
 
 /** Text as HTML text: the four characters that would otherwise be markup. */
 export function escapeHtml(text: string): string {
@@ -361,7 +390,7 @@ function waitingHtml(
   open: readonly OpenProposal[],
   nowMs: number,
   token: string | null,
-  material: ReadonlyMap<string, string>,
+  shown: ReadonlyMap<string, string>,
 ): string {
   return section(
     `waiting for your answer (${String(waiting.length + open.length)})`,
@@ -372,7 +401,9 @@ function waitingHtml(
           record,
           `${record.status} -- waiting ${ago(record.updatedAtMs, nowMs)}`,
           [unblockedBy(record), spentLine(record), fenceLine(record)],
-          approveHtml(record, token, material.get(record.id) ?? ""),
+          shown.has(record.id)
+            ? approveHtml(record, token, shown.get(record.id) ?? "")
+            : answerHref(record, token),
         ),
       )
       .join("") +
@@ -522,6 +553,23 @@ function approveHtml(record: IterationRecord, token: string | null, material: st
   );
 }
 
+/**
+ * The way to the button, drawn on exactly the rows that would have one.
+ *
+ * The conditions are {@link approveHtml}'s, so a link is never offered into a
+ * view that would refuse to draw a button -- and the words say what the second
+ * address adds, because *"answer"* on its own would read as though the press
+ * were here.
+ */
+function answerHref(record: IterationRecord, token: string | null): string {
+  if (token === null || record.status !== "awaiting_human" || record.gateId === null) {
+    return "";
+  }
+  return `<p class="line"><a href="${escapeHtml(
+    viewHref({ kind: "answer", iterationId: record.id }),
+  )}">read what a press would record, and answer there</a></p>`;
+}
+
 /** One iteration, explained the way `rondo explain` explains it. */
 function explainHtml(record: IterationRecord, snapshot: AdvisorySnapshot): string {
   return section(
@@ -532,27 +580,53 @@ function explainHtml(record: IterationRecord, snapshot: AdvisorySnapshot): strin
 }
 
 /**
- * The work a press would approve over, or nothing when there is no press.
+ * What a press would be recorded as having shown, for the rows that carry a
+ * button (D-0042 rules 1 and 4).
  *
- * Read only for the rows that carry a button: it shells out to `git` in the
- * caller, and a page that redraws every five seconds must not inspect every
- * workspace it can see each time it does.
+ * **The ledger row a press writes is `explainIteration`'s whole proposal**, and
+ * it is counted as presented. So the whole of it has to be on the page beside
+ * the button, or rondo would be recording a framing the operator was never
+ * shown -- the one thing the fold must not cost. The three questions above are
+ * a summary and this is not: it is every claim under its own basis, the same
+ * bytes the press stores, drawn where the press is.
+ *
+ * **It is composed for one row, and only on the view that is about that row.**
+ * The summary links here rather than carrying this: the material shells out to
+ * `git` in the caller and the framing reads the row's readings, so a page that
+ * redraws every five seconds must do neither for a row nobody is answering --
+ * and a summary carrying two dozen claims per waiting row is the screen
+ * rondo#145 is about. A row that has left its gate since the link was drawn
+ * composes nothing here and so draws no button, which is the same refusal
+ * `rondo answer` makes.
  */
-async function materialFor(
+async function shownBeforePress(
   ports: WebPorts,
   waiting: readonly IterationRecord[],
+  token: string | null,
+  view: PageView,
 ): Promise<ReadonlyMap<string, string>> {
-  const material = new Map<string, string>();
-  if (ports.material === null) {
-    return material;
+  const shown = new Map<string, string>();
+  if (token === null || view.kind !== "answer") {
+    return shown;
   }
   for (const record of waiting) {
-    if (record.status === "awaiting_human" && record.gateId !== null) {
-      const lines = await ports.material(record);
-      material.set(record.id, `<pre class="material">${escapeHtml(lines.join("\n"))}</pre>`);
+    if (
+      record.id !== view.iterationId ||
+      record.status !== "awaiting_human" ||
+      record.gateId === null
+    ) {
+      continue;
     }
+    const snapshot = gather(record, await ports.store.readingsFor(record.id));
+    const material = ports.material === null ? null : (await ports.material(record)).join("\n");
+    shown.set(
+      record.id,
+      `<p class="note">What pressing approve records as shown, and what it would be over:</p>` +
+        claimsHtml(propose(snapshot).payload.claims, snapshot) +
+        (material === null ? "" : `<pre class="material">${escapeHtml(material)}</pre>`),
+    );
   }
-  return material;
+  return shown;
 }
 
 /**
@@ -598,16 +672,7 @@ function endedRecently(outcomes: readonly ReadOutcome[]): readonly IterationReco
 export async function operatorPage(
   ports: WebPorts,
   token: string | null = null,
-  // **Whether the fold is open is a fact about the URL and not about the
-  // browser** (rondo#145). A `<details>` the operator opened would be slammed
-  // shut by the next `<meta refresh>` five seconds later, which turns a fold
-  // into a thing that cannot be read -- and a page with no script has no way to
-  // reopen it. So the reading is a second address of the same page, the redraw
-  // is pointed back at the address that is being read, and the state survives
-  // every redraw because the server is the one holding it. A `GET` to either
-  // address writes exactly what a `GET` to the other one writes, which is
-  // nothing (D-0041).
-  readingOpen = false,
+  view: PageView = { kind: "summary" },
 ): Promise<string> {
   const nowMs = ports.now();
   const host = await gatherHost(ports);
@@ -640,48 +705,48 @@ export async function operatorPage(
   // continuo subprocess per running lap, and this page redraws itself.
   const transcripts = inbox?.transcripts ?? (await locateRunning(ports, live));
 
+  const pressToken = ports.answer === null ? null : token;
+  const shown = await shownBeforePress(ports, waiting, pressToken, view);
+
   const lead =
     waiting.length + running.length + ended.length + open.length + unreadable.length === 0
       ? nothingHtml()
       : [
-          waitingHtml(
-            waiting,
-            open,
-            nowMs,
-            ports.answer === null ? null : token,
-            await materialFor(ports, waiting),
-          ),
+          waitingHtml(waiting, open, nowMs, pressToken, shown),
           runningHtml(running, unreadable, transcripts, nowMs),
           endedHtml(ended, nowMs),
         ].join("\n");
 
-  const reading = !readingOpen
-    ? ""
-    : [
-        inboxHtml(ports, inbox),
-        betweenHtml(host),
-        ...(await Promise.all(
-          [...waiting, ...running, ...ended].map(async (record) =>
-            explainHtml(record, gather(record, await ports.store.readingsFor(record.id))),
+  const reading =
+    view.kind !== "reading"
+      ? ""
+      : [
+          inboxHtml(ports, inbox),
+          betweenHtml(host),
+          ...(await Promise.all(
+            [...waiting, ...running, ...ended]
+              .filter((record) => !shown.has(record.id))
+              .map(async (record) =>
+                explainHtml(record, gather(record, await ports.store.readingsFor(record.id))),
+              ),
+          )),
+          ...unreadable.map((row) =>
+            row.kind === "unreadable"
+              ? section(
+                  `iteration '${row.id}'`,
+                  "",
+                  `<pre>will not decode: ${escapeHtml(row.reason)}</pre>`,
+                )
+              : "",
           ),
-        )),
-        ...unreadable.map((row) =>
-          row.kind === "unreadable"
-            ? section(
-                `iteration '${row.id}'`,
-                "",
-                `<pre>will not decode: ${escapeHtml(row.reason)}</pre>`,
-              )
-            : "",
-        ),
-      ].join("\n");
+        ].join("\n");
 
   return `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="refresh" content="${String(REFRESH_SECONDS)};url=${readingOpen ? READING_PATH : "/"}">
+<meta http-equiv="refresh" content="${String(REFRESH_SECONDS)};url=${escapeHtml(viewHref(view))}">
 <title>rondo</title>
 <style>
 :root { color-scheme: light dark; }
@@ -724,12 +789,14 @@ ${
     : ""
 }
 ${lead}
-<p class="fold"><a href="${readingOpen ? "/" : READING_PATH}">${
-    readingOpen
+<p class="fold"><a href="${
+    view.kind === "reading" ? "/" : escapeHtml(viewHref({ kind: "reading" }))
+  }">${
+    view.kind === "reading"
       ? "hide the reading"
       : "the reading these rest on: every claim with its basis, and rondo's own accounting"
   }</a></p>
-${readingOpen ? reading : ""}
+${reading}
 </body>
 </html>
 `;
@@ -869,6 +936,23 @@ async function handleApprove(
 }
 
 /**
+ * Which view one request asks for, read off its query and nothing else.
+ *
+ * Total: anything that is not one of the two queries is the summary, because a
+ * typo in a query is an operator who wanted the page and a blank screen would
+ * be a worse answer than the page. The base is a constant this server does not
+ * serve from, present only because `URL` needs one to parse a path.
+ */
+function viewOf(url: string): PageView {
+  const query = new URL(url, "http://127.0.0.1").searchParams;
+  const answering = query.get("answer");
+  if (answering !== null && answering !== "") {
+    return { kind: "answer", iterationId: answering };
+  }
+  return query.get("reading") === "open" ? { kind: "reading" } : { kind: "summary" };
+}
+
+/**
  * Serve the page on localhost until the server is closed.
  *
  * `127.0.0.1` is written here rather than taken as an argument: an address is
@@ -925,11 +1009,8 @@ export function serveOperatorPage(
       });
       return;
     }
-    operatorPage(
-      ports,
-      token,
-      new URL(request.url ?? "/", "http://127.0.0.1").searchParams.get("reading") === "open",
-    )
+    operatorPage(ports, token, viewOf(request.url ?? "/"))
+
       .then((html) => {
         response.writeHead(200, {
           "content-type": "text/html; charset=utf-8",
