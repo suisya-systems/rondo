@@ -455,6 +455,9 @@ const COLUMN_BY_FIELD = {
   sessionId: "session_id",
   sessionPath: "session_path",
   permissionDenials: "permission_denials",
+  lapCostUsd: "lap_cost_usd",
+  lapTurns: "lap_turns",
+  lapDurationMs: "lap_duration_ms",
   reason: "reason",
 } as const satisfies Record<keyof IterationFields, string>;
 
@@ -580,6 +583,12 @@ CREATE TABLE IF NOT EXISTS iteration (
   session_id            TEXT,
   session_path          TEXT,
   permission_denials    TEXT,
+  -- What the lap spent (D-0046). REAL for the dollars, INTEGER for the count
+  -- and the milliseconds, and every one of them nullable: a null is "rondo did
+  -- not read it" and 0 is a lap that spent nothing.
+  lap_cost_usd          REAL,
+  lap_turns             INTEGER,
+  lap_duration_ms       INTEGER,
   reason                TEXT,
   created_at_ms         INTEGER NOT NULL,
   updated_at_ms         INTEGER NOT NULL,
@@ -1009,6 +1018,13 @@ const ADDED_COLUMNS = Object.freeze({
   identifiers_spent: "INTEGER NOT NULL DEFAULT 0",
   supersedes_iteration_id: "TEXT",
   permission_denials: "TEXT",
+  // D-0046's three, and the third entry to add a column: nullable, no
+  // back-fill, and nothing a database written before them could have recorded
+  // -- rondo read none of the three until this entry, so an existing row's null
+  // is the truth about it rather than a gap to fill.
+  lap_cost_usd: "REAL",
+  lap_turns: "INTEGER",
+  lap_duration_ms: "INTEGER",
   occupying: GENERATED_COLUMNS.occupying,
   holds_identifiers: GENERATED_COLUMNS.holds_identifiers,
 });
@@ -1162,6 +1178,9 @@ const SELECT_COLUMNS = [
   "session_id",
   "session_path",
   "permission_denials",
+  "lap_cost_usd",
+  "lap_turns",
+  "lap_duration_ms",
   "reason",
   "created_at_ms",
   "updated_at_ms",
@@ -2740,6 +2759,9 @@ function toRecord(row: SqlRow): IterationRecord {
     sessionId: optionalText(row, "session_id"),
     sessionPath: optionalText(row, "session_path"),
     permissionDenials: optionalText(row, "permission_denials"),
+    lapCostUsd: optionalNumber(row, "lap_cost_usd"),
+    lapTurns: optionalNumber(row, "lap_turns"),
+    lapDurationMs: optionalNumber(row, "lap_duration_ms"),
     reason: optionalText(row, "reason"),
     createdAtMs: requireInteger(row, "created_at_ms"),
     updatedAtMs: requireInteger(row, "updated_at_ms"),
@@ -3013,6 +3035,26 @@ function requireInteger(row: SqlRow, column: string, subject = "iteration"): num
   const value = row[column];
   if (typeof value !== "number" || !Number.isSafeInteger(value)) {
     throw new StoreDefect(`the ${subject} row's '${column}' is not a whole number`);
+  }
+  return value;
+}
+
+/**
+ * A nullable numeric column, whole or not.
+ *
+ * One helper for all three of `D-0046`'s columns, because what they have in
+ * common is the part that matters: a null means rondo did not read the number
+ * and a 0 means it read a zero, so an absent value is never rounded into a
+ * cheap lap. `bigint` is refused for {@link requireInteger}'s reason, and a
+ * non-finite number for a plainer one -- a cost of `Infinity` is not a cost.
+ */
+function optionalNumber(row: SqlRow, column: string, subject = "iteration"): number | null {
+  const value = row[column];
+  if (value === null || value === undefined) {
+    return null;
+  }
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    throw new StoreDefect(`the ${subject} row's '${column}' is not a finite number`);
   }
   return value;
 }

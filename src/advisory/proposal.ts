@@ -173,6 +173,10 @@ export type SnapshotIteration = {
   readonly classificationReason: string | null;
   readonly modelTier: string | null;
   readonly model: string | null;
+  /** What the lap spent (`D-0046`); null is unread and 0 is zero. */
+  readonly lapCostUsd: number | null;
+  readonly lapTurns: number | null;
+  readonly lapDurationMs: number | null;
   readonly gateId: string | null;
   readonly gateStage: string | null;
   readonly gateOutcome: string | null;
@@ -383,6 +387,19 @@ function settled(label: string, value: string | null, pointer: string): Claim {
   return { label, value: value ?? ABSENT, basis: { form: "snapshot", pointer } };
 }
 
+/**
+ * A claim over a number the snapshot may not hold (`D-0046`).
+ *
+ * `String(0)` is `'0'`, which {@link claim} would keep as a value -- but
+ * `String(null)` is `'null'`, which it would keep too, and that is the reading
+ * this wrapper exists to prevent. The null is turned into the absent case
+ * *before* anything is stringified, so an unread cost reads as
+ * {@link UNDETERMINED} and a lap that spent nothing reads as `0`.
+ */
+function spent(label: string, value: number | null, pointer: string): Claim {
+  return claim(label, value === null ? null : String(value), pointer);
+}
+
 /** A claim over a value the snapshot may not hold, pointed at where it would be. */
 function claim(label: string, value: string | null, pointer: string): Claim {
   return {
@@ -429,6 +446,19 @@ export function propose(snapshot: AdvisorySnapshot): Explanation {
     claim("continuo revision", it.continuoRevision, "/iteration/continuoRevision"),
     claim("model tier", it.modelTier, "/iteration/modelTier"),
     claim("model", it.model, "/iteration/model"),
+    // **Three claims, one per quantity, and a number is not spelled as prose**
+    // (`D-0046` rule 5). Time and money are separate: a lap inside its ceiling
+    // can cost several times the one before it, so a duration claim is not a
+    // cost claim and neither is derivable from the other. The basis is the
+    // snapshot pointer, so a reader can follow it into the verbatim row and see
+    // the number -- or the null -- for themselves.
+    //
+    // A null renders as UNDETERMINED and a zero renders as `0`, which is the
+    // whole point of the columns being nullable: "rondo did not read this lap's
+    // cost" and "this lap cost nothing" are different claims.
+    spent("lap cost (USD)", it.lapCostUsd, "/iteration/lapCostUsd"),
+    spent("lap turns", it.lapTurns, "/iteration/lapTurns"),
+    spent("lap duration (ms)", it.lapDurationMs, "/iteration/lapDurationMs"),
     claim("gate stage", it.gateStage, "/iteration/gateStage"),
     claim("gate outcome", it.gateOutcome, "/iteration/gateOutcome"),
     claim("reason", it.reason, "/iteration/reason"),

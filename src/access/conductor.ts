@@ -44,6 +44,7 @@ import {
   type VerifiedContinuo,
 } from "../continuo/invoker.js";
 import type { ContinuoResult } from "../continuo/protocol.js";
+import { readLapSpend } from "../continuo/transcript.js";
 import { classifyPlan } from "../refrain/classification.js";
 import {
   abandon as abandonIteration,
@@ -191,6 +192,23 @@ function lapRequestOf(plan: AdmittedPlan, modelTier: string): PerformLapRequest 
 }
 
 /**
+ * What the lap spent, in the three names {@link LapPerformance} carries.
+ *
+ * A function rather than a spread of {@link readLapSpend}'s own record, because
+ * the transcript's keys are the worker CLI's (`total_cost_usd`, `num_turns`) and
+ * the port's are rondo's: naming the mapping is what lets a reader of either
+ * side see that no fourth number appeared on the way across.
+ */
+function readLapSpendFields(
+  stateRoot: string,
+  runId: string,
+  sessionId: string,
+): Pick<LapPerformance, "costUsd" | "turns" | "durationMs"> {
+  const spend = readLapSpend({ stateRoot, runId, sessionId });
+  return { costUsd: spend.totalCostUsd, turns: spend.numTurns, durationMs: spend.durationMs };
+}
+
+/**
  * Everything the conductor is handed, built from a verified continuo and an
  * open store.
  *
@@ -303,6 +321,20 @@ export function conductorPorts(
         // continuo's own text, unread here: what it says is a person's to read
         // and the loop's only job is to get it onto the row (#88).
         permissionDenials: payload.permissionDenials,
+        // **Read here, beside the answer that names the session, because this
+        // is the one place every part of the path exists** (`D-0046` rule 2):
+        // the state root and the run id are what this adapter just passed on the
+        // command line, and `payload.sessionId` is what the lap answered with.
+        // It is the same shape as `readLapWork` below -- a read of what the lap
+        // left behind, taken by the composition root and never by the loop --
+        // and it cannot fail the step: an unreadable transcript answers three
+        // nulls.
+        //
+        // The run id is the plan's rather than the payload's on purpose: this
+        // path has to be the one rondo passed, and whether continuo answered
+        // about the same run is a check the interpreter makes afterwards, out
+        // of the same two values.
+        ...readLapSpendFields(plan.stateRoot, plan.runId, payload.sessionId),
       }));
     },
     showGate: async (plan, gateId): Promise<EffectOutcome<GateObservation>> =>

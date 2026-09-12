@@ -166,6 +166,12 @@ const LAP_OPENED_A_GATE: EffectOutcome<LapPerformance> = {
     // `[]` is continuo reporting that nothing was refused, which is a fact and
     // not the absence of one (#88).
     permissionDenials: "[]",
+    // No cost read for this fixture: these cases are about the trigger a
+    // stopped lap pulls, and three nulls is what a lap whose transcript rondo
+    // did not read records (D-0046 rule 3).
+    costUsd: null,
+    turns: null,
+    durationMs: null,
   },
 };
 

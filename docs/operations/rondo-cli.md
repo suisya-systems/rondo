@@ -322,10 +322,17 @@ iteration 'cli-lap-001' is awaiting_human
   continuo admitted run rondo-cli-lap-001 at status 'created' under role 'worker' (neutral name 'worker').
   Sending one lap; this is the step that takes minutes.
   The lap answered. Gate gate/worker_escalation/2d6d4fd5-.../0 is already open; session 2d6d4fd5-... was started.
+  The lap cost 1.542 USD over 38 turn(s) in 203324 ms, read from its terminal 'result' event.
   The conductor is suspending here. There is no timer and no poll loop, and the process may exit; call resume() once a person has answered the gate.
 
 A person has to answer this before anything lands. Next: rondo answer
 ```
+
+**The cost line is read off the lap's own transcript** (`D-0046`), not estimated: the three numbers
+are `total_cost_usd`, `num_turns` and `duration_ms` from the terminal `result` event under
+`state_root`, and `rondo explain` prints the same three against the row. A lap whose transcript could
+not be read says so and keeps three nulls -- which is a different row from a lap that cost nothing,
+and neither is reported as the other.
 
 **A request of more than one paragraph is passed as a file**, because it cannot be typed as a shell
 argument:
