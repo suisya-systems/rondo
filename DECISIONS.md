@@ -87,6 +87,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0047 | Where an approval is spent: inside the admission's own transaction, with the contract recomposed from today's material, and by a verb of its own | accepted |
 | D-0048 | Naming a running lap's transcript: one identifier read off a live run, three liveness-shaped fields refused by name, and a directory printed where the hole already is | accepted |
 | D-0049 | An approval that names a contract the proposal never carried: refused at the door as a dangling reference, and not as a spendability check | accepted |
+| D-0050 | The second fence rondo never sees: no column for the worker's own sandbox, `D-0045`'s form declined because the silence points the other way, one standing sentence on the fence block, and the report asked of continuo | accepted |
 
 ---
 
@@ -8708,3 +8709,202 @@ At `c357e3d` on 2026-09-12, by reading the tree.
   material moved under — never one that named a contract the proposal never carried.
 - **`D-0036` rule 4** gains one: its dangling-reference refusal, taken for `elevated_from_message_id`
   into the conversation, is used a second time for `approved` into `composition`.
+
+---
+
+## D-0050 — The second fence rondo never sees: no column for the worker's own sandbox, `D-0045`'s form declined because the silence points the other way, one standing sentence on the fence block, and the report asked of continuo
+
+**Status:** accepted (2026-09-12, rondo's human gate). Refs rondo#129, `D-0032`, `D-0039`, `D-0040`,
+`D-0045`, `D-0046`, `D-0048`.
+
+On 2026-09-12 the paid lap of lap 6 (`lap6-004-r2`) had its **first** Bash call produce no output and
+not be refused. The worker said why, unprompted:
+
+> It failed with `Sandbox is enabled but failed to initialize: EPERM ... listen
+> '/tmp/claude-1000/srt-mux-81-1.sock'`. That is an environment-level failure in setting up the
+> sandbox itself, before the command ran. **As a result of that error, sandboxing was disabled for
+> the remainder of the session, so commands #2-#5 ran unsandboxed.**
+
+rondo's record does not reflect it, and both halves of that record are right. `permission_denials`
+carries one entry and it is the `xxd` one, so the fence block reports one refusal — accurately. The
+allowance it prints is a declaration, which the block already says it is. What is missing is a third
+thing: **the worker's own sandbox is a second containment, it can fail open, and it fails open
+without producing a refusal.** Measured as N-16 in
+[`docs/operations/lap-6-dogfood.md`](docs/operations/lap-6-dogfood.md).
+
+**The point is where the knowledge lives.** A worker that had not volunteered that paragraph would
+have left a record indistinguishable from a clean run.
+
+### Why the obvious repair is a lie, and it is a different lie from `D-0045`'s
+
+The obvious repair is `D-0045`'s: hold the worker's account as an account, the way the operator's
+verification claim is held. It does not carry, for two reasons, and the second is the decisive one.
+
+**There is no door.** `D-0045` can write a row because `--verified` is rondo's own flag: the one fact
+rondo observes is that *at this moment, this actor typed this sentence*, and rondo holds the moment
+because rondo asked. Nothing asks the worker. No flag of `lap perform` carries such a statement, no
+field of `continuo.lap.perform/1` is one, and the worker's words reach rondo only as the gate's
+`rationale` — an account of the work, written to whatever the worker chose to write about. A row
+filled from it would be filled by rondo **searching prose for a subject**, which is rondo composing
+part of what the worker said; `D-0045` rule 3's "a claim is free text on purpose" refuses the same
+move from the other side.
+
+**And the silence points the other way.** `D-0045` rule 6's silence is safe: *"nobody recorded what
+they checked"* is exactly true whenever nobody did, and the entry says in terms that it is not
+evidence that nothing was checked. Here the absence would carry the opposite freight. A worker whose
+sandbox held and a worker that simply did not mention its sandbox produce the *same* empty field, and
+a reader would take the empty field for the first. **A record whose empty state reads as an all-clear
+is worse than no record** — and N-16 is the measurement that rondo already has one of those, on the
+fence block.
+
+### Decision
+
+1. **rondo claims nothing about the worker's own sandbox, and no column, table or record kind is
+   added.** `D-0032` is the line and this entry stays inside it: rondo's three grounded records here
+   are the declaration read back off continuo's delegation record (`D-0040`), the refusals continuo
+   reported (`D-0039` rule 4), and the cost read off the transcript (`D-0046`) — each of them a thing
+   rondo read. A fourth field about the worker's containment would be grounded in nothing rondo,
+   continuo or cadenza observed.
+
+2. **`D-0045`'s form is declined, for the two reasons above, and the entry it declines is not
+   weakened.** Both records are of something rondo did not watch; they differ in who elicited the
+   sentence and in which way the absence reads. `D-0045` stands exactly as written, and this entry is
+   the statement that its shape is **not** the general answer to "rondo did not see it" — it is the
+   answer for a claim rondo *asked for*.
+
+3. **What was missing is a sentence, not a record, and it goes where the screen already draws this
+   line.** The fence block prints *"This is the run's own declaration, not the whole fence"*
+   (`src/access/cli.ts:2242`) because rondo does not read the role's template. It gains a second
+   caveat in the same place: the worker's own sandbox is a second containment, rondo does not observe
+   it, it can fail without producing a refusal, and **a lap that ran with it disabled prints here
+   exactly like one that did not**.
+
+4. **That sentence is standing — printed on every lap, derived from nothing — and the unconditionality
+   is the rule, not a convenience.** A caveat printed only when rondo suspected something would be a
+   claim about *this* lap, and rondo has nothing to suspect with. Printed always, it is a claim about
+   the *record*, which rondo is the authority on. Same shape as `D-0045` rule 6's always-printed
+   silence line, and taken for the same reason: the reader must be able to tell what the screen does
+   not cover by reading the screen.
+
+5. **What an operator asking "was this lap clean?" looks at, in order, and rondo names it rather than
+   summarising it.**
+
+   a. **The fence block** — what the run declared, and what continuo reported refused. Both grounded,
+      neither about the sandbox, and rule 3's sentence now says so.
+
+   b. **The gate's `rationale`, verbatim** — the worker's own account, already printed by the same
+      commands that print the fence block (`src/access/cli.ts:2588`, `:2728`). **This is the only
+      channel this fact has ever travelled, and it is the channel that carried N-16.** It is not made
+      a record, promoted, parsed or counted; it is read by a person.
+
+   c. **The transcript's directory** (`D-0048` rule 5), which the operator opens.
+
+   So the answer to the question is **"rondo cannot tell you, and here is where the evidence is"** —
+   and rule 3's sentence is what stops the screen implying otherwise.
+
+6. **rondo does not grow a second reader of the worker CLI's output, and the parse is refused whether
+   or not the string is there.** rondo's entire filesystem reach into a transcript is
+   `src/continuo/transcript.ts` — two named files, one key of `record.json` and the last `result`
+   event (`D-0046` rule 4). Matching a vendor's free-text diagnostic would stake rondo's record on a
+   message nobody promised to keep, and would produce precisely the field the silence argument
+   refuses: present when the wording matched, absent when it changed, and **indistinguishable from
+   the clean case in both directions**. Whether that message reaches `events-NNN.jsonl` at all was not
+   measured, and the rule does not depend on it.
+
+7. **The requirement is stated for continuo, and continuo's shape is not designed here.** This is
+   `D-0039`'s route used a second time, and `D-0039` rule 4b is the property being claimed:
+
+   > **Loud.** A command the fence does not allow must reach the lap's report — and therefore the
+   > gate — rather than existing only inside the worker's prose. rondo#67 was found because a worker
+   > volunteered it; a worker that did not would have handed the operator an unverified commit that
+   > reads as finished work.
+
+   **A containment that was meant to be in force and was not is the same class of fact, arrived at by
+   the same accident, and it does not meet that property at the pin.** continuo spawns the worker,
+   owns the session directory and already reads the terminal `result` event; rondo is two boundaries
+   away from the process. So the ask is continuo's: **that such a failure become part of what
+   `lap perform` answers with**, in a field whose *absence* means "the backend declined to say" and
+   never "nothing happened" — `permission_denials`' own three-state discipline (`continuo D-1110`),
+   for the reason that entry gives.
+
+   **It is a report and not a control.** rondo does not ask continuo to police the worker's sandbox,
+   choose it, or refuse a lap over it; rondo asks to be told. Until such a field exists, rule 1 holds
+   and nothing is recorded.
+
+8. **Nothing under `src/` changes on this entry**, in `D-0039` rule 6's and `D-0040`'s sense. Rule 3
+   is a wording change to `allowanceLines` and rule 5 names lines that already print; both are
+   separate work.
+
+### What this does not do
+
+- **It does not make rondo observe, monitor, police or verify the worker's sandbox**, and it adds no
+  capability to rondo. The issue's own exclusion is kept.
+- **It does not add a column, a table, a record kind, or a field to `rondo.delegation-record/1`.**
+- **It does not widen `D-0046` rule 4's filesystem grant, read a running transcript, or touch
+  `D-0048` rule 3's refusals.**
+- **It does not move the pin**, and it takes no position on how continuo would detect the failure.
+- **It does not make the absence of a worker's paragraph mean anything.** After rule 3 the screen says
+  so out loud; before it, the absence meant nothing either, and only the screen disagreed.
+
+### What was measured, and how
+
+On **2026-09-12**, at rondo `5263cc2`, by reading the decoder and the surfaces rather than by running
+a lap.
+
+- **Nothing continuo answers with is about the worker's sandbox.** `LAP_PERFORM.read`
+  (`src/continuo/protocol.ts`) decodes thirteen fields — `run_id`, `workspace`, `topic_branch`,
+  `base_commit`, `session_id`, `session_path`, `gate_id`, `event_id`, `event_seq`,
+  `endpoint_lease_failure`, `elapsed_deadline_at_ms`, `model`, `permission_denials` — and not one of
+  them names the worker's process environment. `RUN_SHOW` takes `run`, `delegation_record` and two
+  keys of each `sessions` row; likewise none.
+- **A sandbox that fails open cannot become a denial, by the shape of the field.** `denialsText`
+  requires each entry to carry `tool_name` and `tool_input` (`src/continuo/protocol.ts:966`): the
+  record is of *a call the fence turned down*. The lap's first Bash call was not turned down — it ran,
+  and the containment around it did not.
+- **The two grounded blocks and the worker's own account are already printed by the same command.**
+  `lapMaterialLines` composes the fence block for the terminal and for the page (`D-0041` rule 6), and
+  `rationale` is printed as `why ...` on both answering paths. Rule 5 therefore names three things an
+  operator already has, and adds none.
+- **rondo's transcript reach is two files.** `readLapSpend` opens `record.json` for `generation` and
+  `events-{generation:03d}.jsonl` for the last `result` event, and `src/continuo/transcript.ts` is the
+  only module under `src/continuo/` that opens a file at all.
+- **What was not measured**: whether the worker CLI's sandbox-initialisation message appears in
+  `events-NNN.jsonl`. No lap transcript existed on this machine at the time of writing. Rule 6 is
+  written so that it does not matter; if it turns out to be absent, the rule is if anything stronger.
+
+### What would falsify it
+
+- **continuo growing the report rule 7 asks for.** Rule 1's "nothing is recorded" ends, and the entry
+  that takes the field decides the column. The thing to carry over is the three-state discipline: a
+  backend that declined to say must not read as a backend that saw nothing.
+- **Laps failing open routinely and no worker mentioning it.** Rule 5b rests on `rationale` being a
+  channel. If it is one only when a worker happens to be conscientious, then what is missing is rule
+  7's report and **rule 3's sentence is cosmetic** — an honest screen over an empty record. That is
+  the outcome this entry would most deserve to be re-argued for.
+- **The standing sentence being read as boilerplate.** Rule 4 buys its value by being unconditional;
+  if operators stop reading the fence block because two of its lines never change, the repair is the
+  wording or the placement, not a conditional sentence — rule 4's argument against that stands
+  independently.
+- **The worker CLI making the failure a structured event** — an exit status, a typed stream event, a
+  field of the `result` event. Rule 6 is then refusing a fact that exists in a stable form, and the
+  question becomes an ordinary one about which layer reads it. Rule 7's answer (continuo's) does not
+  change, but its argument becomes about layering rather than about brittleness.
+- **An operator approving a lap on the strength of the fence block reading clean, after rule 3.** The
+  sentence is then in the wrong place, and belongs beside the approve action rather than inside the
+  block it qualifies.
+- **rondo acquiring an executor of its own.** A lap rondo spawns itself has a sandbox rondo chose and
+  can observe; the column rule 1 refuses becomes grounded, and this entry is superseded rather than
+  annotated.
+
+### Annotations this entry adds to earlier entries
+
+- **`D-0045`** gains a dated annotation: its form was considered for a second unwatched claim — the
+  worker's rather than the operator's — and **declined**, on two grounds it does not itself have to
+  answer: that the operator's claim is elicited by rondo's own flag and the worker's is not, and that
+  its silence is safe where this one's would read as an all-clear. Nothing in `D-0045` is corrected,
+  and its scope is narrowed by statement rather than by edit: it is the shape for a claim rondo asked
+  for.
+- **`D-0039` rule 4b** gains one: its loudness property was written about a **refused command**, and
+  is claimed here for a second class of fact — **a containment that was meant to be in force and was
+  not**. The property does not hold for that class at the pin `fcf86eb`, and rule 7 above is rondo's
+  half of the second escalation.
