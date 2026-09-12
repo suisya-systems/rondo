@@ -99,9 +99,31 @@ async function runCommand(
     let timedOut = false;
     let settled = false;
 
+    // **The timeout settles the outcome itself**, rather than killing and then
+    // waiting for `close`. `close` needs every holder of the output pipes gone,
+    // and an npm-installed `codex` is a Node launcher whose native child
+    // inherits them and does not die with it: waiting would leave the command
+    // (and the gate's screen) hanging past the bound it was given. So the pipes
+    // are torn down on rondo's side and the command is answered as killed.
+    // ponytail: only the direct child is killed; a descendant runs on to its own
+    // end detached from rondo. A process group would reach it, but a detached
+    // group also escapes the terminal's Ctrl-C, which is the worse orphan.
     const timer = setTimeout(() => {
       timedOut = true;
       child.kill("SIGKILL");
+      child.stdin?.destroy();
+      child.stdout?.destroy();
+      child.stderr?.destroy();
+      finish({
+        commandLine,
+        status: null,
+        signal: "SIGKILL",
+        ...streams(),
+        spawnError:
+          options.input === undefined
+            ? null
+            : "standard input was not delivered in full: the command was killed at its timeout",
+      });
     }, timeoutMs);
 
     const streams = (): { stdout: string; stderr: string } => ({
@@ -1013,7 +1035,11 @@ function readReviewerEvents(stdout: string): ReviewerEvents {
  * A failed reason carries the exit status or signal and the event stream's
  * error messages, bounded ASCII -- never stderr, where codex echoes the document.
  */
-export async function runReviewer(row: ReviewerRow, document: string): Promise<ReviewerRun> {
+export async function runReviewer(
+  row: ReviewerRow,
+  document: string,
+  timeoutMs: number = REVIEWER_TIMEOUT_MS,
+): Promise<ReviewerRun> {
   let directory: string;
   try {
     directory = mkdtempSync(join(tmpdir(), "rondo-reviewer-"));
@@ -1045,7 +1071,7 @@ export async function runReviewer(row: ReviewerRow, document: string): Promise<R
         directory,
         "-",
       ],
-      REVIEWER_TIMEOUT_MS,
+      timeoutMs,
       { input: document },
     );
     if (outcome.spawnError !== null) {

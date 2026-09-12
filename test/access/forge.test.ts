@@ -390,3 +390,19 @@ posix("a reviewer that exits 0 without reading its document was not delivered it
   expect(run.kind).toBe("failed");
   expect(run.kind === "failed" && run.reason).toContain("standard input was not delivered in full");
 });
+
+posix(
+  "a reviewer whose descendant holds the pipes open is answered at the timeout, not after it",
+  async () => {
+    // The shape of an npm-installed codex: a launcher whose child inherits
+    // stdout. Killing the launcher leaves the child holding the pipe, so a
+    // runner that waited for `close` would wait the child's 30 s out.
+    const root = mkdtempSync(join(tmpdir(), "rondo-fake-reviewer-"));
+    const executable = join(root, "reviewer");
+    writeFileSync(executable, "#!/bin/sh\ncat > /dev/null\nsleep 30 &\nwait\n", { mode: 0o755 });
+    const started = Date.now();
+    const run = await runReviewer(row(executable), "doc", 500);
+    expect(Date.now() - started).toBeLessThan(5_000);
+    expect(run.kind).toBe("failed");
+  },
+);
