@@ -45,9 +45,16 @@ and `--target-base-branch` names another. The `prompt` in the generated plan is 
 target the script did not create, because it does not know what you want done there; supply the
 real one at `start` with `--prompt-file` (section 4).
 
-`--root` is optional; it defaults to `.worker-scratch/dogfood-env`, which `.gitignore` already
-excludes -- an environment is a continuo clone, two SQLite databases, a worktree and captured
-session output, and none of that is a thing to stage by accident.
+`--root` is optional; it defaults to `$XDG_STATE_HOME/rondo/dogfood-env`
+(`~/.local/state/rondo/dogfood-env`). It has to be **outside any installed checkout**, and the
+script refuses a root inside this repository, or one whose ancestors hold a `node_modules`: npm
+prepends every ancestor's
+`node_modules/.bin` to `PATH`, so a workspace cut inside an installed repository builds, lints,
+typechecks and tests green on *that* repository's toolchain whether or not the lap ever ran
+`npm ci` (rondo#111). The default used to be `.worker-scratch/dogfood-env` for the good reason
+that `.gitignore` excludes it -- an environment is a continuo clone, two SQLite databases, a
+worktree and captured session output, and none of that is a thing to stage by accident. Outside
+the repository that reason is satisfied too, and this one as well.
 
 It builds rondo, clones and builds the pinned continuo, creates the control plane, creates a scratch
 target repository with a `main` branch to run laps against and a bare repository beside it as that

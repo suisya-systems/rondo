@@ -44,9 +44,11 @@ options:
       for --target-repo the branch that repository's own HEAD is on.
   --root DIR
       where the environment lives. Created if absent. Default: $RONDO_DOGFOOD_ROOT,
-      or <repo>/.worker-scratch/dogfood-env when that is unset -- which is the
-      root .gitignore already excludes, so a default run cannot put a control
-      plane one `git add -A` away from a commit.
+      or $XDG_STATE_HOME/rondo/dogfood-env (~/.local/state/rondo/dogfood-env)
+      when that is unset. It must be outside any installed checkout: a root
+      inside this repository, or one whose ancestors hold a `node_modules`, is
+      refused, because npm would lend that checkout's toolchain to a lap that
+      never installed (rondo#111).
   --iteration-id ID
       the iteration id the printed commands use. Default: dogfood-001.
       It is no longer written into the plan file: rondo derives the run id, the
@@ -78,14 +80,16 @@ die() { printf 'dogfood-env: %s\n' "$1" >&2; exit 1; }
 step() { printf '\n== %s\n' "$1"; }
 note() { printf '   %s\n' "$1"; }
 
-repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)
 
-# The default lives under `.worker-scratch/`, which .gitignore excludes for the
-# reason written beside it there: a real environment is a continuo clone, two
-# SQLite databases, a worktree and captured session output, and none of that is
-# a thing to stage by accident. It also keeps the generated JSON out of
-# `biome check .`, which is a red gate rather than a warning (AGENTS.md).
-env_root=${RONDO_DOGFOOD_ROOT:-"$repo_root/.worker-scratch/dogfood-env"}
+# The default lives outside the repository. It used to be
+# `<repo>/.worker-scratch/dogfood-env`, which kept the environment out of git and
+# out of `biome check .` but cut every lap workspace inside an installed
+# checkout -- and npm prepends every ancestor's `node_modules/.bin` to PATH, so
+# the lap's build, lint, typecheck and tests ran on the operator's toolchain
+# whether or not the lap installed one (rondo#111). Outside the repository both
+# properties hold: nothing to stage, and nothing to borrow.
+env_root=${RONDO_DOGFOOD_ROOT:-"${XDG_STATE_HOME:-$HOME/.local/state}/rondo/dogfood-env"}
 run_id=dogfood-001
 force_continuo_rebuild=0
 target_repo=
@@ -108,7 +112,35 @@ done
 # name, and it is right to: a relative path means something different to the
 # fenced child than it does to the shell that typed it.
 mkdir -p -- "$env_root"
-env_root=$(cd -- "$env_root" && pwd)
+env_root=$(cd -- "$env_root" && pwd -P)
+
+# The check the default alone cannot make: --root and $RONDO_DOGFOOD_ROOT can
+# still name a directory inside an installed checkout. A workspace there
+# resolves `tsc`, `biome`, `knip` and `vitest` through an ancestor's
+# `node_modules/.bin`, so a lap that skipped `npm ci` reports a green suite that
+# is not its own (rondo#111). Refusing the root is the only place this can be
+# caught: by the time the lap is running, the borrowed toolchain looks exactly
+# like an installed one.
+#
+# Two ancestors have to be refused rather than merely inspected. The repository
+# itself is one: this script runs `npm ci` in it a few steps below, so a root
+# under it is inside an installed checkout by the time a lap runs even when the
+# scan here finds nothing. Both paths are physical (`pwd -P`), because npm
+# resolves ancestors through symlinks and a logical path would be scanned as
+# somewhere it is not.
+case "$env_root" in
+  "$repo_root" | "$repo_root"/*)
+    die "root '$env_root' is inside the rondo checkout '$repo_root', which this script installs; a lap cut there runs its toolchain whether or not it installed one. Use a --root outside it." ;;
+esac
+ancestor=$env_root
+while :; do
+  if [ -d "$ancestor/node_modules" ]; then
+    die "root '$env_root' is inside an installed checkout ('$ancestor/node_modules'); npm would lend its toolchain to a lap that never installed. Use a --root outside it."
+  fi
+  parent=$(dirname -- "$ancestor")
+  if [ "$parent" = "$ancestor" ]; then break; fi
+  ancestor=$parent
+done
 
 approver=${RONDO_APPROVER:-$(id -un)}
 interlock_root=${RONDO_DOGFOOD_INTERLOCK_ROOT:-"$HOME/work/org/workers/interlock"}
