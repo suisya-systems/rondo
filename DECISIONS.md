@@ -104,7 +104,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0064 | rondo is run the way a product manager runs an organisation: a person approves a scope once, the organisation decides everything inside it, and what reaches the person is a question with a recommendation, an irreversible act, a scope exit or a report | accepted |
 | D-0065 | The model reviewer: a reader of another model family that rondo runs outside the lap over bytes it hands over and digests, graded findings with bases on the reading record, a round budget and a threshold that are the scope's, and the three defects a person caught sorted into caught, half caught and not caught | accepted |
 | D-0066 | The scope record: one immutable row with a digest, approved by a row of its own and never by `human_decision`, spent once per act inside the act's own transaction, refused at one point that stops one line, and `D-0062` rule 3 and `D-0022` rule 9 restated for it | accepted |
-| D-0067 | The secretary's running half has no new owner: the advisory reads lines against each other and drafts an order, the surface attempts acts in that order, the store keeps the person's standing policies, and review extensions and merges still reach the person | proposed |
+| D-0067 | The secretary's running half has no new owner: the advisory reads lines against each other and drafts an order, the surface attempts acts in that order, the store keeps the person's standing policies, and review extensions and merges still reach the person | accepted |
 
 ---
 
@@ -5165,6 +5165,10 @@ field - a column for a computable value is a second home for a fact (`D-0022` ru
    **Prose is permitted in a payload only where it travels with its basis.** A claim with no basis
    is the summary #39 says an operator would have approved three times on the day it measures.
 
+   > **Annotation (2026-09-13, from D-0067).** Added after this entry was accepted, and additive. The
+   > union gains `policy:ID`, a locator into a `standing_policy` row (`D-0067` rule 6.5), as `D-0061`
+   > rule 2.6 added `message:ID`. The list above is unedited.
+
 3. **There is no rendered `summary` column, and its absence is the decision.** What the gate shows
    is **composed at render time** from the option set and its bases. A stored summary is a framing
    that outlives the material it was drawn from and can drift from it silently, which is the exact
@@ -5606,6 +5610,11 @@ that already exists.
    paragraph got its shape. Rule 4's host-wide snapshot is the **detection point when
    somebody builds one**: two live iterations are two rows in it, and rondo's own
    `D-0023` triple is what tells them apart.
+
+   > **Annotation (2026-09-13, from D-0067).** Added after this entry was accepted, and additive. The
+   > residual this rule names is carried out by `D-0067` rule 2 for collisions that **share a path**:
+   > the advisory compares the paths changed by open lineages. Collisions that share no path stay
+   > unowned. This rule's text is unedited.
 
 10. **Whatever is built first for #40 writes to `operator_attention` or does not
     ship.** `D-0032` rule 10 designed the table with one writer in mind and this
@@ -12271,6 +12280,11 @@ work, not about who is asking or how large the work is:
 (rule 3.3), what reaches the person is the reason it stopped, the options for going on (widen the
 scope, change the work, stop), and a recommendation.
 
+> **Annotation (2026-09-13, from D-0067).** Added after this entry was accepted, and additive, by the
+> answer of rondo's human gate to `D-0067`'s first point. P3's "things the person owns" include **an
+> in-force `standing_policy`** (`D-0067` rule 6): a choice whose options differ in whether they go
+> against one is in dispute. The table above is not edited.
+
 ### 2. What the organisation decides without asking
 
 Inside an approved scope, the organisation decides these and **records each decision** (rule 3.5),
@@ -13719,6 +13733,11 @@ number.
 
 ### 4. The one point where the organisation stops
 
+> **Annotation (2026-09-13, from D-0067).** Added after this entry was accepted, and additive. A
+> `sequence` proposal (`D-0067` rules 3 and 4) delays **when** the surface attempts an act, until the
+> fact it names is recorded; it does not change the verdict below, which is computed unchanged when the
+> act is attempted. Nothing below is edited.
+
 1. **Before every act under a scope, `src/access` computes one verdict**: `inside`, `outside` with a
    reason, or `undecidable` with a reason. It is a pure function of the scope row, the act and a
    snapshot gathered for it, called from one place, and **anything but `inside` takes no act and
@@ -13933,12 +13952,13 @@ predecessor's); those are part of the text accepted.
 
 ## D-0067 — The secretary's running half has no new owner: the advisory reads lines against each other and drafts an order, the surface attempts acts in that order, the store keeps the person's standing policies, and review extensions and merges still reach the person
 
-**Status:** proposed. Refs `D-0012`, `D-0023`, `D-0027`, `D-0030`, `D-0032`, `D-0033`, `D-0036`,
+**Status:** accepted (2026-09-13, rondo's human gate). Two points were put to the gate and it chose the
+recommended option on both, and named `D-0068` as the entry for two of the losses in section 4; the
+answers are recorded in section "What was put to the human gate, and its answer". Refs `D-0012`, `D-0023`, `D-0027`, `D-0030`, `D-0032`, `D-0033`, `D-0036`,
 `D-0038`, `D-0061`, `D-0063`, `D-0064`, `D-0065`, `D-0066`.
 
-**This entry decides and does not build.** Nothing in `src/` changes with it, and **no earlier entry
-is edited by it**. The annotations it asks for are listed in section "Annotations to add at
-acceptance".
+**This entry decides and does not build.** Nothing in `src/` changes with it. The earlier entries it
+annotates are listed in section "Annotations this entry adds".
 
 claude-org-ja's secretary does two kinds of work. The **drafting half** reads a request, asks back,
 splits the work, writes the instruction a worker runs on and gathers the reports. The **running half**
@@ -14117,8 +14137,8 @@ names. Line numbers drift; re-measure the claim, not the number.
       `D-0063` rule 3's read list unchanged. It carries a `policy:` basis for each policy it rests on
       and for each it goes against, and **an option that goes against a policy says so in what it gives
       up** (`D-0064` rule 4.1).
-   2. **Whether a conflict with a policy by itself makes a choice P3 is the first point put to the
-      gate** (below). This entry does not assume the answer.
+   2. **A conflict with an in-force policy by itself makes a choice P3**, by the gate's answer to the
+      first point (below) and the annotation it adds to `D-0064` rule 1.
    3. **A draft that would change a ratified entry** carries the entry as a basis and reaches the
       person as P3, which is `D-0064` rule 3.3's last bullet and `D-0066` rule 4.2's closing sentence,
       unchanged.
@@ -14135,7 +14155,7 @@ names. Line numbers drift; re-measure the claim, not the number.
 
 | Case | What rondo does | Handled? |
 |---|---|---|
-| **1. A recommendation against the parallel-work policy** | The policy is a `standing_policy` row, drafted from the message the person said it in. A drafter's recommendation carries `policy:` bases and names the conflict in what its option gives up (rule 7.1). Under the gate's option (a) the choice is P3 | **Yes, for a draft.** **Half for a lap's own recommendation**: the reviewer sees the policy only if the criterion hands it (rule 7.4). A drafter that fails to cite the policy is not caught (rule 7.5) |
+| **1. A recommendation against the parallel-work policy** | The policy is a `standing_policy` row, drafted from the message the person said it in. A drafter's recommendation carries `policy:` bases and names the conflict in what its option gives up (rule 7.1). By the gate's first answer the choice is P3 | **Yes, for a draft.** **Half for a lap's own recommendation**: the reviewer sees the policy only if the criterion hands it (rule 7.4). A drafter that fails to cite the policy is not caught (rule 7.5) |
 | **2. A recommendation reversing `D-0064` rule 3.3** | A draft that would change a ratified entry is P3 with the entry as a basis (rule 7.3). A lap whose diff reverses an entry is a reviewer finding when the criterion hands that entry | **Yes for a draft; half for a lap.** Handing all of `DECISIONS.md` would likely pass the reviewer's input bound and make the reading `unavailable` (`D-0065` rule 1.4), so the criterion has to name the entries the lap cites |
 | **3. A review extended to read an unreviewed Major fix** | The case does not arise in the same form: every lap rondo carries onward is read after it ends (`D-0065` rule 2.6), so no fix goes unread. What does arise is a budget spent with a finding at or above the threshold, which stops the line as P3 (`D-0065` rule 4.3), recommending a successor scope with one more round (`D-0066` rule 1.4) | **Yes, but by the person.** The secretary decided this alone; rondo asks |
 | **4. A merge order for tasks appending to one ledger** | The shared path is a collision (rule 2), and the deterministic drafter drafts `first` and `then`. **The release a merge order needs is `first_merged`, which rondo does not record**, and merging is a person's act per merge (`D-0064` rule 3.4). So today the order is a P3 message and the recommendation beside each merge the person approves. The later line's rebase is a `revise`, which waits on `D-0064` rule 3.6 | **Detected and ordered; carried out by the person** until merge observation adds `first_merged` and O4's `revise` opens. Then it is decided without asking |
@@ -14178,7 +14198,9 @@ names. Line numbers drift; re-measure the claim, not the number.
   carries it out, so rondo's secretary is two parts and a store, and the person cannot address the
   running half as one voice.
 
-### What was put to the human gate
+### What was put to the human gate, and its answer
+
+The points are kept as put, and the answer follows them.
 
 1. **Does a conflict with a standing policy by itself make a choice P3?** `D-0064` P3's test lists what
    the person owns as "behaviour a user sees, a ratified entry, a grant, a cost past the scope's
@@ -14202,13 +14224,26 @@ names. Line numbers drift; re-measure the claim, not the number.
    - **(b) No: only an operator writes one.** *Loses:* the person has to type every policy they have
      already said in a thread, and the policies the secretary would have kept are not kept.
 
-### Annotations to add at acceptance
+**The gate's answer (2026-09-13):**
+
+1. **(a).** A conflict with an in-force `standing_policy` makes a choice P3, and `D-0064` rule 1 gains a
+   dated annotation reading the policy as something the person owns. Rule 7.2 is written for it.
+2. **(a).** A drafter may write a new policy without the person confirming it, with `message:` bases,
+   and **every drafted policy is listed in the next report (P5)**. Only an operator writes a successor
+   (rule 6.3).
+
+The gate also decided that two of the losses in section 4, **"one place to ask why this line is
+waiting"** (rondo's secretary is parts, not one voice the person addresses) and **"a held line behind a
+stalled line waits unnoticed"** (patrolling stays empty), are `D-0068`'s. This entry names them in its
+residuals and says nothing about how `D-0068` answers them.
+
+### Annotations this entry adds
 
 - **`D-0033` rule 9**: its residual is carried out by `D-0067` rule 2, for collisions that share a path.
   Collisions that share none stay unowned.
 - **`D-0032` rule 2**: the basis union gains `policy:ID` (`D-0067` rule 6.5).
-- **`D-0064` rule 1**, only under the gate's point 1 (a): P3's "things the person owns" include an
-  in-force `standing_policy`.
+- **`D-0064` rule 1**, by the gate's first answer: P3's "things the person owns" include an in-force
+  `standing_policy`.
 - **`D-0066` section 4**: a `sequence` (`D-0067` rules 3 and 4) delays when an act is attempted and does
   not change the verdict computed when it is.
 
@@ -14228,7 +14263,8 @@ names. Line numbers drift; re-measure the claim, not the number.
 | Residual | Why not here | Who decides |
 |---|---|---|
 | `first_merged` as a release fact | rondo observes no merge (survey G5) | the entry that builds merge observation |
-| A hold whose `first` stalls | Nothing patrols (R8) | the entry that fills patrolling |
+| A hold whose `first` stalls, which nothing notices (section 4) | Nothing patrols (R8) | `D-0068` |
+| One place, and one voice, where the person asks why a line is waiting (section 4) | The running half is placed on parts and the answer is a join shown in a report | `D-0068` |
 | Collisions that share no path | Needs a reader of what the work means, not where it is | a later entry, if premise claims miss them in practice |
 | Which policies and entries a review criterion hands the reviewer | The criterion is a plan field (`D-0065` section 1.2.6), bounded by the input bound | the reviewer's building change |
 | How a person retires or edits a policy on the page | A screen question | the conversation screen's entry |
