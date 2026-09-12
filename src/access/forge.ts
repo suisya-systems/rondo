@@ -918,6 +918,32 @@ export async function gatherReviewMaterialFacts(request: {
  */
 const REVIEWER_TIMEOUT_MS = 900_000;
 
+/**
+ * The codex features the reviewer is started without (codex-cli 0.153.4,
+ * `codex features list`). A denylist, so a later codex can add a tool this does
+ * not name: that is why {@link runReviewer} still refuses any tool event.
+ * ponytail: a denylist by version, a no-tools codex surface when one exists.
+ */
+const REVIEWER_DISABLED_FEATURES = Object.freeze([
+  "shell_tool",
+  "unified_exec",
+  "apps",
+  "plugins",
+  "remote_plugin",
+  "browser_use",
+  "browser_use_external",
+  "computer_use",
+  "in_app_browser",
+  "code_mode_host",
+  "image_generation",
+  "multi_agent",
+  "collaboration_modes",
+  "goals",
+  "hooks",
+  "skill_search",
+  "tool_suggest",
+]);
+
 /** How long one reviewer-supplied message may be inside a persisted reason. */
 const REVIEWER_MESSAGE_BOUND = 300;
 
@@ -957,6 +983,13 @@ function readReviewerEvents(stdout: string): ReviewerEvents {
   let finalMessage: string | null = null;
   const otherItems: string[] = [];
   const errors: string[] = [];
+  // **An `error` item before the turn starts is a startup notice, not a tool.**
+  // Disabling `code_mode_host` makes codex announce, before `turn.started`,
+  // that code mode "will fail closed" -- which is the point of disabling it.
+  // Nothing can be run or fetched before the turn begins, so only that one
+  // shape is let through; inside the turn every non-reading item still fails
+  // the run.
+  let turnStarted = false;
   const lines = stdout.split("\n");
   for (const [index, raw] of lines.entries()) {
     const line = raw.trim();
@@ -971,6 +1004,18 @@ function readReviewerEvents(stdout: string): ReviewerEvents {
     }
     if (!isObject(event) || typeof event.type !== "string") {
       return { kind: "unparseable", line: index + 1 };
+    }
+    if (event.type === "turn.started") {
+      turnStarted = true;
+      continue;
+    }
+    if (
+      !turnStarted &&
+      event.type === "item.completed" &&
+      isObject(event.item) &&
+      event.item.type === "error"
+    ) {
+      continue;
     }
     if (
       event.type === "item.started" ||
@@ -1026,6 +1071,18 @@ function readReviewerEvents(stdout: string): ReviewerEvents {
  * reporting `turn.failed` or `error`. The answer is the last completed agent
  * message.
  *
+ * **Tools are taken away before the run, not only refused after it** (Codex
+ * gate round 3: a tool with a remote side effect is not undone by refusing its
+ * event). `--ignore-user-config` drops the operator's `config.toml`, and with
+ * it every MCP server configured there, while auth still comes from
+ * `CODEX_HOME`; {@link REVIEWER_DISABLED_FEATURES} turns off the built-in
+ * connectors, browsers, image generation and agent spawning that version
+ * exposes. **What that does not reach**, measured the same day by asking the
+ * model to list its tools: a code-mode `exec`, `web__run`, `apply_patch` (held
+ * by `-s read-only`) and the collaboration tools stayed listed, and codex has
+ * no flag rondo found that runs a turn with no tools at all. So the event check
+ * above remains the proof, and a residual reported beside D-0065 1.1.
+ *
  * **What the delivered digest proves.** It is over the string `runCommand`
  * wrote, and a run is `answered` only when that write finished in full before
  * the process was reaped: rondo wrote these bytes to the reviewer's standard
@@ -1063,8 +1120,16 @@ export async function runReviewer(
         "--ephemeral",
         "--color",
         "never",
+        "--ignore-user-config",
+        // Pinned here rather than inherited from the ignored config.
+        // ponytail: measured on 2026-09-13, with the config ignored about a
+        // third of the two-finding answers came back as JSON cut short of its
+        // closing brackets, which is an unavailable reading (fail closed) and
+        // noise; with the config kept, none did. Cause not found; codex's
+        // `--output-schema` (a file rondo would have to write) is the candidate.
         "-c",
-        "features.shell_tool=false",
+        "model_reasoning_effort=medium",
+        ...REVIEWER_DISABLED_FEATURES.flatMap((feature) => ["-c", `features.${feature}=false`]),
         "-c",
         "tools.web_search=false",
         "-C",

@@ -255,7 +255,7 @@ posix(
     });
     expect(readFileSync(fake.seen, "utf8")).toBe(document);
     const argv = readFileSync(`${fake.seen}.argv`, "utf8").split("\n");
-    expect(argv.slice(0, 15)).toEqual([
+    expect(argv.slice(0, 13)).toEqual([
       "exec",
       "--json",
       "-m",
@@ -266,15 +266,24 @@ posix(
       "--ephemeral",
       "--color",
       "never",
+      "--ignore-user-config",
       "-c",
-      "features.shell_tool=false",
-      "-c",
-      "tools.web_search=false",
-      "-C",
+      "model_reasoning_effort=medium",
     ]);
-    expect(argv[16]).toBe("-");
+    // Tools are taken away before the run: the operator's MCP servers go with
+    // the ignored config, and these built-in ones by flag.
+    for (const flag of [
+      "features.shell_tool=false",
+      "features.apps=false",
+      "features.multi_agent=false",
+      "tools.web_search=false",
+    ]) {
+      expect(argv[argv.indexOf(flag) - 1]).toBe("-c");
+    }
+    const at = argv.indexOf("-C");
+    expect(argv[at + 2]).toBe("-");
     // The directory it ran in was empty and is gone.
-    expect(existsSync(argv[15] ?? "")).toBe(false);
+    expect(existsSync(argv[at + 1] ?? "")).toBe(false);
   },
 );
 
@@ -404,5 +413,31 @@ posix(
     const run = await runReviewer(row(executable), "doc", 500);
     expect(Date.now() - started).toBeLessThan(5_000);
     expect(run.kind).toBe("failed");
+  },
+);
+
+posix(
+  "an error notice before the turn starts is not a tool; the same item inside the turn is",
+  async () => {
+    const notice = event({
+      type: "item.completed",
+      item: { id: "item_0", type: "error", message: "Code mode will fail closed" },
+    });
+    const before = await runReviewer(
+      row(
+        fakeReviewer(
+          `${event({ type: "thread.started" })}${notice}${opening}${agentMessage('{"findings":[]}')}${closing}`,
+        ).executable,
+      ),
+      "doc",
+    );
+    expect(before.kind).toBe("answered");
+    const inside = await runReviewer(
+      row(
+        fakeReviewer(`${opening}${notice}${agentMessage('{"findings":[]}')}${closing}`).executable,
+      ),
+      "doc",
+    );
+    expect(inside.kind === "failed" && inside.reason).toContain("(error)");
   },
 );

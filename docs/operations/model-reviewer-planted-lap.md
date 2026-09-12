@@ -7,7 +7,8 @@ prove the model half, so this is the proof it can have. It is written the way th
 the commands that were actually run, and the output that actually came back.
 
 - Run on 2026-09-13, on `feat/rondo-model-reviewer-impl` at `f6468c7` (the reviewer as built), with
-  the fixture's control text corrected as section 4 says.
+  the fixture's control text corrected as section 4 says. It was re-measured under the reviewer
+  flags of `a6c9923`'s successor, section 5.
 - Machine: WSL2 (`Linux 6.18.33.2-microsoft-standard-WSL2`), Node `v22.17.0`, `codex-cli 0.153.4`.
 - Reviewer: the reviewer table's one row, `gpt-6-astra` through `codex`, under the operator's own
   codex login (`D-0065` rule 3.2). The lap model is `claude-opus-5`, so the family check passes.
@@ -117,7 +118,35 @@ It was right. `AGENTS.md` at `91e6fc3`, line 200, lists verify as `lint`, `knip`
 `lint` lines. The control was then run again, as above. It is recorded because it is a readable
 contradiction nobody planted, which is the class section 6 of `D-0065` expects the reviewer to settle.
 
-## 5. What this does not show
+## 5. Re-measured after the reviewer lost its tools and the operator's config
+
+The Codex self-review gate's round 3 found that taking tools away only by refusing their events
+after the run cannot undo a tool with a remote side effect. `runReviewer` was then changed to start
+codex with `--ignore-user-config`, which drops every MCP server the operator configured. It also
+turns off a list of built-in features (connectors, browsers, image generation, agent spawning, code
+mode) and pins `model_reasoning_effort=medium`. The event check stays. The same variants were run
+again under those flags:
+
+| variant | runs | a reading was recorded | result of each recorded reading |
+|---|---|---|---|
+| both planted | 6 | 4 | 2 `major` findings each, bases resolved |
+| p1 only | 2 | 1 | 1 to 2 `major` findings, bases resolved |
+| p2 only | 2 | 2 | 1 `major` finding, bases resolved |
+| control | 2 | 2 | raised nothing |
+
+A further 11 runs with `approvals_reviewer=user` also set gave the same pattern: p1 6 of 6 recorded
+and caught, p2 1 of 1, control 3 of 3 raised nothing, and both planted 0 of 1 recorded.
+
+**Every run that was not recorded was `unavailable` because the answer did not parse.** The
+reviewer's JSON stopped short of its closing `]}`. Such a run never read as `clear`, and never as a
+passed variant. Across every run, no planted variant came back without a `major` finding, and no
+control came back with one. With the operator's config kept, the parse failures did not occur
+(0 of 3 on p1 as an A/B, and 0 of about 9 earlier). The cause is not found. codex's
+`--output-schema` would enforce the shape on the server side, but rondo would have to write the
+schema file, which `src/access/forge.ts` is not granted. This is reported as a residual rather than
+settled here.
+
+## 6. What this does not show
 
 - **Understanding is not proved.** The delivered digest proves rondo wrote these bytes to the
   reviewer's standard input in full (`D-0029` rule 11's "delivered"). The findings show the model
@@ -126,5 +155,8 @@ contradiction nobody planted, which is the class section 6 of `D-0065` expects t
   is outside the material, as `D-0065` section 6 says. The reviewer raised the symptom a person raised.
 - **Nothing here opens O6.** `D-0022` rule 13, `D-0029` rule 6 and `D-0019` rule 7 are kept (`D-0065`,
   the gate's answer (a)). On the answer screen and at `publish` the model reading is material.
+- **Tools are not zero.** Asked to list its tools under the final flags, the model still named a
+  code-mode `exec`, `web__run`, `apply_patch` and collaboration tools. No codex flag turning all of
+  them off was found. What the event check refuses is using one, not having one.
 - **Windows is not walked.** `spawn` without a shell does not resolve an npm `.cmd` shim. That shows
   up as a failed run, so the reading is `unavailable`, never `clear`.
