@@ -538,6 +538,44 @@ node -e '
       // only permitted shape (`... && echo green`) can report success alone (rondo#87). echo
       // writes to stdout; a lap that may edit and commit the repository gains nothing else.
       "echo:*",
+      // A lap that has just seen its verification go red asks one more question:
+      // was it red before I touched anything? Answering it needs the tree at the
+      // base commit, and every spelling of *copying* the tree is either refused or
+      // is the same command that destroys uncommitted work -- rondo#112 watched a
+      // lap try a stash, a mkdir/cp backup, a second worktree and a pathspec
+      // checkout, fail at all four, and then commit a wrong account of the cause.
+      // `git switch` needs no copy: commit the work, switch the whole tree back
+      // one commit, run the same verification there, and switch back.
+      // node_modules is untracked and survives both moves, so the baseline runs
+      // against the install the lap has already paid for.
+      //
+      // **Two exact subjects and no wildcard**, because the destructive case is
+      // a flag rather than a command: `git switch --discard-changes` (or `-f`)
+      // throws away uncommitted work, and no prefix pattern can exclude a flag
+      // that may be typed last. Spelled exactly, the declaration is the two moves
+      // and nothing else -- so what protects the lap is not the habit of leaving
+      // the flag off. Without one, git aborts a switch whose diff would overwrite
+      // a modified file and says to commit first, which is the protection
+      // rondo#112 got by accident from a refusal.
+      //
+      // Neither `git checkout:*` nor `git restore:*` is declared: both have a
+      // pathspec form that overwrites uncommitted work silently, and that shape
+      // is the near-miss rondo#112 recorded.
+      //
+      // `HEAD~1` rather than the name of the base branch, for two reasons. A
+      // branch name would have to be `--detach`ed anyway (the base branch is
+      // checked out in the repository the workspace was cut from, which is the
+      // one thing git will not let a second worktree switch to), and after
+      // `rondo revise` it would be *wrong*: the successor inherits this
+      // declaration while its base becomes the predecessor topic branch, so a
+      // revised lap would silently measure against a tree missing the work it is
+      // revising. `HEAD~1` names what it does -- the commit before the last one
+      // -- whatever the base is, and a lap reads how many commits that leaves out
+      // with the `git log` it already has. Widening it to a deeper baseline is an
+      // edit to this declaration, which is the field of this generated plan a
+      // person may have to write anyway.
+      "git switch --detach HEAD~1",
+      "git switch -",
       "node vendor/pin.mjs:*",
       "node --version",
       "npm --version",
