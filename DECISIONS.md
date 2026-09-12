@@ -11654,14 +11654,18 @@ nowhere to write if it were built first.
       the second premise made structural**: a sentence rondo composes about a request can always be
       followed back to the words it rests on, and a sentence resting on nothing cannot be written.
       The refusal is proved by a planted case, as `D-0036` rule 4's is.
+   7. **`asks`** -- whether the message asks the person for an answer, written once. **A drafter's
+      report and a drafter's unanswered question are otherwise the same rows** -- same author, no
+      reply -- so without this column *waiting on you* could only be told from the prose, which is
+      the inference rule 2.3 exists to refuse. A reply to an asking message is what answers it.
 
 3. **What a message does not hold, each refused by name:**
    - **A gate answer.** `D-0020` rule 5, unchanged.
    - **A decision.** A `HumanDecisionRecord` is not a message and a message id is not a
      `decisionId` (`D-0020` rule 5).
-   - **A status** (`open`, `answered`, `done`). Whether a request is waiting on the person is the
-     last message's `author_kind` and whether anything links to it -- a computation over rows, by
-     `D-0036` rule 2's argument.
+   - **A status** (`open`, `answered`, `done`). Whether a request is waiting on the person is whether
+     it holds a message with `asks` set and no reply -- a computation over rows, by `D-0036` rule 2's
+     argument.
    - **A plan, an agent type, or a tier.** A request is not a plan and does not become one by being
      stored. `D-0025` rule 5 and `D-0044` rule 2 are untouched by rules 1-4.
    - **An edit or a deletion.** Append-only, like every record kind in the store; a correction is a
@@ -11683,7 +11687,7 @@ nowhere to write if it were built first.
    2. **The iteration's request link** (rule 4): the column and `start` taking the message id.
    3. **Reports into the thread, from the deterministic drafter only**: when a lap that names a
       request reaches its gate, is read (`D-0029`), or is published, rondo appends a `drafter`
-      message whose bases point at the iteration, the reading and the gate. **This step reads no
+      message, with `asks` unset, whose bases point at the iteration, the reading and the gate. **This step reads no
       request body** -- it reports on rows -- so it needs nothing from the question below.
    4. **The drafter that reads a request** -- the one-sentence summary, the question asked back, a
       proposed split into plans. **Held behind the human gate's answer to the question below**, and
@@ -11691,7 +11695,7 @@ nowhere to write if it were built first.
       text is not something the deterministic drafter can do and a model drafter is a widening of
       `D-0022` rules 1 and 3.
    5. **The screen**: the thread in `inbox` and on the page, with *waiting on you* extended to a
-      request whose last message is a drafter's question.
+      request holding an asking message with no reply.
 
 6. **Named and not filled:**
    - **A question raised in the middle of a lap.** Absent for the reason the table gives, and the
