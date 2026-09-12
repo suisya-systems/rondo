@@ -788,13 +788,18 @@ export async function operatorPage(
   --s1: .25rem; --s2: .5rem; --s3: .75rem; --s4: 1.25rem; --s5: 2rem;
   /* Values are monospace because they are a ledger and columns must line up;
      headings, notes and labels are not, because they are prose about it. */
+  /* The tertiary ink is the floor: it carries the basis lines, the claim
+     labels and an ended lap's own request, which are text a person reads
+     rather than decoration. Both values clear 4.5:1 against all three grounds
+     they land on -- page, section surface and the waiting wash -- so recessive
+     is a step down in weight and never a step below legible. */
   --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --sans: ui-sans-serif, system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --bg: #eceef1;
   --surface: #fbfcfd;
   --ink: #14181c;
   --ink-2: #4b545d;
-  --ink-3: #78828c;
+  --ink-3: #646d77;
   --rule: #d2d8de;
   --link: #0f5480;
   --wait-edge: #b26206;
@@ -811,7 +816,7 @@ export async function operatorPage(
     --surface: #171b1f;
     --ink: #e3e7ea;
     --ink-2: #a2abb3;
-    --ink-3: #77818a;
+    --ink-3: #848e97;
     --rule: #292f35;
     --link: #6cb2e6;
     --wait-edge: #d18e2f;
