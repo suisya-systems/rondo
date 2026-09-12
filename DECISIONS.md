@@ -9794,11 +9794,10 @@ that algorithm, in 10,587 bytes, under `0BSD`, from the authors of the library r
 6. **The script rondo runs is rondo's own, and its vocabulary is one method, one address, one
    target.** It issues `GET`s of the address it is on and nothing else; it constructs no `POST` and
    holds no client state; the only `POST` this page can produce remains the form's submit, which
-   requires a person to press. It is served as a file from this process rather than inlined, and the
-   response's CSP gains **`script-src 'self'`** beside `frame-ancestors 'none'` -- so an injected
-   `<script>` does not run even if rondo's escaping ever fails. That escaping is now load-bearing at a
-   higher grade than before (a script on this origin can read the token), and the bound on what an
-   injection could achieve is rule 7 of `D-0041`: one word, `approve`, on one open gate.
+   requires a person to press. It is served as a file by this process -- the pinned bytes of rule 5
+   and rondo's own few lines beside them -- so what runs is what was vendored. **`D-0041` rule 3's
+   remaining two facts are untouched and no new defence is added here**: this entry fills the hole
+   rule 3(a) leaves and does not go looking for others.
 
 7. **The page is legible, complete and correct with the script absent, blocked, or broken, and that
    is kept on purpose.** Every view is a whole document rendered by the server -- content, framing and
@@ -9809,12 +9808,7 @@ that algorithm, in 10,587 bytes, under `0BSD`, from the authors of the library r
    may be produced by script**, and a view that needs script to be true is a violation of this rule
    rather than a feature of it.
 
-8. **The address stays the whole of the view's state.** `src/access/web.ts`'s "a view outlives every
-   redraw because the server is the one holding it" was written as a consequence of having no script,
-   and it is kept as a rule now that there is one: no client-side routing, no state the server cannot
-   reconstruct from the URL, nothing an operator could lose by reloading.
-
-9. **Nothing here widens what the page may write.** The vocabulary is still the single word `approve`
+8. **Nothing here widens what the page may write.** The vocabulary is still the single word `approve`
    on a live, non-terminal iteration (`D-0041` rule 7); the write is still one function on the ports
    (rule 4); the press is still the presentation and the redraw still counts none (`D-0042`). A second
    verb is still the thing that re-argues `D-0041` rather than extends it.
@@ -9831,7 +9825,17 @@ that algorithm, in 10,587 bytes, under `0BSD`, from the authors of the library r
   poll of one document by one browser on loopback is what the traffic actually is.
 - **It does not reduce the work the server does per redraw.** rondo#160 names that too; a conditional
   request is a residual below, because nothing has yet measured the read as costing anything.
+- **It does not give the page client-side state or routing.** `src/access/web.ts`'s "a view outlives
+  every redraw because the server is the one holding it" is a consequence of rule 2 -- the script
+  re-fetches the address it is on -- and stays true without being asserted as a fourth invariant.
 - **It does not touch the terminal, `rondo inbox`, or `D-0032` rules 9 and 10.**
+
+### What the implementing change contains
+
+One pull request, not a sequence of them: `idiomorph-0.8.0.min.js` vendored beside its sha256 with
+`vendor/pin.mjs` extended to check a list; rondo's own script file served by this process; the meta
+refresh moved inside `<noscript>` on `summary` and `reading` and deleted outright on `answer`; and the
+tests that show a `GET` still writes nothing and that every view is complete with the script absent.
 
 ### Residuals
 
@@ -9839,9 +9843,10 @@ that algorithm, in 10,587 bytes, under `0BSD`, from the authors of the library r
 |---|---|---|
 | `ETag` / `304` on the poll, so an unchanged ledger is answered without composing the page | It is the right answer to rondo#160's server-cost half and needs a change token the store does not have; nothing has measured the current read as expensive | whoever measures it |
 | Server-sent events instead of polling | Five seconds is the agreed freshness and a poll has no connection to keep alive; SSE is what a sub-second screen would need | the entry that needs sub-second |
-| The `reading` fold becoming a real `<details>` rather than a second address | Now possible, because a morph preserves an open element; the address-as-state rule (rule 8) is the thing to argue against, not an oversight | whoever finds the second address costly |
+| The `reading` fold becoming a real `<details>` rather than a second address | Now possible, because a morph preserves an open element; keeping the view in the address is what makes today's second URL cheap, so this is a trade to argue rather than an oversight | whoever finds the second address costly |
 | A UI component library | Web Awesome is the healthy free choice and the page's own CSS is not the problem rondo#160 reported | the first screen this page's CSS cannot express |
 | Morphing the `answer` view too | Rule 1 says that view updates by nothing; if an operator ever wants it current, it wants rule 1 re-argued and not a quiet exception | whoever wants it |
+| `script-src 'self'` on the page's CSP | One header value, and nothing in this entry rests on it; it belongs to whoever is hardening the surface rather than to the decision to poll | whoever hardens it |
 | A `<noscript>` path for the `answer` view | It has no auto-update in either mode after rule 1, so there is nothing to degrade to | -- |
 
 ### What was measured, and how
@@ -9882,8 +9887,6 @@ the properties rules 2, 3, 6 and 7 assert.
   claim only script fills in, a page that arrives blank when the vendored file 404s. Rule 7 is a
   property somebody has to keep on purpose, and the first exception is the entry that has to re-argue
   it rather than take it.
-- **`script-src 'self'` being relaxed, or an inline script appearing on the page**, which is the step
-  that makes rondo's escaping the only thing between a rendered worker rationale and a press.
 - **idiomorph ceasing to be maintained, or its digest drifting under a version bump that is not
   recorded.** The adoption's whole argument is "one small file whose bytes rondo pins"; an unpinned or
   unread bump is the version of this that `D-0007` exists to prevent.
