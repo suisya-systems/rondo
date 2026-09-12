@@ -99,6 +99,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0060 | Work left uncommitted is a fact rondo reads and names: `git status` joins the reading as a finding, `publish` refuses a workspace that still holds any, `--despite-review` does not reach it, and rondo commits nothing on a lap's behalf | accepted |
 | D-0061 | Where a request enters rondo: the organisation's five steps mapped onto parts that mostly exist, a request thread in the conversation as the first thing built, and the drafter that reads a request cleared by the human gate, with its split into plans waiting on `D-0062` | accepted |
 | D-0062 | A proposal may name an agent type, and only a split proposal from a request may: a record rondo already holds chosen by its digest, approved on route S with the tier bound by the option it came from, and the kind-to-tier judgment kept whole while the request-to-kind judgment moves to the gate | accepted |
+| D-0064 | rondo is run the way a product manager runs an organisation: a person approves a scope once, the organisation decides everything inside it, and what reaches the person is a question with a recommendation, an irreversible act, a scope exit or a report | proposed |
 
 ---
 
@@ -12045,3 +12046,315 @@ rules and the heading's "never", and nothing else.
   rule 2. It is replaced by the first falsifier above, which a measurement can answer where the
   old one could only be argued.
 - Any measurement in "What was measured" failing to reproduce at rondo `101aa82`.
+
+---
+
+## D-0064 — rondo is run the way a product manager runs an organisation: a person approves a scope once, the organisation decides everything inside it, and what reaches the person is a question with a recommendation, an irreversible act, a scope exit or a report
+
+**Status:** proposed (2026-09-13). Three points are put to the human gate; see "What is put to the
+human gate". Refs `D-0009`, `D-0010`, `D-0012`, `D-0019`, `D-0020`, `D-0022`, `D-0025`, `D-0027`,
+`D-0029`, `D-0032`, `D-0034`, `D-0036`, `D-0041`, `D-0043`, `D-0047`, `D-0054`, `D-0061`, `D-0062`,
+and the proposed `D-0059` and `D-0063`.
+
+**This entry decides and does not build.** Nothing in `src/` changes with it, and **no earlier entry
+is edited by it**. Section 6 lists the entries that have to move and says how each should move; each
+move is its own later change.
+
+The product owner reviewed the conversation-screen prototype (a request; a split proposal a person
+approves; the laps' progress streamed into the person's thread; a question put to the person with no
+recommendation) and ruled that it runs **against** how claude-org-ja is operated. That organisation
+puts the human in a product manager's position and leaves the rest to the organisation: the human
+asks for work and judges the points in dispute; the secretary talks, splits and gathers the reports;
+the dispatcher starts workers and patrols them; workers implement in parallel; a reviewer grades
+findings by severity for up to three rounds; a curator turns retrospectives into skills; and
+`state.db` records what happened. rondo's ratified entries were built on a different base, **a
+person approving at a gate once per lap**, and the two most recent move further that way: `D-0062`
+has a person approve the agent type a split names, per request, and `D-0034` gives an explanation
+no recommendation.
+
+This entry decides what reaches the person, what the organisation decides without asking, how work
+is delegated (a scope, not a request at a time), that a question put to the person carries a
+recommendation, which of rondo, cadenza and continuo holds each of the organisation's roles, and
+which existing entries have to move. It keeps **exactly two lines**, and adds no third:
+
+- **Every summary and proposal leads back to its material** (`bases`: `D-0032` rule 2, `D-0061`
+  rule 2.6).
+- **An act that cannot be undone is approved by a person**, at the time, for that act.
+
+### What was measured, and how
+
+At rondo `7b76eea` on **2026-09-13**, by reading. `D-0063` was read on
+`feat/rondo-advisor-as-support-role` at `7f2c5eb` and `D-0059` on `feat/rondo-ui-bar-decision` at
+`4ae2de5`; neither is accepted. The baseline is claude-org-ja at its working tree on the same date,
+read only, and its paths are written `JA/`. Two notes the secretary saved on the same date are cited
+as `JA/notes/lap-gap-survey-2026-09-13.md` (the "survey") and
+`JA/notes/conversation-gap-2026-09-13.md` (the "prototype note"). Line numbers drift; re-measure the
+claim, not the number.
+
+- **Where the person stands in claude-org-ja.** The secretary does dialogue, splitting and relaying
+  (`JA/CLAUDE.md`, "Role boundaries"); a worker's request for a decision always goes to the human and
+  the secretary is "a messenger and not a decision layer" (`JA/CLAUDE.md`, "Escalate a worker's
+  request for a decision to the human"). `JA/.claude/skills/org-conveyor/SKILL.md` Step 1 turns the
+  per-candidate human choice into **one scope contract approved at start**, inside which triage,
+  dispatch, iteration, verify, push, PR and CI watch run without asking; a candidate outside the
+  predicate, a worker escalation or an exhausted budget halts (INV-2, INV-3, "Exit conditions"); and
+  merge is never pre-approved (INV-1). **The organisation's actual standing approval is wider than
+  the skill's**: the human has said that once CI is green the organisation may push, open the pull
+  request and merge on its own, and that the exceptions are points in dispute and irreversible
+  changes (the brief of this task, 2026-09-13). Both forms are the same shape: a scope approved once,
+  and a short list of things that always come back.
+- **Where the person stands in rondo.** Every lap ends suspended at `awaiting_human` (`D-0019`
+  `R-5`), and only a person's answer continues it (`D-0009`, `D-0025` rule 3). `publish` runs only
+  when a person types it (`D-0025` rule 6). One human decision authorises at most one issuance
+  (`D-0022` rule 9) and is spent once (`D-0047` rule 1). The page may write one word, `approve`, and
+  only what a person did at the moment they did it (`D-0041` rules 1 and 7, `D-0054` rule 8). A
+  split's agent type is approved on route S per split (`D-0062` rule 3). The proposed `D-0063` states
+  the consequence in section 1: "rondo puts every handover to a person first, because kept line 2
+  does not bend for small requests".
+- **What the per-lap gate has actually caught.** Lap 4's worker could not run the documented
+  preflight and left nothing committed (`docs/operations/lap-4-dogfood.md`, N-10). Lap 5 went green
+  on the operator's `node_modules` without installing (`docs/operations/lap-5-dogfood.md`, N-14).
+  Lap 6's worker ran with its own sandbox failed, reported only in its prose
+  (`docs/operations/lap-6-dogfood.md`, N-16), and lap 7 reproduced it
+  (`docs/operations/lap-7-dogfood.md`). An operator approved a wrong summary three times in one day
+  (rondo#39, as `D-0032` rule 2 and `D-0034` rule 3 cite it). **Only the first has a mechanical
+  check today** (`D-0060`); the other three were caught by a person reading.
+- **What the organisation's other roles have in rondo today.** The survey's G3 (no model reviewer;
+  "the only substantive review is a person at the gate"), G4 (no CI observation), G5 (no merge
+  observation or cleanup), G6 (no work-discovery), G7 (no stall detection), G8 (one lap at a time,
+  `RONDO_MAX_OCCUPYING` defaults to 1, `docs/operations/rondo-cli.md`) and G13 (no retrospective
+  path). `maxReviewRounds` is carried on a plan and read by nothing in `src/` (survey, G3).
+- **Where the prototype collided with the record.** The prototype note, section 5: one approval
+  cannot cover a split of three plans (G-1); a question has no option structure (G-2); a question
+  raised mid-lap has no home and no relay (G-3); the page's write vocabulary would grow from one word
+  to five, and `D-0059` section 5's press check refuses an in-place send (section 2.2, G-7).
+
+### 1. What reaches the person, and the test for each
+
+**The person is reached for five things and no others.** Each is tested by a question about the
+work, not about who is asking or how large the work is:
+
+| # | What reaches the person | The test | Does it wait on the person |
+|---|---|---|---|
+| **P1** | **A scope to approve** (section 3), and a scope to widen | Always. It is the one act by which the person delegates | yes |
+| **P2** | **A question back about a request** | The request admits readings that lead to **different results the person would see**, and neither the request, its thread nor the repository settles which. A reading the material settles is not asked | yes |
+| **P3** | **A point in dispute, with a recommendation** (section 4) | The choice is not settled by the request, a ratified entry or the scope, **and** the options give up different things the person owns: behaviour a user sees, a ratified entry, a grant, a cost past the scope's budget. A choice whose options differ only in how the organisation gets there is not in dispute | yes |
+| **P4** | **An irreversible act, for approval** | The act is on the scope's closed list of irreversible acts (rule 3.4). It is approved per act and never by a scope | yes |
+| **P5** | **A report of what came of a request**, including what was left undone, what was decided without asking, and every scope exit | Always, once per request (or once per stop), addressed to the request thread (`D-0061` rule 4). Not once per lap | **no** |
+
+**A scope exit is P3.** When the organisation stops because it reached the edge of its scope
+(rule 3.3), what reaches the person is the reason it stopped, the options for going on (widen the
+scope, change the work, stop), and a recommendation.
+
+### 2. What the organisation decides without asking
+
+Inside an approved scope, the organisation decides these and **records each decision** (rule 3.5),
+but does not put them to the person:
+
+| # | Decided without asking | Bounded by |
+|---|---|---|
+| **O1** | **How a request is split** into plans, and in what order and how many at once they run | The scope's request predicate and its lap budget. Parallelism is also bounded by `D-0012` |
+| **O2** | **Which agent type, and so which tier, each plan runs under** | The agent types the scope lists, which a person chose (rule 3.1). `D-0062` rules 1.2, 1.3, 2.2, 2.3 and 2.4 keep applying: a named record, no per-request tier override, grounds for a non-`standard` tier, the highest tier recommended when options differ, and an unpriced tier refused |
+| **O3** | **The wording a worker runs on** (`D-0063` rule 4.3) | Bases into the request thread (kept line 1) |
+| **O4** | **Doing it again**: `revise` with an instruction the organisation writes, or `retry` of a stopped lap under the same grants | The scope's round budget. A retry that needs a **wider grant** is not a redo and leaves the scope (rule 3.3) |
+| **O5** | **Review findings below the scope's severity threshold**, which are left and listed in the report (P5) | Findings at or above the threshold are fixed by the organisation within the round budget; a finding still open when the budget is spent leaves the scope |
+| **O6** | **Answering a lap's end gate when the lap is inside the scope** | Rule 3.6: only when the reading is clear and nothing on P2-P4 is open, and only as the organisation's recorded answer, never as the person's |
+| **O7** | **Pushing a lap's own branch and opening its pull request**, when the scope includes it | Rule 3.4: these are not on the irreversible list. Merging is |
+| **O8** | **What is shown to the person and what is not** | Every item not shown is recorded as withheld with the rule that withheld it (`D-0032` rule 10). "Decided without asking" is exactly what that table's `withheld` side counts |
+
+### 3. Delegation is a scope, not a request at a time
+
+1. **A scope is one record, approved by one human decision, and it says what it covers in fields a
+   machine can test.** At least:
+   1. **the requests it covers**: named request threads (`D-0061` rule 1), or a predicate over them;
+   2. **the repositories and workspaces** a lap under it may use;
+   3. **the agent types** a plan under it may name (O2), which bounds the tier and the grants;
+   4. **budgets**: laps, review rounds (default 3, as claude-org-ja's), cost, and an expiry;
+   5. **the review severity threshold** (O5);
+   6. **which reversible outward acts it includes** (O7), each by name; none is included by default;
+   7. **its closed list of irreversible acts** (rule 3.4), which a scope may add to and may not shorten.
+
+   What is approved is the record as it was shown, by digest, in `D-0022` rule 18's order (recorded
+   before it is shown). **A scope never widens itself**; a wider scope is a new record and a new
+   approval (P1).
+
+2. **A scope is not a grant.** The grants a lap runs under are still its agent type's, composed by
+   cadenza (`D-0022` rule 5). A scope selects among grants a person already approved in an agent
+   type; it cannot add one. A widening (`D-0043`'s `contract_keys`, cadenza's `needs_approval`) is
+   outside every scope by construction.
+
+3. **The organisation stops a line of work, and puts it to the person as P3, when any of these is
+   true.** It stops **that line**; other lines inside the scope carry on, as a conveyor halts one PR
+   at its merge gate and not the belt (`JA/.claude/skills/org-conveyor/SKILL.md` Step 2.8):
+   - the work does not match the scope's fields, **or whether it matches cannot be decided** (an
+     undecidable match is outside, as in org-conveyor INV-2);
+   - a budget is spent;
+   - a point in dispute (P3's test) or an unclear request (P2's test) comes up;
+   - the next act is on the irreversible list (P4);
+   - a grant wider than the agent type's is needed (rule 3.2);
+   - the independent reading refuses (`D-0029` `V-3`), since overriding it with `--despite-review`
+     is a person's act;
+   - a ratified entry would have to change for the work to go on.
+
+4. **Irreversible acts are a closed list, and no scope approves one.** An act is irreversible when
+   rondo cannot undo its effect by an act of its own, or can undo it only by leaving an effect on
+   something others depend on. The list starts as: **merging into a default branch; tagging or
+   publishing a release or a package; deleting a branch, workspace or record rondo did not create for
+   this scope; sending anything to anyone other than the operator and the scope's own pull request;
+   and spending past a budget.** Pushing a lap's own branch and opening its pull request are not on
+   it: closing the pull request and deleting the branch undo them and leave nothing others depend on.
+   **The list grows only by an entry.** Each act on it is approved by a person at the time, for that
+   act, which is kept line 2.
+
+5. **Every act taken inside a scope names the scope.** An admission, a redo, an agent-type choice, a
+   gate answer, a push: each records the scope it was taken under, so "which scope authorised this"
+   is a query, and so is "what was decided without asking under this scope". This is the audit that
+   replaces a person's per-lap answer (section 7), and it is the reason O8 counts withheld items.
+
+6. **A gate answered under a scope is recorded as the organisation's answer, never as the person's.**
+   `D-0009` holds exactly: continuo records whoever answers `presented -> answered` as a human, and
+   nothing downstream can tell a carried answer from a composed one. So an in-scope answer may not be
+   written through that edge under the approver's actor id. It needs a seam that records **a
+   delegated answer as delegated**: an actor kind other than `human`, naming the scope approval it was
+   taken under. **That seam is continuo's to add, and until it exists every lap's end gate stays a
+   person's press**, which leaves O6 unavailable and the rest of this section in force. The same
+   reasoning keeps the voice a column (`D-0032` rule 5, `D-0061` rule 2.3): who decided is recorded,
+   not implied.
+
+### 4. A question put to the person carries a recommendation
+
+1. **Every P2 and P3 carries options, what each gives up, and exactly one recommendation**, which is
+   `D-0032` rule 1's shape. When the organisation cannot rank the options, the recommendation is the
+   one that keeps the most undoable, and it says so.
+2. **A recommendation is material, not a decision.** Nothing runs on it until the person answers,
+   and the answer is carried byte for byte (`D-0009`). The person is asked because the choice is
+   theirs; leaving it without a recommendation hands them the organisation's work as well.
+3. **`D-0034` is not reversed.** An `explanation` still binds nothing and carries no recommendation.
+   It is a report (P5), not a question. What changes is that **a question put to the person is never
+   an `explanation`**: the prototype's mid-lap question drawn with no recommendation (prototype note,
+   scene 7 and section 4 row 18) is the shape this rule refuses.
+4. **This is a change from claude-org-ja on purpose.** Its secretary relays a worker's question
+   without judging it (`JA/CLAUDE.md`, "Escalate ..."). rondo's organisation recommends and the person
+   decides, and the relay keeps the recommendation's author as a column.
+
+### 5. The organisation's roles, and which part holds each
+
+| claude-org-ja role | What it does there | rondo / cadenza / continuo | State |
+|---|---|---|---|
+| **Human (product manager)** | Asks; approves scopes; judges disputes and irreversible acts | The operator, on the approver allowlist (`D-0025` rule 4), through the CLI and the page | present, but asked per lap rather than per scope |
+| **Secretary: dialogue** | Reads a request, asks back, reports | rondo: the request thread (`D-0061`) and the advisory's drafting half (`D-0063` section 1) | decided, not built |
+| **Secretary: splitting and handing over** | Splits and hands pieces over | rondo: the advisory proposes the split (`D-0063` rule 4); `src/access` composes through cadenza's facade and admits (`D-0022` rule 5, `D-0047`) | decided, not built; **per split, not per scope** (section 6) |
+| **Secretary: relaying a worker's question** | Carries a question raised mid-work to the human | nobody | **empty** (`D-0061` rule 6, `D-0063` section 1, prototype note G-3) |
+| **Dispatcher: starting workers** | Spawns workers, in parallel | rondo's conductor (`src/refrain`, `src/access/conductor.ts`) drives continuo's `run admit` and `lap perform` | present; **one lap at a time** (`D-0012`, survey G8) |
+| **Dispatcher: patrolling** | Detects stalls, silent deadlocks, pending approvals | nobody; a ceiling kills the CLI and orphans the child (survey G7) | **empty** |
+| **Worker** | Implements in its own worktree | continuo: a fenced lap (`lap perform`), a child session in a workspace continuo materialises | present |
+| **Reviewer** | Independent model review, graded by severity, up to three rounds | rondo: the independent reading (`D-0029`) is a deterministic shape check with no severity and no rounds (`V-14`) | **empty** as a model reviewer (survey G3) |
+| **CI and merge watch, cleanup** | Watches CI, observes merge, closes the run, removes the worktree | continuo has `ci_observation`, `pr_merged` and `removeWorktree` with nothing driving them (survey G4, G5) | **empty** |
+| **Work discovery** | Proposes the next candidates with one recommendation | nobody (survey G6); `D-0063` gives the advisory a propose-only next-work proposal | **empty** |
+| **Curator** | Retrospectives into knowledge and skills | nobody (survey G13) | **empty** |
+| **Authority and settings** | What a worker is allowed to do | cadenza: contracts and classification, as a library through rondo's facade (`D-0018`) | present |
+| **Record (`state.db`)** | What happened in the organisation | rondo's store (`D-0005`, `D-0020` rule 4) for requests, proposals, decisions, attention; continuo's database for runs, gates and leases | present; **no scope record** (section 3) |
+
+**The empty roles, in one list:** relaying a mid-work question; patrolling; a model reviewer;
+CI and merge watch with cleanup; work discovery; the curator; parallel workers; and the scope record
+itself.
+
+### 6. Existing entries that have to move
+
+**None is edited here.** "Supersede" means a later entry retires what the named rule asserts (the
+file's "How to use this file"). "Annotate" means a dated note that bounds or re-reads a rule without
+changing a claim. "Keep" means the rule already fits.
+
+| Entry, rule | What it asserts today | Collides with | Move |
+|---|---|---|---|
+| **`D-0063`** (proposed), section 1 "hand over" row and its closing paragraph; rule 6.2 | Every handover is put to a person first, because kept line 2 does not bend for small requests | Section 3: a handover inside a scope is not put to a person | **Revise before it is accepted.** Its kept line 2 ("a person approves at a gate, and the advisory decides nothing") becomes this entry's two lines: the advisory still decides nothing, and a person approves a scope and irreversible acts. The model-drafter widening itself is unaffected |
+| **`D-0062`** rule 3 (and 3.5) | A split's agent type is approved on route S, per split, by spending one approval | O2 | **Supersede** rule 3: the agent type is chosen inside the scope's list without a per-split approval. Rules 1.2, 1.3, 2.2-2.4 and 4 are kept |
+| **`D-0022`** rule 9 | One human decision authorises at most one issuance | Rule 3.1: one scope approval authorises many admissions | **Supersede** (inside `D-0063`'s supersession of `D-0022`, or after it). What is kept is that no approval is spent twice for the same act: each in-scope act is recorded once against the scope (rule 3.5) |
+| **`D-0022`** rule 15 | Two approval routes, S and G, and rondo mints no gate | A scope is approved on route S; route G's gate is answered by the organisation under rule 3.6 | **Annotate**: route S gains the scope as a thing it approves; "rondo never mints a gate" is kept |
+| **`D-0047`** rules 1, 5 and 6 | An approval is spent once, inside the admission's transaction, by `rondo retry` | Rule 3.5 | **Keep** for per-proposal approvals. The scope's spend record is a new record with its own entry, in rule 1's transactional shape |
+| **`D-0009`** | rondo carries a human's answer and never composes one | O6 | **Keep, and annotate** with rule 3.6: a delegated answer is not a carried human answer, and waits on a continuo seam that records it as delegated |
+| **`D-0019`** `R-5` | The loop suspends at `awaiting_human`; `resume` is separate | O6 | **Keep.** Who calls `resume` changes, the suspension does not |
+| **`D-0025`** rule 6, and **`D-0010`** | `publish` runs only when a person types it; the operator is the publisher | O7 | **Supersede `D-0025` rule 6's** "nothing here runs unless a person typed `publish`" for push and pull request inside a scope that names them. **Keep "never merges"**, now as rule 3.4's list. `D-0010` is **annotated**: rondo still holds no credential of its own |
+| **`D-0027`** | Revise at the gate is a person's instruction carried into a second lap | O4 | **Annotate**: inside a scope, the organisation may write the instruction, counted against the round budget |
+| **`D-0029`** `V-3`, `V-14` | A refusal stops `publish` with a named override; no round budget in rondo | Rule 3.3; O5 | **Keep** `V-3` (the override stays a person's act). **`V-14` is superseded** when the model reviewer entry adds a round budget; not by this entry |
+| **`D-0032`** rules 1, 2, 4, 10 | Options with one recommendation; bases; irreversibility computed from `kind`; presented and withheld counted in one table | Section 4 relies on rule 1; O8 relies on rule 10; rule 3.4 is a list and not a function of `kind` | **Keep** rules 1, 2 and 10. **Annotate rule 4**: an irreversible act's list is rule 3.4's, and a split whose plans differ in what they make irreversible (prototype note G-5) is that rule's own named falsifier |
+| **`D-0034`** | An explanation carries claims and no recommendation | Section 4 | **Annotate** with rule 4.3: its scope is the `explanation` kind; a question put to the person is never one |
+| **`D-0036`** rule 5 | "Waiting on you" is `awaiting_human`, `withdrawal_requested`, `stalled` | O6: an in-scope `awaiting_human` is waiting on the organisation | **Supersede** once rule 3.6's seam exists: "waiting on you" becomes P1-P4 items, which also absorbs the prototype note's G-4 |
+| **`D-0041`** rules 1 and 7, **`D-0054`** rule 8, and **`D-0059`** (proposed) section 5 and R4 | The page writes only what a person did at that moment, and only the word `approve` | P1-P4 are answered on the page: approving a scope, answering a question by option, approving an irreversible act, and writing a request. Five write kinds, not one (prototype note G-7) | **Supersede `D-0041` rule 7 and `D-0054` rule 8**; **keep `D-0041` rule 1**, since every one of those writes is still a person's act at that moment. **`D-0059` section 5** is revised before ratification to say which write kinds need a navigation press |
+| **`D-0043`** | A stopped lap records one `contract_keys` proposal | A widening is outside every scope (rule 3.2) | **Keep.** It is exactly a P3 |
+| **`D-0061`** step 5.4 and rule 6 | The split waits on the human gate and `D-0062`; a mid-lap question is named and not filled | O1; the empty relay role | **Annotate** step 5.4 (the split is decided inside a scope). Rule 6's mid-lap question becomes a P3 with no home, the first of section 5's empty roles |
+| **`D-0012`**, **`D-0020`**, **`D-0045`**, **`D-0049`**, **`D-0050`**, **`D-0060`** | Single flight; store homes; claims held as claims; dangling references; the second fence; uncommitted work refused | nothing in this entry | **Keep** |
+
+### 7. What moving to this model gives up
+
+- **A person's eyes on every lap, which have caught defects no check catches.** Of the four measured
+  defects above, `D-0060` now catches lap 4's; **lap 5's borrowed `node_modules` (N-14), lap 6 and
+  7's failed sandbox (N-16) and the wrong summary approved three times (rondo#39) were caught only by
+  a person reading**, and `D-0050` decided rondo does not observe the second fence. Under a scope
+  they arrive in a report after the work went on.
+- **The only review rondo has.** The survey's G3 records that a person at the gate is the whole of
+  rondo's substantive review. Delegating the gate before a model reviewer exists removes review, it
+  does not move it.
+- **Audit at the grain of a person.** Today "who approved this lap" names a person and a time. After
+  this entry it names a scope a person approved earlier, and the judgment inside it is the
+  organisation's. Rule 3.5 and O8 make it queryable, but a query over withheld items is weaker
+  evidence than a person's answer: it proves what was not shown, not that what was decided was right.
+  With `D-0063` rule 5 (a model draft is re-readable, not re-derivable), "why this split" has no
+  answer beyond its bases.
+- **`D-0009`'s property as a matter of placement.** Rule 3.6 keeps it only by waiting on continuo;
+  until then O6 is not available and a person still presses once per lap.
+- **`D-0041` rule 7's one-sentence audit of the page's writes**, which becomes a list of write kinds.
+
+### What is put to the human gate
+
+**These three points are not settled inside the entry. It is proposed with them open.**
+
+1. **When the lap's end gate leaves the person's hands (O6).**
+   - **(a) Only after a model reviewer exists (survey G3) and continuo records a delegated answer
+     (rule 3.6)** (recommended). Until both, a scope covers O1-O5, O7 and O8, and the person still
+     presses once per lap. *Loses:* the product manager position is not reached at the lap end until
+     two other pieces of work land.
+   - **(b) As soon as continuo's seam exists**, with no model reviewer. *Loses:* rondo's only review
+     (section 7, second bullet), and the N-14 / N-16 class of defect goes unseen until a report.
+2. **Merge.** claude-org-ja's standing approval lets the organisation merge once CI is green.
+   - **(a) Merge stays on rule 3.4's list, per act** (recommended). rondo observes no CI (survey G4)
+     and holds no merge (`D-0010`, `D-0025` rule 6), so the condition the standing approval rests on,
+     "CI is green", is not something rondo can check.
+   - **(b) A scope may include merge once CI observation exists.** *Loses:* the one act on the list
+     that reaches the default branch would no longer be approved per act, which removes it from kept
+     line 2.
+3. **Whether the scope record comes before or after `D-0063` is accepted.**
+   - **(a) `D-0063` is revised as section 6 says before it is accepted** (recommended), so the entry
+     that widens the advisory is not accepted on a per-handover premise this entry replaces.
+   - **(b) `D-0063` is accepted as written and superseded later.** *Loses:* an accepted entry whose
+     section 1 states the opposite of this one, for as long as the scope entry takes.
+
+### What this does not do
+
+- **It does not design the scope record**, its schema, its writer, its verbs or its screen.
+- **It does not add any role** named empty in section 5, or rank them.
+- **It does not ask continuo for the delegated answer**; it names the request, which is a later
+  change.
+- **It does not change a threshold's value** beyond the default round budget of 3, which is
+  claude-org-ja's.
+- **It does not add an invariant beyond its two lines.** In particular it adds no confidence score
+  on a recommendation, no cap on how much a scope may cover, and no requirement that a person read a
+  report.
+
+### What would falsify it
+
+- **A scope that cannot be written in testable fields** for the work rondo is actually given, so
+  that rule 3.3's "undecidable match is outside" stops every line at once. Then the scope is a
+  per-request approval with more steps, and the owner's model does not transfer.
+- **Reports showing, once scopes run, defects that a per-lap person would have caught and no check
+  did**, at a rate the owner does not accept. The first gate point is then answered (a) on evidence,
+  or O6 is withdrawn.
+- **A point in dispute that rule 1's P3 test lets through**, found afterwards, where the options gave
+  up something the person owns. The P3 test is what moves.
+- **An act off rule 3.4's list that could not be undone.** The list grows by an entry, and the
+  criterion in rule 3.4 is re-read.
+- **Operators wanting to see the per-lap stream the prototype drew**, rather than a report per
+  request. P5's "not once per lap" is what moves.
+- **continuo declining to record a delegated answer.** O6 then cannot exist without breaking
+  `D-0009`, and the lap end stays a person's press for good.
+- Any measurement in "What was measured" failing to reproduce at rondo `7b76eea`.
