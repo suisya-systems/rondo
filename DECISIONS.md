@@ -99,6 +99,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0060 | Work left uncommitted is a fact rondo reads and names: `git status` joins the reading as a finding, `publish` refuses a workspace that still holds any, `--despite-review` does not reach it, and rondo commits nothing on a lap's behalf | accepted |
 | D-0061 | Where a request enters rondo: the organisation's five steps mapped onto parts that mostly exist, a request thread in the conversation as the first thing built, and the drafter that reads a request cleared by the human gate, with its split into plans waiting on `D-0062` | accepted |
 | D-0062 | A proposal may name an agent type, and only a split proposal from a request may: a record rondo already holds chosen by its digest, approved on route S with the tier bound by the option it came from, and the kind-to-tier judgment kept whole while the request-to-kind judgment moves to the gate | accepted |
+| D-0063 | The advisory is the secretary's drafting half: it reads, asks back, splits, puts decisions and reports in front of a person, and proposes what comes next, while handing over and approving stay elsewhere; `D-0022` rules 1, 3, 4 and 7 widen for a model drafter and a split, and only two lines are kept | proposed |
 | D-0064 | rondo is run the way a product manager runs an organisation: a person approves a scope once, the organisation decides everything inside it, and what reaches the person is a question with a recommendation, an irreversible act, a scope exit or a report | accepted |
 
 ---
@@ -12389,3 +12390,219 @@ follows them.
 - **continuo declining to record a delegated answer.** O6 then cannot exist without breaking
   `D-0009`, and the lap end stays a person's press for good.
 - Any measurement in "What was measured" failing to reproduce at rondo `7b76eea`.
+
+---
+
+## D-0063 — The advisory is the secretary's drafting half: it reads, asks back, splits, puts decisions and reports in front of a person, and proposes what comes next, while handing over and approving stay elsewhere; `D-0022` rules 1, 3, 4 and 7 widen for a model drafter and a split, and only two lines are kept
+
+**Status:** proposed (2026-09-13). Two points are put to the human gate; see "What is put to the
+human gate". Refs `D-0009`, `D-0019`, `D-0020`, `D-0022`, `D-0029`, `D-0032`, `D-0034`, `D-0036`,
+`D-0061`, `D-0062`.
+
+**This entry decides and does not build.** Nothing in `src/` changes with it.
+
+`D-0022` built the advisory as a pure function in a layer of its own, and its rule 7 limits what
+the advisory may say about a plan to three forms: a selection among persisted plans, a diff against a
+named predecessor, and a list of holes. The product owner also sees the advisory as rondo's
+counterpart of claude-org-ja's secretary: it reads a request, asks back when the request is unclear,
+splits the work and hands it over, brings decisions to the person, and reports the result. `D-0061`
+step 5.4 needs a drafter that reads a request and proposes a split into plans. `D-0062` lets that
+split name an agent type, and its residuals table leaves `D-0022` rule 7 to this entry. `D-0061`
+records that a model drafter widens `D-0022` rules 1 and 3.
+
+This entry decides three things: which parts of the secretary's role the advisory holds, how
+`D-0022`'s rules widen, and which lines hold after the widening. It keeps two lines that were agreed
+before it was drafted, and **adds no third**:
+
+- **Every summary and proposal leads back to its material** (`bases`, `D-0032` rule 2, `D-0061`
+  rule 2.6).
+- **A person approves at a gate, and the advisory decides nothing** (`D-0022` rules 2 and 15,
+  `D-0009`).
+
+### What was measured, and how
+
+At rondo `101aa82` on **2026-09-13**, by reading. `D-0062` was read on its branch at `edf7967`,
+and its text is byte-identical in `7b76eea`, where it merged. The baseline is claude-org-ja
+at its working tree on the same date, read only; its paths are written `JA/`. Line numbers drift;
+re-measure the claim, not the number.
+
+- **The advisory layer is pure, and that is enforced.** `src/advisory` may import only
+  `src/advisory` and `src/store` (`test/architecture/import-boundaries.test.ts:165`), has no external
+  allowance, and may not use the globals in `FORBIDDEN_GLOBALS` (`:648-654`).
+- **The layer already turns an outside input into a proposal without leaving the layer.**
+  `proposeElevated(snapshot, observation)` (`src/advisory/proposal.ts:695`) takes a claim the
+  operator wrote, which the layer did not compute, and returns an explanation built from it. The
+  input has to be a `Claim`, so it carries a basis.
+- **Every plan proposal today is a selection.** `proposeRetryPlan` (`proposal.ts:703-725`) offers
+  only plans some iteration actually ran under, and its own comment names `D-0022` rule 7's first
+  form.
+- **A proposal row keeps its snapshot verbatim beside a digest, and names its drafter**
+  (`src/store/sqlite.ts:786-790`). `D-0022` rule 4 keeps the snapshot "so a proposal is re-derivable
+  and not only re-readable".
+- **What the secretary does**, from `JA/CLAUDE.md` "Role boundaries" (`:55-67`), "Communication"
+  (`:19-22`), "Escalate a worker's request for a decision to the human" (`:129-140`) and "Proposing
+  the next task after a merge" (`:43-50`), and from `JA/.claude/skills/org-delegate/SKILL.md` and
+  `JA/.claude/skills/org-escalation/SKILL.md`. Two of its properties matter below. The secretary
+  **relays** a decision and never makes one ("a messenger and not a decision layer", `:136`). Its
+  next-task list is **propose-only** and a person picks from it (`:49`).
+
+### 1. The secretary's role, part by part
+
+| The secretary's part | The advisory | Somewhere else |
+|---|---|---|
+| **Read the request**, and say in one sentence what it asks | **Holds it.** A `drafter` message in the request thread with bases into the request (`D-0061` rule 2) | The request itself is the operator's message in the conversation (`D-0061` rule 1) |
+| **Ask back** when the request is unclear, with options | **Holds the question.** A `drafter` message with `asks` set (`D-0061` rule 2.7) | The answer is the operator's reply. Nothing waits on the advisory's judgment that the answer is enough: a split is still a proposal |
+| **Split the work** into pieces a worker can take | **Holds it, as a proposal.** Rule 4 below widens `D-0022` rule 7 so that the plans may be new | The agent type is chosen under `D-0062` |
+| **Hand the pieces over** | **Does not hold it.** A function that returns a value cannot admit a run (`D-0022` rule 2) | Composing the contract is the facade's, called from `src/access` (`D-0022` rule 5). Admitting and spending the approval are the operating surface's (`D-0047`) |
+| **Decide** whether to hand over, and with what | **Does not hold it** | The person, at route S (`D-0022` rule 15), by `decide` |
+| **Bring a decision to the person** | **Holds the material**: the proposal, its options and its recommendation (`D-0032` rule 1), or claims without one (`D-0034`) | Showing it and counting what was shown are the surface's (`D-0036`). A gate answer is carried byte for byte and never composed (`D-0009`) |
+| **Relay a question a worker raised mid-work** | **Does not hold it** | No such question exists today (`D-0061` rule 6). A gate at the end of a lap is continuo's and is answered by a person |
+| **Report the result** | **Holds it.** Row-based reports from the deterministic drafter (`D-0061` step 5.3), and a summary of them across the laps of one request from a model drafter | `publish` and its pull request text stay the surface's (`D-0026`) |
+| **Propose the next piece of work** | **Holds it, propose-only**, the same grade as the secretary's list | Its shape and trigger are the entry `D-0061` rule 6 names |
+| **Ack a worker, keep state, remember across sessions** | **Does not hold it** | No ack is needed (`D-0061` section 1). State and memory are the store's; the advisory reads them in its snapshot |
+
+**The line in this table is the line `D-0022`'s three authorities already draw** (advise, compose,
+issue): the advisory holds every part that produces material, and none of the parts that act on
+it. The secretary does both, because a person is next to it. **What the owner's view loses under
+this line** is stated here and not argued away. The secretary hands over a small, clear request on
+its own, but rondo puts every handover to a person first, because kept line 2 does not bend for
+small requests.
+
+### Decision
+
+1. **The advisory is the drafting half of the secretary's role, as section 1 divides it.** It reads
+   a request, asks back, proposes a split, prepares the material for a decision, reports, and proposes
+   the next piece of work. It does not hand over, approve, relay a worker's question, or write
+   anything outside a proposal or a drafter message.
+
+2. **`D-0022` rule 1, restated: the advisory is two parts, and only one of them is the layer.**
+   1. **The drafter** produces a draft. The deterministic drafter lives in `src/advisory` as today. A
+      **model drafter** does not, because a model call needs a process or a socket and the layer may
+      have neither. It is called from `src/access`, outside `drive()`, which is where `D-0029`
+      rule 6 already puts a model reader and for the same reason.
+   2. **The layer** stays exactly as rule 1 built it: `src/advisory`, allowed `src/advisory` and
+      `src/store`, with no external allowance. **A model draft becomes a proposal or a drafter
+      message only by passing through a pure function in the layer**, in the shape of
+      `proposeElevated(snapshot, observation)`. That function checks that the draft is in one of the
+      layer's forms and that every basis resolves. A draft that fails the check is not written. The
+      check is structural, and it does not check that the draft is true.
+   3. **`D-0022` rule 2 is therefore unchanged**: the layer is a total, pure function of its inputs.
+      What changes is that one input may now come from a model.
+
+3. **`D-0022` rule 3, restated: what the advisory may read gains two entries, and nothing else.**
+   1. **The request thread's message bodies.** These are rondo's store, which rule 3 already allows.
+      The entry is written out because `D-0022` was written before a message had a body.
+   2. **A model drafter's output, handed to the layer as an input** under rule 2.2.
+   3. **The model drafter reads only the snapshot the composition root gathered for it**, which is
+      rule 3's own list: rondo's store, cadenza through the facade, and admitted continuo verbs. It
+      reads no sibling checkout and no continuo database. This clause restates rule 3 and adds no
+      rule.
+
+4. **`D-0022` rule 7, restated: a plan proposal from a request may propose plans no iteration has
+   run.** Rule 7's three forms stand. A **split** adds a fourth form, which is a diff against a
+   **template**:
+   1. **Each proposed plan names a persisted plan as its template**, chosen by `plan_digest`. The
+      template is any plan in rondo's store, not only a predecessor in the same lineage.
+   2. **Only two fields may differ from the template**: the request text (`prompt`), which the
+      drafter composes, and the agent type, which is selected under `D-0062` rule 1.2. Every other
+      field is copied byte for byte. The workspace root and the fence roots, which rule 7 keeps out
+      of the drafter's hands, are therefore still the template's and never the drafter's.
+   3. **The composed `prompt` carries `message:` bases** into the request thread (`D-0061` rule 2.6),
+      so a person can follow every part of it back to the words it came from.
+   4. **With no persisted plan to use as a template, the split proposes no plan.** It lists the
+      holes, which is rule 7's third form, unchanged.
+   5. **Identifiers stay derived at admission** (`D-0023`). A split proposes no run id, branch or
+      workspace, which is what rule 7 meant by "never fill".
+
+5. **`D-0022` rule 4, restated for a model draft: re-readable, and no longer re-derivable.** The
+   row keeps its snapshot verbatim, as now. For a deterministic draft, running `propose` over those
+   bytes gives the same proposal. **For a model draft it does not**, and rule 4's "re-derivable"
+   becomes "re-readable" for that row. The `drafter` column tells a reader which of the two a row
+   is. This is the first point put to the gate.
+
+6. **The two kept lines, and how the widening meets each.**
+   1. **Back to the material.** Every proposal and every drafter message carries bases, and the
+      layer's check (rule 2.2) and the store's writer (`D-0061` rule 2.6) refuse one without them.
+      A model draft gets no exemption.
+   2. **The person approves.** A split admits nothing until a person approves it on route S and the
+      approval is spent (`D-0022` rule 15, `D-0047`, `D-0062` rule 3). An ask-back binds nothing. A
+      report binds nothing. A proposed next piece of work binds nothing.
+
+7. **What is not added, by name**, so that a later reader does not take its absence for an
+   oversight: a digest of the bytes delivered to the model (`D-0029` rule 11's form, which is a
+   reading's rule and not a proposal's), a budget of ask-back rounds, a phased rollout of the
+   parts in section 1, and a check that a model draft is true. Each would be a third line, and none
+   was agreed.
+
+8. **`D-0022` is superseded as a whole, and every rule not restated here is carried as written.**
+   Rules 1, 3, 4 and 7 changed what they asserted, so an annotation is not available ("How to use
+   this file"). A partial status is not available either (`D-0062`'s precedent). Rules 2, 5, 6 and
+   8-20, the sections after the rules, and its residuals **stay under `D-0022`'s heading** and keep
+   being cited as `D-0022` rule N. Rules 1, 3, 4 and 7 are restated as rules 2, 3, 5 and 4 of this
+   entry.
+
+### What the widening gives up
+
+- **Re-derivability of a model draft** (rule 5). A reviewer can read what the model was given and
+  what came back. A reviewer cannot rerun it and get the same answer, so "why this split and not
+  another" has no answer beyond the bases. **What stays auditable** is what the person approved:
+  the `composition` rows hold the contract that was shown, before it was shown (`D-0022` rule 18),
+  and the approval names its digest.
+- **Unit coverage of what a model draft says.** The planted cases can prove the layer's check and the
+  writer's refusals. They cannot prove that a model splits well. That is the same ceiling `D-0029`
+  rule 12 records for a model reader.
+- **The lap's instruction in the person's own words** (rule 4.3). A worker in a split lap runs on
+  text the drafter wrote. The person's words stay in the thread, the link from the lap to them is
+  `D-0061` rule 4, and the bases point into them, but what the person approves is the drafter's
+  wording. This is the second point put to the gate.
+
+### What is put to the human gate
+
+**These two points are not settled inside the entry. It is proposed with them open.**
+
+1. **Rule 5: accept that a model-drafted proposal is re-readable and not re-derivable.**
+   - **(a) Accept** (recommended). What was approved stays exact through the composition rows and the
+     approved digest. What is lost is a rerun of the drafter's reasoning, which a model cannot give
+     anyway.
+   - **(b) Refuse.** Only the deterministic drafter writes proposals. The summary, the ask-back and
+     the split in `D-0061` step 5.4 then cannot be built, because the deterministic drafter cannot
+     read free text, and section 1's "read", "ask back" and "split" rows move to "does not hold".
+2. **Rule 4.3: whose words a split lap runs on.**
+   - **(a) The drafter composes the `prompt`, with bases** (recommended, and as rule 4 is written).
+     A request can be divided and reworded for each piece.
+   - **(b) The `prompt` is a verbatim excerpt of the request's messages.** The worker runs on the
+     person's words, byte for byte. A split can then only cut the request where the person's own text
+     already divides, and a request written as one paragraph cannot be split.
+
+### Annotations this entry adds to earlier entries
+
+- **`D-0022`** gains `Status: superseded by D-0063` and a supersession note in `D-0062`'s form,
+  when this entry is accepted.
+
+### What this does not do
+
+- **It does not choose a model, a prompt, or how a model drafter is invoked.** Those belong to the
+  model-drafter entry that `D-0029`'s residuals and `D-0061` step 5.4 name. This entry decides only
+  the widening of `D-0022` that such a drafter needs.
+- **It does not design the split proposal's kind, payload or verb** (`D-0062`, "What this does not
+  do").
+- **It does not decide the next-work proposal's shape or trigger** (`D-0061` rule 6).
+- **It does not change `D-0019` rule 3 or `D-0025` rule 5.** rondo still allocates no fence
+  geometry, and the plan reader still infers nothing. The drafter is not the plan reader.
+
+### What would falsify it
+
+- **A split that needs a field other than `prompt` and the agent type to differ from its
+  template** (a timeout, a gate option) often enough that declining and writing the plan by hand
+  reads as an obstruction. Rule 4.2's limit is what moves.
+- **A request arriving before any plan exists in the store**, often enough that rule 4.4's hole
+  list is the usual case rather than the first-run case.
+- **A model draft that passes the layer's check and misleads the person at the gate**, found after
+  approval, where the bases resolved but did not support the claim. Kept line 1 is then too weak for
+  a model, and the truth check this entry's rule 7 declines is the entry to write.
+- **The advisory needing to act on its own draft** (admit a run, answer a gate, write outside a
+  proposal or a drafter message). That is `D-0022`'s own falsifier "the advisory needing to write",
+  inherited, and it would reopen section 1's "does not hold" rows.
+- **A question raised mid-lap arriving** (`D-0061` rule 6). Section 1's relay row then needs an
+  owner.
+- Any measurement in "What was measured" failing to reproduce at rondo `101aa82`.
