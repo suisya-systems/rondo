@@ -1,10 +1,13 @@
 /**
- * The read-only page, over a real store.
+ * The operator's page, over a real store.
  *
  * Against `node:sqlite` rather than a stub for `between.test.ts`'s reason: the
  * one property worth asserting here is that a surface which draws itself every
  * few seconds writes **nothing** -- and "no row was written" is a claim about a
- * database rather than about a mock's call log. The other two are what the
+ * database rather than about a mock's call log. The one write it may do is
+ * asserted the other way round, against a recorded call, because what is under
+ * test there is the door rather than the ledger: `answerFromPage` is the
+ * command line's own `walkGate` and `resume`, and this file has no continuo. The other two are what the
  * terminal got wrong and this page must not (rondo#90's paragraphs, rondo#91's
  * repeated basis), and both are properties of the bytes that reach a browser.
  */
@@ -77,14 +80,122 @@ const fresh = () => {
   };
 };
 
-function portsOver(world: ReturnType<typeof fresh>, actorId: string | null = "ada"): WebPorts {
+/** Every press this surface let through, in order. */
+type Pressed = { iterationId: string; body: string }[];
+
+function portsOver(
+  world: ReturnType<typeof fresh>,
+  actorId: string | null = "ada",
+  pressed: Pressed | null = null,
+): WebPorts {
   return {
     store: world.store,
     record: world.record,
     now: () => 5_000,
     policy: { maxOccupying: 4, maxLive: 6 },
     actorId,
+    answer:
+      pressed === null
+        ? null
+        : async (iterationId, body) => {
+            pressed.push({ iterationId, body });
+            return await Promise.resolve({ ok: true, note: "answered" });
+          },
   };
+}
+
+/** Put one reserved row at the gate, which is the only state with a button. */
+async function openGate(world: ReturnType<typeof fresh>, id: string): Promise<void> {
+  for (const [from, to] of [
+    ["planned", "admitting"],
+    ["admitting", "admitted"],
+    ["admitted", "performing"],
+    ["performing", "awaiting_human"],
+  ] as const) {
+    const outcome = await world.store.transition(
+      id,
+      from,
+      to,
+      to === "awaiting_human" ? { gateId: `gate-${id}` } : {},
+      2_000,
+    );
+    if (outcome.kind !== "transitioned") {
+      throw new Error(`the fixture did not reach '${to}': ${JSON.stringify(outcome)}`);
+    }
+  }
+}
+
+/** One form post, with headers of our choosing and redirects left alone. */
+function post(
+  base: string,
+  form: Record<string, string>,
+  headers: Record<string, string> = {},
+): Promise<{ status: number; body: string; location: string | undefined }> {
+  const encoded = new URLSearchParams(form).toString();
+  return new Promise((resolve, reject) => {
+    const request = httpRequest(
+      `${base}/`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+          "content-length": String(Buffer.byteLength(encoded)),
+          ...headers,
+        },
+      },
+      (response) => {
+        let body = "";
+        response.setEncoding("utf8");
+        response.on("data", (chunk: string) => {
+          body += chunk;
+        });
+        response.on("end", () => {
+          resolve({
+            status: response.statusCode ?? 0,
+            body,
+            location: response.headers.location,
+          });
+        });
+      },
+    );
+    request.on("error", reject);
+    request.end(encoded);
+  });
+}
+
+/** A server on an ephemeral port, and the base URL it announced. */
+async function serving(ports: WebPorts): Promise<{
+  base: string;
+  stop: AbortController;
+  served: Promise<number>;
+}> {
+  let announced = "";
+  const stop = new AbortController();
+  const served = serveOperatorPage(
+    ports,
+    0,
+    (line) => {
+      announced = line;
+    },
+    () => {
+      throw new Error("the server refused to listen");
+    },
+    stop.signal,
+  );
+  // `listen` is asynchronous; the announcement is what says the socket is up.
+  while (announced === "") {
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  const base = /(http:\/\/127\.0\.0\.1:\d+)\//.exec(announced)?.[1] ?? "";
+  expect(base).not.toBe("");
+  return { base, stop, served };
+}
+
+/** The token this process minted, as the page rendered it into its form. */
+function tokenIn(html: string): string {
+  const found = /name="token" value="([^"]+)"/.exec(html)?.[1];
+  expect(found).toBeDefined();
+  return found ?? "";
 }
 
 async function reserve(
@@ -138,9 +249,9 @@ test("the page shows what inbox, between and explain show", async () => {
   expect(html).toContain("what spans the live laps");
   expect(html).toContain("iteration 'i-0001'");
   expect(html).toContain("do the thing");
-  // The page says out loud what it is, because a screen that looks like the
-  // operator surface and answers nothing is worse than one that says so.
-  expect(html).toContain("Read-only");
+  // The page says out loud what a redraw does, because a screen that moves a
+  // last-look mark by being left open is worse than one that says it does not.
+  expect(html).toContain("a redraw writes nothing");
   expect(html).toContain('http-equiv="refresh"');
 });
 
@@ -206,25 +317,7 @@ test("it serves the page on localhost, and only the one page", async () => {
   const world = fresh();
   await reserve(world, "i-0001", "do the thing");
 
-  let announced = "";
-  const stop = new AbortController();
-  const served = serveOperatorPage(
-    portsOver(world),
-    0,
-    (line) => {
-      announced = line;
-    },
-    () => {
-      throw new Error("the server refused to listen");
-    },
-    stop.signal,
-  );
-  // `listen` is asynchronous; the announcement is what says the socket is up.
-  while (announced === "") {
-    await new Promise((resolve) => setTimeout(resolve, 5));
-  }
-  const base = /(http:\/\/127\.0\.0\.1:\d+)\//.exec(announced)?.[1] ?? "";
-  expect(base).not.toBe("");
+  const { base, stop, served } = await serving(portsOver(world));
 
   const page = await fetch(`${base}/`);
   expect(page.status).toBe(200);
@@ -234,8 +327,11 @@ test("it serves the page on localhost, and only the one page", async () => {
   // One page and no router: a typo'd path says so rather than quietly showing
   // the only page there is.
   expect((await fetch(`${base}/inbox`)).status).toBe(404);
-  // Read-only reaches the method too: nothing here answers a POST.
-  expect((await fetch(`${base}/`, { method: "POST" })).status).toBe(405);
+  // With no approver there is no write port, so the door is shut at the method
+  // rather than at the token: there is nobody this page could answer as.
+  expect((await fetch(`${base}/`, { method: "POST" })).status).toBe(403);
+  // And a method that is neither a read nor the one write is still refused.
+  expect((await fetch(`${base}/`, { method: "DELETE" })).status).toBe(405);
 
   // **A page on an attacker's domain, rebound to 127.0.0.1, gets nothing.**
   // The socket cannot tell that request from the operator's own -- both arrive
@@ -245,6 +341,103 @@ test("it serves the page on localhost, and only the one page", async () => {
   const rebound = await withHost(base, "evil.example");
   expect(rebound.status).toBe(421);
   expect(rebound.body).not.toContain("i-0001");
+
+  stop.abort();
+  expect(await served).toBe(0);
+});
+
+test("the button is drawn only where there is a gate and somebody to answer it", async () => {
+  const world = fresh();
+  await reserve(world, "i-0001", "do the thing");
+  const pressed: Pressed = [];
+
+  // Reserved and not yet at a gate: nothing is asking, so nothing is offered.
+  expect(await operatorPage(portsOver(world, "ada", pressed), "t")).not.toContain("<form");
+
+  await openGate(world, "i-0001");
+  const offered = await operatorPage(portsOver(world, "ada", pressed), "t");
+  expect(offered).toContain('method="post"');
+  expect(offered).toContain("gate-i-0001");
+
+  // No approver, no write port, no button -- even at the same open gate. The
+  // page is not a second place rondo will act for an unnamed person.
+  expect(await operatorPage(portsOver(world, null), "t")).not.toContain("<form");
+});
+
+test("a person's press answers the gate and an unattended redraw cannot", async () => {
+  const world = fresh();
+  await reserve(world, "i-0001", "do the thing");
+  await openGate(world, "i-0001");
+  const pressed: Pressed = [];
+  const { base, stop, served } = await serving(portsOver(world, "ada", pressed));
+
+  // Whatever the page draws while nobody is there is a GET, and a GET holds
+  // only the reading ports. Three of them, then nothing was answered.
+  for (let draw = 0; draw < 3; draw += 1) {
+    await fetch(`${base}/`);
+  }
+  expect(pressed).toEqual([]);
+
+  const token = tokenIn(await (await fetch(`${base}/`)).text());
+  const answered = await post(base, { token, iteration: "i-0001", body: "revise" });
+
+  // The body the form carried is ignored: the button's word is the module's
+  // constant, so a hand-written post cannot widen what this surface may say.
+  expect(pressed).toEqual([{ iterationId: "i-0001", body: "approve" }]);
+  // A redirect and not a page, so a refresh re-reads rather than re-answers.
+  expect(answered.status).toBe(303);
+  expect(answered.location).toBe("/");
+
+  stop.abort();
+  expect(await served).toBe(0);
+});
+
+test("a form from another page is refused, token first and origin too", async () => {
+  const world = fresh();
+  await reserve(world, "i-0001", "do the thing");
+  await openGate(world, "i-0001");
+  const pressed: Pressed = [];
+  const { base, stop, served } = await serving(portsOver(world, "ada", pressed));
+  const token = tokenIn(await (await fetch(`${base}/`)).text());
+
+  // **The attack the `Host` check does not reach.** A form on evil.example
+  // posting to http://127.0.0.1:7333/ sends exactly the `Host` the operator's
+  // own browser sends, so the DNS-rebinding defence passes it through. What it
+  // cannot do is read this page, so it cannot carry the token.
+  expect((await post(base, { iteration: "i-0001" })).status).toBe(403);
+  expect((await post(base, { token: "not-the-token", iteration: "i-0001" })).status).toBe(403);
+  // Corroboration rather than the gate: an `Origin` naming somewhere else is
+  // refused even when the token is right, which cannot happen and costs little.
+  expect(
+    (await post(base, { token, iteration: "i-0001" }, { origin: "https://evil.example" })).status,
+  ).toBe(403);
+  // A token with no iteration names nothing to answer.
+  expect((await post(base, { token })).status).toBe(400);
+
+  expect(pressed).toEqual([]);
+
+  stop.abort();
+  expect(await served).toBe(0);
+});
+
+test("a refusal from the write port is shown rather than redirected away", async () => {
+  const world = fresh();
+  await reserve(world, "i-0001", "do the thing");
+  await openGate(world, "i-0001");
+  const ports: WebPorts = {
+    ...portsOver(world),
+    answer: async () =>
+      await Promise.resolve({ ok: false, note: "continuo is not usable: no CLI" }),
+  };
+  const { base, stop, served } = await serving(ports);
+  const token = tokenIn(await (await fetch(`${base}/`)).text());
+
+  const refused = await post(base, { token, iteration: "i-0001" });
+  // 303 back to a page still showing the same open gate would be the one answer
+  // a person cannot act on: they pressed the button and nothing appears to have
+  // happened. The reason is the response.
+  expect(refused.status).toBe(409);
+  expect(refused.body).toContain("continuo is not usable");
 
   stop.abort();
   expect(await served).toBe(0);

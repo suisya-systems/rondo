@@ -7399,6 +7399,50 @@ the one write that is being let through.
 | Authenticated identity on this surface | `D-0020` rule 2's OIDC half is unbuilt everywhere, not just here | the adapter `D-0020` already specifies |
 | Showing the walk's six verbs as they happen | The page has no script and a redirect-then-redraw is what a scriptless page can do | whoever first needs progress rather than an outcome |
 
+### What was measured, and how
+
+On **2026-09-12**, on this machine, against the real dogfood environment
+(`scripts/dogfood-env.sh`) — continuo built at the pinned
+`fcf86eb2b7eb34d65bf73188b2b34544fab6820c`, a control plane and a rondo store on disk, `rondo web`
+serving on `127.0.0.1`, and every request made with `curl` so that the headers under test are the
+ones sent.
+
+**A gate was opened without spending a lap.** A lap spawns a real worker session and costs real
+money, and none of the properties here is about what a worker wrote: one runless gate was inserted
+into the control plane at stage `received`, and the iteration row was reserved and transitioned to
+`awaiting_human` through rondo's own store with a plan payload built by `readRunPlan` /
+`allocate` / `admittedPlan` / `planPayload` — the same four calls `rondo start` makes. Everything
+from the press onward is the real path: continuo's own CLI, six verbs, and rondo's own `resume`.
+
+- **The button is on the page, and it is the page's own form.** The served HTML carried
+  `<form class="approve" method="post" action="/">` with the process's token, the iteration id and
+  a single submit button reading `approve`, beside the gate id it answers.
+- **Five unattended redraws wrote nothing.** `operator_view` and `operator_attention` both held
+  **0** rows afterwards, which is rondo#95's property and the one this entry may not cost.
+- **A form without the token is refused, and so is one from another origin.** `POST` with the
+  iteration and no token: **403**. `POST` with the correct token and `Origin: https://evil.example`:
+  **403**. Neither reached the write port.
+- **The press closed the gate.** `POST` with the token and a loopback `Origin`: **303** to `/`. The
+  terminal `rondo web` was running in showed the same six lines `rondo answer` prints — present,
+  deliver, ack, answer, deliver, ack — and then `iteration 'web-approve-003' is closed`.
+- **The ledger says who, when and what.** continuo's `gate_transition` rows for
+  `g-web-approve-003`:
+
+  | seq | kind | from → to | actor_kind | actor_id | body | at (UTC) |
+  |---|---|---|---|---|---|---|
+  | 8 | advance | received → presented | secretary | happy_ryo | — | 2026-09-12 00:17:35 |
+  | 9 | advance | presented → answered | **human** | **happy_ryo** | **approve** | 2026-09-12 00:17:35 |
+  | 10 | advance | answered → forwarded | secretary | happy_ryo | — | 2026-09-12 00:17:36 |
+  | 11 | close | forwarded → forwarded | system | happy_ryo | — | 2026-09-12 00:17:36 |
+
+  The gate row reads `outcome: answered_and_forwarded`, closed at `00:17:36`; rondo's own row reads
+  `status: closed`, `gate_outcome: answered_and_forwarded`. **Row 9 is rule 5 observed**: the actor
+  the press wrote is `happy_ryo` under `actor_kind: human`, which is `RONDO_APPROVER` and is spelled
+  exactly as the terminal spells it.
+- **What was not measured**: no lap has been answered from the page — the gate above was seeded
+  rather than raised by a worker — and no browser was driven. The token, the `Origin` check and the
+  redirect were exercised with `curl`, which sends the headers a browser sends but is not one.
+
 ### What would falsify it
 
 - **The page acquiring a script, a `fetch`, or any redraw that is not a document GET.** Rule 3(a)
