@@ -94,6 +94,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0054 | The page may run one script, and it is a poller and a morph rather than a framework: liveness decided per view, `D-0041` rule 3a re-founded on the server's types, and one vendored 10 KB file no build ever touches | accepted |
 | D-0055 | The chrome is prose the operator reads, and its language comes from the host's one operator: the line drawn at the span rather than at the string, recorded words left in English, and `<html lang>` naming what rondo actually wrote | accepted |
 | D-0056 | The chrome's language follows the browser and is remembered, and the resolution is never silent: five steps with the first answer winning, the resolved tag put back into the URL, and one cookie that is a memory and not a record | accepted |
+| D-0058 | The second `resume` leaves the handbook: idempotence is a property the suite already proves more strongly than a walk can observe it, the surface keeps one `resume` per answering act on purpose, and no verb is added on the strength of a sentence | accepted |
 
 ---
 
