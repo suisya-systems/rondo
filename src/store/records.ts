@@ -78,7 +78,7 @@ export type IterationStatus =
   | "admitting"
   /** continuo holds the run; no lap has been sent. */
   | "admitted"
-  /** `lap perform` is in flight. The one step that takes minutes. */
+  /** `lap perform` is in flight. The slow step, and no two take the same time. */
   | "performing"
   /** A continuo gate is open on this iteration, and its id is on the row. */
   | "awaiting_human"
