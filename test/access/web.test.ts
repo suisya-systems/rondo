@@ -14,6 +14,8 @@
  * terminal got wrong and this page must not (rondo#90's paragraphs, rondo#91's
  * repeated basis), and both are properties of the bytes that reach a browser.
  */
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { request as httpRequest } from "node:http";
 import { DatabaseSync } from "node:sqlite";
 import { expect, test } from "vitest";
@@ -634,8 +636,11 @@ test("the three questions are told apart in the markup, not only in the order (r
   // dark reader gets rondo's contrast and not the browser's (rondo#153).
   const page = await operatorPage(portsOver(world));
   expect(page).toContain("@media (prefers-color-scheme: dark)");
-  // Still no script, and still nothing but the one form that can write.
-  expect(page).not.toContain("<script");
+  // Still no *inline* script, and still nothing but the one form that can
+  // write. D-0054 put two `<script src>` tags on this view and nothing else:
+  // what the page executes is files this tree holds and a reader can diff
+  // against the pin, which an inline script would not be.
+  expect(page).not.toMatch(/<script(?![^>]*\bsrc=)/);
 });
 
 test("a lap at a gate carries its cost and its fence beside the button (rondo#145)", async () => {
@@ -681,9 +686,13 @@ test("a lap at a gate carries its cost and its fence beside the button (rondo#14
   expect(answering).toContain("snapshot /iteration/lapCostUsd = 1.42");
   expect(answering).toContain("snapshot /iteration/lapDurationMs = null");
   expect(answering).toContain("work    rondo/i-0001");
-  // The redraw is pointed back at the view being read, so the page an operator
-  // is deciding on is still there five seconds later.
-  expect(answering).toContain('content="5;url=/?answer=i-0001"');
+  // **And it holds still while they read it** (D-0054 rule 1). This view used
+  // to point a meta refresh back at itself, which kept the address but still
+  // threw the document away under the reader every five seconds -- rondo#160's
+  // complaint, observed on lapja-001. It now updates by nothing at all, and
+  // nothing is staler for it: D-0042 re-composes this framing at press time and
+  // refuses a press naming a row that is not there.
+  expect(answering).not.toContain('http-equiv="refresh"');
 
   // A summary reads neither the framing nor the material: both cost a read per
   // row, on a surface that redraws every five seconds.
@@ -787,4 +796,251 @@ test("a lap nobody asked a language of carries no lang at all, and that is not `
   expect(html).toContain('<pre class="material">');
   expect(html).not.toContain('class="request" lang=');
   expect(html).not.toContain('class="material" lang=');
+});
+
+/**
+ * The two files a live view loads, resolved from the repository root the way
+ * `src/access/web.ts` resolves them.
+ */
+const ROOT = new URL("../../", import.meta.url);
+
+const bytesOf = (path: string): Buffer => readFileSync(new URL(path, ROOT));
+
+const digestOf = (bytes: Buffer | string): string =>
+  createHash("sha256").update(bytes).digest("hex");
+
+/**
+ * The digest and the size D-0054 measured, written out here rather than read
+ * off the tree.
+ *
+ * A test that hashed the file and compared it to the digest file beside it
+ * would agree with itself after any bump: both would move together, and the
+ * question *is this the release the decision priced* would stop being asked.
+ * These two constants are the decision's own measurements (D-0054, "what was
+ * measured, and how"), so a version bump fails here and has to be re-argued
+ * rather than re-recorded -- which is the falsifier that entry names.
+ */
+const IDIOMORPH_SHA256 = "4cbd535caf7663a51eda9bce6595371c384fc430d54b8d414e29a61167f19f96";
+const IDIOMORPH_BYTES = 10_587;
+
+/** Every `<script>` start tag in one document. */
+const scriptTagsIn = (html: string): readonly string[] =>
+  [...html.matchAll(/<script\b[^>]*>/g)].map((found) => found[0]);
+
+/** What is left of a document when its scripts never run (D-0054 rule 7). */
+const withoutScripts = (html: string): string =>
+  html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/g, "");
+
+/** `page/poll.js` with its commentary removed, so a claim is read off code. */
+const pollCode = (): string =>
+  bytesOf("page/poll.js")
+    .toString("utf8")
+    .split("\n")
+    .filter((line) => !/^\s*\/\//.test(line))
+    .join("\n");
+
+test("liveness is per view: two views poll and morph, and the answer view updates by nothing", async () => {
+  const world = fresh();
+  await reserve(world, "i-0001", "do the thing");
+  await openGate(world, "i-0001");
+  const ports = portsOver(world, "ada", []);
+
+  const summary = await operatorPage(ports, "t");
+  const opened = await operatorPage(ports, "t", { kind: "reading" });
+  const answering = await operatorPage(ports, "t", { kind: "answer", iterationId: "i-0001" });
+
+  for (const [html, href] of [
+    [summary, "/"],
+    [opened, "/?reading=open"],
+  ] as const) {
+    // The two files, in the order that makes `Idiomorph` defined before the
+    // poller runs, and both deferred so neither runs before the document.
+    expect(scriptTagsIn(html)).toEqual([
+      '<script src="/idiomorph-0.8.0.min.js" defer>',
+      '<script src="/poll.js" defer>',
+    ]);
+    // **Served by this process, from this tree** (D-0054 rule 5): root-relative
+    // paths and no scheme anywhere in either tag, because a CDN tag is the one
+    // distribution that entry refuses.
+    expect(html).not.toContain("//cdn");
+    expect(scriptTagsIn(html).filter((tag) => tag.includes("://"))).toEqual([]);
+    // The meta refresh has not been deleted -- it has moved, and it is what a
+    // browser with scripting off still runs on.
+    expect(html).toContain(`<noscript><meta http-equiv="refresh" content="5;url=${href}">`);
+    expect(html).toContain("Redraws every 5s, and a redraw writes nothing");
+  }
+
+  // **The answer view updates by nothing at all** (D-0054 rule 1): no script,
+  // no refresh, not even inside `<noscript>` -- it has no auto-update in either
+  // mode, so there is nothing to degrade to. This is rondo#160's largest
+  // complaint answered by deletion, and the page says so where the other two
+  // say the opposite.
+  expect(scriptTagsIn(answering)).toEqual([]);
+  expect(answering).not.toContain('http-equiv="refresh"');
+  expect(answering).not.toContain("<noscript>");
+  expect(answering).toContain("This view does not update itself");
+  // And it is still the view with the button on it.
+  expect(answering).toContain('method="post"');
+});
+
+test("every view is whole with the script gone", async () => {
+  const world = fresh();
+  await reserve(world, "i-0001", "do the thing");
+  await openGate(world, "i-0001");
+  const ports = portsOver(world, "ada", []);
+
+  // The document a browser with scripting disabled draws, and the document a
+  // browser whose `/poll.js` 404s is left holding: the same one, because
+  // nothing on this page is produced by script (D-0054 rule 7).
+  const summary = withoutScripts(await operatorPage(ports, "t"));
+  const opened = withoutScripts(await operatorPage(ports, "t", { kind: "reading" }));
+  const answering = withoutScripts(
+    await operatorPage(ports, "t", { kind: "answer", iterationId: "i-0001" }),
+  );
+
+  // What needs the operator, where to go to answer it, and the liveness a
+  // scriptless browser has.
+  expect(summary).toContain("do the thing");
+  expect(summary).toContain("waiting for your answer");
+  expect(summary).toContain('href="/?answer=i-0001"');
+  expect(summary).toContain('<meta http-equiv="refresh" content="5;url=/">');
+
+  // Every claim under its own basis, unchanged.
+  expect(opened).toContain("inbox for 'ada'");
+  expect(opened).toContain("iteration 'i-0001'");
+
+  // **And the press**: the form, the gate it answers, the one word it carries
+  // and the material it is answered over. A button only script renders is the
+  // first thing rule 7 names as a violation of it.
+  expect(answering).toContain('method="post"');
+  expect(answering).toContain("<button");
+  expect(answering).toContain("gate-i-0001");
+  expect(answering).toContain("work    rondo/i-0001");
+  expect(tokenIn(answering)).toBe("t");
+});
+
+test("an unattended poll writes nothing, however many times it goes round", async () => {
+  const world = fresh();
+  await reserve(world, "i-0001", "do the thing");
+  await openGate(world, "i-0001");
+  const pressed: Pressed = [];
+  // With an approver, so the write port exists and is simply never reached: a
+  // page that wrote nothing because it had nothing to write with would not be
+  // asserting anything (D-0041 rule 4).
+  const { base, stop, served } = await serving(portsOver(world, "ada", pressed));
+
+  // **What the script does, done over the socket the script would use.** Five
+  // rounds of each live view plus the answering one, which is what a page left
+  // open on a desk for half a minute issues while nobody is there. Every one of
+  // them is the request `page/poll.js` makes -- a `GET` of the address being
+  // read -- and every one reaches a renderer holding only the read ports, which
+  // after D-0054 rule 3 is the whole of what stands between an unattended
+  // redraw and the ledger.
+  for (let poll = 0; poll < 5; poll += 1) {
+    for (const address of ["/", "/?reading=open", "/?answer=i-0001"]) {
+      expect((await fetch(`${base}${address}`)).status).toBe(200);
+    }
+  }
+
+  // The four tables a presentation, a look, a decision or a proposal would
+  // land in (D-0042, D-0032 rules 9 and 10).
+  expect(rows(world.connection, "proposal")).toBe(0);
+  expect(rows(world.connection, "operator_attention")).toBe(0);
+  expect(rows(world.connection, "operator_view")).toBe(0);
+  expect(rows(world.connection, "human_decision")).toBe(0);
+  // And nothing was answered, which is the same claim at the other port.
+  expect(pressed).toEqual([]);
+
+  stop.abort();
+  expect(await served).toBe(0);
+});
+
+test("it serves the two script files, as the bytes the tree holds", async () => {
+  const world = fresh();
+  await reserve(world, "i-0001", "do the thing");
+  const { base, stop, served } = await serving(portsOver(world));
+
+  const morph = await fetch(`${base}/idiomorph-0.8.0.min.js`);
+  expect(morph.status).toBe(200);
+  expect(morph.headers.get("content-type")).toBe("text/javascript; charset=utf-8");
+  // **The served bytes are the pinned bytes.** Not "a file was served": the
+  // digest of what came down the socket, against the digest D-0054 recorded.
+  const served256 = digestOf(Buffer.from(await morph.arrayBuffer()));
+  expect(served256).toBe(IDIOMORPH_SHA256);
+
+  const poll = await fetch(`${base}/poll.js`);
+  expect(poll.status).toBe(200);
+  expect(digestOf(Buffer.from(await poll.arrayBuffer()))).toBe(digestOf(bytesOf("page/poll.js")));
+
+  // Still one page and two files, and no directory behind them: a path rondo
+  // did not choose to serve is a 404 even when a file of that name exists.
+  expect((await fetch(`${base}/idiomorph.js`)).status).toBe(404);
+  expect((await fetch(`${base}/package.json`)).status).toBe(404);
+  expect((await fetch(`${base}/../package.json`)).status).toBe(404);
+  // And a script path is not a second door: the only writable address is `/`,
+  // so a POST to one is the same 404 a POST to any other path is.
+  expect((await fetch(`${base}/poll.js`, { method: "POST" })).status).toBe(404);
+
+  stop.abort();
+  expect(await served).toBe(0);
+});
+
+test("the vendored morph is the release D-0054 priced, and the pin checks it", () => {
+  const vendored = bytesOf("vendor/idiomorph-0.8.0.min.js");
+
+  // The two measurements out of the entry itself.
+  expect(vendored.byteLength).toBe(IDIOMORPH_BYTES);
+  expect(digestOf(vendored)).toBe(IDIOMORPH_SHA256);
+
+  // Recorded beside it, in the file `vendor/pin.mjs` reads.
+  expect(bytesOf("vendor/idiomorph-0.8.0.min.js.sha256").toString("utf8").trim()).toBe(
+    IDIOMORPH_SHA256,
+  );
+  // And the helper checks *this* artifact and not only cadenza's tarball: it is
+  // a list since D-0054, and a digest file nothing checks is a digest file.
+  const helper = bytesOf("vendor/pin.mjs").toString("utf8");
+  expect(helper).toContain("vendor/idiomorph-0.8.0.min.js");
+  expect(helper).toContain("vendor/idiomorph-0.8.0.min.js.sha256");
+
+  // The distribution D-0007 requires, asserted as the absence of the one it
+  // refuses: the file is in the tree, and nothing fetches it at runtime.
+  expect(vendored.toString("utf8")).not.toContain("cdn.jsdelivr.net");
+  expect(vendored.toString("utf8")).not.toContain("unpkg.com");
+  // It is a classic script defining the one global `page/poll.js` calls, which
+  // is why the page needs no module graph and no build step.
+  expect(vendored.toString("utf8").startsWith("var Idiomorph=")).toBe(true);
+});
+
+test("rondo's own script has one method, one address and one target", () => {
+  const code = pollCode();
+
+  // **One address**: the view being read, and nothing derived from it.
+  expect(code).toContain("fetch(location.href");
+  expect([...code.matchAll(/fetch\(/g)]).toHaveLength(1);
+
+  // **One target**: the document, morphed in place.
+  expect(code).toContain("Idiomorph.morph(document");
+  expect([...code.matchAll(/Idiomorph\./g)]).toHaveLength(1);
+
+  // **One method**, which is the read the server answers. This is the whole of
+  // what is left of D-0041 rule 3(a)'s client-side half (D-0054 rules 4 and 6),
+  // so it is asserted as the absence of every way of asking for anything else:
+  // no method of its own, no second transport, no form to submit, no state.
+  for (const forbidden of [
+    "POST",
+    "method",
+    "XMLHttpRequest",
+    "EventSource",
+    "WebSocket",
+    "sendBeacon",
+    "FormData",
+    "submit",
+    "localStorage",
+    "sessionStorage",
+    "eval",
+    "innerHTML",
+    "document.write",
+  ]) {
+    expect(code).not.toContain(forbidden);
+  }
 });

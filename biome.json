@@ -6,7 +6,7 @@
     "useIgnoreFile": true
   },
   "files": {
-    "includes": ["**", "!package-lock.json"]
+    "includes": ["**", "!package-lock.json", "!vendor/idiomorph-0.8.0.min.js"]
   },
   "formatter": {
     "enabled": true,
