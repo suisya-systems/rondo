@@ -1113,13 +1113,16 @@ Recorded so that "it works" is not read more broadly than it was tested.
   tests, but no fork has been published through this command yet.
 - After the walk, continuo's run row was still `created` and rondo's row still recorded no publish,
   which is the correct state for work that was approved but not yet submitted.
-- **`propose` (all three kinds), `decide` and `retry`: not walked at all.** All three are exercised
-  end to end against a real SQLite store -- the proposal row, every composition row, the digests on
-  the screen, the decision that names one (`test/access/advisory.test.ts`) and the admission that
-  spends it (`test/access/decision-consumption.test.ts`, over an injected continuo seam) -- and none
-  of them has been run by an operator on real infrastructure. What a walk of `retry` would add over
-  the tests is the continuo half of the arc it drives, which is the same half `start` is walked
-  for.
+- **`propose`, `decide` and `retry`: walked on real infrastructure for `contract_keys` only.** On
+  2026-09-12 the whole chain was driven by an operator against the pinned continuo
+  ([`lap-6-dogfood.md`](lap-6-dogfood.md)): a lap stopped at `abandoned` and left a proposal of its
+  own accord (`D-0043`), the proposal was read, approved and spent by `rondo retry`, the retry's lap
+  ran and reached its gate, a second `retry` was refused as already spent, and a `retry` whose
+  approved digest no option composes was refused with nothing admitted and nothing spent. **The
+  other two kinds -- `run_plan` and `agent_type` -- are still unwalked**, as is a proposal made by
+  `rondo propose` rather than by the automatic trigger; all three remain exercised end to end
+  against a real SQLite store (`test/access/advisory.test.ts`,
+  `test/access/decision-consumption.test.ts`) and nowhere else.
 
 ### The second walk: from nothing, through `scripts/dogfood-env.sh`
 
