@@ -23,8 +23,9 @@
 # tells its reader to put all of it here. Ignored in the repository rather than in
 # one machine's .git/info/exclude, because the reader following that procedure is
 # on a fresh clone and would otherwise be one `git add -A` away from committing a
-# control plane. `scripts/dogfood-env.sh` defaults its --root to a directory under
-# here for the same reason.
+# control plane. (`scripts/dogfood-env.sh` used to default its --root under here for
+# the same reason; it now defaults outside the repository, because a workspace cut
+# inside an installed checkout borrows that checkout's toolchain -- rondo#111.)
 /.worker-scratch/
 
 # --- Node / TypeScript ---
