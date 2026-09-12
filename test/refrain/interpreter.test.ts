@@ -381,6 +381,7 @@ function successfulAnswers(): Answers {
         costUsd: LAP_COST_USD,
         turns: LAP_TURNS,
         durationMs: LAP_DURATION_MS,
+        spendSource: "resultEvent",
       },
     },
     showGate: {
@@ -706,6 +707,7 @@ test("a lap whose transcript rondo could not read keeps three nulls, not three z
         costUsd: null,
         turns: null,
         durationMs: null,
+        spendSource: "unread",
       },
     },
   });
@@ -719,6 +721,48 @@ test("a lap whose transcript rondo could not read keeps three nulls, not three z
   // Said rather than left out: a report silent about cost is silent for two
   // different reasons and a reader cannot tell which.
   expect(says(report, "read no cost")).toBe(true);
+});
+
+test("three nulls are explained by the read that produced them, not by one guess", async () => {
+  // rondo#130. Every one of these rows keeps three nulls, and the reason for
+  // them is a different fact each time. The old line asserted the first for all
+  // three, which on lap 6 was false: the transcript was read and the fake
+  // worker's `result` event simply carries no accounting.
+  const sentences = new Map<LapPerformance["spendSource"], string>();
+  for (const spendSource of ["unread", "resultEventAbsent", "resultEvent"] as const) {
+    const h = harness({
+      performLap: {
+        kind: "answered",
+        value: {
+          runId: ALLOCATED_RUN_ID,
+          gateId: "gate-1",
+          sessionId: "session-1",
+          sessionPath: "started",
+          endpointLeaseFailure: null,
+          elapsedDeadlineAtMs: null,
+          model: MODEL,
+          requestedModel: MODEL,
+          permissionDenials: "[]",
+          costUsd: null,
+          turns: null,
+          durationMs: null,
+          spendSource,
+        },
+      },
+    });
+    const report = await admitOnce(h);
+    const line = report.lines.find((text) => text.includes("read no cost"));
+    expect(line, spendSource).toBeDefined();
+    sentences.set(spendSource, line ?? "");
+  }
+
+  // Three reads, three sentences, and no two of them the same.
+  expect(new Set(sentences.values()).size).toBe(3);
+  // A transcript that was read is never reported as one that was not.
+  expect(sentences.get("resultEvent")).toContain("was read and carried none of the three");
+  expect(sentences.get("resultEvent")).not.toContain("not readable");
+  expect(sentences.get("resultEventAbsent")).toContain("carries no terminal 'result' event");
+  expect(sentences.get("unread")).toContain("not readable under the state root");
 });
 
 test("the row at the open gate carries the gate, the session and the walk's name", async () => {
@@ -767,6 +811,7 @@ test("what a lap reported that the row has no column for is not lost", async () 
         costUsd: null,
         turns: null,
         durationMs: null,
+        spendSource: "unread",
       },
     },
   });
@@ -1312,6 +1357,7 @@ test("a withdrawal keeps what the lap already recorded on the row", async () => 
         costUsd: null,
         turns: null,
         durationMs: null,
+        spendSource: "unread",
       },
     },
   });
@@ -1405,6 +1451,7 @@ test("abandon settles a row it cannot read, and the lock is genuinely released",
       costUsd: null,
       turns: null,
       durationMs: null,
+      spendSource: "unread",
     },
   };
   const second = await admitOnce(h, "i-0002");
@@ -1752,6 +1799,7 @@ test("a lap answering for another run stalls rather than adopting its gate", asy
         costUsd: null,
         turns: null,
         durationMs: null,
+        spendSource: "unread",
       },
     },
   });
@@ -1783,6 +1831,7 @@ test("a lap that ran on another model stalls, and the open gate is named first",
         costUsd: null,
         turns: null,
         durationMs: null,
+        spendSource: "unread",
       },
     },
   });
@@ -1817,6 +1866,7 @@ test("a lap that named no model at all is the same stall, spelled for a reader",
         costUsd: null,
         turns: null,
         durationMs: null,
+        spendSource: "unread",
       },
     },
   });
@@ -1874,6 +1924,7 @@ test("a reason contained in an earlier one is still recorded", async () => {
         costUsd: null,
         turns: null,
         durationMs: null,
+        spendSource: "unread",
       },
     },
   });

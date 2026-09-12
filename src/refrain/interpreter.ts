@@ -1750,13 +1750,17 @@ async function planOf(
  * not a line to drop. The numbers are printed as read -- no rounding, no
  * currency formatting, no estimate of what a missing one might have been -- and
  * every character is ASCII (D-0004).
+ *
+ * **Three nulls get the sentence for the read that produced them** (rondo#130).
+ * They used to get one sentence saying the event "was not readable under the
+ * state root", which for a lap walked by a fake worker was false in its
+ * explanation while true in its conclusion: the transcript was read and simply
+ * carries no accounting. The line now says what the port observed and nothing
+ * past it, which is `D-0032` applied to the one place the collapse was visible.
  */
 function spendLine(lap: LapPerformance): string {
   if (lap.costUsd === null && lap.turns === null && lap.durationMs === null) {
-    return (
-      "rondo read no cost for this lap: its terminal 'result' event was not readable under the " +
-      "state root. The row keeps three nulls rather than a zero."
-    );
+    return `rondo read no cost for this lap: ${unreadSpendReason(lap.spendSource)} The row keeps three nulls rather than a zero.`;
   }
   return (
     `The lap cost ${spelledNumber(lap.costUsd)} USD over ${spelledNumber(lap.turns)} turn(s) in ` +
@@ -1764,9 +1768,27 @@ function spendLine(lap: LapPerformance): string {
   );
 }
 
-/** One number of the three, or the word for the one rondo did not read. */
+/** Why the three are null, in the words of the read that produced them. */
+function unreadSpendReason(source: LapPerformance["spendSource"]): string {
+  switch (source) {
+    case "unread":
+      return "its transcript was not readable under the state root.";
+    case "resultEventAbsent":
+      return "its transcript was read and carries no terminal 'result' event.";
+    case "resultEvent":
+      return "its terminal 'result' event was read and carried none of the three numbers.";
+  }
+}
+
+/**
+ * One number of the three, or the word for the one the event did not carry.
+ *
+ * Reached only when at least one of the three is a number, so the transcript
+ * and its `result` event were both read: a null here is a key the event carried
+ * no number under, and never a read that failed.
+ */
 function spelledNumber(value: number | null): string {
-  return value === null ? "(unread)" : String(value);
+  return value === null ? "(not carried)" : String(value);
 }
 
 function spelledModel(model: string | null): string {

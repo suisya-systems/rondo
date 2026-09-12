@@ -204,9 +204,18 @@ function readLapSpendFields(
   stateRoot: string,
   runId: string,
   sessionId: string,
-): Pick<LapPerformance, "costUsd" | "turns" | "durationMs"> {
+): Pick<LapPerformance, "costUsd" | "turns" | "durationMs" | "spendSource"> {
   const spend = readLapSpend({ stateRoot, runId, sessionId });
-  return { costUsd: spend.totalCostUsd, turns: spend.numTurns, durationMs: spend.durationMs };
+  return {
+    costUsd: spend.totalCostUsd,
+    turns: spend.numTurns,
+    durationMs: spend.durationMs,
+    // The fourth value, and it is not a number: which read produced the three
+    // above, so the report can say why they are null instead of guessing
+    // (rondo#130). The two sides spell the union identically and the type is
+    // declared on both, so a value added on one side stops compiling here.
+    spendSource: spend.source,
+  };
 }
 
 /**
