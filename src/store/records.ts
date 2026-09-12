@@ -579,7 +579,13 @@ export interface OperatorVerificationClaim {
  * other, and a second spelling of this string is a mislabelled row nobody would
  * notice.
  */
-export const DETERMINISTIC_READING_DRAFTER = "rondo/deterministic/1";
+export const DETERMINISTIC_READING_DRAFTER = "rondo/deterministic/2";
+
+/**
+ * The same reader before D-0060, which read committed history only. Its rows
+ * are still in stores, and still say what that reader covered.
+ */
+const DETERMINISTIC_READING_DRAFTER_V1 = "rondo/deterministic/1";
 
 /**
  * What a reading by this drafter did *not* look at, said wherever it says what
@@ -604,7 +610,7 @@ export const DETERMINISTIC_READING_DRAFTER = "rondo/deterministic/1";
  * that its reach is not recorded rather than guessing at it.
  */
 export function readingCoverage(drafter: string): readonly string[] {
-  if (drafter !== DETERMINISTIC_READING_DRAFTER) {
+  if (drafter !== DETERMINISTIC_READING_DRAFTER && drafter !== DETERMINISTIC_READING_DRAFTER_V1) {
     return Object.freeze([
       "What this reader looked at is not recorded, so nothing here says what it covered.",
     ]);
@@ -615,7 +621,9 @@ export function readingCoverage(drafter: string): readonly string[] {
   return Object.freeze([
     "It built nothing, ran nothing and tested nothing: rondo cannot run a lap's work.",
     "Whether the verification this lap was asked for ran is neither checked nor claimed here.",
-    "It read committed history only, and it cannot tell whether the lap did what was asked.",
+    drafter === DETERMINISTIC_READING_DRAFTER_V1
+      ? "It read committed history only, and it cannot tell whether the lap did what was asked."
+      : "It read committed history and git status, and cannot tell whether the lap did what was asked.",
   ]);
 }
 

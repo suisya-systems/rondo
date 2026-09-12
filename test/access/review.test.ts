@@ -26,6 +26,8 @@ function read(
     tipCommit: TIP,
     commits: [{ abbreviatedSha: "cfa4502", subject: "feat: do the thing" }],
     files: [{ path: "src/thing.ts", added: 12, deleted: 3 }],
+    uncommitted: [],
+    checkedOut: "topic",
     ...parts,
   };
 }
@@ -125,4 +127,46 @@ test("evidenceOf and readingOf compute the same measurement", () => {
 
 test("the drafter is versioned, so an old row does not read as today's rules", () => {
   expect(DETERMINISTIC_READING_DRAFTER).toMatch(/^rondo\/deterministic\/\d+$/);
+});
+
+test("D-0060, all uncommitted: the missing sentence sits beside 'left nothing'", () => {
+  const reading = readingOf(
+    read({ tipCommit: BASE, commits: [], files: [], uncommitted: ["a.txt", "new.txt"] }),
+  );
+
+  expect(reading.verdict).toBe("concerns");
+  expect(reading.findings.some((line) => line.includes("left nothing"))).toBe(true);
+  expect(reading.findings).toContain(
+    "the workspace holds 2 uncommitted path(s) that are not on the topic branch: a.txt, new.txt",
+  );
+});
+
+test("D-0060, partly committed: the uncommitted finding alone turns clear into concerns", () => {
+  // **The case that used to read clear and publish without the rest.** Deleting
+  // the finding is the mutation that must make this red.
+  const partial = read({
+    commits: [{ abbreviatedSha: "1234567", subject: "add b" }],
+    files: [{ path: "b.txt", added: 1, deleted: 0 }],
+    uncommitted: ["a.txt", "b.txt", "c.txt"],
+  });
+
+  const reading = readingOf(partial);
+
+  expect(reading.verdict).toBe("concerns");
+  expect(reading.findings).toEqual([
+    "the workspace holds 3 uncommitted path(s) that are not on the topic branch: a.txt, b.txt, c.txt",
+  ]);
+  // Rule 3: the material digest is unchanged by what was left on disk.
+  expect(reading.evidence?.materialDigest).toBe(materialDigestOf({ ...partial, uncommitted: [] }));
+});
+
+test("the uncommitted finding names the first LIST_LIMIT paths and counts the rest", () => {
+  const paths = Array.from({ length: 25 }, (_, index) => `p${String(index)}.txt`);
+
+  const [finding] = readingOf(read({ uncommitted: paths })).findings;
+
+  expect(finding).toContain("25 uncommitted path(s)");
+  expect(finding).toContain("p19.txt");
+  expect(finding).not.toContain("p20.txt");
+  expect(finding).toContain("(and 5 more)");
 });

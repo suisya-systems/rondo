@@ -47,6 +47,22 @@ import type { LapWorkInspection } from "./forge.js";
  */
 export const READING_REMOTE = "origin";
 
+/** How many commits, paths or uncommitted paths a list names before it counts the rest. */
+export const LIST_LIMIT = 20;
+
+/**
+ * "N uncommitted path(s) ...: a, b (and K more)", the one spelling the
+ * reading's finding and `publish`'s refusal share, so the two cannot count
+ * differently. Bounded by `LIST_LIMIT` and saying how many it hid.
+ */
+export function uncommittedPaths(paths: readonly string[], where: string): string {
+  const hidden = paths.length - LIST_LIMIT;
+  return (
+    `${String(paths.length)} uncommitted path(s) ${where}: ${paths.slice(0, LIST_LIMIT).join(", ")}` +
+    `${hidden > 0 ? ` (and ${String(hidden)} more)` : ""}`
+  );
+}
+
 /**
  * The digest of the material a reading was taken over.
  *
@@ -141,6 +157,16 @@ export function readingOf(inspection: LapWorkInspection): LapReadingDraft {
   }
   if (inspection.files.length === 0) {
     findings.push(`the topic branch changes no files against ${inspection.baseRef}`);
+  }
+  // **The finding a partly-committed lap used to pass without** (D-0060 rule
+  // 2). The three above ask where the branch is; this one asks what the branch
+  // is not carrying, and it is the only one that can turn a branch with real
+  // commits away from `clear`. It says what `git status` listed and nothing
+  // about what the paths contain, because nothing here looked (rule 7).
+  if (inspection.uncommitted.length > 0) {
+    findings.push(
+      `the workspace holds ${uncommittedPaths(inspection.uncommitted, "that are not on the topic branch")}`,
+    );
   }
 
   return {

@@ -445,6 +445,22 @@ export type LapWorkInspection =
       /** Oldest first: the order the lap built the work, which is the order it reads in. */
       readonly commits: readonly LapCommit[];
       readonly files: readonly LapFile[];
+      /**
+       * Paths `git status` lists in the workspace, in its order (D-0060 rule 1).
+       *
+       * What git counts: tracked paths modified, staged or deleted, and
+       * untracked paths that are not ignored. None of them is on the topic
+       * branch, so none of them is in a push. **Not in the material digest**
+       * (rule 3): they are what a push would leave behind, not what it carries.
+       */
+      readonly uncommitted: readonly string[];
+      /**
+       * What the workspace has checked out, as `git status --branch` names it
+       * (`topic`, `HEAD (no branch)`, ...). The uncommitted paths are relative
+       * to that, which is not always the topic branch -- D-0060's second
+       * residual asks the refusal to say which branch it read.
+       */
+      readonly checkedOut: string;
     }
   | { readonly kind: "unreadable"; readonly reason: string };
 
@@ -606,5 +622,60 @@ export async function inspectLapWork(request: LapWorkRequest): Promise<LapWorkIn
     });
   }
 
-  return { kind: "read", baseRef, baseCommit, tipCommit, commits, files };
+  // **What the branch does not hold** (D-0060 rule 1). `-z` so a path arrives
+  // as it is rather than as a C string literal, for the reason the diff above
+  // sets `core.quotePath=false`. `--untracked-files=normal` spelled out because
+  // `status.showUntrackedFiles=no` in someone's config would otherwise make an
+  // untracked file read as absent -- the silent loss this query exists to end.
+  // Ignored paths are left out by git's default, which is the repository's own
+  // statement that they are not work. A failure is `unreadable`, never "clean".
+  const status = await runCommand(
+    "git",
+    [
+      "-C",
+      request.workspace,
+      "status",
+      "--porcelain=v1",
+      "-z",
+      "--branch",
+      "--untracked-files=normal",
+    ],
+    PREFLIGHT_TIMEOUT_MS,
+  );
+  const statusFailure = queryFailure(status);
+  if (statusFailure !== null) {
+    return { kind: "unreadable", reason: statusFailure };
+  }
+  const uncommitted: string[] = [];
+  let checkedOut = "";
+  const entries = status.stdout.split("\0");
+  for (let index = 0; index < entries.length; index += 1) {
+    const entry = entries[index] ?? "";
+    if (entry.startsWith("## ")) {
+      // `topic...origin/topic [ahead 1]` is the branch and its upstream; the
+      // branch is the part this names.
+      checkedOut = entry.slice(3).split("...")[0] ?? "";
+      continue;
+    }
+    if (entry.length < 4) {
+      continue;
+    }
+    uncommitted.push(entry.slice(3));
+    // A rename or copy is followed by its source path as an entry of its own,
+    // which is not a second change.
+    if (/[RC]/.test(entry.slice(0, 2))) {
+      index += 1;
+    }
+  }
+
+  return {
+    kind: "read",
+    baseRef,
+    baseCommit,
+    tipCommit,
+    commits,
+    files,
+    uncommitted,
+    checkedOut,
+  };
 }

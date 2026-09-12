@@ -41,6 +41,7 @@ import {
   revisionBlocker,
   transcriptPort,
   USAGE,
+  uncommittedRefusal,
   walkGate,
   workLines,
 } from "../../src/access/cli.js";
@@ -1136,6 +1137,8 @@ function worked(
     tipCommit: "a".repeat(40),
     commits: [{ abbreviatedSha: "cfa4502", subject: "docs: record the first real lap" }],
     files: [{ path: "docs/operations/rondo-cli.md", added: 1, deleted: 0 }],
+    uncommitted: [],
+    checkedOut: "docs/rondo-first-real-lap",
     ...parts,
   };
 }
@@ -2122,4 +2125,40 @@ test("the terminal's wording is ASCII, which is what D-0004's escape needs", () 
   for (const line of spelled) {
     expect(line, `not printable ASCII: ${line}`).toMatch(/^[ -~\n]*$/);
   }
+});
+
+test("D-0060: a partly-committed workspace passes reviewGate, and publish refuses it anyway", () => {
+  // **The silent publish.** The material digest does not cover what was left
+  // on disk (rule 3), so a clear reading stays "ready" -- which is exactly why
+  // the refusal is checked on its own. Removing it makes this red.
+  const partial = worked({ uncommitted: ["a.txt", "b.txt", "c.txt"] });
+  expect(reviewGate(reviewed(), partial, false)).toEqual({ kind: "ready" });
+
+  const refusal = uncommittedRefusal(partial, "/work/lap", "docs/rondo-first-real-lap");
+
+  expect(refusal).toContain("/work/lap");
+  expect(refusal).toContain("3 uncommitted path(s)");
+  expect(refusal).toContain("a.txt, b.txt, c.txt");
+  expect(refusal).toContain("leave them behind");
+  expect(refusal).toContain("--despite-review does not change that");
+  expect(refusal).toContain("rondo retry");
+  expect(refusal).toContain("commit them by hand");
+  expect(refusal).toContain(".git/info/exclude");
+  expect(refusal).not.toContain("checked out");
+});
+
+test("D-0060: a clean or unreadable workspace is not refused here", () => {
+  expect(uncommittedRefusal(worked(), "/work/lap", "docs/rondo-first-real-lap")).toBeNull();
+  // `reviewGate` refuses the unreadable one; this refusal is about paths git listed.
+  expect(uncommittedRefusal({ kind: "unreadable", reason: "x" }, "/work/lap", "topic")).toBeNull();
+});
+
+test("D-0060: the refusal says which branch it read when it is not the topic branch", () => {
+  const refusal = uncommittedRefusal(
+    worked({ uncommitted: ["a.txt"], checkedOut: "HEAD (no branch)" }),
+    "/work/lap",
+    "docs/rondo-first-real-lap",
+  );
+
+  expect(refusal).toContain("'HEAD (no branch)' checked out, not 'docs/rondo-first-real-lap'");
 });
