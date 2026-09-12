@@ -14405,7 +14405,7 @@ scratch directory (the "prototype source"). Line numbers drift; re-measure the c
 
       | Reason | True when | Bases |
       |---|---|---|
-      | **`overdue`** | the latest lap is on the *in flight* side and `now - updated_at_ms` exceeds its plan's `invocationCeilingMs` (section 2, finding F1) | the iteration and its plan |
+      | **`overdue`** | the latest lap is on the *in flight* side and `now - updated_at_ms` exceeds its plan's `invocationCeilingMs`, **or** an F1 episode is already recorded for that iteration at its current status (section 2, rules 1 and 3.1), which keeps a lap `overdue` after `holdAt` refreshes `updated_at_ms` | the iteration, its plan, and the F1 `presented` row when there is one |
       | **`waiting_on_you`** | the latest lap's status is on `D-0036` rule 5's *waiting on you* side; or a message with `asks` set and no reply stands over the line (`D-0066` rule 4.2's reading of bases); or a scope that would cover the plan is presented and has no `scope_decision`; or the lap is `closed` and its lineage is open in `D-0067` rule 2's sense, since `publish` and merge are a person's today | the iteration, the message or the scope row |
       | **`held_by_order`** | an in-force `sequence` names the line as `then` and its `until` fact is not recorded (`D-0067` rule 4) | the `sequence` row, `first`'s latest `iteration_id`, and **`first`'s own wait reading**, followed along `first` until a line not held by order |
       | **`held_by_bound`** | the plan's last admission attempt wrote an `admission_refusal` row and no admission has followed (`D-0023`) | the refusal row |
@@ -14471,15 +14471,17 @@ scratch directory (the "prototype source"). Line numbers drift; re-measure the c
       out rather than guarded. **While no resident host runs, nothing patrols** (section 5).
 3. **What it writes, and what it never does.**
    1. **A finding reaches the person once per episode.** Before writing a message, the tick writes a
-      `presented` row with `subject_kind` `patrol` and `subject_id` `<finding>:<subject id>:<the
-      subject's status>`, through `D-0036` rule 1's index. **The message is written in the same
-      transaction, only when that row was inserted.** For F1 the subject is the iteration, and **both
-      triggers (section 2, rule 2.2) write the same key**: `holdAt`'s same-status write refreshes
-      `updated_at_ms` and not the status, so a tick that sees the ceiling pass and the `noAnswer` arm
-      that follows are one episode. An iteration walks its in-flight statuses forward and never
-      re-enters one (`nextStep`, `src/refrain/loop.ts`), so a lap overdue at `admitting` and later at
-      `performing` is two episodes. For F2 and F3 the subject is the `sequence` row and the status is
-      `first`'s. A finding that stays true is not re-sent. No table and no column is added.
+      `presented` row with `subject_kind` `patrol` and `subject_id` `<finding>:<episode>`, through
+      `D-0036` rule 1's index. **The message is written in the same transaction, only when that row
+      was inserted.** For F1 the episode is the iteration id and its status, and **both triggers
+      (section 2, rule 2.2) write the same key**: `holdAt`'s same-status write refreshes
+      `updated_at_ms` and not the status, so a tick that sees the ceiling pass and the `noAnswer`
+      arm that follows are one episode. An iteration walks its in-flight statuses forward and never
+      re-enters one (`nextStep`, `src/refrain/loop.ts`), so a lap overdue at `admitting` and later
+      at `performing` is two episodes. For F2 the episode is the `sequence` id and `first`'s latest
+      `iteration_id`, so a redo of `first` is a new one; for F3 it is the `sequence` id and the
+      `scope_decision_id` whose test failed, and neither moves when `first` changes status. A
+      finding that stays true is not re-sent. No table and no column is added.
    2. **A P3 finding carries options, what each gives up and one recommendation** (`D-0064` rule 4.1),
       fixed per finding by the building change. F1's are at least: wait one more ceiling; `abandon()`
       after reading the transcript the inbox names (`D-0048` rule 5), which releases the lock and any
