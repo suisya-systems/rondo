@@ -1307,6 +1307,13 @@ export async function main(
             ? null
             : async (iterationId, body) =>
                 await answerFromPage(environment, store, approver, iterationId, body),
+        // Read for the same reason and on the same condition: the material is
+        // what a person is shown before they press, so it is drawn exactly
+        // where the button is (D-0029 rule 2).
+        material:
+          approver === undefined || approver === ""
+            ? null
+            : async (record) => await lapMaterialLines(store, record),
         // **The approver and not an `--actor-id`.** An inbox is one person's,
         // and the identity rondo already trusts to answer a gate is the one
         // whose inbox this host draws. Unset is not a refusal: the other two
@@ -1920,10 +1927,32 @@ async function commandDecide(
  * answer is what D-0029 rule 3 refuses on the clock argument.
  */
 async function sayLapMaterial(store: IterationStore, record: IterationRecord): Promise<void> {
+  for (const line of await lapMaterialLines(store, record)) {
+    say(line);
+  }
+}
+
+/**
+ * The same material as lines, for a surface that is not a terminal.
+ *
+ * **Lifted out rather than copied**, which is D-0041 rule 6 itself:
+ * the page offers an approve button, and a person pressing it must be shown what
+ * `rondo answer` shows them -- the branch, the workspace, the commit subjects,
+ * the paths and the independent reading -- or the screen that is easier to reach
+ * is also the screen that asks for less before it writes. Two renderings of this
+ * would be two things to keep true; one list of lines, printed by the terminal
+ * and put in a `<pre>` by the page, is one.
+ */
+export async function lapMaterialLines(
+  store: IterationStore,
+  record: IterationRecord,
+): Promise<readonly string[]> {
   const workspace = planField(record, "workspace");
   const topicBranch = planField(record, "topic_branch");
-  say(`work    ${topicBranch === "" ? "(no topic branch on the row)" : topicBranch}`);
-  say(`        in ${workspace === "" ? "(no workspace on the row)" : workspace}`);
+  const lines: string[] = [
+    `work    ${topicBranch === "" ? "(no topic branch on the row)" : topicBranch}`,
+    `        in ${workspace === "" ? "(no workspace on the row)" : workspace}`,
+  ];
   // **The commits and the files, not a count of them.** A summary that said
   // "3 commits, 2 files" would leave the person exactly where the gate's own
   // `rationale` leaves them: told that work happened, and told it by a summary.
@@ -1932,22 +1961,21 @@ async function sayLapMaterial(store: IterationStore, record: IterationRecord): P
   // in words nobody generated for this screen.
   const range = readingRangeOf(record);
   if (range === null) {
-    say("        the row does not name a range, so there is nothing to list");
+    lines.push("        the row does not name a range, so there is nothing to list");
   } else {
-    for (const line of workLines(await inspectLapWork(range))) {
-      say(line);
-    }
+    lines.push(...workLines(await inspectLapWork(range)));
   }
   const readings = await store.readingsFor(record.id);
   const latest = readings.at(-1);
   if (latest === undefined) {
-    say("review  no independent reading of this work was recorded.");
-    say("        'rondo publish' will refuse once on that, and --despite-review is the way past.");
-    return;
+    lines.push(
+      "review  no independent reading of this work was recorded.",
+      "        'rondo publish' will refuse once on that, and --despite-review is the way past.",
+    );
+    return lines;
   }
-  for (const line of reviewLines(latest)) {
-    say(line);
-  }
+  lines.push(...reviewLines(latest));
+  return lines;
 }
 
 /**
@@ -2276,7 +2304,7 @@ async function commandAnswer(
  * `walkGate` and `resume` are reached here by the same two calls the command
  * line makes, so "the button does what `rondo answer` does" is a property of
  * there being one implementation rather than two that have to keep agreeing
- * (D-0041 rule 6). What differs is only what a screen can do with the answer: a
+ * (D-0041 rule 7). What differs is only what a screen can do with the answer: a
  * refusal is a sentence handed back to be rendered rather than a line printed
  * and an exit status returned, because the person who pressed the button is
  * looking at a browser and not at this process's stdout.
@@ -2353,10 +2381,22 @@ async function answerFromPage(
   }
   const report = await resume(conductorPorts(continuo, store), record.id);
   sayReport(report);
-  return {
-    ok: true,
-    note: `iteration '${record.id}' is ${report.status ?? "in an unnamed state"}`,
-  };
+  // **A walk that closed the gate and a row that settled are two facts**, and
+  // `resume` is total: a gate it cannot observe comes back as a report with
+  // diagnostic lines rather than as a throw. Redirecting on that would put the
+  // operator back on a page still offering the button, with the answer already
+  // spent and nothing saying why -- so the report's own lines are the response.
+  if (report.status !== "closed") {
+    return {
+      ok: false,
+      note: [
+        `The gate was answered, but iteration '${record.id}' is ` +
+          `${report.status ?? "in an unnamed state"} rather than closed.`,
+        ...report.lines,
+      ].join("\n"),
+    };
+  }
+  return { ok: true, note: `iteration '${record.id}' is closed` };
 }
 
 /**

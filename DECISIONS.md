@@ -7367,7 +7367,15 @@ the one write that is being let through.
    the identity is still asserted by whoever controls the host rather than authenticated, which is
    the same reduction the terminal carries and ends by the same adapter.
 
-6. **What may be written is one sentence, and the button carries one word.** The page may answer an
+6. **A person is shown what a person at the terminal is shown, before they press.** `D-0029`
+   rule 2's material -- the topic branch, the workspace, the commit subjects, the paths and the
+   independent reading -- is rendered beside the button, from the same list of lines
+   `rondo answer` prints. The screen that is easier to reach than a terminal must not also be the
+   screen that asks for less before it writes, and two renderings of that material would be two
+   things to keep true. It is read only for the row that carries a button, because it shells out to
+   `git` and a page redrawing every five seconds must not inspect every workspace it can see.
+
+7. **What may be written is one sentence, and the button carries one word.** The page may answer an
    open gate on a **live, non-terminal** iteration with the body `approve`, which is the option
    rondo's own plans put first. It may not revise, publish, abandon, withdraw, start a lap, close a
    run, or write a proposal decision; it does not move the last-look mark or count a presentation
@@ -7377,7 +7385,7 @@ the one write that is being let through.
    property of there being one implementation rather than a claim two code paths have to keep
    agreeing on.
 
-7. **A write is answered with a redirect and never with a page.** The `POST` replies `303` to `/`,
+8. **A write is answered with a redirect and never with a page.** The `POST` replies `303` to `/`,
    so the browser's own redraw and the operator's reload are GETs; a page whose refresh could
    re-submit an answer would turn `D-0032`'s ledger into a count of how many times somebody pressed
    F5. continuo's `answer` is idempotent for an identical body and `resume` settles once, so a
@@ -7450,6 +7458,12 @@ from the press onward is the real path: continuo's own CLI, six verbs, and rondo
   `status: closed`, `gate_outcome: answered_and_forwarded`. **Row 9 is rule 5 observed**: the actor
   the press wrote is `happy_ryo` under `actor_kind: human`, which is `RONDO_APPROVER` and is spelled
   exactly as the terminal spells it.
+- **The work is shown beside the button** (added after the second Codex round, which found this
+  missing). The page's `<pre class="material">` for the seeded row carried the topic branch, the
+  workspace path, the unreadable-workspace line for a workspace that does not exist, and
+  `review  no independent reading of this work was recorded.` -- which is `rondo answer`'s own
+  material, from one list of lines rather than a second rendering. The press that followed it was
+  **303**, and the walk and the close reproduced exactly as above.
 - **What was not measured**: no lap has been answered from the page — the gate above was seeded
   rather than raised by a worker — and no browser was driven. The token, the `Origin` check and the
   redirect were exercised with `curl`, which sends the headers a browser sends but is not one.
@@ -7466,7 +7480,7 @@ from the press onward is the real path: continuo's own CLI, six verbs, and rondo
   but the person at the host — either makes rule 5's "the same person, spelled the same way" false,
   and the token starts being asked to do authentication's job.
 - **continuo's gate `answer` ceasing to be idempotent for an identical body**, which would make
-  rule 7's redirect the only thing between a double click and two answers, and a redirect is not a
+  rule 8's redirect the only thing between a double click and two answers, and a redirect is not a
   lock.
 - **An unattended redraw turning out to have written anything**, which is rondo#95's original
   property and the one thing this entry may not cost.

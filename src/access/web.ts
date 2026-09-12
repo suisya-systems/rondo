@@ -70,7 +70,7 @@ export interface WebPorts extends InboxReadPorts {
   readonly policy: HostPolicy;
   readonly actorId: string | null;
   /**
-   * The whole of what this surface may write (D-0041 rules 4 and 6), or null
+   * The whole of what this surface may write (D-0041 rules 4 and 7), or null
    * when there is nobody to write as.
    *
    * One function and not a store handle, deliberately: with an `IterationStore`
@@ -81,7 +81,23 @@ export interface WebPorts extends InboxReadPorts {
    * (D-0020 rule 2).
    */
   readonly answer: AnswerFromWeb | null;
+  /**
+   * What the lap actually did, as `rondo answer` lists it (D-0029 rule 2).
+   *
+   * A function for {@link answer}'s reason turned the other way round: the
+   * material is read out of a workspace with `git`, and a page that could spawn
+   * one would have a capability nothing on this surface should hold. So the
+   * caller reads it and this module renders it.
+   *
+   * It is shown **where the button is** and nowhere else, because the button is
+   * where it is needed: a screen that is easier to reach than the terminal must
+   * not also be the screen that asks for less before it writes.
+   */
+  readonly material: LapMaterial | null;
 }
+
+/** The lines `rondo answer` prints about the work itself, for one iteration. */
+export type LapMaterial = (record: IterationRecord) => Promise<readonly string[]>;
 
 /**
  * Carry one body to one iteration's open gate, and say what happened.
@@ -98,7 +114,7 @@ export type AnswerFromWeb = (
 ) => Promise<{ readonly ok: boolean; readonly note: string }>;
 
 /**
- * The one word the button carries (D-0041 rule 6).
+ * The one word the button carries (D-0041 rule 7).
  *
  * Read from this constant on the way *in* rather than from the posted form: the
  * form's own `body` field is not trusted, so the page's writing vocabulary is
@@ -217,11 +233,12 @@ async function betweenHtml(ports: WebPorts): Promise<string> {
  * `method="post"` is not decoration: the redraw above is a document `GET`, and
  * this form is the only thing on the page that can produce anything else.
  */
-function approveHtml(record: IterationRecord, token: string | null): string {
+function approveHtml(record: IterationRecord, token: string | null, material: string): string {
   if (token === null || record.status !== "awaiting_human" || record.gateId === null) {
     return "";
   }
   return (
+    material +
     `<form class="approve" method="post" action="/">` +
     `<input type="hidden" name="token" value="${escapeHtml(token)}">` +
     `<input type="hidden" name="iteration" value="${escapeHtml(record.id)}">` +
@@ -237,12 +254,28 @@ function explainHtml(
   record: IterationRecord,
   snapshot: AdvisorySnapshot,
   token: string | null,
+  material: string,
 ): string {
   return section(
     `iteration '${record.id}'`,
     "This explanation binds nothing: it is not a proposal and cannot be approved.",
-    claimsHtml(propose(snapshot).payload.claims, snapshot) + approveHtml(record, token),
+    claimsHtml(propose(snapshot).payload.claims, snapshot) + approveHtml(record, token, material),
   );
+}
+
+/**
+ * The work a press would approve over, or nothing when there is no press.
+ *
+ * Read only for the row that carries the button: it shells out to `git` in the
+ * caller, and a page that redraws every five seconds must not inspect every
+ * workspace it can see each time it does.
+ */
+async function materialHtml(ports: WebPorts, record: IterationRecord): Promise<string> {
+  if (ports.material === null || record.status !== "awaiting_human" || record.gateId === null) {
+    return "";
+  }
+  const lines = await ports.material(record);
+  return `<pre class="material">${escapeHtml(lines.join("\n"))}</pre>`;
 }
 
 /**
@@ -261,6 +294,7 @@ export async function operatorPage(ports: WebPorts, token: string | null = null)
           outcome.record,
           gather(outcome.record, await ports.store.readingsFor(outcome.record.id)),
           ports.answer === null ? null : token,
+          await materialHtml(ports, outcome.record),
         ),
       );
     } else if (outcome.kind === "unreadable") {
@@ -298,6 +332,7 @@ pre { white-space: pre-wrap; word-break: break-word; margin: 0; }
 .approve { align-items: center; display: flex; flex-wrap: wrap; gap: .75rem; margin: .75rem 0 0; }
 .approve button { font: inherit; padding: .4rem 1.2rem; }
 .approve .note { margin: 0; }
+.material { margin: .75rem 0 0; opacity: .85; }
 .value { white-space: pre-wrap; word-break: break-word; }
 @media (max-width: 40rem) { .claim { grid-template-columns: 1fr; gap: 0; } }
 </style>
@@ -403,7 +438,7 @@ function readForm(request: IncomingMessage): Promise<URLSearchParams | null> {
  * The order is the point. Everything that decides *whether this request may
  * write* happens before the write port is touched at all, and each refusal is
  * a status a person can read rather than a silent redraw. A success answers
- * `303` back to `/` (rule 7): the page refreshes itself, and a `POST` left on
+ * `303` back to `/` (rule 8): the page refreshes itself, and a `POST` left on
  * the history stack is one an F5 would send again.
  */
 async function handleApprove(

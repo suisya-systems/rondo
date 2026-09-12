@@ -94,6 +94,7 @@ function portsOver(
     now: () => 5_000,
     policy: { maxOccupying: 4, maxLive: 6 },
     actorId,
+    material: pressed === null ? null : async (record) => [`work    rondo/${record.id}`],
     answer:
       pressed === null
         ? null
@@ -364,6 +365,10 @@ test("the button is drawn only where there is a gate and somebody to answer it",
   const offered = await operatorPage(portsOver(world, "ada", pressed), "t");
   expect(offered).toContain('method="post"');
   expect(offered).toContain("gate-i-0001");
+  // **What the press would approve over, beside the press** (D-0029 rule 2).
+  // The screen that is easier to reach than the terminal must not also be the
+  // screen that asks for less before it writes.
+  expect(offered).toContain("work    rondo/i-0001");
 
   // No approver, no write port, no button -- even at the same open gate. The
   // page is not a second place rondo will act for an unnamed person.
@@ -432,6 +437,7 @@ test("a refusal from the write port is shown rather than redirected away", async
   await openGate(world, "i-0001");
   const ports: WebPorts = {
     ...portsOver(world),
+    material: async () => await Promise.resolve(["work    rondo/i-0001"]),
     answer: async () =>
       await Promise.resolve({ ok: false, note: "continuo is not usable: no CLI" }),
   };
