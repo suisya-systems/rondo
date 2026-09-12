@@ -65,6 +65,7 @@ import type {
 import type { LapReadingDraft } from "../store/records.js";
 import type { IterationStore } from "../store/sqlite.js";
 
+import { proposeAfterAbandon, type UnpromptedPorts } from "./advisory.js";
 import { discard, writeDelegationRecord } from "./delegation.js";
 import { inspectLapWork } from "./forge.js";
 import { READING_REMOTE, readingOf } from "./review.js";
@@ -369,14 +370,67 @@ export async function openConductor(
  * What this module contributes is the wiring above, and what it contributes to
  * *these* is a single place a surface has to import from.
  */
+/**
+ * Admit one request, and propose a retry if the arc ends `abandoned`.
+ *
+ * **`advisory` is required and is second, which is `D-0043` rule 3.** The
+ * trigger is here rather than at this function's caller so that a second
+ * surface -- a start button on the page -- gets it by construction, and it is
+ * required rather than optional because a type is the only thing that makes
+ * "a new caller cannot forget" true. `src/refrain` is unchanged by it and
+ * `ConductorPorts` never learns the word advisory: an advisory the loop could
+ * reach through its own ports is what the planted cases exist to keep out.
+ *
+ * **The ending, and only that ending.** `abandoned` reached *here* is cadenza's
+ * `refused`, cadenza's `needs_approval` or a classification refusal -- all
+ * three grant-shaped, which is what makes an option set the right answer to
+ * them. The same status written by the human verb {@link abandon} is not this
+ * one, and telling them apart by which path wrote the row costs no column and
+ * no reading of a recorded sentence (rule 2).
+ *
+ * **Nothing here changes what the arc decided** (rule 11). The terminal
+ * transition is committed before this function sees the report; whatever the
+ * trigger could not do becomes a line on it, and a throw from the advisory --
+ * from anywhere, including a port that was supposed to answer rather than
+ * raise -- becomes one too.
+ */
 export async function admit(
   ports: ConductorPorts,
+  advisory: UnpromptedPorts,
   plan: RunPlan,
   policy: LoopPolicy,
   id: string,
   supersedesIterationId: string | null = null,
 ): Promise<ConductorReport> {
-  return await admitIteration(ports, plan, policy, id, supersedesIterationId);
+  const report = await admitIteration(ports, plan, policy, id, supersedesIterationId);
+  if (report.status !== "abandoned" || report.iterationId === null) {
+    return report;
+  }
+  return { ...report, lines: [...report.lines, await proposeLine(advisory, report.iterationId)] };
+}
+
+/**
+ * One line for the report, saying what the unprompted door did.
+ *
+ * The `catch` is rule 11's and is deliberately total: this runs after a
+ * terminal transition is committed, so there is no failure here worth turning
+ * an ended lap into an exception a surface has to decide what to do with.
+ */
+async function proposeLine(advisory: UnpromptedPorts, iterationId: string): Promise<string> {
+  try {
+    const outcome = await proposeAfterAbandon(advisory, iterationId);
+    return outcome.kind === "proposed"
+      ? `Proposed ${String(outcome.options)} contracts a retry could run under, as ` +
+          `'${outcome.proposalId}' for a successor '${outcome.successorId}'. Nobody has been ` +
+          "shown it: 'rondo show' reads it and 'rondo decide' answers it."
+      : outcome.reason;
+  } catch (error) {
+    return (
+      `No retry was proposed for '${iterationId}': the advisory raised ` +
+      `${error instanceof Error ? error.message : String(error)}. The iteration's own outcome ` +
+      "stands."
+    );
+  }
 }
 
 /**

@@ -73,6 +73,7 @@ import {
   proposeRetry,
   recordAnswer,
   showProposal,
+  type UnpromptedPorts,
 } from "./advisory.js";
 import { abandon, admit, conductorPorts, resume } from "./conductor.js";
 import { asciiEscape, consoleSeams, legibleAsciiEscape, relayUpstream } from "./console.js";
@@ -1356,11 +1357,18 @@ export async function main(
 
   switch (parsed.command) {
     case "start":
-      return await commandStart(parsed, ports, continuo);
+      return await commandStart(parsed, ports, unpromptedPorts(store, opened.path), continuo);
     case "answer":
       return await commandAnswer(parsed, environment, store, ports, continuo);
     case "revise":
-      return await commandRevise(parsed, environment, store, ports, continuo);
+      return await commandRevise(
+        parsed,
+        environment,
+        store,
+        ports,
+        unpromptedPorts(store, opened.path),
+        continuo,
+      );
     default:
       return await commandPublish(parsed, environment, store, continuo);
   }
@@ -1370,6 +1378,7 @@ export async function main(
 async function commandStart(
   parsed: ParsedCommand,
   ports: ReturnType<typeof conductorPorts>,
+  advisory: UnpromptedPorts,
   continuo: VerifiedContinuo,
 ): Promise<number> {
   const loaded = loadPlan(parsed);
@@ -1397,7 +1406,7 @@ async function commandStart(
   const iterationId = parsed.iterationId;
   say(`starting iteration '${iterationId}'; the lap is the step that is slow`);
 
-  const report = await admit(ports, plan, START_POLICY, iterationId);
+  const report = await admit(ports, advisory, plan, START_POLICY, iterationId);
   sayReport(report);
   if (report.status === "awaiting_human") {
     say("");
@@ -1462,6 +1471,27 @@ function advisoryPorts(
         }
       }),
   };
+}
+
+/**
+ * The ports the trigger a stopped lap pulls is handed (D-0043 rule 3).
+ *
+ * **The pin is read here and its refusal is carried rather than raised.** A
+ * `cadenza.pin.json` that will not read must not turn an admission that would
+ * otherwise have run into a refusal -- the lap does not need the pin, and only
+ * the row recording which cadenza composed a contract does -- so the absence
+ * travels as a value with its own sentence in it (rule 11).
+ *
+ * `present` is a no-op and is never called: this door shows nobody anything,
+ * which is rule 9. It is passed because {@link ExplainPorts} is one bundle for
+ * every door, and a second bundle differing by one field would be two things to
+ * keep in step.
+ */
+function unpromptedPorts(store: IterationStore, storePath: string): UnpromptedPorts {
+  const pin = cadenzaRevision();
+  return "refusal" in pin
+    ? { unavailable: pin.refusal }
+    : { ...advisoryPorts(store, storePath, () => {}), cadenzaRevision: pin.revision };
 }
 
 /**
@@ -2659,6 +2689,7 @@ async function commandRevise(
   environment: Readonly<Record<string, string | undefined>>,
   store: IterationStore,
   ports: ReturnType<typeof conductorPorts>,
+  advisory: UnpromptedPorts,
   continuo: VerifiedContinuo,
 ): Promise<number> {
   const actor = approvedActor(parsed.actorId, environment);
@@ -2854,7 +2885,7 @@ async function commandRevise(
   // the succession survived only as `base_branch` equalling the predecessor's
   // `topic_branch` -- a value a reader could guess a relationship from, which
   // is what `D-0027` rule 9 deferred and rondo#33 asked for.
-  const second = await admit(ports, successor.plan, START_POLICY, successorId, record.id);
+  const second = await admit(ports, advisory, successor.plan, START_POLICY, successorId, record.id);
   sayReport(second);
   if (second.status === "awaiting_human") {
     say("");
