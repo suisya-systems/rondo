@@ -81,7 +81,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0041 | The one write the operator's page may do: an unattended redraw and a person's click are told apart at runtime and never by type, the approver is the only actor, and the write is a single function rather than a store | accepted |
 | D-0042 | What counts as a presentation on a page that redraws itself: the press and not the render, recorded before the gate is answered, and the reader who does not press left uncounted | accepted |
 | D-0043 | The trigger a stopped lap pulls: one proposal at the abandon the conductor's own arc reaches, `contract_keys` because it is the only option set that is a choice, and a successor identity rondo mints and nobody has yet adopted | accepted |
-| D-0044 | The second model tier is `mechanical`, it is reached by naming an agent type and never by rondo reading a request, and its model id waits on rondo recording what a lap costs | accepted |
+| D-0044 | The second model tier is `mechanical`, it is reached by naming an agent type and never by rondo reading a request, and its model id waits on rondo recording what a lap costs | superseded by D-0062 |
 | D-0045 | What the record may say about a verification rondo did not watch: the operator's claim held as a claim, no column for a result, a silence that reads as a silence, and a row `publish` may print and may not be satisfied by | accepted |
 | D-0046 | Where rondo reads what a lap cost: off the lap's own transcript, three columns rather than one, and an unread cost that is not a zero | accepted |
 | D-0047 | Where an approval is spent: inside the admission's own transaction, with the contract recomposed from today's material, and by a verb of its own | accepted |
@@ -98,6 +98,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0058 | The second `resume` leaves the handbook: idempotence is a property the suite already proves more strongly than a walk can observe it, the surface keeps one `resume` per answering act on purpose, and no verb is added on the strength of a sentence | accepted |
 | D-0060 | Work left uncommitted is a fact rondo reads and names: `git status` joins the reading as a finding, `publish` refuses a workspace that still holds any, `--despite-review` does not reach it, and rondo commits nothing on a lap's behalf | accepted |
 | D-0061 | Where a request enters rondo: the organisation's five steps mapped onto parts that mostly exist, a request thread in the conversation as the first thing built, and the drafter that reads a request cleared by the human gate, with its split into plans waiting on `D-0062` | accepted |
+| D-0062 | A proposal may name an agent type, and only a split proposal from a request may: a record rondo already holds chosen by its digest, approved on route S with the tier bound by the option it came from, and the kind-to-tier judgment kept whole while the request-to-kind judgment moves to the gate | accepted |
 
 ---
 
@@ -7876,7 +7877,16 @@ want. It is not closed here because nothing has yet run long enough to say what 
 
 ## D-0044 — The second model tier is `mechanical`, it is reached by naming an agent type and never by rondo reading a request, and its model id waits on rondo recording what a lap costs
 
-**Status:** accepted (2026-09-12, rondo's human gate). Refs rondo#89, rondo#96, `D-0021`.
+**Status:** superseded by D-0062 (2026-09-13). Accepted 2026-09-12 (rondo's human gate). Refs
+rondo#89, rondo#96, `D-0021`.
+
+> **Supersession note (2026-09-13, from D-0062).** `D-0061`'s gate chose to let a split proposal
+> name an agent type. That changes two assertions below: the heading's and rule 2's "never by rondo
+> reading a request", and rule 3's "by inference". Supersession is whole-entry, per "How to use this
+> file", so **rules 1, 4, 5 and 6 are not retired with it**. Neither are the sections "What the four
+> measured laps actually say" and "Why this organisation's split does not transfer", or the `D-0052`
+> annotation. `D-0062` carries all of them as written, and they are still cited as `D-0044` rule N.
+> Rules 2 and 3 are restated as `D-0062` rules 1 and 2. Nothing below is edited.
 
 > **Annotation (2026-09-12, from D-0052).** Added after this entry was accepted, and additive:
 > nothing below is removed or rewritten, and **how a tier is chosen does not change**. Rule 3's "an
@@ -8325,6 +8335,13 @@ costs one module and one grant, and the falsifiers below say what would move it.
 
 **Status:** accepted (2026-09-12, rondo's human gate). Refs rondo#105, rondo#107, `D-0022`, `D-0030`,
 `D-0032`, `D-0038`, `D-0043`.
+
+> **Annotation (2026-09-13, from D-0062).** Added after this entry was accepted, and additive.
+> Rule 4's refusal gains one case of the same kind. When the proposal is a split that names an agent
+> type (`D-0062` rule 1), the candidate that composes the approved digest must carry the
+> `agentTypeDigest` its option named. If it does not, nothing runs and nothing is spent (`D-0062`
+> rule 3.3). A contract digest does not cover the agent type or its tier, so without this case an
+> approval would not bind the tier. It is a refusal and never a re-selection, as rule 4 already says.
 
 rondo#107 measures the last hole in #41 section 3's chain. `rondo decide` writes a `human_decision`
 row and nothing reads it; the screen says so to the operator in its own words
@@ -11580,6 +11597,11 @@ the gate function and the push were exercised directly, which is where the outco
 
 **Status:** accepted (2026-09-13, rondo's human gate). The gate also answered the question this
 entry put to it; the answer is recorded in section "What was put to the human gate, and its answer".
+
+> **Annotation (2026-09-13, from D-0062).** `D-0062` was accepted, and it names agent types in a
+> proposal, so this entry's falsifier about `D-0062` did not fire and the split stays on option (b).
+> The split still waits on the model-drafter entry. `D-0063` reviews the advisory's role, including
+> `D-0022` rule 7, which a split into plans does not fit.
 Refs `D-0020`, `D-0022`, `D-0025`, `D-0026`, `D-0030`, `D-0032`, `D-0034`, `D-0036`, `D-0044`,
 `D-0062`.
 
@@ -11773,3 +11795,253 @@ entry, and the split waits on that entry and on `D-0062`.
   proposal. The split in step 5.4 then goes back to option (a), and the gate's third answer is
   what moves.
 - Any line reference in section 1 failing to reproduce at `d65cd9e`.
+
+---
+
+## D-0062 — A proposal may name an agent type, and only a split proposal from a request may: a record rondo already holds chosen by its digest, approved on route S with the tier bound by the option it came from, and the kind-to-tier judgment kept whole while the request-to-kind judgment moves to the gate
+
+**Status:** accepted (2026-09-13, rondo's human gate). Refs `D-0014`, `D-0021`, `D-0022`,
+`D-0025`, `D-0032`, `D-0034`, `D-0043`, `D-0047`, `D-0049`, `D-0052`, `D-0061`.
+
+**Four points were put to the gate while this entry was drafted, and it confirmed all four as
+written:** the `D-0022` rule 7 collision is left as a residual for `D-0063`, the spend-time check
+is an annotation on `D-0047` rule 4 (rule 3.3), a `human_decision` column is recorded as refused
+(rule 3.4), and `D-0044` is superseded as a whole.
+
+**This entry decides and does not build.** Nothing in `src/` changes with it.
+
+`D-0061`'s gate chose option (b) for a split into plans: `D-0044` rule 2 is to be amended so that a
+proposal may name an agent type, approved at a gate. `D-0061` left the amendment to this entry and
+put a falsifier on it: if this entry is not accepted, or keeps agent types out of a proposal, the
+split goes back to option (a). **This entry does not re-open (a).** It decides what (b) means in
+three parts: which proposals may name an agent type, at which gate and by what mechanism the name is
+approved, and what is kept in place of the property `D-0044` rule 2 gives up.
+
+### What was measured, and how
+
+At rondo `101aa82` on **2026-09-13**, by reading. cadenza was read from the vendored
+`vendor/suisya-systems-cadenza-0.0.0.tgz` and not from `node_modules` (`D-0018` rule 4). Line numbers
+drift; re-measure the claim, not the number.
+
+- **An approval does not bind a tier today, and this fact shapes the whole entry.**
+  `human_decision.approved` is a contract digest and refers into `composition.contract_digest`
+  (`src/store/sqlite.ts:850-863`, enforced by the writer under `D-0049` rule 2). cadenza's
+  `contractPayload` (`package/dist/domain/contract-digest.js:22-39`) covers `vocabulary_version`,
+  `project_id`, `config_digest`, `issuer`, `grantee`, `granted`, `askable` and `supersedes`, and
+  **nothing about the agent type**: no id, no digest, no executor policy. The tier is covered by
+  `agentTypeDigest`, whose payload (`package/dist/domain/agent-type.js:175-191`) includes
+  `executor_policy.model_tier`. **So two agent types with the same grants and different tiers compose
+  one contract digest**, and an approval naming that digest does not say which of the two was meant.
+- **Proposals already name agent types, in one narrow place.** `agent_type` is one of the three
+  proposable kinds (`src/access/advisory.ts:876`). Its options come from `agentTypesOf`
+  (`advisory.ts:1017-1034`), which offers only the agent types the subject's lineage already ran
+  under. Each candidate carries `agentTypeId` and `agentTypeDigest` beside its `contractDigest`
+  (`src/advisory/proposal.ts:548-557`). This did not conflict with `D-0044` rule 2 because every
+  option was an agent type a person had already put in a plan for that lineage. The drafter selects
+  among a person's earlier choices and never classifies anything.
+- **Two options with one contract digest are already refused, but only at spend time.** `D-0047` rule
+  4's second paragraph refuses an approval that more than one option composes, and it refuses it in
+  `rondo retry`, not at the door.
+- **The tier is still refused before a run when nothing prices it**: `PRICED_MODEL_TIERS` is
+  `["standard"]` (`src/refrain/classification.ts:193`, `D-0052`), and `MODEL_TIER_TABLE` has one row
+  (`src/continuo/roles.ts:184`, `D-0044` rule 5). Today no proposal could route a lap to
+  `mechanical` even if one named it.
+- **Agent types have no catalog.** An agent-type record exists in rondo only as `agentTypeInput` in
+  an iteration's plan, with its digest on the iteration row (`agent_type_digest`,
+  `src/store/sqlite.ts:474`). `D-0044` rule 2's third bullet ("both hats sit on one head") is still
+  the shape.
+
+### Why this is a supersession of the whole of `D-0044`, and not an annotation
+
+"How to use this file" says that anything which would change what an entry *asserted* is a
+supersession and takes a new ID, and that an annotation never edits a claim. **(b) changes two
+assertions of `D-0044`**: its heading and rule 2 say a tier is "never" reached by rondo reading a
+request, and rule 3 says nothing may route a lap to `mechanical` "by inference". A drafter that
+reads a request and names an agent type is inference about the request, even when a person approves
+it afterwards. So an annotation is not available.
+
+**A rule-level status is not available either.** The ledger's `Status` is a property of an entry,
+the index has one status per row, and `D-0001`'s supersession note records the precedent: "Supersession
+here is whole-entry", and the claims that were not retired are said to live on elsewhere. This entry
+follows that precedent. It does not invent a partial status the file has never had.
+
+**What survives, unchanged.** `D-0044` rules 1, 4, 5 and 6, its section "What the four measured laps
+actually say", its section "Why this organisation's split does not transfer", and the `D-0052`
+annotation on it are **carried into this entry as written** and keep being cited as `D-0044` rule N.
+Their text stays under `D-0044`'s heading and is not copied here, so that there is one text and no
+drift. Rules 2 and 3 are restated below as rules 1 and 2 of this entry. The supersession retires those two
+rules and the heading's "never", and nothing else.
+
+### Decision
+
+1. **`D-0044` rule 2, restated.** A tier is still chosen by choosing an agent type, and the tier is
+   still a field of the agent type (`executorPolicy.modelTier`). What changes is who may *propose*
+   the agent type for a plan:
+   1. **An agent type may be named by exactly one kind of proposal: the split into plans that
+      `D-0061` step 5.4 describes, drafted from a request thread.** It may not be named by an
+      `explanation` (`D-0034`: claims and no recommendation), by a drafter message in the request
+      thread (`D-0061` rule 3 refuses "a plan, an agent type, or a tier" there, unchanged), by the
+      deterministic drafter's reports (`D-0061` step 5.3 reads no request body), or by any other
+      kind a later entry adds unless that entry says so by name. The existing `agent_type` retry
+      kind is unchanged. It still selects only from the lineage, because that selection never read
+      a request and needed no amendment.
+   2. **What is named is an agent-type record rondo already holds, chosen by `agentTypeDigest`, and
+      copied byte for byte.** Concretely, it is the `agentTypeInput` of a plan on an iteration row in
+      rondo's store whose `agent_type_digest` equals the named digest. The drafter never composes an
+      agent type, never edits one, and never writes a tier. A proposal naming a digest that no
+      stored record has is refused by the proposal's writer, in `D-0036` rule 4's dangling-reference
+      shape. **This is what keeps the split's agent-type field inside `D-0022` rule 7**: naming a
+      stored record is a *selection* among persisted material, never a hole the drafter fills. When
+      agent types move into a catalog (`D-0044`'s "What this entry does not decide"), the catalog
+      becomes the set this rule selects from, and the rule is already written for that.
+   3. **There is still no per-request tier override, no `--model-tier` flag and no tier field on a
+      proposal, a plan, a request or a message.** `D-0052`'s "no override flag" rests on this bullet
+      and is unaffected.
+   4. **The operator can still name the agent type themselves.** Option (a)'s path is not removed:
+      a plan an operator writes by hand keeps naming its own agent type exactly as today. (b) adds
+      a proposer. It does not take the choice away from the person.
+
+2. **`D-0044` rule 3, restated.** `standard` is the default and the fallback direction is up. What
+   is refused is **routing to `mechanical` without a person approving the agent type that carries
+   it**. Inference is allowed, but only as a proposal:
+   1. **Nothing runs on a named agent type until a person has approved it** (rule 3 below). A
+      global setting, an absent field, or a drafter's output that nobody approved still routes
+      nothing, which is `D-0044` rule 3's "by absence, or by a global setting", kept.
+   2. **Naming an agent type whose tier is not `standard` requires grounds.** The option carries one
+      claim per condition of `D-0044` rule 1's definition (the request names the files, the change is
+      bounded, and `npm run verify` passing is the whole of the acceptance). Each claim has at least
+      one `message:` basis into the request thread (`D-0061` rule 2.6 locator form). **A condition the
+      drafter cannot ground means the option may not name that tier**, and the option that remains is
+      a `standard` one. Grounding is checked by the writer, as a structural refusal: every condition
+      has a claim, and every claim has a basis that resolves. **It is not a check that the claim is
+      true.** That judgment stays with the person at the gate, who can follow each basis back to the
+      words.
+   3. **When the options for one plan differ in tier, the recommendation is the highest tier among
+      them.** This is `D-0043`'s `unchangedIndex` instinct turned toward cost: rondo never recommends
+      a cheaper tier, and a lower tier is something a person reaches for rather than a default they
+      accept by pressing the button. `D-0032` rule 1 still requires a recommendation, and this rule
+      says which option it is.
+   4. **An unpriced tier is still refused before a run is admitted** (`D-0021` rule 3, `D-0052`).
+      Today that means a split naming a `mechanical` agent type is refused at `classify` until
+      `D-0044` rule 5's gate opens. This entry does not open that gate.
+
+3. **The name is approved on route S, through the approval rondo already has, with one refusal
+   added so that the approval binds the tier.** Neither a new gate nor a new approval record is
+   introduced:
+   1. **The gate is `D-0022` rule 15's route S**: a proposal, its `composition` rows written before
+      presentation (`D-0022` rule 18), `rondo decide` recording an approval whose `approved` is one
+      of those rows (`D-0049` rule 2), and a spend inside the admission's own transaction (`D-0047`
+      rule 1). **Route G is not used.** rondo still never mints a gate of its own (`D-0022` rule 15),
+      and a split is put to a person before any lap exists to raise a gate.
+   2. **Within one split proposal, no two options may carry one contract digest, and this is refused
+      when the proposal is written.** `D-0047` rule 4 already refuses such an approval at spend
+      time. Here the refusal is made earlier because of the measurement above: an option set in
+      which a `standard` and a `mechanical` agent type with equal grants share a digest is exactly
+      the set in which the approval would not say which tier was chosen. **The cost is stated**: two
+      options that differ *only* in tier cannot be offered side by side in one proposal. A person
+      who wants the other tier declines and asks, or writes the plan themselves (rule 1.4).
+   3. **At spend time, the candidate that composes the approved digest must carry the
+      `agentTypeDigest` its option named, or nothing runs and nothing is spent.** This check belongs
+      to `D-0047` rule 4's family: it is a refusal and never a re-selection. It is what makes the
+      approval of a contract digest also an approval of the agent type, and therefore of the tier.
+      The chain is: the digest identifies one option (3.2), the option names one `agentTypeDigest`
+      (1.2), and the digest covers `model_tier` (the measurement above).
+   4. **`human_decision` gains no column.** Recording `agentTypeDigest` on the approval itself would
+      make the binding direct instead of derived. It is refused here because `D-0049` rule 2 and
+      `D-0032` rule 12 fix what that row refers to and what its schema states, and changing either
+      is not this entry's to take. It is recorded as the alternative, under "The dispute this entry
+      does not close".
+   5. **One approval authorises the split as a whole or it authorises nothing.** The shape of a
+      split proposal (one proposal carrying several plans, or several proposals under one request)
+      belongs to the split entry. Whatever shape it takes, a plan whose agent type was named by the
+      drafter is admitted only by spending an approval that covered that name. A plan admitted
+      without one names an agent type an operator wrote, which is rule 1.4.
+
+4. **What is kept in place of "a tier is a judgment about a kind of work, never about a request".**
+   `D-0044` rule 2 bundled two judgments, and **only one of them becomes per-request**:
+   - **Kind -> tier stays a per-kind judgment, made once and reviewed with the agent type.** Nothing
+     in this entry lets a request, a drafter or an operator change which tier an agent type carries.
+     A different tier is still a different agent type with a different `agentTypeDigest` (`D-0044`
+     rule 2, third bullet, kept).
+   - **Request -> kind becomes a per-request judgment, proposed with grounds and approved by a
+     person.** Under `D-0044` it was also per-request, but it was hidden: an operator writing a plan
+     chose the agent type for that request without recording a reason. After this entry the choice
+     is a recorded proposal with bases (rule 2.2), a recorded approval (rule 3), and a recorded
+     spend. **The judgment that `D-0044` said should not exist per request did exist per request,
+     and this entry makes it visible.**
+   - **Attribution is kept and widened.** `D-0044` rule 6 puts `model_tier` and `model` on the
+     iteration row. With `D-0061` rule 4's request link and `decision_consumption`, a lap run on a
+     drafter-named agent type can be told apart from one whose plan an operator wrote by hand. So
+     "revisions concentrated on drafter-named `mechanical` laps" is a query, not an impression.
+   - **The bar does not move** (`D-0044` rule 6, kept). A lap on a drafter-named agent type is
+     accepted at the same gate, on the same terms.
+
+### The dispute this entry does not close
+
+- **Binding the tier by derivation (rule 3.3) or by a column on the approval (rule 3.4).** The
+  derived binding needs no change to a ratified record, but it gives up offering tier-only
+  alternatives (rule 3.2), and its correctness rests on three facts held in three places. A column
+  on `human_decision` would be direct, and would re-open `D-0049` rule 2 and `D-0032` rule 12. This
+  entry takes the first form because it can be taken without touching either. If tier-only
+  alternatives turn out to be what operators want, that is the falsifier below, and the column is
+  the entry it calls for.
+- **`D-0044`'s own dispute, whether `mechanical` is worth having at all, is inherited unchanged.**
+  If rondo#96's numbers show model price is not the dominant term, `D-0044` rule 5's gate never
+  opens, rule 2.4 keeps every drafter-named `mechanical` refused, and this entry's tier machinery
+  costs a writer refusal and nothing else.
+
+### What this does not do
+
+- **It does not design the split proposal**: its kind name, its payload, whether it is one proposal
+  or several, or the verb that spends it. That belongs to the split entry `D-0061` step 5.4 names.
+- **It does not widen `D-0022` for the split.** A split proposes plans that are not a selection
+  among persisted plans or a diff against a predecessor. `D-0022` rule 7 (`A-6`) allows a plan
+  proposal to be only those, together with a hole list. `D-0061` names rules 1 and 3 of that entry as
+  the model-drafter entry's widening. **Rule 7 is not named there, and it is not decided here.** This
+  entry keeps its own field, the agent type, inside rule 7. What the advisory is for as a whole,
+  including rule 7, is `D-0063`'s to decide. This entry reads the advisory only as the author of a
+  proposal and does not narrow that role.
+- **It does not choose a model id for `mechanical`**, or open `D-0044` rule 5's gate.
+- **It does not add a catalog of agent types.**
+- **It does not change `D-0025` rule 5.** The plan reader still infers nothing; the drafter is not
+  the plan reader.
+- **It does not change the `agent_type` or `contract_keys` retry kinds** (`D-0043`, `D-0047`
+  rule 8).
+
+### Residuals, with who decides
+
+| Residual | Why not here | Who decides |
+|---|---|---|
+| `D-0022` rule 7's plan-proposal forms, which a split into plans does not fit | A ratified rule other than `D-0044`. The gate ruled that it belongs to a review of the advisory's role as a whole, which may treat the advisory as a support role that does more than propose | `D-0063` |
+| A recorded `agentTypeDigest` on `human_decision` | Would re-open `D-0049` rule 2 and `D-0032` rule 12 | a later entry, if the falsifier on tier-only alternatives fires |
+
+### Annotations this entry adds to earlier entries
+
+- **`D-0044`** gains `Status: superseded by D-0062` and a supersession note in `D-0001`'s form.
+- **`D-0047` rule 4** gains a dated annotation for rule 3.3's refusal.
+- **`D-0061`** gains a dated annotation: its falsifier about `D-0062` did not fire, and the split
+  stays on option (b).
+
+### What would falsify it
+
+- **Operators routinely re-naming the drafter's agent type at the gate**, which means declining a
+  split and writing the plan themselves (rule 1.4). If request -> kind cannot be proposed well
+  enough to accept, rule 4's second bullet has moved a judgment somewhere it is made badly, and
+  option (a)'s question comes back on evidence.
+- **A drafter-named `mechanical` lap being revised measurably more often than an operator-named
+  one**, once both run and cost is recorded. Rule 2.2's grounding is then a formality. What moves
+  is the grounding, not `D-0044` rule 1's boundary, because the operator-named laps are the control.
+- **Operators wanting tier-only alternatives side by side**, often enough that rule 3.2's refusal
+  reads as an obstruction. The column in rule 3.4 is then the entry to write.
+- **cadenza's contract payload gaining the agent type or its executor policy.** The binding becomes
+  direct, rule 3.2 and rule 3.3 become redundant, and the refused column is unnecessary.
+- **A second route to admitting a drafter-named plan that does not spend an approval.** Rule 3.5's
+  claim is broken, and so is everything rule 4 keeps.
+- **A catalog arriving with agent types that were never run.** Rule 1.2 selects from "a record
+  rondo already holds". A catalog changes that set, and the entry that adds the catalog must say
+  whether an unrun agent type may be named.
+- **`D-0044`'s falsifiers on rules 1, 4, 5 and 6**, inherited, since those rules are carried here.
+  Its falsifier "an operator wanting to down-tier one particular request" is retired along with
+  rule 2. It is replaced by the first falsifier above, which a measurement can answer where the
+  old one could only be argued.
+- Any measurement in "What was measured" failing to reproduce at rondo `101aa82`.
