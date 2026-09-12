@@ -82,6 +82,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0042 | What counts as a presentation on a page that redraws itself: the press and not the render, recorded before the gate is answered, and the reader who does not press left uncounted | accepted |
 | D-0043 | The trigger a stopped lap pulls: one proposal at the abandon the conductor's own arc reaches, `contract_keys` because it is the only option set that is a choice, and a successor identity rondo mints and nobody has yet adopted | accepted |
 | D-0044 | The second model tier is `mechanical`, it is reached by naming an agent type and never by rondo reading a request, and its model id waits on rondo recording what a lap costs | accepted |
+| D-0045 | What the record may say about a verification rondo did not watch: the operator's claim held as a claim, no column for a result, a silence that reads as a silence, and a row `publish` may print and may not be satisfied by | accepted |
 
 ---
 
@@ -7986,3 +7987,127 @@ shape of the answer, not to ratify a model id.**
   pending an operator's ratification" is taken up here, and its falsifier "a second tier arriving in
   an agent type before the table has a pair for it" is answered in advance -- the policy for a second
   tier exists from this date, and the pair itself waits on rondo#96.
+
+
+## D-0045 — What the record may say about a verification rondo did not watch: the operator's claim held as a claim, no column for a result, a silence that reads as a silence, and a row `publish` may print and may not be satisfied by
+
+**Status:** accepted (2026-09-12, rondo's human gate). Refs rondo#70, `D-0042`, `D-0032`, `D-0029`,
+`D-0022`.
+
+A lap that cannot verify its own work leaves the verification to the person at the gate. On
+2026-09-12 an operator ran `npm ci --ignore-scripts` and `npm run verify` in the lap's workspace,
+found both green, and said so in `answer --body`. That sentence is carried to continuo byte for
+byte and is a gate answer; nothing on rondo's row held it, and `publish` did not put it in the pull
+request. So the record could say *a person approved this* and could say *nobody approved this*, and
+could not say which of **a person who ran the suite** and **a person who read the diff** had
+approved -- the two cases the record exists to tell apart.
+
+### Why the obvious repair is a lie
+
+The material the operator has is their own account. rondo did not run the commands, was not in that
+terminal, and has no artefact of the run: no exit status, no output, no clock it observed. So every
+shape that writes an *outcome* here -- a `verified` boolean, a `passed` column, a verdict --
+records something rondo has not got, and `D-0022` rule 4's grade for the whole ledger is that a row
+is a record rather than an assertion.
+
+`D-0042` already drew this line on the other surface, and drew it at the same place: that entry
+lets the page write "a person pressed", which rondo observed, and refuses to let it write "a person
+read this", which rondo did not. The press is the available proof. Here the available proof is
+narrower still and is exactly one fact: **at the moment they answered, this person typed this
+sentence.** That is what may be written.
+
+### Decision
+
+1. **The claim is recorded, and it is recorded as a claim.** `rondo answer --verified=TEXT` writes
+   one row of `operator_verification_claim`: the iteration, rondo's clock, the actor, and the
+   operator's words byte for byte. The table's name is part of the decision -- a reader who sees
+   only the schema must not be able to mistake it for a finding.
+
+2. **There is no column for a result, and there will not be one until rondo can reach one
+   itself.** A `verdict` here would be a place to write an outcome nobody observed, and it would be
+   indistinguishable at the point of reading from `lap_reading.verdict`, which rondo *did* reach
+   (`D-0029` rule 11's whole argument: a clear verdict is admitted only beside rondo's own reading
+   of the work). Two columns of the same name and opposite provenance is how a self-report becomes
+   a certification one query later. What rondo knows is who said what, and when; those are the
+   columns.
+
+3. **Every reader says whose account it is.** The pull request body names the actor and says
+   plainly that rondo did not run it and did not see it run. `D-0032` rule 1's discipline -- a
+   claim is rendered beside its basis -- applied to a basis that is a person's word, which is the
+   weakest basis the ledger carries and therefore the one that must be labelled.
+
+4. **The claim is dated to the walk and not to the answer.** It is written before the gate is
+   walked and a write that fails stops the answer -- `D-0042` rule 3's order, for `D-0042` rule 3's
+   reason -- and a walk can fail after it. So the row is attributed to the moment rondo actually
+   observed ("recorded before rondo walked the gate") rather than to an answer that may never have
+   landed. Saying "as they answered" would be a second claim, about the walk, that this record has
+   not checked.
+
+5. **Nothing is written against a gate that is already closed.** Answering a closed gate sends
+   nothing and says so, so a claim written there would sit on the row saying somebody checked the
+   work before answering a gate they did not answer. rondo refuses the claim out loud rather than
+   dropping it, which is also rule 6's rule applied to the one path where the flag is accepted and
+   cannot be honoured.
+
+6. **An absent claim is a record, and it is printed.** `publish` writes *"Nobody recorded what they
+   checked before answering"* in the same place the claim would have gone. A missing bullet is
+   indistinguishable from a section that was never composed, and the silence is half of what #70
+   asked for: the two cases are told apart by *reading the body*, not by knowing what the body
+   would have said if there had been something. **The silence means only what it says.** It is not
+   evidence that nothing was checked -- only that nothing was recorded.
+
+7. **This row is read by people and by nothing else.** It may be printed, enumerated and counted.
+   It may **not** be consulted by any refusal rondo makes: specifically, it does not satisfy, weaken
+   or stand in for `D-0029` rule 10's reading refusal at `publish`, and `--despite-review` remains
+   the only way past that. A self-report that could clear rondo's own gate would let the party being
+   checked supply the check, which is `D-0029`'s founding argument (the graded party does not grade
+   itself) reached from the operator's side. `lap_reading` and this table are therefore separate
+   tables rather than one table with a `drafter` column, even though a `drafter` column is what
+   `D-0029` rule 8 uses for exactly this kind of widening: here the two kinds differ in what a
+   *refusal* may rest on, and a shared table is one `WHERE` clause away from being read as one kind.
+
+8. **It is the terminal's flag, and the page has none.** The surface `D-0042` governs offers no
+   field for a claim, so a press records none. That is the same answer `D-0041` rule 4 gives about
+   everything else the page might write -- the page's writing vocabulary is one function, and
+   widening it is a visible change to a type -- and not an oversight.
+
+### What this entry does not do
+
+- **It does not make rondo verify anything.** Nothing here runs a command, reads an exit status or
+  checks a claim against the work. rondo#85 gave the lap its own verification; this entry is about
+  the case that remains when the lap could not, and it adds no capability to rondo.
+- **It does not touch `lap_reading`, the review refusal, or `publish`'s approval rule.** Rule 7 is
+  the statement that it does not, written as a rule so that a later reader cannot take the new row
+  for evidence.
+- **It does not decide what an operator ought to check.** A claim is free text on purpose: a
+  vocabulary rondo enforced would be rondo composing part of what a person says they did.
+
+### Residuals
+
+| Residual | Why not here | Who decides |
+|---|---|---|
+| A claim that is false | rondo cannot check it, and a record that could be checked would not need to be a claim. What the row buys is attribution: a false one is a named person's false statement rather than an anonymous silence | nobody; this is the ceiling of a self-report |
+| A claim on the web surface | Rule 8. The page would need a field, and `D-0041` rule 4 makes that a change to a type rather than a template edit | whoever first answers a gate from the page and wants the claim recorded |
+| Evidence rondo could read itself -- an exit status of a command rondo ran | It is a different record with a different provenance, and it would earn the verdict column rule 2 refuses. The flag's name does not reserve it: this table holds claims and that one would not be a claim | the entry that first has rondo run a verification |
+| A claim written for an answer whose walk then failed | Rule 4 makes the row honest about it rather than deleting it: the person did say this, and rondo did write it when they said it. `D-0042`'s "a press that is refused after the framing is recorded" residual is the same shape and the same answer | -- |
+| Counting how often a gate is answered with no claim | The row supports the query and nothing asks it yet. `D-0029`'s `terminalWithoutReading` is the precedent for when it does | whoever first wants the coverage number |
+
+### What was measured, and how
+
+On **2026-09-12**, on this machine, against a real `node:sqlite` store on a real file on disk, with
+two real `rondo answer` processes -- not a test harness. continuo was a stand-in at rondo's own CLI
+seam (`D-0015`: `--json` is the wire protocol), because nothing measured here is on continuo's side.
+
+- **Two approvals, told apart by the record.** The iteration answered with
+  `--verified="npm ci --ignore-scripts and npm run verify in the lap's workspace, both green"` left
+  exactly **one** `operator_verification_claim` row -- actor `operator-1`, the sentence byte for
+  byte, rondo's clock -- and its pull request body said *"Before answering, `operator-1` said they
+  had checked: ... rondo did not run it and did not see it run."* The iteration answered with no
+  flag left **zero** rows, and its body said *"Nobody recorded what they checked before
+  answering."* That is rule 1 and rule 6, measured rather than argued.
+- **A closed gate recorded nothing.** With continuo reporting the gate already
+  `answered_and_forwarded`, an answer carrying `--verified` printed both refusals and left the
+  table at **0 rows** (rule 5).
+- **`--verified` without `--body` is refused.** It is the reading mode, which answers nothing, so
+  the flag is rejected before that mode returns rather than silently discarded -- measured as a
+  refusal and **0 rows**.
