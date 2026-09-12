@@ -59,6 +59,9 @@ const FULL: AdvisorySnapshot = {
     classificationReason: "the intended action is inside the contract",
     modelTier: "standard",
     model: "claude-sonnet-4-5",
+    lapCostUsd: 1.542,
+    lapTurns: 38,
+    lapDurationMs: 203_324,
     gateId: "g-0001",
     gateStage: "answered",
     gateOutcome: "approved",
@@ -91,6 +94,9 @@ const BARE: AdvisorySnapshot = {
     classificationReason: null,
     modelTier: null,
     model: null,
+    lapCostUsd: null,
+    lapTurns: null,
+    lapDurationMs: null,
     gateId: null,
     gateStage: null,
     gateOutcome: null,
@@ -122,6 +128,39 @@ test("it says where the request stands, under what plan, and on which build", ()
   expect(labelled(claims, "continuo revision").value).toBe("603843b");
   expect(labelled(claims, "contract digest").value).toBe(FULL.iteration.contractDigest);
   expect(labelled(claims, "revision of").value).toBe("i-0000");
+});
+
+test("it says what the lap cost, in dollars, turns and milliseconds", () => {
+  // rondo#96 / D-0046. Three claims because they are three quantities: a lap can
+  // run well inside its ceiling and cost several times the lap before it, so the
+  // duration is not a price and neither stands in for the other.
+  const claims = propose(FULL).payload.claims;
+  expect(labelled(claims, "lap cost (USD)").value).toBe("1.542");
+  expect(labelled(claims, "lap turns").value).toBe("38");
+  expect(labelled(claims, "lap duration (ms)").value).toBe("203324");
+  // Every claim rests somewhere a reader can follow (D-0032 rule 2).
+  expect(labelled(claims, "lap cost (USD)").basis).toEqual({
+    form: "snapshot",
+    pointer: "/iteration/lapCostUsd",
+  });
+});
+
+test("a lap that cost nothing and a lap whose cost was never read do not render alike", () => {
+  // The reason the columns are nullable. `0` is a lap that spent nothing; a null
+  // is rondo not having read the transcript, and rounding the second into the
+  // first would understate a bill in the direction nobody checks.
+  const free = propose({
+    ...FULL,
+    iteration: { ...FULL.iteration, lapCostUsd: 0, lapTurns: 0, lapDurationMs: 0 },
+  }).payload.claims;
+  expect(labelled(free, "lap cost (USD)").value).toBe("0");
+  expect(labelled(free, "lap turns").value).toBe("0");
+  expect(labelled(free, "lap duration (ms)").value).toBe("0");
+
+  const unread = propose(BARE).payload.claims;
+  expect(labelled(unread, "lap cost (USD)").value).toBe(UNDETERMINED);
+  expect(labelled(unread, "lap turns").value).toBe(UNDETERMINED);
+  expect(labelled(unread, "lap duration (ms)").value).toBe(UNDETERMINED);
 });
 
 test("a field the snapshot does not settle is undetermined and is not dropped", () => {

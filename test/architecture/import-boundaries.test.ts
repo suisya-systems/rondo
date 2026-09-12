@@ -259,6 +259,17 @@ const ALLOWED_EXTERNALS_BY_MODULE: Readonly<
   // it quietly become a second spawner. The planted corpus proves the
   // distinction is enforced rather than merely intended.
   "src/continuo/invoker.ts": { "node:child_process": ["spawn"] },
+  // The one module allowed to read a lap's transcript, granted one read and one
+  // path join (D-0046 rule 4). Keyed by module for `invoker.ts`'s reason, and
+  // the narrowness is the grant: there is no `writeFileSync`, no `rmSync` and no
+  // `readdirSync`, so the module that reads what a lap cost cannot change what
+  // continuo wrote, delete it, or walk the state root looking for other
+  // sessions' transcripts. The two files it may open are computed from the state
+  // root rondo passed and the session id the lap answered with.
+  "src/continuo/transcript.ts": {
+    "node:fs": ["readFileSync"],
+    "node:path": ["join"],
+  },
   // The one module allowed to import cadenza, and the whole of what it takes
   // (D-0018 rule 5). The list is the facade's surface stated twice -- once as
   // an import and once as a grant -- which is the point: adding a binding to

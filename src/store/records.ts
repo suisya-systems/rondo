@@ -390,6 +390,26 @@ export interface IterationRecord {
    */
   readonly permissionDenials: string | null;
   /**
+   * What the lap spent: dollars, turns, and the worker's own wall clock
+   * (`D-0046`).
+   *
+   * **Three columns because they are three quantities.** `lapDurationMs` is the
+   * turn's measured duration and is not a price: lap 3 of the dogfood ran well
+   * inside its `invocationCeilingMs` and cost seven times lap 2 (`D-0044`).
+   * Recording one of the three and deriving the others is what five dogfood
+   * records had to do by hand, out of `events-000.jsonl`, because rondo kept
+   * none of them (rondo#96).
+   *
+   * **`null` is "rondo did not read it", and zero is zero.** The value is read
+   * off the worker's terminal `result` event at the suspend, and a transcript
+   * that was missing or carried no such event leaves all three null -- a
+   * different fact from a lap that cost nothing, which is why these are
+   * nullable columns rather than counters defaulting to 0.
+   */
+  readonly lapCostUsd: number | null;
+  readonly lapTurns: number | null;
+  readonly lapDurationMs: number | null;
+  /**
    * Why this iteration failed, stalled, or is asking for a withdrawal.
    *
    * One column for all three because the question a reader asks is the same --

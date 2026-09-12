@@ -314,6 +314,9 @@ function blankRecord(id: string, status: IterationStatus): IterationRecord {
     sessionId: null,
     sessionPath: null,
     permissionDenials: null,
+    lapCostUsd: null,
+    lapTurns: null,
+    lapDurationMs: null,
     reason: null,
     createdAtMs: NOW_MS,
     updatedAtMs: NOW_MS,
@@ -372,6 +375,12 @@ function successfulAnswers(): Answers {
         elapsedDeadlineAtMs: null,
         model: MODEL,
         requestedModel: MODEL,
+        // Lap 5 of the dogfood, measured: `docs/operations/lap-5-dogfood.md`
+        // section 5. Real figures rather than round ones, so a case that
+        // asserted on a suspiciously tidy number would stand out.
+        costUsd: LAP_COST_USD,
+        turns: LAP_TURNS,
+        durationMs: LAP_DURATION_MS,
       },
     },
     showGate: {
@@ -481,6 +490,18 @@ const AGENT_TYPE_INPUT: AgentTypeInput = {
  * and every other case is about something else.
  */
 const MODEL = "claude-opus-5";
+
+/**
+ * What lap 5 of the dogfood actually spent (`docs/operations/lap-5-dogfood.md`
+ * section 5), as the three numbers `D-0046` records.
+ *
+ * Measured figures rather than round ones on purpose: these are the values a
+ * person read out of `events-000.jsonl` by hand before rondo kept any of them,
+ * so a case asserting on them is asserting against the thing the issue is about.
+ */
+const LAP_COST_USD = 1.542;
+const LAP_TURNS = 38;
+const LAP_DURATION_MS = 203_324;
 
 /**
  * The grantee, before the allocator has a say.
@@ -646,6 +667,60 @@ test("the line before the lap names the ceiling and does not predict a duration"
   expect(says(report, "takes minutes")).toBe(false);
 });
 
+test("the row at the open gate says what the lap cost, in all three quantities", async () => {
+  // rondo#96. The three numbers were on every lap's terminal `result` event and
+  // in none of rondo's columns, so five dogfood records parsed them out of
+  // `events-000.jsonl` by hand. They are written with the gate id, in the same
+  // transaction, because that is the one moment they exist and nobody has been
+  // asked anything yet.
+  const h = harness();
+  const report = await admitOnce(h);
+  const row = await readRow(h.store, "i-0001");
+
+  expect(row?.lapCostUsd).toBe(LAP_COST_USD);
+  expect(row?.lapTurns).toBe(LAP_TURNS);
+  // **Time is not money and both are kept**: a lap can finish inside its
+  // ceiling and cost several times the lap before it (D-0044's table).
+  expect(row?.lapDurationMs).toBe(LAP_DURATION_MS);
+  expect(says(report, String(LAP_COST_USD))).toBe(true);
+});
+
+test("a lap whose transcript rondo could not read keeps three nulls, not three zeroes", async () => {
+  // The distinction the nullable columns exist for. A row that recorded 0 here
+  // would say the lap was free, which is a different claim from "rondo did not
+  // read what it cost" -- and the cheaper one, so it is the one a reader must
+  // never be handed by accident.
+  const h = harness({
+    performLap: {
+      kind: "answered",
+      value: {
+        runId: ALLOCATED_RUN_ID,
+        gateId: "gate-1",
+        sessionId: "session-1",
+        sessionPath: "started",
+        endpointLeaseFailure: null,
+        elapsedDeadlineAtMs: null,
+        model: MODEL,
+        requestedModel: MODEL,
+        permissionDenials: "[]",
+        costUsd: null,
+        turns: null,
+        durationMs: null,
+      },
+    },
+  });
+  const report = await admitOnce(h);
+  const row = await readRow(h.store, "i-0001");
+
+  expect(row?.status).toBe("awaiting_human");
+  expect(row?.lapCostUsd).toBe(null);
+  expect(row?.lapTurns).toBe(null);
+  expect(row?.lapDurationMs).toBe(null);
+  // Said rather than left out: a report silent about cost is silent for two
+  // different reasons and a reader cannot tell which.
+  expect(says(report, "read no cost")).toBe(true);
+});
+
 test("the row at the open gate carries the gate, the session and the walk's name", async () => {
   const h = harness();
   await admitOnce(h);
@@ -689,6 +764,9 @@ test("what a lap reported that the row has no column for is not lost", async () 
         elapsedDeadlineAtMs: 42,
         model: MODEL,
         requestedModel: MODEL,
+        costUsd: null,
+        turns: null,
+        durationMs: null,
       },
     },
   });
@@ -1231,6 +1309,9 @@ test("a withdrawal keeps what the lap already recorded on the row", async () => 
         elapsedDeadlineAtMs: null,
         model: MODEL,
         requestedModel: MODEL,
+        costUsd: null,
+        turns: null,
+        durationMs: null,
       },
     },
   });
@@ -1321,6 +1402,9 @@ test("abandon settles a row it cannot read, and the lock is genuinely released",
       elapsedDeadlineAtMs: null,
       model: MODEL,
       requestedModel: MODEL,
+      costUsd: null,
+      turns: null,
+      durationMs: null,
     },
   };
   const second = await admitOnce(h, "i-0002");
@@ -1665,6 +1749,9 @@ test("a lap answering for another run stalls rather than adopting its gate", asy
         elapsedDeadlineAtMs: null,
         model: MODEL,
         requestedModel: MODEL,
+        costUsd: null,
+        turns: null,
+        durationMs: null,
       },
     },
   });
@@ -1693,6 +1780,9 @@ test("a lap that ran on another model stalls, and the open gate is named first",
         elapsedDeadlineAtMs: null,
         model: "some-other-model",
         requestedModel: MODEL,
+        costUsd: null,
+        turns: null,
+        durationMs: null,
       },
     },
   });
@@ -1724,6 +1814,9 @@ test("a lap that named no model at all is the same stall, spelled for a reader",
         elapsedDeadlineAtMs: null,
         model: null,
         requestedModel: MODEL,
+        costUsd: null,
+        turns: null,
+        durationMs: null,
       },
     },
   });
@@ -1778,6 +1871,9 @@ test("a reason contained in an earlier one is still recorded", async () => {
         elapsedDeadlineAtMs: null,
         model: MODEL,
         requestedModel: MODEL,
+        costUsd: null,
+        turns: null,
+        durationMs: null,
       },
     },
   });

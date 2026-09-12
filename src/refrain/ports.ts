@@ -133,6 +133,22 @@ export interface LapPerformance {
    * to a person is what needs it to be on the row rather than only in a log.
    */
   readonly permissionDenials: string;
+  /**
+   * What the lap spent, as the adapter read it off the worker's own transcript
+   * (`D-0046`).
+   *
+   * **Three numbers and not one**, because time and money are separate
+   * quantities: a lap can finish well inside the plan's `invocationCeilingMs`
+   * and still cost several times the lap before it (`D-0044`'s table). A
+   * duration is not a price and neither substitutes for the other.
+   *
+   * `null` is "rondo did not read this number", never zero -- a lap whose
+   * transcript could not be read and a lap that spent nothing are different
+   * facts, and the columns these land in keep them apart.
+   */
+  readonly costUsd: number | null;
+  readonly turns: number | null;
+  readonly durationMs: number | null;
 }
 
 /** What `gate show` hands back. `outcome` is null exactly while the gate is open. */
