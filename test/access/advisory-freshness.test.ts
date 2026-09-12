@@ -714,3 +714,114 @@ test("an operator's whole-array `/readings` citation over unchanged readings rea
   expect(shows.shown.slice(basisIndex, basisIndex + 2).join("\n")).toContain("freshness: unmoved");
   expect(rendered).not.toContain("freshness: moved");
 });
+
+test("a reading backdated under an already-composed proposal reads unmoved, never moved (D-0051)", async () => {
+  // D-0038's original failure mode: a reading appended with an earlier
+  // `readAtMs` than one already composed into a proposal used to shift the
+  // stored side's position out from under the drafter-plus-occurrence
+  // identity. Content is the identity now, so a clock regression on an
+  // unrelated, later-appended reading cannot move the first one at all.
+  const { store, record } = fresh();
+  await reserveWithPlan(store, "iter-1", null);
+  await store.transition("iter-1", "planned", "classified", {}, 2_000, CLEAR);
+
+  const explained = await explainIteration(
+    { store, record, now: () => 4_000, present: screen().present },
+    "iter-1",
+  );
+  expect(explained.kind).toBe("explained");
+  if (explained.kind !== "explained") {
+    return;
+  }
+
+  // Appended after composition, and backdated well before it.
+  await store.transition("iter-1", "classified", "admitting", {}, 1_000, {
+    ...CLEAR,
+    drafter: "rondo/deterministic/2",
+    verdict: "concerns",
+    findings: ["a second drafter's finding"],
+  });
+
+  const shows = screen();
+  await showProposal(
+    { store, cadenzaRevision: "cadenza@abcdef0", record, now: () => 5_000, present: shows.present },
+    explained.proposalId,
+  );
+  const rendered = shows.shown.join("\n");
+  expect(rendered).toContain("1 readings at composition, 2 now");
+  // The reading composed at rule 1 is unaffected by the second, backdated
+  // one arriving after it -- content matches it regardless of clock or order.
+  const basisIndex = shows.shown.findIndex((line) =>
+    line.includes("basis: snapshot /readings/0/verdict"),
+  );
+  expect(basisIndex).toBeGreaterThanOrEqual(0);
+  expect(shows.shown.slice(basisIndex, basisIndex + 2).join("\n")).toContain("freshness: unmoved");
+});
+
+test("two content-identical readings from one drafter are matched and not collapsed to one (D-0051)", async () => {
+  // Rule 1's accepted cost: two readings whose stored fields agree are one
+  // value twice as far as the snapshot is concerned, and the ordinal keeps
+  // the count of them rather than telling them apart. Both must still be
+  // matched (unmoved), and both must still render as two separate claims.
+  const { store, record } = fresh();
+  await reserveWithPlan(store, "iter-1", null);
+  await store.transition("iter-1", "planned", "classified", {}, 2_000, CLEAR);
+  await store.transition("iter-1", "classified", "admitting", {}, 3_000, CLEAR);
+
+  const explained = await explainIteration(
+    { store, record, now: () => 4_000, present: screen().present },
+    "iter-1",
+  );
+  expect(explained.kind).toBe("explained");
+  if (explained.kind !== "explained") {
+    return;
+  }
+
+  const shows = screen();
+  await showProposal(
+    { store, cadenzaRevision: "cadenza@abcdef0", record, now: () => 5_000, present: shows.present },
+    explained.proposalId,
+  );
+  const rendered = shows.shown.join("\n");
+  expect(rendered).not.toContain("freshness: moved");
+  const occurrences = shows.shown.filter((line) =>
+    line.includes("independent reading (rondo/deterministic/1): clear"),
+  );
+  expect(occurrences.length).toBe(2);
+});
+
+test("a second reading arriving under a composed proposal says so once, as a count (D-0051 rule 5)", async () => {
+  const { store, record } = fresh();
+  await reserveWithPlan(store, "iter-1", null);
+  await store.transition("iter-1", "planned", "classified", {}, 2_000, CLEAR);
+
+  const explained = await explainIteration(
+    { store, record, now: () => 4_000, present: screen().present },
+    "iter-1",
+  );
+  expect(explained.kind).toBe("explained");
+  if (explained.kind !== "explained") {
+    return;
+  }
+
+  await store.transition("iter-1", "classified", "admitting", {}, 5_000, {
+    ...CLEAR,
+    drafter: "rondo/deterministic/2",
+    verdict: "concerns",
+  });
+
+  const shows = screen();
+  await showProposal(
+    { store, cadenzaRevision: "cadenza@abcdef0", record, now: () => 6_000, present: shows.present },
+    explained.proposalId,
+  );
+  const rendered = shows.shown.join("\n");
+  expect(rendered).toContain("1 readings at composition, 2 now");
+  // The one basis composed at rule 1 still reads unmoved; the count is what
+  // carries the news that a second reading exists.
+  const basisIndex = shows.shown.findIndex((line) =>
+    line.includes("basis: snapshot /readings/0/verdict"),
+  );
+  expect(basisIndex).toBeGreaterThanOrEqual(0);
+  expect(shows.shown.slice(basisIndex, basisIndex + 2).join("\n")).toContain("freshness: unmoved");
+});

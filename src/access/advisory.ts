@@ -1935,12 +1935,12 @@ function containerOf(document: Record<string, unknown>, pointer: string): Contai
  * (`D-0038` rule 2): a candidate set is enumerated and de-duplicated by the
  * gatherer, so candidate N today need not be candidate N at composition.
  *
- * **A reading's identity is the drafter *and* which of that drafter's
- * readings this is.** D-0029 appends a second reading from one drafter beside
- * the first rather than replacing it, so the drafter alone collapses two
- * distinct rows onto one identity -- the occurrence count is what keeps them
- * apart, over the one order the store ever produces them in: appended,
- * oldest first, never reordered.
+ * **A reading's identity is what it says (`D-0051` rule 1), never where it
+ * sits.** `lap_reading` has no writer that updates a row, so a reading's
+ * content cannot change while remaining the same row -- content is a stable
+ * identity for it. The ordinal is used only among siblings whose canonical
+ * content is otherwise identical, and it comes out order-invariant for free:
+ * it counts a multiset match rather than a position.
  */
 function identityOf(top: string, array: readonly unknown[], at: number): string {
   const value = array[at];
@@ -1965,18 +1965,14 @@ function identityOf(top: string, array: readonly unknown[], at: number): string 
     return "";
   }
   if (top === "readings" && typeof record["drafter"] === "string") {
+    const content = stableJson(record);
     let occurrence = 0;
     for (let i = 0; i < at; i++) {
-      const other = array[i];
-      if (
-        typeof other === "object" &&
-        other !== null &&
-        (other as Record<string, unknown>)["drafter"] === record["drafter"]
-      ) {
+      if (stableJson(array[i]) === content) {
         occurrence += 1;
       }
     }
-    return `${record["drafter"]}#${String(occurrence)}`;
+    return `${content}#${String(occurrence)}`;
   }
   return "";
 }
@@ -2162,6 +2158,27 @@ export interface FreshnessReport {
   readonly perBasis: readonly Freshness[];
   /** The pin line, said once, when the current pin differs from the one that composed this row. */
   readonly pinLine: string | null;
+  /** `D-0051` rule 5's count line, said once, for `explanation` proposals whose reading count changed. */
+  readonly readingCountLine: string | null;
+}
+
+/**
+ * `D-0051` rule 5: the one reading movement the store can produce is the set
+ * gaining a member, said once as a count rather than through any one basis.
+ * `explanation` proposals only -- `regatherPayload` is the only kind whose
+ * document carries a `readings` array at all -- and only when the count
+ * actually differs, so an unchanged set says nothing extra.
+ */
+function readingCountLine(proposal: StoredProposal, regathered: RegatherOutcome): string | null {
+  if (proposal.kind !== "explanation" || regathered.kind !== "regathered") {
+    return null;
+  }
+  const stored = (proposal.snapshot as Record<string, unknown>)["readings"];
+  const fresh = regathered.document["readings"];
+  if (!Array.isArray(stored) || !Array.isArray(fresh) || stored.length === fresh.length) {
+    return null;
+  }
+  return `${String(stored.length)} readings at composition, ${String(fresh.length)} now`;
 }
 
 /**
@@ -2186,7 +2203,12 @@ async function gatherFreshness(
         ? `iteration '${proposal.iterationId}' is no longer in this store`
         : `iteration '${proposal.iterationId}' will not decode: ${subjectOutcome.reason}`;
     const whole = undetermined(reason);
-    return { subject: whole, perBasis: items.map(() => whole), pinLine: null };
+    return {
+      subject: whole,
+      perBasis: items.map(() => whole),
+      pinLine: null,
+      readingCountLine: null,
+    };
   }
   const freshIteration = snapshotIteration(subjectOutcome.record) as unknown as Record<
     string,
@@ -2215,7 +2237,12 @@ async function gatherFreshness(
       `and rondo is running '${ports.cadenzaRevision}'`
     : null;
 
-  return { subject: subjectVerdict, perBasis, pinLine };
+  return {
+    subject: subjectVerdict,
+    perBasis,
+    pinLine,
+    readingCountLine: readingCountLine(proposal, regathered),
+  };
 }
 
 /**
@@ -2323,7 +2350,8 @@ function answerLines(proposal: StoredProposal): readonly string[] {
  * The header's three-way count and the subject's own verdict (`D-0038` rule 1
  * and rule 4's closing paragraph): always the count, never a single word --
  * including when nothing moved -- and the subject is said beside it because no
- * basis on `agent_type` or `contract_keys` rests on it at all.
+ * basis on `agent_type` or `contract_keys` rests on it at all. `D-0051` rule
+ * 5's reading count line follows, when there is one.
  */
 function freshnessHeaderLines(
   iterationId: string | null,
@@ -2337,6 +2365,7 @@ function freshnessHeaderLines(
     `  freshness: ${String(counts.unmoved)} unmoved, ${String(counts.moved)} moved, ` +
       `${String(counts.undetermined)} undetermined; subject '${String(iterationId)}': ` +
       freshnessWord(freshness.subject),
+    ...(freshness.readingCountLine === null ? [] : [`  ${freshness.readingCountLine}`]),
     ...(freshness.pinLine === null ? [] : [`  ${freshness.pinLine}`]),
   ];
 }
