@@ -1145,6 +1145,7 @@ function text(parts: Partial<PullRequestTextInput> = {}) {
     baseBranch: "main",
     headIsQualified: false,
     work: worked(),
+    verificationClaims: [],
     ...parts,
   });
 }
@@ -1224,6 +1225,33 @@ test("a revision's body states the lineage instead of leaving it to the branch n
   // The observed-red control: a first lap's body claims no predecessor, so the
   // line means something when it is there.
   expect(text().body).not.toContain("It revises iteration");
+});
+
+test("the body distinguishes an approval that checked something from one that did not", () => {
+  // #70. Both halves, because the silent one is the case the record could not
+  // tell apart: a gate sentence alone reads the same whether the operator ran
+  // the suite or read the diff.
+  const silent = text().body;
+  expect(silent).toContain("Nobody recorded what they checked before answering");
+  expect(silent).not.toContain("said they had checked");
+
+  const claimed = text({
+    verificationClaims: [
+      {
+        iterationId: "dogfood-001",
+        claimedAtMs: 1_700_000_000_000,
+        actorId: "operator-1",
+        claim: "npm ci --ignore-scripts and npm run verify, both green",
+      },
+    ],
+  }).body;
+  expect(claimed).toContain(
+    "Before answering, `operator-1` said they had checked: npm ci --ignore-scripts and " +
+      "npm run verify, both green.",
+  );
+  // And it is carried as the operator's word rather than as rondo's finding.
+  expect(claimed).toContain("rondo did not run it and did not see it run.");
+  expect(claimed).not.toContain("Nobody recorded what they checked");
 });
 
 test("a request that contains a code block cannot end the quotation it is inside", () => {

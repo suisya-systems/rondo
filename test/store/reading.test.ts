@@ -317,3 +317,30 @@ test("the coverage of a reading is keyed by its drafter, and states the same cei
   expect(readingCoverage("rondo/none").join("\n")).toContain("is not recorded");
   expect(readingCoverage("rondo/model/1").join("\n")).not.toContain("built nothing");
 });
+
+test("an operator's verification claim is stored as their word, and its absence is nothing", async () => {
+  // #70. The store's half of the distinction: an iteration whose operator said
+  // what they ran, beside one whose operator said nothing.
+  const store = freshStore();
+  await reserveOne(store, "i-said");
+  await reserveOne(store, "i-silent", 2_000);
+
+  await store.recordVerificationClaim("i-said", "operator-1", "npm run verify, green", 3_000);
+
+  expect(await store.verificationClaimsFor("i-said")).toEqual([
+    {
+      iterationId: "i-said",
+      claimedAtMs: 3_000,
+      actorId: "operator-1",
+      claim: "npm run verify, green",
+    },
+  ]);
+  expect(await store.verificationClaimsFor("i-silent")).toEqual([]);
+
+  // Append-only: a second claim is a later fact, not a correction of the first.
+  await store.recordVerificationClaim("i-said", "operator-2", "read the diff", 4_000);
+  expect((await store.verificationClaimsFor("i-said")).map((row) => row.actorId)).toEqual([
+    "operator-1",
+    "operator-2",
+  ]);
+});

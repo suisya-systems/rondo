@@ -54,6 +54,7 @@ import {
   isTerminal,
   type JsonRecord,
   type LapReading,
+  type OperatorVerificationClaim,
   readingCoverage,
 } from "../store/records.js";
 import {
@@ -125,8 +126,13 @@ export const USAGE = `rondo - the operator surface for delegated work
                           show the gate that is waiting for a person. Name one
                           when more than one iteration is open
   rondo answer --actor-id ID --body=TEXT [--iteration-id ID]
+               [--verified=TEXT]
                           answer it, and settle the iteration. Write --body
-                          with an equals sign: an answer may begin with a dash
+                          with an equals sign: an answer may begin with a dash.
+                          --verified says what you ran to check the work before
+                          answering -- recorded on the iteration, and carried
+                          into the pull request, as your claim: rondo did not
+                          watch it run and does not say it did
   rondo revise --actor-id ID --body=TEXT [--iteration-id ID]
                           answer the gate with a change to make, and run a
                           second lap that continues from the first one's
@@ -318,6 +324,8 @@ export interface ParsedCommand {
   readonly iterationId: string | null;
   readonly actorId: string | null;
   readonly body: string | null;
+  /** What the operator says they ran to check the work (#70). Their word, not rondo's. */
+  readonly verified: string | null;
   readonly repo: string | null;
   readonly remote: string | null;
   readonly reason: string | null;
@@ -347,6 +355,7 @@ const FLAGS = {
   "iteration-id": { type: "string" },
   "actor-id": { type: "string" },
   body: { type: "string" },
+  verified: { type: "string" },
   repo: { type: "string" },
   remote: { type: "string" },
   reason: { type: "string" },
@@ -400,7 +409,7 @@ export const FLAGS_BY_COMMAND: Readonly<Record<string, readonly string[]>> = {
   start: ["plan", "prompt", "prompt-file", "iteration-id"],
   // `answer` gained `--iteration-id` because more than one iteration may be
   // waiting at once now, which is the whole point of D-0023.
-  answer: ["actor-id", "body", "iteration-id"],
+  answer: ["actor-id", "body", "iteration-id", "verified"],
   revise: ["actor-id", "body", "iteration-id"],
   publish: [
     "repo",
@@ -559,6 +568,7 @@ export function parseCommand(argv: readonly string[]): ParseOutcome {
       iterationId: text("iteration-id"),
       actorId: text("actor-id"),
       body: text("body"),
+      verified: text("verified"),
       repo: text("repo"),
       remote: text("remote"),
       reason: text("reason"),
@@ -587,6 +597,7 @@ function emptyCommand(command: ParsedCommand["command"]): ParsedCommand {
     iterationId: null,
     actorId: null,
     body: null,
+    verified: null,
     repo: null,
     remote: null,
     reason: null,
@@ -2274,6 +2285,13 @@ async function commandAnswer(
       "--body is empty. An answer is carried byte for byte, and there is nothing to carry.",
     );
   }
+  if (parsed.verified === "") {
+    return refuse(
+      "--verified is empty. It records what you checked, and an empty claim would put a row " +
+        "in the ledger saying a verification was declared and not saying what it was. Leave " +
+        "the flag off if you did not run anything.",
+    );
+  }
 
   say(`gate ${gate.gateId} is at stage '${gate.stage}'`);
   // **A receipt, and the code says so because the difference matters.** The
@@ -2281,6 +2299,23 @@ async function commandAnswer(
   // this cannot inform the decision the way the reading path's copy does. What
   // it does is leave the person holding a record of what they approved over.
   await sayLapMaterial(store, record);
+  // **The claim is written before the gate is walked, and a write that fails
+  // stops the answer** -- `D-0042` rule 3's order, for its reason: a record
+  // written after the act it describes is one an operator can act past. It is
+  // recorded as the operator's own account and never as rondo's: rondo did not
+  // run this and has no way to check it, so the row holds who said it and what
+  // they said, and every reader of it says whose word it is (#70).
+  if (parsed.verified !== null) {
+    try {
+      await store.recordVerificationClaim(record.id, actor.actorId, parsed.verified, Date.now());
+    } catch (error) {
+      return refuse(
+        `what you said you verified was not recorded, so nothing was answered: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
+  }
   const walked = await walkGate(continuo, {
     db: planField(record, "db"),
     gateId: gate.gateId,
@@ -3322,6 +3357,7 @@ async function commandPublish(
     baseBranch,
     headIsQualified: headRef !== topicBranch,
     work,
+    verificationClaims: await store.verificationClaimsFor(record.id),
   });
 
   // **Before the first line is printed, and therefore before `--dry-run`
@@ -3522,6 +3558,11 @@ export interface PullRequestTextInput {
    */
   readonly headIsQualified: boolean;
   readonly work: LapWorkInspection;
+  /**
+   * What the operator said they ran before answering the gate (#70). Empty when
+   * they said nothing, which is what it means and not more than that.
+   */
+  readonly verificationClaims: readonly OperatorVerificationClaim[];
 }
 
 export interface PullRequestText {
@@ -3712,6 +3753,7 @@ function composeBody(input: PullRequestTextInput, withRequest: boolean): string 
     );
   }
   lines.push(`- ${gateSentence(record)}`);
+  lines.push(...verificationLines(input.verificationClaims));
   lines.push(
     `- Against continuo \`${listed(record.continuoRevision ?? "an unrecorded revision", "revision")}\`` +
       `${modelClause(record)}.`,
@@ -3786,6 +3828,35 @@ function fileCounts(file: LapFile): string {
 }
 
 /** What the gate says about who approved this, in a reviewer's terms. */
+/**
+ * What the operator said they checked, or the fact that they said nothing (#70).
+ *
+ * **Both branches are printed, and the silent one is the reason this exists.**
+ * The gate sentence above says a person answered; on its own it reads the same
+ * whether they ran the suite first or read the diff, and those are the two
+ * cases the record is for. So the absence is written out rather than left as a
+ * missing bullet, which a reviewer cannot tell from a section that was never
+ * composed.
+ *
+ * **It is attributed, not asserted.** rondo did not run what these rows name
+ * and did not watch them run, so the line says whose account it is; anything
+ * shorter would put rondo's name on a verification it never observed.
+ */
+function verificationLines(claims: readonly OperatorVerificationClaim[]): readonly string[] {
+  if (claims.length === 0) {
+    return [
+      "- Nobody recorded what they checked before answering, so this body cannot say whether " +
+        "the work was run or only read.",
+    ];
+  }
+  return claims.map(
+    (claim) =>
+      `- Before answering, \`${listed(claim.actorId, "actor id")}\` said they had checked: ` +
+      `${listed(claim.claim, "claim")}. That is their own account, recorded as they answered; ` +
+      "rondo did not run it and did not see it run.",
+  );
+}
+
 function gateSentence(record: IterationRecord): string {
   const gate =
     record.gateId === null || record.gateId === ""

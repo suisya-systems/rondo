@@ -501,6 +501,34 @@ export interface LapReading extends LapReadingDraft {
 }
 
 /**
+ * What an operator says they did to check a lap's work before answering its
+ * gate (#70).
+ *
+ * **It is a claim and the type says so, because rondo did not watch it
+ * happen.** When a lap cannot verify itself the verification falls to the
+ * person at the gate, who runs it in a terminal rondo has no view of. The one
+ * fact rondo holds is that somebody typed a sentence saying what they ran, at
+ * the moment they answered -- so that is what the row holds, attributed and
+ * dated, and nothing here may be read as rondo's own observation (`D-0032`
+ * rule 1: a claim is recorded beside its basis, and the basis of this one is
+ * the operator's own word).
+ *
+ * **What it buys is a distinction the record could not make.** Before it, a
+ * closed gate said "a person answered" and stopped; "a person who ran the suite
+ * first" and "a person who read the diff" were the same row. The claim's
+ * presence or absence separates them, and its absence is not evidence that
+ * nothing was checked -- only that nothing was said.
+ */
+export interface OperatorVerificationClaim {
+  readonly iterationId: string;
+  readonly claimedAtMs: number;
+  /** The person whose word this is -- the same actor that answered the gate. */
+  readonly actorId: string;
+  /** What they say they ran, in their own words, byte for byte as typed. */
+  readonly claim: string;
+}
+
+/**
  * Who produced a reading when rondo's own deterministic reader did (D-0029
  * rule 5).
  *
