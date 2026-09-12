@@ -247,12 +247,12 @@ test("a needs_approval leaves a contract_keys proposal, its compositions, and no
   expect(proposals[0]?.["kind"]).toBe("contract_keys");
   expect(proposals[0]?.["iteration_id"]).toBe(SUBJECT);
   // Derived from the subject and carrying no clock (rule 10).
-  expect(proposals[0]?.["proposal_id"]).toBe(`contract_keys-${SUBJECT}-r2`);
+  expect(proposals[0]?.["proposal_id"]).toBe(`contract_keys-${SUBJECT}`);
   // Unchanged, and one promotion of the fixture's single askable key.
   expect(rowsIn(h.connection, "composition").length).toBe(2);
   // Rule 9: nobody was shown this, so nothing claims they were.
   expect(rowsIn(h.connection, "operator_attention").length).toBe(0);
-  expect(report.lines.join("\n")).toContain(`contract_keys-${SUBJECT}-r2`);
+  expect(report.lines.join("\n")).toContain(`successor '${SUBJECT}-r2'`);
 });
 
 test("cadenza refusing the action fires the same trigger", async () => {
@@ -372,11 +372,25 @@ test("a successor identity that is taken is skipped, and the next free one is mi
   });
   await store.settle(`${SUBJECT}-r2`, "it was taken by hand", NOW_MS - 500);
 
+  const report = await admit(h.ports, h.advisory, PLAN, POLICY, SUBJECT);
+
+  expect(rowsIn(h.connection, "proposal").length).toBe(1);
+  expect(report.lines.join("\n")).toContain(`successor '${SUBJECT}-r3'`);
+});
+
+test("two subjects that would mint one successor each get their own proposal", async () => {
+  // The id is derived from the **subject**, because a successor identity is not
+  // unique to one: `i-0001` and `i-0001-r1` both mint `i-0001-r2` while that
+  // name is free. An id naming only the successor would have let the first of
+  // them collide with the second on the primary key, and the second lap would
+  // have ended with nothing recorded and nobody told why.
+  const h = harness(NEEDS_APPROVAL);
   await admit(h.ports, h.advisory, PLAN, POLICY, SUBJECT);
+  await admit(h.ports, h.advisory, PLAN, POLICY, `${SUBJECT}-r1`);
 
   const proposals = rowsIn(h.connection, "proposal");
-  expect(proposals.length).toBe(1);
-  expect(proposals[0]?.["proposal_id"]).toBe(`contract_keys-${SUBJECT}-r3`);
+  expect(proposals.length).toBe(2);
+  expect(proposals.map((row) => row["iteration_id"]).sort()).toEqual([SUBJECT, `${SUBJECT}-r1`]);
 });
 
 test("the pin the trigger needs being unreadable does not refuse the lap", async () => {

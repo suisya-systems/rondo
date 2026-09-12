@@ -2538,13 +2538,18 @@ export async function proposeAfterAbandon(
         "contract it already ran under",
     );
   }
-  // **Derived, and carrying no clock** (rule 10), unlike the operator door's id
-  // one line of this file away. A second admission that reached this point
-  // about the same subject would compose the same id and collide on the
-  // proposal table's primary key, which is the whole of the idempotence this
-  // needs: the store refuses the duplicate rather than this function
-  // remembering anything.
-  const proposalId = `contract_keys-${minted.id}`;
+  // **Derived from the subject, and carrying no clock** (rule 10), unlike the
+  // operator door's id one line of this file away. A second attempt about the
+  // same subject composes the same id and collides on the proposal table's
+  // primary key, which is the whole of the idempotence this needs: the store
+  // refuses the duplicate rather than this function remembering anything.
+  //
+  // **The subject and not the successor**, because a successor identity is not
+  // unique to one subject: `job` and `job-r1` both mint `job-r2` while that
+  // name is free, and an id naming only the minted successor would have let the
+  // first of them silently suppress the second's proposal. The subject is the
+  // thing this door proposes about, and it proposes about one subject once.
+  const proposalId = `contract_keys-${iterationId}`;
   const written = await recordDraft(
     ports,
     "contract_keys",
