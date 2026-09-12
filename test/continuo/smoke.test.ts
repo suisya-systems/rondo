@@ -239,6 +239,13 @@ test.skipIf(!available)(
           digestAlgorithm: "sha256",
           digestVerified: true,
         },
+        // **Empty, off a real continuo, for a run that has never performed a
+        // lap** (#79). The unit cases can only say what rondo does with a
+        // `sessions` array somebody typed; this says that continuo sends the
+        // key at all, and sends it as an array rather than omitting it -- which
+        // is what `D-0048` rule 1's decoder requires and what the absent-is-not
+        // -null rule would otherwise turn into a defect on every `run show`.
+        sessions: [],
       },
     });
 

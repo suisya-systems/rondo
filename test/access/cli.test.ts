@@ -17,6 +17,8 @@
  * than of this module; the runbook's real walk is what covers that, and
  * `docs/operations/rondo-cli.md` records it.
  */
+import { join } from "node:path";
+
 import { expect, test } from "vitest";
 import {
   approvedActor,
@@ -36,6 +38,7 @@ import {
   reviewGate,
   reviewLines,
   revisionBlocker,
+  transcriptPort,
   USAGE,
   walkGate,
   workLines,
@@ -1838,4 +1841,55 @@ test("show takes one proposal id and nothing that would read as an answer", () =
   expect(parseCommand(["show", "--proposal-id", "p-1", "--outcome", "approved"]).kind).toBe(
     "refused",
   );
+});
+
+test("a refused continuo is retried on the next row, and a working one is not restarted", async () => {
+  // **The page is the caller whose lifetime makes this matter** (D-0048
+  // rule 4). `rondo web` builds this port once and redraws every few seconds,
+  // so a startup remembered *after it failed* would keep reporting a continuo
+  // that is not usable long after it came back -- a stale answer on the one
+  // surface that is supposed to re-read.
+  //
+  // Asserted without spawning anything: the two refusals below differ only
+  // because the port asked again. A cached refusal would repeat the first
+  // reason word for word.
+  const environment: Record<string, string | undefined> = {};
+  const locate = transcriptPort(environment);
+  const running = published({
+    status: "performing",
+    sessionId: null,
+    runId: "rondo-i-1",
+    plan: { state_root: "/srv/state", db: "/srv/cp.sqlite3" } as JsonRecord,
+  });
+
+  const unset = await locate(running);
+  environment["RONDO_CONTINUO_CLI"] = "/nowhere/dist/cli.js";
+  const missing = await locate(running);
+
+  expect(unset.kind).toBe("unknown");
+  expect(missing.kind).toBe("unknown");
+  expect(unset.kind === "unknown" ? unset.reason : "").not.toBe(
+    missing.kind === "unknown" ? missing.reason : "",
+  );
+});
+
+test("a row that already names its session needs no continuo at all (D-0048 rule 6)", async () => {
+  // The bound on what this costs: the subprocess is for the window in which
+  // rondo's own column is empty, and `RONDO_CONTINUO_CLI` is unset here, so a
+  // port that reached for continuo anyway could not have answered `named`.
+  const located = await transcriptPort({})(
+    published({
+      status: "performing",
+      sessionId: "session-7",
+      runId: "rondo-i-1",
+      plan: { state_root: "/srv/state" } as JsonRecord,
+    }),
+  );
+  // `join` rather than a literal: the separator is the platform's, and the
+  // Windows cells of the matrix are as required as the others (AGENTS.md 4).
+  expect(located).toEqual({
+    kind: "named",
+    directory: join("/srv/state", "rondo-i-1", "session-7"),
+    sessions: 1,
+  });
 });

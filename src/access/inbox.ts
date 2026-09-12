@@ -49,7 +49,36 @@ export interface InboxReadPorts {
     "lastView" | "openProposals" | "attentionBreakdown" | "unconsumedDecisions" | "changedSince"
   >;
   readonly now: () => number;
+  /**
+   * Where one running lap is writing its transcript (D-0048 rules 6 and 7).
+   *
+   * A port for {@link InboxPorts.present}'s reason and `web.ts`'s `material`'s:
+   * answering it reaches continuo as a subprocess and composes a path out of
+   * the row's plan, and this module is a pure render over what was read. **The
+   * arrow to continuo is the composition root's**, which is D-0022 rule 3's own
+   * shape -- an admitted `--json` verb, decoded by `src/continuo/protocol.ts`,
+   * handed over in the snapshot.
+   *
+   * It is asked only of the rows that need it; see {@link gatherInbox}.
+   */
+  readonly locateTranscript: (record: IterationRecord) => Promise<TranscriptLocation>;
 }
+
+/**
+ * Where a lap's transcript is, or why rondo cannot say.
+ *
+ * **A directory and not a session id.** A session id still leaves continuo's
+ * layout to be known, and the workaround rondo#79 is about is an operator
+ * listing a directory rondo never named -- so what a screen can print is the
+ * path itself or an honest reason (D-0048 rule 5).
+ *
+ * `sessions` is how many the run has, for the one case a respawn or a resume
+ * produces: the newest is named and the count says that there are others, so
+ * "one session" and "the newest of three" are not the same line.
+ */
+export type TranscriptLocation =
+  | { readonly kind: "named"; readonly directory: string; readonly sessions: number }
+  | { readonly kind: "unknown"; readonly reason: string };
 
 /** Everything the inbox is handed: two ports over the store, a clock, a screen. */
 export interface InboxPorts extends InboxReadPorts {
@@ -126,6 +155,17 @@ export interface InboxSnapshot {
    */
   readonly attentionSince: readonly AttentionCount[] | null;
   readonly unspent: readonly UnconsumedDecision[];
+  /**
+   * Where each running lap is writing, keyed by iteration id (D-0048).
+   *
+   * **Read at render time and never stored** (rule 4). The iteration row's
+   * `session_id` keeps its single writer at the suspend: a live read written
+   * back would give one fact two homes (`D-0022` rule 8) and the copy would go
+   * stale in exactly the window it is read in. A row absent from this map was
+   * not asked about, which is a different thing from one whose answer is
+   * `unknown`.
+   */
+  readonly transcripts: ReadonlyMap<string, TranscriptLocation>;
 }
 
 /**
@@ -246,23 +286,40 @@ function waitingOnYouLines(snapshot: InboxSnapshot): readonly string[] {
 }
 
 /**
- * Where a lap can be watched, read off the row and nothing computed (#71):
- * the workspace a person `ls`s, and the session they `tail` once one is
- * recorded.
+ * Where a lap can be watched: the workspace a person `ls`s, and the directory
+ * its transcript is being written into (#71, #79).
  *
- * **The session half is absent, not merely unshown, for a row that is still
- * `performing`.** `interpreter.ts`'s `performLap` step commits `performing`
- * with no session fields and writes `sessionId` / `sessionPath` only once the
- * lap has already answered and the row is moving to `awaiting_human` (or a
- * terminal status) -- so there is nothing on the row for this line to read
- * back while the lap is actually running. Naming a session rondo does not yet
- * know would be inventing state D-0032 rule 3 refuses to hold, so the line
- * says so instead of guessing.
+ * **The second half used to be absent rather than merely unshown**, because
+ * `interpreter.ts`'s `performLap` step commits `performing` with no session
+ * fields and writes `sessionId` / `sessionPath` only once the lap has answered
+ * and the row is moving to `awaiting_human` (or a terminal status). D-0048 is
+ * where that hole is filled, and it is filled by *asking continuo* rather than
+ * by guessing: rondo still invents no state D-0032 rule 3 refuses to hold, and
+ * a lap whose session nobody can name still says so.
+ *
+ * **This names a place and claims no liveness** (D-0048 rule 3). That a
+ * transcript directory exists is not that anything is still writing into it;
+ * what the operator gets is the end of a manual `ls`, not an answer to "is it
+ * wedged?", which `D-0036` rule 5 still refuses.
  */
-function whereItRuns(record: IterationRecord): string {
-  const session = record.sessionId ?? "(no session recorded on this row yet)";
+function whereItRuns(record: IterationRecord, located: TranscriptLocation | undefined): string {
   const workspace = record.workspace ?? "(no workspace on the row)";
-  return `session ${session}  in ${workspace}`;
+  return `${transcriptPhrase(located)}  in ${workspace}`;
+}
+
+/** The transcript half of the line above, in the three states it has. */
+function transcriptPhrase(located: TranscriptLocation | undefined): string {
+  if (located === undefined) {
+    return "transcript (not looked for on a row that has not started one)";
+  }
+  if (located.kind === "unknown") {
+    // **Unknown and never nothing**, which is the wording `explain` already
+    // uses for the delegation record: a continuo that will not answer and a run
+    // with nothing to answer about are different facts (D-0048 rule 8).
+    return `transcript (not named: ${located.reason})`;
+  }
+  const others = located.sessions > 1 ? `  (newest of ${String(located.sessions)} sessions)` : "";
+  return `transcript ${located.directory}${others}`;
 }
 
 function inFlightLines(snapshot: InboxSnapshot): readonly string[] {
@@ -277,7 +334,7 @@ function inFlightLines(snapshot: InboxSnapshot): readonly string[] {
     ...running.map(
       (record) =>
         `  ${record.id}  ${record.status}  ${ago(record.updatedAtMs, snapshot.atMs)}  ` +
-        whereItRuns(record),
+        whereItRuns(record, snapshot.transcripts.get(record.id)),
     ),
     // **A row that will not decode is on the screen rather than missing from
     // it.** It is live -- it holds a slot -- and an inbox that dropped it
@@ -456,8 +513,37 @@ export async function gatherInbox(ports: InboxReadPorts, actorId: string): Promi
         ? null
         : await ports.record.attentionBreakdown({ fromMs: sinceMs, toMs: atMs }),
     unspent: await ports.record.unconsumedDecisions(),
+    transcripts: await locateRunning(ports, live),
   };
   return snapshot;
+}
+
+/**
+ * Ask where each running lap is writing, for the rows that have one.
+ *
+ * **`performing` and nothing else** (D-0048 rule 6). It is the only status
+ * under which a lap has a transcript at all: `planned` and `classified` have
+ * been admitted to nothing, and `admitting` / `admitted` have no session yet.
+ * Asking about them would be a subprocess per row for an answer that is known
+ * in advance to be "there is none".
+ *
+ * **So the cost is one continuo call per lap actually running**, which the
+ * capacity ledger bounds (`D-0023`), and not one per row of history. They are
+ * asked in sequence rather than at once: the bound is small by construction,
+ * and a screen that fanned out subprocesses would be spending a host's
+ * concurrency on a read.
+ */
+async function locateRunning(
+  ports: InboxReadPorts,
+  live: readonly LiveRow[],
+): Promise<ReadonlyMap<string, TranscriptLocation>> {
+  const located = new Map<string, TranscriptLocation>();
+  for (const row of live) {
+    if (row.kind === "read" && row.record.status === "performing") {
+      located.set(row.record.id, await ports.locateTranscript(row.record));
+    }
+  }
+  return located;
 }
 
 /**

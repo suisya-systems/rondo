@@ -39,7 +39,8 @@ import {
   startContinuo,
   type VerifiedContinuo,
 } from "../continuo/invoker.js";
-import type { ContinuoResult } from "../continuo/protocol.js";
+import type { ContinuoResult, ObservedSession } from "../continuo/protocol.js";
+import { lapTranscriptDirectory } from "../continuo/transcript.js";
 import { allocate } from "../refrain/allocator.js";
 import { type RunPlan, readRunPlan } from "../refrain/plan.js";
 import {
@@ -91,7 +92,7 @@ import {
   type PushTargetInspection,
   pushTopicBranch,
 } from "./forge.js";
-import { type InboxOutcome, showInbox } from "./inbox.js";
+import { type InboxOutcome, showInbox, type TranscriptLocation } from "./inbox.js";
 import { evidenceOf, READING_REMOTE } from "./review.js";
 import { serveOperatorPage } from "./web.js";
 
@@ -1354,6 +1355,10 @@ export async function main(
         // still has most of itself to show.
         actorId: environment[APPROVER_ENV] ?? null,
         now: Date.now,
+        // The page draws `inbox`'s own lines, so it asks the same question of
+        // continuo -- and it is the surface that redraws itself, which is the
+        // one D-0048 rule 4's "read at render time" has to keep honest.
+        locateTranscript: transcriptPort(environment),
       },
       parsed.port ?? DEFAULT_WEB_PORT,
       say,
@@ -1809,6 +1814,7 @@ async function commandInbox(
       store,
       record: openAdvisoryRecord(storePath),
       now: Date.now,
+      locateTranscript: transcriptPort(environment),
       present: (lines) => {
         for (const line of lines) {
           say(line);
@@ -2733,6 +2739,90 @@ async function pageMaterial(
       startup.kind === "refused" ? null : startup.continuo,
     )),
   ];
+}
+
+/**
+ * Where a running lap is writing, for the in-flight row of the inbox (D-0048).
+ *
+ * **The continuo handle is started at most once per look and only if a lap is
+ * actually running.** `inbox` and `web` are both dispatched ahead of
+ * `startContinuo` so that the screen saying what is stuck stays reachable when
+ * continuo is what is stuck, and a port that started one eagerly would undo
+ * that; a host with nothing `performing` spawns nothing at all.
+ */
+export function transcriptPort(
+  environment: Readonly<Record<string, string | undefined>>,
+): (record: IterationRecord) => Promise<TranscriptLocation> {
+  let verified: VerifiedContinuo | null = null;
+  return async (record) => {
+    const stateRoot = planField(record, "state_root");
+    if (stateRoot === "") {
+      return { kind: "unknown", reason: "the row's plan names no state root" };
+    }
+    if (record.runId === null) {
+      return { kind: "unknown", reason: "the row names no run" };
+    }
+    // **The row first, and continuo only for the window where the row is
+    // empty** (D-0048 rule 6). A row that already carries a session needs no
+    // subprocess to name its directory, and asking anyway would spend one to
+    // learn what rondo wrote down itself.
+    if (record.sessionId !== null) {
+      return {
+        kind: "named",
+        directory: lapTranscriptDirectory({
+          stateRoot,
+          runId: record.runId,
+          sessionId: record.sessionId,
+        }),
+        sessions: 1,
+      };
+    }
+    // **A working handle is remembered and a refusal is not.** The page is the
+    // caller that lives: it is built once and redraws itself every few seconds,
+    // so a startup cached after it failed would keep saying "continuo is not
+    // usable" long after continuo came back -- a stale answer on the one
+    // surface D-0048 rule 4's "read at render time" has to keep honest. The
+    // retry costs a `--version` per running lap while continuo is down, which
+    // is the same bound rule 6 already accepts and is paid only when the answer
+    // is unknown anyway.
+    if (verified === null) {
+      const startup = await startContinuo(environment);
+      if (startup.kind === "refused") {
+        return { kind: "unknown", reason: `continuo is not usable here: ${startup.reason}` };
+      }
+      verified = startup.continuo;
+    }
+    const observed = await showRun(verified, {
+      db: planField(record, "db"),
+      runId: record.runId,
+    });
+    if (observed.kind !== "answered") {
+      return {
+        kind: "unknown",
+        reason: `run ${record.runId} could not be read (${observed.kind})`,
+      };
+    }
+    const sessions = observed.payload.sessions;
+    // **Newest by `bound_at_ms`, and nothing filtered on `released_at_ms`**
+    // (D-0048 rule 8): that column is one continuo writes nowhere, so a filter
+    // over it would quietly be no filter at all.
+    const newest = sessions.reduce<ObservedSession | null>(
+      (best, session) => (best === null || session.boundAtMs > best.boundAtMs ? session : best),
+      null,
+    );
+    if (newest === null) {
+      return { kind: "unknown", reason: `continuo holds no session for run ${record.runId} yet` };
+    }
+    return {
+      kind: "named",
+      directory: lapTranscriptDirectory({
+        stateRoot,
+        runId: record.runId,
+        sessionId: newest.sessionId,
+      }),
+      sessions: sessions.length,
+    };
+  };
 }
 
 /**

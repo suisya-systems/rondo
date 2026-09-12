@@ -406,6 +406,11 @@ export interface RunAdmitted {
  * five keys would be rondo claiming to understand rows it does nothing with.
  * `status` is read because a refusal that can say what the run is doing is
  * worth more to the person reading it than one that cannot.
+ *
+ * **Two of those keys are read now, each on its own entry, and the narrowing is
+ * still the decision.** `delegation_record` is D-0040's read-back; `sessions` is
+ * D-0048's, and it is narrowed *inside* the row as well -- see
+ * {@link ObservedSession}.
  */
 export interface RunObserved {
   readonly runId: string;
@@ -421,6 +426,41 @@ export interface RunObserved {
    * from an empty one.
    */
   readonly delegationRecord: DelegationRecordObserved | null;
+  /**
+   * The run's sessions, reduced to the two fields D-0048 rule 1 permits.
+   *
+   * Read for a run that is still moving, which is what makes this different
+   * from {@link delegationRecord}: that field reads back a fact rondo itself
+   * composed off a settled row, and this one is continuo's own fact read while
+   * the lap runs. What justifies it is that during `performing` continuo's row
+   * is the only copy of the session identity in the system -- rondo's own
+   * column is written at the suspend and `lap perform` takes no session id in.
+   *
+   * Empty is a fact and not an absence: continuo holds no session for this run
+   * yet.
+   */
+  readonly sessions: readonly ObservedSession[];
+}
+
+/**
+ * One session of a run, as much of it as rondo may read (D-0048 rule 1).
+ *
+ * **The three fields deliberately absent are `provider_state`, `observation`
+ * and `released_at_ms`, and rule 3 refuses them by name.** They are the
+ * liveness-shaped ones, and they cannot answer liveness: `released_at_ms` is
+ * never written by anything continuo calls, and `provider_state` is a snapshot
+ * taken when the identity was confirmed -- so a stopped session and a running
+ * one read identically (`docs/design/refusal-session-lock.md` section 5,
+ * re-read at the pin `fcf86eb` on 2026-09-12 together with the payload shape
+ * this decoder reads). A decoder that carried them would let a screen one layer
+ * up answer "is it wedged?" from columns that cannot tell.
+ *
+ * `boundAtMs` is here for one purpose: ordering, so that a run which has been
+ * respawned or resumed names its newest session rather than an arbitrary one.
+ */
+export interface ObservedSession {
+  readonly sessionId: string;
+  readonly boundAtMs: number;
 }
 
 /** One stored envelope, as `run show` reports it. */
@@ -746,7 +786,7 @@ export const RUN_SHOW: VerbContract<RunObserved> = {
   // `run` is a nested object rather than five flat keys, which is continuo's
   // own shape: `showPayload` keys the document by the tables it read, so the
   // run's own columns live under `run` beside `lease`, `sessions`, `gates`,
-  // `events` and `outbox`. The other five are not read here; see
+  // `events` and `outbox`. The other four are not read here; see
   // {@link RunObserved}.
   read: (payload) => {
     const row = requireObject(payload, "run");
@@ -764,6 +804,16 @@ export const RUN_SHOW: VerbContract<RunObserved> = {
               digestAlgorithm: requireString(record, "digest_algorithm"),
               digestVerified: requireBoolean(record, "digest_verified"),
             },
+      // **Two fields off each session row and not the row.** The three this
+      // drops are refused by name (D-0048 rule 3); `provider` and
+      // `binding_phase` are simply not asked for, which is this module's
+      // ordinary narrowing. Nothing filters on `released_at_ms`: it is a column
+      // continuo writes nowhere, so a filter over it would be a filter that
+      // silently does nothing (rule 8).
+      sessions: requireObjectArray(payload, "sessions").map((session) => ({
+        sessionId: requireString(session, "session_id"),
+        boundAtMs: requireNumber(session, "bound_at_ms"),
+      })),
     };
   },
 };

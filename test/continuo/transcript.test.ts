@@ -19,7 +19,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test } from "vitest";
 
-import { readLapSpend } from "../../src/continuo/transcript.js";
+import { lapTranscriptDirectory, readLapSpend } from "../../src/continuo/transcript.js";
 
 const SESSION = "59a9bc45-c34a-4a83-b234-2a7f648d3a6f";
 
@@ -212,4 +212,24 @@ test("a generation above 999 is not truncated", () => {
   const stateRoot = sessionDir({ generation: 1000, events: { "1000": transcript(LAP_5) } });
 
   expect(readLapSpend({ stateRoot, runId: RUN, sessionId: SESSION }).numTurns).toBe(38);
+});
+
+test("the directory a screen names is the directory this module reads (D-0048 rule 5)", () => {
+  // **One composer, asserted as one.** The screen naming a running lap's
+  // transcript and the reader opening a finished one must not be two copies of
+  // continuo's layout: what `rondo inbox` prints is exactly the directory the
+  // fixtures below are written into.
+  const directory = lapTranscriptDirectory({
+    stateRoot: "/srv/state",
+    runId: RUN,
+    sessionId: SESSION,
+  });
+  expect(directory).toBe(join("/srv/state", RUN, SESSION));
+
+  // And it opens nothing: a path for a directory that does not exist is still
+  // a path, which is what makes naming one safe on a screen (D-0046 rule 4's
+  // grant is unchanged).
+  expect(lapTranscriptDirectory({ stateRoot: "/nowhere", runId: RUN, sessionId: SESSION })).toBe(
+    join("/nowhere", RUN, SESSION),
+  );
 });
