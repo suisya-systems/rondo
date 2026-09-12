@@ -47,7 +47,8 @@ real one at `start` with `--prompt-file` (section 4).
 
 `--root` is optional; it defaults to `$XDG_STATE_HOME/rondo/dogfood-env`
 (`~/.local/state/rondo/dogfood-env`). It has to be **outside any installed checkout**, and the
-script refuses a root whose ancestors hold a `node_modules`: npm prepends every ancestor's
+script refuses a root inside this repository, or one whose ancestors hold a `node_modules`: npm
+prepends every ancestor's
 `node_modules/.bin` to `PATH`, so a workspace cut inside an installed repository builds, lints,
 typechecks and tests green on *that* repository's toolchain whether or not the lap ever ran
 `npm ci` (rondo#111). The default used to be `.worker-scratch/dogfood-env` for the good reason

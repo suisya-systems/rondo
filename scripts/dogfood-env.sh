@@ -46,8 +46,9 @@ options:
       where the environment lives. Created if absent. Default: $RONDO_DOGFOOD_ROOT,
       or $XDG_STATE_HOME/rondo/dogfood-env (~/.local/state/rondo/dogfood-env)
       when that is unset. It must be outside any installed checkout: a root
-      whose ancestors hold a `node_modules` is refused, because npm would lend
-      that checkout's toolchain to a lap that never installed (rondo#111).
+      inside this repository, or one whose ancestors hold a `node_modules`, is
+      refused, because npm would lend that checkout's toolchain to a lap that
+      never installed (rondo#111).
   --iteration-id ID
       the iteration id the printed commands use. Default: dogfood-001.
       It is no longer written into the plan file: rondo derives the run id, the
@@ -79,7 +80,7 @@ die() { printf 'dogfood-env: %s\n' "$1" >&2; exit 1; }
 step() { printf '\n== %s\n' "$1"; }
 note() { printf '   %s\n' "$1"; }
 
-repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)
 
 # The default lives outside the repository. It used to be
 # `<repo>/.worker-scratch/dogfood-env`, which kept the environment out of git and
@@ -111,7 +112,7 @@ done
 # name, and it is right to: a relative path means something different to the
 # fenced child than it does to the shell that typed it.
 mkdir -p -- "$env_root"
-env_root=$(cd -- "$env_root" && pwd)
+env_root=$(cd -- "$env_root" && pwd -P)
 
 # The check the default alone cannot make: --root and $RONDO_DOGFOOD_ROOT can
 # still name a directory inside an installed checkout. A workspace there
@@ -120,6 +121,17 @@ env_root=$(cd -- "$env_root" && pwd)
 # is not its own (rondo#111). Refusing the root is the only place this can be
 # caught: by the time the lap is running, the borrowed toolchain looks exactly
 # like an installed one.
+#
+# Two ancestors have to be refused rather than merely inspected. The repository
+# itself is one: this script runs `npm ci` in it a few steps below, so a root
+# under it is inside an installed checkout by the time a lap runs even when the
+# scan here finds nothing. Both paths are physical (`pwd -P`), because npm
+# resolves ancestors through symlinks and a logical path would be scanned as
+# somewhere it is not.
+case "$env_root" in
+  "$repo_root" | "$repo_root"/*)
+    die "root '$env_root' is inside the rondo checkout '$repo_root', which this script installs; a lap cut there runs its toolchain whether or not it installed one. Use a --root outside it." ;;
+esac
 ancestor=$env_root
 while :; do
   if [ -d "$ancestor/node_modules" ]; then
