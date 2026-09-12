@@ -322,6 +322,12 @@ test("it serves the page on localhost, and only the one page", async () => {
   const page = await fetch(`${base}/`);
   expect(page.status).toBe(200);
   expect(page.headers.get("content-type")).toBe("text/html; charset=utf-8");
+  // **The attack neither the token nor the `Host` check reaches.** Another
+  // page cannot read this one, so it cannot steal the token -- but it can
+  // frame this one under a button of its own, and the click that follows
+  // carries the genuine token from the loopback origin. The browser is what
+  // refuses that, and only if it is told to.
+  expect(page.headers.get("content-security-policy")).toBe("frame-ancestors 'none'");
   expect(await page.text()).toContain("what spans the live laps");
 
   // One page and no router: a typo'd path says so rather than quietly showing

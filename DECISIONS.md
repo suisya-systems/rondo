@@ -7331,6 +7331,14 @@ the one write that is being let through.
       page (no CORS header is sent, and a cross-origin form post cannot read the response), so a
       request carrying it came from a page this process served.
 
+   c. **The browser, told not to frame this page.** `Content-Security-Policy: frame-ancestors
+      'none'` is served with the page, and it is not a third copy of the same defence: a page on
+      `evil.example` cannot *read* this one and so cannot steal the token, but it can put this one
+      in a transparent frame over a button of its own — and the click that follows carries the
+      genuine token from the loopback origin and is indistinguishable, at this process, from the
+      operator pressing approve. The only party that can tell those apart is the browser, and only
+      if it is told to. rondo needs no frame, so refusing every one costs nothing.
+
    Fact (b) is the one that also answers the *other* attacker, and that is why both are kept rather
    than just (a). rondo#95 established that a loopback bind decides which sockets arrive and not
    which *pages* sent them, and defended against DNS rebinding with the `Host` check. A
@@ -7419,6 +7427,9 @@ from the press onward is the real path: continuo's own CLI, six verbs, and rondo
   a single submit button reading `approve`, beside the gate id it answers.
 - **Five unattended redraws wrote nothing.** `operator_view` and `operator_attention` both held
   **0** rows afterwards, which is rondo#95's property and the one this entry may not cost.
+- **The page refuses to be framed.** `Content-Security-Policy: frame-ancestors 'none'` is on the
+  200 response (found by the Codex review of this change, not by the author, and recorded here as
+  the third fact rule 3 now names).
 - **A form without the token is refused, and so is one from another origin.** `POST` with the
   iteration and no token: **403**. `POST` with the correct token and `Origin: https://evil.example`:
   **403**. Neither reached the write port.
@@ -7459,6 +7470,10 @@ from the press onward is the real path: continuo's own CLI, six verbs, and rondo
   lock.
 - **An unattended redraw turning out to have written anything**, which is rondo#95's original
   property and the one thing this entry may not cost.
+- **A third way for a browser to be made to send a request the operator did not mean.** Rule 3
+  names three and refuses each where it can be refused (the method, the token, the frame); the
+  fourth one is this entry being incomplete rather than wrong, and the place to look is whatever a
+  browser will do for a page the operator is not looking at.
 - **A browser that sends `Origin` on a same-origin form post but not the token**, or any evidence
   that the token can reach a cross-site page, which would mean rule 3(b) does not separate the two
   requests it claims to separate.

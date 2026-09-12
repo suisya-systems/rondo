@@ -505,7 +505,20 @@ export function serveOperatorPage(
     }
     operatorPage(ports, token)
       .then((html) => {
-        response.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+        response.writeHead(200, {
+          "content-type": "text/html; charset=utf-8",
+          // **The third door, and the one the token cannot hold** (D-0041
+          // rule 3). A page on evil.example cannot *read* this one and so
+          // cannot steal the token -- but it can put this one in a transparent
+          // frame over a button of its own, and then the click that arrives
+          // carries the genuine token from the loopback origin and is
+          // indistinguishable from the operator pressing approve. It is the
+          // same shape as the other two: a browser doing what the operator
+          // asked, for a page the operator did not mean. What refuses it is the
+          // browser, told not to frame this page at all, which is why the
+          // header is sent even though nothing about rondo needs a frame.
+          "content-security-policy": "frame-ancestors 'none'",
+        });
         response.end(request.method === "HEAD" ? undefined : html);
       })
       .catch((error: unknown) => {
