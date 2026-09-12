@@ -12156,7 +12156,7 @@ but does not put them to the person:
 | **O1** | **How a request is split** into plans, and in what order and how many at once they run | The scope's request predicate and its lap budget. Parallelism is also bounded by `D-0012` |
 | **O2** | **Which agent type, and so which tier, each plan runs under** | The agent types the scope lists, which a person chose (rule 3.1). `D-0062` rules 1.2, 1.3, 2.2, 2.3 and 2.4 keep applying: a named record, no per-request tier override, grounds for a non-`standard` tier, the highest tier recommended when options differ, and an unpriced tier refused |
 | **O3** | **The wording a worker runs on** (`D-0063` rule 4.3) | Bases into the request thread (kept line 1) |
-| **O4** | **Doing it again**: `revise` with an instruction the organisation writes, or `retry` of a stopped lap under the same grants | The scope's round budget. A retry that needs a **wider grant** is not a redo and leaves the scope (rule 3.3) |
+| **O4** | **Doing it again**: `retry` of a stopped lap under the same grants, and `revise` with an instruction the organisation writes | The scope's round budget. A retry that needs a **wider grant** is not a redo and leaves the scope (rule 3.3). **`revise` answers the predecessor's open gate before it starts a lap** (`D-0027` rules 1 and 6), so the organisation may draft the instruction at once but may run `revise` itself only under rule 3.6, exactly as O6 |
 | **O5** | **Review findings below the scope's severity threshold**, which are left and listed in the report (P5) | Findings at or above the threshold are fixed by the organisation within the round budget; a finding still open when the budget is spent leaves the scope |
 | **O6** | **Answering a lap's end gate when the lap is inside the scope** | Rule 3.6: only when the reading is clear and nothing on P2-P4 is open, and only as the organisation's recorded answer, never as the person's |
 | **O7** | **Pushing a lap's own branch and opening its pull request**, when the scope includes it | Rule 3.4: these are not on the irreversible list. Merging is |
@@ -12217,7 +12217,8 @@ but does not put them to the person:
    written through that edge under the approver's actor id. It needs a seam that records **a
    delegated answer as delegated**: an actor kind other than `human`, naming the scope approval it was
    taken under. **That seam is continuo's to add, and until it exists every lap's end gate stays a
-   person's press**, which leaves O6 unavailable and the rest of this section in force. The same
+   person's press**, which leaves O6 and O4's `revise` unavailable and the rest of this section in
+   force. **Any act that answers a gate is under this rule**, whatever verb carries it. The same
    reasoning keeps the voice a column (`D-0032` rule 5, `D-0061` rule 2.3): who decided is recorded,
    not implied.
 
@@ -12275,7 +12276,7 @@ changing a claim. "Keep" means the rule already fits.
 | **`D-0009`** | rondo carries a human's answer and never composes one | O6 | **Keep, and annotate** with rule 3.6: a delegated answer is not a carried human answer, and waits on a continuo seam that records it as delegated |
 | **`D-0019`** `R-5` | The loop suspends at `awaiting_human`; `resume` is separate | O6 | **Keep.** Who calls `resume` changes, the suspension does not |
 | **`D-0025`** rule 6, and **`D-0010`** | `publish` runs only when a person types it; the operator is the publisher | O7 | **Supersede `D-0025` rule 6's** "nothing here runs unless a person typed `publish`" for push and pull request inside a scope that names them. **Keep "never merges"**, now as rule 3.4's list. `D-0010` is **annotated**: rondo still holds no credential of its own |
-| **`D-0027`** | Revise at the gate is a person's instruction carried into a second lap | O4 | **Annotate**: inside a scope, the organisation may write the instruction, counted against the round budget |
+| **`D-0027`** rule 2 | "Nothing makes rondo revise on its own; a person types the command, once, per lap" | O4 | **Supersede** that sentence, once rule 3.6's seam exists: inside a scope the organisation may write the instruction and run `revise`, counted against the round budget. Rules 1 and 6 (`revise` answers the gate, and validates before it does) are kept, which is why O4's `revise` waits on rule 3.6 |
 | **`D-0029`** `V-3`, `V-14` | A refusal stops `publish` with a named override; no round budget in rondo | Rule 3.3; O5 | **Keep** `V-3` (the override stays a person's act). **`V-14` is superseded** when the model reviewer entry adds a round budget; not by this entry |
 | **`D-0032`** rules 1, 2, 4, 10 | Options with one recommendation; bases; irreversibility computed from `kind`; presented and withheld counted in one table | Section 4 relies on rule 1; O8 relies on rule 10; rule 3.4 is a list and not a function of `kind` | **Keep** rules 1, 2 and 10. **Annotate rule 4**: an irreversible act's list is rule 3.4's, and a split whose plans differ in what they make irreversible (prototype note G-5) is that rule's own named falsifier |
 | **`D-0034`** | An explanation carries claims and no recommendation | Section 4 | **Annotate** with rule 4.3: its scope is the `explanation` kind; a question put to the person is never one |
@@ -12311,8 +12312,8 @@ changing a claim. "Keep" means the rule already fits.
 
 1. **When the lap's end gate leaves the person's hands (O6).**
    - **(a) Only after a model reviewer exists (survey G3) and continuo records a delegated answer
-     (rule 3.6)** (recommended). Until both, a scope covers O1-O5, O7 and O8, and the person still
-     presses once per lap. *Loses:* the product manager position is not reached at the lap end until
+     (rule 3.6)** (recommended). Until both, a scope covers O1-O3, O4's `retry`, O5, O7 and O8, and
+     the person still presses once per lap, including to send a `revise` the organisation drafted. *Loses:* the product manager position is not reached at the lap end until
      two other pieces of work land.
    - **(b) As soon as continuo's seam exists**, with no model reviewer. *Loses:* rondo's only review
      (section 7, second bullet), and the N-14 / N-16 class of defect goes unseen until a report.
