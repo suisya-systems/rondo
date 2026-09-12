@@ -93,6 +93,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0053 | The operator's language is a property of the lap: material is what a lap composed for the answer, the language is an ask carried on the plan and recorded as an ask, and the laps already written stay written | accepted |
 | D-0054 | The page may run one script, and it is a poller and a morph rather than a framework: liveness decided per view, `D-0041` rule 3a re-founded on the server's types, and one vendored 10 KB file no build ever touches | accepted |
 | D-0055 | The chrome is prose the operator reads, and its language comes from the host's one operator: the line drawn at the span rather than at the string, recorded words left in English, and `<html lang>` naming what rondo actually wrote | accepted |
+| D-0056 | The chrome's language is asked for in the URL and defaulted by the host: `?lang=` as the same `GET` the fold already is, BCP 47 lookup so `ja-JP` is `ja`, and a link that is the first of the chrome there to be operated | accepted |
 
 ---
 
@@ -9955,6 +9956,23 @@ the properties rules 2, 3, 6 and 7 assert.
 **Status:** accepted (2026-09-13, rondo's human gate). Refs rondo#166, `D-0053`, `D-0041`, `D-0042`,
 `D-0050`, `D-0020`, `D-0019`, `D-0004`.
 
+> **Annotation (2026-09-13, from D-0056).** Added after this entry was accepted, and additive:
+> nothing below is removed or rewritten. **Rule 5's fourth rejection -- *a control on the page* -- is
+> withdrawn**: `?reading=open` and `?answer=` are `GET`s that already switch what the page shows, and
+> `D-0041` rule 4 binds the *write* vocabulary alone, so `?lang=` is the fold's kind of thing and not
+> `approve`'s (`D-0056` rule 1, rondo#169). **`RONDO_OPERATOR_LANGUAGE` survives as the default**
+> rather than as the only source, which is what keeps rule 5's answer to the terminal
+> (`D-0056` rule 2). The **`Accept-Language` rejection stands on its second half** -- it supplies
+> nothing to the terminal -- and its first half, *the bytes would depend on who asked*, is withdrawn
+> for the same reason as the fourth rejection; `Accept-Language` is still refused as a seed, now as a
+> third and invisible source of one answer (`D-0056` rule 3). **Rule 7 is unamended and applied**: a
+> request chooses which wording is selected and never what `<html lang>` declares. **Rule 4's
+> invariant is widened to the query** -- the recorded bytes depend on neither the host's language nor
+> the request's (`D-0056` rule 11). Exact-tag matching, which this entry did not decide either way and
+> its implementing change settled by comparing two tags, becomes **BCP 47 lookup**, so `ja-JP` renders
+> the `ja` set (`D-0056` rule 4). Every other rule is read as written, and **this entry is not
+> superseded**.
+
 `D-0053` cut the page's text in two and the operator confirmed the cut on the screen it was made on:
 `awaiting_human`, `waiting 2m`, English, fine. Then the operator opened `/?reading=open` -- the fold
 `D-0041` keeps one click away so that a summary can be checked against what it rests on -- and said,
@@ -10290,3 +10308,267 @@ date and is quoted above.
 - **`D-0004`** gains one: after this entry the escape it mandates is also the reason rondo's **own**
   prose stays English in the terminal while the page's does not, so the two surfaces will name one
   section with two words. Its rule is unchanged and its falsifier has not fired.
+
+---
+
+## D-0056 — The chrome's language is asked for in the URL and defaulted by the host: `?lang=` as the same `GET` the fold already is, BCP 47 lookup so `ja-JP` is `ja`, and a link that is the first of the chrome there to be operated
+
+**Status:** accepted (2026-09-13, rondo's human gate). Refs rondo#169, `D-0055`, `D-0054`, `D-0053`,
+`D-0041`, `D-0020`, `D-0019`, `D-0004`.
+
+`D-0055` settled the chrome's language on `RONDO_OPERATOR_LANGUAGE`, read once where `RONDO_APPROVER`
+is read, and the operator's answer on seeing it was that pages have not chosen their language by
+restarting the server for a very long time. That is a finding about the surface and not a preference,
+in the same way rondo#166's *still English* was: the variable is correct about **who reads this host**
+and says nothing about **what this page can be asked for**, and the two are different questions on a
+surface whose whole state already lives in its own query.
+
+**One of `D-0055` rule 5's four rejections does not hold, and it is the one that mattered.**
+
+> **A control on the page.** `D-0041` rule 4: `approve` is the whole of this surface's write
+> vocabulary and a toggle is a second word.
+
+`?reading=open` and `?answer=<id>` are already on this page, already change what it shows, and are
+already `GET`s that write nothing -- `D-0054` rule 1 made *what the view is* a property carried in the
+URL, and `D-0054` rule 2 made the redraw a fetch of `location.href`, so the query is where this
+surface's state has lived since 2026-09-12. `D-0041` rule 4 pins the **write** vocabulary, and a
+navigation is not in it. `?lang=` is the fold's kind of thing and not `approve`'s, so the rejection is
+withdrawn rather than argued with.
+
+The rejection of `Accept-Language` carries the same weakness in its first half -- *it would make the
+page's bytes depend on who asked* -- because the bytes already depend on the URL. Its **second** half
+stands untouched: a header supplies nothing to the terminal. That half is answered by demoting the
+variable rather than by deleting it, which is the shape of this entry: **the host says who reads it,
+and one request may ask for something else.**
+
+### The papercut is the real content, and it is not the parameter
+
+The implementing change of `D-0055` (rondo#168) matches the tag as it is spelled, case folded, which
+is exactly what its own comment says BCP 47 says about comparing two tags -- and it is true about
+comparing two tags and false about *choosing wording for a reader*. `ja-JP` is what a host states and
+what a browser sends, and today it gets English from a tree that holds Japanese. That is `D-0055`'s
+legibility finding reproducing itself one layer down, on the one operator the page has, and it is
+decided here rather than left to the reader who hits it next.
+
+### Decision
+
+1. **The switch is `?lang=<tag>` on `/`, and it is the fold's kind of thing.** A `GET`, writing
+   nothing, no new path, surviving a redraw because `D-0054`'s poller fetches `location.href`.
+   **`D-0055` rule 5's fourth rejection is withdrawn by name**; `D-0041` rules 4 and 7 are unamended
+   and `approve` is still the whole of the write vocabulary, because nothing here writes.
+
+2. **`RONDO_OPERATOR_LANGUAGE` stays and becomes the default, and the precedence has exactly two
+   levels.** The request's tag if it selects a set; otherwise the host's; otherwise English. That is
+   the whole of it: **no third source, no file, no merge, no cookie, and no memory of the last
+   choice.** The variable is still what the terminal uses (`D-0055` rule 10) and still where the host
+   states a fact about its one operator (`D-0020`), so `D-0055` rule 5's surviving argument -- *the
+   host would otherwise have two answers to one question* -- is served by there being one default and
+   one way to depart from it for one request. `D-0019` rule 3 is not breached for the reason `D-0055`
+   gave and one more: a parameter on a URL is not a configuration layer.
+
+3. **`Accept-Language` does not seed the first request, and an unset host is English.** The terminal
+   argument genuinely does not reach this case, and the refusal does not need it. Two reasons that
+   do: it would be the **third** source of one answer, which is the precedence order rule 2 refuses
+   and the thing `D-0019` rule 3 is actually about; and it is the only one of the three that is
+   **invisible on the screen it changes and unfixable from there** -- a header the operator cannot
+   see, sent by a browser they did not configure for this, producing a page with nothing on it saying
+   why. A wrong default, after rule 1, is one link away; a wrong negotiation is a browser setting
+   away. **What the host has not said, rondo does not guess.**
+
+4. **A tag is resolved by BCP 47 lookup, so `ja-JP` is the `ja` set.** RFC 4647 section 3.4: truncate
+   the tag at its last hyphen and try again until a set matches, dropping a trailing single-character
+   subtag together with the subtag before it, and English is the last stop. **The same resolution for
+   the host's variable and for the request's parameter**, because the two carry the same kind of thing
+   and a host that says `ja-JP` has the same papercut as a link that does. No quality values, no
+   ordered list of alternatives, no best-fit: lookup is the whole algorithm, it is four lines, and it
+   is the only part of language negotiation this page has a reader for.
+
+5. **`<html lang>` names the set rondo wrote, never the tag that was asked for, and a request cannot
+   make it lie.** `D-0055` rule 7 is unamended and this is its application: `?lang=ja-JP` yields the
+   `ja` set and the document says `ja`, because `ja` is the language the bytes are in; `?lang=de`
+   yields English and the document says `en`. **The query chooses which prose is selected and has no
+   reach at all into what the document then declares about itself.** Material spans keep what
+   `D-0053` rule 12 and `D-0055` rule 8 give them, including `lang=""` where a plan asked for nothing.
+
+6. **`en` is a tag a request may name, so the switch goes both ways.** The English set is the fallback
+   every set is merged over *and* is reachable by name, which is what keeps a `ja` host from being a
+   one-way door -- and is the reason rule 8's link needs no special case for going back.
+
+7. **An ill-formed or unknown `?lang=` is not a refusal: it selects nothing, and the page is the
+   host's default.** `viewOf` is already total for its own reason -- a typo in a query is an operator
+   who wanted the page, and a blank screen is a worse answer than the page -- and a language nobody
+   ships is the same shape. **The variable keeps its boot refusal** (`D-0055`'s implementing change):
+   a host statement is typed once, far from the screen, and deserves an account; a query is typed in
+   the address bar with the result in front of the person who typed it.
+
+8. **The switch is a link in the chrome: one per shipped set other than the one on screen, beside the
+   fold's link, labelled with that language's own name in its own language.** Naming a language in its
+   own name is what makes the label the same bytes in every set, which is the whole of why it is not a
+   translation problem. **This is the first element of the chrome that exists in order to be operated
+   rather than read, and that is a real change of kind rather than a detail** -- it is stated here
+   instead of being discovered later, and it is taken because `D-0055`'s own argument demands it: a
+   path the operator cannot find is a safeguard present in the markup and absent in practice, and a
+   parameter only a person who has read this file would type is exactly that path.
+
+9. **Every address the page composes for itself carries the tag when the request did.** The fold's
+   link, the answer view's link, the `<noscript>` refresh, the form's `action`, and the `303` after a
+   press. The script's path needs nothing -- `location.href` already is the request -- and that is the
+   asymmetry to watch: **with scripting on the parameter would appear to stick, and the fold would
+   drop it.** A switch the fold drops is `D-0055`'s failure reproduced by the entry that fixed it.
+
+10. **The asked tag reaches every composition the page does, and not only the chrome the renderer
+    holds.** The material port is built at boot closed over the host's set today
+    (`src/access/cli.ts:1419`), so the fence block's two standing sentences -- prose since `D-0055`
+    rule 11 -- would stay in the host's language inside a page that had switched. The set becomes an
+    argument to that port rather than something it was constructed with. This is one seam and it is
+    named because reading the wiring is the only way to find it.
+
+11. **Nothing recorded changes, and the invariant now covers the query.** `D-0055` rule 4 stands: a
+    string the ledger records stays English whatever it reads like. **The bytes a press writes do not
+    depend on the host's language and now do not depend on the request's either** -- which is one
+    assertion rather than two, because the recorded payload is composed where no tag reaches
+    (`src/advisory/proposal.ts`). `D-0042`'s one-version-of-one-claim property is untouched, and
+    nothing is translated at display time (`D-0055` rule 12).
+
+12. **`D-0055` is amended in rule 5's fourth bullet and nowhere else, and it is not superseded.**
+    Rules 1 to 4 and 6 to 14 of that entry are read as written; rule 5's variable survives as the
+    default (rule 2 here) and its `Accept-Language` rejection survives on its second half (rule 3
+    here). This is that entry's first amendment, and `D-0055`'s own falsifier of this shape -- a third
+    amendment being the point at which a re-taken entry is cheaper than the accumulated reading -- is
+    adopted here with the count starting at one.
+
+13. **Nothing under `src/` changes on this entry.** Rules 1 to 11 are an implementation and it is one
+    pull request.
+
+### What the implementing change contains
+
+One pull request:
+
+- Lookup resolution in `src/access/wording.ts`, replacing the exact `SETS.get` in `chromeFor`
+  (`:502`): truncate at the last hyphen until a set matches, dropping a trailing single-character
+  subtag with its predecessor, English last. One function, used by the variable and by the parameter.
+- `?lang=` parsed off the request beside `?reading=` and `?answer=` (`src/access/web.ts:1229`),
+  resolved through the same function, and the host's set as the fallback. `WebPorts` carries the
+  host's default rather than the page's one set, and the renderer takes the request's.
+- The tag threaded through every self-composed address: `viewHref` (`:262`), the `<noscript>` refresh
+  (`:927`), the fold's link (`:1080`), the answer link, the form's `action` (`:677`) and the `303`
+  (`:1218`).
+- The material port taking the set as an argument (`src/access/cli.ts:1419`), so the fence block's
+  standing sentences follow the page (rule 10).
+- One link per shipped set, beside the fold's, labelled `English` / `日本語` -- the same bytes in both
+  sets (rule 8).
+- `docs/operations/rondo-cli.md` gaining the parameter beside the variable, said as *the host states
+  the default and one request may ask for another*.
+- Tests: `?lang=ja-JP` renders the `ja` set and `<html lang="ja">`; `RONDO_OPERATOR_LANGUAGE=ja-JP`
+  does the same at boot; `?lang=en` on a `ja` host renders English; `?lang=de` and `?lang=!!` render
+  the host's default and declare the set actually used; the fold's link, the refresh, the form action
+  and the `303` from a `ja`-asked page all still ask for `ja`; and **the recorded `proposal` and
+  `operator_attention` bytes are identical whether the press came from an `en` page or a `ja` one**
+  (rule 11, which is `D-0055`'s assertion with the query added to it).
+
+### What this entry does not do
+
+- **It does not negotiate.** No `Accept-Language`, no quality values, no alternatives list (rules 3
+  and 4).
+- **It does not remember.** No cookie, no store row, no last-choice-wins; the URL is the whole of the
+  state, which is what `D-0054` rule 1 already decided for this page.
+- **It does not remove `RONDO_OPERATOR_LANGUAGE`**, give it a file, or give it a precedence order
+  (rule 2).
+- **It does not widen the write vocabulary.** `approve` is still the whole of it (`D-0041` rules 4 and
+  7), the redraw still counts no presentation (`D-0042`), and every address this entry adds is a
+  `GET`.
+- **It does not touch material, the ledger, or the terminal.** `D-0053`, `D-0055` rule 4 and `D-0004`
+  are unamended; the terminal has no parameter to carry and stays on the variable.
+- **It does not supersede `D-0055`** (rule 12).
+
+### Residuals
+
+| Residual | Why not here | Who decides |
+|---|---|---|
+| The parameter is not remembered: a fresh `/` is the host's default again, and a bookmark is the whole of the persistence | Remembering means a cookie or a row, which is state this surface has deliberately never had (`D-0054` rule 1), for a host whose default the operator can set in one variable | whoever finds retyping or bookmarking worse than the page's first piece of durable client state |
+| `Accept-Language` as the seed for a host that states nothing (rule 3) | It is a third source of one answer and the only invisible one | the entry that gives rondo a reader whose host they do not control, which is also `D-0020`'s second operator |
+| The six `POST` refusal lines are English literals in `src/access/web.ts` and not in the wording set | They are prose by `D-0055` rule 2 and rondo#168 left them where they were; after rule 9 the form carries the tag, so they *could* follow the page, and this entry is not the place that widens its own scope to move them | whoever next touches the press path, or the reader who is refused in a language they do not read |
+| The terminal cannot be switched per invocation | It has no query to carry one, and `D-0004`'s escape means it has no Japanese to switch to (`D-0055` rule 10) | whoever re-argues `D-0004`'s scope |
+| Two sets under one primary subtag -- `pt-BR` beside `pt`, or `zh-Hant` beside `zh` | Lookup's truncation would pick the shorter one for a longer ask, which is correct for the sets rondo ships today and lossy the day it ships a pair. `zh-Hant` is already legal in the grammar and matched exactly, so this is a real shape and not a hypothetical | whoever ships the second set under one primary subtag |
+| The links grow with the number of sets (one today, a list at five) | Two languages make a link and not a menu, and a menu for a set that does not exist is the machinery this entry is trying not to buy | whoever ships the third set |
+| The deterministic drafter's findings, still English because they are recorded (`D-0055` rule 4) | Unchanged by this entry and unchanged by its reasons | as `D-0055` said |
+
+### What was measured, and how
+
+On **2026-09-13**, at rondo `dcc2e3b` on `node v22.17.0`, by reading the surfaces `D-0055`'s
+implementing change (rondo#168) left behind.
+
+- **The exact match is in one line and is the papercut.** `SETS` is
+  `new Map([["ja", JA]])` (`src/access/wording.ts:490`) and `chromeFor` is
+  `SETS.get(tag.toLowerCase())` (`:502`), so `ja-JP` misses and `EN` is returned -- and `<html lang>`
+  then says `en`, correctly, about an English page a Japanese-speaking host asked not to get.
+- **The query already holds this surface's state, and the redraw already preserves it.** `viewOf`
+  reads `answer` and `reading` off the query and is total (`src/access/web.ts:1229-1235`);
+  `page/poll.js` fetches `location.href` *and nothing derived from it*, in its own words, which is why
+  rule 1 costs the script nothing and rule 9 is about everything else.
+- **Five addresses are composed without a query and would each drop the tag.** `viewHref` returns
+  `/`, `/?reading=open` and `/?answer=<id>` (`:262-270`); the `<noscript>` refresh is
+  `viewHref(view)` (`:927`); the fold's link is `/` or `viewHref({kind:"reading"})` (`:1080`); the
+  form is `action="/"` (`:677`); the press answers `303` to `/` (`:1218`). Rule 9 is a list of five
+  facts rather than a precaution.
+- **The page's language is fixed at boot in two places, not one.** `WebPorts.wording` is a `Chrome`
+  (`:137`), handed `selected.wording` at `src/access/cli.ts:1407`, and the material port is a closure
+  over that same set at `:1419` -- which is the seam rule 10 names. `sayLapMaterial` is handed `EN` at
+  the same site, which is `D-0055` rule 10 and stays.
+- **A partly written set is still that set.** Every set is a `Partial<Chrome>` merged over `EN`
+  (`src/access/wording.ts:502`), so rule 4's truncation lands on wording that may be half English --
+  which is `D-0055` rule 9's cost, already taken, and not a new one.
+- **The grammar admits everything this entry needs and nothing more.**
+  `/^[A-Za-z]{2,8}(-[A-Za-z0-9]{1,8})*$/` (`src/refrain/plan.ts:546-547`) accepts `ja-JP`,
+  `zh-Hant` and `de`, which is why rule 7's unknown-tag case is about a well-formed tag rondo ships no
+  set for and not about a syntax error.
+- **The refusal lines are literals.** `handleApprove`'s six refusals are spelled at
+  `src/access/web.ts:1189-1211` and none is in `Chrome`, which is the third residual above.
+- **What was not measured**: no page has served a second language off a query, no lookup exists, and
+  no operator has followed a link in the chrome. Whether the switch is used, or the default simply
+  becomes right once `ja-JP` resolves, is what this entry authorises and cannot show.
+
+### What would falsify it
+
+- **The operator setting `RONDO_OPERATOR_LANGUAGE=ja` once and never touching the link**, which would
+  mean rule 4 was the whole issue and rules 1, 8 and 9 bought a switch nobody switches. The parameter
+  would then be machinery on a surface that refuses machinery, and the honest move is to delete it
+  rather than to keep it for symmetry.
+- **The tag being dropped by an address this entry missed**, which is rule 9 failing and is the one
+  failure the operator would report as *the page keeps going back to English*. It is the reason the
+  implementing change asserts the fold, the refresh, the form and the `303` rather than asserting the
+  first render.
+- **Somebody adding `Accept-Language` behind the default**, so the page has three sources and one of
+  them is invisible. That is rule 3 spent and `D-0019` rule 3 firing for real.
+- **The parameter growing a second job** -- a second value, a `?lang=off`, a per-view language. It is
+  a tag or it is nothing, and anything else is the toggle `D-0041` rule 4 was right to refuse in the
+  shape it was refusing.
+- **A request reaching `<html lang>`**, so the document declares what was asked instead of what was
+  written. That is rule 5 failing and `D-0055` rule 7 with it.
+- **Two sets under one primary subtag**, which makes lookup's truncation pick the wrong one and turns
+  the fifth residual into the entry after this.
+- **The recorded bytes turning out to depend on the query.** Rule 11 failing, `D-0042`'s invariant
+  with it, which is why it is asserted across two pages rather than inspected on one.
+- **A second amendment of `D-0055`** -- this is the first, and the third is where rule 12's adopted
+  threshold says a re-taken entry is cheaper than the reading.
+- **The page ceasing to be loopback-only with one operator** (`D-0020`, `D-0054`'s own falsifier),
+  after which a per-request language is a per-*reader* language and rule 2's single default is the
+  wrong shape rather than the right one.
+- Any measurement above failing to reproduce at `dcc2e3b`.
+
+### Annotations this entry adds to earlier entries
+
+- **`D-0055` rule 5** gains a dated annotation: its fourth rejection -- *a control on the page* -- is
+  **withdrawn**, because `?reading=open` and `?answer=` are `GET`s that already switch what the page
+  shows and `D-0041` rule 4 binds the write vocabulary alone. `RONDO_OPERATOR_LANGUAGE` is **the
+  default rather than the only source**; the `Accept-Language` rejection **stands on its second half**
+  -- it supplies nothing to the terminal -- and its first half is withdrawn for the same reason as the
+  fourth. Rule 7 is **unamended and applied**: the query chooses the set and never what `<html lang>`
+  says. Rule 4's invariant is **widened to the query** by `D-0056` rule 11. Every other rule is read
+  as written, and the entry is **not superseded**.
+- **`D-0041` rule 4** gains one: what it pins is the **write** vocabulary, and `D-0056` records that a
+  view-state `GET` -- `?reading=open`, `?answer=`, and now `?lang=` -- is not a second word beside
+  `approve`. Nothing in that rule is amended; `D-0054`'s annotation on rule 3 is untouched.
+- **`D-0054` rule 1** gains one: *liveness is a property of the view carried in its own address* is
+  the argument `D-0056` rule 1 reuses for the language, and rule 2's `location.href` fetch is the
+  reason the switch survives a redraw with no change to `page/poll.js`.
