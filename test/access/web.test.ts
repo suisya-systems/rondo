@@ -616,6 +616,26 @@ test("the page is ordered by the operator's three questions (rondo#145)", async 
   expect(reading(opened)).toContain("what spans the live laps");
 });
 
+test("the three questions are told apart in the markup, not only in the order (rondo#153)", async () => {
+  const world = fresh();
+  await reserve(world, "i-0001", "do the thing");
+
+  const html = lead(await operatorPage(portsOver(world)));
+
+  // The order alone put the three questions in a row and gave them the same
+  // weight; the class is the whole of what a stylesheet has to weigh them by,
+  // and each section carries exactly one.
+  expect(html).toContain('<section class="waiting">');
+  expect(html).toContain('<section class="running">');
+  expect(html).toContain('<section class="ended">');
+  // Both palettes are declared rather than inherited from the user agent, so a
+  // dark reader gets rondo's contrast and not the browser's (rondo#153).
+  const page = await operatorPage(portsOver(world));
+  expect(page).toContain("@media (prefers-color-scheme: dark)");
+  // Still no script, and still nothing but the one form that can write.
+  expect(page).not.toContain("<script");
+});
+
 test("a lap at a gate carries its cost and its fence beside the button (rondo#145)", async () => {
   const world = fresh();
   await reserve(world, "i-0001", "do the thing");
