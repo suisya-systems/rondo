@@ -267,9 +267,21 @@ function withoutRepeat(group: { basis: string; claims: readonly Claim[] }): stri
     : group.basis;
 }
 
-function section(heading: string, note: string, body: string): string {
+/**
+ * One section, and the one thing its markup carries beyond its content: which
+ * of the three questions it answers.
+ *
+ * The class is the whole of what the visual weight rests on. *Waiting*,
+ * *running* and *ended* are the same shape and the same words as before -- what
+ * differs is that a stylesheet can now tell them apart, which is what makes a
+ * page ordered by the three questions read as three questions rather than as
+ * one uniform list (rondo#153). No section is drawn on the strength of the
+ * class and none is hidden by it, so a browser that loads no CSS still gets
+ * every claim in the same order.
+ */
+function section(heading: string, note: string, body: string, weight = ""): string {
   return (
-    `<section><h2>${escapeHtml(heading)}</h2>` +
+    `<section${weight === "" ? "" : ` class="${weight}"`}><h2>${escapeHtml(heading)}</h2>` +
     (note === "" ? "" : `<p class="note">${escapeHtml(note)}</p>`) +
     `${body}</section>`
   );
@@ -423,6 +435,7 @@ function waitingHtml(
             )}</p></div>`,
         )
         .join(""),
+    "waiting",
   );
 }
 
@@ -463,6 +476,7 @@ function runningHtml(
             : "",
         )
         .join(""),
+    "running",
   );
 }
 
@@ -476,6 +490,7 @@ function endedHtml(ended: readonly IterationRecord[], nowMs: number): string {
         lapHtml(record, endedHow(record, nowMs), [spentLine(record), fenceLine(record)]),
       )
       .join(""),
+    "ended",
   );
 }
 
@@ -493,7 +508,7 @@ function endedHtml(ended: readonly IterationRecord[], nowMs: number): string {
  */
 function nothingHtml(): string {
   return (
-    `<section><p class="nothing">Nothing is waiting on you, nothing is running, and ` +
+    `<section class="idle"><p class="nothing">Nothing is waiting on you, nothing is running, and ` +
     `nothing has finished.</p>` +
     `<p class="basis">every live row and every ended row in this ledger; the reading below ` +
     `cites what each read found</p></section>`
@@ -758,28 +773,129 @@ export async function operatorPage(
 <meta http-equiv="refresh" content="${String(REFRESH_SECONDS)};url=${escapeHtml(viewHref(view))}">
 <title>rondo</title>
 <style>
-:root { color-scheme: light dark; }
-body { font: 14px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  margin: 0 auto; max-width: 60rem; padding: 1.5rem 1rem; }
-h1 { font-size: 1.2rem; margin: 0; }
-h2 { font-size: 1rem; margin: 0 0 .25rem; }
-section { margin: 1.5rem 0; }
+/* A ledger read by one person many times a day, so: two type roles, one spacing
+   scale, and three states that do not weigh the same.
+
+   Both palettes are written out rather than inherited. color-scheme is kept
+   so the button and the scrollbars follow the reader's setting, but every
+   surface, rule and ink below is a token declared in both modes -- a page that
+   leaned on the user-agent defaults would have its contrast decided elsewhere,
+   and the one thing this screen has to hold is that 'waiting' reads as waiting
+   from across a room. */
+:root {
+  color-scheme: light dark;
+  /* Space is a scale, not a per-element decision (rondo#153). */
+  --s1: .25rem; --s2: .5rem; --s3: .75rem; --s4: 1.25rem; --s5: 2rem;
+  /* Values are monospace because they are a ledger and columns must line up;
+     headings, notes and labels are not, because they are prose about it. */
+  /* The tertiary ink is the floor: it carries the basis lines, the claim
+     labels and an ended lap's own request, which are text a person reads
+     rather than decoration. Both values clear 4.5:1 against all three grounds
+     they land on -- page, section surface and the waiting wash -- so recessive
+     is a step down in weight and never a step below legible. */
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --sans: ui-sans-serif, system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --bg: #eceef1;
+  --surface: #fbfcfd;
+  --ink: #14181c;
+  --ink-2: #4b545d;
+  --ink-3: #646d77;
+  --rule: #d2d8de;
+  --link: #0f5480;
+  --wait-edge: #b26206;
+  --wait-ink: #8a4b04;
+  --wait-wash: #fbf1e0;
+  --wait-press: #a75c06;
+  --wait-press-ink: #fffaf3;
+  --run-edge: #2a79ad;
+  --run-ink: #1b5a83;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f1214;
+    --surface: #171b1f;
+    --ink: #e3e7ea;
+    --ink-2: #a2abb3;
+    --ink-3: #848e97;
+    --rule: #292f35;
+    --link: #6cb2e6;
+    --wait-edge: #d18e2f;
+    --wait-ink: #e9b25f;
+    --wait-wash: #221a0d;
+    --wait-press: #d18e2f;
+    --wait-press-ink: #17130c;
+    --run-edge: #3d86bb;
+    --run-ink: #7dbce5;
+  }
+}
+body { background: var(--bg); color: var(--ink);
+  font: 14px/1.55 var(--mono); margin: 0 auto; max-width: 64rem;
+  padding: var(--s5) var(--s4); }
+/* Every block starts at zero and the scale puts it back, so no two margins
+   stack and nothing carries a spacing decision of its own. */
+h1, h2, p, pre, form { margin: 0; }
+body > * + * { margin-top: var(--s4); }
+h1 { color: var(--ink-3); font: 600 .75rem/1 var(--sans); letter-spacing: .16em;
+  text-transform: uppercase; }
+h2 { color: var(--ink-2); font: 600 .95rem/1.3 var(--sans); margin: 0 0 var(--s3); }
+section { background: var(--surface); border-left: 3px solid var(--rule);
+  padding: var(--s3) var(--s4); }
+section + section { margin-top: var(--s3); }
+a { color: var(--link); text-underline-offset: .2em; }
 pre { white-space: pre-wrap; word-break: break-word; margin: 0; }
-.note, .basis { opacity: .7; margin: .25rem 0; }
-.group, .lap { border-left: 2px solid currentColor; margin: .75rem 0; padding-left: .75rem; }
-.basis { font-size: .85rem; }
-.head { font-weight: 600; margin: .25rem 0; }
-.request, .line { margin: .25rem 0; white-space: pre-wrap; word-break: break-word; }
-.nothing { margin: .25rem 0; }
-.claim { display: grid; grid-template-columns: minmax(9rem, 14rem) 1fr; gap: .75rem; margin: .25rem 0; }
-.label { opacity: .7; }
-.approve { align-items: center; display: flex; flex-wrap: wrap; gap: .75rem; margin: .75rem 0 0; }
-.approve button { font: inherit; padding: .4rem 1.2rem; }
-.approve .note { margin: 0; }
-.material { margin: .75rem 0 0; opacity: .85; }
-.value { white-space: pre-wrap; word-break: break-word; }
-.fold { border-top: 1px solid currentColor; margin: 2rem 0 0; padding-top: .75rem; }
-@media (max-width: 40rem) { .claim { grid-template-columns: 1fr; gap: 0; } }
+.note, .basis, .label { color: var(--ink-3); font-family: var(--sans); }
+.note { color: var(--ink-2); font-size: .8125rem; }
+.basis { font-size: .75rem; }
+.group { border-left: 2px solid var(--rule); padding-left: var(--s3); }
+.group + .group { margin-top: var(--s3); }
+.lap > * + *, .group > * + * { margin-top: var(--s1); }
+/* Laps are separated by a hairline rather than each carrying a rule of its own:
+   the section's own edge already says which question they answer. */
+.lap + .lap { border-top: 1px solid var(--rule); margin-top: var(--s3);
+  padding-top: var(--s3); }
+.head { font-weight: 600; }
+.request, .line, .value { white-space: pre-wrap; word-break: break-word; }
+.line { color: var(--ink-2); font-size: .8125rem; }
+.claim { display: grid; grid-template-columns: minmax(9rem, 14rem) 1fr; gap: var(--s3); }
+.label { font-size: .8125rem; }
+pre, .material { background: var(--bg); border: 1px solid var(--rule);
+  font-size: .8125rem; padding: var(--s2) var(--s3); }
+.material { margin-top: var(--s3); }
+
+/* *What needs me* is the only part of this page anybody can act on, so it is
+   the only part that is allowed to shout: its own wash, a heavier edge, the
+   request set a size larger, and the one button on the page. */
+.waiting { background: var(--wait-wash); border-left: 4px solid var(--wait-edge); }
+.waiting h2 { color: var(--wait-ink); font-size: 1.05rem; font-weight: 700; }
+.waiting .head { color: var(--wait-ink); font-size: .9375rem; }
+.waiting .request { font-size: .9375rem; }
+.waiting .lap + .lap { border-top-color: var(--wait-edge); }
+.running { border-left-color: var(--run-edge); }
+.running h2 { color: var(--run-ink); }
+/* An ended lap is over: it is on the page to be checked against, not read, so
+   it recedes to the page's own ground and to secondary ink. (No section's own
+   heading text is spelled in this stylesheet -- the lead is found by position
+   on the page, and a comment naming one would be found first.) */
+.ended { background: none; }
+.ended h2, .ended .head, .ended .request { color: var(--ink-3); }
+.ended .head { font-weight: 500; }
+.idle { border-left-color: var(--rule); }
+.nothing { color: var(--ink-2); font-family: var(--sans); font-size: 1rem; }
+
+.approve { align-items: center; display: flex; flex-wrap: wrap; gap: var(--s3);
+  margin-top: var(--s4); }
+.approve button { background: var(--wait-press); border: 0; color: var(--wait-press-ink);
+  cursor: pointer; font: 600 .875rem var(--sans); letter-spacing: .04em;
+  padding: .55rem 1.75rem; }
+.approve button:hover { filter: brightness(1.08); }
+:focus-visible { outline: 2px solid var(--wait-edge); outline-offset: 2px; }
+.fold { border-top: 1px solid var(--rule); font-family: var(--sans);
+  font-size: .8125rem; margin-top: var(--s5); padding-top: var(--s3); }
+@media (max-width: 40rem) {
+  body { padding: var(--s4) var(--s3); }
+  section { padding: var(--s3); }
+  .claim { grid-template-columns: 1fr; gap: 0; }
+}
 </style>
 </head>
 <body>
