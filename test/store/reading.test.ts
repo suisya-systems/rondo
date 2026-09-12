@@ -35,6 +35,7 @@ const reserveOne = async (store: ReturnType<typeof freshStore>, id: string, nowM
     id,
     request: "do the thing",
     plan: somePlan(),
+    spend: null,
     nowMs,
     supersedesIterationId: null,
     ...tripleFor(id),

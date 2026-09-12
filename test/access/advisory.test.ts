@@ -51,6 +51,7 @@ const reserveOne = async (store: ReturnType<typeof fresh>["store"], id: string) 
     id,
     request: "teach revise to name the flags it takes",
     plan: somePlan(),
+    spend: null,
     nowMs: 1_000,
     supersedesIterationId: null,
     runId: `rondo-${id}`,
@@ -150,6 +151,7 @@ test("a multi-paragraph request is quoted over its own lines rather than escaped
     id: "i-0001",
     request,
     plan: somePlan(),
+    spend: null,
     nowMs: 1_000,
     supersedesIterationId: null,
     runId: "rondo-i-0001",
@@ -579,6 +581,7 @@ const reserveWithPlan = async (
     id,
     request: "teach rondo to count",
     plan: realPlan(id, plan),
+    spend: null,
     nowMs: 1_000,
     supersedesIterationId,
     runId: `rondo-${id}`,
@@ -669,9 +672,10 @@ test("it proposes the plans a retry could run under, and records both before sho
   expect(rendered).toContain("a retry of iteration 'iter-1', as iteration 'iter-2'");
   expect(rendered).toContain("[recommended]");
   expect(rendered).toContain("[alternative]");
-  // Said out loud, because an approval today authorises an issuance nothing
-  // performs: a line claiming the retry starts would be false.
-  expect(rendered).toContain("It starts nothing yet");
+  // Said out loud, because approving is not starting: the screen names the verb
+  // that spends the answer, and says that verb refuses a contract that moved.
+  expect(rendered).toContain("'rondo retry' is what");
+  expect(rendered).toContain("refuses unless the contract still composes to what you approved");
   for (const option of outcome.options) {
     expect(rendered).toContain(option.value);
   }
@@ -1101,6 +1105,7 @@ test("an agent type cadenza will not build is a refusal and not a crash", async 
     id: "iter-1",
     request: "teach rondo to count",
     plan: malformed as JsonRecord,
+    spend: null,
     nowMs: 1_000,
     supersedesIterationId: null,
     runId: "rondo-iter-1",

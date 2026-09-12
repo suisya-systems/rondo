@@ -57,6 +57,7 @@ import type { AdmittedPlan, RunPlan } from "../refrain/plan.js";
 import type { LoopPolicy } from "../refrain/policy.js";
 import type {
   ConductorPorts,
+  DecisionSpend,
   EffectOutcome,
   GateObservation,
   LapPerformance,
@@ -436,8 +437,9 @@ export async function admit(
   policy: LoopPolicy,
   id: string,
   supersedesIterationId: string | null = null,
+  spend: DecisionSpend | null = null,
 ): Promise<ConductorReport> {
-  const report = await admitIteration(ports, plan, policy, id, supersedesIterationId);
+  const report = await admitIteration(ports, plan, policy, id, supersedesIterationId, spend);
   if (report.status !== "abandoned" || report.iterationId === null) {
     return report;
   }
@@ -457,7 +459,8 @@ async function proposeLine(advisory: UnpromptedPorts, iterationId: string): Prom
     return outcome.kind === "proposed"
       ? `Proposed ${String(outcome.options)} contracts a retry could run under, as ` +
           `'${outcome.proposalId}' for a successor '${outcome.successorId}'. Nobody has been ` +
-          "shown it: 'rondo show' reads it and 'rondo decide' answers it."
+          "shown it: 'rondo show' reads it, 'rondo decide' answers it and 'rondo retry' " +
+          "spends the answer."
       : outcome.reason;
   } catch (error) {
     return (

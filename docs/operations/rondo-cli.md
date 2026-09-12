@@ -710,7 +710,7 @@ things put to you comes from, and answers are counted elsewhere (`D-0032` rule 1
 | `was composed and not recorded, so it is not being shown` | The proposal row could not be written. | Fix the store fault the message names; nothing was presented and nothing was kept. |
 | `was shown and was not counted as presented` (exit 1) | You read it and the proposal was kept, but the presentation count could not be written. | Nothing to re-read. The breakdown of what was put to you is short by one until the store fault the message names is fixed. |
 
-### 7.2 Propose and decide -- what a retry could run under, and answering it
+### 7.2 Propose, decide and retry -- what a retry could run under, answering it, and spending the answer
 
 `explain` says what the store holds and binds nothing. `propose` is the other voice: it puts an
 **option set** in front of you -- with exactly one recommended -- and each option names the
@@ -749,8 +749,8 @@ $ node bin/rondo.mjs propose --iteration-id cli-lap-001 --successor-id cli-lap-0
 a retry of iteration 'cli-lap-001', as iteration 'cli-lap-002' (contract_keys)
   drafter: rondo/advisory/deterministic
   the retry would run as rondo-cli-lap-002 on rondo/cli-lap-002
-  approving one of these records that you approved its contract. It starts nothing yet:
-  no admission reads this decision (D-0022 rule 17's consumer is not built).
+  approving one of these records that you approved its contract. 'rondo retry' is what
+  spends it, and it refuses unless the contract still composes to what you approved.
   [recommended] leave the keys as they are: granting command.run and asking for branch.push
       contract: sha256:15475d4c...
       basis: snapshot /candidates/0/contractDigest = "sha256:15475d4c..."
@@ -764,15 +764,32 @@ Next: rondo decide --proposal-id contract_keys-cli-lap-002-1757500000000 --actor
 $ node bin/rondo.mjs decide --proposal-id run_plan-cli-lap-002-1757500000000 \
     --actor-id "$RONDO_APPROVER" --outcome approved --contract-digest sha256:15475d4c...
 recorded as decision 'decision-contract_keys-cli-lap-002-1757500000000-1757500060000'
-This records that you approved that contract. Nothing runs on it yet: no admission compares it
-against a plan, so the approval stands unspent.
+This records that you approved that contract. Nothing has been spent: the admission that reads
+this decision is 'rondo retry', and it compares the contract your plan composes against the one
+above before anything runs.
+Next: rondo retry --proposal-id contract_keys-cli-lap-002-1757500000000
+
+$ node bin/rondo.mjs retry --proposal-id contract_keys-cli-lap-002-1757500000000
+decision 'decision-contract_keys-cli-lap-002-1757500000000-1757500060000' approved
+sha256:9ab31f02..., and that is the contract the plan below composes under 'cli-lap-002'
+retrying 'cli-lap-001' as iteration 'cli-lap-002'
+the lap is the step that is slow
 ```
 
-**Read the last line literally.** This pair records a proposal and an approval; **nothing consumes
-either**. No admission compares an approved digest against the plan it is about to run (`D-0022`
-rule 17's enforcement), `decision_consumption` stays empty, and the retry does not start. What you
-have afterwards is a ledger entry that says which contract a named person approved, and rule 19's
-*"approved and never spent"* query is what reports it.
+**Approving and spending are two acts, and the gap between them is deliberate** (`D-0047` rule 5).
+`decide` writes a ledger entry saying which contract a named person approved; `retry` is the
+admission that reads it. Until you type `retry`, `D-0022` rule 19's *"approved and never spent"*
+query is what reports the approval, and `rondo inbox` is where you see it.
+
+**What `retry` recomposes, and why it can refuse something you really did approve.** The option set
+is drafted again from the store as it stands *now*, by the same gatherer that drafted it the first
+time, and the digest you approved is matched against what that produces. If the catalog moved, the
+agent type's author withdrew the key your option promoted, or the cadenza pin moved, no option
+carries your digest any more -- and `retry` refuses rather than running the nearest contract. The
+same holds at the store: the consumption row and the iteration row are written in **one
+transaction** (`D-0022` rule 9, `D-0047` rule 1), so there is no state in which an approval was
+spent on a lap that never started, or a lap started on an approval nobody subtracted. An approval
+is spendable **once**.
 
 Three properties of `propose` are the point:
 
@@ -873,8 +890,8 @@ what answering forecloses:
   an approval is spendable once and can never be spent twice (D-0022 rule 9), and the
   answer is appended rather than edited -- changing your mind is a new proposal;
   declining is recorded too, so nobody later reads a refusal as an unanswered question.
-  It starts nothing yet: no admission reads this decision (D-0022 rule 17's consumer
-  is not built).
+  Approving starts nothing by itself: 'rondo retry --proposal-id' is the admission that
+  reads this decision, and it spends it only if the plan still composes what you approved.
 
 Next: rondo decide --proposal-id contract_keys-cli-lap-002-1757500000000 --actor-id ID --outcome approved --contract-digest DIGEST, where DIGEST is the contract line of the option you are approving
 ```
@@ -1096,12 +1113,13 @@ Recorded so that "it works" is not read more broadly than it was tested.
   tests, but no fork has been published through this command yet.
 - After the walk, continuo's run row was still `created` and rondo's row still recorded no publish,
   which is the correct state for work that was approved but not yet submitted.
-- **`propose` (all three kinds) and `decide`: not walked at all.** Both are exercised end to end against a real
-  SQLite store in `test/access/advisory.test.ts` -- the proposal row, every composition row, the
-  digests on the screen and the decision that names one -- and neither has been run by an operator
-  on real infrastructure. There is also nothing downstream of them to walk: no admission reads an
-  approval yet, so what a walk would confirm is a ledger entry, which is what the tests already
-  assert.
+- **`propose` (all three kinds), `decide` and `retry`: not walked at all.** All three are exercised
+  end to end against a real SQLite store -- the proposal row, every composition row, the digests on
+  the screen, the decision that names one (`test/access/advisory.test.ts`) and the admission that
+  spends it (`test/access/decision-consumption.test.ts`, over an injected continuo seam) -- and none
+  of them has been run by an operator on real infrastructure. What a walk of `retry` would add over
+  the tests is the continuo half of the arc it drives, which is the same half `start` is walked
+  for.
 
 ### The second walk: from nothing, through `scripts/dogfood-env.sh`
 

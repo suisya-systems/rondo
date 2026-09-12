@@ -28,6 +28,7 @@ async function fenceBlock(permissionDenials: string | null): Promise<string> {
     id: "i-0001",
     request: "do the thing",
     plan: { run_id: "rondo-i-0001" },
+    spend: null,
     nowMs: 1_000,
     supersedesIterationId: null,
     runId: "rondo-i-0001",

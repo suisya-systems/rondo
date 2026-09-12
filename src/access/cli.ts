@@ -64,6 +64,7 @@ import {
   type ReadOutcome,
 } from "../store/sqlite.js";
 import {
+  approvedRetry,
   composeBetweenLaps,
   type ExplainOutcome,
   type ExplainPorts,
@@ -172,14 +173,23 @@ export const USAGE = `rondo - the operator surface for delegated work
                           type it runs under (agent_type), or which keys that
                           agent type carries as granted rather than askable
                           (contract_keys). Records the proposal and every
-                          contract before it shows them. Approving one starts
-                          nothing: no admission reads the decision yet
+                          contract before it shows them. Approving one records
+                          the contract; rondo retry is what spends it
   rondo decide --proposal-id ID --actor-id ID --outcome approved|declined
                [--contract-digest DIGEST]
                           answer a proposal. --contract-digest is the contract
                           line of the option you are approving, copied from the
                           screen, and it is required on approved and refused on
                           declined. An explanation cannot be answered at all
+  rondo retry --proposal-id ID
+                          spend the approval against one proposal: admit the
+                          retry it authorises, under the identity the proposal
+                          was composed for. The contract that plan composes is
+                          recomposed from the material as it stands now and
+                          compared against the one you approved; if they differ
+                          -- the catalog moved, the agent type changed, the
+                          identity was taken -- nothing runs and the approval
+                          is not spent. An approval is spendable once
   rondo inbox --actor-id ID
                           what is waiting on you, what is running, what changed
                           since you last looked, and what was put to you versus
@@ -317,6 +327,7 @@ export interface ParsedCommand {
     | "inbox"
     | "propose"
     | "decide"
+    | "retry"
     | "show"
     | "web"
     | "help";
@@ -387,6 +398,7 @@ const COMMANDS = [
   "inbox",
   "propose",
   "decide",
+  "retry",
   "show",
   "web",
 ] as const;
@@ -460,6 +472,14 @@ export const FLAGS_BY_COMMAND: Readonly<Record<string, readonly string[]>> = {
   // is copied off the screen rather than chosen by an index -- an index is a
   // position in a list that could have been re-rendered since.
   decide: ["proposal-id", "actor-id", "outcome", "contract-digest"],
+  // **One flag, and no `--actor-id`, no `--iteration-id` and no
+  // `--contract-digest`.** Everything else this verb needs is already written
+  // down: who approved is on the decision row, which iteration it is about and
+  // which identity it runs as are on the proposal, and the digest is the
+  // approval itself. A flag for any of them would be a second place the same
+  // fact lives, and the first time the two disagreed rondo would admit
+  // something nobody approved.
+  retry: ["proposal-id"],
   // One flag, and no `--actor-id`: reading a proposal back is not answering it
   // and not looking at the inbox, so it moves no last-look mark and needs no
   // identity. What it does write is the presentation (D-0036 rule 1), which is
@@ -1372,6 +1392,14 @@ export async function main(
       return await commandStart(parsed, ports, unpromptedPorts(store, opened.path), continuo);
     case "answer":
       return await commandAnswer(parsed, environment, store, ports, continuo);
+    case "retry":
+      return await commandRetry(
+        parsed,
+        store,
+        opened.path,
+        ports,
+        unpromptedPorts(store, opened.path),
+      );
     case "revise":
       return await commandRevise(
         parsed,
@@ -1914,9 +1942,10 @@ async function commandPropose(
  * line owes an operator before a write is attempted -- that the identity is the
  * approver's, and that an approval carries the digest it is approving.
  *
- * **Nothing is consumed.** An approval recorded here authorises an issuance
- * that nothing performs yet: `decision_consumption` stays empty, and D-0022
- * rule 19's *"approved and never spent"* query is what will report it.
+ * **Nothing is consumed here.** An approval recorded by this verb authorises an
+ * issuance that {@link commandRetry} performs, in the store's own transaction;
+ * until it does, D-0022 rule 19's *"approved and never spent"* query is what
+ * reports it.
  */
 async function commandDecide(
   parsed: ParsedCommand,
@@ -1966,11 +1995,84 @@ async function commandDecide(
   say(`recorded as decision '${outcome.decisionId}'`);
   if (approving) {
     say(
-      "This records that you approved that contract. Nothing runs on it yet: no admission " +
-        "compares it against a plan, so the approval stands unspent.",
+      "This records that you approved that contract. Nothing has been spent: the admission " +
+        "that reads this decision is 'rondo retry', and it compares the contract your plan " +
+        "composes against the one above before anything runs.",
     );
+    say(`Next: rondo retry --proposal-id ${parsed.proposalId}`);
   }
   return 0;
+}
+
+/**
+ * Door eleven: spend one approval, and run the retry it authorises.
+ *
+ * **The last link of #41 section 3's chain** -- observation, elevation,
+ * proposal, approval, contract -- and the one #107 measured as missing. Nothing
+ * new is decided here: `approvedRetry` re-derives, from the material as it
+ * stands now, which plan composes the contract a person approved, and `admit()`
+ * hands the approval to `reserve()` so the consumption row and the iteration
+ * row are written in one transaction (D-0022 rule 9).
+ *
+ * **Every refusal is fail-closed and none of them spends anything.** A digest
+ * that no longer matches, an approval already spent, a successor identity
+ * somebody took: each ends with no row, no run and the approval still standing
+ * (D-0043 rule 8).
+ */
+async function commandRetry(
+  parsed: ParsedCommand,
+  store: IterationStore,
+  storePath: string,
+  ports: ReturnType<typeof conductorPorts>,
+  advisory: UnpromptedPorts,
+): Promise<number> {
+  if (parsed.proposalId === null) {
+    return refuse(
+      "retry needs --proposal-id ID, naming the proposal whose approval it spends. There is no " +
+        "default: an approval is spendable once, and 'the obvious one' is not a thing rondo " +
+        "may decide on a person's behalf.",
+    );
+  }
+  // The presenter is silenced: this verb shows nothing a person answers, and a
+  // proposal re-rendered here would be a presentation nobody asked for
+  // (D-0042).
+  const resolved = await approvedRetry(
+    advisoryPorts(store, storePath, () => {}),
+    parsed.proposalId,
+  );
+  if (resolved.kind === "refused") {
+    return refuse(resolved.reason);
+  }
+  const retry = resolved.retry;
+  say(
+    `decision '${retry.decisionId}' approved ${retry.contractDigest}, and that is the contract ` +
+      `the plan below composes under '${retry.successorId}'`,
+  );
+  say(`retrying '${retry.subjectId}' as iteration '${retry.successorId}'`);
+  say("the lap is the step that is slow");
+  const report = await admit(
+    ports,
+    advisory,
+    retry.plan,
+    START_POLICY,
+    retry.successorId,
+    // The retry supersedes the row it was proposed about (D-0030 rule 1), and
+    // the lineage is written by `reserve()` in the same transaction as the
+    // consumption -- so a spent approval and the row it authorised are one
+    // record or neither.
+    retry.subjectId,
+    { decisionId: retry.decisionId, contractDigest: retry.contractDigest },
+  );
+  sayReport(report);
+  if (report.status === "awaiting_human") {
+    say("");
+    say("A person has to answer this before anything lands. Next: rondo answer");
+    return 0;
+  }
+  if (report.iterationId === null) {
+    return 2;
+  }
+  return report.status === "closed" ? 0 : 1;
 }
 
 /** Door two: see what is waiting, and answer it. */
