@@ -2180,6 +2180,9 @@ export async function lapMaterialLines(
  * is `continuo D-1110`'s whole argument for the key being nullable, and the
  * three states of the column are spelled out on `IterationRecord`.
  *
+ * **A third thing is said here and it is neither fact**: what this block does
+ * not cover. See {@link SECOND_FENCE_LINES}.
+ *
  * ponytail: one more `run show` per redraw, on top of the `gate show` that
  * `pageMaterial` already pays. Same ceiling and same upgrade as that one -- a
  * rondo-side column written at admission -- not taken now because the whole
@@ -2189,9 +2192,53 @@ async function fenceLines(
   continuo: VerifiedContinuo | null,
   record: IterationRecord,
 ): Promise<readonly string[]> {
-  const lines = [...(await allowanceLines(continuo, record)), ...denialLines(record)];
+  const lines = [
+    ...(await allowanceLines(continuo, record)),
+    ...denialLines(record),
+    // Appended here rather than inside either half, which is what makes it
+    // unconditional: neither the allowance's six answers nor the denials' five
+    // can leave it out, and a later branch added to either cannot either.
+    ...SECOND_FENCE_LINES,
+  ];
   return lines.map((line, index) => (index === 0 ? `fence   ${line}` : `        ${line}`));
 }
+
+/**
+ * The containment rondo does not observe, said on every lap and derived from
+ * nothing (`D-0050` rules 3 and 4).
+ *
+ * **Why the worker's sandbox reaches neither half of this block.** It fails
+ * *open*: the call runs, with weaker containment than it was meant to have, and
+ * nothing is refused. So it cannot appear in `permission_denials`, which records
+ * calls the fence turned *down* -- the field's own shape says so, every entry
+ * carrying a `tool_name` and the `tool_input` of a call that did not happen --
+ * and it is not in the declaration either, because the declaration is a list of
+ * subjects and this is not about a subject. N-16 (`docs/operations/lap-6-dogfood.md`)
+ * measured the consequence: a lap whose first Bash call left the sandbox
+ * disabled for four more, printing here as a clean run. Only the worker's own
+ * paragraph at the gate said otherwise.
+ *
+ * **Why a frozen constant and not a line of `provenance`.** The caveat beside it
+ * -- *"this is the run's own declaration"* -- is composed on the paths where the
+ * delegation record was actually read, so a lap whose continuo could not be
+ * reached prints none of it. This sentence has to survive all of those, and it
+ * must survive them for a reason rather than by luck: it is a claim about
+ * **rondo's record**, which rondo is the authority on, and not about this lap,
+ * which rondo has nothing to suspect with (`D-0050` rule 4). A sentence printed
+ * only when rondo suspected something would be the second kind. Held as a
+ * constant so that "it is not derived from the lap" is a property of one
+ * expression rather than of every branch above it.
+ *
+ * **It does not report that a lap failed open.** It reports that this screen
+ * cannot tell, and says where the only account of it has ever been
+ * (`D-0050` rule 5b: the gate's own `rationale`, which the same commands print).
+ */
+const SECOND_FENCE_LINES: readonly string[] = Object.freeze([
+  "The worker's own sandbox is a second containment, and rondo does not observe",
+  "it: it can fail to start without refusing anything, so a lap that ran with it",
+  "disabled prints here exactly like one that did not. The worker's own account",
+  "at the gate is the only place that has ever reported it (D-0050).",
+]);
 
 /** What the run was admitted as permitted to run, read back from continuo. */
 async function allowanceLines(

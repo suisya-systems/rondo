@@ -73,6 +73,41 @@ test("the refusals are listed with the call each one was about", async () => {
   expect(said).toContain('Bash  "line one\\nline two"');
 });
 
+/**
+ * What the block does *not* cover, said on every lap (`D-0050` rules 3 and 4).
+ *
+ * The property is unconditionality, so it is tested as a property of every
+ * state this file can reach rather than of one: the worker's sandbox fails open
+ * without refusing anything, so no answer of either half is the one that ought
+ * to carry it, and the sentence is worth nothing if a lap can print without it.
+ *
+ * **The last assertion is why the ones above it mean anything.** `continuo` is
+ * null throughout this file, so the caveat this sentence sits beside --
+ * *"not the whole fence"* -- is never composed on any of these rows. That is
+ * what makes the sentence's presence evidence of its own: it cannot be riding
+ * along with the conditional block. The assertion holds the premise still, so
+ * that a later fixture reaching a real control plane fails here and says the
+ * test has stopped proving what it claims, rather than passing for a new reason.
+ *
+ * Both mistakes are caught and were measured to be: emptying the constant, and
+ * moving it into `allowanceLines`' provenance, each fail this test and only
+ * this test.
+ */
+test("what this block does not cover is said whatever the lap did", async () => {
+  const states = [
+    "[]",
+    "null",
+    null,
+    JSON.stringify([{ tool_name: "Bash", tool_input: { command: "npm test" } }]),
+  ];
+  for (const permissionDenials of states) {
+    const said = await fenceBlock(permissionDenials);
+    expect(said).toContain("The worker's own sandbox is a second containment");
+    expect(said).toContain("prints here exactly like one that did not");
+  }
+  expect(await fenceBlock("[]")).not.toContain("not the whole fence");
+});
+
 test("an allowance that was not read is not an allowance of nothing", async () => {
   const said = await fenceBlock("[]");
   expect(said).toContain("continuo is not usable here");
