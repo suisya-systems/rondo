@@ -13091,15 +13091,31 @@ On 2026-09-13, in Chromium via Playwright, a local server logged the `Sec-Fetch-
 | `fetch(..., {method: "POST"})` | `cors` | absent |
 | A script's `form.submit()` one second after a person's unrelated click | `navigate` | `?1` |
 
-So **refusing `approve` unless `Sec-Fetch-Mode: navigate` and `Sec-Fetch-User: ?1`** refuses every
-unattended writer the audits planted -- a loader, a refresh, a middleware, a `fetch` in a key
-handler, an htmx `hx-post` -- in any stack, at the one door the write passes through, without reading
-the source. It is stronger than today's page, where a same-origin script holding the token could
-`fetch` a `POST` and be served. **Its residual is stated rather than hidden**: a script that submits
-inside the browser's transient-activation window after a person's unrelated gesture (last row) still
-passes, and a non-browser client can forge the headers -- which the per-process token and the
-loopback check already bound, as today. It is a mechanism about browsers; the headers are sent by
-every current engine but are not mandatory for a client to send.
+**Where the check sits decides what it covers, and a check at the route is not enough.** The audits
+planted two kinds of writer. The first kind makes the *browser* issue a request -- T's loader calling
+`approve` over RPC, a `fetch` in a key handler, an htmx `hx-post` -- and a header check on the `approve`
+route refuses all of them. The second kind never issues a request: four of H's planted writers were a
+`GET` handler, a middleware or a mounted sub-app calling the `answer` port **directly**, in the same
+process, during an ordinary `GET`. No check on the `approve` route sees those, and a route
+enumeration permits `GET` routes by design.
+
+So the check belongs **in the write capability itself**: `answer` accepts no call without a *press*
+value, and the only function that mints one does so from the live request, and only when that
+request is a `POST`, a same-origin `Sec-Fetch-Mode: navigate`, carries `Sec-Fetch-User: ?1`, and
+carries the per-process token. A `GET` path that reaches the port can then reach it only while
+handling a person's press, because the request it holds is a `GET` or lacks the header -- whichever
+module it sits in and however it got the port. **This placement was reasoned from the mutants and
+not yet re-run against them**; the implementing change carries the audit's planted writers as tests
+that must fail to write (rule 9).
+
+It is stronger than today's page, where a same-origin script holding the token could `fetch` a
+`POST` and be served. **Its residual is stated rather than hidden**: a script that submits inside the
+browser's transient-activation window after a person's unrelated gesture (last row) still passes; a
+writer that runs *inside* the handling of a real press could still write something other than what
+was pressed, which is `D-0042`'s framing check and not this one; and a non-browser client can forge
+the headers -- which the per-process token and the loopback check already bound, as today. It is a
+mechanism about browsers; the headers are sent by every current engine but are not mandatory for a
+client to send.
 
 ### Decision
 
@@ -13185,13 +13201,17 @@ every current engine but are not mandatory for a client to send.
    **R4. `D-0041` rule 4 and `D-0057` rule 2(a) -- the writing vocabulary is enumerable from one
    type.** H keeps the type split (rule 3a), but a Hono app is a router any module holding it can
    register on, and the audit showed a source sweep cannot close that.
-   - *Substitute* (new, section 5): **`approve` is refused unless the request is a same-origin
-     navigation carrying `Sec-Fetch-User: ?1`**, beside the token and loopback checks that already
-     exist; plus a runtime check in the test suite that enumerates the running app's registered
-     routes (`app.routes`) and fails on any non-`GET` route other than `approve`, replacing a source
-     sweep with a question asked of the program.
-   - *Lost*: the property is no longer read off one declaration; it is two runtime checks. Residual:
-     a script inside a person's transient-activation window.
+   - *Substitute* (new, section 5): **the `answer` port itself refuses any call not carrying a press
+     minted from the live request, and a press is minted only for a `POST` that is a same-origin
+     navigation carrying `Sec-Fetch-User: ?1` and the per-process token.** That covers a writer
+     reached through a request the browser issued *and* a `GET`-side handler calling the port
+     directly. Beside it, a runtime check in the test suite enumerates the running app's registered
+     routes (`app.routes`) and fails on any non-`GET` route other than `approve`, so the enumerable
+     vocabulary is a question asked of the program rather than a source sweep.
+   - *Lost*: the property is no longer read off one declaration; it is a check inside the port and a
+     route enumeration. Residuals: a script inside a person's transient-activation window; a writer
+     running inside the handling of a real press; and the placement is reasoned from the audit's
+     mutants, not yet re-run against them (rule 9).
 
 7. **If the gate chooses T instead**, the same four relaxations apply and are larger: R1 covers
    about 407 KB of bundled JavaScript and 122 production packages; R2 and R3 become a client
@@ -13213,8 +13233,10 @@ every current engine but are not mandatory for a client to send.
 
 9. **The implementing change is a separate pull request, after ratification, and it is gated on the
    screen.** It carries the port of the three views to H, the relaxation substitutes (served-file
-   manifest and its CI check, the `Sec-Fetch-User` refusal with a test in each direction, the route
-   enumeration test), the negotiation moved onto `hono/accepts` / `hono/cookie` with its existing
+   manifest and its CI check, the press-minting check inside the `answer` port with a test in each
+   direction, the route enumeration test, and **every writer the two audits planted -- the `GET`
+   handler, the middleware, the mounted sub-app, the loader, the `fetch` -- carried as a test that
+   must fail to write**), the negotiation moved onto `hono/accepts` / `hono/cookie` with its existing
    342 lines of tests passing unchanged, and the screenshot set of rule 1.
 
 ### What this entry does not do
