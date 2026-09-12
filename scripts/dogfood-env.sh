@@ -502,6 +502,10 @@ node -e '
       // capability `npm run:*` did not already have (rondo#97). `npx:*` is deliberately
       // absent: it adds none either, only an entrance for running an arbitrary package.
       "npm test:*",
+      // Without this, `npm run verify; echo "EXIT=$?"` is refused on its second half and the
+      // only permitted shape (`... && echo green`) can report success alone (rondo#87). echo
+      // writes to stdout; a lap that may edit and commit the repository gains nothing else.
+      "echo:*",
       "node vendor/pin.mjs:*",
       "node --version",
       "npm --version",
