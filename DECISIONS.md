@@ -7342,7 +7342,9 @@ rondo `09830d6`, on **2026-09-12**, by running as well as by reading.
 > alone still guarantees that an unattended redraw writes nothing, and contributes nothing further to
 > the forged cross-site `POST`, which after `D-0054` rests on 3(b) and 3(c) alone. The falsifier below
 > reading "the page acquiring a script, a `fetch`, or any redraw that is not a document GET" is
-> recorded as **fired deliberately**, by rondo#163 and `D-0054`, rather than discovered.
+> recorded as **fired deliberately**, by rondo#163 and `D-0054`, rather than discovered. **This entry
+> is not superseded**: one sub-rule is amended and named as amended, in the form `D-0042` already
+> used on rule 7, and every other rule below is read as written.
 
 `D-0032` rule 1 says the operator's surface has to be able to show the record. rondo#95 built the
 first surface that is not a terminal — one page on `127.0.0.1` that redraws itself every five
@@ -9828,6 +9830,11 @@ that algorithm, in 10,587 bytes, under `0BSD`, from the authors of the library r
 - **It does not give the page client-side state or routing.** `src/access/web.ts`'s "a view outlives
   every redraw because the server is the one holding it" is a consequence of rule 2 -- the script
   re-fetches the address it is on -- and stays true without being asserted as a fourth invariant.
+- **It does not supersede `D-0041`, and the choice is deliberate.** One sub-rule of one rule is
+  amended, and `D-0042` amended rule 7 the same way and left the entry accepted; a whole-entry
+  supersession would have to re-state rules 1, 2, 4, 5, 6, 7 and 8 unchanged to say nothing new about
+  any of them, and would leave `D-0042`'s citations pointing at a superseded entry. The falsifier
+  below says when that stops being the right call.
 - **It does not touch the terminal, `rondo inbox`, or `D-0032` rules 9 and 10.**
 
 ### What the implementing change contains
@@ -9890,6 +9897,10 @@ the properties rules 2, 3, 6 and 7 assert.
 - **idiomorph ceasing to be maintained, or its digest drifting under a version bump that is not
   recorded.** The adoption's whole argument is "one small file whose bytes rondo pins"; an unpinned or
   unread bump is the version of this that `D-0007` exists to prevent.
+- **A third entry amending `D-0041` rather than replacing it.** Two amendments (`D-0042` on rule 7,
+  this one on rule 3(a)) are still an entry a person can read top to bottom with two notes in hand; a
+  third is the point at which the accumulated reading is harder than a re-taken entry, and `D-0041`
+  should then be superseded whole with its survivors carried forward, as `D-0018` did for `D-0001`.
 - **A second operator, or the page ceasing to be loopback-only.** Rule 4 leaves the forged-`POST`
   defence resting on the token and the frame refusal, both of which were argued for a single browser on
   a host one person controls.
