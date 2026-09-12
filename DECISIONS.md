@@ -101,7 +101,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0062 | A proposal may name an agent type, and only a split proposal from a request may: a record rondo already holds chosen by its digest, approved on route S with the tier bound by the option it came from, and the kind-to-tier judgment kept whole while the request-to-kind judgment moves to the gate | accepted |
 | D-0063 | The advisory is the secretary's drafting half: it reads, asks back, drafts a split, brings points in dispute with a recommendation and reports to a person, and proposes what comes next, while handing over and approving stay elsewhere; `D-0022` rules 1, 3, 4 and 7 widen for a model drafter and a split, and only two lines are kept | accepted |
 | D-0064 | rondo is run the way a product manager runs an organisation: a person approves a scope once, the organisation decides everything inside it, and what reaches the person is a question with a recommendation, an irreversible act, a scope exit or a report | accepted |
-| D-0065 | The model reviewer: a reader of another model family that rondo runs outside the lap over bytes it hands over and digests, graded findings with bases on the reading record, a round budget and a threshold that are the scope's, and the three defects a person caught sorted into caught, half caught and not caught | proposed |
+| D-0065 | The model reviewer: a reader of another model family that rondo runs outside the lap over bytes it hands over and digests, graded findings with bases on the reading record, a round budget and a threshold that are the scope's, and the three defects a person caught sorted into caught, half caught and not caught | accepted |
 
 ---
 
@@ -12659,8 +12659,9 @@ the option that fits `D-0064`.** They are kept as put, and the answer follows th
 
 ## D-0065 — The model reviewer: a reader of another model family that rondo runs outside the lap over bytes it hands over and digests, graded findings with bases on the reading record, a round budget and a threshold that are the scope's, and the three defects a person caught sorted into caught, half caught and not caught
 
-**Status:** proposed (2026-09-13). One point is put to rondo's human gate in section "What is put to
-the human gate"; the rest is decided inside `D-0064`. Refs `D-0009`, `D-0010`, `D-0019`, `D-0022`,
+**Status:** accepted (2026-09-13, rondo's human gate). One point was put to the gate and it chose the
+recommended option; the answer is recorded in section "What was put to the human gate, and its
+answer". The rest is decided inside `D-0064`. Refs `D-0009`, `D-0010`, `D-0019`, `D-0022`,
 `D-0026`, `D-0027`, `D-0029`, `D-0030`, `D-0032`, `D-0045`, `D-0048`, `D-0050`, `D-0051`, `D-0052`,
 `D-0060`, `D-0064`.
 
@@ -12840,7 +12841,7 @@ same date, read only (`JA/`), and the survey `JA/notes/lap-gap-survey-2026-09-13
    `clear`, **and** the latest model reading is not `unavailable` and holds no finding at or above the
    scope's threshold. Read literally as "the model reading is `clear`", O5 could never apply, since
    any below-threshold finding would block. That this reading of rule 3.6 touches ratified rules
-   outside `D-0064` is the point put to the gate below.
+   outside `D-0064` was put to the gate, and its answer is below.
 
 ### 6. The three defects a person caught
 
@@ -12850,7 +12851,9 @@ same date, read only (`JA/`), and the survey `JA/notes/lap-gap-survey-2026-09-13
 | **N-16 / N-21**, laps 6 and 7: the worker's sandbox failed to initialise and later calls ran without it | **Yes when the failure is in the transcript, and no otherwise** | The failure text is a command's output, so the reviewer can raise it with a transcript basis, if the criterion treats verification conditions as in scope. `D-0050` is kept: no column records the sandbox, and **the absence of such a finding says nothing** about whether the sandbox held, which is `D-0050`'s own ground. A failure that leaves no text is not caught |
 | **rondo#39**: a wrong summary approved three times in a day | **Inside a lap, yes for two of its three shapes; outside a lap, no** | A summary inside the lap (a commit message, the rationale, the pull request text `D-0026` builds from subjects) is handed with its material, so "a claim contradicting the diff" and "an instruction contradicting a rule file" are settleable. "A candidate that had already merged" needs world state the reviewer does not read. **The three #39 cases themselves were summaries put to a person outside any lap**, and this reviewer reads none of those; under `D-0064` O1 and O3 those summaries are the organisation's and are held only by kept line 1 |
 
-### What is put to the human gate
+### What was put to the human gate, and its answer
+
+The point is kept as put, and the answer follows it.
 
 **Whether a model reading may stand on the path to an organisation's gate answer, and which entry
 says so.** Section 5.7 makes the model reading part of O6's condition. That is what `D-0064` asked
@@ -12868,6 +12871,11 @@ first reason (no non-deterministic verdict on the path to the one human contact)
 - **(b) This entry supersedes `D-0022` rule 13's "never reaches a gate as anything but material",
   `D-0029` rule 6's "material" clause and `D-0019` rule 7's first reason now**, for O6 only. *Loses:*
   three supersessions taken for an act that cannot happen yet, on a reviewer nobody has run.
+
+**The gate's answer (2026-09-13): (a).** `D-0022` rule 13, `D-0029` rule 6 and `D-0019` rule 7's first
+reason are kept as written. Wherever a person answers, a model reading is material and nothing more.
+The entry that opens O6 supersedes or annotates the three rules; this entry does neither, and
+sections 5.6 and 5.7 take effect for O6 only through that entry.
 
 ### What this does not do
 
