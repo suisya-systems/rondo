@@ -290,12 +290,15 @@ costs on this machine, and that `resume` sees the outcome after a human answers.
    it is the forward ack's to write. `resume` reads whichever of the two
    happened.
 
-5. **Resume.** Call `resume(ports, iterationId)` — `ports` is step 2's, and
-   `resume` takes it first exactly as `admit` does. Call it *twice*. The first call after
-   the answer transitions the iteration to `closed`; the second must change
-   nothing and say so. Calling it before the answer must also change nothing —
-   that is the idempotence `resume` promises to a surface that cannot be sure,
-   and it is cheap to check here and expensive to discover in production.
+5. **Resume.** `rondo answer` makes this call, once, right after it walks
+   the gate; there is nothing further to type. What this step checks is that
+   `resume` reads a **real** gate's outcome — whichever of step 4's two endings
+   happened, through a real continuo — and transitions the iteration to `closed`, which is the part
+   the fakes cannot reach. `resume`'s idempotence is not checked here: it is
+   `test/refrain/interpreter.test.ts`'s, in *"resume on a gate that is still
+   open changes nothing and says so"* and *"resume after the gate closes writes
+   once, however many times it is called"*, and that is where it is green
+   (D-0058).
 
 6. **Read the report.** It must say the gate's outcome, the run id, the continuo
    revision that drove it, and — plainly — that **rondo did not close this run**,
