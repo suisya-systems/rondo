@@ -92,6 +92,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0052 | A tier nothing prices is refused at `classify`, off the record cadenza just built: the tier names in the loop, the prices behind the seam, and `D-0017` rule 2 unamended | accepted |
 | D-0053 | The operator's language is a property of the lap: material is what a lap composed for the answer, the language is an ask carried on the plan and recorded as an ask, and the laps already written stay written | accepted |
 | D-0054 | The page may run one script, and it is a poller and a morph rather than a framework: liveness decided per view, `D-0041` rule 3a re-founded on the server's types, and one vendored 10 KB file no build ever touches | accepted |
+| D-0055 | The chrome is prose the operator reads, and its language comes from the host's one operator: the line drawn at the span rather than at the string, recorded words left in English, and `<html lang>` naming what rondo actually wrote | accepted |
 
 ---
 
@@ -9402,6 +9403,24 @@ At rondo `42148b5` on **2026-09-12**, by reading the tree.
 **Status:** accepted (2026-09-12, rondo's human gate). Refs rondo#155, `D-0042`, `D-0050`, `D-0028`,
 `D-0041`, `D-0029`, `D-0004`.
 
+> **Annotation (2026-09-13, from D-0055).** Added after this entry was accepted, and additive:
+> nothing below is removed or rewritten. **Rule 1 is unamended as the provenance test** -- it still
+> decides what a lap composed, what rondo quotes rather than writes, and what the ledger is holding --
+> and is **no longer the language test for rondo's own strings**, which `D-0055` rule 2 decides by
+> asking whether a string is a token the operator learns once or prose the operator must read.
+> **Rule 3 is reversed**: the fence block's two standing sentences are prose and go in the operator's
+> language (`D-0055` rule 11), with `D-0050` rule 4's argument for their *unconditionality* untouched.
+> **Rule 3's own falsifier -- "the fence block being skipped because it is English" -- is recorded as
+> fired on 2026-09-13**, by the operator, on `/?reading=open` (rondo#166). **Rule 5's enumeration is
+> superseded by a test rather than by a longer list**, and each string it names is re-sorted by that
+> test; the strings the ledger records stay English by `D-0042`'s invariant rather than by rule 5
+> (`D-0055` rule 4). **Rule 12's `<html lang="en">` half is amended**: the document declares the
+> language rondo actually wrote the chrome in, and the `lang`-on-material half stands, gaining
+> `lang=""` where a plan asked for nothing. Rules 6 to 11 and 13 are read as written -- in particular
+> rule 8's *the record holds the ask and never the language of the bytes*, which `D-0055` rule 6 states
+> the other half of. **This entry is not superseded**, and the second residual below -- *rondo's own
+> vocabulary in the operator's language* -- is the subject `D-0055` takes up.
+
 The first real look at the operator page reported back: *"maybe it is hard to read because it is
 English"*. That is a legibility finding and not a preference -- the page's whole job is that one
 person can answer in one look -- and it narrowed on the same day to something much smaller than
@@ -9928,3 +9947,346 @@ the properties rules 2, 3, 6 and 7 assert.
   rondo declines to build it. What the ledger holds stays *presentations that were acted on*, and
   `D-0041` rule 2's refusal to invent the distinction is the reason, unchanged by the client having
   gained the ability to lie about it.
+
+---
+
+## D-0055 — The chrome is prose the operator reads, and its language comes from the host's one operator: the line drawn at the span rather than at the string, recorded words left in English, and `<html lang>` naming what rondo actually wrote
+
+**Status:** accepted (2026-09-13, rondo's human gate). Refs rondo#166, `D-0053`, `D-0041`, `D-0042`,
+`D-0050`, `D-0020`, `D-0019`, `D-0004`.
+
+`D-0053` cut the page's text in two and the operator confirmed the cut on the screen it was made on:
+`awaiting_human`, `waiting 2m`, English, fine. Then the operator opened `/?reading=open` -- the fold
+`D-0041` keeps one click away so that a summary can be checked against what it rests on -- and said,
+in effect, *still English*. What is on that screen is not labels. Read off the running page on
+**2026-09-13**:
+
+```
+Redraws every 5s, and a redraw writes nothing: no last-look
+mark moves and no presentation is counted. The one thing that writes is the
+approve button, which records the explanation you pressed on and then answers
+the gate.
+
+Reading this does not move your last-look mark: that is what rondo inbox does.
+
+  proposals that become contracts when you approve them (0)
+  proposals that bind nothing (1)
+  you have never looked: nothing below is marked new
+```
+
+Every one of those is rondo's own sentence, so `D-0053` rule 1 sorts them into **vocabulary** and
+leaves them English -- correctly by its own terms, and wrongly by what the one person who reads them
+can read.
+
+**The place this lands is the worst one available, and that is the argument for taking an entry
+rather than a patch.** `D-0041`'s fold exists because a summary can lie; the operator is supposed to
+be able to go back to what a claim rests on. A return path the operator cannot read is a safeguard
+that is present in the markup and absent in practice, and its absence is invisible, because nothing
+fails when nobody follows it. `D-0053` rule 3's own falsifier -- *the fence block being skipped
+because it is English, as opposed to because it never changes* -- **fired on 2026-09-13**, one day
+after it was written, by the same operator and on the same page.
+
+### The line was in the right place and was drawn against the wrong property
+
+`D-0053` rule 1 asks **who composed this, and for whom**. That question has a job and does it well:
+it decides what a lap writes, what rondo quotes byte for byte, and what the ledger is holding when it
+holds a string. It is not the question the operator's eye asks. The operator's eye asks **is this a
+token I learn once, or a sentence I am expected to read** -- and those two questions cut the same
+material along different lines. The fence block's four standing sentences are rondo's own, about
+rondo's own record, and are four lines of English prose an operator must read to know what the screen
+does not cover. `awaiting_human` is rondo's own, about rondo's own record, and is a word learned once
+and then recognised.
+
+So this entry does not replace `D-0053`'s test. It adds a second axis and says which axis answers
+which question, because collapsing them is what produced a legible screen with an illegible fold.
+
+### Decision
+
+1. **Two axes, and each keeps its own job.** `D-0053` rule 1 -- *material is what a lap composed for
+   this operator's answer; vocabulary is what rondo composed about its own record* -- is **unamended
+   and still the provenance test**: it decides what rondo quotes rather than writes, what carries a
+   lap's language, and what a press records. It is **no longer the language test for rondo's own
+   strings**. Those are sorted by rule 2. A string is therefore asked two questions in order: *whose
+   bytes are these* (`D-0053`), and then, if they are rondo's, *is this a token or is it prose*.
+
+2. **The test: a string rondo composed is a token when its bytes are its identity.** Concretely, one
+   of these is true of it:
+
+   - the operator **types** it, or pastes it (`rondo show --proposal-id ID`, `approve`, an id);
+   - the operator **matches** it against another surface -- the same word appears in the store, in
+     `rondo show`, in continuo's own output -- and the match is how they know they are looking at one
+     thing (`awaiting_human`, `contract_keys`, a record kind, a gate name, a digest);
+   - rondo itself **refuses a different spelling** of it.
+
+   **Everything else rondo composed for the operator to read is prose**, and prose goes in the
+   operator's language. The test is a question about the string's *function*, not about its length,
+   its author, or how hard it is -- which is what makes it applicable to the next screen instead of
+   to this one. Rule 5 of `D-0053` enumerated today's strings and the enumeration is already stale:
+   this entry deliberately names no list, and the two examples below are worked applications rather
+   than a schedule.
+
+3. **The unit is the span and never the string literal, which is the answer to "a token with a
+   sentence wrapped around it".** A token inside prose stays the token, verbatim, in the middle of a
+   translated sentence: *"Reading this does not move your last-look mark: that is what `rondo inbox`
+   does"* becomes a Japanese sentence containing the ASCII bytes `rondo inbox`. Nothing is
+   transliterated, nothing is glossed, nothing gains a parenthesis. The same holds line by line
+   inside a composed block: `src/access/inbox.ts:265` prints
+   `proposals that become contracts when you approve them (N)`, whose description is prose and whose
+   count is a number, and two lines later `proposalLines` prints ids and kinds, which are tokens
+   whole. **Drawing the line at the span is what lets the test survive a string that is half of
+   each**, and it is why the rule is not "translate these strings".
+
+4. **A string the ledger records stays English, whatever it reads like, and this is the one place the
+   test is overruled.** `D-0042` rule 1 makes the press the presentation and records the framing that
+   was beside the button; `propose()` composes that framing, and its claim labels and values are
+   written into the `proposal` payload (`src/advisory/proposal.ts:433` onward). A recorded string that
+   rondo could have written two ways is a ledger holding two versions of one claim, and *which version
+   was under the button* is exactly the question `D-0053` refused a display-time translator in order
+   to keep answerable. So the ledger's side of the fold is English by an invariant rather than by the
+   test. **Named, because it is the boundary case that actually costs something**: the deterministic
+   drafter's findings (`src/access/review.ts`) are rondo's prose written for this operator to read, and
+   they are recorded as claim values -- so they are prose by rule 2, English by this rule, and the
+   fold the issue is about is therefore *more* legible after this entry and not *fully* legible. That
+   is a residual below and it is not smuggled into a rule.
+
+   The override is stated here rather than folded into rule 2 for `D-0053` rule 4's reason: a test with
+   an unnamed exception is a test nobody can apply.
+
+5. **The operator's language comes from the host, beside the operator's identity, and is recorded
+   nowhere.** One environment variable -- `RONDO_OPERATOR_LANGUAGE`, an IETF tag, absent meaning
+   *nobody asked* -- read where `RONDO_APPROVER` is read (`src/access/cli.ts:287`) and validated by the
+   grammar `src/refrain/plan.ts:545` already holds. This is the substantive question rondo#166 named,
+   so the four homes that were not chosen are priced rather than skipped:
+
+   - **The plan.** `material_language` is on the plan because it is an **ask about one lap that the
+     ledger has to be able to answer for** (`D-0053` rules 8 and 9). The chrome is about no lap; the
+     page draws rows from many plans and its own sentences belong to none of them; and there is nothing
+     about the chrome's language for the ledger to hold, because rondo wrote the bytes and no third
+     party could have ignored the ask. A plan field would be an ask recorded against a lap that does
+     not contain the thing it describes.
+   - **`Accept-Language` on the request.** Refused, and this is the tempting one. It would make the
+     page's bytes depend on who asked, which is `D-0053`'s last residual verbatim -- *a second version
+     of a claim by another name* -- on a surface whose whole premise is one operator over loopback
+     (`D-0020`). It also supplies nothing to the terminal, so the host would have two answers to one
+     question and rondo would have to say which wins.
+   - **Derived from the rows on screen** -- the newest `material_language`, or the only one present.
+     Refused: the chrome would change language as laps come and go, a page with nothing running would
+     have no language at all, and rondo's own sentences would become a function of the ledger's
+     contents.
+   - **A control on the page.** `D-0041` rule 4: `approve` is the whole of this surface's write
+     vocabulary and a toggle is a second word. Unchanged from `D-0053` rule 6.
+
+   **`D-0019` rule 3 is not breached and is worth saying why.** What it refuses is rondo *inventing a
+   field of a `RunPlan`*, and what it names as the alternative it does not want is a configuration
+   *layer*: a file, a precedence order, a merge. This is one variable in the set that already holds
+   `RONDO_STORE`, `RONDO_APPROVER`, `RONDO_CONTINUO_CLI` and the two capacity bounds -- host facts a
+   host states once. No file, no precedence, no per-lap override, and no plan field.
+
+6. **The asymmetry with `D-0053` rule 8, stated rather than left to be noticed.** For material, rondo
+   **records the ask and never the language of the bytes**, because a worker can ignore an ask and a
+   field claiming otherwise would be a false claim with an invisible falsifier. For the chrome, rondo
+   **declares the language of the bytes and records no ask at all**, because rondo is the author: there
+   is no gap between what was asked and what arrived for a false claim to live in, and nothing about it
+   is a claim about a lap. One rule, two surfaces of it, and the difference is authorship.
+
+7. **`<html lang>` names the language rondo actually wrote the chrome in, and not the language that was
+   asked for.** `D-0053` rule 12's `<html lang="en">` (`src/access/web.ts:861`) is amended to that
+   rule, which is a strictly truer statement of what the attribute is for and happens to keep `en`
+   whenever nothing is asked. Its consequence is deliberate: a tag rondo ships no wording for produces
+   an English page that says `en`, because that is what the document is. rondo does not declare an
+   intention as a fact.
+
+8. **Chrome and a row's material may disagree, nothing reconciles them, and the markup already says
+   so.** Each is true about a different thing -- one is the language rondo speaks to its operator, the
+   other is what a lap was asked to write -- so there is no conflict to resolve, no warning to draw and
+   no refusal to make. The document declares the chrome (rule 7); each material quotation keeps the
+   `lang` `D-0053` rule 12 gives it. **Where a plan asked for nothing, the material span carries
+   `lang=""`**, which is HTML's own way of saying *the language here is unknown*, rather than the
+   absent attribute it carries today -- which inherited `en` while the chrome was always English and
+   would inherit the operator's language after this entry, turning *rondo does not know* into a guess
+   on the way past. One empty string is the whole of the change and it is exactly what rule 10 of
+   `D-0053` says the absence means.
+
+9. **The wording is rondo's own source, not the operator's configuration, and a missing string is the
+   English one.** The prose lives in the tree keyed by string, one set per tag; the `en` set is today's
+   literals moved and not rewritten. A string with no wording for the asked tag renders English. This
+   is what makes a partial translation shippable, and it has to be, because the set of prose grows with
+   every screen: the alternative is either a screen that cannot ship until it is translated, or a rule
+   that says so and is broken the first time it is inconvenient. **This is the cost the entry takes
+   knowingly**: rondo gains per-language wording of its own, so unlike `D-0053` rule 7's single ASCII
+   sentence, **a third language is now a rondo diff**.
+
+10. **The prose is selected where the surface is known, so one composition keeps serving two surfaces.**
+    `inboxLines` is called by the page (`src/access/web.ts:619`) and by the terminal
+    (`src/access/inbox.ts:585`), and the terminal's strings go through `D-0004`'s ASCII escape, which
+    has no CJK substitutes and would render a Japanese inbox as `\uXXXX` (`D-0053`'s terminal
+    subsection, measured). So the wording set is an input to composition rather than a lookup inside
+    it, and **the terminal stays English until `D-0004`'s scope is a decision somebody takes**. The
+    page is the surface answering happens on -- asked and answered at the window on 2026-09-12 -- and
+    it is the surface rondo#166 is about.
+
+11. **`D-0053` rule 3 is reversed by name.** Both standing sentences of the fence block -- `"This is
+    the run's own declaration, not the whole fence ..."` and `SECOND_FENCE_LINES`
+    (`src/access/cli.ts:2236`) -- are **prose** and go in the operator's language. `D-0050` rule 4's
+    argument is untouched by this: it is an argument for the sentences being **unconditional**, printed
+    on every lap and derived from nothing, and it says nothing about which language they are
+    unconditional in. What `D-0053` rule 3 got wrong is not the provenance -- they are rondo's claim
+    about rondo's record, exactly as it said -- but the inference that a claim about the record is
+    therefore a claim nobody has to read.
+
+12. **Nothing is translated at display time, and this is not a translation layer.** No source text is
+    converted anywhere: two strings rondo authored exist and one is selected, which is what a message
+    catalogue is and what `D-0042` was never about. The property `D-0053` rule 11 and `D-0042` need
+    survives intact and is now testable in one line: **the bytes the ledger records do not depend on
+    the host's language** (rule 4), so a press still records one version of one claim. Material is
+    still quoted byte for byte and still never translated.
+
+13. **Nothing here widens what the page may write, and nothing here is a second verb.** `approve` on a
+    live non-terminal iteration remains the whole vocabulary (`D-0041` rules 4 and 7), the write is
+    still one function on the ports, the redraw still counts no presentation (`D-0042`), and the gate's
+    `options` and the answer word stay tokens by rule 2 -- the operator types them.
+
+14. **Nothing under `src/` changes on this entry.** Rules 2 to 12 are an implementation and it is one
+    pull request.
+
+### What the implementing change contains
+
+One pull request:
+
+- `RONDO_OPERATOR_LANGUAGE` read at startup beside `RONDO_APPROVER` and validated by the tag grammar in
+  `src/refrain/plan.ts` (whose refusal message names `materialLanguage` today, so the grammar is what is
+  shared and the message is the caller's); documented in `docs/operations/rondo-cli.md` with the other
+  four variables.
+- rondo's chrome prose behind a per-tag wording set in the tree, keyed by string, with the `en` set
+  being today's literals moved verbatim and one `ja` set written -- `ja` because it is the language of
+  the operator who raised rondo#155 and rondo#166. Selection at the composition sites, so `inboxLines`
+  and the terminal are unaffected (rule 10).
+- `<html lang>` set to the tag the chrome was actually written in; `lang=""` on a material span whose
+  plan asked for nothing.
+- `SECOND_FENCE_LINES` and the fence block's declaration caveat moved into the wording set (rule 11).
+- Tests: a `ja` host renders ja prose with every token verbatim; **the recorded `proposal` and
+  `operator_attention` payload bytes are byte-identical under an `en` host and a `ja` host** (rule 4 and
+  `D-0042`'s invariant, as one assertion); `<html lang>` matches the set actually used, including for a
+  well-formed tag rondo ships no wording for; every view is complete with `RONDO_OPERATOR_LANGUAGE`
+  unset, ill-formed, and unknown.
+
+### What this entry does not do
+
+- **It does not translate material, or add a display-time translator, or let the ledger hold two
+  versions of one claim.** `D-0053` rules 8, 10, 11 and 13 are untouched: no backfill, no re-recording,
+  no reading of prose to find out what language it is in.
+- **It does not translate the terminal.** `D-0004` is not amended and its escape stays.
+- **It does not enumerate the strings.** Rule 2 is the whole of what a later screen has to apply.
+- **It does not add a column, a record kind, a plan field, or a page control.**
+- **It does not supersede `D-0053`.** Rule 1 keeps its job (rule 1 here), rule 3 is reversed by name
+  (rule 11) and rule 12's `<html lang>` half is amended (rule 7); every other rule of that entry is
+  read as written. This is the form `D-0042` and `D-0054` used on `D-0041`, and the falsifier below says
+  when it stops being the right call.
+- **It does not give rondo a configuration layer** (rule 5), a build step, or a dependency.
+
+### Residuals
+
+| Residual | Why not here | Who decides |
+|---|---|---|
+| The deterministic drafter's findings, which are prose and stay English because they are recorded (rule 4) | Translating them means recording two possible wordings of one claim, which is what `D-0042` and `D-0053` both refuse. The fold is therefore more legible after this entry and not fully legible, and that is the honest state of it | `D-0053` rule 2c's model drafter, whose findings are material and carry the lap's language; or whoever prices a recorded-and-displayed pair |
+| The terminal's chrome (rule 10) | `D-0004`'s escape would render it `\uXXXX`, and a lap nobody can answer is worse than a line nobody can read | whoever re-argues `D-0004`'s scope, with `D-0053`'s terminal subsection in hand |
+| The material `<pre>` holds rondo's prose and a lap's bytes under one `lang` (`src/access/web.ts:707`) | After rule 11 the fence sentences in that block are in the operator's language while the block declares the plan's ask, so the attribute is wrong for those lines exactly when the two differ. It is a hint a browser uses to pick a font, not a claim, and splitting the block means giving `pageMaterial` a shape richer than lines of text | whoever wants the block's spans to declare their own authorship |
+| A screen added with `en` wording only, so the `ja` page is part English | Rule 9 makes that shippable on purpose; the alternative blocks screens on translation | whoever finds a half-English page worse than a late one |
+| A second operator, or two readers wanting different chrome | The host has one operator (`D-0020`) and rule 5 refused `Accept-Language` for that reason | the entry that gives the host a second reader |
+| The gate `options` and the answer word | Tokens by rule 2 -- the operator types them -- and `approve` is also the write word `D-0041` rule 4 pins | the entry that widens the write vocabulary |
+| Headings composed by rondo (`the inbox`, `waiting on you`) becoming prose on the page while the terminal keeps the English ones | Rule 2 sorts them as prose and rule 10 keeps the terminal English, so the two surfaces will name one section with two words for as long as `D-0004` stands | the same reader as the terminal residual above |
+
+### What was measured, and how
+
+On **2026-09-13**, at rondo `707318f` on `node v22.17.0`, by reading the surfaces rather than by
+running a lap. The screen that opened the issue was read off a running page by the operator on the same
+date and is quoted above.
+
+- **The three strings the operator pointed at are rondo's own literals, and none is recorded.** The
+  standing note is composed in the document head at `src/access/web.ts:1027-1034`, the inbox's
+  explanation at `:618`, and the group descriptions at `src/access/inbox.ts:265`, `:267` and `:366`.
+  None of them passes through `propose()`, so none reaches the `proposal` payload a press records --
+  which is why rule 4's override does not touch them and rule 2 decides them alone.
+- **The page's own shape already separates the two.** `section(heading, note, body)`
+  (`src/access/web.ts:330`) puts rondo's explanatory sentence in its own argument and the composed
+  content in another, at all seven call sites. The line this entry draws therefore falls, in the common
+  case, where the code's own seam already is -- which is evidence the seam is real rather than that the
+  implementation will be small.
+- **The recorded side is recorded verbatim, and it is prose in places.** `propose()` composes
+  `claim("request", ...)` through `claim("reason", ...)` and, per reading, `independent reading
+  (<drafter>)` and one `reading finding` claim per finding (`src/advisory/proposal.ts:433` onward); the
+  findings are English sentences composed in `src/access/review.ts`, and `D-0042` writes that payload
+  before the gate is walked. Rule 4 is therefore about strings that exist today, not about a
+  hypothetical.
+- **The `lang` attribute is written from the row's own plan payload and only where a tag is present.**
+  `langAttribute` returns the empty string for absent, null and non-string alike
+  (`src/access/web.ts:374-377`), so a material block from a plan that asked for nothing currently
+  inherits the document's `en` -- which is what rule 8's `lang=""` corrects once the document stops
+  being `en`.
+- **One composition serves both surfaces.** `inboxLines` is exported from `src/access/inbox.ts:462`
+  and called at `src/access/web.ts:619` and `src/access/inbox.ts:585`; the second path is the terminal's
+  and goes through `D-0004`'s escape. Rule 10 is a fact about this call graph rather than a preference.
+- **The tag grammar is already in the tree and already refuses before a process exists.**
+  `/^[A-Za-z]{2,8}(-[A-Za-z0-9]{1,8})*$/` at `src/refrain/plan.ts:552`, with the refusal message naming
+  `materialLanguage`.
+- **The host's variables are five, all read from the environment.** `RONDO_APPROVER`,
+  `RONDO_CONTINUO_CLI`, `RONDO_MAX_LIVE`, `RONDO_MAX_OCCUPYING`, `RONDO_STORE` -- which is the set rule
+  5 adds one member to, and the reason it is not a configuration layer.
+- **What was not measured**: no Japanese chrome was rendered, no wording set exists, and no operator has
+  read a translated page. Whether the fold becomes a path the operator actually takes is the thing this
+  entry authorises and cannot yet show; the implementing change can show the bytes and the attributes,
+  and only use can show the legibility.
+
+### What would falsify it
+
+- **The operator still not returning through the fold**, because what stopped them was the recorded
+  prose rule 4 leaves in English -- the drafter's findings sitting under a translated heading. Then the
+  first residual is the entry to take, and rule 4's override is drawn one string too wide.
+- **A token being translated by somebody adding wording**, so the page says one word and the store,
+  `rondo show` and continuo say another. Rule 2's second clause is the whole defence and it is a
+  property a person keeps on purpose; the first time the page and the terminal disagree about a status
+  name, the test needs a mechanism behind it rather than a sentence.
+- **The recorded bytes turning out to depend on the host's language.** That is rule 4 failing in
+  practice, `D-0042`'s invariant with it, and the reason the implementing change asserts it directly
+  rather than inspecting one payload.
+- **Prose that is a token to somebody else.** Rule 2 asks what the *operator* does with a string; a
+  sentence pasted into an Issue, a log line somebody greps, or a message another tool matches on is a
+  string whose bytes are an identity rondo did not know about. `D-0053` rule 4's commit-subject
+  override is the same shape and was written as an override for the same reason.
+- **The wording sets drifting far enough apart that the `en` fallback is the page.** Rule 9 makes a
+  partial set shippable; if half the screens are English six months on, the rule bought a translation
+  nobody finished and the question becomes whether the prose set wants a completeness check in CI.
+- **An operator wanting the chrome in one language and the material in another**, which rule 8 permits
+  and nothing has yet wanted. If it turns out to be the ordinary case rather than the edge, the chrome's
+  language is not a property of the host's one operator after all.
+- **`RONDO_OPERATOR_LANGUAGE` acquiring a file, a default file, or a precedence order.** That is
+  `D-0019` rule 3's refusal firing for real, and rule 5's argument would be spent.
+- **A second operator, or the page ceasing to be loopback-only** -- which is `D-0054`'s own falsifier
+  and takes rule 5's refusal of `Accept-Language` with it.
+- **A third entry amending `D-0053` rather than replacing it.** This is the first; `D-0054`'s falsifier
+  of the same shape names the third amendment as the point at which the accumulated reading is harder
+  than a re-taken entry, and the same threshold is adopted here.
+- Any measurement above failing to reproduce at `707318f`.
+
+### Annotations this entry adds to earlier entries
+
+- **`D-0053` rule 1** gains a dated annotation: it is **unamended as the provenance test** and is
+  **no longer the language test for rondo's own strings**, which rule 2 above decides. **Rule 3 is
+  reversed**: the fence block's two standing sentences are prose and go in the operator's language, and
+  **rule 3's own falsifier is recorded as fired on 2026-09-13**, by the operator, on
+  `/?reading=open`. **Rule 5's enumeration is superseded by a test rather than by a longer list**, and
+  each string it named is re-sorted by rule 2. **Rule 12's `<html lang="en">` half is amended** to rule
+  7 above; its `lang`-on-material half stands, with rule 8 adding `lang=""` where no ask was made. The
+  entry's second residual -- *rondo's own vocabulary in the operator's language* -- is **the subject of
+  this entry** and is discharged for prose and declined for recorded strings.
+- **`D-0050` rule 3's standing sentence** gains one: `D-0053` named it as rondo's vocabulary staying
+  English, and this entry keeps the provenance reading and reverses the language. `D-0050` rule 4's
+  argument for its **unconditionality** is untouched -- it is printed on every lap and derived from
+  nothing, in whatever language rondo wrote it. Its *read as boilerplate* falsifier's second route --
+  being skipped because it is in a language the reader does not read -- is recorded as **fired**.
+- **`D-0042`** gains one: its one-version-of-a-claim invariant is what rule 4 above serves, and it is
+  the reason a recorded string is not translated even when it is prose. Nothing in that entry is
+  amended.
+- **`D-0004`** gains one: after this entry the escape it mandates is also the reason rondo's **own**
+  prose stays English in the terminal while the page's does not, so the two surfaces will name one
+  section with two words. Its rule is unchanged and its falsifier has not fired.
