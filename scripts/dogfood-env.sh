@@ -498,6 +498,10 @@ node -e '
     allowed_bash: [
       "npm ci --ignore-scripts",
       "npm run:*",
+      // `npm test` runs the `test` script and nothing else, so this spelling adds no
+      // capability `npm run:*` did not already have (rondo#97). `npx:*` is deliberately
+      // absent: it adds none either, only an entrance for running an arbitrary package.
+      "npm test:*",
       "node vendor/pin.mjs:*",
       "node --version",
       "npm --version",
