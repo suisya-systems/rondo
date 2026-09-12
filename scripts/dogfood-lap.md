@@ -220,12 +220,39 @@ costs on this machine, and that `resume` sees the outcome after a human answers.
    rondo answer --iteration-id ID
    ```
 
-   with no `--body` first. It prints the branch, the workspace and what the
-   independent reading of the work found, and it sends nothing. Then go and look
-   at the branch it named. Answering in one command works and is a fair thing to
-   do once you have looked — but the material it prints on that path is a
-   **receipt** for an answer already typed, not something you can act on, so the
-   looking has to happen here.
+   with no `--body` first. It prints the branch, the workspace, the fence block —
+   what the run declared it was allowed to run, and what continuo reported
+   refused — and what the independent reading of the work found, and it sends
+   nothing. Then go and look at the branch it named. Answering in one command
+   works and is a fair thing to do once you have looked — but the material it
+   prints on that path is a **receipt** for an answer already typed, not
+   something you can act on, so the looking has to happen here.
+
+   **"Was this lap clean?" is answered by three things in this order, and rondo
+   does not summarise them into one** (D-0050 rule 5):
+
+   a. **The fence block** above. Both of its facts are grounded and neither is
+      about the worker's own sandbox — which is a second containment, which
+      rondo does not observe, and which can fail to start without refusing
+      anything. The block says so itself on every lap, and it means what it
+      says: **a lap that ran with that sandbox disabled prints here exactly like
+      one that did not** (D-0050 rules 3 and 4, N-16 in
+      `docs/operations/lap-6-dogfood.md`).
+
+   b. **The gate's `rationale`, verbatim** — printed as `why ...` by the same
+      command. This is the only channel that fact has ever travelled, and it is
+      read by a person: it is not parsed, counted or promoted to a record
+      (D-0050 rules 1 and 6).
+
+   c. **The transcript's directory**, `<state root>/<run id>/<session id>`
+      (D-0048 rule 5) — the path `rondo inbox` prints beside an in-flight row,
+      and the one you compose from the row's own values once the lap is at the
+      gate. rondo names the place and does not read the file for you; opening it
+      is yours.
+
+   So rondo's answer to the question is **"rondo cannot tell you, and here is
+   where the evidence is"**. A worker that says nothing about its own sandbox is
+   not saying it held.
 
    Each verb's `--gate-id` is what `gate list` prints, and **`gate ack` takes the
    `message_id` the enqueueing verb returned** — `gate present`'s for the first

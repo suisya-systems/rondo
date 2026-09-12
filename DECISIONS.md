@@ -6951,6 +6951,21 @@ escalate to continuo about the fence — is both the narrower route and the one 
       commit that reads as finished work. That is the failure mode this property exists to remove,
       and it is required of continuo whichever widening shape it picks.
 
+      **Annotated 2026-09-12 by D-0050 (rondo#129).** This property was written about a **refused
+      command**, and D-0050 claims it for a second class of fact: **a containment that was meant to
+      be in force and was not**. A worker's own sandbox can fail to initialise and leave the session
+      running unsandboxed; nothing is turned down, so it cannot become a `permission_denials` entry
+      — that field records a call the fence refused, every entry carrying a `tool_name` and the
+      `tool_input` of a call that did not happen. **The property therefore does not hold for that
+      class at the pin `fcf86eb`**: the fact reached rondo only inside the worker's prose, which is
+      precisely what 4b exists to rule out, and it reached rondo at all only because that worker
+      chose to write the paragraph (N-16, `docs/operations/lap-6-dogfood.md`). D-0050 rule 7 is
+      rondo's half of the second escalation, and it asks for a report and not a control: that such a
+      failure become part of what `lap perform` answers with, in a field whose *absence* means "the
+      backend declined to say" and never "nothing happened" (`continuo D-1110`'s three states).
+      **Nothing in this rule is corrected**, and rondo records nothing about the worker's sandbox
+      until that field exists (D-0050 rule 1).
+
 5. **What rondo records is `continuo_role`, and no column is added.** The iteration row already
    carries it (`src/store/sqlite.ts:538`, written from `AdmitRunOutcome.continuoRole`), and under
    rule 3 that one value names the fence the lap ran under. This is deliberately the whole of
@@ -8016,6 +8031,22 @@ shape of the answer, not to ratify a model id.**
 
 **Status:** accepted (2026-09-12, rondo's human gate). Refs rondo#70, `D-0042`, `D-0032`, `D-0029`,
 `D-0022`.
+
+> **Annotation (2026-09-12, from D-0050).** Added under the annotation rule in "How to use this
+> file"; nothing below is removed or rewritten, and no claim, measurement or date of this entry is
+> corrected. **This entry's form was considered for a second unwatched claim — the worker's own
+> sandbox rather than the operator's verification — and declined**, on two grounds this entry does
+> not itself have to answer. First, **there is no door**: `--verified` is rondo's own flag, so the
+> one fact rondo observes is that at this moment this actor typed this sentence, and rondo holds the
+> moment because rondo asked. Nothing asks the worker; its words reach rondo only as the gate's
+> `rationale`, and a row filled from that would be filled by rondo searching prose for a subject —
+> the move this entry's own *"a claim is free text on purpose"* refuses from the other side. Second,
+> **the silences differ**: rule 6's silence is safe because *"nobody recorded what they checked"* is
+> exactly true whenever nobody did, while a worker whose sandbox held and a worker that never
+> mentioned its sandbox would produce the same empty field, and a reader would take it for the
+> first. **All eight rules stand exactly as written.** What D-0050 adds is a statement of scope
+> rather than an edit: this entry is the shape for a claim **rondo asked for**, and not the general
+> answer to "rondo did not see it".
 
 A lap that cannot verify its own work leaves the verification to the person at the gate. On
 2026-09-12 an operator ran `npm ci --ignore-scripts` and `npm run verify` in the lap's workspace,
