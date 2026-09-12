@@ -10388,11 +10388,18 @@ itself one layer down, on the one operator the page has.
    which is the case the operator was answering about, and the common one. The variable is not
    removed, not given a file, and not given a precedence order of its own (`D-0019` rule 3).
 
-4. **The resolution is never silent: whatever rondo resolved is put back into the URL.** A request
-   that names no `lang` is answered with one `303` to the same view with `lang=<resolved tag>`
-   appended; a request that names one is served. **A request carrying `lang` is never redirected**,
-   which is the whole of why this cannot loop. Three things follow, and they are why this rule is
-   worth a redirect on the first visit:
+4. **The resolution is never silent: the URL names the set being served, or it is redirected until it
+   does.** A request is served only when its `lang` is the tag of the set rule 2 resolved; otherwise
+   it is answered with one `303` to the same view carrying that tag. So a bare `/` gains one, and
+   `?lang=ja-JP` and `?lang=de` are **canonicalised** to the set they actually reached -- `/?lang=ja`
+   for the first, and for the second whatever the remaining steps answered. **This cannot loop,
+   because a set's own tag resolves to itself**: the redirect's target is served, which is one
+   condition and is asserted rather than reasoned about in the implementing change. The URL naming the
+   *ask* rather than the *answer* is the case that matters: `?lang=de` over a remembered `ja` renders
+   Japanese, and a redraw of that address would lose the cookie -- it is credential-less -- resolve
+   `de` to nothing, and morph the page to the host's default. Canonicalising is what makes that
+   unreachable. Three things follow, and they are why this rule is worth a redirect on the first
+   visit:
 
    - **Nothing decides this page's language where the operator cannot see it.** The address bar names
      the answer, whatever produced it -- a cookie from last week, a header, a variable.
@@ -10406,11 +10413,16 @@ itself one layer down, on the one operator the page has.
 
 5. **The memory is one cookie, and this rule is the whole of what it is and what it is not.** `lang`,
    the value a tag, `Path=/`, `SameSite=Strict`, `HttpOnly`, an expiry in months rather than a
-   session. **Written only on a response to a request that named `lang` and only when that tag differs
-   from the remembered one**, so the operator's press writes it, the redirect of rule 4 does not, and
-   **a redraw writes nothing at all** -- which is `D-0042`'s property holding for this cookie in the
-   same words it holds for the ledger. And what it is not, said once here so that no later reader has
-   to infer it:
+   session. **It is written when the URL asks for a language the rest of rule 2 would not have
+   answered** -- which is what a switch is, and what a canonicalising redirect to the answer the other
+   steps already gave is not. **And no redraw can change it, which is a property of the script rather
+   than of this condition**: `page/poll.js` fetches with `credentials: "omit"`, and that mode excludes
+   cookies in *both* directions -- none is sent and a `Set-Cookie` that comes back is discarded. So a
+   redraw, which reaches the server with no cookie and therefore looks like a request asking for
+   something new, may well be answered with a `Set-Cookie` that no browser ever stores. **rondo does
+   not try to tell a redraw from a navigation, and does not need to**, and this is written out because
+   *a redraw writes nothing* is true here of what persists and not of what is emitted. And what the
+   cookie is not, said once here so that no later reader has to infer it:
 
    - **it is not a record**: it never reaches the store, the ledger, a record kind, a plan field or a
      last-look mark, and no press or presentation is counted by it (`D-0042`);
@@ -10450,8 +10462,9 @@ itself one layer down, on the one operator the page has.
    going back.
 
 9. **An ill-formed or unknown `lang` is not a refusal and does not overwrite the memory.** It resolves
-   to nothing, the next step of rule 2 answers, and the URL then names what rondo actually resolved
-   (rule 4). `viewOf` is already total for this reason -- a typo in a query is an operator who wanted
+   to nothing, the next step of rule 2 answers, and rule 4 then redirects the address to the tag of
+   the set that answered -- so the memory is not touched, because the URL has stopped asking for
+   anything the other steps would not have said. `viewOf` is already total for this reason -- a typo in a query is an operator who wanted
    the page, and a blank screen is a worse answer than the page. **`RONDO_OPERATOR_LANGUAGE` keeps its
    boot refusal**: a host statement is typed once, far from any screen, and deserves an account; a
    query is typed with the result in front of the person who typed it.
@@ -10505,10 +10518,11 @@ One pull request:
 - Rule 2's five steps in one place in `src/access/web.ts`, taking the `lang` parameter, the cookie
   header, the host's tag and `Accept-Language`, and returning the set with the tag it resolved -- so
   the order is one readable function rather than a condition spread over the renderer.
-- Rule 4's redirect: a `GET` of `/` naming no `lang` answers `303` to the same view with the resolved
-  tag appended; a request naming `lang` is served. `page/poll.js` is **not** touched.
-- Rule 5's cookie set on the response to a request that named a `lang` differing from the remembered
-  one, with the four attributes named there.
+- Rule 4's redirect: a `GET` whose `lang` is not the tag of the resolved set answers `303` to the same
+  view carrying that tag; a request whose `lang` already names it is served. `page/poll.js` is **not**
+  touched.
+- Rule 5's cookie set on responses whose URL asked for a language the remaining steps would not have
+  answered, with the four attributes named there.
 - `vary: accept-language, cookie` on the HTML response, which today sends only `content-type` and
   `content-security-policy` (`src/access/web.ts:1327-1339`): the bytes now depend on two request
   headers and a shared cache is entitled to know.
@@ -10524,10 +10538,12 @@ One pull request:
   cookie beating the host variable and the host variable beating `Accept-Language`; `?lang=ja-JP`,
   `RONDO_OPERATOR_LANGUAGE=ja-JP` and `accept-language: ja-JP` all reach the `ja` set, as does
   `?lang=ja-x-private`; `accept-language: en;q=0.5, ja;q=0.9` reaches `ja` and a bare `*` reaches the
-  step below; a request with no `lang` gets one `303` naming the resolved tag and a request with one
-  gets none (**the no-loop property, asserted rather than reasoned**); the cookie is set on a switch
-  and **not** set on a redraw of the switched page; `?lang=de` and `?lang=!!` fall through and leave
-  the memory alone; `<html lang>` matches the set actually used in every one of those cases; the fold
+  step below; a bare `/`, `?lang=ja-JP` and `?lang=de` each get one `303` naming the resolved set's
+  tag, and a request already naming it gets none (**the no-loop property, asserted rather than
+  reasoned**); `?lang=de` over a remembered `ja` lands on `/?lang=ja` and leaves the memory as it was,
+  which is the case a credential-less redraw would otherwise morph to English; `?lang=!!` does the
+  same; the cookie is set on a switch and not on a response whose language the other steps would have
+  given anyway; `<html lang>` matches the set actually used in every one of those cases; the fold
   link, the refresh, the form action and the `303` from a `ja` page all still carry `ja`; and **the
   recorded `proposal` and `operator_attention` bytes are identical whether the press came from an `en`
   page or a `ja` one** (rule 13, which is `D-0055`'s assertion with the query, the cookie and the
@@ -10577,9 +10593,12 @@ implementing change (rondo#168) left behind.
   in the implementing change.
 - **The redraw sends no credentials, in the script's own words.** `page/poll.js:48` is
   `credentials: "omit"`, commented *no credentials are wanted and none are sent*. **This is the
-  measurement rule 4 rests on**: a language that lived only in a cookie would render on navigation and
-  be morphed back to the host's default by the first redraw, five seconds later, with nothing in the
-  log.
+  measurement rule 4 rests on**: a language that lived only in a cookie -- or in a URL naming an ask
+  rather than an answer -- would render on navigation and be morphed back to the host's default by the
+  first redraw, five seconds later, with nothing in the log. That the same mode also discards a
+  `Set-Cookie` coming back is **read off the Fetch standard's `omit` credentials mode rather than
+  measured in a browser**, and rule 5 is written so that it is the only thing that condition rests
+  on.
 - **The query already holds this surface's state.** `viewOf` reads `answer` and `reading` off the
   query and is total (`src/access/web.ts:1229-1235`); `poll.js` fetches `location.href` *and nothing
   derived from it*. Rule 1 therefore costs the script nothing and rule 11 is about everything else.
@@ -10623,8 +10642,14 @@ implementing change (rondo#168) left behind.
 - **The redirect looping, or arriving where a `POST` should have.** Rule 4's no-loop property is one
   condition -- a request carrying `lang` is served -- and it is asserted directly because it is the
   kind of thing that is true until somebody adds a second reason to redirect.
-- **A redraw writing the cookie**, which is rule 5's *a redraw writes nothing* failing in the one
-  place this entry put something writable, and `D-0042`'s shape with it.
+- **A browser storing the cookie from a credential-less redraw**, which is the one fact rule 5's
+  *no redraw can change the memory* rests on, taken from the Fetch standard rather than from a
+  measurement. If it turns out false anywhere the operator actually reads this page, the condition
+  needs a discriminator -- `Sec-Fetch-Mode`, or a marker on the switch's own link -- and rondo would
+  then be telling a redraw from a navigation, which this entry declined to do.
+- **An address that asks for one language and is served another**, which is rule 4's canonicalisation
+  failing and is the shape both of `?lang=de` over a remembered `ja` and of any later reason to
+  redirect that does not end at a tag resolving to itself.
 - **A request reaching `<html lang>`**, so the document declares what was asked instead of what was
   written (rule 7, `D-0055` rule 7).
 - **The recorded bytes turning out to depend on the query, the cookie or the header** (rule 13), which
