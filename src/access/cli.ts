@@ -3972,6 +3972,24 @@ const LISTED_LIMIT = 200;
 const REQUEST_LIMIT = 4000;
 
 /**
+ * How much of a verification claim the body carries.
+ *
+ * **`listed()`'s replacement rule does not reach this field.** A commit subject
+ * or a path is replaced rather than cut because the thing itself is right there
+ * to read; a claim's only destination is this body, and the row it was written
+ * to is in a database no reviewer of this pull request can open. Replacing it
+ * printed a sentence meaning *something was said and you may not see it*, to the
+ * one reader it was written for (#131).
+ *
+ * So it is bounded the way the quoted request is bounded, and for that reason:
+ * the cut says how much it left and where the whole of it still is, which is the
+ * difference between a truncation and a loss. Below this -- which is every claim
+ * a person types at a terminal -- the words are printed byte for byte, as
+ * `D-0045` rule 1 recorded them.
+ */
+const CLAIM_LIMIT = 4000;
+
+/**
  * The largest body rondo will hand to the forge.
  *
  * Inside GitHub's own 65,536, with room for the difference between characters
@@ -4113,8 +4131,9 @@ function labelTitle(input: PullRequestTextInput): string {
  * The body, and the last check that it is one a forge will take.
  *
  * **Every value it contains is bounded on the way in** -- lists by
- * `LIST_LIMIT`, each listed or row-carried value by `LISTED_LIMIT`, the request
- * by `REQUEST_LIMIT` -- and this is the check that the sum is bounded too. It
+ * `LIST_LIMIT`, each listed or row-carried value by `LISTED_LIMIT`, a
+ * verification claim by `CLAIM_LIMIT`, the request by `REQUEST_LIMIT` -- and
+ * this is the check that the sum is bounded too. It
  * exists because the failure it prevents is asymmetric: a body the forge
  * refuses is refused after the push, which is the one leg `publish` cannot take
  * back. The quoted request is what gives way first, because it is the one part
@@ -4346,9 +4365,27 @@ function verificationLines(claims: readonly OperatorVerificationClaim[]): readon
   return claims.map(
     (claim) =>
       `- Before answering, \`${listed(claim.actorId, "actor id")}\` said they had checked: ` +
-      `${listed(claim.claim, "claim")}. That is their own account, recorded before rondo ` +
+      `${quotedClaim(claim.claim)} That is their own account, recorded before rondo ` +
       "walked the gate; rondo did not run it and did not see it run.",
   );
+}
+
+/**
+ * The claim, whole, or cut with the cut said out loud, ended as a sentence.
+ *
+ * See `CLAIM_LIMIT` for why it is not `listed()`. The terminator is added only
+ * when the claim has none of its own: the sentence that follows says whose
+ * account this is, and a claim that already ends in a full stop would otherwise
+ * be printed with two -- a thing the reader has to decide is not part of what
+ * the operator typed.
+ */
+function quotedClaim(claim: string): string {
+  const shown =
+    claim.length <= CLAIM_LIMIT
+      ? claim
+      : `${claim.slice(0, CLAIM_LIMIT)} [...${String(claim.length - CLAIM_LIMIT)} more ` +
+        "characters. The whole of it is on this iteration's row in rondo's store.]";
+  return /[.!?]$/.test(shown) ? shown : `${shown}.`;
 }
 
 /** What the gate says about who approved this, in a reviewer's terms. */
