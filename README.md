@@ -172,7 +172,8 @@ written to be thrown away.
 | `test/architecture/` | The test that enforces the arrows above, and the per-module capability grants (SQLite, the spawn, and the cadenza package). |
 | `continuo.pin.json` | Which continuo rondo drives: repository, full sha, and the exact `--version` line that build prints. CI provisions from it; `src/continuo/pin.ts` mirrors it; a test fails if they drift. |
 | `cadenza.pin.json` | Which cadenza rondo carries: repository and full sha — the *source* pin, and no version, because every cadenza build is `0.0.0`. |
-| `vendor/` | The committed cadenza tarball, its sha256, and `pin.mjs` — the portable `record`/`check` helper cadenza's bridge prescribes. `node vendor/pin.mjs check` runs immediately before every install, locally and in all three installing CI jobs. |
+| `page/` | The one script the operator's page runs (D-0054): `poll.js`, which `GET`s the address it is on every five seconds and morphs the answer in place. Served as a file by `rondo web` and touched by no build. |
+| `vendor/` | The committed artifacts and their sha256 files, with `pin.mjs` — the portable `record`/`check` helper cadenza's bridge prescribes, over a list since D-0054. The cadenza tarball is what npm installs; `idiomorph-0.8.0.min.js` is the 10 KB DOM merge the page serves to a browser and installs nowhere. `node vendor/pin.mjs check` runs immediately before every install, locally and in all three installing CI jobs. |
 | `DECISIONS.md` | The append-only design record. Cite by ID. |
 | `AGENTS.md` | How work here is done. |
 | `scripts/dogfood-lap.md` | The full lap, end to end, as a manual procedure. Not a test, and D-0019 rule 17 says why. |

@@ -354,10 +354,21 @@ const ALLOWED_EXTERNALS_BY_MODULE: Readonly<
   // spawn is: `src/access/` holds the whole operator surface, and a layer-wide
   // grant would put a listening socket in reach of the module that reads argv
   // and of the one that drives continuo. What is *absent* is the rest of the
-  // page's hazards -- no `node:fs`, so a read-only page cannot serve a file
-  // off this machine, and no `node:child_process`, so nothing an HTTP request
+  // page's hazards: no `node:child_process`, so nothing an HTTP request
   // reaches can start a process.
+  //
+  // **`node:fs/promises` is granted since D-0054, and this is what it costs.**
+  // The page serves two files -- the digest-pinned `idiomorph` release and
+  // rondo's own poller -- so "a read-only page cannot serve a file off this
+  // machine" has stopped being true as a *type*. What holds instead is a
+  // property of the module: the paths are a fixed two-entry map of URLs
+  // resolved against the module itself, and no request contributes to one --
+  // which `test/access/web.test.ts` asserts from the outside by asking for
+  // paths that exist in the tree and getting 404s. One binding rather than the
+  // module (`readFile`, not `writeFile` and not `readdir`), for the reason the
+  // spawn above is keyed by module: this is the surface strangers can reach.
   "src/access/web.ts": {
+    "node:fs/promises": ["readFile"],
     // The token that separates a person's click from an unattended redraw
     // (D-0041 rule 3b) is the one value on this surface that must not be
     // guessable, and nothing else in the module needs a random or a hash.

@@ -34,11 +34,20 @@
  * writing vocabulary is one sentence long, and widening it is a visible change
  * to a type. No type can tell an unattended redraw from a human's click -- they
  * differ in whether somebody was at the keyboard, which is not in the data -- so
- * two runtime facts do it instead, and either alone would be enough. The redraw
- * is `<meta http-equiv="refresh">` and the page carries no script, so nothing
- * here can emit a `POST` without a person pressing something; and a token minted
- * when this process began listening is rendered into the form and checked on the
- * way in, so a `POST` that carries it came from a page this process served.
+ * two runtime facts do it instead. **D-0054 amended one of them, and narrowed
+ * what the pair guarantees.** Two of the three views now carry a script that
+ * `GET`s its own address every five seconds and morphs the result in place
+ * ({@link isLive}), so *"nothing here can emit a `POST`"* has stopped being
+ * true of this page. What still holds -- and what D-0042's invariant now rests
+ * on alone -- is the server half of the same fact: a `GET` reaches this
+ * renderer, this renderer holds only the read ports, and the compiler says so,
+ * so an unattended redraw writes nothing because the code path it reaches
+ * cannot write. The forged cross-site `POST` is left to the other two facts,
+ * which are untouched: a token minted when this process began listening,
+ * rendered into the form and checked on the way in, so a `POST` that carries
+ * it came from a page this process served; and `frame-ancestors 'none'` on the
+ * way out. That is two facts where there were three, and D-0054 rule 4 accepts
+ * it knowingly rather than discovering it.
  *
  * **So the press, and not the render, is this surface's presentation**
  * (D-0042). The framing beside the button is written to the ledger before the
@@ -62,6 +71,7 @@
  * rotate and get right.
  */
 import { randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import {
   type AdvisorySnapshot,
@@ -165,17 +175,37 @@ export type AnswerFromWeb = (
  */
 const APPROVE_BODY = "approve";
 
-/** How often the page redraws itself, in seconds. */
+/** How often a live view redraws itself, in seconds. Matches `page/poll.js`. */
 const REFRESH_SECONDS = 5;
+
+/**
+ * The two files a live view loads, and the paths this process serves them on.
+ *
+ * **Files rather than an inline script** (D-0054 rules 5 and 6): what runs in
+ * the browser is bytes this tree holds, one of them the digest-pinned
+ * `idiomorph` `0.8.0` release and the other rondo's own poller, so a reader can
+ * diff what the page executes against what was vendored. No CDN tag, no build
+ * step, no bundler: they are read off disk and written to the socket.
+ *
+ * Resolved against this module rather than against the working directory, the
+ * way `cli.ts` reads `cadenza.pin.json`: the path from `dist/access/` and from
+ * `src/access/` is the same, so the served bytes do not depend on where the
+ * process was started.
+ */
+const ASSETS: ReadonlyMap<string, URL> = new Map([
+  ["/idiomorph-0.8.0.min.js", new URL("../../vendor/idiomorph-0.8.0.min.js", import.meta.url)],
+  ["/poll.js", new URL("../../page/poll.js", import.meta.url)],
+]);
 
 /**
  * Which of the one page's three views is being read.
  *
  * **The whole of this surface's state is in the address**, which is what makes
- * it survivable: a `<details>` the operator opened would be slammed shut by the
- * next redraw five seconds later, and a page with no script could not reopen
- * it. The redraw is pointed back at the address being read instead, so a view
- * outlives every redraw because the server is the one holding it.
+ * it survivable: the view is a query the server reads, so every redraw --
+ * the `<noscript>` refresh, or the script's own `GET` -- asks for the view
+ * being read and is answered with it. A view outlives every redraw because the
+ * server is the one holding it, and not because a client remembered anything;
+ * D-0054 adds a script and deliberately does not add client state or a router.
  *
  * `summary` answers the three questions and nothing else. `reading` adds
  * rondo's own compositions -- the inbox, what spans the live laps, every row's
@@ -194,6 +224,24 @@ export type PageView =
   | { readonly kind: "summary" }
   | { readonly kind: "reading" }
   | { readonly kind: "answer"; readonly iterationId: string };
+
+/**
+ * Whether this view keeps itself current, which is a property of the view and
+ * never of the page (D-0054 rule 1).
+ *
+ * `summary` and `reading` are *what is running* and want to be current, so
+ * they carry the script -- and, with scripting off, the meta refresh inside
+ * `<noscript>`. **`answer` updates by nothing at all: no script, no refresh.**
+ * It is one row's framing beside its button, read by a person in order to
+ * press, and rondo#160's complaint was exactly this screen being re-laid-out
+ * under the reader while they read it. It costs no staleness risk, which is why
+ * it is deletion rather than machinery: D-0042 re-composes the framing at press
+ * time and refuses a press naming a row that is not there, so a page a minute
+ * old cannot answer a gate that moved.
+ */
+function isLive(view: PageView): boolean {
+  return view.kind !== "answer";
+}
 
 /** The address of one view, for the redraw and for the links between them. */
 function viewHref(view: PageView): string {
@@ -342,6 +390,16 @@ function langAttribute(record: IterationRecord): string {
  * {@link basisLine} is called rather than the string being spelled here,
  * because a second spelling of a basis is a second thing an operator has to
  * learn to trust. The `iteration` form reads no snapshot, so it is handed none.
+ *
+ * **The `id` is what makes the morph identity-based rather than positional**
+ * (D-0054 rule 2). These blocks come and go -- a lap ends, a gate opens -- and
+ * with no id on them idiomorph matches the repeated children by position: a
+ * list going from `[A, B]` to `[B]` is then A's node rewritten into B and B's
+ * own node removed, which takes the reader's focus with it if it was on the
+ * answer link inside. The row id is already unique per document and already the
+ * thing every line here is read off, so it is also the identity the merge
+ * should use. The two other repeated blocks in the lead (an open proposal, a
+ * row that will not decode) carry one for the same reason.
  */
 function lapHtml(
   record: IterationRecord,
@@ -351,7 +409,7 @@ function lapHtml(
 ): string {
   const basis = basisLine({ form: "iteration", iterationId: record.id }, {});
   return (
-    `<div class="lap"><p class="basis">${escapeHtml(basis)}</p>` +
+    `<div class="lap" id="lap-${escapeHtml(record.id)}"><p class="basis">${escapeHtml(basis)}</p>` +
     `<p class="head">${escapeHtml(head)}</p>` +
     `<p class="request"${langAttribute(record)}>${escapeHtml(record.request)}</p>` +
     lines
@@ -452,7 +510,8 @@ function waitingHtml(
       open
         .map(
           (proposal) =>
-            `<div class="lap"><p class="basis">read it back with its options and ` +
+            `<div class="lap" id="proposal-${escapeHtml(proposal.proposalId)}">` +
+            `<p class="basis">read it back with its options and ` +
             `what each rests on: rondo show --proposal-id ${escapeHtml(proposal.proposalId)}</p>` +
             `<p class="head">${escapeHtml(
               `${proposal.kind} -- waiting ${ago(proposal.createdAtMs, nowMs)}`,
@@ -500,7 +559,8 @@ function runningHtml(
       unreadable
         .map((row) =>
           row.kind === "unreadable"
-            ? `<div class="lap"><p class="head">${escapeHtml(row.id)}</p>` +
+            ? `<div class="lap" id="unreadable-${escapeHtml(row.id)}">` +
+              `<p class="head">${escapeHtml(row.id)}</p>` +
               `<p class="line">${escapeHtml(`will not decode: ${row.reason}`)}</p></div>`
             : "",
         )
@@ -760,6 +820,7 @@ export async function operatorPage(
   // continuo subprocess per running lap, and this page redraws itself.
   const transcripts = inbox?.transcripts ?? (await locateRunning(ports, live));
 
+  const keepsCurrent = isLive(view);
   const pressToken = ports.answer === null ? null : token;
   const shown = await shownBeforePress(ports, waiting, pressToken, view);
 
@@ -801,8 +862,33 @@ export async function operatorPage(
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="refresh" content="${String(REFRESH_SECONDS)};url=${escapeHtml(viewHref(view))}">
-<title>rondo</title>
+${
+  // **What keeps a live view current, in both modes** (D-0054 rules 1 and 7).
+  //
+  // With scripting on, the two files below poll this same address and morph
+  // the answer in place, so the reader's scroll position, selection and focus
+  // survive the redraw. With scripting off, the meta refresh inside
+  // `<noscript>` keeps exactly the liveness this page had before D-0054 --
+  // throwing the document away every five seconds, which is what rondo#160
+  // complained about and is still better than a screen that goes stale
+  // without saying so.
+  //
+  // `defer` on both, in this order: it is what guarantees `Idiomorph` is
+  // defined before `poll.js` runs, and what keeps either from running before
+  // the document it morphs exists. Neither draws anything -- the whole
+  // document is already here, rendered by the server (rule 7).
+  //
+  // The `answer` view reaches none of this: it has no script and no refresh,
+  // so there is nothing for it to degrade to either.
+  keepsCurrent
+    ? `<noscript><meta http-equiv="refresh" content="${String(
+        REFRESH_SECONDS,
+      )};url=${escapeHtml(viewHref(view))}"></noscript>
+<script src="/idiomorph-0.8.0.min.js" defer></script>
+<script src="/poll.js" defer></script>
+`
+    : ""
+}<title>rondo</title>
 <style>
 /* A ledger read by one person many times a day, so: two type roles, one spacing
    scale, and three states that do not weigh the same.
@@ -931,9 +1017,21 @@ pre, .material { background: var(--bg); border: 1px solid var(--rule);
 </head>
 <body>
 <h1>rondo</h1>
-<p class="note">Redraws every ${String(REFRESH_SECONDS)}s, and a redraw writes nothing: no last-look
+${
+  // **Each view says which of the two it is**, because "redraws every 5s" on a
+  // view that does not would be the page's own copy lying about the one
+  // property D-0054 rule 1 spends itself on. Both branches say the same thing
+  // about writing, which is the fact that did not change: a read writes
+  // nothing, whoever or whatever issued it.
+  keepsCurrent
+    ? `<p class="note">Redraws every ${String(REFRESH_SECONDS)}s, and a redraw writes nothing: no last-look
 mark moves and no presentation is counted. The one thing that writes is the approve button, which
-records the explanation you pressed on and then answers the gate.</p>
+records the explanation you pressed on and then answers the gate.</p>`
+    : `<p class="note">This view does not update itself: what a press records is the framing you are
+reading, so it holds still while you read it. Reading it writes nothing -- no last-look mark moves
+and no presentation is counted. The one thing that writes is the approve button, which records the
+explanation you pressed on and then answers the gate.</p>`
+}
 ${
   // **Said on the visible page and not only in the reading.** With no approver
   // there is no write port and so no button anywhere, and a page that explained
@@ -1148,9 +1246,38 @@ export function serveOperatorPage(
       response.end("rondo serves this page to 127.0.0.1 and localhost only\n");
       return;
     }
+    const path = (request.url ?? "/").split("?")[0] ?? "/";
+    // **The two files of D-0054, and nothing else static.** A read of one of
+    // them reaches this branch and not the renderer, so it is the one `GET`
+    // this server answers without composing a page; a `POST` never reaches it
+    // at all, because the only writable path is `/` and this runs above the
+    // method split. `ASSETS` is a fixed map rather than a directory served by
+    // path, so no request can name a file rondo did not choose to serve.
+    const asset = ASSETS.get(path);
+    if (asset !== undefined && request.method !== "POST") {
+      readFile(asset)
+        .then((bytes) => {
+          response.writeHead(200, {
+            "content-type": "text/javascript; charset=utf-8",
+            "content-security-policy": "frame-ancestors 'none'",
+          });
+          response.end(request.method === "HEAD" ? undefined : bytes);
+        })
+        .catch(() => {
+          // **A missing script is a 404 and not a 500** (D-0054 rule 7). The
+          // page that asked for this is already the whole document, button
+          // included; what it loses is the updating, and a page that failed
+          // outright because a script would not load is the failure that rule
+          // is there to prevent.
+          response
+            .writeHead(404, { "content-type": "text/plain; charset=utf-8" })
+            .end("not found\n");
+        });
+      return;
+    }
     // One page and no router: every other path is a 404 rather than a redirect,
     // so a typo'd URL says so instead of quietly showing the only page there is.
-    if ((request.url ?? "/").split("?")[0] !== "/") {
+    if (path !== "/") {
       response.writeHead(404, { "content-type": "text/plain; charset=utf-8" }).end("not found\n");
       return;
     }
