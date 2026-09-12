@@ -11,6 +11,10 @@
  * Exits 1 on a tier rondo cannot price, which is the answer worth having before
  * a run is admitted: `performLap` refuses that tier only after the row is
  * committed and continuo is holding an admitted run.
+ *
+ * Everything printed goes through `asciiEscape`, because every variable part of
+ * it -- the tier, the path, a parse error -- comes out of a file an operator
+ * wrote, and D-0004 holds for this command as for every other (AGENTS.md 6).
  */
 import { readFileSync } from "node:fs";
 
@@ -20,28 +24,40 @@ if (plan === undefined) {
   process.exit(2);
 }
 
-// The tier is read out of the plan rather than typed on the command line on
-// purpose: a preflight that checks a tier the run will not use is a preflight
-// that passes and then lets the run fail.
-const tier = JSON.parse(readFileSync(plan, "utf8"))?.agent_type_input?.executorPolicy?.modelTier;
-if (typeof tier !== "string") {
-  process.stderr.write(`${plan} has no agent_type_input.executorPolicy.modelTier to check.\n`);
-  process.exit(1);
-}
-
 // Dynamic for `bin/rondo.mjs`'s reason: an unbuilt tree becomes the sentence
-// naming the command that fixes it, rather than a module-resolution stack.
+// naming the command that fixes it, rather than a module-resolution stack. It
+// comes before the plan is read because the escape below is in that tree too.
 let mapModelTier;
+let asciiEscape;
 try {
-  ({ mapModelTier } = await import(new URL("../dist/continuo/roles.js", import.meta.url).href));
+  const built = new URL("../dist/", import.meta.url);
+  ({ mapModelTier } = await import(new URL("continuo/roles.js", built).href));
+  ({ asciiEscape } = await import(new URL("access/console.js", built).href));
 } catch {
   process.stderr.write("rondo is not built. Run: npm run build\n");
   process.exit(1);
 }
 
+const refuse = (reason) => {
+  process.stderr.write(`${asciiEscape(reason)}\n`);
+  process.exit(1);
+};
+
+// The tier is read out of the plan rather than typed on the command line on
+// purpose: a preflight that checks a tier the run will not use is a preflight
+// that passes and then lets the run fail.
+let tier;
+try {
+  tier = JSON.parse(readFileSync(plan, "utf8"))?.agent_type_input?.executorPolicy?.modelTier;
+} catch (error) {
+  refuse(`${plan} could not be read as a plan: ${error instanceof Error ? error.message : error}`);
+}
+if (typeof tier !== "string") {
+  refuse(`${plan} has no agent_type_input.executorPolicy.modelTier to check.`);
+}
+
 const selection = mapModelTier(tier);
 if (selection.kind === "unknown") {
-  process.stderr.write(`${selection.reason}\n`);
-  process.exit(1);
+  refuse(selection.reason);
 }
-process.stdout.write(`model tier '${tier}' runs on ${selection.model}\n`);
+process.stdout.write(`model tier '${asciiEscape(tier)}' runs on ${selection.model}\n`);
