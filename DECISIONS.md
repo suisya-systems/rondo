@@ -97,6 +97,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0057 | The page is priced against four frameworks and stays hand-written: 96 lines of 1,233 taken over, three invariants that stop being types, and `D-0007` kept because a build leaves the pin check nothing to check | accepted |
 | D-0058 | The second `resume` leaves the handbook: idempotence is a property the suite already proves more strongly than a walk can observe it, the surface keeps one `resume` per answering act on purpose, and no verb is added on the strength of a sentence | accepted |
 | D-0060 | Work left uncommitted is a fact rondo reads and names: `git status` joins the reading as a finding, `publish` refuses a workspace that still holds any, `--despite-review` does not reach it, and rondo commits nothing on a lap's behalf | accepted |
+| D-0061 | Where a request enters rondo: the organisation's five steps mapped onto parts that mostly exist, a request thread in the conversation as the first thing built, and the drafter that reads a request held behind a human ruling on `D-0044` | proposed |
 
 ---
 
@@ -11572,3 +11573,182 @@ the gate function and the push were exercised directly, which is where the outco
   reader in the tree, and `publish` pushes a branch without it"* is decided by `D-0060`, which
   measured that the partly-committed case reads `clear` and publishes. Nothing in `D-0029` is amended;
   its rule 10 is what rule 6's hand-commit remedy leans on.
+
+---
+
+## D-0061 — Where a request enters rondo: the organisation's five steps mapped onto parts that mostly exist, a request thread in the conversation as the first thing built, and the drafter that reads a request held behind a human ruling on `D-0044`
+
+**Status:** proposed (2026-09-13). Awaits rondo's human gate, and carries one question for it
+(section "What is put to the human gate") that this entry deliberately does not answer. Refs
+`D-0020`, `D-0022`, `D-0025`, `D-0026`, `D-0030`, `D-0032`, `D-0034`, `D-0036`, `D-0044`.
+
+**This entry decides and does not build.** Nothing in `src/` changes with it.
+
+The product owner's requirement, in their terms: rondo is not usable until a person can **ask** it
+for work the way people ask claude-org-ja's secretary today -- say what they want in words; have it
+read, and asked back when it is unclear; have it split and handed to workers; have the decisions made
+along the way brought back to them; and get the result back as a report. rondo was given an advisory
+for exactly this role, and today its front door is not a request at all: it is a command that takes a
+plan file (`D-0025` rule 5), and continuo's intake is "the admission command *is* the intake"
+(continuo `docs/design/minimal-operating-loop.md`).
+
+Two premises were agreed with the human before this entry was drafted, and the entry is built on
+them rather than re-arguing them:
+
+- **What is missing is not a count of features but a role**: the one that turns what a person would
+  otherwise have to read into one sentence, before they have to read it.
+- **Whatever summarises can be wrong, so every summary must lead back to the material it summarised**
+  -- and the order is **the record first, the screen after**, because in the other order the screen
+  asks for something the record never kept.
+
+### What was measured, and how
+
+At rondo `d65cd9e` on **2026-09-13**, by reading rather than by running. The comparison baseline is
+claude-org-ja at its working tree on the same date, read only; its paths are written `JA/`. Line
+numbers drift; re-measure the claim, not the number.
+
+### 1. The organisation's five steps, and what in rondo each of them lands on
+
+| Step (claude-org-ja) | Where it lives there | rondo today | State |
+|---|---|---|---|
+| **Read the request** | The secretary talks to the person, resolves which project is meant (`JA/CLAUDE.md:19-22`) | The request is a string inside a plan: `RunPlan.prompt`, "the one field of eight that the one-liner supplies" (`src/refrain/plan.ts:113-114`), typed by `start --prompt` / `--prompt-file` byte for byte (`src/access/cli.ts:120-129`). It is copied into every advisory snapshot (`src/advisory/proposal.ts:164`) and quoted verbatim on the advisory screen (`src/access/advisory.ts:337-347`). Nothing reads it to decide anything: `D-0025` rule 5 (no inference over the plan) and `D-0044` rule 2 (no tier by reading a request) | **carried, not read.** And it only exists once a plan exists -- rondo has no place for a request *before* a person has already turned it into a plan |
+| **Ask back when unclear** | "When a request is ambiguous, offer options and ask back" (`JA/CLAUDE.md:21`); the pre-delegation checklist (`JA/.claude/skills/org-delegate/SKILL.md:113-122`) | Nothing. The conversation exists as a table of one column, `message_id` (`src/store/sqlite.ts:726-758`); its only writer is `elevate`, which carries an operator's observation *to* the advisory, and it stores no body -- the text travels in the proposal payload (`src/access/advisory.ts:567-575`, `recordMessage` at `sqlite.ts:1757-1769`). There is no row in which rondo can say anything to a person before a lap runs | **missing** |
+| **Split and hand over** | The secretary splits the work and generates the brief (`JA/.claude/skills/org-delegate/SKILL.md:151-236`); a dispatcher spawns workers | Handing over exists: `start` admits one plan as one lap (`cli.ts:1536-1542`). Splitting does not: one request is one plan is one lap, and `D-0044` records that "rondo's unit is the whole lap". The proposal kinds `run_plan` / `agent_type` / `contract_keys` (`src/access/advisory.ts:876`) propose a **retry** of a stopped lap (`cli.ts:168-179`), never a first plan from a request | **hand-over present, split missing.** No row links two laps to the one request they came from, other than a revise/retry lineage (`D-0030`) |
+| **Bring decisions back to the person** | Worker escalations go to the human, never judged by the secretary, and are recorded in three places (`JA/CLAUDE.md:129-140`, `JA/.claude/skills/org-escalation/SKILL.md:40-81`) | The gate: a lap stops and a person must answer (`cli.ts:1541`); the answer is carried byte for byte (`D-0009`, `D-0025` rule 3). Proposals are answered by `decide` (`cli.ts:180-185`). `inbox` separates *waiting on you* from *in flight* (`D-0036` rule 5, `cli.ts:195-201`). An explanation carries claims whose bases are locators (`D-0032` rule 2, `D-0034`) -- which is already the "back to the material" property the second premise asks for | **present at the end of a lap; absent in the middle of one.** A lap is one arc on one model (`D-0044`), so a question the work raises halfway arrives only as the gate at its end |
+| **Ack, and report the result** | Every worker message is acked first (`JA/CLAUDE.md:100-102`); completion is reported with a human-readable summary (`JA/.claude/skills/org-delegate/SKILL.md:314-379`, the summary at `:367`) | The lap's report is what the gate shows plus the independent reading (`D-0029`); `publish` opens a pull request whose body is written for a person and quotes the request as input (`D-0026`). Ack has no counterpart, and needs none: nobody is an idle worker waiting for a receipt -- a lap is a child process that ends | **report present, but addressed to the lap and not to the request.** Nothing says "this is what came of what you asked" across the laps a request took |
+
+**What the table says, in one line:** rondo can already *do* the middle of the flow and can already
+*ground* what it says; what it lacks is **a place for the request itself** -- the person's words before
+they became a plan, the question back, the answer to it, and the report addressed to the same
+thread. Every missing step above is missing for that one reason, and every one of them would have
+nowhere to write if it were built first.
+
+### Decision
+
+1. **The first thing built is the request thread, and it is the conversation `D-0020` rule 5 already
+   placed in rondo's store -- widened, not replaced.** No new table and no second conversation:
+   `D-0036` rule 3's three properties stand exactly (a message id is durable and immutable; an
+   observation is a message; a gate answer never lives there). `D-0036`'s residuals name "the task
+   that first writes a message" as the decider of the rest, and a request is that message. This rule
+   decides the rest, and only as far as a request needs.
+
+2. **What a message holds.** Each is a column of `conversation_message`, written once:
+   1. **`message_id`** -- unchanged.
+   2. **`body`** -- the bytes as written, never trimmed, reflowed or paraphrased (`D-0025` rule 3's
+      discipline for a gate body, applied to the conversation). ASCII escaping governs what rondo
+      prints, never what it stores (`D-0004`).
+   3. **`author_kind`** -- `operator` or `drafter` -- and **`author_id`**: the actor id (on the
+      approver allowlist, `D-0025` rule 4) for an operator, the drafter's name for a drafter.
+      **Which voice spoke is a column and never a property of the prose** -- `D-0032` rule 5's
+      reasoning, applied to the thread.
+   4. **`in_reply_to`** -- nullable. A message with none **opens a request**; a thread is the chain.
+   5. **`at_ms`** -- a caller clock. **This is the one choice here that `D-0036` deliberately left
+      open, and it is taken on purpose:** a clock puts messages into `CHANGE_SOURCES`
+      (`src/store/sqlite.ts:1935-1959`) by that list's own membership rule, so a reply rondo writes
+      while the person is away is in "what changed since you last looked". A thread that the
+      operator's feed cannot see is exactly the screen-wants-what-the-record-lacks failure the
+      ordering premise names.
+   6. **`bases`** -- **required and non-empty on every `drafter` message, refused by the writer
+      otherwise**, and absent-or-empty permitted on an `operator` message. The same locator forms
+      `D-0032` rule 2 already defines, plus one: `message:ID`, pointing into the thread. **This is
+      the second premise made structural**: a sentence rondo composes about a request can always be
+      followed back to the words it rests on, and a sentence resting on nothing cannot be written.
+      The refusal is proved by a planted case, as `D-0036` rule 4's is.
+
+3. **What a message does not hold, each refused by name:**
+   - **A gate answer.** `D-0020` rule 5, unchanged.
+   - **A decision.** A `HumanDecisionRecord` is not a message and a message id is not a
+     `decisionId` (`D-0020` rule 5).
+   - **A status** (`open`, `answered`, `done`). Whether a request is waiting on the person is the
+     last message's `author_kind` and whether anything links to it -- a computation over rows, by
+     `D-0036` rule 2's argument.
+   - **A plan, an agent type, or a tier.** A request is not a plan and does not become one by being
+     stored. `D-0025` rule 5 and `D-0044` rule 2 are untouched by rules 1-4.
+   - **An edit or a deletion.** Append-only, like every record kind in the store; a correction is a
+     reply.
+   - **An operator-authored paraphrase.** A drafter's summary is a `drafter` message; storing it
+     under `operator` would record as the person's words what the person never wrote.
+
+4. **An iteration names the request it came from.** One nullable column on the iteration row,
+   written once at reservation, **refused when it names no message that opens a request**, and read
+   where provenance is shown -- `D-0030`'s shape for lineage, exactly. Several laps may name the same
+   request; that many-to-one link is what "split" is recorded *as*, whoever did the splitting. It is
+   in the first build and not deferred, because without it the report of rule 5's third step has nothing
+   to address.
+
+5. **The order after that**, each step its own entry or task:
+   1. **The thread and its writer** (rules 1-3): the columns, the writer refusal with its planted
+      case, and the smallest operator verbs that write -- one to open a request, one to reply. A
+      record with no writer cannot be tested, and a verb is a writer, not a screen.
+   2. **The iteration's request link** (rule 4): the column and `start` taking the message id.
+   3. **Reports into the thread, from the deterministic drafter only**: when a lap that names a
+      request reaches its gate, is read (`D-0029`), or is published, rondo appends a `drafter`
+      message whose bases point at the iteration, the reading and the gate. **This step reads no
+      request body** -- it reports on rows -- so it needs nothing from the question below.
+   4. **The drafter that reads a request** -- the one-sentence summary, the question asked back, a
+      proposed split into plans. **Held behind the human gate's answer to the question below**, and
+      behind the model-drafter entry `D-0029`'s residuals already name, because summarising free
+      text is not something the deterministic drafter can do and a model drafter is a widening of
+      `D-0022` rules 1 and 3.
+   5. **The screen**: the thread in `inbox` and on the page, with *waiting on you* extended to a
+      request whose last message is a drafter's question.
+
+6. **Named and not filled:**
+   - **A question raised in the middle of a lap.** Absent for the reason the table gives, and the
+     premise `D-0044`'s third falsifier ("a lap gaining sub-roles") would have to fall first.
+   - **Finding the next request** (work-discovery; the lap-gap survey's `G6`). A request thread is
+     where a proposed next request would be written, and choosing one is its own entry.
+
+### What is put to the human gate
+
+**`D-0044`'s heading says a tier "is reached by naming an agent type and never by rondo reading a
+request".** Rules 1-5.3 above store, link and quote a request and read none of it, and **this entry
+judges that they need no change to `D-0044` or `D-0025`**. Step 5.4 is different, and the entry
+does not settle it inside itself:
+
+- **A summary and a question asked back** read the body in order to *say* something, not to *decide*
+  something. `D-0044` rule 2 forbids reading the body to judge which tier the work needs, and
+  `D-0025` rule 5 forbids inference *in the plan reader*; neither is triggered by a drafter message
+  with bases. **This entry's reading is that no ratified rule changes** -- but the heading's words
+  are broader than its rules, and the human is asked to confirm the reading rather than have it
+  assumed.
+- **A proposed split into plans** is where the two rules actually bind. A proposed plan names an
+  agent type, and an agent type carries the tier. Two ways through, and what each loses:
+  - **(a) Keep `D-0044` rule 2 whole.** A split proposal may propose the plan's request text and
+    workspace but **must name an agent type the operator chose for the request**, never one the
+    drafter picked. *Loses:* the drafter cannot route work by kind, so the person still makes that
+    choice once per request -- the per-request judgment `D-0044` rule 2 prefers not to exist, now
+    made by a person rather than by rondo.
+  - **(b) Amend `D-0044` rule 2** so a proposal from a request may name an agent type, approved at a
+    gate like any other proposal. *Loses:* the property that a tier is a judgment about a kind of
+    work reviewed with the agent type, not a judgment made per request; and `D-0044`'s own falsifier
+    ("an operator wanting to down-tier one particular request") would be answered by construction
+    rather than by evidence.
+
+**Step 5.4 does not start until the gate answers this**, and whichever answer it gives is recorded
+as its own entry (an annotation for (a), a supersession of `D-0044` rule 2 for (b)), not here.
+
+### What this does not do
+
+- **It does not build anything.** No column, verb, drafter or screen.
+- **It does not choose a model drafter** or decide what it may read beyond naming the widening.
+- **It does not change the gate, `decide`, `publish` or the inbox.** It names what later steps add
+  to them.
+- **It does not decide threading beyond a reply chain**, retention beyond append-only, or how a
+  thread is closed.
+
+### What would falsify it
+
+- **A request needing to be edited in place**, rather than corrected by a reply, often enough that
+  append-only reads as an obstruction. Rule 3's "no edit" is the claim to re-argue.
+- **A drafter message that cannot name a basis** yet is worth showing -- rule 2.6's refusal would
+  then be withholding something true rather than stopping something groundless.
+- **The operator's "what changed" feed becoming unreadable** once messages enter it. Rule 2.5's
+  choice is what would move.
+- **A lap needing to name two requests**, which breaks rule 4's single column.
+- **Requests arriving somewhere other than rondo's store first** -- an issue tracker the operator
+  prefers to type into -- which makes rule 1 a statement about a copy rather than about the home;
+  `D-0020` rule 5's own falsifier, inherited.
+- **The human gate answering the question above in a way that also reaches rules 1-5.3** -- that is,
+  ruling that storing or quoting a request is already "reading" it in `D-0044`'s sense.
+- Any line reference in section 1 failing to reproduce at `d65cd9e`.
