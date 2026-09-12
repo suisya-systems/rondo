@@ -2072,11 +2072,19 @@ async function allowanceLines(
     `envelope ${stored.digestAlgorithm} ${stored.envelopeDigest}`,
     "continuo re-checked that digest against the stored bytes: " +
       `${stored.digestVerified ? "it matches" : "IT DOES NOT MATCH"}.`,
+    // **The declaration is not the fence, and saying so is the whole point of
+    // the screen.** continuo renders the role's own template into the same
+    // `permissions.allow` -- on a worker that is six `git` specs rondo never
+    // declared and cannot see from here. A list headed "allowed to run" would
+    // have been rondo asserting a fence it did not read, which is the habit
+    // this block exists to break.
+    "This is the run's own declaration, not the whole fence: continuo renders the",
+    "role's template into the same allow list, and rondo does not read that here.",
   ];
   if (subjects.length === 0) {
-    return ["the run was allowed to run no command at all.", ...provenance];
+    return ["this run declared no Bash subject of its own.", ...provenance];
   }
-  return ["allowed to run:", ...subjects.map((subject) => `  ${subject}`), ...provenance];
+  return ["declared for this run:", ...subjects.map((subject) => `  ${subject}`), ...provenance];
 }
 
 /**

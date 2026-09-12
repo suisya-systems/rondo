@@ -76,4 +76,9 @@ test("an allowance that was not read is not an allowance of nothing", async () =
   const said = await fenceBlock("[]");
   expect(said).toContain("continuo is not usable here");
   expect(said).toContain("unknown rather than nothing");
+  // The screen never says "allowed to run": the declaration is one input to the
+  // fence and continuo renders the role's own template into the same allow
+  // list, which rondo does not read. Measured on a real lap: a worker role
+  // contributes six `git` specs no delegation record declares.
+  expect(said).not.toContain("allowed to run:");
 });
