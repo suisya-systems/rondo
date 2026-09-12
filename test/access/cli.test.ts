@@ -1152,6 +1152,7 @@ function text(parts: Partial<PullRequestTextInput> = {}) {
     baseBranch: "main",
     headIsQualified: false,
     work: worked(),
+    predecessor: null,
     verificationClaims: [],
     ...parts,
   });
@@ -1219,9 +1220,20 @@ test("a revision's body states the lineage instead of leaving it to the branch n
   // D-0030 rule 4, at the reader who most needs it: the branch being merged
   // carries every lap's commits, so a reviewer looking at a revision is looking
   // at work that was already answered for once, and nothing else in this body
-  // would say so.
-  const body = text({ record: published({ supersedesIterationId: "dogfood-000" }) }).body;
-  expect(body).toContain("It revises iteration `dogfood-000`");
+  // would say so. The commits claim is made only because this lap was cut from
+  // the branch the predecessor ran on, which is what the two rows say.
+  const revised = published({
+    supersedesIterationId: "dogfood-000",
+    plan: { ...published().plan, base_branch: "rondo/dogfood-000" },
+  });
+  const body = text({
+    record: revised,
+    predecessor: published({ id: "dogfood-000", topicBranch: "rondo/dogfood-000" }),
+  }).body;
+  expect(body).toContain(
+    "It revises iteration `dogfood-000`: this lap was cut from `rondo/dogfood-000`, the branch " +
+      "that lap ran on, so whatever that lap committed is on this branch too.",
+  );
   // Above the gate sentence, which is about the last lap rather than all of
   // them, and inside the section that says how the change got here.
   expect(body.indexOf("It revises iteration")).toBeGreaterThan(
@@ -1232,6 +1244,35 @@ test("a revision's body states the lineage instead of leaving it to the branch n
   // The observed-red control: a first lap's body claims no predecessor, so the
   // line means something when it is there.
   expect(text().body).not.toContain("It revises iteration");
+});
+
+test("a retry's body does not describe its predecessor as a revision (#132)", () => {
+  // D-0047 gave `supersedesIterationId` a second meaning, and the one sentence
+  // said the predecessor's commits were on this branch, that this branch was
+  // cut from that lap's branch, and that a person answered its gate. For a
+  // retry of a lap abandoned at `classify` all three are false: it has no
+  // commits, its branch was never materialised, and what a person answered was
+  // a proposal.
+  const body = text({
+    record: published({ supersedesIterationId: "lap6-004", plan: { base_branch: "main" } }),
+    predecessor: published({
+      id: "lap6-004",
+      status: "abandoned",
+      topicBranch: "rondo/lap6-004",
+    }),
+  }).body;
+  expect(body).toContain(
+    "It supersedes iteration `lap6-004`, which ended `abandoned`: this lap was cut from `main` " +
+      "rather than from that lap's own branch, so nothing it left is carried here.",
+  );
+  expect(body).not.toContain("It revises iteration");
+  expect(body).not.toContain("asked for a change at its gate");
+
+  // A predecessor rondo could not read is said out loud rather than given the
+  // benefit of either spelling.
+  expect(text({ record: published({ supersedesIterationId: "lap6-004" }) }).body).toContain(
+    "It supersedes iteration `lap6-004`, whose row rondo could not read here",
+  );
 });
 
 test("the body distinguishes an approval that checked something from one that did not", () => {
