@@ -21,6 +21,7 @@ import { expect, test } from "vitest";
 
 import type { UnpromptedPorts } from "../../src/access/advisory.js";
 import { proposeAfterAbandon } from "../../src/access/advisory.js";
+import { unpromptedPorts } from "../../src/access/cli.js";
 import { abandon, admit, resume } from "../../src/access/conductor.js";
 import type { CatalogLayer } from "../../src/cadenza/facade.js";
 import type { AdmittedPlan, RunPlan } from "../../src/refrain/plan.js";
@@ -434,4 +435,22 @@ test("the same subject proposed twice writes one row, and the store is what refu
 
   expect(second.kind).toBe("silent");
   expect(rowsIn(h.connection, "proposal").length).toBe(1);
+});
+
+test("ports the trigger cannot even open come back as a value, not as a throw", async () => {
+  // The other half of rule 11, and the half the conductor's `catch` cannot
+  // reach: the advisory opens a **second** connection to the store, and it does
+  // so before the admission that would have been wrapped. A directory is not a
+  // database, so this is the real failure rather than a stubbed one.
+  const h = harness(NEEDS_APPROVAL);
+  const store = iterationStore(h.connection, CONSERVATIVE_HOST_POLICY);
+
+  const ports = unpromptedPorts(store, resolve("/"));
+
+  expect("unavailable" in ports ? ports.unavailable : "opened").toContain(
+    "the advisory's own connection to the store could not be opened",
+  );
+  const report = await admit(h.ports, ports, PLAN, POLICY, SUBJECT);
+  expect(report.status).toBe("abandoned");
+  expect(rowsIn(h.connection, "proposal").length).toBe(0);
 });

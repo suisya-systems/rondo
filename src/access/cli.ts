@@ -1476,22 +1476,34 @@ function advisoryPorts(
 /**
  * The ports the trigger a stopped lap pulls is handed (D-0043 rule 3).
  *
- * **The pin is read here and its refusal is carried rather than raised.** A
- * `cadenza.pin.json` that will not read must not turn an admission that would
- * otherwise have run into a refusal -- the lap does not need the pin, and only
- * the row recording which cadenza composed a contract does -- so the absence
- * travels as a value with its own sentence in it (rule 11).
+ * **Nothing here may stop a lap that would otherwise have run** (rule 11), and
+ * there are two ways it could. The pin is a file, and a `cadenza.pin.json` that
+ * will not read leaves nothing able to say which cadenza composed a contract;
+ * the advisory's record is a **second connection to the store**, opened here
+ * rather than shared, and opening it runs a schema. Neither is anything the lap
+ * itself needs, so both absences travel as a value with their own sentence in
+ * it instead of as a refusal or a throw -- the catch in the conductor cannot
+ * help with either, because both happen before the admission it wraps.
  *
  * `present` is a no-op and is never called: this door shows nobody anything,
  * which is rule 9. It is passed because {@link ExplainPorts} is one bundle for
  * every door, and a second bundle differing by one field would be two things to
  * keep in step.
  */
-function unpromptedPorts(store: IterationStore, storePath: string): UnpromptedPorts {
+export function unpromptedPorts(store: IterationStore, storePath: string): UnpromptedPorts {
   const pin = cadenzaRevision();
-  return "refusal" in pin
-    ? { unavailable: pin.refusal }
-    : { ...advisoryPorts(store, storePath, () => {}), cadenzaRevision: pin.revision };
+  if ("refusal" in pin) {
+    return { unavailable: pin.refusal };
+  }
+  try {
+    return { ...advisoryPorts(store, storePath, () => {}), cadenzaRevision: pin.revision };
+  } catch (error) {
+    return {
+      unavailable:
+        "the advisory's own connection to the store could not be opened: " +
+        `${error instanceof Error ? error.message : String(error)}`,
+    };
+  }
 }
 
 /**
