@@ -576,6 +576,11 @@ node -e '
       // person may have to write anyway.
       "git switch --detach HEAD~1",
       "git switch -",
+      // Still the only two `node` shapes beside `--version`, and `node -e` is
+      // deliberately absent (rondo#103): a subject that runs an expression is
+      // not a vocabulary, it is `npx:*` again under another name. The preflight
+      // that used to need one is `npm run preflight:model-tier` now, which is
+      // already covered by `npm run:*`.
       "node vendor/pin.mjs:*",
       "node --version",
       "npm --version",
