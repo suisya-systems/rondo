@@ -1250,7 +1250,9 @@ test("the body distinguishes an approval that checked something from one that di
       "npm run verify, both green.",
   );
   // And it is carried as the operator's word rather than as rondo's finding.
-  expect(claimed).toContain("rondo did not run it and did not see it run.");
+  expect(claimed).toContain(
+    "recorded before rondo walked the gate; rondo did not run it and did not see it run.",
+  );
   expect(claimed).not.toContain("Nobody recorded what they checked");
 });
 

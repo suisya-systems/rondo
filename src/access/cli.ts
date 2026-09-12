@@ -3853,6 +3853,12 @@ function fileCounts(file: LapFile): string {
  * **It is attributed, not asserted.** rondo did not run what these rows name
  * and did not watch them run, so the line says whose account it is; anything
  * shorter would put rondo's name on a verification it never observed.
+ *
+ * **It dates the claim to the walk and not to the answer**, because those come
+ * apart: a walk that fails after the claim is written leaves a row beside a
+ * gate that was answered later, or not at all. Saying "before rondo walked the
+ * gate" is true of every row this table can hold; "as they answered" would be a
+ * second claim, about the walk, that this record has not checked.
  */
 function verificationLines(claims: readonly OperatorVerificationClaim[]): readonly string[] {
   if (claims.length === 0) {
@@ -3864,8 +3870,8 @@ function verificationLines(claims: readonly OperatorVerificationClaim[]): readon
   return claims.map(
     (claim) =>
       `- Before answering, \`${listed(claim.actorId, "actor id")}\` said they had checked: ` +
-      `${listed(claim.claim, "claim")}. That is their own account, recorded as they answered; ` +
-      "rondo did not run it and did not see it run.",
+      `${listed(claim.claim, "claim")}. That is their own account, recorded before rondo ` +
+      "walked the gate; rondo did not run it and did not see it run.",
   );
 }
 
