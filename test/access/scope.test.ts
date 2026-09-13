@@ -287,6 +287,21 @@ test("an ask with no iteration holds back a lineage start and not a redo (rule 4
   expect(scopeVerdict(REDO, oneOf)).toMatchObject({ kind: "outside", test: "asks" });
 });
 
+test("D-0069 rule 5: a start naming no proposal is held by every open ask; a split's is not", () => {
+  const unproposed: ScopeAct = { ...START, proposalId: null };
+  const elsewhere = snapshot({
+    openAsks: asks({ messageId: "m-stop", iterationIds: ["i-other"] }),
+  });
+  expect(scopeVerdict(unproposed, elsewhere)).toMatchObject({
+    kind: "outside",
+    test: "asks",
+    reason: expect.stringContaining("'m-stop'"),
+  });
+  expect(scopeVerdict(START, elsewhere)).toEqual(INSIDE);
+  // Control: with no open ask the operator's start is inside.
+  expect(scopeVerdict(unproposed, snapshot())).toEqual(INSIDE);
+});
+
 test("a lineage start reads no predecessor and no reading", () => {
   expect(scopeVerdict(START, snapshot({ predecessor: null }))).toEqual(INSIDE);
   expect(scopeVerdict(REDO, snapshot({ predecessor: null }))).toMatchObject({

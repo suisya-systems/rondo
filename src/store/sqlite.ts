@@ -333,6 +333,20 @@ export type ScopeReadOutcome =
   | { readonly kind: "absent" }
   | { readonly kind: "unreadable"; readonly reason: string };
 
+/**
+ * The agent-type input rondo holds for one digest (D-0069 section 1): from an
+ * `agent_type_record` row, or from the plan of an iteration row carrying that
+ * digest (D-0062 rule 1.2), absent, or unreadable.
+ */
+export type HeldAgentTypeOutcome =
+  | {
+      readonly kind: "read";
+      readonly source: "agent_type_record" | "iteration";
+      readonly agentTypeInput: JsonValue;
+    }
+  | { readonly kind: "absent" }
+  | { readonly kind: "unreadable"; readonly reason: string };
+
 /** One scope decision read back, absent, or unreadable. */
 export type ScopeDecisionReadOutcome =
   | { readonly kind: "read"; readonly decision: StoredScopeDecision }
@@ -1194,6 +1208,25 @@ CREATE TABLE IF NOT EXISTS scope_consumption (
   proposal_id                 TEXT,
   consumed_at_ms              INTEGER NOT NULL,
   PRIMARY KEY (scope_decision_id, act_kind, subject_id)
+);
+
+-- D-0069 section 1. An agent type rondo holds without a paid lap: recorded from
+-- an operator's plan in the transaction that writes the scope naming it, so a
+-- scope's agent_types test reads an iteration row OR this row (D-0062 rule 1.2's
+-- second concrete form).
+--
+-- **Append-only, and the digest is the primary key**: the first record of a
+-- digest is the record, and a later scope naming the same digest writes nothing
+-- here. agent_type_input is canonical JSON, copied byte for byte from the plan;
+-- agent_type_digest is cadenza's over it, computed in src/access (D-0006), and
+-- plan_digest names the plan document it was read from. A row stays behind when
+-- its scope is declined (D-0069 section 1 (a)'s loss).
+CREATE TABLE IF NOT EXISTS agent_type_record (
+  agent_type_digest           TEXT    PRIMARY KEY,
+  agent_type_input            TEXT    NOT NULL,
+  plan_digest                 TEXT    NOT NULL,
+  recorded_by                 TEXT    NOT NULL,
+  recorded_at_ms              INTEGER NOT NULL
 );
 `;
 
@@ -2328,7 +2361,14 @@ export interface AdvisoryRecord {
    * `drafter` row with no bases is refused (rule 1.5); a `supersedesScopeId`
    * naming no row, or this row, is refused; every `requests` id must be a
    * message that opens a request and every `agent_types` digest a record rondo
-   * already holds; an id already taken is refused. The payload is stored as
+   * already holds; an id already taken is refused.
+   *
+   * **D-0069 section 1**: `agentTypeRecords` are written as `agent_type_record`
+   * rows in the same transaction, before the `agent_types` test, so a digest an
+   * operator's plan recorded counts as held. Only an `operator` row may record
+   * one, and only for a digest its own `agent_types` lists; a digest already
+   * recorded writes nothing (append-only). The whole write rolls back with a
+   * refusal, so a refused scope leaves no record behind. The payload is stored as
    * canonical JSON beside `contentDigest` over it.
    */
   recordScope(draft: ScopeDraft): Promise<RecordOutcome>;
@@ -2340,6 +2380,13 @@ export interface AdvisoryRecord {
   recordScopeDecision(draft: ScopeDecisionDraft): Promise<RecordOutcome>;
   /** One scope row, its digest re-derived; a mismatch is `unreadable` (`verbatim`'s precedent). */
   readScope(scopeId: string): Promise<ScopeReadOutcome>;
+  /**
+   * The held record behind one agent-type digest, for the scope's screen to
+   * read the tier and grants back from (D-0069 section 1): an
+   * `agent_type_record` row first, else the earliest iteration row with that
+   * `agent_type_digest`.
+   */
+  heldAgentType(agentTypeDigest: string): Promise<HeldAgentTypeOutcome>;
   readScopeDecision(scopeDecisionId: string): Promise<ScopeDecisionReadOutcome>;
   /**
    * The one decision on a scope row, or `absent` while nobody has answered it.
@@ -2435,6 +2482,12 @@ const CHANGE_SOURCES = Object.freeze([
     table: "scope_consumption",
     id: "subject_id",
     at: "consumed_at_ms",
+  },
+  {
+    kind: "agent_type_record",
+    table: "agent_type_record",
+    id: "agent_type_digest",
+    at: "recorded_at_ms",
   },
 ] as const);
 
@@ -3122,26 +3175,78 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
               };
             }
           }
-          // **"A record rondo already holds" is D-0062 rule 1.2's, read as
-          // written**: the agentTypeInput of a plan on an iteration row whose
-          // agent_type_digest equals the digest. So only iteration rows count,
-          // and a proposal naming a digest does not -- a proposal is a draft,
-          // and a draft citing a digest is not the record the digest names.
+          // **D-0069 section 1: an operator's plan records its agent type with
+          // the scope.** Only an operator's row, because a drafter recording
+          // what it then selects is the hole D-0022 rule 7 refuses; only a
+          // listed digest, because a record exists only for a scope a person
+          // will be asked to approve. **Every refusal is decided before any
+          // insert**: `immediateTransaction` commits what a body returns, so a
+          // refusal after an insert would leave a record with no scope.
+          for (const recorded of draft.agentTypeRecords) {
+            if (draft.authorKind !== "operator") {
+              return {
+                kind: "refused",
+                reason:
+                  `the scope '${draft.scopeId}' is a drafter's and records the agent type ` +
+                  `'${recorded.agentTypeDigest}': only an operator's scope records one from a ` +
+                  "plan, and a drafter's lists only agent types already held (D-0069 section 1, " +
+                  "D-0022 rule 7)",
+              };
+            }
+            if (!reading.payload.agent_types.includes(recorded.agentTypeDigest)) {
+              return {
+                kind: "refused",
+                reason:
+                  `the scope '${draft.scopeId}' records the agent type ` +
+                  `'${recorded.agentTypeDigest}' from a plan and does not list it: a record ` +
+                  "is written only for a scope a person will be asked to approve over it " +
+                  "(D-0069 section 1)",
+              };
+            }
+          }
+          const recordedHere = draft.agentTypeRecords.map((recorded) => recorded.agentTypeDigest);
+          // **"A record rondo already holds" is D-0062 rule 1.2's**: the
+          // agentTypeInput of a plan on an iteration row whose agent_type_digest
+          // equals the digest, or an agent_type_record row an operator's plan
+          // wrote (D-0069 section 1). A proposal naming a digest does not count --
+          // a proposal is a draft, and a draft citing a digest is not the record
+          // the digest names.
           for (const digest of reading.payload.agent_types) {
             if (
+              !recordedHere.includes(digest) &&
               connection
-                .prepare("SELECT 1 FROM iteration WHERE agent_type_digest = ? LIMIT 1")
-                .get(digest) === undefined
+                .prepare(
+                  "SELECT 1 FROM iteration WHERE agent_type_digest = ? " +
+                    "UNION ALL SELECT 1 FROM agent_type_record WHERE agent_type_digest = ? LIMIT 1",
+                )
+                .get(digest, digest) === undefined
             ) {
               return {
                 kind: "refused",
                 reason:
                   `the scope '${draft.scopeId}' lists the agent type '${digest}', which is no ` +
                   "record rondo holds: D-0066 rule 1.2.3 lists agent types rondo already holds " +
-                  "(D-0062 rule 1.2, an iteration row with that agent_type_digest), and a " +
-                  "digest nobody can read back bounds no tier and no grant",
+                  "(D-0062 rule 1.2, an iteration row with that agent_type_digest, or D-0069 " +
+                  "section 1, one an operator's scope recorded from a plan), and a digest " +
+                  "nobody can read back bounds no tier and no grant",
               };
             }
+          }
+          // The first record of a digest is the record (append-only).
+          for (const recorded of draft.agentTypeRecords) {
+            connection
+              .prepare(
+                "INSERT INTO agent_type_record (agent_type_digest, agent_type_input, plan_digest, " +
+                  "recorded_by, recorded_at_ms) VALUES (?, ?, ?, ?, ?) " +
+                  "ON CONFLICT (agent_type_digest) DO NOTHING",
+              )
+              .run(
+                recorded.agentTypeDigest,
+                canonicalJson(recorded.agentTypeInput),
+                recorded.planDigest,
+                draft.authorId,
+                draft.createdAtMs,
+              );
           }
           connection
             .prepare(
@@ -3249,6 +3354,47 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
           return { kind: "unreadable", reason: error.message };
         }
         throw error;
+      }
+    },
+
+    async heldAgentType(agentTypeDigest: string): Promise<HeldAgentTypeOutcome> {
+      const recorded = connection
+        .prepare("SELECT agent_type_input FROM agent_type_record WHERE agent_type_digest = ?")
+        .get(agentTypeDigest) as SqlRow | undefined;
+      const ran =
+        recorded === undefined
+          ? (connection
+              .prepare(
+                "SELECT id, plan FROM iteration WHERE agent_type_digest = ? " +
+                  "ORDER BY created_at_ms, id LIMIT 1",
+              )
+              .get(agentTypeDigest) as SqlRow | undefined)
+          : undefined;
+      if (recorded === undefined && ran === undefined) {
+        return { kind: "absent" };
+      }
+      try {
+        if (recorded !== undefined) {
+          return {
+            kind: "read",
+            source: "agent_type_record",
+            agentTypeInput: JSON.parse(String(recorded["agent_type_input"])) as JsonValue,
+          };
+        }
+        const plan = JSON.parse(String(ran?.["plan"])) as unknown;
+        const input =
+          plan !== null && typeof plan === "object" && !Array.isArray(plan)
+            ? (plan as JsonRecord)["agent_type_input"]
+            : undefined;
+        if (input === undefined) {
+          return {
+            kind: "unreadable",
+            reason: `the plan of iteration '${String(ran?.["id"])}' carries no agent_type_input`,
+          };
+        }
+        return { kind: "read", source: "iteration", agentTypeInput: input };
+      } catch (error) {
+        return { kind: "unreadable", reason: describe(error) };
       }
     },
 
@@ -3842,7 +3988,9 @@ function scopeRefusal(
         `${LINEAGE_BOUND} links, so whether a question stands over it cannot be read`,
     );
   }
-  const standing = asks.asks.find((ask) => askStandsOver(ask, lineage));
+  // D-0069 rule 5: a lineage start naming no proposal is held by every open ask.
+  const unproposedStart = input.supersedesIterationId === null && spend.proposalId === null;
+  const standing = asks.asks.find((ask) => askStandsOver(ask, lineage, unproposedStart));
   if (standing !== undefined) {
     return outside(
       "asks",

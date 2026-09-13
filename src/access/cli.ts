@@ -52,6 +52,7 @@ import {
 } from "../refrain/policy.js";
 import { revisionPlan } from "../refrain/revision.js";
 import {
+  type AgentTypeRecordDraft,
   type IterationRecord,
   isDeterministicReadingDrafter,
   isModelReadingDrafter,
@@ -109,7 +110,12 @@ import { type InboxOutcome, showInbox, type TranscriptLocation } from "./inbox.j
 import { modelReadingLines } from "./model-review.js";
 import { modelReviewPorts, takeModelReading } from "./model-reviewer.js";
 import { evidenceOf, LIST_LIMIT, READING_REMOTE, uncommittedPaths } from "./review.js";
-import { admitUnderScope } from "./scope.js";
+import {
+  admitUnderScope,
+  agentTypeRecordOf,
+  heldAgentTypeLines,
+  type ScopedAdmission,
+} from "./scope.js";
 import { serveOperatorPage } from "./web.js";
 import { type Chrome, EN } from "./wording.js";
 
@@ -135,6 +141,7 @@ export const USAGE = `rondo - the operator surface for delegated work
 
   rondo start --plan FILE --iteration-id ID [--prompt TEXT]
               [--prompt-file FILE] [--message-id ID]
+              [--scope-decision-id ID]
                           take one request and run a lap, and stop at the gate.
                           --prompt-file reads the request from a file, byte for
                           byte, for a request too long or too many paragraphs
@@ -144,7 +151,12 @@ export const USAGE = `rondo - the operator surface for delegated work
                           derived from --iteration-id; rondo mints them, so
                           there is no flag to type them. --message-id names
                           the message that opened the request this lap came
-                          from, and is refused when it opens none
+                          from, and is refused when it opens none.
+                          --scope-decision-id admits the lap under an approved
+                          scope instead of asking: it needs --message-id, and
+                          is refused with the test that refused it, spending
+                          nothing, unless every test of the scope passes. An
+                          unanswered question in the request's thread holds it
   rondo request --actor-id ID --message-id ID --body=TEXT
                           open a request: your words, stored as written, as a
                           message in the conversation that replies to nothing.
@@ -210,9 +222,15 @@ export const USAGE = `rondo - the operator surface for delegated work
                           screen, and it is required on approved and refused on
                           declined. An explanation cannot be answered at all
   rondo scope --payload-file FILE --actor-id ID [--supersedes-scope-id ID]
+              [--plan FILE]...
                           write one scope: the requests, workspaces and agent
                           types a run of decisions may be taken inside without
-                          asking, and its budgets. FILE is an absolute path to
+                          asking, and its budgets. Each --plan (an absolute
+                          path) records the agent type of that plan so the scope
+                          may list it before any lap has run, and the screen
+                          prints its digest. Every listed agent type is shown
+                          with the tier and granted keys of the record held.
+                          FILE is an absolute path to
                           the JSON payload; review_rounds, severity_threshold,
                           outward_acts and irreversible_additions take their
                           defaults when absent. Records the row before it shows
@@ -451,6 +469,8 @@ export interface ParsedCommand {
     | "web"
     | "help";
   readonly planFile: string | null;
+  /** Every `--plan`, in order: more than one only for `scope` (D-0069 section 1). */
+  readonly planFiles: readonly string[];
   readonly prompt: string | null;
   readonly promptFile: string | null;
   readonly iterationId: string | null;
@@ -488,7 +508,9 @@ export type ParseOutcome =
   | { readonly kind: "refused"; readonly reason: string };
 
 const FLAGS = {
-  plan: { type: "string" },
+  // `multiple` for `scope`, which records one agent type per plan (D-0069
+  // section 1); every other command refuses a second `--plan` in `parseCommand`.
+  plan: { type: "string", multiple: true },
   prompt: { type: "string" },
   "prompt-file": { type: "string" },
   "iteration-id": { type: "string" },
@@ -556,7 +578,9 @@ export const FLAGS_BY_COMMAND: Readonly<Record<string, readonly string[]>> = {
   // from `revise` (D-0023 rule 9): rondo derives all three from the iteration
   // id, which is now required rather than defaulted. D-0027 typed them on
   // `revise` because no allocator existed when it was written.
-  start: ["plan", "prompt", "prompt-file", "iteration-id", "message-id"],
+  // `--scope-decision-id` spends a scope on a first admission (D-0069 section
+  // 2), through the same call site as `retry`'s, and needs `--message-id`.
+  start: ["plan", "prompt", "prompt-file", "iteration-id", "message-id", "scope-decision-id"],
   // `answer` gained `--iteration-id` because more than one iteration may be
   // waiting at once now, which is the whole point of D-0023.
   answer: ["actor-id", "body", "iteration-id", "verified"],
@@ -632,7 +656,7 @@ export const FLAGS_BY_COMMAND: Readonly<Record<string, readonly string[]>> = {
   // author and is checked against the allowlist; `decide-scope` copies the
   // digest off the screen for `decide`'s reason -- the answer names the row
   // that was shown, not a position in a list.
-  scope: ["payload-file", "actor-id", "supersedes-scope-id"],
+  scope: ["payload-file", "actor-id", "supersedes-scope-id", "plan"],
   "decide-scope": ["scope-id", "scope-digest", "outcome", "actor-id"],
   // One flag, and no `--actor-id`: reading a proposal back is not answering it
   // and not looking at the inbox, so it moves no last-look mark and needs no
@@ -665,7 +689,7 @@ export function parseCommand(argv: readonly string[]): ParseOutcome {
     };
   }
 
-  let values: Record<string, string | boolean | undefined>;
+  let values: Record<string, string | boolean | string[] | undefined>;
   let positionals: readonly string[];
   try {
     const parsed = parseArgs({
@@ -740,6 +764,31 @@ export function parseCommand(argv: readonly string[]): ParseOutcome {
     return typeof value === "string" ? value : null;
   };
 
+  const planFiles = Array.isArray(values["plan"]) ? values["plan"] : [];
+  if (command !== "scope" && planFiles.length > 1) {
+    return {
+      kind: "refused",
+      reason: `--plan is given ${String(planFiles.length)} times, and '${command}' runs one plan. Name one.`,
+    };
+  }
+
+  // **Refused here, before any verdict** (D-0069 section 2): the verdict refuses
+  // an act that names no request, and a refusal with no request has no thread to
+  // write its stop into, so a scoped first admission would leave nothing durable.
+  if (
+    command === "start" &&
+    values["scope-decision-id"] !== undefined &&
+    values["message-id"] === undefined
+  ) {
+    return {
+      kind: "refused",
+      reason:
+        "start --scope-decision-id needs --message-id ID, the message that opened the request: " +
+        "a scope covers only the requests it lists, and a refusal is written into that " +
+        "request's thread so it keeps the line stopped.",
+    };
+  }
+
   // **Checked here rather than handed to `listen`.** A port that is not a port
   // is refused before a server exists, and the range is the one an operating
   // system has: `Number("8080x")` is NaN and `Number("")` is 0, so a typo would
@@ -757,7 +806,8 @@ export function parseCommand(argv: readonly string[]): ParseOutcome {
     kind: "parsed",
     parsed: {
       command: command as ParsedCommand["command"],
-      planFile: text("plan"),
+      planFile: planFiles[0] ?? null,
+      planFiles,
       prompt: text("prompt"),
       promptFile: text("prompt-file"),
       iterationId: text("iteration-id"),
@@ -793,6 +843,7 @@ function emptyCommand(command: ParsedCommand["command"]): ParsedCommand {
   return {
     command,
     planFile: null,
+    planFiles: [],
     prompt: null,
     promptFile: null,
     iterationId: null,
@@ -1126,27 +1177,12 @@ function loadPlan(parsed: ParsedCommand): { plan: RunPlan } | { refusal: string 
   if (parsed.planFile === null) {
     return { refusal: "start needs --plan FILE, naming the JSON plan to run." };
   }
-  let raw: string;
-  try {
-    raw = readFileSync(parsed.planFile, "utf8");
-  } catch (error) {
-    return {
-      refusal: `The plan file could not be read: ${error instanceof Error ? error.message : String(error)}`,
-    };
-  }
-  let document: unknown;
-  try {
-    document = JSON.parse(raw);
-  } catch (error) {
-    return {
-      refusal: `The plan file is not JSON: ${error instanceof Error ? error.message : String(error)}`,
-    };
-  }
-  if (document === null || typeof document !== "object" || Array.isArray(document)) {
-    return { refusal: "The plan file must hold a JSON object." };
+  const read = readPlanDocument(parsed.planFile);
+  if ("refusal" in read) {
+    return read;
   }
 
-  const payload = { ...(document as JsonRecord) };
+  const payload = { ...read.document };
   if (parsed.prompt !== null) {
     payload["prompt"] = parsed.prompt;
   }
@@ -1180,6 +1216,30 @@ function loadPlan(parsed: ParsedCommand): { plan: RunPlan } | { refusal: string 
     return { refusal: `The plan was refused: ${outcome.reason}` };
   }
   return { plan: outcome.plan };
+}
+
+/** A plan file's JSON object, or why it is not one. */
+function readPlanDocument(file: string): { document: JsonRecord } | { refusal: string } {
+  let raw: string;
+  try {
+    raw = readFileSync(file, "utf8");
+  } catch (error) {
+    return {
+      refusal: `The plan file could not be read: ${error instanceof Error ? error.message : String(error)}`,
+    };
+  }
+  let document: unknown;
+  try {
+    document = JSON.parse(raw);
+  } catch (error) {
+    return {
+      refusal: `The plan file is not JSON: ${error instanceof Error ? error.message : String(error)}`,
+    };
+  }
+  if (document === null || typeof document !== "object" || Array.isArray(document)) {
+    return { refusal: "The plan file must hold a JSON object." };
+  }
+  return { document: document as JsonRecord };
 }
 
 /**
@@ -1616,6 +1676,7 @@ export async function main(
       return await commandStart(
         parsed,
         store,
+        opened.path,
         ports,
         unpromptedPorts(store, opened.path),
         continuo,
@@ -1656,9 +1717,10 @@ export async function main(
 }
 
 /** Door one: take one request and run a lap. */
-async function commandStart(
+export async function commandStart(
   parsed: ParsedCommand,
   store: IterationStore,
+  storePath: string,
   ports: ReturnType<typeof conductorPorts>,
   advisory: UnpromptedPorts,
   continuo: VerifiedContinuo,
@@ -1687,6 +1749,41 @@ async function commandStart(
   }
   const iterationId = parsed.iterationId;
   say(`starting iteration '${iterationId}'; the lap is the step that is slow`);
+
+  // D-0069 section 2: a first admission that spends a scope, through the one
+  // call site that computes a verdict. It names no proposal, so every open ask
+  // in its request's thread holds it back (rule 5). `parseCommand` has already
+  // refused it without `--message-id`.
+  if (parsed.scopeDecisionId !== null) {
+    const outcome = await admitUnderScope(
+      {
+        store,
+        record: openAdvisoryRecord(storePath),
+        nowMs: Date.now,
+        admit: (scoped, id, supersedes, requestMessageId, scopeSpend) =>
+          admit(
+            ports,
+            advisory,
+            scoped,
+            START_POLICY,
+            id,
+            supersedes,
+            null,
+            requestMessageId,
+            scopeSpend,
+          ),
+      },
+      parsed.scopeDecisionId,
+      {
+        kind: "lineage_start",
+        iterationId,
+        plan,
+        proposalId: null,
+        requestMessageId: parsed.messageId,
+      },
+    );
+    return await finishScopedAdmission(outcome, "first admission", continuo, store, iterationId);
+  }
 
   const report = await admit(
     ports,
@@ -2423,6 +2520,30 @@ async function commandScope(
   if (document === null || typeof document !== "object" || Array.isArray(document)) {
     return refuse("The scope payload file must hold a JSON object.");
   }
+  // D-0069 section 1: each plan records its agent type in the scope's own
+  // transaction, so the scope may list one no lap has run yet.
+  const agentTypeRecords: { file: string; record: AgentTypeRecordDraft }[] = [];
+  for (const file of parsed.planFiles) {
+    if (!isAbsolute(file)) {
+      return refuse(
+        `scope --plan '${file}' is not an absolute path, and a relative path would name a ` +
+          "different file from a different directory.",
+      );
+    }
+    const read = readPlanDocument(file);
+    if ("refusal" in read) {
+      return refuse(`${file}: ${read.refusal}`);
+    }
+    const planned = readRunPlan(read.document);
+    if (planned.kind !== "planned") {
+      return refuse(`${file}: The plan was refused: ${planned.reason}`);
+    }
+    const recorded = agentTypeRecordOf(planned.plan, read.document);
+    if ("refusal" in recorded) {
+      return refuse(`${file}: its agent type builds no record: ${recorded.refusal}`);
+    }
+    agentTypeRecords.push({ file, record: recorded.record });
+  }
   const record = openAdvisoryRecord(storePath);
   const atMs = Date.now();
   const scopeId = `scope-${String(atMs)}`;
@@ -2434,8 +2555,12 @@ async function commandScope(
     authorId: actor.actorId,
     bases: [],
     createdAtMs: atMs,
+    agentTypeRecords: agentTypeRecords.map((recorded) => recorded.record),
   });
   if (written.kind !== "recorded") {
+    for (const recorded of agentTypeRecords) {
+      say(`plan ${recorded.file}: agent type ${recorded.record.agentTypeDigest}`);
+    }
     return refuse(written.reason);
   }
   const stored = await record.readScope(scopeId);
@@ -2455,6 +2580,12 @@ async function commandScope(
     say(`workspace: ${workspace.repository} at ${workspace.workspace_root}`);
   }
   say(`agent types: ${payload.agent_types.join(", ")}`);
+  for (const recorded of agentTypeRecords) {
+    say(`plan ${recorded.file}: agent type ${recorded.record.agentTypeDigest}`);
+  }
+  for (const line of await heldAgentTypeLines(record, payload.agent_types)) {
+    say(line);
+  }
   say(
     `budgets: ${String(budgets.laps)} laps, ${String(budgets.review_rounds)} review rounds, ` +
       `${String(budgets.cost_usd)} USD with ${String(budgets.cost_reserve_usd)} USD reserved per ` +
@@ -2636,10 +2767,25 @@ export async function commandScopedRetry(
       requestMessageId: predecessor.record.requestMessageId,
     },
   );
+  return await finishScopedAdmission(outcome, "retry", continuo, store, successorId);
+}
+
+/**
+ * Say what an admission under a scope came to, for `retry` and `start` alike:
+ * a refusal with the test that refused it and what keeps the line stopped
+ * (D-0066 rule 4.4), or the lap's report and its gate.
+ */
+async function finishScopedAdmission(
+  outcome: ScopedAdmission,
+  act: "retry" | "first admission",
+  continuo: VerifiedContinuo,
+  store: IterationStore,
+  iterationId: string,
+): Promise<number> {
   if (outcome.kind === "refused") {
     consoleSeams.writeError(
       `${asciiEscape(
-        `Refused: the retry is ${outcome.verdict} the scope at the ${outcome.test} test, so ` +
+        `Refused: the ${act} is ${outcome.verdict} the scope at the ${outcome.test} test, so ` +
           `nothing was admitted and nothing was spent: ${outcome.reason}`,
       )}\n`,
     );
@@ -2657,7 +2803,7 @@ export async function commandScopedRetry(
         );
       case "noThread":
         return refuse(
-          "The iteration names no request, so there is no thread to write the stop into: this " +
+          `The ${act} names no request, so there is no thread to write the stop into: this ` +
             "refusal is printed only, and nothing durable keeps the line stopped.",
         );
       case "failed":
@@ -2671,7 +2817,7 @@ export async function commandScopedRetry(
   sayReport(report);
   if (report.status === "awaiting_human") {
     await sayGateOpen(() =>
-      takeModelReading(modelReviewPorts(continuo, store), report.iterationId ?? successorId),
+      takeModelReading(modelReviewPorts(continuo, store), report.iterationId ?? iterationId),
     );
     return 0;
   }

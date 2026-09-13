@@ -99,6 +99,7 @@ const scope = (parts: Partial<ScopeDraft> = {}): ScopeDraft => ({
   authorId: "oidc|operator-1",
   bases: [],
   createdAtMs: 1_000,
+  agentTypeRecords: [],
   ...parts,
 });
 
@@ -345,6 +346,122 @@ test("a request that is no message, or an agent type no iteration holds, is refu
   );
   // Control: the same scope over what the store does hold records.
   expect(await record.recordScope(scope())).toEqual({ kind: "recorded" });
+});
+
+const UNRUN = `sha256:${"c".repeat(64)}`;
+const recorded = (agentTypeDigest = UNRUN) => ({
+  agentTypeDigest,
+  agentTypeInput: { agentTypeId: "worker-basic", granted: ["command.run"] },
+  planDigest: `sha256:${"d".repeat(64)}`,
+});
+const records = (connection: DatabaseSync) =>
+  count(connection, "SELECT COUNT(*) AS n FROM agent_type_record");
+
+test("D-0069: an operator's scope records an unrun agent type from a plan, in its own transaction", async () => {
+  const { connection, record } = await seeded();
+  const payload = { ...PAYLOAD, agent_types: [AGENT_TYPE, UNRUN] };
+  // Control: without the record, the unrun digest is no record rondo holds.
+  const bare = await record.recordScope(scope({ payload }));
+  expect(bare.kind === "refused" ? bare.reason : bare.kind).toContain(UNRUN);
+  expect(await record.recordScope(scope({ payload, agentTypeRecords: [recorded()] }))).toEqual({
+    kind: "recorded",
+  });
+  expect(
+    connection
+      .prepare(
+        "SELECT agent_type_input, plan_digest, recorded_by, recorded_at_ms FROM agent_type_record",
+      )
+      .all(),
+  ).toEqual([
+    {
+      agent_type_input: '{"agentTypeId":"worker-basic","granted":["command.run"]}',
+      plan_digest: `sha256:${"d".repeat(64)}`,
+      recorded_by: "oidc|operator-1",
+      recorded_at_ms: 1_000,
+    },
+  ]);
+  // Once held, a drafter's scope may list it, and a later record of it writes nothing.
+  expect(
+    await record.recordScope(
+      scope({
+        scopeId: "s-0002",
+        payload,
+        authorKind: "drafter",
+        bases: [{ form: "message", messageId: "m-0001" }],
+      }),
+    ),
+  ).toEqual({ kind: "recorded" });
+  expect(
+    await record.recordScope(
+      scope({
+        scopeId: "s-0003",
+        payload,
+        agentTypeRecords: [{ ...recorded(), agentTypeInput: { other: true } }],
+      }),
+    ),
+  ).toEqual({ kind: "recorded" });
+  expect(records(connection)).toBe(1);
+  expect(await record.heldAgentType(UNRUN)).toEqual({
+    kind: "read",
+    source: "agent_type_record",
+    agentTypeInput: { agentTypeId: "worker-basic", granted: ["command.run"] },
+  });
+  expect((await record.changedSince(1)).map((change) => change.kind)).toContain(
+    "agent_type_record",
+  );
+});
+
+test("D-0069: a drafter records nothing, a record its scope does not list is refused, a refusal rolls it back", async () => {
+  const { connection, record } = await seeded();
+  const payload = { ...PAYLOAD, agent_types: [AGENT_TYPE, UNRUN] };
+  const drafted = await record.recordScope(
+    scope({
+      payload,
+      authorKind: "drafter",
+      bases: [{ form: "message", messageId: "m-0001" }],
+      agentTypeRecords: [recorded()],
+    }),
+  );
+  expect(drafted.kind === "refused" ? drafted.reason : drafted.kind).toContain("drafter's");
+  const unlisted = await record.recordScope(scope({ agentTypeRecords: [recorded()] }));
+  expect(unlisted.kind === "refused" ? unlisted.reason : unlisted.kind).toContain(
+    "does not list it",
+  );
+  // Refusals that come after the record loop leave no record either: a second listed agent
+  // type nobody holds, a second plan the scope does not list, and a taken scope id.
+  const THIRD = `sha256:${"e".repeat(64)}`;
+  const unheld = await record.recordScope(
+    scope({ payload: { ...payload, agent_types: [UNRUN, THIRD] }, agentTypeRecords: [recorded()] }),
+  );
+  expect(unheld.kind === "refused" ? unheld.reason : unheld.kind).toContain(THIRD);
+  const secondUnlisted = await record.recordScope(
+    scope({ payload, agentTypeRecords: [recorded(), recorded(THIRD)] }),
+  );
+  expect(secondUnlisted.kind === "refused" ? secondUnlisted.reason : secondUnlisted.kind).toContain(
+    "does not list it",
+  );
+  expect(await record.recordScope(scope({ scopeId: "s-taken" }))).toEqual({ kind: "recorded" });
+  const taken = await record.recordScope(
+    scope({ scopeId: "s-taken", payload, agentTypeRecords: [recorded()] }),
+  );
+  expect(taken.kind).toBe("refused");
+  expect(records(connection)).toBe(0);
+  expect(await record.heldAgentType(UNRUN)).toEqual({ kind: "absent" });
+  expect(count(connection, "SELECT COUNT(*) AS n FROM scope")).toBe(1);
+});
+
+test("D-0069: a digest an iteration holds reads back from that iteration's plan", async () => {
+  const { connection, record } = await seeded();
+  connection
+    .prepare("UPDATE iteration SET plan = ? WHERE id = 'i-held'")
+    .run(JSON.stringify({ agent_type_input: { agentTypeId: "ran" } }));
+  expect(await record.heldAgentType(AGENT_TYPE)).toEqual({
+    kind: "read",
+    source: "iteration",
+    agentTypeInput: { agentTypeId: "ran" },
+  });
+  connection.prepare("UPDATE iteration SET plan = '{}' WHERE id = 'i-held'").run();
+  expect(await record.heldAgentType(AGENT_TYPE)).toMatchObject({ kind: "unreadable" });
 });
 
 test("a request must open one: a bare message id and a reply are refused (R5)", async () => {
@@ -665,11 +782,14 @@ const askable = async () => {
   let n = 0;
   const redo = () =>
     reserveInput(`i-redo-${String(++n)}`, spendOf(), { supersedesIterationId: "i-held" });
-  const start = () => reserveInput(`i-start-${String(++n)}`, spendOf());
-  return { ...seed, redo, start };
+  // A split's first admission (D-0066 rule 4.4 as written); `unproposed` is an
+  // operator's plan under `start`, which names no proposal (D-0069 rule 5).
+  const start = () => reserveInput(`i-start-${String(++n)}`, spendOf({ proposalId: "p-split" }));
+  const unproposed = () => reserveInput(`i-plan-${String(++n)}`, spendOf());
+  return { ...seed, redo, start, unproposed };
 };
 
-test("5. an ask over the lineage refuses a redo, at any depth, and not a lineage start", async () => {
+test("5. an ask over the lineage refuses a redo, at any depth, and not a split's lineage start", async () => {
   const { connection, record, store, redo, start } = await askable();
   expect(
     await record.recordThreadMessage(ask("m-ask", [{ form: "iteration", iterationId: "i-held" }])),
@@ -722,6 +842,25 @@ test("5. controls: an answered ask, one in another request's thread, one on anot
   // The ask deep in a reply chain is still in the thread.
   await record.recordThreadMessage(ask("m-ask-4", [], "m-ans"));
   expect(await refusalOf(store, start())).toContain("'m-ask-4'");
+});
+
+test("PLANTED 5 (D-0069 rule 5): every open ask holds back a start naming no proposal, whatever its bases", async () => {
+  const { connection, record, store, start, unproposed } = await askable();
+  // A stop over another lineage: a split's start carries on, an operator's plan is held.
+  await record.recordThreadMessage(ask("m-stop", [{ form: "iteration", iterationId: "i-held" }]));
+  expect(await refusalOf(store, unproposed())).toContain("'m-stop'");
+  expect(count(connection, "SELECT COUNT(*) AS n FROM iteration WHERE id LIKE 'i-plan-%'")).toBe(0);
+  await reserves(store, start());
+  // Answered, it holds nothing; a question in another request's thread holds nothing either.
+  await record.recordThreadMessage(message({ messageId: "m-ans", inReplyTo: "m-stop" }));
+  await record.recordThreadMessage(message({ messageId: "m-0002" }));
+  await record.recordThreadMessage(
+    ask("m-ask-2", [{ form: "iteration", iterationId: "i-held" }], "m-0002"),
+  );
+  await reserves(store, unproposed());
+  expect(
+    count(connection, "SELECT COUNT(*) AS n FROM scope_consumption WHERE proposal_id IS NULL"),
+  ).toBe(1);
 });
 
 test("5. an ask over a lap stands over its whole lineage, so a branch from an earlier lap is refused", async () => {

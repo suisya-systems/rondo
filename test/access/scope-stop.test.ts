@@ -8,22 +8,28 @@
  * that a person's reply is what lets the line carry on, and that the store's
  * refusal under the write lock reaches the same writer as data.
  */
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { expect, test, vi } from "vitest";
 
-import { commandScopedRetry, parseCommand } from "../../src/access/cli.js";
+import { commandScopedRetry, commandStart, main, parseCommand } from "../../src/access/cli.js";
 import { admit, type ReportingPorts, reportToRequest, resume } from "../../src/access/conductor.js";
 import { consoleSeams } from "../../src/access/console.js";
 import { admitUnderScope, type ScopeAct, type ScopeAdmitPorts } from "../../src/access/scope.js";
 import { allocate } from "../../src/refrain/allocator.js";
 import { classifyPlan } from "../../src/refrain/classification.js";
-import { type AdmittedPlan, admittedPlan, type RunPlan, runPlan } from "../../src/refrain/plan.js";
+import {
+  type AdmittedPlan,
+  admittedPlan,
+  planPayload,
+  type RunPlan,
+  runPlan,
+} from "../../src/refrain/plan.js";
 import type { LoopPolicy } from "../../src/refrain/policy.js";
 import type { ConductorPorts, EffectOutcome, LapPerformance } from "../../src/refrain/ports.js";
-import { contentDigest } from "../../src/store/plan.js";
+import { canonicalJson, contentDigest } from "../../src/store/plan.js";
 import { type JsonRecord, type LapReading, modelReadingDrafter } from "../../src/store/records.js";
 import { advisoryRecord, iterationStore } from "../../src/store/sqlite.js";
 
@@ -205,6 +211,7 @@ async function harness(path = ":memory:", payload: JsonRecord = PAYLOAD) {
       authorId: "oidc|operator-1",
       bases: [],
       createdAtMs: 1,
+      agentTypeRecords: [],
     }),
   ).toEqual({ kind: "recorded" });
   expect(
@@ -397,12 +404,104 @@ test("a redo's stop names the lineage's latest lap as an iteration basis", async
     { form: "message", messageId: ROOT },
     { form: "iteration", iterationId: "i-a" },
   ]);
-  // It holds that line, and not a new lineage in the same request.
+  // It holds that line, and not a split's new lineage in the same request (D-0066 rule 4.4).
   h.clock.now = 2_000;
   expect(await admitUnderScope(h.ports, "sd-1", redo)).toMatchObject({ test: "asks" });
-  expect(await admitUnderScope(h.ports, "sd-1", start("i-c"))).toMatchObject({
+  expect(
+    await admitUnderScope(h.ports, "sd-1", {
+      kind: "lineage_start",
+      iterationId: "i-c",
+      plan: PLAN,
+      proposalId: "p-split",
+      requestMessageId: ROOT,
+    }),
+  ).toMatchObject({ kind: "admitted" });
+});
+
+test("PLANTED (D-0069 rule 5): a stopped line is not re-run as a new lineage by an operator's scoped start", async () => {
+  const h = await harness();
+  expect(await admitUnderScope(h.ports, "sd-1", start("i-a"))).toMatchObject({
     kind: "admitted",
   });
+  // The line through `i-a` is stopped: its redo is refused and the stop names `i-a`.
+  h.clock.now = EXPIRES;
+  const redo: ScopeAct = {
+    kind: "redo",
+    iterationId: "i-b",
+    plan: PLAN,
+    predecessorId: "i-a",
+    requestMessageId: ROOT,
+  };
+  const refused = await admitUnderScope(h.ports, "sd-1", redo);
+  if (refused.kind !== "refused" || refused.stop.kind !== "written") throw new Error("no stop");
+  h.clock.now = 2_000;
+  // The bypass: the same plan, started again as a new lineage naming no proposal. Held by the
+  // stop about another lineage, and nothing is admitted or spent.
+  const bypass = await admitUnderScope(h.ports, "sd-1", start("i-again"));
+  expect(bypass).toMatchObject({
+    kind: "refused",
+    verdict: "outside",
+    test: "asks",
+    reason: expect.stringContaining("D-0069 rule 5"),
+    stop: { kind: "held", messageId: refused.stop.messageId },
+  });
+  expect(h.consumptions()).toBe(1);
+  expect(h.stops()).toHaveLength(1);
+  // The store's re-test holds it too, when the verdict is raced past (a stop landing after it).
+  expect(
+    await h.record.recordThreadMessage({
+      messageId: "m-answer",
+      body: "go ahead",
+      authorKind: "operator",
+      authorId: "oidc|operator-1",
+      inReplyTo: refused.stop.messageId,
+      atMs: 2_001,
+      bases: [],
+      asks: false,
+    }),
+  ).toEqual({ kind: "recorded" });
+  h.beforeReserve.run = async () => {
+    h.beforeReserve.run = async () => {};
+    expect(
+      await h.record.recordThreadMessage({
+        messageId: "m-late-stop",
+        body: "which way?",
+        authorKind: "drafter",
+        authorId: "rondo/advisory/deterministic",
+        inReplyTo: ROOT,
+        atMs: 2_002,
+        bases: [
+          { form: "message", messageId: ROOT },
+          { form: "iteration", iterationId: "i-a" },
+        ],
+        asks: true,
+      }),
+    ).toEqual({ kind: "recorded" });
+  };
+  expect(await admitUnderScope(h.ports, "sd-1", start("i-again"))).toMatchObject({
+    kind: "refused",
+    test: "asks",
+    stop: { kind: "held", messageId: "m-late-stop" },
+  });
+  expect(h.consumptions()).toBe(1);
+  // Control: once every question is answered, the same start is admitted and spends the scope.
+  expect(
+    await h.record.recordThreadMessage({
+      messageId: "m-answer-2",
+      body: "go ahead",
+      authorKind: "operator",
+      authorId: "oidc|operator-1",
+      inReplyTo: "m-late-stop",
+      atMs: 2_003,
+      bases: [],
+      asks: false,
+    }),
+  ).toEqual({ kind: "recorded" });
+  expect(await admitUnderScope(h.ports, "sd-1", start("i-again"))).toMatchObject({
+    kind: "admitted",
+    report: { iterationId: "i-again" },
+  });
+  expect(h.consumptions()).toBe(2);
 });
 
 test("a store refusal under the write lock reaches the stop as data, and writes it", async () => {
@@ -419,6 +518,7 @@ test("a store refusal under the write lock reaches the stop as data, and writes 
         authorId: "oidc|operator-1",
         bases: [],
         createdAtMs: 2,
+        agentTypeRecords: [],
       }),
     ).toEqual({ kind: "recorded" });
     expect(
@@ -696,6 +796,7 @@ test("a refusal ahead of the asks test does not write a second stop over a held 
         authorId: "oidc|operator-1",
         bases: [],
         createdAtMs: 2,
+        agentTypeRecords: [],
       }),
     ).toEqual({ kind: "recorded" });
     expect(
@@ -813,4 +914,180 @@ test("D-0061 5.3: a report never answers a stop, and a lap naming no request rep
   const quiet = await harness();
   await admit(quiet.reporting, quiet.advisory, PLAN, POLICY, "i-n");
   expect(quiet.stops()).toHaveLength(0);
+});
+
+// --- D-0069: a scope before the first lap, and `start` spending it -------------
+
+/** PLAN as the JSON file an operator writes: the admitted payload without rondo's minted names. */
+function planFile(dir: string, p: RunPlan = PLAN): string {
+  const allocation = allocate("i-probe", p.workspaceRoot);
+  if (allocation.kind !== "allocated") throw new Error(allocation.reason);
+  const admitted = admittedPlan(p, allocation.allocation);
+  if (admitted.kind !== "planned") throw new Error(admitted.reason);
+  const {
+    run_id: _run,
+    lease_claimant_id: _lease,
+    workspace: _workspace,
+    topic_branch: _branch,
+    ...document
+  } = planPayload(admitted.plan);
+  const file = join(dir, "plan.json");
+  writeFileSync(file, JSON.stringify(document));
+  return file;
+}
+
+/** `main` with stdout and stderr captured. */
+async function captured(argv: string[], environment: Record<string, string>) {
+  const out: string[] = [];
+  const write = consoleSeams.write;
+  const writeError = consoleSeams.writeError;
+  consoleSeams.write = (text: string) => {
+    out.push(text);
+  };
+  consoleSeams.writeError = (text: string) => {
+    out.push(text);
+  };
+  try {
+    return { code: await main(argv, environment), text: out.join("") };
+  } finally {
+    consoleSeams.write = write;
+    consoleSeams.writeError = writeError;
+  }
+}
+
+test("scope --plan records an agent type no lap has run, and the screen reads its tier and grants back", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "rondo-scope-plan-"));
+  const path = join(dir, "rondo.sqlite3");
+  const connection = new DatabaseSync(path);
+  const record = advisoryRecord(connection);
+  iterationStore(connection, { maxOccupying: 100, maxLive: 100 });
+  expect(
+    await record.recordThreadMessage({
+      messageId: ROOT,
+      body: "please teach rondo to count",
+      authorKind: "operator",
+      authorId: "oidc|operator-1",
+      inReplyTo: null,
+      atMs: 1,
+      bases: [],
+      asks: false,
+    }),
+  ).toEqual({ kind: "recorded" });
+  const payloadFile = join(dir, "scope.json");
+  writeFileSync(payloadFile, JSON.stringify(PAYLOAD));
+  const environment = { RONDO_STORE: path, RONDO_APPROVER: "oidc|operator-1" };
+  const argv = ["scope", "--payload-file", payloadFile, "--actor-id", "oidc|operator-1"];
+  const digest = agentTypeOf(PLAN);
+
+  // Control: with no plan, the fresh store holds no record of the agent type.
+  const bare = await captured(argv, environment);
+  expect(bare.code).not.toBe(0);
+  expect(bare.text).toContain("which is no record rondo holds");
+
+  const recorded = await captured([...argv, "--plan", planFile(dir)], environment);
+  expect(recorded.text).toContain(`agent type ${digest}`);
+  expect(recorded.code).toBe(0);
+  expect(recorded.text).toContain(`plan ${join(dir, "plan.json")}: agent type ${digest}`);
+  expect(recorded.text).toContain(
+    `agent type ${digest}: tier standard, granted command.run (held from a plan recorded for a scope)`,
+  );
+  expect(recorded.text).toMatch(/^[\x20-\x7E\n]*$/);
+  const rows = connection
+    .prepare("SELECT agent_type_digest, agent_type_input, recorded_by FROM agent_type_record")
+    .all() as Record<string, unknown>[];
+  expect(rows).toEqual([
+    {
+      agent_type_digest: digest,
+      agent_type_input: canonicalJson(PLAN.agentTypeInput as never),
+      recorded_by: "oidc|operator-1",
+    },
+  ]);
+  expect(await record.heldAgentType(digest)).toEqual({
+    kind: "read",
+    source: "agent_type_record",
+    agentTypeInput: PLAN.agentTypeInput,
+  });
+  // A relative plan path is refused before anything is written.
+  expect((await captured([...argv, "--plan", "plan.json"], environment)).code).not.toBe(0);
+});
+
+test("start --scope-decision-id: refused without --message-id before any verdict", () => {
+  const refused = parseCommand([
+    "start",
+    "--plan",
+    "/tmp/plan.json",
+    "--iteration-id",
+    "i-a",
+    "--scope-decision-id",
+    "sd-1",
+  ]);
+  expect(refused.kind === "refused" ? refused.reason : refused.kind).toContain("--message-id");
+  expect(
+    parseCommand([
+      "start",
+      "--plan",
+      "/tmp/plan.json",
+      "--iteration-id",
+      "i-a",
+      "--scope-decision-id",
+      "sd-1",
+      "--message-id",
+      ROOT,
+    ]),
+  ).toMatchObject({ kind: "parsed", parsed: { scopeDecisionId: "sd-1", messageId: ROOT } });
+  // One plan per start; `scope` alone takes several.
+  expect(
+    parseCommand(["start", "--plan", "/a.json", "--plan", "/b.json", "--iteration-id", "i-a"]).kind,
+  ).toBe("refused");
+  expect(
+    parseCommand(["scope", "--payload-file", "/s.json", "--plan", "/a.json", "--plan", "/b.json"]),
+  ).toMatchObject({ kind: "parsed", parsed: { planFiles: ["/a.json", "/b.json"] } });
+});
+
+test("start --scope-decision-id goes through the verdict: refused at expiry with a stop, then held", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "rondo-scope-start-"));
+  const path = join(dir, "rondo.sqlite3");
+  const h = await harness(path);
+  const errors: string[] = [];
+  const run = async (iterationId: string): Promise<number> => {
+    const parsed = parseCommand([
+      "start",
+      "--plan",
+      planFile(dir),
+      "--iteration-id",
+      iterationId,
+      "--scope-decision-id",
+      "sd-1",
+      "--message-id",
+      ROOT,
+    ]);
+    if (parsed.kind !== "parsed") throw new Error("the start did not parse");
+    const original = { write: consoleSeams.write, writeError: consoleSeams.writeError };
+    consoleSeams.write = () => {};
+    consoleSeams.writeError = (text: string) => {
+      errors.push(text);
+    };
+    try {
+      // The wall clock is past the fixture's expiry: refused before `admit`.
+      return await commandStart(parsed.parsed, h.store, path, {} as never, {} as never, {
+        cliPath: "/opt/continuo/dist/cli.js",
+        revision: "0".repeat(40),
+      });
+    } finally {
+      consoleSeams.write = original.write;
+      consoleSeams.writeError = original.writeError;
+    }
+  };
+  expect(await run("i-a")).toBe(2);
+  expect(errors.join("")).toContain(
+    "Refused: the first admission is outside the scope at the expiry test",
+  );
+  expect(errors.join("")).toContain("The line is stopped by message 'scope-stop-i-a-");
+  expect(h.stops()).toHaveLength(1);
+  errors.length = 0;
+  expect(await run("i-b")).toBe(2);
+  expect(errors.join("")).toContain("at the asks test");
+  expect(errors.join("")).toContain("already holds this line");
+  expect(h.stops()).toHaveLength(1);
+  expect(h.consumptions()).toBe(0);
 });
