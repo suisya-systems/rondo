@@ -239,13 +239,13 @@ test("(a) a press is one write: the port spends it, and a request mints at most 
   // turn one press into two writes, and one request into two presses.
   app.post("/twice", async (c) => {
     const form = await c.req.parseBody();
-    const first = mintPress(c, form["token"], TOKEN);
+    const first = mintPress(c, form["token"]);
     if (!("press" in first)) {
       return c.text(first.line, first.status);
     }
     outcomes.push(String((await portOf(ports).answer(first.press, "i-0001")).ok));
     outcomes.push(String((await portOf(ports).answer(first.press, "i-0002")).ok));
-    outcomes.push("press" in mintPress(c, form["token"], TOKEN) ? "minted" : "refused");
+    outcomes.push("press" in mintPress(c, form["token"]) ? "minted" : "refused");
     return c.text("done");
   });
   const { base, stop, closed } = await served(app);
@@ -312,7 +312,7 @@ async function plantedWrite(
   name: string,
 ): Promise<void> {
   ran.push(name);
-  const minting = mintPress(c, TOKEN, TOKEN);
+  const minting = mintPress(c, TOKEN);
   await port.answer("press" in minting ? minting.press : ({} as Press), "i-0001");
   await port.answer(Object.freeze({}) as Press, "i-0001");
 }
@@ -345,7 +345,7 @@ test("(c) the audit's planted writers, reached by a GET, write nothing", async (
   // as data, and then calls the port with a press minted from its own request.
   app.get("/planted/loader", async (c) => {
     ran.push("loader");
-    const minting = mintPress(c, TOKEN, TOKEN);
+    const minting = mintPress(c, TOKEN);
     if ("press" in minting) {
       await port.answer(minting.press, "i-0001");
     }
@@ -369,6 +369,36 @@ test("(c) the audit's planted writers, reached by a GET, write nothing", async (
   // Every planted writer ran -- the assertion below is about writers that were
   // reached, not about routes that never matched.
   expect(new Set(ran)).toEqual(new Set(["handler", "middleware", "sub-app", "loader"]));
+  expect(written).toEqual([]);
+
+  stop.abort();
+  expect(await closed).toBe(0);
+});
+
+test("(c) a GET writer that rewrites the live request it holds into a press still writes nothing", async () => {
+  // The node request's `method` is writable and its `headers` a plain object,
+  // so a planted handler can make the live object say "a person's POST". A press
+  // reads the copy the listener froze on arrival, so the rewrite changes nothing.
+  const written: Written = [];
+  const ports = spyPorts(written);
+  const app = createApp(ports, TOKEN);
+  let refused: boolean | null = null;
+  app.get("/planted/rewrite", async (c) => {
+    const incoming = c.env.incoming as { method?: string; headers: Record<string, string> };
+    const host = incoming.headers["host"] ?? "";
+    incoming.method = "POST";
+    Object.assign(incoming.headers, pressHeaders(`http://${host}`));
+    const minting = mintPress(c, TOKEN);
+    refused = "status" in minting;
+    if ("press" in minting) {
+      await portOf(ports).answer(minting.press, "i-0001");
+    }
+    return c.text("drawn");
+  });
+  const { base, stop, closed } = await served(app);
+
+  await send(base, "/planted/rewrite", "GET", {});
+  expect(refused).toBe(true);
   expect(written).toEqual([]);
 
   stop.abort();

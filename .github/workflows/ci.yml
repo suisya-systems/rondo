@@ -95,7 +95,8 @@ jobs:
         # residuals, "cross-platform build reproducibility ... the implementing change's CI"). A
         # Windows cell that emits different CSS bytes is that residual observed, and is D-0059's
         # falsifier for R1; narrowing this step to ubuntu is then a decision to record, not a
-        # quiet edit here.
+        # quiet edit here. A red here is that residual only once line endings are ruled out:
+        # `.gitattributes` pins the page's js and css to LF, so a CRLF checkout cannot change keys.js's digest.
         run: npm run page:check
 
       - name: Type-check

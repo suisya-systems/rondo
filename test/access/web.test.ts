@@ -439,6 +439,10 @@ test("a request keeps its paragraphs and its markup is text (rondo#90)", async (
   // such problem. `white-space: pre-wrap` is what renders it.
   expect(html).toContain("first line\n\nsecond");
   expect(html).not.toContain("\\u000a");
+  // ...and the running row that carries it is not cut to one line.
+  const request = /<p class="(request[^"]*)"[^>]*>first line/.exec(html)?.[1] ?? "";
+  expect(request).toContain("whitespace-pre-wrap");
+  expect(request).not.toContain("truncate");
   expect(html).toContain("&lt;b&gt;paragraph&lt;/b&gt;");
   expect(html).not.toContain("<b>paragraph</b>");
 });
@@ -994,6 +998,18 @@ test("liveness is per view: two views poll and swap, and the answer view updates
     expect(html).toContain(`<noscript><meta http-equiv="refresh" content="5;url=${href}"/>`);
     expect(html).toContain("Redraws every 5s, and a redraw writes nothing");
   }
+  // **What the reading view shows is inside what the refresh swaps**: `#ledger`
+  // holds the fold and the reading sections, counted by `<div>` depth from
+  // `#ledger`'s own opening tag.
+  const ledgerAt = opened.indexOf('<div id="ledger"');
+  const depthAt = (marker: string): number => {
+    const at = opened.indexOf(marker);
+    expect(at, marker).toBeGreaterThan(ledgerAt);
+    const between = opened.slice(ledgerAt, at);
+    return (between.match(/<div[\s>]/g) ?? []).length - (between.match(/<\/div>/g) ?? []).length;
+  };
+  expect(depthAt('<p id="fold"')).toBeGreaterThan(0);
+  expect(depthAt('<div id="reading"')).toBeGreaterThan(0);
 
   // **The answer view updates by nothing at all** (D-0054 rule 1): no poll, no
   // library, no refresh, not even inside `<noscript>` -- it has no auto-update
@@ -1399,7 +1415,7 @@ test("rule 2 is five steps and the first answer wins, each step losing to the on
   expect(resolvedTag({ cookie: "lang=en", host: "ja", header: "ja" })).toBe("en");
 
   // **Step 1 beats everything**, which is what makes rule 4's canonical URL the
-  // whole of the state and the poller's `credentials: "omit"` survivable.
+  // whole of the state, so a redraw of a view's own address keeps its language.
   expect(resolvedTag({ query: "ja", cookie: "lang=en", host: "en", header: "en" })).toBe("ja");
   expect(resolvedTag({ query: "en", cookie: "lang=ja", host: "ja", header: "ja" })).toBe("en");
 
@@ -1498,17 +1514,34 @@ async function get(
   vary: string | null;
   body: string;
 }> {
-  const response = await fetch(`${base}${path}`, {
-    headers,
-    redirect: "manual",
+  // **A navigation unless the caller says otherwise**, over `node:http`:
+  // undici's fetch always sends `sec-fetch-mode: cors`, which is what a redraw
+  // sends, and rule 5's cookie is written only on a navigation.
+  return new Promise((resolve, reject) => {
+    const request = httpRequest(
+      `${base}${path}`,
+      { headers: { "sec-fetch-mode": "navigate", ...headers } },
+      (response) => {
+        let body = "";
+        response.setEncoding("utf8");
+        response.on("data", (chunk: string) => {
+          body += chunk;
+        });
+        response.on("end", () => {
+          const vary = response.headers["vary"];
+          resolve({
+            status: response.statusCode ?? 0,
+            location: response.headers.location ?? null,
+            cookie: response.headers["set-cookie"]?.join(", ") ?? null,
+            vary: vary === undefined ? null : String(vary),
+            body,
+          });
+        });
+      },
+    );
+    request.on("error", reject);
+    request.end();
   });
-  return {
-    status: response.status,
-    location: response.headers.get("location"),
-    cookie: response.headers.get("set-cookie"),
-    vary: response.headers.get("vary"),
-    body: await response.text(),
-  };
 }
 
 /** The tag one served document declares about itself (rule 7). */
@@ -1665,6 +1698,19 @@ test("the memory is one cookie, written by a switch and by nothing else (rule 5)
   }
   // And the switch goes back: `en` is a tag any step may name (rule 8).
   expect((await get(base, "/?lang=en", { cookie: "lang=ja" })).cookie).toContain("lang=en");
+
+  // **htmx's redraw is not a switch**: it is a same-origin XHR that sends and
+  // stores cookies, so a tab left on `ja` would otherwise rewrite the memory
+  // another tab just switched to `en`, every five seconds.
+  for (const poll of [
+    { "hx-request": "true" },
+    { "sec-fetch-mode": "cors", "sec-fetch-dest": "empty" },
+  ]) {
+    expect((await get(base, "/?lang=ja", { cookie: "lang=en", ...poll })).cookie).toBeNull();
+  }
+  expect(
+    (await get(base, "/?lang=ja", { cookie: "lang=en", "sec-fetch-mode": "navigate" })).cookie,
+  ).toContain("lang=ja");
 
   stop.abort();
   expect(await served).toBe(0);

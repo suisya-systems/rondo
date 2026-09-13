@@ -96,7 +96,27 @@ const minted = new WeakSet<object>();
  * already states: a non-browser client on loopback that sends the headers and
  * the token, which the token and the loopback bind already bound.
  */
-const live = new WeakSet<object>();
+const live = new WeakMap<object, Arrival>();
+
+/**
+ * One request as it arrived, frozen by the listener before the app ran.
+ *
+ * **A copy, and not the live `IncomingMessage`**: its `method` is a writable
+ * property and its `headers` a plain object, so a planted `GET` handler holding
+ * `c.env.incoming` could rewrite both into a person's `POST` and then mint.
+ * The copy is taken before any handler runs, so nothing the app does can change
+ * what a press reads. **The token is in it too**, taken from the app
+ * {@link createApp} built, so no caller supplies the value its own guess is
+ * compared against.
+ */
+interface Arrival {
+  readonly method: string | undefined;
+  readonly headers: Incoming["headers"];
+  readonly token: string | undefined;
+}
+
+/** Each app's token, recorded by {@link createApp} for the listener to copy. */
+const tokens = new WeakMap<object, string>();
 
 /**
  * The same comparison the token has always had, without its duration depending
@@ -112,7 +132,7 @@ function sameToken(posted: unknown, token: string): boolean {
 }
 
 /** One header as the socket parsed it; a repeated header is not a value. */
-function header(incoming: Incoming, name: string): string | undefined {
+function header(incoming: Arrival, name: string): string | undefined {
   const value = incoming.headers[name];
   return typeof value === "string" ? value : undefined;
 }
@@ -133,15 +153,19 @@ function header(incoming: Incoming, name: string): string | undefined {
  *    no `?1`) and a script's `form.submit()` with no gesture (no `?1`);
  * 5. it carries this process's token (D-0041 rule 3b).
  *
+ * Every one of those is read off the {@link Arrival} the listener froze, and
+ * the expected token with them, so a writer inside the process can neither
+ * rewrite the request it holds nor name the value its guess is compared to.
+ *
  * Refusals are statuses a person can read, as they were before.
  */
 export function mintPress(
   c: Context<PageEnv>,
   postedToken: unknown,
-  token: string,
 ): { readonly press: Press } | { readonly status: 403; readonly line: string } {
-  const incoming = (c.env as Partial<PageEnv["Bindings"]> | undefined)?.incoming;
-  if (incoming === undefined || !live.has(incoming)) {
+  const key = (c.env as Partial<PageEnv["Bindings"]> | undefined)?.incoming;
+  const incoming = key === undefined ? undefined : live.get(key);
+  if (key === undefined || incoming === undefined) {
     return {
       status: 403,
       line: "that request did not arrive on this page's socket",
@@ -174,13 +198,13 @@ export function mintPress(
       line: "only a person pressing this page's button can answer a gate, and a script cannot",
     };
   }
-  if (!sameToken(postedToken, token)) {
+  if (incoming.token === undefined || !sameToken(postedToken, incoming.token)) {
     return {
       status: 403,
       line: "that form did not come from this page; reload it and press the button again",
     };
   }
-  live.delete(incoming);
+  live.delete(key);
   const press = Object.freeze({}) as Press;
   minted.add(press);
   return { press };
@@ -362,6 +386,7 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
   // the renderer does not hold it at runtime either (D-0041 rule 4).
   const { answer, ...reading } = ports;
   const app = new Hono<PageEnv>();
+  tokens.set(app, token);
 
   // **The method, then the `Host`**, above every path, as the hand-written
   // server ordered them: a method that is neither a read nor the one write is
@@ -445,9 +470,14 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     c.header("vary", "accept-language, cookie");
     // **Rule 5's one cookie, on the one condition rule 5 names**: this URL
     // asked for a language the remaining steps would not have answered. The
-    // four attributes are rule 5's; a redraw fetched with `credentials: "omit"`
-    // never stores it.
-    if (isSwitch(asked, wording)) {
+    // four attributes are rule 5's. **Only on a navigation**: htmx's redraw is a
+    // same-origin XHR that sends and stores cookies, so two tabs on two
+    // languages would otherwise overwrite each other's memory every five
+    // seconds with nobody switching anything.
+    const mode = c.req.header("sec-fetch-mode");
+    const navigated =
+      c.req.header("hx-request") !== "true" && (mode === undefined || mode === "navigate");
+    if (navigated && isSwitch(asked, wording)) {
       setCookie(c, LANG_COOKIE, wording.lang, {
         path: "/",
         sameSite: "Strict",
@@ -477,7 +507,7 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
       );
     }
     const form = await c.req.parseBody();
-    const minting = mintPress(c, form["token"], token);
+    const minting = mintPress(c, form["token"]);
     if (!("press" in minting)) {
       return said(c, minting.status, minting.line);
     }
@@ -516,7 +546,7 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
 /**
  * Serve an app on `127.0.0.1` until the server is closed.
  *
- * **The listener registers each request it hands the app** in {@link live}, and
+ * **The listener freezes each request it hands the app** into {@link live}, and
  * that is what {@link mintPress} checks first -- so this function, and not the
  * app, is where a request becomes one a person could have pressed with.
  *
@@ -540,7 +570,15 @@ export function serveApp(
   const server = createServer(
     getRequestListener(
       (request, env) => {
-        live.add((env as PageEnv["Bindings"]).incoming);
+        const { incoming } = env as PageEnv["Bindings"];
+        live.set(
+          incoming,
+          Object.freeze({
+            method: incoming.method,
+            headers: Object.freeze({ ...incoming.headers }),
+            token: tokens.get(app),
+          }),
+        );
         return app.request(request, undefined, env);
       },
       { hostname: "127.0.0.1" },

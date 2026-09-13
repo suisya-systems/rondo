@@ -781,9 +781,13 @@ function lapRow(
             question === "waiting"
               ? "request text-[15px] leading-6 font-semibold wrap-anywhere whitespace-pre-wrap"
               : question === "running"
-                ? "request truncate text-sm leading-6 font-medium"
+                ? "request text-sm leading-6 font-medium wrap-anywhere whitespace-pre-wrap"
                 : "request truncate text-sm leading-6 text-muted-foreground"
           }
+          // **Only an ended row is cut to one line** (rondo#90): a waiting or
+          // running request is shown whole with its paragraphs, and an ended
+          // one keeps its whole text in `title` for the pointer that asks.
+          {...(question === "ended" ? { title: record.request } : {})}
           lang={materialLanguage(record)}
         >
           {record.request}
@@ -1495,21 +1499,31 @@ export async function operatorPage(
                   {endedView(wording, ended, nowMs)}
                 </>
               )}
+              <p id="fold" class="border-t border-border pt-4 text-[13px]">
+                <a
+                  href={viewHref(
+                    view.kind === "reading" ? { kind: "summary" } : { kind: "reading" },
+                    wording.lang,
+                  )}
+                  class="text-link hover:underline"
+                  {...(view.kind === "reading" ? { "data-back": "" } : {})}
+                >
+                  {view.kind === "reading" ? wording.hideReading : wording.openReading}
+                </a>
+              </p>
+              {
+                // **The fold and the reading are inside the swap too**: on
+                // `?reading=open` they are drawn from the same ledger, and a
+                // reading left outside `#ledger` would stay at first load
+                // under a note that says the view redraws.
+                readingSections.length === 0 ? null : (
+                  <div id="reading" class="space-y-4">
+                    {readingSections}
+                  </div>
+                )
+              }
             </div>
           }
-          <p id="fold" class="border-t border-border pt-4 text-[13px]">
-            <a
-              href={viewHref(
-                view.kind === "reading" ? { kind: "summary" } : { kind: "reading" },
-                wording.lang,
-              )}
-              class="text-link hover:underline"
-              {...(view.kind === "reading" ? { "data-back": "" } : {})}
-            >
-              {view.kind === "reading" ? wording.hideReading : wording.openReading}
-            </a>
-          </p>
-          {readingSections.length === 0 ? null : <div class="space-y-4">{readingSections}</div>}
         </main>
       </body>
     </html>
