@@ -90,6 +90,7 @@ import {
   admit,
   conductorPorts,
   type ReportingPorts,
+  type RequestThread,
   reportToRequest,
   resume,
 } from "./conductor.js";
@@ -1783,7 +1784,14 @@ export async function commandStart(
         requestMessageId: parsed.messageId,
       },
     );
-    return await finishScopedAdmission(outcome, "first admission", continuo, store, iterationId);
+    return await finishScopedAdmission(
+      outcome,
+      "first admission",
+      continuo,
+      store,
+      iterationId,
+      ports.thread ?? null,
+    );
   }
 
   const report = await admit(
@@ -1799,7 +1807,10 @@ export async function commandStart(
   sayReport(report);
   if (report.status === "awaiting_human") {
     await sayGateOpen(() =>
-      takeModelReading(modelReviewPorts(continuo, store), report.iterationId ?? iterationId),
+      takeModelReading(
+        modelReviewPorts(continuo, store, ports.thread ?? null),
+        report.iterationId ?? iterationId,
+      ),
     );
     return 0;
   }
@@ -2476,7 +2487,10 @@ async function commandRetry(
   sayReport(report);
   if (report.status === "awaiting_human") {
     await sayGateOpen(() =>
-      takeModelReading(modelReviewPorts(continuo, store), report.iterationId ?? retry.successorId),
+      takeModelReading(
+        modelReviewPorts(continuo, store, ports.thread ?? null),
+        report.iterationId ?? retry.successorId,
+      ),
     );
     return 0;
   }
@@ -2771,7 +2785,14 @@ export async function commandScopedRetry(
       requestMessageId: predecessor.record.requestMessageId,
     },
   );
-  return await finishScopedAdmission(outcome, "retry", continuo, store, successorId);
+  return await finishScopedAdmission(
+    outcome,
+    "retry",
+    continuo,
+    store,
+    successorId,
+    ports.thread ?? null,
+  );
 }
 
 /**
@@ -2785,6 +2806,7 @@ async function finishScopedAdmission(
   continuo: VerifiedContinuo,
   store: IterationStore,
   iterationId: string,
+  thread: RequestThread | null,
 ): Promise<number> {
   if (outcome.kind === "refused") {
     consoleSeams.writeError(
@@ -2821,7 +2843,10 @@ async function finishScopedAdmission(
   sayReport(report);
   if (report.status === "awaiting_human") {
     await sayGateOpen(() =>
-      takeModelReading(modelReviewPorts(continuo, store), report.iterationId ?? iterationId),
+      takeModelReading(
+        modelReviewPorts(continuo, store, thread),
+        report.iterationId ?? iterationId,
+      ),
     );
     return 0;
   }
@@ -2855,7 +2880,7 @@ export async function sayGateOpen(take: (() => Promise<readonly string[]>) | nul
   say("");
   say(
     "model review  taking a model reading of this work; the gate is already open and does " +
-      "not wait for it",
+      "not wait for it, but you should: answer after it prints below",
   );
   for (const line of await take()) {
     say(line);
@@ -3572,7 +3597,7 @@ async function commandAnswer(
     // bytes to the reviewer again and append a second round nobody asked for.
     await sayGateOpen(
       modelReadingDue(await store.readingsFor(record.id))
-        ? () => takeModelReading(modelReviewPorts(continuo, store), record.id)
+        ? () => takeModelReading(modelReviewPorts(continuo, store, ports.thread ?? null), record.id)
         : null,
     );
   }
@@ -4234,7 +4259,10 @@ async function commandRevise(
   sayReport(second);
   if (second.status === "awaiting_human") {
     await sayGateOpen(() =>
-      takeModelReading(modelReviewPorts(continuo, store), second.iterationId ?? successorId),
+      takeModelReading(
+        modelReviewPorts(continuo, store, ports.thread ?? null),
+        second.iterationId ?? successorId,
+      ),
     );
     return 0;
   }

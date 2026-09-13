@@ -880,6 +880,8 @@ test("D-0061 5.3: a lap naming a request reports its gate and reading once, aski
   const body = String(reports[0]?.["body"]);
   expect(body).toContain(`gate '${String(gateId)}'`);
   expect(body).toContain("reading says 'clear' with 0 finding(s)");
+  // rondo#218: the gate does not wait for the model reading, and the thread says one may follow.
+  expect(body).toContain("model reading of this work may still be on its way");
   // Rows only: the request's words are never read into a report.
   expect(body).not.toContain("teach rondo to count");
   expect(body).toMatch(/^[\x20-\x7E\n]*$/);

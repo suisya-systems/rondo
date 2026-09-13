@@ -31,6 +31,7 @@ import {
   modelReadingDrafter,
 } from "../store/records.js";
 import type { IterationStore } from "../store/sqlite.js";
+import { type RequestThread, reportToRequest } from "./conductor.js";
 import { gatherReviewMaterialFacts, runReviewer } from "./forge.js";
 import {
   modelReadingLines,
@@ -53,15 +54,22 @@ export interface ModelReviewPorts {
   readonly runReviewer: typeof runReviewer;
   readonly readCommands: typeof readLapCommands;
   readonly now: () => number;
+  /**
+   * Where the landed reading is reported (D-0061 5.3, rondo#218), or null.
+   * The gate report went first, so without this the thread never hears it.
+   */
+  readonly thread?: RequestThread | null;
 }
 
 /** The ports the command line uses: the real forge, the real transcript, continuo's gate. */
 export function modelReviewPorts(
   continuo: VerifiedContinuo,
   store: IterationStore,
+  thread: RequestThread | null = null,
 ): ModelReviewPorts {
   return {
     store,
+    thread,
     rationale: async (record) => {
       const db = record.plan["db"];
       if (record.gateId === null || typeof db !== "string") {
@@ -121,9 +129,14 @@ async function take(ports: ModelReviewPorts, iterationId: string): Promise<reado
       ];
     }
     const stored = latestReading(await store.readingsFor(record.id), isModelReadingDrafter);
-    return stored === null
-      ? ["model review  the reading was recorded and did not read back."]
-      : modelReadingLines(stored);
+    if (stored === null) {
+      return ["model review  the reading was recorded and did not read back."];
+    }
+    const reported =
+      ports.thread === undefined || ports.thread === null
+        ? null
+        : await reportToRequest(ports.thread, record.id, { kind: "modelReading" }, ports.now());
+    return reported === null ? modelReadingLines(stored) : [...modelReadingLines(stored), reported];
   };
   const unavailable = (reason: string) =>
     append({
