@@ -106,6 +106,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0066 | The scope record: one immutable row with a digest, approved by a row of its own and never by `human_decision`, spent once per act inside the act's own transaction, refused at one point that stops one line, and `D-0062` rule 3 and `D-0022` rule 9 restated for it | accepted |
 | D-0067 | The secretary's running half has no new owner: the advisory reads lines against each other and drafts an order, the surface attempts acts in that order, the store keeps the person's standing policies, and review extensions and merges still reach the person | accepted |
 | D-0068 | One voice and a patrol: the person asks rondo why a line waits and gets an answer joined from rows with bases, a timer in the resident host reads rows against each lap's own declared patience, and nothing it finds is handled silently | accepted |
+| D-0069 | A scope before the first lap: an agent type becomes a record rondo holds when an operator's scope is written from a plan, `start` spends a scope through the `lineage_start` arm, and an operator-written first admission waits on every open question in its request's thread | proposed |
 
 ---
 
@@ -14691,3 +14692,229 @@ The points are kept as put, and the answer follows them.
 - **A finding sent twice for one episode, or never sent for one**, which falsifies section 2 rule
   3.1's key.
 - Any measurement in "What was measured" failing to reproduce at rondo `1db9112`.
+
+---
+
+## D-0069 — A scope before the first lap: an agent type becomes a record rondo holds when an operator's scope is written from a plan, `start` spends a scope through the `lineage_start` arm, and an operator-written first admission waits on every open question in its request's thread
+
+**Status:** proposed (2026-09-13). Three points are put to the human gate; see "What is put to the
+human gate". Refs `D-0006`, `D-0022`, `D-0030`, `D-0047`, `D-0061`, `D-0062`, `D-0064`, `D-0065`,
+`D-0066`, rondo#201.
+
+**This entry decides and does not build.** Nothing in `src/` changes with it, and no earlier entry is
+edited by it. The annotations it would add on acceptance are listed in "Annotations this entry adds".
+
+`D-0064` has the person approve a scope once and the organisation do the rest (rule 3.1, P1).
+`D-0066` built that scope. Lap 8 walked it for the first time (`docs/operations/lap-8-dogfood.md`,
+rondo#207) and found that **the order the model assumes, request -> scope -> P1 -> admit under it,
+cannot be walked** (N-25): the first lap of a request is always admitted unscoped, its cost is on no
+budget, and the person's P1 comes after money is spent. This entry decides two things that close
+N-25, how an agent type becomes "a record rondo holds" without a paid lap and which verb spends a
+scope on a first admission, and it shows that neither opens a way around `D-0066` section 4. It keeps
+`D-0064`'s two lines (bases; an irreversible act is approved by a person) and **adds no third**.
+
+### What was measured, and how
+
+At rondo `787ea73` on **2026-09-13**, by reading, and from lap 8's record on
+`feat/rondo-lap-8-dogfood` (rondo#207, not merged at this commit). Line numbers drift; re-measure the
+claim, not the number.
+
+- **The scope writer refuses a digest no iteration row holds.** `recordScope`'s transaction runs
+  `SELECT 1 FROM iteration WHERE agent_type_digest = ?` for each `agent_types` entry and refuses with
+  *"which is no record rondo holds: D-0066 rule 1.2.3 ... (D-0062 rule 1.2, an iteration row with
+  that agent_type_digest)"* (`src/store/sqlite.ts:3112-3131`). Its comment reads `D-0062` rule 1.2
+  "as written" and says a proposal naming a digest does not count, "a draft citing a digest is not the
+  record the digest names". Lap 8 hit this refusal at +27.9 s (lap 8 section 3).
+- **No rondo command prints an agent type's digest before a lap.** Lap 8 computed it with
+  `agentTypeRecord(plan.agent_type_input)` from `dist/cadenza/facade.js` in a scratch script, and it
+  matched `iteration.agent_type_digest` on `lap8-001` byte for byte once that row existed (lap 8
+  section 3). The iteration row's digest is cadenza's classification answer
+  (`src/refrain/classification.ts:96`), computed in `src/refrain`/`src/access` through the facade,
+  never in `src/store`.
+- **The verdict already has a first-admission arm, and nothing reaches it.** `ScopeAct` has two arms,
+  `lineage_start` (with `proposalId` and `requestMessageId`) and `redo` (`src/access/scope.ts:63-80`).
+  `scopeVerdict` returns `inside` for a `lineage_start` after the budgets, with no readings test
+  (`scope.ts:287-290`), and `stopTheLine` already words a refused "first admission of a plan"
+  (`scope.ts:792`). The only constructions of `kind: "lineage_start"` are in
+  `test/access/scope.test.ts` and `test/access/scope-stop.test.ts`. `rondo start` takes `plan`,
+  `prompt`, `prompt-file`, `iteration-id` and `message-id` and no scope (`src/access/cli.ts:559`);
+  `retry` is the one verb with `--scope-decision-id` (`cli.ts:629`), and it builds only `kind: "redo"`
+  (`cli.ts:2612-2640`).
+- **The store re-tests a lineage start already.** `reserve()` calls `spendScope` when a scope spend
+  is passed (`sqlite.ts:1747-1748`), which re-tests the agent type against `spend.agentTypeDigest`
+  (`sqlite.ts:3855-3861`) and the open asks with `askStandsOver` over the lineage through
+  `supersedesIterationId` (`sqlite.ts:3824-3832`), which is empty for a first admission.
+- **A stop over one lineage does not hold back a new lineage.** `askStandsOver` returns true for an
+  ask with no `iteration_id` basis only when the act's line is empty, and for an ask with one only
+  when the line contains that iteration (`src/store/records.ts:1545-1549`). So an in-scope stop over
+  lineage L, which carries L's `iteration_id` (`D-0066` rule 4.4), stands over no `lineage_start`.
+- **What one unscoped first lap cost in lap 8**: `lap8-001`, $1.0399, admitted before the scope, with
+  0 `scope_consumption` rows after it (lap 8 section 7). The departure became the person's touch 1
+  (lap 8 section 2).
+
+### 1. How an agent type becomes a record rondo holds without a paid lap
+
+`D-0062` rule 1.2 says what is named is "an agent-type record rondo already holds, chosen by
+`agentTypeDigest`, and copied byte for byte", and gives its concrete form as the `agentTypeInput` of
+a plan on an iteration row. It says why: naming a stored record is **a selection among persisted
+material, never a hole the drafter fills** (`D-0022` rule 7), and "when agent types move into a
+catalog ... the catalog becomes the set this rule selects from". `D-0066` rule 1.2.3 carries it for
+the scope, and the writer's refusal gives the reason in its own words: **a digest nobody can read
+back bounds no tier and no grant**. So what the rule needs is a readable record, persisted before
+anyone selects it, whose author is not the drafter selecting it. A paid lap is one way to get that,
+not the requirement. The options:
+
+| | How | Gives up |
+|---|---|---|
+| **(a)** | **Recorded from a plan when an operator writes a scope.** `rondo scope` takes one or more plan files beside the payload. `src/access` computes each plan's `agentTypeRecord` through cadenza's facade, and the store writes one append-only `agent_type_record` row per digest (`agent_type_digest` primary key, `agent_type_input` as canonical JSON, the source `plan_digest`, `recorded_by`, `recorded_at_ms`) **in the scope row's own transaction**, before the `agent_types` test. The test then reads an iteration row **or** an `agent_type_record` row with that digest. Only an `operator` scope may record one; a `drafter` scope may list only digests already held | A record exists that never ran, so P1 is the first time anyone sees that agent type's tier and grants in rondo, and the scope's screen has to show them from the record (below). A row stays behind when the scope is declined. And the writer now trusts a digest `src/access` computed, as it already trusts the iteration row's |
+| **(b)** | **A registration verb**, `rondo agent-type --plan FILE`, writing the same row with no scope | The same as (a), plus a record that no P1 draft asked for: an agent-type catalog in all but name, which `D-0062`'s falsifier ("a catalog arriving with agent types that were never run") says is the catalog entry's to decide, and `D-0044` left undecided. One more verb between a request and its scope |
+| **(c)** | **A digest a proposal names counts as held** | `D-0062` rule 1.2's own reason: a split proposal is the drafter's draft, so a scope over a digest the drafter wrote is the drafter selecting what it composed, which is the hole `D-0022` rule 7 refuses. The writer's comment already rejects it. It also waits on the split proposal kind, which is not built (`D-0066` section 3, `PROPOSAL_KINDS`) |
+| **(d)** | **Unchanged**: one unscoped lap per agent type per store, after which scopes can list it | `D-0064`'s model on a new machine, a fresh store and every new agent type: that lap's cost is on no budget and the person's P1 follows it. It does not close N-25's other half, since nothing spends a scope on a first admission anyway (section 2) |
+
+**Recommended: (a).** It is the smallest change that keeps rule 1.2's reason intact. The record is
+persisted, readable and copied byte for byte from a plan an operator wrote (`D-0062` rule 1.4's
+author), it exists only because a scope a person will be asked to approve names it, and the drafter
+still never composes an agent type. What (a) must also carry, which is kept line 1 and not a new
+rule: **the scope's screen prints, for each listed digest, the tier and the granted keys read back
+from the held record**, whether that record is an iteration's plan or an `agent_type_record` row, so
+the person approving the list sees what it bounds and not only a hash. Printing the digest of a plan
+(the second half of N-25's "no command prints a digest") comes with it: `scope` prints the digest of
+every plan it recorded.
+
+### 2. A first admission that spends a scope
+
+| | How | Gives up |
+|---|---|---|
+| **(i)** | **`rondo start --scope-decision-id ID`** builds `kind: "lineage_start"` with `proposalId: null` and calls `admitUnderScope`, the one call site that computes a verdict (`D-0066` rule 4.1), exactly as `commandScopedRetry` does for `redo`. `--message-id` is required with it and refused missing before any verdict, because the verdict refuses an act that names no request (`scope.ts:180-185`) and a refusal with no request has no thread to stop in. Without `--scope-decision-id`, `start` is unchanged (`D-0062` rule 1.4) | One more flag on `start`. And an operator-written first admission under a scope is an act "decided without asking" whose plan no proposal row holds: `proposal_id` is null, so `D-0066` rule 3.3's join answers "which scope" but has no draft to show, only the iteration's own plan |
+| **(ii)** | **Wait for the split proposal kind** (`D-0063` rule 4) to be the only caller of `lineage_start` | Every first lap stays unscoped until the model drafter and the split kind are built, and a plan an operator writes is never scoped at all. Lap 8's walk, "one P1 covers the first lap", stays impossible |
+
+**Recommended: (i).** The arm, the verdict, the store's re-test and the stop's wording for it are
+already built and tested (measurement above). Nothing about the lap's end changes: the gate is still a
+person's press (`D-0064`'s first gate answer), so the scope covers the admission, the lap and cost
+budgets and the request's asks, which is what `D-0066` section 3.2 says an admission spends.
+
+### 3. What this relaxes, and why it is not a way around `D-0066` section 4
+
+**Relaxed or annotated, and nothing superseded:**
+
+1. **`D-0062` rule 1.2**: "an agent-type record rondo already holds" gains a second concrete form, an
+   `agent_type_record` row written from an operator's plan in the scope's transaction (section 1).
+   This is an annotation, not a supersession: the rule was written for a set that grows ("the catalog
+   becomes the set this rule selects from"), and its selection, byte-for-byte copy and refusal of a
+   digest nothing stores are unchanged. Its falsifier "a catalog arriving with agent types that were
+   never run ... must say whether an unrun agent type may be named" is answered: **yes, when an
+   operator recorded it from a plan for a scope a person approves**, and no otherwise.
+2. **`D-0066` rule 1.2.3**: read with that annotation. The writer's refusal of an unheld digest stays.
+3. **`D-0066` rule 3.3**: `proposal_id` is null for an in-scope `retry` **and for an operator-written
+   plan's first admission** under `start`.
+4. **`D-0066` rule 4.2's readings bullet**: "an admission that starts a lineage (a drafted split's
+   plan)" includes an operator-written plan admitted by `start`. No reading is required of either.
+5. **`D-0066` rule 4.2's asks bullet and rule 4.4**: a first admission **that names no proposal** is
+   held back by **every** unanswered `asks` message in its request's thread, whatever its bases. A
+   first admission from a split proposal keeps rule 4.4 as written.
+
+**The five checks against section 4, one per way round it:**
+
+- **The agent type.** Recording a record changes what P1 may *list*, never what an admission is
+  tested against. The verdict still tests the admitted plan's own classified digest against
+  `agent_types` (`scope.ts:229-243`), and `reserve()` re-tests it (`sqlite.ts:3855-3861`). A plan
+  whose agent type the person did not approve in a scope stays outside.
+- **The grants.** A `lineage_start` has no predecessor to compare with, as a drafted split's plan has
+  none; its bound is the agent type's, and cadenza's `needs_approval` is still outside
+  (`scope.ts:245-251`, `D-0064` rule 3.2). The person sees those grants at P1 (section 1).
+- **The budgets.** Each scoped `start` is an `admission` row: it counts a lap and its reserve, and is
+  refused at expiry, exactly as a redo (`D-0066` rule 3.4).
+- **The stop, and the one real bypass.** Without rule 5 above, a line stopped at `readings` (a spent
+  `review_rounds`, or an `unavailable` model reading) could be run again as a **new** lineage of the
+  same request by a scoped `start` of the same plan: the stop carries the old lineage's
+  `iteration_id`, `askStandsOver` does not hold a lineage start under it (measurement above), and a
+  new lineage has no readings and a round count of 0. That is a redo spelled as a first admission, and
+  it would skip `D-0065` rule 4's budget and `D-0066` rule 4.4's stop. **Whether an operator-written
+  plan continues a stopped line is not something rondo can decide**: nothing links it to a lineage,
+  and a small edit to the plan defeats any digest comparison. **`D-0064` rule 3.3 already answers an
+  undecidable match: it is outside.** Rule 5 is that reading made concrete, and it adds no invariant.
+  A split's plan keeps `D-0066`'s gate answer (b), because the split proposal row is what says which
+  plans are separate lines, and that is the one thing an operator's `start` does not have.
+- **The unscoped path.** `start` without `--scope-decision-id` still admits a lap under no scope, as
+  lap 8 did, and the verdict never sees it. **This entry does not widen that path**, and it is not a
+  way round section 4, which tests acts taken *under* a scope: an unscoped lap ends at a gate only a
+  person answers, and its cost is on its row and on no budget. Refusing an unscoped `start` for a
+  request an approved scope lists would be a new rule over the person's own act, so it is left as a
+  residual.
+
+### What is put to the human gate
+
+1. **How an agent type becomes a record rondo holds before a lap** (section 1).
+   - **(a) Recorded from an operator's plan in the scope's transaction** (recommended). *Loses:* a
+     held record that never ran, so the scope's screen must show its tier and grants; a row left
+     behind by a declined scope.
+   - **(b) A registration verb.** *Loses:* as (a), plus a record no P1 asked for, which is the
+     catalog `D-0062` and `D-0044` leave to their own entry, and one more step.
+   - **(c) A proposal's digest counts as held.** *Loses:* `D-0022` rule 7 (the drafter selecting what
+     it composed), and it waits on the unbuilt split kind.
+   - **(d) Unchanged.** *Loses:* `D-0064`'s P1-first order for every new agent type and store.
+2. **Which act spends a scope on a first admission** (section 2).
+   - **(i) `start --scope-decision-id`, through the existing `lineage_start` arm** (recommended).
+     *Loses:* an admission decided under a scope with no proposal row to show as its draft.
+   - **(ii) Only the future split proposal.** *Loses:* every first lap unscoped until the drafter and
+     split kind exist, and operator-written plans never scoped.
+3. **What holds back an operator-written first admission** (section 3, relaxed rule 5).
+   - **(A) Every unanswered `asks` message in the request's thread** (recommended), as the reading of
+     `D-0064` rule 3.3's "undecidable match is outside". *Loses:* a second, genuinely separate
+     operator-written plan for the same request waits on a stop about another lineage, until the
+     person replies or the work comes as a split.
+   - **(B) Only asks with no `iteration_id` basis**, as `askStandsOver` does today. *Loses:* the
+     bypass in section 3 stays open: a stopped line re-runs as a new lineage with a fresh round
+     budget, under the same scope and with no person asked.
+
+### What moving to this gives up
+
+- **"Held" no longer means "ran once in this store".** An agent type can be approved in a scope
+  before rondo has seen it run, and the person's view of it is its record, not a lap.
+- **Parallel operator-written lineages of one request are coupled** by the gate's third point (A).
+  Separate lines that must not wait on each other come as a split.
+
+### What this does not do
+
+- **It does not build** the table, the flag, the screen lines or the verb change.
+- **It does not add a catalog of agent types**: no listing, editing or retirement of
+  `agent_type_record` rows, and no record written outside a scope.
+- **It does not change what a drafted scope may list**, the split proposal kind, or `D-0022` rule 7.
+- **It does not address N-26 to N-31** (the stop's recommendation for `readings`, its escaped body, a
+  relayed approval, the dogfood plan's missing review criterion, the worker sandbox, and a reply that
+  says "stop"). N-29 matters beside this entry: until the dogfood plan names a review criterion, a
+  scoped first lap's redo is still refused at `readings`.
+- **It does not open O6.** The lap's end gate stays a person's press.
+- **It does not add an invariant beyond `D-0064`'s two lines.**
+
+### Residuals, with who decides
+
+| Residual | Why not here | Who decides |
+|---|---|---|
+| An unscoped `start` for a request an approved scope lists | It would restrict the person's own act, and the lap it admits still ends at the person's gate | a later entry, if unscoped laps under scoped requests are observed in the organisation's hands |
+| A catalog of agent types (listing, retiring, recording without a scope) | Section 1 (b)'s loss; `D-0044` and `D-0062` leave it to its own entry | the catalog entry |
+| A relayed P1 recorded as the person's own (lap 8 N-28) | A column on `scope_decision`, not the first admission | the entry that answers lap 8's N-28 candidate issue |
+
+### Annotations this entry adds (on acceptance)
+
+- **`D-0062` rule 1.2** gains a dated annotation: section 3 rule 1, and the answer to its catalog
+  falsifier.
+- **`D-0066` rules 1.2.3, 3.3, 4.2 and 4.4** gain dated annotations: section 3 rules 2 to 5, as the
+  gate answers them.
+- **`docs/operations/lap-8-dogfood.md` N-25** is answered by this entry once built.
+
+### What would falsify it
+
+- **An `agent_type_record` row whose digest is not cadenza's digest of its stored input**, found by
+  recomputing through the facade. Section 1's trust in `src/access`'s digest is then broken, and the
+  writer needs a recompute it cannot do under `D-0006`'s boundary.
+- **A scoped `start` admitted while an unanswered stop stands in its request's thread**, by any path.
+  Section 3 rule 5 is not holding.
+- **An operator-written plan re-running a stopped line through an unscoped `start`** often enough to
+  matter once scopes run. The unscoped-path residual is then the entry to write.
+- **Operators routinely writing separate plans for one request that should not wait on each other**,
+  so that the third gate point's (A) reads as an obstruction. Splits are then the path, or (B) with a
+  link from a plan to the line it continues.
+- **cadenza changing `agentTypeDigest`** so that it no longer covers the tier or the grants, which
+  `D-0066`'s own falsifier names; a recorded row then bounds less than P1 shows.
+- Any measurement in "What was measured" failing to reproduce at rondo `787ea73`.
