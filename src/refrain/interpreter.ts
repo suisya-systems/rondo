@@ -50,6 +50,7 @@ import type {
   IterationRecord,
   IterationStatus,
   LapReadingDraft,
+  ScopeRefusal,
 } from "../store/records.js";
 import { isTerminal, readingCoverage } from "../store/records.js";
 import { allocate } from "./allocator.js";
@@ -71,6 +72,7 @@ import type {
   EffectOutcome,
   GateObservation,
   LapPerformance,
+  ScopeSpend,
 } from "./ports.js";
 
 /**
@@ -103,6 +105,12 @@ export interface ConductorReport {
   readonly iterationId: string | null;
   readonly status: IterationStatus | null;
   readonly lines: readonly string[];
+  /**
+   * The one exception to "branch on `status`": the store's scope re-test
+   * refused, and which test did, carried as data so `admitUnderScope` can write
+   * D-0066 rule 4.4's stop without reading `lines`. Absent on every other report.
+   */
+  readonly scopeRefusal?: ScopeRefusal;
 }
 
 /**
@@ -170,6 +178,7 @@ export async function admit(
   supersedesIterationId: string | null = null,
   spend: DecisionSpend | null = null,
   requestMessageId: string | null = null,
+  scopeSpend: ScopeSpend | null = null,
 ): Promise<ConductorReport> {
   const lines: string[] = [];
   const admission = nextStep(null, policy);
@@ -246,6 +255,8 @@ export async function admit(
     // is the store's, against the digest the composition root composed from
     // this very plan; the loop's part is that the two writes are one.
     spend,
+    // Carried, never read, for `spend`'s reason (D-0066 rule 3.1).
+    scopeSpend,
     nowMs: ports.now(),
   });
   switch (reservation.kind) {
@@ -295,6 +306,22 @@ export async function admit(
           "still stands wherever it stood.",
       );
       return { iterationId: null, status: null, lines: Object.freeze(lines) };
+    case "scopeRefused":
+      lines.push(
+        `Refused: the approval this admission would have spent was not spendable: ${reservation.reason}.`,
+        "Nothing was written and nothing was spent: no iteration was reserved, and the approval " +
+          "still stands wherever it stood.",
+      );
+      return {
+        iterationId: null,
+        status: null,
+        lines: Object.freeze(lines),
+        scopeRefusal: Object.freeze({
+          verdict: reservation.verdict,
+          test: reservation.test,
+          reason: reservation.reason,
+        }),
+      };
     case "requestRefused":
       lines.push(`Refused: ${reservation.reason}`);
       return { iterationId: null, status: null, lines: Object.freeze(lines) };

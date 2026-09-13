@@ -1208,3 +1208,110 @@ export function readPayload(document: JsonRecord): PayloadReading {
     throw error;
   }
 }
+
+/**
+ * One plan a split proposes, as a diff against a template (D-0063 rule 4).
+ *
+ * **Four fields and no identifier.** Rule 4.1 names the template by its
+ * `plan_digest`; rule 4.2 lets only the request text and the agent type differ
+ * from it, so those are the only two values carried, and every other field is
+ * the template's byte for byte; rule 4.5 derives run id, branch and workspace at
+ * admission, so none is here and a key that would carry one is refused.
+ * `bases` reads {@link Basis}'s closed union, D-0061 rule 2.6's `message` form
+ * included (rule 4.3).
+ *
+ * ponytail: residual R3 -- no drafter writes a split and no path admits one yet.
+ */
+export interface SplitPlan {
+  readonly template_plan_digest: string;
+  readonly prompt: string;
+  readonly agent_type_digest: string;
+  readonly bases: readonly Basis[];
+}
+
+/**
+ * A split's payload (D-0063 rule 4, D-0066 rule 5.1): proposed plans, or --
+ * with no persisted plan to use as a template -- the holes (rule 4.4, D-0022
+ * rule 7's third form). Never approved per split: the scope that lists the
+ * agent type is the approval.
+ */
+export interface SplitPayload {
+  readonly plans: readonly SplitPlan[];
+  readonly holes: readonly string[];
+}
+
+export type SplitPayloadReading =
+  | { readonly kind: "split"; readonly payload: SplitPayload }
+  | { readonly kind: "unreadable"; readonly reason: string };
+
+const SPLIT_KEYS: readonly string[] = ["plans", "holes"];
+const SPLIT_PLAN_KEYS: readonly string[] = [
+  "template_plan_digest",
+  "prompt",
+  "agent_type_digest",
+  "bases",
+];
+const SPLIT_DIGEST = /^sha256:[0-9a-f]{64}$/;
+
+/**
+ * A split payload, read back. Total; never throws.
+ *
+ * **A reader of its own rather than a third arm of {@link readPayload}.** An arm
+ * there widens {@link PayloadReading}, and every screen that switches on it
+ * would need a rendering for a kind nothing writes today (no drafter, no verb:
+ * D-0066's residual R3). The row's `kind` still says `split`, and
+ * `readPayload` over a split reads `unreadable` -- visibly, never as one of the
+ * other two.
+ */
+export function readSplitPayload(document: JsonRecord): SplitPayloadReading {
+  try {
+    const row = object(document, "the split payload");
+    refuseUnknownKeys(row, SPLIT_KEYS, "the split payload");
+    const plans = readList(row.plans, "plans").map((one, index) => {
+      const what = `split plan ${String(index)}`;
+      const plan = object(one, what);
+      // D-0063 rule 4.5: a key beyond the four is a proposed identifier or a
+      // field the template owns, and neither is the drafter's to fill.
+      refuseUnknownKeys(plan, SPLIT_PLAN_KEYS, what);
+      const template = text(plan, "template_plan_digest", what);
+      const agentType = text(plan, "agent_type_digest", what);
+      for (const digest of [template, agentType]) {
+        if (!SPLIT_DIGEST.test(digest)) {
+          throw new PayloadDefect(`${what} names '${digest}', which is not a sha256 digest`);
+        }
+      }
+      return {
+        template_plan_digest: template,
+        prompt: text(plan, "prompt", what),
+        agent_type_digest: agentType,
+        bases: readList(plan.bases, `${what}'s bases`).map((basis, b) =>
+          readBasis(basis, `${what} basis ${String(b)}`),
+        ),
+      };
+    });
+    const holes = readList(row.holes, "holes").map((hole, index) => {
+      if (typeof hole !== "string" || hole === "") {
+        throw new PayloadDefect(`hole ${String(index)} is not a non-empty string`);
+      }
+      return hole;
+    });
+    if (plans.length === 0 && holes.length === 0) {
+      throw new PayloadDefect(
+        "the split proposes no plan and lists no hole, so it says nothing (D-0063 rule 4.4)",
+      );
+    }
+    return { kind: "split", payload: { plans, holes } };
+  } catch (error) {
+    if (error instanceof PayloadDefect) {
+      return { kind: "unreadable", reason: error.message };
+    }
+    throw error;
+  }
+}
+
+function refuseUnknownKeys(at: Record<string, unknown>, known: readonly string[], what: string) {
+  const extra = Object.keys(at).find((key) => !known.includes(key));
+  if (extra !== undefined) {
+    throw new PayloadDefect(`${what} carries '${extra}', which is not one of ${known.join(", ")}`);
+  }
+}

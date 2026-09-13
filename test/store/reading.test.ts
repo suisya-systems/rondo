@@ -51,6 +51,7 @@ const reserveOne = async (store: ReturnType<typeof freshStore>, id: string, nowM
     request: "do the thing",
     plan: somePlan(),
     spend: null,
+    scopeSpend: null,
     nowMs,
     supersedesIterationId: null,
     requestMessageId: null,

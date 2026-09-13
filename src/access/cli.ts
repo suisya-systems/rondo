@@ -43,7 +43,7 @@ import type { ContinuoResult, ObservedSession } from "../continuo/protocol.js";
 import { probeUnixSocket, workerSandboxRefusal } from "../continuo/sandbox.js";
 import { lapTranscriptDirectory } from "../continuo/transcript.js";
 import { allocate } from "../refrain/allocator.js";
-import { isLanguageTag, type RunPlan, readRunPlan } from "../refrain/plan.js";
+import { isLanguageTag, type RunPlan, readPlan, readRunPlan } from "../refrain/plan.js";
 import {
   CONSERVATIVE_HOST_POLICY,
   type HostPolicy,
@@ -61,6 +61,7 @@ import {
   latestReading,
   type OperatorVerificationClaim,
   readingCoverage,
+  scopePayloadWithDefaults,
 } from "../store/records.js";
 import {
   type IterationStore,
@@ -70,6 +71,7 @@ import {
 } from "../store/sqlite.js";
 import {
   approvedRetry,
+  COMMAND_LINE_SURFACE,
   composeBetweenLaps,
   type ExplainOutcome,
   type ExplainPorts,
@@ -100,6 +102,7 @@ import { type InboxOutcome, showInbox, type TranscriptLocation } from "./inbox.j
 import { modelReadingLines } from "./model-review.js";
 import { modelReviewPorts, takeModelReading } from "./model-reviewer.js";
 import { evidenceOf, LIST_LIMIT, READING_REMOTE, uncommittedPaths } from "./review.js";
+import { admitUnderScope } from "./scope.js";
 import { serveOperatorPage } from "./web.js";
 import { type Chrome, EN } from "./wording.js";
 
@@ -199,6 +202,26 @@ export const USAGE = `rondo - the operator surface for delegated work
                           line of the option you are approving, copied from the
                           screen, and it is required on approved and refused on
                           declined. An explanation cannot be answered at all
+  rondo scope --payload-file FILE --actor-id ID [--supersedes-scope-id ID]
+                          write one scope: the requests, workspaces and agent
+                          types a run of decisions may be taken inside without
+                          asking, and its budgets. FILE is an absolute path to
+                          the JSON payload; review_rounds, severity_threshold,
+                          outward_acts and irreversible_additions take their
+                          defaults when absent. Records the row before it shows
+                          it, digest included. A change to a scope is a
+                          successor naming the row it replaces, and the screen
+                          says what the predecessor's approval has spent
+  rondo decide-scope --scope-id ID --scope-digest DIGEST --actor-id ID
+                     --outcome approved|declined
+                          answer a scope. --scope-digest is the digest line
+                          copied from the screen; one scope takes one answer
+  rondo retry --iteration-id ID --successor-id ID --scope-decision-id ID
+                          an in-scope retry: admit the stored plan of
+                          --iteration-id again as --successor-id, spending the
+                          approved scope instead of asking. Refused, with the
+                          test that refused it, unless every test of the scope
+                          passes; a refusal takes no act and spends nothing
   rondo retry --proposal-id ID
                           spend the approval against one proposal: admit the
                           retry it authorises, under the identity the proposal
@@ -414,6 +437,8 @@ export interface ParsedCommand {
     | "inbox"
     | "propose"
     | "decide"
+    | "scope"
+    | "decide-scope"
     | "retry"
     | "show"
     | "web"
@@ -438,6 +463,12 @@ export interface ParsedCommand {
   readonly proposalId: string | null;
   readonly contractDigest: string | null;
   readonly outcome: string | null;
+  /** D-0066: the scope payload file, and the scope rows the scope verbs name. */
+  readonly payloadFile: string | null;
+  readonly supersedesScopeId: string | null;
+  readonly scopeId: string | null;
+  readonly scopeDigest: string | null;
+  readonly scopeDecisionId: string | null;
   readonly port: number | null;
   readonly dryRun: boolean;
   readonly allowRemoteMismatch: boolean;
@@ -469,6 +500,11 @@ const FLAGS = {
   "proposal-id": { type: "string" },
   "contract-digest": { type: "string" },
   outcome: { type: "string" },
+  "payload-file": { type: "string" },
+  "supersedes-scope-id": { type: "string" },
+  "scope-id": { type: "string" },
+  "scope-digest": { type: "string" },
+  "scope-decision-id": { type: "string" },
   port: { type: "string" },
   "dry-run": { type: "boolean" },
   "allow-remote-mismatch": { type: "boolean" },
@@ -489,6 +525,8 @@ const COMMANDS = [
   "inbox",
   "propose",
   "decide",
+  "scope",
+  "decide-scope",
   "retry",
   "show",
   "web",
@@ -575,7 +613,20 @@ export const FLAGS_BY_COMMAND: Readonly<Record<string, readonly string[]>> = {
   // approval itself. A flag for any of them would be a second place the same
   // fact lives, and the first time the two disagreed rondo would admit
   // something nobody approved.
-  retry: ["proposal-id"],
+  // **Two routes, and the parser keeps them apart.** `--proposal-id` spends one
+  // approved contract (D-0047's route S, unchanged). `--iteration-id`,
+  // `--successor-id` and `--scope-decision-id` are D-0066's in-scope retry
+  // (D-0064 O4), which spends a scope instead: the predecessor whose stored plan
+  // runs again, the identity it runs as (a person's to choose, D-0023), and the
+  // approval that covers it. Mixing the two is refused in `parseCommand`.
+  retry: ["proposal-id", "iteration-id", "successor-id", "scope-decision-id"],
+  // **The scope verbs, both pre-continuo like `decide`** (D-0066 sections 1
+  // and 2). `scope` writes a row an operator authored, so `--actor-id` is its
+  // author and is checked against the allowlist; `decide-scope` copies the
+  // digest off the screen for `decide`'s reason -- the answer names the row
+  // that was shown, not a position in a list.
+  scope: ["payload-file", "actor-id", "supersedes-scope-id"],
+  "decide-scope": ["scope-id", "scope-digest", "outcome", "actor-id"],
   // One flag, and no `--actor-id`: reading a proposal back is not answering it
   // and not looking at the inbox, so it moves no last-look mark and needs no
   // identity. What it does write is the presentation (D-0036 rule 1), which is
@@ -658,6 +709,25 @@ export function parseCommand(argv: readonly string[]): ParseOutcome {
     };
   }
 
+  // **Two retries, and rondo takes neither when both are named.** A proposal's
+  // approval and a scope's approval are two different authorities for one
+  // admission (D-0066 rule 3.1), and a command line carrying both has not said
+  // which of them is being spent.
+  if (
+    command === "retry" &&
+    values["proposal-id"] !== undefined &&
+    (values["scope-decision-id"] !== undefined ||
+      values["iteration-id"] !== undefined ||
+      values["successor-id"] !== undefined)
+  ) {
+    return {
+      kind: "refused",
+      reason:
+        "retry --proposal-id spends a proposal's approval, and --iteration-id, --successor-id " +
+        "and --scope-decision-id spend a scope's, so they cannot be given together. Name one.",
+    };
+  }
+
   const text = (name: string): string | null => {
     const value = values[name];
     return typeof value === "string" ? value : null;
@@ -699,6 +769,11 @@ export function parseCommand(argv: readonly string[]): ParseOutcome {
       proposalId: text("proposal-id"),
       contractDigest: text("contract-digest"),
       outcome: text("outcome"),
+      payloadFile: text("payload-file"),
+      supersedesScopeId: text("supersedes-scope-id"),
+      scopeId: text("scope-id"),
+      scopeDigest: text("scope-digest"),
+      scopeDecisionId: text("scope-decision-id"),
       port,
       dryRun: values["dry-run"] === true,
       allowRemoteMismatch: values["allow-remote-mismatch"] === true,
@@ -729,6 +804,11 @@ function emptyCommand(command: ParsedCommand["command"]): ParsedCommand {
     proposalId: null,
     contractDigest: null,
     outcome: null,
+    payloadFile: null,
+    supersedesScopeId: null,
+    scopeId: null,
+    scopeDigest: null,
+    scopeDecisionId: null,
     port: null,
     dryRun: false,
     allowRemoteMismatch: false,
@@ -1493,6 +1573,13 @@ export async function main(
   if (parsed.command === "decide") {
     return await commandDecide(parsed, environment, opened.path);
   }
+  // The scope verbs write rondo's own rows and drive no continuo (D-0066).
+  if (parsed.command === "scope") {
+    return await commandScope(parsed, environment, opened.path);
+  }
+  if (parsed.command === "decide-scope") {
+    return await commandDecideScope(parsed, environment, opened.path);
+  }
 
   // **`show` is dispatched here for `explain`'s reason.** It reads one of
   // rondo's own rows and drives no continuo verb, and the proposal most worth
@@ -1529,6 +1616,16 @@ export async function main(
     case "answer":
       return await commandAnswer(parsed, environment, store, ports, continuo);
     case "retry":
+      if (parsed.proposalId === null) {
+        return await commandScopedRetry(
+          parsed,
+          store,
+          opened.path,
+          ports,
+          unpromptedPorts(store, opened.path),
+          continuo,
+        );
+      }
       return await commandRetry(
         parsed,
         store,
@@ -2272,6 +2369,302 @@ async function commandRetry(
   if (report.status === "awaiting_human") {
     await sayGateOpen(() =>
       takeModelReading(modelReviewPorts(continuo, store), report.iterationId ?? retry.successorId),
+    );
+    return 0;
+  }
+  if (report.iterationId === null) {
+    return 2;
+  }
+  return report.status === "closed" ? 0 : 1;
+}
+
+/**
+ * Write one scope, show it, and count that it was shown (D-0066 section 1).
+ *
+ * **Write, present, count**, `propose`'s order (D-0036 rule 1): the screen a
+ * person approves from is composed from the stored row, digest included, so
+ * what `decide-scope` names is what the store holds. The operator authors the
+ * row, so its `author_kind` is `operator` and its author the allowlisted actor
+ * (rule 1.5); a drafter row needs bases, and no verb writes one.
+ *
+ * **Defaults are filled before the digest** (`scopePayloadWithDefaults`), so
+ * the approved bytes and the tested bytes are one document.
+ */
+async function commandScope(
+  parsed: ParsedCommand,
+  environment: Readonly<Record<string, string | undefined>>,
+  storePath: string,
+): Promise<number> {
+  if (parsed.payloadFile === null || !isAbsolute(parsed.payloadFile)) {
+    return refuse(
+      "scope needs --payload-file FILE, an absolute path to the scope's JSON payload. A relative " +
+        "path would name a different file from a different directory.",
+    );
+  }
+  const actor = approvedActor(parsed.actorId, environment);
+  if ("refusal" in actor) {
+    return refuse(actor.refusal);
+  }
+  let document: unknown;
+  try {
+    document = JSON.parse(readFileSync(parsed.payloadFile, "utf8"));
+  } catch (error) {
+    return refuse(
+      `The scope payload could not be read as JSON: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+  if (document === null || typeof document !== "object" || Array.isArray(document)) {
+    return refuse("The scope payload file must hold a JSON object.");
+  }
+  const record = openAdvisoryRecord(storePath);
+  const atMs = Date.now();
+  const scopeId = `scope-${String(atMs)}`;
+  const written = await record.recordScope({
+    scopeId,
+    payload: scopePayloadWithDefaults(document as JsonRecord),
+    supersedesScopeId: parsed.supersedesScopeId,
+    authorKind: "operator",
+    authorId: actor.actorId,
+    bases: [],
+    createdAtMs: atMs,
+  });
+  if (written.kind !== "recorded") {
+    return refuse(written.reason);
+  }
+  const stored = await record.readScope(scopeId);
+  if (stored.kind !== "read") {
+    return refuse(
+      `scope '${scopeId}' was recorded and will not read back: ` +
+        (stored.kind === "absent" ? "it is not there" : stored.reason),
+    );
+  }
+  const scope = stored.scope;
+  const payload = scope.payload;
+  const budgets = payload.budgets;
+  say(`recorded as scope '${scope.scopeId}'`);
+  say(`digest: ${scope.scopeDigest}`);
+  say(`requests: ${payload.requests.join(", ")}`);
+  for (const workspace of payload.workspaces) {
+    say(`workspace: ${workspace.repository} at ${workspace.workspace_root}`);
+  }
+  say(`agent types: ${payload.agent_types.join(", ")}`);
+  say(
+    `budgets: ${String(budgets.laps)} laps, ${String(budgets.review_rounds)} review rounds, ` +
+      `${String(budgets.cost_usd)} USD with ${String(budgets.cost_reserve_usd)} USD reserved per ` +
+      `unread lap, expires at ${String(budgets.expires_at_ms)} ms`,
+  );
+  say(`severity threshold: ${payload.severity_threshold}`);
+  say(
+    `outward acts: ${payload.outward_acts.length === 0 ? "none" : payload.outward_acts.join(", ")}`,
+  );
+  say(
+    "irreversible additions: " +
+      (payload.irreversible_additions.length === 0
+        ? "none"
+        : payload.irreversible_additions.join(", ")),
+  );
+  if (scope.supersedesScopeId !== null) {
+    say(`supersedes scope '${scope.supersedesScopeId}'`);
+    // Rule 1.4: approving this successor retires the predecessor's approval, so
+    // what that approval has already spent is part of what is being decided.
+    const prior = await record.scopeDecisionOf(scope.supersedesScopeId);
+    if (prior.kind === "read" && prior.decision.outcome === "approved") {
+      const spent = await record.scopeSpent(prior.decision.scopeDecisionId);
+      say(
+        `the predecessor's approval '${prior.decision.scopeDecisionId}' has spent ` +
+          `${String(spent.admissions)} laps and ${String(spent.readCostUsd)} USD read, with ` +
+          `${String(spent.unreadLaps)} unread laps holding their reserve`,
+      );
+    } else {
+      say(
+        prior.kind === "unreadable"
+          ? `the predecessor's decision will not read: ${prior.reason}`
+          : "the predecessor has no approval, so it has spent nothing",
+      );
+    }
+  }
+  // D-0066 gate answer 1: what the cost budget does not see is said on the screen.
+  say(
+    "The cost budget counts the laps' own cost only: the reviewer's cost is not counted, and a " +
+      "lap whose cost is not read yet holds the reserve, which is a guess.",
+  );
+  const counted = await record.recordAttention({
+    atMs,
+    subjectKind: "scope",
+    subjectId: scope.scopeId,
+    disposition: "presented",
+    ruleName: null,
+  });
+  if (counted.kind !== "recorded") {
+    say(`the scope above was shown and its presentation was not counted: ${counted.reason}`);
+    return 1;
+  }
+  say(
+    `Next: rondo decide-scope --scope-id ${scope.scopeId} --scope-digest ${scope.scopeDigest} ` +
+      "--actor-id ID --outcome approved",
+  );
+  return 0;
+}
+
+/**
+ * Answer one scope (D-0066 section 2), `decide`'s shape: the approver on the
+ * allowlist, the surface as `recorded_by`, and the digest copied off the
+ * screen on both outcomes -- the writer refuses one that is not the row's
+ * (rule 2.2), and a decline names the row it declined as exactly as an
+ * approval does.
+ */
+async function commandDecideScope(
+  parsed: ParsedCommand,
+  environment: Readonly<Record<string, string | undefined>>,
+  storePath: string,
+): Promise<number> {
+  if (parsed.scopeId === null || parsed.scopeDigest === null) {
+    return refuse(
+      "decide-scope needs --scope-id ID and --scope-digest DIGEST, the digest line copied from " +
+        "the screen: what is recorded is the scope you were shown.",
+    );
+  }
+  if (parsed.outcome !== "approved" && parsed.outcome !== "declined") {
+    return refuse(
+      "decide-scope needs --outcome approved or --outcome declined. Declining is written down " +
+        "rather than left as silence.",
+    );
+  }
+  const actor = approvedActor(parsed.actorId, environment);
+  if ("refusal" in actor) {
+    return refuse(actor.refusal);
+  }
+  const decidedAtMs = Date.now();
+  const scopeDecisionId = `scope-decision-${parsed.scopeId}-${String(decidedAtMs)}`;
+  const outcome = await openAdvisoryRecord(storePath).recordScopeDecision({
+    scopeDecisionId,
+    scopeId: parsed.scopeId,
+    scopeDigest: parsed.scopeDigest,
+    outcome: parsed.outcome,
+    actorId: actor.actorId,
+    recordedBy: COMMAND_LINE_SURFACE,
+    decidedAtMs,
+  });
+  if (outcome.kind !== "recorded") {
+    return refuse(outcome.reason);
+  }
+  say(`recorded as scope decision '${scopeDecisionId}'`);
+  if (parsed.outcome === "approved") {
+    say(
+      "Nothing has been spent. An act taken under this scope is tested against it at the moment " +
+        "it is taken, and one that is not inside it is refused and spends nothing.",
+    );
+  }
+  return 0;
+}
+
+/**
+ * An in-scope retry (D-0066 rule 3.2, D-0064 O4): the predecessor's stored plan
+ * admitted again under the successor's identity, **through the one call site
+ * that computes a verdict** (`admitUnderScope`, rule 4.1). Anything but
+ * `inside` is printed with the test that refused it and takes no act.
+ *
+ * **The retry inherits the predecessor row's `requestMessageId`** (D-0061 rule
+ * 4): it redoes that request's work, so it is tested against the scope's
+ * `requests` and the thread's open asks as that request, never as one named on
+ * the command line.
+ *
+ * **A refusal says what keeps the line stopped** (rule 4.4): the asking message
+ * written into the request's thread, or the one already holding it. A retry
+ * whose predecessor names no request has no thread, and that refusal is the one
+ * left with no durable stop; a stop that could not be written exits 1.
+ */
+export async function commandScopedRetry(
+  parsed: ParsedCommand,
+  store: IterationStore,
+  storePath: string,
+  ports: ReturnType<typeof conductorPorts>,
+  advisory: UnpromptedPorts,
+  continuo: VerifiedContinuo,
+): Promise<number> {
+  const { iterationId: predecessorId, successorId, scopeDecisionId } = parsed;
+  if (predecessorId === null || successorId === null || scopeDecisionId === null) {
+    return refuse(
+      "retry needs --proposal-id ID, or all three of --iteration-id ID (the iteration to redo), " +
+        "--successor-id ID (the identity it runs as) and --scope-decision-id ID (the approved " +
+        "scope it spends).",
+    );
+  }
+  const predecessor = await store.read(predecessorId);
+  if (predecessor.kind !== "read") {
+    return refuse(
+      predecessor.kind === "absent"
+        ? `There is no iteration '${predecessorId}' in this store, so there is no plan to redo.`
+        : `Iteration '${predecessorId}' will not decode: ${predecessor.reason}`,
+    );
+  }
+  const decoded = readPlan(predecessor.record.plan);
+  if (decoded.kind !== "planned") {
+    return refuse(`The plan iteration '${predecessorId}' ran will not decode: ${decoded.reason}`);
+  }
+  const outcome = await admitUnderScope(
+    {
+      store,
+      record: openAdvisoryRecord(storePath),
+      nowMs: Date.now,
+      admit: (plan, id, supersedes, requestMessageId, scopeSpend) =>
+        admit(
+          ports,
+          advisory,
+          plan,
+          START_POLICY,
+          id,
+          supersedes,
+          null,
+          requestMessageId,
+          scopeSpend,
+        ),
+    },
+    scopeDecisionId,
+    {
+      kind: "redo",
+      iterationId: successorId,
+      plan: decoded.plan,
+      predecessorId,
+      requestMessageId: predecessor.record.requestMessageId,
+    },
+  );
+  if (outcome.kind === "refused") {
+    consoleSeams.writeError(
+      `${asciiEscape(
+        `Refused: the retry is ${outcome.verdict} the scope at the ${outcome.test} test, so ` +
+          `nothing was admitted and nothing was spent: ${outcome.reason}`,
+      )}\n`,
+    );
+    const stop = outcome.stop;
+    switch (stop.kind) {
+      case "written":
+        return refuse(
+          `The line is stopped by message '${stop.messageId}', which asks in the request's ` +
+            "thread; a reply to it is what lets the line carry on.",
+        );
+      case "held":
+        return refuse(
+          `No new message was written: message '${stop.messageId}' ` +
+            "already holds this line, and a reply to it is what lets the line carry on.",
+        );
+      case "noThread":
+        return refuse(
+          "The iteration names no request, so there is no thread to write the stop into: this " +
+            "refusal is printed only, and nothing durable keeps the line stopped.",
+        );
+      case "failed":
+        refuse(
+          `The message '${stop.messageId}' that keeps this line stopped was NOT recorded: ${stop.reason}`,
+        );
+        return 1;
+    }
+  }
+  const report = outcome.report;
+  sayReport(report);
+  if (report.status === "awaiting_human") {
+    await sayGateOpen(() =>
+      takeModelReading(modelReviewPorts(continuo, store), report.iterationId ?? successorId),
     );
     return 0;
   }

@@ -72,6 +72,7 @@ const reserveOne = async (
     supersedesIterationId,
     requestMessageId: null,
     spend: null,
+    scopeSpend: null,
     nowMs,
   });
 
@@ -283,6 +284,7 @@ test("a terminal spent row holds its triple for ever", async () => {
     supersedesIterationId: null,
     requestMessageId: null,
     spend: null,
+    scopeSpend: null,
     nowMs: 3_000,
   });
   expect(collided.kind).toBe("defect");
@@ -311,6 +313,7 @@ test("the observed-red control: a terminal unspent row releases its triple", asy
     supersedesIterationId: null,
     requestMessageId: null,
     spend: null,
+    scopeSpend: null,
     nowMs: 3_000,
   });
   expect(inheriting.kind).toBe("reserved");
@@ -350,6 +353,7 @@ test("two live iterations may not hold one name even before either is spent", as
     supersedesIterationId: null,
     requestMessageId: null,
     spend: null,
+    scopeSpend: null,
     nowMs: 2_000,
   });
   expect(collided.kind).toBe("defect");
@@ -607,6 +611,7 @@ test("a legacy row that spent its identifiers keeps holding them after the migra
     supersedesIterationId: null,
     requestMessageId: null,
     spend: null,
+    scopeSpend: null,
     nowMs: 2_000,
   });
   expect(reissued.kind).toBe("defect");
@@ -665,6 +670,7 @@ test("a legacy row's branch and workspace are back-filled from its plan and then
     supersedesIterationId: null,
     requestMessageId: null,
     spend: null,
+    scopeSpend: null,
     nowMs: 2_000,
   });
   expect(collided.kind).toBe("defect");

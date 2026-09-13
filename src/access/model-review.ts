@@ -13,8 +13,8 @@
  * **Material, never a decision.** D-0065's gate answer (a) keeps D-0022 rule 13,
  * D-0029 rule 6 and D-0019 rule 7's first reason as written: wherever a person
  * answers, a model reading is material. Nothing here refuses `publish`; the
- * round decision is not wired into any loop, because the scope that would apply
- * it (D-0066) is not recorded yet.
+ * round decision is read only by D-0066's scope verdict (`./scope.ts`), for a
+ * redo taken under a scope, and never by a gate a person answers.
  */
 
 import { type ReviewerRow, reviewerFamilyCheck } from "../continuo/roles.js";
@@ -70,18 +70,23 @@ export interface ReviewScope {
  * The review policy a scope sets, or D-0066's defaults (3, `major`) where there
  * is no scope.
  *
- * **The insertion point, not the scope record.** D-0066 decides the record and
- * builds nothing, so this takes a scope-shaped value and nothing here constructs
- * one. A budget that is not a positive safe integer (the first reading is round
- * 1, so 0 rounds cannot be counted) or a threshold outside D-0065 2.2's four
- * falls back to the default rather than inventing a meaning for it.
+ * **The insertion point, not the scope record.** The scope record is read in
+ * `src/store/records.ts` and mapped to this view by `reviewScopeOf` in
+ * `./scope.ts`, which is the one caller that passes a scope. A budget of 0 is a
+ * real budget and is kept: D-0066 rule 1.2.4 lets a scope allow no redo after a
+ * finding at or above the threshold, and since `roundsTaken` counts the latest
+ * reading (round 1 at least), `reviewRoundDecision` stops on the first such
+ * finding. Only a budget that is not a safe integer >= 0, or a threshold outside
+ * D-0065 2.2's four, falls back to the default rather than inventing a meaning
+ * for it -- and the scope reader refuses both, so a stored scope never reaches
+ * the fallback.
  */
 export function reviewPolicyOf(scope: ReviewScope | null): ReviewPolicy {
   const budget = scope?.budgets.reviewRounds;
   const threshold = scope?.severityThreshold;
   return Object.freeze({
     roundBudget:
-      budget !== undefined && Number.isSafeInteger(budget) && budget > 0
+      budget !== undefined && Number.isSafeInteger(budget) && budget >= 0
         ? budget
         : DEFAULT_REVIEW_ROUND_BUDGET,
     threshold:
@@ -590,8 +595,8 @@ export type ReviewRoundDecision =
 
 /**
  * The round decision over the latest model reading, where `roundsTaken` counts
- * that reading (so the first reading is round 1). Not wired: nothing applies a
- * scope yet (D-0066).
+ * that reading (so the first reading is round 1). Its one caller is the scope
+ * verdict's redo test (D-0066 rule 4.2, `./scope.ts`).
  *
  * A reading whose severities did not decode is a stop, not an exit: its
  * findings cannot be shown to be below the threshold, and nothing here may

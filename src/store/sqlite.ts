@@ -53,6 +53,7 @@ import {
   type AdmissionRefusal,
   type AttentionCount,
   type AttentionInterval,
+  askStandsOver,
   type CompositionDraft,
   FINDING_SEVERITIES,
   type FindingBasis,
@@ -65,22 +66,33 @@ import {
   isApprovableKind,
   isModelReadingDrafter,
   type JsonRecord,
+  type JsonValue,
   type LapReading,
   type LapReadingDraft,
   MODEL_READING_DRAFTER_PREFIX,
   type Occupancy,
+  type OpenAsk,
   type OpenProposal,
   type OperatorAttention,
   type OperatorVerificationClaim,
   type ProposalDraft,
   type ReadingEvidence,
   type RecordChange,
+  readScopePayload,
+  type ScopeDecisionDraft,
+  type ScopeDraft,
+  type ScopeRefusal,
+  type ScopeSpent,
+  type ScopeTest,
   type StoredDecision,
   type StoredProposal,
+  type StoredScope,
+  type StoredScopeDecision,
   SUSPENDED_STATUSES,
   TERMINAL_STATUSES,
   type ThreadMessageDraft,
   type UnconsumedDecision,
+  WRITABLE_SCOPE_ACT_KINDS,
 } from "./records.js";
 
 /**
@@ -142,7 +154,45 @@ export interface ReserveInput {
    * reason -- a caller that can leave it off is a caller that forgets.
    */
   readonly spend: DecisionSpend | null;
+  /**
+   * The approved scope this admission is taken under, or null when it is not
+   * taken under one (D-0066 rule 3.1).
+   *
+   * **Beside `spend` and for `spend`'s reason**: the `scope_consumption` row is
+   * written in this `BEGIN IMMEDIATE`, beside the iteration row, both or
+   * neither (D-0047 rule 1), and the scope's store-side tests are re-made under
+   * the same write lock so that two admissions running at once cannot both take
+   * the last lap (D-0066 rule 4.3). Required rather than optional for
+   * `supersedesIterationId`'s reason. **At most one of `spend` and this is
+   * non-null**: an admission is authorised by one approval, and naming two is a
+   * defect in the caller rather than a stricter admission.
+   */
+  readonly scopeSpend: ScopeSpend | null;
   readonly nowMs: number;
+}
+
+/**
+ * One approved scope, as the admission taken under it names it (D-0066 rule 3).
+ *
+ * **The repository and the workspace root are not here, and that is the
+ * point.** The store reads them from `plan` -- the admitted plan it is about to
+ * insert -- so the pair tested against `workspaces` is the pair that runs, and
+ * never a pair the caller claims beside it. **Nor is the request**: the act's
+ * request is the row's own `requestMessageId` (D-0061 rule 4), the link the
+ * iteration is written with, so the request tested against `requests` is the one
+ * the row records.
+ *
+ * `agentTypeDigest` is the one tested value a caller does carry: the iteration
+ * row does not hold it until classification, after `reserve()`, so it comes
+ * from the surface's `classifyPlan` over this same plan. Its drift between that
+ * read and this write is the bounded race D-0047 rule 6 accepts and D-0066
+ * rule 4.3 names.
+ */
+export interface ScopeSpend {
+  readonly scopeDecisionId: string;
+  /** The split proposal the plan came from, or null for an in-scope retry (rule 3.3). */
+  readonly proposalId: string | null;
+  readonly agentTypeDigest: string;
 }
 
 /**
@@ -225,6 +275,8 @@ export type ReserveOutcome =
       readonly occupancy: number;
     }
   | { readonly kind: "unapproved"; readonly reason: string }
+  /** The scope's re-test under the write lock refused (D-0066 rule 4.3). Nothing is written. */
+  | ({ readonly kind: "scopeRefused" } & ScopeRefusal)
   /** The request link names no message that opens a request (D-0061 rule 4). Nothing is written. */
   | { readonly kind: "requestRefused"; readonly reason: string }
   | { readonly kind: "defect"; readonly reason: string };
@@ -269,6 +321,27 @@ export type ReadOutcome =
 export type ProposalReadOutcome =
   | { readonly kind: "read"; readonly proposal: StoredProposal }
   | { readonly kind: "absent" }
+  | { readonly kind: "unreadable"; readonly reason: string };
+
+/** One scope row read back, absent, or refused as unreadable -- {@link ProposalReadOutcome}'s arms. */
+export type ScopeReadOutcome =
+  | { readonly kind: "read"; readonly scope: StoredScope }
+  | { readonly kind: "absent" }
+  | { readonly kind: "unreadable"; readonly reason: string };
+
+/** One scope decision read back, absent, or unreadable. */
+export type ScopeDecisionReadOutcome =
+  | { readonly kind: "read"; readonly decision: StoredScopeDecision }
+  | { readonly kind: "absent" }
+  | { readonly kind: "unreadable"; readonly reason: string };
+
+/**
+ * The open asks in one request's thread, or unreadable when a message's bases
+ * will not parse -- fail closed, since an ask whose line cannot be read might
+ * stand over any line (D-0066 rule 4.2).
+ */
+export type OpenAsksReadOutcome =
+  | { readonly kind: "read"; readonly asks: readonly OpenAsk[] }
   | { readonly kind: "unreadable"; readonly reason: string };
 
 /** Whether the status-blind termination of {@link IterationStore.settle} landed. */
@@ -1033,6 +1106,91 @@ CREATE TABLE IF NOT EXISTS operator_attention (
 -- added beside it.
 CREATE UNIQUE INDEX IF NOT EXISTS operator_attention_presented_subject
   ON operator_attention(subject_kind, subject_id) WHERE disposition = 'presented';
+
+-- D-0066 section 1. A scope: what a person approves once, in fields a machine
+-- can test (D-0064 rule 3.1).
+--
+-- **Immutable and append-only, with no status column** (D-0022 rule 4's
+-- shape). A change is a successor row naming supersedes_scope_id (rule 1.4),
+-- and "retired" is not a flag on this row but the existence of an approved
+-- scope_decision on a descendant -- so there is nothing to update, and nothing
+-- here ever is.
+--
+-- payload is held verbatim beside scope_digest, contentDigest over it, for
+-- proposal.payload's reason: what is approved is the digest (rule 1.3), and a
+-- reader re-derives it rather than trusting the column. bases is canonical
+-- JSON too; the writer refuses a drafter row whose bases are empty (rule 1.5).
+--
+-- **The one CHECK is author_kind's closed pair** (D-0061 rule 2.3's voice
+-- column). Every other rule -- the payload's shape, the dangling supersedes,
+-- the requests and agent types that must name rows -- is a writer refusal
+-- inside BEGIN IMMEDIATE, for human_decision's reason: SQLite cannot state a
+-- cross-table reference here, and this schema declares no foreign keys.
+CREATE TABLE IF NOT EXISTS scope (
+  scope_id                    TEXT    PRIMARY KEY,
+  payload                     TEXT    NOT NULL,
+  scope_digest                TEXT    NOT NULL,
+  supersedes_scope_id         TEXT,
+  author_kind                 TEXT    NOT NULL,
+  author_id                   TEXT    NOT NULL,
+  bases                       TEXT    NOT NULL,
+  created_at_ms               INTEGER NOT NULL,
+  CHECK (author_kind IN ('operator', 'drafter'))
+);
+
+-- D-0066 section 2. A person's answer to one scope row (P1), and **never a
+-- human_decision row**: that table's approved references a composed contract,
+-- and a scope has none -- changing that reference is D-0049's falsifier, not a
+-- column to reuse (rule 2.1).
+--
+-- outcome is a row on both sides for D-0032 rule 6's reason. scope_digest is
+-- the digest the person was shown, and the writer refuses one that is not the
+-- named row's in D-0049 rule 2's dangling-reference shape (rule 2.2).
+--
+-- **scope_id is UNIQUE, and that is rule 2.3 made structural**: one decision
+-- per scope row. D-0047 rule 6 refuses two answers to one question; a scope row,
+-- unlike a proposal, has nothing to choose among, so the database can hold it.
+-- A person who declined and changes their mind approves a new row with the
+-- same payload.
+CREATE TABLE IF NOT EXISTS scope_decision (
+  scope_decision_id           TEXT    PRIMARY KEY,
+  scope_id                    TEXT    NOT NULL UNIQUE,
+  scope_digest                TEXT    NOT NULL,
+  outcome                     TEXT    NOT NULL,
+  actor_id                    TEXT    NOT NULL,
+  recorded_by                 TEXT    NOT NULL,
+  decided_at_ms               INTEGER NOT NULL,
+  CHECK (outcome IN ('approved', 'declined'))
+);
+
+-- D-0066 section 3. One row per act taken under an approved scope, written in
+-- the act's own transaction.
+--
+-- **The primary key is (scope_decision_id, act_kind, subject_id)**, so the same
+-- act is never recorded twice against one approval and the database refuses it
+-- rather than a check (rule 3.1, decision_consumption's reason). A
+-- scope_decision authorises many acts, each once (rule 5.2).
+--
+-- act_kind is a closed union the writer refuses outside of, and today it has
+-- one writable member, admission, whose subject_id is the iteration id and
+-- whose row lands in reserve()'s BEGIN IMMEDIATE beside the iteration row
+-- (rule 3.2). **No CHECK spells the union**: proposal.kind's precedent, so that
+-- the entries that make push_branch and open_pull_request writable change a
+-- constant and not a table.
+--
+-- **Budgets are counted from these rows and never kept as counters** (rule 3.4,
+-- D-0022 rule 8): laps is a COUNT, cost is a join to iteration.lap_cost_usd.
+-- proposal_id names the split proposal an admitted plan came from and is null
+-- for an in-scope retry (rule 3.3); it is where "decided without asking" is
+-- read from, so no column is added to the iteration row (rule 3.5).
+CREATE TABLE IF NOT EXISTS scope_consumption (
+  scope_decision_id           TEXT    NOT NULL,
+  act_kind                    TEXT    NOT NULL,
+  subject_id                  TEXT    NOT NULL,
+  proposal_id                 TEXT,
+  consumed_at_ms              INTEGER NOT NULL,
+  PRIMARY KEY (scope_decision_id, act_kind, subject_id)
+);
 `;
 
 /**
@@ -1512,6 +1670,18 @@ export function iterationStore(connection: DatabaseSync, policy: HostPolicy): It
 
   return {
     async reserve(input: ReserveInput): Promise<ReserveOutcome> {
+      if (input.spend !== null && input.scopeSpend !== null) {
+        // **Refused before the transaction opens**, not beside the spends: a
+        // body that returned this after `spendDecision` had inserted its row
+        // would commit a consumption for an admission that never happened.
+        return {
+          kind: "defect",
+          reason:
+            `iteration '${input.id}' was reserved spending both a human decision and a scope ` +
+            "decision, and an admission is authorised by one approval: naming two is a defect " +
+            "in the caller, not a stricter admission (D-0066 rule 5.2)",
+        };
+      }
       try {
         const encoded = canonicalJson(input.plan);
         const digest = planDigest(input.plan);
@@ -1567,6 +1737,17 @@ export function iterationStore(connection: DatabaseSync, policy: HostPolicy): It
             const refusal = spendDecision(connection, input.spend, input.nowMs);
             if (refusal !== null) {
               return { kind: "unapproved", reason: refusal };
+            }
+          }
+          // **The scope's spend, in the same place and for the same reason**
+          // (D-0066 rules 3.1 and 4.3): its store-side tests are re-made under
+          // this write lock and its consumption row lands beside the iteration
+          // row, both or neither. A refusal writes nothing, and says which
+          // test refused as data (`scopeRefused`), for rule 4.4's stop.
+          if (input.scopeSpend !== null) {
+            const refusal = spendScope(connection, input, input.scopeSpend);
+            if (refusal !== null) {
+              return refusal;
             }
           }
           connection
@@ -2127,6 +2308,53 @@ export interface AdvisoryRecord {
    * something for ever.
    */
   changedSince(tMs: number): Promise<readonly RecordChange[]>;
+  /**
+   * Append one scope row -- **or refuse it** (D-0066 section 1).
+   *
+   * In one `BEGIN IMMEDIATE`: the payload is read by `readScopePayload`; a
+   * `drafter` row with no bases is refused (rule 1.5); a `supersedesScopeId`
+   * naming no row, or this row, is refused; every `requests` id must be a
+   * message that opens a request and every `agent_types` digest a record rondo
+   * already holds; an id already taken is refused. The payload is stored as
+   * canonical JSON beside `contentDigest` over it.
+   */
+  recordScope(draft: ScopeDraft): Promise<RecordOutcome>;
+  /**
+   * Append a person's answer to one scope row -- **or refuse it** (D-0066
+   * section 2): a scope that is not a row, a digest that is not the row's
+   * (rule 2.2), and a second decision on one row (rule 2.3).
+   */
+  recordScopeDecision(draft: ScopeDecisionDraft): Promise<RecordOutcome>;
+  /** One scope row, its digest re-derived; a mismatch is `unreadable` (`verbatim`'s precedent). */
+  readScope(scopeId: string): Promise<ScopeReadOutcome>;
+  readScopeDecision(scopeDecisionId: string): Promise<ScopeDecisionReadOutcome>;
+  /**
+   * The one decision on a scope row, or `absent` while nobody has answered it.
+   * One, because the writer refuses a second (D-0066 rule 2.3); the verb reads
+   * it to say what a predecessor's approval spent before its successor is
+   * approved (rule 1.4).
+   */
+  scopeDecisionOf(scopeId: string): Promise<ScopeDecisionReadOutcome>;
+  /** What an approval has spent, counted from its consumption rows (D-0066 rule 3.4). */
+  scopeSpent(scopeDecisionId: string): Promise<ScopeSpent>;
+  /**
+   * Whether some successor of this scope, at any depth, carries an `approved`
+   * decision (D-0066 rule 1.4). A drafted-only or declined successor retires
+   * nothing.
+   */
+  scopeSupersededByApproved(scopeId: string): Promise<boolean>;
+  /**
+   * The messages with `asks` set and no reply in the thread `requestMessageId`
+   * opens, each with the iterations its bases name (D-0061 rule 2.7, D-0066
+   * rule 4.2). The same query `reserve()` re-tests under the write lock.
+   */
+  openAsksIn(requestMessageId: string): Promise<OpenAsksReadOutcome>;
+  /**
+   * Every iteration in `iterationId`'s lineage: all that share its root, the end
+   * of its `supersedes` chain (D-0030, D-0066 rule 4.2), or null when a walk
+   * passes the bound. The same query `reserve()` re-tests under the write lock.
+   */
+  lineageOf(iterationId: string): Promise<readonly string[] | null>;
 }
 
 /**
@@ -2183,6 +2411,17 @@ const CHANGE_SOURCES = Object.freeze([
     table: "conversation_message",
     id: "message_id",
     at: "at_ms",
+  },
+  // D-0066's three tables, by the membership rule above: each is append-only
+  // and carries a caller clock. A consumption is identified by its subject (the
+  // iteration it admitted), which is the id a reader follows.
+  { kind: "scope", table: "scope", id: "scope_id", at: "created_at_ms" },
+  { kind: "scope_decision", table: "scope_decision", id: "scope_decision_id", at: "decided_at_ms" },
+  {
+    kind: "scope_consumption",
+    table: "scope_consumption",
+    id: "subject_id",
+    at: "consumed_at_ms",
   },
 ] as const);
 
@@ -2490,6 +2729,18 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
             };
           }
           const proposalKind = String((row as SqlRow)["kind"]);
+          if (proposalKind === "split") {
+            // D-0066 rule 5.1: a split binds through the scope that lists its
+            // agent type, and D-0062 rule 3's per-split approval is retired. The
+            // kind is not approvable either way; this only says the right why.
+            return {
+              kind: "refused",
+              reason:
+                `proposal '${draft.proposalId}' is a split, which is never approved per split: ` +
+                "its agent type is approved by a scope that lists it (D-0066 rule 5.1, which " +
+                "retires D-0062 rule 3)",
+            };
+          }
           if (!isApprovableKind(proposalKind)) {
             // **The refusal fires for an unrecognised kind too, and by the same
             // line.** A kind this rondo does not know is not in the approvable
@@ -2799,6 +3050,218 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
           };
         });
     },
+
+    async recordScope(draft: ScopeDraft): Promise<RecordOutcome> {
+      const reading = readScopePayload(draft.payload);
+      if (reading.kind === "refused") {
+        return { kind: "refused", reason: reading.reason };
+      }
+      if (draft.authorKind === "drafter" && draft.bases.length === 0) {
+        // D-0066 rule 1.5, as D-0061 rule 2.6 refuses a drafter message with
+        // none: a drafted scope is material, and material with no bases is a
+        // claim nobody can check before approving it.
+        return {
+          kind: "refused",
+          reason:
+            `the scope '${draft.scopeId}' was drafted with no bases: D-0066 rule 1.5 refuses a ` +
+            "drafter's scope that names nothing it was drafted from, because a person approving " +
+            "it would have nothing to check it against",
+        };
+      }
+      try {
+        return immediateTransaction<RecordOutcome>(connection, () => {
+          const successorOf = draft.supersedesScopeId;
+          if (successorOf === draft.scopeId) {
+            return {
+              kind: "refused",
+              reason:
+                `the scope '${draft.scopeId}' names itself as the scope it supersedes, and a ` +
+                "change to a scope is a new row under an id of its own (D-0066 rule 1.4)",
+            };
+          }
+          if (
+            successorOf !== null &&
+            connection.prepare("SELECT 1 FROM scope WHERE scope_id = ?").get(successorOf) ===
+              undefined
+          ) {
+            return {
+              kind: "refused",
+              reason:
+                `the scope '${draft.scopeId}' supersedes '${successorOf}', which is no scope in ` +
+                "this store: a successor of nothing would retire nothing while reading as a " +
+                "change (D-0066 rule 1.4, D-0049 rule 2's dangling-reference shape)",
+            };
+          }
+          // **Each request is a message that opens one** (D-0066 rule 1.2.1,
+          // D-0061 rule 1): a thread message with no `in_reply_to`, by the same
+          // test `reserve()` makes of a lap's request link. An elevation's bare
+          // id or a reply is a message, and neither is a request.
+          for (const messageId of reading.payload.requests) {
+            const standing = requestStanding(connection, messageId);
+            if (standing !== "opens") {
+              return {
+                kind: "refused",
+                reason:
+                  `the scope '${draft.scopeId}' names the request '${messageId}', which ` +
+                  `${standing === "absent" ? "is no message in this conversation" : "is a message that does not open a request"}: ` +
+                  "a scope over a request nobody made covers nothing a reader can follow " +
+                  "(D-0066 rule 1.2.1)",
+              };
+            }
+          }
+          // **"A record rondo already holds" is D-0062 rule 1.2's, read as
+          // written**: the agentTypeInput of a plan on an iteration row whose
+          // agent_type_digest equals the digest. So only iteration rows count,
+          // and a proposal naming a digest does not -- a proposal is a draft,
+          // and a draft citing a digest is not the record the digest names.
+          for (const digest of reading.payload.agent_types) {
+            if (
+              connection
+                .prepare("SELECT 1 FROM iteration WHERE agent_type_digest = ? LIMIT 1")
+                .get(digest) === undefined
+            ) {
+              return {
+                kind: "refused",
+                reason:
+                  `the scope '${draft.scopeId}' lists the agent type '${digest}', which is no ` +
+                  "record rondo holds: D-0066 rule 1.2.3 lists agent types rondo already holds " +
+                  "(D-0062 rule 1.2, an iteration row with that agent_type_digest), and a " +
+                  "digest nobody can read back bounds no tier and no grant",
+              };
+            }
+          }
+          connection
+            .prepare(
+              "INSERT INTO scope (scope_id, payload, scope_digest, supersedes_scope_id, " +
+                "author_kind, author_id, bases, created_at_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            )
+            .run(
+              draft.scopeId,
+              canonicalJson(draft.payload),
+              contentDigest(draft.payload),
+              successorOf,
+              draft.authorKind,
+              draft.authorId,
+              canonicalJson(draft.bases),
+              draft.createdAtMs,
+            );
+          return { kind: "recorded" };
+        });
+      } catch (error) {
+        if (isUniqueViolation(error)) {
+          return {
+            kind: "refused",
+            reason:
+              `a scope with id '${draft.scopeId}' already exists, and a scope is never edited: ` +
+              "a change is a successor under an id of its own (D-0066 rule 1.4)",
+          };
+        }
+        return { kind: "defect", reason: describe(error) };
+      }
+    },
+
+    async recordScopeDecision(draft: ScopeDecisionDraft): Promise<RecordOutcome> {
+      try {
+        return immediateTransaction<RecordOutcome>(connection, () => {
+          // D-0066 rule 2.2 in D-0049 rule 2's shape: the read and the insert
+          // share the write lock, so the digest that matched is the row's.
+          const row = connection
+            .prepare("SELECT scope_digest FROM scope WHERE scope_id = ?")
+            .get(draft.scopeId) as SqlRow | undefined;
+          if (row === undefined) {
+            return {
+              kind: "refused",
+              reason:
+                `a scope decision must name a scope, and '${draft.scopeId}' is not a row in this ` +
+                "store: an answer to a scope nobody wrote approves nothing (D-0066 rule 2.2)",
+            };
+          }
+          const digest = String(row["scope_digest"]);
+          if (digest !== draft.scopeDigest) {
+            return {
+              kind: "refused",
+              reason:
+                `the decision on scope '${draft.scopeId}' names digest '${draft.scopeDigest}', and ` +
+                `the row's digest is '${digest}': the approval must name what was shown ` +
+                "(D-0066 rule 2.2, D-0049 rule 2)",
+            };
+          }
+          connection
+            .prepare(
+              "INSERT INTO scope_decision (scope_decision_id, scope_id, scope_digest, outcome, " +
+                "actor_id, recorded_by, decided_at_ms) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            )
+            .run(
+              draft.scopeDecisionId,
+              draft.scopeId,
+              draft.scopeDigest,
+              draft.outcome,
+              draft.actorId,
+              draft.recordedBy,
+              draft.decidedAtMs,
+            );
+          return { kind: "recorded" };
+        });
+      } catch (error) {
+        if (isUniqueViolation(error) && error.message.includes("scope_decision.scope_id")) {
+          return {
+            kind: "refused",
+            reason:
+              `the scope '${draft.scopeId}' already has a decision, and D-0066 rule 2.3 allows one ` +
+              "per scope row: a person who changes their mind answers a new row with the same " +
+              "payload",
+          };
+        }
+        if (isUniqueViolation(error)) {
+          return {
+            kind: "refused",
+            reason:
+              `a scope decision with id '${draft.scopeDecisionId}' already exists, and a decision ` +
+              "row is never rewritten (D-0066 rule 5.2)",
+          };
+        }
+        return { kind: "defect", reason: describe(error) };
+      }
+    },
+
+    async readScope(scopeId: string): Promise<ScopeReadOutcome> {
+      const row = connection.prepare(`${SELECT_SCOPE} WHERE scope_id = ?`).get(scopeId);
+      if (row === undefined) {
+        return { kind: "absent" };
+      }
+      try {
+        return { kind: "read", scope: toScope(row as SqlRow) };
+      } catch (error) {
+        if (error instanceof StoreDefect) {
+          return { kind: "unreadable", reason: error.message };
+        }
+        throw error;
+      }
+    },
+
+    async readScopeDecision(scopeDecisionId: string): Promise<ScopeDecisionReadOutcome> {
+      return scopeDecisionWhere(connection, "scope_decision_id", scopeDecisionId);
+    },
+
+    async scopeDecisionOf(scopeId: string): Promise<ScopeDecisionReadOutcome> {
+      return scopeDecisionWhere(connection, "scope_id", scopeId);
+    },
+
+    async scopeSpent(scopeDecisionId: string): Promise<ScopeSpent> {
+      return spentUnder(connection, scopeDecisionId);
+    },
+
+    async scopeSupersededByApproved(scopeId: string): Promise<boolean> {
+      return supersededByApproved(connection, scopeId);
+    },
+
+    async openAsksIn(requestMessageId: string): Promise<OpenAsksReadOutcome> {
+      return openAsksIn(connection, requestMessageId);
+    },
+
+    async lineageOf(iterationId: string): Promise<readonly string[] | null> {
+      return lineageOf(connection, iterationId);
+    },
   };
 }
 
@@ -3018,22 +3481,514 @@ function threadMessageRefusal(connection: DatabaseSync, draft: ThreadMessageDraf
   return null;
 }
 
+const SELECT_SCOPE =
+  "SELECT scope_id, payload, scope_digest, supersedes_scope_id, author_kind, author_id, bases, " +
+  "created_at_ms FROM scope";
+
+/** One scope decision by one of its two identifying columns (the column is never caller input). */
+function scopeDecisionWhere(
+  connection: DatabaseSync,
+  column: "scope_decision_id" | "scope_id",
+  value: string,
+): ScopeDecisionReadOutcome {
+  const row = connection.prepare(`${SELECT_SCOPE_DECISION} WHERE ${column} = ?`).get(value);
+  if (row === undefined) {
+    return { kind: "absent" };
+  }
+  try {
+    return { kind: "read", decision: toScopeDecision(row as SqlRow) };
+  } catch (error) {
+    if (error instanceof StoreDefect) {
+      return { kind: "unreadable", reason: error.message };
+    }
+    throw error;
+  }
+}
+
+const SELECT_SCOPE_DECISION =
+  "SELECT scope_decision_id, scope_id, scope_digest, outcome, actor_id, recorded_by, " +
+  "decided_at_ms FROM scope_decision";
+
+/**
+ * One scope row, read into a record, or a `StoreDefect` saying why not.
+ *
+ * **The digest is re-derived and compared** (`verbatim`'s precedent, D-0022
+ * rule 4): a payload whose bytes no longer digest to `scope_digest` is not the
+ * row a person approved, and every test the verdict and the store make is
+ * against the payload -- so a mismatch is unreadable, never proceeded on. The
+ * payload is then read by the same strict reader the writer used.
+ */
+function toScope(row: SqlRow): StoredScope {
+  const text = requireText(row, "payload", "scope");
+  let parsed: unknown;
+  let bases: unknown;
+  try {
+    parsed = JSON.parse(text);
+    bases = JSON.parse(requireText(row, "bases", "scope"));
+  } catch (error) {
+    if (error instanceof StoreDefect) {
+      throw error;
+    }
+    throw new StoreDefect(`the scope row's payload or bases is not JSON: ${describe(error)}`);
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    throw new StoreDefect("the scope row's payload is JSON, but it is not an object");
+  }
+  if (!Array.isArray(bases)) {
+    throw new StoreDefect("the scope row's bases is JSON, but it is not a list");
+  }
+  const recorded = requireText(row, "scope_digest", "scope");
+  const recomputed = contentDigest(parsed as JsonRecord);
+  if (recorded !== recomputed) {
+    throw new StoreDefect(
+      `the scope row's scope_digest is '${recorded}' and its payload digests to '${recomputed}'. ` +
+        "The pair no longer describes one scope, so rondo cannot say what a person approved.",
+    );
+  }
+  const reading = readScopePayload(parsed as JsonRecord);
+  if (reading.kind === "refused") {
+    throw new StoreDefect(`the scope row does not read back: ${reading.reason}`);
+  }
+  const authorKind = requireText(row, "author_kind", "scope");
+  if (authorKind !== "operator" && authorKind !== "drafter") {
+    throw new StoreDefect(`the scope row's author_kind '${authorKind}' is not operator or drafter`);
+  }
+  return Object.freeze({
+    scopeId: requireText(row, "scope_id", "scope"),
+    scopeDigest: recorded,
+    payload: reading.payload,
+    supersedesScopeId: optionalText(row, "supersedes_scope_id", "scope"),
+    authorKind,
+    authorId: requireText(row, "author_id", "scope"),
+    bases: Object.freeze(bases as JsonValue[]),
+    createdAtMs: requireInteger(row, "created_at_ms", "scope"),
+  });
+}
+
+function toScopeDecision(row: SqlRow): StoredScopeDecision {
+  const outcome = requireText(row, "outcome", "scope decision");
+  if (outcome !== "approved" && outcome !== "declined") {
+    throw new StoreDefect(
+      `the scope decision row's outcome '${outcome}' is not approved or declined`,
+    );
+  }
+  return Object.freeze({
+    scopeDecisionId: requireText(row, "scope_decision_id", "scope decision"),
+    scopeId: requireText(row, "scope_id", "scope decision"),
+    scopeDigest: requireText(row, "scope_digest", "scope decision"),
+    outcome,
+    actorId: requireText(row, "actor_id", "scope decision"),
+    recordedBy: requireText(row, "recorded_by", "scope decision"),
+    decidedAtMs: requireInteger(row, "decided_at_ms", "scope decision"),
+  });
+}
+
+/**
+ * What an approval has spent, **counted from rows** (D-0066 rule 3.4).
+ *
+ * `LEFT JOIN` rather than `JOIN`: a consumption whose iteration is not there
+ * cannot be written (the two land in one transaction), and if one were ever
+ * found it counts as an unread lap -- holding its reserve -- rather than as a
+ * lap that cost nothing. `COALESCE` because `SUM` over no rows is null, and an
+ * empty ledger has spent 0.
+ */
+function spentUnder(connection: DatabaseSync, scopeDecisionId: string): ScopeSpent {
+  const row = connection
+    .prepare(
+      "SELECT COUNT(*) AS admissions, COALESCE(SUM(i.lap_cost_usd), 0) AS read_cost, " +
+        "COALESCE(SUM(CASE WHEN i.lap_cost_usd IS NULL THEN 1 ELSE 0 END), 0) AS unread " +
+        "FROM scope_consumption c LEFT JOIN iteration i ON i.id = c.subject_id " +
+        "WHERE c.scope_decision_id = ? AND c.act_kind = 'admission'",
+    )
+    .get(scopeDecisionId) as SqlRow;
+  return Object.freeze({
+    admissions: Number(row["admissions"]),
+    readCostUsd: Number(row["read_cost"]),
+    unreadLaps: Number(row["unread"]),
+  });
+}
+
+/**
+ * Whether any successor of `scopeId`, at any depth, has an approved decision
+ * (D-0066 rule 1.4).
+ *
+ * **Transitive**: once a successor is approved the predecessor authorises no new
+ * act, and a grandchild approved over an unanswered child retires the
+ * grandparent just as surely -- the person approved a row that replaces the
+ * whole chain above it. A successor that is only drafted, or declined, retires
+ * nothing. `UNION` rather than `UNION ALL`, so a cycle nobody could write through
+ * `recordScope` would still terminate.
+ */
+function supersededByApproved(connection: DatabaseSync, scopeId: string): boolean {
+  return (
+    connection
+      .prepare(
+        "WITH RECURSIVE descendant(scope_id) AS (" +
+          "SELECT scope_id FROM scope WHERE supersedes_scope_id = ? " +
+          "UNION SELECT s.scope_id FROM scope s JOIN descendant d ON s.supersedes_scope_id = d.scope_id" +
+          ") SELECT 1 FROM scope_decision WHERE outcome = 'approved' " +
+          "AND scope_id IN (SELECT scope_id FROM descendant) LIMIT 1",
+      )
+      .get(scopeId) !== undefined
+  );
+}
+
+/**
+ * The scope's spend, inside `reserve()`'s transaction (D-0066 rules 3.1, 3.2
+ * and 4.3): the store-side re-tests, then the consumption row. Returns the
+ * refusal, or null when the row landed.
+ *
+ * **The re-tests are D-0066 rule 4.3's list**, in the verdict's order, made again under
+ * the write lock so that two admissions running at once cannot both take the
+ * last lap (D-0047 rule 1's reason). The tests rule 4.3 leaves to the snapshot
+ * (the agent type record, the grant, the readings) are not repeated here;
+ * `agentTypeDigest` is compared with the list, and its own drift between the
+ * surface's classification and this write is D-0047 rule 6's bounded race.
+ */
+function spendScope(
+  connection: DatabaseSync,
+  input: ReserveInput,
+  spend: ScopeSpend,
+): Extract<ReserveOutcome, { kind: "scopeRefused" | "unapproved" }> | null {
+  const refusal = scopeRefusal(connection, input, spend);
+  if (refusal !== null) {
+    return { kind: "scopeRefused", ...refusal };
+  }
+  // The one act kind a writer may record today (D-0066 rule 3.2).
+  const actKind: (typeof WRITABLE_SCOPE_ACT_KINDS)[number] = WRITABLE_SCOPE_ACT_KINDS[0];
+  try {
+    connection
+      .prepare(
+        "INSERT INTO scope_consumption (scope_decision_id, act_kind, subject_id, proposal_id, " +
+          "consumed_at_ms) VALUES (?, ?, ?, ?, ?)",
+      )
+      .run(spend.scopeDecisionId, actKind, input.id, spend.proposalId, input.nowMs);
+  } catch (error) {
+    if (isUniqueViolation(error)) {
+      return {
+        kind: "unapproved",
+        reason:
+          `the admission of '${input.id}' is already recorded under scope decision ` +
+          `'${spend.scopeDecisionId}', and the same act is never recorded twice against one ` +
+          "approval (D-0066 rule 3.1)",
+      };
+    }
+    throw error;
+  }
+  return null;
+}
+
+/**
+ * Whether `messageId` is a message, and whether it opens a request: a thread
+ * message (`author_kind` set) with no `in_reply_to` (D-0061 rules 1, 2.4 and
+ * 4). The one statement of that test, for a lap's request link and a scope's
+ * `requests` alike.
+ */
+function requestStanding(
+  connection: DatabaseSync,
+  messageId: string,
+): "absent" | "opens" | "not_a_request" {
+  const row = connection
+    .prepare("SELECT author_kind, in_reply_to FROM conversation_message WHERE message_id = ?")
+    .get(messageId) as SqlRow | undefined;
+  if (row === undefined) {
+    return "absent";
+  }
+  return row["author_kind"] !== null && row["in_reply_to"] === null ? "opens" : "not_a_request";
+}
+
 /** Why `messageId` cannot be a lap's request link, or null when it can (D-0061 rule 4). */
 function requestRefusal(connection: DatabaseSync, messageId: string | null): string | null {
   if (messageId === null) {
     return null;
   }
-  const row = connection
-    .prepare("SELECT author_kind, in_reply_to FROM conversation_message WHERE message_id = ?")
-    .get(messageId) as SqlRow | undefined;
-  if (row !== undefined && row["author_kind"] !== null && row["in_reply_to"] === null) {
+  const standing = requestStanding(connection, messageId);
+  if (standing === "opens") {
     return null;
   }
   return (
-    `'${messageId}' ${row === undefined ? "is no message in the conversation" : "is a message that does not open a request"}, ` +
+    `'${messageId}' ${standing === "absent" ? "is no message in the conversation" : "is a message that does not open a request"}, ` +
     "and a lap names the message that opened its request or none (D-0061 rule 4). Nothing was " +
     "written: no iteration was reserved and no approval was spent."
   );
+}
+
+/**
+ * Why the scope does not cover this admission, as {@link ScopeRefusal}, or null
+ * (D-0066 rule 4.3). `undecidable` where a row the test needs cannot be read.
+ *
+ * **The asks test runs right after the request test, ahead of the scope's
+ * fields and budgets**, in the surface's verdict too. A stopping message is
+ * what keeps a line stopped (rule 4.4), so while it stands the question is the
+ * answer: tested after the budgets, a spent budget would answer again on every
+ * attempt and each refusal would write another stop.
+ */
+function scopeRefusal(
+  connection: DatabaseSync,
+  input: ReserveInput,
+  spend: ScopeSpend,
+): ScopeRefusal | null {
+  const outside = (test: ScopeTest, reason: string): ScopeRefusal => ({
+    verdict: "outside",
+    test,
+    reason,
+  });
+  const undecidable = (test: ScopeTest, reason: string): ScopeRefusal => ({
+    verdict: "undecidable",
+    test,
+    reason,
+  });
+  const decisionId = spend.scopeDecisionId;
+  // 1. The decision exists and is approved.
+  const decisionRow = connection
+    .prepare(
+      "SELECT scope_id, scope_digest, outcome FROM scope_decision WHERE scope_decision_id = ?",
+    )
+    .get(decisionId) as SqlRow | undefined;
+  if (decisionRow === undefined) {
+    return undecidable(
+      "decision",
+      `there is no scope decision '${decisionId}' in this store: an act under a scope names an ` +
+        "approval a person recorded (D-0066 rule 3.1)",
+    );
+  }
+  if (String(decisionRow["outcome"]) !== "approved") {
+    return outside(
+      "decision",
+      `the scope decision '${decisionId}' declined, and a declined scope authorises nothing ` +
+        "(D-0066 rule 2.1, D-0032 rule 6)",
+    );
+  }
+  // 2. The scope row exists and its digest is the decision's.
+  const scopeId = String(decisionRow["scope_id"]);
+  const scopeRow = connection.prepare(`${SELECT_SCOPE} WHERE scope_id = ?`).get(scopeId) as
+    | SqlRow
+    | undefined;
+  if (scopeRow === undefined) {
+    return undecidable(
+      "decision",
+      `the scope decision '${decisionId}' names scope '${scopeId}', which is no row in this store`,
+    );
+  }
+  let scope: StoredScope;
+  try {
+    scope = toScope(scopeRow);
+  } catch (error) {
+    if (error instanceof StoreDefect) {
+      return undecidable(
+        "decision",
+        `the scope '${scopeId}' cannot be read, so nothing is admitted under it: ${error.message}`,
+      );
+    }
+    throw error;
+  }
+  const approvedDigest = String(decisionRow["scope_digest"]);
+  if (scope.scopeDigest !== approvedDigest) {
+    return outside(
+      "decision",
+      `the scope decision '${decisionId}' approved digest '${approvedDigest}' and scope ` +
+        `'${scopeId}' digests to '${scope.scopeDigest}': the approval names what was shown ` +
+        "(D-0066 rule 1.3)",
+    );
+  }
+  // 3. Not superseded by an approved successor, at any depth.
+  if (supersededByApproved(connection, scopeId)) {
+    return outside(
+      "superseded",
+      `the scope '${scopeId}' has an approved successor, and once a successor is approved the ` +
+        "predecessor authorises no new act (D-0066 rule 1.4)",
+    );
+  }
+  const { payload } = scope;
+  // 4. The request: the row's own link, listed. `requestRefusal` has already
+  // refused, earlier in `reserve()`, an id that opens no request, so this asks
+  // only whether the scope covers it (D-0066 rule 1.2.1).
+  const request = input.requestMessageId;
+  if (request === null || !payload.requests.includes(request)) {
+    return outside(
+      "request",
+      `${request === null ? "the admission names no request" : `the request '${request}' is not one scope '${scopeId}' lists`}, ` +
+        "and a scope covers only the requests it lists (D-0066 rule 1.2.1)",
+    );
+  }
+  // 5. No open ask over the act's line, read under the write lock (rules 4.2
+  // and 4.3): the lineage is every lap sharing the predecessor's root, empty for
+  // a lineage start.
+  const asks = openAsksIn(connection, request);
+  if (asks.kind === "unreadable") {
+    return undecidable(
+      "asks",
+      `whether a question stands over this line cannot be read, so it is outside: ${asks.reason}`,
+    );
+  }
+  const lineage = lineageOf(connection, input.supersedesIterationId);
+  if (lineage === null) {
+    return undecidable(
+      "asks",
+      `the lineage through '${String(input.supersedesIterationId)}' does not end within ` +
+        `${LINEAGE_BOUND} links, so whether a question stands over it cannot be read`,
+    );
+  }
+  const standing = asks.asks.find((ask) => askStandsOver(ask, lineage));
+  if (standing !== undefined) {
+    return outside(
+      "asks",
+      `the message '${standing.messageId}' asks a question nobody has answered, and it stands ` +
+        "over this line: the person's reply is what lets it carry on (D-0066 rule 4.4)",
+    );
+  }
+  // 6. The admitted plan's own pair, byte for byte.
+  const repository = input.plan["repository"];
+  const workspaceRoot = input.plan["workspace_root"];
+  if (
+    typeof repository !== "string" ||
+    typeof workspaceRoot !== "string" ||
+    !payload.workspaces.some(
+      (pair) => pair.repository === repository && pair.workspace_root === workspaceRoot,
+    )
+  ) {
+    return outside(
+      "workspace",
+      `the plan's repository and workspace root (${String(repository)}, ${String(workspaceRoot)}) ` +
+        `are not a pair scope '${scopeId}' lists (D-0066 rule 1.2.2)`,
+    );
+  }
+  // 7. The agent type.
+  if (!payload.agent_types.includes(spend.agentTypeDigest)) {
+    return outside(
+      "agent_type",
+      `the agent type '${spend.agentTypeDigest}' is not one scope '${scopeId}' lists ` +
+        "(D-0066 rule 1.2.3)",
+    );
+  }
+  const { budgets } = payload;
+  // 8. Expiry, against the act's own clock: at the instant itself it has expired.
+  if (input.nowMs >= budgets.expires_at_ms) {
+    return outside(
+      "expiry",
+      `the scope '${scopeId}' expired at ${budgets.expires_at_ms} and this admission is at ` +
+        `${input.nowMs}: an expiry refuses the next act (D-0066 rule 3.4.4)`,
+    );
+  }
+  const spent = spentUnder(connection, decisionId);
+  // 9. Laps.
+  if (spent.admissions >= budgets.laps) {
+    return outside(
+      "laps",
+      `the scope decision '${decisionId}' has admitted ${spent.admissions} of ${budgets.laps} ` +
+        "laps, and a spent budget refuses the next admission (D-0066 rule 3.4.1)",
+    );
+  }
+  // 10. Cost: what was read, plus a reserve for every unread lap including this one.
+  const committed = spent.readCostUsd + (spent.unreadLaps + 1) * budgets.cost_reserve_usd;
+  if (committed > budgets.cost_usd) {
+    return outside(
+      "cost",
+      `the scope decision '${decisionId}' would commit ${committed} USD against a budget of ` +
+        `${budgets.cost_usd}: ${spent.readCostUsd} read, plus ${budgets.cost_reserve_usd} reserved ` +
+        `for each of ${spent.unreadLaps} unread laps and this one (D-0066 rule 3.4.2)`,
+    );
+  }
+  return null;
+}
+
+/** Links a lineage walk follows before it calls the chain one that does not end. */
+const LINEAGE_BOUND = 1000;
+
+/**
+ * Every iteration sharing `tipId`'s root, the end of its `supersedes` chain,
+ * root first; empty for no tip; null when either walk passes
+ * {@link LINEAGE_BOUND}. `reserve()` never writes a cycle (a predecessor must
+ * already be a row, and ids are unique), so the bound is a backstop against a
+ * row edited by hand, not an expected answer.
+ */
+function lineageOf(connection: DatabaseSync, tipId: string | null): readonly string[] | null {
+  if (tipId === null) {
+    return [];
+  }
+  const up = connection
+    .prepare(
+      "WITH RECURSIVE line(id, depth) AS (SELECT ?, 0 " +
+        "UNION ALL SELECT i.supersedes_iteration_id, l.depth + 1 FROM iteration i " +
+        "JOIN line l ON i.id = l.id WHERE i.supersedes_iteration_id IS NOT NULL AND l.depth < ?" +
+        ") SELECT id FROM line ORDER BY depth DESC",
+    )
+    .all(tipId, LINEAGE_BOUND);
+  if (up.length > LINEAGE_BOUND) {
+    return null;
+  }
+  const down = connection
+    .prepare(
+      "WITH RECURSIVE tree(id, depth) AS (SELECT ?, 0 " +
+        "UNION ALL SELECT i.id, t.depth + 1 FROM iteration i " +
+        "JOIN tree t ON i.supersedes_iteration_id = t.id WHERE t.depth < ?" +
+        ") SELECT id, depth FROM tree ORDER BY depth, id",
+    )
+    .all(String((up[0] as SqlRow)["id"]), LINEAGE_BOUND) as SqlRow[];
+  return down.some((row) => Number(row["depth"]) >= LINEAGE_BOUND)
+    ? null
+    : down.map((row) => String(row["id"]));
+}
+
+/**
+ * The open asks in the thread `requestMessageId` opens (D-0061 rule 2.7, D-0066
+ * rule 4.2): messages whose `in_reply_to` chain reaches the root, the root
+ * included, with `asks = 1` and no message replying to them.
+ *
+ * `UNION` rather than `UNION ALL` in the thread walk, so it terminates even
+ * over a cycle nobody could write through `recordThreadMessage`.
+ */
+function openAsksIn(connection: DatabaseSync, requestMessageId: string): OpenAsksReadOutcome {
+  const rows = connection
+    .prepare(
+      "WITH RECURSIVE thread(id) AS (SELECT ? " +
+        "UNION SELECT m.message_id FROM conversation_message m JOIN thread t ON m.in_reply_to = t.id" +
+        ") SELECT m.message_id, m.bases FROM conversation_message m " +
+        "WHERE m.message_id IN (SELECT id FROM thread) AND m.asks = 1 AND NOT EXISTS " +
+        "(SELECT 1 FROM conversation_message r WHERE r.in_reply_to = m.message_id) " +
+        "ORDER BY m.at_ms, m.message_id",
+    )
+    .all(requestMessageId) as SqlRow[];
+  const asks: OpenAsk[] = [];
+  for (const row of rows) {
+    const messageId = String(row["message_id"]);
+    let bases: unknown;
+    try {
+      bases = row["bases"] === null ? [] : JSON.parse(String(row["bases"]));
+    } catch (error) {
+      return {
+        kind: "unreadable",
+        reason: `the bases of message '${messageId}' are not JSON: ${describe(error)}`,
+      };
+    }
+    if (!Array.isArray(bases)) {
+      return {
+        kind: "unreadable",
+        reason: `the bases of message '${messageId}' are JSON, but not a list`,
+      };
+    }
+    const iterationIds: string[] = [];
+    for (const basis of bases) {
+      if (typeof basis !== "object" || basis === null) {
+        return {
+          kind: "unreadable",
+          reason: `a basis of message '${messageId}' is not a locator`,
+        };
+      }
+      const { form, iterationId } = basis as Record<string, unknown>;
+      if (form === "iteration") {
+        if (typeof iterationId !== "string") {
+          return {
+            kind: "unreadable",
+            reason: `an iteration basis of message '${messageId}' names no iteration id`,
+          };
+        }
+        iterationIds.push(iterationId);
+      }
+    }
+    asks.push(Object.freeze({ messageId, iterationIds: Object.freeze(iterationIds) }));
+  }
+  return { kind: "read", asks: Object.freeze(asks) };
 }
 
 function lineageDefect(connection: DatabaseSync, input: ReserveInput): string | null {

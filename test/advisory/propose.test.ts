@@ -33,6 +33,7 @@ import {
   proposeRetryPlan,
   type RetrySnapshot,
   readPayload,
+  readSplitPayload,
   UNDETERMINED,
 } from "../../src/advisory/proposal.js";
 
@@ -554,4 +555,45 @@ test("a recommendation that names no option is unreadable", () => {
   expect(readPayload({ neither: true }).kind).toBe("unreadable");
   // A claim with no basis is the summary #39 measured an operator approving on.
   expect(readPayload({ claims: [{ label: "a", value: "b" }] }).kind).toBe("unreadable");
+});
+
+test("a split reads back as plans against templates, or as holes, and nothing else (D-0063 rule 4)", () => {
+  const digest = (c: string) => `sha256:${c.repeat(64)}`;
+  const plan = {
+    template_plan_digest: digest("a"),
+    prompt: "do the first half",
+    agent_type_digest: digest("b"),
+    bases: [{ form: "iteration", iterationId: "i-1" }],
+  };
+  const planned = { plans: [plan], holes: [] };
+  expect(readSplitPayload(planned)).toEqual({ kind: "split", payload: planned });
+  // Rule 4.3: a plan may rest on the request's words, D-0061 rule 2.6's message form.
+  const onMessage = {
+    plans: [{ ...plan, bases: [{ form: "message", messageId: "m-1" }] }],
+    holes: [],
+  };
+  expect(readSplitPayload(onMessage)).toEqual({ kind: "split", payload: onMessage });
+  // Rule 4.4: no template, so no plan, and the holes are the whole answer.
+  const holes = { plans: [], holes: ["no persisted plan names this repository"] };
+  expect(readSplitPayload(holes)).toEqual({ kind: "split", payload: holes });
+
+  for (const [why, document] of [
+    ["says nothing", { plans: [], holes: [] }],
+    ["proposes an identifier (rule 4.5)", { plans: [{ ...plan, run_id: "r-1" }], holes: [] }],
+    ["names no digest", { plans: [{ ...plan, agent_type_digest: "tier-standard" }], holes: [] }],
+    [
+      "cites an unknown basis form",
+      { plans: [{ ...plan, bases: [{ form: "hunch" }] }], holes: [] },
+    ],
+    [
+      "cites a message with no id",
+      { plans: [{ ...plan, bases: [{ form: "message" }] }], holes: [] },
+    ],
+    ["carries an unknown key", { ...planned, recommended: 0 }],
+    ["has an empty hole", { plans: [], holes: [""] }],
+  ] as const) {
+    expect(readSplitPayload(document as never).kind, why).toBe("unreadable");
+  }
+  // Not an arm of readPayload: a split there is visibly unreadable, never options or claims.
+  expect(readPayload(planned).kind).toBe("unreadable");
 });
