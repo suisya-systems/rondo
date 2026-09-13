@@ -981,7 +981,7 @@ test("liveness is per view: two views poll and swap, and the answer view updates
     // **The refresh is a `GET` of this view's own address**, and the one
     // element it swaps is the ledger (D-0054 rules 1 and 2, R3).
     expect(html).toContain(
-      `<div id="ledger" class="space-y-8" hx-get="${href}" hx-trigger="every 5s" hx-select="#ledger" hx-swap="outerHTML" hx-select-oob="#requests-count">`,
+      `<div id="ledger" class="space-y-8" hx-get="${href}" hx-trigger="every 5s" hx-select="#ledger" hx-swap="outerHTML" hx-select-oob="#waiting-count">`,
     );
     expect([...html.matchAll(/hx-[a-z-]+=/g)].map((found) => found[0])).toEqual([
       "hx-get=",
@@ -2013,9 +2013,6 @@ test("a request thread is drawn whole: every body byte for byte, voices apart, b
   // **The ask that waits is marked, and only it** (rule 2.7): nothing replies to it.
   expect(ask).toContain("data-waiting");
   expect(ask).toContain("Waiting on you");
-  // The reply box says it does not answer that question, where the words are typed.
-  expect(html).toContain('class="not-answer');
-  expect(html).toContain("does not answer the question waiting in this thread");
   expect(root).not.toContain("data-waiting");
   expect(report).not.toContain("data-waiting");
 
@@ -2029,26 +2026,30 @@ test("a request thread is drawn whole: every body byte for byte, voices apart, b
   // A report replies to the request, which is how every reply reads by
   // default, so it names no parent line of its own.
   expect(report).not.toContain("in reply to");
-  // **A waiting ask offers no reply** (#220 S1 review): answering it moves
-  // work, which is a press's; the card says so instead.
-  expect(ask).not.toContain('id="reply-ask-b"');
-  expect(ask).toContain("it takes a press, not a reply");
+  // **A waiting ask is answered on the page** (#220 S1): its own link aims the
+  // box at it, labelled as answering, and nothing sends the person to a terminal.
+  expect(ask).toContain('id="reply-ask-b"');
+  expect(ask).toContain(">Answer</a>");
+  expect(html).not.toContain("rondo reply");
 
   // **No message id is printed as text**: each is an anchor and an attribute.
   for (const id of ["request-a", "ask-b", "report-c"]) {
     expect(html).not.toContain(`>${id}<`);
   }
 
-  // **The reply box answers the latest message that is not a waiting ask**, carries the id
-  // rondo minted -- once, hidden, never shown -- and sits outside the ledger
-  // the redraw swaps, so no redraw touches a draft.
-  expect(html).toContain(
-    '<form id="composer" method="post" action="/reply?lang=en" hx-post="/reply?lang=en"',
-  );
-  expect(html).toContain('<input type="hidden" name="in_reply_to" value="report-c"/>');
+  // **The box answers the waiting question by default, on a press**: a native
+  // `POST` to `/answer-ask` with no `hx-post` (D-0059 section 5a's falsifier,
+  // D-0069 rule 5), a filled Answer button, and a target line of who and when.
+  // It carries the id rondo minted -- once, hidden, never shown -- and sits
+  // outside the ledger the redraw swaps, so no redraw touches a draft.
+  expect(html).toContain('<form id="composer" method="post" action="/answer-ask?lang=en" class=');
+  expect(html).not.toContain("hx-post");
+  expect(html).toContain('<input type="hidden" name="in_reply_to" value="ask-b"/>');
   expect(html.split(MINTED.reply)).toHaveLength(2);
   expect(html).toContain(`<input type="hidden" name="message_id" value="${MINTED.reply}"/>`);
-  expect(html).toContain("Replying to rondo-drafter: noted");
+  expect(html).toMatch(/Answering rondo-drafter's question, \d+s ago/);
+  expect(html).toMatch(/<button type="submit" class="[^"]*bg-wait[^"]*">[\s\S]*?Answer<\/button>/);
+  expect(html).not.toContain('class="not-answer');
   const ledgerAt = html.indexOf('<div id="ledger"');
   const composerAt = html.indexOf('<form id="composer"');
   const between = html.slice(ledgerAt, composerAt);
@@ -2073,15 +2074,11 @@ test("the reply box points at the message a person chose, and a thread nobody wr
   );
   expect(chosen).toContain('<input type="hidden" name="in_reply_to" value="report-c"/>');
   expect(chosen).toContain("autofocus");
-  // Pointed at a waiting ask by hand, the box does not answer it.
-  const atAsk = await operatorPage(
-    ports,
-    "t",
-    { kind: "thread", messageId: "request-a", to: "ask-b" },
-    EN,
-    mint,
-  );
-  expect(atAsk).not.toContain('name="in_reply_to" value="ask-b"');
+  // Pointed elsewhere, it is a send, and it says it does not answer the question.
+  expect(chosen).toContain('action="/reply?lang=en" hx-post="/reply?lang=en"');
+  expect(chosen).toContain("Replying to rondo-drafter, ");
+  expect(chosen).toContain('class="not-answer');
+  expect(chosen).toContain("does not answer the question waiting in this thread");
   const nowhere = await operatorPage(
     ports,
     "t",
@@ -2119,12 +2116,13 @@ test("the summary counts an ask waiting on the person and leads to the reply, an
   const summary = await operatorPage(ports, "t", { kind: "summary" }, EN, mint);
   expect(summary).toContain("waiting for your answer (1)");
   expect(summary).toContain('<li id="ask-ask-b"');
-  expect(summary).toContain('href="/?thread=request-a&amp;lang=en#ask-b"');
+  expect(summary).toContain('href="/?thread=request-a&amp;to=ask-b&amp;lang=en#ask-b"');
   expect(summary).toContain("asked in: Please look at the flaky test.");
   // The header's way in, on every view, with the count the redraw renews.
   expect(summary).toContain('href="/?requests=open&amp;lang=en"');
+  // One count, the summary heading's own, beside it (#220 S1).
   expect(summary).toMatch(
-    /<span id="requests-count" class="empty:hidden"><span [^>]*>1 waiting<\/span>/,
+    /<span id="waiting-count" class="empty:hidden"><a href="\/\?lang=en" [^>]*>1 waiting<\/a>/,
   );
   // The summary draws no composer.
   expect(summary).not.toContain('id="composer"');
@@ -2155,8 +2153,9 @@ test("the threads speak Japanese where the page does, tokens and words untouched
   expect(html).toContain(">下書き役</span>");
   expect(html).toContain(">あなた</span>");
   expect(html).toContain("あなたの回答待ち");
-  expect(html).toContain("この返信は、このスレッドで待っている質問への回答にはなりません。");
-  expect(html).toContain('action="/reply?lang=ja"');
+  expect(html).toContain("rondo-drafter の質問に回答 · ");
+  expect(html).toContain(">回答する</button>");
+  expect(html).toContain('action="/answer-ask?lang=ja"');
   expect(bodiesIn(html)).toEqual([ROOT_BODY, ASK_BODY, LATER_BODY]);
 });
 

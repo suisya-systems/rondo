@@ -300,8 +300,9 @@ function nonReads(app: Hono<PageEnv>): string[] {
 /**
  * **The closed table** (D-0059 section 5a and R4): middleware -- method and
  * `Host`, security headers, `csrf` on each of the three write addresses, body
- * limit -- and three write routes: the lap-end `approve` press, and the two
- * sends into a request thread. A new write kind is a new row here, argued in
+ * limit -- and four write routes: the lap-end `approve` press, the two
+ * sends into a request thread, and the answer to a waiting question, which is
+ * a press (D-0059 section 5a's falsifier, D-0069 rule 5). A new write kind is a new row here, argued in
  * the decision first.
  */
 const WRITE_TABLE = [
@@ -310,10 +311,12 @@ const WRITE_TABLE = [
   "ALL /",
   "ALL /request",
   "ALL /reply",
+  "ALL /answer-ask",
   "ALL /*",
   "POST /",
   "POST /request",
   "POST /reply",
+  "POST /answer-ask",
 ];
 
 test("(b) the page's writing vocabulary is enumerated off the running app", () => {
@@ -917,6 +920,165 @@ test("(send) with no approver there is no say port, and a send says why", async 
   expect(refused.body).toContain("RONDO_APPROVER");
   expect(sent).toEqual([]);
 
+  stop.abort();
+  expect(await closed).toBe(0);
+});
+
+/** An advisory record holding a request and a drafter's ask that waits on it. */
+async function askWaiting() {
+  const connection = new DatabaseSync(":memory:");
+  const record = advisoryRecord(connection);
+  const at = { authorId: "rondo-drafter", atMs: 1, bases: [] } as const;
+  for (const draft of [
+    { ...at, messageId: "req", body: "r", authorKind: "operator", inReplyTo: null, asks: false },
+    {
+      ...at,
+      messageId: "ask",
+      body: "a?",
+      authorKind: "drafter",
+      inReplyTo: "req",
+      bases: [{ form: "message", messageId: "req" }],
+      asks: true,
+    },
+  ] as const) {
+    const outcome = await record.recordThreadMessage(draft);
+    expect(outcome.kind, JSON.stringify(outcome)).toBe("recorded");
+  }
+  const ports = {
+    ...spyPorts([]),
+    record,
+    say: new SayPort(
+      async (message) => {
+        const outcome = await record.recordThreadMessage({
+          ...message,
+          authorKind: "operator",
+          authorId: "ada",
+          atMs: 2,
+          bases: [],
+          asks: false,
+        });
+        return outcome.kind === "recorded"
+          ? { ok: true, note: "" }
+          : { ok: false, note: outcome.reason };
+      },
+      async () => await record.threadMessages(),
+    ),
+  } as ServedPorts;
+  const waitingAsks = async () => {
+    const open = await record.openAsksIn("req");
+    return open.kind === "read" ? open.asks.map((ask) => ask.messageId) : null;
+  };
+  const operatorRows = () =>
+    connection
+      .prepare("SELECT COUNT(*) AS n FROM conversation_message WHERE author_kind = 'operator'")
+      .get();
+  return { record, ports, waitingAsks, operatorRows };
+}
+
+test("(answer) a person's press answers a waiting question once, and the question stops waiting", async () => {
+  // D-0059 section 5a's falsifier and D-0069 rule 5: the reply to an ask
+  // releases work, so it is a press, on the page (#220 S1).
+  const { ports, waitingAsks, operatorRows } = await askWaiting();
+  const { base, stop, closed } = await served(createApp(ports, TOKEN));
+  const answer = {
+    token: TOKEN,
+    message_id: newMessageId("reply"),
+    in_reply_to: "ask",
+    body: "yes, go",
+  };
+  expect(await waitingAsks()).toEqual(["ask"]);
+
+  const pressed = await send(base, "/answer-ask?lang=ja", "POST", pressHeaders(base), answer);
+  expect(pressed.status).toBe(303);
+  expect(pressed.location).toBe(`/?thread=${answer.message_id}&lang=ja#${answer.message_id}`);
+  expect(await waitingAsks()).toEqual([]);
+  // A second press of the same form is the answer it repeats.
+  expect((await send(base, "/answer-ask", "POST", pressHeaders(base), answer)).status).toBe(303);
+  expect(operatorRows()).toEqual({ n: 2 });
+
+  stop.abort();
+  expect(await closed).toBe(0);
+});
+
+test("(answer) every shape that is not a person's press is refused, and the question keeps waiting", async () => {
+  const { ports, waitingAsks, operatorRows } = await askWaiting();
+  const app = createApp(ports, TOKEN);
+  const outcomes: string[] = [];
+  // Planted: a send minted by an htmx-shaped request, spent at the answer.
+  app.post("/planted/send-as-press", async (c) => {
+    const minting = mintSend(c, TOKEN);
+    if ("send" in minting) {
+      const said = await sayOf(ports).answerAsk(minting.send as unknown as Press, {
+        messageId: newMessageId("reply"),
+        body: "nobody pressed",
+        inReplyTo: "ask",
+      });
+      outcomes.push(String(said.ok));
+    }
+    return c.text("done");
+  });
+  // Planted: a GET writer that holds the port and a forged press.
+  app.get("/planted/get", async (c) => {
+    const minting = mintPress(c, TOKEN);
+    const message = { messageId: newMessageId("reply"), body: "planted", inReplyTo: "ask" };
+    outcomes.push(
+      String(
+        (
+          await sayOf(ports).answerAsk(
+            "press" in minting ? minting.press : (Object.freeze({}) as Press),
+            message,
+          )
+        ).ok,
+      ),
+    );
+    return c.text("drawn");
+  });
+  const { base, stop, closed } = await served(app);
+  const person = pressHeaders(base);
+  const answer = {
+    token: TOKEN,
+    message_id: newMessageId("reply"),
+    in_reply_to: "ask",
+    body: "words",
+  };
+
+  const refusals: [
+    string,
+    string,
+    Record<string, string | undefined>,
+    Record<string, string>,
+    number,
+  ][] = [
+    ["an htmx hx-post", "POST", htmxHeaders(base), answer, 403],
+    ["missing Sec-Fetch-User", "POST", { ...person, "sec-fetch-user": undefined }, answer, 403],
+    ["a same-origin fetch", "POST", { ...person, "sec-fetch-mode": "cors" }, answer, 403],
+    ["a wrong token", "POST", person, { ...answer, token: "not-the-token" }, 403],
+    ["a foreign Origin", "POST", { ...person, origin: "https://evil.example" }, answer, 403],
+    ["no question named", "POST", person, { ...answer, in_reply_to: "" }, 400],
+    ["no words", "POST", person, { ...answer, body: " " }, 400],
+  ];
+  for (const [shape, method, headers, form, status] of refusals) {
+    const answered = await send(base, "/answer-ask", method, headers, form);
+    expect(answered.status, shape).toBe(status);
+    expect(answered.body, shape).not.toBe("");
+  }
+  // A native refusal is a page with the way back to the question's thread.
+  const refused = await send(
+    base,
+    "/answer-ask",
+    "POST",
+    { ...person, "sec-fetch-user": undefined },
+    answer,
+  );
+  expect(refused.body).toContain('href="/?thread=ask&amp;lang=en"');
+  expect(refused.body).toContain("Answer button");
+  expect((await send(base, "/answer-ask", "GET", person)).status).toBe(404);
+  await send(base, "/planted/send-as-press", "POST", htmxHeaders(base), { token: TOKEN });
+  await send(base, "/planted/get", "GET", person);
+  expect(outcomes).toEqual(["false", "false"]);
+
+  expect(await waitingAsks()).toEqual(["ask"]);
+  expect(operatorRows()).toEqual({ n: 1 });
   stop.abort();
   expect(await closed).toBe(0);
 });

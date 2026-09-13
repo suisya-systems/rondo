@@ -433,9 +433,10 @@ export class SayPort {
     // releases that hold -- a message that moves work, which section 5a says
     // then needs a press too. Refused here, inside the capability, so whatever
     // holds a send is refused and not only the page's route; fail closed when
-    // the thread cannot be read. Provisional until the owner answers whether a
-    // free-text answer to an ask may be a send. Not a race: `asks` never
-    // changes on a row, and an ask answered in between has no hold left.
+    // the thread cannot be read. The page answers a waiting ask through
+    // {@link answerAsk}, on a press (D-0059 section 5a's falsifier, D-0069 rule
+    // 5). Not a race: `asks` never changes on a row, and an ask answered in
+    // between has no hold left.
     if (message.inReplyTo !== null && (await this.#waiting(message.inReplyTo))) {
       return {
         ok: false,
@@ -443,6 +444,31 @@ export class SayPort {
         waitingAsk: true,
       };
     }
+    return await this.#say(message);
+  }
+
+  /**
+   * Record one reply that answers a question, on one **press** (#220 S1).
+   *
+   * **Why a press and not a send.** D-0059 section 5a's falsifier: "A message
+   * posted with no person typing it being acted on as if the person had said
+   * it ... If a later entry lets a message move work, the send needs a press
+   * too." D-0069 rule 5 makes an unanswered ask hold back an operator-written
+   * first admission, so the reply that answers it releases work: it is that
+   * later entry. Same writer as {@link say} (the operator's message under the
+   * approver's name), reached only with a press {@link mintPress} minted and
+   * nobody has spent -- so a script's `hx-post` or `fetch`, which can mint a
+   * send, cannot answer a question. A press may reply to any message; it is
+   * the route for a question because only a question needs one.
+   */
+  async answerAsk(
+    press: Press,
+    message: SentMessage & { readonly inReplyTo: string },
+  ): Promise<Said> {
+    if (!minted.has(press)) {
+      return { ok: false, note: "nothing was answered: this was not a person's press" };
+    }
+    minted.delete(press);
     return await this.#say(message);
   }
 
@@ -506,6 +532,16 @@ const SEND_ROUTES: ReadonlyMap<string, SentKind> = new Map([
   ["/request", "request"],
   ["/reply", "reply"],
 ]);
+
+/**
+ * The route that answers a question waiting in a thread: a reply on a press,
+ * not a send ({@link SayPort.answerAsk} says why -- D-0059 section 5a's
+ * falsifier and D-0069 rule 5). A native form `POST` only, never `hx-post`.
+ */
+const ANSWER_ASK_ROUTE = "/answer-ask";
+
+/** The routes whose body is a person's words, and so takes the larger limit. */
+const MESSAGE_ROUTES: ReadonlySet<string> = new Set([...SEND_ROUTES.keys(), ANSWER_ASK_ROUTE]);
 
 /**
  * The cap on a send's body: a person's words, not two short fields. 64 KiB is
@@ -606,8 +642,8 @@ function said(c: Context<PageEnv>, status: 400 | 403 | 404 | 409 | 413 | 421 | 5
  *
  * **The routes are the vocabulary** (D-0059 R4): `GET` of the fixed files,
  * `GET /` for the three views, and section 5a's closed table of write routes:
- * `POST /`, the lap-end `approve` press, and the two sends, `POST /request`
- * and `POST /reply`. `test/access/web-app.test.ts` enumerates `app.routes` and
+ * `POST /`, the lap-end `approve` press, the two sends, `POST /request`
+ * and `POST /reply`, and the question's answer on a press, `POST /answer-ask`. `test/access/web-app.test.ts` enumerates `app.routes` and
  * fails on any other non-`GET` entry.
  */
 export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
@@ -665,7 +701,7 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
   // origin is refused before the route. Mounted on `/` only, so a `POST` to a
   // served file stays the 404 any unknown write is.
   app.use("/", csrf());
-  for (const path of SEND_ROUTES.keys()) {
+  for (const path of MESSAGE_ROUTES) {
     app.use(path, csrf());
   }
   // One limit middleware, sized by the address: a send carries a person's
@@ -681,7 +717,7 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     onError: (c) => refused(c, 413, "sendRefusedTooLong", null),
   });
   app.use(async (c, next) =>
-    SEND_ROUTES.has(c.req.path) ? await sendLimit(c, next) : await pressLimit(c, next),
+    MESSAGE_ROUTES.has(c.req.path) ? await sendLimit(c, next) : await pressLimit(c, next),
   );
 
   for (const [path, served] of SERVED) {
@@ -824,6 +860,46 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     });
   }
 
+  // **The answer to a waiting question, on a press** (#220 S1): a reply whose
+  // mint is `mintPress`, not `mintSend`, because answering an ask releases the
+  // hold D-0069 rule 5 puts on work, and D-0059 section 5a's falsifier says a
+  // message that moves work needs a press. The form is a native `POST` only, so
+  // a click is a navigation carrying `Sec-Fetch-User: ?1`; the draft survives
+  // a refusal in `sessionStorage` (`page/composer.js`).
+  app.post(ANSWER_ASK_ROUTE, async (c) => {
+    if (say === null) {
+      return refused(c, 403, "sendRefusedNoApprover", null);
+    }
+    const form = await c.req.parseBody();
+    const back = typeof form["in_reply_to"] === "string" ? form["in_reply_to"] : null;
+    const minting = mintPress(c, form["token"]);
+    if (!("press" in minting)) {
+      return refused(c, minting.status, "answerRefusedPress", back);
+    }
+    const messageId = form["message_id"];
+    if (
+      typeof messageId !== "string" ||
+      !SENT_MESSAGE_ID.test(messageId) ||
+      back === null ||
+      back === ""
+    ) {
+      return refused(c, 400, "sendRefusedForm", back);
+    }
+    const body = form["body"];
+    if (typeof body !== "string" || body.trim() === "") {
+      return refused(c, 400, "sendRefusedNoWords", back);
+    }
+    const message = { messageId, body, inReplyTo: back };
+    const answered = await say.answerAsk(minting.press, message);
+    if (!answered.ok && !(await alreadyThere(message))) {
+      return refused(c, 409, "sendRefusedNotTaken", back);
+    }
+    return c.redirect(
+      `${viewHref({ kind: "thread", messageId, to: null }, tagOf(c))}#${messageId}`,
+      303,
+    );
+  });
+
   /** Whether the thread already holds exactly this operator message. */
   async function alreadyThere(message: SentMessage): Promise<boolean> {
     const read = await reading.record.threadMessages();
@@ -857,7 +933,8 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
       | "sendRefusedNoWords"
       | "sendRefusedNotTaken"
       | "sendRefusedAsk"
-      | "sendRefusedTooLong",
+      | "sendRefusedTooLong"
+      | "answerRefusedPress",
     back: string | null,
   ) {
     const wording = wordingOf(c);

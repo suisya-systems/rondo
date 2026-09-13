@@ -129,7 +129,12 @@ export interface Chrome {
   readonly basesLabel: string;
   readonly replyAction: string;
   readonly openThread: string;
-  readonly replyingTo: (who: string, words: string) => string;
+  /** The reply box's target, on one short line: who wrote it and how long ago. */
+  readonly replyingTo: (who: string, since: string) => string;
+  /** The same line when the target is a question waiting on the person, answered by a press. */
+  readonly answeringTo: (who: string, since: string) => string;
+  /** The filled button that answers a waiting question (a press, not a send). */
+  readonly answerAskAction: string;
   readonly newRequestHeading: string;
   readonly requestPlaceholder: string;
   readonly replyPlaceholder: string;
@@ -154,7 +159,8 @@ export interface Chrome {
   readonly sendRefusedAsk: string;
   readonly sendRefusedTooLong: string;
   readonly sendRefusedUnknown: string;
-  readonly askNotByReply: string;
+  /** An answer to a question that did not arrive as a person's press of its button. */
+  readonly answerRefusedPress: string;
   /** Said in the reply box while its thread holds a question still waiting: the box does not answer it. */
   readonly replyNotAnswer: string;
   /** Script off, a refused send lands on its own page: the way back, and where the words are. */
@@ -419,7 +425,9 @@ explanation you pressed on and then answers the gate.`,
   basesLabel: "rests on",
   replyAction: "Reply",
   openThread: "Open the thread",
-  replyingTo: (who, words) => `Replying to ${who}: ${words}`,
+  replyingTo: (who, since) => `Replying to ${who}, ${since} ago`,
+  answeringTo: (who, since) => `Answering ${who}'s question, ${since} ago`,
+  answerAskAction: "Answer",
   newRequestHeading: "New request",
   requestPlaceholder: "What do you want done? Write it as you would say it.",
   replyPlaceholder: "Write a reply.",
@@ -438,12 +446,12 @@ explanation you pressed on and then answers the gate.`,
   sendRefusedNotTaken:
     "The conversation did not record this message; the message it replies to may not be in the thread. Reload the thread and try again.",
   sendRefusedAsk:
-    "That message is a question still waiting on your answer. Answering it lets its work carry on, which takes a press, and this page does not offer that press yet. Until it does, answer it in the terminal with rondo reply.",
+    "That message is a question still waiting on your answer. Open its thread and press Answer.",
   sendRefusedTooLong:
     "That message is longer than this page accepts. Shorten it, or split it into two replies.",
   sendRefusedUnknown: "rondo did not take this message. Reload the page and send again.",
-  askNotByReply:
-    "Answering this lets its work carry on, so it takes a press, not a reply. The page cannot answer it yet: answer it in the terminal with rondo reply.",
+  answerRefusedPress:
+    "An answer is taken only from a press of the Answer button. Reload the thread and press Answer again.",
   replyNotAnswer: "This reply does not answer the question waiting in this thread.",
   sendBack: "Back to the thread",
   sendBackNote: "Your browser's Back button returns to what you wrote.",
@@ -648,7 +656,9 @@ const JA: Partial<Chrome> = Object.freeze({
   basesLabel: "根拠",
   replyAction: "返信する",
   openThread: "スレッドを開く",
-  replyingTo: (who, words) => `${who} に返信: ${words}`,
+  replyingTo: (who, since) => `${who} に返信 · ${since}前`,
+  answeringTo: (who, since) => `${who} の質問に回答 · ${since}前`,
+  answerAskAction: "回答する",
   newRequestHeading: "新しい依頼",
   requestPlaceholder: "何をしてほしいですか。話すときの言葉のまま書いてください。",
   replyPlaceholder: "返信を書く",
@@ -668,13 +678,13 @@ const JA: Partial<Chrome> = Object.freeze({
   sendRefusedNotTaken:
     "会話がこのメッセージを記録しませんでした。返信先のメッセージがスレッドに無いのかもしれません。スレッドを読み込み直してから、もう一度試してください。",
   sendRefusedAsk:
-    "返信先は、まだあなたの回答を待っている質問です。回答するとその作業が先へ進むため押下が必要ですが、このページにはまだその押下がありません。それまでは、ターミナルの rondo reply で回答してください。",
+    "返信先は、まだあなたの回答を待っている質問です。スレッドを開いて「回答する」を押してください。",
   sendRefusedTooLong:
     "このページが受け付けるより長いメッセージです。短くするか、2 つの返信に分けてください。",
   sendRefusedUnknown:
     "rondo はこのメッセージを受け取りませんでした。ページを読み込み直してから、もう一度送信してください。",
-  askNotByReply:
-    "回答すると作業が先へ進むため、返信ではなく押下が必要です。このページではまだ回答できないので、ターミナルの rondo reply で回答してください。",
+  answerRefusedPress:
+    "回答は「回答する」ボタンを押したときだけ受け付けます。スレッドを読み込み直して、もう一度「回答する」を押してください。",
   replyNotAnswer: "この返信は、このスレッドで待っている質問への回答にはなりません。",
   sendBack: "スレッドに戻る",
   sendBackNote: "ブラウザの「戻る」で、書いた文に戻れます。",

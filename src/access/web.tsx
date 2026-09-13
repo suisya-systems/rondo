@@ -1049,110 +1049,105 @@ function waitingView(
   shown: ReadonlyMap<string, Shown>,
   threads: Threads,
   actorId: string | null,
+  count: number,
 ) {
   const asks = threads.messages.filter((message) => threads.waiting.has(message.messageId));
   const hoisted = [
     ...waiting.filter((record) => shown.has(record.id)),
     ...waiting.filter((record) => !shown.has(record.id)),
   ];
-  return questionGroup(
-    "waiting",
-    wording.waitingHeading(waiting.length + asks.length + open.length),
-    [
-      ...hoisted.map((record) => {
-        const framing = shown.get(record.id);
-        return lapRow(
-          "waiting",
+  return questionGroup("waiting", wording.waitingHeading(count), [
+    ...hoisted.map((record) => {
+      const framing = shown.get(record.id);
+      return lapRow(
+        "waiting",
+        record,
+        stateHead(
+          wording,
           record,
-          stateHead(
-            wording,
-            record,
-            "wait",
-            wording.age(ago(record.updatedAtMs, nowMs)),
-            wording.waitingHead(record.status, wording.age(ago(record.updatedAtMs, nowMs))),
-          ),
-          [unblockedBy(wording, record), spentLine(wording, record), fenceLine(wording, record)],
-          framing === undefined ? answerLink(wording, record, token) : null,
-          framing === undefined ? null : approveView(wording, record, token, framing),
-        );
-      }),
-      // **An ask in a request thread waits on the person too** (D-0061 rule 2.7,
-      // #220 S1): its words, the request it was asked in, and the way to reply --
-      // which lands on the thread with the reply box already pointed at it.
-      ...asks.map((ask) => {
-        const root = threads.rootOf(ask.messageId);
-        const request = root === null ? undefined : threads.byId.get(root);
-        return (
-          <li id={`ask-${ask.messageId}`} data-row="" tabindex={-1} class={ROW}>
-            {glyph("wait")}
-            <div class="min-w-0">
-              <p
-                class="request line-clamp-2 text-[15px] leading-6 font-semibold wrap-anywhere"
-                title={ask.body}
-                lang=""
-              >
-                {firstLine(ask.body)}
-              </p>
-              {metaLine(
-                <>
-                  <span class="head inline-flex items-center gap-2 whitespace-nowrap">
-                    <span
-                      class={`inline-flex shrink-0 items-center rounded-full border px-2 py-px text-[11.5px] font-medium leading-4 whitespace-nowrap ${TONE.wait}`}
-                    >
-                      {wording.askWaitingPill}
-                    </span>
-                    <span class="tabular-nums">{wording.age(ago(ask.atMs, nowMs))}</span>
-                  </span>
-                  <span>{whoWrote(wording, ask, actorId)}</span>
-                  {request === undefined ? null : (
-                    <span class="line min-w-0 truncate" lang="">
-                      {wording.askedIn(firstLine(request.body))}
-                    </span>
-                  )}
-                </>,
-              )}
-              <p class="mt-2">
-                <a
-                  id={`reply-to-${ask.messageId}`}
-                  href={`${viewHref(
-                    { kind: "thread", messageId: root ?? ask.messageId, to: null },
-                    wording.lang,
-                  )}#${ask.messageId}`}
-                  data-open=""
-                  class={`${PRIMARY} h-7 px-3 text-[13px]`}
-                >
-                  {wording.openThread}
-                </a>
-              </p>
-            </div>
-          </li>
-        );
-      }),
-      ...open.map((proposal) => (
-        <li id={`proposal-${proposal.proposalId}`} data-row="" tabindex={-1} class={ROW}>
+          "wait",
+          wording.age(ago(record.updatedAtMs, nowMs)),
+          wording.waitingHead(record.status, wording.age(ago(record.updatedAtMs, nowMs))),
+        ),
+        [unblockedBy(wording, record), spentLine(wording, record), fenceLine(wording, record)],
+        framing === undefined ? answerLink(wording, record, token) : null,
+        framing === undefined ? null : approveView(wording, record, token, framing),
+      );
+    }),
+    // **An ask in a request thread waits on the person too** (D-0061 rule 2.7,
+    // #220 S1): its words, the request it was asked in, and the way to reply --
+    // which lands on the thread with the reply box already pointed at it.
+    ...asks.map((ask) => {
+      const root = threads.rootOf(ask.messageId);
+      const request = root === null ? undefined : threads.byId.get(root);
+      return (
+        <li id={`ask-${ask.messageId}`} data-row="" tabindex={-1} class={ROW}>
           {glyph("wait")}
           <div class="min-w-0">
-            <p class="head text-[15px] leading-6 font-semibold wrap-anywhere">
-              {wording.proposalHead(proposal.kind, wording.age(ago(proposal.createdAtMs, nowMs)))}
+            <p
+              class="request line-clamp-2 text-[15px] leading-6 font-semibold wrap-anywhere"
+              title={ask.body}
+              lang=""
+            >
+              {firstLine(ask.body)}
             </p>
             {metaLine(
               <>
-                <span class="line wrap-anywhere">
-                  {wording.aboutIteration(proposal.iterationId)}
+                <span class="head inline-flex items-center gap-2 whitespace-nowrap">
+                  <span
+                    class={`inline-flex shrink-0 items-center rounded-full border px-2 py-px text-[11.5px] font-medium leading-4 whitespace-nowrap ${TONE.wait}`}
+                  >
+                    {wording.askWaitingPill}
+                  </span>
+                  <span class="tabular-nums">{wording.age(ago(ask.atMs, nowMs))}</span>
                 </span>
-                <span class="basis font-mono text-[11.5px] wrap-anywhere text-faint">
-                  {wording.proposalBasis(proposal.proposalId)}
-                </span>
+                <span>{whoWrote(wording, ask, actorId)}</span>
+                {request === undefined ? null : (
+                  <span class="line min-w-0 truncate" lang="">
+                    {wording.askedIn(firstLine(request.body))}
+                  </span>
+                )}
               </>,
             )}
-          </div>
-          <div class={META}>
-            <p>{proposal.proposalId}</p>
+            <p class="mt-2">
+              <a
+                id={`reply-to-${ask.messageId}`}
+                href={`${viewHref(
+                  { kind: "thread", messageId: root ?? ask.messageId, to: ask.messageId },
+                  wording.lang,
+                )}#${ask.messageId}`}
+                data-open=""
+                class={`${PRIMARY} h-7 px-3 text-[13px]`}
+              >
+                {wording.openThread}
+              </a>
+            </p>
           </div>
         </li>
-      )),
-    ],
-  );
+      );
+    }),
+    ...open.map((proposal) => (
+      <li id={`proposal-${proposal.proposalId}`} data-row="" tabindex={-1} class={ROW}>
+        {glyph("wait")}
+        <div class="min-w-0">
+          <p class="head text-[15px] leading-6 font-semibold wrap-anywhere">
+            {wording.proposalHead(proposal.kind, wording.age(ago(proposal.createdAtMs, nowMs)))}
+          </p>
+          {metaLine(
+            <>
+              <span class="line wrap-anywhere">{wording.aboutIteration(proposal.iterationId)}</span>
+              <span class="basis font-mono text-[11.5px] wrap-anywhere text-faint">
+                {wording.proposalBasis(proposal.proposalId)}
+              </span>
+            </>,
+          )}
+        </div>
+        <div class={META}>
+          <p>{proposal.proposalId}</p>
+        </div>
+      </li>
+    )),
+  ]);
 }
 
 /**
@@ -1790,7 +1785,8 @@ function messageView(
   const parent = message.inReplyTo === null ? undefined : threads.byId.get(message.inReplyTo);
   const drafter = message.authorKind === "drafter";
   // **The way to point the reply box here**, a navigation `GET` that writes
-  // nothing, quiet in the header; an ask still waiting has none (below).
+  // nothing, quiet in the header. On an ask still waiting it is labelled as
+  // answering, because the box it points then answers on a press.
   const replyLink = (
     <a
       id={`reply-${message.messageId}`}
@@ -1798,7 +1794,7 @@ function messageView(
       data-open=""
       class="reply-link rounded px-1 font-medium text-link hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
     >
-      {wording.replyAction}
+      {waiting ? wording.answerAskAction : wording.replyAction}
     </a>
   );
   return (
@@ -1849,7 +1845,7 @@ function messageView(
             {wording.age(ago(message.atMs, nowMs))}
           </a>
           <span class="flex-1" />
-          {forms && !waiting ? replyLink : null}
+          {forms ? replyLink : null}
         </header>
         {/*
          * Said only where the reply is to neither the message above it nor the
@@ -1886,17 +1882,6 @@ function messageView(
         >
           {message.body}
         </p>
-        {/*
-         * **A waiting ask is not answered by a reply** (#220 S1 review): the
-         * first reply releases the line it holds (D-0066 rule 4.4), which is
-         * an answer that moves work, and D-0059 section 5a keeps those on a
-         * press. The server refuses such a send; the page does not offer it.
-         */}
-        {forms && waiting ? (
-          <p class="note px-4 pb-3 text-[12.5px] leading-5 text-muted-foreground">
-            {wording.askNotByReply}
-          </p>
-        ) : null}
         {message.bases.length === 0 ? null : (
           <div class="bases flex flex-wrap items-center gap-1.5 border-t border-border/60 px-4 py-2">
             <span class="text-[11px] font-medium text-faint">{wording.basesLabel}</span>
@@ -2084,9 +2069,10 @@ function requestsView(wording: Chrome, threads: Threads, nowMs: number, actorId:
 
 /**
  * The message a reply box answers: the one the person pointed at with `Reply`,
- * else the latest message **the other party** wrote, else the thread's latest
- * message -- never an ask still waiting, which a reply would answer (see
- * `messageView`), so a thread of nothing else has no box.
+ * else the latest question still waiting in the thread, else the latest
+ * message **the other party** wrote, else the thread's latest message.
+ * `answers` is whether the target is a waiting question, which the box then
+ * answers on a press (`/answer-ask`) rather than a send.
  *
  * **Not the person's own latest by default** (the S1 design pass on #220): a box
  * that read "Replying to you" under a drafter's question pointed a person at
@@ -2096,24 +2082,35 @@ function replyTarget(
   threads: Threads,
   view: { readonly messageId: string; readonly to: string | null },
   actorId: string | null,
-): { readonly root: string; readonly target: ThreadMessageDraft } | null {
+): {
+  readonly root: string;
+  readonly target: ThreadMessageDraft;
+  readonly answers: boolean;
+  readonly asksWaiting: boolean;
+} | null {
   const root = threads.rootOf(view.messageId);
   if (root === null) {
     return null;
   }
-  const members = threads.messages.filter(
-    (message) =>
-      threads.rootOf(message.messageId) === root && !threads.waiting.has(message.messageId),
-  );
+  const members = threads.messages.filter((message) => threads.rootOf(message.messageId) === root);
+  const asks = members.filter((message) => threads.waiting.has(message.messageId));
   const pointed = view.to === null ? undefined : threads.byId.get(view.to);
   const theirs = members.filter(
     (message) => !(message.authorKind === "operator" && message.authorId === actorId),
   );
   const target =
     (pointed !== undefined && members.includes(pointed) ? pointed : undefined) ??
+    asks.at(-1) ??
     theirs.at(-1) ??
     members.at(-1);
-  return target === undefined ? null : { root, target };
+  return target === undefined
+    ? null
+    : {
+        root,
+        target,
+        answers: threads.waiting.has(target.messageId),
+        asksWaiting: asks.length > 0,
+      };
 }
 
 /** A message id minted for one form (`newMessageId` in `src/access/web-app.ts`). */
@@ -2135,6 +2132,12 @@ export type MintMessageId = (kind: "request" | "reply") => string;
  * because where it lands is a different view -- its own thread -- and a swap
  * would draw that thread under the requests' address.
  *
+ * **Aimed at a waiting question, the box is a press** (#220 S1): action
+ * `/answer-ask`, a native `POST` with no `hx-post` in either mode, and a filled
+ * button labelled as answering. Answering an ask releases the hold D-0069
+ * rule 5 puts on work, and D-0059 section 5a's falsifier says a message that
+ * moves work needs a press, which only a person's navigation mints.
+ *
  * **The id is minted here, at render, and carried hidden** (D-0061 rule 2.1):
  * the same form sent twice is one id, and the store refuses the second. It is
  * never printed. With no approver there is no form, and the box's place says
@@ -2147,6 +2150,7 @@ function composerView(
   token: string | null,
   newId: MintMessageId | null,
   actorId: string | null,
+  nowMs: number,
 ) {
   if (view.kind !== "requests" && view.kind !== "thread") {
     return null;
@@ -2163,20 +2167,21 @@ function composerView(
     return null;
   }
   const kind = replying === null ? "request" : "reply";
-  const action = `/${kind}?lang=${encodeURIComponent(wording.lang)}`;
+  const answers = replying?.answers === true;
+  const action = `/${answers ? "answer-ask" : kind}?lang=${encodeURIComponent(wording.lang)}`;
   return (
     <form
       id="composer"
       method="post"
       action={action}
-      {...(replying === null
+      {...(replying === null || answers
         ? {}
         : {
             "hx-post": action,
             "hx-target": "#ledger",
             "hx-select": "#ledger",
             "hx-swap": "outerHTML show:window:bottom",
-            "hx-select-oob": "#composer-fields,#requests-count",
+            "hx-select-oob": "#composer-fields,#waiting-count",
             // **One send per press, visibly** (the S1 design pass): the button
             // is disabled while its request is in flight. The store's refusal
             // of a repeated id is still what makes a double send one message.
@@ -2215,9 +2220,9 @@ function composerView(
                   <path d="M3.5 2.5v5a3 3 0 0 0 3 3h6m-3-3 3 3-3 3" />
                 </svg>
                 <span class="truncate">
-                  {wording.replyingTo(
+                  {(answers ? wording.answeringTo : wording.replyingTo)(
                     whoWrote(wording, replying.target, actorId),
-                    firstLine(replying.target.body),
+                    wording.age(ago(replying.target.atMs, nowMs)),
                   )}
                 </span>
               </a>
@@ -2256,11 +2261,7 @@ function composerView(
              * their answer to the message above and see nothing say it did not
              * reach the question (see `replyTarget`).
              */}
-            {threads.messages.some(
-              (message) =>
-                threads.waiting.has(message.messageId) &&
-                threads.rootOf(message.messageId) === replying.root,
-            ) ? (
+            {replying.asksWaiting && !answers ? (
               <p class="not-answer mx-4 mt-0.5 text-[12px] leading-5 text-faint">
                 {wording.replyNotAnswer}
               </p>
@@ -2276,7 +2277,11 @@ function composerView(
         />
       </div>
       <label for="composer-body" class="sr-only">
-        {replying === null ? wording.newRequestHeading : wording.replyAction}
+        {replying === null
+          ? wording.newRequestHeading
+          : answers
+            ? wording.answerAskAction
+            : wording.replyAction}
       </label>
       <textarea
         id="composer-body"
@@ -2301,7 +2306,11 @@ function composerView(
           </span>
           <button
             type="submit"
-            class="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-md bg-foreground px-4 text-sm font-semibold text-background shadow-xs outline-none hover:bg-foreground/85 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card disabled:cursor-wait disabled:opacity-60"
+            class={
+              answers
+                ? `${PRIMARY} h-9 px-4 text-sm`
+                : "inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-md bg-foreground px-4 text-sm font-semibold text-background shadow-xs outline-none hover:bg-foreground/85 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card disabled:cursor-wait disabled:opacity-60"
+            }
           >
             <svg
               aria-hidden="true"
@@ -2315,7 +2324,7 @@ function composerView(
             >
               <path d="M8 13V3m-4 4 4-4 4 4" />
             </svg>
-            {wording.sendAction}
+            {answers ? wording.answerAskAction : wording.sendAction}
           </button>
         </span>
       </div>
@@ -2423,6 +2432,11 @@ export async function operatorPage(
   // Reused rather than asked again when the inbox already asked: it is a
   // continuo subprocess per running lap, and this page redraws itself.
   const transcripts = inbox?.transcripts ?? (await locateRunning(ports, live));
+  // **One count of what waits on the person** (#220 S1): the header pill and the
+  // summary's *waiting for your answer* heading both say this number -- gates,
+  // questions in threads, and proposals an answer can settle -- so they cannot
+  // disagree.
+  const waitingCount = waiting.length + threads.waiting.size + open.length;
 
   const keepsCurrent = isLive(view);
   // **The token arrives null exactly when there is no writer** (D-0041 rule 4,
@@ -2559,9 +2573,11 @@ export async function operatorPage(
               }
             </h1>
             {/*
-             * **The way into the requests, on every view** (#220 S1), with the
-             * count of asks waiting on the person. The count is its own element
-             * so a redraw can renew it out of band: the header is not swapped.
+             * **The way into the requests, on every view** (#220 S1), and beside
+             * it the count of everything waiting on the person -- the same number
+             * as the summary's heading, and a link to that summary. The count is
+             * its own element so a redraw can renew it out of band: the header
+             * is not swapped.
              */}
             <span aria-hidden="true" class="text-faint">
               /
@@ -2573,16 +2589,19 @@ export async function operatorPage(
               {...(view.kind === "requests" ? { "aria-current": "page" } : {})}
             >
               {wording.requestsNav}
-              <span id="requests-count" class="empty:hidden">
-                {threads.waiting.size === 0 ? null : (
-                  // **Said as what it counts** (the S1 design pass): a bare `1`
-                  // beside "Requests" read as a count of requests.
-                  <span class={`${PILL} px-1.5 font-sans ${TONE.wait}`}>
-                    {wording.waitingCount(threads.waiting.size)}
-                  </span>
-                )}
-              </span>
             </a>
+            <span id="waiting-count" class="empty:hidden">
+              {waitingCount === 0 ? null : (
+                // **Said as what it counts** (the S1 design pass): a bare `1`
+                // beside "Requests" read as a count of requests.
+                <a
+                  href={viewHref({ kind: "summary" }, wording.lang)}
+                  class={`${PILL} px-1.5 font-sans ${TONE.wait} hover:underline`}
+                >
+                  {wording.waitingCount(waitingCount)}
+                </a>
+              )}
+            </span>
             {
               // The thread's own crumb, where there is room for it; the thread
               // header names it at every width.
@@ -2703,7 +2722,7 @@ export async function operatorPage(
             </p>
           ) : null}
           {view.kind === "requests"
-            ? composerView(wording, view, threads, token, newId, ports.actorId)
+            ? composerView(wording, view, threads, token, newId, ports.actorId, nowMs)
             : null}
           {
             // **The ledger is what the refresh swaps**, and only on a live
@@ -2721,7 +2740,7 @@ export async function operatorPage(
                     "hx-trigger": "every 5s",
                     "hx-select": "#ledger",
                     "hx-swap": "outerHTML",
-                    "hx-select-oob": "#requests-count",
+                    "hx-select-oob": "#waiting-count",
                   }
                 : {})}
             >
@@ -2739,7 +2758,17 @@ export async function operatorPage(
                 nothingView(wording)
               ) : (
                 <>
-                  {waitingView(wording, waiting, open, nowMs, token, shown, threads, ports.actorId)}
+                  {waitingView(
+                    wording,
+                    waiting,
+                    open,
+                    nowMs,
+                    token,
+                    shown,
+                    threads,
+                    ports.actorId,
+                    waitingCount,
+                  )}
                   {attentionView(wording, unreadable)}
                   {runningView(wording, running, transcripts, nowMs)}
                   {endedView(wording, ended, nowMs)}
@@ -2774,7 +2803,7 @@ export async function operatorPage(
             </div>
           }
           {view.kind === "thread"
-            ? composerView(wording, view, threads, token, newId, ports.actorId)
+            ? composerView(wording, view, threads, token, newId, ports.actorId, nowMs)
             : null}
           {
             // **Each view says which of the two it is**, because "redraws every
@@ -2797,7 +2826,16 @@ export async function operatorPage(
                       : wording.stillNote
                 }
               >
-                {keepsCurrent ? wording.liveShort(REFRESH_SECONDS) : wording.stillShort}
+                {
+                  // **Script only, as the header's live pill** (#220 S1): with
+                  // script off nothing redraws in place, and a thread with a box
+                  // does not reload at all, so "live" would be false there.
+                  keepsCurrent ? (
+                    <span class="js-only">{wording.liveShort(REFRESH_SECONDS)}</span>
+                  ) : (
+                    wording.stillShort
+                  )
+                }
               </span>
             </p>
           }
