@@ -106,7 +106,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0066 | The scope record: one immutable row with a digest, approved by a row of its own and never by `human_decision`, spent once per act inside the act's own transaction, refused at one point that stops one line, and `D-0062` rule 3 and `D-0022` rule 9 restated for it | accepted |
 | D-0067 | The secretary's running half has no new owner: the advisory reads lines against each other and drafts an order, the surface attempts acts in that order, the store keeps the person's standing policies, and review extensions and merges still reach the person | accepted |
 | D-0068 | One voice and a patrol: the person asks rondo why a line waits and gets an answer joined from rows with bases, a timer in the resident host reads rows against each lap's own declared patience, and nothing it finds is handled silently | accepted |
-| D-0069 | A scope before the first lap: an agent type becomes a record rondo holds when an operator's scope is written from a plan, `start` spends a scope through the `lineage_start` arm, and an operator-written first admission waits on every open question in its request's thread | proposed |
+| D-0069 | A scope before the first lap: an agent type becomes a record rondo holds when an operator's scope is written from a plan, `start` spends a scope through the `lineage_start` arm, and an operator-written first admission waits on every open question in its request's thread | accepted |
 
 ---
 
@@ -12042,6 +12042,16 @@ rules and the heading's "never", and nothing else.
       a plan an operator writes by hand keeps naming its own agent type exactly as today. (b) adds
       a proposer. It does not take the choice away from the person.
 
+> **Annotation (2026-09-13, from D-0069).** Added after this entry was accepted, and additive, by the
+> answer of rondo's human gate to `D-0069`'s first point.
+> **Rule 1.2's "agent-type record rondo already holds" gains a second concrete form**: an
+> `agent_type_record` row that `src/access` writes from a plan an operator gives `rondo scope`, in the
+> scope row's own transaction (`D-0069` section 1 (a)). The selection, the byte-for-byte copy and the
+> refusal of a digest nothing stores are unchanged, and the drafter still composes no agent type. The
+> falsifier "a catalog arriving with agent types that were never run" is answered: an unrun agent type
+> may be named **when an operator recorded it from a plan for a scope a person approves**, and not
+> otherwise. Nothing above is edited.
+
 2. **`D-0044` rule 3, restated.** `standard` is the default and the fallback direction is up. What
    is refused is **routing to `mechanical` without a person approving the agent type that carries
    it**. Inference is allowed, but only as a proposal:
@@ -13689,6 +13699,14 @@ number.
    writer refuses a `drafter` row with no bases, as `D-0061` rule 2.6 does for a message. The
    advisory still decides nothing: a drafted scope binds nothing until section 2's approval.
 
+> **Annotation (2026-09-13, from D-0069).** Added after this entry was accepted, and additive, by the
+> answer of rondo's human gate to `D-0069`'s first point.
+> **Rule 1.2.3's "a record rondo already holds"** is read with `D-0069`'s annotation on `D-0062`
+> rule 1.2: an iteration row **or** an `agent_type_record` row with that digest. An `operator` scope
+> may record such a row from a plan in its own transaction; a `drafter` scope may list only digests
+> already held. The scope's screen prints each listed digest's tier and granted keys read back from
+> the held record. The writer's refusal of an unheld digest stays. Nothing above is edited.
+
 ### 2. The approval of a scope (P1)
 
 1. **A scope's approval is a row of its own, `scope_decision`, and never a `human_decision` row.**
@@ -13747,6 +13765,11 @@ number.
    joins**: iteration to consumption to decision to scope, and consumption to proposal. With `D-0032`
    rule 10's withheld rows this is the audit `D-0064` rule 3.5 names. No column is added to the
    iteration row: the link has one home, the consumption row.
+
+> **Annotation (2026-09-13, from D-0069).** Added after this entry was accepted, and additive, by the
+> answer of rondo's human gate to `D-0069`'s second point.
+> **Rule 3.3's `proposal_id` is null for an in-scope `retry` and for an operator-written plan's first
+> admission** by `rondo start --scope-decision-id` (`D-0069` section 2 (i)). Nothing above is edited.
 
 ### 4. The one point where the organisation stops
 
@@ -13821,6 +13844,18 @@ number.
      not-yet-admitted plans until answered; lineages already running carry on. A P2 about the
      request, which names no lap, does the same.
    This is the gate's second answer.
+
+> **Annotation (2026-09-13, from D-0069).** Added after this entry was accepted, and additive, by the
+> answer of rondo's human gate to `D-0069`'s second and third points.
+> - **Rule 4.2's readings bullet**: "an admission that starts a lineage (a drafted split's plan)"
+>   includes an operator-written plan admitted by `rondo start --scope-decision-id`; no reading is
+>   required of either.
+> - **Rule 4.2's asks bullet and rule 4.4**: a first admission **that names no proposal** is held back
+>   by **every** unanswered `asks` message in its request's thread, whatever its bases (`D-0069`
+>   section 3, third point (A)), since whether it continues a stopped line cannot be decided
+>   (`D-0064` rule 3.3). The coupling is confined to operator-written first admissions within the same
+>   request, and it ends when the stop is answered. A first admission from a split proposal keeps
+>   rule 4.4 as written. Nothing above is edited.
 
 ### 5. `D-0062` rule 3 and `D-0022` rule 9, restated
 
@@ -14697,8 +14732,9 @@ The points are kept as put, and the answer follows them.
 
 ## D-0069 — A scope before the first lap: an agent type becomes a record rondo holds when an operator's scope is written from a plan, `start` spends a scope through the `lineage_start` arm, and an operator-written first admission waits on every open question in its request's thread
 
-**Status:** proposed (2026-09-13). Three points are put to the human gate; see "What is put to the
-human gate". Refs `D-0006`, `D-0022`, `D-0030`, `D-0047`, `D-0061`, `D-0062`, `D-0064`, `D-0065`,
+**Status:** accepted (2026-09-13, rondo's human gate). Three points were put to the gate and it chose
+the recommended option on each; the answers are recorded in section "What was put to the human gate,
+and its answer". Refs `D-0006`, `D-0022`, `D-0030`, `D-0047`, `D-0061`, `D-0062`, `D-0064`, `D-0065`,
 `D-0066`, rondo#201.
 
 **This entry decides and does not build.** Nothing in `src/` changes with it, and no earlier entry is
@@ -14842,7 +14878,10 @@ budgets and the request's asks, which is what `D-0066` section 3.2 says an admis
   request an approved scope lists would be a new rule over the person's own act, so it is left as a
   residual.
 
-### What is put to the human gate
+### What was put to the human gate, and its answer
+
+The points are kept as put, and the answer follows them.
+
 
 1. **How an agent type becomes a record rondo holds before a lap** (section 1).
    - **(a) Recorded from an operator's plan in the scope's transaction** (recommended). *Loses:* a
@@ -14866,6 +14905,16 @@ budgets and the request's asks, which is what `D-0066` section 3.2 says an admis
    - **(B) Only asks with no `iteration_id` basis**, as `askStandsOver` does today. *Loses:* the
      bypass in section 3 stays open: a stopped line re-runs as a new lineage with a fresh round
      budget, under the same scope and with no person asked.
+
+**The gate's answer (2026-09-13):**
+
+1. **(a).** An agent type becomes a record rondo holds when an operator's scope records it from a
+   plan, in the scope row's own transaction.
+2. **(i).** `rondo start --scope-decision-id` spends a scope on a first admission through the
+   `lineage_start` arm.
+3. **(A).** Every unanswered `asks` message in the request's thread holds back an operator-written
+   first admission. The gate confirmed the extent of the coupling: it holds back only an
+   operator-written first admission within the same request, and it ends once the stop is answered.
 
 ### What moving to this gives up
 
@@ -14895,12 +14944,12 @@ budgets and the request's asks, which is what `D-0066` section 3.2 says an admis
 | A catalog of agent types (listing, retiring, recording without a scope) | Section 1 (b)'s loss; `D-0044` and `D-0062` leave it to its own entry | the catalog entry |
 | A relayed P1 recorded as the person's own (lap 8 N-28) | A column on `scope_decision`, not the first admission | the entry that answers lap 8's N-28 candidate issue |
 
-### Annotations this entry adds (on acceptance)
+### Annotations this entry adds
 
 - **`D-0062` rule 1.2** gains a dated annotation: section 3 rule 1, and the answer to its catalog
   falsifier.
 - **`D-0066` rules 1.2.3, 3.3, 4.2 and 4.4** gain dated annotations: section 3 rules 2 to 5, as the
-  gate answers them.
+  gate answered them.
 - **`docs/operations/lap-8-dogfood.md` N-25** is answered by this entry once built.
 
 ### What would falsify it
