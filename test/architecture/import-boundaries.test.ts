@@ -259,6 +259,10 @@ const ALLOWED_EXTERNALS_BY_MODULE: Readonly<
   // it quietly become a second spawner. The planted corpus proves the
   // distinction is enforced rather than merely intended.
   "src/continuo/invoker.ts": { "node:child_process": ["spawn"] },
+  // One server, never exposed: the preflight that asks whether this process may
+  // create a Unix socket at all, because the worker it spawns inherits the answer
+  // (N-16, N-21). It listens on an abstract name and closes at once.
+  "src/continuo/sandbox.ts": { "node:net": ["createServer"] },
   // The one module allowed to read a lap's transcript, granted one read and one
   // path join (D-0046 rule 4). Keyed by module for `invoker.ts`'s reason, and
   // the narrowness is the grant: there is no `writeFileSync`, no `rmSync` and no

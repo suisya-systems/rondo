@@ -393,6 +393,12 @@ refuses and lists them rather than picking.
 
 ## 4. Start -- take one request and run a lap
 
+**Run it outside any other Claude Code sandbox.** `start`, `retry` and `revise` spawn a worker whose
+own sandbox needs a Unix socket, and a Claude Code sandbox on Linux refuses those for itself and every
+child (N-16, N-21; `scripts/dogfood-lap.md`, "Before you start", item 7). The three commands refuse
+before any lap when they hit that block, with a line saying so. The check is Linux-only and sees only
+this cause.
+
 ```console
 $ node bin/rondo.mjs start --plan "$S/plan.json" --iteration-id cli-lap-001
 plan ok: 30 fields
