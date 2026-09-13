@@ -2012,7 +2012,7 @@ test("a request thread is drawn whole: every body byte for byte, voices apart, b
 
   // **The ask that waits is marked, and only it** (rule 2.7): nothing replies to it.
   expect(ask).toContain("data-waiting");
-  expect(ask).toContain("question waiting on you");
+  expect(ask).toContain("Waiting on you");
   // The reply box says it does not answer that question, where the words are typed.
   expect(html).toContain('class="not-answer');
   expect(html).toContain("does not answer the question waiting in this thread");
@@ -2123,7 +2123,9 @@ test("the summary counts an ask waiting on the person and leads to the reply, an
   expect(summary).toContain("asked in: Please look at the flaky test.");
   // The header's way in, on every view, with the count the redraw renews.
   expect(summary).toContain('href="/?requests=open&amp;lang=en"');
-  expect(summary).toMatch(/<span id="requests-count" class="empty:hidden"><span [^>]*>1<\/span>/);
+  expect(summary).toMatch(
+    /<span id="requests-count" class="empty:hidden"><span [^>]*>1 waiting<\/span>/,
+  );
   // The summary draws no composer.
   expect(summary).not.toContain('id="composer"');
 
@@ -2152,7 +2154,7 @@ test("the threads speak Japanese where the page does, tokens and words untouched
   );
   expect(html).toContain(">下書き役</span>");
   expect(html).toContain(">あなた</span>");
-  expect(html).toContain("あなたへの質問");
+  expect(html).toContain("あなたの回答待ち");
   expect(html).toContain("この返信は、このスレッドで待っている質問への回答にはなりません。");
   expect(html).toContain('action="/reply?lang=ja"');
   expect(bodiesIn(html)).toEqual([ROOT_BODY, ASK_BODY, LATER_BODY]);

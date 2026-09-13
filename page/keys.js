@@ -1,9 +1,10 @@
 // The one script rondo owns on its page (DECISIONS.md D-0059 rule 5, R3).
 //
-// Three keys and one class, and that is the whole vocabulary: `j` and `k` move
+// Four keys and one class, and that is the whole vocabulary: `j` and `k` move
 // focus between the rows the server rendered (`[data-row]`), `Enter` follows the
-// focused row's server-rendered link (`[data-open]`), and `Esc` follows the
-// view's server-rendered way back (`[data-back]`). Following a link is a
+// focused row's server-rendered link (`[data-open]`), `Esc` follows the view's
+// server-rendered way back (`[data-back]`), and `r` puts the caret in the
+// composer's box (`textarea[data-draft]`), which types nothing and sends nothing. Following a link is a
 // navigation `GET` to an address the server wrote into the page. It constructs
 // no request of its own, reads no form, submits nothing and holds nothing a
 // server reads: every write this page can make is a form's own submit, and a
@@ -52,6 +53,12 @@ document.addEventListener("keydown", (event) => {
     if (open !== null) {
       event.preventDefault();
       open.click();
+    }
+  } else if (event.key === "r") {
+    const box = document.querySelector("textarea[data-draft]");
+    if (box !== null) {
+      event.preventDefault();
+      box.focus();
     }
   } else if (event.key === "Escape") {
     const back = document.querySelector("a[data-back]");

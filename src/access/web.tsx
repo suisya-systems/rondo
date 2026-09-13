@@ -528,16 +528,30 @@ const ROW =
 
 /** The muted, right-aligned column of identifiers (section 1, GitHub's run list): a locator, so a step below the metadata. */
 const META =
-  "col-start-2 flex gap-x-2 font-mono text-[11px] leading-6 whitespace-nowrap text-faint tabular-nums sm:col-start-auto sm:justify-end";
+  "col-start-2 flex gap-x-2 font-mono text-[11px] leading-6 whitespace-nowrap text-faint tabular-nums max-sm:hidden sm:col-start-auto sm:justify-end";
 
 /**
  * The metadata line under a row's title: its sentences run on one line, parted
  * by a middle dot the stylesheet draws, so the separator is not a character in
  * the document and a reader without CSS still gets the sentences as they were.
- * Under `sm` each sentence wraps to a line of its own, where a dot would lead it.
+ *
+ * **Every sentence carries its dot, and the dot that would lead a line is cut
+ * off** (the S1 design pass on #220): the line sits a dot's width to the left
+ * inside a box that clips ({@link metaLine}), so a sentence that wraps to a new
+ * line starts clean instead of with a stray `·`. Direct children must be plain
+ * spans: a pill goes inside one.
  */
 const META_LINE =
-  "mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[12.5px] leading-5 text-muted-foreground sm:[&>span+span]:before:mr-2 sm:[&>span+span]:before:text-faint sm:[&>span+span]:before:content-['·']";
+  "-ml-3 flex flex-wrap items-center gap-y-0.5 text-[12.5px] leading-5 text-muted-foreground [&>span]:relative [&>span]:pl-3 [&>span]:before:absolute [&>span]:before:left-[0.3rem] [&>span]:before:text-faint [&>span]:before:content-['·']";
+
+/** {@link META_LINE} inside the box that clips its leading dots. */
+function metaLine(children: unknown, extra = "") {
+  return (
+    <div class="mt-0.5 overflow-hidden">
+      <p class={`${META_LINE} ${extra}`}>{children}</p>
+    </div>
+  );
+}
 
 /** A row focusable by `j`/`k` that is not a list item: the answer view's claim groups. */
 const FOCUS_ROW =
@@ -840,7 +854,7 @@ function fenceLine(wording: Chrome, record: IterationRecord): string | null {
 function endedHow(wording: Chrome, record: IterationRecord, nowMs: number): string {
   return wording.endedHead(
     record.status,
-    ago(record.updatedAtMs, nowMs),
+    wording.age(ago(record.updatedAtMs, nowMs)),
     endedWhy(wording, record),
   );
 }
@@ -870,7 +884,7 @@ function stateHead(wording: Chrome, record: IterationRecord, tone: Tone, age: st
 }
 
 /** Which of the three questions a row answers, which is what its weight is decided by. */
-type Question = "waiting" | "running" | "ended";
+type Question = "waiting" | "attention" | "running" | "ended";
 
 /**
  * One lap as one row, with the row it rests on cited once beside it (D-0032,
@@ -940,24 +954,21 @@ function lapRow(
          * transcript path wrapped to four there, and the whole of it is in the
          * reading. A waiting row's is never cut -- it says what releases it.
          */}
-        <p
-          class={
-            question === "waiting"
-              ? META_LINE
-              : `${META_LINE} max-sm:max-h-15 max-sm:overflow-hidden`
-          }
-        >
-          {head}
-          {lines
-            .filter((line) => line !== null)
-            .map((line) =>
-              typeof line === "string" ? (
-                <span class="line min-w-0 wrap-anywhere whitespace-pre-wrap">{line}</span>
-              ) : (
-                line
-              ),
-            )}
-        </p>
+        {metaLine(
+          <>
+            {head}
+            {lines
+              .filter((line) => line !== null)
+              .map((line) =>
+                typeof line === "string" ? (
+                  <span class="line min-w-0 wrap-anywhere whitespace-pre-wrap">{line}</span>
+                ) : (
+                  line
+                ),
+              )}
+          </>,
+          question === "waiting" ? "" : "max-sm:max-h-15 max-sm:overflow-hidden",
+        )}
         {tail}
       </div>
       {/* The id alone; the basis it abbreviates is the column's `title`. */}
@@ -1002,9 +1013,11 @@ function questionGroup(question: Question, heading: string, rows: readonly unkno
           class={
             question === "waiting"
               ? "divide-y divide-wait/20 rounded-lg border border-wait/35 bg-card shadow-[inset_3px_0_0_var(--color-wait)]"
-              : question === "running"
-                ? "divide-y divide-border rounded-lg border border-border bg-card"
-                : "divide-y divide-border/70 rounded-lg border border-border/70"
+              : question === "attention"
+                ? "divide-y divide-fail/20 rounded-lg border border-fail/35 bg-card"
+                : question === "running"
+                  ? "divide-y divide-border rounded-lg border border-border bg-card"
+                  : "divide-y divide-border/70 rounded-lg border border-border/70"
           }
         >
           {rows}
@@ -1055,8 +1068,8 @@ function waitingView(
             wording,
             record,
             "wait",
-            ago(record.updatedAtMs, nowMs),
-            wording.waitingHead(record.status, ago(record.updatedAtMs, nowMs)),
+            wording.age(ago(record.updatedAtMs, nowMs)),
+            wording.waitingHead(record.status, wording.age(ago(record.updatedAtMs, nowMs))),
           ),
           [unblockedBy(wording, record), spentLine(wording, record), fenceLine(wording, record)],
           framing === undefined ? answerLink(wording, record, token) : null,
@@ -1080,16 +1093,24 @@ function waitingView(
               >
                 {firstLine(ask.body)}
               </p>
-              <p class={META_LINE}>
-                <span class={`${PILL} font-sans ${TONE.wait}`}>{wording.askWaitingPill}</span>
-                <span>{whoWrote(wording, ask, actorId)}</span>
-                <span class="tabular-nums">{ago(ask.atMs, nowMs)}</span>
-                {request === undefined ? null : (
-                  <span class="line min-w-0 truncate" lang="">
-                    {wording.askedIn(firstLine(request.body))}
+              {metaLine(
+                <>
+                  <span class="head inline-flex items-center gap-2 whitespace-nowrap">
+                    <span
+                      class={`inline-flex shrink-0 items-center rounded-full border px-2 py-px text-[11.5px] font-medium leading-4 whitespace-nowrap ${TONE.wait}`}
+                    >
+                      {wording.askWaitingPill}
+                    </span>
+                    <span class="tabular-nums">{wording.age(ago(ask.atMs, nowMs))}</span>
                   </span>
-                )}
-              </p>
+                  <span>{whoWrote(wording, ask, actorId)}</span>
+                  {request === undefined ? null : (
+                    <span class="line min-w-0 truncate" lang="">
+                      {wording.askedIn(firstLine(request.body))}
+                    </span>
+                  )}
+                </>,
+              )}
               <p class="mt-2">
                 <a
                   id={`reply-to-${ask.messageId}`}
@@ -1112,14 +1133,18 @@ function waitingView(
           {glyph("wait")}
           <div class="min-w-0">
             <p class="head text-[15px] leading-6 font-semibold wrap-anywhere">
-              {wording.proposalHead(proposal.kind, ago(proposal.createdAtMs, nowMs))}
+              {wording.proposalHead(proposal.kind, wording.age(ago(proposal.createdAtMs, nowMs)))}
             </p>
-            <p class={META_LINE}>
-              <span class="line wrap-anywhere">{wording.aboutIteration(proposal.iterationId)}</span>
-              <span class="basis font-mono text-[11.5px] wrap-anywhere text-faint">
-                {wording.proposalBasis(proposal.proposalId)}
-              </span>
-            </p>
+            {metaLine(
+              <>
+                <span class="line wrap-anywhere">
+                  {wording.aboutIteration(proposal.iterationId)}
+                </span>
+                <span class="basis font-mono text-[11.5px] wrap-anywhere text-faint">
+                  {wording.proposalBasis(proposal.proposalId)}
+                </span>
+              </>,
+            )}
           </div>
           <div class={META}>
             <p>{proposal.proposalId}</p>
@@ -1131,6 +1156,50 @@ function waitingView(
 }
 
 /**
+ * *What needs attention* -- a live row rondo cannot read (the S1 design pass on
+ * #220).
+ *
+ * **Its own group, with a sentence a person can act on.** Under *running* it was
+ * the loudest thing on the page -- a raw decode error in red mono under an id
+ * for a title -- and said nothing a reader could do. It still holds a slot, so it
+ * is still on the screen: a human title, one line saying what broke and what to
+ * do, and the reason itself byte for byte inside a fold (and in the reading's own
+ * section for the row).
+ */
+function attentionView(wording: Chrome, unreadable: readonly LiveRow[]) {
+  const rows = unreadable.flatMap((row) => (row.kind === "unreadable" ? [row] : []));
+  if (rows.length === 0) {
+    return null;
+  }
+  return questionGroup(
+    "attention",
+    wording.attentionHeading(rows.length),
+    rows.map((row) => (
+      <li id={`unreadable-${row.id}`} data-row="" tabindex={-1} class={ROW}>
+        {glyph("alert")}
+        <div class="min-w-0">
+          <p class="head text-sm leading-6 font-semibold">{wording.unreadableTitle}</p>
+          <p class="line text-[12.5px] leading-5 text-muted-foreground">
+            {wording.unreadableAction(row.id)}
+          </p>
+          <details id={`unreadable-reason-${row.id}`} class="group mt-1">
+            <summary class="cursor-pointer text-[12px] leading-5 text-faint select-none hover:text-foreground">
+              {wording.unreadableDetail}
+            </summary>
+            <p class="basis mt-1 font-mono text-[11px] leading-4 wrap-anywhere text-faint">
+              {wording.willNotDecode(row.reason)}
+            </p>
+          </details>
+        </div>
+        <div class={META}>
+          <p>{row.id}</p>
+        </div>
+      </li>
+    )),
+  );
+}
+
+/**
  * *What is running* -- every live lap that is not waiting on anybody.
  *
  * The line under each is {@link whereItRuns}: the transcript directory continuo
@@ -1138,42 +1207,17 @@ function waitingView(
  * lap in flight -- it names a place and claims no liveness (D-0048 rule 3) --
  * and it is what an operator asking *is this progressing* can actually open.
  *
- * A live row that will not decode is here rather than missing, for the inbox's
- * reason: it holds a slot, so leaving it out would understate what is running.
+ * A live row that will not decode is not here but in {@link attentionView},
+ * above: it is on the page rather than missing, and it is the one row nobody can
+ * read, so it is not counted among the laps that are running.
  */
 function runningView(
   wording: Chrome,
   running: readonly IterationRecord[],
-  unreadable: readonly LiveRow[],
   transcripts: ReadonlyMap<string, TranscriptLocation>,
   nowMs: number,
 ) {
-  return questionGroup("running", wording.runningHeading(running.length + unreadable.length), [
-    // **A row that will not decode leads its group** (the third design pass):
-    // it is the one thing here nobody can read, and at the foot of the group it
-    // was the last row anyone reached. Still inside *running*, because the slot
-    // it holds is what the count is about.
-    ...unreadable.map((row) =>
-      row.kind === "unreadable" ? (
-        <li id={`unreadable-${row.id}`} data-row="" tabindex={-1} class={`${ROW} bg-fail/5`}>
-          {glyph("alert")}
-          <div class="min-w-0">
-            <p class="head text-sm leading-6 font-medium">{row.id}</p>
-            {/*
-             * One line, with the whole reason in `title` and in the reading's
-             * own section for this row: two full digests in running text were
-             * the heaviest block on the page.
-             */}
-            <p
-              class="line truncate font-mono text-[11.5px] leading-5 text-fail"
-              title={wording.willNotDecode(row.reason)}
-            >
-              {wording.willNotDecode(row.reason)}
-            </p>
-          </div>
-        </li>
-      ) : null,
-    ),
+  return questionGroup("running", wording.runningHeading(running.length), [
     ...running.map((record) =>
       lapRow(
         "running",
@@ -1182,8 +1226,8 @@ function runningView(
           wording,
           record,
           "run",
-          ago(record.updatedAtMs, nowMs),
-          wording.runningHead(record.status, ago(record.updatedAtMs, nowMs)),
+          wording.age(ago(record.updatedAtMs, nowMs)),
+          wording.runningHead(record.status, wording.age(ago(record.updatedAtMs, nowMs))),
         ),
         [
           runsWhere(wording, record, transcripts.get(record.id)),
@@ -1238,7 +1282,7 @@ function endedView(wording: Chrome, ended: readonly IterationRecord[], nowMs: nu
           wording,
           record,
           endedTone(record),
-          wording.endedAgo(ago(record.updatedAtMs, nowMs)),
+          wording.endedAgo(wording.age(ago(record.updatedAtMs, nowMs))),
           endedHow(wording, record, nowMs),
         ),
         [
@@ -1498,11 +1542,13 @@ function answerLink(wording: Chrome, record: IterationRecord, token: string | nu
         href={viewHref({ kind: "answer", iterationId: record.id }, wording.lang)}
         data-open=""
         class={`${PRIMARY} h-7 px-3 text-[13px]`}
+        // **One verb per card, no helper prose beside it** (the S1 design
+        // pass): every waiting row is title, one meta line, one action, and
+        // what the second address adds is the pointer's `title`.
+        title={wording.answerHere}
       >
         {wording.answerAction}
       </a>
-      {/* The sentence recedes and drops out under `sm`, where it cost a line per card. */}
-      <span class="line hidden text-xs leading-5 text-faint sm:inline">{wording.answerHere}</span>
     </p>
   );
 }
@@ -1721,10 +1767,14 @@ function basisChip(
  * rests on, and -- where it asks and nothing has replied -- the one mark that
  * it waits on the person.
  *
- * **The voices are told apart three ways, none of them alone**: a badge that
- * names the drafter's voice, a blue wash on its card, and the side of the column
- * each leans to above `sm`. The id is never printed: the age is the message's
- * link to itself, and `Reply` is how a person points at it.
+ * **The voices are told apart three ways, none of them alone**: an initial in a
+ * round mark (blue for the drafter), a badge that names the drafter's voice, and
+ * a blue wash on its card. **Every card starts at the same left edge** (the S1
+ * design pass on #220): leaning the voices to opposite sides made the column
+ * zig-zag by 40px with nothing saying why. The id is never printed: the age is
+ * the message's link to itself, and `Reply` is how a person points at it --
+ * drawn on hover or focus where a pointer can hover (`page/app.css`), and always
+ * with script off or on touch.
  */
 function messageView(
   wording: Chrome,
@@ -1746,7 +1796,7 @@ function messageView(
       id={`reply-${message.messageId}`}
       href={viewHref({ kind: "thread", messageId: root, to: message.messageId }, wording.lang)}
       data-open=""
-      class="rounded px-1 font-medium text-link hover:underline"
+      class="reply-link rounded px-1 font-medium text-link hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
     >
       {wording.replyAction}
     </a>
@@ -1758,8 +1808,18 @@ function messageView(
       tabindex={-1}
       data-voice={message.authorKind}
       {...(waiting ? { "data-waiting": "" } : {})}
-      class={`message scroll-mt-16 scroll-mb-40 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background ${drafter ? "sm:mr-10" : "sm:ml-10"}`}
+      class="message grid scroll-mt-28 scroll-mb-40 grid-cols-1 gap-x-3 sm:grid-cols-[1.75rem_minmax(0,1fr)] rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-4 focus-visible:ring-offset-background"
     >
+      <span
+        aria-hidden="true"
+        class={
+          drafter
+            ? "mt-2 hidden size-7 sm:inline-flex items-center justify-center rounded-full bg-run-wash text-[12px] font-semibold text-run-ink ring-1 ring-run/30"
+            : "mt-2 hidden size-7 sm:inline-flex items-center justify-center rounded-full bg-muted text-[12px] font-semibold text-foreground ring-1 ring-border"
+        }
+      >
+        {whoWrote(wording, message, actorId).slice(0, 1).toUpperCase()}
+      </span>
       <article
         class={
           waiting
@@ -1786,7 +1846,7 @@ function messageView(
             class="text-faint tabular-nums hover:text-foreground"
             title={new Date(message.atMs).toISOString()}
           >
-            {ago(message.atMs, nowMs)}
+            {wording.age(ago(message.atMs, nowMs))}
           </a>
           <span class="flex-1" />
           {forms && !waiting ? replyLink : null}
@@ -1866,12 +1926,84 @@ function threadView(
     );
   }
   const members = threads.messages.filter((message) => threads.rootOf(message.messageId) === root);
+  const request = threads.byId.get(root);
+  const waitingHere = members.filter((message) => threads.waiting.has(message.messageId)).length;
   return (
-    <ol data-thread={root} class="space-y-3">
-      {members.map((message, at) =>
-        messageView(wording, threads, message, members[at - 1], root, nowMs, actorId, forms),
-      )}
-    </ol>
+    <div class="space-y-4">
+      {/*
+       * **The thread names itself** (the S1 design pass on #220): the request's
+       * first words as its title, one state line, and a way back drawn at every
+       * width -- `Esc` is a key hint, and there is none at a phone's width or
+       * with script off. Sticky under the page's bar, so the title stays in
+       * view down a long thread. With script off the thread does not reload
+       * itself (a draft would be lost), so the header says how to see new
+       * messages, where a reader looks for it.
+       */}
+      <header class="thread-head sticky top-12 z-[4] border-b border-border bg-background/95 py-2.5 backdrop-blur-sm">
+        <div class="flex min-w-0 items-center gap-2">
+          <a
+            href={viewHref({ kind: "requests" }, wording.lang)}
+            class="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            title={wording.backToRequests}
+          >
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              class="size-4"
+            >
+              <path d="M13 8H3m4-4-4 4 4 4" />
+            </svg>
+            <span class="sr-only">{wording.backToRequests}</span>
+          </a>
+          <h2
+            class="request min-w-0 flex-1 truncate text-[15px] leading-6 font-semibold"
+            title={request?.body}
+            lang=""
+          >
+            {request === undefined ? null : firstLine(request.body)}
+          </h2>
+          {forms ? (
+            <noscript>
+              <a
+                href={viewHref({ kind: "thread", messageId: root, to: null }, wording.lang)}
+                class="shrink-0 text-[12.5px] font-medium text-link hover:underline"
+                title={wording.threadNoReload}
+              >
+                {wording.reloadThread}
+              </a>
+            </noscript>
+          ) : null}
+        </div>
+        <div class="ml-9 overflow-hidden">
+          <p class={META_LINE}>
+            {waitingHere === 0 ? null : (
+              <span>
+                <span class={`${PILL} font-sans ${TONE.wait}`}>{wording.askWaitingPill}</span>
+              </span>
+            )}
+            <span>
+              {wording.threadSize(
+                members.length,
+                wording.age(ago(Math.max(...members.map((message) => message.atMs)), nowMs)),
+              )}
+            </span>
+            {request === undefined ? null : (
+              <span>{wording.threadStarted(wording.age(ago(request.atMs, nowMs)))}</span>
+            )}
+          </p>
+        </div>
+      </header>
+      <ol data-thread={root} class="space-y-4">
+        {members.map((message, at) =>
+          messageView(wording, threads, message, members[at - 1], root, nowMs, actorId, forms),
+        )}
+      </ol>
+    </div>
   );
 }
 
@@ -1928,17 +2060,19 @@ function requestsView(wording: Chrome, threads: Threads, nowMs: number, actorId:
                 >
                   {firstLine(row.root.body)}
                 </a>
-                <p class={META_LINE}>
-                  <span>{whoWrote(wording, row.root, actorId)}</span>
-                  <span>{wording.threadSize(row.size, ago(row.lastMs, nowMs))}</span>
-                </p>
-              </div>
-              <div class={META}>
-                {row.waiting > 0 ? (
-                  <span class={`${PILL} self-start font-sans ${TONE.wait}`}>
-                    {wording.asksWaiting(row.waiting)}
-                  </span>
-                ) : null}
+                {metaLine(
+                  <>
+                    {row.waiting > 0 ? (
+                      <span>
+                        <span class={`${PILL} font-sans ${TONE.wait}`}>
+                          {wording.asksWaiting(row.waiting)}
+                        </span>
+                      </span>
+                    ) : null}
+                    <span>{whoWrote(wording, row.root, actorId)}</span>
+                    <span>{wording.threadSize(row.size, wording.age(ago(row.lastMs, nowMs)))}</span>
+                  </>,
+                )}
               </div>
             </li>
           ))}
@@ -1950,12 +2084,18 @@ function requestsView(wording: Chrome, threads: Threads, nowMs: number, actorId:
 
 /**
  * The message a reply box answers: the one the person pointed at with `Reply`,
- * else the thread's latest message -- never an ask still waiting, which a reply
- * would answer (see `messageView`), so a thread of nothing else has no box.
+ * else the latest message **the other party** wrote, else the thread's latest
+ * message -- never an ask still waiting, which a reply would answer (see
+ * `messageView`), so a thread of nothing else has no box.
+ *
+ * **Not the person's own latest by default** (the S1 design pass on #220): a box
+ * that read "Replying to you" under a drafter's question pointed a person at
+ * their own words. A conversation answers the other side.
  */
 function replyTarget(
   threads: Threads,
   view: { readonly messageId: string; readonly to: string | null },
+  actorId: string | null,
 ): { readonly root: string; readonly target: ThreadMessageDraft } | null {
   const root = threads.rootOf(view.messageId);
   if (root === null) {
@@ -1966,8 +2106,13 @@ function replyTarget(
       threads.rootOf(message.messageId) === root && !threads.waiting.has(message.messageId),
   );
   const pointed = view.to === null ? undefined : threads.byId.get(view.to);
+  const theirs = members.filter(
+    (message) => !(message.authorKind === "operator" && message.authorId === actorId),
+  );
   const target =
-    (pointed !== undefined && members.includes(pointed) ? pointed : undefined) ?? members.at(-1);
+    (pointed !== undefined && members.includes(pointed) ? pointed : undefined) ??
+    theirs.at(-1) ??
+    members.at(-1);
   return target === undefined ? null : { root, target };
 }
 
@@ -2013,7 +2158,7 @@ function composerView(
       </p>
     );
   }
-  const replying = view.kind === "thread" ? replyTarget(threads, view) : null;
+  const replying = view.kind === "thread" ? replyTarget(threads, view, actorId) : null;
   if (view.kind === "thread" && replying === null) {
     return null;
   }
@@ -2032,11 +2177,15 @@ function composerView(
             "hx-select": "#ledger",
             "hx-swap": "outerHTML show:window:bottom",
             "hx-select-oob": "#composer-fields,#requests-count",
+            // **One send per press, visibly** (the S1 design pass): the button
+            // is disabled while its request is in flight. The store's refusal
+            // of a repeated id is still what makes a double send one message.
+            "hx-disabled-elt": "find button[type='submit']",
           })}
       class={
         replying === null
           ? "rounded-xl border border-border bg-card shadow-xs focus-within:border-ring/60"
-          : "sticky bottom-3 z-[5] rounded-xl border border-border bg-card shadow-[0_6px_24px_-12px_rgb(0_0_0/0.35)] focus-within:border-ring/60"
+          : "sticky bottom-3 z-[5] rounded-xl sm:ml-10 border border-border bg-card shadow-[0_6px_24px_-12px_rgb(0_0_0/0.35)] focus-within:border-ring/60"
       }
     >
       {replying === null ? (
@@ -2048,29 +2197,59 @@ function composerView(
         {replying === null ? null : (
           <>
             <input type="hidden" name="in_reply_to" value={replying.target.messageId} />
-            <a
-              href={`#${replying.target.messageId}`}
-              class="replying mx-4 mt-2.5 flex min-w-0 items-center gap-1.5 text-[12px] leading-5 text-muted-foreground hover:text-foreground"
-            >
-              <svg
-                aria-hidden="true"
-                viewBox="0 0 16 16"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.6"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                class="size-3.5 shrink-0 text-faint"
+            <div class="mx-4 mt-2.5 flex min-w-0 items-center gap-1">
+              <a
+                href={`#${replying.target.messageId}`}
+                class="replying flex min-w-0 items-center gap-1.5 text-[12px] leading-5 text-muted-foreground hover:text-foreground"
               >
-                <path d="M3.5 2.5v5a3 3 0 0 0 3 3h6m-3-3 3 3-3 3" />
-              </svg>
-              <span class="truncate">
-                {wording.replyingTo(
-                  whoWrote(wording, replying.target, actorId),
-                  firstLine(replying.target.body),
-                )}
-              </span>
-            </a>
+                <svg
+                  aria-hidden="true"
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.6"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  class="size-3.5 shrink-0 text-faint"
+                >
+                  <path d="M3.5 2.5v5a3 3 0 0 0 3 3h6m-3-3 3 3-3 3" />
+                </svg>
+                <span class="truncate">
+                  {wording.replyingTo(
+                    whoWrote(wording, replying.target, actorId),
+                    firstLine(replying.target.body),
+                  )}
+                </span>
+              </a>
+              {
+                // **A target chosen by hand can be let go** (the S1 design
+                // pass): a navigation back to the thread's default target, which
+                // keeps the draft (`page/composer.js`).
+                view.kind === "thread" && view.to !== null ? (
+                  <a
+                    href={viewHref(
+                      { kind: "thread", messageId: replying.root, to: null },
+                      wording.lang,
+                    )}
+                    class="inline-flex size-5 shrink-0 items-center justify-center rounded text-faint hover:bg-accent hover:text-foreground"
+                    title={wording.replyDefault}
+                  >
+                    <svg
+                      aria-hidden="true"
+                      viewBox="0 0 16 16"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      class="size-3"
+                    >
+                      <path d="m4 4 8 8m0-8-8 8" />
+                    </svg>
+                    <span class="sr-only">{wording.replyDefault}</span>
+                  </a>
+                ) : null
+              }
+            </div>
             {/*
              * **Said where the words are typed** (#220 S1 review): a person who
              * came for a question waiting in this thread would otherwise send
@@ -2082,7 +2261,7 @@ function composerView(
                 threads.waiting.has(message.messageId) &&
                 threads.rootOf(message.messageId) === replying.root,
             ) ? (
-              <p class="not-answer mx-4 mt-1 text-[12.5px] leading-5 font-medium text-foreground">
+              <p class="not-answer mx-4 mt-0.5 text-[12px] leading-5 text-faint">
                 {wording.replyNotAnswer}
               </p>
             ) : null}
@@ -2103,23 +2282,26 @@ function composerView(
         id="composer-body"
         name="body"
         required
-        rows={replying === null ? 4 : 2}
+        rows={replying === null ? 4 : 3}
         placeholder={replying === null ? wording.requestPlaceholder : wording.replyPlaceholder}
         data-draft={replying === null ? "request" : `reply:${replying.root}`}
         {...(view.kind === "thread" && view.to !== null ? { autofocus: true } : {})}
-        class="block w-full resize-y bg-transparent px-4 pt-2 text-[14px] leading-6 outline-none placeholder:text-faint"
+        // **The box grows with the words** (the S1 design pass): at a fixed
+        // two rows a three-line draft scrolled its first line out of sight
+        // under the line above it. Capped, then it scrolls.
+        class="block max-h-[40vh] min-h-[4.5rem] w-full resize-y bg-transparent px-4 pt-2 text-[14px] leading-6 outline-none [field-sizing:content] placeholder:text-faint"
       />
       <div class="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 pt-1 pb-2.5">
         <span class="note px-1 text-[11.5px] leading-5 text-faint">{wording.sendNote}</span>
         <span class="ml-auto flex items-center gap-3">
           <span class="js-only hidden items-center gap-1 text-[11.5px] text-faint sm:flex">
-            {kbd("Ctrl")}
+            {kbd("Ctrl/⌘")}
             {kbd("↵")}
             <span>{wording.keySend}</span>
           </span>
           <button
             type="submit"
-            class="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-md bg-foreground px-4 text-sm font-semibold text-background shadow-xs outline-none hover:bg-foreground/85 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2focus-visible:ring-offset-card"
+            class="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-md bg-foreground px-4 text-sm font-semibold text-background shadow-xs outline-none hover:bg-foreground/85 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card disabled:cursor-wait disabled:opacity-60"
           >
             <svg
               aria-hidden="true"
@@ -2393,12 +2575,31 @@ export async function operatorPage(
               {wording.requestsNav}
               <span id="requests-count" class="empty:hidden">
                 {threads.waiting.size === 0 ? null : (
+                  // **Said as what it counts** (the S1 design pass): a bare `1`
+                  // beside "Requests" read as a count of requests.
                   <span class={`${PILL} px-1.5 font-sans ${TONE.wait}`}>
-                    {String(threads.waiting.size)}
+                    {wording.waitingCount(threads.waiting.size)}
                   </span>
                 )}
               </span>
             </a>
+            {
+              // The thread's own crumb, where there is room for it; the thread
+              // header names it at every width.
+              view.kind === "thread" && threads.rootOf(view.messageId) !== null ? (
+                <>
+                  <span aria-hidden="true" class="hidden text-faint xl:inline">
+                    /
+                  </span>
+                  <span
+                    class="hidden max-w-[16rem] truncate text-[13px] text-foreground xl:inline"
+                    lang=""
+                  >
+                    {firstLine(threads.byId.get(threads.rootOf(view.messageId) ?? "")?.body ?? "")}
+                  </span>
+                </>
+              ) : null
+            }
             {keepsCurrent ? (
               <>
                 {/*
@@ -2414,6 +2615,21 @@ export async function operatorPage(
               </>
             ) : null}
             <span class="flex-1" />
+            {
+              // **Whose name a send and a press are recorded under** (the S1
+              // design pass), in place of a sentence naming the variable.
+              ports.actorId === null ? null : (
+                <span
+                  class="hidden items-center gap-1.5 text-[12.5px] text-muted-foreground lg:inline-flex"
+                  title={wording.signedInAs(ports.actorId)}
+                >
+                  <span class="inline-flex size-5 items-center justify-center rounded-full bg-muted text-[10.5px] font-semibold text-foreground ring-1 ring-border">
+                    {ports.actorId.slice(0, 1).toUpperCase()}
+                  </span>
+                  {ports.actorId}
+                </span>
+              )
+            }
             <span class="js-only hidden items-center gap-1.5 text-xs text-muted-foreground sm:flex">
               {
                 // Each view names only the keys that do something on it: the
@@ -2434,7 +2650,13 @@ export async function operatorPage(
               {view.kind === "summary" ? null : (
                 <>
                   {kbd("esc")}
-                  <span>{wording.keyBack}</span>
+                  <span class="mr-2">{wording.keyBack}</span>
+                  {onThreads && forms ? (
+                    <>
+                      {kbd("r")}
+                      <span class="ml-0.5">{wording.keyWrite}</span>
+                    </>
+                  ) : null}
                 </>
               )}
             </span>
@@ -2450,7 +2672,7 @@ export async function operatorPage(
               // links carry no class of their own; the nav styles them, so a
               // link is still exactly its address, its tag and its name.
               // Muted, so the one thing in the header in colour is the live state.
-              <nav class="switch flex gap-3 text-[13px] text-muted-foreground [&>a]:hover:text-foreground [&>a]:hover:underline">
+              <nav class="switch flex shrink-0 gap-3 whitespace-nowrap text-[13px] text-muted-foreground [&>a]:hover:text-foreground [&>a]:hover:underline">
                 {[...SHIPPED_SETS]
                   .filter(([tag]) => tag !== wording.lang)
                   .map(([tag, endonym]) => (
@@ -2518,7 +2740,8 @@ export async function operatorPage(
               ) : (
                 <>
                   {waitingView(wording, waiting, open, nowMs, token, shown, threads, ports.actorId)}
-                  {runningView(wording, running, unreadable, transcripts, nowMs)}
+                  {attentionView(wording, unreadable)}
+                  {runningView(wording, running, transcripts, nowMs)}
                   {endedView(wording, ended, nowMs)}
                 </>
               )}
@@ -2561,15 +2784,24 @@ export async function operatorPage(
             // change: a read writes nothing, whoever or whatever issued it.
             // At the foot rather than the head (the design pass on #220): it is
             // the page's account of itself, and what needs the reader leads.
+            // **One short line, and the account in its `title`** (the S1 design
+            // pass): the sentences are the page's account of itself for the
+            // reader who asks, not prose every reader has to read past.
             <p class="note max-w-3xl text-[11.5px] leading-5 text-faint">
-              {onThreads
-                ? wording.threadsLiveNote(REFRESH_SECONDS)
-                : keepsCurrent
-                  ? wording.liveNote(REFRESH_SECONDS)
-                  : wording.stillNote}
+              <span
+                title={
+                  onThreads
+                    ? wording.threadsLiveNote(REFRESH_SECONDS)
+                    : keepsCurrent
+                      ? wording.liveNote(REFRESH_SECONDS)
+                      : wording.stillNote
+                }
+              >
+                {keepsCurrent ? wording.liveShort(REFRESH_SECONDS) : wording.stillShort}
+              </span>
             </p>
           }
-          {onThreads && forms ? (
+          {onThreads && forms && view.kind === "requests" ? (
             <noscript>
               <p class="note max-w-3xl text-[11.5px] leading-5 text-faint">
                 {wording.threadNoReload}

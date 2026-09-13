@@ -164,6 +164,27 @@ export interface Chrome {
   readonly threadNoReload: string;
   /** The threads' account of themselves: the redraw writes nothing, and Send is what writes here. */
   readonly threadsLiveNote: (seconds: number) => string;
+  /**
+   * The S1 design pass on #220: the short lines drawn where the long notes
+   * were (the notes stay, as the `title`), and the thread header's words.
+   */
+  readonly liveShort: (seconds: number) => string;
+  readonly stillShort: string;
+  /** An age as `ago` spells it (`59m`), in this set's units. */
+  readonly age: (ago: string) => string;
+  /** The header pill: how many questions wait on the person. */
+  readonly waitingCount: (count: number) => string;
+  readonly signedInAs: (actorId: string) => string;
+  readonly backToRequests: string;
+  readonly reloadThread: string;
+  readonly threadStarted: (since: string) => string;
+  /** Lets go of a reply target chosen by hand. */
+  readonly replyDefault: string;
+  /** A live row that will not decode, as a person reads it. */
+  readonly attentionHeading: (count: number) => string;
+  readonly unreadableTitle: string;
+  readonly unreadableAction: (iterationId: string) => string;
+  readonly unreadableDetail: string;
 
   // -- The page's chrome under stack H (D-0059 rule 5): the live indicator and
   // the key hints, both drawn only once the key script has run --
@@ -171,6 +192,7 @@ export interface Chrome {
   readonly keyMove: string;
   readonly keyOpen: string;
   readonly keyBack: string;
+  readonly keyWrite: string;
 
   // -- The fold, and the sections inside it --
   readonly openReading: string;
@@ -388,7 +410,7 @@ explanation you pressed on and then answers the gate.`,
     `${String(count)} ${count === 1 ? "message" : "messages"}, last ${since} ago`,
   asksWaiting: (count) =>
     `${String(count)} ${count === 1 ? "question" : "questions"} waiting on you`,
-  askWaitingPill: "question waiting on you",
+  askWaitingPill: "Waiting on you",
   you: "you",
   operatorVoice: "operator",
   drafterVoice: "drafter",
@@ -402,7 +424,7 @@ explanation you pressed on and then answers the gate.`,
   requestPlaceholder: "What do you want done? Write it as you would say it.",
   replyPlaceholder: "Write a reply.",
   sendAction: "Send",
-  sendNote: "Recorded exactly as written. A correction is another reply.",
+  sendNote: "Sent as written. To correct it, reply again.",
   keySend: "send",
   composerNoApprover:
     "RONDO_APPROVER is not set, so there is nobody this page could send as: the threads can be read, not written to.",
@@ -421,9 +443,8 @@ explanation you pressed on and then answers the gate.`,
     "That message is longer than this page accepts. Shorten it, or split it into two replies.",
   sendRefusedUnknown: "rondo did not take this message. Reload the page and send again.",
   askNotByReply:
-    "Answering this question lets its work carry on, so it takes a press, not a reply. This page does not offer that press yet; until it does, answer it in the terminal with rondo reply.",
-  replyNotAnswer:
-    "This reply does not answer the question waiting in this thread; answering it takes a press this page does not have yet.",
+    "Answering this lets its work carry on, so it takes a press, not a reply. The page cannot answer it yet: answer it in the terminal with rondo reply.",
+  replyNotAnswer: "This reply does not answer the question waiting in this thread.",
   sendBack: "Back to the thread",
   sendBackNote: "Your browser's Back button returns to what you wrote.",
   threadsLiveNote: (seconds) =>
@@ -431,12 +452,27 @@ explanation you pressed on and then answers the gate.`,
     "your words, recorded exactly as written into the thread, under RONDO_APPROVER's name. A message approves nothing.",
   threadNoReload:
     "With scripting off this view does not reload itself, so nothing you are writing is thrown away: reload it to see new messages.",
+  liveShort: (seconds) => `Live, updates every ${String(seconds)}s`,
+  stillShort: "Holds still while you read",
+  age: (ago) => ago,
+  waitingCount: (count) => `${String(count)} waiting`,
+  signedInAs: (actorId) => `You send and answer as ${actorId}`,
+  backToRequests: "Back to requests",
+  reloadThread: "Reload for new messages",
+  threadStarted: (since) => `started ${since} ago`,
+  replyDefault: "Reply to the latest message instead",
+  attentionHeading: (count) => `needs attention (${String(count)})`,
+  unreadableTitle: "A run's record cannot be read",
+  unreadableAction: (iterationId) =>
+    `rondo cannot show or answer ${iterationId}, and it still holds a slot. Look at it in the terminal with rondo explain.`,
+  unreadableDetail: "What rondo could not read",
   liveLabel: "live",
   keyMove: "move",
   keyOpen: "open",
   keyBack: "back",
+  keyWrite: "write",
 
-  openReading: "the reading these rest on: every claim with its basis, and rondo's own accounting",
+  openReading: "Show the full reading: every claim with its basis",
   hideReading: "hide the reading",
   inboxHeading: "the inbox",
   inboxNote: "Reading this does not move your last-look mark: that is what rondo inbox does.",
@@ -601,9 +637,9 @@ const JA: Partial<Chrome> = Object.freeze({
   requestsNav: "依頼",
   requestsHeading: (count) => `依頼 (${String(count)})`,
   noRequests: "まだ依頼はありません。下の欄に、自分の言葉で書いてください。",
-  threadSize: (count, since) => `メッセージ ${String(count)} 件、最後は ${since} 前`,
+  threadSize: (count, since) => `メッセージ ${String(count)} 件、最後は ${since}前`,
   asksWaiting: (count) => `あなたへの質問 ${String(count)}`,
-  askWaitingPill: "あなたへの質問",
+  askWaitingPill: "あなたの回答待ち",
   you: "あなた",
   operatorVoice: "オペレーター",
   drafterVoice: "下書き役",
@@ -617,7 +653,7 @@ const JA: Partial<Chrome> = Object.freeze({
   requestPlaceholder: "何をしてほしいですか。話すときの言葉のまま書いてください。",
   replyPlaceholder: "返信を書く",
   sendAction: "送信",
-  sendNote: "書いた文はそのまま記録されます。直すときは返信を書き足します。",
+  sendNote: "書いたとおりに送られます。直すときは、もう一度返信します。",
   keySend: "送信",
   composerNoApprover:
     "RONDO_APPROVER が設定されていないため、このページが誰として送るのかが決まりません。スレッドは読めますが、書き込めません。",
@@ -638,9 +674,8 @@ const JA: Partial<Chrome> = Object.freeze({
   sendRefusedUnknown:
     "rondo はこのメッセージを受け取りませんでした。ページを読み込み直してから、もう一度送信してください。",
   askNotByReply:
-    "この質問に回答すると作業が先へ進むため、返信ではなく押下が必要です。このページにはまだその押下がありません。それまでは、ターミナルの rondo reply で回答してください。",
-  replyNotAnswer:
-    "この返信は、このスレッドで待っている質問への回答にはなりません。回答には押下が必要で、このページにはまだありません。",
+    "回答すると作業が先へ進むため、返信ではなく押下が必要です。このページではまだ回答できないので、ターミナルの rondo reply で回答してください。",
+  replyNotAnswer: "この返信は、このスレッドで待っている質問への回答にはなりません。",
   sendBack: "スレッドに戻る",
   sendBackNote: "ブラウザの「戻る」で、書いた文に戻れます。",
   threadsLiveNote: (seconds) =>
@@ -650,12 +685,31 @@ const JA: Partial<Chrome> = Object.freeze({
     "スクリプトが無効なとき、この画面は自動で読み込み直しません。書きかけの文が消えないためです。新しいメッセージは読み込み直して確認してください。",
   approvePlain: "この作業をこのまま受け入れます。",
   undeterminedFold: (count) => `rondo が決められなかった項目 ${String(count)} 件`,
+  liveShort: (seconds) => `ライブ · ${String(seconds)}秒ごとに更新`,
+  stillShort: "読んでいるあいだは動きません",
+  age: (ago) => {
+    const unit = ago.slice(-1);
+    const units: Record<string, string> = { s: "秒", m: "分", h: "時間", d: "日" };
+    return units[unit] === undefined ? ago : `${ago.slice(0, -1)}${units[unit]}`;
+  },
+  waitingCount: (count) => `${String(count)} 件待ち`,
+  signedInAs: (actorId) => `${actorId} として送信・回答します`,
+  backToRequests: "依頼の一覧に戻る",
+  reloadThread: "読み込み直して新着を見る",
+  threadStarted: (since) => `${since}前に開始`,
+  replyDefault: "最新のメッセージへの返信に戻す",
+  attentionHeading: (count) => `確認が必要なもの (${String(count)})`,
+  unreadableTitle: "実行の記録を読み取れません",
+  unreadableAction: (iterationId) =>
+    `rondo は ${iterationId} を表示も回答もできませんが、枠はまだ使っています。ターミナルの rondo explain で確認してください。`,
+  unreadableDetail: "rondo が読み取れなかった内容",
   liveLabel: "ライブ",
   keyMove: "移動",
   keyOpen: "開く",
   keyBack: "戻る",
+  keyWrite: "書く",
 
-  openReading: "これらが立っている読み下し: 根拠つきのすべての claim と、rondo 自身の会計",
+  openReading: "読み下しをすべて表示: 根拠つきのすべての主張",
   hideReading: "読み下しを閉じる",
   inboxHeading: "inbox",
   inboxNote: "ここを読んでも最後に見た印は動きません。印を動かすのは rondo inbox です。",
