@@ -1,0 +1,9 @@
+{
+  "severities": {
+    "blocker": "the change does not do what the request asks, or it breaks the build or the tests",
+    "major": "behaviour the change adds or alters is not covered by a test",
+    "minor": "the change adds an invariant, check or refusal the request did not ask for",
+    "nit": "wording, naming or comments, with no effect on behaviour"
+  },
+  "rule_files": []
+}

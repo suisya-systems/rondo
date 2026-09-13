@@ -194,6 +194,19 @@ costs on this machine, and that `resume` sees the outcome after a human answers.
    command for the operator and a command a lap may run; declaring `node -e:*`
    instead would have widened the fence from a vocabulary to anything.
 
+   **Give the plan a review criterion** (`review_criterion`, D-0065 section
+   1.2.6): what `blocker`, `major`, `minor` and `nit` mean, and which rule files
+   of the target the reviewer reads. A plan without one is admitted and runs,
+   but every model reading of its laps is `unavailable` naming the absent
+   criterion, and an in-scope `rondo retry --scope-decision-id` is never
+   admitted -- lap 8 found exactly that (N-29, rondo#205). `scripts/dogfood-env.sh`
+   writes `scripts/dogfood-review-criterion.json` into the plan; pass
+   `--review-criterion FILE` (or set `RONDO_DOGFOOD_REVIEW_CRITERION`) for a
+   target that needs other meanings. Its `rule_files` is empty because the
+   scratch target has no rule file, and a named file missing at the base commit
+   leaves the reading unavailable; name `AGENTS.md` there when the target is
+   rondo itself.
+
 2. **Admit.** Call the composition root's
    `admit(ports, plan, policy, iterationId)`, where `ports` comes from
    `openConductor(store, process.env)` and `iterationId` is yours to allocate
