@@ -15166,20 +15166,32 @@ what is re-readable and not re-derivable (`D-0063` rule 5) to the parts no funct
    The person widens by editing at P1 (section 5.3).
 2. **The budget function.** Pure, in `src/advisory`, over rows the snapshot holds. For the listed agent
    types and `P` plans:
-   1. **The sample** for an agent type is the 10 most recent iteration rows under its digest with a
-      read `lap_cost_usd` (`D-0046`); if none, the 10 most recent read laps in the store with the same
-      `model_tier`; if none, the cold start.
-   2. **`cost_reserve_usd`** is the highest first-lap cost (`supersedes_iteration_id` null) in any
-      listed agent type's sample, rounded up to the next 0.10 USD. **Cold start: 2.50**, the value laps
-      8 and 9 chose, which covers six of the seven recorded code-change laps.
-   3. **`laps`** is `P x review_rounds`: every line may use its whole round budget before the lap
+   1. **Three measurements, each looked up on its own**: the first-lap cost (a read `lap_cost_usd`,
+      `D-0046`, on a row with `supersedes_iteration_id` null), the redo cost (the same, with it set),
+      and the lap duration (a read `lap_duration_ms`). **Each falls through three levels
+      independently**: the 10 most recent iteration rows under a listed agent type's digest that hold
+      that measurement; if none, the 10 most recent rows in the store with the same `model_tier` that
+      hold it; if none, its cold start. So a sample of successors only still yields a first-lap cost
+      from the next level, and the function is total on every store.
+   2. **`cost_reserve_usd`** is the highest first-lap cost found for any listed agent type, rounded up
+      to the next 0.10 USD. **Cold start: 2.50**, the value laps 8 and 9 chose, which covers six of the
+      seven recorded code-change laps.
+   3. **`redo`** is the highest redo cost found, rounded up the same way. **Cold start: the reserve.**
+   4. **`laps`** is `P x review_rounds`: every line may use its whole round budget before the lap
       budget stops it, so the two budgets never stop a line for two different reasons at once.
-   4. **`cost_usd`** is `P x (reserve + (review_rounds - 1) x redo)`, where `redo` is the highest redo
-      cost (`supersedes_iteration_id` set) in the same samples, rounded up the same way, and the reserve
-      where no redo was read.
-   5. **`expires_at_ms`** is the draft time (the document's assembly time, held in the snapshot) plus `laps x` the longest read `lap_duration_ms` in the
-      samples, plus **24 h for the person's replies**. That allowance is not a measurement: rondo holds
-      no row saying when a person answered a lap's end gate (the gate is continuo's). Residual.
+   5. **`cost_usd`** is `P x (2 x reserve + (review_rounds - 2) x redo)`, or `P x reserve` when
+      `review_rounds` is 1. **It is sized for the admission test, not for the expected spend**: a
+      line's last redo is admitted while its own reserve is counted (`D-0066` rule 3.4.2), on top of
+      the first lap (at most the reserve, which is the highest read) and the earlier redos. With the
+      lower `P x (reserve + (review_rounds - 1) x redo)`, a line whose redos are cheaper than its first
+      lap would be refused the redos the round budget allows. For one plan, 2 rounds and the cold start
+      this gives 5.00, the value laps 8 and 9 chose by hand.
+   6. **`expires_at_ms`** is the draft time (the document's assembly time, held in the snapshot) plus
+      `laps x` the longest lap duration found, plus **24 h for the person's replies**. **Cold start for
+      the duration: 30 min**, above every recorded lap duration (the longest is lap 3's 724.4 s,
+      `docs/operations/lap-8-dogfood.md`). The 24 h
+      allowance is not a measurement: rondo holds no row saying when a person answered a lap's end gate
+      (the gate is continuo's). Residual.
    6. **Every computed value carries its bases**: the iteration rows it was read from, or the words
       "cold start: not measured in this store". A value is never shown without them (kept line 1).
 3. **The hard bounds stay exactly `D-0066` rule 1.2.4's**: all five budgets are always present, so a
