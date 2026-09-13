@@ -1490,6 +1490,64 @@ export interface ScopeSpent {
   readonly unreadLaps: number;
 }
 
+/**
+ * A message in a request's thread with `asks` set and no reply (D-0061 rule
+ * 2.7), with the lineages its bases name (D-0066 rule 4.2).
+ *
+ * `iterationIds` are its `iteration` bases; empty when it names no lap, which is
+ * rule 4.4's first bullet: it stands over the request's acts that continue no
+ * lineage.
+ */
+export interface OpenAsk {
+  readonly messageId: string;
+  readonly iterationIds: readonly string[];
+}
+
+/** Which of D-0066 rule 4.2's tests refused, as a closed name a test and a screen can both read. */
+export type ScopeTest =
+  | "decision"
+  | "superseded"
+  | "request"
+  | "workspace"
+  | "agent_type"
+  | "contract"
+  | "irreversible"
+  | "expiry"
+  | "laps"
+  | "cost"
+  | "asks"
+  | "grants"
+  | "readings";
+
+/**
+ * A refusal of an act under a scope, as data: the surface's verdict and the
+ * store's re-test answer in this one shape, so the surface can act on which test
+ * refused (D-0066 rule 4.4's stopping message) without reading prose.
+ */
+export interface ScopeRefusal {
+  readonly verdict: "outside" | "undecidable";
+  readonly test: ScopeTest;
+  readonly reason: string;
+}
+
+/**
+ * Whether an open ask stands over an act's line (D-0066 rules 4.2 and 4.4).
+ *
+ * **One answer, read by the surface's verdict and the store's re-test alike**, so
+ * the two cannot drift. `lineageIds` is every iteration in the act's lineage:
+ * all that share its predecessor's root, the end of the `supersedes` chain
+ * (D-0030: a line is a split's plan with the redos that continue it). Empty for
+ * an act that starts a lineage. An ask naming iterations stands over their
+ * lineages, so it stops a redo anywhere in one of them -- a branch from an
+ * earlier lap included; an ask naming none stops a lineage start and lets
+ * lineages already running carry on.
+ */
+export function askStandsOver(ask: OpenAsk, lineageIds: readonly string[]): boolean {
+  return ask.iterationIds.length === 0
+    ? lineageIds.length === 0
+    : ask.iterationIds.some((id) => lineageIds.includes(id));
+}
+
 export type ScopePayloadReading =
   | { readonly kind: "read"; readonly payload: ScopePayload }
   | { readonly kind: "refused"; readonly reason: string };

@@ -8,12 +8,9 @@
  *
  * **Every refusal is observed firing and its control observed not firing.** For
  * the writers the control is the neighbouring draft that records. For the spend
- * the control is sharper, because nothing admits under a scope on this tree:
- * the store refuses every scoped spend as its last test while the request
- * thread (D-0061 rules 2 and 4) is not built (residual R1). So a spend that
- * passes tests 1-8 is observed reaching *that* refusal, and a flipped input is
- * observed stopping at an earlier one -- which is how each earlier test is
- * seen to be wired, in D-0066 rule 4.3's order.
+ * it is the neighbouring admission that reserves, and writes its consumption row
+ * beside the iteration row; a flipped input is observed stopping at its own
+ * test, in D-0066 rule 4.3's order.
  */
 import { DatabaseSync } from "node:sqlite";
 import { expect, test } from "vitest";
@@ -26,6 +23,7 @@ import {
   type ScopeDecisionDraft,
   type ScopeDraft,
   scopePayloadWithDefaults,
+  type ThreadMessageDraft,
 } from "../../src/store/records.js";
 import {
   advisoryRecord,
@@ -41,7 +39,6 @@ const AGENT_TYPE = `sha256:${"a".repeat(64)}`;
 const OTHER_AGENT_TYPE = `sha256:${"b".repeat(64)}`;
 const REPOSITORY = "/srv/repo";
 const WORKSPACE_ROOT = "/srv/work";
-const R1 = "the request thread (D-0061 rules 2 and 4) is not built";
 
 const PAYLOAD: JsonRecord = {
   requests: ["m-0001"],
@@ -53,6 +50,31 @@ const PAYLOAD: JsonRecord = {
   irreversible_additions: [],
 };
 
+/** A thread message, opening a request unless `inReplyTo` says otherwise (D-0061 rule 2). */
+const message = (parts: Partial<ThreadMessageDraft> = {}): ThreadMessageDraft => ({
+  messageId: "m-0001",
+  body: "please do the work",
+  authorKind: "operator",
+  authorId: "oidc|operator-1",
+  inReplyTo: null,
+  atMs: 1,
+  bases: [],
+  asks: false,
+  ...parts,
+});
+
+/** A drafter's question in `m-0001`'s thread, over whatever its bases name (D-0066 rule 4.4). */
+const ask = (messageId: string, bases: JsonRecord[], inReplyTo = "m-0001"): ThreadMessageDraft =>
+  message({
+    messageId,
+    body: "which way?",
+    authorKind: "drafter",
+    authorId: "rondo/deterministic",
+    inReplyTo,
+    bases: [{ form: "message", messageId: "m-0001" }, ...bases],
+    asks: true,
+  });
+
 /**
  * A store holding what a scope may name: the request message, and an iteration
  * row carrying the agent type (D-0062 rule 1.2's "a record rondo already holds").
@@ -61,7 +83,7 @@ const seeded = async (policy: HostPolicy = ROOMY) => {
   const connection = new DatabaseSync(":memory:");
   const store = iterationStore(connection, policy);
   const record = advisoryRecord(connection);
-  await record.recordMessage("m-0001");
+  expect(await record.recordThreadMessage(message())).toEqual({ kind: "recorded" });
   await store.reserve(reserveInput("i-held", null));
   connection
     .prepare("UPDATE iteration SET agent_type_digest = ?, status = 'closed' WHERE id = ?")
@@ -94,7 +116,6 @@ const scopeDecision = (parts: Partial<ScopeDecisionDraft> = {}): ScopeDecisionDr
 const spendOf = (parts: Partial<ScopeSpend> = {}): ScopeSpend => ({
   scopeDecisionId: "sd-0001",
   proposalId: null,
-  requestMessageId: "m-0001",
   agentTypeDigest: AGENT_TYPE,
   ...parts,
 });
@@ -112,7 +133,7 @@ function reserveInput(
     topicBranch: `rondo/${id}`,
     workspace: `/srv/work/iter-${id}`,
     supersedesIterationId: null,
-    requestMessageId: null,
+    requestMessageId: "m-0001",
     spend: null,
     scopeSpend,
     nowMs: 5_000,
@@ -326,6 +347,23 @@ test("a request that is no message, or an agent type no iteration holds, is refu
   expect(await record.recordScope(scope())).toEqual({ kind: "recorded" });
 });
 
+test("a request must open one: a bare message id and a reply are refused (R5)", async () => {
+  const { record } = await seeded();
+  await record.recordMessage("m-bare");
+  await record.recordThreadMessage(message({ messageId: "m-reply", inReplyTo: "m-0001" }));
+  for (const id of ["m-bare", "m-reply"]) {
+    const refused = await record.recordScope(scope({ payload: { ...PAYLOAD, requests: [id] } }));
+    expect(refused.kind === "refused" ? refused.reason : refused.kind).toContain(
+      "does not open a request",
+    );
+  }
+  // Control: a request root records.
+  await record.recordThreadMessage(message({ messageId: "m-root-2" }));
+  expect(
+    await record.recordScope(scope({ payload: { ...PAYLOAD, requests: ["m-0001", "m-root-2"] } })),
+  ).toEqual({ kind: "recorded" });
+});
+
 test("a second scope under one id is refused, not overwritten", async () => {
   const { record } = await seeded();
   expect(await record.recordScope(scope())).toEqual({ kind: "recorded" });
@@ -482,17 +520,52 @@ const refusalOf = async (
   input: ReserveInput,
 ): Promise<string> => {
   const outcome = await store.reserve(input);
-  expect(outcome.kind).toBe("unapproved");
-  return outcome.kind === "unapproved" ? outcome.reason : "";
+  expect(outcome.kind).toBe("scopeRefused");
+  return outcome.kind === "scopeRefused"
+    ? `${outcome.verdict} ${outcome.test}: ${outcome.reason}`
+    : "";
 };
 
-test("a spend that passes every store test stops at R1, and writes nothing", async () => {
+const reserves = async (
+  store: Awaited<ReturnType<typeof seeded>>["store"],
+  input: ReserveInput,
+): Promise<void> => {
+  expect((await store.reserve(input)).kind).toBe("reserved");
+};
+
+test("a spend that passes every store test writes one consumption row beside its iteration", async () => {
   const { connection, store } = await approved();
-  expect(await refusalOf(store, reserveInput("i-new", spendOf()))).toContain(R1);
-  expect(count(connection, "SELECT COUNT(*) AS n FROM iteration WHERE id = 'i-new'")).toBe(0);
+  await reserves(store, reserveInput("i-new", spendOf({ proposalId: "p-split" })));
+  expect(connection.prepare("SELECT * FROM scope_consumption").all()).toEqual([
+    {
+      scope_decision_id: "sd-0001",
+      act_kind: "admission",
+      subject_id: "i-new",
+      proposal_id: "p-split",
+      consumed_at_ms: 5_000,
+    },
+  ]);
+  expect(count(connection, "SELECT COUNT(*) AS n FROM iteration WHERE id = 'i-new'")).toBe(1);
+});
+
+test("both or neither: an iteration insert that fails after the consumption rolls both back", async () => {
+  const { connection, store } = await approved();
+  // `i-held` is already a row: the consumption lands, then the iteration's
+  // primary key refuses, and the transaction takes the consumption with it.
+  const collided = await store.reserve(reserveInput("i-held", spendOf()));
+  expect(collided.kind).toBe("defect");
   expect(count(connection, "SELECT COUNT(*) AS n FROM scope_consumption")).toBe(0);
-  // Control: the same admission with no scope reserves.
-  expect((await store.reserve(reserveInput("i-new", null))).kind).toBe("reserved");
+  // Control: the same admission under a fresh identity writes both.
+  await reserves(store, reserveInput("i-new", spendOf()));
+  expect(count(connection, "SELECT COUNT(*) AS n FROM scope_consumption")).toBe(1);
+});
+
+test("the last lap: of two admissions under laps 1 the second is refused and writes nothing", async () => {
+  const { connection, store } = await approved(withBudgets({ laps: 1 }));
+  await reserves(store, reserveInput("i-first", spendOf()));
+  expect(await refusalOf(store, reserveInput("i-second", spendOf()))).toContain("1 of 1 laps");
+  expect(count(connection, "SELECT COUNT(*) AS n FROM iteration WHERE id = 'i-second'")).toBe(0);
+  expect(count(connection, "SELECT COUNT(*) AS n FROM scope_consumption")).toBe(1);
 });
 
 test("1. a missing or declined decision is refused", async () => {
@@ -515,14 +588,14 @@ test("2. a scope whose digest is not the decision's is refused", async () => {
 test("3. a scope with an approved successor is refused; a drafted one is not", async () => {
   const { record, store } = await approved();
   await record.recordScope(scope({ scopeId: "s-next", supersedesScopeId: "s-0001" }));
-  expect(await refusalOf(store, reserveInput("i-new", spendOf()))).toContain(R1);
+  await reserves(store, reserveInput("i-a", spendOf()));
   await record.recordScopeDecision(
     scopeDecision({ scopeDecisionId: "sd-next", scopeId: "s-next" }),
   );
-  expect(await refusalOf(store, reserveInput("i-new", spendOf()))).toContain("approved successor");
+  expect(await refusalOf(store, reserveInput("i-b", spendOf()))).toContain("approved successor");
 });
 
-test("4. a plan whose pair is not listed, byte for byte, is refused", async () => {
+test("6. a plan whose pair is not listed, byte for byte, is refused", async () => {
   const { store } = await approved();
   const plan = { run_id: "r", repository: REPOSITORY, workspace_root: `${WORKSPACE_ROOT}/` };
   expect(await refusalOf(store, reserveInput("i-new", spendOf(), { plan }))).toContain(
@@ -530,43 +603,145 @@ test("4. a plan whose pair is not listed, byte for byte, is refused", async () =
   );
 });
 
-test("5. an agent type the scope does not list is refused", async () => {
+test("7. an agent type the scope does not list is refused", async () => {
   const { store } = await approved();
   expect(
     await refusalOf(store, reserveInput("i-new", spendOf({ agentTypeDigest: OTHER_AGENT_TYPE }))),
   ).toContain("is not one scope");
 });
 
-test("6. expiry: the instant itself has expired, the millisecond before has not", async () => {
+test("8. expiry: the instant itself has expired, the millisecond before has not", async () => {
   const { store } = await approved();
   expect(await refusalOf(store, reserveInput("i-new", spendOf(), { nowMs: 10_000 }))).toContain(
     "expired",
   );
-  expect(await refusalOf(store, reserveInput("i-new", spendOf(), { nowMs: 9_999 }))).toContain(R1);
+  await reserves(store, reserveInput("i-new", spendOf(), { nowMs: 9_999 }));
 });
 
-test("7. laps: a spent budget is refused, and laps 0 refuses the first", async () => {
+test("9. laps: a spent budget is refused, and laps 0 refuses the first", async () => {
   const zero = await approved(withBudgets({ laps: 0 }));
   expect(await refusalOf(zero.store, reserveInput("i-new", spendOf()))).toContain("0 of 0 laps");
   const { connection, store } = await approved(withBudgets({ laps: 2, cost_usd: 100 }));
   admitted(connection, "i-a", 1);
-  expect(await refusalOf(store, reserveInput("i-new", spendOf()))).toContain(R1);
-  admitted(connection, "i-b", 1);
-  expect(await refusalOf(store, reserveInput("i-new", spendOf()))).toContain("2 of 2 laps");
+  await reserves(store, reserveInput("i-b", spendOf()));
+  expect(await refusalOf(store, reserveInput("i-c", spendOf()))).toContain("2 of 2 laps");
 });
 
-test("8. cost: an unread lap holds its reserve, a read cost replaces it, equality is inside", async () => {
+test("10. cost across real admissions: an unread lap holds its reserve, a read cost replaces it, equality is inside", async () => {
   // Budget 10, reserve 2. Read 5 plus one unread lap plus this one: 5 + 2*2 = 9.
   const { connection, store } = await approved(withBudgets({ laps: 10 }));
   admitted(connection, "i-read", 5);
   admitted(connection, "i-unread", null);
-  expect(await refusalOf(store, reserveInput("i-new", spendOf()))).toContain(R1);
-  // A second unread lap: 5 + 3*2 = 11 > 10.
-  admitted(connection, "i-unread-2", null);
-  expect(await refusalOf(store, reserveInput("i-new", spendOf()))).toContain("would commit 11 USD");
+  await reserves(store, reserveInput("i-b", spendOf()));
+  // `i-b` is admitted and unread, and holds its reserve too: 5 + 3*2 = 11 > 10.
+  expect(await refusalOf(store, reserveInput("i-c", spendOf()))).toContain("would commit 11 USD");
   // Its cost is read at 1: 6 + 2*2 = 10, exactly the budget, which is inside.
-  connection.prepare("UPDATE iteration SET lap_cost_usd = 1 WHERE id = 'i-unread-2'").run();
-  expect(await refusalOf(store, reserveInput("i-new", spendOf()))).toContain(R1);
+  connection.prepare("UPDATE iteration SET lap_cost_usd = 1 WHERE id = 'i-b'").run();
+  await reserves(store, reserveInput("i-c", spendOf()));
+});
+
+test("4. the request is the row's own link, and the scope must list it", async () => {
+  const { record, store } = await approved();
+  expect(
+    await refusalOf(store, reserveInput("i-new", spendOf(), { requestMessageId: null })),
+  ).toContain("names no request");
+  await record.recordThreadMessage(message({ messageId: "m-0002" }));
+  expect(
+    await refusalOf(store, reserveInput("i-new", spendOf(), { requestMessageId: "m-0002" })),
+  ).toContain("'m-0002' is not one scope");
+  // A reply is refused earlier, by the request link's own test, and spends nothing.
+  await record.recordThreadMessage(message({ messageId: "m-reply", inReplyTo: "m-0001" }));
+  expect(
+    (await store.reserve(reserveInput("i-new", spendOf(), { requestMessageId: "m-reply" }))).kind,
+  ).toBe("requestRefused");
+  await reserves(store, reserveInput("i-new", spendOf()));
+});
+
+// --- 5. Open asks, under the write lock (D-0066 rules 4.2-4.4) ------------
+
+/** An approved scope with room for many laps, and a redo of `i-held` beside a lineage start. */
+const askable = async () => {
+  const seed = await approved(withBudgets({ laps: 50, cost_usd: 1_000 }));
+  let n = 0;
+  const redo = () =>
+    reserveInput(`i-redo-${String(++n)}`, spendOf(), { supersedesIterationId: "i-held" });
+  const start = () => reserveInput(`i-start-${String(++n)}`, spendOf());
+  return { ...seed, redo, start };
+};
+
+test("5. an ask over the lineage refuses a redo, at any depth, and not a lineage start", async () => {
+  const { connection, record, store, redo, start } = await askable();
+  expect(
+    await record.recordThreadMessage(ask("m-ask", [{ form: "iteration", iterationId: "i-held" }])),
+  ).toEqual({ kind: "recorded" });
+  expect(await refusalOf(store, redo())).toContain("'m-ask'");
+  await reserves(store, start());
+  // A grandparent: `i-held` now continues `i-root`, and an ask over `i-root` stands over it too.
+  admitted(connection, "i-root", null, "sd-other");
+  connection
+    .prepare("UPDATE iteration SET supersedes_iteration_id = 'i-root' WHERE id = 'i-held'")
+    .run();
+  await record.recordThreadMessage(message({ messageId: "m-ans", inReplyTo: "m-ask" }));
+  await reserves(store, redo());
+  await record.recordThreadMessage(
+    ask("m-ask-root", [{ form: "iteration", iterationId: "i-root" }]),
+  );
+  expect(await refusalOf(store, redo())).toContain("'m-ask-root'");
+  expect(await record.openAsksIn("m-0001")).toEqual({
+    kind: "read",
+    asks: [{ messageId: "m-ask-root", iterationIds: ["i-root"] }],
+  });
+});
+
+test("5. an ask naming no lap holds back a lineage start, and lineages running carry on", async () => {
+  const { connection, record, store, redo, start } = await askable();
+  await record.recordThreadMessage(ask("m-ask", []));
+  expect(await refusalOf(store, start())).toContain("'m-ask'");
+  await reserves(store, redo());
+  expect(count(connection, "SELECT COUNT(*) AS n FROM iteration WHERE id LIKE 'i-start-%'")).toBe(
+    0,
+  );
+});
+
+test("5. controls: an answered ask, one in another request's thread, one on another lineage", async () => {
+  const { record, store, redo, start } = await askable();
+  // Answered: a reply to the ask ends it.
+  await record.recordThreadMessage(ask("m-ask", []));
+  expect(await refusalOf(store, start())).toContain("'m-ask'");
+  await record.recordThreadMessage(message({ messageId: "m-ans", inReplyTo: "m-ask" }));
+  await reserves(store, start());
+  // Another request's thread: its question does not stand over this request's acts.
+  await record.recordThreadMessage(message({ messageId: "m-0002" }));
+  await record.recordThreadMessage(ask("m-ask-2", [], "m-0002"));
+  await reserves(store, start());
+  // Another lineage: an iteration basis not on this chain.
+  await record.recordThreadMessage(
+    ask("m-ask-3", [{ form: "iteration", iterationId: "i-elsewhere" }]),
+  );
+  await reserves(store, redo());
+  // The ask deep in a reply chain is still in the thread.
+  await record.recordThreadMessage(ask("m-ask-4", [], "m-ans"));
+  expect(await refusalOf(store, start())).toContain("'m-ask-4'");
+});
+
+test("5. an ask over a lap stands over its whole lineage, so a branch from an earlier lap is refused", async () => {
+  const { connection, record, store } = await askable();
+  const redoOf = (id: string, predecessor: string) =>
+    reserveInput(id, spendOf(), { supersedesIterationId: predecessor });
+  await reserves(store, redoOf("i-p", "i-held"));
+  // The line is stopped over its latest lap, `i-p`.
+  await record.recordThreadMessage(ask("m-stop", [{ form: "iteration", iterationId: "i-p" }]));
+  expect(await refusalOf(store, redoOf("i-s1", "i-p"))).toContain("'m-stop'");
+  // Redoing the earlier lap shares `i-p`'s root, so the same stop holds it.
+  expect(await refusalOf(store, redoOf("i-s2", "i-held"))).toContain("'m-stop'");
+  expect(count(connection, "SELECT COUNT(*) AS n FROM iteration WHERE id = 'i-s2'")).toBe(0);
+  expect(count(connection, "SELECT COUNT(*) AS n FROM scope_consumption")).toBe(1);
+  expect(await record.lineageOf("i-held")).toEqual(["i-held", "i-p"]);
+  expect(await record.lineageOf("i-p")).toEqual(["i-held", "i-p"]);
+  // Control: once answered, the branch from the earlier lap is admitted.
+  await record.recordThreadMessage(message({ messageId: "m-ans", inReplyTo: "m-stop" }));
+  await reserves(store, redoOf("i-s2", "i-held"));
+  expect(await record.lineageOf("i-p")).toEqual(["i-held", "i-p", "i-s2"]);
 });
 
 test("the re-tests run in rule 4.3's order: the earliest failing one is the reason", async () => {
@@ -578,10 +753,17 @@ test("the re-tests run in rule 4.3's order: the earliest failing one is the reas
       reserveInput("i-new", spendOf({ agentTypeDigest: OTHER_AGENT_TYPE }), { nowMs: 20_000 }),
     ),
   ).toContain("is not one scope");
-  // Control: with the agent type fixed, expiry (test 6) answers before laps (test 7).
+  // Control: with the agent type fixed, expiry (test 8) answers before laps (test 9).
   expect(await refusalOf(store, reserveInput("i-new", spendOf(), { nowMs: 20_000 }))).toContain(
     "expired",
   );
+});
+
+test("an open ask over the line answers before a spent budget, so a stop is not written twice", async () => {
+  const { store, record } = await approved(withBudgets({ laps: 0 }));
+  expect(await refusalOf(store, reserveInput("i-new", spendOf()))).toContain("outside laps");
+  await record.recordThreadMessage(ask("m-stop", []));
+  expect(await refusalOf(store, reserveInput("i-new", spendOf()))).toContain("outside asks");
 });
 
 test("spending a human decision and a scope at once is a defect that writes nothing", async () => {

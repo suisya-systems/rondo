@@ -567,6 +567,12 @@ test("a split reads back as plans against templates, or as holes, and nothing el
   };
   const planned = { plans: [plan], holes: [] };
   expect(readSplitPayload(planned)).toEqual({ kind: "split", payload: planned });
+  // Rule 4.3: a plan may rest on the request's words, D-0061 rule 2.6's message form.
+  const onMessage = {
+    plans: [{ ...plan, bases: [{ form: "message", messageId: "m-1" }] }],
+    holes: [],
+  };
+  expect(readSplitPayload(onMessage)).toEqual({ kind: "split", payload: onMessage });
   // Rule 4.4: no template, so no plan, and the holes are the whole answer.
   const holes = { plans: [], holes: ["no persisted plan names this repository"] };
   expect(readSplitPayload(holes)).toEqual({ kind: "split", payload: holes });
@@ -577,6 +583,10 @@ test("a split reads back as plans against templates, or as holes, and nothing el
     ["names no digest", { plans: [{ ...plan, agent_type_digest: "tier-standard" }], holes: [] }],
     [
       "cites an unknown basis form",
+      { plans: [{ ...plan, bases: [{ form: "hunch" }] }], holes: [] },
+    ],
+    [
+      "cites a message with no id",
       { plans: [{ ...plan, bases: [{ form: "message" }] }], holes: [] },
     ],
     ["carries an unknown key", { ...planned, recommended: 0 }],

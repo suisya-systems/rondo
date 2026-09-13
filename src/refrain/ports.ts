@@ -31,6 +31,7 @@ import type {
   IterationStatus,
   JsonRecord,
   LapReadingDraft,
+  ScopeRefusal,
 } from "../store/records.js";
 import type { AdmittedPlan } from "./plan.js";
 
@@ -218,6 +219,8 @@ export type ReserveOutcome =
     }
   /** The approval this admission carried is one the store would not spend. */
   | { readonly kind: "unapproved"; readonly reason: string }
+  /** The scope's re-test under the write lock refused (D-0066 rule 4.3): which test, as data. */
+  | ({ readonly kind: "scopeRefused" } & ScopeRefusal)
   /** The request link names no message that opens a request (D-0061 rule 4). */
   | { readonly kind: "requestRefused"; readonly reason: string }
   | { readonly kind: "defect"; readonly reason: string };
@@ -406,15 +409,15 @@ export interface ReserveInput {
 /**
  * One approved scope, as the admission taken under it names it (D-0066 rule 3).
  *
- * The repository and workspace root are not carried: the store reads them from
- * the admitted plan itself. `agentTypeDigest` comes from the surface's
+ * The repository, the workspace root and the request are not carried: the store
+ * reads them from the admitted plan and the row's own `requestMessageId`.
+ * `agentTypeDigest` comes from the surface's
  * classification of this same plan, and its drift before the write is D-0047
  * rule 6's bounded race (D-0066 rule 4.3).
  */
 export interface ScopeSpend {
   readonly scopeDecisionId: string;
   readonly proposalId: string | null;
-  readonly requestMessageId: string;
   readonly agentTypeDigest: string;
 }
 

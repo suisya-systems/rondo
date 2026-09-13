@@ -2564,12 +2564,17 @@ async function commandDecideScope(
  * that computes a verdict** (`admitUnderScope`, rule 4.1). Anything but
  * `inside` is printed with the test that refused it and takes no act.
  *
- * ponytail: residual R2 -- rule 4.4's stopping message is not written, because
- * the request thread it would go into (D-0061 5.1/5.2) is not built; the
- * refusal is printed only. And R1 makes every verdict on this tree
- * `undecidable` at the request test, so this verb refuses until that lands.
+ * **The retry inherits the predecessor row's `requestMessageId`** (D-0061 rule
+ * 4): it redoes that request's work, so it is tested against the scope's
+ * `requests` and the thread's open asks as that request, never as one named on
+ * the command line.
+ *
+ * **A refusal says what keeps the line stopped** (rule 4.4): the asking message
+ * written into the request's thread, or the one already holding it. A retry
+ * whose predecessor names no request has no thread, and that refusal is the one
+ * left with no durable stop; a stop that could not be written exits 1.
  */
-async function commandScopedRetry(
+export async function commandScopedRetry(
   parsed: ParsedCommand,
   store: IterationStore,
   storePath: string,
@@ -2602,17 +2607,58 @@ async function commandScopedRetry(
       store,
       record: openAdvisoryRecord(storePath),
       nowMs: Date.now,
-      admit: (plan, id, supersedes, scopeSpend) =>
-        admit(ports, advisory, plan, START_POLICY, id, supersedes, null, null, scopeSpend),
+      admit: (plan, id, supersedes, requestMessageId, scopeSpend) =>
+        admit(
+          ports,
+          advisory,
+          plan,
+          START_POLICY,
+          id,
+          supersedes,
+          null,
+          requestMessageId,
+          scopeSpend,
+        ),
     },
     scopeDecisionId,
-    { kind: "redo", iterationId: successorId, plan: decoded.plan, predecessorId },
+    {
+      kind: "redo",
+      iterationId: successorId,
+      plan: decoded.plan,
+      predecessorId,
+      requestMessageId: predecessor.record.requestMessageId,
+    },
   );
   if (outcome.kind === "refused") {
-    return refuse(
-      `Refused: the retry is ${outcome.verdict} the scope at the ${outcome.test} test, so ` +
-        `nothing was admitted and nothing was spent: ${outcome.reason}`,
+    consoleSeams.writeError(
+      `${asciiEscape(
+        `Refused: the retry is ${outcome.verdict} the scope at the ${outcome.test} test, so ` +
+          `nothing was admitted and nothing was spent: ${outcome.reason}`,
+      )}\n`,
     );
+    const stop = outcome.stop;
+    switch (stop.kind) {
+      case "written":
+        return refuse(
+          `The line is stopped by message '${stop.messageId}', which asks in the request's ` +
+            "thread; a reply to it is what lets the line carry on.",
+        );
+      case "held":
+        return refuse(
+          `No new message was written: message '${stop.messageId}' ` +
+            "already holds this line, and a reply to it is what lets the line carry on.",
+        );
+      case "noThread":
+        return refuse(
+          "The iteration names no request, so there is no thread to write the stop into: this " +
+            "refusal is printed only, and nothing durable keeps the line stopped.",
+        );
+      case "failed":
+        refuse(
+          `The message '${stop.messageId}' that keeps this line stopped was NOT recorded: ${stop.reason}`,
+        );
+        return 1;
+    }
   }
   const report = outcome.report;
   sayReport(report);

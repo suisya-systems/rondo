@@ -19,7 +19,13 @@ import {
 } from "../../src/access/scope.js";
 import { allocate } from "../../src/refrain/allocator.js";
 import { classifyPlan } from "../../src/refrain/classification.js";
-import { admittedPlan, planPayload, type RunPlan, runPlan } from "../../src/refrain/plan.js";
+import {
+  admittedPlan,
+  planPayload,
+  type RunPlan,
+  readPlan,
+  runPlan,
+} from "../../src/refrain/plan.js";
 import {
   type JsonRecord,
   type LapReading,
@@ -54,8 +60,26 @@ const SCOPE: StoredScope = {
 
 const PLAN = { repository: "/repo", workspaceRoot: "/work" } as RunPlan;
 
-const START: ScopeAct = { kind: "lineage_start", iterationId: "i-2", plan: PLAN, proposalId: "p" };
-const REDO: ScopeAct = { kind: "redo", iterationId: "i-2", plan: PLAN, predecessorId: "i-1" };
+const START: ScopeAct = {
+  kind: "lineage_start",
+  iterationId: "i-2",
+  plan: PLAN,
+  proposalId: "p",
+  requestMessageId: "m-1",
+};
+const REDO: ScopeAct = {
+  kind: "redo",
+  iterationId: "i-2",
+  plan: PLAN,
+  predecessorId: "i-1",
+  requestMessageId: "m-1",
+};
+
+const asks = (...open: { messageId?: string; iterationIds: string[] }[]) =>
+  ({
+    kind: "read",
+    asks: open.map((ask, n) => ({ messageId: ask.messageId ?? `m-ask-${String(n)}`, ...ask })),
+  }) as const;
 
 function reading(severities: readonly ("blocker" | "major" | "minor" | "nit")[]): LapReading {
   return {
@@ -94,7 +118,7 @@ function snapshot(
     spent: { admissions: 0, readCostUsd: 0, unreadLaps: 0 },
     nowMs: 500,
     requestMessageId: "m-1",
-    openAsks: [],
+    openAsks: asks(),
     lineageIterationIds: { kind: "read", ids: ["i-1", "i-0"] },
     classification: { kind: "read", outcome: "allowed", agentTypeDigest: AGENT, granted: ["a"] },
     predecessor: PREDECESSOR,
@@ -123,7 +147,7 @@ test.each<[string, ScopeSnapshot, "outside" | "undecidable", string]>([
     "decision",
   ],
   ["an approved successor", snapshot({ supersededByApproved: true }), "outside", "superseded"],
-  ["an unreadable request (R1)", snapshot({ requestMessageId: null }), "undecidable", "request"],
+  ["an act naming no request", snapshot({ requestMessageId: null }), "outside", "request"],
   ["a request not listed", snapshot({ requestMessageId: "m-9" }), "outside", "request"],
   [
     "a workspace root not listed",
@@ -181,8 +205,24 @@ test.each<[string, ScopeSnapshot, "outside" | "undecidable", string]>([
     "outside",
     "cost",
   ],
-  ["unreadable asks (R1)", snapshot({ openAsks: null }), "undecidable", "asks"],
-  ["an ask over the lineage", snapshot({ openAsks: [{ iterationId: "i-0" }] }), "outside", "asks"],
+  [
+    "unreadable asks",
+    snapshot({ openAsks: { kind: "unreadable", reason: "bases not JSON" } }),
+    "undecidable",
+    "asks",
+  ],
+  [
+    "an unwalkable lineage",
+    snapshot({ lineageIterationIds: { kind: "unreadable", reason: "cycle" } }),
+    "undecidable",
+    "asks",
+  ],
+  [
+    "an ask over the lineage",
+    snapshot({ openAsks: asks({ iterationIds: ["i-0"] }) }),
+    "outside",
+    "asks",
+  ],
 ])("%s refuses at its own test", (_name, snap, kind, testName) => {
   expect(scopeVerdict(REDO, snap)).toMatchObject({ kind, test: testName });
 });
@@ -212,17 +252,39 @@ test("the first failing test decides the name", () => {
       REDO,
       snapshot({ requestMessageId: null, spent: { admissions: 9, readCostUsd: 0, unreadLaps: 0 } }),
     ),
-  ).toMatchObject({ kind: "undecidable", test: "request" });
+  ).toMatchObject({ kind: "outside", test: "request" });
+});
+
+test("an open ask answers before the scope's fields and budgets (rule 4.4's stop holds the line)", () => {
+  const spent = { spent: { admissions: 9, readCostUsd: 0, unreadLaps: 0 } };
+  expect(scopeVerdict(REDO, snapshot(spent))).toMatchObject({ test: "laps" });
+  expect(
+    scopeVerdict(REDO, snapshot({ ...spent, openAsks: asks({ iterationIds: ["i-1"] }) })),
+  ).toMatchObject({ kind: "outside", test: "asks" });
+  // The request still answers first: the asks are read from its thread.
+  expect(
+    scopeVerdict(
+      REDO,
+      snapshot({ requestMessageId: "m-9", openAsks: asks({ iterationIds: ["i-1"] }) }),
+    ),
+  ).toMatchObject({ test: "request" });
 });
 
 test("an ask with no iteration holds back a lineage start and not a redo (rule 4.4)", () => {
-  const unattached = snapshot({ openAsks: [{ iterationId: null }] });
-  expect(scopeVerdict(START, unattached)).toMatchObject({ kind: "outside", test: "asks" });
+  const unattached = snapshot({ openAsks: asks({ messageId: "m-q", iterationIds: [] }) });
+  expect(scopeVerdict(START, unattached)).toMatchObject({
+    kind: "outside",
+    test: "asks",
+    reason: expect.stringContaining("'m-q'"),
+  });
   expect(scopeVerdict(REDO, unattached)).toEqual(INSIDE);
   // An ask on another lineage stops neither.
-  const elsewhere = snapshot({ openAsks: [{ iterationId: "i-other" }] });
+  const elsewhere = snapshot({ openAsks: asks({ iterationIds: ["i-other"] }) });
   expect(scopeVerdict(START, elsewhere)).toEqual(INSIDE);
   expect(scopeVerdict(REDO, elsewhere)).toEqual(INSIDE);
+  // One of several iteration bases on the line is enough.
+  const oneOf = snapshot({ openAsks: asks({ iterationIds: ["i-other", "i-1"] }) });
+  expect(scopeVerdict(REDO, oneOf)).toMatchObject({ kind: "outside", test: "asks" });
 });
 
 test("a lineage start reads no predecessor and no reading", () => {
@@ -340,6 +402,10 @@ function ports(snap: ScopeSnapshot, admitted: unknown[]): ScopeAdmitPorts {
       readScopeDecision: async () => ({ kind: "read", decision: snap.decision }),
       scopeSpent: async () => snap.spent,
       scopeSupersededByApproved: async () => snap.supersededByApproved,
+      openAsksIn: async () => snap.openAsks,
+      lineageOf: async () =>
+        snap.lineageIterationIds.kind === "read" ? snap.lineageIterationIds.ids : null,
+      recordThreadMessage: async () => ({ kind: "recorded" }),
     },
     nowMs: () => 500,
     admit: async (...args) => {
@@ -350,11 +416,16 @@ function ports(snap: ScopeSnapshot, admitted: unknown[]): ScopeAdmitPorts {
 }
 
 test("PLANTED: an undecidable verdict never calls admit, and names its test", async () => {
-  // The production gatherer passes a null request (R1), so every scoped act on
-  // this tree ends here -- with nothing admitted and nothing spent.
+  // The gatherer classifies the act's own plan, and this hand-built one does
+  // not classify: undecidable at the agent type test, before any admit.
   const admitted: unknown[] = [];
-  const outcome = await admitUnderScope(ports(snapshot(), admitted), "sd-1", REDO);
-  expect(outcome).toMatchObject({ kind: "refused", verdict: "undecidable", test: "request" });
+  const outcome = await admitUnderScope(ports(snapshot(), admitted), "sd-1", START);
+  expect(outcome).toMatchObject({
+    kind: "refused",
+    verdict: "undecidable",
+    test: "agent_type",
+    stop: { kind: "written" },
+  });
   expect(admitted).toEqual([]);
 
   const missing = ports(snapshot(), admitted);
@@ -371,9 +442,10 @@ test("PLANTED: an undecidable verdict never calls admit, and names its test", as
 
 // --- The gatherer -----------------------------------------------------------
 //
-// Every admitUnderScope case above stops at R1's null request, so nothing there
-// reads what the gatherer computed for a redo. These call it directly over a
-// fake store holding a real, classifiable stored plan and a three-link chain.
+// The admitUnderScope cases above use a hand-built plan that does not classify,
+// so nothing there reads what the gatherer computed for a redo. These call it
+// directly over a fake store holding a real, classifiable stored plan and a
+// three-link chain.
 
 const ABS = (p: string) => resolve(p);
 
@@ -476,8 +548,23 @@ function gatherPorts(links: Record<string, Link>): ScopeReadPorts {
       },
       readingsFor: async (id) => links[id]?.readings ?? [],
     },
-    record: base.record,
+    record: {
+      ...base.record,
+      // Every link sharing the id's root, as the store's query answers.
+      lineageOf: async (id) => Object.keys(links).filter((other) => rootOf(other) === rootOf(id)),
+    },
   };
+  function rootOf(id: string): string {
+    const seen = new Set<string>();
+    let at = id;
+    let up = links[at]?.supersedes ?? null;
+    while (up !== null && !seen.has(at)) {
+      seen.add(at);
+      at = up;
+      up = links[at]?.supersedes ?? null;
+    }
+    return at;
+  }
 }
 
 async function gatheredRedo(links: Record<string, Link>): Promise<ScopeSnapshot> {
@@ -500,7 +587,9 @@ test("the gatherer walks the chain newest first and reads the predecessor's late
   // The tip is the predecessor; its reading is the 'major' one, not the root's 'blocker'.
   expect(readings.latestModelReading?.graded).toEqual(reading(["major"]).graded);
   expect(snap.predecessor?.grants).toMatchObject({ kind: "read", contractDigestMatches: true });
-  expect(snap.requestMessageId).toBeNull();
+  // The request is the act's own, and the asks are read from its thread.
+  expect(snap.requestMessageId).toBe("m-1");
+  expect(snap.openAsks).toEqual(asks());
 
   // Control: a single-link chain counts one round.
   const one = await gatheredRedo({ "i-1": { supersedes: null, readings: [reading(["major"])] } });
@@ -539,4 +628,77 @@ test("a cyclic or broken lineage gathers as unreadable, not as a hang or a short
     "i-0": { supersedes: null, readings: [] },
   });
   expect(ended.lineageIterationIds).toEqual({ kind: "read", ids: ["i-1", "i-0"] });
+});
+
+test("PLANTED: a branch's lineage and review rounds hold its sibling laps, sharing the root", async () => {
+  // `i-1` branches from `i-0` beside `i-sib`, which holds a model reading of its own.
+  const branched = await gatheredRedo({
+    "i-1": { supersedes: "i-0", readings: [reading(["major"])] },
+    "i-0": { supersedes: null, readings: [] },
+    "i-sib": { supersedes: "i-0", readings: [reading(["blocker"])] },
+    "i-far": { supersedes: null, readings: [reading(["major"])] },
+  });
+  expect(branched.lineageIterationIds).toEqual({ kind: "read", ids: ["i-1", "i-0", "i-sib"] });
+  expect(branched.predecessor?.readings).toMatchObject({ kind: "read", roundsTaken: 2 });
+  // The latest reading stays the predecessor's own, not the sibling's.
+  const readings = branched.predecessor?.readings;
+  if (readings?.kind !== "read") throw new Error("the readings did not read");
+  expect(readings.latestModelReading?.graded).toEqual(reading(["major"]).graded);
+  // Control: without the sibling, one round.
+  const alone = await gatheredRedo({
+    "i-1": { supersedes: "i-0", readings: [reading(["major"])] },
+    "i-0": { supersedes: null, readings: [] },
+    "i-far": { supersedes: null, readings: [reading(["major"])] },
+  });
+  expect(alone.predecessor?.readings).toMatchObject({ kind: "read", roundsTaken: 1 });
+});
+
+test("inside: a retry is admitted as its predecessor's request, with the classified agent type", async () => {
+  const { payload } = storedPlan();
+  const decoded = readPlan(payload);
+  if (decoded.kind !== "planned") throw new Error(decoded.reason);
+  const plan = decoded.plan;
+  const allocation = allocate("i-2", plan.workspaceRoot);
+  if (allocation.kind !== "allocated") throw new Error(allocation.reason);
+  const admittedTwo = admittedPlan(plan, allocation.allocation);
+  if (admittedTwo.kind !== "planned") throw new Error(admittedTwo.reason);
+  const classified = classifyPlan(admittedTwo.plan);
+  if (classified.kind !== "answered") throw new Error("the fixture plan did not classify");
+  const agentType = classified.value.agentTypeDigest;
+  const snap = snapshot(
+    {},
+    {
+      requests: ["m-root"],
+      workspaces: [{ repository: plan.repository, workspace_root: plan.workspaceRoot }],
+      agent_types: [agentType],
+    },
+  );
+  const calls: unknown[][] = [];
+  const reads = gatherPorts({ "i-1": { supersedes: null, readings: [reading(["major"])] } });
+  const admitPorts: ScopeAdmitPorts = {
+    ...ports(snap, []),
+    store: reads.store,
+    nowMs: () => 500,
+    admit: async (...args) => {
+      calls.push(args);
+      return { iterationId: "i-2", status: "closed", lines: [] };
+    },
+  };
+  const act: ScopeAct = { ...REDO, plan, requestMessageId: "m-root" };
+  expect(await admitUnderScope(admitPorts, "sd-1", act)).toMatchObject({ kind: "admitted" });
+  expect(calls).toEqual([
+    [
+      plan,
+      "i-2",
+      "i-1",
+      "m-root",
+      { scopeDecisionId: "sd-1", proposalId: null, agentTypeDigest: agentType },
+    ],
+  ]);
+  // Control: the same retry naming a request the scope does not list is refused and admits nothing.
+  calls.length = 0;
+  expect(
+    await admitUnderScope(admitPorts, "sd-1", { ...act, requestMessageId: "m-other" }),
+  ).toMatchObject({ kind: "refused", verdict: "outside", test: "request" });
+  expect(calls).toEqual([]);
 });

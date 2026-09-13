@@ -1217,10 +1217,10 @@ export function readPayload(document: JsonRecord): PayloadReading {
  * from it, so those are the only two values carried, and every other field is
  * the template's byte for byte; rule 4.5 derives run id, branch and workspace at
  * admission, so none is here and a key that would carry one is refused.
+ * `bases` reads {@link Basis}'s closed union, D-0061 rule 2.6's `message` form
+ * included (rule 4.3).
  *
- * ponytail: `bases` accepts D-0032 rule 2's existing forms only. Rule 4.3's
- * `message:` form belongs to D-0061 rule 2.6, which is not built (the scope
- * record's residual R4), and no drafter writes a split yet (R3).
+ * ponytail: residual R3 -- no drafter writes a split and no path admits one yet.
  */
 export interface SplitPlan {
   readonly template_plan_digest: string;
@@ -1259,7 +1259,7 @@ const SPLIT_DIGEST = /^sha256:[0-9a-f]{64}$/;
  * **A reader of its own rather than a third arm of {@link readPayload}.** An arm
  * there widens {@link PayloadReading}, and every screen that switches on it
  * would need a rendering for a kind nothing writes today (no drafter, no verb:
- * D-0066's residuals R3 and R4). The row's `kind` still says `split`, and
+ * D-0066's residual R3). The row's `kind` still says `split`, and
  * `readPayload` over a split reads `unreadable` -- visibly, never as one of the
  * other two.
  */

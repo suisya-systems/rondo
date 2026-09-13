@@ -11,20 +11,16 @@
  * this module is not on the externals allowlist.
  *
  * **The surface's verdict, and the store makes it again.** Rule 4.3: what lives
- * in the store (the scope's fields, the superseding approval, the budgets) is
- * re-tested by `reserve()` under the write lock, in the transaction that writes
- * the consumption. What does not (the agent type record, the grant, the
- * readings) is decided here from the snapshot, and its drift before the write
- * is D-0047 rule 6's bounded race.
+ * in the store (the scope's fields, the superseding approval, the budgets, the
+ * request and the open asks) is re-tested by `reserve()` under the write lock,
+ * in the transaction that writes the consumption. What does not (the agent type
+ * record, the grant, the readings) is decided here from the snapshot, and its
+ * drift before the write is D-0047 rule 6's bounded race.
  *
- * ponytail: residual R1. The request thread (D-0061 rules 2 and 4, build steps
- * 5.1 and 5.2) is not built, so no row links an act to the message that opened
- * its request, and no message carries `asks`. The production gatherer passes
- * `requestMessageId` and `openAsks` as null, the verdict answers `undecidable`
- * for both, and so **no act under a scope is taken on this tree**. When the
- * thread lands only the gatherer changes. R2: the stopping message of rule 4.4
- * has nowhere to be written either, so a refusal is returned and printed, and
- * no row keeps the line stopped.
+ * **The request is the act's own** (D-0061 rule 4): the link the iteration row
+ * is written with, which an in-scope retry inherits from its predecessor's row.
+ * The open asks are read from the thread that request opens, and a refusal
+ * writes rule 4.4's stop into it, which is what keeps the line stopped.
  */
 
 import { agentTypeRecord } from "../cadenza/facade.js";
@@ -34,16 +30,22 @@ import type { ConductorReport } from "../refrain/interpreter.js";
 import { admittedPlan, type RunPlan, readPlan } from "../refrain/plan.js";
 import type { ScopeSpend } from "../refrain/ports.js";
 import {
+  askStandsOver,
   IRREVERSIBLE_ACTS,
   isModelReadingDrafter,
   type LapReading,
   latestReading,
+  type OpenAsk,
   type ScopePayload,
+  type ScopeRefusal,
   type ScopeSpent,
+  type ScopeTest,
   type StoredScope,
   type StoredScopeDecision,
 } from "../store/records.js";
 import type { AdvisoryRecord, IterationStore } from "../store/sqlite.js";
+import { DETERMINISTIC_DRAFTER } from "./advisory.js";
+import { asciiEscape } from "./console.js";
 import {
   type ReviewScope,
   reviewPolicyOf,
@@ -65,40 +67,22 @@ export type ScopeAct =
       readonly plan: RunPlan;
       /** The split proposal the plan came from (rule 3.3). */
       readonly proposalId: string | null;
+      /** The message that opened the request the plan answers, or null (D-0061 rule 4). */
+      readonly requestMessageId: string | null;
     }
   | {
       readonly kind: "redo";
       readonly iterationId: string;
       readonly plan: RunPlan;
       readonly predecessorId: string;
+      /** The predecessor row's own `requestMessageId`, inherited (D-0061 rule 4). */
+      readonly requestMessageId: string | null;
     };
-
-/** Which of rule 4.2's tests refused, as a closed name a test and a screen can both read. */
-export type ScopeTest =
-  | "decision"
-  | "superseded"
-  | "request"
-  | "workspace"
-  | "agent_type"
-  | "contract"
-  | "irreversible"
-  | "expiry"
-  | "laps"
-  | "cost"
-  | "asks"
-  | "grants"
-  | "readings";
 
 export type ScopeVerdict =
   | { readonly kind: "inside" }
   | { readonly kind: "outside"; readonly test: ScopeTest; readonly reason: string }
   | { readonly kind: "undecidable"; readonly test: ScopeTest; readonly reason: string };
-
-/** A message with `asks` set and no reply (D-0061 rule 2.7), by the lineage its bases name. */
-export interface OpenAsk {
-  /** The `iteration_id` basis, or null when it names no lap (rule 4.4's first bullet). */
-  readonly iterationId: string | null;
-}
 
 type Read<T> =
   | ({ readonly kind: "read" } & T)
@@ -111,11 +95,11 @@ export interface ScopeSnapshot {
   readonly supersededByApproved: boolean;
   readonly spent: ScopeSpent;
   readonly nowMs: number;
-  /** The message that opened the act's request, or null: not readable on this tree (R1). */
+  /** The act's request link (the plan's or the predecessor row's), or null when it names none. */
   readonly requestMessageId: string | null;
-  /** Open `asks` in the request's thread, or null: not readable on this tree (R1). */
-  readonly openAsks: readonly OpenAsk[] | null;
-  /** The act's lineage, newest first: empty for a lineage start (rule 4.4). */
+  /** Open `asks` in the request's thread; empty when the act names no request. */
+  readonly openAsks: Read<{ readonly asks: readonly OpenAsk[] }>;
+  /** Every lap in the act's lineage, sharing the predecessor's root: empty for a lineage start (rule 4.4). */
   readonly lineageIterationIds: Read<{ readonly ids: readonly string[] }>;
   /** cadenza's answer for the act's own plan under the admission's identity. */
   readonly classification: Read<{
@@ -150,10 +134,11 @@ export function reviewScopeOf(payload: ScopePayload): ReviewScope {
  * (rule 4.1) -- that half is {@link admitUnderScope}'s.
  *
  * The order puts the approval first because every later test reads the row it
- * approved; the store-backed tests before the snapshot-backed ones in the same
- * order `reserve()` re-tests them; and the asks and the redo tests last, since
- * R1 makes the asks test undecidable on every production snapshot and the
- * other refusals are still worth naming ahead of it.
+ * approved; the tests `reserve()` re-tests in the order it re-tests them; the
+ * redo's tests last. **The asks test comes right after the request**, ahead of
+ * the scope's fields and budgets: rule 4.4's stop is what keeps a line stopped,
+ * so while one stands it is the answer, and a budget refusal named ahead of it
+ * would write another stop on every attempt.
  */
 export function scopeVerdict(act: ScopeAct, snapshot: ScopeSnapshot): ScopeVerdict {
   const outside = (test: ScopeTest, reason: string): ScopeVerdict => ({
@@ -193,10 +178,9 @@ export function scopeVerdict(act: ScopeAct, snapshot: ScopeSnapshot): ScopeVerdi
   }
   // 3. The request (rule 1.2.1).
   if (snapshot.requestMessageId === null) {
-    return undecidable(
+    return outside(
       "request",
-      "the request this act answers cannot be read: the request thread (D-0061 rules 2 and 4) is " +
-        "not built, so no row links an act to the message that opened its request",
+      "the act names no request, so it cannot be one the scope lists (D-0066 rule 1.2.1)",
     );
   }
   if (!payload.requests.includes(snapshot.requestMessageId)) {
@@ -205,7 +189,32 @@ export function scopeVerdict(act: ScopeAct, snapshot: ScopeSnapshot): ScopeVerdi
       `the request '${snapshot.requestMessageId}' is not in the scope's requests (D-0066 rule 1.2.1)`,
     );
   }
-  // 4. The workspace pair, byte for byte (rule 1.2.2).
+  // 4. Open asks over the act's line (rule 4.2, D-0061 rule 2.7), right after the
+  // request they are read from: while a stop stands, it is the answer (rule 4.4).
+  const openAsks = snapshot.openAsks;
+  if (openAsks.kind === "unreadable") {
+    return undecidable(
+      "asks",
+      `whether a question stands over this line cannot be read: ${openAsks.reason}`,
+    );
+  }
+  const lineage = snapshot.lineageIterationIds;
+  if (lineage.kind === "unreadable") {
+    return undecidable("asks", `the act's lineage cannot be walked: ${lineage.reason}`);
+  }
+  // A lineage start continues no line, whatever the snapshot's walk holds.
+  const line = act.kind === "lineage_start" ? [] : lineage.ids;
+  const standing = openAsks.asks.find((ask) => askStandsOver(ask, line));
+  if (standing !== undefined) {
+    return outside(
+      "asks",
+      standing.iterationIds.length === 0
+        ? `the unanswered question '${standing.messageId}' about the request holds back its plans ` +
+            "not yet admitted (D-0066 rule 4.4)"
+        : `the unanswered question '${standing.messageId}' stands over this line (D-0066 rule 4.4)`,
+    );
+  }
+  // 5. The workspace pair, byte for byte (rule 1.2.2).
   const { repository, workspaceRoot } = act.plan;
   if (
     !payload.workspaces.some(
@@ -217,7 +226,7 @@ export function scopeVerdict(act: ScopeAct, snapshot: ScopeSnapshot): ScopeVerdi
       `(${repository}, ${workspaceRoot}) is not one of the scope's workspaces (D-0066 rule 1.2.2)`,
     );
   }
-  // 5. The agent type (rule 1.2.3).
+  // 6. The agent type (rule 1.2.3).
   const classification = snapshot.classification;
   if (classification.kind === "unreadable") {
     return undecidable(
@@ -232,7 +241,7 @@ export function scopeVerdict(act: ScopeAct, snapshot: ScopeSnapshot): ScopeVerdi
         "(D-0066 rule 1.2.3)",
     );
   }
-  // 6. No grant beyond the agent type's (D-0064 rule 3.2).
+  // 7. No grant beyond the agent type's (D-0064 rule 3.2).
   if (classification.outcome !== "allowed") {
     return outside(
       "contract",
@@ -240,7 +249,7 @@ export function scopeVerdict(act: ScopeAct, snapshot: ScopeSnapshot): ScopeVerdi
         "needs no grant beyond the agent type's (D-0064 rule 3.2)",
     );
   }
-  // 7. Irreversible, always outside (D-0064 rule 3.4, D-0066 rule 1.2.7). An
+  // 8. Irreversible, always outside (D-0064 rule 3.4, D-0066 rule 1.2.7). An
   // admission is not on the entry's list; a scope may add it.
   const actName = "admission";
   if (
@@ -253,7 +262,7 @@ export function scopeVerdict(act: ScopeAct, snapshot: ScopeSnapshot): ScopeVerdi
         "(D-0064 rule 3.4)",
     );
   }
-  // 8. The budgets an admission spends, with the store's own arithmetic (rule 3.4).
+  // 9. The budgets an admission spends, with the store's own arithmetic (rule 3.4).
   if (snapshot.nowMs >= budgets.expires_at_ms) {
     return outside(
       "expiry",
@@ -273,29 +282,6 @@ export function scopeVerdict(act: ScopeAct, snapshot: ScopeSnapshot): ScopeVerdi
       "cost",
       `${String(committed)} USD read and reserved would pass the budget of ` +
         `${String(budgets.cost_usd)} USD (D-0066 rule 3.4.2)`,
-    );
-  }
-  // 9. Open asks over the act's line (rule 4.2, D-0061 rule 2.7).
-  if (snapshot.openAsks === null) {
-    return undecidable(
-      "asks",
-      "whether a question stands over this line cannot be read: the request thread (D-0061 " +
-        "rules 2 and 4) is not built, so no message carries asks",
-    );
-  }
-  const lineage = snapshot.lineageIterationIds;
-  if (lineage.kind === "unreadable") {
-    return undecidable("asks", `the act's lineage cannot be walked: ${lineage.reason}`);
-  }
-  const standing = snapshot.openAsks.find((ask) =>
-    ask.iterationId === null ? act.kind === "lineage_start" : lineage.ids.includes(ask.iterationId),
-  );
-  if (standing !== undefined) {
-    return outside(
-      "asks",
-      standing.iterationId === null
-        ? "an unanswered question about the request holds back its plans not yet admitted (D-0066 rule 4.4)"
-        : `an unanswered question stands over iteration '${standing.iterationId}' on this line (D-0066 rule 4.4)`,
     );
   }
   if (act.kind === "lineage_start") {
@@ -353,7 +339,12 @@ export interface ScopeReadPorts {
   readonly store: Pick<IterationStore, "read" | "readingsFor">;
   readonly record: Pick<
     AdvisoryRecord,
-    "readScope" | "readScopeDecision" | "scopeSpent" | "scopeSupersededByApproved"
+    | "readScope"
+    | "readScopeDecision"
+    | "scopeSpent"
+    | "scopeSupersededByApproved"
+    | "openAsksIn"
+    | "lineageOf"
   >;
 }
 
@@ -367,9 +358,9 @@ const LINEAGE_BOUND = 1000;
 /**
  * Gather the snapshot for one act (rule 4.1). **Reads only.**
  *
- * `requestMessageId` and `openAsks` are null, always, on this tree: the request
- * thread (D-0061 rules 2 and 4) is not built, so there is nothing to read them
- * from (residual R1). The verdict answers `undecidable` for that.
+ * The request is the act's own link; the open asks are read from the thread it
+ * opens, and an act naming no request reads none (the verdict refuses it at the
+ * request test first).
  */
 export async function gatherScopeSnapshot(
   ports: ScopeReadPorts,
@@ -401,7 +392,7 @@ export async function gatherScopeSnapshot(
     };
   }
 
-  const chain = act.kind === "redo" ? await walkLineage(ports, act.predecessorId) : null;
+  const lineage = act.kind === "redo" ? await lineageTree(ports, act.predecessorId) : null;
   return {
     kind: "gathered",
     snapshot: Object.freeze({
@@ -410,30 +401,34 @@ export async function gatherScopeSnapshot(
       supersededByApproved: await ports.record.scopeSupersededByApproved(scopeId),
       spent: await ports.record.scopeSpent(scopeDecisionId),
       nowMs,
-      requestMessageId: null,
-      openAsks: null,
+      requestMessageId: act.requestMessageId,
+      openAsks:
+        act.requestMessageId === null
+          ? { kind: "read" as const, asks: [] }
+          : await ports.record.openAsksIn(act.requestMessageId),
       lineageIterationIds:
-        chain === null
+        lineage === null
           ? { kind: "read" as const, ids: [] }
-          : chain.kind === "read"
-            ? { kind: "read" as const, ids: chain.links.map((link) => link.id) }
-            : chain,
+          : lineage.kind === "read"
+            ? { kind: "read" as const, ids: lineage.links.map((link) => link.id) }
+            : lineage,
       classification: classifyAs(act.plan, act.iterationId),
       predecessor:
-        act.kind === "redo" && chain !== null
+        act.kind === "redo" && lineage !== null
           ? {
               grants: await predecessorGrants(ports, act.predecessorId),
               readings:
-                chain.kind === "read"
+                lineage.kind === "read"
                   ? {
                       kind: "read" as const,
                       latestModelReading: latestReading(
-                        chain.links[0]?.readings ?? [],
+                        lineage.links.find((link) => link.id === act.predecessorId)?.readings ?? [],
                         isModelReadingDrafter,
                       ),
-                      roundsTaken: reviewRoundsAlong(chain.links),
+                      // The whole lineage, a branch's sibling laps included (D-0065 4.1).
+                      roundsTaken: reviewRoundsAlong(lineage.links),
                     }
-                  : chain,
+                  : lineage,
             }
           : null,
     }),
@@ -521,76 +516,291 @@ async function walkLineage(ports: ScopeReadPorts, tipId: string): Promise<Lineag
   return { kind: "read", links };
 }
 
+/**
+ * Every lap sharing the predecessor's root, with its readings (D-0030: a line is
+ * a split's plan with every redo that continues it, a branch included). The
+ * chain is walked first, so a broken or cyclic one is unreadable here too.
+ */
+async function lineageTree(ports: ScopeReadPorts, predecessorId: string): Promise<Lineage> {
+  const chain = await walkLineage(ports, predecessorId);
+  if (chain.kind !== "read") {
+    return chain;
+  }
+  const ids = await ports.record.lineageOf(predecessorId);
+  if (ids === null) {
+    return { kind: "unreadable", reason: `the lineage of '${predecessorId}' does not end` };
+  }
+  const links: { id: string; readings: readonly LapReading[] }[] = [];
+  for (const id of ids) {
+    links.push({ id, readings: await ports.store.readingsFor(id) });
+  }
+  return { kind: "read", links };
+}
+
 export type ScopedAdmission =
   | { readonly kind: "admitted"; readonly report: ConductorReport }
-  | {
+  | ({
       readonly kind: "refused";
-      readonly verdict: "outside" | "undecidable";
-      readonly test: ScopeTest;
-      readonly reason: string;
-    };
+      /** Rule 4.4's stop: what keeps the line stopped, or why nothing does. */
+      readonly stop: ScopeStop;
+    } & ScopeRefusal);
 
-/** What the one call site needs: the reads, a clock, and `admit` already bound to its ports. */
+/**
+ * What rule 4.4's stopping message came to.
+ *
+ * - `written`: one drafter message with `asks` set, in the request's thread.
+ * - `held`: an unanswered question already stands over the line, whatever test
+ *   refused, so none is written; `messageId` is that question.
+ * - `noThread`: the act names no request, so there is no thread to write into.
+ *   **The one refusal that leaves no durable stop.**
+ * - `failed`: the write itself failed, or the thread would not read to say
+ *   whether a stop already holds the line, so none was written; the surface
+ *   says so loudly.
+ */
+export type ScopeStop =
+  | { readonly kind: "written"; readonly messageId: string }
+  | { readonly kind: "held"; readonly messageId: string }
+  | { readonly kind: "noThread" }
+  | { readonly kind: "failed"; readonly messageId: string; readonly reason: string };
+
+/** What the one call site needs: the reads, a clock, the stop's writer, and `admit` bound to its ports. */
 export interface ScopeAdmitPorts extends ScopeReadPorts {
+  readonly record: ScopeReadPorts["record"] & Pick<AdvisoryRecord, "recordThreadMessage">;
   readonly nowMs: () => number;
-  /** `conductor.admit(ports, advisory, plan, policy, id, supersedes, null, null, scopeSpend)`. */
+  /** `conductor.admit(ports, advisory, plan, policy, id, supersedes, null, request, scopeSpend)`. */
   readonly admit: (
     plan: RunPlan,
     iterationId: string,
     supersedesIterationId: string | null,
+    requestMessageId: string | null,
     scopeSpend: ScopeSpend,
   ) => Promise<ConductorReport>;
 }
 
 /**
  * **The one place a verdict is computed and acted on** (D-0066 rule 4.1):
- * gather, verdict, and anything but `inside` returns the refusal without
- * calling `admit`. On `inside` the admission carries the scope spend, and
- * `reserve()` re-tests and writes the consumption in the row's own transaction.
+ * gather, verdict, and anything but `inside` takes no act. On `inside` the
+ * admission carries the scope spend, and `reserve()` re-tests and writes the
+ * consumption in the row's own transaction.
  *
- * R2: the refusal is returned for the surface to print; rule 4.4's stopping
- * message is not written, because the thread it goes into is not built.
+ * **Every refusal ends in rule 4.4's stop**, the surface's verdict and the
+ * store's re-test alike: the store's arrives as `report.scopeRefusal`, data
+ * rather than prose, so both reach {@link stopTheLine} with the test that
+ * refused.
  */
 export async function admitUnderScope(
   ports: ScopeAdmitPorts,
   scopeDecisionId: string,
   act: ScopeAct,
 ): Promise<ScopedAdmission> {
-  const gathered = await gatherScopeSnapshot(ports, scopeDecisionId, act, ports.nowMs());
+  const nowMs = ports.nowMs();
+  const gathered = await gatherScopeSnapshot(ports, scopeDecisionId, act, nowMs);
   if (gathered.kind !== "gathered") {
-    return {
-      kind: "refused",
+    const refusal: ScopeRefusal = {
       verdict: "undecidable",
       test: gathered.test,
       reason: gathered.reason,
     };
+    return refused(refusal, await stopTheLine(ports, scopeDecisionId, act, refusal, null, nowMs));
   }
   const snapshot = gathered.snapshot;
   const verdict = scopeVerdict(act, snapshot);
   if (verdict.kind !== "inside") {
-    return { kind: "refused", verdict: verdict.kind, test: verdict.test, reason: verdict.reason };
+    const refusal: ScopeRefusal = {
+      verdict: verdict.kind,
+      test: verdict.test,
+      reason: verdict.reason,
+    };
+    return refused(
+      refusal,
+      await stopTheLine(ports, scopeDecisionId, act, refusal, snapshot, nowMs),
+    );
   }
-  // `inside` has passed the request and classification tests, so both are read.
-  if (snapshot.requestMessageId === null || snapshot.classification.kind !== "read") {
-    throw new Error("an inside verdict over an unread request or classification is a defect");
+  // `inside` has passed the classification test, so it is read.
+  if (snapshot.classification.kind !== "read") {
+    throw new Error("an inside verdict over an unread classification is a defect");
   }
+  const report = await ports.admit(
+    act.plan,
+    act.iterationId,
+    act.kind === "redo" ? act.predecessorId : null,
+    // The row's request link, which the store tests against `requests`.
+    act.requestMessageId,
+    {
+      scopeDecisionId,
+      // Rule 3.3: an in-scope retry names no proposal.
+      proposalId: act.kind === "lineage_start" ? act.proposalId : null,
+      // Drift between this classification and the store's write is D-0047
+      // rule 6's bounded race, which D-0066 rule 4.3 accepts.
+      agentTypeDigest: snapshot.classification.agentTypeDigest,
+    },
+  );
+  if (report.scopeRefusal !== undefined) {
+    return refused(
+      report.scopeRefusal,
+      await stopTheLine(ports, scopeDecisionId, act, report.scopeRefusal, snapshot, nowMs),
+    );
+  }
+  return { kind: "admitted", report };
+}
+
+function refused(refusal: ScopeRefusal, stop: ScopeStop): ScopedAdmission {
   return {
-    kind: "admitted",
-    report: await ports.admit(
-      act.plan,
-      act.iterationId,
-      act.kind === "redo" ? act.predecessorId : null,
-      {
-        scopeDecisionId,
-        // Rule 3.3: an in-scope retry names no proposal.
-        proposalId: act.kind === "lineage_start" ? act.proposalId : null,
-        requestMessageId: snapshot.requestMessageId,
-        // Drift between this classification and the store's write is D-0047
-        // rule 6's bounded race, which D-0066 rule 4.3 accepts.
-        agentTypeDigest: snapshot.classification.agentTypeDigest,
-      },
-    ),
+    kind: "refused",
+    verdict: refusal.verdict,
+    test: refusal.test,
+    reason: refusal.reason,
+    stop,
   };
+}
+
+/**
+ * Rule 4.4: write the one drafter message with `asks` set that keeps this line
+ * stopped, into the request's thread -- unless an open ask already stands over
+ * the line, when a second would say the same thing twice. **That is read here
+ * for every refusal**, not only the `asks` test's: the decision, superseded and
+ * request tests (and a failed gather) run before `asks` and refuse the same way
+ * on every attempt. **A failed read of the asks writes nothing**: whether a
+ * stop already holds the line is unknown, and writing on every attempt would
+ * pile up stops no reader can find while the read fails; it is `failed`, loudly.
+ *
+ * **Bases:** the request root as a `message` basis and, for a redo, the
+ * lineage's latest lap (the predecessor) as an `iteration` basis; a lineage
+ * start names none, so its stop holds back the request's unstarted plans.
+ *
+ * ponytail: rule 4.4 also names the scope row and the refused test as bases,
+ * and no form in D-0032 rule 2 or D-0061 rule 2.6 locates a scope row; rather
+ * than add one, the body names the scope id, its digest and the test. A
+ * `scope` basis form is the upgrade if a reader ever needs to follow it.
+ */
+async function stopTheLine(
+  ports: ScopeAdmitPorts,
+  scopeDecisionId: string,
+  act: ScopeAct,
+  refusal: ScopeRefusal,
+  snapshot: ScopeSnapshot | null,
+  nowMs: number,
+): Promise<ScopeStop> {
+  const request = act.requestMessageId;
+  if (request === null) {
+    return { kind: "noThread" };
+  }
+  const messageId = `scope-stop-${act.iterationId}-${String(nowMs)}`;
+  const holder = await holdingAsk(ports, act, request);
+  if (holder.kind === "unreadable") {
+    return {
+      kind: "failed",
+      messageId,
+      reason:
+        "the request's thread will not read, so whether a stop already holds this line is " +
+        `unknown and none was written: ${holder.reason}`,
+    };
+  }
+  if (holder.messageId !== null) {
+    return { kind: "held", messageId: holder.messageId };
+  }
+  const outcome = await ports.record.recordThreadMessage({
+    messageId,
+    body: stopBody(scopeDecisionId, act, refusal, snapshot?.scope ?? null),
+    authorKind: "drafter",
+    authorId: DETERMINISTIC_DRAFTER,
+    inReplyTo: request,
+    atMs: nowMs,
+    bases: [
+      { form: "message", messageId: request },
+      ...(act.kind === "redo" ? [{ form: "iteration", iterationId: act.predecessorId }] : []),
+    ],
+    asks: true,
+  });
+  return outcome.kind === "recorded"
+    ? { kind: "written", messageId }
+    : { kind: "failed", messageId, reason: outcome.reason };
+}
+
+/**
+ * The open ask standing over the act's line, read again with the lineage: null
+ * when none does, `unreadable` when the asks will not read. The lineage is read
+ * afresh, since the store's refusal may come from a lap written after the
+ * snapshot; a redo whose lineage will not read is tested on its predecessor
+ * alone, the one lap the stop it would write names, so an earlier stop over it
+ * is found.
+ */
+async function holdingAsk(
+  ports: ScopeAdmitPorts,
+  act: ScopeAct,
+  request: string,
+): Promise<Read<{ readonly messageId: string | null }>> {
+  const asks = await ports.record.openAsksIn(request);
+  if (asks.kind !== "read") {
+    return asks;
+  }
+  const line =
+    act.kind === "lineage_start"
+      ? []
+      : ((await ports.record.lineageOf(act.predecessorId)) ?? [act.predecessorId]);
+  return {
+    kind: "read",
+    messageId: asks.asks.find((ask) => askStandsOver(ask, line))?.messageId ?? null,
+  };
+}
+
+/**
+ * The option rule 4.4 recommends for the test that refused (D-0064 rule 4.1:
+ * one recommendation). A spent or retired approval wants a successor scope; an
+ * act the scope never covered wants the work changed, or a successor that lists
+ * it; a read that failed wants stopping until it is fixed.
+ */
+function recommendation(refusal: ScopeRefusal): string {
+  if (refusal.verdict === "undecidable") {
+    return (
+      "stop this line until the read that failed is fixed: nothing can be tested against a " +
+      "row that cannot be read, and a successor scope or a change would be tested the same way"
+    );
+  }
+  switch (refusal.test) {
+    case "decision":
+    case "superseded":
+    case "expiry":
+    case "laps":
+    case "cost":
+    case "readings":
+      return (
+        "a successor scope (D-0066 rule 1.4) with the budget or approval this line needs: the " +
+        "work itself is what the scope was approved for, and what ran out is the approval"
+      );
+    default:
+      return (
+        "change the work so the scope covers it, or approve a successor scope that lists it: " +
+        "the scope as approved does not name this act"
+      );
+  }
+}
+
+/** The stop's words: ASCII, deterministic, one recommendation (rule 4.4, D-0064 rule 4.1). */
+function stopBody(
+  scopeDecisionId: string,
+  act: ScopeAct,
+  refusal: ScopeRefusal,
+  scope: StoredScope | null,
+): string {
+  const scopeName =
+    scope === null
+      ? `scope decision '${scopeDecisionId}' (its scope row could not be read)`
+      : `scope '${scope.scopeId}' (digest ${scope.scopeDigest}) under decision '${scopeDecisionId}'`;
+  return asciiEscape(
+    [
+      `Stopped: the ${act.kind === "redo" ? `redo of '${act.predecessorId}'` : "first admission of a plan"} ` +
+        `as '${act.iterationId}' is ${refusal.verdict} ${scopeName} at the ${refusal.test} test.`,
+      `Reason: ${refusal.reason}`,
+      "Options:",
+      "- A successor scope (D-0066 rule 1.4). Gives up: this line waits for a person to approve " +
+        "a new scope, and the old one is retired when they do.",
+      "- A change to the work. Gives up: the work as planned; what runs is the changed work.",
+      "- Stopping. Gives up: this line's work; other lines of the request carry on.",
+      `Recommended: ${recommendation(refusal)}.`,
+      "This line stays stopped until this message is answered.",
+    ].join("\n"),
+  );
 }
 
 /** Why cadenza gave no answer, in its own words (D-0018 rule 7). */
