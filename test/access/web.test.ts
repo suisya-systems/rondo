@@ -974,19 +974,21 @@ test("liveness is per view: two views poll and swap, and the answer view updates
     expect(scriptTagsIn(html)).toEqual([
       '<script src="/htmx.min.js" defer="">',
       '<script src="/keys.js" defer="">',
+      '<script src="/composer.js" defer="">',
     ]);
     expect(html).not.toContain("//cdn");
     expect(scriptTagsIn(html).filter((tag) => tag.includes("://"))).toEqual([]);
     // **The refresh is a `GET` of this view's own address**, and the one
     // element it swaps is the ledger (D-0054 rules 1 and 2, R3).
     expect(html).toContain(
-      `<div id="ledger" class="space-y-8" hx-get="${href}" hx-trigger="every 5s" hx-select="#ledger" hx-swap="outerHTML">`,
+      `<div id="ledger" class="space-y-8" hx-get="${href}" hx-trigger="every 5s" hx-select="#ledger" hx-swap="outerHTML" hx-select-oob="#requests-count">`,
     );
-    expect([...html.matchAll(/hx-[a-z]+=/g)].map((found) => found[0])).toEqual([
+    expect([...html.matchAll(/hx-[a-z-]+=/g)].map((found) => found[0])).toEqual([
       "hx-get=",
       "hx-trigger=",
       "hx-select=",
       "hx-swap=",
+      "hx-select-oob=",
     ]);
     // **R2's substitute is the library's configuration**, and it is on the
     // page rather than assumed from htmx's defaults.
@@ -1002,6 +1004,19 @@ test("liveness is per view: two views poll and swap, and the answer view updates
       allowScriptTags: false,
       historyEnabled: false,
       includeIndicatorStyles: false,
+      // A refused send lands under the draft rather than nowhere (#220 S1).
+      responseHandling: [
+        { code: "204", swap: false },
+        { code: "[23]..", swap: true },
+        {
+          code: "[45]..",
+          swap: true,
+          error: true,
+          target: "#composer-note",
+          select: "#send-refused",
+          swapOverride: "innerHTML",
+        },
+      ],
     });
     // The meta refresh has not been deleted -- it has moved, and it is what a
     // browser with scripting off still runs on.
@@ -1025,7 +1040,12 @@ test("liveness is per view: two views poll and swap, and the answer view updates
   // library, no refresh, not even inside `<noscript>` -- it has no auto-update
   // in either mode, so there is nothing to degrade to. It carries only the key
   // script, which moves focus and follows links and changes nothing by itself.
-  expect(scriptTagsIn(answering)).toEqual(['<script src="/keys.js" defer="">']);
+  // And the composer script, whose fold keeping is what holds a fold the
+  // person opened here across the press (#220 S1); it redraws nothing.
+  expect(scriptTagsIn(answering)).toEqual([
+    '<script src="/keys.js" defer="">',
+    '<script src="/composer.js" defer="">',
+  ]);
   expect(answering).not.toMatch(/hx-[a-z]+=/);
   expect(answering).not.toContain("htmx");
   expect(answering).not.toContain('http-equiv="refresh"');
@@ -1740,7 +1760,12 @@ test("the memory is one cookie, written by a switch and by nothing else (rule 5)
     expect((await get(base, "/?lang=ja", { cookie: "lang=en", ...poll })).cookie).toBeNull();
   }
   expect(
-    (await get(base, "/?lang=ja", { cookie: "lang=en", "sec-fetch-mode": "navigate" })).cookie,
+    (
+      await get(base, "/?lang=ja", {
+        cookie: "lang=en",
+        "sec-fetch-mode": "navigate",
+      })
+    ).cookie,
   ).toContain("lang=ja");
 
   stop.abort();
@@ -1879,4 +1904,293 @@ test("the bytes a press records depend on neither the query, the cookie nor the 
   for (const world of worlds) {
     expect(rows(world.connection as DatabaseSync, "proposal")).toBe(1);
   }
+});
+
+// -- The request threads (D-0061 rule 4, D-0059 section 5a's send, #220 S1) --
+
+/** The ids a composer would carry, minted in the shape the server mints them. */
+const MINTED = {
+  request: "request-00000000-0000-4000-8000-000000000001",
+  reply: "reply-00000000-0000-4000-8000-000000000002",
+} as const;
+const mint = (kind: "request" | "reply"): string => MINTED[kind];
+
+/** The text a browser reads out of an escaped element body. */
+const unescaped = (html: string): string =>
+  html
+    .replaceAll("&lt;", "<")
+    .replaceAll("&gt;", ">")
+    .replaceAll("&quot;", '"')
+    .replaceAll("&#39;", "'")
+    .replaceAll("&amp;", "&");
+
+const ROOT_BODY =
+  "Please look at the flaky test.\n\n  It fails <b>one run in five</b> & only on CI.\n";
+const ASK_BODY = "Which runner should I read first?\n\nThe Linux one has the most failures.";
+const LATER_BODY = "noted";
+
+/** A request by `ada`, a drafter's asking reply resting on three locators, and a report that asks nothing. */
+async function seedThread(world: ReturnType<typeof fresh>): Promise<void> {
+  await reserve(world, "i-0001", "do the thing");
+  const drafts = [
+    {
+      messageId: "request-a",
+      body: ROOT_BODY,
+      authorKind: "operator",
+      authorId: "ada",
+      inReplyTo: null,
+      atMs: 1_000,
+      bases: [],
+      asks: false,
+    },
+    {
+      messageId: "ask-b",
+      body: ASK_BODY,
+      authorKind: "drafter",
+      authorId: "rondo-drafter",
+      inReplyTo: "request-a",
+      atMs: 2_000,
+      bases: [
+        { form: "message", messageId: "request-a" },
+        { form: "iteration", iterationId: "i-0001" },
+        { form: "continuoRun", runId: "rondo-i-0001" },
+      ],
+      asks: true,
+    },
+    {
+      messageId: "report-c",
+      body: LATER_BODY,
+      authorKind: "drafter",
+      authorId: "rondo-drafter",
+      inReplyTo: "request-a",
+      atMs: 3_000,
+      bases: [{ form: "iteration", iterationId: "i-0001" }],
+      asks: false,
+    },
+  ] as const;
+  for (const draft of drafts) {
+    const outcome = await world.record.recordThreadMessage(draft);
+    expect(outcome.kind, JSON.stringify(outcome)).toBe("recorded");
+  }
+}
+
+/** Every message body the page drew, as a browser reads it. */
+const bodiesIn = (html: string): readonly string[] =>
+  [...html.matchAll(/<p class="body [^"]*" lang="">([\s\S]*?)<\/p>/g)].map((found) =>
+    unescaped(found[1] ?? ""),
+  );
+
+/** One message's `<li>`, by its id. */
+const messageIn = (html: string, id: string): string =>
+  /<li id="[^"]*"[\s\S]*?<\/li>/.exec(html.slice(html.indexOf(`<li id="${id}"`)))?.[0] ?? "";
+
+test("a request thread is drawn whole: every body byte for byte, voices apart, bases as links, the ask marked", async () => {
+  const world = fresh();
+  await seedThread(world);
+  const html = await operatorPage(
+    portsOver(world, "ada", []),
+    "t",
+    { kind: "thread", messageId: "report-c", to: null },
+    EN,
+    mint,
+  );
+
+  // **The words as written, in order, with their paragraphs and their spaces**
+  // (D-0061 rule 2.2, rondo#90), and a `<b>` in them is text.
+  expect(bodiesIn(html)).toEqual([ROOT_BODY, ASK_BODY, LATER_BODY]);
+  expect(html).not.toContain("<b>one run");
+
+  // **Two voices, told apart by more than the prose** (rule 2.3): a badge on
+  // the drafter's, and "you" on the person's own.
+  const root = messageIn(html, "request-a");
+  const ask = messageIn(html, "ask-b");
+  const report = messageIn(html, "report-c");
+  expect(root).toContain('data-voice="operator"');
+  expect(root).toContain(">you</span>");
+  expect(ask).toContain('data-voice="drafter"');
+  expect(ask).toContain(">drafter</span>");
+
+  // **The ask that waits is marked, and only it** (rule 2.7): nothing replies to it.
+  expect(ask).toContain("data-waiting");
+  expect(ask).toContain("waiting on your reply");
+  expect(root).not.toContain("data-waiting");
+  expect(report).not.toContain("data-waiting");
+
+  // **Bases are chips that go where they point, never an id to copy**: the
+  // cited message by its words and an anchor, the lap by its reading section;
+  // a form this page has no view for is said and not linked.
+  expect(ask).toContain('href="#request-a"');
+  expect(ask).toContain("you: Please look at the flaky test.");
+  expect(ask).toContain('href="/?reading=open&amp;lang=en#read-i-0001"');
+  expect(ask).toMatch(/<span class="basis [^"]*" title="continuo run rondo-i-0001">/);
+  // A report replies to the request, which is how every reply reads by
+  // default, so it names no parent line of its own.
+  expect(report).not.toContain("in reply to");
+  // The waiting ask's way to answer it is the filled button under its words.
+  expect(ask).toContain('id="reply-ask-b" href="/?thread=request-a&amp;to=ask-b&amp;lang=en"');
+
+  // **No message id is printed as text**: each is an anchor and an attribute.
+  for (const id of ["request-a", "ask-b", "report-c"]) {
+    expect(html).not.toContain(`>${id}<`);
+  }
+
+  // **The reply box answers the waiting ask by default**, carries the id
+  // rondo minted -- once, hidden, never shown -- and sits outside the ledger
+  // the redraw swaps, so no redraw touches a draft.
+  expect(html).toContain(
+    '<form id="composer" method="post" action="/reply?lang=en" hx-post="/reply?lang=en"',
+  );
+  expect(html).toContain('<input type="hidden" name="in_reply_to" value="ask-b"/>');
+  expect(html.split(MINTED.reply)).toHaveLength(2);
+  expect(html).toContain(`<input type="hidden" name="message_id" value="${MINTED.reply}"/>`);
+  expect(html).toContain("Replying to rondo-drafter: Which runner should I read first?");
+  const ledgerAt = html.indexOf('<div id="ledger"');
+  const composerAt = html.indexOf('<form id="composer"');
+  const between = html.slice(ledgerAt, composerAt);
+  expect((between.match(/<div[\s>]/g) ?? []).length).toBe((between.match(/<\/div>/g) ?? []).length);
+  // Every message carries its own way to be replied to, which retargets the box.
+  expect(report).toContain('href="/?thread=request-a&amp;to=report-c&amp;lang=en"');
+  // The thread polls, but with script off it does not reload a draft away.
+  expect(html).toContain('hx-get="/?thread=report-c&amp;lang=en"');
+  expect(html).not.toContain('http-equiv="refresh"');
+});
+
+test("the reply box points at the message a person chose, and a thread nobody wrote is said", async () => {
+  const world = fresh();
+  await seedThread(world);
+  const ports = portsOver(world, "ada", []);
+  const chosen = await operatorPage(
+    ports,
+    "t",
+    { kind: "thread", messageId: "request-a", to: "report-c" },
+    EN,
+    mint,
+  );
+  expect(chosen).toContain('<input type="hidden" name="in_reply_to" value="report-c"/>');
+  expect(chosen).toContain("autofocus");
+  const nowhere = await operatorPage(
+    ports,
+    "t",
+    { kind: "thread", messageId: "no-such", to: null },
+    EN,
+    mint,
+  );
+  expect(nowhere).toContain("No request thread holds that message.");
+  expect(nowhere).not.toContain('id="composer"');
+});
+
+test("with no approver the threads are read and never written: no form, and the reason said", async () => {
+  const world = fresh();
+  await seedThread(world);
+  const ports = portsOver(world, null);
+  for (const view of [
+    { kind: "thread", messageId: "request-a", to: null },
+    { kind: "requests" },
+  ] as const) {
+    // No token and no minter: the server hands neither without a say port.
+    const html = await operatorPage(ports, null, view, EN, null);
+    expect(html).not.toContain("<form");
+    expect(html).not.toContain("<textarea");
+    expect(html).toContain("RONDO_APPROVER is not set, so there is nobody this page could send as");
+    expect(bodiesIn(html).length > 0 || html.includes("Please look at the flaky test.")).toBe(true);
+    expect(html).not.toContain(">Reply</a>");
+  }
+});
+
+test("the summary counts an ask waiting on the person and leads to the reply, and the requests list reads at a glance", async () => {
+  const world = fresh();
+  await seedThread(world);
+  const ports = portsOver(world, "ada", []);
+
+  const summary = await operatorPage(ports, "t", { kind: "summary" }, EN, mint);
+  expect(summary).toContain("waiting for your answer (1)");
+  expect(summary).toContain('<li id="ask-ask-b"');
+  expect(summary).toContain('href="/?thread=request-a&amp;to=ask-b&amp;lang=en"');
+  expect(summary).toContain("asked in: Please look at the flaky test.");
+  // The header's way in, on every view, with the count the redraw renews.
+  expect(summary).toContain('href="/?requests=open&amp;lang=en"');
+  expect(summary).toMatch(/<span id="requests-count" class="empty:hidden"><span [^>]*>1<\/span>/);
+  // The summary draws no composer.
+  expect(summary).not.toContain('id="composer"');
+
+  const requests = await operatorPage(ports, "t", { kind: "requests" }, EN, mint);
+  expect(requests).toContain("requests (1)");
+  expect(requests).toContain("1 waiting on you");
+  expect(requests).toContain('href="/?thread=request-a&amp;lang=en" data-open=""');
+  expect(requests).toContain("3 messages, last 2s ago");
+  // **A new request is a native submit**: where it lands is its own thread, a
+  // different view, so it is not swapped into this one.
+  expect(requests).toContain('<form id="composer" method="post" action="/request?lang=en" class=');
+  expect(requests).not.toContain("hx-post");
+  expect(requests).toContain(`value="${MINTED.request}"`);
+  expect(requests).not.toContain('name="in_reply_to"');
+});
+
+test("the threads speak Japanese where the page does, tokens and words untouched", async () => {
+  const world = fresh();
+  await seedThread(world);
+  const html = await operatorPage(
+    portsOver(world, "ada", []),
+    "t",
+    { kind: "thread", messageId: "request-a", to: null },
+    chromeFor("ja"),
+    mint,
+  );
+  expect(html).toContain(">下書き役</span>");
+  expect(html).toContain(">あなた</span>");
+  expect(html).toContain("あなたの返事待ち");
+  expect(html).toContain('action="/reply?lang=ja"');
+  expect(bodiesIn(html)).toEqual([ROOT_BODY, ASK_BODY, LATER_BODY]);
+});
+
+/** `page/composer.js` with its commentary removed, so a claim is read off code. */
+const composerCode = (): string =>
+  bytesOf("page/composer.js")
+    .toString("utf8")
+    .split("\n")
+    .filter((line) => !/^\s*\/\//.test(line))
+    .join("\n");
+
+test("the composer script keeps a draft and the open folds, and makes no request of its own", async () => {
+  const code = composerCode();
+  // Its two duties, by what they touch (D-0059 section 5a).
+  expect(code).toContain('"textarea[data-draft]"');
+  expect(code).toContain("sessionStorage");
+  expect(code).toContain("HTMLDetailsElement");
+  // Ctrl/Cmd+Enter asks the form for the submit its own button makes.
+  expect(code).toContain("requestSubmit()");
+  for (const forbidden of [
+    "fetch",
+    "POST",
+    "XMLHttpRequest",
+    "EventSource",
+    "WebSocket",
+    "sendBeacon",
+    "FormData",
+    "localStorage",
+    "eval",
+    "innerHTML",
+    "document.write",
+    "location.href =",
+    "htmx.",
+    ".submit()",
+  ]) {
+    expect(code).not.toContain(forbidden);
+  }
+  // The one htmx event it hears is a send's end, where all it does is clear the draft.
+  expect([...code.matchAll(/htmx:[A-Za-z]+/g)].map((found) => found[0])).toEqual([
+    "htmx:afterRequest",
+  ]);
+  // And keys.js no longer keeps folds: one place does.
+  expect(keysCode()).not.toContain("toggle");
+
+  const world = fresh();
+  const { base, stop, served } = await serving(portsOver(world));
+  const served_ = await fetch(`${base}/composer.js`);
+  expect(served_.status).toBe(200);
+  expect(digestOf(Buffer.from(await served_.arrayBuffer()))).toBe(
+    digestOf(bytesOf("page/composer.js")),
+  );
+  stop.abort();
+  expect(await served).toBe(0);
 });

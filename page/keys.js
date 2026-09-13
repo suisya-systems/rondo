@@ -1,14 +1,13 @@
 // The one script rondo owns on its page (DECISIONS.md D-0059 rule 5, R3).
 //
-// Three keys, one class and the open folds, and that is the whole vocabulary: `j` and `k` move
+// Three keys and one class, and that is the whole vocabulary: `j` and `k` move
 // focus between the rows the server rendered (`[data-row]`), `Enter` follows the
 // focused row's server-rendered link (`[data-open]`), and `Esc` follows the
 // view's server-rendered way back (`[data-back]`). Following a link is a
 // navigation `GET` to an address the server wrote into the page. It constructs
 // no request of its own, reads no form, submits nothing and holds nothing a
-// server reads -- only which folds are open, below: the
-// only `POST` this page can produce is still the native form's submit, and the
-// press it carries is minted only from a person's click or key (D-0059 section 5).
+// server reads: every write this page can make is a form's own submit, and a
+// press is minted only from a person's click or key (D-0059 sections 5, 5a).
 //
 // **It draws nothing a person must read** (D-0054 rule 7). The first line adds
 // `js` to the root element, which is what un-hides the key hints and the live
@@ -16,13 +15,9 @@
 // broken, the hints stay hidden rather than advertising keys that do nothing,
 // and every view is still the complete document the server rendered.
 //
-// **And the folds a person opened stay open** (D-0059 section 5a, R3): the
-// reading's sections are `<details>` the server always renders shut, and the
-// in-place redraw replaces them every five seconds. So the ids of the folds a
-// person opened are kept in memory for the life of this document, and any fold
-// with one of those ids that arrives shut is opened again. Nothing is stored
-// past a navigation and nothing is sent; with script off `page/app.css` draws
-// every fold open instead.
+// Keeping the folds a person opened moved to `page/composer.js` (#220 S1),
+// which keeps them across a navigation as well as across the redraw: one place
+// for what a tab remembers, so its duties stay countable.
 //
 // Served as a file under `script-src 'self'`, and its digest is in
 // `page.manifest.json` beside everything else the browser receives (R1).
@@ -72,8 +67,9 @@ document.addEventListener("keydown", (event) => {
 // even when nothing changed; so while one exists the redraw's request is
 // cancelled before it is sent, and the next one five seconds later is asked
 // again. Cancelling is the only thing done with that request -- none is built.
+// Only the redraw's: a send from the composer is a person's, and goes.
 document.addEventListener("htmx:beforeRequest", (event) => {
-  if (!(document.getSelection()?.isCollapsed ?? true)) {
+  if (event.detail.elt.id === "ledger" && !(document.getSelection()?.isCollapsed ?? true)) {
     event.preventDefault();
   }
 });
@@ -97,24 +93,3 @@ document.addEventListener("htmx:beforeSwap", (event) => {
     lastLedger = arrived;
   }
 });
-
-const opened = new Set();
-// `toggle` does not bubble, so it is heard on the way down.
-document.addEventListener(
-  "toggle",
-  (event) => {
-    const fold = event.target;
-    if (fold instanceof HTMLDetailsElement && fold.id !== "") {
-      fold.open ? opened.add(fold.id) : opened.delete(fold.id);
-    }
-  },
-  true,
-);
-new MutationObserver(() => {
-  for (const id of opened) {
-    const fold = document.getElementById(id);
-    if (fold instanceof HTMLDetailsElement && !fold.open) {
-      fold.open = true;
-    }
-  }
-}).observe(document.body, { childList: true, subtree: true });

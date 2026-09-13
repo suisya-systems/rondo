@@ -109,6 +109,43 @@ export interface Chrome {
    */
   readonly answerAction: string;
 
+  // -- Request threads (D-0061 rule 4, D-0059 section 5a's send) --
+  /** The header's way into the requests, on every view. */
+  readonly requestsNav: string;
+  readonly requestsHeading: (count: number) => string;
+  readonly noRequests: string;
+  /** How many messages a request's thread holds, and when it last moved. */
+  readonly threadSize: (count: number, since: string) => string;
+  /** The pill on a request, or on a message, that waits for the person's reply. */
+  readonly asksWaiting: (count: number) => string;
+  readonly askWaitingPill: string;
+  /** The operator's own messages are "you"; the voice badge says which voice spoke (rule 2.3). */
+  readonly you: string;
+  readonly operatorVoice: string;
+  readonly drafterVoice: string;
+  /** The summary's row for an ask: the request it was asked in. */
+  readonly askedIn: (request: string) => string;
+  readonly inReplyTo: (who: string, words: string) => string;
+  readonly basesLabel: string;
+  readonly replyAction: string;
+  readonly openThread: string;
+  readonly replyingTo: (who: string, words: string) => string;
+  readonly newRequestHeading: string;
+  readonly requestPlaceholder: string;
+  readonly replyPlaceholder: string;
+  readonly sendAction: string;
+  readonly sendNote: string;
+  readonly keySend: string;
+  readonly composerNoApprover: string;
+  readonly noSuchThread: string;
+  readonly threadsUnreadable: (reason: string) => string;
+  /** The line a refused send shows under the draft, which is kept. */
+  readonly notSent: (line: string) => string;
+  /** With script off a view with a composer does not reload itself, so a draft survives. */
+  readonly threadNoReload: string;
+  /** The threads' account of themselves: the redraw writes nothing, and Send is what writes here. */
+  readonly threadsLiveNote: (seconds: number) => string;
+
   // -- The page's chrome under stack H (D-0059 rule 5): the live indicator and
   // the key hints, both drawn only once the key script has run --
   readonly liveLabel: string;
@@ -324,6 +361,39 @@ explanation you pressed on and then answers the gate.`,
     `${String(count)} ${count === 1 ? "field" : "fields"} rondo could not determine`,
   answerHere: "read what a press would record, and answer there",
   answerAction: "Review and answer",
+
+  requestsNav: "Requests",
+  requestsHeading: (count) => `requests (${String(count)})`,
+  noRequests: "No request has been written yet. Write one below, in your own words.",
+  threadSize: (count, since) =>
+    `${String(count)} ${count === 1 ? "message" : "messages"}, last ${since} ago`,
+  asksWaiting: (count) => `${String(count)} waiting on you`,
+  askWaitingPill: "waiting on your reply",
+  you: "you",
+  operatorVoice: "operator",
+  drafterVoice: "drafter",
+  askedIn: (request) => `asked in: ${request}`,
+  inReplyTo: (who, words) => `in reply to ${who}: ${words}`,
+  basesLabel: "rests on",
+  replyAction: "Reply",
+  openThread: "Open the thread",
+  replyingTo: (who, words) => `Replying to ${who}: ${words}`,
+  newRequestHeading: "New request",
+  requestPlaceholder: "What do you want done? Write it as you would say it.",
+  replyPlaceholder: "Write a reply.",
+  sendAction: "Send",
+  sendNote: "Recorded exactly as written. A correction is another reply.",
+  keySend: "send",
+  composerNoApprover:
+    "RONDO_APPROVER is not set, so there is nobody this page could send as: the threads can be read, not written to.",
+  noSuchThread: "No request thread holds that message.",
+  threadsUnreadable: (reason) => `The request threads could not be read: ${reason}`,
+  notSent: (line) => `Not sent, and your words are kept: ${line}`,
+  threadsLiveNote: (seconds) =>
+    `Redraws every ${String(seconds)}s, and a redraw writes nothing. What writes here is Send: ` +
+    "your words, recorded exactly as written into the thread, under RONDO_APPROVER's name. A message approves nothing.",
+  threadNoReload:
+    "With scripting off this view does not reload itself, so nothing you are writing is thrown away: reload it to see new messages.",
   liveLabel: "live",
   keyMove: "move",
   keyOpen: "open",
@@ -490,6 +560,38 @@ const JA: Partial<Chrome> = Object.freeze({
     `ゲート ${gateId} に '${word}' と答えます。rondo answer と同じ動作です`,
   answerHere: "押したときに何が記録されるかを読み、そこで答える",
   answerAction: "確認して答える",
+
+  requestsNav: "依頼",
+  requestsHeading: (count) => `依頼 (${String(count)})`,
+  noRequests: "まだ依頼はありません。下の欄に、自分の言葉で書いてください。",
+  threadSize: (count, since) => `メッセージ ${String(count)} 件、最後は ${since} 前`,
+  asksWaiting: (count) => `あなたの返事待ち ${String(count)}`,
+  askWaitingPill: "あなたの返事待ち",
+  you: "あなた",
+  operatorVoice: "オペレーター",
+  drafterVoice: "下書き役",
+  askedIn: (request) => `依頼: ${request}`,
+  inReplyTo: (who, words) => `${who} への返信: ${words}`,
+  basesLabel: "根拠",
+  replyAction: "返信する",
+  openThread: "スレッドを開く",
+  replyingTo: (who, words) => `${who} に返信: ${words}`,
+  newRequestHeading: "新しい依頼",
+  requestPlaceholder: "何をしてほしいですか。話すときの言葉のまま書いてください。",
+  replyPlaceholder: "返信を書く",
+  sendAction: "送信",
+  sendNote: "書いた文はそのまま記録されます。直すときは返信を書き足します。",
+  keySend: "送信",
+  composerNoApprover:
+    "RONDO_APPROVER が設定されていないため、このページが誰として送るのかが決まりません。スレッドは読めますが、書き込めません。",
+  noSuchThread: "そのメッセージを含む依頼スレッドはありません。",
+  threadsUnreadable: (reason) => `依頼スレッドを読めませんでした: ${reason}`,
+  notSent: (line) => `送信されませんでした。書いた文は残しています: ${line}`,
+  threadsLiveNote: (seconds) =>
+    `${String(seconds)}秒ごとに描き直しますが、描き直しは何も書き込みません。ここで書き込むのは送信だけで、` +
+    "書いた文をそのまま RONDO_APPROVER の名前でスレッドに記録します。メッセージは何も承認しません。",
+  threadNoReload:
+    "スクリプトが無効なとき、この画面は自動で読み込み直しません。書きかけの文が消えないためです。新しいメッセージは読み込み直して確認してください。",
   approvePlain: "この作業をこのまま受け入れます。",
   undeterminedFold: (count) => `rondo が決められなかった項目 ${String(count)} 件`,
   liveLabel: "ライブ",

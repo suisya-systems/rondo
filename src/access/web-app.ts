@@ -533,6 +533,18 @@ function typeOf(name: string): string {
  * because a typo in a query is an operator who wanted the page.
  */
 function viewOf(query: URLSearchParams): PageView {
+  const thread = query.get("thread");
+  if (thread !== null && thread !== "") {
+    const to = query.get("to");
+    return {
+      kind: "thread",
+      messageId: thread,
+      to: to === null || to === "" ? null : to,
+    };
+  }
+  if (query.get("requests") === "open") {
+    return { kind: "requests" };
+  }
   const answering = query.get("answer");
   if (answering !== null && answering !== "") {
     return { kind: "answer", iterationId: answering };
@@ -676,7 +688,13 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     if (asked.query !== wording.lang) {
       return c.redirect(viewHref(view, wording.lang), 303);
     }
-    const html = await operatorPage(reading, answer === null ? null : token, view, wording);
+    const html = await operatorPage(
+      reading,
+      answer === null ? null : token,
+      view,
+      wording,
+      say === null ? null : newMessageId,
+    );
     return c.body(html, 200, { "content-type": "text/html; charset=utf-8" });
   });
 
@@ -717,7 +735,7 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
   for (const [path, kind] of SEND_ROUTES) {
     app.post(path, async (c) => {
       if (say === null) {
-        return said(
+        return refused(
           c,
           403,
           "RONDO_APPROVER is not set, so there is nobody this page could send as",
@@ -726,19 +744,19 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
       const form = await c.req.parseBody();
       const minting = mintSend(c, form["token"]);
       if (!("send" in minting)) {
-        return said(c, minting.status, minting.line);
+        return refused(c, minting.status, minting.line);
       }
       const messageId = form["message_id"];
       if (typeof messageId !== "string" || !SENT_MESSAGE_ID.test(messageId)) {
-        return said(c, 400, "that form carried no message id this page minted");
+        return refused(c, 400, "that form carried no message id this page minted");
       }
       const body = form["body"];
       if (typeof body !== "string" || body.trim() === "") {
-        return said(c, 400, "there are no words to send");
+        return refused(c, 400, "there are no words to send");
       }
       const inReplyTo = form["in_reply_to"];
       if (kind === "reply" && (typeof inReplyTo !== "string" || inReplyTo === "")) {
-        return said(c, 400, "that reply named no message it answers");
+        return refused(c, 400, "that reply named no message it answers");
       }
       const sent = await say.say(minting.send, {
         messageId,
@@ -746,24 +764,50 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
         inReplyTo: kind === "reply" ? (inReplyTo as string) : null,
       });
       if (!sent.ok) {
-        return said(c, 409, sent.note);
+        return refused(c, 409, sent.note);
       }
-      // ponytail: anchored on the summary until the thread view lands (#220 S1 part 2).
-      return c.redirect(`${viewHref({ kind: "summary" }, tagOf(c))}#${messageId}`, 303);
+      // **The thread, at the message just sent**: the thread view resolves any
+      // message to its request, so the new id is the whole address.
+      return c.redirect(
+        `${viewHref({ kind: "thread", messageId, to: null }, tagOf(c))}#${messageId}`,
+        303,
+      );
     });
   }
 
   /**
-   * The tag a write was made under, for its `303` (D-0056 rule 11), read back
-   * off the form's own `action`; a write sets no cookie.
+   * A send's refusal. A native submit gets {@link said}'s plain line; htmx gets
+   * the same line as `#send-refused`, which the page's `responseHandling` puts
+   * under the draft, prefixed in the page's language by what happened to the
+   * words. Same status either way.
    */
-  function tagOf(c: Context<PageEnv>): string {
+  function refused(c: Context<PageEnv>, status: 400 | 403 | 409, line: string) {
+    if (c.req.header("hx-request") !== "true") {
+      return said(c, status, line);
+    }
+    const escaped = wordingOf(c)
+      .notSent(line)
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;");
+    return c.html(`<p id="send-refused">${escaped}</p>`, status);
+  }
+
+  /**
+   * The wording a write was made under, for its `303` and its refusal (D-0056
+   * rule 11), read back off the form's own `action`; a write sets no cookie.
+   */
+  function wordingOf(c: Context<PageEnv>) {
     return resolveLanguage({
       query: new URL(c.req.url).searchParams.get("lang"),
       cookie: c.req.header("cookie"),
       host: reading.hostLanguage,
       header: c.req.header("accept-language"),
-    }).lang;
+    });
+  }
+
+  function tagOf(c: Context<PageEnv>): string {
+    return wordingOf(c).lang;
   }
 
   // One page and no router: a typo'd path says so rather than quietly showing

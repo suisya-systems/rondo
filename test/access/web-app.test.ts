@@ -538,7 +538,8 @@ test("(send) a native submit and an htmx hx-post each send one message", async (
     in_reply_to: "request-ignored",
   });
   expect(native.status).toBe(303);
-  expect(native.location).toBe(`/?lang=ja#${request}`);
+  // Onto the thread, at the message just sent (#220 S1).
+  expect(native.location).toBe(`/?thread=${request}&lang=ja#${request}`);
 
   const reply = newMessageId("reply");
   const htmx = await send(base, "/reply", "POST", htmxHeaders(base), {
@@ -767,6 +768,12 @@ test("(send) the same form sent twice records its message once", async () => {
   const again = await send(base, "/request", "POST", htmxHeaders(base), form);
   expect(again.status).toBe(409);
   expect(again.body).toContain(form.message_id);
+  // htmx is answered with the line as `#send-refused`, which the page puts
+  // under the draft (#220 S1); a native submit keeps the plain line.
+  expect(again.body).toMatch(/^<p id="send-refused">Not sent, and your words are kept: /);
+  const native = await send(base, "/request", "POST", submitHeaders(base), form);
+  expect(native.status).toBe(409);
+  expect(native.body).not.toContain("send-refused");
   expect(connection.prepare("SELECT COUNT(*) AS n FROM conversation_message").get()).toEqual({
     n: 1,
   });
