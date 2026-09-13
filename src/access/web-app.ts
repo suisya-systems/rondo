@@ -28,6 +28,15 @@
  * holds a request that can never be a press, whichever module it sits in and
  * however it reached the port. `test/access/web-app.test.ts` carries the
  * audit's planted writers as tests that must fail to write.
+ *
+ * **A second write kind, with its own value and its own port** (section 5a,
+ * last row). A message into a request thread is a *send*, not a press: the
+ * `SayPort` refuses any call without a {@link Send}, and {@link mintSend} mints
+ * one from the same frozen arrival under the same method, origin and token
+ * checks, but lets `Sec-Fetch-Mode` be `cors` and asks for no `?1`, so an htmx
+ * `hx-post` can send and the draft beside the option buttons survives. A send
+ * is not a press and a press is not a send: two brands, two sets of the
+ * minted, two ports, so neither can be spent at the other's port.
  */
 import { randomUUID, timingSafeEqual } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -138,31 +147,59 @@ function header(incoming: Arrival, name: string): string | undefined {
 }
 
 /**
- * Mint a {@link Press} from the request being handled, or say why not.
+ * The two kinds of message a person sends into a request thread from the page
+ * (D-0061 rule 4, D-0059 section 5a's second write kind): a new request, or a
+ * reply to a message already in a thread.
+ */
+type SentKind = "request" | "reply";
+
+/**
+ * A message id for one form, minted **when the form is rendered** and carried
+ * in it as a hidden field (D-0061 rule 2.1).
  *
- * **The only function that makes one, and every condition is a fact about the
- * live request** (D-0059 section 5a, first row):
+ * **Rondo names the message, and the person never types an id.** Minted at
+ * render rather than on arrival so that the same form sent twice -- a double
+ * click, a resend after a slow answer -- carries the same id, and the store's
+ * uniqueness refuses the second rather than recording the person's words
+ * twice. The readable prefix says which kind of send made the row. Here and
+ * not in the renderer because the renderer is not granted `node:crypto`; the
+ * server hands the renderer ids.
+ */
+export function newMessageId(kind: SentKind): string {
+  return `${kind}-${randomUUID()}`;
+}
+
+/**
+ * The shape {@link newMessageId} mints, and the only shape a send route
+ * accepts: a posted id that is not one is not this page's form.
+ */
+const SENT_MESSAGE_ID =
+  /^(request|reply)-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+/** A refusal a mint gives, as a status and a line a person can read. */
+type Refused = { readonly status: 403; readonly line: string };
+
+/**
+ * The checks a press and a send share, read off the frozen arrival, and the
+ * arrival spent if they pass (D-0059 section 5a).
  *
- * 1. it arrived on this process's socket and has not been pressed with before;
+ * 1. it arrived on this process's socket and has not been minted from before;
  * 2. its method, as the socket read it, is `POST` -- so every `GET`-side
  *    writer the audit planted holds a request that fails here;
  * 3. it is same-origin: `Sec-Fetch-Site: same-origin` **and** an `Origin`
  *    naming this machine at the address the request was sent to;
- * 4. it is a navigation a person made: `Sec-Fetch-Mode: navigate` and
- *    `Sec-Fetch-User: ?1` -- which refuses `fetch`, an htmx `hx-post` (`cors`,
- *    no `?1`) and a script's `form.submit()` with no gesture (no `?1`);
+ * 4. `modeRefusal`, the one check the two kinds do not share;
  * 5. it carries this process's token (D-0041 rule 3b).
  *
- * Every one of those is read off the {@link Arrival} the listener froze, and
- * the expected token with them, so a writer inside the process can neither
- * rewrite the request it holds nor name the value its guess is compared to.
- *
- * Refusals are statuses a person can read, as they were before.
+ * **One mint per request, whichever kind**: the arrival is taken out of
+ * {@link live} when it passes, so a request that minted a send cannot also mint
+ * a press, nor the other way round.
  */
-export function mintPress(
+function spendArrival(
   c: Context<PageEnv>,
   postedToken: unknown,
-): { readonly press: Press } | { readonly status: 403; readonly line: string } {
+  modeRefusal: (incoming: Arrival) => string | null,
+): Refused | null {
   const key = (c.env as Partial<PageEnv["Bindings"]> | undefined)?.incoming;
   const incoming = key === undefined ? undefined : live.get(key);
   if (key === undefined || incoming === undefined) {
@@ -172,7 +209,7 @@ export function mintPress(
     };
   }
   if (incoming.method !== "POST") {
-    return { status: 403, line: "only a POST can answer a gate" };
+    return { status: 403, line: "only a POST can write from this page" };
   }
   const origin = header(incoming, "origin");
   let originHost: string | null = null;
@@ -189,25 +226,91 @@ export function mintPress(
   ) {
     return { status: 403, line: "that request came from another page" };
   }
-  if (
-    header(incoming, "sec-fetch-mode") !== "navigate" ||
-    header(incoming, "sec-fetch-user") !== "?1"
-  ) {
-    return {
-      status: 403,
-      line: "only a person pressing this page's button can answer a gate, and a script cannot",
-    };
+  const mode = modeRefusal(incoming);
+  if (mode !== null) {
+    return { status: 403, line: mode };
   }
   if (incoming.token === undefined || !sameToken(postedToken, incoming.token)) {
     return {
       status: 403,
-      line: "that form did not come from this page; reload it and press the button again",
+      line: "that form did not come from this page; reload it and try again",
     };
   }
   live.delete(key);
+  return null;
+}
+
+/**
+ * Mint a {@link Press} from the request being handled, or say why not.
+ *
+ * **The only function that makes one, and every condition is a fact about the
+ * live request** (D-0059 section 5a, first row): {@link spendArrival}'s shared
+ * checks, and in the mode's place **a navigation a person made** --
+ * `Sec-Fetch-Mode: navigate` and `Sec-Fetch-User: ?1`, which refuses `fetch`,
+ * an htmx `hx-post` (`cors`, no `?1`) and a script's `form.submit()` with no
+ * gesture (no `?1`).
+ *
+ * Every one of those is read off the {@link Arrival} the listener froze, and
+ * the expected token with them, so a writer inside the process can neither
+ * rewrite the request it holds nor name the value its guess is compared to.
+ */
+export function mintPress(
+  c: Context<PageEnv>,
+  postedToken: unknown,
+): { readonly press: Press } | Refused {
+  const refused = spendArrival(c, postedToken, (incoming) =>
+    header(incoming, "sec-fetch-mode") === "navigate" && header(incoming, "sec-fetch-user") === "?1"
+      ? null
+      : "only a person pressing this page's button can answer a gate, and a script cannot",
+  );
+  if (refused !== null) {
+    return refused;
+  }
   const press = Object.freeze({}) as Press;
   minted.add(press);
   return { press };
+}
+
+/**
+ * One message sent from the page into a request thread, minted from one live
+ * request (D-0059 section 5a, last row).
+ *
+ * Opaque for {@link Press}'s reasons and with its own brand and its own set, so
+ * a press cannot be spent as a send nor a send as a press.
+ */
+declare const sendBrand: unique symbol;
+export type Send = { readonly [sendBrand]: true };
+
+/** Every send {@link mintSend} has minted and no port has spent yet. */
+const mintedSends = new WeakSet<object>();
+
+/**
+ * Mint a {@link Send} from the request being handled, or say why not.
+ *
+ * {@link spendArrival}'s shared checks, and in the mode's place only this:
+ * `Sec-Fetch-Mode` is `navigate` (a native form submit, script off) or `cors`
+ * (htmx's `hx-post`), and no `Sec-Fetch-User` is asked for. **What that gives
+ * up is section 5a's stated residual**: a same-origin script can send a message
+ * nobody typed. A message is append-only and is not an act -- it answers no
+ * gate and approves nothing, because every approval has its own port and needs
+ * a press.
+ */
+export function mintSend(
+  c: Context<PageEnv>,
+  postedToken: unknown,
+): { readonly send: Send } | Refused {
+  const refused = spendArrival(c, postedToken, (incoming) => {
+    const mode = header(incoming, "sec-fetch-mode");
+    return mode === "navigate" || mode === "cors"
+      ? null
+      : "only this page's own form can send a message";
+  });
+  if (refused !== null) {
+    return refused;
+  }
+  const send = Object.freeze({}) as Send;
+  mintedSends.add(send);
+  return { send };
 }
 
 /**
@@ -268,7 +371,60 @@ export class AnswerPort {
   }
 }
 
-/** The ports the server is handed: the reading half, and the one writer. */
+/** One message a person sends from the page, as the say port carries it. */
+export interface SentMessage {
+  /** Minted by rondo when the form was rendered (`newMessageId`), never typed. */
+  readonly messageId: string;
+  /** The words as the person wrote them. */
+  readonly body: string;
+  /** Null for a new request; the message replied to otherwise. */
+  readonly inReplyTo: string | null;
+}
+
+/**
+ * Record one operator message into a request thread, and say what happened.
+ *
+ * The caller supplies this (`recordThreadMessage` under the approver's name);
+ * `ok` false carries the store's refusal -- a reply to nothing, an id already
+ * in the conversation -- for the page to show.
+ */
+export type SayFromWeb = (
+  message: SentMessage,
+) => Promise<{ readonly ok: boolean; readonly note: string }>;
+
+/**
+ * The second thing this surface may write (D-0059 section 5a, last row): a
+ * message into a request thread, and nothing else.
+ *
+ * **The send check is inside the capability**, as the press check is in
+ * {@link AnswerPort}: whoever holds this object reaches the implementation only
+ * through {@link say}, which writes nothing without a send {@link mintSend}
+ * minted and nobody has spent.
+ */
+export class SayPort {
+  readonly #say: SayFromWeb;
+
+  constructor(say: SayFromWeb) {
+    this.#say = say;
+  }
+
+  /** Record one message, on one send. */
+  async say(
+    send: Send,
+    message: SentMessage,
+  ): Promise<{ readonly ok: boolean; readonly note: string }> {
+    if (!mintedSends.has(send)) {
+      return {
+        ok: false,
+        note: "nothing was sent: this did not come from this page's form",
+      };
+    }
+    mintedSends.delete(send);
+    return await this.#say(message);
+  }
+}
+
+/** The ports the server is handed: the reading half, and the two writers. */
 export interface ServedPorts extends WebPorts {
   /**
    * Null when `RONDO_APPROVER` is unset, which is also when no button is drawn
@@ -276,6 +432,8 @@ export interface ServedPorts extends WebPorts {
    * rule 2).
    */
   readonly answer: AnswerPort | null;
+  /** Null on the same condition as {@link answer}: no approver, no forms. */
+  readonly say: SayPort | null;
 }
 
 /**
@@ -306,6 +464,22 @@ function fromThisMachine(host: string | undefined): boolean {
  * fields, and a request bigger than that is not the page's form.
  */
 const MAX_FORM_BYTES = 4096;
+
+/**
+ * The send routes (D-0059 section 5a, last row), by the kind of message each
+ * sends. A path and not a query on `/`, so the write table names each kind.
+ */
+const SEND_ROUTES: ReadonlyMap<string, SentKind> = new Map([
+  ["/request", "request"],
+  ["/reply", "reply"],
+]);
+
+/**
+ * The cap on a send's body: a person's words, not two short fields. 64 KiB is
+ * a few pages of prose even percent-encoded (a CJK character is 9 bytes), and
+ * a request bigger than that is still not the page's form.
+ */
+const MAX_MESSAGE_BYTES = 64 * 1024;
 
 /**
  * The files this process serves, as a fixed map from path to file (D-0059 R1).
@@ -377,14 +551,15 @@ function said(c: Context<PageEnv>, status: 400 | 403 | 404 | 409 | 413 | 421 | 5
  * The page as a Hono app, a function of rondo's ports and this process's token.
  *
  * **The routes are the vocabulary** (D-0059 R4): `GET` of the fixed files,
- * `GET /` for the three views, and **one** non-`GET` route, `POST /`, the
- * lap-end `approve` press. `test/access/web-app.test.ts` enumerates
- * `app.routes` and fails on any other non-`GET` entry.
+ * `GET /` for the three views, and section 5a's closed table of write routes:
+ * `POST /`, the lap-end `approve` press, and the two sends, `POST /request`
+ * and `POST /reply`. `test/access/web-app.test.ts` enumerates `app.routes` and
+ * fails on any other non-`GET` entry.
  */
 export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
   // The writer is taken off before anything reading is handed the rest, so
   // the renderer does not hold it at runtime either (D-0041 rule 4).
-  const { answer, ...reading } = ports;
+  const { answer, say, ...reading } = ports;
   const app = new Hono<PageEnv>();
   tokens.set(app, token);
 
@@ -436,11 +611,21 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
   // origin is refused before the route. Mounted on `/` only, so a `POST` to a
   // served file stays the 404 any unknown write is.
   app.use("/", csrf());
-  app.use(
-    bodyLimit({
-      maxSize: MAX_FORM_BYTES,
-      onError: (c) => said(c, 413, "that is larger than this page's form"),
-    }),
+  for (const path of SEND_ROUTES.keys()) {
+    app.use(path, csrf());
+  }
+  // One limit middleware, sized by the address: a send carries a person's
+  // words, every other request at most the press's two short fields.
+  const pressLimit = bodyLimit({
+    maxSize: MAX_FORM_BYTES,
+    onError: (c) => said(c, 413, "that is larger than this page's form"),
+  });
+  const sendLimit = bodyLimit({
+    maxSize: MAX_MESSAGE_BYTES,
+    onError: (c) => said(c, 413, "that message is longer than this page accepts"),
+  });
+  app.use(async (c, next) =>
+    SEND_ROUTES.has(c.req.path) ? await sendLimit(c, next) : await pressLimit(c, next),
   );
 
   for (const [path, served] of SERVED) {
@@ -521,14 +706,65 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     }
     // **The tag the press was made under, for the `303`** (D-0056 rule 11),
     // read back off the form's own `action`; the press writes no cookie.
-    const tag = resolveLanguage({
+    return c.redirect(viewHref({ kind: "summary" }, tagOf(c)), 303);
+  });
+
+  // **The two send routes** (D-0059 section 5a, last row): a new request and a
+  // reply. Everything that decides whether this request may write happens in
+  // `mintSend`, and the port checks the send again on its own side. The same
+  // handler answers a native submit and an htmx `hx-post`: both get the `303`,
+  // which htmx follows as a `GET` and swaps in.
+  for (const [path, kind] of SEND_ROUTES) {
+    app.post(path, async (c) => {
+      if (say === null) {
+        return said(
+          c,
+          403,
+          "RONDO_APPROVER is not set, so there is nobody this page could send as",
+        );
+      }
+      const form = await c.req.parseBody();
+      const minting = mintSend(c, form["token"]);
+      if (!("send" in minting)) {
+        return said(c, minting.status, minting.line);
+      }
+      const messageId = form["message_id"];
+      if (typeof messageId !== "string" || !SENT_MESSAGE_ID.test(messageId)) {
+        return said(c, 400, "that form carried no message id this page minted");
+      }
+      const body = form["body"];
+      if (typeof body !== "string" || body.trim() === "") {
+        return said(c, 400, "there are no words to send");
+      }
+      const inReplyTo = form["in_reply_to"];
+      if (kind === "reply" && (typeof inReplyTo !== "string" || inReplyTo === "")) {
+        return said(c, 400, "that reply named no message it answers");
+      }
+      const sent = await say.say(minting.send, {
+        messageId,
+        body,
+        inReplyTo: kind === "reply" ? (inReplyTo as string) : null,
+      });
+      if (!sent.ok) {
+        return said(c, 409, sent.note);
+      }
+      // ponytail: anchored on the summary until the thread view lands (#220 S1 part 2).
+      return c.redirect(`${viewHref({ kind: "summary" }, tagOf(c))}#${messageId}`, 303);
+    });
+  }
+
+  /**
+   * The tag a write was made under, for its `303` (D-0056 rule 11), read back
+   * off the form's own `action`; a write sets no cookie.
+   */
+  function tagOf(c: Context<PageEnv>): string {
+    return resolveLanguage({
       query: new URL(c.req.url).searchParams.get("lang"),
       cookie: c.req.header("cookie"),
       host: reading.hostLanguage,
       header: c.req.header("accept-language"),
     }).lang;
-    return c.redirect(viewHref({ kind: "summary" }, tag), 303);
-  });
+  }
 
   // One page and no router: a typo'd path says so rather than quietly showing
   // the only page there is.

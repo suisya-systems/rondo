@@ -145,6 +145,9 @@ function portsOver(
             pressed.push({ iterationId, body });
             return await Promise.resolve({ ok: true, note: "answered" });
           }),
+    // The thread's sends are `test/access/web-app.test.ts`'s door; this page
+    // test draws no send form.
+    say: null,
   };
 }
 
