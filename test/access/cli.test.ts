@@ -2047,6 +2047,26 @@ test("the scope verbs take their own flags and refuse the others (D-0066)", () =
   });
   // Control: route S still parses on its own.
   expect(parseCommand(["retry", "--proposal-id", "p-1"]).kind).toBe("parsed");
+  // D-0070: revise spends a scope on its second lap with the same flag.
+  expect(
+    parseCommand([
+      "revise",
+      "--actor-id",
+      "oidc|operator-1",
+      "--body=fix the finding",
+      "--iteration-id",
+      "iter-2",
+      "--scope-decision-id",
+      "scope-decision-scope-2-1",
+    ]),
+  ).toMatchObject({
+    kind: "parsed",
+    parsed: {
+      command: "revise",
+      iterationId: "iter-2",
+      scopeDecisionId: "scope-decision-scope-2-1",
+    },
+  });
 
   for (const argv of [
     // A proposal's approval and a scope's are two authorities for one admission.

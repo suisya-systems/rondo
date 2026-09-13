@@ -716,6 +716,120 @@ const spend = () => ({
   agentTypeDigest: agentTypeOf(PLAN),
 });
 
+// --- D-0070: the in-scope revise's step between the verdict and the admission --
+
+test("D-0070 2: a refused verdict runs no step; an inside one runs it once, before the admission", async () => {
+  const h = await harness();
+  expect(await admitUnderScope(h.ports, "sd-1", start("i-a"))).toMatchObject({ kind: "admitted" });
+  expect(await h.store.appendReading("i-a", nitReading, 1_001)).toMatchObject({
+    kind: "appended",
+  });
+  const order: string[] = [];
+  const ports: ScopeAdmitPorts = {
+    ...h.ports,
+    beforeAdmit: async () => {
+      order.push("step");
+      return null;
+    },
+    admit: async (...args) => {
+      order.push("admit");
+      return h.ports.admit(...args);
+    },
+  };
+  // Refused at expiry: the gate a revise would walk is never reached.
+  h.clock.now = EXPIRES;
+  expect(await admitUnderScope(ports, "sd-1", redoOf("i-b", "i-a"))).toMatchObject({
+    kind: "refused",
+    test: "expiry",
+    stop: { kind: "written" },
+  });
+  expect(order).toEqual([]);
+  expect(h.consumptions()).toBe(1);
+  // Control: answer the stop, and the same redo runs the step and then spends.
+  const stop = h.stops()[0];
+  expect(
+    await h.record.recordThreadMessage({
+      messageId: "m-go",
+      body: "go ahead",
+      authorKind: "operator",
+      authorId: "oidc|operator-1",
+      inReplyTo: String(stop?.["message_id"]),
+      atMs: 2_001,
+      bases: [],
+      asks: false,
+    }),
+  ).toEqual({ kind: "recorded" });
+  h.clock.now = 2_002;
+  expect(await admitUnderScope(ports, "sd-1", redoOf("i-b", "i-a"))).toMatchObject({
+    kind: "admitted",
+    report: { iterationId: "i-b" },
+  });
+  expect(order).toEqual(["step", "admit"]);
+  expect(h.consumptions()).toBe(2);
+});
+
+test("D-0070 2.5: a step that stops admits nothing and spends nothing", async () => {
+  const h = await harness();
+  expect(await admitUnderScope(h.ports, "sd-1", start("i-a"))).toMatchObject({ kind: "admitted" });
+  expect(await h.store.appendReading("i-a", nitReading, 1_001)).toMatchObject({
+    kind: "appended",
+  });
+  let admitted = false;
+  const ports: ScopeAdmitPorts = {
+    ...h.ports,
+    beforeAdmit: async () => 1,
+    admit: async (...args) => {
+      admitted = true;
+      return h.ports.admit(...args);
+    },
+  };
+  h.clock.now += 1;
+  expect(await admitUnderScope(ports, "sd-1", redoOf("i-b", "i-a"))).toEqual({
+    kind: "halted",
+    status: 1,
+  });
+  expect(admitted).toBe(false);
+  expect(h.consumptions()).toBe(1);
+  expect(h.stops()).toHaveLength(0);
+});
+
+test("D-0070 2.4: the store refusing after the step is a refusal with its stop", async () => {
+  const h = await harness();
+  expect(await admitUnderScope(h.ports, "sd-1", start("i-a"))).toMatchObject({ kind: "admitted" });
+  expect(await h.store.appendReading("i-a", nitReading, 1_001)).toMatchObject({
+    kind: "appended",
+  });
+  let stepped = false;
+  const ports: ScopeAdmitPorts = {
+    ...h.ports,
+    // The race: while the gate is walked, a question is asked over the line.
+    beforeAdmit: async () => {
+      stepped = true;
+      expect(
+        await h.record.recordThreadMessage({
+          messageId: "m-ask-during-walk",
+          body: "hold on",
+          authorKind: "operator",
+          authorId: "oidc|operator-1",
+          inReplyTo: ROOT,
+          atMs: 1_002,
+          bases: [{ form: "iteration", iterationId: "i-a" }],
+          asks: true,
+        }),
+      ).toEqual({ kind: "recorded" });
+      return null;
+    },
+  };
+  h.clock.now += 1;
+  expect(await admitUnderScope(ports, "sd-1", redoOf("i-b", "i-a"))).toMatchObject({
+    kind: "refused",
+    test: "asks",
+    stop: { kind: "held", messageId: "m-ask-during-walk" },
+  });
+  expect(stepped).toBe(true);
+  expect(h.consumptions()).toBe(1);
+});
+
 // --- The retry verb over the same rows ---------------------------------------
 
 /** `rondo retry` in scope: a file store, since the verb opens its own advisory port on the path. */

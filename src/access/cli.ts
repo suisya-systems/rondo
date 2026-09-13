@@ -177,11 +177,15 @@ export const USAGE = `rondo - the operator surface for delegated work
                           into the pull request, as your claim: rondo did not
                           watch it run and does not say it did
   rondo revise --actor-id ID --body=TEXT [--iteration-id ID]
+               [--scope-decision-id ID]
                           answer the gate with a change to make, and run a
                           second lap that continues from the first one's
                           branch. The second lap's run id, topic branch and
                           workspace are derived from --iteration-id, the same
-                          way rondo start mints the first lap's
+                          way rondo start mints the first lap's.
+                          --scope-decision-id spends an approved scope on the
+                          second lap: the gate is still your answer, and it is
+                          not touched unless every test of the scope passes
   rondo publish --repo OWNER/NAME --actor-id ID --iteration-id ID
                 [--remote NAME] [--dry-run] [--allow-remote-mismatch]
                 [--despite-review]
@@ -586,7 +590,9 @@ export const FLAGS_BY_COMMAND: Readonly<Record<string, readonly string[]>> = {
   // `answer` gained `--iteration-id` because more than one iteration may be
   // waiting at once now, which is the whole point of D-0023.
   answer: ["actor-id", "body", "iteration-id", "verified"],
-  revise: ["actor-id", "body", "iteration-id"],
+  // `--scope-decision-id` spends a scope on the second lap (D-0070): the gate
+  // answer stays the person's, and the lap is the `redo` arm's admission.
+  revise: ["actor-id", "body", "iteration-id", "scope-decision-id"],
   publish: [
     "repo",
     "actor-id",
@@ -1709,6 +1715,7 @@ export async function main(
         parsed,
         environment,
         store,
+        opened.path,
         ports,
         unpromptedPorts(store, opened.path),
         continuo,
@@ -2802,12 +2809,15 @@ export async function commandScopedRetry(
  */
 async function finishScopedAdmission(
   outcome: ScopedAdmission,
-  act: "retry" | "first admission",
+  act: "retry" | "first admission" | "revise",
   continuo: VerifiedContinuo,
   store: IterationStore,
   iterationId: string,
   thread: RequestThread | null,
 ): Promise<number> {
+  if (outcome.kind === "halted") {
+    return outcome.status;
+  }
   if (outcome.kind === "refused") {
     consoleSeams.writeError(
       `${asciiEscape(
@@ -4058,6 +4068,7 @@ async function commandRevise(
   parsed: ParsedCommand,
   environment: Readonly<Record<string, string | undefined>>,
   store: IterationStore,
+  storePath: string,
   ports: ReturnType<typeof conductorPorts>,
   advisory: UnpromptedPorts,
   continuo: VerifiedContinuo,
@@ -4073,6 +4084,7 @@ async function commandRevise(
         "it. Write it with an equals sign: an instruction may begin with a dash.",
     );
   }
+  const body = parsed.body;
   // **One identifier now, and it used to be three.** The second lap is a second
   // run -- continuo holds a run under the first lap's id, git holds its branch
   // and a worktree stands at its workspace -- so it needs identifiers of its
@@ -4116,7 +4128,7 @@ async function commandRevise(
   const successor = revisionPlan({
     predecessor: record,
     iterationId: successorId,
-    instruction: parsed.body,
+    instruction: body,
   });
   if (successor.kind === "refused") {
     return refuse(
@@ -4200,55 +4212,120 @@ async function commandRevise(
     return refuse(blocker);
   }
 
-  say(`gate ${gate.gateId} is at stage '${gate.stage}'`);
-  const walked = await walkGate(continuo, {
-    db: planField(record, "db"),
-    gateId: gate.gateId,
-    destinationDir: planField(record, "endpoint_destination_dir"),
-    holder: planField(record, "lease_claimant_id"),
-    actorId: actor.actorId,
-    body: parsed.body,
-  });
-  if (walked.kind === "failed") {
-    return walked.status;
-  }
-  // **A walk that sent nothing is not permission to start a lap.** The gate was
-  // closed by somebody else between the read above and the walk's own, so the
-  // instruction reached nothing -- and the outcome it closed at may be
-  // `withdrawn` or `expired`, which are not a person saying anything. `resume`
-  // below would settle the row at `closed` for any of them, so this is the
-  // check that keeps a successor from running on an answer that was never
-  // recorded. The row is still settled, because that is true and useful.
-  if (!walked.answerSent) {
+  // **The gate walk and the first row's settlement, as one step** that returns
+  // null when the second lap may start and an exit status when it may not. An
+  // in-scope revise runs it between the scope's verdict and the admission
+  // (D-0070 section 2), so a refused verdict leaves the gate untouched.
+  let gateAnswered = false;
+  const answerGate = async (): Promise<number | null> => {
+    say(`gate ${gate.gateId} is at stage '${gate.stage}'`);
+    const walked = await walkGate(continuo, {
+      db: planField(record, "db"),
+      gateId: gate.gateId,
+      destinationDir: planField(record, "endpoint_destination_dir"),
+      holder: planField(record, "lease_claimant_id"),
+      actorId: actor.actorId,
+      body,
+    });
+    if (walked.kind === "failed") {
+      return walked.status;
+    }
+    // **A walk that sent nothing is not permission to start a lap.** The gate
+    // was closed by somebody else between the read above and the walk's own,
+    // so the instruction reached nothing -- and the outcome it closed at may be
+    // `withdrawn` or `expired`, which are not a person saying anything.
+    // `resume` below would settle the row at `closed` for any of them, so this
+    // is the check that keeps a successor from running on an answer that was
+    // never recorded. The row is still settled, because that is true and
+    // useful.
+    if (!walked.answerSent) {
+      const report = await resume(ports, record.id);
+      sayReport(report);
+      say("");
+      say(
+        "Your instruction was not carried to the gate, so no second lap was started. The " +
+          "iteration above is settled; 'rondo start' is how the work continues from here.",
+      );
+      return 1;
+    }
+    gateAnswered = true;
+
     const report = await resume(ports, record.id);
     sayReport(report);
+    // **The second lap does not start until the first row is terminal**, and
+    // this is a refusal rather than an attempt because the attempt has a worse
+    // failure mode: `reserve` would answer `occupied` -- correctly -- and the
+    // operator would read a single-flight message about an iteration they had
+    // just answered, with no idea that the answer is what had not landed.
+    if (report.status !== "closed") {
+      say("");
+      say(
+        "The first iteration did not reach 'closed', so no second lap was started. Run " +
+          "'rondo answer' to see where its gate stands.",
+      );
+      return 1;
+    }
+
     say("");
-    say(
-      "Your instruction was not carried to the gate, so no second lap was started. The " +
-        "iteration above is settled; 'rondo start' is how the work continues from here.",
+    say(`revising as iteration '${successorId}', cut from '${successor.plan.baseBranch}'`);
+    say("the lap is the step that is slow");
+    return null;
+  };
+
+  if (parsed.scopeDecisionId !== null) {
+    // D-0070: the second lap is the `redo` arm's admission, tested as an
+    // in-scope retry is and as the predecessor's request (D-0061 rule 4). The
+    // text is carried and not tested (section 3).
+    const outcome = await admitUnderScope(
+      {
+        store,
+        record: openAdvisoryRecord(storePath),
+        nowMs: Date.now,
+        beforeAdmit: answerGate,
+        admit: (plan, id, supersedes, requestMessageId, scopeSpend) =>
+          admit(
+            ports,
+            advisory,
+            plan,
+            START_POLICY,
+            id,
+            supersedes,
+            null,
+            requestMessageId,
+            scopeSpend,
+          ),
+      },
+      parsed.scopeDecisionId,
+      {
+        kind: "redo",
+        iterationId: successorId,
+        plan: successor.plan,
+        predecessorId: record.id,
+        requestMessageId: record.requestMessageId,
+      },
     );
-    return 1;
+    if (outcome.kind === "refused") {
+      consoleSeams.writeError(
+        gateAnswered
+          ? "The gate was answered with your instruction, and the store then refused the " +
+              "second lap, so no second lap was started (D-0070 section 2.4).\n"
+          : "The gate was not touched: your instruction was not sent.\n",
+      );
+    }
+    return await finishScopedAdmission(
+      outcome,
+      "revise",
+      continuo,
+      store,
+      successorId,
+      ports.thread ?? null,
+    );
   }
 
-  const report = await resume(ports, record.id);
-  sayReport(report);
-  // **The second lap does not start until the first row is terminal**, and this
-  // is a refusal rather than an attempt because the attempt has a worse failure
-  // mode: `reserve` would answer `occupied` -- correctly -- and the operator
-  // would read a single-flight message about an iteration they had just
-  // answered, with no idea that the answer is what had not landed.
-  if (report.status !== "closed") {
-    say("");
-    say(
-      "The first iteration did not reach 'closed', so no second lap was started. Run " +
-        "'rondo answer' to see where its gate stands.",
-    );
-    return 1;
+  const halted = await answerGate();
+  if (halted !== null) {
+    return halted;
   }
-
-  say("");
-  say(`revising as iteration '${successorId}', cut from '${successor.plan.baseBranch}'`);
-  say("the lap is the step that is slow");
   // **The predecessor's id travels beside the plan, not inside it** (D-0030
   // rule 1). It is the one place in rondo that knows this lap is a revision of
   // that one at the moment the row is written, and until this argument existed
