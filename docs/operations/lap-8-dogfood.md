@@ -34,8 +34,7 @@ record (D-0066, #196).**
 | 3 | was P1 the person's act? | **yes, relayed** | `scope_decision` row `approved`, `actor_id happy_ryo`, `recorded_by rondo/cli`, written 9.8 s after the secretary relayed the person's answer. Nothing on the row says it was relayed (N-28) |
 | 4 | did the in-scope redo inherit the predecessor's request link? | **yes** | `rondo retry` takes no `--message-id`. The stop it wrote is `in_reply_to lap8-req-195`, and its bases name that message, so the verdict tested the link it read off `lap8-001`'s row (D-0061 rule 4) |
 | 5 | did the in-scope re-test refuse, and spend nothing? | **yes** | `Refused: the retry is outside the scope at the readings test, so nothing was admitted and nothing was spent`. `scope_consumption` has 0 rows, `iteration` holds only `lap8-001`, and `admission_refusal` is empty |
-| 6 | was the stop written as D-0066 rule 4.4 says? | **yes, with two defects in its words** | one `drafter` message, `asks 1`, in the request's thread, bases `[message lap8-req-195, iteration lap8-001]`, with reason, three options, what each gives up and one recommendation. The recommendation is wrong for this test (N-26), and the stored body holds literal `
-` escapes (N-27) |
+| 6 | was the stop written as D-0066 rule 4.4 says? | **yes, with two defects in its words** | one `drafter` message, `asks 1`, in the request's thread, bases `[message lap8-req-195, iteration lap8-001]`, with reason, three options, what each gives up and one recommendation. The recommendation is wrong for this test (N-26), and the stored body holds literal `\u000a` escapes (N-27) |
 | 7 | did the worker's sandbox start? | **no failure reported** | the transcript holds **0** occurrences of `sandbox`, and `stderr-000.log` is empty. Laps 6 and 7 each printed `Sandbox is enabled but failed to initialize: EPERM`. `start` and `retry` were the only commands run with the operator's sandbox disabled (runbook item 7, N-21) |
 
 ## 2. Where a person was touched
@@ -224,14 +223,7 @@ The rows, read with SQL (`node:sqlite`, read-only) after the gate closed:
 The stop's body, as stored:
 
 ```
-Stopped: the redo of 'lap8-001' as 'lap8-002' is outside scope 'scope-1789270620294' (digest sha256:4c9be95d…) under decision 'scope-decision-scope-1789270620294-1789270953820' at the readings test.
-Reason: the model reading is unavailable: the plan names no review criterion, so there is nothing to grade against (D-0029 rule 13). (D-0065 5.4)
-Options:
-- A successor scope (D-0066 rule 1.4). Gives up: this line waits for a person to approve a new scope, and the old one is retired when they do.
-- A change to the work. Gives up: the work as planned; what runs is the changed work.
-- Stopping. Gives up: this line's work; other lines of the request carry on.
-Recommended: a successor scope (D-0066 rule 1.4) with the budget or approval this line needs: the work itself is what the scope was approved for, and what ran out is the approval.
-This line stays stopped until this message is answered.
+Stopped: the redo of 'lap8-001' as 'lap8-002' is outside scope 'scope-1789270620294' (digest sha256:4c9be95d…) under decision 'scope-decision-scope-1789270620294-1789270953820' at the readings test.\u000aReason: the model reading is unavailable: the plan names no review criterion, so there is nothing to grade against (D-0029 rule 13). (D-0065 5.4)\u000aOptions:\u000a- A successor scope (D-0066 rule 1.4). Gives up: this line waits for a person to approve a new scope, and the old one is retired when they do.\u000a- A change to the work. Gives up: the work as planned; what runs is the changed work.\u000a- Stopping. Gives up: this line's work; other lines of the request carry on.\u000aRecommended: a successor scope (D-0066 rule 1.4) with the budget or approval this line needs: the work itself is what the scope was approved for, and what ran out is the approval.\u000aThis line stays stopped until this message is answered.
 ```
 
 Against D-0066:
@@ -335,12 +327,10 @@ same test for the same reason. The option that helps is *a change to the work*: 
 criterion, so a model reading can be taken. The same wording fits a `readings` refusal caused by an
 exhausted review budget, so the case needs splitting on the reason, not the test.
 
-### N-27. The stop's body is stored with literal `
-` escapes instead of newlines
+### N-27. The stop's body is stored with literal `\u000a` escapes instead of newlines
 
 `stopBody()` joins its lines with `\n` and then passes the whole string through `asciiEscape`, which
-escapes the newlines. The row therefore holds one line with `
-` in it. Every reader of the thread
+escapes the newlines. The row therefore holds one line with `\u000a` in it. Every reader of the thread
 (`inbox`, the page, a future report) gets the escaped form unless it unescapes, and the text is
 unreadable in SQL. The escape belongs on each line, or at display time.
 
@@ -424,10 +414,8 @@ Drafted in English as candidate issue bodies. Filing is the secretary's.
    `unavailable` (D-0065 5.4), a successor scope is refused the same way. The recommendation should be
    a change to the work (a plan with a review criterion). Split the `readings` case by reason:
    exhausted rounds -> successor scope; unavailable -> change the work.*
-3. **The scope stop's body is stored with literal `
-` escapes** (N-27). *`stopBody()` runs
-   `asciiEscape` over the joined text, so `conversation_message.body` holds one line with `
-`
+3. **The scope stop's body is stored with literal `\u000a` escapes** (N-27). *`stopBody()` runs
+   `asciiEscape` over the joined text, so `conversation_message.body` holds one line with `\u000a`
    in it (observed in lap 8, `scope-stop-lap8-002-1789270962898`). Escape per line, or keep newlines,
    so the thread is readable in `inbox`, on the page and in SQL.*
 4. **A relayed approval is indistinguishable from a direct one** (N-28). *`scope_decision` and the
