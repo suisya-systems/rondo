@@ -13101,6 +13101,22 @@ and R3/R4 after `D-0064`); the gate's answers are recorded in "What was put to t
 answer" below. Supersedes `D-0057`. Refs rondo#172, `D-0057`, `D-0054`, `D-0041`, `D-0042`, `D-0007`,
 `D-0055`, `D-0056`, `D-0002`, `D-0006`, `D-0061`, `D-0064`.
 
+> **Annotation (2026-09-14, from rondo#220).** Added after this entry was accepted, and additive, by the
+> answer of rondo's human gate (relayed by the secretary on 2026-09-14) that every write the page adds
+> beyond section 5a's table is a press, recorded as a row added to that table.
+> - **Section 5a's table gains a row: answering a waiting ask** -- a reply whose `in_reply_to` is a
+>   drafter message with `asks` set and no reply yet -- **needs a press**, minted as the approvals are
+>   (`POST`, same-origin, `Sec-Fetch-Mode: navigate`, `Sec-Fetch-User: ?1`, per-process token). It is
+>   the case this entry's falsifier names: `D-0069` rule 5 holds an operator-written first admission
+>   back while any ask in its request's thread waits, so the reply that answers one releases work,
+>   and "if a later entry lets a message move work ... the send needs a press too". A reply to any
+>   other message stays a send, and the send port refuses one aimed at a waiting ask.
+> - **What it costs is what section 5a already priced for P2/P3**: the answer is a navigation, so an
+>   unsent draft survives only through the composer script, whose two duties are unchanged.
+> - The writes the later slices of rondo#220 add (the verification claim, recording a scope, a scoped
+>   `start`, `revise`, `publish`) are added to the table by their own annotations. Nothing above is
+>   edited.
+
 `D-0057` priced four frameworks by **the lines they take over** (96 of 1,233) and by **whether the
 served bytes can still be checked without a build**, and kept the page hand-written. It never asked
 whether the screen an operator looks at reaches the level engineers now hold a developer tool to.
