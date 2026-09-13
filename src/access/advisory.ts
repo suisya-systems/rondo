@@ -2095,8 +2095,10 @@ const BASIS_FRESHNESS: {
       "deciding a repository citation needs a ref to compare against, which is a policy nothing in " +
         "rondo owns yet (D-0033 rule 9, D-0037's residual)",
     ),
-  // A thread message is append-only (D-0061 rule 3): nothing can move under it.
-  message: () => ({ verdict: "unmoved", detail: "a message is append-only and cannot change" }),
+  // Append-only (D-0061 rule 3) means an existing message cannot move, not that
+  // the one cited exists, and nothing here reads the thread yet.
+  message: () =>
+    undetermined("rondo has no reader for a thread message yet, so it cannot confirm this one"),
 };
 
 /** What re-gathering produced for a proposal's candidates or its readings, so bases can be compared. */
