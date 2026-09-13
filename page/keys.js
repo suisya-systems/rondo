@@ -89,11 +89,20 @@ document.addEventListener("htmx:beforeRequest", (event) => {
 // what the server sent and never against the live document, whose folds this
 // script opens. A redraw that did change something still swaps, and resets
 // those offsets: a known limit, not one this script hides.
-let lastLedger = document.getElementById("ledger")?.outerHTML ?? null;
+// The header's waiting count arrives out of band with the same response, so it
+// is part of what "the same" means: a count that changed alone still swaps
+// (#220 S1, Codex).
+const sameness = (doc) => {
+  const ledger = doc.getElementById("ledger")?.outerHTML;
+  return ledger === undefined
+    ? undefined
+    : ledger + (doc.getElementById("waiting-count")?.outerHTML ?? "");
+};
+let lastLedger = sameness(document) ?? null;
 document.addEventListener("htmx:beforeSwap", (event) => {
-  const arrived = new DOMParser()
-    .parseFromString(event.detail.serverResponse, "text/html")
-    .getElementById("ledger")?.outerHTML;
+  const arrived = sameness(
+    new DOMParser().parseFromString(event.detail.serverResponse, "text/html"),
+  );
   if (arrived !== undefined && arrived === lastLedger) {
     event.detail.shouldSwap = false;
   } else if (arrived !== undefined) {

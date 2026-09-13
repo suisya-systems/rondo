@@ -854,7 +854,7 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
       // **The thread, at the message just sent**: the thread view resolves any
       // message to its request, so the new id is the whole address.
       return c.redirect(
-        `${viewHref({ kind: "thread", messageId, to: null }, tagOf(c))}#${messageId}`,
+        `${viewHref({ kind: "thread", messageId, to: null }, tagOf(c))}#${encodeURIComponent(messageId)}`,
         303,
       );
     });
@@ -895,7 +895,7 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
       return refused(c, 409, "sendRefusedNotTaken", back);
     }
     return c.redirect(
-      `${viewHref({ kind: "thread", messageId, to: null }, tagOf(c))}#${messageId}`,
+      `${viewHref({ kind: "thread", messageId, to: null }, tagOf(c))}#${encodeURIComponent(messageId)}`,
       303,
     );
   });

@@ -21,19 +21,24 @@
 // page can make is still a form's own submit, minted on the server (section
 // 5a). Served under `script-src 'self'`, its digest in `page.manifest.json`.
 
+// A copy in this document's memory beside `sessionStorage`, so storage that is
+// refused (a private window, a full quota) still keeps words across an in-place
+// send; only a navigation needs the storage itself (#220 S1, Codex).
+const memory = new Map();
 const store = {
   get(key) {
     try {
-      return sessionStorage.getItem(key);
+      return sessionStorage.getItem(key) ?? memory.get(key) ?? null;
     } catch {
-      return null;
+      return memory.get(key) ?? null;
     }
   },
   set(key, value) {
+    value === null ? memory.delete(key) : memory.set(key, value);
     try {
       value === null ? sessionStorage.removeItem(key) : sessionStorage.setItem(key, value);
     } catch {
-      // Storage refused (a private window, a full quota): the page works without it.
+      // Storage refused: the memory copy above is what is left.
     }
   },
 };
@@ -43,7 +48,14 @@ const store = {
 const draftKey = (box) => `rondo:draft:${box.dataset.draft}`;
 const box = () => document.querySelector("textarea[data-draft]");
 
-const landed = decodeURIComponent(location.hash.slice(1));
+// A fragment that is not valid percent-encoding is not a landing, and must not
+// stop the rest of this script (#220 S1, Codex).
+let landed = "";
+try {
+  landed = decodeURIComponent(location.hash.slice(1));
+} catch {
+  landed = "";
+}
 const sentFrom = landed === "" ? null : store.get(`rondo:sent:${landed}`);
 if (sentFrom !== null) {
   store.set(sentFrom, null);

@@ -1115,7 +1115,7 @@ function waitingView(
                 href={`${viewHref(
                   { kind: "thread", messageId: root ?? ask.messageId, to: ask.messageId },
                   wording.lang,
-                )}#${ask.messageId}`}
+                )}#${encodeURIComponent(ask.messageId)}`}
                 data-open=""
                 class={`${PRIMARY} h-7 px-3 text-[13px]`}
               >
@@ -1654,9 +1654,18 @@ interface Threads {
   readonly byId: ReadonlyMap<string, ThreadMessageDraft>;
   readonly rootOf: (messageId: string) => string | null;
   readonly waiting: ReadonlySet<string>;
+  /**
+   * The laps the reading view draws a section for, so an `iteration` basis is
+   * a link only when its anchor exists (#220 S1, Codex): a cited lap older than
+   * the reading's window is named and not linked to nowhere.
+   */
+  readonly inReading: ReadonlySet<string>;
 }
 
-function threadsOf(messages: readonly ThreadMessageDraft[]): Threads {
+function threadsOf(
+  messages: readonly ThreadMessageDraft[],
+  inReading: ReadonlySet<string>,
+): Threads {
   const byId = new Map(messages.map((message) => [message.messageId, message]));
   const replied = new Set(messages.flatMap((message) => message.inReplyTo ?? []));
   // ponytail: a walk per message per render, which is O(messages x depth); a
@@ -1679,6 +1688,7 @@ function threadsOf(messages: readonly ThreadMessageDraft[]): Threads {
         .filter((message) => message.asks && !replied.has(message.messageId))
         .map((message) => message.messageId),
     ),
+    inReading,
   };
 }
 
@@ -1727,12 +1737,14 @@ function basisChip(
     if (cited !== undefined) {
       href =
         threads.rootOf(cited.messageId) === root
-          ? `#${cited.messageId}`
-          : `${viewHref({ kind: "thread", messageId: cited.messageId, to: null }, wording.lang)}#${cited.messageId}`;
+          ? `#${encodeURIComponent(cited.messageId)}`
+          : `${viewHref({ kind: "thread", messageId: cited.messageId, to: null }, wording.lang)}#${encodeURIComponent(cited.messageId)}`;
     }
   } else if (form === "iteration" && typeof basis["iterationId"] === "string") {
     label = basisLine({ form: "iteration", iterationId: basis["iterationId"] }, {});
-    href = `${viewHref({ kind: "reading" }, wording.lang)}#read-${basis["iterationId"]}`;
+    if (threads.inReading.has(basis["iterationId"])) {
+      href = `${viewHref({ kind: "reading" }, wording.lang)}#read-${encodeURIComponent(basis["iterationId"])}`;
+    }
   } else if (form === "snapshot") {
     label = `snapshot ${String(basis["pointer"])}`;
   } else if ((BASIS_FORMS as readonly unknown[]).includes(form)) {
@@ -1838,7 +1850,7 @@ function messageView(
             <span class={`${PILL} font-sans ${TONE.wait}`}>{wording.askWaitingPill}</span>
           ) : null}
           <a
-            href={`#${message.messageId}`}
+            href={`#${encodeURIComponent(message.messageId)}`}
             class="text-faint tabular-nums hover:text-foreground"
             title={new Date(message.atMs).toISOString()}
           >
@@ -1855,7 +1867,7 @@ function messageView(
         parent.messageId !== previous?.messageId &&
         parent.messageId !== root ? (
           <a
-            href={`#${parent.messageId}`}
+            href={`#${encodeURIComponent(parent.messageId)}`}
             class="mx-4 mt-1 flex min-w-0 items-center gap-1.5 text-[12px] leading-5 text-muted-foreground hover:text-foreground"
           >
             <svg
@@ -2209,7 +2221,7 @@ function composerView(
             <input type="hidden" name="in_reply_to" value={replying.target.messageId} />
             <div class="mx-4 mt-2.5 flex min-w-0 items-center gap-1">
               <a
-                href={`#${replying.target.messageId}`}
+                href={`#${encodeURIComponent(replying.target.messageId)}`}
                 class="replying flex min-w-0 items-center gap-1.5 text-[12px] leading-5 text-muted-foreground hover:text-foreground"
               >
                 <svg
@@ -2397,7 +2409,6 @@ export async function operatorPage(
   // counts them for every view. A thread that will not read is said, never
   // drawn half (see `threadMessages`).
   const threadRead = await ports.record.threadMessages();
-  const threads = threadsOf(threadRead.kind === "read" ? threadRead.messages : []);
   const forms = token !== null && newId !== null;
   const onThreads = view.kind === "requests" || view.kind === "thread";
   const host = await gatherHost(ports);
@@ -2425,6 +2436,10 @@ export async function operatorPage(
     (side === "waitingOnYou" ? waiting : running).push(row.record);
   }
   const unreadable = live.filter((row) => row.kind === "unreadable");
+  const threads = threadsOf(
+    threadRead.kind === "read" ? threadRead.messages : [],
+    new Set([...waiting, ...running, ...ended, ...unreadable].map((row) => row.id)),
+  );
   // **Only the ones an answer can settle** (D-0032 rule 5). `openProposals`
   // returns every proposal nobody has decided, and an explanation is
   // undecidable by construction -- `recordDecision` refuses the non-binding
