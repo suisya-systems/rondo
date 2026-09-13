@@ -15100,8 +15100,8 @@ number.
 4. **Its row name is `rondo/drafter/1/<model-id>`.** The version counts the drafter's own instructions
    (the fixed text rondo prepends to the document, a constant in `src/`), so a changed instruction is a
    new version and not a new entry; a changed model is a new entry.
-5. **Material over the input bound, a timeout, output that does not parse, or a tool call makes the
-   run `unavailable`.** The material is never truncated (`D-0065` rule 1.4's reason). An unavailable
+5. **Material over the input bound, a timeout, output that does not parse, a tool call, or a draft
+   the layer's structural check refuses (rule 7.1) makes the run `unavailable`.** The material is never truncated (`D-0065` rule 1.4's reason). An unavailable
    run writes one deterministic `drafter` message into the thread, `asks` unset, naming the reason with
    a `message:` basis to **every operator message the document held that no earlier drafter row
    covers** (rule 3.2), and writes nothing else. It is not retried: the person's next message triggers
@@ -15186,13 +15186,12 @@ what is re-readable and not re-derivable (`D-0063` rule 5) to the parts no funct
    3. **`redo`** is the highest redo cost found, rounded up the same way. **Cold start: the reserve.**
    4. **`laps`** is `P x review_rounds`: every line may use its whole round budget before the lap
       budget stops it, so the two budgets never stop a line for two different reasons at once.
-   5. **`cost_usd`** is `P x (2 x reserve + (review_rounds - 2) x redo)`, or `P x reserve` when
-      `review_rounds` is 1. **It is sized for the admission test, not for the expected spend**: a
-      line's last redo is admitted while its own reserve is counted (`D-0066` rule 3.4.2), on top of
-      the first lap (at most the reserve, which is the highest read) and the earlier redos. With the
-      lower `P x (reserve + (review_rounds - 1) x redo)`, a line whose redos are cheaper than its first
-      lap would be refused the redos the round budget allows. For one plan, 2 rounds and the cold start
-      this gives 5.00, the value laps 8 and 9 chose by hand.
+   5. **`cost_usd`** is `P x (reserve + (review_rounds - 1) x max(redo, reserve))`. **It is sized for
+      the admission test, not for the expected spend**: a line's last redo is admitted while its own
+      reserve is counted (`D-0066` rule 3.4.2), so each lap after the first is budgeted at the larger of
+      its measured cost and the reserve, and a line that finishes at its measurements leaves every other
+      line its full share. For one plan, 2 rounds and the cold start this gives 5.00, the value laps 8
+      and 9 chose by hand.
    6. **`expires_at_ms`** is the draft time (the document's assembly time, held in the snapshot) plus
       `laps x` the longest lap duration found, plus **24 h for the person's replies**. **Cold start for
       the duration: 30 min**, above every recorded lap duration (the longest is lap 3's 724.4 s,
@@ -15261,7 +15260,7 @@ what is re-readable and not re-derivable (`D-0063` rule 5) to the parts no funct
    plans, or the narrower stated value; every stated value has a basis.
 2. **The staleness check** (rule 3.3): the thread's latest operator message is the document's.
 3. **What is written, all in one transaction or nothing**: one proposal row of the split kind (plans,
-   or holes, or neither), **written by every run that passes rule 7.2 even when it drafts nothing**, with
+   or holes, or neither), **written by every run that passes rules 7.1 and 7.2 even when it drafts nothing**, with
    the document as its snapshot; a drafted scope row when there are plans;
    and the `drafter` messages (summary, question) with a basis to the proposal row.
 4. **"A model drafter exists", for the owner's purpose**, means, as `D-0065` rule 5.6 does for the
