@@ -521,6 +521,7 @@ const PLAN_INPUT: RunPlan = {
   prompt: "teach rondo to count",
   allowedBash: ["npm run:*"],
   materialLanguage: null,
+  reviewCriterion: null,
   repository: "/srv/rondo/repo",
   artifactRoot: "/srv/rondo/artifacts",
   stateRoot: "/srv/rondo/state",

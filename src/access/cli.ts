@@ -52,9 +52,12 @@ import {
 import { revisionPlan } from "../refrain/revision.js";
 import {
   type IterationRecord,
+  isDeterministicReadingDrafter,
+  isModelReadingDrafter,
   isTerminal,
   type JsonRecord,
   type LapReading,
+  latestReading,
   type OperatorVerificationClaim,
   readingCoverage,
 } from "../store/records.js";
@@ -93,6 +96,8 @@ import {
   pushTopicBranch,
 } from "./forge.js";
 import { type InboxOutcome, showInbox, type TranscriptLocation } from "./inbox.js";
+import { modelReadingLines } from "./model-review.js";
+import { modelReviewPorts, takeModelReading } from "./model-reviewer.js";
 import { evidenceOf, LIST_LIMIT, READING_REMOTE, uncommittedPaths } from "./review.js";
 import { serveOperatorPage } from "./web.js";
 import { type Chrome, EN } from "./wording.js";
@@ -1477,7 +1482,13 @@ export async function main(
 
   switch (parsed.command) {
     case "start":
-      return await commandStart(parsed, ports, unpromptedPorts(store, opened.path), continuo);
+      return await commandStart(
+        parsed,
+        store,
+        ports,
+        unpromptedPorts(store, opened.path),
+        continuo,
+      );
     case "answer":
       return await commandAnswer(parsed, environment, store, ports, continuo);
     case "retry":
@@ -1487,6 +1498,7 @@ export async function main(
         opened.path,
         ports,
         unpromptedPorts(store, opened.path),
+        continuo,
       );
     case "revise":
       return await commandRevise(
@@ -1505,6 +1517,7 @@ export async function main(
 /** Door one: take one request and run a lap. */
 async function commandStart(
   parsed: ParsedCommand,
+  store: IterationStore,
   ports: ReturnType<typeof conductorPorts>,
   advisory: UnpromptedPorts,
   continuo: VerifiedContinuo,
@@ -1537,8 +1550,9 @@ async function commandStart(
   const report = await admit(ports, advisory, plan, START_POLICY, iterationId);
   sayReport(report);
   if (report.status === "awaiting_human") {
-    say("");
-    say("A person has to answer this before anything lands. Next: rondo answer");
+    await sayGateOpen(() =>
+      takeModelReading(modelReviewPorts(continuo, store), report.iterationId ?? iterationId),
+    );
     return 0;
   }
   if (report.iterationId === null) {
@@ -2114,6 +2128,7 @@ async function commandRetry(
   storePath: string,
   ports: ReturnType<typeof conductorPorts>,
   advisory: UnpromptedPorts,
+  continuo: VerifiedContinuo,
 ): Promise<number> {
   if (parsed.proposalId === null) {
     return refuse(
@@ -2154,14 +2169,77 @@ async function commandRetry(
   );
   sayReport(report);
   if (report.status === "awaiting_human") {
-    say("");
-    say("A person has to answer this before anything lands. Next: rondo answer");
+    await sayGateOpen(() =>
+      takeModelReading(modelReviewPorts(continuo, store), report.iterationId ?? retry.successorId),
+    );
     return 0;
   }
   if (report.iterationId === null) {
     return 2;
   }
   return report.status === "closed" ? 0 : 1;
+}
+
+/**
+ * Say that the gate is open, then take the model reading of the lap and print it
+ * (D-0065 2.6). Exported so the order is testable without a continuo.
+ *
+ * **After `drive()` returned**, so the deterministic reading is already on the
+ * row and the gate is already open: a person may answer from another terminal
+ * while this runs, and answers without it. That is D-0029 rule 3's information
+ * where the clock runs, not a wait in front of the gate.
+ *
+ * **The next step is said first, and that order is the point.** The reviewer
+ * may run up to its timeout; an operator told "Next: rondo answer" only after
+ * it would sit in front of an open gate being told nothing, which is the wait
+ * D-0029 rule 3 refuses put back by the printing order. `take` is null when no
+ * reading is due, and then only the next step is said.
+ */
+export async function sayGateOpen(take: (() => Promise<readonly string[]>) | null): Promise<void> {
+  say("");
+  say("A person has to answer this before anything lands. Next: rondo answer");
+  if (take === null) {
+    return;
+  }
+  say("");
+  say(
+    "model review  taking a model reading of this work; the gate is already open and does " +
+      "not wait for it",
+  );
+  for (const line of await take()) {
+    say(line);
+  }
+}
+
+/**
+ * The reading the answer screen calls "the review" and `publish` refuses on:
+ * the latest row that is not a model's (D-0065 5.5).
+ *
+ * "Not a model's" rather than "the deterministic drafter's": the interpreter
+ * writes its own `unavailable` row as `rondo/none` when the work could not be
+ * read, and that row carries the reason a person and `publish` must still see.
+ */
+export function reviewedReading(readings: readonly LapReading[]): LapReading | null {
+  return latestReading(readings, (drafter) => !isModelReadingDrafter(drafter));
+}
+
+/**
+ * Whether a model reading is still due for the iteration's current tip (D-0065
+ * 4.1: one round per tip).
+ *
+ * Not due when a model reading already carries the latest deterministic
+ * reading's tip: that round was taken over these commits. Due otherwise,
+ * including when the deterministic reading resolved no range, because then
+ * there is no tip to have taken a round over and the attempt records why.
+ */
+export function modelReadingDue(readings: readonly LapReading[]): boolean {
+  const tip = latestReading(readings, isDeterministicReadingDrafter)?.evidence?.tipCommit;
+  if (tip === undefined) {
+    return true;
+  }
+  return !readings.some(
+    (reading) => isModelReadingDrafter(reading.drafter) && reading.evidence?.tipCommit === tip,
+  );
 }
 
 /** Door two: see what is waiting, and answer it. */
@@ -2234,16 +2312,38 @@ export async function lapMaterialLines(
   }
   lines.push(...(await fenceLines(wording, continuo, record)));
   const readings = await store.readingsFor(record.id);
-  const latest = readings.at(-1);
-  if (latest === undefined) {
+  // **The deterministic reading, and the model reading beside it as material**
+  // (D-0065 5.5). They are picked by drafter rather than by position: a model
+  // reading appended after the gate opened is the newest row, and taking the
+  // newest row as "the review" would print the model's words where `publish`'s
+  // refusal reads the deterministic one. "Not a model's" rather than "the
+  // deterministic drafter's", so the interpreter's own `unavailable` row
+  // (`rondo/none`, carrying why the work could not be read) still shows.
+  const latest = reviewedReading(readings);
+  if (latest === null) {
     lines.push(
       "review  no independent reading of this work was recorded.",
       "        'rondo publish' will refuse once on that, and --despite-review is the way past.",
     );
-    return lines;
+  } else {
+    lines.push(...reviewLines(latest));
   }
-  lines.push(...reviewLines(latest));
+  const model = latestReading(readings, isModelReadingDrafter);
+  if (model !== null) {
+    lines.push(...modelReadingLines(model));
+  }
   return lines;
+}
+
+/**
+ * The latest model reading as `publish` prints it, or nothing (D-0065 5.5).
+ *
+ * Material beside the deterministic reading `reviewGate` refuses on, never an
+ * input to it: publish's refusal stays the deterministic reader's alone.
+ */
+export function publishModelReadingLines(readings: readonly LapReading[]): readonly string[] {
+  const model = latestReading(readings, isModelReadingDrafter);
+  return model === null ? [] : modelReadingLines(model);
 }
 
 /**
@@ -2811,6 +2911,16 @@ async function commandAnswer(
   // so a walk that half-failed and was retried settles here exactly once.
   const report = await resume(ports, record.id);
   sayReport(report);
+  if (report.status === "awaiting_human") {
+    // **One model round per tip** (D-0065 4.1). Answering a gate that resumes
+    // into another gate over the same commits would otherwise hand the same
+    // bytes to the reviewer again and append a second round nobody asked for.
+    await sayGateOpen(
+      modelReadingDue(await store.readingsFor(record.id))
+        ? () => takeModelReading(modelReviewPorts(continuo, store), record.id)
+        : null,
+    );
+  }
   if (report.status === "closed") {
     say("");
     // The id is spelled out because closing the iteration is what stops it
@@ -3465,8 +3575,9 @@ async function commandRevise(
   const second = await admit(ports, advisory, successor.plan, START_POLICY, successorId, record.id);
   sayReport(second);
   if (second.status === "awaiting_human") {
-    say("");
-    say("A person has to answer this before anything lands. Next: rondo answer");
+    await sayGateOpen(() =>
+      takeModelReading(modelReviewPorts(continuo, store), second.iterationId ?? successorId),
+    );
     return 0;
   }
   if (second.iterationId === null) {
@@ -3971,10 +4082,16 @@ async function commandPublish(
     range === null
       ? { kind: "unreadable", reason: "the row does not name the range a reading was taken across" }
       : await inspectLapWork(range);
-  const gateOnReview = reviewGate(readings.at(-1) ?? null, asRead, parsed.despiteReview);
+  // Every reading but a model's (D-0065 5.5): a model reading is material
+  // beside it and is not part of this refusal, and the interpreter's
+  // `rondo/none` unavailable row still refuses with its own reason.
+  const gateOnReview = reviewGate(reviewedReading(readings), asRead, parsed.despiteReview);
   if (gateOnReview.kind === "refused") {
     return refuse(gateOnReview.reason);
   }
+  // The model reading beside it, as material only (D-0065 5.5): printed, and
+  // read by nothing above.
+  const modelReading = publishModelReadingLines(readings);
 
   say(`iteration '${record.id}' is closed; gate outcome '${record.gateOutcome ?? "(none)"}'`);
   if (parsed.despiteReview) {
@@ -3990,6 +4107,12 @@ async function commandPublish(
   for (const warning of preflight.warnings) {
     say("");
     say(warning);
+  }
+  if (modelReading.length > 0) {
+    say("");
+    for (const line of modelReading) {
+      say(line);
+    }
   }
   say("");
   say("publish runs these three, in order, as you:");

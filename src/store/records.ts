@@ -498,6 +498,69 @@ export interface ReadingEvidence {
   readonly materialDigest: string;
   readonly commitCount: number;
   readonly fileCount: number;
+  /**
+   * rondo's digest of the exact document it handed a model reader (D-0029
+   * rule 11's delivered digest, D-0065 2.2). Absent on a deterministic reading,
+   * which is handed nothing: it reads the workspace itself.
+   *
+   * **The store refuses a model drafter's `clear` without it**, for the reason
+   * it refuses any `clear` without evidence: a model reading whose hand-over is
+   * not measured is the reviewer's account of what it read, which rule 11 does
+   * not admit as evidence.
+   */
+  readonly deliveredDigest?: string;
+}
+
+/**
+ * The closed four a model reader grades a finding by (D-0065 2.2): the
+ * organisation's Blocker/Major/Minor/Nit, its P1 read as `major`.
+ */
+export type FindingSeverity = "blocker" | "major" | "minor" | "nit";
+
+/** {@link FindingSeverity}, most severe first. Its order is what "at or above" means. */
+export const FINDING_SEVERITIES: readonly FindingSeverity[] = Object.freeze([
+  "blocker",
+  "major",
+  "minor",
+  "nit",
+]);
+
+/**
+ * Whether `severity` is at or above `threshold` (D-0065 4.3 and 5.1).
+ *
+ * The threshold is the scope's, never the reading's: the verdict does not depend
+ * on it (D-0065 2.4), and this is only ever asked by whoever applies a scope.
+ */
+export function severityAtOrAbove(severity: FindingSeverity, threshold: FindingSeverity): boolean {
+  return FINDING_SEVERITIES.indexOf(severity) <= FINDING_SEVERITIES.indexOf(threshold);
+}
+
+/**
+ * A locator into the document rondo delivered (D-0065 2.2): a path and line at
+ * `tipCommit`, a commit, a transcript event index, or a rule-file path and line
+ * at `baseCommit`.
+ */
+export type FindingBasis =
+  | { readonly kind: "file"; readonly path: string; readonly line: number }
+  | { readonly kind: "commit"; readonly sha: string }
+  | { readonly kind: "event"; readonly index: number }
+  | { readonly kind: "rule"; readonly path: string; readonly line: number };
+
+/**
+ * The per-finding fields a model reading adds beside its one-line text.
+ *
+ * **Recorded as the reviewer gave them, with rondo's check beside them rather
+ * than instead of them** (D-0065 2.3). A finding none of whose bases resolved
+ * against the delivered document keeps its severity: dropping or demoting it
+ * could hide a real blocker, and nothing downstream may dismiss what a reviewer
+ * raised (D-0065 5.3).
+ */
+export interface GradedFinding {
+  readonly severity: FindingSeverity;
+  /** As the reviewer gave them, in its order. */
+  readonly bases: readonly FindingBasis[];
+  /** False when no basis resolved against the delivered document (or none was given). */
+  readonly basisResolved: boolean;
 }
 
 /**
@@ -518,6 +581,13 @@ export interface LapReadingDraft {
   readonly verdict: ReadingVerdict;
   /** Empty on `clear`. One line each; never prose rondo composed about a person. */
   readonly findings: readonly string[];
+  /**
+   * A model reading's severity and bases per finding: parallel to `findings`,
+   * same length and order (D-0065 2.2). Absent on a deterministic reading, and
+   * on a stored row whose column does not decode -- the one-line findings stay
+   * readable either way.
+   */
+  readonly graded?: readonly GradedFinding[];
   /** Null exactly when the verdict is `unavailable`. */
   readonly evidence: ReadingEvidence | null;
   /** Why nothing could be read. Null unless the verdict is `unavailable`. */
@@ -587,6 +657,50 @@ export const DETERMINISTIC_READING_DRAFTER = "rondo/deterministic/2";
  */
 const DETERMINISTIC_READING_DRAFTER_V1 = "rondo/deterministic/1";
 
+/** Either version of rondo's own deterministic reader. */
+export function isDeterministicReadingDrafter(drafter: string): boolean {
+  return drafter === DETERMINISTIC_READING_DRAFTER || drafter === DETERMINISTIC_READING_DRAFTER_V1;
+}
+
+/**
+ * The model reviewer's drafter, before the model id (D-0065 2.1): the reviewer
+ * and its version, so a later reader can tell which reviewer said it, and the
+ * model, so D-0051's identity-by-content keeps two models' readings apart.
+ */
+export const MODEL_READING_DRAFTER_PREFIX = "rondo/model/1/";
+
+/** `rondo/model/1/<model-id>`. */
+export function modelReadingDrafter(modelId: string): string {
+  return `${MODEL_READING_DRAFTER_PREFIX}${modelId}`;
+}
+
+/** Whether a drafter is the model reviewer's, with a model id after the prefix. */
+export function isModelReadingDrafter(drafter: string): boolean {
+  return (
+    drafter.startsWith(MODEL_READING_DRAFTER_PREFIX) &&
+    drafter.length > MODEL_READING_DRAFTER_PREFIX.length
+  );
+}
+
+/**
+ * The newest reading whose drafter `which` admits, or null.
+ *
+ * Newest by the store's order (oldest first, `read_at_ms` then insertion), so
+ * the last match wins -- a second reading is a later fact, not a correction.
+ */
+export function latestReading(
+  readings: readonly LapReading[],
+  which: (drafter: string) => boolean,
+): LapReading | null {
+  for (let i = readings.length - 1; i >= 0; i--) {
+    const reading = readings[i];
+    if (reading !== undefined && which(reading.drafter)) {
+      return reading;
+    }
+  }
+  return null;
+}
+
 /**
  * What a reading by this drafter did *not* look at, said wherever it says what
  * it found (rondo#69).
@@ -610,7 +724,17 @@ const DETERMINISTIC_READING_DRAFTER_V1 = "rondo/deterministic/1";
  * that its reach is not recorded rather than guessing at it.
  */
 export function readingCoverage(drafter: string): readonly string[] {
-  if (drafter !== DETERMINISTIC_READING_DRAFTER && drafter !== DETERMINISTIC_READING_DRAFTER_V1) {
+  if (isModelReadingDrafter(drafter)) {
+    // D-0065 2.5, in the deterministic lines' shape and with D-0029 rule 11's
+    // three grades: what was handed over, that nothing ran, and that delivery is
+    // the most that can be said about understanding.
+    return Object.freeze([
+      "It read the committed diff, the commit messages, the prompt, the transcript's commands",
+      "and outputs, and the repository rules it was given, and ran nothing itself.",
+      "The material was delivered; that it was understood is not provable.",
+    ]);
+  }
+  if (!isDeterministicReadingDrafter(drafter)) {
     return Object.freeze([
       "What this reader looked at is not recorded, so nothing here says what it covered.",
     ]);

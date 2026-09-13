@@ -33,6 +33,15 @@
  * went wrong far better than a translation of them would.
  */
 import { spawn } from "node:child_process";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+import type { ReviewerRow } from "../continuo/roles.js";
+import { contentDigest } from "../store/plan.js";
+import type { ReadingEvidence } from "../store/records.js";
+
+import type { ReviewerRun } from "./model-review.js";
 
 /** What one forge command did. Streams as they arrived, unparsed. */
 export interface CommandOutcome {
@@ -40,6 +49,8 @@ export interface CommandOutcome {
   readonly commandLine: string;
   /** Null when the process was killed by a signal or never started. */
   readonly status: number | null;
+  /** The signal that ended the process, when one did (a timeout is SIGKILL). */
+  readonly signal: string | null;
   readonly stdout: string;
   readonly stderr: string;
   /** Set when the process could not be started at all. */
@@ -61,21 +72,68 @@ async function runCommand(
   executable: string,
   argv: readonly string[],
   timeoutMs: number = FORGE_TIMEOUT_MS,
+  options: { readonly input?: string } = {},
 ): Promise<CommandOutcome> {
   const commandLine = [executable, ...argv].join(" ");
   return await new Promise<CommandOutcome>((resolve) => {
     // `shell: false` is `spawn`'s default and is load-bearing: every argument
     // below reaches the process as one argv element, so a branch name or a
     // title containing a shell metacharacter is data rather than syntax.
-    const child = spawn(executable, [...argv], { stdio: ["ignore", "pipe", "pipe"] });
-    let stdout = "";
-    let stderr = "";
+    //
+    // Standard input is a pipe only when there is something to write to it
+    // (D-0065 1.1: the reviewer's document), so every other command keeps the
+    // closed stdin it always had and cannot sit waiting on a terminal.
+    //
+    // **Windows.** Without a shell, `spawn` does not resolve an npm `.cmd`
+    // shim, so a `codex` installed that way fails to start (ENOENT). That is a
+    // `spawnError`, which every caller turns into an unreadable query or a
+    // failed reviewer run -- an unavailable reading, never a clear one.
+    const child = spawn(executable, [...argv], {
+      stdio: [options.input === undefined ? "ignore" : "pipe", "pipe", "pipe"],
+    });
+    // **Bytes, decoded once at the end.** A chunk boundary can fall inside a
+    // multi-byte UTF-8 character; decoding chunk by chunk would turn both
+    // halves into U+FFFD in text a reading is then taken over.
+    const stdoutChunks: Buffer[] = [];
+    const stderrChunks: Buffer[] = [];
+    let timedOut = false;
     let settled = false;
 
+    // **The timeout settles the outcome itself**, rather than killing and then
+    // waiting for `close`. `close` needs every holder of the output pipes gone,
+    // and an npm-installed `codex` is a Node launcher whose native child
+    // inherits them and does not die with it: waiting would leave the command
+    // (and the gate's screen) hanging past the bound it was given. So the pipes
+    // are torn down on rondo's side and the command is answered as killed.
+    // ponytail: only the direct child is killed; a descendant runs on to its own
+    // end detached from rondo. A process group would reach it, but a detached
+    // group also escapes the terminal's Ctrl-C, which is the worse orphan.
     const timer = setTimeout(() => {
-      stderr += `\nrondo stopped waiting after ${String(timeoutMs)} ms and killed the command.\n`;
+      timedOut = true;
       child.kill("SIGKILL");
+      child.stdin?.destroy();
+      child.stdout?.destroy();
+      child.stderr?.destroy();
+      finish({
+        commandLine,
+        status: null,
+        signal: "SIGKILL",
+        ...streams(),
+        spawnError:
+          options.input === undefined
+            ? null
+            : "standard input was not delivered in full: the command was killed at its timeout",
+      });
     }, timeoutMs);
+
+    const streams = (): { stdout: string; stderr: string } => ({
+      stdout: Buffer.concat(stdoutChunks).toString("utf8"),
+      stderr:
+        Buffer.concat(stderrChunks).toString("utf8") +
+        (timedOut
+          ? `\nrondo stopped waiting after ${String(timeoutMs)} ms and killed the command.\n`
+          : ""),
+    });
 
     const finish = (outcome: CommandOutcome): void => {
       if (settled) {
@@ -86,17 +144,67 @@ async function runCommand(
       resolve(outcome);
     };
 
-    child.stdout.on("data", (chunk: Buffer) => {
-      stdout += chunk.toString("utf8");
+    // **Delivered means the write finished, not that it was attempted.** A
+    // process that exits without reading all of its input makes the write fail
+    // with EPIPE, or is destroyed with the write still pending when Node reaps
+    // the child; either way `finish` never fires. Unhandled, the EPIPE is an
+    // uncaught exception; swallowed, it is a delivered digest over bytes the
+    // reader was never given (D-0065 1.4). So the outcome waits for standard
+    // input to close as well as the process, and the input counts as delivered
+    // only if `finish` fired first with no error.
+    let stdinClosed = options.input === undefined || child.stdin === null;
+    let stdinFinished = false;
+    let stdinError: string | null = null;
+    let exited: { status: number | null; signal: string | null } | null = null;
+    const settleIfDone = (): void => {
+      if (exited === null || !stdinClosed) {
+        return;
+      }
+      finish({
+        commandLine,
+        ...exited,
+        ...streams(),
+        spawnError:
+          options.input === undefined || (stdinFinished && stdinError === null)
+            ? null
+            : `standard input was not delivered in full: ${stdinError ?? "the process did not take it all"}`,
+      });
+    };
+
+    if (options.input !== undefined && child.stdin !== null) {
+      child.stdin.on("error", (error: Error) => {
+        stdinError = error.message;
+      });
+      child.stdin.on("finish", () => {
+        stdinFinished = true;
+      });
+      child.stdin.on("close", () => {
+        stdinClosed = true;
+        settleIfDone();
+      });
+      child.stdin.end(options.input, "utf8");
+    }
+
+    child.stdout?.on("data", (chunk: Buffer) => {
+      stdoutChunks.push(chunk);
     });
-    child.stderr.on("data", (chunk: Buffer) => {
-      stderr += chunk.toString("utf8");
+    child.stderr?.on("data", (chunk: Buffer) => {
+      stderrChunks.push(chunk);
     });
     child.on("error", (error: Error) => {
-      finish({ commandLine, status: null, stdout, stderr, spawnError: error.message });
+      finish({ commandLine, status: null, signal: null, ...streams(), spawnError: error.message });
     });
-    child.on("close", (status) => {
-      finish({ commandLine, status, stdout, stderr, spawnError: null });
+    child.on("close", (status, signal) => {
+      exited = { status, signal };
+      settleIfDone();
+      // The process is gone, so nothing more will be read: a pipe still open
+      // after pending callbacks ran is closed here rather than waited on, and
+      // counts as undelivered unless `finish` already fired.
+      setImmediate(() => {
+        if (!stdinClosed) {
+          child.stdin?.destroy();
+        }
+      });
     });
   });
 }
@@ -678,4 +786,402 @@ export async function inspectLapWork(request: LapWorkRequest): Promise<LapWorkIn
     uncommitted,
     checkedOut,
   };
+}
+
+/**
+ * What `git` handed over for a model reading (D-0065 1.2.1, 1.2.2, 1.2.6).
+ *
+ * Facts again, for `LapWorkInspection`'s reason: what the reviewer is handed and
+ * how it is laid out is decided in `./model-review.ts`, a pure function over this.
+ */
+export type ReviewMaterialFacts =
+  | {
+      readonly kind: "read";
+      /** `git diff base...tip`, the committed bytes (no textconv, no external diff). */
+      readonly diff: string;
+      /** Full sha and full message, oldest first. */
+      readonly commits: readonly { readonly sha: string; readonly message: string }[];
+      /** Each rule file's content at `baseCommit`, in the order the criterion named them. */
+      readonly ruleFiles: readonly { readonly path: string; readonly content: string }[];
+    }
+  | { readonly kind: "unreadable"; readonly reason: string };
+
+/**
+ * Read the range the deterministic reading resolved, by its shas and not by
+ * branch names, so the model reading is about the same commits (D-0065 1.2.1)
+ * even if the branch moved since.
+ *
+ * **A rule file the criterion names and the base does not hold is unreadable,
+ * not skipped.** A document that silently lacks a rule the plan said to grade
+ * against would carry a delivered digest over a criterion the reviewer never saw.
+ */
+export async function gatherReviewMaterialFacts(request: {
+  readonly workspace: string;
+  readonly evidence: ReadingEvidence;
+  readonly ruleFiles: readonly string[];
+}): Promise<ReviewMaterialFacts> {
+  const { workspace, evidence } = request;
+  const diffed = await runCommand(
+    "git",
+    [
+      "-C",
+      workspace,
+      "-c",
+      "core.quotePath=false",
+      "diff",
+      "--no-color",
+      "--no-ext-diff",
+      "--no-textconv",
+      `${evidence.baseCommit}...${evidence.tipCommit}`,
+    ],
+    PREFLIGHT_TIMEOUT_MS,
+  );
+  const diffFailure = queryFailure(diffed);
+  if (diffFailure !== null) {
+    return { kind: "unreadable", reason: diffFailure };
+  }
+
+  // NUL after the sha and NUL after the message, and nothing else as a
+  // separator: a commit message holding a NUL is one git itself refuses to
+  // write, so every other byte of a message survives (an RS or any control byte
+  // a message may legitimately hold included). Output that is not exactly
+  // sha/message pairs is unreadable rather than skipped -- a skipped commit is a
+  // delivered digest over a range with a message missing.
+  //
+  // `--no-merges` keeps the commits the deterministic reading counted
+  // (`inspectLapWork`), so a merge commit's message is not handed over; its
+  // content still is, through the range's diff.
+  const logged = await runCommand(
+    "git",
+    [
+      "-C",
+      workspace,
+      "log",
+      "--no-merges",
+      "--reverse",
+      "--no-show-signature",
+      "--format=%H%x00%B%x00",
+      `${evidence.baseCommit}..${evidence.tipCommit}`,
+    ],
+    PREFLIGHT_TIMEOUT_MS,
+  );
+  const logFailure = queryFailure(logged);
+  if (logFailure !== null) {
+    return { kind: "unreadable", reason: logFailure };
+  }
+  // `sha NUL message NUL` per commit, with the newline git puts between
+  // entries leading the next sha; the last field is what follows the last NUL.
+  const fields = logged.stdout.split("\0");
+  const trailer = fields.pop() ?? "";
+  if (fields.length % 2 !== 0 || trailer.trim() !== "") {
+    return { kind: "unreadable", reason: `${logged.commandLine}: output is not sha/message pairs` };
+  }
+  const commits: { sha: string; message: string }[] = [];
+  for (let index = 0; index < fields.length; index += 2) {
+    const sha = (fields[index] ?? "").replace(/^\n/, "");
+    if (!/^[0-9a-f]{40,64}$/.test(sha)) {
+      return {
+        kind: "unreadable",
+        reason: `${logged.commandLine}: output is not sha/message pairs`,
+      };
+    }
+    commits.push({ sha, message: (fields[index + 1] ?? "").trim() });
+  }
+
+  const ruleFiles: { path: string; content: string }[] = [];
+  for (const path of request.ruleFiles) {
+    const shown = await runCommand(
+      "git",
+      ["-C", workspace, "show", "--no-textconv", `${evidence.baseCommit}:${path}`],
+      PREFLIGHT_TIMEOUT_MS,
+    );
+    const showFailure = queryFailure(shown);
+    if (showFailure !== null) {
+      return {
+        kind: "unreadable",
+        reason: `rule file '${path}' could not be read at ${evidence.baseCommit}: ${showFailure}`,
+      };
+    }
+    ruleFiles.push({ path, content: shown.stdout });
+  }
+
+  return { kind: "read", diff: diffed.stdout, commits, ruleFiles };
+}
+
+/**
+ * How long a model reviewer may take over one document.
+ *
+ * ponytail: picked, not measured. A reasoning model over a few hundred kilobytes
+ * takes minutes; fifteen is past that and short of a hang nobody notices. The
+ * reading runs after `drive()` returned and occupies no capacity (D-0065 2.6),
+ * so what this bounds is the operator's terminal, not the loop.
+ */
+const REVIEWER_TIMEOUT_MS = 900_000;
+
+/**
+ * The codex features the reviewer is started without (codex-cli 0.153.4,
+ * `codex features list`). A denylist, so a later codex can add a tool this does
+ * not name: that is why {@link runReviewer} still refuses any tool event.
+ * ponytail: a denylist by version, a no-tools codex surface when one exists.
+ */
+const REVIEWER_DISABLED_FEATURES = Object.freeze([
+  "shell_tool",
+  "unified_exec",
+  "apps",
+  "plugins",
+  "remote_plugin",
+  "browser_use",
+  "browser_use_external",
+  "computer_use",
+  "in_app_browser",
+  "code_mode_host",
+  "image_generation",
+  "multi_agent",
+  "collaboration_modes",
+  "goals",
+  "hooks",
+  "skill_search",
+  "tool_suggest",
+]);
+
+/** How long one reviewer-supplied message may be inside a persisted reason. */
+const REVIEWER_MESSAGE_BOUND = 300;
+
+/**
+ * A reviewer-supplied string as a reason may carry it: printable ASCII, bounded.
+ * Never stderr -- codex echoes the whole handed-over document there, and a
+ * reason is persisted.
+ */
+function boundedAscii(text: string): string {
+  const ascii = text.replace(/[^\x20-\x7e]/g, "?");
+  return ascii.length > REVIEWER_MESSAGE_BOUND
+    ? `${ascii.slice(0, REVIEWER_MESSAGE_BOUND)}...`
+    : ascii;
+}
+
+/** The item types a reading over the delivered bytes alone may contain. */
+const READING_ITEM_TYPES: ReadonlySet<string> = new Set(["agent_message", "reasoning"]);
+
+/** What rondo reads out of `codex exec --json`'s event stream. */
+type ReviewerEvents =
+  | { readonly kind: "unparseable"; readonly line: number }
+  | {
+      readonly kind: "read";
+      /** The text of the last completed `agent_message`, if there was one. */
+      readonly finalMessage: string | null;
+      /** Item types outside `READING_ITEM_TYPES`, in first-seen order. */
+      readonly otherItems: readonly string[];
+      /** `turn.failed` and `error` events' messages. */
+      readonly errors: readonly string[];
+    };
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function readReviewerEvents(stdout: string): ReviewerEvents {
+  let finalMessage: string | null = null;
+  const otherItems: string[] = [];
+  const errors: string[] = [];
+  // **An `error` item before the turn starts is a startup notice, not a tool.**
+  // Disabling `code_mode_host` makes codex announce, before `turn.started`,
+  // that code mode "will fail closed" -- which is the point of disabling it.
+  // Nothing can be run or fetched before the turn begins, so only that one
+  // shape is let through; inside the turn every non-reading item still fails
+  // the run.
+  let turnStarted = false;
+  const lines = stdout.split("\n");
+  for (const [index, raw] of lines.entries()) {
+    const line = raw.trim();
+    if (line === "") {
+      continue;
+    }
+    let event: unknown;
+    try {
+      event = JSON.parse(line);
+    } catch {
+      return { kind: "unparseable", line: index + 1 };
+    }
+    if (!isObject(event) || typeof event.type !== "string") {
+      return { kind: "unparseable", line: index + 1 };
+    }
+    if (event.type === "turn.started") {
+      turnStarted = true;
+      continue;
+    }
+    if (
+      !turnStarted &&
+      event.type === "item.completed" &&
+      isObject(event.item) &&
+      event.item.type === "error"
+    ) {
+      continue;
+    }
+    if (
+      event.type === "item.started" ||
+      event.type === "item.completed" ||
+      event.type === "item.updated"
+    ) {
+      const item = event.item;
+      const itemType =
+        isObject(item) && typeof item.type === "string" ? item.type : "(untyped item)";
+      if (!READING_ITEM_TYPES.has(itemType)) {
+        if (!otherItems.includes(itemType)) {
+          otherItems.push(itemType);
+        }
+      } else if (
+        event.type === "item.completed" &&
+        itemType === "agent_message" &&
+        isObject(item) &&
+        typeof item.text === "string"
+      ) {
+        finalMessage = item.text;
+      }
+    } else if (event.type === "turn.failed") {
+      const error = event.error;
+      errors.push(
+        isObject(error) && typeof error.message === "string" ? error.message : "turn.failed",
+      );
+    } else if (event.type === "error") {
+      errors.push(typeof event.message === "string" ? event.message : "error");
+    }
+  }
+  return { kind: "read", finalMessage, otherItems, errors };
+}
+
+/**
+ * Run the reviewer over one document, and nothing else (D-0065 1.1).
+ *
+ * **The document is on standard input and the directory is empty.** The review
+ * surface that lets the reviewer run `git` in the workspace is not used: what it
+ * read would be its own account. So the process is started in a fresh empty
+ * directory (`-C`), `--ephemeral` so no session is kept, and `-` so the prompt
+ * is exactly the bytes written. It inherits the environment, so the login is the
+ * operator's own codex login and rondo holds no credential (D-0010, D-0065 3.2).
+ *
+ * **"Ran nothing" is checked, not hoped for.** Measured on 2026-09-13 with
+ * codex-cli 0.153.4: `-s read-only` blocks writes but still runs shell
+ * commands, and `-c features.shell_tool=false` is what removes the shell tool
+ * (`tools.web_search=false` likewise the fetch). Those flags are the intent;
+ * the proof is `--json`, whose stdout is one event per line. A run whose events
+ * hold any item other than an agent message or reasoning -- a command, a tool
+ * call, a web search, a file change, a type rondo does not know -- is failed,
+ * because its reading is not over the delivered bytes only (D-0065 rule 1.1).
+ * So is a line that is not a JSON event, a run with no agent message, and a run
+ * reporting `turn.failed` or `error`. The answer is the last completed agent
+ * message.
+ *
+ * **Tools are taken away before the run, not only refused after it** (Codex
+ * gate round 3: a tool with a remote side effect is not undone by refusing its
+ * event). `--ignore-user-config` drops the operator's `config.toml`, and with
+ * it every MCP server configured there, while auth still comes from
+ * `CODEX_HOME`; {@link REVIEWER_DISABLED_FEATURES} turns off the built-in
+ * connectors, browsers, image generation and agent spawning that version
+ * exposes. **What that does not reach**, measured the same day by asking the
+ * model to list its tools: a code-mode `exec`, `web__run`, `apply_patch` (held
+ * by `-s read-only`) and the collaboration tools stayed listed, and codex has
+ * no flag rondo found that runs a turn with no tools at all. So the event check
+ * above remains the proof, and a residual reported beside D-0065 1.1.
+ *
+ * **What the delivered digest proves.** It is over the string `runCommand`
+ * wrote, and a run is `answered` only when that write finished in full before
+ * the process was reaped: rondo wrote these bytes to the reviewer's standard
+ * input. It does not prove the model attended to them (D-0029 rule 11 compares
+ * it against the document prepared).
+ *
+ * A failed reason carries the exit status or signal and the event stream's
+ * error messages, bounded ASCII -- never stderr, where codex echoes the document.
+ */
+export async function runReviewer(
+  row: ReviewerRow,
+  document: string,
+  timeoutMs: number = REVIEWER_TIMEOUT_MS,
+): Promise<ReviewerRun> {
+  let directory: string;
+  try {
+    directory = mkdtempSync(join(tmpdir(), "rondo-reviewer-"));
+  } catch (error) {
+    return {
+      kind: "failed",
+      reason: `no empty directory for the reviewer: ${error instanceof Error ? error.message : String(error)}`,
+    };
+  }
+  try {
+    const outcome = await runCommand(
+      row.executable,
+      [
+        "exec",
+        "--json",
+        "-m",
+        row.model,
+        "-s",
+        "read-only",
+        "--skip-git-repo-check",
+        "--ephemeral",
+        "--color",
+        "never",
+        "--ignore-user-config",
+        // Pinned here rather than inherited from the ignored config.
+        // ponytail: measured on 2026-09-13, with the config ignored about a
+        // third of the two-finding answers came back as JSON cut short of its
+        // closing brackets, which is an unavailable reading (fail closed) and
+        // noise; with the config kept, none did. Cause not found; codex's
+        // `--output-schema` (a file rondo would have to write) is the candidate.
+        "-c",
+        "model_reasoning_effort=medium",
+        ...REVIEWER_DISABLED_FEATURES.flatMap((feature) => ["-c", `features.${feature}=false`]),
+        "-c",
+        "tools.web_search=false",
+        "-C",
+        directory,
+        "-",
+      ],
+      timeoutMs,
+      { input: document },
+    );
+    if (outcome.spawnError !== null) {
+      return { kind: "failed", reason: `${outcome.commandLine}: ${outcome.spawnError}` };
+    }
+    const events = readReviewerEvents(outcome.stdout);
+    if (events.kind === "unparseable") {
+      return {
+        kind: "failed",
+        reason: `${outcome.commandLine}: stdout line ${String(events.line)} is not a JSON event, so the events are unparseable`,
+      };
+    }
+    if (events.otherItems.length > 0) {
+      return {
+        kind: "failed",
+        reason:
+          `the reviewer ran or fetched something (${events.otherItems.map(boundedAscii).join(", ")}), ` +
+          "so its reading is not over the delivered bytes only (D-0065 rule 1.1)",
+      };
+    }
+    const said = events.errors.map(boundedAscii).join("; ");
+    if (outcome.status !== 0 || events.errors.length > 0) {
+      const ended =
+        outcome.signal !== null
+          ? `was killed by ${outcome.signal}`
+          : `exited ${String(outcome.status)}`;
+      return {
+        kind: "failed",
+        reason: `${outcome.commandLine} ${ended}${said === "" ? "" : `: ${said}`}`,
+      };
+    }
+    if (events.finalMessage === null) {
+      return { kind: "failed", reason: `${outcome.commandLine}: no agent message in its events` };
+    }
+    return {
+      kind: "answered",
+      finalMessage: events.finalMessage.trim(),
+      deliveredDigest: contentDigest({ delivered: document }),
+    };
+  } finally {
+    try {
+      rmSync(directory, { recursive: true, force: true });
+    } catch {
+      // An empty directory left in the temp dir costs nothing; a throw here
+      // would lose a reading that was already taken.
+    }
+  }
 }

@@ -26,25 +26,30 @@ import {
   FLAGS_BY_COMMAND,
   forgeHost,
   type GateVerbs,
+  modelReadingDue,
   operatorLanguage,
   type PreflightInput,
   type PullRequestTextInput,
   parseBasis,
   parseCommand,
   parseForgeSlug,
+  publishModelReadingLines,
   publishPreflight,
   pullRequestText,
   readingRangeOf,
   repositoryFromRemoteUrl,
+  reviewedReading,
   reviewGate,
   reviewLines,
   revisionBlocker,
+  sayGateOpen,
   transcriptPort,
   USAGE,
   uncommittedRefusal,
   walkGate,
   workLines,
 } from "../../src/access/cli.js";
+import { consoleSeams } from "../../src/access/console.js";
 import type { LapWorkInspection, PushTargetInspection } from "../../src/access/forge.js";
 import { evidenceOf } from "../../src/access/review.js";
 import { type Chrome, chromeFor, EN } from "../../src/access/wording.js";
@@ -2161,4 +2166,90 @@ test("D-0060: the refusal says which branch it read when it is not the topic bra
   );
 
   expect(refusal).toContain("'HEAD (no branch)' checked out, not 'docs/rondo-first-real-lap'");
+});
+
+// D-0065: the model reading on the command paths.
+
+function modelRead(parts: Partial<LapReading> = {}): LapReading {
+  const deterministic = reviewed();
+  return {
+    ...deterministic,
+    readAtMs: 3_000,
+    drafter: "rondo/model/1/gpt-6-astra",
+    verdict: "concerns",
+    findings: ["the commit message and the diff disagree"],
+    graded: [{ severity: "major", bases: [], basisResolved: false }],
+    evidence:
+      deterministic.evidence === null
+        ? null
+        : { ...deterministic.evidence, deliveredDigest: `sha256:${"d".repeat(64)}` },
+    ...parts,
+  };
+}
+
+test("the next step is said before the model reading is taken, not after it", async () => {
+  // The reviewer can run up to its timeout; an operator told what to do only
+  // after it would wait in front of a gate that is already open (D-0029 rule 3).
+  const printed: string[] = [];
+  const original = consoleSeams.write;
+  consoleSeams.write = (text: string): void => {
+    printed.push(text);
+  };
+  let seenBeforeTake = "";
+  try {
+    await sayGateOpen(async () => {
+      seenBeforeTake = printed.join("");
+      return ["model review  1 point(s) raised"];
+    });
+    const all = printed.join("");
+    expect(seenBeforeTake).toContain("Next: rondo answer");
+    expect(all.indexOf("Next: rondo answer")).toBeLessThan(all.indexOf("1 point(s) raised"));
+
+    printed.length = 0;
+    await sayGateOpen(null);
+    expect(printed.join("")).toContain("Next: rondo answer");
+    expect(printed.join("")).not.toContain("model review");
+  } finally {
+    consoleSeams.write = original;
+  }
+});
+
+test("the review is the latest reading that is not a model's, rondo/none included", () => {
+  const none = reviewed({
+    drafter: "rondo/none",
+    verdict: "unavailable",
+    evidence: null,
+    unavailableReason: "the workspace could not be read",
+    readAtMs: 2_500,
+  });
+  expect(reviewedReading([none, modelRead()])).toEqual(none);
+  expect(reviewedReading([modelRead()])).toBeNull();
+  expect(reviewedReading([reviewed(), modelRead()])?.drafter).toBe(reviewed().drafter);
+});
+
+test("a model reading is due once per deterministic tip (D-0065 4.1)", () => {
+  expect(modelReadingDue([reviewed()])).toBe(true);
+  expect(modelReadingDue([reviewed(), modelRead()])).toBe(false);
+  // A newer deterministic reading over other commits makes the next round due.
+  const moved = reviewed({
+    readAtMs: 4_000,
+    evidence: {
+      ...(reviewed().evidence as NonNullable<LapReading["evidence"]>),
+      tipCommit: "f".repeat(40),
+    },
+  });
+  expect(modelReadingDue([reviewed(), modelRead(), moved])).toBe(true);
+  // No range resolved: there is no tip to have taken a round over.
+  expect(modelReadingDue([reviewed({ verdict: "unavailable", evidence: null })])).toBe(true);
+  expect(modelReadingDue([])).toBe(true);
+});
+
+test("publish prints the latest model reading as material, and nothing when there is none", () => {
+  const readings = [reviewed(), modelRead()];
+
+  const said = publishModelReadingLines(readings).join("\n");
+
+  expect(said).toContain("[major] the commit message and the diff disagree");
+  expect(said).toContain("material for you, not a check");
+  expect(publishModelReadingLines([reviewed()])).toEqual([]);
 });

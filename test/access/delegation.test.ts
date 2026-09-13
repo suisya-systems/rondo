@@ -83,6 +83,7 @@ function planWith(layer: CatalogLayer, allowedBash: readonly string[]): Admitted
     prompt: "teach rondo to count",
     allowedBash,
     materialLanguage: null,
+    reviewCriterion: null,
     repository: REPOSITORY,
     artifactRoot: resolve("/srv/rondo/artifacts"),
     stateRoot: resolve("/srv/rondo/state"),

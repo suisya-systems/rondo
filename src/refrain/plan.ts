@@ -160,6 +160,18 @@ export interface RunPlan {
    * is visible.
    */
   readonly materialLanguage: string | null;
+  /**
+   * The review criterion the model reviewer is handed (D-0065 section 1.2.6,
+   * `D-0029` rule 13: a plan field), or null for **no criterion was written**.
+   *
+   * **Null is not a default criterion.** rondo holds no meaning of its own for
+   * `blocker` or `major`: what each severity means is the target repository's,
+   * written by whoever wrote the plan. A plan without one gets a model reading
+   * recorded `unavailable` naming the absent criterion, and no reviewer is
+   * spawned (D-0065 section 2.3) -- inventing the meanings here would put a
+   * standard into the record that nobody set.
+   */
+  readonly reviewCriterion: ReviewCriterion | null;
 
   // --- continuo: the lap ----------------------------------------------------
   /** The repository the workspace is cut from. Absolute. */
@@ -305,6 +317,38 @@ export interface RunPlan {
   readonly parties: IssuanceParties;
   readonly intendedAction: IntendedAction;
 }
+
+/**
+ * What each severity means, and which of the target repository's rule files the
+ * reviewer is given (D-0065 section 1.2.6).
+ *
+ * **The meanings are the plan's; which severities must be cleared is the
+ * scope's** (D-0065 section 5.1). Neither overrides the other, so the threshold
+ * is not here.
+ *
+ * `ruleFiles` are repository-relative paths (`AGENTS.md`) whose content rondo
+ * reads at the reading's `baseCommit` -- never at the tip, so a lap cannot
+ * rewrite the rules it is reviewed against. They are forward-slash paths as git
+ * names them, which is why a backslash is refused rather than translated.
+ */
+export interface ReviewCriterion {
+  readonly severities: {
+    readonly blocker: string;
+    readonly major: string;
+    readonly minor: string;
+    readonly nit: string;
+  };
+  readonly ruleFiles: readonly string[];
+}
+
+/**
+ * How many rule files one criterion may name.
+ *
+ * ponytail: a bound picked to keep a mistyped glob-shaped list from reaching
+ * the reviewer's input bound one file at a time; not a measurement. The input
+ * bound (D-0065 section 2.3) is what actually refuses over-large material.
+ */
+export const MAX_REVIEW_RULE_FILES = 20;
 
 /**
  * The largest delay `setTimeout` can hold: 2^31 - 1 milliseconds, about 24.8
@@ -460,6 +504,7 @@ export function runPlan(input: RunPlan): PlanOutcome {
       prompt: requireNonEmpty("prompt", input.prompt),
       allowedBash: requireAllowedBash(input.allowedBash),
       materialLanguage: optionalLanguageTag(input.materialLanguage),
+      reviewCriterion: optionalReviewCriterion(input.reviewCriterion),
       repository: requireAbsolute("repository", input.repository),
       artifactRoot: requireAbsolute("artifactRoot", input.artifactRoot),
       stateRoot: requireAbsolute("stateRoot", input.stateRoot),
@@ -577,6 +622,93 @@ function optionalLanguageTag(value: string | null): string | null {
     );
   }
   return value;
+}
+
+/**
+ * The criterion, checked for shape (D-0065 section 1.2.6).
+ *
+ * **Shape only.** Whether a meaning is a good one is the plan author's to
+ * write. What is refused is what would reach the reviewer as something other
+ * than the author meant: an empty meaning (a severity with no stated meaning
+ * grades nothing), and a rule file path that is not a repository-relative git
+ * path -- absolute, climbing out with `..`, backslash-spelled, or carrying a
+ * control character -- because `git show <baseCommit>:<path>` would read a
+ * different file or none. `RunPlan` is structural, so the containers are
+ * checked before a field of them is read.
+ */
+function optionalReviewCriterion(value: ReviewCriterion | null): ReviewCriterion | null {
+  if (value === null) {
+    return null;
+  }
+  const criterion: unknown = value;
+  if (typeof criterion !== "object" || criterion === null || Array.isArray(criterion)) {
+    return refuse("'reviewCriterion' is not a table, and a criterion is severities and rule files");
+  }
+  const severities: unknown = value.severities;
+  if (typeof severities !== "object" || severities === null || Array.isArray(severities)) {
+    return refuse(
+      "'reviewCriterion.severities' is not a table, and it says what blocker, major, minor and " +
+        "nit mean",
+    );
+  }
+  const meaning = (severity: "blocker" | "major" | "minor" | "nit"): string => {
+    const field = `reviewCriterion.severities.${severity}`;
+    const text: unknown = (severities as Record<string, unknown>)[severity];
+    if (typeof text !== "string") {
+      return refuse(`'${field}' is not a string, and each severity's meaning is text`);
+    }
+    return requireNonEmpty(field, text);
+  };
+  const ruleFiles: unknown = value.ruleFiles;
+  if (!Array.isArray(ruleFiles)) {
+    return refuse("'reviewCriterion.ruleFiles' is not an array, and it lists repository paths");
+  }
+  if (ruleFiles.length > MAX_REVIEW_RULE_FILES) {
+    return refuse(
+      `'reviewCriterion.ruleFiles' names ${String(ruleFiles.length)} files, and a criterion ` +
+        `names at most ${String(MAX_REVIEW_RULE_FILES)}`,
+    );
+  }
+  return Object.freeze({
+    severities: Object.freeze({
+      blocker: meaning("blocker"),
+      major: meaning("major"),
+      minor: meaning("minor"),
+      nit: meaning("nit"),
+    }),
+    ruleFiles: Object.freeze(
+      ruleFiles.map((path, index) =>
+        requireRulePath(`reviewCriterion.ruleFiles[${String(index)}]`, path),
+      ),
+    ),
+  });
+}
+
+/** A repository-relative, forward-slash git path that stays inside the tree. */
+function requireRulePath(field: string, path: unknown): string {
+  if (typeof path !== "string") {
+    return refuse(`'${field}' is not a string`);
+  }
+  requireNonEmpty(field, path);
+  if (hasControlCharacter(path)) {
+    return refuse(`'${field}' is '${path}', and a repository path carries no control character`);
+  }
+  if (path.includes("\\") || isAbsolutePath(path)) {
+    return refuse(
+      `'${field}' is '${path}', and a rule file is a repository-relative path spelled with '/' ` +
+        "-- 'AGENTS.md' or 'docs/rules.md' -- read at the base commit",
+    );
+  }
+  // `.` is refused with `..`: `git show <rev>:./path` resolves against the
+  // process's directory rather than the tree root, so it would name a different
+  // file depending on where rondo was started.
+  if (path.split("/").some((segment) => segment === ".." || segment === "." || segment === "")) {
+    return refuse(
+      `'${field}' is '${path}', and a rule file path names a file inside the repository from its ` +
+        "root: no '.', '..' or empty segment",
+    );
+  }
+  return path;
 }
 
 /**
@@ -805,6 +937,13 @@ export function planPayload(plan: AdmittedPlan): JsonRecord {
     prompt: plan.prompt,
     allowed_bash: [...plan.allowedBash],
     material_language: plan.materialLanguage,
+    review_criterion:
+      plan.reviewCriterion === null
+        ? null
+        : {
+            severities: { ...plan.reviewCriterion.severities },
+            rule_files: [...plan.reviewCriterion.ruleFiles],
+          },
     repository: plan.repository,
     artifact_root: plan.artifactRoot,
     state_root: plan.stateRoot,
@@ -969,6 +1108,16 @@ const PAYLOAD_UPGRADES: readonly ((payload: JsonRecord) => JsonRecord)[] = [
    * the stored payload, exactly as the `allowed_bash` rung above it.
    */
   (payload) => withMaterialLanguage(payload),
+  /**
+   * v3 -> v4: the review criterion (D-0065 section 1.2.6, `D-0029` rule 13).
+   *
+   * **Absent means "no criterion was written"**, which is null, and which is
+   * what those laps had: there was no field to write one in. It is not a
+   * default criterion -- rondo has no meanings of its own for the severities --
+   * so a model reading of such a lap is `unavailable` naming the absent
+   * criterion, which is true. The stored bytes are not changed by the climb.
+   */
+  (payload) => withReviewCriterion(payload),
 ];
 
 /**
@@ -1156,6 +1305,18 @@ function withMaterialLanguage(payload: JsonRecord): JsonRecord {
 }
 
 /**
+ * A payload from before the review criterion existed, given the criterion it
+ * had: none. A present key is left as it is, including a malformed one, which
+ * {@link readReviewCriterion} still refuses by name.
+ */
+function withReviewCriterion(payload: JsonRecord): JsonRecord {
+  if (payload["review_criterion"] !== undefined) {
+    return payload;
+  }
+  return { ...payload, review_criterion: null };
+}
+
+/**
  * The caller's half of a plan, read from a document (D-0023 rule 9).
  *
  * What an operator's plan file holds: everything except the three identifiers
@@ -1180,6 +1341,7 @@ export function readRunPlan(payload: JsonRecord): PlanOutcome {
       prompt: readString(current, "prompt"),
       allowedBash: readStringArray(current, "allowed_bash"),
       materialLanguage: readNullableString(current, "material_language"),
+      reviewCriterion: readReviewCriterion(current),
       repository: readString(current, "repository"),
       artifactRoot: readString(current, "artifact_root"),
       stateRoot: readString(current, "state_root"),
@@ -1259,6 +1421,42 @@ function readStringArray(payload: JsonRecord, key: string): readonly string[] {
     }
     return element;
   });
+}
+
+/**
+ * `review_criterion`: null, or `{severities: {blocker, major, minor, nit},
+ * rule_files: [...]}`. Shapes only; {@link runPlan} checks the rules.
+ */
+function readReviewCriterion(payload: JsonRecord): ReviewCriterion | null {
+  const found = payload["review_criterion"];
+  if (found === null) {
+    return null;
+  }
+  if (typeof found !== "object" || Array.isArray(found)) {
+    return refuse("the persisted plan's 'review_criterion' is not an object or null");
+  }
+  const value = found as JsonRecord;
+  const inner = value["severities"];
+  if (typeof inner !== "object" || inner === null || Array.isArray(inner)) {
+    return refuse("the persisted plan's 'review_criterion.severities' is not an object");
+  }
+  const severities = inner as JsonRecord;
+  const read = (key: string): string => {
+    const text = severities[key];
+    if (typeof text !== "string") {
+      return refuse(`the persisted plan's 'review_criterion.severities.${key}' is not a string`);
+    }
+    return text;
+  };
+  return {
+    severities: {
+      blocker: read("blocker"),
+      major: read("major"),
+      minor: read("minor"),
+      nit: read("nit"),
+    },
+    ruleFiles: readStringArray(value, "rule_files"),
+  };
 }
 
 function readOpaque(payload: JsonRecord, key: string): JsonValue {
