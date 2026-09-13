@@ -427,14 +427,27 @@ test("D-0069: a drafter records nothing, a record its scope does not list is ref
   expect(unlisted.kind === "refused" ? unlisted.reason : unlisted.kind).toContain(
     "does not list it",
   );
-  // Refused after the record was written (the request test), so the record rolls back too.
-  const late = await record.recordScope(
-    scope({ payload: { ...payload, requests: ["m-none"] }, agentTypeRecords: [recorded()] }),
+  // Refusals that come after the record loop leave no record either: a second listed agent
+  // type nobody holds, a second plan the scope does not list, and a taken scope id.
+  const THIRD = `sha256:${"e".repeat(64)}`;
+  const unheld = await record.recordScope(
+    scope({ payload: { ...payload, agent_types: [UNRUN, THIRD] }, agentTypeRecords: [recorded()] }),
   );
-  expect(late.kind).toBe("refused");
+  expect(unheld.kind === "refused" ? unheld.reason : unheld.kind).toContain(THIRD);
+  const secondUnlisted = await record.recordScope(
+    scope({ payload, agentTypeRecords: [recorded(), recorded(THIRD)] }),
+  );
+  expect(secondUnlisted.kind === "refused" ? secondUnlisted.reason : secondUnlisted.kind).toContain(
+    "does not list it",
+  );
+  expect(await record.recordScope(scope({ scopeId: "s-taken" }))).toEqual({ kind: "recorded" });
+  const taken = await record.recordScope(
+    scope({ scopeId: "s-taken", payload, agentTypeRecords: [recorded()] }),
+  );
+  expect(taken.kind).toBe("refused");
   expect(records(connection)).toBe(0);
   expect(await record.heldAgentType(UNRUN)).toEqual({ kind: "absent" });
-  expect(count(connection, "SELECT COUNT(*) AS n FROM scope")).toBe(0);
+  expect(count(connection, "SELECT COUNT(*) AS n FROM scope")).toBe(1);
 });
 
 test("D-0069: a digest an iteration holds reads back from that iteration's plan", async () => {

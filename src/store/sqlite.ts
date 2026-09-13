@@ -3175,12 +3175,13 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
               };
             }
           }
-          // **D-0069 section 1: an operator's plan records its agent type here,
-          // before the test below.** Only an operator's row, because a drafter
-          // recording what it then selects is the hole D-0022 rule 7 refuses;
-          // only a listed digest, because a record exists only for a scope a
-          // person will be asked to approve. The first record of a digest is
-          // the record (append-only).
+          // **D-0069 section 1: an operator's plan records its agent type with
+          // the scope.** Only an operator's row, because a drafter recording
+          // what it then selects is the hole D-0022 rule 7 refuses; only a
+          // listed digest, because a record exists only for a scope a person
+          // will be asked to approve. **Every refusal is decided before any
+          // insert**: `immediateTransaction` commits what a body returns, so a
+          // refusal after an insert would leave a record with no scope.
           for (const recorded of draft.agentTypeRecords) {
             if (draft.authorKind !== "operator") {
               return {
@@ -3202,20 +3203,8 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
                   "(D-0069 section 1)",
               };
             }
-            connection
-              .prepare(
-                "INSERT INTO agent_type_record (agent_type_digest, agent_type_input, plan_digest, " +
-                  "recorded_by, recorded_at_ms) VALUES (?, ?, ?, ?, ?) " +
-                  "ON CONFLICT (agent_type_digest) DO NOTHING",
-              )
-              .run(
-                recorded.agentTypeDigest,
-                canonicalJson(recorded.agentTypeInput),
-                recorded.planDigest,
-                draft.authorId,
-                draft.createdAtMs,
-              );
           }
+          const recordedHere = draft.agentTypeRecords.map((recorded) => recorded.agentTypeDigest);
           // **"A record rondo already holds" is D-0062 rule 1.2's**: the
           // agentTypeInput of a plan on an iteration row whose agent_type_digest
           // equals the digest, or an agent_type_record row an operator's plan
@@ -3224,6 +3213,7 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
           // the digest names.
           for (const digest of reading.payload.agent_types) {
             if (
+              !recordedHere.includes(digest) &&
               connection
                 .prepare(
                   "SELECT 1 FROM iteration WHERE agent_type_digest = ? " +
@@ -3241,6 +3231,22 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
                   "nobody can read back bounds no tier and no grant",
               };
             }
+          }
+          // The first record of a digest is the record (append-only).
+          for (const recorded of draft.agentTypeRecords) {
+            connection
+              .prepare(
+                "INSERT INTO agent_type_record (agent_type_digest, agent_type_input, plan_digest, " +
+                  "recorded_by, recorded_at_ms) VALUES (?, ?, ?, ?, ?) " +
+                  "ON CONFLICT (agent_type_digest) DO NOTHING",
+              )
+              .run(
+                recorded.agentTypeDigest,
+                canonicalJson(recorded.agentTypeInput),
+                recorded.planDigest,
+                draft.authorId,
+                draft.createdAtMs,
+              );
           }
           connection
             .prepare(
