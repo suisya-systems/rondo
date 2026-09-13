@@ -106,8 +106,9 @@ C-NN`, so the spaces can never be read as one.
 | D-0066 | The scope record: one immutable row with a digest, approved by a row of its own and never by `human_decision`, spent once per act inside the act's own transaction, refused at one point that stops one line, and `D-0062` rule 3 and `D-0022` rule 9 restated for it | accepted |
 | D-0067 | The secretary's running half has no new owner: the advisory reads lines against each other and drafts an order, the surface attempts acts in that order, the store keeps the person's standing policies, and review extensions and merges still reach the person | accepted |
 | D-0068 | One voice and a patrol: the person asks rondo why a line waits and gets an answer joined from rows with bases, a timer in the resident host reads rows against each lap's own declared patience, and nothing it finds is handled silently | accepted |
-| D-0069 | A scope before the first lap: an agent type becomes a record rondo holds when an operator's scope is written from a plan, `start` spends a scope through the `lineage_start` arm, and an operator-written first admission waits on every open question in its request's thread | accepted |
+| D-0069 | A scope before the first lap: an agent type becomes a record rondo holds when an operator's scope is written from a plan, `start` spends a scope through the `lineage_start` arm, and an operator-written first admission waits on every open question in its request's thread | superseded by D-0071 |
 | D-0070 | A revise inside a scope: the person still answers the gate, the lap it starts spends the scope through the `redo` arm, the verdict is computed before the gate is walked, and the added text is carried and never tested | accepted |
+| D-0071 | The model drafter: a Claude model rondo runs outside the lap over a thread it hands over, which chooses among held plans and agent types and writes words, while every number in a drafted scope is computed from recorded laps and may only be narrowed; and a plan the person pastes into the thread is how a fresh store gets its first template and agent type | accepted |
 
 ---
 
@@ -11733,6 +11734,10 @@ entry put to it; the answer is recorded in section "What was put to the human ga
 > proposal, so this entry's falsifier about `D-0062` did not fire and the split stays on option (b).
 > The split still waits on the model-drafter entry. `D-0063` reviews the advisory's role, including
 > `D-0022` rule 7, which a split into plans does not fit.
+
+> **Annotation (2026-09-14, from D-0071).** Step 5.4's drafter, the model-drafter entry this entry
+> waits on, is `D-0071`. Nothing below is edited.
+
 Refs `D-0020`, `D-0022`, `D-0025`, `D-0026`, `D-0030`, `D-0032`, `D-0034`, `D-0036`, `D-0044`,
 `D-0062`.
 
@@ -12793,6 +12798,9 @@ the option that fits `D-0064`.** They are kept as put, and the answer follows th
 - **It does not choose a model, a prompt, or how a model drafter is invoked.** Those belong to the
   model-drafter entry that `D-0029`'s residuals and `D-0061` step 5.4 name. This entry decides only
   the widening of `D-0022` that such a drafter needs.
+
+  > **Annotation (2026-09-14, from D-0071).** The model-drafter entry is `D-0071`: the model, what it
+  > is handed, when it runs, and what it chooses versus what is computed. The bullet above is unedited.
 - **It does not design the split proposal's kind, payload or verb** (`D-0062`, "What this does not
   do").
 - **It does not decide the next-work proposal's shape or trigger** (`D-0061` rule 6).
@@ -13720,6 +13728,12 @@ number.
 > may record such a row from a plan in its own transaction; a `drafter` scope may list only digests
 > already held. The scope's screen prints each listed digest's tier and granted keys read back from
 > the held record. The writer's refusal of an unheld digest stays. Nothing above is edited.
+
+> **Annotation (2026-09-14, from D-0071).** Added after this entry was accepted, and additive, by the
+> answer of rondo's human gate to `D-0071`'s first point. A `drafter` scope may also record an
+> `agent_type_record` row, **only from a plan an operator pasted into the request thread**, from the
+> message's bytes and with `recorded_by` the message's author (`D-0071` section 6.2, superseding
+> `D-0069` section 1's operator-only clause). Nothing above is edited.
 
 ### 2. The approval of a scope (P1)
 
@@ -14775,10 +14789,20 @@ The points are kept as put, and the answer follows them.
 
 ## D-0069 — A scope before the first lap: an agent type becomes a record rondo holds when an operator's scope is written from a plan, `start` spends a scope through the `lineage_start` arm, and an operator-written first admission waits on every open question in its request's thread
 
-**Status:** accepted (2026-09-13, rondo's human gate). Three points were put to the gate and it chose
-the recommended option on each; the answers are recorded in section "What was put to the human gate,
-and its answer". Refs `D-0006`, `D-0022`, `D-0030`, `D-0047`, `D-0061`, `D-0062`, `D-0064`, `D-0065`,
-`D-0066`, rondo#201.
+**Status:** superseded by D-0071 (2026-09-14). Accepted 2026-09-13 (rondo's human gate).
+
+> **Supersession note (2026-09-14, from D-0071).** By the answer of rondo's human gate to `D-0071`'s
+> first point, a **drafted** scope may also record an agent type, from a plan an operator pasted into
+> the request thread, copied from the message's bytes in the scope's own transaction with
+> `recorded_by` the message's author (`D-0071` section 6.2). That changes what section 1 below asserted
+> ("Only an `operator` scope may record one; a `drafter` scope may list only digests already held").
+> Supersession is whole-entry, per "How to use this file", so **every other section, the relaxed rules
+> of section 3 and the gate's three answers are not retired with it**: they are carried as written and
+> are still cited as `D-0069` section N. Nothing below is edited.
+
+Three points were put to the gate and it chose the recommended option on each; the answers are
+recorded in section "What was put to the human gate, and its answer". Refs `D-0006`, `D-0022`,
+`D-0030`, `D-0047`, `D-0061`, `D-0062`, `D-0064`, `D-0065`, `D-0066`, rondo#201.
 
 **This entry decides and does not build.** Nothing in `src/` changes with it, and no earlier entry is
 edited by it. The annotations it would add on acceptance are listed in "Annotations this entry adds".
@@ -15256,3 +15280,361 @@ The points are kept as put, and the answer follows them.
 - **`revisionPlan` changing a field any scope test reads** (agent type, workspace pair, grants), so
   that section 3.1's "impossible by construction" no longer holds.
 - Any measurement in "What was measured" failing to reproduce at rondo `4036ff6`.
+
+---
+
+## D-0071 — The model drafter: a Claude model rondo runs outside the lap over a thread it hands over, which chooses among held plans and agent types and writes words, while every number in a drafted scope is computed from recorded laps and may only be narrowed; and a plan the person pastes into the thread is how a fresh store gets its first template and agent type
+
+**Status:** accepted (2026-09-14, rondo's human gate). Three points were put to the gate and it chose
+the recommended option on each; the answers are recorded at the end of "What was put to the human
+gate, and its answer" directly below. Refs `D-0009`, `D-0010`,
+`D-0022`, `D-0029`, `D-0032`, `D-0046`, `D-0052`, `D-0061`, `D-0062`, `D-0063`, `D-0064`, `D-0065`,
+`D-0066`, `D-0067`, `D-0068`, `D-0069`.
+
+**This entry decides and does not build.** Nothing in `src/` changes with it. The annotations and the
+supersession it adds are listed in "Annotations this entry adds".
+
+**Numbering.** `D-0070` was in rondo#224 (merged as rondo#225) and not on this entry's base when it was
+drafted. This entry takes the next number after it.
+
+`D-0063` made the advisory the secretary's drafting half and left three things to "the model-drafter
+entry that `D-0029`'s residuals and `D-0061` step 5.4 name": the model, the prompt, and how it is
+invoked. `D-0061` step 5.4 (the summary, the question asked back, the split) and `D-0062`'s split wait
+on the same entry. This is it. It decides six things: which model and how it is run, what it is handed,
+when it runs, what it may choose and what is computed instead (with the scope's budgets derived from
+recorded laps rather than fixed defaults), what is carried and what is composed under `D-0009`, and
+how a request is drafted when rondo holds no plan or agent type that fits. It keeps `D-0064`'s two
+lines (bases; an irreversible act is approved by a person) and **adds no third**.
+
+### What was put to the human gate, and its answer
+
+The points are kept as put, each with options, what each gives up, and one recommendation (`D-0064`
+rule 4.1). The answer follows them.
+
+1. **A request that needs a plan or an agent type rondo does not hold** (section 6). On a fresh store
+   there is no template at all: `agent_type_record` keeps a `plan_digest` and not the plan (measurement
+   below), so `D-0069` gives a scope an agent type but gives the drafter nothing to copy.
+   - **(a) The person pastes a plan into the request thread, and a drafted scope records from it**
+     (recommended). An operator message whose body is a plan is carried byte for byte (`D-0009`) and is
+     a plan in rondo's store, so it is a template (`D-0063` rule 4.1). A drafted scope that lists the
+     plan's agent type records it **in the scope's own transaction, from the message's bytes, with
+     `recorded_by` the message's `author_id`** and a `message:` basis to it. The drafter still composes
+     no agent type: the record's bytes and author are the person's. *Loses:* `D-0069` section 1's
+     assertion "only an `operator` scope may record one" changes, so `D-0069` is superseded as a whole
+     with every other section carried (`D-0062`'s and `D-0063` rule 8's precedent); and a relayed
+     message (lap 8 N-28) records an agent type as the person's, with the same trust an operator scope
+     already has.
+   - **(b) `D-0069` unchanged.** The drafter drafts no plan and writes a P2 naming the hole; the person
+     writes an operator scope with `rondo scope --plan` and runs the first lap with `rondo start
+     --scope-decision-id` themselves, after which the iteration row is a template. *Loses:* on every
+     fresh store, and for every new kind of work, the person writes a plan file, a scope payload and a
+     `start` by hand before the organisation can draft anything, which is the opposite of `D-0064` P1.
+   - **(c) An agent-type and plan catalog outside any scope.** *Loses:* it is the catalog `D-0044`,
+     `D-0062` and `D-0069` leave to their own entry, and a record no P1 asked for.
+2. **How a drafted scope's budgets are set** (section 4).
+   - **(a) Computed by a pure function over recorded laps, with bases, and the model may only narrow
+     them; built in two stages** (recommended). Stage 1 is the function and the page showing each value
+     with its derivation, which needs no model and can replace lap 10's fixed defaults on the interim
+     form; stage 2 is the model drafter narrowing values with a `message:` or `policy:` basis. *Loses:*
+     a request that says in words it is small or large does not move the computed ceiling up; only the
+     person's edit at P1 widens. A fresh store gets cold-start values that are not measurements.
+   - **(b) The model proposes the numbers, with bases.** *Loses:* the money bound becomes re-readable and
+     not re-derivable (`D-0063` rule 5), varies run to run over the same rows, and a basis can resolve
+     without supporting the number (`D-0063`'s third falsifier), on the one field `D-0064` rule 3.4 puts
+     on the irreversible list when exceeded.
+   - **(c) Fixed defaults the person tunes** (lap 10's interim form). *Loses:* the owner's stated goal
+     that budgets adjust themselves, and the person re-guesses a reserve per scope, as lap 8 did.
+3. **Which model drafts** (section 1).
+   - **(a) `claude-opus-5` through the `claude` CLI** (recommended). The draft decides the prompt a
+     worker runs on and the split, so it gets the model the worker gets; the reviewer stays the only
+     `gpt-*` reader, so a later reviewer over drafts (`D-0065`'s first residual) is a different family
+     by construction; and the CLI's JSON output reports a cost, which the codex login does not
+     (`D-0065` rule 3.4). *Loses:* a same-family drafter and worker share blind spots about the work.
+   - **(b) `gpt-6-astra` through `codex`.** *Loses:* the drafter and the reviewer become one family, so
+     a later review of drafts cannot use the reviewer as it stands, and a draft's cost is unread.
+   - **(c) A smaller Claude model.** *Loses:* split quality on the step that decides every lap under a
+     scope, for a saving not measured (a draft is one call; a lap is $0.46-$7.06, lap 8 and 9 records).
+
+**The gate's answer (2026-09-14):**
+
+1. **(a).** A plan the person pastes into the request thread is a template, and a drafted scope records
+   its agent type from the message's bytes in the scope's own transaction, with `recorded_by` the
+   message's author. `D-0069` is superseded as a whole, with every other section carried.
+2. **(a).** A drafted scope's budgets are computed by a pure function over recorded laps with bases, the
+   model may only narrow them, and it is built in two stages: the function and the page first, the
+   model's narrowing with the drafter.
+3. **(a).** The drafter's first table row is `claude-opus-5` through the `claude` CLI.
+
+### What was measured, and how
+
+At rondo `765dd6e` on **2026-09-14**, by reading. Line numbers drift; re-measure the claim, not the
+number.
+
+- **No path drafts a plan or a scope from a request.** `SplitPlan` (`src/advisory/proposal.ts:1234`)
+  carries `template_plan_digest`, `prompt`, `agent_type_digest` and `bases`, and its own comment reads
+  "no drafter writes a split and no path admits one yet". The only scope writer call passes
+  `authorKind: "operator"` and `bases: []` from `rondo scope` (`src/access/cli.ts:2568-2574`). The store
+  accepts a `drafter` scope with bases and refuses one that records an agent type
+  (`src/store/sqlite.ts:3178-3196`). Every drafter rondo runs today is deterministic.
+- **The scope's defaults are fixed values.** `scopePayloadWithDefaults` fills `review_rounds` 3,
+  `severity_threshold` `major`, empty `outward_acts` and `irreversible_additions`, and nothing for
+  `laps`, `cost_usd`, `cost_reserve_usd` or `expires_at_ms`, which the author must write
+  (`src/store/records.ts:1620-1634`).
+- **A plan is stored only on an iteration row.** `iteration.plan` and `plan_digest`
+  (`sqlite.ts:718-723`); `agent_type_record` holds `agent_type_digest`, `agent_type_input`,
+  `plan_digest`, `recorded_by`, `recorded_at_ms` and no plan (`sqlite.ts:1224-1230`). A store whose
+  only agent types came through `D-0069` holds no template.
+- **What recorded laps cost, and the reserves people chose.** Code-change laps cost 1.032, 7.062,
+  2.055, 1.542, 0.891 (laps 2-5, 7), 1.040 (lap 8) and 1.884 with a `revise` successor at 0.456
+  (lap 9) USD (`docs/operations/lap-8-dogfood.md`, `lap-9-dogfood.md`). Lap 8 and lap 9 both approved
+  `cost_reserve_usd` 2.50 and `cost_usd` 5.00 by hand; the reserve was 1.46 and 0.62 above the lap it
+  covered. Lap 9's person spent 10 min 26 s of a 16 min 11 s walk between commands.
+- **The model tables.** `MODEL_TIER_TABLE` has one row, `standard` -> `claude-opus-5`, family `claude`;
+  `REVIEWER_TABLE` has one row, `gpt-6-astra`, family `gpt`, executable `codex`; a changed row is a new
+  entry (`src/continuo/roles.ts:184-186`, `:283-285`).
+- **Standing policies are free text.** `standing_policy.body` is "the policy as written" (`D-0067`
+  rule 6.1), so no budget can be read off one without reading prose.
+
+### 1. Which model, and how it is run
+
+1. **The drafter is not an agent type, not a tier and not a lap**, for `D-0065` rule 3.1's reasons,
+   and one more: a lap ends at a gate a person presses, so a draft run as a lap would put a press
+   before every P1.
+2. **Its model is one row of a drafter table beside `MODEL_TIER_TABLE` and `REVIEWER_TABLE`**, with the
+   same rule: a changed row is a new entry. The first row is the gate's answer to point 3. It runs
+   under the operator's own login; rondo holds no credential (`D-0010`).
+3. **It is run as `D-0065` rule 1.1 runs the reviewer**: in `src/access`, outside `drive()`
+   (`D-0063` rule 2.1), as a process in an empty directory with no tools, handed one document on
+   standard input. It fetches nothing. The flags are the building change's to measure; "no tools" is
+   the property, and a run that reports a tool call is `unavailable`.
+4. **Its row name is `rondo/drafter/1/<model-id>`.** The version counts the drafter's own instructions
+   (the fixed text rondo prepends to the document, a constant in `src/`), so a changed instruction is a
+   new version and not a new entry; a changed model is a new entry.
+5. **Material over the input bound, a timeout, output that does not parse, a tool call, or a draft
+   the layer's structural check refuses (rule 7.1) makes the run `unavailable`.** The material is never truncated (`D-0065` rule 1.4's reason). An unavailable
+   run writes one deterministic `drafter` message into the thread, `asks` unset, naming the reason with
+   a `message:` basis to **every operator message the document held that no earlier drafter row
+   covers** (rule 3.2), and writes nothing else. It is not retried: the person's next message triggers
+   the next run.
+
+### 2. What it is handed, and what it is not
+
+1. **The document holds, each taken by rondo from its own source:**
+   1. **the request thread**: every message's id, `author_kind`, `in_reply_to`, `asks` and body bytes;
+   2. **the held agent types**: each digest with its tier, whether the tier is priced (`D-0052`) and
+      its granted keys, read back from the held record (`D-0069`'s screen form);
+   3. **the templates**: the distinct plans on the 20 most recent iteration rows, and every plan
+      carried in an operator message of this thread (the gate's point 1 (a)), each whole, with its
+      `plan_digest`;
+   4. **the in-force standing policies**, whole (`D-0067` rule 7.1);
+   5. **the laps of this request so far**: their iteration rows, gate outcomes and readings' verdicts
+      and findings, so a redraft knows what already ran;
+   6. **the measurements behind the budgets** (rule 4.2.1) for every held agent type, with their
+      bases, and rule 4.2's formulas. **The ceilings themselves are not in the document**, because they
+      depend on the number of plans and the agent types, which the model chooses in the same call.
+2. **It does not read the target repository**, CI, GitHub or any sibling checkout (`D-0063` rule 3.3).
+   So a question the repository would settle may be asked anyway (`D-0064` P2's test names the
+   repository); that is counted under "What this gives up".
+3. **The document is the proposal row's snapshot, stored verbatim** (`D-0022` rule 4), so what the model
+   was given is re-readable from the row. No separate delivered digest is added (`D-0063` rule 7).
+
+### 3. When it runs
+
+1. **One run per operator message in a request thread**, whether the message opens the request,
+   answers a drafter's question, replies to a stop (`D-0066` rule 4.4) or adds to work in flight.
+   Which of these it is, is the model's reading of the thread, and the run may draft nothing.
+2. **Where: the resident host** (`D-0068`), which finds work by rows and not by a queue. **An
+   operator message is drafted once a drafter row covers it**: a proposal row written by this drafter
+   whose snapshot holds the message, or an unavailable run's message citing it (rule 1.5). An operator
+   message no such row covers has not been drafted. Every finished run writes one of the two (rule
+   7.3), including a run that drafts nothing, so no message stays eligible after a run over it. So a message written by the CLI while the host runs is drafted too, and a host restart
+   loses nothing. With no host running, nothing is drafted and the thread waits.
+3. **At most one run per thread at a time, and a stale run writes nothing.** A run whose thread gained
+   an operator message after its document was assembled is discarded by the layer's check (rule 5.2)
+   and run once more over the new thread.
+4. **The message write never waits on the run**, and the page's response to a person's press never
+   includes it; the draft arrives later, as the model reading does (`D-0065` rule 2.6).
+
+### 4. What the model chooses, and what is computed
+
+**The model chooses among held material and writes words. Lists and numbers are computed.** That keeps
+what is re-readable and not re-derivable (`D-0063` rule 5) to the parts no function can do.
+
+| Field | Source | May the model change it |
+|---|---|---|
+| one-sentence summary, and a P2 question with options, what each gives up and one recommendation | **model**, with `message:` bases (`D-0063` section 1) | - |
+| whether to ask or to split (exactly one per run; a P2 holds unstarted plans back anyway, `D-0066` rule 4.4) | **model** | - |
+| each plan's template, agent type (from the held list, with `D-0062` rule 2.2's grounds for a non-`standard` tier) and `prompt` | **model**, `D-0063` rule 4 | - |
+| `requests` | computed: the request's opening message | no |
+| `workspaces` | computed: the templates' (`repository`, `workspaceRoot`) pairs | no |
+| `agent_types` | computed: the digests the plans name | no |
+| `budgets.review_rounds` | computed: 3 (`D-0064` rule 3.1.4) | narrow, with a basis |
+| `severity_threshold` | computed: `major` (`D-0065` rule 2.2) | stricter, with a basis |
+| `budgets.cost_reserve_usd` | computed, rule 4.2 | **no**: a lower reserve admits more laps at once, which widens |
+| `budgets.laps`, `budgets.cost_usd`, `budgets.expires_at_ms` | computed, rule 4.2 | narrow (fewer, less, sooner), with a basis |
+| `outward_acts` | computed: empty | include `push_branch` / `open_pull_request` **only with a `policy:` basis** |
+| `irreversible_additions` | computed: empty | add, with a basis (adding only narrows, `D-0064` rule 3.4) |
+
+1. **A narrowing is a stated value with a `message:` or `policy:` basis** to the words it rests on
+   (the person wrote "keep it under $3", or a standing policy says so). **The order is: the model
+   returns the split and its narrowings; rondo then computes the budgets from the plans it returned
+   (rule 4.2); and the scope takes, per field, the narrower of the computed value and the stated one.**
+   A stated value that is not narrower changes nothing. Nothing the model writes widens a computed
+   value. The person widens by editing at P1 (section 5.3).
+2. **The budget function.** Pure, in `src/advisory`, over rows the snapshot holds. For the listed agent
+   types and `P` plans:
+   1. **Three measurements, each looked up on its own**: the first-lap cost (a read `lap_cost_usd`,
+      `D-0046`, on a row with `supersedes_iteration_id` null), the redo cost (the same, with it set),
+      and the lap duration (a read `lap_duration_ms`). **Each falls through three levels
+      independently**: the 10 most recent iteration rows under a listed agent type's digest that hold
+      that measurement; if none, the 10 most recent rows in the store with the same `model_tier` that
+      hold it; if none, its cold start. So a sample of successors only still yields a first-lap cost
+      from the next level, and the function is total on every store.
+   2. **`cost_reserve_usd`** is the highest first-lap cost found for any listed agent type, rounded up
+      to the next 0.10 USD. **Cold start: 2.50**, the value laps 8 and 9 chose, which covers six of the
+      seven recorded code-change laps.
+   3. **`redo`** is the highest redo cost found, rounded up the same way. **Cold start: the reserve.**
+   4. **`laps`** is `P x review_rounds`: every line may use its whole round budget before the lap
+      budget stops it, so the two budgets never stop a line for two different reasons at once.
+   5. **`cost_usd`** is `P x (reserve + (review_rounds - 1) x max(redo, reserve))`. **It is sized for
+      the admission test, not for the expected spend**: a line's last redo is admitted while its own
+      reserve is counted (`D-0066` rule 3.4.2), so each lap after the first is budgeted at the larger of
+      its measured cost and the reserve, and a line that finishes at its measurements leaves every other
+      line its full share. For one plan, 2 rounds and the cold start this gives 5.00, the value laps 8
+      and 9 chose by hand.
+   6. **`expires_at_ms`** is the draft time (the document's assembly time, held in the snapshot) plus
+      `laps x` the longest lap duration found, plus **24 h for the person's replies**. **Cold start for
+      the duration: 30 min**, above every recorded lap duration (the longest is lap 3's 724.4 s,
+      `docs/operations/lap-8-dogfood.md`). The 24 h
+      allowance is not a measurement: rondo holds no row saying when a person answered a lap's end gate
+      (the gate is continuo's). Residual.
+   6. **Every computed value carries its bases**: the iteration rows it was read from, or the words
+      "cold start: not measured in this store". A value is never shown without them (kept line 1).
+3. **The hard bounds stay exactly `D-0066` rule 1.2.4's**: all five budgets are always present, so a
+   drafted scope always has an expiry and a cost ceiling. The function returns a value for every field
+   on every store, which is why it has a cold start and never a hole.
+4. **Staged.** **Stage 1** is rule 4.2 with the page showing its values and bases. It needs no model,
+   and an operator scope on the page may start from it in place of fixed defaults (lap 10's interim form
+   is the first reader). **Stage 2** is the model drafter, which adds the split, the summary, the
+   question and the narrowings. The 24 h allowance is replaced when rondo reads gate answer times
+   (residual). Each stage is its own building change.
+
+### 5. Carried and composed (`D-0009`), and what the person edits
+
+1. **Carried byte for byte, and never rephrased as the person's**: the request and every operator
+   message (into the document and into bases); a plan the person pastes (into the template set and,
+   under point 1 (a), into an `agent_type_record`); the person's reply to a question; an approval or a
+   decline (`scope_decision`, `D-0066` section 2).
+2. **Composed by the drafter, and recorded under `author_kind` `drafter`**: the summary, the question,
+   its options and recommendation, each plan's `prompt` (`D-0063` rule 4.3), the choice of template and
+   agent type, and each narrowing. **Computed, and recorded with the rows it came from**: the rest of
+   the drafted scope (section 4). A computed value is neither the person's words nor the model's.
+3. **What the person does on the page with a drafted scope and split:**
+   - **Approve as drafted**: a `scope_decision` on the drafter's row (`D-0066` rule 2).
+   - **Edit the scope**: the submitted form is a **new `operator` scope row** with
+     `supersedes_scope_id` the draft and a `scope:` basis to it, and the person approves that row. The
+     values are the person's because the person submitted them; the link to what the organisation
+     proposed is the basis, and nothing composed is stored under the person's voice unmarked (`D-0061`
+     rule 3).
+   - **Edit a plan's prompt or agent type**: the edited plan is an **operator-written plan** (`D-0062`
+     rule 1.4), admitted by `rondo start --scope-decision-id` through `D-0069` section 2 (i), and
+     `D-0069`'s third answer holds it back while any ask in the thread is open. The split proposal row
+     keeps the draft, unedited.
+   - **Decline**: a `declined` decision, and the person's reply in the thread triggers the next run.
+4. **Never composed by the drafter**: a gate answer, an approval, a person's reply, a standing policy
+   under the person's voice (`D-0067` rule 6.2 keeps a drafted one a `drafter` row), or an agent type.
+
+### 6. A request that needs what rondo does not hold
+
+1. **The hole is named, as `D-0063` rule 4.4 says**: with no template for a piece of work, or no held
+   agent type that fits it, the drafter proposes no plan for it and writes a P2 saying which, with one
+   recommendation.
+2. **Under point 1 (a)**, the recommendation is "paste a plan for this kind of work into the thread",
+   and the option list includes each held agent type that might fit, with what it gives up. The
+   person's pasted plan is an operator message; the next run has a template and, when its drafted scope
+   is written, a recorded agent type. **What (a) keeps of `D-0069` section 1's reason**: the record is
+   persisted, copied byte for byte from bytes a person wrote, and exists only for a scope a person will
+   be asked to approve; the scope's screen shows its tier and grants from the record; the writer still
+   refuses a digest no row holds. The drafter selects; it never composes what it selects.
+3. **Under point 1 (b)**, the recommendation is the operator path `D-0069` built, and the drafter drafts
+   again once an iteration row holds a template.
+4. **An unpriced tier is still refused at `classify`** (`D-0052`), and a plan naming a non-`standard`
+   tier still needs `D-0062` rule 2.2's grounds; a pasted plan widens neither.
+
+### 7. What a draft must pass before it is written
+
+1. **The layer's structural check** (`D-0063` rule 2.2), extended to this drafter's forms: every basis
+   resolves; every template digest is in the document; every agent type digest is held (or, under
+   point 1 (a), recorded from a plan in this thread); only `prompt` and the agent type differ from the
+   template (`D-0063` rule 4.2); every computed field equals rule 4.2 over the snapshot and the returned
+   plans, or the narrower stated value; every stated value has a basis.
+2. **The staleness check** (rule 3.3): the thread's latest operator message is the document's.
+3. **What is written, all in one transaction or nothing**: one proposal row of the split kind (plans,
+   or holes, or neither), **written by every run that passes rules 7.1 and 7.2 even when it drafts nothing**, with
+   the document as its snapshot; a drafted scope row when there are plans;
+   and the `drafter` messages (summary, question) with a basis to the proposal row.
+4. **"A model drafter exists", for the owner's purpose**, means, as `D-0065` rule 5.6 does for the
+   reviewer: the drafter is built, and **two planted requests** recorded in `docs/operations/` were
+   drafted as expected: one whose words admit two readings with different visible results produced a
+   P2, and one with two separable parts produced two plans whose bases lead back to each part. CI
+   cannot prove this half (`D-0065` rule 5.6's reason).
+
+### What this gives up
+
+- **Re-derivability of the split and the wording**, which `D-0063`'s gate already accepted. What
+  stays exact is the computed scope, re-derivable from its rows.
+- **The repository as material.** The drafter may ask what the repository would settle, and may split
+  work the repository shows is one change.
+- **An automatic widening.** A request that is plainly larger than recorded laps gets the recorded
+  ceiling; the person widens at P1 or at a scope exit.
+- **Under point 1 (a)**, `D-0069` section 1's "only an `operator` scope records" and a whole-entry
+  supersession to change one sentence.
+- **Per-message cost while the host runs**: every operator message in a request thread costs one draft.
+
+### What this does not do
+
+- **It does not build** the drafter, the table, the budget function, the page lines or the planted
+  requests.
+- **It does not review a draft.** A reviewer over drafts is `D-0065`'s first residual, unchanged.
+- **It does not relay a question raised mid-lap** (`D-0061` rule 6), draft a `revise` instruction
+  (`D-0065` rule 5.3 and `D-0070`), or open O6.
+- **It does not add a catalog of agent types or plans**, a scope predicate, or a drafter budget.
+- **It does not add an invariant beyond `D-0064`'s two lines.**
+
+### Residuals, with who decides
+
+| Residual | Why not here | Who decides |
+|---|---|---|
+| The 24 h reply allowance in `expires_at_ms` | rondo reads no gate answer time | the entry that reads one from continuo |
+| What a draft costs, and whether drafting counts against anything | No scope is approved when the drafter runs; the cost is readable but not yet measured | the building change records it on the planted requests; a later entry if it matters |
+| The language a drafter message is written in | `D-0053` rule 2c names the model drafter's findings; a thread message has no language field | the building change, under `D-0053` and `D-0055` |
+| The repository's rule files as drafter material | `D-0063` rule 3.3's read list | a later entry, if asks the repository settles are observed |
+| A drafted successor after a scope exit, beyond "the reply triggers a run" | `D-0066` rule 1.4 says the drafter drafts it; this entry's run does, with no rule of its own | unchanged |
+
+### Annotations this entry adds
+
+Each dated and additive unless marked, and added with this entry's acceptance:
+
+- **`D-0063`** "What this does not do", first bullet: the model, the prompt and the invocation are
+  `D-0071`.
+- **`D-0061`** step 5.4: the drafter is `D-0071`.
+- **By the gate's answer to point 1: `D-0069` gains `Status: superseded by D-0071`** and a supersession note:
+  section 1's "only an `operator` scope may record one" is restated by `D-0071` section 6.2; every other
+  section and the gate's answers stay under `D-0069`'s heading. **`D-0066` rule 1.2.3's `D-0069`
+  annotation** gains a dated note to the same effect.
+
+### What would falsify it
+
+- **A drafted split the person routinely edits** (prompt or agent type) before approving, so that the
+  edit path of rule 5.3 is the usual path. The split is then not drafted well enough to delegate, which
+  is `D-0062`'s first falsifier for this drafter.
+- **Drafted budgets routinely widened by the person at P1**, or lines routinely stopping on a computed
+  budget and continued by a widened successor. Rule 4.2's samples or its formulas are what move; if
+  they cannot, the gate's point 2 (b) comes back on evidence.
+- **Asks the repository would have settled**, often enough that the person answers what the drafter
+  could have read. Rule 2.2 is what moves.
+- **A draft that passes rule 7.1 and misleads**, as `D-0063`'s third falsifier, inherited.
+- **Pasted plans recording agent types a person did not mean to approve** (relayed or quoted plans).
+  Point 1 (a)'s trust in an operator message is then too wide.
+- **A drafter-table model that is the reviewer's family**, if a reviewer over drafts is later built.
+- Any measurement in "What was measured" failing to reproduce at rondo `765dd6e`.
