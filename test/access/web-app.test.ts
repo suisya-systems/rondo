@@ -28,6 +28,7 @@ import { expect, test } from "vitest";
 import {
   AnswerPort,
   createApp,
+  MAX_CLAIM_CHARS,
   mintPress,
   mintSend,
   newMessageId,
@@ -44,7 +45,7 @@ import { advisoryRecord } from "../../src/store/sqlite.js";
 const TOKEN = "the-process-token";
 
 /** Every write the port let through to its implementation. */
-type Written = { iterationId: string; body: string }[];
+type Written = { iterationId: string; body: string; claim?: string }[];
 
 /** Every message the say port let through to its implementation. */
 type Sent = SentMessage[];
@@ -58,8 +59,9 @@ type Sent = SentMessage[];
 function spyPorts(written: Written, sent: Sent = []): ServedPorts {
   return {
     hostLanguage: null,
-    answer: new AnswerPort(async (iterationId, body) => {
-      written.push({ iterationId, body });
+    answer: new AnswerPort(async (iterationId, body, claim) => {
+      // A claim is listed only when one reached the implementation.
+      written.push({ iterationId, body, ...(claim === null ? {} : { claim }) });
       return await Promise.resolve({ ok: true, note: "" });
     }),
     // The port reads the thread on a reply, to refuse answering an ask by a send.
@@ -279,6 +281,70 @@ test("(a) a press is one write: the port spends it, and a request mints at most 
   expect((await send(base, "/twice", "POST", pressHeaders(base), FORM)).status).toBe(200);
   expect(outcomes).toEqual(["true", "false", "refused"]);
   expect(written).toEqual([{ iterationId: "i-0001", body: "approve" }]);
+
+  stop.abort();
+  expect(await closed).toBe(0);
+});
+
+test("(claim) a press carries what the person verified, trimmed; blank is none, and too long answers nothing", async () => {
+  const written: Written = [];
+  const { base, stop, closed } = await served(createApp(spyPorts(written), TOKEN));
+  const person = pressHeaders(base);
+
+  const said = "  npm run verify in the lap's workspace, green  ";
+  expect((await send(base, "/", "POST", person, { ...FORM, verified: said })).status).toBe(303);
+  expect((await send(base, "/", "POST", person, { ...FORM, verified: " \n " })).status).toBe(303);
+  expect((await send(base, "/", "POST", person, FORM)).status).toBe(303);
+  const tooLong = await send(base, "/", "POST", person, {
+    ...FORM,
+    verified: "\u691c".repeat(MAX_CLAIM_CHARS + 1),
+  });
+  // Refused in words by the port, not by the body limit: the form still fits.
+  expect(tooLong.status).toBe(409);
+  expect(tooLong.body).toContain(String(MAX_CLAIM_CHARS));
+  expect(written).toEqual([
+    { iterationId: "i-0001", body: "approve", claim: said.trim() },
+    { iterationId: "i-0001", body: "approve" },
+    { iterationId: "i-0001", body: "approve" },
+  ]);
+
+  stop.abort();
+  expect(await closed).toBe(0);
+});
+
+test("(claim) a claim cannot be carried by an htmx post, a fetch or a send", async () => {
+  const written: Written = [];
+  const sent: Sent = [];
+  const { base, stop, closed } = await served(createApp(spyPorts(written, sent), TOKEN));
+  const claimed = { ...FORM, verified: "I ran everything" };
+
+  expect((await send(base, "/", "POST", htmxHeaders(base), claimed)).status).toBe(403);
+  expect(
+    (
+      await send(
+        base,
+        "/",
+        "POST",
+        { ...pressHeaders(base), "sec-fetch-mode": "cors", "sec-fetch-user": undefined },
+        claimed,
+      )
+    ).status,
+  ).toBe(403);
+  // A send takes the field along as nothing: the message is the words, and no
+  // claim reaches the answer port.
+  const messageId = newMessageId("request");
+  expect(
+    (
+      await send(base, "/request", "POST", htmxHeaders(base), {
+        token: TOKEN,
+        message_id: messageId,
+        body: "words",
+        verified: "I ran everything",
+      })
+    ).status,
+  ).toBe(303);
+  expect(written).toEqual([]);
+  expect(sent).toEqual([{ messageId, body: "words", inReplyTo: null }]);
 
   stop.abort();
   expect(await closed).toBe(0);
@@ -619,7 +685,8 @@ test("(send) every other shape of request to a send route is refused and sends n
   expect((await send(base, "/request", "GET", htmx)).status).toBe(404);
   // The press route keeps its own, smaller, limit.
   expect(
-    (await send(base, "/", "POST", pressHeaders(base), { ...FORM, pad: "x".repeat(5000) })).status,
+    (await send(base, "/", "POST", pressHeaders(base), { ...FORM, pad: "x".repeat(13 * 1024) }))
+      .status,
   ).toBe(413);
 
   expect(sent).toEqual([]);

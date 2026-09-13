@@ -1621,7 +1621,7 @@ export async function main(
               // navigation, so the page's server is not the only thing standing
               // between a `GET` and this walk.
               new AnswerPort(
-                async (iterationId, body) =>
+                async (iterationId, body, claim) =>
                   await answerFromPage(
                     environment,
                     store,
@@ -1629,6 +1629,7 @@ export async function main(
                     approver,
                     iterationId,
                     body,
+                    claim,
                   ),
               ),
         say:
@@ -3867,6 +3868,66 @@ export async function recordPagePress(
 }
 
 /**
+ * Record what the person pressing says they verified, then walk the gate.
+ *
+ * **`commandAnswer --verified`'s order, as one function a test can drive**
+ * (`D-0045` rules 4 and 5, carried to the page by its rondo#220 annotation).
+ * The claim is written before the walk, and a write that fails walks nothing:
+ * `D-0042` rule 3's order, because a record written after the act it describes
+ * is one a person can act past. It is the operator's own account and never
+ * rondo's, so the row holds who said it and what they said.
+ *
+ * **Not on a gate that is already closed.** `walkGate` sends nothing for one of
+ * those, so a claim written here would say a person checked the work before
+ * answering a gate they did not answer. The terminal says so and walks on (the
+ * walk then reports the closed gate); a page has no terminal the presser is
+ * reading, so here it is a refusal whose note says both halves. The gate is
+ * read only when there is a claim, so a press without one walks exactly as it
+ * did before this function existed.
+ */
+export async function claimThenWalk(
+  store: Pick<IterationStore, "recordVerificationClaim">,
+  continuo: VerifiedContinuo,
+  request: WalkRequest,
+  iterationId: string,
+  claim: string | null,
+  verbs: GateVerbs = GATE_VERBS,
+  nowMs: () => number = Date.now,
+): Promise<WalkOutcome | { readonly kind: "refused"; readonly note: string }> {
+  if (claim !== null) {
+    const observed = await verbs.show(continuo, { db: request.db, gateId: request.gateId });
+    if (observed.kind !== "answered") {
+      return {
+        kind: "refused",
+        note:
+          `The gate for '${iterationId}' would not read, so what you said you verified was not ` +
+          "recorded and nothing was answered. The terminal running 'rondo web' has continuo's " +
+          "own diagnosis.",
+      };
+    }
+    if (observed.payload.outcome !== null) {
+      return {
+        kind: "refused",
+        note:
+          `Gate ${observed.payload.gateId} is already closed as '${observed.payload.outcome}', ` +
+          "so what you said you verified was not recorded: nothing here is being answered.",
+      };
+    }
+    try {
+      await store.recordVerificationClaim(iterationId, request.actorId, claim, nowMs());
+    } catch (error) {
+      return {
+        kind: "refused",
+        note: `What you said you verified was not recorded, so nothing was answered: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      };
+    }
+  }
+  return await walkGate(continuo, request, verbs);
+}
+
+/**
  * One press of the page's approve button, in the terminal's own verbs.
  *
  * **It is `commandAnswer`'s writing half over a row it did not parse for.**
@@ -3892,6 +3953,7 @@ async function answerFromPage(
   approver: string,
   iterationId: string,
   body: string,
+  claim: string | null,
 ): Promise<{ ok: boolean; note: string }> {
   const actor = approvedActor(approver, environment);
   if ("refusal" in actor) {
@@ -3940,14 +4002,23 @@ async function answerFromPage(
     return { ok: false, note: `continuo is not usable: ${startup.reason}` };
   }
   const continuo = startup.continuo;
-  const walked = await walkGate(continuo, {
-    db: planField(record, "db"),
-    gateId: record.gateId,
-    destinationDir: planField(record, "endpoint_destination_dir"),
-    holder: planField(record, "lease_claimant_id"),
-    actorId: actor.actorId,
-    body,
-  });
+  const walked = await claimThenWalk(
+    store,
+    continuo,
+    {
+      db: planField(record, "db"),
+      gateId: record.gateId,
+      destinationDir: planField(record, "endpoint_destination_dir"),
+      holder: planField(record, "lease_claimant_id"),
+      actorId: actor.actorId,
+      body,
+    },
+    record.id,
+    claim,
+  );
+  if (walked.kind === "refused") {
+    return { ok: false, note: walked.note };
+  }
   if (walked.kind === "failed") {
     // The relay's own words went to the terminal `rondo web` is running in --
     // `walkGate` says what it did as it does it, and this surface does not

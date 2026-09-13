@@ -328,7 +328,19 @@ export function mintSend(
 export type AnswerFromWeb = (
   iterationId: string,
   body: string,
+  claim: string | null,
 ) => Promise<{ readonly ok: boolean; readonly note: string }>;
+
+/**
+ * The longest verification claim an approve press carries, in characters.
+ *
+ * Not a performance measure: a claim is a sentence or two saying what the
+ * person ran (`D-0045` rule 3), and a longer one is refused in words rather
+ * than cut, because a claim recorded shorter than it was said is a claim the
+ * person did not make. Sized so that the whole form, percent-encoded at 9 bytes
+ * a CJK character, still fits {@link MAX_FORM_BYTES}.
+ */
+export const MAX_CLAIM_CHARS = 1000;
 
 /**
  * The whole of what this surface may write (D-0041 rules 4 and 7, D-0059 R4).
@@ -356,10 +368,19 @@ export class AnswerPort {
    *
    * The body is {@link APPROVE_BODY} and not an argument: the page's writing
    * vocabulary is one word whatever a caller says (D-0041 rule 7).
+   *
+   * **The press may carry what the person says they verified** (`D-0045`, as
+   * annotated from rondo#220: a claim is part of the approve press, not a write
+   * of its own, so nothing but a press reaches it). Trimmed here, inside the
+   * capability, so every holder gets the same rule: nothing but whitespace is no
+   * claim, and one longer than {@link MAX_CLAIM_CHARS} answers nothing and says
+   * so. What happens to it after that is the implementation's, which records it
+   * exactly as `rondo answer --verified` does.
    */
   async answer(
     press: Press,
     iterationId: string,
+    claim: string | null = null,
   ): Promise<{ readonly ok: boolean; readonly note: string }> {
     if (!minted.has(press)) {
       return {
@@ -368,7 +389,17 @@ export class AnswerPort {
       };
     }
     minted.delete(press);
-    return await this.#answer(iterationId, APPROVE_BODY);
+    const said = claim?.trim() ?? "";
+    if (said.length > MAX_CLAIM_CHARS) {
+      return {
+        ok: false,
+        note:
+          `nothing was answered: what you said you verified is ${String(said.length)} ` +
+          `characters, and this page takes at most ${String(MAX_CLAIM_CHARS)}. Shorten it ` +
+          "and press again.",
+      };
+    }
+    return await this.#answer(iterationId, APPROVE_BODY, said === "" ? null : said);
   }
 }
 
@@ -520,9 +551,11 @@ function fromThisMachine(host: string | undefined): boolean {
 
 /**
  * The cap on a request body. Not a performance measure: the form is two short
- * fields, and a request bigger than that is not the page's form.
+ * fields and, on the approve press, a claim of at most {@link MAX_CLAIM_CHARS}
+ * characters (9 bytes each percent-encoded, at worst), and a request bigger
+ * than that is not the page's form.
  */
-const MAX_FORM_BYTES = 4096;
+const MAX_FORM_BYTES = 12 * 1024;
 
 /**
  * The send routes (D-0059 section 5a, last row), by the kind of message each
@@ -705,7 +738,7 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     app.use(path, csrf());
   }
   // One limit middleware, sized by the address: a send carries a person's
-  // words, every other request at most the press's two short fields.
+  // words, every other request at most the press's short fields and its claim.
   const pressLimit = bodyLimit({
     maxSize: MAX_FORM_BYTES,
     onError: (c) => said(c, 413, "that is larger than this page's form"),
@@ -798,7 +831,15 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     if (typeof iterationId !== "string" || iterationId === "") {
       return said(c, 400, "that form named no iteration");
     }
-    const answered = await answer.answer(minting.press, iterationId);
+    // **What the person says they verified rides on this press** (`D-0045` as
+    // annotated from rondo#220): absent is no claim, and anything but text is a
+    // form this page did not draw -- refused rather than dropped, since a claim
+    // silently lost is a person believing the record holds what they checked.
+    const verified = form["verified"];
+    if (verified !== undefined && typeof verified !== "string") {
+      return said(c, 400, "what that form said you verified was not text");
+    }
+    const answered = await answer.answer(minting.press, iterationId, verified ?? null);
     if (!answered.ok) {
       return said(c, 409, answered.note);
     }
