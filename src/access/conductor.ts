@@ -543,6 +543,8 @@ export interface RequestThread {
 /** What a report says happened to the lap (D-0061 step 5.3). */
 export type LapEvent =
   | { readonly kind: "gate" }
+  /** The model reading landed, after the gate opened (D-0065 2.6, rondo#218). */
+  | { readonly kind: "modelReading" }
   /** `pullRequestUrl`: what the forge printed for the opened pull request, or null. */
   | { readonly kind: "published"; readonly pullRequestUrl: string | null };
 
@@ -614,7 +616,33 @@ export async function reportToRequest(
       (reading === null
         ? "No independent reading is recorded for it."
         : `Its independent reading says '${reading.verdict}' with ` +
-          `${String(reading.findings.length)} finding(s).`);
+          `${String(reading.findings.length)} finding(s).`) +
+      // rondo#218: the gate does not wait for the model reading (D-0065 2.6),
+      // so a reader of the thread is told one may follow rather than shown a
+      // lone "clear" the model reading later contradicts.
+      " A model reading of this work may still be on its way; the gate does not wait for it, " +
+      "and when it lands it is reported in this thread. Read it before answering.";
+  } else if (event.kind === "modelReading") {
+    const reading = latestReading(
+      await thread.store.readingsFor(iterationId),
+      isModelReadingDrafter,
+    );
+    if (reading === null) {
+      return `No model reading was reported to the request '${request}': none is recorded.`;
+    }
+    messageId = `report-model-${iterationId}-${String(reading.readAtMs)}`;
+    const findings = reading.findings.map((text, i) => {
+      const severity = reading.graded?.[i]?.severity;
+      return severity === undefined ? ` - ${text}` : ` - [${severity}] ${text}`;
+    });
+    body =
+      `Lap '${iterationId}' has a model reading (${reading.drafter}) at gate ` +
+      `'${row.gateId ?? "(none recorded)"}': ` +
+      (reading.verdict === "unavailable"
+        ? `none could be taken: ${reading.unavailableReason ?? "no reason recorded"}.`
+        : `'${reading.verdict}' with ${String(reading.findings.length)} finding(s).`) +
+      (findings.length === 0 ? "" : `\n${findings.join("\n")}`) +
+      "\nThis is material, not a check; the answer is still a person's.";
   } else {
     messageId = `report-published-${iterationId}`;
     body =

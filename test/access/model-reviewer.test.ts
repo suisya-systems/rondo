@@ -24,8 +24,13 @@ import {
   runPlan,
 } from "../../src/refrain/plan.js";
 import { contentDigest } from "../../src/store/plan.js";
-import type { JsonRecord, LapReadingDraft, ReadingEvidence } from "../../src/store/records.js";
-import { iterationStore } from "../../src/store/sqlite.js";
+import type {
+  JsonRecord,
+  LapReadingDraft,
+  ReadingEvidence,
+  ThreadMessageDraft,
+} from "../../src/store/records.js";
+import { advisoryRecord, iterationStore } from "../../src/store/sqlite.js";
 
 const PLAN: RunPlan = {
   db: "/srv/continuo.db",
@@ -131,10 +136,25 @@ async function world(
     readonly reading?: LapReadingDraft | null;
     readonly sessionId?: string | null;
     readonly materialLanguage?: RunPlan["materialLanguage"];
+    readonly requestMessageId?: string | null;
   } = {},
 ) {
-  const store = iterationStore(new DatabaseSync(":memory:"), { maxOccupying: 4, maxLive: 6 });
+  const connection = new DatabaseSync(":memory:");
+  const store = iterationStore(connection, { maxOccupying: 4, maxLive: 6 });
+  const record = advisoryRecord(connection);
   const id = "i-0001";
+  if (options.requestMessageId !== undefined && options.requestMessageId !== null) {
+    await record.recordThreadMessage({
+      messageId: options.requestMessageId,
+      body: "please do the thing",
+      authorKind: "operator",
+      authorId: "oidc|operator-1",
+      inReplyTo: null,
+      atMs: 1,
+      bases: [],
+      asks: false,
+    });
+  }
   await store.reserve({
     id,
     request: "do the thing",
@@ -147,7 +167,7 @@ async function world(
     scopeSpend: null,
     nowMs: 1_000,
     supersedesIterationId: null,
-    requestMessageId: null,
+    requestMessageId: options.requestMessageId ?? null,
     runId: "rondo-i-0001",
     topicBranch: "rondo/i-0001",
     workspace: "/srv/work/iter-i-0001",
@@ -215,7 +235,7 @@ async function world(
     },
     now: () => 3_000,
   };
-  return { store, id, ports, calls };
+  return { store, record, id, ports, calls };
 }
 
 test("a reading is taken over the deterministic range, appended, and printed from the row", async () => {
@@ -249,6 +269,30 @@ test("a reading is taken over the deterministic range, appended, and printed fro
   expect(said).toContain("[major]");
   expect(said).toContain("src/check.ts:1");
   expect(said).toContain("material for you, not a check");
+});
+
+test("rondo#218: the landed reading is reported into the request's thread, findings and all", async () => {
+  const { store, record, id, ports } = await world({ requestMessageId: "req-1" });
+  const written: ThreadMessageDraft[] = [];
+  const thread = {
+    store,
+    record: {
+      recordThreadMessage: async (message: ThreadMessageDraft) => {
+        written.push(message);
+        return await record.recordThreadMessage(message);
+      },
+    },
+  };
+
+  const lines = await takeModelReading({ ...ports, thread }, id);
+
+  expect(written).toHaveLength(1);
+  expect(written[0]).toMatchObject({ inReplyTo: "req-1", authorKind: "drafter", asks: false });
+  const body = String(written[0]?.["body"]);
+  expect(body).toContain("rondo/model/1/gpt-6-astra");
+  expect(body).toContain("'concerns' with 1 finding(s)");
+  expect(body).toContain("[major] the commit says it speeds run up");
+  expect(lines.at(-1)).toContain("Reported to the request 'req-1'");
 });
 
 test("a plan with no criterion is refused before anything is gathered or spawned", async () => {
