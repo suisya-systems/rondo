@@ -772,7 +772,11 @@ test("a lap at a gate carries its cost and its fence beside the button (rondo#14
   // and the page escapes rather than re-encodes it.
   expect(lead(html)).toContain("the fence refused [&quot;Bash(rm:*)&quot;]");
   expect(lead(html)).toContain("answer gate gate-i-0001");
-  expect(lead(html)).toContain('<p class="basis">iteration i-0001</p>');
+  // The column shows the id alone and keeps the basis it abbreviates as `title`.
+  expect(lead(html)).toContain('title="iteration i-0001"><p class="basis">i-0001</p>');
+  // The state is a pill a person reads, with the status sentence as its `title`.
+  expect(lead(html)).toContain(">Waiting on you</span>");
+  expect(lead(html)).toContain('title="awaiting_human -- waiting ');
 
   // **The button is on the page that showed what a press records** (D-0042
   // rules 1 and 4). `recordPagePress` stores `explainIteration`'s entire claim
@@ -818,7 +822,10 @@ test("a lap that has ended is on the page it just left (rondo#145)", async () =>
   const html = await operatorPage(portsOver(world));
 
   expect(lead(html)).toContain("just finished (1)");
-  expect(lead(html)).toContain("closed 1s ago -- gate answered 'approve'");
+  // The pill says the outcome; the terminal's head sentence is its `title`.
+  expect(lead(html)).toContain(">Approved</span>");
+  expect(lead(html)).toContain("1s ago");
+  expect(lead(html)).toContain(`title="closed 1s ago -- gate answered 'approve'"`);
   // Nothing is running and nothing is waiting, and the page says each once.
   expect(lead(html)).toContain("waiting for your answer (0)");
   expect(lead(html)).toContain("running now (0)");
@@ -1362,7 +1369,10 @@ test("every view is complete under each of the three answers to the language que
     }
     // The fold still carries rondo's own accounting, and the button its note.
     expect(views[1]).toContain(wording.inboxHeading);
-    expect(views[2]).toContain(wording.approveNote("gate-i-0001", "approve"));
+    expect(views[2]).toContain(wording.approvePlain);
+    expect(views[2]).toContain(`title="${wording.approveNote("gate-i-0001", "approve")}"`);
+    // Every undetermined claim is still in the answer view, inside its one fold.
+    expect(views[2]).toContain('<details id="undetermined"');
   }
 });
 

@@ -537,7 +537,7 @@ function glyph(tone: Tone | "alert") {
       stroke-width="1.6"
       stroke-linecap="round"
       stroke-linejoin="round"
-      class={`mt-0.5 size-4 ${color}`}
+      class={`mt-0.5 size-4 shrink-0 ${color}`}
     >
       {tone === "wait" ? (
         <>
@@ -639,7 +639,11 @@ function claimsView(claims: readonly Claim[], snapshot: object, focusable = fals
           class={`flex flex-col sm:flex-row sm:items-start ${focusable ? FOCUS_ROW : ""}`}
           {...(focusable ? { "data-row": "", tabindex: -1 } : {})}
         >
-          <p class="basis order-last wrap-anywhere px-3 pb-1.5 font-mono text-[10.5px] leading-4 text-faint sm:w-[32%] sm:shrink-0 sm:py-2 sm:text-right">
+          {/* One quiet line, cut with an ellipsis; the whole locator is its `title`. */}
+          <p
+            class="basis order-last truncate px-3 pb-1.5 font-mono text-[10px] leading-4 text-faint/75 sm:w-[32%] sm:shrink-0 sm:py-2 sm:text-right"
+            title={withoutRepeat(group)}
+          >
             {withoutRepeat(group)}
           </p>
           <dl class="min-w-0 flex-1 divide-y divide-border/60">
@@ -797,11 +801,35 @@ function fenceLine(wording: Chrome, record: IterationRecord): string | null {
 
 /** How an ended lap ended: the status, and the answer or reason beside it. */
 function endedHow(wording: Chrome, record: IterationRecord, nowMs: number): string {
-  const why =
-    record.gateOutcome !== null
-      ? wording.gateAnswered(record.gateOutcome)
-      : (record.reason ?? wording.noReasonRecorded);
-  return wording.endedHead(record.status, ago(record.updatedAtMs, nowMs), why);
+  return wording.endedHead(
+    record.status,
+    ago(record.updatedAtMs, nowMs),
+    endedWhy(wording, record),
+  );
+}
+
+function endedWhy(wording: Chrome, record: IterationRecord): string {
+  return record.gateOutcome !== null
+    ? wording.gateAnswered(record.gateOutcome)
+    : (record.reason ?? wording.noReasonRecorded);
+}
+
+/**
+ * A row's state as a pill and its age (the page's third design pass on #220):
+ * a word a person reads rather than the status enum. The head sentence the
+ * terminal prints -- status, age, answer -- stays whole in `title`.
+ */
+function stateHead(wording: Chrome, record: IterationRecord, tone: Tone, age: string, raw: string) {
+  return (
+    <span class="head inline-flex items-center gap-2 whitespace-nowrap" title={raw}>
+      <span
+        class={`inline-flex shrink-0 items-center rounded-full border px-2 py-px text-[11.5px] font-medium leading-4 whitespace-nowrap ${TONE[tone]}`}
+      >
+        {wording.statePill(record.status, record.gateOutcome)}
+      </span>
+      <span class="tabular-nums">{age}</span>
+    </span>
+  );
 }
 
 /** Which of the three questions a row answers, which is what its weight is decided by. */
@@ -837,8 +865,8 @@ type Question = "waiting" | "running" | "ended";
 function lapRow(
   question: Question,
   record: IterationRecord,
-  head: string,
-  lines: readonly (string | null)[],
+  head: unknown,
+  lines: readonly unknown[],
   tail: unknown = null,
   below: unknown = null,
 ) {
@@ -879,20 +907,25 @@ function lapRow(
           class={
             question === "waiting"
               ? META_LINE
-              : `${META_LINE} max-sm:max-h-10 max-sm:overflow-hidden`
+              : `${META_LINE} max-sm:max-h-15 max-sm:overflow-hidden`
           }
         >
-          <span class="head wrap-anywhere">{head}</span>
+          {head}
           {lines
-            .filter((line): line is string => line !== null)
-            .map((line) => (
-              <span class="line min-w-0 wrap-anywhere whitespace-pre-wrap">{line}</span>
-            ))}
+            .filter((line) => line !== null)
+            .map((line) =>
+              typeof line === "string" ? (
+                <span class="line min-w-0 wrap-anywhere whitespace-pre-wrap">{line}</span>
+              ) : (
+                line
+              ),
+            )}
         </p>
         {tail}
       </div>
-      <div class={META}>
-        <p class="basis">{basisLine({ form: "iteration", iterationId: record.id }, {})}</p>
+      {/* The id alone; the basis it abbreviates is the column's `title`. */}
+      <div class={META} title={basisLine({ form: "iteration", iterationId: record.id }, {})}>
+        <p class="basis">{record.id}</p>
       </div>
       {below === null ? null : <div class="col-span-full">{below}</div>}
     </li>
@@ -975,7 +1008,13 @@ function waitingView(
       return lapRow(
         "waiting",
         record,
-        wording.waitingHead(record.status, ago(record.updatedAtMs, nowMs)),
+        stateHead(
+          wording,
+          record,
+          "wait",
+          ago(record.updatedAtMs, nowMs),
+          wording.waitingHead(record.status, ago(record.updatedAtMs, nowMs)),
+        ),
         [unblockedBy(wording, record), spentLine(wording, record), fenceLine(wording, record)],
         framing === undefined ? answerLink(wording, record, token) : null,
         framing === undefined ? null : approveView(wording, record, token, framing),
@@ -1051,9 +1090,15 @@ function runningView(
       lapRow(
         "running",
         record,
-        wording.runningHead(record.status, ago(record.updatedAtMs, nowMs)),
+        stateHead(
+          wording,
+          record,
+          "run",
+          ago(record.updatedAtMs, nowMs),
+          wording.runningHead(record.status, ago(record.updatedAtMs, nowMs)),
+        ),
         [
-          whereItRuns(wording, record, transcripts.get(record.id)),
+          runsWhere(wording, record, transcripts.get(record.id)),
           spentLine(wording, record),
           fenceLine(wording, record),
         ],
@@ -1062,16 +1107,61 @@ function runningView(
   ]);
 }
 
+/**
+ * {@link whereItRuns}, with the workspace kept whole as one unit: at a narrow
+ * width a wrapped `in` with its path cut off below was a stray word. The bytes
+ * are the catalogue's; only the span boundary is this function's.
+ */
+function runsWhere(
+  wording: Chrome,
+  record: IterationRecord,
+  located: TranscriptLocation | undefined,
+) {
+  const whole = whereItRuns(wording, record, located);
+  const place = wording.runsIn("", record.workspace ?? wording.noWorkspace);
+  if (!whole.endsWith(place)) {
+    return whole;
+  }
+  const gap = /^\s*/.exec(place)?.[0] ?? "";
+  return (
+    <span class="line min-w-0 wrap-anywhere whitespace-pre-wrap">
+      {whole.slice(0, whole.length - place.length)}
+      {gap}
+      <span
+        class="inline-block max-w-full overflow-hidden align-bottom text-ellipsis whitespace-pre"
+        title={place.slice(gap.length)}
+      >
+        {place.slice(gap.length)}
+      </span>
+    </span>
+  );
+}
+
 /** *What just finished* -- the last few endings, newest first (rondo#145). */
 function endedView(wording: Chrome, ended: readonly IterationRecord[], nowMs: number) {
   return questionGroup(
     "ended",
     wording.endedHeading(ended.length),
     ended.map((record) =>
-      lapRow("ended", record, endedHow(wording, record, nowMs), [
-        spentLine(wording, record),
-        fenceLine(wording, record),
-      ]),
+      lapRow(
+        "ended",
+        record,
+        stateHead(
+          wording,
+          record,
+          endedTone(record),
+          wording.endedAgo(ago(record.updatedAtMs, nowMs)),
+          endedHow(wording, record, nowMs),
+        ),
+        [
+          // The pill already says a closed lap's answer; anything else it ended on is a line.
+          record.status === "closed" && record.gateOutcome !== null
+            ? null
+            : endedWhy(wording, record),
+          spentLine(wording, record),
+          fenceLine(wording, record),
+        ],
+      ),
     ),
   );
 }
@@ -1217,10 +1307,43 @@ function approveView(
   if (!answerable(record, token) || record.gateId === null) {
     return null;
   }
+  const known = framing.claims.filter((claim) => claim.value !== UNDETERMINED);
+  const unknown = framing.claims.filter((claim) => claim.value === UNDETERMINED);
   return (
     <div id="answering" class="mt-3 space-y-3">
       <p class="note text-[13px] leading-5 text-muted-foreground">{wording.pressNote}</p>
-      {claimsView(framing.claims, framing.snapshot, true)}
+      {/*
+       * **The claims that carry a value first, the undetermined ones in one
+       * fold** (the third design pass on #220). Folded is not dropped: the fold
+       * and every claim in it are in the document (D-0042), and with script
+       * off `page/app.css` draws it open.
+       */}
+      {known.length === 0 ? null : claimsView(known, framing.snapshot, true)}
+      {unknown.length === 0 ? null : (
+        <details id="undetermined" class="group rounded-md border border-border">
+          <summary
+            data-row=""
+            class="flex cursor-pointer list-none items-center gap-2 rounded-md px-3 py-2 text-[12.5px] leading-5 text-muted-foreground outline-none select-none hover:bg-accent focus-visible:bg-accent focus-visible:shadow-[inset_3px_0_0_var(--color-ring)] [&::-webkit-details-marker]:hidden"
+          >
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.6"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              class="size-3.5 shrink-0 text-faint transition-transform group-open:rotate-90"
+            >
+              <path d="m6 3.5 4.5 4.5L6 12.5" />
+            </svg>
+            {wording.undeterminedFold(unknown.length)}
+          </summary>
+          <div class="border-t border-border [&>div]:rounded-none [&>div]:border-0">
+            {claimsView(unknown, framing.snapshot, true)}
+          </div>
+        </details>
+      )}
       {framing.material === null ? null : (
         <pre
           class="material overflow-x-auto rounded-md border border-border bg-muted/50 p-3 font-mono text-[12px] leading-5 wrap-anywhere whitespace-pre-wrap"
@@ -1253,8 +1376,11 @@ function approveView(
         >
           {APPROVE_BODY}
         </button>
-        <span class="note min-w-0 text-xs leading-5 text-muted-foreground">
-          {wording.approveNote(record.gateId, APPROVE_BODY)}
+        <span
+          class="note min-w-0 text-[13px] leading-5 text-muted-foreground"
+          title={wording.approveNote(record.gateId, APPROVE_BODY)}
+        >
+          {wording.approvePlain}
         </span>
       </form>
     </div>

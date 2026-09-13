@@ -38,7 +38,10 @@ document.addEventListener("keydown", (event) => {
   if (event.target instanceof Element && event.target.closest("input, textarea, select")) {
     return;
   }
-  const rows = [...document.querySelectorAll("[data-row]")];
+  // Only rows on screen: a row inside a shut fold cannot take focus.
+  const rows = [...document.querySelectorAll("[data-row]")].filter(
+    (row) => row.getClientRects().length > 0,
+  );
   const at = rows.indexOf(document.activeElement);
   if (event.key === "j" || event.key === "k") {
     // From no row, either key lands on the first: there is nothing above it.
