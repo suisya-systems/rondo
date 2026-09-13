@@ -79,6 +79,7 @@ import {
   type StoredProposal,
   SUSPENDED_STATUSES,
   TERMINAL_STATUSES,
+  type ThreadMessageDraft,
   type UnconsumedDecision,
 } from "./records.js";
 
@@ -122,6 +123,12 @@ export interface ReserveInput {
    * the one caller that passes an id today.
    */
   readonly supersedesIterationId: string | null;
+  /**
+   * The message that opened the request this lap came from, or null
+   * (D-0061 rule 4). Required for `supersedesIterationId`'s reason, and refused
+   * under the write lock when it names no message that opens a request.
+   */
+  readonly requestMessageId: string | null;
   /**
    * The approval this admission spends, or null when nobody approved anything
    * (D-0022 rule 9).
@@ -218,6 +225,8 @@ export type ReserveOutcome =
       readonly occupancy: number;
     }
   | { readonly kind: "unapproved"; readonly reason: string }
+  /** The request link names no message that opens a request (D-0061 rule 4). Nothing is written. */
+  | { readonly kind: "requestRefused"; readonly reason: string }
   | { readonly kind: "defect"; readonly reason: string };
 
 /** Which of {@link HostPolicy}'s two bounds an admission was refused by. */
@@ -627,6 +636,7 @@ CREATE TABLE IF NOT EXISTS iteration (
   workspace             TEXT,
   identifiers_spent     INTEGER NOT NULL DEFAULT 0,
   supersedes_iteration_id TEXT,
+  request_message_id    TEXT,
   continuo_revision     TEXT,
   agent_type_digest     TEXT,
   config_digest         TEXT,
@@ -783,13 +793,25 @@ CREATE INDEX IF NOT EXISTS operator_verification_claim_by_iteration
 --      has to remember to write, and elevation is the first thing that could
 --      have violated it by accident.
 --
--- **No created_at_ms**, which is the one absence worth naming twice: a caller
--- clock on an append-only table is exactly what CHANGE_SOURCES enumerates, so
--- adding one would settle ordering and put messages in the operator's "what
--- changed" feed -- two decisions rule 3 leaves open, taken as a side effect of
--- a column.
+-- **D-0061 rule 2 widens it into the request thread**, and takes the choices
+-- above on purpose: body, author_kind / author_id, in_reply_to (null opens a
+-- request), at_ms (a caller clock, so a message is in CHANGE_SOURCES), bases
+-- (canonical JSON of locators, non-empty on a drafter message) and asks (0/1).
+-- Every one is nullable because an elevation's message, written before or
+-- beside them, is still only an id; recordThreadMessage is the writer that
+-- fills them, and it refuses what rule 2 refuses. Rule 3's refusals -- a gate
+-- answer, a decision, a status, a plan, an agent type or a tier, an edit or a
+-- deletion -- are held by the shape: no column for any of them and no writer
+-- that updates.
 CREATE TABLE IF NOT EXISTS conversation_message (
-  message_id                  TEXT    PRIMARY KEY
+  message_id                  TEXT    PRIMARY KEY,
+  body                        TEXT,
+  author_kind                 TEXT,
+  author_id                   TEXT,
+  in_reply_to                 TEXT,
+  at_ms                       INTEGER,
+  bases                       TEXT,
+  asks                        INTEGER
 );
 
 -- D-0022 rule 4, extended by D-0032 rules 1, 2, 3, 7 and 8.
@@ -1086,6 +1108,9 @@ const ADDED_COLUMNS = Object.freeze({
   workspace: "TEXT",
   identifiers_spent: "INTEGER NOT NULL DEFAULT 0",
   supersedes_iteration_id: "TEXT",
+  // D-0061 rule 4: nullable and no back-fill, for supersedes_iteration_id's
+  // reason -- no row written before it could have named a request.
+  request_message_id: "TEXT",
   permission_denials: "TEXT",
   // D-0046's three, and the third entry to add a column: nullable, no
   // back-fill, and nothing a database written before them could have recorded
@@ -1108,6 +1133,43 @@ const LAP_READING_ADDED_COLUMNS = Object.freeze({
   graded: "TEXT",
   delivered_digest: "TEXT",
 });
+
+/**
+ * D-0061 rule 2's seven columns, for a `conversation_message` created while it
+ * was one column. No back-fill: an existing row is an elevation's id and has
+ * no body, author or clock to recover.
+ */
+const CONVERSATION_ADDED_COLUMNS = Object.freeze({
+  body: "TEXT",
+  author_kind: "TEXT",
+  author_id: "TEXT",
+  in_reply_to: "TEXT",
+  at_ms: "INTEGER",
+  bases: "TEXT",
+  asks: "INTEGER",
+});
+
+/** Add every column of `columns` that `table` lacks, inside the caller's transaction. */
+function addMissingColumns(
+  connection: DatabaseSync,
+  table: string,
+  columns: Readonly<Record<string, string>>,
+): readonly string[] {
+  const present = new Set(
+    connection
+      .prepare(`SELECT name FROM pragma_table_xinfo('${table}')`)
+      .all()
+      .map((row) => String((row as SqlRow)["name"])),
+  );
+  const added: string[] = [];
+  for (const [column, declaration] of Object.entries(columns)) {
+    if (!present.has(column)) {
+      connection.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${declaration}`);
+      added.push(column);
+    }
+  }
+  return added;
+}
 
 /**
  * Bring an existing database up to the schema above.
@@ -1142,33 +1204,11 @@ function migrate(connection: DatabaseSync): void {
   // race for the write lock rather than for the `ALTER`.
   connection.exec("BEGIN IMMEDIATE");
   try {
-    const present = new Set(
-      connection
-        .prepare("SELECT name FROM pragma_table_xinfo('iteration')")
-        .all()
-        .map((row) => String((row as SqlRow)["name"])),
-    );
-    const added: string[] = [];
-    for (const [column, declaration] of Object.entries(ADDED_COLUMNS)) {
-      if (!present.has(column)) {
-        connection.exec(`ALTER TABLE iteration ADD COLUMN ${column} ${declaration}`);
-        added.push(column);
-      }
-    }
-    if (added.includes("identifiers_spent")) {
+    if (addMissingColumns(connection, "iteration", ADDED_COLUMNS).includes("identifiers_spent")) {
       backfill(connection);
     }
-    const readingPresent = new Set(
-      connection
-        .prepare("SELECT name FROM pragma_table_xinfo('lap_reading')")
-        .all()
-        .map((row) => String((row as SqlRow)["name"])),
-    );
-    for (const [column, declaration] of Object.entries(LAP_READING_ADDED_COLUMNS)) {
-      if (!readingPresent.has(column)) {
-        connection.exec(`ALTER TABLE lap_reading ADD COLUMN ${column} ${declaration}`);
-      }
-    }
+    addMissingColumns(connection, "lap_reading", LAP_READING_ADDED_COLUMNS);
+    addMissingColumns(connection, "conversation_message", CONVERSATION_ADDED_COLUMNS);
     connection.exec("DROP INDEX IF EXISTS iteration_one_live");
     connection.exec("COMMIT");
   } catch (error) {
@@ -1253,6 +1293,7 @@ const SELECT_COLUMNS = [
   "workspace",
   "identifiers_spent",
   "supersedes_iteration_id",
+  "request_message_id",
   "continuo_revision",
   "agent_type_digest",
   "config_digest",
@@ -1506,6 +1547,13 @@ export function iterationStore(connection: DatabaseSync, policy: HostPolicy): It
           if (lineage !== null) {
             return { kind: "defect", reason: lineage };
           }
+          // **The request link, under the same lock and before the spend**
+          // (D-0061 rule 4), so a refusal spends no approval. Unlike the
+          // lineage it is a refusal and not a defect: the id is a person's.
+          const request = requestRefusal(connection, input.requestMessageId);
+          if (request !== null) {
+            return { kind: "requestRefused", reason: request };
+          }
           // **The approval is spent here, before the row, and in the row's own
           // transaction** (D-0022 rule 9, `advisory.md` 6.3). Under rule 17 a
           // retry is an ordinary admission rather than a successor contract, so
@@ -1525,8 +1573,8 @@ export function iterationStore(connection: DatabaseSync, policy: HostPolicy): It
             .prepare(
               "INSERT INTO iteration (id, status, request, plan, plan_digest, attempts, " +
                 "run_id, topic_branch, workspace, identifiers_spent, supersedes_iteration_id, " +
-                "created_at_ms, updated_at_ms) VALUES (?, 'planned', ?, ?, ?, 1, ?, ?, ?, 0, " +
-                "?, ?, ?)",
+                "request_message_id, created_at_ms, updated_at_ms) " +
+                "VALUES (?, 'planned', ?, ?, ?, 1, ?, ?, ?, 0, ?, ?, ?, ?)",
             )
             // One attempt, not zero: the row exists because an attempt is being
             // made. `nextStep` compares the policy's ceiling against a *fresh*
@@ -1547,6 +1595,7 @@ export function iterationStore(connection: DatabaseSync, policy: HostPolicy): It
               input.topicBranch,
               input.workspace,
               input.supersedesIterationId,
+              input.requestMessageId,
               input.nowMs,
               input.nowMs,
             );
@@ -1905,6 +1954,18 @@ export interface AdvisoryRecord {
    */
   recordMessage(messageId: string): Promise<RecordOutcome>;
   /**
+   * Append one message to a request thread -- **or refuse it** (D-0061 rules
+   * 2 and 3).
+   *
+   * Refused, inside one `BEGIN IMMEDIATE`: an id already in the conversation
+   * (D-0036 rule 3); an author kind that is not `operator` or `drafter`; a blank
+   * author id or an empty body; an `inReplyTo` that is no thread message; a
+   * `drafter` message with no bases (rule 2.6); and a `message:` basis naming
+   * no message in the conversation, for D-0036 rule 4's reason. Nothing
+   * updates or deletes a message: a correction is a reply.
+   */
+  recordThreadMessage(draft: ThreadMessageDraft): Promise<RecordOutcome>;
+  /**
    * Append one immutable proposal (D-0022 rule 4) -- **or refuse it**
    * (D-0036 rule 4).
    *
@@ -2083,11 +2144,8 @@ export interface AdvisoryRecord {
  * is written by the render at the end of the render, so including it would make
  * every look report itself as a change the operator has not seen.
  *
- * `conversation_message` is absent rather than excluded: it carries no clock at
- * all, so the membership rule above never reaches it. D-0036 rule 3 leaves
- * ordering undecided, and a table with no timestamp is what that looks like
- * here -- the task that gives a message a clock is the one that decides whether
- * a message is a change the operator is shown.
+ * `conversation_message` joined when D-0061 rule 2.5 gave a message a clock,
+ * which was D-0036 rule 3's open question answered on purpose.
  *
  * `iteration` contributes `updated_at_ms` rather than `created_at_ms`: it is
  * the one mutable row in the store, and what changed about it is when it last
@@ -2118,6 +2176,14 @@ const CHANGE_SOURCES = Object.freeze([
     at: "consumed_at_ms",
   },
   { kind: "operator_attention", table: "operator_attention", id: "subject_id", at: "at_ms" },
+  // D-0061 rule 2.5: a thread message carries a clock, so it is a change. An
+  // elevation's id-only row has a NULL at_ms and never matches the bound.
+  {
+    kind: "conversation_message",
+    table: "conversation_message",
+    id: "message_id",
+    at: "at_ms",
+  },
 ] as const);
 
 /**
@@ -2166,6 +2232,11 @@ export function openAdvisoryRecord(databasePath: string): AdvisoryRecord {
 
 export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
   connection.exec(SCHEMA);
+  // The thread's columns, for a database this port opens before the iteration
+  // store has migrated it: `changedSince` names `at_ms`.
+  immediateTransaction(connection, () =>
+    addMissingColumns(connection, "conversation_message", CONVERSATION_ADDED_COLUMNS),
+  );
 
   /**
    * Run one insert, translating a throw into an outcome.
@@ -2193,9 +2264,29 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
    * refusal, whether the operator's observation arrives on its own or as half
    * of an elevation.
    */
-  const insertMessage = (messageId: string): RecordOutcome => {
+  const insertMessage = (messageId: string, thread?: ThreadMessageDraft): RecordOutcome => {
     try {
-      connection.prepare("INSERT INTO conversation_message (message_id) VALUES (?)").run(messageId);
+      if (thread === undefined) {
+        connection
+          .prepare("INSERT INTO conversation_message (message_id) VALUES (?)")
+          .run(messageId);
+      } else {
+        connection
+          .prepare(
+            "INSERT INTO conversation_message (message_id, body, author_kind, author_id, " +
+              "in_reply_to, at_ms, bases, asks) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+          )
+          .run(
+            messageId,
+            thread.body,
+            thread.authorKind,
+            thread.authorId,
+            thread.inReplyTo,
+            thread.atMs,
+            canonicalJson([...thread.bases]),
+            thread.asks ? 1 : 0,
+          );
+      }
       return { kind: "recorded" };
     } catch (error) {
       if (isUniqueViolation(error)) {
@@ -2293,6 +2384,20 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
   return {
     async recordMessage(messageId: string): Promise<RecordOutcome> {
       return insertMessage(messageId);
+    },
+
+    async recordThreadMessage(draft: ThreadMessageDraft): Promise<RecordOutcome> {
+      try {
+        return immediateTransaction<RecordOutcome>(connection, () => {
+          const refusal = threadMessageRefusal(connection, draft);
+          if (refusal !== null) {
+            return { kind: "refused", reason: refusal };
+          }
+          return insertMessage(draft.messageId, draft);
+        });
+      } catch (error) {
+        return { kind: "defect", reason: describe(error) };
+      }
     },
 
     async recordProposal(draft: ProposalDraft): Promise<RecordOutcome> {
@@ -2833,6 +2938,104 @@ function spendDecision(
   return null;
 }
 
+/**
+ * Each basis form and the fields its locator needs, mirroring the advisory's
+ * closed `Basis` union (D-0032 rule 2, plus D-0061 rule 2.6's `message`). The
+ * store may not import that type, so a form added there is added here too.
+ */
+const BASIS_LOCATOR_FIELDS: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+  snapshot: { pointer: "string" },
+  iteration: { iterationId: "string" },
+  gateTransition: { gateId: "string", transitionSeq: "number" },
+  continuoRun: { runId: "string" },
+  repository: { path: "string", commit: "string", firstLine: "number", lastLine: "number" },
+  message: { messageId: "string" },
+};
+
+/**
+ * Why a thread message may not be written, or null (D-0061 rules 2 and 3).
+ *
+ * Read inside the writer's transaction, so the message a reply or a basis
+ * names is still there when the row lands. The duplicate id is the insert's own
+ * refusal and is not repeated here.
+ */
+function threadMessageRefusal(connection: DatabaseSync, draft: ThreadMessageDraft): string | null {
+  if (draft.authorKind !== "operator" && draft.authorKind !== "drafter") {
+    return `a thread message is written by an operator or a drafter, and '${String(draft.authorKind)}' is neither (D-0061 rule 2.3)`;
+  }
+  if (draft.authorId.trim() === "") {
+    return "a thread message names who wrote it, and its author id is blank (D-0061 rule 2.3)";
+  }
+  if (draft.body === "") {
+    return "a thread message holds the words as written, and this one holds none (D-0061 rule 2.2)";
+  }
+  if (draft.authorKind === "drafter" && draft.bases.length === 0) {
+    return (
+      `the drafter message '${draft.messageId}' carries no basis, and a sentence rondo composes ` +
+      "about a request must lead back to the words it rests on: D-0061 rule 2.6 refuses one " +
+      "resting on nothing"
+    );
+  }
+  const isThreadMessage = (id: string): boolean =>
+    connection
+      .prepare(
+        "SELECT 1 FROM conversation_message WHERE message_id = ? AND author_kind IS NOT NULL",
+      )
+      .get(id) !== undefined;
+  if (draft.inReplyTo !== null && !isThreadMessage(draft.inReplyTo)) {
+    return (
+      `'${draft.messageId}' replies to '${draft.inReplyTo}', which is no message in a request ` +
+      "thread: a reply to nothing would be a thread nobody can follow back (D-0061 rule 2.4)"
+    );
+  }
+  for (const basis of draft.bases) {
+    const form = basis["form"];
+    const fields = typeof form === "string" ? BASIS_LOCATOR_FIELDS[form] : undefined;
+    if (
+      fields === undefined ||
+      !Object.entries(fields).every(([field, type]) => typeof basis[field] === type)
+    ) {
+      return (
+        `a basis of '${draft.messageId}' is ${canonicalJson(basis)}, which is not a complete ` +
+        "locator in any form D-0032 rule 2 and D-0061 rule 2.6 define"
+      );
+    }
+    if (basis["form"] === "message") {
+      const target = basis["messageId"];
+      const found =
+        typeof target === "string" &&
+        connection
+          .prepare("SELECT 1 FROM conversation_message WHERE message_id = ?")
+          .get(target) !== undefined;
+      if (!found) {
+        return (
+          `a basis of '${draft.messageId}' is message:${String(target)}, which is no message in ` +
+          "the conversation: a locator to nothing is a basis nobody can follow (D-0061 rule 2.6)"
+        );
+      }
+    }
+  }
+  return null;
+}
+
+/** Why `messageId` cannot be a lap's request link, or null when it can (D-0061 rule 4). */
+function requestRefusal(connection: DatabaseSync, messageId: string | null): string | null {
+  if (messageId === null) {
+    return null;
+  }
+  const row = connection
+    .prepare("SELECT author_kind, in_reply_to FROM conversation_message WHERE message_id = ?")
+    .get(messageId) as SqlRow | undefined;
+  if (row !== undefined && row["author_kind"] !== null && row["in_reply_to"] === null) {
+    return null;
+  }
+  return (
+    `'${messageId}' ${row === undefined ? "is no message in the conversation" : "is a message that does not open a request"}, ` +
+    "and a lap names the message that opened its request or none (D-0061 rule 4). Nothing was " +
+    "written: no iteration was reserved and no approval was spent."
+  );
+}
+
 function lineageDefect(connection: DatabaseSync, input: ReserveInput): string | null {
   const predecessor = input.supersedesIterationId;
   if (predecessor === null) {
@@ -3009,6 +3212,7 @@ function toRecord(row: SqlRow): IterationRecord {
     workspace: optionalText(row, "workspace"),
     identifiersSpent: requireInteger(row, "identifiers_spent"),
     supersedesIterationId: optionalText(row, "supersedes_iteration_id"),
+    requestMessageId: optionalText(row, "request_message_id"),
     continuoRevision: optionalText(row, "continuo_revision"),
     agentTypeDigest: optionalText(row, "agent_type_digest"),
     configDigest: optionalText(row, "config_digest"),

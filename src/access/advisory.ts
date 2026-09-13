@@ -291,6 +291,8 @@ export function basisLine(basis: Basis, snapshot: object): string {
       return `gate ${basis.gateId} transition ${String(basis.transitionSeq)}`;
     case "continuoRun":
       return `continuo run ${basis.runId}`;
+    case "message":
+      return `message ${basis.messageId}`;
     default:
       return `${basis.path}:${String(basis.firstLine)}-${String(basis.lastLine)} at ${basis.commit}`;
   }
@@ -2065,7 +2067,7 @@ function snapshotBasisFreshness(pointer: string, ctx: FreshnessContext): Freshne
 }
 
 /**
- * One basis's freshness, exhaustive over {@link Basis}'s five forms
+ * One basis's freshness, exhaustive over {@link Basis}'s six forms
  * (`D-0038` rule 4). A sixth form added to the union and forgotten here is a
  * type error, not a screen that quietly says a premise held.
  */
@@ -2093,6 +2095,10 @@ const BASIS_FRESHNESS: {
       "deciding a repository citation needs a ref to compare against, which is a policy nothing in " +
         "rondo owns yet (D-0033 rule 9, D-0037's residual)",
     ),
+  // Append-only (D-0061 rule 3) means an existing message cannot move, not that
+  // the one cited exists, and nothing here reads the thread yet.
+  message: () =>
+    undetermined("rondo has no reader for a thread message yet, so it cannot confirm this one"),
 };
 
 /** What re-gathering produced for a proposal's candidates or its readings, so bases can be compared. */

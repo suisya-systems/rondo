@@ -85,6 +85,7 @@ const reserveOne = async (store: ReturnType<typeof freshStore>, id: string, nowM
     spend: null,
     nowMs,
     supersedesIterationId: null,
+    requestMessageId: null,
     ...tripleFor(id),
   });
 
@@ -142,6 +143,7 @@ test("the plan digest does not depend on the order the plan's keys were written 
     spend: null,
     nowMs: 1,
     supersedesIterationId: null,
+    requestMessageId: null,
     ...tripleFor("i-0001"),
   });
   await store.transition("i-0001", "planned", "closed", {}, 2);
@@ -152,6 +154,7 @@ test("the plan digest does not depend on the order the plan's keys were written 
     spend: null,
     nowMs: 3,
     supersedesIterationId: null,
+    requestMessageId: null,
     ...tripleFor("i-0002"),
   });
 
@@ -562,6 +565,7 @@ test("openIterationStore opens a store by path, schema applied", async () => {
     spend: null,
     nowMs: 1_000,
     supersedesIterationId: null,
+    requestMessageId: null,
     ...tripleFor("iter-open"),
   });
   expect(reserved.kind).toBe("reserved");

@@ -53,6 +53,7 @@ const reserveOne = async (store: ReturnType<typeof freshStore>, id: string, nowM
     spend: null,
     nowMs,
     supersedesIterationId: null,
+    requestMessageId: null,
     ...tripleFor(id),
   });
 

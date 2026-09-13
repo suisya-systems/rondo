@@ -169,6 +169,7 @@ export async function admit(
   id: string,
   supersedesIterationId: string | null = null,
   spend: DecisionSpend | null = null,
+  requestMessageId: string | null = null,
 ): Promise<ConductorReport> {
   const lines: string[] = [];
   const admission = nextStep(null, policy);
@@ -240,6 +241,7 @@ export async function admit(
     request: validated.plan.prompt,
     plan: planPayload(admitted.plan),
     supersedesIterationId,
+    requestMessageId,
     // **Carried, never read** (D-0022 rule 17). The comparison this authorises
     // is the store's, against the digest the composition root composed from
     // this very plan; the loop's part is that the two writes are one.
@@ -293,6 +295,9 @@ export async function admit(
           "still stands wherever it stood.",
       );
       return { iterationId: null, status: null, lines: Object.freeze(lines) };
+    case "requestRefused":
+      lines.push(`Refused: ${reservation.reason}`);
+      return { iterationId: null, status: null, lines: Object.freeze(lines) };
     case "defect":
       lines.push(`The store could not reserve an iteration: ${reservation.reason}`);
       return { iterationId: null, status: null, lines: Object.freeze(lines) };
@@ -310,6 +315,11 @@ export async function admit(
         lines.push(
           `It is a revision of iteration ${reservation.record.supersedesIterationId}, and the ` +
             "row records that rather than leaving it to be inferred from the branch names.",
+        );
+      }
+      if (reservation.record.requestMessageId !== null) {
+        lines.push(
+          `It came from the request opened by message ${reservation.record.requestMessageId}.`,
         );
       }
       return drive(ports, reservation.record, lines);

@@ -450,8 +450,17 @@ export async function admit(
   id: string,
   supersedesIterationId: string | null = null,
   spend: DecisionSpend | null = null,
+  requestMessageId: string | null = null,
 ): Promise<ConductorReport> {
-  const report = await admitIteration(ports, plan, policy, id, supersedesIterationId, spend);
+  const report = await admitIteration(
+    ports,
+    plan,
+    policy,
+    id,
+    supersedesIterationId,
+    spend,
+    requestMessageId,
+  );
   if (report.status !== "abandoned" || report.iterationId === null) {
     return report;
   }

@@ -237,6 +237,7 @@ async function reserve(
     spend: null,
     nowMs: 1_000,
     supersedesIterationId: null,
+    requestMessageId: null,
     runId: `rondo-${id}`,
     topicBranch: `rondo/${id}`,
     workspace: `/srv/work/${id}`,

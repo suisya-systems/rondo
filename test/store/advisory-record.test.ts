@@ -414,7 +414,7 @@ test("a decision naming no proposal at all is refused", async () => {
 
 // --- The conversation, and rule 4's writer refusal (D-0036) ---------------
 
-test("a message is an id and nothing else, so a gate answer cannot live there", async () => {
+test("an elevation's message is still an id alone, so a gate answer cannot live there", async () => {
   // **D-0036 rule 3's three properties, read off the schema.** The third one --
   // a gate answer never lives in the conversation (D-0020 rule 5) -- is held by
   // the shape rather than by a CHECK: there is no column to put a body in, so
@@ -432,7 +432,12 @@ test("a message is an id and nothing else, so a gate answer cannot live there", 
         unknown
       >[]
     ).map((column) => column["name"]),
-  ).toEqual(["message_id"]);
+  ).not.toContain("gate_answer");
+  // D-0061 rule 2 widened the table; an elevation still writes the id alone.
+  expect(connection.prepare("SELECT body, author_kind FROM conversation_message").get()).toEqual({
+    body: null,
+    author_kind: null,
+  });
 });
 
 test("a message id is immutable: a second row under one id is refused", async () => {
@@ -794,6 +799,7 @@ test("terminal iterations are enumerable, which nothing else in the store does",
       spend: null,
       nowMs: at,
       supersedesIterationId: null,
+      requestMessageId: null,
       runId: `rondo-${id}`,
       topicBranch: `rondo/${id}`,
       workspace: `/srv/work/${id}`,
@@ -828,6 +834,7 @@ test("what changed since a mark spans the record kinds and includes the bound", 
     spend: null,
     nowMs: 1_000,
     supersedesIterationId: null,
+    requestMessageId: null,
     runId: "rondo-i-0001",
     topicBranch: "rondo/i-0001",
     workspace: "/srv/work/i-0001",

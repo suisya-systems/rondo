@@ -218,6 +218,8 @@ export type ReserveOutcome =
     }
   /** The approval this admission carried is one the store would not spend. */
   | { readonly kind: "unapproved"; readonly reason: string }
+  /** The request link names no message that opens a request (D-0061 rule 4). */
+  | { readonly kind: "requestRefused"; readonly reason: string }
   | { readonly kind: "defect"; readonly reason: string };
 
 /** Which of the host's two bounds an admission was refused by (D-0023 rule 8). */
@@ -375,6 +377,8 @@ export interface ReserveInput {
    * would be an assertion rather than a record.
    */
   readonly supersedesIterationId: string | null;
+  /** The message that opened this lap's request, or null (D-0061 rule 4). Carried, never read. */
+  readonly requestMessageId: string | null;
   /**
    * The approval this admission spends, or null when nobody approved anything.
    *
