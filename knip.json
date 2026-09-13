@@ -9,6 +9,5 @@
   ],
   "project": ["src/**/*.{ts,mts,cts,tsx}", "scripts/**/*.mjs", "test/**/*.ts", "page/**/*.css"],
   "ignoreExportsUsedInFile": true,
-  "vitest": false,
-  "ignoreDependencies": ["@hono/node-server"]
+  "vitest": false
 }

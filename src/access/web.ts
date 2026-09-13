@@ -30,7 +30,7 @@
  *
  * **A click, though, is a person answering a gate.** So the page carries one
  * button, and the whole of what it may write arrives as a *second* port holding
- * a single function ({@link AnswerFromWeb}) rather than a store: the page's
+ * a single capability (`AnswerPort`, in `src/access/web-app.ts`) rather than a store: the page's
  * writing vocabulary is one sentence long, and widening it is a visible change
  * to a type. No type can tell an unattended redraw from a human's click -- they
  * differ in whether somebody was at the keyboard, which is not in the data -- so
@@ -54,7 +54,7 @@
  * gate is answered, by the same `explain` writer the terminal uses -- and if it
  * cannot be written, nothing is answered and the person is told, which is
  * D-0022 rule 18's order applied to a page that had already drawn what it was
- * about to act on. It happens inside {@link AnswerFromWeb} rather than here for
+ * about to act on. It happens inside the answer port rather than here for
  * D-0041 rule 4's reason: one function is still the whole of what this surface
  * may write.
  *
@@ -69,10 +69,15 @@
  * server binds `127.0.0.1` and nothing else, so what protects the page is that
  * it is not reachable rather than a password rondo would have to store,
  * rotate and get right.
+ *
+ * **This module renders and negotiates; it does not serve** (D-0059 rule 2).
+ * The server -- routing, the `Host` check, the security headers, the press and
+ * the one write route -- is `src/access/web-app.ts`, on Hono. What stays here
+ * is rondo's content and D-0056's five steps (D-0059 rule 4), both of which are
+ * functions of values and not of a socket, which is also why none of this
+ * module's tests needs one.
  */
-import { randomUUID } from "node:crypto";
-import { readFile } from "node:fs/promises";
-import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { parseAccept } from "hono/utils/accept";
 import {
   type AdvisorySnapshot,
   type Claim,
@@ -140,21 +145,9 @@ export interface WebPorts extends InboxReadPorts {
    */
   readonly hostLanguage: string | null;
   /**
-   * The whole of what this surface may write (D-0041 rules 4 and 7), or null
-   * when there is nobody to write as.
-   *
-   * One function and not a store handle, deliberately: with an `IterationStore`
-   * here every later edit to this module could write anything a store can write
-   * and the compiler would agree, and the boundary would be back to being a
-   * promise. Null when `RONDO_APPROVER` is unset, which is also when no button
-   * is drawn -- rondo does not act for an unnamed person on a screen either
-   * (D-0020 rule 2).
-   */
-  readonly answer: AnswerFromWeb | null;
-  /**
    * What the lap actually did, as `rondo answer` lists it (D-0029 rule 2).
    *
-   * A function for {@link answer}'s reason turned the other way round: the
+   * A function for the answer port's reason turned the other way round: the
    * material is read out of a workspace with `git`, and a page that could spawn
    * one would have a capability nothing on this surface should hold. So the
    * caller reads it and this module renders it.
@@ -180,51 +173,155 @@ export interface WebPorts extends InboxReadPorts {
 export type LapMaterial = (wording: Chrome, record: IterationRecord) => Promise<readonly string[]>;
 
 /**
- * Record the framing this press rests on, carry one body to one iteration's
- * open gate, and say what happened.
- *
- * The caller supplies this; nothing about continuo, a gate walk, an actor or
- * the ledger is known here. `ok` false is a refusal a person can act on -- a
- * row that ended, a gate already closed, a continuo that will not start, or a
- * framing that could not be recorded (D-0042 rule 3) -- and the page shows
- * `note` rather than redrawing, because a redraw would show a gate that is
- * still open and no reason why.
- */
-export type AnswerFromWeb = (
-  iterationId: string,
-  body: string,
-) => Promise<{ readonly ok: boolean; readonly note: string }>;
-
-/**
  * The one word the button carries (D-0041 rule 7).
  *
  * Read from this constant on the way *in* rather than from the posted form: the
  * form's own `body` field is not trusted, so the page's writing vocabulary is
  * one word whatever a hand-written request says.
  */
-const APPROVE_BODY = "approve";
+export const APPROVE_BODY = "approve";
+
+/**
+ * The page's stylesheet, as the exact bytes between `<style>` and `</style>`.
+ *
+ * **A constant so that its digest can be the policy** (D-0059 rule 6, R4's
+ * `default-src 'self'`). The server's CSP admits this one inline block by its
+ * `sha256` and no other inline style, which keeps `style-src` from needing
+ * `'unsafe-inline'` while the views are still this module's hand-written
+ * markup. It goes when the views move onto the built `app.css`.
+ */
+export const PAGE_STYLE = `/* A ledger read by one person many times a day, so: two type roles, one spacing
+   scale, and three states that do not weigh the same.
+
+   Both palettes are written out rather than inherited. color-scheme is kept
+   so the button and the scrollbars follow the reader's setting, but every
+   surface, rule and ink below is a token declared in both modes -- a page that
+   leaned on the user-agent defaults would have its contrast decided elsewhere,
+   and the one thing this screen has to hold is that 'waiting' reads as waiting
+   from across a room. */
+:root {
+  color-scheme: light dark;
+  /* Space is a scale, not a per-element decision (rondo#153). */
+  --s1: .25rem; --s2: .5rem; --s3: .75rem; --s4: 1.25rem; --s5: 2rem;
+  /* Values are monospace because they are a ledger and columns must line up;
+     headings, notes and labels are not, because they are prose about it. */
+  /* The tertiary ink is the floor: it carries the basis lines, the claim
+     labels and an ended lap's own request, which are text a person reads
+     rather than decoration. Both values clear 4.5:1 against all three grounds
+     they land on -- page, section surface and the waiting wash -- so recessive
+     is a step down in weight and never a step below legible. */
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --sans: ui-sans-serif, system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --bg: #eceef1;
+  --surface: #fbfcfd;
+  --ink: #14181c;
+  --ink-2: #4b545d;
+  --ink-3: #646d77;
+  --rule: #d2d8de;
+  --link: #0f5480;
+  --wait-edge: #b26206;
+  --wait-ink: #8a4b04;
+  --wait-wash: #fbf1e0;
+  --wait-press: #a75c06;
+  --wait-press-ink: #fffaf3;
+  --run-edge: #2a79ad;
+  --run-ink: #1b5a83;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f1214;
+    --surface: #171b1f;
+    --ink: #e3e7ea;
+    --ink-2: #a2abb3;
+    --ink-3: #848e97;
+    --rule: #292f35;
+    --link: #6cb2e6;
+    --wait-edge: #d18e2f;
+    --wait-ink: #e9b25f;
+    --wait-wash: #221a0d;
+    --wait-press: #d18e2f;
+    --wait-press-ink: #17130c;
+    --run-edge: #3d86bb;
+    --run-ink: #7dbce5;
+  }
+}
+body { background: var(--bg); color: var(--ink);
+  font: 14px/1.55 var(--mono); margin: 0 auto; max-width: 64rem;
+  padding: var(--s5) var(--s4); }
+/* Every block starts at zero and the scale puts it back, so no two margins
+   stack and nothing carries a spacing decision of its own. */
+h1, h2, p, pre, form { margin: 0; }
+body > * + * { margin-top: var(--s4); }
+h1 { color: var(--ink-3); font: 600 .75rem/1 var(--sans); letter-spacing: .16em;
+  text-transform: uppercase; }
+h2 { color: var(--ink-2); font: 600 .95rem/1.3 var(--sans); margin: 0 0 var(--s3); }
+section { background: var(--surface); border-left: 3px solid var(--rule);
+  padding: var(--s3) var(--s4); }
+section + section { margin-top: var(--s3); }
+a { color: var(--link); text-underline-offset: .2em; }
+pre { white-space: pre-wrap; word-break: break-word; margin: 0; }
+.note, .basis, .label { color: var(--ink-3); font-family: var(--sans); }
+.note { color: var(--ink-2); font-size: .8125rem; }
+.basis { font-size: .75rem; }
+.group { border-left: 2px solid var(--rule); padding-left: var(--s3); }
+.group + .group { margin-top: var(--s3); }
+.lap > * + *, .group > * + * { margin-top: var(--s1); }
+/* Laps are separated by a hairline rather than each carrying a rule of its own:
+   the section's own edge already says which question they answer. */
+.lap + .lap { border-top: 1px solid var(--rule); margin-top: var(--s3);
+  padding-top: var(--s3); }
+.head { font-weight: 600; }
+.request, .line, .value { white-space: pre-wrap; word-break: break-word; }
+.line { color: var(--ink-2); font-size: .8125rem; }
+.claim { display: grid; grid-template-columns: minmax(9rem, 14rem) 1fr; gap: var(--s3); }
+.label { font-size: .8125rem; }
+pre, .material { background: var(--bg); border: 1px solid var(--rule);
+  font-size: .8125rem; padding: var(--s2) var(--s3); }
+.material { margin-top: var(--s3); }
+
+/* *What needs me* is the only part of this page anybody can act on, so it is
+   the only part that is allowed to shout: its own wash, a heavier edge, the
+   request set a size larger, and the one button on the page. */
+.waiting { background: var(--wait-wash); border-left: 4px solid var(--wait-edge); }
+.waiting h2 { color: var(--wait-ink); font-size: 1.05rem; font-weight: 700; }
+.waiting .head { color: var(--wait-ink); font-size: .9375rem; }
+.waiting .request { font-size: .9375rem; }
+.waiting .lap + .lap { border-top-color: var(--wait-edge); }
+.running { border-left-color: var(--run-edge); }
+.running h2 { color: var(--run-ink); }
+/* An ended lap is over: it is on the page to be checked against, not read, so
+   it recedes to the page's own ground and to secondary ink. (No section's own
+   heading text is spelled in this stylesheet -- the lead is found by position
+   on the page, and a comment naming one would be found first.) */
+.ended { background: none; }
+.ended h2, .ended .head, .ended .request { color: var(--ink-3); }
+.ended .head { font-weight: 500; }
+.idle { border-left-color: var(--rule); }
+.nothing { color: var(--ink-2); font-family: var(--sans); font-size: 1rem; }
+
+.approve { align-items: center; display: flex; flex-wrap: wrap; gap: var(--s3);
+  margin-top: var(--s4); }
+.approve button { background: var(--wait-press); border: 0; color: var(--wait-press-ink);
+  cursor: pointer; font: 600 .875rem var(--sans); letter-spacing: .04em;
+  padding: .55rem 1.75rem; }
+.approve button:hover { filter: brightness(1.08); }
+:focus-visible { outline: 2px solid var(--wait-edge); outline-offset: 2px; }
+.fold { border-top: 1px solid var(--rule); font-family: var(--sans);
+  font-size: .8125rem; margin-top: var(--s5); padding-top: var(--s3); }
+/* The switch sits with the fold's link and reads as the same kind of thing: the
+   two ways off this screen, in the same type at the same size (D-0056 rule 10).
+   No second rule above it -- one line separates the chrome from the ledger, and
+   a second would make the switch a footer of its own. */
+.switch { font-family: var(--sans); font-size: .8125rem; margin-top: var(--s2); }
+@media (max-width: 40rem) {
+  body { padding: var(--s4) var(--s3); }
+  section { padding: var(--s3); }
+  .claim { grid-template-columns: 1fr; gap: 0; }
+}
+`;
 
 /** How often a live view redraws itself, in seconds. Matches `page/poll.js`. */
 const REFRESH_SECONDS = 5;
-
-/**
- * The two files a live view loads, and the paths this process serves them on.
- *
- * **Files rather than an inline script** (D-0054 rules 5 and 6): what runs in
- * the browser is bytes this tree holds, one of them the digest-pinned
- * `idiomorph` `0.8.0` release and the other rondo's own poller, so a reader can
- * diff what the page executes against what was vendored. No CDN tag, no build
- * step, no bundler: they are read off disk and written to the socket.
- *
- * Resolved against this module rather than against the working directory, the
- * way `cli.ts` reads `cadenza.pin.json`: the path from `dist/access/` and from
- * `src/access/` is the same, so the served bytes do not depend on where the
- * process was started.
- */
-const ASSETS: ReadonlyMap<string, URL> = new Map([
-  ["/idiomorph-0.8.0.min.js", new URL("../../vendor/idiomorph-0.8.0.min.js", import.meta.url)],
-  ["/poll.js", new URL("../../page/poll.js", import.meta.url)],
-]);
 
 /**
  * Which of the one page's three views is being read.
@@ -288,7 +385,7 @@ function isLive(view: PageView): boolean {
  * address reads as *the view, in this language* rather than the other way
  * round.
  */
-function viewHref(view: PageView, tag: string): string {
+export function viewHref(view: PageView, tag: string): string {
   const lang = `lang=${encodeURIComponent(tag)}`;
   switch (view.kind) {
     case "reading":
@@ -310,7 +407,7 @@ function viewHref(view: PageView, tag: string): string {
  * it is a seed rather than a second home of the state, because rule 4 means the
  * tag in force is always the URL's.
  */
-const LANG_COOKIE = "lang";
+export const LANG_COOKIE = "lang";
 
 /**
  * How long the memory outlives the tab, in seconds.
@@ -320,25 +417,7 @@ const LANG_COOKIE = "lang";
  * is this tab*, and a memory that died with the browser would ask them again
  * every morning, which is the papercut the entry exists to close.
  */
-const LANG_COOKIE_SECONDS = 180 * 24 * 60 * 60;
-
-/**
- * The `Set-Cookie` that remembers one switch.
- *
- * The four attributes are named in D-0056 rule 5 and each is load-bearing:
- * `Path=/` because this server serves one path; `SameSite=Strict` so no
- * cross-site navigation can set the operator's language for them;
- * `HttpOnly` because nothing in `page/poll.js` reads it and a value script
- * cannot touch is a value a later script cannot start depending on.
- */
-function rememberLang(tag: string): string {
-  // Written raw for {@link cookieTag}'s reason: `tag` is a shipped set's own
-  // tag, so there is no escaping for the two sides to agree about.
-  return (
-    `${LANG_COOKIE}=${tag}; Path=/; SameSite=Strict; HttpOnly; ` +
-    `Max-Age=${String(LANG_COOKIE_SECONDS)}`
-  );
-}
+export const LANG_COOKIE_SECONDS = 180 * 24 * 60 * 60;
 
 /**
  * The remembered tag off a request's `Cookie` header, or null when there is
@@ -347,9 +426,9 @@ function rememberLang(tag: string): string {
  * **Read raw, and not percent-decoded.** The value rondo writes is a set's own
  * tag -- `en` or `ja`, inside `[a-z]` -- so there is nothing to decode, and
  * `decodeURIComponent` is a function that *throws* on input it does not like
- * (`lang=%` is a `URIError`). This runs synchronously in the request callback,
- * outside the two promise handlers below, so a throw here would take the
- * process down rather than ignore a preference -- and the cookie jar for
+ * (`lang=%` is a `URIError`). This runs on every request to the page, so a
+ * throw here would turn a stray cookie into a page that does not render rather
+ * than a preference ignored -- and the cookie jar for
  * `localhost` is shared with whatever else on this machine has served a page,
  * so the header is not rondo's to trust the shape of. A value that is not a
  * tag resolves to nothing through {@link setFor}, which is the same answer
@@ -382,19 +461,25 @@ function cookieTag(header: string | undefined): string | null {
  * skipped. No basic filtering, no alternatives list, no best-fit.
  */
 function tagsByWeight(header: string | undefined): readonly string[] {
-  if (header === undefined) {
-    return [];
-  }
+  // **The list is split by `hono/utils/accept` and weighed here** (D-0059 rule
+  // 4). The library's tokenizer handles the grammar -- quoted strings, stray
+  // separators, whitespace -- and is what rondo no longer carries. Its *weight*
+  // is not used: it reads a `Q=0` as `q=1`, because it looks the parameter up
+  // by its lowercase name, which turns a refusal into the strongest preference
+  // in the list. So the weight is re-read off the parameters below with the
+  // grammar D-0056 rule 6 already tested, and the library's sort is undone by
+  // sorting again on that weight.
   const offered: { tag: string; q: number; at: number }[] = [];
-  for (const [at, part] of header.split(",").entries()) {
-    const [named, ...parameters] = part.split(";");
-    const tag = (named ?? "").trim();
+  for (const [at, { type, params }] of parseAccept(header ?? "").entries()) {
+    const tag = type.trim();
     // `*` is the only member of the grammar that is not a tag, and it says
     // nothing rather than something this page could look up.
     if (tag === "" || tag === "*") {
       continue;
     }
-    const weight = parameters
+    const weight = Object.entries(params)
+      // Case-insensitive, because RFC 9110 parameter names are.
+      .filter(([name]) => name.trim().toLowerCase() === "q")
       // The fraction's digits are optional because RFC 9110's `qvalue` says so
       // -- `0*3DIGIT` after the point -- so `q=0.` is a spelling of zero and
       // must read as the refusal it is. A pattern demanding a digit there would
@@ -402,7 +487,7 @@ function tagsByWeight(header: string | undefined): readonly string[] {
       // explicit *do not send me this* into the strongest preference in the
       // list, which is rule 6's q=0 case failing in the one direction that
       // matters.
-      .map((parameter) => /^\s*q\s*=\s*(\d+(?:\.\d*)?)\s*$/i.exec(parameter)?.[1])
+      .map(([, value]) => /^\s*(\d+(?:\.\d*)?)\s*$/.exec(value)?.[1])
       .find((found) => found !== undefined);
     const q = weight === undefined ? 1 : Number(weight);
     if (!Number.isFinite(q) || q <= 0) {
@@ -412,7 +497,9 @@ function tagsByWeight(header: string | undefined): readonly string[] {
   }
   // `at` is compared explicitly rather than leaning on a stable sort: "stable
   // within a weight" is the entry's wording and is a property of the result
-  // rather than of the engine running it.
+  // rather than of the engine running it. (`at` is the library's order, which
+  // differs from the written order only where the library's weight differs
+  // from this one.)
   return offered
     .sort((left, right) => right.q - left.q || left.at - right.at)
     .map((one) => one.tag);
@@ -482,7 +569,7 @@ export function resolveLanguage(asked: LanguageAsked): Chrome {
  * the other steps answer `ja` either way and **the memory is not touched**
  * (rule 9) -- and `?lang=!!` does the same.
  */
-function isSwitch(asked: LanguageAsked, resolved: Chrome): boolean {
+export function isSwitch(asked: LanguageAsked, resolved: Chrome): boolean {
   return resolveLanguage({ ...asked, query: null }).lang !== resolved.lang;
 }
 
@@ -1074,7 +1161,11 @@ export async function operatorPage(
   const transcripts = inbox?.transcripts ?? (await locateRunning(ports, live));
 
   const keepsCurrent = isLive(view);
-  const pressToken = ports.answer === null ? null : token;
+  // **The token arrives null exactly when there is no writer** (D-0041 rule 4,
+  // D-0059 rule 3a): the renderer is handed the reading ports and nothing that
+  // could write, so whether a button is drawn is decided by the one caller that
+  // does hold the writer (`src/access/web-app.ts`) and handed down as a token.
+  const pressToken = token;
   const shown = await shownBeforePress(ports, wording, waiting, pressToken, view);
 
   const lead =
@@ -1158,135 +1249,7 @@ ${
     : ""
 }<title>rondo</title>
 <style>
-/* A ledger read by one person many times a day, so: two type roles, one spacing
-   scale, and three states that do not weigh the same.
-
-   Both palettes are written out rather than inherited. color-scheme is kept
-   so the button and the scrollbars follow the reader's setting, but every
-   surface, rule and ink below is a token declared in both modes -- a page that
-   leaned on the user-agent defaults would have its contrast decided elsewhere,
-   and the one thing this screen has to hold is that 'waiting' reads as waiting
-   from across a room. */
-:root {
-  color-scheme: light dark;
-  /* Space is a scale, not a per-element decision (rondo#153). */
-  --s1: .25rem; --s2: .5rem; --s3: .75rem; --s4: 1.25rem; --s5: 2rem;
-  /* Values are monospace because they are a ledger and columns must line up;
-     headings, notes and labels are not, because they are prose about it. */
-  /* The tertiary ink is the floor: it carries the basis lines, the claim
-     labels and an ended lap's own request, which are text a person reads
-     rather than decoration. Both values clear 4.5:1 against all three grounds
-     they land on -- page, section surface and the waiting wash -- so recessive
-     is a step down in weight and never a step below legible. */
-  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  --sans: ui-sans-serif, system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  --bg: #eceef1;
-  --surface: #fbfcfd;
-  --ink: #14181c;
-  --ink-2: #4b545d;
-  --ink-3: #646d77;
-  --rule: #d2d8de;
-  --link: #0f5480;
-  --wait-edge: #b26206;
-  --wait-ink: #8a4b04;
-  --wait-wash: #fbf1e0;
-  --wait-press: #a75c06;
-  --wait-press-ink: #fffaf3;
-  --run-edge: #2a79ad;
-  --run-ink: #1b5a83;
-}
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0f1214;
-    --surface: #171b1f;
-    --ink: #e3e7ea;
-    --ink-2: #a2abb3;
-    --ink-3: #848e97;
-    --rule: #292f35;
-    --link: #6cb2e6;
-    --wait-edge: #d18e2f;
-    --wait-ink: #e9b25f;
-    --wait-wash: #221a0d;
-    --wait-press: #d18e2f;
-    --wait-press-ink: #17130c;
-    --run-edge: #3d86bb;
-    --run-ink: #7dbce5;
-  }
-}
-body { background: var(--bg); color: var(--ink);
-  font: 14px/1.55 var(--mono); margin: 0 auto; max-width: 64rem;
-  padding: var(--s5) var(--s4); }
-/* Every block starts at zero and the scale puts it back, so no two margins
-   stack and nothing carries a spacing decision of its own. */
-h1, h2, p, pre, form { margin: 0; }
-body > * + * { margin-top: var(--s4); }
-h1 { color: var(--ink-3); font: 600 .75rem/1 var(--sans); letter-spacing: .16em;
-  text-transform: uppercase; }
-h2 { color: var(--ink-2); font: 600 .95rem/1.3 var(--sans); margin: 0 0 var(--s3); }
-section { background: var(--surface); border-left: 3px solid var(--rule);
-  padding: var(--s3) var(--s4); }
-section + section { margin-top: var(--s3); }
-a { color: var(--link); text-underline-offset: .2em; }
-pre { white-space: pre-wrap; word-break: break-word; margin: 0; }
-.note, .basis, .label { color: var(--ink-3); font-family: var(--sans); }
-.note { color: var(--ink-2); font-size: .8125rem; }
-.basis { font-size: .75rem; }
-.group { border-left: 2px solid var(--rule); padding-left: var(--s3); }
-.group + .group { margin-top: var(--s3); }
-.lap > * + *, .group > * + * { margin-top: var(--s1); }
-/* Laps are separated by a hairline rather than each carrying a rule of its own:
-   the section's own edge already says which question they answer. */
-.lap + .lap { border-top: 1px solid var(--rule); margin-top: var(--s3);
-  padding-top: var(--s3); }
-.head { font-weight: 600; }
-.request, .line, .value { white-space: pre-wrap; word-break: break-word; }
-.line { color: var(--ink-2); font-size: .8125rem; }
-.claim { display: grid; grid-template-columns: minmax(9rem, 14rem) 1fr; gap: var(--s3); }
-.label { font-size: .8125rem; }
-pre, .material { background: var(--bg); border: 1px solid var(--rule);
-  font-size: .8125rem; padding: var(--s2) var(--s3); }
-.material { margin-top: var(--s3); }
-
-/* *What needs me* is the only part of this page anybody can act on, so it is
-   the only part that is allowed to shout: its own wash, a heavier edge, the
-   request set a size larger, and the one button on the page. */
-.waiting { background: var(--wait-wash); border-left: 4px solid var(--wait-edge); }
-.waiting h2 { color: var(--wait-ink); font-size: 1.05rem; font-weight: 700; }
-.waiting .head { color: var(--wait-ink); font-size: .9375rem; }
-.waiting .request { font-size: .9375rem; }
-.waiting .lap + .lap { border-top-color: var(--wait-edge); }
-.running { border-left-color: var(--run-edge); }
-.running h2 { color: var(--run-ink); }
-/* An ended lap is over: it is on the page to be checked against, not read, so
-   it recedes to the page's own ground and to secondary ink. (No section's own
-   heading text is spelled in this stylesheet -- the lead is found by position
-   on the page, and a comment naming one would be found first.) */
-.ended { background: none; }
-.ended h2, .ended .head, .ended .request { color: var(--ink-3); }
-.ended .head { font-weight: 500; }
-.idle { border-left-color: var(--rule); }
-.nothing { color: var(--ink-2); font-family: var(--sans); font-size: 1rem; }
-
-.approve { align-items: center; display: flex; flex-wrap: wrap; gap: var(--s3);
-  margin-top: var(--s4); }
-.approve button { background: var(--wait-press); border: 0; color: var(--wait-press-ink);
-  cursor: pointer; font: 600 .875rem var(--sans); letter-spacing: .04em;
-  padding: .55rem 1.75rem; }
-.approve button:hover { filter: brightness(1.08); }
-:focus-visible { outline: 2px solid var(--wait-edge); outline-offset: 2px; }
-.fold { border-top: 1px solid var(--rule); font-family: var(--sans);
-  font-size: .8125rem; margin-top: var(--s5); padding-top: var(--s3); }
-/* The switch sits with the fold's link and reads as the same kind of thing: the
-   two ways off this screen, in the same type at the same size (D-0056 rule 10).
-   No second rule above it -- one line separates the chrome from the ledger, and
-   a second would make the switch a footer of its own. */
-.switch { font-family: var(--sans); font-size: .8125rem; margin-top: var(--s2); }
-@media (max-width: 40rem) {
-  body { padding: var(--s4) var(--s3); }
-  section { padding: var(--s3); }
-  .claim { grid-template-columns: 1fr; gap: 0; }
-}
-</style>
+${PAGE_STYLE}</style>
 </head>
 <body>
 <h1>rondo</h1>
@@ -1336,367 +1299,4 @@ ${reading}
 </body>
 </html>
 `;
-}
-
-/**
- * Whether a request's `Host` names this machine.
- *
- * **Binding to loopback is not by itself enough, and this is the gap it
- * leaves.** A browser will happily send a page from `evil.example` a request to
- * a name the attacker has re-pointed at `127.0.0.1` -- DNS rebinding -- and the
- * socket cannot tell that request from the operator's own, because it arrives
- * on loopback either way. What differs is the `Host` header: the operator's
- * browser sends the address they typed, and a rebound page sends the attacker's
- * name. So the page is served to the three spellings of this machine and to
- * nothing else, which is the whole of what an unauthenticated surface can
- * check.
- *
- * A request with no `Host` at all is refused rather than admitted: HTTP/1.1
- * requires one, and the only clients that omit it are not browsers.
- */
-function fromThisMachine(host: string | undefined): boolean {
-  if (host === undefined) {
-    return false;
-  }
-  // The port is whatever this server was asked to listen on, so only the name
-  // is checked. `[::1]:7333` keeps its brackets; `127.0.0.1:7333` does not.
-  const name = host.startsWith("[")
-    ? host.slice(0, host.indexOf("]") + 1)
-    : (host.split(":")[0] ?? "");
-  return name === "127.0.0.1" || name === "localhost" || name === "[::1]";
-}
-
-/**
- * Whether a request's `Origin`, if it sent one, names this machine.
- *
- * Corroboration rather than the gate (D-0041 rule 3): a cross-site form post
- * carries the attacker's origin and is refused here for free, but `Origin` is
- * absent often enough -- and from enough legitimate requests -- that a surface
- * resting on it would be resting on a header's presence. The token is what the
- * refusal actually rests on; this closes the door one step earlier when the
- * browser happens to say who sent the request.
- *
- * An `Origin` that will not parse is refused rather than admitted: `null` is
- * what a browser sends for a sandboxed or redirected form post, and that is not
- * the operator's own page.
- */
-function originIsThisMachine(origin: string | undefined): boolean {
-  if (origin === undefined) {
-    return true;
-  }
-  try {
-    return fromThisMachine(new URL(origin).host);
-  } catch {
-    return false;
-  }
-}
-
-/**
- * The body of one form post, or null when it is longer than a form post is.
- *
- * The cap is not a performance measure. This surface accepts exactly two short
- * fields, and a request that is bigger than that is not the page's form -- so
- * reading it to the end would be this process buffering whatever anybody on
- * loopback felt like sending.
- */
-const MAX_FORM_BYTES = 4096;
-
-function readForm(request: IncomingMessage): Promise<URLSearchParams | null> {
-  return new Promise((resolve) => {
-    let body = "";
-    request.setEncoding("utf8");
-    request.on("data", (chunk: string) => {
-      body += chunk;
-      if (body.length > MAX_FORM_BYTES) {
-        resolve(null);
-        request.destroy();
-      }
-    });
-    request.on("end", () => {
-      resolve(new URLSearchParams(body));
-    });
-    request.on("error", () => {
-      resolve(null);
-    });
-  });
-}
-
-/**
- * One press of the button, from the check that it was a person to the row it
- * settles.
- *
- * The order is the point. Everything that decides *whether this request may
- * write* happens before the write port is touched at all, and each refusal is
- * a status a person can read rather than a silent redraw. A success answers
- * `303` back to `/` (rule 8): the page refreshes itself, and a `POST` left on
- * the history stack is one an F5 would send again.
- */
-async function handleApprove(
-  ports: WebPorts,
-  token: string,
-  // **The tag the press was made under, for the `303`** (D-0056 rule 11). The
-  // form's `action` already carries it, so this is the same tag read back off
-  // the request rather than a second decision -- and a redirect that dropped it
-  // would put the operator back on a page that re-resolves, which with a
-  // memory-less browser is the switch silently expiring at the one moment the
-  // operator was told something was written.
-  //
-  // The press writes no cookie: rule 10 makes the switch's link the only thing
-  // that writes the memory, and rule 5's *authorises nothing* clause is easier
-  // to keep true of a path that never mentions one.
-  tag: string,
-  request: IncomingMessage,
-  response: ServerResponse,
-): Promise<void> {
-  const refuse = (status: number, line: string): void => {
-    response.writeHead(status, { "content-type": "text/plain; charset=utf-8" });
-    response.end(`${line}\n`);
-  };
-  if (ports.answer === null) {
-    refuse(403, "RONDO_APPROVER is not set, so there is nobody this page could answer as");
-    return;
-  }
-  if (!originIsThisMachine(request.headers.origin)) {
-    refuse(403, "that request came from another page");
-    return;
-  }
-  const form = await readForm(request);
-  if (form === null) {
-    refuse(413, "that is larger than this page's form");
-    return;
-  }
-  if (form.get("token") !== token) {
-    refuse(403, "that form did not come from this page; reload it and press the button again");
-    return;
-  }
-  const iterationId = form.get("iteration");
-  if (iterationId === null || iterationId === "") {
-    refuse(400, "that form named no iteration");
-    return;
-  }
-  const answered = await ports.answer(iterationId, APPROVE_BODY);
-  if (!answered.ok) {
-    refuse(409, answered.note);
-    return;
-  }
-  response.writeHead(303, { location: viewHref({ kind: "summary" }, tag) }).end();
-}
-
-/**
- * Which view one request asks for, read off its query and nothing else.
- *
- * Total: anything that is not one of the two queries is the summary, because a
- * typo in a query is an operator who wanted the page and a blank screen would
- * be a worse answer than the page. The base is a constant this server does not
- * serve from, present only because `URL` needs one to parse a path.
- */
-function viewOf(url: string): PageView {
-  const query = new URL(url, "http://127.0.0.1").searchParams;
-  const answering = query.get("answer");
-  if (answering !== null && answering !== "") {
-    return { kind: "answer", iterationId: answering };
-  }
-  return query.get("reading") === "open" ? { kind: "reading" } : { kind: "summary" };
-}
-
-/**
- * The language one request asked for, read off its query and nothing else.
- *
- * Total for {@link viewOf}'s reason, and D-0056 rule 9 says so in as many
- * words: an ill-formed or unknown `lang` is not a refusal. It resolves to
- * nothing, the next step of rule 2 answers, and rule 4 then redirects the
- * address to the tag of the set that answered -- so `?lang=!!` is an operator
- * who wanted the page, and a blank screen would be a worse answer than the
- * page. The boot refusal stays where it is: a host statement is typed once, far
- * from any screen, and deserves an account; a query is typed with the result in
- * front of the person who typed it.
- */
-function langOf(url: string): string | null {
-  return new URL(url, "http://127.0.0.1").searchParams.get("lang");
-}
-
-/**
- * Serve the page on localhost until the server is closed.
- *
- * `127.0.0.1` is written here rather than taken as an argument: an address is
- * the one thing about this surface that must not be configurable, because a
- * page with no authentication bound to anything else is a page anybody on the
- * network can read. {@link fromThisMachine} is the other half of that, and it
- * is not redundant: the bind decides which sockets arrive, and the `Host` check
- * decides which *pages* may have sent them.
- *
- * Resolves 0 when the server closes and 1 when it cannot listen, so the
- * command line has a status without this module knowing what a status is.
- */
-export function serveOperatorPage(
-  ports: WebPorts,
-  port: number,
-  announce: (line: string) => void,
-  announceError: (line: string) => void,
-  // `listen`'s own `signal`, which closes the server when it aborts. The
-  // command line passes none -- ctrl-c ends the process and there is nothing
-  // to unwind -- and a test passes one rather than reaching for a handle this
-  // function would otherwise have to hand back.
-  signal?: AbortSignal,
-): Promise<number> {
-  // **Minted once, when this process starts serving** (D-0041 rule 3b). Per
-  // process rather than per render, because a token that changed under the
-  // five-second redraw would expire every form before anybody could press it;
-  // and `randomUUID` rather than anything derived, because the whole property
-  // is that no other page can guess it.
-  const token = randomUUID();
-  const server = createServer((request, response) => {
-    if (request.method !== "GET" && request.method !== "HEAD" && request.method !== "POST") {
-      response.writeHead(405, { allow: "GET, HEAD, POST" }).end();
-      return;
-    }
-    if (!fromThisMachine(request.headers.host)) {
-      response.writeHead(421, { "content-type": "text/plain; charset=utf-8" });
-      response.end("rondo serves this page to 127.0.0.1 and localhost only\n");
-      return;
-    }
-    const path = (request.url ?? "/").split("?")[0] ?? "/";
-    // **The two files of D-0054, and nothing else static.** A read of one of
-    // them reaches this branch and not the renderer, so it is the one `GET`
-    // this server answers without composing a page; a `POST` never reaches it
-    // at all, because the only writable path is `/` and this runs above the
-    // method split. `ASSETS` is a fixed map rather than a directory served by
-    // path, so no request can name a file rondo did not choose to serve.
-    const asset = ASSETS.get(path);
-    if (asset !== undefined && request.method !== "POST") {
-      readFile(asset)
-        .then((bytes) => {
-          response.writeHead(200, {
-            "content-type": "text/javascript; charset=utf-8",
-            "content-security-policy": "frame-ancestors 'none'",
-          });
-          response.end(request.method === "HEAD" ? undefined : bytes);
-        })
-        .catch(() => {
-          // **A missing script is a 404 and not a 500** (D-0054 rule 7). The
-          // page that asked for this is already the whole document, button
-          // included; what it loses is the updating, and a page that failed
-          // outright because a script would not load is the failure that rule
-          // is there to prevent.
-          response
-            .writeHead(404, { "content-type": "text/plain; charset=utf-8" })
-            .end("not found\n");
-        });
-      return;
-    }
-    // One page and no router: every other path is a 404 rather than a redirect,
-    // so a typo'd URL says so instead of quietly showing the only page there is.
-    if (path !== "/") {
-      response.writeHead(404, { "content-type": "text/plain; charset=utf-8" }).end("not found\n");
-      return;
-    }
-    // **Rule 2's five steps, once per request, for both methods.** A press is
-    // answered with a `303` that has to carry the tag (rule 11), so the
-    // resolution is above the method split rather than inside the render.
-    const url = request.url ?? "/";
-    const asked: LanguageAsked = {
-      query: langOf(url),
-      cookie: request.headers.cookie,
-      host: ports.hostLanguage,
-      header: request.headers["accept-language"],
-    };
-    const wording = resolveLanguage(asked);
-    if (request.method === "POST") {
-      handleApprove(ports, token, wording.lang, request, response).catch((error: unknown) => {
-        // Same reasoning as the render's catch below: every check above is
-        // total and the write port reports its own refusals, so a throw here is
-        // a defect. Shown rather than swallowed -- a redirect back to a page
-        // still showing an open gate is the one answer a person cannot act on.
-        response.writeHead(500, { "content-type": "text/plain; charset=utf-8" });
-        response.end(`${error instanceof Error ? error.message : String(error)}\n`);
-      });
-      return;
-    }
-    const view = viewOf(url);
-    // **The resolution is never silent** (D-0056 rule 4). A request is served
-    // only when its `lang` is the tag of the set rule 2 resolved; otherwise it
-    // is answered with one `303` to the same view carrying that tag. So a bare
-    // `/` gains one, `?lang=ja-JP` is canonicalised to `/?lang=ja`, and
-    // `?lang=de` over a remembered `ja` lands on `/?lang=ja` -- which is the
-    // case that matters, because a redraw of the address that named the *ask*
-    // is credential-less, would resolve `de` to nothing and would morph the
-    // page to the host's default five seconds after it rendered.
-    //
-    // **This cannot loop, because a set's own tag resolves to itself**: the
-    // redirect's target is served. That is one condition and it is asserted
-    // here rather than reasoned about -- it stays true only as long as nothing
-    // adds a second reason to redirect.
-    if (asked.query !== wording.lang) {
-      response
-        .writeHead(303, {
-          location: viewHref(view, wording.lang),
-          // Sent here for the same reason as on the render below: *where this
-          // goes* now depends on two request headers.
-          vary: "accept-language, cookie",
-          ...(isSwitch(asked, wording) ? { "set-cookie": rememberLang(wording.lang) } : {}),
-        })
-        .end();
-      return;
-    }
-    operatorPage(ports, token, view, wording)
-
-      .then((html) => {
-        response.writeHead(200, {
-          "content-type": "text/html; charset=utf-8",
-          // **The bytes now depend on two request headers, and a shared cache
-          // is entitled to know** (D-0056). This page sent only a content type
-          // and a policy before: nothing about it varied by who asked.
-          vary: "accept-language, cookie",
-          // **Rule 5's one cookie, on the one condition rule 5 names**: this
-          // URL asked for a language the remaining steps would not have
-          // answered, which is what a switch is. A redraw reaches here with no
-          // cookie and so may well be answered with one -- and no browser ever
-          // stores it, because `page/poll.js` fetches with
-          // `credentials: "omit"` and that mode excludes cookies in *both*
-          // directions. rondo does not try to tell a redraw from a navigation
-          // and does not need to.
-          ...(isSwitch(asked, wording) ? { "set-cookie": rememberLang(wording.lang) } : {}),
-          // **The third door, and the one the token cannot hold** (D-0041
-          // rule 3). A page on evil.example cannot *read* this one and so
-          // cannot steal the token -- but it can put this one in a transparent
-          // frame over a button of its own, and then the click that arrives
-          // carries the genuine token from the loopback origin and is
-          // indistinguishable from the operator pressing approve. It is the
-          // same shape as the other two: a browser doing what the operator
-          // asked, for a page the operator did not mean. What refuses it is the
-          // browser, told not to frame this page at all, which is why the
-          // header is sent even though nothing about rondo needs a frame.
-          "content-security-policy": "frame-ancestors 'none'",
-        });
-        response.end(request.method === "HEAD" ? undefined : html);
-      })
-      .catch((error: unknown) => {
-        // The page is composed from rows that may not decode, and every reader
-        // it uses is total -- so a throw here is a defect rather than a state.
-        // It is shown rather than swallowed: a blank page would send the
-        // operator to the terminal to find out what a terminal already knows.
-        response.writeHead(500, { "content-type": "text/plain; charset=utf-8" });
-        response.end(`${error instanceof Error ? error.message : String(error)}\n`);
-      });
-  });
-  return new Promise<number>((resolve) => {
-    server.on("error", (error) => {
-      announceError(`the operator page could not be served: ${error.message}`);
-      resolve(1);
-    });
-    server.on("close", () => {
-      resolve(0);
-    });
-    server.listen({ port, host: "127.0.0.1", signal }, () => {
-      // The port that was **bound**, not the one that was asked for: they differ
-      // when the caller asked for 0, and a line naming a port nothing is
-      // listening on is worse than no line at all.
-      const bound = server.address();
-      const at = bound !== null && typeof bound === "object" ? bound.port : port;
-      announce(
-        `rondo is ${ports.answer === null ? "reading" : "reading and answering"} at ` +
-          `http://127.0.0.1:${String(at)}/ -- ctrl-c to stop`,
-      );
-    });
-  });
 }

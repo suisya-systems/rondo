@@ -21,13 +21,8 @@ import { DatabaseSync } from "node:sqlite";
 import { expect, test } from "vitest";
 
 import { recordPagePress } from "../../src/access/cli.js";
-import {
-  type LanguageAsked,
-  operatorPage,
-  resolveLanguage,
-  serveOperatorPage,
-  type WebPorts,
-} from "../../src/access/web.js";
+import { type LanguageAsked, operatorPage, resolveLanguage } from "../../src/access/web.js";
+import { AnswerPort, type ServedPorts, serveOperatorPage } from "../../src/access/web-app.js";
 import { type Chrome, chromeFor, EN } from "../../src/access/wording.js";
 import { allocate } from "../../src/refrain/allocator.js";
 import { admittedPlan, planPayload, type RunPlan, runPlan } from "../../src/refrain/plan.js";
@@ -107,7 +102,7 @@ function portsOver(
   // rather than a member of the ports, because five steps decide it per
   // request; `null` is a host that said nothing.
   hostLanguage: string | null = null,
-): WebPorts {
+): ServedPorts {
   return {
     store: world.store,
     record: world.record,
@@ -123,10 +118,10 @@ function portsOver(
     answer:
       pressed === null
         ? null
-        : async (iterationId, body) => {
+        : new AnswerPort(async (iterationId, body) => {
             pressed.push({ iterationId, body });
             return await Promise.resolve({ ok: true, note: "answered" });
-          },
+          }),
   };
 }
 
@@ -151,13 +146,29 @@ async function openGate(world: ReturnType<typeof fresh>, id: string): Promise<vo
   }
 }
 
-/** One form post, with headers of our choosing and redirects left alone. */
+/**
+ * One form post, with headers of our choosing and redirects left alone.
+ *
+ * **Shaped like a person's press unless a test says otherwise** (D-0059
+ * section 5): same-origin, a navigation, `Sec-Fetch-User: ?1` and an `Origin`
+ * naming the page -- the headers Chromium sends when a person clicks the
+ * native button. A header given as `undefined` is not sent at all.
+ */
 function post(
   base: string,
   form: Record<string, string>,
-  headers: Record<string, string> = {},
+  headers: Record<string, string | undefined> = {},
 ): Promise<{ status: number; body: string; location: string | undefined }> {
   const encoded = new URLSearchParams(form).toString();
+  const sent = Object.fromEntries(
+    Object.entries({
+      origin: base,
+      "sec-fetch-site": "same-origin",
+      "sec-fetch-mode": "navigate",
+      "sec-fetch-user": "?1",
+      ...headers,
+    }).filter((entry): entry is [string, string] => entry[1] !== undefined),
+  );
   return new Promise((resolve, reject) => {
     const request = httpRequest(
       `${base}/`,
@@ -166,7 +177,7 @@ function post(
         headers: {
           "content-type": "application/x-www-form-urlencoded",
           "content-length": String(Buffer.byteLength(encoded)),
-          ...headers,
+          ...sent,
         },
       },
       (response) => {
@@ -190,7 +201,7 @@ function post(
 }
 
 /** A server on an ephemeral port, and the base URL it announced. */
-async function serving(ports: WebPorts): Promise<{
+async function serving(ports: ServedPorts): Promise<{
   base: string;
   stop: AbortController;
   served: Promise<number>;
@@ -426,7 +437,13 @@ test("it serves the page on localhost, and only the one page", async () => {
   // frame this one under a button of its own, and the click that follows
   // carries the genuine token from the loopback origin. The browser is what
   // refuses that, and only if it is told to.
-  expect(page.headers.get("content-security-policy")).toBe("frame-ancestors 'none'");
+  // Since D-0059 the policy also says nothing runs that this process did not
+  // serve (R2's substitute), so the header is a list and the one directive this
+  // test is about is asserted by name.
+  const policy = page.headers.get("content-security-policy") ?? "";
+  expect(policy.split(/;\s*/)).toContain("frame-ancestors 'none'");
+  expect(policy.split(/;\s*/)).toContain("default-src 'self'");
+  expect(policy.split(/;\s*/)).toContain("script-src 'self'");
   expect(await page.text()).toContain("waiting for your answer");
 
   // **The reading is the same page at a second address**, and the redraw it
@@ -499,9 +516,14 @@ test("the button is drawn only where there is a gate and somebody to answer it",
 
   // No approver, no write port, no button -- even at the same open gate, and
   // not on the answering view either. The page is not a second place rondo will
-  // act for an unnamed person.
-  expect(await operatorPage(portsOver(world, null), "t")).not.toContain("<form");
-  expect(await operatorPage(portsOver(world, null), "t", answering)).not.toContain("<form");
+  // act for an unnamed person. Asked of the server since D-0059: the renderer
+  // no longer holds the writer (rule 3a), so *whether there is one* is decided
+  // where it is held, and handed down as a token or as nothing.
+  const { base, stop, served } = await serving(portsOver(world, null));
+  expect(await (await fetch(`${base}/?lang=en`)).text()).not.toContain("<form");
+  expect(await (await fetch(`${base}/?answer=i-0001&lang=en`)).text()).not.toContain("<form");
+  stop.abort();
+  expect(await served).toBe(0);
 });
 
 test("a person's press answers the gate and an unattended redraw cannot", async () => {
@@ -566,11 +588,12 @@ test("a refusal from the write port is shown rather than redirected away", async
   const world = fresh();
   await reserve(world, "i-0001", "do the thing");
   await openGate(world, "i-0001");
-  const ports: WebPorts = {
+  const ports: ServedPorts = {
     ...portsOver(world),
     material: async () => await Promise.resolve(["work    rondo/i-0001"]),
-    answer: async () =>
-      await Promise.resolve({ ok: false, note: "continuo is not usable: no CLI" }),
+    answer: new AnswerPort(
+      async () => await Promise.resolve({ ok: false, note: "continuo is not usable: no CLI" }),
+    ),
   };
   const { base, stop, served } = await serving(ports);
   const token = tokenIn(await (await fetch(`${base}/?answer=i-0001`)).text());
@@ -1632,7 +1655,7 @@ test("the resolved set reaches the material port and not only the chrome (rule 1
   // The port is handed the set the *request* resolved to, so the fence block's
   // standing sentences follow the page rather than the host it was started on.
   const asked: string[] = [];
-  const ports: WebPorts = {
+  const ports: ServedPorts = {
     ...portsOver(world, "ada", [], "en"),
     material: async (wording) => {
       asked.push(wording.lang);

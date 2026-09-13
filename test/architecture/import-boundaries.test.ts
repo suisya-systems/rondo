@@ -365,31 +365,45 @@ const ALLOWED_EXTERNALS_BY_MODULE: Readonly<
     "node:os": ["tmpdir"],
     "node:path": ["join"],
   },
-  // The HTTP access point this file's own note promised, granted the one
-  // binding that starts a server and keyed by module for every reason the
-  // spawn is: `src/access/` holds the whole operator surface, and a layer-wide
-  // grant would put a listening socket in reach of the module that reads argv
-  // and of the one that drives continuo. What is *absent* is the rest of the
-  // page's hazards: no `node:child_process`, so nothing an HTTP request
-  // reaches can start a process.
-  //
-  // **`node:fs/promises` is granted since D-0054, and this is what it costs.**
-  // The page serves two files -- the digest-pinned `idiomorph` release and
-  // rondo's own poller -- so "a read-only page cannot serve a file off this
-  // machine" has stopped being true as a *type*. What holds instead is a
-  // property of the module: the paths are a fixed two-entry map of URLs
-  // resolved against the module itself, and no request contributes to one --
-  // which `test/access/web.test.ts` asserts from the outside by asking for
-  // paths that exist in the tree and getting 404s. One binding rather than the
-  // module (`readFile`, not `writeFile` and not `readdir`), for the reason the
-  // spawn above is keyed by module: this is the surface strangers can reach.
+  // The renderer and D-0056's negotiation. **Since D-0059 it serves nothing**:
+  // the socket, the served files and the token moved to `src/access/web-app.ts`,
+  // and what is left is one parser. `hono/utils/accept` splits
+  // `Accept-Language` (D-0059 rule 4); the weight is still read by rondo.
   "src/access/web.ts": {
+    "hono/utils/accept": ["parseAccept"],
+  },
+  // The HTTP access point, on Hono (D-0059 rule 2), keyed by module for every
+  // reason the spawn is: `src/access/` holds the whole operator surface, and a
+  // layer-wide grant would put a listening socket in reach of the module that
+  // reads argv and of the one that drives continuo. What is *absent* is the
+  // rest of the page's hazards: no `node:child_process`, so nothing an HTTP
+  // request reaches can start a process.
+  //
+  // **Reads, and only of a fixed map.** `readFile` serves the files
+  // `page.manifest.json` names plus D-0054's two, and `readFileSync` reads that
+  // manifest once at load; no request contributes to a path, which
+  // `test/access/web-app.test.ts` asserts from the outside with paths that
+  // exist in the tree and answer 404. One binding each, not the module: no
+  // write, no `readdir`.
+  //
+  // **`node:crypto`, three bindings**: `randomUUID` for the per-process token
+  // (D-0041 rule 3b), `timingSafeEqual` to compare it, and `createHash` for the
+  // one inline stylesheet's CSP digest.
+  //
+  // **Hono by binding**: the app and its context type, the adapter's server,
+  // and exactly the four middleware D-0059 rule 2 names for this surface.
+  "src/access/web-app.ts": {
+    "node:crypto": ["createHash", "randomUUID", "timingSafeEqual"],
+    "node:fs": ["readFileSync"],
     "node:fs/promises": ["readFile"],
-    // The token that separates a person's click from an unattended redraw
-    // (D-0041 rule 3b) is the one value on this surface that must not be
-    // guessable, and nothing else in the module needs a random or a hash.
-    "node:crypto": ["randomUUID"],
-    "node:http": ["createServer", "IncomingMessage", "ServerResponse"],
+    // One listening socket, handed Hono's request listener.
+    "node:http": ["createServer"],
+    "@hono/node-server": ["getRequestListener"],
+    hono: ["Context", "Hono"],
+    "hono/body-limit": ["bodyLimit"],
+    "hono/cookie": ["setCookie"],
+    "hono/csrf": ["csrf"],
+    "hono/secure-headers": ["secureHeaders"],
   },
 };
 
@@ -429,6 +443,7 @@ const EXPECTED_MODULES: readonly string[] = [
   "src/access/conductor.ts",
   "src/access/console.ts",
   "src/access/local.ts",
+  "src/access/web-app.ts",
   "src/access/web.ts",
   "src/advisory/proposal.ts",
   "src/cadenza/facade.ts",
