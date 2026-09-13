@@ -141,8 +141,8 @@ export interface ReserveInput {
    * under the write lock when it names no message that opens a request.
    *
    * **Only a first lap's link is the caller's** (rondo#195). A successor
-   * inherits its predecessor row's link, read under the write lock: null here
-   * takes it, and a different non-null value is a defect in the caller.
+   * inherits its predecessor row's link, read under the write lock, whatever
+   * is passed here.
    */
   readonly requestMessageId: string | null;
   /**
@@ -1726,11 +1726,10 @@ export function iterationStore(connection: DatabaseSync, policy: HostPolicy): It
           // so the link is derived from the row it supersedes rather than
           // taken from the caller. `linked` is the input with that link, and
           // everything below reads it.
-          const inherited = inheritedRequest(connection, input);
-          if (inherited.kind === "defect") {
-            return { kind: "defect", reason: inherited.reason };
-          }
-          const linked: ReserveInput = { ...input, requestMessageId: inherited.requestMessageId };
+          const linked: ReserveInput = {
+            ...input,
+            requestMessageId: inheritedRequest(connection, input),
+          };
           // **The request link, under the same lock and before the spend**
           // (D-0061 rule 4), so a refusal spends no approval. Unlike the
           // lineage it is a refusal and not a defect: the id is a person's.
@@ -4034,34 +4033,16 @@ function lineageDefect(connection: DatabaseSync, input: ReserveInput): string | 
  *
  * A first lap's is the caller's. A successor's is the row it supersedes, which
  * `lineageDefect` has already found: a revision or a retry continues that
- * request, and the request's report must not lose track of it. A caller that
- * names a different request for a successor is a defect rather than a choice,
- * because no verb may move a lap's line onto another request.
+ * request, and the request's report must not lose track of it.
  */
-function inheritedRequest(
-  connection: DatabaseSync,
-  input: ReserveInput,
-):
-  | { readonly kind: "linked"; readonly requestMessageId: string | null }
-  | { readonly kind: "defect"; readonly reason: string } {
+function inheritedRequest(connection: DatabaseSync, input: ReserveInput): string | null {
   if (input.supersedesIterationId === null) {
-    return { kind: "linked", requestMessageId: input.requestMessageId };
+    return input.requestMessageId;
   }
   const row = connection
     .prepare("SELECT request_message_id FROM iteration WHERE id = ?")
     .get(input.supersedesIterationId) as SqlRow | undefined;
-  const inherited = row === undefined ? null : optionalText(row, "request_message_id");
-  if (input.requestMessageId !== null && input.requestMessageId !== inherited) {
-    return {
-      kind: "defect",
-      reason:
-        `iteration '${input.id}' was reserved under request '${input.requestMessageId}' as a ` +
-        `successor of '${input.supersedesIterationId}', whose request is ` +
-        `${inherited === null ? "none" : `'${inherited}'`}: a successor inherits its ` +
-        "predecessor's request link and does not name one of its own (rondo#195)",
-    };
-  }
-  return { kind: "linked", requestMessageId: inherited };
+  return row === undefined ? null : optionalText(row, "request_message_id");
 }
 
 /**

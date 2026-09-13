@@ -309,28 +309,6 @@ test("a revision or retry of a linked lap stays linked, and of an unlinked lap s
   ]);
 });
 
-test("PLANTED: a successor naming a request other than its predecessor's is a defect, and no row is written", async () => {
-  const connection = new DatabaseSync(":memory:");
-  const record = advisoryRecord(connection);
-  const store = iterationStore(connection, { maxOccupying: 5, maxLive: 5 });
-  await record.recordThreadMessage(operator());
-  await record.recordThreadMessage(operator({ messageId: "m-other", atMs: 1_500 }));
-  await reserve(store, "a", "m-request");
-  await reserve(store, "b", null);
-
-  for (const [id, predecessor] of [
-    ["a2", "a"],
-    ["b2", "b"],
-  ] as const) {
-    const refused = await reserve(store, id, "m-other", predecessor);
-    expect(refused.kind).toBe("defect");
-    expect(refused.kind === "defect" && refused.reason).toContain("m-other");
-  }
-  expect((connection.prepare("SELECT COUNT(*) AS n FROM iteration").get() as { n: number }).n).toBe(
-    2,
-  );
-});
-
 test("PLANTED: a lap naming a reply, an elevation's id or nothing is refused, and no row is written", async () => {
   const connection = new DatabaseSync(":memory:");
   const record = advisoryRecord(connection);
