@@ -71,6 +71,7 @@ import type {
   EffectOutcome,
   GateObservation,
   LapPerformance,
+  ScopeSpend,
 } from "./ports.js";
 
 /**
@@ -170,6 +171,7 @@ export async function admit(
   supersedesIterationId: string | null = null,
   spend: DecisionSpend | null = null,
   requestMessageId: string | null = null,
+  scopeSpend: ScopeSpend | null = null,
 ): Promise<ConductorReport> {
   const lines: string[] = [];
   const admission = nextStep(null, policy);
@@ -246,6 +248,8 @@ export async function admit(
     // is the store's, against the digest the composition root composed from
     // this very plan; the loop's part is that the two writes are one.
     spend,
+    // Carried, never read, for `spend`'s reason (D-0066 rule 3.1).
+    scopeSpend,
     nowMs: ports.now(),
   });
   switch (reservation.kind) {

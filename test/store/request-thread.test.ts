@@ -62,6 +62,7 @@ const reserve = (
     supersedesIterationId: null,
     requestMessageId,
     spend: null,
+    scopeSpend: null,
     nowMs: 5_000,
   });
 

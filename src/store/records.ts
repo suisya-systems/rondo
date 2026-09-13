@@ -811,6 +811,13 @@ export const PROPOSAL_KINDS = Object.freeze([
   "contract_keys",
   "widening_successor",
   "explanation",
+  // D-0066 rule 5.1 (and D-0063 rule 4). A drafted split is still a proposal
+  // row, because that is where a draft lives (D-0022 rule 4), but **it is never
+  // approved per split**: its agent type is approved by the scope that lists
+  // it, and D-0062 rule 3's per-split approval on route S is retired. So it is
+  // a kind here and deliberately absent from APPROVABLE_PROPOSAL_KINDS below,
+  // which is what makes recordDecision refuse a human_decision naming one.
+  "split",
 ] as const);
 
 export type ProposalKind = (typeof PROPOSAL_KINDS)[number];
@@ -1287,4 +1294,441 @@ export interface StoredDecision {
   readonly approved: string | null;
   readonly actorId: string;
   readonly decidedAtMs: number;
+}
+
+/**
+ * The scope record's payload, as it is stored (D-0066 rule 1.2).
+ *
+ * **snake_case, because this is the stored document and not a view of it.** The
+ * row holds these bytes verbatim beside `contentDigest` over them (rule 1.1),
+ * and what a person approves is that digest (rule 1.3) -- so the spelling a
+ * reader sees is the spelling that was digested, with no camelCase rendering in
+ * between that a second writer could render differently. The one camelCase view
+ * that exists is `ReviewScope` in `src/access/model-review.ts`, and it is
+ * derived from this, never stored.
+ *
+ * Every field is D-0064 rule 3.1's, in a form an equality or a count can test.
+ */
+export interface ScopePayload {
+  /**
+   * Message ids, each one that opens a request (D-0061 rule 1). **The named
+   * form only** (rule 1.2.1): a predicate is the form whose match can be
+   * undecidable, and an undecidable match is outside anyway.
+   */
+  readonly requests: readonly string[];
+  readonly workspaces: readonly ScopeWorkspace[];
+  /**
+   * `agentTypeDigest` values (rule 1.2.3). The digest covers `model_tier`, so
+   * this list bounds the tier and the grants without a second field.
+   */
+  readonly agent_types: readonly string[];
+  readonly budgets: ScopeBudgets;
+  readonly severity_threshold: FindingSeverity;
+  readonly outward_acts: readonly ScopeOutwardAct[];
+  /**
+   * Names **added** to {@link IRREVERSIBLE_ACTS} (rule 1.2.7). The list itself
+   * is not on the row, so a scope cannot shorten it by construction.
+   */
+  readonly irreversible_additions: readonly string[];
+}
+
+/** One (repository, workspace root) pair, compared byte for byte (rule 1.2.2). */
+export interface ScopeWorkspace {
+  readonly repository: string;
+  /**
+   * The plan's `workspaceRoot` (D-0066 rule 1.2.2), spelled as the plan payload's
+   * own snake_case serialisation spells it (`workspace_root`), so the store's
+   * re-test compares this string with the admitted plan's key of the same name
+   * and never with a rendering of it.
+   */
+  readonly workspace_root: string;
+}
+
+/**
+ * The five budgets, **all required** (rule 1.2.4): a scope with no expiry or no
+ * cost bound would be a standing grant.
+ */
+export interface ScopeBudgets {
+  /** Admissions under the approval. 0 is allowed: it is how a scope is ended early (rule 1.4). */
+  readonly laps: number;
+  /** D-0065 rule 4.1's round budget. 0 is allowed: no redo after a finding at or above the threshold. */
+  readonly review_rounds: number;
+  readonly cost_usd: number;
+  /** What an unread lap counts as until its cost is read (rule 3.4.2, the gate's first answer). */
+  readonly cost_reserve_usd: number;
+  readonly expires_at_ms: number;
+}
+
+/**
+ * The closed vocabulary of reversible outward acts a scope may include
+ * (rule 1.2.6, D-0064 O7). `merge_default_branch` is not a member: the writer
+ * refuses it by name until the entry that builds CI observation takes D-0064
+ * rule 3.4's transition.
+ */
+export const SCOPE_OUTWARD_ACTS = Object.freeze(["push_branch", "open_pull_request"] as const);
+
+export type ScopeOutwardAct = (typeof SCOPE_OUTWARD_ACTS)[number];
+
+/**
+ * D-0064 rule 3.4's closed list of irreversible acts, transcribed by name.
+ *
+ * "Merging into a default branch; tagging or publishing a release or a package;
+ * deleting a branch, workspace or record rondo did not create for this scope;
+ * sending anything to anyone other than the operator and the scope's own pull
+ * request; and spending past a budget." **The list grows only by an entry**, so
+ * it is a frozen constant here and never a column: the effective list for a
+ * scope is this plus its `irreversible_additions` (D-0066 rule 1.2.7).
+ */
+export const IRREVERSIBLE_ACTS = Object.freeze([
+  "merge_default_branch",
+  "tag_or_publish_release_or_package",
+  "delete_branch_workspace_or_record_not_created_for_scope",
+  "send_to_other_than_operator_and_scope_pull_request",
+  "spend_past_budget",
+] as const);
+
+/**
+ * What an act under a scope can be recorded as (D-0066 rule 3.2).
+ *
+ * `push_branch` and `open_pull_request` are **named and not writable** until
+ * the entry that supersedes D-0025 rule 6 lets the organisation publish; a gate
+ * answer and `revise` get their kinds from the entry that opens O6, so they are
+ * not named at all.
+ */
+export const SCOPE_ACT_KINDS = Object.freeze([
+  "admission",
+  "push_branch",
+  "open_pull_request",
+] as const);
+
+export type ScopeActKind = (typeof SCOPE_ACT_KINDS)[number];
+
+/**
+ * The act kinds a `scope_consumption` row may be written with today: one
+ * (D-0066 rule 3.2). An admission's `subject_id` is the iteration id, written
+ * in `reserve()`'s own transaction.
+ */
+export const WRITABLE_SCOPE_ACT_KINDS = Object.freeze([
+  "admission",
+] as const satisfies readonly ScopeActKind[]);
+
+/** Who wrote a scope row (D-0066 rule 1.5, D-0061 rule 2.3's voice column). */
+export type ScopeAuthorKind = "operator" | "drafter";
+
+/** One scope, as the caller hands it to the store (D-0066 rule 1.1). */
+export interface ScopeDraft {
+  readonly scopeId: string;
+  /**
+   * The payload as authored, **after** {@link scopePayloadWithDefaults}: the
+   * store digests these bytes, so defaults filled after the digest would make
+   * the approved row and the tested row two documents.
+   */
+  readonly payload: JsonRecord;
+  /** The row this one succeeds, or null (rule 1.4: a change is a successor). */
+  readonly supersedesScopeId: string | null;
+  readonly authorKind: ScopeAuthorKind;
+  readonly authorId: string;
+  /** D-0032 rule 2 bases. Required non-empty on a `drafter` row (rule 1.5). */
+  readonly bases: readonly JsonValue[];
+  readonly createdAtMs: number;
+}
+
+/** One scope row read back, its digest re-derived (D-0022 rule 4). */
+export interface StoredScope {
+  readonly scopeId: string;
+  readonly scopeDigest: string;
+  readonly payload: ScopePayload;
+  readonly supersedesScopeId: string | null;
+  readonly authorKind: ScopeAuthorKind;
+  readonly authorId: string;
+  readonly bases: readonly JsonValue[];
+  readonly createdAtMs: number;
+}
+
+/**
+ * A person's answer to one scope row (D-0066 section 2), and never a
+ * `human_decision` row: that table's `approved` references a contract, and a
+ * scope has none.
+ */
+export interface ScopeDecisionDraft {
+  readonly scopeDecisionId: string;
+  readonly scopeId: string;
+  /** The digest the person was shown. The writer refuses one that is not the row's (rule 2.2). */
+  readonly scopeDigest: string;
+  readonly outcome: DecisionOutcome;
+  /** The approver, on the allowlist (D-0025 rule 4), checked at the surface. */
+  readonly actorId: string;
+  /** The surface's own identity, which is not the approver's. */
+  readonly recordedBy: string;
+  readonly decidedAtMs: number;
+}
+
+export interface StoredScopeDecision {
+  readonly scopeDecisionId: string;
+  readonly scopeId: string;
+  readonly scopeDigest: string;
+  readonly outcome: DecisionOutcome;
+  readonly actorId: string;
+  readonly recordedBy: string;
+  readonly decidedAtMs: number;
+}
+
+/**
+ * What an approval has spent, **counted from rows and never kept as a counter**
+ * (D-0066 rule 3.4, D-0022 rule 8).
+ *
+ * `unreadLaps` is kept apart from `readCostUsd` rather than folded into it with
+ * a reserve, because the reserve is the scope's field and not the ledger's: the
+ * reader counts, and whoever holds the scope prices the unread laps.
+ */
+export interface ScopeSpent {
+  /** `admission` rows under the approval. */
+  readonly admissions: number;
+  /** The sum of `lap_cost_usd` over the admitted iterations whose cost was read. */
+  readonly readCostUsd: number;
+  /** Admitted iterations whose `lap_cost_usd` is still null (D-0046: null is "not read"). */
+  readonly unreadLaps: number;
+}
+
+export type ScopePayloadReading =
+  | { readonly kind: "read"; readonly payload: ScopePayload }
+  | { readonly kind: "refused"; readonly reason: string };
+
+const SCOPE_KEYS = Object.freeze([
+  "requests",
+  "workspaces",
+  "agent_types",
+  "budgets",
+  "severity_threshold",
+  "outward_acts",
+  "irreversible_additions",
+]);
+const WORKSPACE_KEYS = Object.freeze(["repository", "workspace_root"]);
+const BUDGET_KEYS = Object.freeze([
+  "laps",
+  "review_rounds",
+  "cost_usd",
+  "cost_reserve_usd",
+  "expires_at_ms",
+]);
+const AGENT_TYPE_DIGEST = /^sha256:[0-9a-f]{64}$/;
+
+/**
+ * Fill D-0066 rule 1.2's defaults **only where the key is absent**.
+ *
+ * `review_rounds` 3 (D-0064 rule 3.1.4), `severity_threshold` `major` (D-0065
+ * rule 2.2), and empty `outward_acts` and `irreversible_additions`. A key that
+ * is present is left exactly as written, including a wrong one: correcting a
+ * value is the reader's refusal, never a default's silent repair. Called by the
+ * verb **before** the payload is digested, so the stored row is explicit and
+ * what is approved is what is tested.
+ */
+export function scopePayloadWithDefaults(input: JsonRecord): JsonRecord {
+  const budgets = input["budgets"];
+  const filledBudgets =
+    isRecord(budgets) && budgets["review_rounds"] === undefined
+      ? { ...budgets, review_rounds: 3 }
+      : budgets;
+  return {
+    ...input,
+    ...(filledBudgets === undefined ? {} : { budgets: filledBudgets }),
+    ...(input["severity_threshold"] === undefined ? { severity_threshold: "major" } : {}),
+    ...(input["outward_acts"] === undefined ? { outward_acts: [] } : {}),
+    ...(input["irreversible_additions"] === undefined ? { irreversible_additions: [] } : {}),
+  };
+}
+
+/**
+ * Read a stored or authored scope payload, **total**: a refusal carrying why,
+ * never a throw (D-0066 rule 1.2).
+ *
+ * Strict on purpose. A payload is approved by digest and then tested field by
+ * field under a write lock, so a key this reader does not know is a field a
+ * person approved that no test will ever read -- which is a scope wider than it
+ * looks. Unknown keys are refused at every level for that reason, and so are
+ * duplicates: a list the person reads as "three agent types" that holds two is
+ * the screen overstating the scope.
+ */
+export function readScopePayload(json: JsonValue): ScopePayloadReading {
+  const refused = (reason: string): ScopePayloadReading => ({
+    kind: "refused",
+    reason: `the scope payload is refused: ${reason}`,
+  });
+  if (!isRecord(json)) {
+    return refused("it is not a JSON object");
+  }
+  const unknown = unknownKey(json, SCOPE_KEYS);
+  if (unknown !== null) {
+    return refused(
+      `'${unknown}' is not a scope field, and a field no test reads is a scope wider than it looks`,
+    );
+  }
+
+  const requests = distinctStrings(json["requests"], "requests", false);
+  if (typeof requests === "string") {
+    return refused(requests);
+  }
+  const agentTypes = distinctStrings(json["agent_types"], "agent_types", false);
+  if (typeof agentTypes === "string") {
+    return refused(agentTypes);
+  }
+  const malformed = agentTypes.find((digest) => !AGENT_TYPE_DIGEST.test(digest));
+  if (malformed !== undefined) {
+    return refused(
+      `agent_types holds '${malformed}', which is not an agentTypeDigest ('sha256:' and 64 ` +
+        "lowercase hex, D-0066 rule 1.2.3)",
+    );
+  }
+
+  const workspacesValue = json["workspaces"];
+  if (!Array.isArray(workspacesValue) || workspacesValue.length === 0) {
+    return refused("workspaces must be a non-empty list (D-0066 rule 1.2.2)");
+  }
+  const workspaces: ScopeWorkspace[] = [];
+  const seenPairs = new Set<string>();
+  for (const entry of workspacesValue as readonly JsonValue[]) {
+    if (!isRecord(entry)) {
+      return refused("each workspaces entry must be an object");
+    }
+    const extra = unknownKey(entry, WORKSPACE_KEYS);
+    if (extra !== null) {
+      return refused(`'${extra}' is not a workspaces field`);
+    }
+    const repository = entry["repository"];
+    const workspaceRoot = entry["workspace_root"];
+    if (typeof repository !== "string" || typeof workspaceRoot !== "string") {
+      return refused("each workspaces entry needs a string repository and workspace_root");
+    }
+    const pair = JSON.stringify([repository, workspaceRoot]);
+    if (seenPairs.has(pair)) {
+      return refused(`workspaces names (${repository}, ${workspaceRoot}) twice`);
+    }
+    seenPairs.add(pair);
+    workspaces.push(Object.freeze({ repository, workspace_root: workspaceRoot }));
+  }
+
+  const budgetsValue = json["budgets"];
+  if (!isRecord(budgetsValue)) {
+    return refused("budgets must be an object holding all five budgets (D-0066 rule 1.2.4)");
+  }
+  const extraBudget = unknownKey(budgetsValue, BUDGET_KEYS);
+  if (extraBudget !== null) {
+    return refused(`'${extraBudget}' is not a budget`);
+  }
+  const missing = BUDGET_KEYS.find((key) => budgetsValue[key] === undefined);
+  if (missing !== undefined) {
+    return refused(
+      `the budget '${missing}' is missing, and all five are required: a scope with no expiry or ` +
+        "no cost bound would be a standing grant (D-0066 rule 1.2.4)",
+    );
+  }
+  const laps = budgetsValue["laps"];
+  const reviewRounds = budgetsValue["review_rounds"];
+  const costUsd = budgetsValue["cost_usd"];
+  const costReserveUsd = budgetsValue["cost_reserve_usd"];
+  const expiresAtMs = budgetsValue["expires_at_ms"];
+  for (const [name, value] of [
+    ["laps", laps],
+    ["review_rounds", reviewRounds],
+  ] as const) {
+    if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
+      return refused(`the budget '${name}' must be a whole number of at least 0`);
+    }
+  }
+  for (const [name, value] of [
+    ["cost_usd", costUsd],
+    ["cost_reserve_usd", costReserveUsd],
+  ] as const) {
+    if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+      return refused(`the budget '${name}' must be a finite number of at least 0`);
+    }
+  }
+  if (typeof expiresAtMs !== "number" || !Number.isSafeInteger(expiresAtMs)) {
+    return refused("the budget 'expires_at_ms' must be a whole number of milliseconds");
+  }
+
+  const threshold = json["severity_threshold"];
+  if (!(FINDING_SEVERITIES as readonly unknown[]).includes(threshold)) {
+    return refused(
+      `severity_threshold must be one of ${FINDING_SEVERITIES.join(", ")} (D-0065 rule 2.2)`,
+    );
+  }
+
+  const outward = distinctStrings(json["outward_acts"], "outward_acts", true);
+  if (typeof outward === "string") {
+    return refused(outward);
+  }
+  for (const act of outward) {
+    if (act === "merge_default_branch") {
+      return refused(
+        "outward_acts holds 'merge_default_branch', which the scope writer refuses: merging stays " +
+          "on D-0064 rule 3.4's irreversible list until the entry that builds CI observation takes " +
+          "that rule's transition (D-0066 rule 1.2.6)",
+      );
+    }
+    if (!(SCOPE_OUTWARD_ACTS as readonly string[]).includes(act)) {
+      return refused(
+        `outward_acts holds '${act}', which is not one of ${SCOPE_OUTWARD_ACTS.join(", ")} ` +
+          "(D-0066 rule 1.2.6, D-0064 O7)",
+      );
+    }
+  }
+
+  const additions = distinctStrings(json["irreversible_additions"], "irreversible_additions", true);
+  if (typeof additions === "string") {
+    return refused(additions);
+  }
+  if (additions.some((name) => name === "")) {
+    return refused("irreversible_additions holds an empty name");
+  }
+
+  return {
+    kind: "read",
+    payload: Object.freeze({
+      requests: Object.freeze(requests),
+      workspaces: Object.freeze(workspaces),
+      agent_types: Object.freeze(agentTypes),
+      budgets: Object.freeze({
+        laps: laps as number,
+        review_rounds: reviewRounds as number,
+        cost_usd: costUsd as number,
+        cost_reserve_usd: costReserveUsd as number,
+        expires_at_ms: expiresAtMs,
+      }),
+      severity_threshold: threshold as FindingSeverity,
+      outward_acts: Object.freeze(outward as ScopeOutwardAct[]),
+      irreversible_additions: Object.freeze(additions),
+    }),
+  };
+}
+
+function isRecord(value: JsonValue | undefined): value is JsonRecord {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function unknownKey(record: JsonRecord, known: readonly string[]): string | null {
+  return Object.keys(record).find((key) => !known.includes(key)) ?? null;
+}
+
+/** A list of distinct strings, or why not. `mayBeEmpty` is false for rule 1.2's non-empty lists. */
+function distinctStrings(
+  value: JsonValue | undefined,
+  name: string,
+  mayBeEmpty: boolean,
+): string[] | string {
+  if (!Array.isArray(value)) {
+    return `${name} must be a list`;
+  }
+  const list = value as readonly JsonValue[];
+  if (!mayBeEmpty && list.length === 0) {
+    return `${name} must not be empty (D-0066 rule 1.2)`;
+  }
+  if (list.some((entry) => typeof entry !== "string")) {
+    return `${name} must hold only strings`;
+  }
+  const strings = list as readonly string[];
+  if (new Set(strings).size !== strings.length) {
+    return `${name} holds a duplicate`;
+  }
+  return [...strings];
 }

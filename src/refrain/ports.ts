@@ -390,7 +390,32 @@ export interface ReserveInput {
    * the row it authorised.
    */
   readonly spend: DecisionSpend | null;
+  /**
+   * The approved scope this admission is taken under, or null (D-0066 rule 3.1).
+   *
+   * **Carried and never read, for `spend`'s reason**: whether the act is inside
+   * the scope is the surface's verdict and the store's re-test, and what
+   * `src/refrain` contributes is that the value reaches `reserve()`, so the
+   * consumption lands in the same transaction as the row. At most one of
+   * `spend` and this is non-null.
+   */
+  readonly scopeSpend: ScopeSpend | null;
   readonly nowMs: number;
+}
+
+/**
+ * One approved scope, as the admission taken under it names it (D-0066 rule 3).
+ *
+ * The repository and workspace root are not carried: the store reads them from
+ * the admitted plan itself. `agentTypeDigest` comes from the surface's
+ * classification of this same plan, and its drift before the write is D-0047
+ * rule 6's bounded race (D-0066 rule 4.3).
+ */
+export interface ScopeSpend {
+  readonly scopeDecisionId: string;
+  readonly proposalId: string | null;
+  readonly requestMessageId: string;
+  readonly agentTypeDigest: string;
 }
 
 /** One approval, as the admission that spends it names it (D-0022 rule 9). */

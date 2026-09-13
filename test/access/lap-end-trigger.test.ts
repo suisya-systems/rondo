@@ -378,6 +378,7 @@ test("a successor identity that is taken is skipped, and the next free one is mi
     request: "an earlier retry, already spent",
     plan: { run_id: "rondo-i-0001-r2" },
     spend: null,
+    scopeSpend: null,
     nowMs: NOW_MS - 1_000,
     supersedesIterationId: null,
     requestMessageId: null,

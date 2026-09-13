@@ -321,7 +321,6 @@ test("the policy defaults to 3 rounds and 'major', and a scope overrides both", 
 });
 
 test.each([
-  ["a zero budget", scope(0, "minor"), { roundBudget: 3, threshold: "minor" }],
   ["a negative budget", scope(-1, "minor"), { roundBudget: 3, threshold: "minor" }],
   ["a non-integer budget", scope(2.5, "minor"), { roundBudget: 3, threshold: "minor" }],
   [
@@ -342,6 +341,25 @@ const GRADED = answered(
     ],
   }),
 );
+
+test("a zero budget is kept, and stops on the first finding at or above the threshold", () => {
+  const policy = reviewPolicyOf(scope(0, "major"));
+  expect(policy).toEqual({ roundBudget: 0, threshold: "major" });
+  expect(reviewRoundDecision({ latest: stored(GRADED), roundsTaken: 1, policy }).kind).toBe("stop");
+  // Control: the same reading under a budget of 3 is a revise.
+  expect(
+    reviewRoundDecision({
+      latest: stored(GRADED),
+      roundsTaken: 1,
+      policy: reviewPolicyOf(scope(3, "major")),
+    }).kind,
+  ).toBe("revise");
+  // Nothing at or above the threshold exits even with no rounds to spend.
+  expect(
+    reviewRoundDecision({ latest: stored(answered('{"findings":[]}')), roundsTaken: 1, policy })
+      .kind,
+  ).toBe("exit");
+});
 
 test("round decisions: exit leaves below-threshold findings, revise within budget, stop at it", () => {
   const policy = reviewPolicyOf(null);

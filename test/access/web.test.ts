@@ -235,6 +235,7 @@ async function reserve(
     request,
     plan: planFor(id, materialLanguage),
     spend: null,
+    scopeSpend: null,
     nowMs: 1_000,
     supersedesIterationId: null,
     requestMessageId: null,

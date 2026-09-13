@@ -1769,6 +1769,10 @@ const FORECLOSES: Record<ProposalKind, readonly string[]> = {
   contract_keys: ["the retry would carry the keys you pick as granted rather than as askable"],
   widening_successor: ["the successor would carry the widening you pick"],
   explanation: [],
+  // D-0066 rule 5.1: a split is never approved per split, so it is not in the
+  // approvable set and `foreclosureLines` never reaches this entry -- the
+  // store refuses a decision naming one. Empty, for `explanation`'s reason.
+  split: [],
 };
 
 /**

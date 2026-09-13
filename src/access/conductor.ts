@@ -62,6 +62,7 @@ import type {
   GateObservation,
   LapPerformance,
   RunAdmission,
+  ScopeSpend,
   StorePort,
 } from "../refrain/ports.js";
 import type { LapReadingDraft } from "../store/records.js";
@@ -451,6 +452,7 @@ export async function admit(
   supersedesIterationId: string | null = null,
   spend: DecisionSpend | null = null,
   requestMessageId: string | null = null,
+  scopeSpend: ScopeSpend | null = null,
 ): Promise<ConductorReport> {
   const report = await admitIteration(
     ports,
@@ -460,6 +462,7 @@ export async function admit(
     supersedesIterationId,
     spend,
     requestMessageId,
+    scopeSpend,
   );
   if (report.status !== "abandoned" || report.iterationId === null) {
     return report;

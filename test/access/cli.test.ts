@@ -1984,6 +1984,83 @@ test("propose and decide take their own flags and refuse the others", () => {
   }
 });
 
+test("the scope verbs take their own flags and refuse the others (D-0066)", () => {
+  const scoped = parseCommand([
+    "scope",
+    "--payload-file",
+    "/tmp/scope.json",
+    "--actor-id",
+    "operator-1",
+    "--supersedes-scope-id",
+    "scope-1",
+  ]);
+  expect(scoped).toMatchObject({
+    kind: "parsed",
+    parsed: {
+      command: "scope",
+      payloadFile: "/tmp/scope.json",
+      actorId: "operator-1",
+      supersedesScopeId: "scope-1",
+    },
+  });
+
+  const decided = parseCommand([
+    "decide-scope",
+    "--scope-id",
+    "scope-2",
+    "--scope-digest",
+    "sha256:abc",
+    "--outcome",
+    "declined",
+    "--actor-id",
+    "operator-1",
+  ]);
+  expect(decided).toMatchObject({
+    kind: "parsed",
+    parsed: {
+      command: "decide-scope",
+      scopeId: "scope-2",
+      scopeDigest: "sha256:abc",
+      outcome: "declined",
+    },
+  });
+
+  const retried = parseCommand([
+    "retry",
+    "--iteration-id",
+    "iter-1",
+    "--successor-id",
+    "iter-2",
+    "--scope-decision-id",
+    "scope-decision-scope-2-1",
+  ]);
+  expect(retried).toMatchObject({
+    kind: "parsed",
+    parsed: {
+      command: "retry",
+      iterationId: "iter-1",
+      successorId: "iter-2",
+      scopeDecisionId: "scope-decision-scope-2-1",
+      proposalId: null,
+    },
+  });
+  // Control: route S still parses on its own.
+  expect(parseCommand(["retry", "--proposal-id", "p-1"]).kind).toBe("parsed");
+
+  for (const argv of [
+    // A proposal's approval and a scope's are two authorities for one admission.
+    ["retry", "--proposal-id", "p-1", "--scope-decision-id", "d-1"],
+    ["retry", "--proposal-id", "p-1", "--iteration-id", "iter-1"],
+    ["retry", "--proposal-id", "p-1", "--successor-id", "iter-2"],
+    // `--contract-digest` is `decide`'s; a scope approval names a scope digest.
+    ["decide-scope", "--scope-id", "s", "--contract-digest", "sha256:abc"],
+    ["scope", "--payload-file", "/tmp/scope.json", "--scope-digest", "sha256:abc"],
+    ["decide", "--proposal-id", "p-1", "--scope-id", "s"],
+  ]) {
+    expect({ argv, kind: parseCommand(argv).kind }).toEqual({ argv, kind: "refused" });
+  }
+});
+
 test("show takes one proposal id and nothing that would read as an answer", () => {
   // Reading a proposal back is not answering it (#39): `--outcome` and
   // `--actor-id` belong to `decide`, and a flag that reads as though it did
