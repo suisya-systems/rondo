@@ -25,6 +25,7 @@ import {
   FINDING_SEVERITIES,
   type FindingBasis,
   type FindingSeverity,
+  findingBasisText,
   type GradedFinding,
   isModelReadingDrafter,
   type LapReading,
@@ -651,19 +652,6 @@ export function reviewRoundsAlong(
   return chain.filter((link) => link.readings.some((r) => isModelReadingDrafter(r.drafter))).length;
 }
 
-function basisLine(basis: FindingBasis): string {
-  switch (basis.kind) {
-    case "file":
-      return `${basis.path}:${String(basis.line)}`;
-    case "commit":
-      return `commit ${basis.sha}`;
-    case "event":
-      return `transcript event ${String(basis.index)}`;
-    case "rule":
-      return `rule ${basis.path}:${String(basis.line)}`;
-  }
-}
-
 /**
  * A model reading as a person reads it at a gate: labelled material (D-0065's
  * gate answer (a)), each finding with its severity and bases, and what the
@@ -683,7 +671,7 @@ export function modelReadingLines(reading: LapReading): readonly string[] {
     if (graded === undefined) {
       return [`        - ${text}`];
     }
-    const bases = graded.bases.map(basisLine).join(", ");
+    const bases = graded.bases.map(findingBasisText).join(", ");
     return [
       `        - [${graded.severity}] ${text}`,
       graded.bases.length === 0

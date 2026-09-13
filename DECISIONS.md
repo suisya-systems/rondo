@@ -8180,6 +8180,21 @@ shape of the answer, not to ratify a model id.**
 > rather than an edit: this entry is the shape for a claim **rondo asked for**, and not the general
 > answer to "rondo did not see it".
 
+> **Annotation (2026-09-14, from rondo#220).** Added after this entry was accepted, and additive, by the
+> answer of rondo's human gate (relayed by the secretary on 2026-09-14) that every write the page adds
+> beyond `D-0059` section 5a's table is a press.
+> - **Rule 8's "the page has none" is superseded in that part.** The page's lap-end approve press
+>   carries an optional claim -- one text field beside the button, trimmed, blank meaning no claim, at
+>   most 1,000 characters and refused in words beyond that rather than cut -- and it is recorded under
+>   rules 2 to 5 unchanged: after the actor check and the framing (`D-0042`), before the gate walk, a
+>   write that fails answers nothing, and a gate already closed is refused out loud with no row
+>   written. On the page that last case is a refusal rather than rule 5's printed line and walk on,
+>   because nobody pressing a button reads the terminal. The claim is part of the press and not a
+>   write of its own, so a send, an htmx `hx-post` or a `fetch` cannot carry one. `D-0041` rule 4's
+>   price was paid as that rule says: `AnswerFromWeb` and `AnswerPort.answer` gained the parameter.
+> - **The residual "A claim on the web surface" is thereby answered.** Every other rule and residual
+>   stands as written.
+
 A lap that cannot verify its own work leaves the verification to the person at the gate. On
 2026-09-12 an operator ran `npm ci --ignore-scripts` and `npm run verify` in the lap's workspace,
 found both green, and said so in `answer --body`. That sentence is carried to continuo byte for
@@ -13056,6 +13071,20 @@ reason are kept as written. Wherever a person answers, a model reading is materi
 The entry that opens O6 supersedes or annotates the three rules; this entry does neither, and
 sections 5.6 and 5.7 take effect for O6 only through that entry.
 
+> **Annotation (2026-09-14, from rondo#220).** Added after this entry was accepted, and additive, by the
+> answers of rondo's human gate relayed by the secretary on 2026-09-14. It reads the gate answer (a)
+> above for **a lap's end gate answered by a person on the page**, and changes nothing in it.
+> - **One gate per lap, and no recommendation at it.** The deterministic reading and the latest model
+>   reading are both shown, side by side, as material; neither is ranked above the other and rondo adds
+>   no advice on how to answer.
+> - **A model reading never refuses the press.** Approve is not refused because of model findings and
+>   there is no despite-review press: a person answering over material is not overruling a reading
+>   (section 5.3's `--despite-review` is the organisation's case under a scope, not this one).
+> - **A blocker or major finding is stated beside the press.** When the latest model reading holds any
+>   finding graded `blocker` or `major`, one line saying so sits next to the approve button, seen
+>   before pressing, with a link to read the reading. It informs and does not gate. Nothing above is
+>   edited.
+
 ### What this does not do
 
 - **It does not build the reviewer**, the reviewer table, the new row fields, the criterion field's
@@ -13116,6 +13145,13 @@ answer" below. Supersedes `D-0057`. Refs rondo#172, `D-0057`, `D-0054`, `D-0041`
 > - The writes the later slices of rondo#220 add (the verification claim, recording a scope, a scoped
 >   `start`, `revise`, `publish`) are added to the table by their own annotations. Nothing above is
 >   edited.
+
+> **Annotation (2026-09-14, from rondo#220, the lap-end gate read on the page).** Added under the same
+> answer of rondo's human gate as the annotation above, and additive.
+> - **Section 5a's table gains a row: the verification claim**, carried on the lap-end approve press
+>   (its first row) as an optional field, and **not a separate write**: no route, port or brand of its
+>   own, so it needs exactly the press that row already needs. How it is recorded is `D-0045`'s, as
+>   annotated from rondo#220. Nothing above is edited.
 
 `D-0057` priced four frameworks by **the lines they take over** (96 of 1,233) and by **whether the
 served bytes can still be checked without a build**, and kept the page hand-written. It never asked

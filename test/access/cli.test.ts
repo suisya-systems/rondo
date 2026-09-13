@@ -23,10 +23,10 @@ import { expect, test } from "vitest";
 import {
   approvedActor,
   approvedForPublication,
+  claimThenWalk,
   FLAGS_BY_COMMAND,
   forgeHost,
   type GateVerbs,
-  modelReadingDue,
   operatorLanguage,
   type PreflightInput,
   type PullRequestTextInput,
@@ -38,7 +38,6 @@ import {
   pullRequestText,
   readingRangeOf,
   repositoryFromRemoteUrl,
-  reviewedReading,
   reviewGate,
   reviewLines,
   revisionBlocker,
@@ -56,7 +55,13 @@ import { type Chrome, chromeFor, EN } from "../../src/access/wording.js";
 import { BASIS_FORMS } from "../../src/advisory/proposal.js";
 import type { VerifiedContinuo } from "../../src/continuo/invoker.js";
 import type { ContinuoResult } from "../../src/continuo/protocol.js";
-import type { IterationRecord, JsonRecord, LapReading } from "../../src/store/records.js";
+import {
+  type IterationRecord,
+  type JsonRecord,
+  type LapReading,
+  modelReadingDue,
+  reviewedReading,
+} from "../../src/store/records.js";
 
 /** A handle no test reaches past: every verb below is a fake. */
 const continuo: VerifiedContinuo = {
@@ -395,6 +400,97 @@ test("from 'received' the walk is six verbs, in continuo's order", () => {
       "ack:m-forwarded-relay",
     ]);
   })();
+});
+
+/**
+ * A store that holds only claims, and writes each into the verbs' call log, so
+ * the log says whether the claim came before the walk's first write.
+ */
+function claimStore(calls: string[], fails = false) {
+  return {
+    recordVerificationClaim: async (iterationId: string, actorId: string, claim: string) => {
+      if (fails) {
+        throw new Error("disk I/O error");
+      }
+      calls.push(`claim:${iterationId}:${actorId}:${claim}`);
+      return await Promise.resolve();
+    },
+  };
+}
+
+test("a page press with a claim records it after reading the gate and before any walk write", async () => {
+  const { verbs, calls } = fakeVerbs("presented");
+  const outcome = await claimThenWalk(
+    claimStore(calls),
+    continuo,
+    walkRequest,
+    "i-0001",
+    "npm run verify, green",
+    verbs,
+  );
+  expect(outcome).toEqual({ kind: "walked", closed: true, answerSent: true });
+  expect(calls).toEqual([
+    "show:g1",
+    "claim:i-0001:happy_ryo:npm run verify, green",
+    "show:g1",
+    "answer:approve",
+    "deliver:rondo-operator:r1",
+    "ack:m-forwarded-relay",
+  ]);
+});
+
+test("a page press without a claim records none and walks exactly as the terminal does", async () => {
+  const { verbs, calls } = fakeVerbs("presented");
+  const outcome = await claimThenWalk(
+    claimStore(calls),
+    continuo,
+    walkRequest,
+    "i-0001",
+    null,
+    verbs,
+  );
+  expect(outcome).toEqual({ kind: "walked", closed: true, answerSent: true });
+  expect(calls.some((call) => call.startsWith("claim:"))).toBe(false);
+  expect(calls[0]).toBe("show:g1");
+  expect(calls).toContain("answer:approve");
+});
+
+test("a claim that cannot be written answers nothing, and says so", async () => {
+  const { verbs, calls } = fakeVerbs("presented");
+  const outcome = await claimThenWalk(
+    claimStore(calls, true),
+    continuo,
+    walkRequest,
+    "i-0001",
+    "npm run verify, green",
+    verbs,
+  );
+  expect(outcome.kind).toBe("refused");
+  if (outcome.kind === "refused") {
+    expect(outcome.note).toContain("nothing was answered");
+    expect(outcome.note).toContain("disk I/O error");
+    expect(outcome.why).toBe("claimNotRecorded");
+  }
+  expect(calls).toEqual(["show:g1"]);
+});
+
+test("a claim on a gate already closed is refused out loud, and no claim row is written", async () => {
+  const { verbs, calls } = fakeVerbs("answered", "answered_and_forwarded");
+  const outcome = await claimThenWalk(
+    claimStore(calls),
+    continuo,
+    walkRequest,
+    "i-0001",
+    "npm run verify, green",
+    verbs,
+  );
+  expect(outcome.kind).toBe("refused");
+  if (outcome.kind === "refused") {
+    expect(outcome.note).toContain("already closed as 'answered_and_forwarded'");
+    expect(outcome.note).toContain("not recorded");
+    expect(outcome.why).toBe("claimGateClosed");
+  }
+  expect(calls).toEqual(["show:g1"]);
 });
 
 test("a gate scoped to no run is delivered on the global resource", () => {

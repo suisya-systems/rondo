@@ -51,6 +51,38 @@ export const READING_REMOTE = "origin";
 export const LIST_LIMIT = 20;
 
 /**
+ * One refused call: the tool, and the input a reader acts on. Shared by
+ * `rondo answer`'s material and the page's fence card (#220 S2), so both say a
+ * refusal in the same words.
+ */
+export function denialLine(denial: unknown): string {
+  if (typeof denial !== "object" || denial === null || Array.isArray(denial)) {
+    return "(a refusal rondo cannot read)";
+  }
+  const fields = denial as Readonly<Record<string, unknown>>;
+  const name = fields["tool_name"];
+  const input = fields["tool_input"];
+  const command =
+    typeof input === "object" && input !== null && !Array.isArray(input)
+      ? (input as Readonly<Record<string, unknown>>)["command"]
+      : undefined;
+  return (
+    `${typeof name === "string" ? name : "(unnamed tool)"}  ` +
+    capped(JSON.stringify(typeof command === "string" ? command : input))
+  );
+}
+
+/** How much of a worker's own text one line of the gate screen carries. */
+const DENIAL_TEXT_LIMIT = 200;
+
+/** Say that a value was cut rather than trailing off, as `workLines` does. */
+function capped(text: string): string {
+  return text.length <= DENIAL_TEXT_LIMIT
+    ? text
+    : `${text.slice(0, DENIAL_TEXT_LIMIT)}... (${String(text.length)} chars)`;
+}
+
+/**
  * "N uncommitted path(s) ...: a, b (and K more)", the one spelling the
  * reading's finding and `publish`'s refusal share, so the two cannot count
  * differently. Bounded by `LIST_LIMIT` and saying how many it hid.

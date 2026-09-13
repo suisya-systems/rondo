@@ -99,16 +99,25 @@ import {
 } from "../advisory/proposal.js";
 import type { HostPolicy } from "../refrain/policy.js";
 import {
+  type FindingSeverity,
+  findingBasisText,
   type IterationRecord,
   isApprovableKind,
+  isModelReadingDrafter,
   isTerminal,
+  type LapReading,
+  latestReading,
+  MODEL_READING_DRAFTER_PREFIX,
   type NonTerminalStatus,
   type OpenProposal,
+  readingCoverage,
+  reviewedReading,
   type ThreadMessageDraft,
   WAIT_SIDE,
 } from "../store/records.js";
 import type { AdvisoryRecord, IterationStore, ReadOutcome } from "../store/sqlite.js";
 import { basisLine, gather, gatherHost } from "./advisory.js";
+import type { LapWorkInspection } from "./forge.js";
 import {
   ago,
   gatherInbox,
@@ -121,6 +130,7 @@ import {
   unblockedBy,
   whereItRuns,
 } from "./inbox.js";
+import { denialLine, LIST_LIMIT } from "./review.js";
 import { type Chrome, EN, SHIPPED_SETS, setFor } from "./wording.js";
 
 /**
@@ -134,7 +144,12 @@ import { type Chrome, EN, SHIPPED_SETS, setFor } from "./wording.js";
 export interface WebPorts extends InboxReadPorts {
   readonly store: Pick<
     IterationStore,
-    "read" | "readLive" | "readingsFor" | "occupancy" | "terminalIterations"
+    | "read"
+    | "readLive"
+    | "readingsFor"
+    | "occupancy"
+    | "terminalIterations"
+    | "verificationClaimsFor"
   >;
   readonly record: InboxReadPorts["record"] &
     Pick<AdvisoryRecord, "admissionRefusals" | "threadMessages">;
@@ -184,7 +199,25 @@ export interface WebPorts extends InboxReadPorts {
  * (D-0055 rule 11), and a page that had switched would have shown them in the
  * host's language inside a document declaring another.
  */
-export type LapMaterial = (wording: Chrome, record: IterationRecord) => Promise<readonly string[]>;
+export type LapMaterial = (wording: Chrome, record: IterationRecord) => Promise<LapMaterialRead>;
+
+/**
+ * What {@link LapMaterial} reads, in the two shapes the answer view draws it in
+ * (#220 S2).
+ *
+ * **Structured where the page lays it out, and the lines whole beside it.**
+ * `why` and `work` are what the rows are built from -- never text parsed back
+ * out of `lines` -- and `lines` is `rondo answer`'s own material, kept in a fold
+ * so nothing D-0029 rule 2 asks for leaves the page when the layout does not
+ * draw it.
+ */
+export interface LapMaterialRead {
+  readonly lines: readonly string[];
+  /** The gate's rationale, the worker's own words; null when it was not read. */
+  readonly why: string | null;
+  /** What `git` reported about the lap's work; null when the row names no range. */
+  readonly work: LapWorkInspection | null;
+}
 
 /**
  * The one word the button carries (D-0041 rule 7).
@@ -839,15 +872,103 @@ function spentLine(wording: Chrome, record: IterationRecord): string | null {
  * refused and is the distinction the column was added to carry -- so it gets a
  * line of its own. The bytes are printed as continuo wrote them.
  */
-function fenceLine(wording: Chrome, record: IterationRecord): string | null {
+function fenceLine(wording: Chrome, record: IterationRecord) {
   const refused = record.permissionDenials;
   if (refused === null) {
     return null;
   }
-  if (refused === "null") {
-    return wording.fenceUnknown;
+  // **Plain words on the row, the console's sentence as its `title`** (#220
+  // S2): "the fence refused [...]" is a JSON array in a sentence about a
+  // mechanism, and what a person reads from it is a count. The bytes continuo
+  // wrote are still here, and listed one by one in the answer view's fence card.
+  const denials = decodedDenials(refused);
+  const raw =
+    refused === "null"
+      ? wording.fenceUnknown
+      : refused === "[]"
+        ? wording.fenceRefusedNothing
+        : wording.fenceRefused(refused);
+  return (
+    <span class="line min-w-0 wrap-anywhere" title={raw}>
+      {!Array.isArray(denials)
+        ? wording.blockedUnknown
+        : denials.length === 0
+          ? wording.blockedNothing
+          : wording.blockedCount(denials.length)}
+    </span>
+  );
+}
+
+/** The fence column decoded, or `null` where it is not a list (`"null"`, or bytes that will not parse). */
+function decodedDenials(refused: string): readonly unknown[] | null {
+  try {
+    const parsed: unknown = JSON.parse(refused);
+    return Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
   }
-  return refused === "[]" ? wording.fenceRefusedNothing : wording.fenceRefused(refused);
+}
+
+/**
+ * **What the fence blocked, on the gate itself** (#220 S2): the count in plain
+ * words and each refused call as `rondo answer` spells it ({@link denialLine}),
+ * so a person approving sees that a command was stopped without opening the
+ * text fold. No row reading (SQL null) draws nothing, as {@link fenceLine}.
+ */
+function fenceView(wording: Chrome, record: IterationRecord) {
+  const refused = record.permissionDenials;
+  if (refused === null) {
+    return null;
+  }
+  const denials = decodedDenials(refused);
+  const count =
+    denials === null
+      ? wording.blockedUnknown
+      : denials.length === 0
+        ? wording.blockedNothing
+        : wording.blockedCount(denials.length);
+  // **One line, the calls in a fold** (the S2 design pass on #220): the count is
+  // what a person weighs; each call is there to open. A call whose shape rondo
+  // cannot read is said in plain words rather than the console's placeholder.
+  return (
+    <section id="fence" class={`${CARD} py-2`}>
+      {denials === null || denials.length === 0 ? (
+        <p class="text-[13px] leading-6">
+          <span class="font-semibold">{wording.fenceHeading}</span>{" "}
+          <span class="text-muted-foreground">{count}</span>
+        </p>
+      ) : (
+        <details id="fence-calls" class="group">
+          <summary class="flex cursor-pointer list-none flex-wrap items-center gap-x-2 text-[13px] leading-6 select-none [&::-webkit-details-marker]:hidden">
+            {chevron()}
+            <span class="font-semibold">{wording.fenceHeading}</span>
+            <span class="text-muted-foreground">{count}</span>
+          </summary>
+          <ul class="mt-2 divide-y divide-border/70 rounded-md border border-border/70">
+            {denials.slice(0, LIST_LIMIT).map((denial) =>
+              typeof denial === "object" && denial !== null && !Array.isArray(denial) ? (
+                <li class="px-3 py-1.5 font-mono text-[12px] leading-5 wrap-anywhere" lang="">
+                  {denialLine(denial)}
+                </li>
+              ) : (
+                <li class="px-3 py-1.5 text-[12.5px] leading-5 text-muted-foreground">
+                  {wording.denialUnreadable}
+                  <span class="block font-mono text-[11.5px] text-faint wrap-anywhere" lang="">
+                    {JSON.stringify(denial)}
+                  </span>
+                </li>
+              ),
+            )}
+            {denials.length > LIST_LIMIT ? (
+              <li class="px-3 py-1.5 text-[12px] text-faint">
+                {wording.moreRows(denials.length - LIST_LIMIT)}
+              </li>
+            ) : null}
+          </ul>
+        </details>
+      )}
+    </section>
+  );
 }
 
 /** How an ended lap ended: the status, and the answer or reason beside it. */
@@ -1067,9 +1188,19 @@ function waitingView(
           record,
           "wait",
           wording.age(ago(record.updatedAtMs, nowMs)),
-          wording.waitingHead(record.status, wording.age(ago(record.updatedAtMs, nowMs))),
+          `${wording.waitingHead(record.status, wording.age(ago(record.updatedAtMs, nowMs)))}\n${unblockedBy(wording, record)}`,
         ),
-        [unblockedBy(wording, record), spentLine(wording, record), fenceLine(wording, record)],
+        [
+          // **"answer gate gate-..." is not drawn where the button says it**
+          // (#220 S2): an open gate with an id is released by the answer this
+          // row leads to, and the id is the head's `title`. A stalled row, or a
+          // gate with no id, keeps the sentence: there it says something else.
+          record.status === "awaiting_human" && record.gateId !== null
+            ? null
+            : unblockedBy(wording, record),
+          spentLine(wording, record),
+          fenceLine(wording, record),
+        ],
         framing === undefined ? answerLink(wording, record, token) : null,
         framing === undefined ? null : approveView(wording, record, token, framing),
       );
@@ -1177,6 +1308,21 @@ function attentionView(wording: Chrome, unreadable: readonly LiveRow[]) {
           <p class="line text-[12.5px] leading-5 text-muted-foreground">
             {wording.unreadableAction(row.id)}
           </p>
+          {/*
+           * **An action on the page, not a command for a terminal** (#220 S2):
+           * the reading already holds this row's section with the reason in
+           * it, so the way to it is a link. The target is inside the section's
+           * fold, which the browser opens on arrival.
+           */}
+          <p class="mt-1.5">
+            <a
+              href={`${viewHref({ kind: "reading" }, wording.lang)}#${encodeURIComponent(`read-${row.id}-reason`)}`}
+              data-open=""
+              class="text-[13px] font-medium text-link underline-offset-2 hover:underline"
+            >
+              {wording.unreadableRead}
+            </a>
+          </p>
           <details id={`unreadable-reason-${row.id}`} class="group mt-1">
             <summary class="cursor-pointer text-[12px] leading-5 text-faint select-none hover:text-foreground">
               {wording.unreadableDetail}
@@ -1235,37 +1381,48 @@ function runningView(
 }
 
 /**
- * {@link whereItRuns}, with the workspace kept whole as one unit: at a narrow
- * width a wrapped `in` with its path cut off below was a stray word. The bytes
- * are the catalogue's; only the span boundary is this function's.
+ * {@link whereItRuns} in plain words (#220 S2), in the four states the
+ * console's sentence has, and never merging them: a log found, none yet in a
+ * named directory, rondo not able to ask (with continuo's reason, visible --
+ * a continuo that will not answer is not a run with nothing to answer about,
+ * D-0048 rule 8), and not looked for. The workspace stays visible beside it;
+ * the console's whole sentence is the `title`.
  */
 function runsWhere(
   wording: Chrome,
   record: IterationRecord,
   located: TranscriptLocation | undefined,
 ) {
-  const whole = whereItRuns(wording, record, located);
-  const place = wording.runsIn("", record.workspace ?? wording.noWorkspace);
-  if (!whole.endsWith(place)) {
-    return whole;
-  }
-  const gap = /^\s*/.exec(place)?.[0] ?? "";
+  const said =
+    located === undefined
+      ? wording.logNotLookedFor
+      : located.kind === "unknown"
+        ? wording.logUnchecked(located.reason)
+        : located.sessions === 0
+          ? wording.logNotYet
+          : wording.logFound;
   return (
-    <span class="line min-w-0 wrap-anywhere whitespace-pre-wrap">
-      {whole.slice(0, whole.length - place.length)}
-      {gap}
-      <span
-        class="inline-block max-w-full overflow-hidden align-bottom text-ellipsis whitespace-pre"
-        title={place.slice(gap.length)}
-      >
-        {place.slice(gap.length)}
-      </span>
+    <span class="line min-w-0 wrap-anywhere" title={whereItRuns(wording, record, located)}>
+      {said}
+      {record.workspace === null ? null : (
+        <span class="font-mono text-faint"> {record.workspace}</span>
+      )}
     </span>
   );
 }
 
 /** *What just finished* -- the last few endings, newest first (rondo#145). */
-function endedView(wording: Chrome, ended: readonly IterationRecord[], nowMs: number) {
+/**
+ * `claims` is each ended lap's latest verification claim (D-0045), echoed on its
+ * row (the S2 design pass on #220): an approve press lands on this list, and
+ * the row it moved says back what the person said they checked.
+ */
+function endedView(
+  wording: Chrome,
+  ended: readonly IterationRecord[],
+  nowMs: number,
+  claims: ReadonlyMap<string, { readonly claim: string; readonly by: string | null }>,
+) {
   return questionGroup(
     "ended",
     wording.endedHeading(ended.length),
@@ -1287,6 +1444,14 @@ function endedView(wording: Chrome, ended: readonly IterationRecord[], nowMs: nu
             : endedWhy(wording, record),
           spentLine(wording, record),
           fenceLine(wording, record),
+          claims.has(record.id) ? (
+            <span class="line min-w-0 wrap-anywhere whitespace-pre-wrap" lang="">
+              {wording.checkedEcho(
+                claims.get(record.id)?.claim ?? "",
+                claims.get(record.id)?.by ?? null,
+              )}
+            </span>
+          ) : null,
         ],
       ),
     ),
@@ -1399,6 +1564,371 @@ function betweenView(wording: Chrome, snapshot: HostSnapshot) {
   );
 }
 
+/** A card on the answer view: one section of what a press is made over. */
+const CARD = "min-w-0 rounded-lg border border-border bg-card px-4 py-3";
+
+const CARD_HEADING = "text-[13px] leading-6 font-semibold";
+
+/** A pill in the row's sans face, as {@link stateHead} draws one. */
+function pill(tone: Tone, text: string, extra = "") {
+  return (
+    <span
+      class={`inline-flex shrink-0 items-center rounded-full border px-2 py-px text-[11.5px] font-medium leading-4 whitespace-nowrap ${TONE[tone]} ${extra}`}
+    >
+      {text}
+    </span>
+  );
+}
+
+function chevron() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.6"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      class="size-3.5 shrink-0 text-faint transition-transform group-open:rotate-90"
+    >
+      <path d="m6 3.5 4.5 4.5L6 12.5" />
+    </svg>
+  );
+}
+
+/** A verdict as a tone: raised is amber and never red, because it refuses nothing here. */
+function verdictTone(verdict: string): Tone {
+  return verdict === "clear" ? "ok" : verdict === "concerns" ? "revise" : "muted";
+}
+
+const SEVERITY_TONE: Readonly<Record<FindingSeverity, Tone>> = {
+  blocker: "fail",
+  major: "revise",
+  minor: "muted",
+  nit: "muted",
+};
+
+/**
+ * What a reader looked at and what it did not, in a quiet fold (rondo#69): the
+ * store's own sentences, which are English in every set, so the fold says so.
+ */
+function coverageFold(id: string, wording: Chrome, drafter: string) {
+  return (
+    <details id={id} class="group mt-2">
+      <summary class="flex cursor-pointer list-none items-center gap-1.5 text-[12px] leading-5 text-faint select-none hover:text-foreground [&::-webkit-details-marker]:hidden">
+        {chevron()}
+        {wording.whatItRead}
+      </summary>
+      <p class="mt-1 pl-5 text-[12px] leading-5 text-muted-foreground" lang="en">
+        {readingCoverage(drafter).join(" ")}
+      </p>
+    </details>
+  );
+}
+
+/**
+ * *What changed* -- the commits and the files as rows (D-0029 rule 2), from the
+ * inspection `workLines` prints, capped where it caps and saying how many it
+ * hid. The branch and the base are quiet, and the workspace path is the
+ * branch's `title`: a locator, not something to read.
+ */
+function changedView(wording: Chrome, record: IterationRecord, work: LapWorkInspection | null) {
+  const hidden = (count: number) =>
+    count > LIST_LIMIT ? (
+      <li class="px-3 py-1.5 text-[12px] text-faint">{wording.moreRows(count - LIST_LIMIT)}</li>
+    ) : null;
+  const ROWS = "divide-y divide-border/70 rounded-md border border-border/70";
+  return (
+    <section id="changed" class={CARD}>
+      <div class="flex flex-wrap items-baseline gap-x-2">
+        <h3 class={CARD_HEADING}>{wording.workHeading}</h3>
+        <span class="font-mono text-[11.5px] text-faint" title={record.workspace ?? ""}>
+          {record.topicBranch ?? ""}
+        </span>
+        {work?.kind === "read" ? (
+          <span class="font-mono text-[11.5px] text-faint">
+            {wording.changedAgainst(work.baseRef)}
+          </span>
+        ) : null}
+      </div>
+      {work === null ? (
+        <p class="mt-1 text-[13px] leading-5 text-muted-foreground">{wording.changedNoRange}</p>
+      ) : work.kind !== "read" ? (
+        <p class="mt-1 text-[13px] leading-5 text-muted-foreground">
+          {wording.changedUnreadable(work.reason)}
+        </p>
+      ) : (
+        <div class="mt-2 space-y-2">
+          {work.commits.length === 0 ? (
+            <p class="text-[13px] leading-5 text-muted-foreground">{wording.noCommits}</p>
+          ) : (
+            <ul class={`commits ${ROWS}`}>
+              {work.commits.slice(0, LIST_LIMIT).map((commit) => (
+                <li class="flex gap-3 px-3 py-1.5 text-[13px] leading-5">
+                  <span class="shrink-0 font-mono text-[11.5px] leading-5 text-faint">
+                    {commit.abbreviatedSha}
+                  </span>
+                  <span class="min-w-0 wrap-anywhere" lang="">
+                    {commit.subject}
+                  </span>
+                </li>
+              ))}
+              {hidden(work.commits.length)}
+            </ul>
+          )}
+          {work.files.length === 0 ? (
+            <p class="text-[13px] leading-5 text-muted-foreground">{wording.noFiles}</p>
+          ) : (
+            <ul class={`files ${ROWS}`}>
+              {work.files.slice(0, LIST_LIMIT).map((file) => (
+                <li class="flex items-baseline gap-3 px-3 py-1.5">
+                  <span class="min-w-0 flex-1 font-mono text-[12px] leading-5 wrap-anywhere">
+                    {file.path}
+                  </span>
+                  {file.added === null || file.deleted === null ? (
+                    <span class="shrink-0 text-[11.5px] text-faint">{wording.binaryFile}</span>
+                  ) : (
+                    <span class="shrink-0 font-mono text-[11.5px] tabular-nums">
+                      <span class="text-ok">+{String(file.added)}</span>{" "}
+                      <span class="text-fail">-{String(file.deleted)}</span>
+                    </span>
+                  )}
+                </li>
+              ))}
+              {hidden(work.files.length)}
+            </ul>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
+/**
+ * *Checks* -- the deterministic reading, the one `publish` refuses on (D-0065
+ * 5.5): its verdict, its findings as rows, what it counted and what it covered.
+ */
+/**
+ * The checks' verdict as a pill; muted rather than green where the work it
+ * would be matched against cannot be read now (the S2 design pass on #220), so
+ * an unreadable workspace never reads as a clean pass.
+ */
+function checksPill(wording: Chrome, reading: LapReading | null, workGone = false) {
+  return reading === null
+    ? null
+    : pill(
+        workGone ? "muted" : verdictTone(reading.verdict),
+        wording.verdictPill(reading.verdict, reading.findings.length),
+      );
+}
+
+/**
+ * The model's verdict as a pill, its worst finding said in the pill (the S2
+ * design pass on #220): graded findings counted by severity, blocker first, in
+ * red where there is a blocker. A reading whose severities did not decode keeps
+ * the plain count.
+ */
+function modelPill(wording: Chrome, reading: LapReading) {
+  const graded = reading.graded ?? [];
+  if (reading.verdict !== "concerns" || graded.length === 0) {
+    return pill(
+      verdictTone(reading.verdict),
+      wording.verdictPill(reading.verdict, reading.findings.length),
+    );
+  }
+  const counted = (["blocker", "major", "minor", "nit"] as const)
+    .map((severity) => ({
+      severity,
+      count: graded.filter((finding) => finding.severity === severity).length,
+    }))
+    .filter((part) => part.count > 0);
+  return pill(
+    SEVERITY_TONE[counted[0]?.severity ?? "minor"],
+    counted.map((part) => wording.severityCount(part.severity, part.count)).join(" · "),
+  );
+}
+
+/**
+ * A reading that could not be taken: one plain sentence, and the recorded
+ * reason -- the store's own words, English in every set -- in a fold beside it
+ * (the S2 design pass on #220). Folded is not dropped.
+ */
+function notTakenView(wording: Chrome, id: string, reason: string | null) {
+  return (
+    <>
+      <p class="mt-1 text-[13px] leading-5 text-muted-foreground">{wording.readingNotTaken}</p>
+      <details id={id} class="group mt-1">
+        <summary class="flex cursor-pointer list-none items-center gap-1.5 text-[12px] leading-5 text-faint select-none hover:text-foreground [&::-webkit-details-marker]:hidden">
+          {chevron()}
+          {wording.whyNotTaken}
+        </summary>
+        <p class="mt-1 pl-5 text-[12px] leading-5 wrap-anywhere text-muted-foreground">
+          {reason ?? wording.noReasonRecorded}
+        </p>
+      </details>
+    </>
+  );
+}
+
+function checksView(wording: Chrome, reading: LapReading | null, work: LapWorkInspection | null) {
+  const workGone = work !== null && work.kind !== "read";
+  return (
+    <section id="checks" class={`${CARD} scroll-mt-16`}>
+      <div class="flex items-center gap-2">
+        <h3 class={CARD_HEADING}>{wording.checksHeading}</h3>
+        {checksPill(wording, reading, workGone)}
+      </div>
+      {reading === null ? (
+        <p class="mt-1 text-[13px] leading-5 text-muted-foreground">{wording.checksNone}</p>
+      ) : reading.verdict === "unavailable" ? (
+        notTakenView(wording, "checks-not-taken", reading.unavailableReason)
+      ) : (
+        <>
+          {workGone ? (
+            <p class="mt-1 text-[13px] leading-5 text-wait-ink">{wording.checksWorkUnreadable}</p>
+          ) : null}
+          {reading.findings.length === 0 ? null : (
+            <ul class="finding-rows mt-2 space-y-1.5" lang="en">
+              {reading.findings.map((finding) => (
+                <li class="finding flex gap-2 text-[13px] leading-5">
+                  <span aria-hidden="true" class="text-wait">
+                    •
+                  </span>
+                  <span class="min-w-0 wrap-anywhere">{finding}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          <p class="mt-2 text-[12.5px] leading-5 text-muted-foreground">
+            {wording.checksCounted(
+              reading.evidence?.commitCount ?? 0,
+              reading.evidence?.fileCount ?? 0,
+            )}
+          </p>
+          {coverageFold("checks-coverage", wording, reading.drafter)}
+        </>
+      )}
+    </section>
+  );
+}
+
+/**
+ * *Model review* -- the model's reading beside the checks, as material only
+ * (D-0065's gate answer (a)): each finding with its severity and its bases,
+ * in the reviewer's order, which rondo does not rank. Four states: a reading,
+ * one that could not be taken, none yet while one is still due, and a reading
+ * of earlier commits while one of the current ones is.
+ *
+ * **The page does not wait for it** (D-0054 rule 1): the answer view holds
+ * still, so a reading that may still arrive is a sentence and a reload link.
+ */
+/**
+ * Whether the page may say a model reading *may still arrive* (#220 S2), which
+ * is not `modelReadingDue`: that one decides whether the terminal takes a
+ * round, and an unavailable row carries no evidence, so it stays "due" after a
+ * round on these very commits ended unavailable -- and nothing at this gate
+ * retries. The page says so only while there is no model row at all, or the
+ * latest one names a tip other than the checks' tip. An unavailable row is
+ * that round's outcome and is shown as such.
+ */
+function modelPendingOnPage(readings: readonly LapReading[], model: LapReading | null): boolean {
+  if (model === null) {
+    return true;
+  }
+  const modelTip = model.evidence?.tipCommit;
+  const checksTip = reviewedReading(readings)?.evidence?.tipCommit;
+  return modelTip !== undefined && checksTip !== undefined && modelTip !== checksTip;
+}
+
+function modelView(wording: Chrome, reading: LapReading | null, due: boolean, reload: string) {
+  const later = (note: string) => (
+    <p class="mt-1 text-[13px] leading-5 text-muted-foreground">
+      {note}{" "}
+      <a href={reload} class="font-medium text-link underline-offset-2 hover:underline">
+        {wording.reloadPage}
+      </a>
+    </p>
+  );
+  return (
+    <section id="model-review" class={`${CARD} scroll-mt-16`}>
+      <div class="flex flex-wrap items-center gap-2">
+        <h3 class={CARD_HEADING}>{wording.modelHeading}</h3>
+        {reading === null ? null : modelPill(wording, reading)}
+        {reading === null ? null : (
+          <span class="ml-auto font-mono text-[11px] text-faint" title={reading.drafter}>
+            {reading.drafter.slice(MODEL_READING_DRAFTER_PREFIX.length)}
+          </span>
+        )}
+      </div>
+      {reading === null ? (
+        later(wording.modelPending)
+      ) : (
+        <>
+          {due ? later(wording.modelOlder) : null}
+          {reading.verdict === "unavailable" ? (
+            notTakenView(wording, "model-not-taken-why", reading.unavailableReason)
+          ) : (
+            <>
+              {reading.findings.length === 0 ? null : (
+                <ul class="mt-2 divide-y divide-border/70">
+                  {reading.findings.map((text, index) => {
+                    const graded = reading.graded?.[index];
+                    return (
+                      <li class="model-finding py-2 first:pt-1 last:pb-0">
+                        <p class="flex items-start gap-2 text-[13px] leading-5">
+                          {graded === undefined
+                            ? null
+                            : pill(
+                                SEVERITY_TONE[graded.severity],
+                                wording.severityWord(graded.severity),
+                                "severity mt-px",
+                              )}
+                          <span class="min-w-0 wrap-anywhere" lang="">
+                            {text}
+                          </span>
+                        </p>
+                        {graded === undefined ? null : (
+                          <p class="mt-1 flex flex-wrap items-center gap-1 text-[11.5px] leading-4">
+                            {graded.bases.map((basis) => (
+                              <code class="basis-chip rounded border border-border bg-muted/60 px-1.5 py-px font-mono text-faint wrap-anywhere">
+                                {findingBasisText(basis)}
+                              </code>
+                            ))}
+                            {graded.bases.length === 0 ? (
+                              <span class="text-faint">{wording.basisNone}</span>
+                            ) : graded.basisResolved ? null : (
+                              <span class="text-faint">{wording.basisUnresolved}</span>
+                            )}
+                          </p>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+              {coverageFold("model-coverage", wording, reading.drafter)}
+            </>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
+/**
+ * The line by the button, or null: how many blockers and majors the latest
+ * model reading raised (D-0065 as annotated from #220). Counted from the
+ * graded findings, so a reading whose severities did not decode says nothing
+ * here -- its findings are still every one of them on the card.
+ */
+function modelRaised(wording: Chrome, reading: LapReading | null): string | null {
+  const graded = reading?.graded ?? [];
+  const blockers = graded.filter((finding) => finding.severity === "blocker").length;
+  const majors = graded.filter((finding) => finding.severity === "major").length;
+  return blockers + majors === 0 ? null : wording.modelRaised(blockers, majors);
+}
+
 /** Whether a row carries a question this page can put a button under. */
 function answerable(record: IterationRecord, token: string | null): token is string {
   return token !== null && record.status === "awaiting_human" && record.gateId !== null;
@@ -1436,49 +1966,113 @@ function approveView(
   }
   const known = framing.claims.filter((claim) => claim.value !== UNDETERMINED);
   const unknown = framing.claims.filter((claim) => claim.value === UNDETERMINED);
+  const model = latestReading(framing.readings, isModelReadingDrafter);
+  const modelDue = modelPendingOnPage(framing.readings, model);
+  const raised = modelRaised(wording, model);
+  const checks = reviewedReading(framing.readings);
+  const reload = viewHref({ kind: "answer", iterationId: record.id }, wording.lang);
   return (
     <div id="answering" class="mt-3 space-y-3">
-      <p class="note text-[13px] leading-5 text-muted-foreground">{wording.pressNote}</p>
-      {/*
-       * **The claims that carry a value first, the undetermined ones in one
-       * fold** (the third design pass on #220). Folded is not dropped: the fold
-       * and every claim in it are in the document (D-0042), and with script
-       * off `page/app.css` draws it open.
-       */}
-      {known.length === 0 ? null : claimsView(known, framing.snapshot, true)}
-      {unknown.length === 0 ? null : (
-        <details id="undetermined" class="group rounded-md border border-border">
-          <summary
-            data-row=""
-            class="flex cursor-pointer list-none items-center gap-2 rounded-md px-3 py-2 text-[12.5px] leading-5 text-muted-foreground outline-none select-none hover:bg-accent focus-visible:bg-accent focus-visible:shadow-[inset_3px_0_0_var(--color-ring)] [&::-webkit-details-marker]:hidden"
-          >
-            <svg
-              aria-hidden="true"
-              viewBox="0 0 16 16"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.6"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              class="size-3.5 shrink-0 text-faint transition-transform group-open:rotate-90"
-            >
-              <path d="m6 3.5 4.5 4.5L6 12.5" />
-            </svg>
-            {wording.undeterminedFold(unknown.length)}
-          </summary>
-          <div class="border-t border-border [&>div]:rounded-none [&>div]:border-0">
-            {claimsView(unknown, framing.snapshot, true)}
-          </div>
-        </details>
-      )}
       {framing.material === null ? null : (
-        <pre
-          class="material overflow-x-auto rounded-md border border-border bg-muted/50 p-3 font-mono text-[12px] leading-5 wrap-anywhere whitespace-pre-wrap"
-          lang={materialLanguage(record)}
-        >
-          {framing.material}
-        </pre>
+        <>
+          <section id="why" class={CARD}>
+            <h3 class={CARD_HEADING}>{wording.whyStopped}</h3>
+            {framing.material.why === null ? (
+              <p class="text-[13px] leading-5 text-muted-foreground">{wording.whyNotRead}</p>
+            ) : (
+              <p
+                class="mt-1 text-[13.5px] leading-6 wrap-anywhere whitespace-pre-wrap"
+                lang={materialLanguage(record)}
+              >
+                {framing.material.why}
+              </p>
+            )}
+          </section>
+          {changedView(wording, record, framing.material.work)}
+          {fenceView(wording, record)}
+        </>
       )}
+      {/*
+       * **The two readings side by side, and nothing between them** (D-0065 as
+       * annotated from #220): one gate, no recommendation, each reading in its
+       * own words. Stacked under `lg`.
+       */}
+      <div class="grid items-start gap-3 lg:grid-cols-2">
+        {checksView(wording, checks, framing.material?.work ?? null)}
+        {modelView(wording, model, modelDue, reload)}
+      </div>
+      <p class="note text-[12.5px] leading-5 text-faint">{wording.readingsNote}</p>
+      {/*
+       * **What the press records, folded by default** (the S2 design pass on
+       * #220): every claim is still in the document and still recorded as
+       * shown (D-0042) -- folded is not dropped, and with script off
+       * `page/app.css` draws the fold open -- but the readings above already
+       * say what these rows say, and the rows pushed the claim box a screen
+       * below them. The summary counts what is inside.
+       */}
+      <details id="records" class="group rounded-md border border-border">
+        <summary
+          data-row=""
+          class="flex cursor-pointer list-none items-center gap-2 rounded-md px-3 py-2 text-[12.5px] leading-5 text-muted-foreground outline-none select-none hover:bg-accent focus-visible:bg-accent focus-visible:shadow-[inset_3px_0_0_var(--color-ring)] [&::-webkit-details-marker]:hidden"
+        >
+          {chevron()}
+          {wording.recordsFold(framing.claims.length)}
+        </summary>
+        <div class="space-y-3 border-t border-border p-3">
+          <p class="note text-[13px] leading-5 text-muted-foreground">{wording.pressNote}</p>
+          {/*
+           * **The claims that carry a value first, the undetermined ones in one
+           * fold** (the third design pass on #220). Folded is not dropped: the fold
+           * and every claim in it are in the document (D-0042), and with script
+           * off `page/app.css` draws it open.
+           */}
+          {known.length === 0 ? null : claimsView(known, framing.snapshot, true)}
+          {unknown.length === 0 ? null : (
+            <details id="undetermined" class="group rounded-md border border-border">
+              <summary
+                data-row=""
+                class="flex cursor-pointer list-none items-center gap-2 rounded-md px-3 py-2 text-[12.5px] leading-5 text-muted-foreground outline-none select-none hover:bg-accent focus-visible:bg-accent focus-visible:shadow-[inset_3px_0_0_var(--color-ring)] [&::-webkit-details-marker]:hidden"
+              >
+                <svg
+                  aria-hidden="true"
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.6"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  class="size-3.5 shrink-0 text-faint transition-transform group-open:rotate-90"
+                >
+                  <path d="m6 3.5 4.5 4.5L6 12.5" />
+                </svg>
+                {wording.undeterminedFold(unknown.length)}
+              </summary>
+              <div class="border-t border-border [&>div]:rounded-none [&>div]:border-0">
+                {claimsView(unknown, framing.snapshot, true)}
+              </div>
+            </details>
+          )}
+          {framing.material === null ? null : (
+            // **Folded is not dropped** (D-0029 rule 2): `rondo answer`'s material
+            // whole, for what the layout above does not draw -- the fence's
+            // allowance and its standing sentences, the gate's options, the
+            // readings' evidence -- and its label says so rather than promising a
+            // repeat.
+            <details id="material-text" class="group rounded-md border border-border">
+              <summary class="flex cursor-pointer list-none items-center gap-2 rounded-md px-3 py-2 text-[12.5px] leading-5 text-muted-foreground outline-none select-none hover:bg-accent focus-visible:bg-accent [&::-webkit-details-marker]:hidden">
+                {chevron()}
+                {wording.allAsText}
+              </summary>
+              <pre
+                class="material overflow-x-auto border-t border-border bg-muted/50 p-3 font-mono text-[12px] leading-5 wrap-anywhere whitespace-pre-wrap"
+                lang={materialLanguage(record)}
+              >
+                {framing.material.lines.join("\n")}
+              </pre>
+            </details>
+          )}
+        </div>
+      </details>
       <form
         method="post"
         action={viewHref({ kind: "summary" }, wording.lang)}
@@ -1487,28 +2081,109 @@ function approveView(
         // table; full width under `sm`, where it is the bottom sheet. The lift
         // is shallow and the material ends a gap above it, so where the bar
         // rests at the end of the framing it covers nothing.
-        class="sticky bottom-0 z-[1] -mx-4 mt-5 flex flex-col gap-2 border-t border-border bg-card px-4 py-3 shadow-[0_-4px_10px_-8px_rgb(0_0_0/0.3)] sm:flex-row sm:items-center sm:gap-3"
+        class="sticky bottom-0 z-[1] -mx-4 mt-5 flex flex-col gap-2 border-t border-border bg-card px-4 py-3 shadow-[0_-4px_10px_-8px_rgb(0_0_0/0.3)]"
       >
         <input type="hidden" name="token" value={token} />
         <input type="hidden" name="iteration" value={record.id} />
         {/*
-         * The last `j`/`k` stop, by focus alone: moving to the button presses
-         * nothing, and `Enter` on it is the browser's own activation of a
-         * native submit -- a person's key, which is what mints a press.
+         * **Both readings' verdicts pinned in the bar** (the S2 design pass on
+         * #220): the bar stays on screen at every scroll, so the decision's
+         * material shows before any reading is scrolled to, at a phone width
+         * too. Side by side and in the same weight, no recommendation between
+         * them (D-0065 as annotated from #220). The model's blocker or major
+         * line is part of it -- seen before pressing and never in the way of
+         * it; the button is the same button whatever it says.
          */}
-        <button
-          type="submit"
-          data-row=""
-          class={`${PRIMARY} h-10 w-full justify-center px-6 text-sm sm:h-9 sm:w-auto`}
+        <p
+          id="bar-readings"
+          class="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] leading-5 text-muted-foreground"
         >
-          {APPROVE_BODY}
-        </button>
-        <span
-          class="note min-w-0 text-[13px] leading-5 text-muted-foreground"
-          title={wording.approveNote(record.gateId, APPROVE_BODY)}
-        >
-          {wording.approvePlain}
-        </span>
+          <a
+            href="#checks"
+            class="inline-flex items-center gap-1.5 whitespace-nowrap hover:underline"
+          >
+            {wording.checksHeading}
+            {checksPill(wording, checks)}
+          </a>
+          <a
+            href="#model-review"
+            class="inline-flex items-center gap-1.5 whitespace-nowrap hover:underline"
+          >
+            {wording.modelHeading}
+            {model === null ? null : modelPill(wording, model)}
+          </a>
+          {raised === null ? null : (
+            <span
+              id="model-raised"
+              class="inline-flex flex-wrap items-center gap-x-1.5 text-[13px] text-fail"
+            >
+              {glyph("alert")}
+              <span>{raised}</span>
+              <a
+                href="#model-review"
+                class="font-medium whitespace-nowrap underline underline-offset-2"
+              >
+                {wording.modelRaisedLink}
+              </a>
+            </span>
+          )}
+          {modelDue ? (
+            <span>{wording.modelMayArrive}</span>
+          ) : model?.verdict === "unavailable" ? (
+            // Said as "only the checks read this" only when the checks did
+            // read it (#220 S2, Codex): both readers can be unavailable.
+            <span id="model-not-taken">
+              {checks !== null && checks.verdict !== "unavailable"
+                ? wording.modelNotTaken
+                : wording.neitherReadingTaken}
+            </span>
+          ) : null}
+        </p>
+        <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:gap-3">
+          {/*
+           * **What the person says they checked, carried by this press** (D-0045
+           * as annotated from #220): optional, their words byte for byte, and no
+           * `maxlength` -- a browser cuts a pasted claim silently, and a claim
+           * recorded shorter than it was said is one the person did not make, so
+           * the port refuses an over-long one in words instead. `data-draft` is
+           * the composer script's duty, keyed per gate so a later gate on the
+           * same lap does not start with an earlier gate's words. Its label says
+           * where the words go, right beside the button they go with.
+           */}
+          <label class="flex min-w-0 flex-1 flex-col gap-1">
+            <span class="text-[12.5px] leading-5 font-medium text-muted-foreground">
+              {wording.claimLabel}
+            </span>
+            <textarea
+              name="verified"
+              rows={1}
+              data-draft={`claim:${record.id}:${record.gateId}`}
+              placeholder={wording.claimPlaceholder}
+              class="max-h-32 min-h-9 w-full resize-y rounded-md border border-border bg-background px-2.5 py-1.5 text-[13px] leading-5 outline-none [field-sizing:content] placeholder:text-faint focus-visible:ring-2 focus-visible:ring-ring"
+            />
+          </label>
+          {/*
+           * The last `j`/`k` stop, by focus alone: moving to the button
+           * presses nothing, and `Enter` on it is the browser's own activation
+           * of a native submit -- a person's key, which is what mints a press.
+           * What approving means is its description, not a second label.
+           */}
+          <button
+            type="submit"
+            data-row=""
+            aria-describedby={`approve-plain-${record.id}`}
+            class={`${PRIMARY} h-10 w-full justify-center px-6 text-sm sm:h-9 sm:w-auto`}
+          >
+            {APPROVE_BODY}
+          </button>
+          <span
+            id={`approve-plain-${record.id}`}
+            class="note sr-only"
+            title={wording.approveNote(record.gateId, APPROVE_BODY)}
+          >
+            {wording.approvePlain}
+          </span>
+        </div>
       </form>
     </div>
   );
@@ -1571,7 +2246,9 @@ function explainView(wording: Chrome, record: IterationRecord, snapshot: Advisor
 interface Shown {
   readonly claims: readonly Claim[];
   readonly snapshot: AdvisorySnapshot;
-  readonly material: string | null;
+  readonly material: LapMaterialRead | null;
+  /** The row's readings, which the two reading cards are drawn from. */
+  readonly readings: readonly LapReading[];
 }
 
 /**
@@ -1609,15 +2286,16 @@ async function shownBeforePress(
     if (record.id !== view.iterationId || !answerable(record, token)) {
       continue;
     }
-    const snapshot = gather(record, await ports.store.readingsFor(record.id));
+    const readings = await ports.store.readingsFor(record.id);
+    const snapshot = gather(record, readings);
     // The set this request resolved to and not the host's (D-0056 rule 12):
     // the fence block's standing sentences are inside these lines.
-    const material =
-      ports.material === null ? null : (await ports.material(wording, record)).join("\n");
+    const material = ports.material === null ? null : await ports.material(wording, record);
     shown.set(record.id, {
       claims: propose(snapshot).payload.claims,
       snapshot,
       material,
+      readings,
     });
   }
   return shown;
@@ -2424,6 +3102,27 @@ export async function operatorPage(
     }
   });
   const ended = endedRecently(await ports.store.terminalIterations());
+  // **Whose word it is stays with the words** (#220 S2, Codex): a claim another
+  // operator recorded, on the page or with `rondo answer --verified`, is theirs
+  // and never "you said"; `by` is null only when it is this page's own actor.
+  const endedClaims = new Map(
+    (
+      await Promise.all(
+        ended.map(async (record) => {
+          const last = (await ports.store.verificationClaimsFor(record.id)).at(-1);
+          return [
+            record.id,
+            last === undefined
+              ? undefined
+              : { claim: last.claim, by: last.actorId === ports.actorId ? null : last.actorId },
+          ] as const;
+        }),
+      )
+    ).filter(
+      (entry): entry is readonly [string, { claim: string; by: string | null }] =>
+        entry[1] !== undefined,
+    ),
+  );
   const waiting: IterationRecord[] = [];
   const running: IterationRecord[] = [];
   for (const row of live) {
@@ -2487,7 +3186,21 @@ export async function operatorPage(
               ? readingSection(
                   wording.iterationHeading(row.id),
                   "",
-                  <pre class={PRE}>{wording.willNotDecode(row.reason)}</pre>,
+                  <>
+                    <p class="text-[13px] leading-5">{wording.unreadableLead}</p>
+                    {/*
+                     * Wrapped, and no focus ring on arrival (the S2 design pass
+                     * on #220): the summary's link lands here, and a clipped
+                     * line in a heavy outline read as an error in the page.
+                     */}
+                    <pre
+                      id={`read-${row.id}-reason`}
+                      tabindex={-1}
+                      class={`${PRE.replace(/whitespace-pre$/, "whitespace-pre-wrap")} wrap-anywhere outline-none`}
+                    >
+                      {wording.willNotDecode(row.reason)}
+                    </pre>
+                  </>,
                   `read-${row.id}`,
                   glyph("alert"),
                 )
@@ -2796,7 +3509,7 @@ export async function operatorPage(
                   )}
                   {attentionView(wording, unreadable)}
                   {runningView(wording, running, transcripts, nowMs)}
-                  {endedView(wording, ended, nowMs)}
+                  {endedView(wording, ended, nowMs, endedClaims)}
                 </>
               )}
               {onThreads ? null : (
