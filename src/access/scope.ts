@@ -23,6 +23,11 @@
  * writes rule 4.4's stop into it, which is what keeps the line stopped.
  */
 
+import {
+  type BudgetAgentType,
+  computeScopeBudgets,
+  type ScopeBudgets,
+} from "../advisory/budget.js";
 import { type AgentTypeInput, agentTypeRecord } from "../cadenza/facade.js";
 import { allocate } from "../refrain/allocator.js";
 import { classifyPlan } from "../refrain/classification.js";
@@ -905,6 +910,54 @@ export async function heldAgentTypeLines(
     }
   }
   return lines;
+}
+
+/**
+ * A scope's five budgets computed from this store's recorded laps, each with its
+ * bases (D-0071 rule 4.2, stage 1), for a form to start from in place of fixed
+ * defaults. **Reads only.**
+ *
+ * Every iteration row is read, live and terminal; a row that will not decode is
+ * skipped, as it holds no measurement to read. Each listed agent type's tier is
+ * read back from the held record (D-0069 section 1); a digest with no record
+ * that rebuilds to it has no tier, so its measurements fall from its own rows
+ * straight to the cold start.
+ */
+export async function scopeBudgetsFromStore(
+  ports: {
+    readonly store: Pick<IterationStore, "readLive" | "terminalIterations">;
+    readonly record: Pick<AdvisoryRecord, "heldAgentType">;
+  },
+  input: {
+    readonly agentTypes: readonly string[];
+    readonly plans: number;
+    readonly reviewRounds?: number;
+    readonly draftedAtMs: number;
+  },
+): Promise<ScopeBudgets> {
+  const rows = [
+    ...(await ports.store.readLive()),
+    ...(await ports.store.terminalIterations()),
+  ].flatMap((outcome) => (outcome.kind === "read" ? [outcome.record] : []));
+  const agentTypes: BudgetAgentType[] = [];
+  for (const digest of input.agentTypes) {
+    agentTypes.push({ digest, modelTier: await heldTier(ports.record, digest) });
+  }
+  return computeScopeBudgets({ ...input, agentTypes, rows });
+}
+
+async function heldTier(
+  record: Pick<AdvisoryRecord, "heldAgentType">,
+  digest: string,
+): Promise<string | null> {
+  const held = await record.heldAgentType(digest);
+  if (held.kind !== "read") return null;
+  try {
+    const built = agentTypeRecord(held.agentTypeInput as unknown as AgentTypeInput);
+    return built.agentTypeDigest === digest ? built.executorPolicy.modelTier : null;
+  } catch {
+    return null;
+  }
 }
 
 /** Why cadenza gave no answer, in its own words (D-0018 rule 7). */
