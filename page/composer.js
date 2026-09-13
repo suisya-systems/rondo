@@ -61,10 +61,15 @@ document.addEventListener("input", (event) => {
 });
 
 // Which draft a submit carried, by the id it carried, for the landing above.
+// **Only a native submit**: htmx has already cancelled the one it sends (its
+// listener on the form runs before this one on the document), and that send
+// never lands on a page load, so a marker left for it would outlive the send
+// and wipe a later draft on any load anchored at that id -- a basis chip that
+// cites the message, a reload (#220 S1 review).
 document.addEventListener("submit", (event) => {
   const draft = event.target.querySelector?.("textarea[data-draft]");
   const id = event.target.querySelector?.("input[name=message_id]")?.value;
-  if (draft && id) {
+  if (draft && id && !event.defaultPrevented) {
     store.set(`rondo:sent:${id}`, draftKey(draft));
   }
 });

@@ -141,6 +141,19 @@ export interface Chrome {
   readonly threadsUnreadable: (reason: string) => string;
   /** The line a refused send shows under the draft, which is kept. */
   readonly notSent: (line: string) => string;
+  /**
+   * Why a send was refused, one sentence each, with no id and no D-number in
+   * it (#220 S1 review): the lines a page can cause. The mint's several
+   * reasons are one sentence, because what a person does about each is the
+   * same -- reload and send again.
+   */
+  readonly sendRefusedNoApprover: string;
+  readonly sendRefusedForm: string;
+  readonly sendRefusedNoWords: string;
+  readonly sendRefusedNotTaken: string;
+  /** Script off, a refused send lands on its own page: the way back, and where the words are. */
+  readonly sendBack: string;
+  readonly sendBackNote: string;
   /** With script off a view with a composer does not reload itself, so a draft survives. */
   readonly threadNoReload: string;
   /** The threads' account of themselves: the redraw writes nothing, and Send is what writes here. */
@@ -389,6 +402,14 @@ explanation you pressed on and then answers the gate.`,
   noSuchThread: "No request thread holds that message.",
   threadsUnreadable: (reason) => `The request threads could not be read: ${reason}`,
   notSent: (line) => `Not sent, and your words are kept: ${line}`,
+  sendRefusedNoApprover: "RONDO_APPROVER is not set, so there is nobody this page could send as.",
+  sendRefusedForm:
+    "This did not come from this page's own form, or the page is older than this rondo. Reload the page and send again.",
+  sendRefusedNoWords: "There are no words to send.",
+  sendRefusedNotTaken:
+    "The conversation did not record this message; the message it replies to may not be in the thread. Reload the thread and try again.",
+  sendBack: "Back to the thread",
+  sendBackNote: "Your browser's Back button returns to what you wrote.",
   threadsLiveNote: (seconds) =>
     `Redraws every ${String(seconds)}s, and a redraw writes nothing. What writes here is Send: ` +
     "your words, recorded exactly as written into the thread, under RONDO_APPROVER's name. A message approves nothing.",
@@ -587,6 +608,15 @@ const JA: Partial<Chrome> = Object.freeze({
   noSuchThread: "そのメッセージを含む依頼スレッドはありません。",
   threadsUnreadable: (reason) => `依頼スレッドを読めませんでした: ${reason}`,
   notSent: (line) => `送信されませんでした。書いた文は残しています: ${line}`,
+  sendRefusedNoApprover:
+    "RONDO_APPROVER が設定されていないため、このページが誰として送るのかが決まりません。",
+  sendRefusedForm:
+    "このページ自身のフォームから届いていないか、ページが今の rondo より古いものです。ページを読み込み直してから、もう一度送信してください。",
+  sendRefusedNoWords: "送る文がありません。",
+  sendRefusedNotTaken:
+    "会話がこのメッセージを記録しませんでした。返信先のメッセージがスレッドに無いのかもしれません。スレッドを読み込み直してから、もう一度試してください。",
+  sendBack: "スレッドに戻る",
+  sendBackNote: "ブラウザの「戻る」で、書いた文に戻れます。",
   threadsLiveNote: (seconds) =>
     `${String(seconds)}秒ごとに描き直しますが、描き直しは何も書き込みません。ここで書き込むのは送信だけで、` +
     "書いた文をそのまま RONDO_APPROVER の名前でスレッドに記録します。メッセージは何も承認しません。",

@@ -552,6 +552,15 @@ function viewOf(query: URLSearchParams): PageView {
   return query.get("reading") === "open" ? { kind: "reading" } : { kind: "summary" };
 }
 
+/** Text made safe to place in HTML, as element content or a quoted attribute. */
+function escapeHtml(text: string): string {
+  return text
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
 /** A plain-text response a person can read, for every refusal. */
 function said(c: Context<PageEnv>, status: 400 | 403 | 404 | 409 | 413 | 421 | 500, line: string) {
   return c.body(`${line}\n`, status, {
@@ -735,36 +744,37 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
   for (const [path, kind] of SEND_ROUTES) {
     app.post(path, async (c) => {
       if (say === null) {
-        return refused(
-          c,
-          403,
-          "RONDO_APPROVER is not set, so there is nobody this page could send as",
-        );
+        return refused(c, 403, "sendRefusedNoApprover", null);
       }
       const form = await c.req.parseBody();
+      const back = typeof form["in_reply_to"] === "string" ? form["in_reply_to"] : null;
       const minting = mintSend(c, form["token"]);
       if (!("send" in minting)) {
-        return refused(c, minting.status, minting.line);
+        return refused(c, minting.status, "sendRefusedForm", back);
       }
       const messageId = form["message_id"];
       if (typeof messageId !== "string" || !SENT_MESSAGE_ID.test(messageId)) {
-        return refused(c, 400, "that form carried no message id this page minted");
+        return refused(c, 400, "sendRefusedForm", back);
       }
       const body = form["body"];
       if (typeof body !== "string" || body.trim() === "") {
-        return refused(c, 400, "there are no words to send");
+        return refused(c, 400, "sendRefusedNoWords", back);
       }
-      const inReplyTo = form["in_reply_to"];
-      if (kind === "reply" && (typeof inReplyTo !== "string" || inReplyTo === "")) {
-        return refused(c, 400, "that reply named no message it answers");
+      const inReplyTo = kind === "reply" ? back : null;
+      if (kind === "reply" && (inReplyTo === null || inReplyTo === "")) {
+        return refused(c, 400, "sendRefusedForm", null);
       }
-      const sent = await say.say(minting.send, {
-        messageId,
-        body,
-        inReplyTo: kind === "reply" ? (inReplyTo as string) : null,
-      });
-      if (!sent.ok) {
-        return refused(c, 409, sent.note);
+      const message = { messageId, body, inReplyTo };
+      const sent = await say.say(minting.send, message);
+      // **A second submit of one form is the send it repeats** (#220 S1
+      // review): the id was minted when the form was drawn precisely so that
+      // the store refuses the second row, and the words the person sent are in
+      // the thread under that id. Telling them "not sent" would be false, and
+      // would keep the draft for a third send under a fresh id. Only the same
+      // words, to the same message, in the operator's voice count; any other
+      // holder of the id is a refusal like the rest.
+      if (!sent.ok && !(await alreadyThere(message))) {
+        return refused(c, 409, "sendRefusedNotTaken", inReplyTo);
       }
       // **The thread, at the message just sent**: the thread view resolves any
       // message to its request, so the new id is the whole address.
@@ -775,22 +785,57 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     });
   }
 
+  /** Whether the thread already holds exactly this operator message. */
+  async function alreadyThere(message: SentMessage): Promise<boolean> {
+    const read = await reading.record.threadMessages();
+    return (
+      read.kind === "read" &&
+      read.messages.some(
+        (held) =>
+          held.messageId === message.messageId &&
+          held.authorKind === "operator" &&
+          held.body === message.body &&
+          held.inReplyTo === message.inReplyTo,
+      )
+    );
+  }
+
   /**
-   * A send's refusal. A native submit gets {@link said}'s plain line; htmx gets
-   * the same line as `#send-refused`, which the page's `responseHandling` puts
-   * under the draft, prefixed in the page's language by what happened to the
-   * words. Same status either way.
+   * A send's refusal, as one catalogue sentence in the page's language and
+   * never the store's or the mint's internal line (#220 S1 review: no ids, no
+   * D-numbers in front of a person). htmx gets it as `#send-refused`, which the
+   * page's `responseHandling` puts under the draft; a native submit, with
+   * script off, gets a small page of its own with the way back to the thread
+   * (`back`, the message replied to, or the requests) and where the words are.
+   * Same status either way.
    */
-  function refused(c: Context<PageEnv>, status: 400 | 403 | 409, line: string) {
-    if (c.req.header("hx-request") !== "true") {
-      return said(c, status, line);
+  function refused(
+    c: Context<PageEnv>,
+    status: 400 | 403 | 409,
+    why: "sendRefusedNoApprover" | "sendRefusedForm" | "sendRefusedNoWords" | "sendRefusedNotTaken",
+    back: string | null,
+  ) {
+    const wording = wordingOf(c);
+    const line = escapeHtml(wording.notSent(wording[why]));
+    if (c.req.header("hx-request") === "true") {
+      return c.html(`<p id="send-refused">${line}</p>`, status);
     }
-    const escaped = wordingOf(c)
-      .notSent(line)
-      .replaceAll("&", "&amp;")
-      .replaceAll("<", "&lt;")
-      .replaceAll(">", "&gt;");
-    return c.html(`<p id="send-refused">${escaped}</p>`, status);
+    const href = escapeHtml(
+      viewHref(
+        back === null || back === ""
+          ? { kind: "requests" }
+          : { kind: "thread", messageId: back, to: null },
+        wording.lang,
+      ),
+    );
+    return c.html(
+      `<!doctype html><html lang="${escapeHtml(wording.lang)}"><head><meta charset="utf-8">` +
+        `<meta name="viewport" content="width=device-width, initial-scale=1">` +
+        `<title>${escapeHtml(wording.sendAction)}</title></head><body>` +
+        `<p id="send-refused">${line}</p><p>${escapeHtml(wording.sendBackNote)}</p>` +
+        `<p><a href="${href}">${escapeHtml(wording.sendBack)}</a></p></body></html>`,
+      status,
+    );
   }
 
   /**

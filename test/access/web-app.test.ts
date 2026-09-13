@@ -747,6 +747,7 @@ test("(send) the same form sent twice records its message once", async () => {
   const record = advisoryRecord(connection);
   const ports = {
     ...spyPorts([]),
+    record,
     say: new SayPort(async (message) => {
       const outcome = await record.recordThreadMessage({
         ...message,
@@ -765,15 +766,29 @@ test("(send) the same form sent twice records its message once", async () => {
   const form = { token: TOKEN, message_id: newMessageId("request"), body: "one request" };
 
   expect((await send(base, "/request", "POST", htmxHeaders(base), form)).status).toBe(303);
-  const again = await send(base, "/request", "POST", htmxHeaders(base), form);
-  expect(again.status).toBe(409);
-  expect(again.body).toContain(form.message_id);
-  // htmx is answered with the line as `#send-refused`, which the page puts
-  // under the draft (#220 S1); a native submit keeps the plain line.
-  expect(again.body).toMatch(/^<p id="send-refused">Not sent, and your words are kept: /);
-  const native = await send(base, "/request", "POST", submitHeaders(base), form);
+  // The repeat is the send it repeats (#220 S1 review): the words are in the
+  // thread, so it is answered as sent, at that message, and not "not sent".
+  for (const headers of [htmxHeaders(base), submitHeaders(base)]) {
+    const again = await send(base, "/request", "POST", headers, form);
+    expect(again.status).toBe(303);
+    expect(again.location).toContain(`#${form.message_id}`);
+  }
+  expect(connection.prepare("SELECT COUNT(*) AS n FROM conversation_message").get()).toEqual({
+    n: 1,
+  });
+  // The same id under other words is a refusal, said without the id, in the
+  // page's language; with script off it is a page with the way back.
+  const other = { ...form, body: "other words" };
+  const htmx = await send(base, "/request?lang=ja", "POST", htmxHeaders(base), other);
+  expect(htmx.status).toBe(409);
+  expect(htmx.body).toMatch(/^<p id="send-refused">送信されませんでした。/);
+  expect(htmx.body).not.toContain(form.message_id);
+  const native = await send(base, "/request?lang=ja", "POST", submitHeaders(base), other);
   expect(native.status).toBe(409);
-  expect(native.body).not.toContain("send-refused");
+  expect(native.body).toContain('<html lang="ja">');
+  expect(native.body).toContain('<a href="/?requests=open&amp;lang=ja">スレッドに戻る</a>');
+  expect(native.body).not.toContain(form.message_id);
+  expect(native.body).not.toMatch(/D-00/);
   expect(connection.prepare("SELECT COUNT(*) AS n FROM conversation_message").get()).toEqual({
     n: 1,
   });
