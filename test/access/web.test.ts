@@ -1181,11 +1181,13 @@ test("rondo's own script moves focus and follows the server's links, and asks fo
   ]) {
     expect(code).not.toContain(forbidden);
   }
-  // **The one htmx event it hears is the refresh about to be sent, and all it
-  // may do there is cancel it** while a person holds a text selection: a
-  // cancelled `GET` asks for nothing.
+  // **The two htmx events it hears are the refresh about to be sent and about
+  // to be swapped, and all it may do at either is decline**: cancel the
+  // request while a person holds a text selection, and skip a swap that would
+  // bring back the same ledger. Declining asks for nothing.
   expect([...code.matchAll(/htmx:[A-Za-z]+/g)].map((found) => found[0])).toEqual([
     "htmx:beforeRequest",
+    "htmx:beforeSwap",
   ]);
 });
 

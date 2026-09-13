@@ -78,6 +78,26 @@ document.addEventListener("htmx:beforeRequest", (event) => {
   }
 });
 
+// **And a redraw that brings back what is already on screen swaps nothing.**
+// The swap replaces every node in the ledger, which resets what the browser
+// keeps per element -- a scroll offset, a caret, a hover -- even when not one
+// byte changed. So the ledger the server last sent is kept as text, and a
+// response whose ledger is the same text is not swapped in. Compared against
+// what the server sent and never against the live document, whose folds this
+// script opens. A redraw that did change something still swaps, and resets
+// those offsets: a known limit, not one this script hides.
+let lastLedger = document.getElementById("ledger")?.outerHTML ?? null;
+document.addEventListener("htmx:beforeSwap", (event) => {
+  const arrived = new DOMParser()
+    .parseFromString(event.detail.serverResponse, "text/html")
+    .getElementById("ledger")?.outerHTML;
+  if (arrived !== undefined && arrived === lastLedger) {
+    event.detail.shouldSwap = false;
+  } else if (arrived !== undefined) {
+    lastLedger = arrived;
+  }
+});
+
 const opened = new Set();
 // `toggle` does not bubble, so it is heard on the way down.
 document.addEventListener(
