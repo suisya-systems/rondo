@@ -2071,6 +2071,21 @@ function composerView(
                 )}
               </span>
             </a>
+            {/*
+             * **Said where the words are typed** (#220 S1 review): a person who
+             * came for a question waiting in this thread would otherwise send
+             * their answer to the message above and see nothing say it did not
+             * reach the question (see `replyTarget`).
+             */}
+            {threads.messages.some(
+              (message) =>
+                threads.waiting.has(message.messageId) &&
+                threads.rootOf(message.messageId) === replying.root,
+            ) ? (
+              <p class="not-answer mx-4 mt-1 text-[12.5px] leading-5 font-medium text-foreground">
+                {wording.replyNotAnswer}
+              </p>
+            ) : null}
           </>
         )}
         {/* Where htmx puts a refusal (the page's `responseHandling`); the draft stays. */}

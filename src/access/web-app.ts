@@ -48,6 +48,7 @@ import { bodyLimit } from "hono/body-limit";
 import { setCookie } from "hono/cookie";
 import { csrf } from "hono/csrf";
 import { secureHeaders } from "hono/secure-headers";
+import type { ThreadMessagesReadOutcome } from "../store/sqlite.js";
 import {
   APPROVE_BODY,
   isSwitch,
@@ -392,6 +393,13 @@ export type SayFromWeb = (
   message: SentMessage,
 ) => Promise<{ readonly ok: boolean; readonly note: string }>;
 
+/** What {@link SayPort.say} answers: `waitingAsk` marks the one refusal the port makes itself. */
+export interface Said {
+  readonly ok: boolean;
+  readonly note: string;
+  readonly waitingAsk?: true;
+}
+
 /**
  * The second thing this surface may write (D-0059 section 5a, last row): a
  * message into a request thread, and nothing else.
@@ -403,16 +411,15 @@ export type SayFromWeb = (
  */
 export class SayPort {
   readonly #say: SayFromWeb;
+  readonly #threads: () => Promise<ThreadMessagesReadOutcome>;
 
-  constructor(say: SayFromWeb) {
+  constructor(say: SayFromWeb, threads: () => Promise<ThreadMessagesReadOutcome>) {
     this.#say = say;
+    this.#threads = threads;
   }
 
   /** Record one message, on one send. */
-  async say(
-    send: Send,
-    message: SentMessage,
-  ): Promise<{ readonly ok: boolean; readonly note: string }> {
+  async say(send: Send, message: SentMessage): Promise<Said> {
     if (!mintedSends.has(send)) {
       return {
         ok: false,
@@ -420,7 +427,33 @@ export class SayPort {
       };
     }
     mintedSends.delete(send);
+    // **A reply to a question still waiting is not a send** (#220 S1 review,
+    // D-0059 section 5a's last revisit condition): while nothing replies to an
+    // ask it holds its line (D-0066 rules 4.2 and 4.4), and the first reply
+    // releases that hold -- a message that moves work, which section 5a says
+    // then needs a press too. Refused here, inside the capability, so whatever
+    // holds a send is refused and not only the page's route; fail closed when
+    // the thread cannot be read. Provisional until the owner answers whether a
+    // free-text answer to an ask may be a send. Not a race: `asks` never
+    // changes on a row, and an ask answered in between has no hold left.
+    if (message.inReplyTo !== null && (await this.#waiting(message.inReplyTo))) {
+      return {
+        ok: false,
+        note: "a question still waiting is answered by a press",
+        waitingAsk: true,
+      };
+    }
     return await this.#say(message);
+  }
+
+  /** Whether `messageId` asks and nothing replies to it yet, or the thread cannot be read. */
+  async #waiting(messageId: string): Promise<boolean> {
+    const read = await this.#threads();
+    return (
+      read.kind !== "read" ||
+      (read.messages.some((held) => held.messageId === messageId && held.asks) &&
+        !read.messages.some((held) => held.inReplyTo === messageId))
+    );
   }
 }
 
@@ -766,18 +799,12 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
       if (kind === "reply" && (inReplyTo === null || inReplyTo === "")) {
         return refused(c, 400, "sendRefusedForm", null);
       }
-      // **A reply to a question still waiting is not a send** (#220 S1 review,
-      // D-0059 section 5a's residual): while nothing replies to an ask it holds
-      // its line (D-0066 rules 4.2 and 4.4), and the first reply releases that
-      // hold -- an act that moves work, which section 5a says a message cannot
-      // be. Until an answer comes with a press of its own, the page refuses it
-      // here, fail closed. Not a race: `asks` never changes on a row, and an ask
-      // someone answered in between has no hold left to release.
-      if (inReplyTo !== null && (await waitingAsk(inReplyTo))) {
-        return refused(c, 409, "sendRefusedAsk", inReplyTo);
-      }
       const message = { messageId, body, inReplyTo };
       const sent = await say.say(minting.send, message);
+      // The port's own refusal of an answer to a waiting ask (`SayPort.say`).
+      if (sent.waitingAsk === true) {
+        return refused(c, 409, "sendRefusedAsk", inReplyTo);
+      }
       // **A second submit of one form is the send it repeats** (#220 S1
       // review): the id was minted when the form was drawn precisely so that
       // the store refuses the second row, and the words the person sent are in
@@ -795,16 +822,6 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
         303,
       );
     });
-  }
-
-  /** Whether `messageId` asks and nothing replies to it yet, or the thread cannot be read. */
-  async function waitingAsk(messageId: string): Promise<boolean> {
-    const read = await reading.record.threadMessages();
-    return (
-      read.kind !== "read" ||
-      (read.messages.some((held) => held.messageId === messageId && held.asks) &&
-        !read.messages.some((held) => held.inReplyTo === messageId))
-    );
   }
 
   /** Whether the thread already holds exactly this operator message. */

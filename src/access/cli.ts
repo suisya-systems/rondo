@@ -1637,27 +1637,30 @@ export async function main(
             : // **The send is checked inside this port**, as the press is in
               // `AnswerPort`: whatever holds it records nothing without a send
               // minted from a same-origin `POST` carrying the token.
-              new SayPort(async (message) => {
-                const outcome = await record.recordThreadMessage({
-                  messageId: message.messageId,
-                  body: message.body,
-                  authorKind: "operator",
-                  authorId: sender.actorId,
-                  inReplyTo: message.inReplyTo,
-                  atMs: Date.now(),
-                  bases: [],
-                  asks: false,
-                });
-                return outcome.kind === "recorded"
-                  ? { ok: true, note: "" }
-                  : {
-                      ok: false,
-                      note:
-                        outcome.kind === "refused"
-                          ? outcome.reason
-                          : `the message was not recorded: ${outcome.reason}`,
-                    };
-              }),
+              new SayPort(
+                async (message) => {
+                  const outcome = await record.recordThreadMessage({
+                    messageId: message.messageId,
+                    body: message.body,
+                    authorKind: "operator",
+                    authorId: sender.actorId,
+                    inReplyTo: message.inReplyTo,
+                    atMs: Date.now(),
+                    bases: [],
+                    asks: false,
+                  });
+                  return outcome.kind === "recorded"
+                    ? { ok: true, note: "" }
+                    : {
+                        ok: false,
+                        note:
+                          outcome.kind === "refused"
+                            ? outcome.reason
+                            : `the message was not recorded: ${outcome.reason}`,
+                      };
+                },
+                async () => await record.threadMessages(),
+              ),
         // Read for the same reason and on the same condition: the material is
         // what a person is shown before they press, so it is drawn exactly
         // where the button is (D-0029 rule 2 and D-0041 rule 6).

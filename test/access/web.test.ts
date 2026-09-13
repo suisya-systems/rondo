@@ -2012,7 +2012,10 @@ test("a request thread is drawn whole: every body byte for byte, voices apart, b
 
   // **The ask that waits is marked, and only it** (rule 2.7): nothing replies to it.
   expect(ask).toContain("data-waiting");
-  expect(ask).toContain("waiting on your reply");
+  expect(ask).toContain("question waiting on you");
+  // The reply box says it does not answer that question, where the words are typed.
+  expect(html).toContain('class="not-answer');
+  expect(html).toContain("does not answer the question waiting in this thread");
   expect(root).not.toContain("data-waiting");
   expect(report).not.toContain("data-waiting");
 
@@ -2126,7 +2129,7 @@ test("the summary counts an ask waiting on the person and leads to the reply, an
 
   const requests = await operatorPage(ports, "t", { kind: "requests" }, EN, mint);
   expect(requests).toContain("requests (1)");
-  expect(requests).toContain("1 waiting on you");
+  expect(requests).toContain("1 question waiting on you");
   expect(requests).toContain('href="/?thread=request-a&amp;lang=en" data-open=""');
   expect(requests).toContain("3 messages, last 2s ago");
   // **A new request is a native submit**: where it lands is its own thread, a
@@ -2149,7 +2152,8 @@ test("the threads speak Japanese where the page does, tokens and words untouched
   );
   expect(html).toContain(">下書き役</span>");
   expect(html).toContain(">あなた</span>");
-  expect(html).toContain("あなたの返事待ち");
+  expect(html).toContain("あなたへの質問");
+  expect(html).toContain("この返信は、このスレッドで待っている質問への回答にはなりません。");
   expect(html).toContain('action="/reply?lang=ja"');
   expect(bodiesIn(html)).toEqual([ROOT_BODY, ASK_BODY, LATER_BODY]);
 });

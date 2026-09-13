@@ -62,12 +62,14 @@ function spyPorts(written: Written, sent: Sent = []): ServedPorts {
       written.push({ iterationId, body });
       return await Promise.resolve({ ok: true, note: "" });
     }),
-    say: new SayPort(async (message) => {
-      sent.push(message);
-      return await Promise.resolve({ ok: true, note: "" });
-    }),
-    // A reply reads the thread once, to refuse answering an ask by a send.
-    record: { threadMessages: async () => await Promise.resolve({ kind: "read", messages: [] }) },
+    // The port reads the thread on a reply, to refuse answering an ask by a send.
+    say: new SayPort(
+      async (message) => {
+        sent.push(message);
+        return await Promise.resolve({ ok: true, note: "" });
+      },
+      async () => await Promise.resolve({ kind: "read", messages: [] }),
+    ),
   } as unknown as ServedPorts;
 }
 
@@ -750,19 +752,22 @@ test("(send) the same form sent twice records its message once", async () => {
   const ports = {
     ...spyPorts([]),
     record,
-    say: new SayPort(async (message) => {
-      const outcome = await record.recordThreadMessage({
-        ...message,
-        authorKind: "operator",
-        authorId: "ada",
-        atMs: 1,
-        bases: [],
-        asks: false,
-      });
-      return outcome.kind === "recorded"
-        ? { ok: true, note: "" }
-        : { ok: false, note: outcome.reason };
-    }),
+    say: new SayPort(
+      async (message) => {
+        const outcome = await record.recordThreadMessage({
+          ...message,
+          authorKind: "operator",
+          authorId: "ada",
+          atMs: 1,
+          bases: [],
+          asks: false,
+        });
+        return outcome.kind === "recorded"
+          ? { ok: true, note: "" }
+          : { ok: false, note: outcome.reason };
+      },
+      async () => await record.threadMessages(),
+    ),
   } as ServedPorts;
   const { base, stop, closed } = await served(createApp(ports, TOKEN));
   const form = { token: TOKEN, message_id: newMessageId("request"), body: "one request" };
@@ -828,9 +833,34 @@ test("(send) a reply cannot answer an ask that waits, so a send releases no hold
     bases: [{ form: "message", messageId: "req" }],
     asks: true,
   });
-  const { base, stop, closed } = await served(
-    createApp({ ...spyPorts([], sent), record } as ServedPorts, TOKEN),
-  );
+  // The refusal is the port's, not the route's: any holder of a send is refused.
+  const ports = {
+    ...spyPorts([], sent),
+    record,
+    say: new SayPort(
+      async (message) => {
+        sent.push(message);
+        return await Promise.resolve({ ok: true, note: "" });
+      },
+      async () => await record.threadMessages(),
+    ),
+  } as ServedPorts;
+  const app = createApp(ports, TOKEN);
+  const bypass: boolean[] = [];
+  app.post("/planted/answer", async (c) => {
+    const minting = mintSend(c, TOKEN);
+    expect("send" in minting).toBe(true);
+    if ("send" in minting) {
+      const said = await sayOf(ports).say(minting.send, {
+        messageId: newMessageId("reply"),
+        body: "b",
+        inReplyTo: "ask",
+      });
+      bypass.push(said.ok, said.waitingAsk === true);
+    }
+    return c.text("drawn");
+  });
+  const { base, stop, closed } = await served(app);
   const reply = { token: TOKEN, message_id: newMessageId("reply"), in_reply_to: "ask", body: "b" };
 
   const htmx = await send(base, "/reply?lang=ja", "POST", htmxHeaders(base), reply);
@@ -843,6 +873,8 @@ test("(send) a reply cannot answer an ask that waits, so a send releases no hold
   const open = await record.openAsksIn("req");
   expect(open.kind === "read" && open.asks.map((ask) => ask.messageId)).toEqual(["ask"]);
   // A reply to anything else in the thread is still a send.
+  await send(base, "/planted/answer", "POST", htmxHeaders(base), { token: TOKEN });
+  expect(bypass).toEqual([false, true]);
   const other = { ...reply, message_id: newMessageId("reply"), in_reply_to: "req" };
   expect((await send(base, "/reply", "POST", htmxHeaders(base), other)).status).toBe(303);
   expect(sent).toHaveLength(1);

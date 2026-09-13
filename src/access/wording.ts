@@ -155,6 +155,8 @@ export interface Chrome {
   readonly sendRefusedTooLong: string;
   readonly sendRefusedUnknown: string;
   readonly askNotByReply: string;
+  /** Said in the reply box while its thread holds a question still waiting: the box does not answer it. */
+  readonly replyNotAnswer: string;
   /** Script off, a refused send lands on its own page: the way back, and where the words are. */
   readonly sendBack: string;
   readonly sendBackNote: string;
@@ -384,8 +386,9 @@ explanation you pressed on and then answers the gate.`,
   noRequests: "No request has been written yet. Write one below, in your own words.",
   threadSize: (count, since) =>
     `${String(count)} ${count === 1 ? "message" : "messages"}, last ${since} ago`,
-  asksWaiting: (count) => `${String(count)} waiting on you`,
-  askWaitingPill: "waiting on your reply",
+  asksWaiting: (count) =>
+    `${String(count)} ${count === 1 ? "question" : "questions"} waiting on you`,
+  askWaitingPill: "question waiting on you",
   you: "you",
   operatorVoice: "operator",
   drafterVoice: "drafter",
@@ -413,12 +416,14 @@ explanation you pressed on and then answers the gate.`,
   sendRefusedNotTaken:
     "The conversation did not record this message; the message it replies to may not be in the thread. Reload the thread and try again.",
   sendRefusedAsk:
-    "That message is a question still waiting on your answer. Answering it lets its work carry on, which takes a press, and this page does not offer that press yet.",
+    "That message is a question still waiting on your answer. Answering it lets its work carry on, which takes a press, and this page does not offer that press yet. Until it does, answer it in the terminal with rondo reply.",
   sendRefusedTooLong:
     "That message is longer than this page accepts. Shorten it, or split it into two replies.",
   sendRefusedUnknown: "rondo did not take this message. Reload the page and send again.",
   askNotByReply:
-    "Answering this question lets its work carry on, so it takes a press, not a reply. This page does not offer that press yet.",
+    "Answering this question lets its work carry on, so it takes a press, not a reply. This page does not offer that press yet; until it does, answer it in the terminal with rondo reply.",
+  replyNotAnswer:
+    "This reply does not answer the question waiting in this thread; answering it takes a press this page does not have yet.",
   sendBack: "Back to the thread",
   sendBackNote: "Your browser's Back button returns to what you wrote.",
   threadsLiveNote: (seconds) =>
@@ -597,8 +602,8 @@ const JA: Partial<Chrome> = Object.freeze({
   requestsHeading: (count) => `依頼 (${String(count)})`,
   noRequests: "まだ依頼はありません。下の欄に、自分の言葉で書いてください。",
   threadSize: (count, since) => `メッセージ ${String(count)} 件、最後は ${since} 前`,
-  asksWaiting: (count) => `あなたの返事待ち ${String(count)}`,
-  askWaitingPill: "あなたの返事待ち",
+  asksWaiting: (count) => `あなたへの質問 ${String(count)}`,
+  askWaitingPill: "あなたへの質問",
   you: "あなた",
   operatorVoice: "オペレーター",
   drafterVoice: "下書き役",
@@ -627,13 +632,15 @@ const JA: Partial<Chrome> = Object.freeze({
   sendRefusedNotTaken:
     "会話がこのメッセージを記録しませんでした。返信先のメッセージがスレッドに無いのかもしれません。スレッドを読み込み直してから、もう一度試してください。",
   sendRefusedAsk:
-    "返信先は、まだあなたの回答を待っている質問です。回答するとその作業が先へ進むため押下が必要ですが、このページにはまだその押下がありません。",
+    "返信先は、まだあなたの回答を待っている質問です。回答するとその作業が先へ進むため押下が必要ですが、このページにはまだその押下がありません。それまでは、ターミナルの rondo reply で回答してください。",
   sendRefusedTooLong:
     "このページが受け付けるより長いメッセージです。短くするか、2 つの返信に分けてください。",
   sendRefusedUnknown:
     "rondo はこのメッセージを受け取りませんでした。ページを読み込み直してから、もう一度送信してください。",
   askNotByReply:
-    "この質問に回答すると作業が先へ進むため、返信ではなく押下が必要です。このページにはまだその押下がありません。",
+    "この質問に回答すると作業が先へ進むため、返信ではなく押下が必要です。このページにはまだその押下がありません。それまでは、ターミナルの rondo reply で回答してください。",
+  replyNotAnswer:
+    "この返信は、このスレッドで待っている質問への回答にはなりません。回答には押下が必要で、このページにはまだありません。",
   sendBack: "スレッドに戻る",
   sendBackNote: "ブラウザの「戻る」で、書いた文に戻れます。",
   threadsLiveNote: (seconds) =>
