@@ -201,7 +201,8 @@ export const USAGE = `rondo - the operator surface for delegated work
                           who elevated it. --basis is required and names where
                           the observation rests: snapshot:/pointer,
                           iteration:ID, gate:ID#SEQ, run:ID,
-                          repo:PATH@COMMIT#FIRST-LAST, or message:ID. Write
+                          repo:PATH@COMMIT#FIRST-LAST, message:ID, or
+                          scope:ID. Write
                           --observation with
                           an equals sign: an observation may begin with a dash
   rondo propose --iteration-id ID --successor-id ID
@@ -1939,9 +1940,9 @@ function sayAdvisoryOutcome(
 /**
  * One `--basis LOCATOR` as the closed union the advisory already has, or null.
  *
- * **A compact spelling of {@link Basis} and not a sixth form.** #41 section 3
+ * **A compact spelling of {@link Basis} and not a form of its own.** #41 section 3
  * requires that what is elevated carries its basis with it, and D-0032 rule 2
- * already fixes what a basis is: a locator, in one of five forms, never a copy
+ * already fixes what a basis is: a locator, in one of its forms, never a copy
  * of the material. So the only thing missing was a way to type one on a command
  * line, which is this function and nothing more -- there is deliberately no
  * form meaning "the operator said so", because that is the claim with no basis
@@ -1971,6 +1972,8 @@ export function parseBasis(text: string): Basis | null {
       return { form: "continuoRun", runId: rest };
     case "message":
       return { form: "message", messageId: rest };
+    case "scope":
+      return { form: "scope", scopeId: rest };
     case "gate": {
       const hash = rest.lastIndexOf("#");
       const tail = rest.slice(hash + 1);
@@ -2008,7 +2011,8 @@ export function parseBasis(text: string): Basis | null {
 
 /** The one sentence that lists what a `--basis` may be, written once. */
 const BASIS_FORMS_LINE =
-  "snapshot:/pointer, iteration:ID, gate:ID#SEQ, run:ID, repo:PATH@COMMIT#FIRST-LAST, or message:ID";
+  "snapshot:/pointer, iteration:ID, gate:ID#SEQ, run:ID, repo:PATH@COMMIT#FIRST-LAST, message:ID, " +
+  "or scope:ID";
 
 /**
  * Door nine: hand one observation to the advisory, and record that a person

@@ -32,12 +32,12 @@ import type { JsonRecord } from "../store/records.js";
  * Where a claim or an option rests, as a **locator and never a copy**
  * (D-0032 rule 2).
  *
- * A closed union of five forms, and the closure is the point: an unrecognised
+ * A closed union, and the closure is the point: an unrecognised
  * form is a row the reader refuses rather than guesses at. `snapshot` is the
  * one that renders inline, because D-0022 rule 4 stores the snapshot **verbatim**
  * beside the proposal -- so the material the advisory actually read is *in the
  * row*, and a pointer into it is neither a copy nor a second source of truth.
- * The other four name material the advisory did not read as a store row, and
+ * The others name material the advisory did not read as a store row, and
  * they render as something an operator opens.
  *
  * **"The basis is prose" is deliberately not a member.** Prose is permitted in
@@ -65,9 +65,15 @@ export type Basis =
       readonly lastLine: number;
     }
   /** A message in the request thread: D-0061 rule 2.6's one addition to the union. */
-  | { readonly form: "message"; readonly messageId: string };
+  | { readonly form: "message"; readonly messageId: string }
+  /**
+   * A scope row (D-0066 section 1), by its id: immutable, so the id alone
+   * locates what was cited. Added for D-0066 rule 4.4's stop, which names the
+   * scope that refused (rondo#197).
+   */
+  | { readonly form: "scope"; readonly scopeId: string };
 
-/** The six forms of {@link Basis}, written once so a reader can check the union is closed. */
+/** The seven forms of {@link Basis}, written once so a reader can check the union is closed. */
 export const BASIS_FORMS = Object.freeze([
   "snapshot",
   "iteration",
@@ -75,6 +81,7 @@ export const BASIS_FORMS = Object.freeze([
   "continuoRun",
   "repository",
   "message",
+  "scope",
 ] as const satisfies readonly Basis["form"][]);
 
 /**
@@ -1134,6 +1141,8 @@ function readBasis(at: unknown, what: string): Basis {
       };
     case "message":
       return { form, messageId: text(row, "messageId", `${what}'s basis`) };
+    case "scope":
+      return { form, scopeId: text(row, "scopeId", `${what}'s basis`) };
     default:
       throw new PayloadDefect(
         `${what}'s basis is of form '${form}', which is not one of ${BASIS_FORMS.join(", ")}. ` +

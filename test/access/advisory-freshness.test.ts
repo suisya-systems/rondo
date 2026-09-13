@@ -829,3 +829,56 @@ test("a second reading arriving under a composed proposal says so once, as a cou
   expect(basisIndex).toBeGreaterThanOrEqual(0);
   expect(shows.shown.slice(basisIndex, basisIndex + 2).join("\n")).toContain("freshness: unmoved");
 });
+
+test("a scope basis reads undetermined with its own reason, never unmoved (#197)", async () => {
+  const { store, record } = fresh();
+  await reserveWithPlan(store, "iter-1", null);
+
+  await record.recordProposal({
+    proposalId: "p-scoped",
+    kind: "explanation",
+    drafter: "rondo/advisory/deterministic",
+    payload: {
+      claims: [
+        {
+          label: "stopped",
+          value: "the scope refused this test",
+          basis: { form: "scope", scopeId: "scope-0001" },
+        },
+      ],
+    },
+    snapshot: { iteration: { id: "iter-1", status: "planned" } },
+    derivation: "store_rows",
+    iterationId: "iter-1",
+    supersedesIterationId: null,
+    supersedesProposalId: null,
+    predecessorPlanDigest: null,
+    predecessorContractDigest: null,
+    agentTypeDigest: null,
+    configDigest: null,
+    contractDigest: null,
+    continuoRevision: null,
+    cadenzaRevision: null,
+    elevatedFromMessageId: null,
+    elevatedByActorId: null,
+    createdAtMs: 5_000,
+  });
+
+  const shows = screen();
+  await showProposal(
+    {
+      store,
+      cadenzaRevision: PROPOSE_PORTS.cadenzaRevision,
+      record,
+      now: () => 9_000,
+      present: shows.present,
+    },
+    "p-scoped",
+  );
+  const rendered = shows.shown.join("\n");
+  expect(rendered).toContain("scope scope-0001");
+  expect(rendered).toContain(
+    "freshness: undetermined (nothing here reads the scope row this basis names, so it cannot confirm it)",
+  );
+  expect(rendered).toContain("0 unmoved, 0 moved, 1 undetermined");
+});

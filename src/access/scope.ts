@@ -680,14 +680,12 @@ function refused(refusal: ScopeRefusal, stop: ScopeStop): ScopedAdmission {
  * stop already holds the line is unknown, and writing on every attempt would
  * pile up stops no reader can find while the read fails; it is `failed`, loudly.
  *
- * **Bases:** the request root as a `message` basis and, for a redo, the
- * lineage's latest lap (the predecessor) as an `iteration` basis; a lineage
- * start names none, so its stop holds back the request's unstarted plans.
- *
- * ponytail: rule 4.4 also names the scope row and the refused test as bases,
- * and no form in D-0032 rule 2 or D-0061 rule 2.6 locates a scope row; rather
- * than add one, the body names the scope id, its digest and the test. A
- * `scope` basis form is the upgrade if a reader ever needs to follow it.
+ * **Bases:** the request root as a `message` basis, the scope row as a `scope`
+ * basis when the snapshot read it (rondo#197), and, for a redo, the lineage's
+ * latest lap (the predecessor) as an `iteration` basis; a lineage start names
+ * no lap, so its stop holds back the request's unstarted plans. The refused
+ * test is a name and no row, so no locator reaches it: the body names it, with
+ * the scope's digest.
  */
 async function stopTheLine(
   ports: ScopeAdmitPorts,
@@ -724,6 +722,7 @@ async function stopTheLine(
     atMs: nowMs,
     bases: [
       { form: "message", messageId: request },
+      ...(snapshot === null ? [] : [{ form: "scope", scopeId: snapshot.scope.scopeId }]),
       ...(act.kind === "redo" ? [{ form: "iteration", iterationId: act.predecessorId }] : []),
     ],
     asks: true,

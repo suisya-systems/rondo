@@ -573,6 +573,9 @@ test("a split reads back as plans against templates, or as holes, and nothing el
     holes: [],
   };
   expect(readSplitPayload(onMessage)).toEqual({ kind: "split", payload: onMessage });
+  // rondo#197: a plan may rest on a scope row.
+  const onScope = { plans: [{ ...plan, bases: [{ form: "scope", scopeId: "s-1" }] }], holes: [] };
+  expect(readSplitPayload(onScope)).toEqual({ kind: "split", payload: onScope });
   // Rule 4.4: no template, so no plan, and the holes are the whole answer.
   const holes = { plans: [], holes: ["no persisted plan names this repository"] };
   expect(readSplitPayload(holes)).toEqual({ kind: "split", payload: holes });
@@ -585,6 +588,7 @@ test("a split reads back as plans against templates, or as holes, and nothing el
       "cites an unknown basis form",
       { plans: [{ ...plan, bases: [{ form: "hunch" }] }], holes: [] },
     ],
+    ["cites a scope with no id", { plans: [{ ...plan, bases: [{ form: "scope" }] }], holes: [] }],
     [
       "cites a message with no id",
       { plans: [{ ...plan, bases: [{ form: "message" }] }], holes: [] },

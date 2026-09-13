@@ -15,6 +15,7 @@ import { DatabaseSync } from "node:sqlite";
 import { expect, test } from "vitest";
 
 import {
+  basisLine,
   COMMAND_LINE_SURFACE,
   type Elevation,
   elevateObservation,
@@ -1398,4 +1399,9 @@ test("two answers against one proposal are both on the screen, with the count", 
   expect(rendered).toContain("approved by 'oidc|operator-1' as decision 'd-0002'");
   expect(rendered).toContain("2 answers were recorded against this proposal");
   expect(rendered).not.toContain("Next:");
+});
+
+test("a scope basis renders as the scope row it names, beside the other row forms (#197)", () => {
+  expect(basisLine({ form: "scope", scopeId: "scope-0001" }, {})).toBe("scope scope-0001");
+  expect(basisLine({ form: "message", messageId: "m-0001" }, {})).toBe("message m-0001");
 });
