@@ -490,7 +490,8 @@ export interface ThreadMessageDraft {
   /** The caller's clock, which puts the message in "what changed" (rule 2.5). */
   readonly atMs: number;
   /**
-   * D-0032 rule 2's locators plus `message:ID` (rule 2.6), as JSON: the store
+   * D-0032 rule 2's locators plus `message:ID` (rule 2.6) and `scope:ID`
+   * (rondo#197), as JSON: the store
    * may not import the advisory's `Basis`. Required non-empty on a drafter
    * message and refused otherwise.
    */

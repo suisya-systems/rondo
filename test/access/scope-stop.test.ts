@@ -287,8 +287,11 @@ test("a verdict refusal writes one asking drafter message; the next attempt is h
     in_reply_to: ROOT,
     asks: 1,
   });
-  // A lineage start names no lap: the request root is its one basis.
-  expect(JSON.parse(String(stops[0]?.["bases"]))).toEqual([{ form: "message", messageId: ROOT }]);
+  // A lineage start names no lap: the request root and the scope row are its bases (rondo#197).
+  expect(JSON.parse(String(stops[0]?.["bases"]))).toEqual([
+    { form: "message", messageId: ROOT },
+    { form: "scope", scopeId: "s-1" },
+  ]);
   const body = String(stops[0]?.["body"]);
   expect(body).toContain("scope 's-1'");
   expect(body).toContain(contentDigest(PAYLOAD));
@@ -402,6 +405,7 @@ test("a redo's stop names the lineage's latest lap as an iteration basis", async
   expect(refused).toMatchObject({ kind: "refused", test: "expiry", stop: { kind: "written" } });
   expect(JSON.parse(String(h.stops()[0]?.["bases"]))).toEqual([
     { form: "message", messageId: ROOT },
+    { form: "scope", scopeId: "s-1" },
     { form: "iteration", iterationId: "i-a" },
   ]);
   // It holds that line, and not a split's new lineage in the same request (D-0066 rule 4.4).
@@ -564,6 +568,10 @@ test("an undecidable refusal recommends stopping, and a failed write is reported
   const missing = await admitUnderScope(h.ports, "sd-none", start("i-a"));
   expect(missing).toMatchObject({ verdict: "undecidable", stop: { kind: "written" } });
   expect(String(h.stops()[0]?.["body"])).toContain("Recommended: stop this line");
+  // No scope row was read, so the stop names none rather than a locator to nothing.
+  expect(JSON.parse(String(h.stops()[0]?.["bases"]))).toEqual([
+    { form: "message", messageId: ROOT },
+  ]);
   const fresh = await harness();
   const failing: ScopeAdmitPorts = {
     ...fresh.ports,

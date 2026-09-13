@@ -293,6 +293,8 @@ export function basisLine(basis: Basis, snapshot: object): string {
       return `continuo run ${basis.runId}`;
     case "message":
       return `message ${basis.messageId}`;
+    case "scope":
+      return `scope ${basis.scopeId}`;
     default:
       return `${basis.path}:${String(basis.firstLine)}-${String(basis.lastLine)} at ${basis.commit}`;
   }
@@ -2071,8 +2073,8 @@ function snapshotBasisFreshness(pointer: string, ctx: FreshnessContext): Freshne
 }
 
 /**
- * One basis's freshness, exhaustive over {@link Basis}'s six forms
- * (`D-0038` rule 4). A sixth form added to the union and forgotten here is a
+ * One basis's freshness, exhaustive over {@link Basis}'s forms
+ * (`D-0038` rule 4). A form added to the union and forgotten here is a
  * type error, not a screen that quietly says a premise held.
  */
 const BASIS_FRESHNESS: {
@@ -2103,6 +2105,9 @@ const BASIS_FRESHNESS: {
   // the one cited exists, and nothing here reads the thread yet.
   message: () =>
     undetermined("rondo has no reader for a thread message yet, so it cannot confirm this one"),
+  // A scope row is immutable (D-0066 rule 1.4), but nothing here reads it.
+  scope: () =>
+    undetermined("nothing here reads the scope row this basis names, so it cannot confirm it"),
 };
 
 /** What re-gathering produced for a proposal's candidates or its readings, so bases can be compared. */

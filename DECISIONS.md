@@ -13857,6 +13857,19 @@ number.
 >   request, and it ends when the stop is answered. A first admission from a split proposal keeps
 >   rule 4.4 as written. Nothing above is edited.
 
+> **Annotation (2026-09-14, from rondo#197).** Added after this entry was accepted, and additive, by the
+> answer of rondo's human gate on 2026-09-13 to rondo#196's implementation.
+> - **Rule 4.4's "a line is a lineage"** is read as the lineage tree: an ask with an `iteration` basis
+>   stands over every lap sharing that lap's root (the end of its `supersedes` chain), so it stops a
+>   redo anywhere in that lineage, a branch from an earlier lap included. This is the reading #196
+>   built, and the gate accepted it.
+> - **Rule 4.4's "bases that include the scope row"**: `D-0032` rule 2's closed union gains a seventh
+>   form, `scope` (`{ form: "scope", scopeId }`, typed `scope:ID`), and the thread writer refuses one
+>   naming no scope row, as it refuses a `message` basis naming no message (`D-0061` rule 2.6). The
+>   stop carries it whenever the scope row was read; a stop written after a failed read names none.
+>   **The refused test is a closed name and not a row**, so no locator reaches it: the stop's body
+>   names it, with the scope's digest. Nothing above is edited.
+
 ### 5. `D-0062` rule 3 and `D-0022` rule 9, restated
 
 1. **`D-0062` rule 3, restated: a drafted split's agent type is approved by the scope, not per

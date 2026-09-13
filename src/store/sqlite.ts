@@ -3562,8 +3562,9 @@ function spendDecision(
 
 /**
  * Each basis form and the fields its locator needs, mirroring the advisory's
- * closed `Basis` union (D-0032 rule 2, plus D-0061 rule 2.6's `message`). The
- * store may not import that type, so a form added there is added here too.
+ * closed `Basis` union (D-0032 rule 2, plus D-0061 rule 2.6's `message` and
+ * rondo#197's `scope`). The store may not import that type, so a form added
+ * there is added here too.
  */
 const BASIS_LOCATOR_FIELDS: Readonly<Record<string, Readonly<Record<string, string>>>> = {
   snapshot: { pointer: "string" },
@@ -3572,6 +3573,7 @@ const BASIS_LOCATOR_FIELDS: Readonly<Record<string, Readonly<Record<string, stri
   continuoRun: { runId: "string" },
   repository: { path: "string", commit: "string", firstLine: "number", lastLine: "number" },
   message: { messageId: "string" },
+  scope: { scopeId: "string" },
 };
 
 /**
@@ -3635,6 +3637,17 @@ function threadMessageRefusal(connection: DatabaseSync, draft: ThreadMessageDraf
           "the conversation: a locator to nothing is a basis nobody can follow (D-0061 rule 2.6)"
         );
       }
+    }
+    if (
+      basis["form"] === "scope" &&
+      connection
+        .prepare("SELECT 1 FROM scope WHERE scope_id = ?")
+        .get(basis["scopeId"] as string) === undefined
+    ) {
+      return (
+        `a basis of '${draft.messageId}' is scope:${String(basis["scopeId"])}, which is no scope ` +
+        "row: a locator to nothing is a basis nobody can follow (D-0061 rule 2.6)"
+      );
     }
   }
   return null;

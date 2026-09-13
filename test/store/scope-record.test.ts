@@ -905,6 +905,21 @@ test("an open ask over the line answers before a spent budget, so a stop is not 
   expect(await refusalOf(store, reserveInput("i-new", spendOf()))).toContain("outside asks");
 });
 
+test("PLANTED (rondo#197): a scope:ID basis is recorded when it names a scope row, and refused when it names none", async () => {
+  const { connection, record } = await seeded();
+  expect(await record.recordScope(scope())).toEqual({ kind: "recorded" });
+  expect(
+    await record.recordThreadMessage(ask("m-stop", [{ form: "scope", scopeId: "s-0001" }])),
+  ).toEqual({ kind: "recorded" });
+  const missing = await record.recordThreadMessage(
+    ask("m-nowhere", [{ form: "scope", scopeId: "s-never" }]),
+  );
+  expect(missing.kind === "refused" && missing.reason).toContain("scope:s-never");
+  const incomplete = await record.recordThreadMessage(ask("m-bare", [{ form: "scope" }]));
+  expect(incomplete.kind === "refused" && incomplete.reason).toContain("not a complete locator");
+  expect(count(connection, "SELECT COUNT(*) AS n FROM conversation_message")).toBe(2);
+});
+
 test("spending a human decision and a scope at once is a defect that writes nothing", async () => {
   const { connection, store } = await approved();
   const both = await store.reserve(
