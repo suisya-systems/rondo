@@ -250,6 +250,24 @@ export interface Chrome {
   readonly gateBack: string;
   /** The line by the button when the model review raised a blocker or a major. */
   readonly modelRaised: (blockers: number, majors: number) => string;
+  /** A model finding's severity (`blocker`, `major`, `minor`, `nit`) as a word, and counted. */
+  readonly severityWord: (severity: string) => string;
+  readonly severityCount: (severity: string, count: number) => string;
+  /** A reading that could not be taken, in one plain sentence; the reason is in a fold. */
+  readonly readingNotTaken: string;
+  readonly whyNotTaken: string;
+  /** Beside the checks when *what changed* cannot be read now. */
+  readonly checksWorkUnreadable: string;
+  /** In the approve bar when the model's round ended with no reading. */
+  readonly modelNotTaken: string;
+  /** The fold holding what the approve press records. */
+  readonly recordsFold: (count: number) => string;
+  /** A refused call whose shape rondo cannot read, on the fence card. */
+  readonly denialUnreadable: string;
+  /** The plain sentence above an unreadable row's reason in the reading. */
+  readonly unreadableLead: string;
+  /** An ended row's echo of the verification claim its press carried. */
+  readonly checkedEcho: (claim: string) => string;
   readonly modelRaisedLink: string;
   readonly modelMayArrive: string;
 
@@ -543,7 +561,7 @@ explanation you pressed on and then answers the gate.`,
   logNotYet: "no log yet",
   logUnchecked: (reason) => `could not check for a log: ${reason}`,
   logNotLookedFor: "log not looked for yet",
-  fenceHeading: "Blocked by the fence",
+  fenceHeading: "The fence:",
   whyStopped: "Why it stopped",
   whyNotRead: "The worker's own account could not be read; it is in the text below if it was.",
   workHeading: "What changed",
@@ -578,7 +596,7 @@ explanation you pressed on and then answers the gate.`,
   readingsNote:
     "Both readings are material for you to weigh. Neither approves anything; the answer is yours.",
   allAsText: "The full record as text, including what is not shown above",
-  claimLabel: "What did you check? (optional)",
+  claimLabel: "What you checked (recorded with your approval)",
   claimPlaceholder: "e.g. ran the tests locally; read the diff; opened the page on a phone",
   claimTooLong: (max) =>
     `What you said you checked is longer than the ${String(max)} characters this page takes. Shorten it and press approve again.`,
@@ -598,6 +616,18 @@ explanation you pressed on and then answers the gate.`,
       .filter((part) => part !== "")
       .join(" and ")}.`,
   modelRaisedLink: "Read it",
+  severityWord: (severity) => severity,
+  severityCount: (severity, count) => `${String(count)} ${severity}`,
+  readingNotTaken: "No reading could be taken, so there is nothing from it to weigh.",
+  whyNotTaken: "Why",
+  checksWorkUnreadable:
+    "What changed cannot be read now, so this reading cannot be matched against the work.",
+  modelNotTaken: "Only the checks read this; the model review was not taken.",
+  recordsFold: (count) => `What approve records (${String(count)} fields), and the full text`,
+  denialUnreadable: "rondo could not record which command this was.",
+  unreadableLead:
+    "rondo could not read this run's record, so it cannot be shown or answered. What rondo found:",
+  checkedEcho: (claim) => `you said you checked: ${claim}`,
   modelMayArrive: "The model review may still arrive.",
   liveLabel: "live",
   keyMove: "move",
@@ -846,7 +876,7 @@ const JA: Partial<Chrome> = Object.freeze({
   logNotYet: "ログはまだありません",
   logUnchecked: (reason) => `ログを確認できませんでした: ${reason}`,
   logNotLookedFor: "ログはまだ探していません",
-  fenceHeading: "fence が止めたもの",
+  fenceHeading: "実行の制限:",
   whyStopped: "止まった理由",
   whyNotRead: "作業者自身の説明は読み取れませんでした。読めていれば下のテキストにあります。",
   workHeading: "変わったもの",
@@ -881,7 +911,7 @@ const JA: Partial<Chrome> = Object.freeze({
   reloadPage: "読み込み直す",
   readingsNote: "どちらの読み取りも判断材料です。どちらも何も承認しません。答えるのはあなたです。",
   allAsText: "記録全文 (上に出していない項目も含む)",
-  claimLabel: "何を確認しましたか (任意)",
+  claimLabel: "確認したこと (承認と一緒に記録されます)",
   claimPlaceholder: "例: 手元でテストを実行した / 差分を読んだ / スマートフォンで画面を開いた",
   claimTooLong: (max) =>
     `確認した内容が、このページで受け付ける ${String(max)} 文字より長くなっています。短くしてから、もう一度 approve を押してください。`,
@@ -895,12 +925,26 @@ const JA: Partial<Chrome> = Object.freeze({
   gateBack: "ゲートに戻る",
   modelRaised: (blockers, majors) =>
     `モデルレビューの指摘: ${[
-      blockers === 0 ? "" : `blocker ${String(blockers)} 件`,
-      majors === 0 ? "" : `major ${String(majors)} 件`,
+      blockers === 0 ? "" : `阻害 ${String(blockers)} 件`,
+      majors === 0 ? "" : `重大 ${String(majors)} 件`,
     ]
       .filter((part) => part !== "")
       .join("、")}。`,
   modelRaisedLink: "読む",
+  severityWord: (severity) =>
+    ({ blocker: "阻害", major: "重大", minor: "軽微", nit: "細部" })[severity] ?? severity,
+  severityCount: (severity, count) =>
+    `${({ blocker: "阻害", major: "重大", minor: "軽微", nit: "細部" })[severity] ?? severity} ${String(count)} 件`,
+  readingNotTaken: "読み取りを取れなかったため、判断材料はありません。",
+  whyNotTaken: "理由",
+  checksWorkUnreadable:
+    "いまは変わったものを読み取れないため、この読み取りを作業と照らし合わせられません。",
+  modelNotTaken: "チェックだけが読みました。モデルレビューは取れていません。",
+  recordsFold: (count) => `approve で記録される内容 (${String(count)} 項目) と記録全文`,
+  denialUnreadable: "どのコマンドだったかを rondo は記録できませんでした。",
+  unreadableLead:
+    "この実行の記録を rondo が読み取れないため、表示も回答もできません。rondo が見つけた内容:",
+  checkedEcho: (claim) => `確認したこと: ${claim}`,
   modelMayArrive: "モデルレビューはこれから届くかもしれません。",
   liveLabel: "ライブ",
   keyMove: "移動",

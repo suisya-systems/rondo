@@ -868,7 +868,12 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     }
     // **The tag the press was made under, for the `303`** (D-0056 rule 11),
     // read back off the form's own `action`; the press writes no cookie.
-    return c.redirect(viewHref({ kind: "summary" }, tagOf(c)), 303);
+    // Anchored at the lap's row (the S2 design pass on #220), which now sits in
+    // *just finished* and says back the claim the press carried.
+    return c.redirect(
+      `${viewHref({ kind: "summary" }, tagOf(c))}#${encodeURIComponent(`lap-${iterationId}`)}`,
+      303,
+    );
   });
 
   // **The two send routes** (D-0059 section 5a, last row): a new request and a

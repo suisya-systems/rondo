@@ -180,7 +180,7 @@ test("(a) a person's native press is minted, and it writes the one word once", a
     body: "revise",
   });
   expect(pressed.status).toBe(303);
-  expect(pressed.location).toBe("/?lang=en");
+  expect(pressed.location).toBe("/?lang=en#lap-i-0001");
   // The form's `body` is not read: the port's word is the page's one word.
   expect(written).toEqual([{ iterationId: "i-0001", body: "approve" }]);
 

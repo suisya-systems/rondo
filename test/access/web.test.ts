@@ -608,7 +608,7 @@ test("a person's press answers the gate and an unattended redraw cannot", async 
   // and it carries the tag the press was made under (D-0056 rule 11), so the
   // page the operator lands back on does not re-resolve its language.
   expect(answered.status).toBe(303);
-  expect(answered.location).toBe("/?lang=en");
+  expect(answered.location).toBe("/?lang=en#lap-i-0001");
 
   stop.abort();
   expect(await served).toBe(0);
@@ -1819,7 +1819,7 @@ test("every address a ja page composes for itself carries ja (rule 11)", async (
   const token = tokenIn(answering);
   const answered = await post(base, { token, iteration: "i-0001" }, { origin: base });
   expect(answered.status).toBe(303);
-  expect(answered.location).toBe("/?lang=ja");
+  expect(answered.location).toBe("/?lang=ja#lap-i-0001");
   expect(pressed).toEqual([{ iterationId: "i-0001", body: "approve" }]);
 
   stop.abort();
@@ -2346,6 +2346,13 @@ test("the answer view draws both readings side by side from the rows, with the w
   expect(form).not.toContain("maxlength");
   // Not due: this model reading carries the checks' tip.
   expect(html).not.toContain("may still arrive");
+  // Both verdicts pinned in the bar, the model's worst finding first in its pill
+  // (the S2 design pass), and what the press records folded shut by default.
+  expect(form).toContain('id="bar-readings"');
+  expect(form).toContain(">1 blocker · 1 major · 1 nit</span>");
+  expect(html).toMatch(
+    /<details id="records" class="group[^"]*"><summary[^>]*>[\s\S]*?What approve records \(\d+ fields\)/,
+  );
 
   // The full text is still in the document, in its fold.
   expect(html).toMatch(/<details id="material-text"[\s\S]*fence {3}the whole text/);
@@ -2385,8 +2392,26 @@ test("an unavailable model reading of these commits is its outcome, not a pendin
     iterationId: "i-0001",
   });
   expect(html).toContain("the plan names no review criterion");
+  expect(html).toContain("No reading could be taken, so there is nothing from it to weigh.");
+  expect(html).toContain("Only the checks read this; the model review was not taken.");
   expect(html).not.toContain("may still arrive");
   expect(html).not.toContain("earlier commits");
+});
+
+test("an approved lap's row says back the claim its press carried (#220 S2 design pass)", async () => {
+  const world = fresh();
+  await gateWithChecks(world);
+  await world.store.recordVerificationClaim("i-0001", "ada", "ran npm test", 4_000);
+  const closed = await world.store.transition(
+    "i-0001",
+    "awaiting_human",
+    "closed",
+    { gateOutcome: "approve" },
+    5_000,
+  );
+  expect(closed.kind).toBe("transitioned");
+  const html = await operatorPage(portsOver(world, "ada", []), "t", { kind: "summary" });
+  expect(html).toContain("you said you checked: ran npm test");
 });
 
 test("what the fence blocked is on the gate, each call in words, not only in the text fold (#220 S2)", async () => {
@@ -2397,7 +2422,7 @@ test("what the fence blocked is on the gate, each call in words, not only in the
     iterationId: "i-0001",
   });
   const card = html.slice(html.indexOf('<section id="fence"'), html.indexOf('id="material-text"'));
-  expect(card).toContain("Blocked by the fence");
+  expect(card).toContain("The fence:");
   expect(card).toContain("blocked 1 command");
   expect(card).toContain("Bash  &quot;rm -rf /srv&quot;");
   expect(html).toContain("The full record as text, including what is not shown above");
