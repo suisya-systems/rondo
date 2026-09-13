@@ -80,6 +80,13 @@ document.addEventListener("htmx:afterRequest", (event) => {
     store.set(draftKey(draft), null);
     draft.value = "";
   }
+  // A refusal that came from before the send route (Hono's own `csrf`, the
+  // `Host` check, a defect) carries no `#send-refused` for htmx to put under the
+  // draft; the note says the catalogue's generic line instead of nothing.
+  const note = document.getElementById("composer-note");
+  if (draft && event.detail.failed && note !== null && note.textContent === "") {
+    note.textContent = note.dataset.refused ?? "";
+  }
 });
 
 document.addEventListener("keydown", (event) => {

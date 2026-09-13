@@ -151,6 +151,10 @@ export interface Chrome {
   readonly sendRefusedForm: string;
   readonly sendRefusedNoWords: string;
   readonly sendRefusedNotTaken: string;
+  readonly sendRefusedAsk: string;
+  readonly sendRefusedTooLong: string;
+  readonly sendRefusedUnknown: string;
+  readonly askNotByReply: string;
   /** Script off, a refused send lands on its own page: the way back, and where the words are. */
   readonly sendBack: string;
   readonly sendBackNote: string;
@@ -408,6 +412,13 @@ explanation you pressed on and then answers the gate.`,
   sendRefusedNoWords: "There are no words to send.",
   sendRefusedNotTaken:
     "The conversation did not record this message; the message it replies to may not be in the thread. Reload the thread and try again.",
+  sendRefusedAsk:
+    "That message is a question still waiting on your answer. Answering it lets its work carry on, which takes a press, and this page does not offer that press yet.",
+  sendRefusedTooLong:
+    "That message is longer than this page accepts. Shorten it, or split it into two replies.",
+  sendRefusedUnknown: "rondo did not take this message. Reload the page and send again.",
+  askNotByReply:
+    "Answering this question lets its work carry on, so it takes a press, not a reply. This page does not offer that press yet.",
   sendBack: "Back to the thread",
   sendBackNote: "Your browser's Back button returns to what you wrote.",
   threadsLiveNote: (seconds) =>
@@ -615,6 +626,14 @@ const JA: Partial<Chrome> = Object.freeze({
   sendRefusedNoWords: "送る文がありません。",
   sendRefusedNotTaken:
     "会話がこのメッセージを記録しませんでした。返信先のメッセージがスレッドに無いのかもしれません。スレッドを読み込み直してから、もう一度試してください。",
+  sendRefusedAsk:
+    "返信先は、まだあなたの回答を待っている質問です。回答するとその作業が先へ進むため押下が必要ですが、このページにはまだその押下がありません。",
+  sendRefusedTooLong:
+    "このページが受け付けるより長いメッセージです。短くするか、2 つの返信に分けてください。",
+  sendRefusedUnknown:
+    "rondo はこのメッセージを受け取りませんでした。ページを読み込み直してから、もう一度送信してください。",
+  askNotByReply:
+    "この質問に回答すると作業が先へ進むため、返信ではなく押下が必要です。このページにはまだその押下がありません。",
   sendBack: "スレッドに戻る",
   sendBackNote: "ブラウザの「戻る」で、書いた文に戻れます。",
   threadsLiveNote: (seconds) =>

@@ -1036,7 +1036,6 @@ function waitingView(
   shown: ReadonlyMap<string, Shown>,
   threads: Threads,
   actorId: string | null,
-  forms: boolean,
 ) {
   const asks = threads.messages.filter((message) => threads.waiting.has(message.messageId));
   const hoisted = [
@@ -1094,18 +1093,14 @@ function waitingView(
               <p class="mt-2">
                 <a
                   id={`reply-to-${ask.messageId}`}
-                  href={viewHref(
-                    {
-                      kind: "thread",
-                      messageId: root ?? ask.messageId,
-                      to: ask.messageId,
-                    },
+                  href={`${viewHref(
+                    { kind: "thread", messageId: root ?? ask.messageId, to: null },
                     wording.lang,
-                  )}
+                  )}#${ask.messageId}`}
                   data-open=""
                   class={`${PRIMARY} h-7 px-3 text-[13px]`}
                 >
-                  {forms ? wording.replyAction : wording.openThread}
+                  {wording.openThread}
                 </a>
               </p>
             </div>
@@ -1745,18 +1740,13 @@ function messageView(
   const parent = message.inReplyTo === null ? undefined : threads.byId.get(message.inReplyTo);
   const drafter = message.authorKind === "drafter";
   // **The way to point the reply box here**, a navigation `GET` that writes
-  // nothing. Quiet in the header; on an ask still waiting, the filled button
-  // under its words, because answering it is what the card is for.
+  // nothing, quiet in the header; an ask still waiting has none (below).
   const replyLink = (
     <a
       id={`reply-${message.messageId}`}
       href={viewHref({ kind: "thread", messageId: root, to: message.messageId }, wording.lang)}
       data-open=""
-      class={
-        waiting
-          ? `${PRIMARY} h-7 px-3 text-[13px]`
-          : "rounded px-1 font-medium text-link hover:underline"
-      }
+      class="rounded px-1 font-medium text-link hover:underline"
     >
       {wording.replyAction}
     </a>
@@ -1836,7 +1826,17 @@ function messageView(
         >
           {message.body}
         </p>
-        {forms && waiting ? <p class="px-4 pb-3">{replyLink}</p> : null}
+        {/*
+         * **A waiting ask is not answered by a reply** (#220 S1 review): the
+         * first reply releases the line it holds (D-0066 rule 4.4), which is
+         * an answer that moves work, and D-0059 section 5a keeps those on a
+         * press. The server refuses such a send; the page does not offer it.
+         */}
+        {forms && waiting ? (
+          <p class="note px-4 pb-3 text-[12.5px] leading-5 text-muted-foreground">
+            {wording.askNotByReply}
+          </p>
+        ) : null}
         {message.bases.length === 0 ? null : (
           <div class="bases flex flex-wrap items-center gap-1.5 border-t border-border/60 px-4 py-2">
             <span class="text-[11px] font-medium text-faint">{wording.basesLabel}</span>
@@ -1950,8 +1950,8 @@ function requestsView(wording: Chrome, threads: Threads, nowMs: number, actorId:
 
 /**
  * The message a reply box answers: the one the person pointed at with `Reply`,
- * else the first ask in the thread still waiting on them -- replying is what
- * releases it -- else the thread's latest message.
+ * else the thread's latest message -- never an ask still waiting, which a reply
+ * would answer (see `messageView`), so a thread of nothing else has no box.
  */
 function replyTarget(
   threads: Threads,
@@ -1961,12 +1961,13 @@ function replyTarget(
   if (root === null) {
     return null;
   }
-  const members = threads.messages.filter((message) => threads.rootOf(message.messageId) === root);
+  const members = threads.messages.filter(
+    (message) =>
+      threads.rootOf(message.messageId) === root && !threads.waiting.has(message.messageId),
+  );
   const pointed = view.to === null ? undefined : threads.byId.get(view.to);
   const target =
-    (pointed !== undefined && threads.rootOf(pointed.messageId) === root ? pointed : undefined) ??
-    members.find((message) => threads.waiting.has(message.messageId)) ??
-    members.at(-1);
+    (pointed !== undefined && members.includes(pointed) ? pointed : undefined) ?? members.at(-1);
   return target === undefined ? null : { root, target };
 }
 
@@ -2076,6 +2077,7 @@ function composerView(
         <p
           id="composer-note"
           role="status"
+          data-refused={wording.notSent(wording.sendRefusedUnknown)}
           class="px-4 pt-2 text-[12.5px] leading-5 text-fail empty:hidden"
         />
       </div>
@@ -2500,17 +2502,7 @@ export async function operatorPage(
                 nothingView(wording)
               ) : (
                 <>
-                  {waitingView(
-                    wording,
-                    waiting,
-                    open,
-                    nowMs,
-                    token,
-                    shown,
-                    threads,
-                    ports.actorId,
-                    forms,
-                  )}
+                  {waitingView(wording, waiting, open, nowMs, token, shown, threads, ports.actorId)}
                   {runningView(wording, running, unreadable, transcripts, nowMs)}
                   {endedView(wording, ended, nowMs)}
                 </>

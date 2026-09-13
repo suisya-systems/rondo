@@ -643,7 +643,9 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
   });
   const sendLimit = bodyLimit({
     maxSize: MAX_MESSAGE_BYTES,
-    onError: (c) => said(c, 413, "that message is longer than this page accepts"),
+    // Through the send's own refusal, so htmx puts it under the draft and a
+    // native submit gets the page's language and the way back (#220 S1 review).
+    onError: (c) => refused(c, 413, "sendRefusedTooLong", null),
   });
   app.use(async (c, next) =>
     SEND_ROUTES.has(c.req.path) ? await sendLimit(c, next) : await pressLimit(c, next),
@@ -764,6 +766,16 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
       if (kind === "reply" && (inReplyTo === null || inReplyTo === "")) {
         return refused(c, 400, "sendRefusedForm", null);
       }
+      // **A reply to a question still waiting is not a send** (#220 S1 review,
+      // D-0059 section 5a's residual): while nothing replies to an ask it holds
+      // its line (D-0066 rules 4.2 and 4.4), and the first reply releases that
+      // hold -- an act that moves work, which section 5a says a message cannot
+      // be. Until an answer comes with a press of its own, the page refuses it
+      // here, fail closed. Not a race: `asks` never changes on a row, and an ask
+      // someone answered in between has no hold left to release.
+      if (inReplyTo !== null && (await waitingAsk(inReplyTo))) {
+        return refused(c, 409, "sendRefusedAsk", inReplyTo);
+      }
       const message = { messageId, body, inReplyTo };
       const sent = await say.say(minting.send, message);
       // **A second submit of one form is the send it repeats** (#220 S1
@@ -783,6 +795,16 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
         303,
       );
     });
+  }
+
+  /** Whether `messageId` asks and nothing replies to it yet, or the thread cannot be read. */
+  async function waitingAsk(messageId: string): Promise<boolean> {
+    const read = await reading.record.threadMessages();
+    return (
+      read.kind !== "read" ||
+      (read.messages.some((held) => held.messageId === messageId && held.asks) &&
+        !read.messages.some((held) => held.inReplyTo === messageId))
+    );
   }
 
   /** Whether the thread already holds exactly this operator message. */
@@ -811,8 +833,14 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
    */
   function refused(
     c: Context<PageEnv>,
-    status: 400 | 403 | 409,
-    why: "sendRefusedNoApprover" | "sendRefusedForm" | "sendRefusedNoWords" | "sendRefusedNotTaken",
+    status: 400 | 403 | 409 | 413,
+    why:
+      | "sendRefusedNoApprover"
+      | "sendRefusedForm"
+      | "sendRefusedNoWords"
+      | "sendRefusedNotTaken"
+      | "sendRefusedAsk"
+      | "sendRefusedTooLong",
     back: string | null,
   ) {
     const wording = wordingOf(c);

@@ -2026,24 +2026,26 @@ test("a request thread is drawn whole: every body byte for byte, voices apart, b
   // A report replies to the request, which is how every reply reads by
   // default, so it names no parent line of its own.
   expect(report).not.toContain("in reply to");
-  // The waiting ask's way to answer it is the filled button under its words.
-  expect(ask).toContain('id="reply-ask-b" href="/?thread=request-a&amp;to=ask-b&amp;lang=en"');
+  // **A waiting ask offers no reply** (#220 S1 review): answering it moves
+  // work, which is a press's; the card says so instead.
+  expect(ask).not.toContain('id="reply-ask-b"');
+  expect(ask).toContain("it takes a press, not a reply");
 
   // **No message id is printed as text**: each is an anchor and an attribute.
   for (const id of ["request-a", "ask-b", "report-c"]) {
     expect(html).not.toContain(`>${id}<`);
   }
 
-  // **The reply box answers the waiting ask by default**, carries the id
+  // **The reply box answers the latest message that is not a waiting ask**, carries the id
   // rondo minted -- once, hidden, never shown -- and sits outside the ledger
   // the redraw swaps, so no redraw touches a draft.
   expect(html).toContain(
     '<form id="composer" method="post" action="/reply?lang=en" hx-post="/reply?lang=en"',
   );
-  expect(html).toContain('<input type="hidden" name="in_reply_to" value="ask-b"/>');
+  expect(html).toContain('<input type="hidden" name="in_reply_to" value="report-c"/>');
   expect(html.split(MINTED.reply)).toHaveLength(2);
   expect(html).toContain(`<input type="hidden" name="message_id" value="${MINTED.reply}"/>`);
-  expect(html).toContain("Replying to rondo-drafter: Which runner should I read first?");
+  expect(html).toContain("Replying to rondo-drafter: noted");
   const ledgerAt = html.indexOf('<div id="ledger"');
   const composerAt = html.indexOf('<form id="composer"');
   const between = html.slice(ledgerAt, composerAt);
@@ -2068,6 +2070,15 @@ test("the reply box points at the message a person chose, and a thread nobody wr
   );
   expect(chosen).toContain('<input type="hidden" name="in_reply_to" value="report-c"/>');
   expect(chosen).toContain("autofocus");
+  // Pointed at a waiting ask by hand, the box does not answer it.
+  const atAsk = await operatorPage(
+    ports,
+    "t",
+    { kind: "thread", messageId: "request-a", to: "ask-b" },
+    EN,
+    mint,
+  );
+  expect(atAsk).not.toContain('name="in_reply_to" value="ask-b"');
   const nowhere = await operatorPage(
     ports,
     "t",
@@ -2105,7 +2116,7 @@ test("the summary counts an ask waiting on the person and leads to the reply, an
   const summary = await operatorPage(ports, "t", { kind: "summary" }, EN, mint);
   expect(summary).toContain("waiting for your answer (1)");
   expect(summary).toContain('<li id="ask-ask-b"');
-  expect(summary).toContain('href="/?thread=request-a&amp;to=ask-b&amp;lang=en"');
+  expect(summary).toContain('href="/?thread=request-a&amp;lang=en#ask-b"');
   expect(summary).toContain("asked in: Please look at the flaky test.");
   // The header's way in, on every view, with the count the redraw renews.
   expect(summary).toContain('href="/?requests=open&amp;lang=en"');
@@ -2181,6 +2192,8 @@ test("the composer script keeps a draft and the open folds, and makes no request
   expect([...code.matchAll(/htmx:[A-Za-z]+/g)].map((found) => found[0])).toEqual([
     "htmx:afterRequest",
   ]);
+  // A refusal with no `#send-refused` (csrf, Host, a defect) still says "not sent", as text.
+  expect(code).toContain("note.textContent = note.dataset.refused");
   // And keys.js no longer keeps folds: one place does.
   expect(keysCode()).not.toContain("toggle");
 

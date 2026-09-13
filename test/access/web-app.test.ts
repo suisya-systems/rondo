@@ -66,6 +66,8 @@ function spyPorts(written: Written, sent: Sent = []): ServedPorts {
       sent.push(message);
       return await Promise.resolve({ ok: true, note: "" });
     }),
+    // A reply reads the thread once, to refuse answering an ask by a send.
+    record: { threadMessages: async () => await Promise.resolve({ kind: "read", messages: [] }) },
   } as unknown as ServedPorts;
 }
 
@@ -793,6 +795,78 @@ test("(send) the same form sent twice records its message once", async () => {
     n: 1,
   });
 
+  stop.abort();
+  expect(await closed).toBe(0);
+});
+
+test("(send) a reply cannot answer an ask that waits, so a send releases no hold on work", async () => {
+  // #220 S1 review, D-0059 section 5a's residual: the first reply to an ask
+  // ends the hold `reserve()` reads through `openAsksIn` (D-0066 rule 4.4). An
+  // htmx-shaped send -- any same-origin script -- must leave the ask open.
+  const connection = new DatabaseSync(":memory:");
+  const record = advisoryRecord(connection);
+  const sent: Sent = [];
+  const write = async (draft: Parameters<typeof record.recordThreadMessage>[0]) => {
+    const outcome = await record.recordThreadMessage(draft);
+    expect(outcome.kind, JSON.stringify(outcome)).toBe("recorded");
+  };
+  const at = { authorId: "rondo-drafter", atMs: 1, bases: [] } as const;
+  await write({
+    ...at,
+    messageId: "req",
+    body: "r",
+    authorKind: "operator",
+    inReplyTo: null,
+    asks: false,
+  });
+  await write({
+    ...at,
+    messageId: "ask",
+    body: "a?",
+    authorKind: "drafter",
+    inReplyTo: "req",
+    bases: [{ form: "message", messageId: "req" }],
+    asks: true,
+  });
+  const { base, stop, closed } = await served(
+    createApp({ ...spyPorts([], sent), record } as ServedPorts, TOKEN),
+  );
+  const reply = { token: TOKEN, message_id: newMessageId("reply"), in_reply_to: "ask", body: "b" };
+
+  const htmx = await send(base, "/reply?lang=ja", "POST", htmxHeaders(base), reply);
+  expect(htmx.status).toBe(409);
+  expect(htmx.body).toMatch(/^<p id="send-refused">送信されませんでした。/);
+  const native = await send(base, "/reply", "POST", submitHeaders(base), reply);
+  expect(native.status).toBe(409);
+  expect(native.body).toContain('href="/?thread=ask&amp;lang=en"');
+  expect(sent).toEqual([]);
+  const open = await record.openAsksIn("req");
+  expect(open.kind === "read" && open.asks.map((ask) => ask.messageId)).toEqual(["ask"]);
+  // A reply to anything else in the thread is still a send.
+  const other = { ...reply, message_id: newMessageId("reply"), in_reply_to: "req" };
+  expect((await send(base, "/reply", "POST", htmxHeaders(base), other)).status).toBe(303);
+  expect(sent).toHaveLength(1);
+
+  stop.abort();
+  expect(await closed).toBe(0);
+});
+
+test("(send) an oversize send is refused like any other send: in the page's language, under the draft", async () => {
+  const sent: Sent = [];
+  const { base, stop, closed } = await served(createApp(spyPorts([], sent), TOKEN));
+  const form = {
+    token: TOKEN,
+    message_id: newMessageId("reply"),
+    in_reply_to: "r",
+    body: "x".repeat(70 * 1024),
+  };
+  const htmx = await send(base, "/reply?lang=ja", "POST", htmxHeaders(base), form);
+  expect(htmx.status).toBe(413);
+  expect(htmx.body).toMatch(/^<p id="send-refused">送信されませんでした。/);
+  const native = await send(base, "/reply?lang=ja", "POST", submitHeaders(base), form);
+  expect(native.status).toBe(413);
+  expect(native.body).toContain('<html lang="ja">');
+  expect(sent).toEqual([]);
   stop.abort();
   expect(await closed).toBe(0);
 });
