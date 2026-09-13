@@ -107,6 +107,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0067 | The secretary's running half has no new owner: the advisory reads lines against each other and drafts an order, the surface attempts acts in that order, the store keeps the person's standing policies, and review extensions and merges still reach the person | accepted |
 | D-0068 | One voice and a patrol: the person asks rondo why a line waits and gets an answer joined from rows with bases, a timer in the resident host reads rows against each lap's own declared patience, and nothing it finds is handled silently | accepted |
 | D-0069 | A scope before the first lap: an agent type becomes a record rondo holds when an operator's scope is written from a plan, `start` spends a scope through the `lineage_start` arm, and an operator-written first admission waits on every open question in its request's thread | accepted |
+| D-0070 | A revise inside a scope: the person still answers the gate, the lap it starts spends the scope through the `redo` arm, the verdict is computed before the gate is walked, and the added text is carried and never tested | accepted |
 
 ---
 
@@ -12522,6 +12523,13 @@ follows them.
    per act, and kept line 2 applies to merge only while the condition does not hold.
 3. **(a).** `D-0063` is revised along section 6 before it is accepted.
 
+> **Annotation (2026-09-14, from D-0070).** Added after this entry was accepted, and additive, by the
+> answer of rondo's human gate to `D-0070`'s first point.
+> **Answer 1 (a)'s "a scope covers O1-O3, O4's `retry`, O5, O7 and O8"**: a `revise` a person types
+> naming a scope decision spends that scope on the lap it admits, as an `admission` (`D-0070` section 1
+> (a)). The gate answer it carries stays the person's press, so "the person still presses once per lap"
+> holds, and O4's organisation-run `revise` still waits on rule 3.6. Nothing above is edited.
+
 ### What this does not do
 
 - **It does not design the scope record**, its schema, its writer, its verbs or its screen.
@@ -12967,6 +12975,12 @@ same date, read only (`JA/`), and the survey `JA/notes/lap-gap-survey-2026-09-13
    entry.
 5. **Outside a scope nothing is counted.** A person who types `revise` is the bound (`D-0027` rule 2),
    and the model reading is material they read.
+
+> **Annotation (2026-09-14, from D-0070).** Added after this entry was accepted, and additive, by the
+> answer of rondo's human gate to `D-0070`'s first point.
+> **Rule 4.5** is the case with no scope named: a `revise` that names a scope decision is inside that
+> scope, its lap is an `admission` through the `redo` arm, and its round is counted under rules 4.1 to
+> 4.3 (`D-0070` section 1). Nothing above is edited.
 
 ### 5. How it plugs into `D-0064`
 
@@ -13771,6 +13785,13 @@ number.
 > **Rule 3.3's `proposal_id` is null for an in-scope `retry` and for an operator-written plan's first
 > admission** by `rondo start --scope-decision-id` (`D-0069` section 2 (i)). Nothing above is edited.
 
+> **Annotation (2026-09-14, from D-0070).** Added after this entry was accepted, and additive, by the
+> answer of rondo's human gate to `D-0070`'s first point.
+> **Rule 3.2's "a gate answer (`D-0064` O6) and `revise` get their kinds from the entry that opens O6"**
+> withholds a kind from the **gate answer** `revise` carries. The lap a person's `revise
+> --scope-decision-id` admits is an `admission`, written like an in-scope `retry`'s, with `subject_id`
+> the successor's iteration id and `proposal_id` null (`D-0070` section 1 (a)). No act kind is added. Nothing above is edited.
+
 ### 4. The one point where the organisation stops
 
 > **Annotation (2026-09-13, from D-0067).** Added after this entry was accepted, and additive. A
@@ -13869,6 +13890,15 @@ number.
 >   stop carries it whenever the scope row was read; a stop written after a failed read names none.
 >   **The refused test is a closed name and not a row**, so no locator reaches it: the stop's body
 >   names it, with the scope's digest. Nothing above is edited.
+
+> **Annotation (2026-09-14, from D-0070).** Added after this entry was accepted, and additive, by the
+> answer of rondo's human gate to `D-0070`'s second and third points.
+> - **Rule 4.1's single call site**, for `revise`: the gate walk runs **between** the verdict and the
+>   admission, inside the one call site, so an `outside` or `undecidable` verdict walks no gate, spends
+>   nothing and writes rule 4.4's stop (`D-0070` section 2 (i)). A refusal by `reserve()`'s re-test
+>   after the walk is rule 4.3's bounded race, and the surface says the gate was answered and no lap ran.
+> - **Rule 4.2's tests read no property of the text `revise` adds**; it reaches the verdict only through
+>   the successor's plan (`D-0070` section 3 (A)). Nothing above is edited.
 
 ### 5. `D-0062` rule 3 and `D-0022` rule 9, restated
 
@@ -14980,3 +15010,249 @@ The points are kept as put, and the answer follows them.
 - **cadenza changing `agentTypeDigest`** so that it no longer covers the tier or the grants, which
   `D-0066`'s own falsifier names; a recorded row then bounds less than P1 shows.
 - Any measurement in "What was measured" failing to reproduce at rondo `787ea73`.
+
+---
+
+## D-0070 — A revise inside a scope: the person still answers the gate, the lap it starts spends the scope through the `redo` arm, the verdict is computed before the gate is walked, and the added text is carried and never tested
+
+**Status:** accepted (2026-09-14, rondo's human gate). Three points were put to the gate and it chose
+the recommended option on each; the answers are recorded in section "What was put to the human gate,
+and its answer". Refs `D-0009`, `D-0027`, `D-0030`, `D-0047`, `D-0061`, `D-0064`, `D-0065`, `D-0066`,
+`D-0069`, rondo#217.
+
+**This entry decides and does not build.** Nothing in `src/` changes with it, and no earlier entry is
+edited by it. The annotations it would add on acceptance are listed in "Annotations this entry adds".
+
+Lap 9 (`docs/operations/lap-9-dogfood.md`, N-33) walked a scope approved before the first lap
+(`D-0069`) and found that **a review finding can be fixed only by leaving the scope**. The in-scope
+redo, `retry --scope-decision-id`, re-admits the predecessor's stored plan and carries no words; the
+redo that carries words, `revise`, takes no scope. So the lap `D-0065` rule 5.3 calls the correction
+of a finding ran on no budget, and the round the scope's `review_rounds` exists to count was not
+counted. This entry decides how a `revise` spends a scope without opening O6, and what the verdict
+tests about the text `revise` adds. It keeps `D-0064`'s two lines (bases; an irreversible act is
+approved by a person) and **adds no third**.
+
+**Why this is an entry and not an implementation.** Three accepted texts say, as written, that a
+`revise` is not counted by a scope today: `D-0064`'s answer to its first gate point ("a scope covers
+O1-O3, O4's `retry`, O5, O7 and O8"), `D-0066` rule 3.2 ("A gate answer (`D-0064` O6) and `revise`
+get their kinds from the entry that opens O6") with its residuals row, and `D-0065` rule 4.5
+("Outside a scope nothing is counted. A person who types `revise` is the bound"). Section 1 argues
+that all three are about **the gate answer `revise` carries** and not about **the lap it admits**,
+but reading them that way is the gate's to accept, not an implementation's to assume.
+
+### What was measured, and how
+
+At rondo `4036ff6` on **2026-09-14**, by reading, and from lap 9's record (rondo#216, merged at this
+commit). Line numbers drift; re-measure the claim, not the number.
+
+- **`revise` answers the gate, then admits with no scope.** Its flags are `actor-id`, `body` and
+  `iteration-id` (`src/access/cli.ts:588`). `commandRevise` composes the successor's plan with
+  `revisionPlan` before anything else, walks the predecessor's gate under the person's `--actor-id`
+  (`cli.ts:4179`), resumes the predecessor to `closed`, and only then calls
+  `admit(ports, advisory, successor.plan, START_POLICY, successorId, record.id)` with no request
+  argument and no scope spend (`cli.ts:4233`).
+- **The in-scope retry is the `redo` arm and nothing else.** `retry` takes `iteration-id`,
+  `successor-id` and `scope-decision-id` (`cli.ts:654`); `commandScopedRetry` builds
+  `{ kind: "redo", plan: <the predecessor's stored plan>, predecessorId, requestMessageId:
+  <the predecessor row's> }` and hands it to `admitUnderScope` (`cli.ts:2720-2770`). Nothing in that
+  act carries text a person wrote.
+- **The `redo` arm already tests everything a revise's lap needs**, in `scopeVerdict`
+  (`src/access/scope.ts:145-343`): the approval, supersession, the request, the open asks over the
+  lineage tree, the workspace pair, the agent type, `allowed`, the budgets (laps, cost with reserve,
+  expiry), no grant beyond the predecessor's recomposed contract, and the predecessor's latest model
+  reading against `review_rounds` and `severity_threshold` (`scope.ts:325-342`). Rounds are counted
+  along the lineage with `reviewRoundsAlong` (`src/access/model-review.ts:648`), and a revise's
+  successor already names its predecessor through `supersedes_iteration_id` (lap 9 section 1, row 6).
+- **`admitUnderScope` is gather, verdict, admit, with nothing between** (`scope.ts:607-680`): on
+  `inside` it calls its `admit` port, and `reserve()` re-tests the store's half and writes the
+  `admission` consumption in the row's transaction (`src/store/sqlite.ts:1794`, `spendScope` at
+  `sqlite.ts:3820`).
+- **The act kinds**: `SCOPE_ACT_KINDS` is `admission`, `push_branch`, `open_pull_request`, and only
+  `admission` is writable; the comment above it repeats `D-0066` rule 3.2's "a gate answer and
+  `revise` get their kinds from the entry that opens O6, so they are not named at all"
+  (`src/store/records.ts:1395-1415`).
+- **What the revise text changes in the successor's plan is the prompt, and only the prompt is
+  new.** `revisionPlan` sets `baseBranch`, `pullRequestBaseBranch` and
+  `prompt: revisionPrompt(plan, input)`, which appends the instruction to the predecessor's prompt
+  (`src/refrain/revision.ts:120-181`). **The prompt is not an input to classification**:
+  `classifyPlan` reads the catalog layers, `agentTypeInput`, the grants against the fence, the
+  parties and `intendedAction` (`src/refrain/classification.ts:70-95`). So no scope test reads the
+  text today, on either arm.
+- **What lap 9's unscoped revise cost**: `lap9-002`, 0.455749 USD, with no `scope_consumption` row,
+  while the scope showed 1 of 2 laps and 1.884267 of 5.00 USD spent (lap 9 sections 1 and 5). The
+  person paused 402 s over it, the longest stretch of the walk (lap 9 section 2).
+
+### 1. Which half of `revise` a scope counts
+
+A `revise` is two acts in one command: **the answer to the predecessor's gate** and **the admission
+of the successor's lap** (`D-0027` rules 1 and 6).
+
+1. **The gate answer stays the person's press, and a scope does not cover it.** It is walked through
+   continuo under the person's `--actor-id`, exactly as today. `D-0009` and `D-0064` rule 3.6 hold
+   unchanged: nothing is answered as delegated, no act kind is added for a gate answer, and O6 stays
+   closed. **A `revise` under a scope is still typed by a person, once per lap**, which is what
+   `D-0064`'s first gate answer (a) says ("the person still presses once per lap, including to send a
+   `revise` the organisation drafted") and what `D-0027` rule 2 says.
+2. **The successor's admission spends the scope as an `admission`, through the `redo` arm.** It is
+   `D-0066` rule 3.2's one writable act kind, with `subject_id` the successor's iteration id and
+   `proposal_id` null, written in `reserve()`'s transaction. It is the same act an in-scope `retry`
+   is, with a plan that differs from the predecessor's in its base branches and its prompt. So the
+   lap, its cost (with its reserve until read) and its review round are counted against the scope
+   (`D-0066` rules 3.4.1 to 3.4.3), which is lap 9's N-33.
+3. **Reading the three texts this way.** `D-0066` rule 3.2 withholds a kind from "a gate answer and
+   `revise`" "since both wait on continuo's delegated answer (`D-0064` rule 3.6)". What waits on that
+   seam is the answer, and section 1.1 keeps it the person's. `D-0064`'s "O4's `revise`" is the
+   organisation **running** `revise` itself (O4's row: "may run `revise` itself only under rule 3.6,
+   exactly as O6"), which this entry does not open. `D-0065` rule 4.5's "a person who types `revise`
+   is the bound" is the case with no scope named; a person who names one has asked for the scope's
+   bound as well. `D-0066` rule 4.2's readings bullet already names "`revise` once O4 has it" beside
+   the in-scope `retry` as an admission that redoes a lap.
+4. **The flag is `revise --scope-decision-id ID`** (issue #217's first proposal). A body on `retry`
+   was the alternative. It is rejected because `revise` alone validates the successor before it
+   walks the gate (`D-0027` rule 6) and preflights the identifiers the walk would strand (`D-0031`).
+   A `retry` with a body would need both, and would still have to answer the gate.
+5. **The request is the predecessor row's** (`D-0061` rule 4), as the in-scope `retry`'s is. A
+   predecessor that names no request is refused at the request test, with the `noThread` stop, as
+   the in-scope `retry` is today.
+
+### 2. When the verdict is computed: before the gate is walked, at the one call site
+
+1. **The verdict is computed before the gate is walked, and a refusal walks nothing.** A walked gate
+   cannot be taken back (`D-0027` rule 6). A verdict computed after it would leave a person's answer
+   spent on a lap the scope then refused, which is the failure rule 6 exists to prevent. So `outside`
+   or `undecidable` refuses with the test that refused, writes `D-0066` rule 4.4's stop into the
+   request's thread, leaves the gate at its stage, and spends nothing.
+2. **It stays one call site** (`D-0066` rule 4.1). The walk goes **between** the verdict and the
+   admission inside `admitUnderScope`, as a step the surface hands in, rather than as a second verdict
+   computed in `commandRevise` before the first. Gather, verdict, walk, admit: a verdict is still
+   computed once per act and acted on in one place.
+3. **The snapshot is taken before the walk.** Walking the gate changes the predecessor's status and
+   nothing the verdict reads. The readings, grants, lineage and request are unchanged by it, and the
+   store's half is re-tested at `reserve()` anyway (`D-0066` rule 4.3).
+4. **The store's re-test after the walk is the bounded race, named.** Between the verdict and
+   `reserve()` another act under the same approval may take the last lap or pass the cost, or a stop
+   may be written. `reserve()` then refuses and writes nothing, as it does for every scoped admission.
+   For a `revise` that refusal lands **after** the gate was answered, so the person's words are
+   recorded at continuo and no lap runs. The surface says so, and writes the stop as for any other
+   refusal. This is `D-0047` rule 6's race, which `D-0066` rule 4.3 accepts; it is not closed by
+   holding the write lock across a continuo walk, which would put a subprocess inside a SQLite
+   transaction.
+5. **A walk that sends nothing starts no lap**, under a scope as today (`commandRevise`'s
+   `answerSent` check), and a gate that does not reach `closed` starts no lap. Neither is an
+   admission, so neither spends.
+
+### 3. What the verdict tests about the added text: nothing
+
+1. **The verdict tests no property of the text `revise` adds.** It is not tested for quoting the
+   findings, naming their bases, length, or language. The text reaches the verdict only through the
+   successor's plan, and no scope test reads the prompt (measured above). A text that somehow
+   changed the plan's agent type, workspace or grants is impossible by construction
+   (`revisionPlan` changes the prompt and the two base branches only), and would be caught by the
+   existing tests if it were not.
+2. **Why nothing.**
+   - **The text is a person's words, carried and not composed** (`D-0009`; `D-0027` rule 7: continuo
+     gets it byte for byte as the gate's answer and the prompt gets it appended). A test on its
+     content is rondo judging what a person said before carrying it.
+   - **`D-0066` rule 4.1's verdict is a pure function over fields and rows.** "Does this instruction
+     correct that finding" is a judgment, not a field. No row answers it, and a string match on
+     locators would refuse a person who fixes the finding in their own words (lap 9's text named the
+     file and the severity, not the basis locators).
+   - **What a scope bounds is already bounded without it.** The redo is tested like an in-scope
+     `retry`: no wider grant, a predecessor reading whose finding is at or above the threshold with
+     rounds remaining, the budgets. Whether the correction worked is the **next** model reading's
+     answer, counted as the next round (`D-0065` rules 4.1 and 4.3), not the text's.
+3. **`D-0065` rule 5.3's "a `revise` instruction that quotes the findings" stays the organisation's
+   drafting duty**, for when the organisation drafts one (O4). It is a property of the draft, reviewed
+   where drafts are reviewed. It is not a test on a person's `revise`.
+4. **Behaviour the text does not change.** The predecessor's latest model reading still decides the
+   readings test. A predecessor with no model reading is `undecidable` at `readings`, as for an
+   in-scope `retry` today (`scope.ts:329-336`). A clear reading with rounds remaining is `inside` under
+   `D-0066` rule 4.2's readings bullet as built, so a person may use a scoped `revise` to ask for a
+   change no finding asked for, and the lap and its round are counted.
+
+### What was put to the human gate, and its answer
+
+The points are kept as put, and the answer follows them.
+
+1. **Which half of `revise` a scope counts** (section 1).
+   - **(a) Only the successor's admission, as an `admission` through the `redo` arm; the gate answer
+     stays the person's** (recommended). *Loses:* one command writes one scoped act and one unscoped
+     act, and a reader must know that the answer on the gate is the person's while the lap is the
+     scope's.
+   - **(b) Nothing until O6** (the texts as written, rondo#217 held). *Loses:* every correction of a
+     finding runs on no budget and counts no round until continuo records a delegated answer, which
+     is lap 9's N-33 left standing, and `review_rounds` counts nothing a person can reach.
+2. **When the verdict is computed** (section 2).
+   - **(i) Before the walk, at the one call site, with the walk between verdict and admission**
+     (recommended). *Loses:* the store's refusal after the walk (section 2.4) still lands after the
+     gate is answered, in a race the surface names but does not close.
+   - **(ii) After the walk, as `retry` computes it today.** *Loses:* every refusal, not only the
+     race, arrives after the person's answer was spent, which is what `D-0027` rule 6 refuses.
+3. **What the verdict tests about the added text** (section 3).
+   - **(A) Nothing; the text is carried** (recommended). *Loses:* a scoped `revise` whose text does
+     not address the finding is admitted, and is caught only by the next reading, at the cost of a
+     lap and a round.
+   - **(B) A mechanical test: the text names every finding at or above the threshold by its bases'
+     locators.** *Loses:* `D-0009`'s carried-not-judged property for the text, and a person who fixes
+     a finding in their own words is refused, with a stop written for it.
+
+**The gate's answer (2026-09-14):**
+
+1. **(a).** A `revise` that names a scope decision spends the scope on the lap it admits, as an
+   `admission` through the `redo` arm; the gate answer stays the person's press.
+2. **(i).** The verdict is computed before the gate is walked, at the one call site, with the walk
+   between the verdict and the admission.
+3. **(A).** The verdict tests nothing about the text `revise` adds; the text is carried.
+
+### What moving to this gives up
+
+- **One command, two authorities.** `revise --scope-decision-id` is a person's gate answer and a
+  scope's admission together, and the audit joins them: the gate's actor at continuo, and the
+  consumption row at rondo.
+- **Nothing checks that the correction is aimed at the finding** until the next reading. A lap and a
+  round are the price of a text that misses.
+
+### What this does not do
+
+- **It does not build** the flag, the step between verdict and admission, or the screen lines.
+- **It does not open O6 or O4's organisation-run `revise`.** The gate stays a person's press, and
+  `D-0027` rule 2 stands.
+- **It does not add an act kind.** `admission` is the only writable kind, as `D-0066` rule 3.2 left it.
+- **It does not change the verdict's tests or their order** (`D-0066` rule 4.2, `D-0069`'s
+  annotations). A scoped `revise` is tested exactly as a scoped `retry` is.
+- **It does not address N-34 to N-37** (the gate report before the model reading, the page, and the
+  runbook's zsh prompt).
+- **It does not add an invariant beyond `D-0064`'s two lines.**
+
+### Residuals, with who decides
+
+| Residual | Why not here | Who decides |
+|---|---|---|
+| The organisation drafting and running `revise` itself (O4 under rule 3.6) | Waits on continuo's delegated answer | the entry that opens O6 |
+| Closing section 2.4's race (a reservation of the lap before the walk) | A second writable state for a scope spend; the race has not been observed | a later entry, if it is |
+| A draft check that an organisation-drafted instruction quotes the findings (`D-0065` rule 5.3) | A property of a draft, not of a person's act | the entry that has the organisation draft `revise` instructions |
+
+### Annotations this entry adds
+
+- **`D-0064`'s answer to its first gate point (a)** gains a dated annotation: a person-typed `revise`
+  naming a scope decision spends that scope on the lap it admits (section 1); the gate answer stays
+  the person's press, and O4's organisation-run `revise` still waits on rule 3.6.
+- **`D-0066` rule 3.2** gains a dated annotation: the admission a `revise` makes is an `admission`
+  through the `redo` arm (section 1.2); what waits on the O6 entry is the gate answer's kind. **Rule
+  4.1** gains one: for `revise`, the gate walk runs between the verdict and the admission (section 2).
+- **`D-0065` rule 4.5** gains a dated annotation: a `revise` that names a scope decision is inside
+  that scope and its round is counted (section 1.3).
+- **`docs/operations/lap-9-dogfood.md` N-33** is answered by this entry once built.
+
+### What would falsify it
+
+- **Section 2.4's race observed**: a scoped `revise` whose gate was answered and whose lap the store
+  then refused. The reservation residual is then the entry to write.
+- **Scoped `revise` laps routinely spent on texts that do not address the finding**, so that rounds
+  run out on misses rather than on hard findings. The gate's third point (B), or a drafted text, is
+  then what moves.
+- **continuo recording a delegated answer (O6 opened)**: sections 1.1 and 1.3's reading is then
+  revisited by the entry that opens it, since the gate answer may then be the organisation's too.
+- **`revisionPlan` changing a field any scope test reads** (agent type, workspace pair, grants), so
+  that section 3.1's "impossible by construction" no longer holds.
+- Any measurement in "What was measured" failing to reproduce at rondo `4036ff6`.
