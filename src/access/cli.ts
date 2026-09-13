@@ -40,6 +40,7 @@ import {
   type VerifiedContinuo,
 } from "../continuo/invoker.js";
 import type { ContinuoResult, ObservedSession } from "../continuo/protocol.js";
+import { probeUnixSocket, workerSandboxRefusal } from "../continuo/sandbox.js";
 import { lapTranscriptDirectory } from "../continuo/transcript.js";
 import { allocate } from "../refrain/allocator.js";
 import { isLanguageTag, type RunPlan, readRunPlan } from "../refrain/plan.js";
@@ -1471,6 +1472,15 @@ export async function main(
   // reading back is often about a lap that has already ended.
   if (parsed.command === "show") {
     return await commandShow(parsed, store, opened.path);
+  }
+
+  // The three commands that can spawn a paid worker refuse first when that
+  // worker's own sandbox could not come up (N-16, N-21; `src/continuo/sandbox.ts`).
+  if (parsed.command === "start" || parsed.command === "retry" || parsed.command === "revise") {
+    const blocked = workerSandboxRefusal(await probeUnixSocket());
+    if (blocked !== null) {
+      return refuse(blocked);
+    }
   }
 
   const startup = await startContinuo(environment);

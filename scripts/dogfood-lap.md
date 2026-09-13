@@ -82,6 +82,21 @@ costs on this machine, and that `resume` sees the outcome after a human answers.
    supplies no default for any of them, and D-0019 rule 3 is why: a rondo-side
    default would be rondo guessing at a fence's geometry.
 
+7. **A shell that is not inside another Claude Code sandbox.** The lap spawns a
+   worker `claude`, and that worker brings up its own sandbox, which needs a
+   Unix socket. A Claude Code sandbox on Linux refuses `socket(AF_UNIX)` through
+   a seccomp filter that every child inherits and none can remove, so a lap
+   started from one -- a claude-org worker's Bash call, say -- runs its worker
+   with `Sandbox is enabled but failed to initialize: EPERM ... listen
+   '/tmp/claude-1000/srt-mux-*.sock'` and every Bash call after the first
+   unsandboxed. Laps 6 and 7 both did (N-16, N-21). A different TMPDIR does not
+   help: the refusal is on the socket, before any path. So run `rondo start`,
+   `retry` and `revise` from a plain terminal, or have the operator run that one
+   command with its sandbox off. `start`, `retry` and `revise` refuse when they
+   see this block themselves; that check is Linux-only and sees only this
+   cause, so a worker sandbox that fails another way still prints like a clean
+   lap (D-0050).
+
 ## The procedure
 
 > **There is a shorter way now.** `rondo start`, `rondo answer` and `rondo publish` do steps 2, 4,
