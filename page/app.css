@@ -132,3 +132,16 @@ body {
 html:not(.js) .js-only {
   display: none;
 }
+
+/*
+ * With script off every fold of the reading is drawn open (the third design pass on #220): the
+ * `<noscript>` refresh reloads the document every five seconds and would shut a fold a person had
+ * opened, and nothing but the key script can open it again. Unlayered for the reason above.
+ */
+html:not(.js) details::details-content {
+  content-visibility: visible;
+  display: block;
+}
+html:not(.js) details > summary svg {
+  rotate: 90deg;
+}
