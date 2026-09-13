@@ -447,12 +447,51 @@ Drafted in English as candidate issue bodies. Filing is the secretary's.
 - No source file was changed by this walk. The lap's commit `de36852` lives on `rondo/lap8-001` in
   the scratch target, and it is **not** on this branch.
 
+## 9b. After the lap: the publish, and the rule removed (all decided by the person)
+
+The person decided, through the secretary, to publish `lap8-001` and to **drop the worker's own "a
+successor naming a different request is a defect" rule** (candidate 7), because #195 did not ask for
+that invariant.
+
+- **Who published.** This worker's brief forbids push and PR creation. The person granted a one-time
+  exception for this publish, but the Claude Code auto-mode classifier still denied the worker's
+  `rondo publish` (run with the sandbox disabled) before it executed. Nothing was pushed by that
+  attempt. **The secretary then ran `rondo publish`**, on the person's approval, from a rondo built at
+  `787ea73`, which includes #198's thread reports, against this lap's `RONDO_STORE`. It opened
+  **https://github.com/suisya-systems/rondo/pull/208** and closed run `rondo-lap8-001` `completed`.
+- **The rule removal.** The removal was applied to the lap workspace as a follow-up commit
+  `115e25c` on `rondo/lap8-001`. It removes the mismatch defect from `inheritedRequest()`, which now
+  returns the predecessor's link whatever the caller passes, and the PLANTED mismatch test. The
+  "stays linked / stays unlinked" test is kept. `npm run verify` on it: `EXIT=0`, **1158 passed, 5
+  skipped** (one fewer than `de36852`'s 1159: the removed test). The push is the secretary's.
+- **The published report (D-0061 5.3).** It landed in the thread:
+
+```
+{"message_id":"report-published-lap8-001","author_kind":"drafter","author_id":"rondo/advisory/deterministic",
+ "in_reply_to":"lap8-req-195","bases":"[{\"form\":\"iteration\",\"iterationId\":\"lap8-001\"},{\"form\":\"continuoRun\",\"runId\":\"rondo-lap8-001\"}]",
+ "asks":0,"at_ms":1789272251835,
+ "body":"Lap 'lap8-001' was published: its branch was pushed, a pull request was opened, and run 'rondo-lap8-001' was closed completed."}
+```
+
+  Its body is one line (126 characters, no newline, no `
+`), so the N-27 escape defect does not
+  show on it. It cannot, because there is nothing to escape. The report does not name the pull
+  request's URL or number, so a reader of the thread cannot get from it to #208 (N-32). **No gate
+  report** is in the thread: the gate was answered at 03:43:21 with the `55902d0` build, before #198.
+
+### N-32. The thread's publish report does not name the pull request
+
+`report-published-lap8-001` says a pull request was opened but does not say which, and its bases are
+the iteration and the continuo run only. The request's report (D-0064 P5) is where a person is
+meant to find the result, and from this row the only way to reach #208 is to search GitHub for the
+branch. Candidate: *put the pull request URL in the publish report's body, or add a basis form that
+locates it.*
+
 ## 10. What is left where it is
 
-- continuo run `rondo-lap8-001` is still at `created`. `publish` closes it, and `run close` refuses a
-  second close (the same reason as lap 7).
-- The workspace `iter-lap8-001` and the branch `rondo/lap8-001` (`de36852`) stay in the scratch
-  target, unpublished. Publishing, and the decision in candidate 6, are the person's.
+- continuo run `rondo-lap8-001` is closed `completed` by `publish`.
+- The branch `rondo/lap8-001` is on GitHub as PR #208. The follow-up commit `115e25c` is local in the
+  workspace `iter-lap8-001` until the secretary pushes it.
 - The stop `scope-stop-lap8-002-1789270962898` is answered by `lap8-stop-reply`, so no open ask
   holds the line (N-31). The scope `scope-1789270620294` stays approved with nothing spent until it
   expires at 1789291960000.
