@@ -107,7 +107,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0067 | The secretary's running half has no new owner: the advisory reads lines against each other and drafts an order, the surface attempts acts in that order, the store keeps the person's standing policies, and review extensions and merges still reach the person | accepted |
 | D-0068 | One voice and a patrol: the person asks rondo why a line waits and gets an answer joined from rows with bases, a timer in the resident host reads rows against each lap's own declared patience, and nothing it finds is handled silently | accepted |
 | D-0069 | A scope before the first lap: an agent type becomes a record rondo holds when an operator's scope is written from a plan, `start` spends a scope through the `lineage_start` arm, and an operator-written first admission waits on every open question in its request's thread | accepted |
-| D-0070 | A revise inside a scope: the person still answers the gate, the lap it starts spends the scope through the `redo` arm, the verdict is computed before the gate is walked, and the added text is carried and never tested | proposed |
+| D-0070 | A revise inside a scope: the person still answers the gate, the lap it starts spends the scope through the `redo` arm, the verdict is computed before the gate is walked, and the added text is carried and never tested | accepted |
 
 ---
 
@@ -12523,6 +12523,13 @@ follows them.
    per act, and kept line 2 applies to merge only while the condition does not hold.
 3. **(a).** `D-0063` is revised along section 6 before it is accepted.
 
+> **Annotation (2026-09-14, from D-0070).** Added after this entry was accepted, and additive, by the
+> answer of rondo's human gate to `D-0070`'s first point.
+> **Answer 1 (a)'s "a scope covers O1-O3, O4's `retry`, O5, O7 and O8"**: a `revise` a person types
+> naming a scope decision spends that scope on the lap it admits, as an `admission` (`D-0070` section 1
+> (a)). The gate answer it carries stays the person's press, so "the person still presses once per lap"
+> holds, and O4's organisation-run `revise` still waits on rule 3.6. Nothing above is edited.
+
 ### What this does not do
 
 - **It does not design the scope record**, its schema, its writer, its verbs or its screen.
@@ -12968,6 +12975,12 @@ same date, read only (`JA/`), and the survey `JA/notes/lap-gap-survey-2026-09-13
    entry.
 5. **Outside a scope nothing is counted.** A person who types `revise` is the bound (`D-0027` rule 2),
    and the model reading is material they read.
+
+> **Annotation (2026-09-14, from D-0070).** Added after this entry was accepted, and additive, by the
+> answer of rondo's human gate to `D-0070`'s first point.
+> **Rule 4.5** is the case with no scope named: a `revise` that names a scope decision is inside that
+> scope, its lap is an `admission` through the `redo` arm, and its round is counted under rules 4.1 to
+> 4.3 (`D-0070` section 1). Nothing above is edited.
 
 ### 5. How it plugs into `D-0064`
 
@@ -13772,6 +13785,13 @@ number.
 > **Rule 3.3's `proposal_id` is null for an in-scope `retry` and for an operator-written plan's first
 > admission** by `rondo start --scope-decision-id` (`D-0069` section 2 (i)). Nothing above is edited.
 
+> **Annotation (2026-09-14, from D-0070).** Added after this entry was accepted, and additive, by the
+> answer of rondo's human gate to `D-0070`'s first point.
+> **Rule 3.2's "a gate answer (`D-0064` O6) and `revise` get their kinds from the entry that opens O6"**
+> withholds a kind from the **gate answer** `revise` carries. The lap a person's `revise
+> --scope-decision-id` admits is an `admission`, written like an in-scope `retry`'s, with `subject_id`
+> the successor's iteration id and `proposal_id` null (`D-0070` section 1 (a)). No act kind is added. Nothing above is edited.
+
 ### 4. The one point where the organisation stops
 
 > **Annotation (2026-09-13, from D-0067).** Added after this entry was accepted, and additive. A
@@ -13870,6 +13890,15 @@ number.
 >   stop carries it whenever the scope row was read; a stop written after a failed read names none.
 >   **The refused test is a closed name and not a row**, so no locator reaches it: the stop's body
 >   names it, with the scope's digest. Nothing above is edited.
+
+> **Annotation (2026-09-14, from D-0070).** Added after this entry was accepted, and additive, by the
+> answer of rondo's human gate to `D-0070`'s second and third points.
+> - **Rule 4.1's single call site**, for `revise`: the gate walk runs **between** the verdict and the
+>   admission, inside the one call site, so an `outside` or `undecidable` verdict walks no gate, spends
+>   nothing and writes rule 4.4's stop (`D-0070` section 2 (i)). A refusal by `reserve()`'s re-test
+>   after the walk is rule 4.3's bounded race, and the surface says the gate was answered and no lap ran.
+> - **Rule 4.2's tests read no property of the text `revise` adds**; it reaches the verdict only through
+>   the successor's plan (`D-0070` section 3 (A)). Nothing above is edited.
 
 ### 5. `D-0062` rule 3 and `D-0022` rule 9, restated
 
@@ -14986,8 +15015,9 @@ The points are kept as put, and the answer follows them.
 
 ## D-0070 — A revise inside a scope: the person still answers the gate, the lap it starts spends the scope through the `redo` arm, the verdict is computed before the gate is walked, and the added text is carried and never tested
 
-**Status:** proposed (2026-09-14). Three points are put to the human gate; see "What is put to the
-human gate". Refs `D-0009`, `D-0027`, `D-0030`, `D-0047`, `D-0061`, `D-0064`, `D-0065`, `D-0066`,
+**Status:** accepted (2026-09-14, rondo's human gate). Three points were put to the gate and it chose
+the recommended option on each; the answers are recorded in section "What was put to the human gate,
+and its answer". Refs `D-0009`, `D-0027`, `D-0030`, `D-0047`, `D-0061`, `D-0064`, `D-0065`, `D-0066`,
 `D-0069`, rondo#217.
 
 **This entry decides and does not build.** Nothing in `src/` changes with it, and no earlier entry is
@@ -15140,7 +15170,9 @@ of the successor's lap** (`D-0027` rules 1 and 6).
    `D-0066` rule 4.2's readings bullet as built, so a person may use a scoped `revise` to ask for a
    change no finding asked for, and the lap and its round are counted.
 
-### What is put to the human gate
+### What was put to the human gate, and its answer
+
+The points are kept as put, and the answer follows them.
 
 1. **Which half of `revise` a scope counts** (section 1).
    - **(a) Only the successor's admission, as an `admission` through the `redo` arm; the gate answer
@@ -15163,6 +15195,14 @@ of the successor's lap** (`D-0027` rules 1 and 6).
    - **(B) A mechanical test: the text names every finding at or above the threshold by its bases'
      locators.** *Loses:* `D-0009`'s carried-not-judged property for the text, and a person who fixes
      a finding in their own words is refused, with a stop written for it.
+
+**The gate's answer (2026-09-14):**
+
+1. **(a).** A `revise` that names a scope decision spends the scope on the lap it admits, as an
+   `admission` through the `redo` arm; the gate answer stays the person's press.
+2. **(i).** The verdict is computed before the gate is walked, at the one call site, with the walk
+   between the verdict and the admission.
+3. **(A).** The verdict tests nothing about the text `revise` adds; the text is carried.
 
 ### What moving to this gives up
 
@@ -15192,7 +15232,7 @@ of the successor's lap** (`D-0027` rules 1 and 6).
 | Closing section 2.4's race (a reservation of the lap before the walk) | A second writable state for a scope spend; the race has not been observed | a later entry, if it is |
 | A draft check that an organisation-drafted instruction quotes the findings (`D-0065` rule 5.3) | A property of a draft, not of a person's act | the entry that has the organisation draft `revise` instructions |
 
-### Annotations this entry adds (on acceptance)
+### Annotations this entry adds
 
 - **`D-0064`'s answer to its first gate point (a)** gains a dated annotation: a person-typed `revise`
   naming a scope decision spends that scope on the lap it admits (section 1); the gate answer stays
