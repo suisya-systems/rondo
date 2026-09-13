@@ -70,6 +70,7 @@ const reserveOne = async (
     topicBranch: `rondo/${id}`,
     workspace: `/srv/work/iter-${id}`,
     supersedesIterationId,
+    requestMessageId: null,
     spend: null,
     nowMs,
   });
@@ -280,6 +281,7 @@ test("a terminal spent row holds its triple for ever", async () => {
     topicBranch: "rondo/b",
     workspace: "/srv/work/iter-b",
     supersedesIterationId: null,
+    requestMessageId: null,
     spend: null,
     nowMs: 3_000,
   });
@@ -307,6 +309,7 @@ test("the observed-red control: a terminal unspent row releases its triple", asy
     topicBranch: "rondo/a",
     workspace: "/srv/work/iter-a",
     supersedesIterationId: null,
+    requestMessageId: null,
     spend: null,
     nowMs: 3_000,
   });
@@ -345,6 +348,7 @@ test("two live iterations may not hold one name even before either is spent", as
     topicBranch: "rondo/a",
     workspace: "/srv/work/iter-b",
     supersedesIterationId: null,
+    requestMessageId: null,
     spend: null,
     nowMs: 2_000,
   });
@@ -601,6 +605,7 @@ test("a legacy row that spent its identifiers keeps holding them after the migra
     topicBranch: "rondo/new",
     workspace: "/srv/work/iter-new",
     supersedesIterationId: null,
+    requestMessageId: null,
     spend: null,
     nowMs: 2_000,
   });
@@ -658,6 +663,7 @@ test("a legacy row's branch and workspace are back-filled from its plan and then
     topicBranch: "dogfood/legacy",
     workspace: "/srv/work/iter-new",
     supersedesIterationId: null,
+    requestMessageId: null,
     spend: null,
     nowMs: 2_000,
   });

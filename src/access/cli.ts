@@ -124,7 +124,7 @@ const DEFAULT_WEB_PORT = 7333;
 export const USAGE = `rondo - the operator surface for delegated work
 
   rondo start --plan FILE --iteration-id ID [--prompt TEXT]
-              [--prompt-file FILE]
+              [--prompt-file FILE] [--message-id ID]
                           take one request and run a lap, and stop at the gate.
                           --prompt-file reads the request from a file, byte for
                           byte, for a request too long or too many paragraphs
@@ -132,7 +132,16 @@ export const USAGE = `rondo - the operator surface for delegated work
                           same thing two ways, so only one of them may be given.
                           The run id, the topic branch and the workspace are
                           derived from --iteration-id; rondo mints them, so
-                          there is no flag to type them
+                          there is no flag to type them. --message-id names
+                          the message that opened the request this lap came
+                          from, and is refused when it opens none
+  rondo request --actor-id ID --message-id ID --body=TEXT
+                          open a request: your words, stored as written, as a
+                          message in the conversation that replies to nothing.
+                          Write --body with an equals sign
+  rondo reply --actor-id ID --message-id ID --in-reply-to ID --body=TEXT
+                          reply to a message in a request thread. A message is
+                          never edited or deleted: a correction is a reply
   rondo answer [--iteration-id ID]
                           show the gate that is waiting for a person. Name one
                           when more than one iteration is open
@@ -169,8 +178,9 @@ export const USAGE = `rondo - the operator surface for delegated work
                           the proposal records which message it came from and
                           who elevated it. --basis is required and names where
                           the observation rests: snapshot:/pointer,
-                          iteration:ID, gate:ID#SEQ, run:ID, or
-                          repo:PATH@COMMIT#FIRST-LAST. Write --observation with
+                          iteration:ID, gate:ID#SEQ, run:ID,
+                          repo:PATH@COMMIT#FIRST-LAST, or message:ID. Write
+                          --observation with
                           an equals sign: an observation may begin with a dash
   rondo propose --iteration-id ID --successor-id ID
                 --kind run_plan|agent_type|contract_keys
@@ -399,6 +409,8 @@ export interface ParsedCommand {
     | "explain"
     | "between"
     | "elevate"
+    | "request"
+    | "reply"
     | "inbox"
     | "propose"
     | "decide"
@@ -418,6 +430,7 @@ export interface ParsedCommand {
   readonly remote: string | null;
   readonly reason: string | null;
   readonly messageId: string | null;
+  readonly inReplyTo: string | null;
   readonly observation: string | null;
   readonly basis: string | null;
   readonly successorId: string | null;
@@ -448,6 +461,7 @@ const FLAGS = {
   remote: { type: "string" },
   reason: { type: "string" },
   "message-id": { type: "string" },
+  "in-reply-to": { type: "string" },
   observation: { type: "string" },
   basis: { type: "string" },
   "successor-id": { type: "string" },
@@ -470,6 +484,8 @@ const COMMANDS = [
   "explain",
   "between",
   "elevate",
+  "request",
+  "reply",
   "inbox",
   "propose",
   "decide",
@@ -495,7 +511,7 @@ export const FLAGS_BY_COMMAND: Readonly<Record<string, readonly string[]>> = {
   // from `revise` (D-0023 rule 9): rondo derives all three from the iteration
   // id, which is now required rather than defaulted. D-0027 typed them on
   // `revise` because no allocator existed when it was written.
-  start: ["plan", "prompt", "prompt-file", "iteration-id"],
+  start: ["plan", "prompt", "prompt-file", "iteration-id", "message-id"],
   // `answer` gained `--iteration-id` because more than one iteration may be
   // waiting at once now, which is the whole point of D-0023.
   answer: ["actor-id", "body", "iteration-id", "verified"],
@@ -529,6 +545,11 @@ export const FLAGS_BY_COMMAND: Readonly<Record<string, readonly string[]>> = {
   // a default here would be rondo supplying part of an act it is recording a
   // person as having taken.
   elevate: ["iteration-id", "actor-id", "message-id", "observation", "basis"],
+  // D-0061 step 5.1's two verbs, every flag required: the id is a person's
+  // for elevate's reason, and the author is always the operator -- no verb
+  // writes a drafter message, so none can record a paraphrase as the person's.
+  request: ["actor-id", "message-id", "body"],
+  reply: ["actor-id", "message-id", "in-reply-to", "body"],
   // **One flag, and no `--since`.** The bound is the last-look mark and
   // nothing else (D-0032 rule 9): a `--since` an operator typed would be a
   // second cursor beside the stored one, and the first time the two disagreed
@@ -670,6 +691,7 @@ export function parseCommand(argv: readonly string[]): ParseOutcome {
       remote: text("remote"),
       reason: text("reason"),
       messageId: text("message-id"),
+      inReplyTo: text("in-reply-to"),
       observation: text("observation"),
       basis: text("basis"),
       successorId: text("successor-id"),
@@ -699,6 +721,7 @@ function emptyCommand(command: ParsedCommand["command"]): ParsedCommand {
     remote: null,
     reason: null,
     messageId: null,
+    inReplyTo: null,
     observation: null,
     basis: null,
     successorId: null,
@@ -1382,6 +1405,10 @@ export async function main(
   if (parsed.command === "elevate") {
     return await commandElevate(parsed, environment, store, opened.path);
   }
+  // `request` and `reply` write rondo's own rows and drive no continuo.
+  if (parsed.command === "request" || parsed.command === "reply") {
+    return await commandThreadMessage(parsed, environment, opened.path);
+  }
 
   // **`inbox` is dispatched here for `explain`'s reason, and most of all.** The
   // screen that says what is stuck has to be reachable when something is stuck,
@@ -1557,7 +1584,16 @@ async function commandStart(
   const iterationId = parsed.iterationId;
   say(`starting iteration '${iterationId}'; the lap is the step that is slow`);
 
-  const report = await admit(ports, advisory, plan, START_POLICY, iterationId);
+  const report = await admit(
+    ports,
+    advisory,
+    plan,
+    START_POLICY,
+    iterationId,
+    null,
+    null,
+    parsed.messageId,
+  );
   sayReport(report);
   if (report.status === "awaiting_human") {
     await sayGateOpen(() =>
@@ -1732,6 +1768,8 @@ export function parseBasis(text: string): Basis | null {
       return { form: "iteration", iterationId: rest };
     case "run":
       return { form: "continuoRun", runId: rest };
+    case "message":
+      return { form: "message", messageId: rest };
     case "gate": {
       const hash = rest.lastIndexOf("#");
       const tail = rest.slice(hash + 1);
@@ -1769,7 +1807,7 @@ export function parseBasis(text: string): Basis | null {
 
 /** The one sentence that lists what a `--basis` may be, written once. */
 const BASIS_FORMS_LINE =
-  "snapshot:/pointer, iteration:ID, gate:ID#SEQ, run:ID, or repo:PATH@COMMIT#FIRST-LAST";
+  "snapshot:/pointer, iteration:ID, gate:ID#SEQ, run:ID, repo:PATH@COMMIT#FIRST-LAST, or message:ID";
 
 /**
  * Door nine: hand one observation to the advisory, and record that a person
@@ -1833,6 +1871,59 @@ async function commandElevate(
     }),
     "elevation",
   );
+}
+
+/**
+ * `request` and `reply`: an operator's message into a request thread
+ * (D-0061 step 5.1).
+ *
+ * The actor passes the approver allowlist before anything is written, and the
+ * store's writer holds the rest of rule 2's refusals. `asks` is always unset:
+ * a question put *to* the person is a drafter's, and no verb writes one.
+ */
+async function commandThreadMessage(
+  parsed: ParsedCommand,
+  environment: Readonly<Record<string, string | undefined>>,
+  storePath: string,
+): Promise<number> {
+  const replying = parsed.command === "reply";
+  if (
+    parsed.messageId === null ||
+    parsed.body === null ||
+    (replying && parsed.inReplyTo === null)
+  ) {
+    return refuse(
+      `${parsed.command} needs --message-id ID${replying ? ", --in-reply-to ID" : ""} and ` +
+        "--body=TEXT. None has a default: a message is a person's words under a name they chose.",
+    );
+  }
+  const actor = approvedActor(parsed.actorId, environment);
+  if ("refusal" in actor) {
+    return refuse(actor.refusal);
+  }
+  const outcome = await openAdvisoryRecord(storePath).recordThreadMessage({
+    messageId: parsed.messageId,
+    body: parsed.body,
+    authorKind: "operator",
+    authorId: actor.actorId,
+    inReplyTo: replying ? parsed.inReplyTo : null,
+    atMs: Date.now(),
+    bases: [],
+    asks: false,
+  });
+  if (outcome.kind === "refused") {
+    return refuse(outcome.reason);
+  }
+  if (outcome.kind === "defect") {
+    consoleSeams.writeError(asciiEscape(`The message was not recorded: ${outcome.reason}\n`));
+    return 1;
+  }
+  say(
+    replying
+      ? `recorded message '${parsed.messageId}' in reply to '${String(parsed.inReplyTo)}'`
+      : `opened request '${parsed.messageId}'`,
+  );
+  return 0;
 }
 
 /**
@@ -2834,6 +2925,10 @@ async function commandAnswer(
     // an ordinary lap's screen is unchanged.
     if (record.supersedesIterationId !== null) {
       say(`revises ${record.supersedesIterationId}`);
+    }
+    // Where provenance is shown (D-0061 rule 4), on the same terms.
+    if (record.requestMessageId !== null) {
+      say(`request ${record.requestMessageId}`);
     }
     say(`gate    ${gate.gateId}  (${gate.gateType})  stage '${gate.stage}'`);
     sayLegible(`why     ${gate.rationale}`);

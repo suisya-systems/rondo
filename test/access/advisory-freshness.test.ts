@@ -131,6 +131,7 @@ const reserveWithPlan = async (
     spend: null,
     nowMs: 1_000,
     supersedesIterationId,
+    requestMessageId: null,
     runId: `rondo-${id}`,
     topicBranch: `rondo/${id}`,
     workspace: `/srv/work/${id}`,

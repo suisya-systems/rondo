@@ -63,15 +63,18 @@ export type Basis =
       readonly commit: string;
       readonly firstLine: number;
       readonly lastLine: number;
-    };
+    }
+  /** A message in the request thread: D-0061 rule 2.6's one addition to the union. */
+  | { readonly form: "message"; readonly messageId: string };
 
-/** The five forms of {@link Basis}, written once so a reader can check the union is closed. */
+/** The six forms of {@link Basis}, written once so a reader can check the union is closed. */
 export const BASIS_FORMS = Object.freeze([
   "snapshot",
   "iteration",
   "gateTransition",
   "continuoRun",
   "repository",
+  "message",
 ] as const satisfies readonly Basis["form"][]);
 
 /**
@@ -1129,6 +1132,8 @@ function readBasis(at: unknown, what: string): Basis {
         firstLine: whole(row, "firstLine", `${what}'s basis`),
         lastLine: whole(row, "lastLine", `${what}'s basis`),
       };
+    case "message":
+      return { form, messageId: text(row, "messageId", `${what}'s basis`) };
     default:
       throw new PayloadDefect(
         `${what}'s basis is of form '${form}', which is not one of ${BASIS_FORMS.join(", ")}. ` +

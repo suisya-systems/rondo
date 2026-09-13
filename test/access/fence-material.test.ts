@@ -32,6 +32,7 @@ async function fenceBlock(permissionDenials: string | null): Promise<string> {
     spend: null,
     nowMs: 1_000,
     supersedesIterationId: null,
+    requestMessageId: null,
     runId: "rondo-i-0001",
     topicBranch: "rondo/i-0001",
     workspace: "/srv/work/iter-i-0001",

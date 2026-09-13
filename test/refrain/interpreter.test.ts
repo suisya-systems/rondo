@@ -172,6 +172,7 @@ class FakeStore implements StorePort {
       // transition: a fake that let a later write set it would make the type's
       // omission of the field look like a detail.
       supersedesIterationId: input.supersedesIterationId,
+      requestMessageId: input.requestMessageId,
       createdAtMs: input.nowMs,
       updatedAtMs: input.nowMs,
     };
@@ -298,6 +299,7 @@ function blankRecord(id: string, status: IterationStatus): IterationRecord {
     workspace: null,
     identifiersSpent: 0,
     supersedesIterationId: null,
+    requestMessageId: null,
     continuoRevision: null,
     agentTypeDigest: null,
     configDigest: null,
@@ -1594,6 +1596,17 @@ test("the observed-red control: an ordinary admission records no lineage and cla
 
   expect((await readRow(h.store, "i-0001"))?.supersedesIterationId).toBeNull();
   expect(says(report, "It is a revision of iteration")).toBe(false);
+});
+
+test("a request link handed to admit reaches the row, and is said where it is written", async () => {
+  // D-0061 rule 4. The store refuses a link that opens no request; this asserts
+  // only that `admit` carries it, and `test/store/request-thread.test.ts` holds
+  // the refusal against a real database.
+  const h = harness();
+  const report = await admit(h.ports, PLAN, PERMISSIVE, "i-0001", null, null, "m-request");
+
+  expect((await readRow(h.store, "i-0001"))?.requestMessageId).toBe("m-request");
+  expect(says(report, "It came from the request opened by message m-request")).toBe(true);
 });
 
 // --- what cannot be classified halts and asks -------------------------------

@@ -317,6 +317,17 @@ export interface IterationRecord {
    */
   readonly supersedesIterationId: string | null;
   /**
+   * The message that opened the request this lap came from, or null
+   * (D-0061 rule 4).
+   *
+   * Written once, by `reserve()`, for `supersedesIterationId`'s reason, and
+   * refused there when it names no message that opens a request. Several laps
+   * may name one request: that many-to-one link is what a split is recorded
+   * as. Null is "no request", which is every lap `start` ran without one and
+   * every row written before the column.
+   */
+  readonly requestMessageId: string | null;
+  /**
    * The continuo revision `startContinuo` **observed**, not the one the pin
    * expected.
    *
@@ -455,8 +466,41 @@ export type IterationFields = Partial<
     | "topicBranch"
     | "workspace"
     | "supersedesIterationId"
+    | "requestMessageId"
   >
 >;
+
+/**
+ * One message in a request thread, as its writer is handed it (D-0061 rule 2).
+ *
+ * **What is not here is rule 3's refusals, held by the shape**: there is no
+ * field for a gate answer, a decision, a status, a plan, an agent type or a
+ * tier, and no writer that edits or deletes. A correction is a reply.
+ */
+export interface ThreadMessageDraft {
+  readonly messageId: string;
+  /** The bytes as written: never trimmed, reflowed or paraphrased. */
+  readonly body: string;
+  /** Which voice spoke is a column and never a property of the prose (rule 2.3). */
+  readonly authorKind: ThreadAuthorKind;
+  /** The approved actor id for an operator, the drafter's name for a drafter. */
+  readonly authorId: string;
+  /** Null opens a request; otherwise the message this one answers (rule 2.4). */
+  readonly inReplyTo: string | null;
+  /** The caller's clock, which puts the message in "what changed" (rule 2.5). */
+  readonly atMs: number;
+  /**
+   * D-0032 rule 2's locators plus `message:ID` (rule 2.6), as JSON: the store
+   * may not import the advisory's `Basis`. Required non-empty on a drafter
+   * message and refused otherwise.
+   */
+  readonly bases: readonly JsonRecord[];
+  /** Whether the message asks the person for an answer (rule 2.7). */
+  readonly asks: boolean;
+}
+
+/** The two voices a thread message can be written in (D-0061 rule 2.3). */
+export type ThreadAuthorKind = "operator" | "drafter";
 
 /**
  * What one independent reading of a lap's work concluded (D-0029).

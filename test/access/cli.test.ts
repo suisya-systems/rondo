@@ -1105,6 +1105,7 @@ function published(parts: Partial<IterationRecord> = {}): IterationRecord {
     workspace: "/srv/rondo/workspace-dogfood-001",
     identifiersSpent: 1,
     supersedesIterationId: null,
+    requestMessageId: null,
     continuoRevision: "603843b",
     agentTypeDigest: null,
     configDigest: null,
@@ -1868,6 +1869,7 @@ test("every form of a basis can be typed, and nothing else parses", () => {
     "gate:g-1#3",
     "run:r-0001",
     "repo:src/refrain/plan.ts@c0ffee#8-12",
+    "message:m-0001",
   ].map((text) => parseBasis(text));
   expect(typed.map((basis) => basis?.form)).toEqual([...BASIS_FORMS]);
   expect(parseBasis("repo:src/refrain/plan.ts@c0ffee#8-12")).toEqual({
