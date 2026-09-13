@@ -267,7 +267,7 @@ export interface Chrome {
   /** The plain sentence above an unreadable row's reason in the reading. */
   readonly unreadableLead: string;
   /** An ended row's echo of the verification claim its press carried. */
-  readonly checkedEcho: (claim: string) => string;
+  readonly checkedEcho: (claim: string, by: string | null) => string;
   readonly modelRaisedLink: string;
   readonly modelMayArrive: string;
 
@@ -627,7 +627,8 @@ explanation you pressed on and then answers the gate.`,
   denialUnreadable: "rondo could not record which command this was.",
   unreadableLead:
     "rondo could not read this run's record, so it cannot be shown or answered. What rondo found:",
-  checkedEcho: (claim) => `you said you checked: ${claim}`,
+  checkedEcho: (claim, by) =>
+    by === null ? `you said you checked: ${claim}` : `${by} said they checked: ${claim}`,
   modelMayArrive: "The model review may still arrive.",
   liveLabel: "live",
   keyMove: "move",
@@ -944,7 +945,8 @@ const JA: Partial<Chrome> = Object.freeze({
   denialUnreadable: "どのコマンドだったかを rondo は記録できませんでした。",
   unreadableLead:
     "この実行の記録を rondo が読み取れないため、表示も回答もできません。rondo が見つけた内容:",
-  checkedEcho: (claim) => `確認したこと: ${claim}`,
+  checkedEcho: (claim, by) =>
+    by === null ? `確認したこと: ${claim}` : `${by} が確認したこと: ${claim}`,
   modelMayArrive: "モデルレビューはこれから届くかもしれません。",
   liveLabel: "ライブ",
   keyMove: "移動",

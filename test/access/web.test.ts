@@ -2412,6 +2412,10 @@ test("an approved lap's row says back the claim its press carried (#220 S2 desig
   expect(closed.kind).toBe("transitioned");
   const html = await operatorPage(portsOver(world, "ada", []), "t", { kind: "summary" });
   expect(html).toContain("you said you checked: ran npm test");
+  // Another operator's claim is theirs, never "you" (#220 S2, Codex).
+  const other = await operatorPage(portsOver(world, "grace", []), "t", { kind: "summary" });
+  expect(other).toContain("ada said they checked: ran npm test");
+  expect(other).not.toContain("you said you checked");
 });
 
 test("what the fence blocked is on the gate, each call in words, not only in the text fold (#220 S2)", async () => {

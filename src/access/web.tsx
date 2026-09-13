@@ -1421,7 +1421,7 @@ function endedView(
   wording: Chrome,
   ended: readonly IterationRecord[],
   nowMs: number,
-  claims: ReadonlyMap<string, string>,
+  claims: ReadonlyMap<string, { readonly claim: string; readonly by: string | null }>,
 ) {
   return questionGroup(
     "ended",
@@ -1446,7 +1446,10 @@ function endedView(
           fenceLine(wording, record),
           claims.has(record.id) ? (
             <span class="line min-w-0 wrap-anywhere whitespace-pre-wrap" lang="">
-              {wording.checkedEcho(claims.get(record.id) ?? "")}
+              {wording.checkedEcho(
+                claims.get(record.id)?.claim ?? "",
+                claims.get(record.id)?.by ?? null,
+              )}
             </span>
           ) : null,
         ],
@@ -3093,18 +3096,26 @@ export async function operatorPage(
     }
   });
   const ended = endedRecently(await ports.store.terminalIterations());
+  // **Whose word it is stays with the words** (#220 S2, Codex): a claim another
+  // operator recorded, on the page or with `rondo answer --verified`, is theirs
+  // and never "you said"; `by` is null only when it is this page's own actor.
   const endedClaims = new Map(
     (
       await Promise.all(
-        ended.map(
-          async (record) =>
-            [
-              record.id,
-              (await ports.store.verificationClaimsFor(record.id)).at(-1)?.claim,
-            ] as const,
-        ),
+        ended.map(async (record) => {
+          const last = (await ports.store.verificationClaimsFor(record.id)).at(-1);
+          return [
+            record.id,
+            last === undefined
+              ? undefined
+              : { claim: last.claim, by: last.actorId === ports.actorId ? null : last.actorId },
+          ] as const;
+        }),
       )
-    ).filter((entry): entry is readonly [string, string] => entry[1] !== undefined),
+    ).filter(
+      (entry): entry is readonly [string, { claim: string; by: string | null }] =>
+        entry[1] !== undefined,
+    ),
   );
   const waiting: IterationRecord[] = [];
   const running: IterationRecord[] = [];
