@@ -23,16 +23,20 @@
  * writes rule 4.4's stop into it, which is what keeps the line stopped.
  */
 
-import { agentTypeRecord } from "../cadenza/facade.js";
+import { type AgentTypeInput, agentTypeRecord } from "../cadenza/facade.js";
 import { allocate } from "../refrain/allocator.js";
 import { classifyPlan } from "../refrain/classification.js";
 import type { ConductorReport } from "../refrain/interpreter.js";
 import { admittedPlan, type RunPlan, readPlan } from "../refrain/plan.js";
 import type { ScopeSpend } from "../refrain/ports.js";
+import { planDigest } from "../store/plan.js";
 import {
+  type AgentTypeRecordDraft,
   askStandsOver,
   IRREVERSIBLE_ACTS,
   isModelReadingDrafter,
+  type JsonRecord,
+  type JsonValue,
   type LapReading,
   latestReading,
   type OpenAsk,
@@ -203,14 +207,19 @@ export function scopeVerdict(act: ScopeAct, snapshot: ScopeSnapshot): ScopeVerdi
   }
   // A lineage start continues no line, whatever the snapshot's walk holds.
   const line = act.kind === "lineage_start" ? [] : lineage.ids;
-  const standing = openAsks.asks.find((ask) => askStandsOver(ask, line));
+  const unproposed = unproposedStart(act);
+  const standing = openAsks.asks.find((ask) => askStandsOver(ask, line, unproposed));
   if (standing !== undefined) {
     return outside(
       "asks",
-      standing.iterationIds.length === 0
-        ? `the unanswered question '${standing.messageId}' about the request holds back its plans ` +
+      unproposed
+        ? `the unanswered question '${standing.messageId}' in the request's thread holds back ` +
+            "every first admission that names no proposal, since nothing says which line such " +
+            "a plan continues (D-0069 rule 5)"
+        : standing.iterationIds.length === 0
+          ? `the unanswered question '${standing.messageId}' about the request holds back its plans ` +
             "not yet admitted (D-0066 rule 4.4)"
-        : `the unanswered question '${standing.messageId}' stands over this line (D-0066 rule 4.4)`,
+          : `the unanswered question '${standing.messageId}' stands over this line (D-0066 rule 4.4)`,
     );
   }
   // 5. The workspace pair, byte for byte (rule 1.2.2).
@@ -331,6 +340,14 @@ export function scopeVerdict(act: ScopeAct, snapshot: ScopeSnapshot): ScopeVerdi
     policy: reviewPolicyOf(reviewScopeOf(payload)),
   });
   return round.kind === "stop" ? outside("readings", round.reason) : { kind: "inside" };
+}
+
+/**
+ * D-0069 rule 5's act: a first admission that names no proposal (an operator's
+ * plan under `start`), which every open ask in its request's thread holds back.
+ */
+function unproposedStart(act: ScopeAct): boolean {
+  return act.kind === "lineage_start" && act.proposalId === null;
 }
 
 /** The store half the gatherer reads, and nothing it could write with. */
@@ -739,7 +756,8 @@ async function holdingAsk(
       : ((await ports.record.lineageOf(act.predecessorId)) ?? [act.predecessorId]);
   return {
     kind: "read",
-    messageId: asks.asks.find((ask) => askStandsOver(ask, line))?.messageId ?? null,
+    messageId:
+      asks.asks.find((ask) => askStandsOver(ask, line, unproposedStart(act)))?.messageId ?? null,
   };
 }
 
@@ -810,6 +828,69 @@ function stopBody(
     `Recommended: ${recommendation(refusal)}.`,
     "This line stays stopped until this message is answered.",
   ].join("\n");
+}
+
+/**
+ * The agent type an operator's plan records for a scope (D-0069 section 1):
+ * cadenza's digest over the plan's `agentTypeInput`, the input copied as the
+ * plan holds it, and the digest of the plan document it came from. A refusal
+ * is cadenza's own words when the input builds no record.
+ */
+export function agentTypeRecordOf(
+  plan: RunPlan,
+  document: JsonRecord,
+): { readonly record: AgentTypeRecordDraft } | { readonly refusal: string } {
+  try {
+    return {
+      record: {
+        agentTypeDigest: agentTypeRecord(plan.agentTypeInput).agentTypeDigest,
+        agentTypeInput: plan.agentTypeInput as unknown as JsonValue,
+        planDigest: planDigest(document),
+      },
+    };
+  } catch (error) {
+    return { refusal: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+/**
+ * What a listed agent type bounds, **read back from the record rondo holds**
+ * (D-0069 section 1): its tier and granted keys, so the person approving the
+ * list sees more than a hash. One line per digest; a record that will not
+ * rebuild, or rebuilds to another digest, says so in place of the tier.
+ */
+export async function heldAgentTypeLines(
+  record: Pick<AdvisoryRecord, "heldAgentType">,
+  digests: readonly string[],
+): Promise<readonly string[]> {
+  const lines: string[] = [];
+  for (const digest of digests) {
+    const held = await record.heldAgentType(digest);
+    if (held.kind !== "read") {
+      lines.push(
+        `agent type ${digest}: ${held.kind === "absent" ? "no record is held" : `the record will not read: ${held.reason}`}`,
+      );
+      continue;
+    }
+    const from =
+      held.source === "iteration" ? "an iteration's plan" : "a plan recorded for a scope";
+    try {
+      const built = agentTypeRecord(held.agentTypeInput as unknown as AgentTypeInput);
+      lines.push(
+        built.agentTypeDigest === digest
+          ? `agent type ${digest}: tier ${built.executorPolicy.modelTier}, granted ` +
+              `${built.granted.length === 0 ? "none" : built.granted.join(", ")} (held from ${from})`
+          : `agent type ${digest}: the record held from ${from} rebuilds to ` +
+              `${built.agentTypeDigest}, so what it bounds cannot be shown`,
+      );
+    } catch (error) {
+      lines.push(
+        `agent type ${digest}: the record held from ${from} does not build: ` +
+          (error instanceof Error ? error.message : String(error)),
+      );
+    }
+  }
+  return lines;
 }
 
 /** Why cadenza gave no answer, in its own words (D-0018 rule 7). */

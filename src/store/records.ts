@@ -1431,6 +1431,27 @@ export interface ScopeDraft {
   /** D-0032 rule 2 bases. Required non-empty on a `drafter` row (rule 1.5). */
   readonly bases: readonly JsonValue[];
   readonly createdAtMs: number;
+  /**
+   * The agent types this scope records from an operator's plans (D-0069
+   * section 1), each written as an `agent_type_record` row in the scope row's
+   * own transaction, before the `agent_types` test. Empty for a drafter's row:
+   * the writer refuses one otherwise.
+   */
+  readonly agentTypeRecords: readonly AgentTypeRecordDraft[];
+}
+
+/**
+ * One agent type recorded from a plan (D-0069 section 1). The digest is
+ * cadenza's over `agentTypeInput`, computed in `src/access` through the facade:
+ * the store cannot recompute it (D-0006) and trusts it as it trusts an
+ * iteration row's `agent_type_digest`.
+ */
+export interface AgentTypeRecordDraft {
+  readonly agentTypeDigest: string;
+  /** The plan's `agent_type_input`, copied byte for byte (D-0062 rule 1.2). */
+  readonly agentTypeInput: JsonValue;
+  /** The digest of the plan document it was read from. */
+  readonly planDigest: string;
 }
 
 /** One scope row read back, its digest re-derived (D-0022 rule 4). */
@@ -1541,8 +1562,22 @@ export interface ScopeRefusal {
  * lineages, so it stops a redo anywhere in one of them -- a branch from an
  * earlier lap included; an ask naming none stops a lineage start and lets
  * lineages already running carry on.
+ *
+ * **`unproposedStart` is D-0069 rule 5**: a lineage start that names no split
+ * proposal (an operator-written plan under `start`) is held back by **every**
+ * open ask in its request's thread, whatever its bases. Nothing links such a
+ * plan to a line, so whether it continues a stopped one is undecidable, and
+ * D-0064 rule 3.3 makes an undecidable match outside. A split's first admission
+ * and a redo keep rule 4.4 as written.
  */
-export function askStandsOver(ask: OpenAsk, lineageIds: readonly string[]): boolean {
+export function askStandsOver(
+  ask: OpenAsk,
+  lineageIds: readonly string[],
+  unproposedStart: boolean,
+): boolean {
+  if (unproposedStart) {
+    return true;
+  }
   return ask.iterationIds.length === 0
     ? lineageIds.length === 0
     : ask.iterationIds.some((id) => lineageIds.includes(id));
