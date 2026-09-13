@@ -1209,6 +1209,11 @@ test("every repeated block in the lead carries the identity the refresh restores
   expect(new Set(ids).size).toBe(ids.length);
   // And no row without one.
   expect([...html.matchAll(/<li(?! id=)[^>]*data-row/g)]).toEqual([]);
+  // The same holds for every link inside the swapped ledger, which a keyboard
+  // reader reaches by Tab rather than by `j`/`k`: one with no id loses focus to
+  // the document on the next refresh.
+  const ledger = html.slice(html.indexOf('id="ledger"'));
+  expect([...ledger.matchAll(/<a(?! id=)[\s>]/g)]).toEqual([]);
 });
 
 /**
@@ -1474,6 +1479,11 @@ test("Accept-Language is read by q, a q of zero is a refusal, and * says nothing
   expect(resolvedTag({ header: "ja;q=0.1, en;q=0.8" })).toBe("en");
   // Absent means 1.
   expect(resolvedTag({ header: "ja, en;q=0.9" })).toBe("ja");
+  // **A tie keeps the order the list was written in**, however the parameter
+  // name is cased: the tokenizer reads `Q=0.5` as 1 and sorts English first,
+  // and a tie broken on its order would be broken by that misreading.
+  expect(resolvedTag({ header: "ja;q=0.5, en;Q=0.5" })).toBe("ja");
+  expect(resolvedTag({ header: "en;Q=0.5, ja;q=0.5" })).toBe("en");
   // **A q of zero is a refusal and not a low preference**, so `ja` is dropped
   // before lookup runs rather than tried after unsupported German: this header
   // must reach the step below rather than the `ja` set.

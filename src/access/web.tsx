@@ -344,8 +344,20 @@ function tagsByWeight(header: string | undefined): readonly string[] {
   // grammar D-0056 rule 6 already tested, and the library's sort is undone by
   // sorting again on that weight.
   const offered: { tag: string; q: number; at: number }[] = [];
-  for (const [at, { type, params }] of parseAccept(header ?? "").entries()) {
+  // **`at` is the position the tag was written at, not the library's**: the
+  // library has already sorted on its own weight, so `ja;q=0.5, en;Q=0.5`
+  // comes back English first, and a tie broken on that order is broken by the
+  // misread weight. So each entry is matched back to its first unclaimed
+  // occurrence in the header as written.
+  const written = (header ?? "").split(",").map((part) => part.split(";")[0]?.trim() ?? "");
+  const claimed = new Set<number>();
+  for (const { type, params } of parseAccept(header ?? "")) {
     const tag = type.trim();
+    const found = written.findIndex((one, index) => one === tag && !claimed.has(index));
+    claimed.add(found);
+    // Not found only for a spelling the split above cannot see (a comma inside
+    // a quoted parameter); such a tag goes after every tag it could place.
+    const at = found === -1 ? written.length : found;
     // `*` is the only member of the grammar that is not a tag, and it says
     // nothing rather than something this page could look up.
     if (tag === "" || tag === "*") {
@@ -371,9 +383,7 @@ function tagsByWeight(header: string | undefined): readonly string[] {
   }
   // `at` is compared explicitly rather than leaning on a stable sort: "stable
   // within a weight" is the entry's wording and is a property of the result
-  // rather than of the engine running it. (`at` is the library's order, which
-  // differs from the written order only where the library's weight differs
-  // from this one.)
+  // rather than of the engine running it.
   return offered
     .sort((left, right) => right.q - left.q || left.at - right.at)
     .map((one) => one.tag);
@@ -1403,7 +1413,10 @@ function answerLink(wording: Chrome, record: IterationRecord, token: string | nu
   }
   return (
     <p class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+      {/* An `id` because a keyboard reader tabbed here keeps focus across the
+          refresh only through one: htmx restores focus by the old element's id. */}
       <a
+        id={`answer-${record.id}`}
         href={viewHref({ kind: "answer", iterationId: record.id }, wording.lang)}
         data-open=""
         class={`${PRIMARY} h-7 px-3 text-[13px]`}
@@ -1802,6 +1815,7 @@ export async function operatorPage(
               )}
               <p id="fold" class="border-t border-border pt-4 text-[13px]">
                 <a
+                  id="fold-link"
                   href={viewHref(
                     view.kind === "reading" ? { kind: "summary" } : { kind: "reading" },
                     wording.lang,
