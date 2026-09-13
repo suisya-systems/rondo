@@ -30,6 +30,8 @@
  * person. A payload that will not read is what the interpreter files at
  * `stalled`.
  */
+import { readFileSync } from "node:fs";
+
 import { expect, test } from "vitest";
 
 import type {
@@ -831,6 +833,34 @@ test("a review criterion is accepted, survives the round trip and is spelled rev
   expect(read.kind === "planned" && read.plan.reviewCriterion).toEqual(CRITERION);
   // Null is the absence of a criterion and is a plan.
   expect(runPlan(withField({ reviewCriterion: null })).kind).toBe("planned");
+});
+
+test("the dogfood plan's default criterion is one a plan file admits (rondo#205)", () => {
+  // `scripts/dogfood-env.sh` writes this file into its plan as
+  // `review_criterion`. Without one every dogfood lap's model reading was
+  // `unavailable` and no in-scope retry could be admitted; this holds the
+  // default to the plan-file reader without paying for a lap.
+  const script = readFileSync("scripts/dogfood-env.sh", "utf8");
+  expect(script).toContain('"$repo_root/scripts/dogfood-review-criterion.json"');
+  expect(script).toContain("review_criterion: JSON.parse(");
+  const criterion = JSON.parse(
+    readFileSync("scripts/dogfood-review-criterion.json", "utf8"),
+  ) as JsonRecord;
+
+  const file = { ...asVersionZero(payloadOf()), review_criterion: criterion } as Record<
+    string,
+    unknown
+  >;
+  for (const minted of ["run_id", "lease_claimant_id", "workspace", "topic_branch"]) {
+    delete file[minted];
+  }
+  file["workspace_root"] = "/srv/rondo/work-root";
+  const read = readRunPlan(file as JsonRecord);
+  if (read.kind !== "planned") {
+    throw new Error(read.reason);
+  }
+  expect(read.plan.reviewCriterion?.severities.blocker).toContain("what the request asks");
+  expect(read.plan.reviewCriterion?.ruleFiles).toEqual([]);
 });
 
 test("a criterion with an empty meaning or a rule path outside the tree is refused by name", () => {

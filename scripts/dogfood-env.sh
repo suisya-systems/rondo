@@ -23,6 +23,7 @@ usage() {
   cat <<'USAGE'
 usage: scripts/dogfood-env.sh [--root DIR] [--iteration-id ID]
                               [--target-repo DIR] [--target-base-branch NAME]
+                              [--review-criterion FILE]
                               [--force-continuo-rebuild]
 
 Provision a working environment for the rondo operator CLI and print the
@@ -56,6 +57,13 @@ options:
       need a second plan file -- `rondo start` takes --iteration-id and
       --prompt as flags. It must be a lowercase letter followed by up to 63
       more of [a-z0-9_-].
+  --review-criterion FILE
+      a JSON file written into the plan as `review_criterion`:
+      {"severities": {"blocker", "major", "minor", "nit"}, "rule_files": [...]}.
+      Default: $RONDO_DOGFOOD_REVIEW_CRITERION, or
+      scripts/dogfood-review-criterion.json when that is unset. A plan with no
+      criterion gets an `unavailable` model reading on every lap, and an
+      in-scope `rondo retry` is never admitted without one (rondo#205).
   --force-continuo-rebuild
       rebuild the pinned continuo even when the built one already reports the
       pinned version line.
@@ -65,6 +73,7 @@ options:
 environment (all optional; each is a path this machine has and this script
 cannot discover):
   RONDO_DOGFOOD_ROOT            default for --root
+  RONDO_DOGFOOD_REVIEW_CRITERION default for --review-criterion
   RONDO_APPROVER                the identity allowed to answer and publish.
                                 Default: the current user name.
   RONDO_DOGFOOD_INTERLOCK_ROOT  the interlock checkout continuo fences against.
@@ -94,6 +103,7 @@ run_id=dogfood-001
 force_continuo_rebuild=0
 target_repo=
 target_base_branch=
+review_criterion=${RONDO_DOGFOOD_REVIEW_CRITERION:-"$repo_root/scripts/dogfood-review-criterion.json"}
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -102,6 +112,8 @@ while [ $# -gt 0 ]; do
     --target-repo) [ $# -ge 2 ] || die "--target-repo needs a value"; target_repo=$2; shift 2 ;;
     --target-base-branch)
       [ $# -ge 2 ] || die "--target-base-branch needs a value"; target_base_branch=$2; shift 2 ;;
+    --review-criterion)
+      [ $# -ge 2 ] || die "--review-criterion needs a value"; review_criterion=$2; shift 2 ;;
     --force-continuo-rebuild) force_continuo_rebuild=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) usage >&2; die "unknown argument '$1'" ;;
@@ -113,6 +125,8 @@ done
 # fenced child than it does to the shell that typed it.
 mkdir -p -- "$env_root"
 env_root=$(cd -- "$env_root" && pwd -P)
+[ -f "$review_criterion" ] ||
+  die "review criterion '$review_criterion' is not a file; pass --review-criterion FILE"
 
 # The check the default alone cannot make: --root and $RONDO_DOGFOOD_ROOT can
 # still name a directory inside an installed checkout. A workspace there
@@ -479,7 +493,7 @@ fi
 node -e '
   const [out, envRoot, runId, controlPlane, target, catalogOrigin, interlockRoot,
          claudeOrgPath, claudeBin, nodeBin, prompt, baseBranch,
-         projectName] = process.argv.slice(1);
+         projectName, reviewCriterionFile] = process.argv.slice(1);
 
   // The three budgets are stated rather than inherited. `invocation_ceiling_ms`
   // must be strictly greater than their sum; rondo refuses a ceiling that
@@ -502,6 +516,14 @@ node -e '
     // one: there is no second spelling to get wrong.
     base_branch: baseBranch,
     prompt,
+
+    // **What each finding severity means to the model reviewer** (D-0065
+    // section 1.2.6, rondo#205). Without it every model reading of a lap is
+    // `unavailable`, and an in-scope `rondo retry --scope-decision-id` is never
+    // admitted. The meanings live in a JSON file so that a test can hold the
+    // default to `runPlan` without paying for a lap; `rondo start` validates
+    // an override the same way.
+    review_criterion: JSON.parse(require("node:fs").readFileSync(reviewCriterionFile, "utf8")),
 
     // **What the worker of this lap may run** (`continuo D-1110`, D-0039 rule
     // 3). Each entry is a Bash *subject*: continuo renders `Bash(<subject>)`
@@ -656,7 +678,7 @@ node -e '
   require("node:fs").writeFileSync(out, `${JSON.stringify(plan, null, 2)}\n`);
 ' "$plan" "$env_root" "$run_id" "$control_plane" "$target" "$catalog_origin" \
   "$interlock_root" "$claude_org_path" "$claude_bin" "$node_bin" "$prompt" \
-  "$target_base_branch" "$project_name"
+  "$target_base_branch" "$project_name" "$review_criterion"
 note "$plan"
 
 step "Environment"
