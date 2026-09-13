@@ -67,6 +67,17 @@ document.addEventListener("keydown", (event) => {
   }
 });
 
+// **And a selection the person is making is not swapped out from under them.**
+// The redraw replaces every node in the ledger, which clears a text selection
+// even when nothing changed; so while one exists the redraw's request is
+// cancelled before it is sent, and the next one five seconds later is asked
+// again. Cancelling is the only thing done with that request -- none is built.
+document.addEventListener("htmx:beforeRequest", (event) => {
+  if (!(document.getSelection()?.isCollapsed ?? true)) {
+    event.preventDefault();
+  }
+});
+
 const opened = new Set();
 // `toggle` does not bubble, so it is heard on the way down.
 document.addEventListener(

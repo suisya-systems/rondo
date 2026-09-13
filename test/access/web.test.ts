@@ -1177,10 +1177,16 @@ test("rondo's own script moves focus and follows the server's links, and asks fo
     "innerHTML",
     "document.write",
     "location.href =",
-    "htmx",
+    "htmx.",
   ]) {
     expect(code).not.toContain(forbidden);
   }
+  // **The one htmx event it hears is the refresh about to be sent, and all it
+  // may do there is cancel it** while a person holds a text selection: a
+  // cancelled `GET` asks for nothing.
+  expect([...code.matchAll(/htmx:[A-Za-z]+/g)].map((found) => found[0])).toEqual([
+    "htmx:beforeRequest",
+  ]);
 });
 
 test("every repeated block in the lead carries the identity the refresh restores focus by", async () => {
