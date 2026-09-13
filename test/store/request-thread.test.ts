@@ -180,6 +180,22 @@ test("PLANTED: a message:ID basis naming no message is refused", async () => {
   expect(count(connection)).toBe(1);
 });
 
+test("PLANTED: a basis of an unknown form, or missing its locator, is refused", async () => {
+  const connection = new DatabaseSync(":memory:");
+  const record = advisoryRecord(connection);
+  await record.recordThreadMessage(operator());
+
+  for (const basis of [
+    { form: "bogus" },
+    { form: "iteration" },
+    { form: "prose", text: "trust me" },
+  ]) {
+    const refused = await record.recordThreadMessage(drafter({ bases: [basis] }));
+    expect(refused.kind === "refused" && refused.reason).toContain("not a complete locator");
+  }
+  expect(count(connection)).toBe(1);
+});
+
 test("a message:ID basis is typed on the command line like every other form", () => {
   expect(parseBasis("message:m-request")).toEqual({ form: "message", messageId: "m-request" });
   expect(parseBasis("message:")).toBeNull();

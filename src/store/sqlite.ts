@@ -2939,6 +2939,20 @@ function spendDecision(
 }
 
 /**
+ * Each basis form and the fields its locator needs, mirroring the advisory's
+ * closed `Basis` union (D-0032 rule 2, plus D-0061 rule 2.6's `message`). The
+ * store may not import that type, so a form added there is added here too.
+ */
+const BASIS_LOCATOR_FIELDS: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+  snapshot: { pointer: "string" },
+  iteration: { iterationId: "string" },
+  gateTransition: { gateId: "string", transitionSeq: "number" },
+  continuoRun: { runId: "string" },
+  repository: { path: "string", commit: "string", firstLine: "number", lastLine: "number" },
+  message: { messageId: "string" },
+};
+
+/**
  * Why a thread message may not be written, or null (D-0061 rules 2 and 3).
  *
  * Read inside the writer's transaction, so the message a reply or a basis
@@ -2975,8 +2989,16 @@ function threadMessageRefusal(connection: DatabaseSync, draft: ThreadMessageDraf
     );
   }
   for (const basis of draft.bases) {
-    if (typeof basis["form"] !== "string") {
-      return `a basis of '${draft.messageId}' names no form, and a basis is a locator (D-0032 rule 2)`;
+    const form = basis["form"];
+    const fields = typeof form === "string" ? BASIS_LOCATOR_FIELDS[form] : undefined;
+    if (
+      fields === undefined ||
+      !Object.entries(fields).every(([field, type]) => typeof basis[field] === type)
+    ) {
+      return (
+        `a basis of '${draft.messageId}' is ${canonicalJson(basis)}, which is not a complete ` +
+        "locator in any form D-0032 rule 2 and D-0061 rule 2.6 define"
+      );
     }
     if (basis["form"] === "message") {
       const target = basis["messageId"];
