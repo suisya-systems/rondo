@@ -555,6 +555,8 @@ async function lineageTree(ports: ScopeReadPorts, predecessorId: string): Promis
 
 export type ScopedAdmission =
   | { readonly kind: "admitted"; readonly report: ConductorReport }
+  /** `beforeAdmit` stopped after an `inside` verdict: nothing was admitted or spent. */
+  | { readonly kind: "halted"; readonly status: number }
   | ({
       readonly kind: "refused";
       /** Rule 4.4's stop: what keeps the line stopped, or why nothing does. */
@@ -583,6 +585,13 @@ export type ScopeStop =
 export interface ScopeAdmitPorts extends ScopeReadPorts {
   readonly record: ScopeReadPorts["record"] & Pick<AdvisoryRecord, "recordThreadMessage">;
   readonly nowMs: () => number;
+  /**
+   * The act's own irreversible step, run only on `inside` and before `admit`
+   * (D-0070 section 2): `revise` walks the predecessor's gate here, so a
+   * refused verdict walks nothing. A number is the exit status it stopped with,
+   * and nothing is admitted; null lets the admission go ahead.
+   */
+  readonly beforeAdmit?: () => Promise<number | null>;
   /** `conductor.admit(ports, advisory, plan, policy, id, supersedes, null, request, scopeSpend)`. */
   readonly admit: (
     plan: RunPlan,
@@ -635,6 +644,12 @@ export async function admitUnderScope(
   // `inside` has passed the classification test, so it is read.
   if (snapshot.classification.kind !== "read") {
     throw new Error("an inside verdict over an unread classification is a defect");
+  }
+  // D-0070 section 2: gather, verdict, the act's own step, admit. The snapshot
+  // stays the one taken above, and `reserve()` re-tests the store's half.
+  const halted = ports.beforeAdmit === undefined ? null : await ports.beforeAdmit();
+  if (halted !== null) {
+    return { kind: "halted", status: halted };
   }
   const report = await ports.admit(
     act.plan,
