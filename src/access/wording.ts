@@ -235,6 +235,19 @@ export interface Chrome {
   readonly allAsText: string;
   readonly claimLabel: string;
   readonly claimPlaceholder: string;
+  /**
+   * Why an approve press carrying a claim answered nothing (rondo#220 S2
+   * review), one sentence each and none pointing at the terminal: a person hits
+   * the first by typing and the second whenever two people answer one gate.
+   * Shown on a page of its own with the way back to the gate, whose claim draft
+   * the browser keeps.
+   */
+  readonly claimTooLong: (max: number) => string;
+  readonly claimGateUnread: string;
+  readonly claimGateClosed: string;
+  readonly claimNotRecorded: string;
+  readonly answerNotDone: string;
+  readonly gateBack: string;
   /** The line by the button when the model review raised a blocker or a major. */
   readonly modelRaised: (blockers: number, majors: number) => string;
   readonly modelRaisedLink: string;
@@ -567,6 +580,16 @@ explanation you pressed on and then answers the gate.`,
   allAsText: "The full record as text, including what is not shown above",
   claimLabel: "What did you check? (optional)",
   claimPlaceholder: "e.g. ran the tests locally; read the diff; opened the page on a phone",
+  claimTooLong: (max) =>
+    `What you said you checked is longer than the ${String(max)} characters this page takes. Shorten it and press approve again.`,
+  claimGateUnread:
+    "rondo could not read this gate, so what you said you checked was not recorded. Go back to the gate and try again.",
+  claimGateClosed:
+    "This gate was already answered, so what you said you checked was not recorded. Go back to the gate to see how it ended.",
+  claimNotRecorded:
+    "rondo could not record what you said you checked, so nothing was answered. Go back to the gate and try again.",
+  answerNotDone: "Nothing was answered",
+  gateBack: "Back to the gate",
   modelRaised: (blockers, majors) =>
     `The model review raised ${[
       blockers === 0 ? "" : `${String(blockers)} blocker${blockers === 1 ? "" : "s"}`,
@@ -860,6 +883,16 @@ const JA: Partial<Chrome> = Object.freeze({
   allAsText: "記録全文 (上に出していない項目も含む)",
   claimLabel: "何を確認しましたか (任意)",
   claimPlaceholder: "例: 手元でテストを実行した / 差分を読んだ / スマートフォンで画面を開いた",
+  claimTooLong: (max) =>
+    `確認した内容が、このページで受け付ける ${String(max)} 文字より長くなっています。短くしてから、もう一度 approve を押してください。`,
+  claimGateUnread:
+    "rondo がこのゲートを読めなかったため、確認した内容は記録していません。ゲートに戻って、もう一度試してください。",
+  claimGateClosed:
+    "このゲートはすでに回答済みのため、確認した内容は記録していません。ゲートに戻ると、どう終わったかを確認できます。",
+  claimNotRecorded:
+    "rondo が確認した内容を記録できなかったため、何も回答していません。ゲートに戻って、もう一度試してください。",
+  answerNotDone: "回答されませんでした",
+  gateBack: "ゲートに戻る",
   modelRaised: (blockers, majors) =>
     `モデルレビューの指摘: ${[
       blockers === 0 ? "" : `blocker ${String(blockers)} 件`,

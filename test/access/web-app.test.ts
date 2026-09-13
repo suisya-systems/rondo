@@ -295,19 +295,54 @@ test("(claim) a press carries what the person verified, trimmed; blank is none, 
   expect((await send(base, "/", "POST", person, { ...FORM, verified: said })).status).toBe(303);
   expect((await send(base, "/", "POST", person, { ...FORM, verified: " \n " })).status).toBe(303);
   expect((await send(base, "/", "POST", person, FORM)).status).toBe(303);
-  const tooLong = await send(base, "/", "POST", person, {
+  const tooLong = await send(base, "/?lang=ja", "POST", person, {
     ...FORM,
     verified: "\u691c".repeat(MAX_CLAIM_CHARS + 1),
   });
   // Refused in words by the port, not by the body limit: the form still fits.
+  // Said in the press's language, with the way back to the gate (S2 review).
   expect(tooLong.status).toBe(409);
   expect(tooLong.body).toContain(String(MAX_CLAIM_CHARS));
+  expect(tooLong.body).toContain('<html lang="ja">');
+  expect(tooLong.body).toContain("ゲートに戻る");
+  expect(tooLong.body).toContain('href="/?answer=i-0001&amp;lang=ja"');
   expect(written).toEqual([
     { iterationId: "i-0001", body: "approve", claim: said.trim() },
     { iterationId: "i-0001", body: "approve" },
     { iterationId: "i-0001", body: "approve" },
   ]);
 
+  stop.abort();
+  expect(await closed).toBe(0);
+});
+
+test("(claim) a claim refused past the port is said in the press's language, never pointing at a terminal", async () => {
+  const ports = {
+    hostLanguage: null,
+    answer: new AnswerPort(
+      async () =>
+        await Promise.resolve({
+          ok: false,
+          note: "Gate g1 is already closed",
+          why: "claimGateClosed" as const,
+        }),
+    ),
+    say: null,
+  } as unknown as ServedPorts;
+  const { base, stop, closed } = await served(createApp(ports, TOKEN));
+  for (const [lang, words] of [
+    ["en", "This gate was already answered"],
+    ["ja", "このゲートはすでに回答済み"],
+  ] as const) {
+    const refused = await send(base, `/?lang=${lang}`, "POST", pressHeaders(base), {
+      ...FORM,
+      verified: "ran it",
+    });
+    expect(refused.status).toBe(409);
+    expect(refused.body).toContain(words);
+    expect(refused.body).toContain(`href="/?answer=i-0001&amp;lang=${lang}"`);
+    expect(refused.body).not.toContain("terminal");
+  }
   stop.abort();
   expect(await closed).toBe(0);
 });

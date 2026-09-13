@@ -469,6 +469,7 @@ test("a claim that cannot be written answers nothing, and says so", async () => 
   if (outcome.kind === "refused") {
     expect(outcome.note).toContain("nothing was answered");
     expect(outcome.note).toContain("disk I/O error");
+    expect(outcome.why).toBe("claimNotRecorded");
   }
   expect(calls).toEqual(["show:g1"]);
 });
@@ -487,6 +488,7 @@ test("a claim on a gate already closed is refused out loud, and no claim row is 
   if (outcome.kind === "refused") {
     expect(outcome.note).toContain("already closed as 'answered_and_forwarded'");
     expect(outcome.note).toContain("not recorded");
+    expect(outcome.why).toBe("claimGateClosed");
   }
   expect(calls).toEqual(["show:g1"]);
 });

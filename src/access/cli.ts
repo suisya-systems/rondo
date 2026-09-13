@@ -119,7 +119,7 @@ import {
   type ScopedAdmission,
 } from "./scope.js";
 import type { LapMaterialRead } from "./web.js";
-import { AnswerPort, SayPort, serveOperatorPage } from "./web-app.js";
+import { AnswerPort, type ClaimRefusal, SayPort, serveOperatorPage } from "./web-app.js";
 import { type Chrome, EN } from "./wording.js";
 
 /**
@@ -3854,21 +3854,24 @@ export async function claimThenWalk(
   claim: string | null,
   verbs: GateVerbs = GATE_VERBS,
   nowMs: () => number = Date.now,
-): Promise<WalkOutcome | { readonly kind: "refused"; readonly note: string }> {
+): Promise<
+  WalkOutcome | { readonly kind: "refused"; readonly note: string; readonly why: ClaimRefusal }
+> {
   if (claim !== null) {
     const observed = await verbs.show(continuo, { db: request.db, gateId: request.gateId });
     if (observed.kind !== "answered") {
       return {
         kind: "refused",
+        why: "claimGateUnread",
         note:
           `The gate for '${iterationId}' would not read, so what you said you verified was not ` +
-          "recorded and nothing was answered. The terminal running 'rondo web' has continuo's " +
-          "own diagnosis.",
+          "recorded and nothing was answered.",
       };
     }
     if (observed.payload.outcome !== null) {
       return {
         kind: "refused",
+        why: "claimGateClosed",
         note:
           `Gate ${observed.payload.gateId} is already closed as '${observed.payload.outcome}', ` +
           "so what you said you verified was not recorded: nothing here is being answered.",
@@ -3879,6 +3882,7 @@ export async function claimThenWalk(
     } catch (error) {
       return {
         kind: "refused",
+        why: "claimNotRecorded",
         note: `What you said you verified was not recorded, so nothing was answered: ${
           error instanceof Error ? error.message : String(error)
         }`,
@@ -3915,7 +3919,7 @@ async function answerFromPage(
   iterationId: string,
   body: string,
   claim: string | null,
-): Promise<{ ok: boolean; note: string }> {
+): Promise<{ ok: boolean; note: string; why?: ClaimRefusal }> {
   const actor = approvedActor(approver, environment);
   if ("refusal" in actor) {
     return { ok: false, note: actor.refusal };
@@ -3978,7 +3982,7 @@ async function answerFromPage(
     claim,
   );
   if (walked.kind === "refused") {
-    return { ok: false, note: walked.note };
+    return { ok: false, note: walked.note, why: walked.why };
   }
   if (walked.kind === "failed") {
     // The relay's own words went to the terminal `rondo web` is running in --

@@ -329,7 +329,27 @@ export type AnswerFromWeb = (
   iterationId: string,
   body: string,
   claim: string | null,
-) => Promise<{ readonly ok: boolean; readonly note: string }>;
+) => Promise<AnswerOutcome>;
+
+/**
+ * Why a press carrying a claim answered nothing, as the wording key the page
+ * says it in (rondo#220 S2 review). A person causes these by typing or by
+ * answering a gate someone else already did, so they are said in the
+ * request's language with the way back to the gate, never as the English
+ * plain-text line the older refusals are.
+ */
+export type ClaimRefusal =
+  | "claimTooLong"
+  | "claimGateUnread"
+  | "claimGateClosed"
+  | "claimNotRecorded";
+
+/** What one answer came to; `why` is set only on a claim's own refusals. */
+export interface AnswerOutcome {
+  readonly ok: boolean;
+  readonly note: string;
+  readonly why?: ClaimRefusal;
+}
 
 /**
  * The longest verification claim an approve press carries, in characters.
@@ -381,7 +401,7 @@ export class AnswerPort {
     press: Press,
     iterationId: string,
     claim: string | null = null,
-  ): Promise<{ readonly ok: boolean; readonly note: string }> {
+  ): Promise<AnswerOutcome> {
     if (!minted.has(press)) {
       return {
         ok: false,
@@ -393,6 +413,7 @@ export class AnswerPort {
     if (said.length > MAX_CLAIM_CHARS) {
       return {
         ok: false,
+        why: "claimTooLong",
         note:
           `nothing was answered: what you said you verified is ${String(said.length)} ` +
           `characters, and this page takes at most ${String(MAX_CLAIM_CHARS)}. Shorten it ` +
@@ -841,7 +862,9 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     }
     const answered = await answer.answer(minting.press, iterationId, verified ?? null);
     if (!answered.ok) {
-      return said(c, 409, answered.note);
+      return answered.why === undefined
+        ? said(c, 409, answered.note)
+        : claimRefused(c, answered.why, iterationId);
     }
     // **The tag the press was made under, for the `303`** (D-0056 rule 11),
     // read back off the form's own `action`; the press writes no cookie.
@@ -998,6 +1021,25 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
         `<p id="send-refused">${line}</p><p>${escapeHtml(wording.sendBackNote)}</p>` +
         `<p><a href="${href}">${escapeHtml(wording.sendBack)}</a></p></body></html>`,
       status,
+    );
+  }
+
+  /**
+   * A claim's refusal as a page in the press's language, with the way back to
+   * the gate (rondo#220 S2 review). Only a native submit carries a claim, so
+   * there is no htmx fragment; the draft is kept by the gate's own composer.
+   */
+  function claimRefused(c: Context<PageEnv>, why: ClaimRefusal, iterationId: string) {
+    const wording = wordingOf(c);
+    const line = why === "claimTooLong" ? wording.claimTooLong(MAX_CLAIM_CHARS) : wording[why];
+    const href = escapeHtml(viewHref({ kind: "answer", iterationId }, wording.lang));
+    return c.html(
+      `<!doctype html><html lang="${escapeHtml(wording.lang)}"><head><meta charset="utf-8">` +
+        `<meta name="viewport" content="width=device-width, initial-scale=1">` +
+        `<title>${escapeHtml(wording.answerNotDone)}</title></head><body>` +
+        `<p id="answer-refused">${escapeHtml(line)}</p><p>${escapeHtml(wording.sendBackNote)}</p>` +
+        `<p><a href="${href}">${escapeHtml(wording.gateBack)}</a></p></body></html>`,
+      409,
     );
   }
 
