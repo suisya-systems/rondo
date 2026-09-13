@@ -51,6 +51,7 @@ const reserve = (
   store: ReturnType<typeof iterationStore>,
   id: string,
   requestMessageId: string | null,
+  supersedesIterationId: string | null = null,
 ) =>
   store.reserve({
     id,
@@ -59,7 +60,7 @@ const reserve = (
     runId: `rondo-${id}`,
     topicBranch: `rondo/${id}`,
     workspace: `/srv/work/iter-${id}`,
-    supersedesIterationId: null,
+    supersedesIterationId,
     requestMessageId,
     spend: null,
     scopeSpend: null,
@@ -276,6 +277,36 @@ test("a lap reserved under the message that opened a request records it, and two
   expect(first.kind === "reserved" && first.record.requestMessageId).toBe("m-request");
   expect(second.kind === "reserved" && second.record.requestMessageId).toBe("m-request");
   expect(unlinked.kind === "reserved" && unlinked.record.requestMessageId).toBeNull();
+});
+
+test("a revision or retry of a linked lap stays linked, and of an unlinked lap stays unlinked (rondo#195)", async () => {
+  const connection = new DatabaseSync(":memory:");
+  const record = advisoryRecord(connection);
+  const store = iterationStore(connection, { maxOccupying: 5, maxLive: 5 });
+  await record.recordThreadMessage(operator());
+
+  await reserve(store, "a", "m-request");
+  await reserve(store, "b", null);
+  // `revise` and `retry --proposal-id` name no request: the successor's link is
+  // the predecessor row's, derived under the write lock.
+  const linked = await reserve(store, "a2", null, "a");
+  const unlinked = await reserve(store, "b2", null, "b");
+  // Two links deep, with the caller naming the inherited link itself, as the
+  // in-scope retry does.
+  const deeper = await reserve(store, "a3", "m-request", "a2");
+
+  expect(linked.kind === "reserved" && linked.record.requestMessageId).toBe("m-request");
+  expect(unlinked.kind === "reserved" && unlinked.record.requestMessageId).toBeNull();
+  expect(deeper.kind === "reserved" && deeper.record.requestMessageId).toBe("m-request");
+  expect(
+    connection
+      .prepare("SELECT id, request_message_id FROM iteration WHERE id IN ('a2', 'b2') ORDER BY id")
+      .all()
+      .map((row) => ({ ...row })),
+  ).toEqual([
+    { id: "a2", request_message_id: "m-request" },
+    { id: "b2", request_message_id: null },
+  ]);
 });
 
 test("PLANTED: a lap naming a reply, an elevation's id or nothing is refused, and no row is written", async () => {

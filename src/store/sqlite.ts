@@ -139,6 +139,10 @@ export interface ReserveInput {
    * The message that opened the request this lap came from, or null
    * (D-0061 rule 4). Required for `supersedesIterationId`'s reason, and refused
    * under the write lock when it names no message that opens a request.
+   *
+   * **Only a first lap's link is the caller's** (rondo#195). A successor
+   * inherits its predecessor row's link, read under the write lock, whatever
+   * is passed here.
    */
   readonly requestMessageId: string | null;
   /**
@@ -1717,10 +1721,19 @@ export function iterationStore(connection: DatabaseSync, policy: HostPolicy): It
           if (lineage !== null) {
             return { kind: "defect", reason: lineage };
           }
+          // **A successor's request link is its predecessor's, read here**
+          // (rondo#195): a revision or a retry is the same request continued,
+          // so the link is derived from the row it supersedes rather than
+          // taken from the caller. `linked` is the input with that link, and
+          // everything below reads it.
+          const linked: ReserveInput = {
+            ...input,
+            requestMessageId: inheritedRequest(connection, input),
+          };
           // **The request link, under the same lock and before the spend**
           // (D-0061 rule 4), so a refusal spends no approval. Unlike the
           // lineage it is a refusal and not a defect: the id is a person's.
-          const request = requestRefusal(connection, input.requestMessageId);
+          const request = requestRefusal(connection, linked.requestMessageId);
           if (request !== null) {
             return { kind: "requestRefused", reason: request };
           }
@@ -1745,7 +1758,7 @@ export function iterationStore(connection: DatabaseSync, policy: HostPolicy): It
           // row, both or neither. A refusal writes nothing, and says which
           // test refused as data (`scopeRefused`), for rule 4.4's stop.
           if (input.scopeSpend !== null) {
-            const refusal = spendScope(connection, input, input.scopeSpend);
+            const refusal = spendScope(connection, linked, input.scopeSpend);
             if (refusal !== null) {
               return refusal;
             }
@@ -1776,7 +1789,7 @@ export function iterationStore(connection: DatabaseSync, policy: HostPolicy): It
               input.topicBranch,
               input.workspace,
               input.supersedesIterationId,
-              input.requestMessageId,
+              linked.requestMessageId,
               input.nowMs,
               input.nowMs,
             );
@@ -4013,6 +4026,23 @@ function lineageDefect(connection: DatabaseSync, input: ReserveInput): string | 
     );
   }
   return null;
+}
+
+/**
+ * The request link the reserved row is written with (rondo#195, D-0061 rule 4).
+ *
+ * A first lap's is the caller's. A successor's is the row it supersedes, which
+ * `lineageDefect` has already found: a revision or a retry continues that
+ * request, and the request's report must not lose track of it.
+ */
+function inheritedRequest(connection: DatabaseSync, input: ReserveInput): string | null {
+  if (input.supersedesIterationId === null) {
+    return input.requestMessageId;
+  }
+  const row = connection
+    .prepare("SELECT request_message_id FROM iteration WHERE id = ?")
+    .get(input.supersedesIterationId) as SqlRow | undefined;
+  return row === undefined ? null : optionalText(row, "request_message_id");
 }
 
 /**
