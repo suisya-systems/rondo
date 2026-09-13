@@ -4689,7 +4689,8 @@ async function commandPublish(
     const reported = await reportToRequest(
       ports.thread,
       record.id,
-      { kind: "published" },
+      // gh prints the new pull request's URL as the last line of its stdout.
+      { kind: "published", pullRequestUrl: opened.stdout.trim().split("\n").at(-1) || null },
       Date.now(),
     );
     if (reported !== null) {

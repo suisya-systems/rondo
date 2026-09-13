@@ -45,7 +45,6 @@ import {
 } from "../store/records.js";
 import type { AdvisoryRecord, IterationStore } from "../store/sqlite.js";
 import { DETERMINISTIC_DRAFTER } from "./advisory.js";
-import { asciiEscape } from "./console.js";
 import {
   type ReviewScope,
   reviewPolicyOf,
@@ -746,7 +745,8 @@ async function holdingAsk(
 
 /**
  * The option rule 4.4 recommends for the test that refused (D-0064 rule 4.1:
- * one recommendation). A spent or retired approval wants a successor scope; an
+ * one recommendation). A spent or retired approval, or a spent round budget, wants
+ * a successor scope; a model reading that cannot be taken wants the work changed; an
  * act the scope never covered wants the work changed, or a successor that lists
  * it; a read that failed wants stopping until it is fixed.
  */
@@ -763,11 +763,18 @@ function recommendation(refusal: ScopeRefusal): string {
     case "expiry":
     case "laps":
     case "cost":
-    case "readings":
       return (
         "a successor scope (D-0066 rule 1.4) with the budget or approval this line needs: the " +
         "work itself is what the scope was approved for, and what ran out is the approval"
       );
+    case "readings":
+      // Only a spent round budget (D-0065 4.3) is an approval that ran out. An
+      // unavailable or ungraded reading refuses a successor at the same test.
+      return refusal.reason.endsWith("(D-0065 4.3)")
+        ? "a successor scope (D-0066 rule 1.4) with the review rounds this line needs: the " +
+            "findings are open because the rounds the scope approved are spent"
+        : "change the work so a model reading can be taken (a plan with a review criterion): " +
+            "a successor scope would be refused at this test for the same reason";
     default:
       return (
         "change the work so the scope covers it, or approve a successor scope that lists it: " +
@@ -776,7 +783,11 @@ function recommendation(refusal: ScopeRefusal): string {
   }
 }
 
-/** The stop's words: ASCII, deterministic, one recommendation (rule 4.4, D-0064 rule 4.1). */
+/**
+ * The stop's words: deterministic, one recommendation (rule 4.4, D-0064 rule 4.1).
+ * Stored as written, newlines included: ASCII escaping governs what rondo prints,
+ * not what it stores (D-0004).
+ */
 function stopBody(
   scopeDecisionId: string,
   act: ScopeAct,
@@ -787,20 +798,18 @@ function stopBody(
     scope === null
       ? `scope decision '${scopeDecisionId}' (its scope row could not be read)`
       : `scope '${scope.scopeId}' (digest ${scope.scopeDigest}) under decision '${scopeDecisionId}'`;
-  return asciiEscape(
-    [
-      `Stopped: the ${act.kind === "redo" ? `redo of '${act.predecessorId}'` : "first admission of a plan"} ` +
-        `as '${act.iterationId}' is ${refusal.verdict} ${scopeName} at the ${refusal.test} test.`,
-      `Reason: ${refusal.reason}`,
-      "Options:",
-      "- A successor scope (D-0066 rule 1.4). Gives up: this line waits for a person to approve " +
-        "a new scope, and the old one is retired when they do.",
-      "- A change to the work. Gives up: the work as planned; what runs is the changed work.",
-      "- Stopping. Gives up: this line's work; other lines of the request carry on.",
-      `Recommended: ${recommendation(refusal)}.`,
-      "This line stays stopped until this message is answered.",
-    ].join("\n"),
-  );
+  return [
+    `Stopped: the ${act.kind === "redo" ? `redo of '${act.predecessorId}'` : "first admission of a plan"} ` +
+      `as '${act.iterationId}' is ${refusal.verdict} ${scopeName} at the ${refusal.test} test.`,
+    `Reason: ${refusal.reason}`,
+    "Options:",
+    "- A successor scope (D-0066 rule 1.4). Gives up: this line waits for a person to approve " +
+      "a new scope, and the old one is retired when they do.",
+    "- A change to the work. Gives up: the work as planned; what runs is the changed work.",
+    "- Stopping. Gives up: this line's work; other lines of the request carry on.",
+    `Recommended: ${recommendation(refusal)}.`,
+    "This line stays stopped until this message is answered.",
+  ].join("\n");
 }
 
 /** Why cadenza gave no answer, in its own words (D-0018 rule 7). */

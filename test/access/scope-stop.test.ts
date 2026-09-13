@@ -24,7 +24,7 @@ import { type AdmittedPlan, admittedPlan, type RunPlan, runPlan } from "../../sr
 import type { LoopPolicy } from "../../src/refrain/policy.js";
 import type { ConductorPorts, EffectOutcome, LapPerformance } from "../../src/refrain/ports.js";
 import { contentDigest } from "../../src/store/plan.js";
-import type { JsonRecord } from "../../src/store/records.js";
+import { type JsonRecord, type LapReading, modelReadingDrafter } from "../../src/store/records.js";
 import { advisoryRecord, iterationStore } from "../../src/store/sqlite.js";
 
 const ABS = (p: string) => resolve(p);
@@ -126,7 +126,7 @@ const PAYLOAD: JsonRecord = {
 };
 
 /** A store with the request, an approved scope, and a clock the test moves. */
-async function harness(path = ":memory:") {
+async function harness(path = ":memory:", payload: JsonRecord = PAYLOAD) {
   const connection = new DatabaseSync(path);
   const store = iterationStore(connection, { maxOccupying: 100, maxLive: 100 });
   const record = advisoryRecord(connection);
@@ -199,7 +199,7 @@ async function harness(path = ":memory:") {
   expect(
     await record.recordScope({
       scopeId: "s-1",
-      payload: PAYLOAD,
+      payload,
       supersedesScopeId: null,
       authorKind: "operator",
       authorId: "oidc|operator-1",
@@ -211,7 +211,7 @@ async function harness(path = ":memory:") {
     await record.recordScopeDecision({
       scopeDecisionId: "sd-1",
       scopeId: "s-1",
-      scopeDigest: contentDigest(PAYLOAD),
+      scopeDigest: contentDigest(payload),
       outcome: "approved",
       actorId: "oidc|operator-1",
       recordedBy: "rondo/cli",
@@ -287,6 +287,9 @@ test("a verdict refusal writes one asking drafter message; the next attempt is h
   expect(body).toContain(contentDigest(PAYLOAD));
   expect(body).toContain("expiry test");
   expect(body).toContain("Recommended: a successor scope");
+  // Stored with its newlines, not their escapes (rondo#203, D-0004).
+  expect(body).toContain("\nOptions:\n");
+  expect(body).not.toContain("\\u000a");
   expect(body).toMatch(/^[\x20-\x7E\n]*$/);
 
   // Back inside the expiry: the stop itself refuses, and no second message is written.
@@ -317,6 +320,62 @@ test("a verdict refusal writes one asking drafter message; the next attempt is h
   expect(third).toMatchObject({ kind: "admitted", report: { iterationId: "i-a" } });
   expect(h.consumptions()).toBe(1);
   expect(h.stops()).toHaveLength(1);
+});
+
+test("a readings refusal recommends by its reason: spent rounds a successor, an unavailable reading a change (rondo#202)", async () => {
+  // A review_rounds of 1: the predecessor's one reading spends it.
+  const payload = {
+    ...PAYLOAD,
+    budgets: { ...(PAYLOAD["budgets"] as JsonRecord), review_rounds: 1 },
+  };
+  const recommended = async (latest: Partial<LapReading>): Promise<string> => {
+    const h = await harness(":memory:", payload);
+    expect(await admitUnderScope(h.ports, "sd-1", start("i-a"))).toMatchObject({
+      kind: "admitted",
+    });
+    const reading = {
+      drafter: modelReadingDrafter("gpt-6-astra"),
+      verdict: "concerns",
+      findings: ["a major finding"],
+      graded: [{ severity: "major", bases: [], basisResolved: true }],
+      evidence: null,
+      unavailableReason: null,
+      iterationId: "i-a",
+      readAtMs: 1,
+      ...latest,
+    } as LapReading;
+    const store = h.ports.store;
+    const ports: ScopeAdmitPorts = {
+      ...h.ports,
+      store: {
+        ...store,
+        readingsFor: async (id: string) => (id === "i-a" ? [reading] : store.readingsFor(id)),
+      },
+    };
+    const refused = await admitUnderScope(ports, "sd-1", {
+      kind: "redo",
+      iterationId: "i-b",
+      plan: PLAN,
+      predecessorId: "i-a",
+      requestMessageId: ROOT,
+    });
+    expect(refused).toMatchObject({ kind: "refused", verdict: "outside", test: "readings" });
+    return (
+      String(h.stops()[0]?.["body"])
+        .split("\n")
+        .find((l) => l.startsWith("Recommended:")) ?? ""
+    );
+  };
+  const spent = await recommended({});
+  expect(spent).toContain("Recommended: a successor scope");
+  const unavailable = await recommended({
+    verdict: "unavailable",
+    findings: [],
+    graded: [],
+    unavailableReason: "the plan names no review criterion",
+  });
+  expect(unavailable).toContain("Recommended: change the work");
+  expect(unavailable).not.toContain("successor scope (D-0066");
 });
 
 test("a redo's stop names the lineage's latest lap as an iteration basis", async () => {
@@ -733,11 +792,13 @@ test("D-0061 5.3: a lap naming a request reports its gate and reading once, aski
     await reportToRequest(
       { record: h.record, store: h.store },
       "i-r",
-      { kind: "published" },
+      { kind: "published", pullRequestUrl: "https://github.com/o/r/pull/7" },
       h.clock.now + 1,
     ),
   ).toContain("report-published-i-r");
   expect(String(h.stops()[1]?.["body"])).toContain(`run '${String(runId)}' was closed completed`);
+  // A reader of the thread can get from the report to the pull request (rondo#210).
+  expect(String(h.stops()[1]?.["body"])).toContain("pull request https://github.com/o/r/pull/7");
 });
 
 test("D-0061 5.3: a report never answers a stop, and a lap naming no request reports nothing", async () => {

@@ -541,7 +541,10 @@ export interface RequestThread {
 }
 
 /** What a report says happened to the lap (D-0061 step 5.3). */
-export type LapEvent = { readonly kind: "gate" } | { readonly kind: "published" };
+export type LapEvent =
+  | { readonly kind: "gate" }
+  /** `pullRequestUrl`: what the forge printed for the opened pull request, or null. */
+  | { readonly kind: "published"; readonly pullRequestUrl: string | null };
 
 async function gateIdOf(ports: ConductorPorts, iterationId: string): Promise<string | null> {
   const after = await ports.store.read(iterationId);
@@ -615,7 +618,8 @@ export async function reportToRequest(
   } else {
     messageId = `report-published-${iterationId}`;
     body =
-      `Lap '${iterationId}' was published: its branch was pushed, a pull request was opened, ` +
+      `Lap '${iterationId}' was published: its branch was pushed, pull request ` +
+      `${event.pullRequestUrl ?? "(no URL printed)"} was opened, ` +
       `and run '${row.runId ?? "(none recorded)"}' was closed completed.`;
   }
   const outcome = await thread.record.recordThreadMessage({
