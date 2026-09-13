@@ -2721,11 +2721,6 @@ export async function operatorPage(
               </p>
             ) : null
           }
-          {threadRead.kind === "unreadable" ? (
-            <p class="note rounded-md border border-fail/40 px-3 py-2 text-[13px] leading-5 text-fail">
-              {wording.threadsUnreadable(threadRead.reason)}
-            </p>
-          ) : null}
           {view.kind === "requests"
             ? composerView(wording, view, threads, token, newId, ports.actorId, nowMs)
             : null}
@@ -2749,6 +2744,16 @@ export async function operatorPage(
                   }
                 : {})}
             >
+              {
+                // Inside the swap (#220 S1, Codex): a thread read that fails
+                // while the page is open must be said by the redraw that shows
+                // the empty list, and must go away with the redraw that recovers.
+                threadRead.kind === "unreadable" ? (
+                  <p class="note rounded-md border border-fail/40 px-3 py-2 text-[13px] leading-5 text-fail">
+                    {wording.threadsUnreadable(threadRead.reason)}
+                  </p>
+                ) : null
+              }
               {view.kind === "requests" ? (
                 requestsView(wording, threads, nowMs, ports.actorId)
               ) : view.kind === "thread" ? (

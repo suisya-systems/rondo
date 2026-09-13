@@ -89,6 +89,12 @@ document.addEventListener("htmx:beforeRequest", (event) => {
 });
 
 document.addEventListener("htmx:afterRequest", (event) => {
+  // **Only the send's own request** (#220 S1, Codex): after an outerHTML swap
+  // htmx reports the redraw's end on a surviving ancestor, whose descendants
+  // include the box, so the element alone would take a poll for a send.
+  if (event.detail.requestConfig?.verb !== "post") {
+    return;
+  }
   const draft = event.detail.elt.querySelector?.("textarea[data-draft]");
   if (draft && event.detail.successful) {
     const now = store.get(draftKey(draft)) ?? "";
