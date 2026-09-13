@@ -15,7 +15,7 @@ import { DatabaseSync } from "node:sqlite";
 import { expect, test, vi } from "vitest";
 
 import { commandScopedRetry, parseCommand } from "../../src/access/cli.js";
-import { admit } from "../../src/access/conductor.js";
+import { admit, type ReportingPorts, reportToRequest, resume } from "../../src/access/conductor.js";
 import { consoleSeams } from "../../src/access/console.js";
 import { admitUnderScope, type ScopeAct, type ScopeAdmitPorts } from "../../src/access/scope.js";
 import { allocate } from "../../src/refrain/allocator.js";
@@ -240,7 +240,20 @@ async function harness(path = ":memory:") {
     Number(
       (connection.prepare("SELECT COUNT(*) AS n FROM scope_consumption").get() as { n: number }).n,
     );
-  return { connection, store, record, clock, ports, stops, consumptions, beforeReserve };
+  /** The same conductor with the request thread D-0061 step 5.3 reports into. */
+  const reporting: ReportingPorts = { ...conductor, thread: { record, store } };
+  return {
+    connection,
+    store,
+    record,
+    clock,
+    ports,
+    stops,
+    consumptions,
+    beforeReserve,
+    reporting,
+    advisory,
+  };
 }
 
 const start = (iterationId: string): ScopeAct => ({
@@ -675,4 +688,68 @@ test("an unwalkable lineage writes a stop, and the next attempt is held by it", 
     stop: { kind: "held", messageId: first.stop.messageId },
   });
   expect(h.stops()).toHaveLength(1);
+});
+
+test("D-0061 5.3: a lap naming a request reports its gate and reading once, asking nothing", async () => {
+  const h = await harness();
+  const report = await admit(h.reporting, h.advisory, PLAN, POLICY, "i-r", null, null, ROOT);
+  expect(report.status).toBe("awaiting_human");
+  const found = await h.store.read("i-r");
+  if (found.kind !== "read") throw new Error("no row");
+  const { runId, gateId } = found.record;
+  const reports = h.stops();
+  expect(reports).toHaveLength(1);
+  expect(reports[0]).toMatchObject({
+    message_id: `report-gate-i-r-${String(gateId)}`,
+    author_id: "rondo/advisory/deterministic",
+    in_reply_to: ROOT,
+    asks: 0,
+  });
+  expect(JSON.parse(String(reports[0]?.["bases"]))).toEqual([
+    { form: "iteration", iterationId: "i-r" },
+    { form: "continuoRun", runId },
+  ]);
+  const body = String(reports[0]?.["body"]);
+  expect(body).toContain(`gate '${String(gateId)}'`);
+  expect(body).toContain("reading says 'clear' with 0 finding(s)");
+  // Rows only: the request's words are never read into a report.
+  expect(body).not.toContain("teach rondo to count");
+  expect(body).toMatch(/^[\x20-\x7E\n]*$/);
+  expect(report.lines.at(-1)).toContain(`Reported to the request '${ROOT}'`);
+
+  // Looking at the same open gate again reaches no gate, and reports nothing.
+  const looking: ReportingPorts = {
+    ...h.reporting,
+    showGate: async () => ({
+      kind: "answered",
+      value: { gateId: String(gateId), stage: "received", outcome: null },
+    }),
+  };
+  expect((await resume(looking, "i-r")).status).toBe("awaiting_human");
+  expect(h.stops()).toHaveLength(1);
+
+  // Publishing is the other report.
+  expect(
+    await reportToRequest(
+      { record: h.record, store: h.store },
+      "i-r",
+      { kind: "published" },
+      h.clock.now + 1,
+    ),
+  ).toContain("report-published-i-r");
+  expect(String(h.stops()[1]?.["body"])).toContain(`run '${String(runId)}' was closed completed`);
+});
+
+test("D-0061 5.3: a report never answers a stop, and a lap naming no request reports nothing", async () => {
+  const h = await harness();
+  h.clock.now = EXPIRES;
+  const stopped = await admitUnderScope(h.ports, "sd-1", start("i-a"));
+  if (stopped.kind !== "refused" || stopped.stop.kind !== "written") throw new Error("no stop");
+  await admit(h.reporting, h.advisory, PLAN, POLICY, "i-r", null, null, ROOT);
+  const asks = await h.record.openAsksIn(ROOT);
+  expect(asks).toMatchObject({ kind: "read", asks: [{ messageId: stopped.stop.messageId }] });
+
+  const quiet = await harness();
+  await admit(quiet.reporting, quiet.advisory, PLAN, POLICY, "i-n");
+  expect(quiet.stops()).toHaveLength(0);
 });

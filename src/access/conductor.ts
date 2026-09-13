@@ -65,10 +65,10 @@ import type {
   ScopeSpend,
   StorePort,
 } from "../refrain/ports.js";
-import type { LapReadingDraft } from "../store/records.js";
-import type { IterationStore } from "../store/sqlite.js";
+import { isModelReadingDrafter, type LapReadingDraft, latestReading } from "../store/records.js";
+import type { AdvisoryRecord, IterationStore } from "../store/sqlite.js";
 
-import { proposeAfterAbandon, type UnpromptedPorts } from "./advisory.js";
+import { DETERMINISTIC_DRAFTER, proposeAfterAbandon, type UnpromptedPorts } from "./advisory.js";
 import { discard, writeDelegationRecord } from "./delegation.js";
 import { inspectLapWork } from "./forge.js";
 import { READING_REMOTE, readingOf } from "./review.js";
@@ -240,11 +240,13 @@ function readLapSpendFields(
 export function conductorPorts(
   continuo: VerifiedContinuo,
   store: IterationStore,
+  record: Pick<AdvisoryRecord, "recordThreadMessage"> | null,
   now: () => number = Date.now,
-): ConductorPorts {
+): ReportingPorts {
   const port: StorePort = store;
   return {
     store: port,
+    thread: record === null ? null : { record, store },
     now,
     classify: async (plan) => classifyPlan(plan),
     startContinuo: async () => ({ kind: "answered", value: { revision: continuo.revision } }),
@@ -395,8 +397,9 @@ export async function openConductor(
   store: IterationStore,
   environment: Readonly<Record<string, string | undefined>> = process.env,
   now: () => number = Date.now,
+  record: Pick<AdvisoryRecord, "recordThreadMessage"> | null = null,
 ): Promise<
-  | { readonly kind: "ready"; readonly ports: ConductorPorts; readonly revision: string }
+  | { readonly kind: "ready"; readonly ports: ReportingPorts; readonly revision: string }
   | { readonly kind: "refused"; readonly reason: string }
 > {
   const startup = await startContinuo(environment);
@@ -405,7 +408,7 @@ export async function openConductor(
   }
   return {
     kind: "ready",
-    ports: conductorPorts(startup.continuo, store, now),
+    ports: conductorPorts(startup.continuo, store, record, now),
     revision: startup.continuo.revision,
   };
 }
@@ -444,7 +447,7 @@ export async function openConductor(
  * raise -- becomes one too.
  */
 export async function admit(
-  ports: ConductorPorts,
+  ports: ReportingPorts,
   advisory: UnpromptedPorts,
   plan: RunPlan,
   policy: LoopPolicy,
@@ -464,6 +467,9 @@ export async function admit(
     requestMessageId,
     scopeSpend,
   );
+  if (report.status === "awaiting_human") {
+    return await withGateReport(ports, report);
+  }
   if (report.status !== "abandoned" || report.iterationId === null) {
     return report;
   }
@@ -503,8 +509,131 @@ async function proposeLine(advisory: UnpromptedPorts, iterationId: string): Prom
  * leaves everything unchanged, so a surface that cannot be sure whether the
  * answer landed may simply call it again.
  */
-export async function resume(ports: ConductorPorts, iterationId: string): Promise<ConductorReport> {
-  return await resumeIteration(ports, iterationId);
+export async function resume(ports: ReportingPorts, iterationId: string): Promise<ConductorReport> {
+  const before = await ports.store.read(iterationId);
+  const report = await resumeIteration(ports, iterationId);
+  // An open gate left as it was is no gate reached: a `revise` that walked a
+  // second lap names a new gate, and only that one is reported.
+  if (
+    report.status !== "awaiting_human" ||
+    (before.kind === "read" &&
+      before.record.status === "awaiting_human" &&
+      before.record.gateId === (await gateIdOf(ports, iterationId)))
+  ) {
+    return report;
+  }
+  return await withGateReport(ports, report);
+}
+
+/**
+ * The surface's ports: the conductor's, and the request thread D-0061 step 5.3
+ * reports into. `thread` is absent or null where nothing is reported -- a
+ * test's hand-built ports, or `abandon`, which reaches no gate.
+ */
+export interface ReportingPorts extends ConductorPorts {
+  readonly thread?: RequestThread | null;
+}
+
+/** What a report into a request thread reads and writes. */
+export interface RequestThread {
+  readonly record: Pick<AdvisoryRecord, "recordThreadMessage">;
+  readonly store: Pick<IterationStore, "read" | "readingsFor">;
+}
+
+/** What a report says happened to the lap (D-0061 step 5.3). */
+export type LapEvent = { readonly kind: "gate" } | { readonly kind: "published" };
+
+async function gateIdOf(ports: ConductorPorts, iterationId: string): Promise<string | null> {
+  const after = await ports.store.read(iterationId);
+  return after.kind === "read" ? after.record.gateId : null;
+}
+
+async function withGateReport(
+  ports: ReportingPorts,
+  report: ConductorReport,
+): Promise<ConductorReport> {
+  if (ports.thread === undefined || ports.thread === null || report.iterationId === null) {
+    return report;
+  }
+  const line = await reportToRequest(
+    ports.thread,
+    report.iterationId,
+    { kind: "gate" },
+    ports.now(),
+  );
+  return line === null ? report : { ...report, lines: [...report.lines, line] };
+}
+
+/**
+ * **D-0061 step 5.3: a `drafter` message into the request thread a lap names**,
+ * when it reaches its gate -- which is also when it is read, since the D-0029
+ * reading lands in the gate's own transaction -- and when it is published.
+ *
+ * **It reads rows and no request body.** `asks` is unset, so a report never
+ * holds a line (D-0066 rule 4.4), and it replies to the request's root and never
+ * to an asking message, which a reply would answer. The bases are the iteration
+ * (the row that carries the gate id and the readings) and its continuo run.
+ *
+ * ponytail: the gate has no locator of its own until it has a transition
+ * (`gateTransition` needs a seq the row does not hold) and a reading none at
+ * all, so both are reached through the iteration basis rather than a new form.
+ *
+ * Returns a line for the report, or null when the lap names no request. A
+ * report that could not be written never fails the step: the lap's own outcome
+ * is committed before this runs.
+ */
+export async function reportToRequest(
+  thread: RequestThread,
+  iterationId: string,
+  event: LapEvent,
+  nowMs: number,
+): Promise<string | null> {
+  const found = await thread.store.read(iterationId);
+  if (found.kind !== "read") {
+    return `No report was written to the request thread: iteration '${iterationId}' did not read.`;
+  }
+  const row = found.record;
+  const request = row.requestMessageId;
+  if (request === null) {
+    return null;
+  }
+  let body: string;
+  let messageId: string;
+  if (event.kind === "gate") {
+    const reading = latestReading(
+      await thread.store.readingsFor(iterationId),
+      (drafter) => !isModelReadingDrafter(drafter),
+    );
+    messageId = `report-gate-${iterationId}-${row.gateId ?? "none"}`;
+    body =
+      `Lap '${iterationId}' reached gate '${row.gateId ?? "(none recorded)"}' at stage ` +
+      `'${row.gateStage ?? "(none recorded)"}'. ` +
+      (reading === null
+        ? "No independent reading is recorded for it."
+        : `Its independent reading says '${reading.verdict}' with ` +
+          `${String(reading.findings.length)} finding(s).`);
+  } else {
+    messageId = `report-published-${iterationId}`;
+    body =
+      `Lap '${iterationId}' was published: its branch was pushed, a pull request was opened, ` +
+      `and run '${row.runId ?? "(none recorded)"}' was closed completed.`;
+  }
+  const outcome = await thread.record.recordThreadMessage({
+    messageId,
+    body,
+    authorKind: "drafter",
+    authorId: DETERMINISTIC_DRAFTER,
+    inReplyTo: request,
+    atMs: nowMs,
+    bases: [
+      { form: "iteration", iterationId },
+      ...(row.runId === null ? [] : [{ form: "continuoRun", runId: row.runId }]),
+    ],
+    asks: false,
+  });
+  return outcome.kind === "recorded"
+    ? `Reported to the request '${request}' as message '${messageId}'.`
+    : `No report was written to the request '${request}': ${outcome.reason}`;
 }
 
 /**
