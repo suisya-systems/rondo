@@ -21,7 +21,9 @@
     "node": ">=22.14.0 <23 || >=24.0.0 <25"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "tsc -p tsconfig.build.json && node scripts/page.mjs build",
+    "page:record": "node scripts/page.mjs record",
+    "page:check": "node scripts/page.mjs check",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
@@ -30,16 +32,23 @@
     "preflight:model-tier": "node scripts/model-tier.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
-    "verify": "npm run build && npm run lint && npm run knip && npm run typecheck && npm run test"
+    "verify": "npm run build && npm run page:check && npm run lint && npm run knip && npm run typecheck && npm run test"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.10",
+    "@tailwindcss/cli": "4.3.3",
     "@types/node": "26.3.0",
     "knip": "6.32.2",
+    "tailwindcss": "4.3.3",
     "typescript": "7.0.2",
     "vitest": "4.1.11"
   },
   "dependencies": {
-    "@suisya-systems/cadenza": "file:vendor/suisya-systems-cadenza-0.0.0.tgz"
+    "@suisya-systems/cadenza": "file:vendor/suisya-systems-cadenza-0.0.0.tgz",
+    "@fontsource-variable/inter": "5.3.0",
+    "@fontsource-variable/jetbrains-mono": "5.3.0",
+    "@hono/node-server": "2.1.1",
+    "hono": "4.13.7",
+    "htmx.org": "2.0.10"
   }
 }

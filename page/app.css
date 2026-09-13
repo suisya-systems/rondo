@@ -1,0 +1,32 @@
+/*
+ * The page's one stylesheet input (DECISIONS.md D-0059 rule 2, R1). `scripts/page.mjs build`
+ * compiles it with the Tailwind CLI into `dist/page/app.css`, the only generated file the browser
+ * receives; its digest is in `page.manifest.json`.
+ *
+ * `source(none)` switches automatic source detection off, and the one `@source` below is the whole
+ * of what Tailwind scans. Without it the CSS silently grew 2.7x by scanning stray files (measured in
+ * both stacks, D-0059 R1), and a class string in a test or a scratch file would change served bytes.
+ * The views are the `.tsx` modules under `src/access`; nothing else there carries class strings.
+ */
+@import "tailwindcss" source(none);
+@source "../src/access/**/*.tsx";
+
+/*
+ * The two faces are copied beside this file by the build, so the URLs are relative to the served
+ * directory rather than to `node_modules`. Latin subset, variable weight: CJK stays on system fonts
+ * (D-0059 residuals).
+ */
+@font-face {
+  font-family: "Inter Variable";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url(./inter-latin-wght-normal.woff2) format("woff2-variations");
+}
+@font-face {
+  font-family: "JetBrains Mono Variable";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 800;
+  src: url(./jetbrains-mono-latin-wght-normal.woff2) format("woff2-variations");
+}

@@ -1,7 +1,14 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
-  "entry": ["src/index.ts", "src/access/cli.ts", "test/**/*.test.ts", "vitest.config.ts"],
-  "project": ["src/**/*.{ts,mts,cts,tsx}", "scripts/**/*.mjs", "test/**/*.ts"],
+  "entry": [
+    "src/index.ts",
+    "src/access/cli.ts",
+    "test/**/*.test.ts",
+    "vitest.config.ts",
+    "page/app.css"
+  ],
+  "project": ["src/**/*.{ts,mts,cts,tsx}", "scripts/**/*.mjs", "test/**/*.ts", "page/**/*.css"],
   "ignoreExportsUsedInFile": true,
-  "vitest": false
+  "vitest": false,
+  "ignoreDependencies": ["@hono/node-server"]
 }
