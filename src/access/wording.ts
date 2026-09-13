@@ -202,8 +202,11 @@ export interface Chrome {
   readonly blockedNothing: string;
   readonly blockedUnknown: string;
   /** A running row whose transcript rondo could not name; the reason is the `title`. */
-  readonly logNotFound: string;
   readonly logFound: string;
+  readonly logNotYet: string;
+  readonly logUnchecked: (reason: string) => string;
+  readonly logNotLookedFor: string;
+  readonly fenceHeading: string;
   readonly whyStopped: string;
   readonly whyNotRead: string;
   readonly workHeading: string;
@@ -523,8 +526,11 @@ explanation you pressed on and then answers the gate.`,
   blockedCount: (count) => `blocked ${String(count)} command${count === 1 ? "" : "s"}`,
   blockedNothing: "blocked nothing",
   blockedUnknown: "not known what was blocked",
-  logNotFound: "log not found",
-  logFound: "writing a log",
+  logFound: "log found",
+  logNotYet: "no log yet",
+  logUnchecked: (reason) => `could not check for a log: ${reason}`,
+  logNotLookedFor: "log not looked for yet",
+  fenceHeading: "Blocked by the fence",
   whyStopped: "Why it stopped",
   whyNotRead: "The worker's own account could not be read; it is in the text below if it was.",
   workHeading: "What changed",
@@ -558,7 +564,7 @@ explanation you pressed on and then answers the gate.`,
   reloadPage: "Reload",
   readingsNote:
     "Both readings are material for you to weigh. Neither approves anything; the answer is yours.",
-  allAsText: "Everything above, as text",
+  allAsText: "The full record as text, including what is not shown above",
   claimLabel: "What did you check? (optional)",
   claimPlaceholder: "e.g. ran the tests locally; read the diff; opened the page on a phone",
   modelRaised: (blockers, majors) =>
@@ -813,8 +819,11 @@ const JA: Partial<Chrome> = Object.freeze({
   blockedCount: (count) => `${String(count)} 件のコマンドを止めた`,
   blockedNothing: "止めたコマンドなし",
   blockedUnknown: "止めたコマンドは不明",
-  logNotFound: "ログが見つかりません",
-  logFound: "ログを書き込み中",
+  logFound: "ログあり",
+  logNotYet: "ログはまだありません",
+  logUnchecked: (reason) => `ログを確認できませんでした: ${reason}`,
+  logNotLookedFor: "ログはまだ探していません",
+  fenceHeading: "fence が止めたもの",
   whyStopped: "止まった理由",
   whyNotRead: "作業者自身の説明は読み取れませんでした。読めていれば下のテキストにあります。",
   workHeading: "変わったもの",
@@ -848,7 +857,7 @@ const JA: Partial<Chrome> = Object.freeze({
     "これは以前のコミットについてのものです。いまのコミットの読み取りがこれから届くかもしれません。",
   reloadPage: "読み込み直す",
   readingsNote: "どちらの読み取りも判断材料です。どちらも何も承認しません。答えるのはあなたです。",
-  allAsText: "ここまでの内容をテキストで",
+  allAsText: "記録全文 (上に出していない項目も含む)",
   claimLabel: "何を確認しましたか (任意)",
   claimPlaceholder: "例: 手元でテストを実行した / 差分を読んだ / スマートフォンで画面を開いた",
   modelRaised: (blockers, majors) =>

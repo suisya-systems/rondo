@@ -111,7 +111,7 @@ import {
 import { type InboxOutcome, showInbox, type TranscriptLocation } from "./inbox.js";
 import { modelReadingLines } from "./model-review.js";
 import { modelReviewPorts, takeModelReading } from "./model-reviewer.js";
-import { evidenceOf, LIST_LIMIT, READING_REMOTE, uncommittedPaths } from "./review.js";
+import { denialLine, evidenceOf, LIST_LIMIT, READING_REMOTE, uncommittedPaths } from "./review.js";
 import {
   admitUnderScope,
   agentTypeRecordOf,
@@ -3208,34 +3208,6 @@ function denialLines(record: IterationRecord): readonly string[] {
     ...denials.slice(0, LIST_LIMIT).map((denial) => `  ${denialLine(denial)}`),
     ...(hidden > 0 ? [`  ...and ${String(hidden)} more`] : []),
   ];
-}
-
-/** One refused call: the tool, and the input a reader acts on. */
-function denialLine(denial: unknown): string {
-  if (typeof denial !== "object" || denial === null || Array.isArray(denial)) {
-    return "(a refusal rondo cannot read)";
-  }
-  const fields = denial as Readonly<Record<string, unknown>>;
-  const name = fields["tool_name"];
-  const input = fields["tool_input"];
-  const command =
-    typeof input === "object" && input !== null && !Array.isArray(input)
-      ? (input as Readonly<Record<string, unknown>>)["command"]
-      : undefined;
-  return (
-    `${typeof name === "string" ? name : "(unnamed tool)"}  ` +
-    capped(JSON.stringify(typeof command === "string" ? command : input))
-  );
-}
-
-/** How much of a worker's own text one line of the gate screen carries. */
-const DENIAL_TEXT_LIMIT = 200;
-
-/** Say that a value was cut rather than trailing off, as `workLines` does. */
-function capped(text: string): string {
-  return text.length <= DENIAL_TEXT_LIMIT
-    ? text
-    : `${text.slice(0, DENIAL_TEXT_LIMIT)}... (${String(text.length)} chars)`;
 }
 
 /**

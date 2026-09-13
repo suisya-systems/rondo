@@ -1218,6 +1218,23 @@ test("rondo's own script moves focus and follows the server's links, and asks fo
   ]);
 });
 
+test("a running row says why rondo could not check for a log, not that there is none (#220 S2)", async () => {
+  const world = fresh();
+  await reserve(world, "i-0001", "not started");
+  await reserve(world, "i-0002", "performing");
+  for (const [from, to] of [
+    ["planned", "admitting"],
+    ["admitting", "admitted"],
+    ["admitted", "performing"],
+  ] as const) {
+    expect((await world.store.transition("i-0002", from, to, {}, 2_000)).kind).toBe("transitioned");
+  }
+  const html = await operatorPage(portsOver(world, "ada", []), "t");
+  expect(html).toContain("could not check for a log: no continuo in this test");
+  expect(html).toContain("log not looked for yet");
+  expect(html).not.toContain("log not found");
+});
+
 test("every repeated block in the lead carries the identity the refresh restores focus by", async () => {
   const world = fresh();
   await reserve(world, "i-0001", "the one at a gate");
@@ -2345,6 +2362,44 @@ test("a model reading not yet taken is said as pending, beside the checks and by
   expect(html).toContain('href="/?answer=i-0001&amp;lang=en" class="font-medium text-link');
   expect(html).toContain("The model review may still arrive.");
   expect(html).not.toContain('id="model-raised"');
+});
+
+test("an unavailable model reading of these commits is its outcome, not a pending one (#220 S2)", async () => {
+  const world = fresh();
+  await gateWithChecks(world);
+  const appended = await world.store.appendReading(
+    "i-0001",
+    {
+      drafter: "rondo/model/1/gpt-6-astra",
+      verdict: "unavailable",
+      findings: [],
+      evidence: null,
+      unavailableReason: "the plan names no review criterion",
+    },
+    4_000,
+  );
+  expect(appended.kind).toBe("appended");
+  const html = await operatorPage({ ...portsOver(world, "ada", []), material: structured }, "t", {
+    kind: "answer",
+    iterationId: "i-0001",
+  });
+  expect(html).toContain("the plan names no review criterion");
+  expect(html).not.toContain("may still arrive");
+  expect(html).not.toContain("earlier commits");
+});
+
+test("what the fence blocked is on the gate, each call in words, not only in the text fold (#220 S2)", async () => {
+  const world = fresh();
+  await gateWithChecks(world);
+  const html = await operatorPage({ ...portsOver(world, "ada", []), material: structured }, "t", {
+    kind: "answer",
+    iterationId: "i-0001",
+  });
+  const card = html.slice(html.indexOf('<section id="fence"'), html.indexOf('id="material-text"'));
+  expect(card).toContain("Blocked by the fence");
+  expect(card).toContain("blocked 1 command");
+  expect(card).toContain("Bash  &quot;rm -rf /srv&quot;");
+  expect(html).toContain("The full record as text, including what is not shown above");
 });
 
 test("no approver, no claim box; the summary row says its facts plainly and keeps the raw ones (#220 S2)", async () => {

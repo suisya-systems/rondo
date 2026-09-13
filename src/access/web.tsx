@@ -108,7 +108,6 @@ import {
   type LapReading,
   latestReading,
   MODEL_READING_DRAFTER_PREFIX,
-  modelReadingDue,
   type NonTerminalStatus,
   type OpenProposal,
   readingCoverage,
@@ -131,7 +130,7 @@ import {
   unblockedBy,
   whereItRuns,
 } from "./inbox.js";
-import { LIST_LIMIT } from "./review.js";
+import { denialLine, LIST_LIMIT } from "./review.js";
 import { type Chrome, EN, SHIPPED_SETS, setFor } from "./wording.js";
 
 /**
@@ -876,13 +875,8 @@ function fenceLine(wording: Chrome, record: IterationRecord) {
   // **Plain words on the row, the console's sentence as its `title`** (#220
   // S2): "the fence refused [...]" is a JSON array in a sentence about a
   // mechanism, and what a person reads from it is a count. The bytes continuo
-  // wrote are still here, and listed under the answer view's text fold.
-  let denials: unknown = null;
-  try {
-    denials = JSON.parse(refused);
-  } catch {
-    denials = null;
-  }
+  // wrote are still here, and listed one by one in the answer view's fence card.
+  const denials = decodedDenials(refused);
   const raw =
     refused === "null"
       ? wording.fenceUnknown
@@ -897,6 +891,56 @@ function fenceLine(wording: Chrome, record: IterationRecord) {
           ? wording.blockedNothing
           : wording.blockedCount(denials.length)}
     </span>
+  );
+}
+
+/** The fence column decoded, or `null` where it is not a list (`"null"`, or bytes that will not parse). */
+function decodedDenials(refused: string): readonly unknown[] | null {
+  try {
+    const parsed: unknown = JSON.parse(refused);
+    return Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * **What the fence blocked, on the gate itself** (#220 S2): the count in plain
+ * words and each refused call as `rondo answer` spells it ({@link denialLine}),
+ * so a person approving sees that a command was stopped without opening the
+ * text fold. No row reading (SQL null) draws nothing, as {@link fenceLine}.
+ */
+function fenceView(wording: Chrome, record: IterationRecord) {
+  const refused = record.permissionDenials;
+  if (refused === null) {
+    return null;
+  }
+  const denials = decodedDenials(refused);
+  return (
+    <section id="fence" class={CARD}>
+      <h3 class={CARD_HEADING}>{wording.fenceHeading}</h3>
+      <p class="text-[13px] leading-5 text-muted-foreground">
+        {denials === null
+          ? wording.blockedUnknown
+          : denials.length === 0
+            ? wording.blockedNothing
+            : wording.blockedCount(denials.length)}
+      </p>
+      {denials === null || denials.length === 0 ? null : (
+        <ul class="mt-2 divide-y divide-border/70 rounded-md border border-border/70">
+          {denials.slice(0, LIST_LIMIT).map((denial) => (
+            <li class="px-3 py-1.5 font-mono text-[12px] leading-5 wrap-anywhere" lang="">
+              {denialLine(denial)}
+            </li>
+          ))}
+          {denials.length > LIST_LIMIT ? (
+            <li class="px-3 py-1.5 text-[12px] text-faint">
+              {wording.moreRows(denials.length - LIST_LIMIT)}
+            </li>
+          ) : null}
+        </ul>
+      )}
+    </section>
   );
 }
 
@@ -1310,22 +1354,32 @@ function runningView(
 }
 
 /**
- * {@link whereItRuns} in plain words (#220 S2): whether rondo found the log,
- * and nothing else on the row. The transcript directory, the workspace and the
- * reason a log was not named are the console's sentence, kept whole as the
- * `title`, and the reading's inbox section prints them as text.
+ * {@link whereItRuns} in plain words (#220 S2), in the four states the
+ * console's sentence has, and never merging them: a log found, none yet in a
+ * named directory, rondo not able to ask (with continuo's reason, visible --
+ * a continuo that will not answer is not a run with nothing to answer about,
+ * D-0048 rule 8), and not looked for. The workspace stays visible beside it;
+ * the console's whole sentence is the `title`.
  */
 function runsWhere(
   wording: Chrome,
   record: IterationRecord,
   located: TranscriptLocation | undefined,
 ) {
-  if (located === undefined) {
-    return null;
-  }
+  const said =
+    located === undefined
+      ? wording.logNotLookedFor
+      : located.kind === "unknown"
+        ? wording.logUnchecked(located.reason)
+        : located.sessions === 0
+          ? wording.logNotYet
+          : wording.logFound;
   return (
-    <span class="line min-w-0" title={whereItRuns(wording, record, located)}>
-      {located.kind === "named" ? wording.logFound : wording.logNotFound}
+    <span class="line min-w-0 wrap-anywhere" title={whereItRuns(wording, record, located)}>
+      {said}
+      {record.workspace === null ? null : (
+        <span class="font-mono text-faint"> {record.workspace}</span>
+      )}
     </span>
   );
 }
@@ -1665,6 +1719,24 @@ function checksView(wording: Chrome, reading: LapReading | null) {
  * **The page does not wait for it** (D-0054 rule 1): the answer view holds
  * still, so a reading that may still arrive is a sentence and a reload link.
  */
+/**
+ * Whether the page may say a model reading *may still arrive* (#220 S2), which
+ * is not `modelReadingDue`: that one decides whether the terminal takes a
+ * round, and an unavailable row carries no evidence, so it stays "due" after a
+ * round on these very commits ended unavailable -- and nothing at this gate
+ * retries. The page says so only while there is no model row at all, or the
+ * latest one names a tip other than the checks' tip. An unavailable row is
+ * that round's outcome and is shown as such.
+ */
+function modelPendingOnPage(readings: readonly LapReading[], model: LapReading | null): boolean {
+  if (model === null) {
+    return true;
+  }
+  const modelTip = model.evidence?.tipCommit;
+  const checksTip = reviewedReading(readings)?.evidence?.tipCommit;
+  return modelTip !== undefined && checksTip !== undefined && modelTip !== checksTip;
+}
+
 function modelView(wording: Chrome, reading: LapReading | null, due: boolean, reload: string) {
   const later = (note: string) => (
     <p class="mt-1 text-[13px] leading-5 text-muted-foreground">
@@ -1798,7 +1870,7 @@ function approveView(
   const known = framing.claims.filter((claim) => claim.value !== UNDETERMINED);
   const unknown = framing.claims.filter((claim) => claim.value === UNDETERMINED);
   const model = latestReading(framing.readings, isModelReadingDrafter);
-  const modelDue = modelReadingDue(framing.readings);
+  const modelDue = modelPendingOnPage(framing.readings, model);
   const raised = modelRaised(wording, model);
   const reload = viewHref({ kind: "answer", iterationId: record.id }, wording.lang);
   return (
@@ -1819,6 +1891,7 @@ function approveView(
             )}
           </section>
           {changedView(wording, record, framing.material.work)}
+          {fenceView(wording, record)}
         </>
       )}
       {/*
@@ -1867,7 +1940,9 @@ function approveView(
       {framing.material === null ? null : (
         // **Folded is not dropped** (D-0029 rule 2): `rondo answer`'s material
         // whole, for what the layout above does not draw -- the fence's
-        // allowance and its standing sentences, the refused calls one by one.
+        // allowance and its standing sentences, the gate's options, the
+        // readings' evidence -- and its label says so rather than promising a
+        // repeat.
         <details id="material-text" class="group rounded-md border border-border">
           <summary class="flex cursor-pointer list-none items-center gap-2 rounded-md px-3 py-2 text-[12.5px] leading-5 text-muted-foreground outline-none select-none hover:bg-accent focus-visible:bg-accent [&::-webkit-details-marker]:hidden">
             {chevron()}
