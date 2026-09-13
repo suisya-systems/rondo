@@ -89,6 +89,8 @@
 import { parseAccept } from "hono/utils/accept";
 import {
   type AdvisorySnapshot,
+  BASIS_FORMS,
+  type Basis,
   type Claim,
   type HostSnapshot,
   propose,
@@ -102,6 +104,7 @@ import {
   isTerminal,
   type NonTerminalStatus,
   type OpenProposal,
+  type ThreadMessageDraft,
   WAIT_SIDE,
 } from "../store/records.js";
 import type { AdvisoryRecord, IterationStore, ReadOutcome } from "../store/sqlite.js";
@@ -133,7 +136,8 @@ export interface WebPorts extends InboxReadPorts {
     IterationStore,
     "read" | "readLive" | "readingsFor" | "occupancy" | "terminalIterations"
   >;
-  readonly record: InboxReadPorts["record"] & Pick<AdvisoryRecord, "admissionRefusals">;
+  readonly record: InboxReadPorts["record"] &
+    Pick<AdvisoryRecord, "admissionRefusals" | "threadMessages">;
   readonly policy: HostPolicy;
   readonly actorId: string | null;
   /**
@@ -221,7 +225,21 @@ const REFRESH_SECONDS = 5;
 export type PageView =
   | { readonly kind: "summary" }
   | { readonly kind: "reading" }
-  | { readonly kind: "answer"; readonly iterationId: string };
+  | { readonly kind: "answer"; readonly iterationId: string }
+  /**
+   * The request threads (D-0061 rule 4, #220 S1): `requests` lists them and
+   * carries the composer for a new one; `thread` is one of them, named by any
+   * message in it -- so the address a send redirects to is the message it
+   * sent -- with `to` the message the reply box answers, or null for the
+   * default ({@link replyTarget}). Both are live: a drafter can write into a
+   * thread while a person reads it.
+   */
+  | { readonly kind: "requests" }
+  | {
+      readonly kind: "thread";
+      readonly messageId: string;
+      readonly to: string | null;
+    };
 
 /**
  * Whether this view keeps itself current, which is a property of the view and
@@ -266,6 +284,12 @@ export function viewHref(view: PageView, tag: string): string {
       return `/?reading=open&${lang}`;
     case "answer":
       return `/?answer=${encodeURIComponent(view.iterationId)}&${lang}`;
+    case "requests":
+      return `/?requests=open&${lang}`;
+    case "thread":
+      return `/?thread=${encodeURIComponent(view.messageId)}${
+        view.to === null ? "" : `&to=${encodeURIComponent(view.to)}`
+      }&${lang}`;
     default:
       return `/?${lang}`;
   }
@@ -504,16 +528,30 @@ const ROW =
 
 /** The muted, right-aligned column of identifiers (section 1, GitHub's run list): a locator, so a step below the metadata. */
 const META =
-  "col-start-2 flex gap-x-2 font-mono text-[11px] leading-6 whitespace-nowrap text-faint tabular-nums sm:col-start-auto sm:justify-end";
+  "col-start-2 flex gap-x-2 font-mono text-[11px] leading-6 whitespace-nowrap text-faint tabular-nums max-sm:hidden sm:col-start-auto sm:justify-end";
 
 /**
  * The metadata line under a row's title: its sentences run on one line, parted
  * by a middle dot the stylesheet draws, so the separator is not a character in
  * the document and a reader without CSS still gets the sentences as they were.
- * Under `sm` each sentence wraps to a line of its own, where a dot would lead it.
+ *
+ * **Every sentence carries its dot, and the dot that would lead a line is cut
+ * off** (the S1 design pass on #220): the line sits a dot's width to the left
+ * inside a box that clips ({@link metaLine}), so a sentence that wraps to a new
+ * line starts clean instead of with a stray `·`. Direct children must be plain
+ * spans: a pill goes inside one.
  */
 const META_LINE =
-  "mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[12.5px] leading-5 text-muted-foreground sm:[&>span+span]:before:mr-2 sm:[&>span+span]:before:text-faint sm:[&>span+span]:before:content-['·']";
+  "-ml-3 flex flex-wrap items-center gap-y-0.5 text-[12.5px] leading-5 text-muted-foreground [&>span]:relative [&>span]:pl-3 [&>span]:before:absolute [&>span]:before:left-[0.3rem] [&>span]:before:text-faint [&>span]:before:content-['·']";
+
+/** {@link META_LINE} inside the box that clips its leading dots. */
+function metaLine(children: unknown, extra = "") {
+  return (
+    <div class="mt-0.5 overflow-hidden">
+      <p class={`${META_LINE} ${extra}`}>{children}</p>
+    </div>
+  );
+}
 
 /** A row focusable by `j`/`k` that is not a list item: the answer view's claim groups. */
 const FOCUS_ROW =
@@ -528,7 +566,7 @@ const FOCUS_ROW =
  * state is also the pill's text beside it: the glyph is for the eye across the
  * room and never the only carrier.
  */
-function glyph(tone: Tone | "alert") {
+function glyph(tone: Tone | "alert" | "message") {
   const color = {
     wait: "text-wait",
     run: "text-run",
@@ -537,6 +575,7 @@ function glyph(tone: Tone | "alert") {
     muted: "text-faint",
     revise: "text-wait",
     alert: "text-fail",
+    message: "text-faint",
   }[tone];
   return (
     <svg
@@ -573,6 +612,8 @@ function glyph(tone: Tone | "alert") {
         <path d="M13.2 6.4A5.4 5.4 0 1 0 13.4 9M13.6 2.8v3.8H9.8" />
       ) : tone === "alert" ? (
         <path d="M8 2.2 14.2 13H1.8L8 2.2Zm0 4.3v2.8m0 2v.1" />
+      ) : tone === "message" ? (
+        <path d="M2.5 4.3c0-1 .8-1.8 1.8-1.8h7.4c1 0 1.8.8 1.8 1.8v5c0 1-.8 1.8-1.8 1.8H7.2L4.4 13.5v-2.4h-.1c-1 0-1.8-.8-1.8-1.8Z" />
       ) : (
         <>
           <circle cx="8" cy="8" r="6.2" />
@@ -813,7 +854,7 @@ function fenceLine(wording: Chrome, record: IterationRecord): string | null {
 function endedHow(wording: Chrome, record: IterationRecord, nowMs: number): string {
   return wording.endedHead(
     record.status,
-    ago(record.updatedAtMs, nowMs),
+    wording.age(ago(record.updatedAtMs, nowMs)),
     endedWhy(wording, record),
   );
 }
@@ -843,7 +884,7 @@ function stateHead(wording: Chrome, record: IterationRecord, tone: Tone, age: st
 }
 
 /** Which of the three questions a row answers, which is what its weight is decided by. */
-type Question = "waiting" | "running" | "ended";
+type Question = "waiting" | "attention" | "running" | "ended";
 
 /**
  * One lap as one row, with the row it rests on cited once beside it (D-0032,
@@ -913,24 +954,21 @@ function lapRow(
          * transcript path wrapped to four there, and the whole of it is in the
          * reading. A waiting row's is never cut -- it says what releases it.
          */}
-        <p
-          class={
-            question === "waiting"
-              ? META_LINE
-              : `${META_LINE} max-sm:max-h-15 max-sm:overflow-hidden`
-          }
-        >
-          {head}
-          {lines
-            .filter((line) => line !== null)
-            .map((line) =>
-              typeof line === "string" ? (
-                <span class="line min-w-0 wrap-anywhere whitespace-pre-wrap">{line}</span>
-              ) : (
-                line
-              ),
-            )}
-        </p>
+        {metaLine(
+          <>
+            {head}
+            {lines
+              .filter((line) => line !== null)
+              .map((line) =>
+                typeof line === "string" ? (
+                  <span class="line min-w-0 wrap-anywhere whitespace-pre-wrap">{line}</span>
+                ) : (
+                  line
+                ),
+              )}
+          </>,
+          question === "waiting" ? "" : "max-sm:max-h-15 max-sm:overflow-hidden",
+        )}
         {tail}
       </div>
       {/* The id alone; the basis it abbreviates is the column's `title`. */}
@@ -975,9 +1013,11 @@ function questionGroup(question: Question, heading: string, rows: readonly unkno
           class={
             question === "waiting"
               ? "divide-y divide-wait/20 rounded-lg border border-wait/35 bg-card shadow-[inset_3px_0_0_var(--color-wait)]"
-              : question === "running"
-                ? "divide-y divide-border rounded-lg border border-border bg-card"
-                : "divide-y divide-border/70 rounded-lg border border-border/70"
+              : question === "attention"
+                ? "divide-y divide-fail/20 rounded-lg border border-fail/35 bg-card"
+                : question === "running"
+                  ? "divide-y divide-border rounded-lg border border-border bg-card"
+                  : "divide-y divide-border/70 rounded-lg border border-border/70"
           }
         >
           {rows}
@@ -1007,12 +1047,16 @@ function waitingView(
   nowMs: number,
   token: string | null,
   shown: ReadonlyMap<string, Shown>,
+  threads: Threads,
+  actorId: string | null,
+  count: number,
 ) {
+  const asks = threads.messages.filter((message) => threads.waiting.has(message.messageId));
   const hoisted = [
     ...waiting.filter((record) => shown.has(record.id)),
     ...waiting.filter((record) => !shown.has(record.id)),
   ];
-  return questionGroup("waiting", wording.waitingHeading(waiting.length + open.length), [
+  return questionGroup("waiting", wording.waitingHeading(count), [
     ...hoisted.map((record) => {
       const framing = shown.get(record.id);
       return lapRow(
@@ -1022,12 +1066,64 @@ function waitingView(
           wording,
           record,
           "wait",
-          ago(record.updatedAtMs, nowMs),
-          wording.waitingHead(record.status, ago(record.updatedAtMs, nowMs)),
+          wording.age(ago(record.updatedAtMs, nowMs)),
+          wording.waitingHead(record.status, wording.age(ago(record.updatedAtMs, nowMs))),
         ),
         [unblockedBy(wording, record), spentLine(wording, record), fenceLine(wording, record)],
         framing === undefined ? answerLink(wording, record, token) : null,
         framing === undefined ? null : approveView(wording, record, token, framing),
+      );
+    }),
+    // **An ask in a request thread waits on the person too** (D-0061 rule 2.7,
+    // #220 S1): its words, the request it was asked in, and the way to reply --
+    // which lands on the thread with the reply box already pointed at it.
+    ...asks.map((ask) => {
+      const root = threads.rootOf(ask.messageId);
+      const request = root === null ? undefined : threads.byId.get(root);
+      return (
+        <li id={`ask-${ask.messageId}`} data-row="" tabindex={-1} class={ROW}>
+          {glyph("wait")}
+          <div class="min-w-0">
+            <p
+              class="request line-clamp-2 text-[15px] leading-6 font-semibold wrap-anywhere"
+              title={ask.body}
+              lang=""
+            >
+              {firstLine(ask.body)}
+            </p>
+            {metaLine(
+              <>
+                <span class="head inline-flex items-center gap-2 whitespace-nowrap">
+                  <span
+                    class={`inline-flex shrink-0 items-center rounded-full border px-2 py-px text-[11.5px] font-medium leading-4 whitespace-nowrap ${TONE.wait}`}
+                  >
+                    {wording.askWaitingPill}
+                  </span>
+                  <span class="tabular-nums">{wording.age(ago(ask.atMs, nowMs))}</span>
+                </span>
+                <span>{whoWrote(wording, ask, actorId)}</span>
+                {request === undefined ? null : (
+                  <span class="line min-w-0 truncate" lang="">
+                    {wording.askedIn(firstLine(request.body))}
+                  </span>
+                )}
+              </>,
+            )}
+            <p class="mt-2">
+              <a
+                id={`reply-to-${ask.messageId}`}
+                href={`${viewHref(
+                  { kind: "thread", messageId: root ?? ask.messageId, to: ask.messageId },
+                  wording.lang,
+                )}#${encodeURIComponent(ask.messageId)}`}
+                data-open=""
+                class={`${PRIMARY} h-7 px-3 text-[13px]`}
+              >
+                {wording.openThread}
+              </a>
+            </p>
+          </div>
+        </li>
       );
     }),
     ...open.map((proposal) => (
@@ -1035,14 +1131,16 @@ function waitingView(
         {glyph("wait")}
         <div class="min-w-0">
           <p class="head text-[15px] leading-6 font-semibold wrap-anywhere">
-            {wording.proposalHead(proposal.kind, ago(proposal.createdAtMs, nowMs))}
+            {wording.proposalHead(proposal.kind, wording.age(ago(proposal.createdAtMs, nowMs)))}
           </p>
-          <p class={META_LINE}>
-            <span class="line wrap-anywhere">{wording.aboutIteration(proposal.iterationId)}</span>
-            <span class="basis font-mono text-[11.5px] wrap-anywhere text-faint">
-              {wording.proposalBasis(proposal.proposalId)}
-            </span>
-          </p>
+          {metaLine(
+            <>
+              <span class="line wrap-anywhere">{wording.aboutIteration(proposal.iterationId)}</span>
+              <span class="basis font-mono text-[11.5px] wrap-anywhere text-faint">
+                {wording.proposalBasis(proposal.proposalId)}
+              </span>
+            </>,
+          )}
         </div>
         <div class={META}>
           <p>{proposal.proposalId}</p>
@@ -1053,6 +1151,50 @@ function waitingView(
 }
 
 /**
+ * *What needs attention* -- a live row rondo cannot read (the S1 design pass on
+ * #220).
+ *
+ * **Its own group, with a sentence a person can act on.** Under *running* it was
+ * the loudest thing on the page -- a raw decode error in red mono under an id
+ * for a title -- and said nothing a reader could do. It still holds a slot, so it
+ * is still on the screen: a human title, one line saying what broke and what to
+ * do, and the reason itself byte for byte inside a fold (and in the reading's own
+ * section for the row).
+ */
+function attentionView(wording: Chrome, unreadable: readonly LiveRow[]) {
+  const rows = unreadable.flatMap((row) => (row.kind === "unreadable" ? [row] : []));
+  if (rows.length === 0) {
+    return null;
+  }
+  return questionGroup(
+    "attention",
+    wording.attentionHeading(rows.length),
+    rows.map((row) => (
+      <li id={`unreadable-${row.id}`} data-row="" tabindex={-1} class={ROW}>
+        {glyph("alert")}
+        <div class="min-w-0">
+          <p class="head text-sm leading-6 font-semibold">{wording.unreadableTitle}</p>
+          <p class="line text-[12.5px] leading-5 text-muted-foreground">
+            {wording.unreadableAction(row.id)}
+          </p>
+          <details id={`unreadable-reason-${row.id}`} class="group mt-1">
+            <summary class="cursor-pointer text-[12px] leading-5 text-faint select-none hover:text-foreground">
+              {wording.unreadableDetail}
+            </summary>
+            <p class="basis mt-1 font-mono text-[11px] leading-4 wrap-anywhere text-faint">
+              {wording.willNotDecode(row.reason)}
+            </p>
+          </details>
+        </div>
+        <div class={META}>
+          <p>{row.id}</p>
+        </div>
+      </li>
+    )),
+  );
+}
+
+/**
  * *What is running* -- every live lap that is not waiting on anybody.
  *
  * The line under each is {@link whereItRuns}: the transcript directory continuo
@@ -1060,42 +1202,17 @@ function waitingView(
  * lap in flight -- it names a place and claims no liveness (D-0048 rule 3) --
  * and it is what an operator asking *is this progressing* can actually open.
  *
- * A live row that will not decode is here rather than missing, for the inbox's
- * reason: it holds a slot, so leaving it out would understate what is running.
+ * A live row that will not decode is not here but in {@link attentionView},
+ * above: it is on the page rather than missing, and it is the one row nobody can
+ * read, so it is not counted among the laps that are running.
  */
 function runningView(
   wording: Chrome,
   running: readonly IterationRecord[],
-  unreadable: readonly LiveRow[],
   transcripts: ReadonlyMap<string, TranscriptLocation>,
   nowMs: number,
 ) {
-  return questionGroup("running", wording.runningHeading(running.length + unreadable.length), [
-    // **A row that will not decode leads its group** (the third design pass):
-    // it is the one thing here nobody can read, and at the foot of the group it
-    // was the last row anyone reached. Still inside *running*, because the slot
-    // it holds is what the count is about.
-    ...unreadable.map((row) =>
-      row.kind === "unreadable" ? (
-        <li id={`unreadable-${row.id}`} data-row="" tabindex={-1} class={`${ROW} bg-fail/5`}>
-          {glyph("alert")}
-          <div class="min-w-0">
-            <p class="head text-sm leading-6 font-medium">{row.id}</p>
-            {/*
-             * One line, with the whole reason in `title` and in the reading's
-             * own section for this row: two full digests in running text were
-             * the heaviest block on the page.
-             */}
-            <p
-              class="line truncate font-mono text-[11.5px] leading-5 text-fail"
-              title={wording.willNotDecode(row.reason)}
-            >
-              {wording.willNotDecode(row.reason)}
-            </p>
-          </div>
-        </li>
-      ) : null,
-    ),
+  return questionGroup("running", wording.runningHeading(running.length), [
     ...running.map((record) =>
       lapRow(
         "running",
@@ -1104,8 +1221,8 @@ function runningView(
           wording,
           record,
           "run",
-          ago(record.updatedAtMs, nowMs),
-          wording.runningHead(record.status, ago(record.updatedAtMs, nowMs)),
+          wording.age(ago(record.updatedAtMs, nowMs)),
+          wording.runningHead(record.status, wording.age(ago(record.updatedAtMs, nowMs))),
         ),
         [
           runsWhere(wording, record, transcripts.get(record.id)),
@@ -1160,7 +1277,7 @@ function endedView(wording: Chrome, ended: readonly IterationRecord[], nowMs: nu
           wording,
           record,
           endedTone(record),
-          wording.endedAgo(ago(record.updatedAtMs, nowMs)),
+          wording.endedAgo(wording.age(ago(record.updatedAtMs, nowMs))),
           endedHow(wording, record, nowMs),
         ),
         [
@@ -1420,11 +1537,13 @@ function answerLink(wording: Chrome, record: IterationRecord, token: string | nu
         href={viewHref({ kind: "answer", iterationId: record.id }, wording.lang)}
         data-open=""
         class={`${PRIMARY} h-7 px-3 text-[13px]`}
+        // **One verb per card, no helper prose beside it** (the S1 design
+        // pass): every waiting row is title, one meta line, one action, and
+        // what the second address adds is the pointer's `title`.
+        title={wording.answerHere}
       >
         {wording.answerAction}
       </a>
-      {/* The sentence recedes and drops out under `sm`, where it cost a line per card. */}
-      <span class="line hidden text-xs leading-5 text-faint sm:inline">{wording.answerHere}</span>
     </p>
   );
 }
@@ -1521,6 +1640,715 @@ function endedRecently(outcomes: readonly ReadOutcome[]): readonly IterationReco
     .slice(0, RECENT_ENDED);
 }
 
+/**
+ * The request threads as the page reads them (D-0061 rule 2), with the two
+ * facts every thread view needs derived once per render: which request a
+ * message belongs to, and which asks still wait on the person.
+ *
+ * **An ask waits while nothing replies to it**, which is rule 2.7's own
+ * definition and the one `openAsksIn` queries -- read here off the same rows
+ * rather than asked once per request, because the page draws every thread.
+ */
+interface Threads {
+  readonly messages: readonly ThreadMessageDraft[];
+  readonly byId: ReadonlyMap<string, ThreadMessageDraft>;
+  readonly rootOf: (messageId: string) => string | null;
+  readonly waiting: ReadonlySet<string>;
+  /**
+   * The laps the reading view draws a section for, so an `iteration` basis is
+   * a link only when its anchor exists (#220 S1, Codex): a cited lap older than
+   * the reading's window is named and not linked to nowhere.
+   */
+  readonly inReading: ReadonlySet<string>;
+}
+
+function threadsOf(
+  messages: readonly ThreadMessageDraft[],
+  inReading: ReadonlySet<string>,
+): Threads {
+  const byId = new Map(messages.map((message) => [message.messageId, message]));
+  const replied = new Set(messages.flatMap((message) => message.inReplyTo ?? []));
+  // ponytail: a walk per message per render, which is O(messages x depth); a
+  // thread is a conversation's worth of rows. A `root` column is the upgrade.
+  const rootOf = (messageId: string): string | null => {
+    let at = byId.get(messageId);
+    const seen = new Set<string>();
+    while (at !== undefined && at.inReplyTo !== null && !seen.has(at.messageId)) {
+      seen.add(at.messageId);
+      at = byId.get(at.inReplyTo);
+    }
+    return at?.inReplyTo === null ? at.messageId : null;
+  };
+  return {
+    messages,
+    byId,
+    rootOf,
+    waiting: new Set(
+      messages
+        .filter((message) => message.asks && !replied.has(message.messageId))
+        .map((message) => message.messageId),
+    ),
+    inReading,
+  };
+}
+
+/** The first line of a message that says anything, for a chip or a list row. */
+function firstLine(body: string): string {
+  return body.split("\n").find((line) => line.trim() !== "") ?? body;
+}
+
+/** Who wrote a message, as a person reads it: their own messages are "you". */
+function whoWrote(wording: Chrome, message: ThreadMessageDraft, actorId: string | null): string {
+  return message.authorKind === "operator" && message.authorId === actorId
+    ? wording.you
+    : message.authorId;
+}
+
+/** A locator drawn as a chip: quiet, one line, the whole of it in `title`. */
+const CHIP =
+  "inline-flex max-w-full min-w-0 items-center gap-1 rounded-md border border-border bg-muted/60 px-1.5 py-0.5 text-[11px] leading-4 text-muted-foreground";
+
+/**
+ * One basis of a message, as a chip that goes where it points (#220 S1).
+ *
+ * **Never an id to copy.** A `message` basis is the words it cites and a link
+ * to them; an `iteration` basis links to that lap's section of the reading. The
+ * other forms have no view on this page yet, so they are the terminal's own
+ * {@link basisLine} and not a link -- a chip that led nowhere would be worse
+ * than one that says so by not being blue. A basis that is not a locator is
+ * shown as its JSON rather than dropped, so nothing the drafter cited is lost.
+ */
+function basisChip(
+  wording: Chrome,
+  basis: Readonly<Record<string, unknown>>,
+  threads: Threads,
+  root: string | null,
+  actorId: string | null,
+) {
+  const form = basis["form"];
+  let label: string;
+  let href: string | null = null;
+  if (form === "message" && typeof basis["messageId"] === "string") {
+    const cited = threads.byId.get(basis["messageId"]);
+    label =
+      cited === undefined
+        ? basisLine({ form: "message", messageId: basis["messageId"] }, {})
+        : `${whoWrote(wording, cited, actorId)}: ${firstLine(cited.body)}`;
+    if (cited !== undefined) {
+      href =
+        threads.rootOf(cited.messageId) === root
+          ? `#${encodeURIComponent(cited.messageId)}`
+          : `${viewHref({ kind: "thread", messageId: cited.messageId, to: null }, wording.lang)}#${encodeURIComponent(cited.messageId)}`;
+    }
+  } else if (form === "iteration" && typeof basis["iterationId"] === "string") {
+    label = basisLine({ form: "iteration", iterationId: basis["iterationId"] }, {});
+    if (threads.inReading.has(basis["iterationId"])) {
+      href = `${viewHref({ kind: "reading" }, wording.lang)}#read-${encodeURIComponent(basis["iterationId"])}`;
+    }
+  } else if (form === "snapshot") {
+    label = `snapshot ${String(basis["pointer"])}`;
+  } else if ((BASIS_FORMS as readonly unknown[]).includes(form)) {
+    label = basisLine(basis as unknown as Basis, {});
+  } else {
+    label = JSON.stringify(basis);
+  }
+  const text = (
+    <span class={form === "message" ? "max-w-[26rem] truncate" : "truncate font-mono"}>
+      {label}
+    </span>
+  );
+  return href === null ? (
+    <span class={`basis ${CHIP}`} title={label}>
+      {text}
+    </span>
+  ) : (
+    <a href={href} class={`basis ${CHIP} hover:border-ring/60 hover:text-foreground`} title={label}>
+      {text}
+    </a>
+  );
+}
+
+/**
+ * One message in a thread (D-0061 rule 2): who wrote it and in which voice, how
+ * long ago, the words byte for byte with their paragraphs (rondo#90), what it
+ * rests on, and -- where it asks and nothing has replied -- the one mark that
+ * it waits on the person.
+ *
+ * **The voices are told apart three ways, none of them alone**: an initial in a
+ * round mark (blue for the drafter), a badge that names the drafter's voice, and
+ * a blue wash on its card. **Every card starts at the same left edge** (the S1
+ * design pass on #220): leaning the voices to opposite sides made the column
+ * zig-zag by 40px with nothing saying why. The id is never printed: the age is
+ * the message's link to itself, and `Reply` is how a person points at it --
+ * drawn on hover or focus where a pointer can hover (`page/app.css`), and always
+ * with script off or on touch.
+ */
+function messageView(
+  wording: Chrome,
+  threads: Threads,
+  message: ThreadMessageDraft,
+  previous: ThreadMessageDraft | undefined,
+  root: string,
+  nowMs: number,
+  actorId: string | null,
+  forms: boolean,
+) {
+  const waiting = threads.waiting.has(message.messageId);
+  const parent = message.inReplyTo === null ? undefined : threads.byId.get(message.inReplyTo);
+  const drafter = message.authorKind === "drafter";
+  // **The way to point the reply box here**, a navigation `GET` that writes
+  // nothing, quiet in the header. On an ask still waiting it is labelled as
+  // answering, because the box it points then answers on a press.
+  const replyLink = (
+    <a
+      id={`reply-${message.messageId}`}
+      href={viewHref({ kind: "thread", messageId: root, to: message.messageId }, wording.lang)}
+      data-open=""
+      class="reply-link rounded px-1 font-medium text-link hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+    >
+      {waiting ? wording.answerAskAction : wording.replyAction}
+    </a>
+  );
+  return (
+    <li
+      id={message.messageId}
+      data-row=""
+      tabindex={-1}
+      data-voice={message.authorKind}
+      {...(waiting ? { "data-waiting": "" } : {})}
+      class="message grid scroll-mt-28 scroll-mb-40 grid-cols-1 gap-x-3 sm:grid-cols-[1.75rem_minmax(0,1fr)] rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-4 focus-visible:ring-offset-background"
+    >
+      <span
+        aria-hidden="true"
+        class={
+          drafter
+            ? "mt-2 hidden size-7 sm:inline-flex items-center justify-center rounded-full bg-run-wash text-[12px] font-semibold text-run-ink ring-1 ring-run/30"
+            : "mt-2 hidden size-7 sm:inline-flex items-center justify-center rounded-full bg-muted text-[12px] font-semibold text-foreground ring-1 ring-border"
+        }
+      >
+        {whoWrote(wording, message, actorId).slice(0, 1).toUpperCase()}
+      </span>
+      <article
+        class={
+          waiting
+            ? "rounded-lg border border-wait/45 bg-card shadow-[inset_3px_0_0_var(--color-wait)]"
+            : drafter
+              ? "rounded-lg border border-run/25 bg-run-wash/40"
+              : "rounded-lg border border-border bg-card"
+        }
+      >
+        <header class="flex flex-wrap items-center gap-x-2 gap-y-1 px-4 pt-2.5 text-[12.5px] leading-5">
+          <span class="author font-semibold text-foreground">
+            {whoWrote(wording, message, actorId)}
+          </span>
+          {drafter ? (
+            <span class={`voice ${PILL} font-sans ${TONE.run}`}>{wording.drafterVoice}</span>
+          ) : message.authorId === actorId ? null : (
+            <span class={`voice ${PILL} font-sans ${TONE.muted}`}>{wording.operatorVoice}</span>
+          )}
+          {waiting ? (
+            <span class={`${PILL} font-sans ${TONE.wait}`}>{wording.askWaitingPill}</span>
+          ) : null}
+          <a
+            href={`#${encodeURIComponent(message.messageId)}`}
+            class="text-faint tabular-nums hover:text-foreground"
+            title={new Date(message.atMs).toISOString()}
+          >
+            {wording.age(ago(message.atMs, nowMs))}
+          </a>
+          <span class="flex-1" />
+          {forms ? replyLink : null}
+        </header>
+        {/*
+         * Said only where the reply is to neither the message above it nor the
+         * request itself, which is what every reply is read as by default.
+         */}
+        {parent !== undefined &&
+        parent.messageId !== previous?.messageId &&
+        parent.messageId !== root ? (
+          <a
+            href={`#${encodeURIComponent(parent.messageId)}`}
+            class="mx-4 mt-1 flex min-w-0 items-center gap-1.5 text-[12px] leading-5 text-muted-foreground hover:text-foreground"
+          >
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.6"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              class="size-3.5 shrink-0 text-faint"
+            >
+              <path d="M3.5 2.5v5a3 3 0 0 0 3 3h6m-3-3 3 3-3 3" />
+            </svg>
+            <span class="truncate">
+              {wording.inReplyTo(whoWrote(wording, parent, actorId), firstLine(parent.body))}
+            </span>
+          </a>
+        ) : null}
+        {/* The words as written: no trim, no reflow (D-0061 rule 2.2). Their language is unknown (D-0055 rule 8). */}
+        <p
+          class="body px-4 pt-1 pb-3 text-[14px] leading-6 wrap-anywhere whitespace-pre-wrap"
+          lang=""
+        >
+          {message.body}
+        </p>
+        {message.bases.length === 0 ? null : (
+          <div class="bases flex flex-wrap items-center gap-1.5 border-t border-border/60 px-4 py-2">
+            <span class="text-[11px] font-medium text-faint">{wording.basesLabel}</span>
+            {message.bases.map((basis) => basisChip(wording, basis, threads, root, actorId))}
+          </div>
+        )}
+      </article>
+    </li>
+  );
+}
+
+/** Every message of the thread `messageId` belongs to, oldest first, or a line saying there is none. */
+function threadView(
+  wording: Chrome,
+  threads: Threads,
+  view: { readonly messageId: string },
+  nowMs: number,
+  actorId: string | null,
+  forms: boolean,
+) {
+  const root = threads.rootOf(view.messageId);
+  if (root === null) {
+    return (
+      <p class="note rounded-lg border border-dashed border-border px-5 py-6 text-[13px]">
+        {wording.noSuchThread}
+      </p>
+    );
+  }
+  const members = threads.messages.filter((message) => threads.rootOf(message.messageId) === root);
+  const request = threads.byId.get(root);
+  const waitingHere = members.filter((message) => threads.waiting.has(message.messageId)).length;
+  return (
+    <div class="space-y-4">
+      {/*
+       * **The thread names itself** (the S1 design pass on #220): the request's
+       * first words as its title, one state line, and a way back drawn at every
+       * width -- `Esc` is a key hint, and there is none at a phone's width or
+       * with script off. Sticky under the page's bar, so the title stays in
+       * view down a long thread. With script off the thread does not reload
+       * itself (a draft would be lost), so the header says how to see new
+       * messages, where a reader looks for it.
+       */}
+      <header class="thread-head sticky top-12 z-[4] border-b border-border bg-background/95 py-2.5 backdrop-blur-sm">
+        <div class="flex min-w-0 items-center gap-2">
+          <a
+            href={viewHref({ kind: "requests" }, wording.lang)}
+            class="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            title={wording.backToRequests}
+          >
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              class="size-4"
+            >
+              <path d="M13 8H3m4-4-4 4 4 4" />
+            </svg>
+            <span class="sr-only">{wording.backToRequests}</span>
+          </a>
+          <h2
+            class="request min-w-0 flex-1 truncate text-[15px] leading-6 font-semibold"
+            title={request?.body}
+            lang=""
+          >
+            {request === undefined ? null : firstLine(request.body)}
+          </h2>
+          {forms ? (
+            <noscript>
+              <a
+                href={viewHref({ kind: "thread", messageId: root, to: null }, wording.lang)}
+                class="shrink-0 text-[12.5px] font-medium text-link hover:underline"
+                title={wording.threadNoReload}
+              >
+                {wording.reloadThread}
+              </a>
+            </noscript>
+          ) : null}
+        </div>
+        <div class="ml-9 overflow-hidden">
+          <p class={META_LINE}>
+            {waitingHere === 0 ? null : (
+              <span>
+                <span class={`${PILL} font-sans ${TONE.wait}`}>{wording.askWaitingPill}</span>
+              </span>
+            )}
+            <span>
+              {wording.threadSize(
+                members.length,
+                wording.age(ago(Math.max(...members.map((message) => message.atMs)), nowMs)),
+              )}
+            </span>
+            {request === undefined ? null : (
+              <span>{wording.threadStarted(wording.age(ago(request.atMs, nowMs)))}</span>
+            )}
+          </p>
+        </div>
+      </header>
+      <ol data-thread={root} class="space-y-4">
+        {members.map((message, at) =>
+          messageView(wording, threads, message, members[at - 1], root, nowMs, actorId, forms),
+        )}
+      </ol>
+    </div>
+  );
+}
+
+/**
+ * Every request, the ones with an ask waiting first and then by when they last
+ * moved (#220 S1). One row each: the request's first words, whose it is, how
+ * big and how recent its thread is, and a pill counting what waits on the
+ * person. The row's words are the link into the thread, so opening one is a
+ * click or `Enter`, never an id.
+ */
+function requestsView(wording: Chrome, threads: Threads, nowMs: number, actorId: string | null) {
+  const rows = threads.messages
+    .filter((message) => message.inReplyTo === null)
+    .map((root) => {
+      const members = threads.messages.filter(
+        (message) => threads.rootOf(message.messageId) === root.messageId,
+      );
+      return {
+        root,
+        size: members.length,
+        lastMs: Math.max(...members.map((message) => message.atMs)),
+        waiting: members.filter((message) => threads.waiting.has(message.messageId)).length,
+      };
+    })
+    .sort(
+      (left, right) =>
+        Number(right.waiting > 0) - Number(left.waiting > 0) || right.lastMs - left.lastMs,
+    );
+  return (
+    <section data-question="requests" class="space-y-2">
+      <h2 class="text-sm leading-6 font-semibold text-foreground first-letter:uppercase">
+        {wording.requestsHeading(rows.length)}
+      </h2>
+      {rows.length === 0 ? (
+        <p class="note rounded-lg border border-dashed border-border px-5 py-6 text-[13px] text-muted-foreground">
+          {wording.noRequests}
+        </p>
+      ) : (
+        <ul class="divide-y divide-border rounded-lg border border-border bg-card">
+          {rows.map((row) => (
+            <li id={`request-${row.root.messageId}`} data-row="" tabindex={-1} class={ROW}>
+              {glyph(row.waiting > 0 ? "wait" : "message")}
+              <div class="min-w-0">
+                <a
+                  id={`open-${row.root.messageId}`}
+                  href={viewHref(
+                    { kind: "thread", messageId: row.root.messageId, to: null },
+                    wording.lang,
+                  )}
+                  data-open=""
+                  class="request line-clamp-2 text-sm leading-6 font-medium wrap-anywhere hover:underline"
+                  title={row.root.body}
+                  lang=""
+                >
+                  {firstLine(row.root.body)}
+                </a>
+                {metaLine(
+                  <>
+                    {row.waiting > 0 ? (
+                      <span>
+                        <span class={`${PILL} font-sans ${TONE.wait}`}>
+                          {wording.asksWaiting(row.waiting)}
+                        </span>
+                      </span>
+                    ) : null}
+                    <span>{whoWrote(wording, row.root, actorId)}</span>
+                    <span>{wording.threadSize(row.size, wording.age(ago(row.lastMs, nowMs)))}</span>
+                  </>,
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+/**
+ * The message a reply box answers: the one the person pointed at with `Reply`,
+ * else the latest question still waiting in the thread, else the latest
+ * message **the other party** wrote, else the thread's latest message.
+ * `answers` is whether the target is a waiting question, which the box then
+ * answers on a press (`/answer-ask`) rather than a send.
+ *
+ * **Not the person's own latest by default** (the S1 design pass on #220): a box
+ * that read "Replying to you" under a drafter's question pointed a person at
+ * their own words. A conversation answers the other side.
+ */
+function replyTarget(
+  threads: Threads,
+  view: { readonly messageId: string; readonly to: string | null },
+  actorId: string | null,
+): {
+  readonly root: string;
+  readonly target: ThreadMessageDraft;
+  readonly answers: boolean;
+  readonly asksWaiting: boolean;
+} | null {
+  const root = threads.rootOf(view.messageId);
+  if (root === null) {
+    return null;
+  }
+  const members = threads.messages.filter((message) => threads.rootOf(message.messageId) === root);
+  const asks = members.filter((message) => threads.waiting.has(message.messageId));
+  const pointed = view.to === null ? undefined : threads.byId.get(view.to);
+  const theirs = members.filter(
+    (message) => !(message.authorKind === "operator" && message.authorId === actorId),
+  );
+  const target =
+    (pointed !== undefined && members.includes(pointed) ? pointed : undefined) ??
+    asks.at(-1) ??
+    theirs.at(-1) ??
+    members.at(-1);
+  return target === undefined
+    ? null
+    : {
+        root,
+        target,
+        answers: threads.waiting.has(target.messageId),
+        asksWaiting: asks.length > 0,
+      };
+}
+
+/** A message id minted for one form (`newMessageId` in `src/access/web-app.ts`). */
+export type MintMessageId = (kind: "request" | "reply") => string;
+
+/**
+ * The box a person writes into: a new request on `requests`, a reply on
+ * `thread` (D-0061 rule 4, D-0059 section 5a's send).
+ *
+ * **Outside the ledger, so no redraw touches a draft.** The poll swaps
+ * `#ledger`; this form is after it, and what a send must renew -- the minted
+ * id, the reply's target, a refusal note -- is `#composer-fields`, which only
+ * this form's own response replaces (`hx-select-oob`).
+ *
+ * **Two ways to send, one route.** With script off it is a native `POST` and
+ * the `303` lands on the thread at the message sent. With script on a reply is
+ * htmx's `hx-post`: the thread is swapped in, the box stays where it is, and
+ * `page/composer.js` clears the draft. A new request stays a native submit,
+ * because where it lands is a different view -- its own thread -- and a swap
+ * would draw that thread under the requests' address.
+ *
+ * **Aimed at a waiting question, the box is a press** (#220 S1): action
+ * `/answer-ask`, a native `POST` with no `hx-post` in either mode, and a filled
+ * button labelled as answering. Answering an ask releases the hold D-0069
+ * rule 5 puts on work, and D-0059 section 5a's falsifier says a message that
+ * moves work needs a press, which only a person's navigation mints.
+ *
+ * **The id is minted here, at render, and carried hidden** (D-0061 rule 2.1):
+ * the same form sent twice is one id, and the store refuses the second. It is
+ * never printed. With no approver there is no form, and the box's place says
+ * why (D-0020 rule 2).
+ */
+function composerView(
+  wording: Chrome,
+  view: PageView,
+  threads: Threads,
+  token: string | null,
+  newId: MintMessageId | null,
+  actorId: string | null,
+  nowMs: number,
+) {
+  if (view.kind !== "requests" && view.kind !== "thread") {
+    return null;
+  }
+  if (token === null || newId === null) {
+    return (
+      <p class="note rounded-md border border-border bg-muted/60 px-3 py-2 text-[13px] leading-5">
+        {wording.composerNoApprover}
+      </p>
+    );
+  }
+  const replying = view.kind === "thread" ? replyTarget(threads, view, actorId) : null;
+  if (view.kind === "thread" && replying === null) {
+    return null;
+  }
+  const kind = replying === null ? "request" : "reply";
+  const answers = replying?.answers === true;
+  const action = `/${answers ? "answer-ask" : kind}?lang=${encodeURIComponent(wording.lang)}`;
+  return (
+    <form
+      id="composer"
+      method="post"
+      action={action}
+      {...(replying === null || answers
+        ? {}
+        : {
+            "hx-post": action,
+            "hx-target": "#ledger",
+            "hx-select": "#ledger",
+            "hx-swap": "outerHTML show:window:bottom",
+            // **The whole form and not only its fields** (#220 S1, Codex): the
+            // thread's default target after a send can be a waiting ask, and
+            // answering one is a press with its own `action` and no `hx-post`.
+            // Swapping the fields alone left the send's mode on a box aimed at
+            // an ask; `page/composer.js` puts back any words typed meanwhile.
+            "hx-select-oob": "#composer,#waiting-count",
+            // **One send per press, visibly** (the S1 design pass): the button
+            // is disabled while its request is in flight. The store's refusal
+            // of a repeated id is still what makes a double send one message.
+            "hx-disabled-elt": "find button[type='submit']",
+          })}
+      class={
+        replying === null
+          ? "rounded-xl border border-border bg-card shadow-xs focus-within:border-ring/60"
+          : "sticky bottom-3 z-[5] rounded-xl sm:ml-10 border border-border bg-card shadow-[0_6px_24px_-12px_rgb(0_0_0/0.35)] focus-within:border-ring/60"
+      }
+    >
+      {replying === null ? (
+        <h2 class="px-4 pt-3 text-sm leading-6 font-semibold">{wording.newRequestHeading}</h2>
+      ) : null}
+      <div id="composer-fields">
+        <input type="hidden" name="token" value={token} />
+        <input type="hidden" name="message_id" value={newId(kind)} />
+        {replying === null ? null : (
+          <>
+            <input type="hidden" name="in_reply_to" value={replying.target.messageId} />
+            <div class="mx-4 mt-2.5 flex min-w-0 items-center gap-1">
+              <a
+                href={`#${encodeURIComponent(replying.target.messageId)}`}
+                class="replying flex min-w-0 items-center gap-1.5 text-[12px] leading-5 text-muted-foreground hover:text-foreground"
+              >
+                <svg
+                  aria-hidden="true"
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.6"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  class="size-3.5 shrink-0 text-faint"
+                >
+                  <path d="M3.5 2.5v5a3 3 0 0 0 3 3h6m-3-3 3 3-3 3" />
+                </svg>
+                <span class="truncate">
+                  {(answers ? wording.answeringTo : wording.replyingTo)(
+                    whoWrote(wording, replying.target, actorId),
+                    wording.age(ago(replying.target.atMs, nowMs)),
+                  )}
+                </span>
+              </a>
+              {
+                // **A target chosen by hand can be let go** (the S1 design
+                // pass): a navigation back to the thread's default target, which
+                // keeps the draft (`page/composer.js`).
+                view.kind === "thread" && view.to !== null ? (
+                  <a
+                    href={viewHref(
+                      { kind: "thread", messageId: replying.root, to: null },
+                      wording.lang,
+                    )}
+                    class="inline-flex size-5 shrink-0 items-center justify-center rounded text-faint hover:bg-accent hover:text-foreground"
+                    title={wording.replyDefault}
+                  >
+                    <svg
+                      aria-hidden="true"
+                      viewBox="0 0 16 16"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      class="size-3"
+                    >
+                      <path d="m4 4 8 8m0-8-8 8" />
+                    </svg>
+                    <span class="sr-only">{wording.replyDefault}</span>
+                  </a>
+                ) : null
+              }
+            </div>
+            {/*
+             * **Said where the words are typed** (#220 S1 review): a person who
+             * came for a question waiting in this thread would otherwise send
+             * their answer to the message above and see nothing say it did not
+             * reach the question (see `replyTarget`).
+             */}
+            {replying.asksWaiting && !answers ? (
+              <p class="not-answer mx-4 mt-0.5 text-[12px] leading-5 text-faint">
+                {wording.replyNotAnswer}
+              </p>
+            ) : null}
+          </>
+        )}
+        {/* Where htmx puts a refusal (the page's `responseHandling`); the draft stays. */}
+        <p
+          id="composer-note"
+          role="status"
+          data-refused={wording.notSent(wording.sendRefusedUnknown)}
+          class="px-4 pt-2 text-[12.5px] leading-5 text-fail empty:hidden"
+        />
+      </div>
+      <label for="composer-body" class="sr-only">
+        {replying === null
+          ? wording.newRequestHeading
+          : answers
+            ? wording.answerAskAction
+            : wording.replyAction}
+      </label>
+      <textarea
+        id="composer-body"
+        name="body"
+        required
+        rows={replying === null ? 4 : 3}
+        placeholder={replying === null ? wording.requestPlaceholder : wording.replyPlaceholder}
+        data-draft={replying === null ? "request" : `reply:${replying.root}`}
+        {...(view.kind === "thread" && view.to !== null ? { autofocus: true } : {})}
+        // **The box grows with the words** (the S1 design pass): at a fixed
+        // two rows a three-line draft scrolled its first line out of sight
+        // under the line above it. Capped, then it scrolls.
+        class="block max-h-[40vh] min-h-[4.5rem] w-full resize-y bg-transparent px-4 pt-2 text-[14px] leading-6 outline-none [field-sizing:content] placeholder:text-faint"
+      />
+      <div class="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 pt-1 pb-2.5">
+        <span class="note px-1 text-[11.5px] leading-5 text-faint">{wording.sendNote}</span>
+        <span class="ml-auto flex items-center gap-3">
+          <span class="js-only hidden items-center gap-1 text-[11.5px] text-faint sm:flex">
+            {kbd("Ctrl/⌘")}
+            {kbd("↵")}
+            <span>{wording.keySend}</span>
+          </span>
+          <button
+            type="submit"
+            class={
+              answers
+                ? `${PRIMARY} h-9 px-4 text-sm`
+                : "inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-md bg-foreground px-4 text-sm font-semibold text-background shadow-xs outline-none hover:bg-foreground/85 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card disabled:cursor-wait disabled:opacity-60"
+            }
+          >
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              class="size-3.5"
+            >
+              <path d="M8 13V3m-4 4 4-4 4 4" />
+            </svg>
+            {answers ? wording.answerAskAction : wording.sendAction}
+          </button>
+        </span>
+      </div>
+    </form>
+  );
+}
+
 /** A key as the keyboard shows it. */
 function kbd(key: string) {
   return (
@@ -1568,8 +2396,21 @@ export async function operatorPage(
   // it. `EN` by default for the same reason `token` and `view` have defaults:
   // a caller that has said nothing gets the page this was before.
   wording: Chrome = EN,
+  /**
+   * Mints the id a composer form carries (D-0061 rule 2.1), or null where
+   * there is no say port: no minter, no form. Handed down by
+   * `src/access/web-app.ts` for the token's reason -- the renderer holds
+   * nothing that writes, and is not granted `node:crypto` either.
+   */
+  newId: MintMessageId | null = null,
 ): Promise<string> {
   const nowMs = ports.now();
+  // **Read on every view**: the summary counts the asks waiting and the header
+  // counts them for every view. A thread that will not read is said, never
+  // drawn half (see `threadMessages`).
+  const threadRead = await ports.record.threadMessages();
+  const forms = token !== null && newId !== null;
+  const onThreads = view.kind === "requests" || view.kind === "thread";
   const host = await gatherHost(ports);
   const inbox = ports.actorId === null ? null : await gatherInbox(ports, ports.actorId);
   const live: LiveRow[] = (await ports.store.readLive()).flatMap((outcome): LiveRow[] => {
@@ -1595,6 +2436,10 @@ export async function operatorPage(
     (side === "waitingOnYou" ? waiting : running).push(row.record);
   }
   const unreadable = live.filter((row) => row.kind === "unreadable");
+  const threads = threadsOf(
+    threadRead.kind === "read" ? threadRead.messages : [],
+    new Set([...waiting, ...running, ...ended, ...unreadable].map((row) => row.id)),
+  );
   // **Only the ones an answer can settle** (D-0032 rule 5). `openProposals`
   // returns every proposal nobody has decided, and an explanation is
   // undecidable by construction -- `recordDecision` refuses the non-binding
@@ -1607,6 +2452,11 @@ export async function operatorPage(
   // Reused rather than asked again when the inbox already asked: it is a
   // continuo subprocess per running lap, and this page redraws itself.
   const transcripts = inbox?.transcripts ?? (await locateRunning(ports, live));
+  // **One count of what waits on the person** (#220 S1): the header pill and the
+  // summary's *waiting for your answer* heading both say this number -- gates,
+  // questions in threads, and proposals an answer can settle -- so they cannot
+  // disagree.
+  const waitingCount = waiting.length + threads.waiting.size + open.length;
 
   const keepsCurrent = isLive(view);
   // **The token arrives null exactly when there is no writer** (D-0041 rule 4,
@@ -1615,6 +2465,8 @@ export async function operatorPage(
   // does hold the writer (`src/access/web-app.ts`) and handed down as a token.
   const shown = await shownBeforePress(ports, wording, waiting, token, view);
 
+  // ponytail: the thread views still gather the laps above, as the summary
+  // does, on every redraw; skip those reads for them if a redraw costs.
   const readingSections =
     view.kind !== "reading"
       ? []
@@ -1665,9 +2517,16 @@ export async function operatorPage(
           // in either mode, so there is nothing for it to degrade to.
           keepsCurrent ? (
             <>
-              <noscript>
-                <meta http-equiv="refresh" content={`${String(REFRESH_SECONDS)};url=${here}`} />
-              </noscript>
+              {
+                // **Not where a person may be writing** (#220 S1): with script
+                // off a reload would throw a half-written draft away, so a
+                // view with a composer does not reload itself and says so.
+                onThreads && forms ? null : (
+                  <noscript>
+                    <meta http-equiv="refresh" content={`${String(REFRESH_SECONDS)};url=${here}`} />
+                  </noscript>
+                )
+              }
               {/*
                * R2's substitute, as the library's own configuration: requests
                * to this origin only, no `eval`, no script out of a response, no
@@ -1676,7 +2535,30 @@ export async function operatorPage(
                */}
               <meta
                 name="htmx-config"
-                content='{"selfRequestsOnly":true,"allowEval":false,"allowScriptTags":false,"historyEnabled":false,"includeIndicatorStyles":false}'
+                content={JSON.stringify({
+                  selfRequestsOnly: true,
+                  allowEval: false,
+                  allowScriptTags: false,
+                  historyEnabled: false,
+                  includeIndicatorStyles: false,
+                  // **A refused send is shown where the draft is** (#220 S1):
+                  // htmx swaps no error by default, so a `409` would change
+                  // nothing on the screen. The send routes answer htmx with a
+                  // `#send-refused` line, and it goes into the composer's note;
+                  // the draft is not touched.
+                  responseHandling: [
+                    { code: "204", swap: false },
+                    { code: "[23]..", swap: true },
+                    {
+                      code: "[45]..",
+                      swap: true,
+                      error: true,
+                      target: "#composer-note",
+                      select: "#send-refused",
+                      swapOverride: "innerHTML",
+                    },
+                  ],
+                })}
               />
             </>
           ) : null
@@ -1691,6 +2573,7 @@ export async function operatorPage(
           keepsCurrent ? <script src="/htmx.min.js" defer /> : null
         }
         <script src="/keys.js" defer />
+        <script src="/composer.js" defer />
       </head>
       <body class="min-h-screen bg-background font-sans text-foreground antialiased">
         <header class="sticky top-0 z-10 border-b border-border bg-background/90 backdrop-blur-sm">
@@ -1698,8 +2581,9 @@ export async function operatorPage(
             <h1 class="text-[15px] font-semibold tracking-tight">
               {
                 // `data-back` is what `Esc` follows; on the summary there is
-                // nowhere further back to go, so it is absent there.
-                view.kind === "summary" ? (
+                // nowhere further back to go, so it is absent there, and on a
+                // thread the way back is the requests link beside this.
+                view.kind === "summary" || view.kind === "thread" ? (
                   <a href={here}>rondo</a>
                 ) : (
                   <a href={viewHref({ kind: "summary" }, wording.lang)} data-back="">
@@ -1708,6 +2592,53 @@ export async function operatorPage(
                 )
               }
             </h1>
+            {/*
+             * **The way into the requests, on every view** (#220 S1), and beside
+             * it the count of everything waiting on the person -- the same number
+             * as the summary's heading, and a link to that summary. The count is
+             * its own element so a redraw can renew it out of band: the header
+             * is not swapped.
+             */}
+            <span aria-hidden="true" class="text-faint">
+              /
+            </span>
+            <a
+              href={viewHref({ kind: "requests" }, wording.lang)}
+              class={`inline-flex items-center gap-1.5 text-[13px] hover:text-foreground ${onThreads ? "font-medium text-foreground" : "text-muted-foreground"}`}
+              {...(view.kind === "thread" ? { "data-back": "" } : {})}
+              {...(view.kind === "requests" ? { "aria-current": "page" } : {})}
+            >
+              {wording.requestsNav}
+            </a>
+            <span id="waiting-count" class="empty:hidden">
+              {waitingCount === 0 ? null : (
+                // **Said as what it counts** (the S1 design pass): a bare `1`
+                // beside "Requests" read as a count of requests.
+                <a
+                  href={viewHref({ kind: "summary" }, wording.lang)}
+                  class={`${PILL} px-1.5 font-sans ${TONE.wait} hover:underline`}
+                >
+                  {wording.waitingCount(waitingCount)}
+                </a>
+              )}
+            </span>
+            {
+              // The thread's own crumb, where there is room for it; the thread
+              // header names it at every width.
+              view.kind === "thread" && threads.rootOf(view.messageId) !== null ? (
+                <>
+                  <span aria-hidden="true" class="hidden text-faint xl:inline">
+                    /
+                  </span>
+                  <span
+                    class="hidden max-w-[16rem] truncate text-[13px] text-foreground xl:inline"
+                    lang=""
+                  >
+                    {firstLine(threads.byId.get(threads.rootOf(view.messageId) ?? "")?.body ?? "")}
+                  </span>
+                </>
+              ) : null
+            }
             {keepsCurrent ? (
               <>
                 {/*
@@ -1723,6 +2654,21 @@ export async function operatorPage(
               </>
             ) : null}
             <span class="flex-1" />
+            {
+              // **Whose name a send and a press are recorded under** (the S1
+              // design pass), in place of a sentence naming the variable.
+              ports.actorId === null ? null : (
+                <span
+                  class="hidden items-center gap-1.5 text-[12.5px] text-muted-foreground lg:inline-flex"
+                  title={wording.signedInAs(ports.actorId)}
+                >
+                  <span class="inline-flex size-5 items-center justify-center rounded-full bg-muted text-[10.5px] font-semibold text-foreground ring-1 ring-border">
+                    {ports.actorId.slice(0, 1).toUpperCase()}
+                  </span>
+                  {ports.actorId}
+                </span>
+              )
+            }
             <span class="js-only hidden items-center gap-1.5 text-xs text-muted-foreground sm:flex">
               {
                 // Each view names only the keys that do something on it: the
@@ -1743,7 +2689,13 @@ export async function operatorPage(
               {view.kind === "summary" ? null : (
                 <>
                   {kbd("esc")}
-                  <span>{wording.keyBack}</span>
+                  <span class="mr-2">{wording.keyBack}</span>
+                  {onThreads && forms ? (
+                    <>
+                      {kbd("r")}
+                      <span class="ml-0.5">{wording.keyWrite}</span>
+                    </>
+                  ) : null}
                 </>
               )}
             </span>
@@ -1759,7 +2711,7 @@ export async function operatorPage(
               // links carry no class of their own; the nav styles them, so a
               // link is still exactly its address, its tag and its name.
               // Muted, so the one thing in the header in colour is the live state.
-              <nav class="switch flex gap-3 text-[13px] text-muted-foreground [&>a]:hover:text-foreground [&>a]:hover:underline">
+              <nav class="switch flex shrink-0 gap-3 whitespace-nowrap text-[13px] text-muted-foreground [&>a]:hover:text-foreground [&>a]:hover:underline">
                 {[...SHIPPED_SETS]
                   .filter(([tag]) => tag !== wording.lang)
                   .map(([tag, endonym]) => (
@@ -1784,6 +2736,9 @@ export async function operatorPage(
               </p>
             ) : null
           }
+          {view.kind === "requests"
+            ? composerView(wording, view, threads, token, newId, ports.actorId, nowMs)
+            : null}
           {
             // **The ledger is what the refresh swaps**, and only on a live
             // view: htmx `GET`s this view's own address every five seconds and
@@ -1800,32 +2755,65 @@ export async function operatorPage(
                     "hx-trigger": "every 5s",
                     "hx-select": "#ledger",
                     "hx-swap": "outerHTML",
+                    "hx-select-oob": "#waiting-count",
                   }
                 : {})}
             >
-              {waiting.length + running.length + ended.length + open.length + unreadable.length ===
-              0 ? (
+              {
+                // Inside the swap (#220 S1, Codex): a thread read that fails
+                // while the page is open must be said by the redraw that shows
+                // the empty list, and must go away with the redraw that recovers.
+                threadRead.kind === "unreadable" ? (
+                  <p class="note rounded-md border border-fail/40 px-3 py-2 text-[13px] leading-5 text-fail">
+                    {wording.threadsUnreadable(threadRead.reason)}
+                  </p>
+                ) : null
+              }
+              {view.kind === "requests" ? (
+                requestsView(wording, threads, nowMs, ports.actorId)
+              ) : view.kind === "thread" ? (
+                threadView(wording, threads, view, nowMs, ports.actorId, forms)
+              ) : waiting.length +
+                  running.length +
+                  ended.length +
+                  open.length +
+                  unreadable.length +
+                  threads.waiting.size ===
+                0 ? (
                 nothingView(wording)
               ) : (
                 <>
-                  {waitingView(wording, waiting, open, nowMs, token, shown)}
-                  {runningView(wording, running, unreadable, transcripts, nowMs)}
+                  {waitingView(
+                    wording,
+                    waiting,
+                    open,
+                    nowMs,
+                    token,
+                    shown,
+                    threads,
+                    ports.actorId,
+                    waitingCount,
+                  )}
+                  {attentionView(wording, unreadable)}
+                  {runningView(wording, running, transcripts, nowMs)}
                   {endedView(wording, ended, nowMs)}
                 </>
               )}
-              <p id="fold" class="border-t border-border pt-4 text-[13px]">
-                <a
-                  id="fold-link"
-                  href={viewHref(
-                    view.kind === "reading" ? { kind: "summary" } : { kind: "reading" },
-                    wording.lang,
-                  )}
-                  class="text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-                  {...(view.kind === "reading" ? { "data-back": "" } : {})}
-                >
-                  {view.kind === "reading" ? wording.hideReading : wording.openReading}
-                </a>
-              </p>
+              {onThreads ? null : (
+                <p id="fold" class="border-t border-border pt-4 text-[13px]">
+                  <a
+                    id="fold-link"
+                    href={viewHref(
+                      view.kind === "reading" ? { kind: "summary" } : { kind: "reading" },
+                      wording.lang,
+                    )}
+                    class="text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                    {...(view.kind === "reading" ? { "data-back": "" } : {})}
+                  >
+                    {view.kind === "reading" ? wording.hideReading : wording.openReading}
+                  </a>
+                </p>
+              )}
               {
                 // **The fold and the reading are inside the swap too**: on
                 // `?reading=open` they are drawn from the same ledger, and a
@@ -1839,6 +2827,9 @@ export async function operatorPage(
               }
             </div>
           }
+          {view.kind === "thread"
+            ? composerView(wording, view, threads, token, newId, ports.actorId, nowMs)
+            : null}
           {
             // **Each view says which of the two it is**, because "redraws every
             // 5s" on a view that does not would be the page's own copy lying
@@ -1847,10 +2838,39 @@ export async function operatorPage(
             // change: a read writes nothing, whoever or whatever issued it.
             // At the foot rather than the head (the design pass on #220): it is
             // the page's account of itself, and what needs the reader leads.
+            // **One short line, and the account in its `title`** (the S1 design
+            // pass): the sentences are the page's account of itself for the
+            // reader who asks, not prose every reader has to read past.
             <p class="note max-w-3xl text-[11.5px] leading-5 text-faint">
-              {keepsCurrent ? wording.liveNote(REFRESH_SECONDS) : wording.stillNote}
+              <span
+                title={
+                  onThreads
+                    ? wording.threadsLiveNote(REFRESH_SECONDS)
+                    : keepsCurrent
+                      ? wording.liveNote(REFRESH_SECONDS)
+                      : wording.stillNote
+                }
+              >
+                {
+                  // **Script only, as the header's live pill** (#220 S1): with
+                  // script off nothing redraws in place, and a thread with a box
+                  // does not reload at all, so "live" would be false there.
+                  keepsCurrent ? (
+                    <span class="js-only">{wording.liveShort(REFRESH_SECONDS)}</span>
+                  ) : (
+                    wording.stillShort
+                  )
+                }
+              </span>
             </p>
           }
+          {onThreads && forms && view.kind === "requests" ? (
+            <noscript>
+              <p class="note max-w-3xl text-[11.5px] leading-5 text-faint">
+                {wording.threadNoReload}
+              </p>
+            </noscript>
+          ) : null}
         </main>
       </body>
     </html>

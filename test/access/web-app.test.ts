@@ -21,6 +21,7 @@
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { request as httpRequest } from "node:http";
+import { DatabaseSync } from "node:sqlite";
 import { type Context, Hono } from "hono";
 import { expect, test } from "vitest";
 
@@ -28,16 +29,25 @@ import {
   AnswerPort,
   createApp,
   mintPress,
+  mintSend,
+  newMessageId,
   type PageEnv,
   type Press,
+  SayPort,
+  type Send,
+  type SentMessage,
   type ServedPorts,
   serveApp,
 } from "../../src/access/web-app.js";
+import { advisoryRecord } from "../../src/store/sqlite.js";
 
 const TOKEN = "the-process-token";
 
 /** Every write the port let through to its implementation. */
 type Written = { iterationId: string; body: string }[];
+
+/** Every message the say port let through to its implementation. */
+type Sent = SentMessage[];
 
 /**
  * Ports that hold a spy writer and nothing a `POST` reads.
@@ -45,14 +55,30 @@ type Written = { iterationId: string; body: string }[];
  * The write route reads only the host's language off the reading half, so the
  * rest is absent and a route that tried to render would fail loudly.
  */
-function spyPorts(written: Written): ServedPorts {
+function spyPorts(written: Written, sent: Sent = []): ServedPorts {
   return {
     hostLanguage: null,
     answer: new AnswerPort(async (iterationId, body) => {
       written.push({ iterationId, body });
       return await Promise.resolve({ ok: true, note: "" });
     }),
+    // The port reads the thread on a reply, to refuse answering an ask by a send.
+    say: new SayPort(
+      async (message) => {
+        sent.push(message);
+        return await Promise.resolve({ ok: true, note: "" });
+      },
+      async () => await Promise.resolve({ kind: "read", messages: [] }),
+    ),
   } as unknown as ServedPorts;
+}
+
+/** The say port out of the ports, typed as present. */
+function sayOf(ports: ServedPorts): SayPort {
+  if (ports.say === null) {
+    throw new Error("the fixture has no say port");
+  }
+  return ports.say;
 }
 
 /** The port out of the ports, typed as present. */
@@ -272,12 +298,26 @@ function nonReads(app: Hono<PageEnv>): string[] {
 }
 
 /**
- * **The closed table** (D-0059 section 5a and R4): four middleware -- method
- * and `Host`, security headers, `csrf` on the one write address, body limit --
- * and one write route, the lap-end `approve` press. A new write kind is a new
- * row here, argued in the decision first.
+ * **The closed table** (D-0059 section 5a and R4): middleware -- method and
+ * `Host`, security headers, `csrf` on each of the three write addresses, body
+ * limit -- and four write routes: the lap-end `approve` press, the two
+ * sends into a request thread, and the answer to a waiting question, which is
+ * a press (D-0059 section 5a's falsifier, D-0069 rule 5). A new write kind is a new row here, argued in
+ * the decision first.
  */
-const WRITE_TABLE = ["ALL /*", "ALL /*", "ALL /", "ALL /*", "POST /"];
+const WRITE_TABLE = [
+  "ALL /*",
+  "ALL /*",
+  "ALL /",
+  "ALL /request",
+  "ALL /reply",
+  "ALL /answer-ask",
+  "ALL /*",
+  "POST /",
+  "POST /request",
+  "POST /reply",
+  "POST /answer-ask",
+];
 
 test("(b) the page's writing vocabulary is enumerated off the running app", () => {
   const app = createApp(spyPorts([]), TOKEN);
@@ -285,7 +325,7 @@ test("(b) the page's writing vocabulary is enumerated off the running app", () =
 
   // Not vacuously: each way of adding a writer changes the enumeration.
   const posted = createApp(spyPorts([]), TOKEN);
-  posted.post("/thread", (c) => c.text(""));
+  posted.post("/scope", (c) => c.text(""));
   expect(nonReads(posted)).not.toEqual(WRITE_TABLE);
   const used = createApp(spyPorts([]), TOKEN);
   used.use(async (_c, next) => {
@@ -463,6 +503,582 @@ test("it serves the manifest's files as the bytes the manifest names, and no oth
     expect((await fetch(`${base}${path}`)).status, path).toBe(404);
   }
 
+  stop.abort();
+  expect(await closed).toBe(0);
+});
+
+/**
+ * The headers Chromium sends for htmx's `hx-post` from this page (D-0059
+ * section 5a, measured on the prototype): same-origin, `cors`, no `?1`.
+ */
+function htmxHeaders(base: string): Record<string, string> {
+  return {
+    origin: base,
+    "hx-request": "true",
+    "sec-fetch-site": "same-origin",
+    "sec-fetch-mode": "cors",
+    "sec-fetch-dest": "empty",
+  };
+}
+
+/** A native form submit with script off: a navigation, with or without `?1`. */
+function submitHeaders(base: string): Record<string, string> {
+  return {
+    origin: base,
+    "sec-fetch-site": "same-origin",
+    "sec-fetch-mode": "navigate",
+    "sec-fetch-dest": "document",
+  };
+}
+
+test("(send) a native submit and an htmx hx-post each send one message", async () => {
+  const sent: Sent = [];
+  const written: Written = [];
+  const { base, stop, closed } = await served(createApp(spyPorts(written, sent), TOKEN));
+
+  const request = newMessageId("request");
+  const native = await send(base, "/request?lang=ja", "POST", submitHeaders(base), {
+    token: TOKEN,
+    message_id: request,
+    body: "please look at the flaky test",
+    // A new request's form carries no reply target; one posted is not read.
+    in_reply_to: "request-ignored",
+  });
+  expect(native.status).toBe(303);
+  // Onto the thread, at the message just sent (#220 S1).
+  expect(native.location).toBe(`/?thread=${request}&lang=ja#${request}`);
+
+  const reply = newMessageId("reply");
+  const htmx = await send(base, "/reply", "POST", htmxHeaders(base), {
+    token: TOKEN,
+    message_id: reply,
+    in_reply_to: request,
+    body: "and the lint one too",
+  });
+  expect(htmx.status).toBe(303);
+
+  expect(sent).toEqual([
+    { messageId: request, body: "please look at the flaky test", inReplyTo: null },
+    { messageId: reply, body: "and the lint one too", inReplyTo: request },
+  ]);
+  // A send is not a press: the answer port was not reached.
+  expect(written).toEqual([]);
+
+  stop.abort();
+  expect(await closed).toBe(0);
+});
+
+test("(send) every other shape of request to a send route is refused and sends nothing", async () => {
+  const sent: Sent = [];
+  const { base, stop, closed } = await served(createApp(spyPorts([], sent), TOKEN));
+  const htmx = htmxHeaders(base);
+  const form = { token: TOKEN, message_id: newMessageId("request"), body: "words" };
+
+  const refusals: [
+    string,
+    string,
+    Record<string, string | undefined>,
+    Record<string, string>,
+    number,
+  ][] = [
+    ["a wrong token", "/request", htmx, { ...form, token: "not-the-token" }, 403],
+    ["no token", "/request", htmx, { message_id: form.message_id, body: "words" }, 403],
+    ["a foreign Origin", "/request", { ...htmx, origin: "https://evil.example" }, form, 403],
+    [
+      "a cross-site Sec-Fetch-Site",
+      "/request",
+      { ...htmx, "sec-fetch-site": "cross-site" },
+      form,
+      403,
+    ],
+    [
+      "a same-site Sec-Fetch-Site",
+      "/request",
+      { ...htmx, "sec-fetch-site": "same-site" },
+      form,
+      403,
+    ],
+    ["no Origin at all", "/request", { ...htmx, origin: undefined }, form, 403],
+    ["an opaque Origin", "/request", { ...htmx, origin: "null" }, form, 403],
+    ["no Sec-Fetch-Mode", "/request", { ...htmx, "sec-fetch-mode": undefined }, form, 403],
+    ["a no-cors mode", "/request", { ...htmx, "sec-fetch-mode": "no-cors" }, form, 403],
+    ["an empty body", "/request", htmx, { ...form, body: "" }, 400],
+    ["a blank body", "/request", htmx, { ...form, body: " \n\t" }, 400],
+    ["no body field", "/request", htmx, { token: TOKEN, message_id: form.message_id }, 400],
+    ["a typed message id", "/request", htmx, { ...form, message_id: "my-id" }, 400],
+    ["no message id", "/request", htmx, { token: TOKEN, body: "words" }, 400],
+    ["a reply naming nothing", "/reply", htmx, { ...form, message_id: newMessageId("reply") }, 400],
+    ["an oversize body", "/request", htmx, { ...form, body: "x".repeat(70 * 1024) }, 413],
+  ];
+  for (const [shape, path, headers, posted, status] of refusals) {
+    const answered = await send(base, path, "POST", headers, posted);
+    expect(answered.status, shape).toBe(status);
+    expect(answered.body, shape).not.toBe("");
+  }
+  // A `GET` to a send route is no route at all.
+  expect((await send(base, "/request", "GET", htmx)).status).toBe(404);
+  // The press route keeps its own, smaller, limit.
+  expect(
+    (await send(base, "/", "POST", pressHeaders(base), { ...FORM, pad: "x".repeat(5000) })).status,
+  ).toBe(413);
+
+  expect(sent).toEqual([]);
+  stop.abort();
+  expect(await closed).toBe(0);
+});
+
+test("(send) a send is not a press and a press is not a send", async () => {
+  const written: Written = [];
+  const sent: Sent = [];
+  const ports = spyPorts(written, sent);
+  const app = createApp(ports, TOKEN);
+  const outcomes: string[] = [];
+  const message = { messageId: newMessageId("request"), body: "words", inReplyTo: null };
+  // Planted beside the real routes: each mints one kind and spends it at the
+  // other kind's port, then tries to mint the other kind off the same request.
+  app.post("/as-press", async (c) => {
+    const minting = mintSend(c, TOKEN);
+    if ("send" in minting) {
+      outcomes.push(
+        String((await portOf(ports).answer(minting.send as unknown as Press, "i-0001")).ok),
+      );
+    }
+    outcomes.push("press" in mintPress(c, TOKEN) ? "minted" : "refused");
+    return c.text("done");
+  });
+  app.post("/as-send", async (c) => {
+    const minting = mintPress(c, TOKEN);
+    if ("press" in minting) {
+      outcomes.push(String((await sayOf(ports).say(minting.press as unknown as Send, message)).ok));
+    }
+    outcomes.push("send" in mintSend(c, TOKEN) ? "minted" : "refused");
+    return c.text("done");
+  });
+  const { base, stop, closed } = await served(app);
+
+  await send(base, "/as-press", "POST", htmxHeaders(base), {});
+  await send(base, "/as-send", "POST", pressHeaders(base), {});
+  // Each mint succeeded, was refused at the wrong port, and the request minted
+  // nothing more.
+  expect(outcomes).toEqual(["false", "refused", "false", "refused"]);
+  expect(written).toEqual([]);
+  expect(sent).toEqual([]);
+
+  stop.abort();
+  expect(await closed).toBe(0);
+});
+
+test("(send) the audit's planted writers, reached by a GET or a forged request, send nothing", async () => {
+  const sent: Sent = [];
+  const ports = spyPorts([], sent);
+  const port = sayOf(ports);
+  const ran: string[] = [];
+  const app = createApp(ports, TOKEN);
+  const message = {
+    messageId: newMessageId("request"),
+    body: "nobody typed this",
+    inReplyTo: null,
+  };
+  const planted = async (c: Context<PageEnv>, name: string): Promise<void> => {
+    ran.push(name);
+    const minting = mintSend(c, TOKEN);
+    await port.say("send" in minting ? minting.send : ({} as Send), message);
+    await port.say(Object.freeze({}) as Send, message);
+  };
+
+  app.get("/planted/handler", async (c) => {
+    await planted(c, "handler");
+    return c.text("drawn");
+  });
+  app.use("/planted/middleware", async (c, next) => {
+    await planted(c, "middleware");
+    await next();
+  });
+  const sub = new Hono<PageEnv>();
+  sub.get("/", async (c) => {
+    await planted(c, "sub-app");
+    return c.text("drawn");
+  });
+  app.route("/planted/sub", sub);
+  // A GET handler that rewrites the live request into an htmx POST first.
+  app.get("/planted/rewrite", async (c) => {
+    const incoming = c.env.incoming as { method?: string; headers: Record<string, string> };
+    incoming.method = "POST";
+    Object.assign(incoming.headers, htmxHeaders(`http://${incoming.headers["host"] ?? ""}`));
+    await planted(c, "rewrite");
+    return c.text("drawn");
+  });
+
+  const { base, stop, closed } = await served(app);
+  for (const path of [
+    "/planted/handler",
+    "/planted/middleware",
+    "/planted/sub",
+    "/planted/rewrite",
+  ]) {
+    await send(base, path, "GET", htmxHeaders(base));
+  }
+  expect(new Set(ran)).toEqual(new Set(["handler", "middleware", "sub-app", "rewrite"]));
+
+  // A request that never crossed the socket, carrying every header and the
+  // adapter's own binding forged.
+  const headers = {
+    host: "127.0.0.1",
+    ...htmxHeaders("http://127.0.0.1"),
+    "content-type": "application/x-www-form-urlencoded",
+  };
+  const forged = await app.request(
+    "http://127.0.0.1/request",
+    {
+      method: "POST",
+      headers,
+      body: new URLSearchParams({
+        token: TOKEN,
+        message_id: message.messageId,
+        body: "x",
+      }).toString(),
+    },
+    { incoming: { method: "POST", headers } },
+  );
+  expect(forged.status).toBe(403);
+  expect(sent).toEqual([]);
+
+  stop.abort();
+  expect(await closed).toBe(0);
+});
+
+test("(send) the same form sent twice records its message once", async () => {
+  // Over a real advisory record, because what refuses the second is the
+  // store's uniqueness on the id the form was rendered with.
+  const connection = new DatabaseSync(":memory:");
+  const record = advisoryRecord(connection);
+  const ports = {
+    ...spyPorts([]),
+    record,
+    say: new SayPort(
+      async (message) => {
+        const outcome = await record.recordThreadMessage({
+          ...message,
+          authorKind: "operator",
+          authorId: "ada",
+          atMs: 1,
+          bases: [],
+          asks: false,
+        });
+        return outcome.kind === "recorded"
+          ? { ok: true, note: "" }
+          : { ok: false, note: outcome.reason };
+      },
+      async () => await record.threadMessages(),
+    ),
+  } as ServedPorts;
+  const { base, stop, closed } = await served(createApp(ports, TOKEN));
+  const form = { token: TOKEN, message_id: newMessageId("request"), body: "one request" };
+
+  expect((await send(base, "/request", "POST", htmxHeaders(base), form)).status).toBe(303);
+  // The repeat is the send it repeats (#220 S1 review): the words are in the
+  // thread, so it is answered as sent, at that message, and not "not sent".
+  for (const headers of [htmxHeaders(base), submitHeaders(base)]) {
+    const again = await send(base, "/request", "POST", headers, form);
+    expect(again.status).toBe(303);
+    expect(again.location).toContain(`#${form.message_id}`);
+  }
+  expect(connection.prepare("SELECT COUNT(*) AS n FROM conversation_message").get()).toEqual({
+    n: 1,
+  });
+  // The same id under other words is a refusal, said without the id, in the
+  // page's language; with script off it is a page with the way back.
+  const other = { ...form, body: "other words" };
+  const htmx = await send(base, "/request?lang=ja", "POST", htmxHeaders(base), other);
+  expect(htmx.status).toBe(409);
+  expect(htmx.body).toMatch(/^<p id="send-refused">送信されませんでした。/);
+  expect(htmx.body).not.toContain(form.message_id);
+  const native = await send(base, "/request?lang=ja", "POST", submitHeaders(base), other);
+  expect(native.status).toBe(409);
+  expect(native.body).toContain('<html lang="ja">');
+  expect(native.body).toContain('<a href="/?requests=open&amp;lang=ja">スレッドに戻る</a>');
+  expect(native.body).not.toContain(form.message_id);
+  expect(native.body).not.toMatch(/D-00/);
+  expect(connection.prepare("SELECT COUNT(*) AS n FROM conversation_message").get()).toEqual({
+    n: 1,
+  });
+
+  stop.abort();
+  expect(await closed).toBe(0);
+});
+
+test("(send) a reply cannot answer an ask that waits, so a send releases no hold on work", async () => {
+  // #220 S1 review, D-0059 section 5a's residual: the first reply to an ask
+  // ends the hold `reserve()` reads through `openAsksIn` (D-0066 rule 4.4). An
+  // htmx-shaped send -- any same-origin script -- must leave the ask open.
+  const connection = new DatabaseSync(":memory:");
+  const record = advisoryRecord(connection);
+  const sent: Sent = [];
+  const write = async (draft: Parameters<typeof record.recordThreadMessage>[0]) => {
+    const outcome = await record.recordThreadMessage(draft);
+    expect(outcome.kind, JSON.stringify(outcome)).toBe("recorded");
+  };
+  const at = { authorId: "rondo-drafter", atMs: 1, bases: [] } as const;
+  await write({
+    ...at,
+    messageId: "req",
+    body: "r",
+    authorKind: "operator",
+    inReplyTo: null,
+    asks: false,
+  });
+  await write({
+    ...at,
+    messageId: "ask",
+    body: "a?",
+    authorKind: "drafter",
+    inReplyTo: "req",
+    bases: [{ form: "message", messageId: "req" }],
+    asks: true,
+  });
+  // The refusal is the port's, not the route's: any holder of a send is refused.
+  const ports = {
+    ...spyPorts([], sent),
+    record,
+    say: new SayPort(
+      async (message) => {
+        sent.push(message);
+        return await Promise.resolve({ ok: true, note: "" });
+      },
+      async () => await record.threadMessages(),
+    ),
+  } as ServedPorts;
+  const app = createApp(ports, TOKEN);
+  const bypass: boolean[] = [];
+  app.post("/planted/answer", async (c) => {
+    const minting = mintSend(c, TOKEN);
+    expect("send" in minting).toBe(true);
+    if ("send" in minting) {
+      const said = await sayOf(ports).say(minting.send, {
+        messageId: newMessageId("reply"),
+        body: "b",
+        inReplyTo: "ask",
+      });
+      bypass.push(said.ok, said.waitingAsk === true);
+    }
+    return c.text("drawn");
+  });
+  const { base, stop, closed } = await served(app);
+  const reply = { token: TOKEN, message_id: newMessageId("reply"), in_reply_to: "ask", body: "b" };
+
+  const htmx = await send(base, "/reply?lang=ja", "POST", htmxHeaders(base), reply);
+  expect(htmx.status).toBe(409);
+  expect(htmx.body).toMatch(/^<p id="send-refused">送信されませんでした。/);
+  const native = await send(base, "/reply", "POST", submitHeaders(base), reply);
+  expect(native.status).toBe(409);
+  expect(native.body).toContain('href="/?thread=ask&amp;lang=en"');
+  expect(sent).toEqual([]);
+  const open = await record.openAsksIn("req");
+  expect(open.kind === "read" && open.asks.map((ask) => ask.messageId)).toEqual(["ask"]);
+  // A reply to anything else in the thread is still a send.
+  await send(base, "/planted/answer", "POST", htmxHeaders(base), { token: TOKEN });
+  expect(bypass).toEqual([false, true]);
+  const other = { ...reply, message_id: newMessageId("reply"), in_reply_to: "req" };
+  expect((await send(base, "/reply", "POST", htmxHeaders(base), other)).status).toBe(303);
+  expect(sent).toHaveLength(1);
+
+  stop.abort();
+  expect(await closed).toBe(0);
+});
+
+test("(send) an oversize send is refused like any other send: in the page's language, under the draft", async () => {
+  const sent: Sent = [];
+  const { base, stop, closed } = await served(createApp(spyPorts([], sent), TOKEN));
+  const form = {
+    token: TOKEN,
+    message_id: newMessageId("reply"),
+    in_reply_to: "r",
+    body: "x".repeat(70 * 1024),
+  };
+  const htmx = await send(base, "/reply?lang=ja", "POST", htmxHeaders(base), form);
+  expect(htmx.status).toBe(413);
+  expect(htmx.body).toMatch(/^<p id="send-refused">送信されませんでした。/);
+  const native = await send(base, "/reply?lang=ja", "POST", submitHeaders(base), form);
+  expect(native.status).toBe(413);
+  expect(native.body).toContain('<html lang="ja">');
+  expect(sent).toEqual([]);
+  stop.abort();
+  expect(await closed).toBe(0);
+});
+
+test("(send) with no approver there is no say port, and a send says why", async () => {
+  const sent: Sent = [];
+  const { base, stop, closed } = await served(
+    createApp({ ...spyPorts([], sent), say: null } as ServedPorts, TOKEN),
+  );
+  const refused = await send(base, "/request", "POST", htmxHeaders(base), {
+    token: TOKEN,
+    message_id: newMessageId("request"),
+    body: "words",
+  });
+  expect(refused.status).toBe(403);
+  expect(refused.body).toContain("RONDO_APPROVER");
+  expect(sent).toEqual([]);
+
+  stop.abort();
+  expect(await closed).toBe(0);
+});
+
+/** An advisory record holding a request and a drafter's ask that waits on it. */
+async function askWaiting() {
+  const connection = new DatabaseSync(":memory:");
+  const record = advisoryRecord(connection);
+  const at = { authorId: "rondo-drafter", atMs: 1, bases: [] } as const;
+  for (const draft of [
+    { ...at, messageId: "req", body: "r", authorKind: "operator", inReplyTo: null, asks: false },
+    {
+      ...at,
+      messageId: "ask",
+      body: "a?",
+      authorKind: "drafter",
+      inReplyTo: "req",
+      bases: [{ form: "message", messageId: "req" }],
+      asks: true,
+    },
+  ] as const) {
+    const outcome = await record.recordThreadMessage(draft);
+    expect(outcome.kind, JSON.stringify(outcome)).toBe("recorded");
+  }
+  const ports = {
+    ...spyPorts([]),
+    record,
+    say: new SayPort(
+      async (message) => {
+        const outcome = await record.recordThreadMessage({
+          ...message,
+          authorKind: "operator",
+          authorId: "ada",
+          atMs: 2,
+          bases: [],
+          asks: false,
+        });
+        return outcome.kind === "recorded"
+          ? { ok: true, note: "" }
+          : { ok: false, note: outcome.reason };
+      },
+      async () => await record.threadMessages(),
+    ),
+  } as ServedPorts;
+  const waitingAsks = async () => {
+    const open = await record.openAsksIn("req");
+    return open.kind === "read" ? open.asks.map((ask) => ask.messageId) : null;
+  };
+  const operatorRows = () =>
+    connection
+      .prepare("SELECT COUNT(*) AS n FROM conversation_message WHERE author_kind = 'operator'")
+      .get();
+  return { record, ports, waitingAsks, operatorRows };
+}
+
+test("(answer) a person's press answers a waiting question once, and the question stops waiting", async () => {
+  // D-0059 section 5a's falsifier and D-0069 rule 5: the reply to an ask
+  // releases work, so it is a press, on the page (#220 S1).
+  const { ports, waitingAsks, operatorRows } = await askWaiting();
+  const { base, stop, closed } = await served(createApp(ports, TOKEN));
+  const answer = {
+    token: TOKEN,
+    message_id: newMessageId("reply"),
+    in_reply_to: "ask",
+    body: "yes, go",
+  };
+  expect(await waitingAsks()).toEqual(["ask"]);
+
+  const pressed = await send(base, "/answer-ask?lang=ja", "POST", pressHeaders(base), answer);
+  expect(pressed.status).toBe(303);
+  expect(pressed.location).toBe(`/?thread=${answer.message_id}&lang=ja#${answer.message_id}`);
+  expect(await waitingAsks()).toEqual([]);
+  // A second press of the same form is the answer it repeats.
+  expect((await send(base, "/answer-ask", "POST", pressHeaders(base), answer)).status).toBe(303);
+  expect(operatorRows()).toEqual({ n: 2 });
+
+  stop.abort();
+  expect(await closed).toBe(0);
+});
+
+test("(answer) every shape that is not a person's press is refused, and the question keeps waiting", async () => {
+  const { ports, waitingAsks, operatorRows } = await askWaiting();
+  const app = createApp(ports, TOKEN);
+  const outcomes: string[] = [];
+  // Planted: a send minted by an htmx-shaped request, spent at the answer.
+  app.post("/planted/send-as-press", async (c) => {
+    const minting = mintSend(c, TOKEN);
+    if ("send" in minting) {
+      const said = await sayOf(ports).answerAsk(minting.send as unknown as Press, {
+        messageId: newMessageId("reply"),
+        body: "nobody pressed",
+        inReplyTo: "ask",
+      });
+      outcomes.push(String(said.ok));
+    }
+    return c.text("done");
+  });
+  // Planted: a GET writer that holds the port and a forged press.
+  app.get("/planted/get", async (c) => {
+    const minting = mintPress(c, TOKEN);
+    const message = { messageId: newMessageId("reply"), body: "planted", inReplyTo: "ask" };
+    outcomes.push(
+      String(
+        (
+          await sayOf(ports).answerAsk(
+            "press" in minting ? minting.press : (Object.freeze({}) as Press),
+            message,
+          )
+        ).ok,
+      ),
+    );
+    return c.text("drawn");
+  });
+  const { base, stop, closed } = await served(app);
+  const person = pressHeaders(base);
+  const answer = {
+    token: TOKEN,
+    message_id: newMessageId("reply"),
+    in_reply_to: "ask",
+    body: "words",
+  };
+
+  const refusals: [
+    string,
+    string,
+    Record<string, string | undefined>,
+    Record<string, string>,
+    number,
+  ][] = [
+    ["an htmx hx-post", "POST", htmxHeaders(base), answer, 403],
+    ["missing Sec-Fetch-User", "POST", { ...person, "sec-fetch-user": undefined }, answer, 403],
+    ["a same-origin fetch", "POST", { ...person, "sec-fetch-mode": "cors" }, answer, 403],
+    ["a wrong token", "POST", person, { ...answer, token: "not-the-token" }, 403],
+    ["a foreign Origin", "POST", { ...person, origin: "https://evil.example" }, answer, 403],
+    ["no question named", "POST", person, { ...answer, in_reply_to: "" }, 400],
+    ["no words", "POST", person, { ...answer, body: " " }, 400],
+  ];
+  for (const [shape, method, headers, form, status] of refusals) {
+    const answered = await send(base, "/answer-ask", method, headers, form);
+    expect(answered.status, shape).toBe(status);
+    expect(answered.body, shape).not.toBe("");
+  }
+  // A native refusal is a page with the way back to the question's thread.
+  const refused = await send(
+    base,
+    "/answer-ask",
+    "POST",
+    { ...person, "sec-fetch-user": undefined },
+    answer,
+  );
+  expect(refused.body).toContain('href="/?thread=ask&amp;lang=en"');
+  expect(refused.body).toContain("Answer button");
+  expect((await send(base, "/answer-ask", "GET", person)).status).toBe(404);
+  await send(base, "/planted/send-as-press", "POST", htmxHeaders(base), { token: TOKEN });
+  await send(base, "/planted/get", "GET", person);
+  expect(outcomes).toEqual(["false", "false"]);
+
+  expect(await waitingAsks()).toEqual(["ask"]);
+  expect(operatorRows()).toEqual({ n: 1 });
   stop.abort();
   expect(await closed).toBe(0);
 });

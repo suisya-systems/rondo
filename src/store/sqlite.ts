@@ -362,6 +362,15 @@ export type OpenAsksReadOutcome =
   | { readonly kind: "read"; readonly asks: readonly OpenAsk[] }
   | { readonly kind: "unreadable"; readonly reason: string };
 
+/**
+ * Every request thread's messages, or unreadable when a message's bases will
+ * not parse (D-0061 rule 2). The page draws the threads from it; a thread it
+ * could only half read would show a conversation with holes nobody can see.
+ */
+export type ThreadMessagesReadOutcome =
+  | { readonly kind: "read"; readonly messages: readonly ThreadMessageDraft[] }
+  | { readonly kind: "unreadable"; readonly reason: string };
+
 /** Whether the status-blind termination of {@link IterationStore.settle} landed. */
 export type SettleOutcome =
   | { readonly kind: "settled" }
@@ -2410,6 +2419,12 @@ export interface AdvisoryRecord {
    */
   openAsksIn(requestMessageId: string): Promise<OpenAsksReadOutcome>;
   /**
+   * Every thread message in the conversation, oldest first, in the shape its
+   * writer was handed (D-0061 rule 2): the page's thread view reads it. An
+   * elevation's id-only row is no thread message and is not here.
+   */
+  threadMessages(): Promise<ThreadMessagesReadOutcome>;
+  /**
    * Every iteration in `iterationId`'s lineage: all that share its root, the end
    * of its `supersedes` chain (D-0030, D-0066 rule 4.2), or null when a walk
    * passes the bound. The same query `reserve()` re-tests under the write lock.
@@ -3418,6 +3433,10 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
       return openAsksIn(connection, requestMessageId);
     },
 
+    async threadMessages(): Promise<ThreadMessagesReadOutcome> {
+      return threadMessages(connection);
+    },
+
     async lineageOf(iterationId: string): Promise<readonly string[] | null> {
       return lineageOf(connection, iterationId);
     },
@@ -4163,6 +4182,52 @@ function openAsksIn(connection: DatabaseSync, requestMessageId: string): OpenAsk
     asks.push(Object.freeze({ messageId, iterationIds: Object.freeze(iterationIds) }));
   }
   return { kind: "read", asks: Object.freeze(asks) };
+}
+
+/**
+ * Every thread message, oldest first (D-0061 rule 2): `at_ms`, then `rowid`,
+ * so two messages written in one millisecond keep the order they were written
+ * in. Fail closed on bases that will not parse, for {@link openAsksIn}'s reason.
+ */
+function threadMessages(connection: DatabaseSync): ThreadMessagesReadOutcome {
+  const rows = connection
+    .prepare(
+      "SELECT message_id, body, author_kind, author_id, in_reply_to, at_ms, bases, asks " +
+        "FROM conversation_message WHERE author_kind IS NOT NULL ORDER BY at_ms, rowid",
+    )
+    .all() as SqlRow[];
+  const messages: ThreadMessageDraft[] = [];
+  for (const row of rows) {
+    const messageId = String(row["message_id"]);
+    let bases: unknown;
+    try {
+      bases = row["bases"] === null ? [] : JSON.parse(String(row["bases"]));
+    } catch (error) {
+      return {
+        kind: "unreadable",
+        reason: `the bases of message '${messageId}' are not JSON: ${describe(error)}`,
+      };
+    }
+    if (!Array.isArray(bases) || !bases.every((one) => typeof one === "object" && one !== null)) {
+      return {
+        kind: "unreadable",
+        reason: `the bases of message '${messageId}' are not a list of locators`,
+      };
+    }
+    messages.push(
+      Object.freeze({
+        messageId,
+        body: String(row["body"] ?? ""),
+        authorKind: row["author_kind"] === "drafter" ? "drafter" : "operator",
+        authorId: String(row["author_id"] ?? ""),
+        inReplyTo: row["in_reply_to"] === null ? null : String(row["in_reply_to"]),
+        atMs: Number(row["at_ms"] ?? 0),
+        bases: Object.freeze(bases as JsonRecord[]),
+        asks: Number(row["asks"]) === 1,
+      }),
+    );
+  }
+  return { kind: "read", messages: Object.freeze(messages) };
 }
 
 function lineageDefect(connection: DatabaseSync, input: ReserveInput): string | null {

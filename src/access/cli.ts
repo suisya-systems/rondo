@@ -117,7 +117,7 @@ import {
   heldAgentTypeLines,
   type ScopedAdmission,
 } from "./scope.js";
-import { AnswerPort, serveOperatorPage } from "./web-app.js";
+import { AnswerPort, SayPort, serveOperatorPage } from "./web-app.js";
 import { type Chrome, EN } from "./wording.js";
 
 /**
@@ -1593,10 +1593,16 @@ export async function main(
     // the page decide not to draw a button would leave a door with nobody's
     // name on it reachable by a hand-written POST.
     const approver = environment[APPROVER_ENV];
+    const record = openAdvisoryRecord(opened.path);
+    // **The sender is the approver, through the same allowlist `request` and
+    // `reply` use** (D-0061 rule 4, D-0059 section 5a): no approver, or one the
+    // allowlist refuses, is no say port, and so no forms.
+    const sender =
+      approver === undefined || approver === "" ? null : approvedActor(approver, environment);
     return await serveOperatorPage(
       {
         store,
-        record: openAdvisoryRecord(opened.path),
+        record,
         policy: bounds.policy,
         // **The host's statement, as a tag, and one step of five** (D-0056
         // rules 2 and 3). The page resolves it against the request's `?lang=`,
@@ -1624,6 +1630,36 @@ export async function main(
                     iterationId,
                     body,
                   ),
+              ),
+        say:
+          sender === null || "refusal" in sender
+            ? null
+            : // **The send is checked inside this port**, as the press is in
+              // `AnswerPort`: whatever holds it records nothing without a send
+              // minted from a same-origin `POST` carrying the token.
+              new SayPort(
+                async (message) => {
+                  const outcome = await record.recordThreadMessage({
+                    messageId: message.messageId,
+                    body: message.body,
+                    authorKind: "operator",
+                    authorId: sender.actorId,
+                    inReplyTo: message.inReplyTo,
+                    atMs: Date.now(),
+                    bases: [],
+                    asks: false,
+                  });
+                  return outcome.kind === "recorded"
+                    ? { ok: true, note: "" }
+                    : {
+                        ok: false,
+                        note:
+                          outcome.kind === "refused"
+                            ? outcome.reason
+                            : `the message was not recorded: ${outcome.reason}`,
+                      };
+                },
+                async () => await record.threadMessages(),
               ),
         // Read for the same reason and on the same condition: the material is
         // what a person is shown before they press, so it is drawn exactly

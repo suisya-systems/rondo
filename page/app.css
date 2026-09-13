@@ -75,7 +75,7 @@
     --muted-foreground: #a3abb5;
     --faint: #8c95a0;
     --border: #282d34;
-    --accent: #1c222a;
+    --accent: #232c38;
     --ring: #5b9bff;
     --link: #7aafff;
     --wait: #d48a2c;
@@ -144,4 +144,16 @@ html:not(.js) details::details-content {
 }
 html:not(.js) details > summary svg {
   rotate: 90deg;
+}
+
+/*
+ * A message's `Reply` is drawn where a person points at the message (the S1 design pass on #220):
+ * on hover or keyboard focus, and only where a pointer can hover and the key script has run. On
+ * touch, and with script off, it is always drawn. Hidden by opacity rather than `display`, so it
+ * keeps its place, stays in the tab order, and shows the moment Tab reaches it.
+ */
+@media (hover: hover) {
+  html.js .message:not(:hover, :focus-within) .reply-link {
+    opacity: 0;
+  }
 }

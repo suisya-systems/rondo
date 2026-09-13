@@ -109,12 +109,96 @@ export interface Chrome {
    */
   readonly answerAction: string;
 
+  // -- Request threads (D-0061 rule 4, D-0059 section 5a's send) --
+  /** The header's way into the requests, on every view. */
+  readonly requestsNav: string;
+  readonly requestsHeading: (count: number) => string;
+  readonly noRequests: string;
+  /** How many messages a request's thread holds, and when it last moved. */
+  readonly threadSize: (count: number, since: string) => string;
+  /** The pill on a request, or on a message, that waits for the person's reply. */
+  readonly asksWaiting: (count: number) => string;
+  readonly askWaitingPill: string;
+  /** The operator's own messages are "you"; the voice badge says which voice spoke (rule 2.3). */
+  readonly you: string;
+  readonly operatorVoice: string;
+  readonly drafterVoice: string;
+  /** The summary's row for an ask: the request it was asked in. */
+  readonly askedIn: (request: string) => string;
+  readonly inReplyTo: (who: string, words: string) => string;
+  readonly basesLabel: string;
+  readonly replyAction: string;
+  readonly openThread: string;
+  /** The reply box's target, on one short line: who wrote it and how long ago. */
+  readonly replyingTo: (who: string, since: string) => string;
+  /** The same line when the target is a question waiting on the person, answered by a press. */
+  readonly answeringTo: (who: string, since: string) => string;
+  /** The filled button that answers a waiting question (a press, not a send). */
+  readonly answerAskAction: string;
+  readonly newRequestHeading: string;
+  readonly requestPlaceholder: string;
+  readonly replyPlaceholder: string;
+  readonly sendAction: string;
+  readonly sendNote: string;
+  readonly keySend: string;
+  readonly composerNoApprover: string;
+  readonly noSuchThread: string;
+  readonly threadsUnreadable: (reason: string) => string;
+  /** The line a refused send shows under the draft, which is kept. */
+  readonly notSent: (line: string) => string;
+  /**
+   * Why a send was refused, one sentence each, with no id and no D-number in
+   * it (#220 S1 review): the lines a page can cause. The mint's several
+   * reasons are one sentence, because what a person does about each is the
+   * same -- reload and send again.
+   */
+  readonly sendRefusedNoApprover: string;
+  readonly sendRefusedForm: string;
+  readonly sendRefusedNoWords: string;
+  readonly sendRefusedNotTaken: string;
+  readonly sendRefusedAsk: string;
+  readonly sendRefusedTooLong: string;
+  readonly sendRefusedUnknown: string;
+  /** An answer to a question that did not arrive as a person's press of its button. */
+  readonly answerRefusedPress: string;
+  /** Said in the reply box while its thread holds a question still waiting: the box does not answer it. */
+  readonly replyNotAnswer: string;
+  /** Script off, a refused send lands on its own page: the way back, and where the words are. */
+  readonly sendBack: string;
+  readonly sendBackNote: string;
+  /** With script off a view with a composer does not reload itself, so a draft survives. */
+  readonly threadNoReload: string;
+  /** The threads' account of themselves: the redraw writes nothing, and Send is what writes here. */
+  readonly threadsLiveNote: (seconds: number) => string;
+  /**
+   * The S1 design pass on #220: the short lines drawn where the long notes
+   * were (the notes stay, as the `title`), and the thread header's words.
+   */
+  readonly liveShort: (seconds: number) => string;
+  readonly stillShort: string;
+  /** An age as `ago` spells it (`59m`), in this set's units. */
+  readonly age: (ago: string) => string;
+  /** The header pill: how many questions wait on the person. */
+  readonly waitingCount: (count: number) => string;
+  readonly signedInAs: (actorId: string) => string;
+  readonly backToRequests: string;
+  readonly reloadThread: string;
+  readonly threadStarted: (since: string) => string;
+  /** Lets go of a reply target chosen by hand. */
+  readonly replyDefault: string;
+  /** A live row that will not decode, as a person reads it. */
+  readonly attentionHeading: (count: number) => string;
+  readonly unreadableTitle: string;
+  readonly unreadableAction: (iterationId: string) => string;
+  readonly unreadableDetail: string;
+
   // -- The page's chrome under stack H (D-0059 rule 5): the live indicator and
   // the key hints, both drawn only once the key script has run --
   readonly liveLabel: string;
   readonly keyMove: string;
   readonly keyOpen: string;
   readonly keyBack: string;
+  readonly keyWrite: string;
 
   // -- The fold, and the sections inside it --
   readonly openReading: string;
@@ -324,12 +408,79 @@ explanation you pressed on and then answers the gate.`,
     `${String(count)} ${count === 1 ? "field" : "fields"} rondo could not determine`,
   answerHere: "read what a press would record, and answer there",
   answerAction: "Review and answer",
+
+  requestsNav: "Requests",
+  requestsHeading: (count) => `requests (${String(count)})`,
+  noRequests: "No request has been written yet. Write one below, in your own words.",
+  threadSize: (count, since) =>
+    `${String(count)} ${count === 1 ? "message" : "messages"}, last ${since} ago`,
+  asksWaiting: (count) =>
+    `${String(count)} ${count === 1 ? "question" : "questions"} waiting on you`,
+  askWaitingPill: "Waiting on you",
+  you: "you",
+  operatorVoice: "operator",
+  drafterVoice: "drafter",
+  askedIn: (request) => `asked in: ${request}`,
+  inReplyTo: (who, words) => `in reply to ${who}: ${words}`,
+  basesLabel: "rests on",
+  replyAction: "Reply",
+  openThread: "Open the thread",
+  replyingTo: (who, since) => `Replying to ${who}, ${since} ago`,
+  answeringTo: (who, since) => `Answering ${who}'s question, ${since} ago`,
+  answerAskAction: "Answer",
+  newRequestHeading: "New request",
+  requestPlaceholder: "What do you want done? Write it as you would say it.",
+  replyPlaceholder: "Write a reply.",
+  sendAction: "Send",
+  sendNote: "Sent as written. To correct it, reply again.",
+  keySend: "send",
+  composerNoApprover:
+    "RONDO_APPROVER is not set, so there is nobody this page could send as: the threads can be read, not written to.",
+  noSuchThread: "No request thread holds that message.",
+  threadsUnreadable: (reason) => `The request threads could not be read: ${reason}`,
+  notSent: (line) => `Not sent, and your words are kept: ${line}`,
+  sendRefusedNoApprover: "RONDO_APPROVER is not set, so there is nobody this page could send as.",
+  sendRefusedForm:
+    "This did not come from this page's own form, or the page is older than this rondo. Reload the page and send again.",
+  sendRefusedNoWords: "There are no words to send.",
+  sendRefusedNotTaken:
+    "The conversation did not record this message; the message it replies to may not be in the thread. Reload the thread and try again.",
+  sendRefusedAsk:
+    "That message is a question still waiting on your answer. Open its thread and press Answer.",
+  sendRefusedTooLong:
+    "That message is longer than this page accepts. Shorten it, or split it into two replies.",
+  sendRefusedUnknown: "rondo did not take this message. Reload the page and send again.",
+  answerRefusedPress:
+    "An answer is taken only from a press of the Answer button. Reload the thread and press Answer again.",
+  replyNotAnswer: "This reply does not answer the question waiting in this thread.",
+  sendBack: "Back to the thread",
+  sendBackNote: "Your browser's Back button returns to what you wrote.",
+  threadsLiveNote: (seconds) =>
+    `Redraws every ${String(seconds)}s, and a redraw writes nothing. What writes here is Send: ` +
+    "your words, recorded exactly as written into the thread, under RONDO_APPROVER's name. A message approves nothing.",
+  threadNoReload:
+    "With scripting off this view does not reload itself, so nothing you are writing is thrown away: reload it to see new messages.",
+  liveShort: (seconds) => `Live, updates every ${String(seconds)}s`,
+  stillShort: "Holds still while you read",
+  age: (ago) => ago,
+  waitingCount: (count) => `${String(count)} waiting`,
+  signedInAs: (actorId) => `You send and answer as ${actorId}`,
+  backToRequests: "Back to requests",
+  reloadThread: "Reload for new messages",
+  threadStarted: (since) => `started ${since} ago`,
+  replyDefault: "Reply to the latest message instead",
+  attentionHeading: (count) => `needs attention (${String(count)})`,
+  unreadableTitle: "A run's record cannot be read",
+  unreadableAction: (iterationId) =>
+    `rondo cannot show or answer ${iterationId}, and it still holds a slot. Look at it in the terminal with rondo explain.`,
+  unreadableDetail: "What rondo could not read",
   liveLabel: "live",
   keyMove: "move",
   keyOpen: "open",
   keyBack: "back",
+  keyWrite: "write",
 
-  openReading: "the reading these rest on: every claim with its basis, and rondo's own accounting",
+  openReading: "Show the full reading: every claim with its basis",
   hideReading: "hide the reading",
   inboxHeading: "the inbox",
   inboxNote: "Reading this does not move your last-look mark: that is what rondo inbox does.",
@@ -490,14 +641,85 @@ const JA: Partial<Chrome> = Object.freeze({
     `ゲート ${gateId} に '${word}' と答えます。rondo answer と同じ動作です`,
   answerHere: "押したときに何が記録されるかを読み、そこで答える",
   answerAction: "確認して答える",
+
+  requestsNav: "依頼",
+  requestsHeading: (count) => `依頼 (${String(count)})`,
+  noRequests: "まだ依頼はありません。下の欄に、自分の言葉で書いてください。",
+  threadSize: (count, since) => `メッセージ ${String(count)} 件、最後は ${since}前`,
+  asksWaiting: (count) => `あなたへの質問 ${String(count)}`,
+  askWaitingPill: "あなたの回答待ち",
+  you: "あなた",
+  operatorVoice: "オペレーター",
+  drafterVoice: "下書き役",
+  askedIn: (request) => `依頼: ${request}`,
+  inReplyTo: (who, words) => `${who} への返信: ${words}`,
+  basesLabel: "根拠",
+  replyAction: "返信する",
+  openThread: "スレッドを開く",
+  replyingTo: (who, since) => `${who} に返信 · ${since}前`,
+  answeringTo: (who, since) => `${who} の質問に回答 · ${since}前`,
+  answerAskAction: "回答する",
+  newRequestHeading: "新しい依頼",
+  requestPlaceholder: "何をしてほしいですか。話すときの言葉のまま書いてください。",
+  replyPlaceholder: "返信を書く",
+  sendAction: "送信",
+  sendNote: "書いたとおりに送られます。直すときは、もう一度返信します。",
+  keySend: "送信",
+  composerNoApprover:
+    "RONDO_APPROVER が設定されていないため、このページが誰として送るのかが決まりません。スレッドは読めますが、書き込めません。",
+  noSuchThread: "そのメッセージを含む依頼スレッドはありません。",
+  threadsUnreadable: (reason) => `依頼スレッドを読めませんでした: ${reason}`,
+  notSent: (line) => `送信されませんでした。書いた文は残しています: ${line}`,
+  sendRefusedNoApprover:
+    "RONDO_APPROVER が設定されていないため、このページが誰として送るのかが決まりません。",
+  sendRefusedForm:
+    "このページ自身のフォームから届いていないか、ページが今の rondo より古いものです。ページを読み込み直してから、もう一度送信してください。",
+  sendRefusedNoWords: "送る文がありません。",
+  sendRefusedNotTaken:
+    "会話がこのメッセージを記録しませんでした。返信先のメッセージがスレッドに無いのかもしれません。スレッドを読み込み直してから、もう一度試してください。",
+  sendRefusedAsk:
+    "返信先は、まだあなたの回答を待っている質問です。スレッドを開いて「回答する」を押してください。",
+  sendRefusedTooLong:
+    "このページが受け付けるより長いメッセージです。短くするか、2 つの返信に分けてください。",
+  sendRefusedUnknown:
+    "rondo はこのメッセージを受け取りませんでした。ページを読み込み直してから、もう一度送信してください。",
+  answerRefusedPress:
+    "回答は「回答する」ボタンを押したときだけ受け付けます。スレッドを読み込み直して、もう一度「回答する」を押してください。",
+  replyNotAnswer: "この返信は、このスレッドで待っている質問への回答にはなりません。",
+  sendBack: "スレッドに戻る",
+  sendBackNote: "ブラウザの「戻る」で、書いた文に戻れます。",
+  threadsLiveNote: (seconds) =>
+    `${String(seconds)}秒ごとに描き直しますが、描き直しは何も書き込みません。ここで書き込むのは送信だけで、` +
+    "書いた文をそのまま RONDO_APPROVER の名前でスレッドに記録します。メッセージは何も承認しません。",
+  threadNoReload:
+    "スクリプトが無効なとき、この画面は自動で読み込み直しません。書きかけの文が消えないためです。新しいメッセージは読み込み直して確認してください。",
   approvePlain: "この作業をこのまま受け入れます。",
   undeterminedFold: (count) => `rondo が決められなかった項目 ${String(count)} 件`,
+  liveShort: (seconds) => `ライブ · ${String(seconds)}秒ごとに更新`,
+  stillShort: "読んでいるあいだは動きません",
+  age: (ago) => {
+    const unit = ago.slice(-1);
+    const units: Record<string, string> = { s: "秒", m: "分", h: "時間", d: "日" };
+    return units[unit] === undefined ? ago : `${ago.slice(0, -1)}${units[unit]}`;
+  },
+  waitingCount: (count) => `${String(count)} 件待ち`,
+  signedInAs: (actorId) => `${actorId} として送信・回答します`,
+  backToRequests: "依頼の一覧に戻る",
+  reloadThread: "読み込み直して新着を見る",
+  threadStarted: (since) => `${since}前に開始`,
+  replyDefault: "最新のメッセージへの返信に戻す",
+  attentionHeading: (count) => `確認が必要なもの (${String(count)})`,
+  unreadableTitle: "実行の記録を読み取れません",
+  unreadableAction: (iterationId) =>
+    `rondo は ${iterationId} を表示も回答もできませんが、枠はまだ使っています。ターミナルの rondo explain で確認してください。`,
+  unreadableDetail: "rondo が読み取れなかった内容",
   liveLabel: "ライブ",
   keyMove: "移動",
   keyOpen: "開く",
   keyBack: "戻る",
+  keyWrite: "書く",
 
-  openReading: "これらが立っている読み下し: 根拠つきのすべての claim と、rondo 自身の会計",
+  openReading: "読み下しをすべて表示: 根拠つきのすべての主張",
   hideReading: "読み下しを閉じる",
   inboxHeading: "inbox",
   inboxNote: "ここを読んでも最後に見た印は動きません。印を動かすのは rondo inbox です。",
