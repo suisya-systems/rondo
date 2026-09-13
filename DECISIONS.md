@@ -106,8 +106,8 @@ C-NN`, so the spaces can never be read as one.
 | D-0066 | The scope record: one immutable row with a digest, approved by a row of its own and never by `human_decision`, spent once per act inside the act's own transaction, refused at one point that stops one line, and `D-0062` rule 3 and `D-0022` rule 9 restated for it | accepted |
 | D-0067 | The secretary's running half has no new owner: the advisory reads lines against each other and drafts an order, the surface attempts acts in that order, the store keeps the person's standing policies, and review extensions and merges still reach the person | accepted |
 | D-0068 | One voice and a patrol: the person asks rondo why a line waits and gets an answer joined from rows with bases, a timer in the resident host reads rows against each lap's own declared patience, and nothing it finds is handled silently | accepted |
-| D-0069 | A scope before the first lap: an agent type becomes a record rondo holds when an operator's scope is written from a plan, `start` spends a scope through the `lineage_start` arm, and an operator-written first admission waits on every open question in its request's thread | accepted |
-| D-0071 | The model drafter: a Claude model rondo runs outside the lap over a thread it hands over, which chooses among held plans and agent types and writes words, while every number in a drafted scope is computed from recorded laps and may only be narrowed; and a plan the person pastes into the thread is how a fresh store gets its first template and agent type | proposed |
+| D-0069 | A scope before the first lap: an agent type becomes a record rondo holds when an operator's scope is written from a plan, `start` spends a scope through the `lineage_start` arm, and an operator-written first admission waits on every open question in its request's thread | superseded by D-0071 |
+| D-0071 | The model drafter: a Claude model rondo runs outside the lap over a thread it hands over, which chooses among held plans and agent types and writes words, while every number in a drafted scope is computed from recorded laps and may only be narrowed; and a plan the person pastes into the thread is how a fresh store gets its first template and agent type | accepted |
 
 ---
 
@@ -11733,6 +11733,10 @@ entry put to it; the answer is recorded in section "What was put to the human ga
 > proposal, so this entry's falsifier about `D-0062` did not fire and the split stays on option (b).
 > The split still waits on the model-drafter entry. `D-0063` reviews the advisory's role, including
 > `D-0022` rule 7, which a split into plans does not fit.
+
+> **Annotation (2026-09-14, from D-0071).** Step 5.4's drafter, the model-drafter entry this entry
+> waits on, is `D-0071`. Nothing below is edited.
+
 Refs `D-0020`, `D-0022`, `D-0025`, `D-0026`, `D-0030`, `D-0032`, `D-0034`, `D-0036`, `D-0044`,
 `D-0062`.
 
@@ -12786,6 +12790,9 @@ the option that fits `D-0064`.** They are kept as put, and the answer follows th
 - **It does not choose a model, a prompt, or how a model drafter is invoked.** Those belong to the
   model-drafter entry that `D-0029`'s residuals and `D-0061` step 5.4 name. This entry decides only
   the widening of `D-0022` that such a drafter needs.
+
+  > **Annotation (2026-09-14, from D-0071).** The model-drafter entry is `D-0071`: the model, what it
+  > is handed, when it runs, and what it chooses versus what is computed. The bullet above is unedited.
 - **It does not design the split proposal's kind, payload or verb** (`D-0062`, "What this does not
   do").
 - **It does not decide the next-work proposal's shape or trigger** (`D-0061` rule 6).
@@ -13707,6 +13714,12 @@ number.
 > may record such a row from a plan in its own transaction; a `drafter` scope may list only digests
 > already held. The scope's screen prints each listed digest's tier and granted keys read back from
 > the held record. The writer's refusal of an unheld digest stays. Nothing above is edited.
+
+> **Annotation (2026-09-14, from D-0071).** Added after this entry was accepted, and additive, by the
+> answer of rondo's human gate to `D-0071`'s first point. A `drafter` scope may also record an
+> `agent_type_record` row, **only from a plan an operator pasted into the request thread**, from the
+> message's bytes and with `recorded_by` the message's author (`D-0071` section 6.2, superseding
+> `D-0069` section 1's operator-only clause). Nothing above is edited.
 
 ### 2. The approval of a scope (P1)
 
@@ -14746,10 +14759,20 @@ The points are kept as put, and the answer follows them.
 
 ## D-0069 — A scope before the first lap: an agent type becomes a record rondo holds when an operator's scope is written from a plan, `start` spends a scope through the `lineage_start` arm, and an operator-written first admission waits on every open question in its request's thread
 
-**Status:** accepted (2026-09-13, rondo's human gate). Three points were put to the gate and it chose
-the recommended option on each; the answers are recorded in section "What was put to the human gate,
-and its answer". Refs `D-0006`, `D-0022`, `D-0030`, `D-0047`, `D-0061`, `D-0062`, `D-0064`, `D-0065`,
-`D-0066`, rondo#201.
+**Status:** superseded by D-0071 (2026-09-14). Accepted 2026-09-13 (rondo's human gate).
+
+> **Supersession note (2026-09-14, from D-0071).** By the answer of rondo's human gate to `D-0071`'s
+> first point, a **drafted** scope may also record an agent type, from a plan an operator pasted into
+> the request thread, copied from the message's bytes in the scope's own transaction with
+> `recorded_by` the message's author (`D-0071` section 6.2). That changes what section 1 below asserted
+> ("Only an `operator` scope may record one; a `drafter` scope may list only digests already held").
+> Supersession is whole-entry, per "How to use this file", so **every other section, the relaxed rules
+> of section 3 and the gate's three answers are not retired with it**: they are carried as written and
+> are still cited as `D-0069` section N. Nothing below is edited.
+
+Three points were put to the gate and it chose the recommended option on each; the answers are
+recorded in section "What was put to the human gate, and its answer". Refs `D-0006`, `D-0022`,
+`D-0030`, `D-0047`, `D-0061`, `D-0062`, `D-0064`, `D-0065`, `D-0066`, rondo#201.
 
 **This entry decides and does not build.** Nothing in `src/` changes with it, and no earlier entry is
 edited by it. The annotations it would add on acceptance are listed in "Annotations this entry adds".
@@ -14986,17 +15009,17 @@ The points are kept as put, and the answer follows them.
 
 ## D-0071 — The model drafter: a Claude model rondo runs outside the lap over a thread it hands over, which chooses among held plans and agent types and writes words, while every number in a drafted scope is computed from recorded laps and may only be narrowed; and a plan the person pastes into the thread is how a fresh store gets its first template and agent type
 
-**Status:** proposed (2026-09-14). Three points are put to rondo's human gate, each with a
-recommendation; see "What is put to the human gate" directly below. Refs `D-0009`, `D-0010`,
+**Status:** accepted (2026-09-14, rondo's human gate). Three points were put to the gate and it chose
+the recommended option on each; the answers are recorded at the end of "What was put to the human
+gate, and its answer" directly below. Refs `D-0009`, `D-0010`,
 `D-0022`, `D-0029`, `D-0032`, `D-0046`, `D-0052`, `D-0061`, `D-0062`, `D-0063`, `D-0064`, `D-0065`,
 `D-0066`, `D-0067`, `D-0068`, `D-0069`.
 
-**This entry decides and does not build.** Nothing in `src/` changes with it, and no earlier entry is
-edited by it. The annotations and the one supersession it would add on acceptance are listed in
-"Annotations this entry adds".
+**This entry decides and does not build.** Nothing in `src/` changes with it. The annotations and the
+supersession it adds are listed in "Annotations this entry adds".
 
-**Numbering.** `D-0070` is proposed in rondo#224 and not merged at this entry's base. This entry takes
-the next number after it, and is renumbered if the two collide when either merges.
+**Numbering.** `D-0070` is in rondo#224 and not merged at this entry's base. This entry takes the next
+number after it.
 
 `D-0063` made the advisory the secretary's drafting half and left three things to "the model-drafter
 entry that `D-0029`'s residuals and `D-0061` step 5.4 name": the model, the prompt, and how it is
@@ -15007,9 +15030,10 @@ recorded laps rather than fixed defaults), what is carried and what is composed 
 how a request is drafted when rondo holds no plan or agent type that fits. It keeps `D-0064`'s two
 lines (bases; an irreversible act is approved by a person) and **adds no third**.
 
-### What is put to the human gate
+### What was put to the human gate, and its answer
 
-Each point has options, what each gives up, and one recommendation (`D-0064` rule 4.1).
+The points are kept as put, each with options, what each gives up, and one recommendation (`D-0064`
+rule 4.1). The answer follows them.
 
 1. **A request that needs a plan or an agent type rondo does not hold** (section 6). On a fresh store
    there is no template at all: `agent_type_record` keeps a `plan_digest` and not the plan (measurement
@@ -15054,6 +15078,16 @@ Each point has options, what each gives up, and one recommendation (`D-0064` rul
      a later review of drafts cannot use the reviewer as it stands, and a draft's cost is unread.
    - **(c) A smaller Claude model.** *Loses:* split quality on the step that decides every lap under a
      scope, for a saving not measured (a draft is one call; a lap is $0.46-$7.06, lap 8 and 9 records).
+
+**The gate's answer (2026-09-14):**
+
+1. **(a).** A plan the person pastes into the request thread is a template, and a drafted scope records
+   its agent type from the message's bytes in the scope's own transaction, with `recorded_by` the
+   message's author. `D-0069` is superseded as a whole, with every other section carried.
+2. **(a).** A drafted scope's budgets are computed by a pure function over recorded laps with bases, the
+   model may only narrow them, and it is built in two stages: the function and the page first, the
+   model's narrowing with the drafter.
+3. **(a).** The drafter's first table row is `claude-opus-5` through the `claude` CLI.
 
 ### What was measured, and how
 
@@ -15303,12 +15337,12 @@ what is re-readable and not re-derivable (`D-0063` rule 5) to the parts no funct
 
 ### Annotations this entry adds
 
-On acceptance, each dated and additive unless marked:
+Each dated and additive unless marked, and added with this entry's acceptance:
 
 - **`D-0063`** "What this does not do", first bullet: the model, the prompt and the invocation are
   `D-0071`.
 - **`D-0061`** step 5.4: the drafter is `D-0071`.
-- **Under point 1 (a) only: `D-0069` gains `Status: superseded by D-0071`** and a supersession note:
+- **By the gate's answer to point 1: `D-0069` gains `Status: superseded by D-0071`** and a supersession note:
   section 1's "only an `operator` scope may record one" is restated by `D-0071` section 6.2; every other
   section and the gate's answers stay under `D-0069`'s heading. **`D-0066` rule 1.2.3's `D-0069`
   annotation** gains a dated note to the same effect.
