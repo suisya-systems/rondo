@@ -15103,8 +15103,9 @@ number.
 5. **Material over the input bound, a timeout, output that does not parse, or a tool call makes the
    run `unavailable`.** The material is never truncated (`D-0065` rule 1.4's reason). An unavailable
    run writes one deterministic `drafter` message into the thread, `asks` unset, naming the reason with
-   a `message:` basis to the message that triggered it, and writes nothing else. It is not retried:
-   the person's next message triggers the next run.
+   a `message:` basis to **every operator message the document held that no earlier drafter row
+   covers** (rule 3.2), and writes nothing else. It is not retried: the person's next message triggers
+   the next run.
 
 ### 2. What it is handed, and what it is not
 
@@ -15118,8 +15119,9 @@ number.
    4. **the in-force standing policies**, whole (`D-0067` rule 7.1);
    5. **the laps of this request so far**: their iteration rows, gate outcomes and readings' verdicts
       and findings, so a redraft knows what already ran;
-   6. **the computed budget table** of section 4 with its bases, so the model sees the ceilings it may
-      narrow.
+   6. **the measurements behind the budgets** (rule 4.2.1) for every held agent type, with their
+      bases, and rule 4.2's formulas. **The ceilings themselves are not in the document**, because they
+      depend on the number of plans and the agent types, which the model chooses in the same call.
 2. **It does not read the target repository**, CI, GitHub or any sibling checkout (`D-0063` rule 3.3).
    So a question the repository would settle may be asked anyway (`D-0064` P2's test names the
    repository); that is counted under "What this gives up".
@@ -15131,9 +15133,11 @@ number.
 1. **One run per operator message in a request thread**, whether the message opens the request,
    answers a drafter's question, replies to a stop (`D-0066` rule 4.4) or adds to work in flight.
    Which of these it is, is the model's reading of the thread, and the run may draft nothing.
-2. **Where: the resident host** (`D-0068`), which finds work by rows and not by a queue: **an
-   operator message in a request thread that no later `drafter` row cites as a basis** has not been
-   drafted. So a message written by the CLI while the host runs is drafted too, and a host restart
+2. **Where: the resident host** (`D-0068`), which finds work by rows and not by a queue. **An
+   operator message is drafted once a drafter row covers it**: a proposal row written by this drafter
+   whose snapshot holds the message, or an unavailable run's message citing it (rule 1.5). An operator
+   message no such row covers has not been drafted. Every finished run writes one of the two (rule
+   7.3), including a run that drafts nothing, so no message stays eligible after a run over it. So a message written by the CLI while the host runs is drafted too, and a host restart
    loses nothing. With no host running, nothing is drafted and the thread waits.
 3. **At most one run per thread at a time, and a stale run writes nothing.** A run whose thread gained
    an operator message after its document was assembled is discarded by the layer's check (rule 5.2)
@@ -15161,9 +15165,12 @@ what is re-readable and not re-derivable (`D-0063` rule 5) to the parts no funct
 | `outward_acts` | computed: empty | include `push_branch` / `open_pull_request` **only with a `policy:` basis** |
 | `irreversible_additions` | computed: empty | add, with a basis (adding only narrows, `D-0064` rule 3.4) |
 
-1. **A narrowing carries a `message:` or `policy:` basis** to the words it rests on (the person wrote
-   "keep it under $3", or a standing policy says so). Nothing the model writes widens a computed value.
-   The person widens by editing at P1 (section 5.3).
+1. **A narrowing is a stated value with a `message:` or `policy:` basis** to the words it rests on
+   (the person wrote "keep it under $3", or a standing policy says so). **The order is: the model
+   returns the split and its narrowings; rondo then computes the budgets from the plans it returned
+   (rule 4.2); and the scope takes, per field, the narrower of the computed value and the stated one.**
+   A stated value that is not narrower changes nothing. Nothing the model writes widens a computed
+   value. The person widens by editing at P1 (section 5.3).
 2. **The budget function.** Pure, in `src/advisory`, over rows the snapshot holds. For the listed agent
    types and `P` plans:
    1. **Three measurements, each looked up on its own**: the first-lap cost (a read `lap_cost_usd`,
@@ -15250,11 +15257,12 @@ what is re-readable and not re-derivable (`D-0063` rule 5) to the parts no funct
 1. **The layer's structural check** (`D-0063` rule 2.2), extended to this drafter's forms: every basis
    resolves; every template digest is in the document; every agent type digest is held (or, under
    point 1 (a), recorded from a plan in this thread); only `prompt` and the agent type differ from the
-   template (`D-0063` rule 4.2); every computed field equals rule 4.2 over the snapshot; every changed
-   field is a narrowing with a basis.
+   template (`D-0063` rule 4.2); every computed field equals rule 4.2 over the snapshot and the returned
+   plans, or the narrower stated value; every stated value has a basis.
 2. **The staleness check** (rule 3.3): the thread's latest operator message is the document's.
 3. **What is written, all in one transaction or nothing**: one proposal row of the split kind (plans,
-   or holes, or neither) with the document as its snapshot; a drafted scope row when there are plans;
+   or holes, or neither), **written by every run that passes rule 7.2 even when it drafts nothing**, with
+   the document as its snapshot; a drafted scope row when there are plans;
    and the `drafter` messages (summary, question) with a basis to the proposal row.
 4. **"A model drafter exists", for the owner's purpose**, means, as `D-0065` rule 5.6 does for the
    reviewer: the drafter is built, and **two planted requests** recorded in `docs/operations/` were
