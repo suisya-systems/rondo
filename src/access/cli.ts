@@ -117,7 +117,7 @@ import {
   heldAgentTypeLines,
   type ScopedAdmission,
 } from "./scope.js";
-import { serveOperatorPage } from "./web.js";
+import { AnswerPort, serveOperatorPage } from "./web-app.js";
 import { type Chrome, EN } from "./wording.js";
 
 /**
@@ -390,7 +390,7 @@ const OPERATOR_LANGUAGE_ENV = "RONDO_OPERATOR_LANGUAGE";
  * variable.
  *
  * **A tag and not a set** (D-0056 rule 3): the lookup happens per request in
- * `src/access/web.ts`, beside the other four steps of rule 2, because a step
+ * `src/access/web.tsx`, beside the other four steps of rule 2, because a step
  * that resolved to `EN` here could not be told from a step that said nothing.
  * `null` is *nobody asked*.
  *
@@ -1610,8 +1610,21 @@ export async function main(
         answer:
           approver === undefined || approver === ""
             ? null
-            : async (iterationId, body) =>
-                await answerFromPage(environment, store, opened.path, approver, iterationId, body),
+            : // **The press is checked inside this port** (D-0059 R4): whatever
+              // holds it writes nothing without a press minted from a person's
+              // navigation, so the page's server is not the only thing standing
+              // between a `GET` and this walk.
+              new AnswerPort(
+                async (iterationId, body) =>
+                  await answerFromPage(
+                    environment,
+                    store,
+                    opened.path,
+                    approver,
+                    iterationId,
+                    body,
+                  ),
+              ),
         // Read for the same reason and on the same condition: the material is
         // what a person is shown before they press, so it is drawn exactly
         // where the button is (D-0029 rule 2 and D-0041 rule 6).

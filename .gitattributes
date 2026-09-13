@@ -1,0 +1,6 @@
+# The page's sources are hashed into page.manifest.json (D-0059 R1), so their
+# bytes must not depend on the checkout: Git for Windows' core.autocrlf would
+# otherwise turn page/keys.js into CRLF and fail page:check on the Windows cells.
+page/*.js text eol=lf
+page/*.css text eol=lf
+page.manifest.json text eol=lf

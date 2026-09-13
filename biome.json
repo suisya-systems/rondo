@@ -6,7 +6,7 @@
     "useIgnoreFile": true
   },
   "files": {
-    "includes": ["**", "!package-lock.json", "!vendor/idiomorph-0.8.0.min.js"]
+    "includes": ["**", "!package-lock.json"]
   },
   "formatter": {
     "enabled": true,
@@ -34,6 +34,11 @@
       "quoteStyle": "double",
       "semicolons": "always",
       "trailingCommas": "all"
+    }
+  },
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
     }
   }
 }

@@ -39,7 +39,7 @@ import { type Chrome, EN } from "./wording.js";
  * Everything reading the inbox needs, and nothing that writes.
  *
  * The two ports are narrowed to the methods {@link gatherInbox} calls, so a
- * surface that may only read -- `src/access/web.ts` -- is handed a value the
+ * surface that may only read -- `src/access/web.tsx` -- is handed a value the
  * compiler will not let it write through. {@link InboxPorts} widens them back
  * for the command line, which does write the two rows a look creates.
  */
@@ -53,7 +53,7 @@ export interface InboxReadPorts {
   /**
    * Where one running lap is writing its transcript (D-0048 rules 6 and 7).
    *
-   * A port for {@link InboxPorts.present}'s reason and `web.ts`'s `material`'s:
+   * A port for {@link InboxPorts.present}'s reason and `web.tsx`'s `material`'s:
    * answering it reaches continuo as a subprocess and composes a path out of
    * the row's plan, and this module is a pure render over what was read. **The
    * arrow to continuo is the composition root's**, which is D-0022 rule 3's own

@@ -16,6 +16,14 @@
     "moduleResolution": "NodeNext",
     "types": ["node"],
 
+    // The page's views are server JSX (DECISIONS.md D-0059 rule 2): `hono/jsx`
+    // renders them to a string, and rondo's existing `tsc` is the compiler, so
+    // `.tsx` under `src/` needs no bundler and no second toolchain. Set here,
+    // not only in `tsconfig.build.json`, so the suite type-checks the views
+    // under the settings they are emitted with (D-0024).
+    "jsx": "react-jsx",
+    "jsxImportSource": "hono/jsx",
+
     "strict": true,
     // Not implied by `strict` -- both are enabled deliberately (D-0002).
     "noUncheckedIndexedAccess": true,

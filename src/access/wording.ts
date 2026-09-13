@@ -52,7 +52,7 @@ export interface Chrome {
   /** The tag this set is written in, which is what the document declares. */
   readonly lang: string;
 
-  // -- The page's two standing notes (src/access/web.ts) --
+  // -- The page's two standing notes (src/access/web.tsx) --
   readonly liveNote: (seconds: number) => string;
   readonly stillNote: string;
   readonly noApproverNote: string;
@@ -65,6 +65,14 @@ export interface Chrome {
   readonly runningHead: (status: string, ran: string) => string;
   readonly endedHead: (status: string, since: string, why: string) => string;
   readonly gateAnswered: (outcome: string) => string;
+  /**
+   * The state pill a row leads with (the page's third design pass on #220): a
+   * word a person reads instead of the status enum, which stays in the pill's
+   * `title`. An outcome or status no entry names is shown as its own bytes.
+   */
+  readonly statePill: (status: string, gateOutcome: string | null) => string;
+  /** The age beside an ended row's pill. */
+  readonly endedAgo: (since: string) => string;
   readonly noReasonRecorded: string;
   readonly proposalBasis: (proposalId: string) => string;
   readonly proposalHead: (kind: string, waited: string) => string;
@@ -89,7 +97,24 @@ export interface Chrome {
   // -- The button, and the way to it --
   readonly pressNote: string;
   readonly approveNote: (gateId: string, word: string) => string;
+  /** The plain sentence beside the button; `approveNote` stays as its `title`. */
+  readonly approvePlain: string;
+  /** The fold that holds the claims rondo could not determine. */
+  readonly undeterminedFold: (count: number) => string;
   readonly answerHere: string;
+  /**
+   * The short label on the filled button that leads to the press (D-0059
+   * section 2: a short primary call to action). `answerHere` stays beside it as
+   * the sentence that says what the second address adds.
+   */
+  readonly answerAction: string;
+
+  // -- The page's chrome under stack H (D-0059 rule 5): the live indicator and
+  // the key hints, both drawn only once the key script has run --
+  readonly liveLabel: string;
+  readonly keyMove: string;
+  readonly keyOpen: string;
+  readonly keyBack: string;
 
   // -- The fold, and the sections inside it --
   readonly openReading: string;
@@ -244,6 +269,30 @@ explanation you pressed on and then answers the gate.`,
   runningHead: (status, ran) => `${status} -- running ${ran}`,
   endedHead: (status, since, why) => `${status} ${since} ago -- ${why}`,
   gateAnswered: (outcome) => `gate answered '${outcome}'`,
+  statePill: (status, gateOutcome) =>
+    (
+      ({
+        awaiting_human: "Waiting on you",
+        withdrawal_requested: "Withdrawal asked",
+        stalled: "Stalled",
+        planned: "Starting",
+        classified: "Starting",
+        admitting: "Starting",
+        admitted: "Starting",
+        performing: "Running",
+        closed:
+          gateOutcome === "approve"
+            ? "Approved"
+            : gateOutcome === "revise"
+              ? "Revised"
+              : gateOutcome === null
+                ? "Closed"
+                : `Closed: ${gateOutcome}`,
+        abandoned: "Abandoned",
+        failed: "Failed",
+      }) as Record<string, string | undefined>
+    )[status] ?? status,
+  endedAgo: (since) => `${since} ago`,
   noReasonRecorded: "no reason recorded",
   proposalBasis: (proposalId) =>
     `read it back with its options and what each rests on: rondo show --proposal-id ${proposalId}`,
@@ -270,7 +319,15 @@ explanation you pressed on and then answers the gate.`,
   pressNote: "What pressing approve records as shown, and what it would be over:",
   approveNote: (gateId, word) =>
     `answers gate ${gateId} as '${word}', which is what rondo answer does`,
+  approvePlain: "Accept this work as it is.",
+  undeterminedFold: (count) =>
+    `${String(count)} ${count === 1 ? "field" : "fields"} rondo could not determine`,
   answerHere: "read what a press would record, and answer there",
+  answerAction: "Review and answer",
+  liveLabel: "live",
+  keyMove: "move",
+  keyOpen: "open",
+  keyBack: "back",
 
   openReading: "the reading these rest on: every claim with its basis, and rondo's own accounting",
   hideReading: "hide the reading",
@@ -382,6 +439,30 @@ const JA: Partial<Chrome> = Object.freeze({
   runningHead: (status, ran) => `${status} -- ${ran} 実行中`,
   endedHead: (status, since, why) => `${status} ${since}前 -- ${why}`,
   gateAnswered: (outcome) => `ゲートに '${outcome}' と答えた`,
+  statePill: (status, gateOutcome) =>
+    (
+      ({
+        awaiting_human: "あなたの回答待ち",
+        withdrawal_requested: "取り下げ依頼中",
+        stalled: "停止中",
+        planned: "開始中",
+        classified: "開始中",
+        admitting: "開始中",
+        admitted: "開始中",
+        performing: "実行中",
+        closed:
+          gateOutcome === "approve"
+            ? "承認済み"
+            : gateOutcome === "revise"
+              ? "差し戻し"
+              : gateOutcome === null
+                ? "完了"
+                : `完了: ${gateOutcome}`,
+        abandoned: "放棄",
+        failed: "失敗",
+      }) as Record<string, string | undefined>
+    )[status] ?? status,
+  endedAgo: (since) => `${since}前`,
   noReasonRecorded: "理由は記録されていない",
   proposalBasis: (proposalId) =>
     `選択肢と各々の根拠つきで読み直す: rondo show --proposal-id ${proposalId}`,
@@ -408,6 +489,13 @@ const JA: Partial<Chrome> = Object.freeze({
   approveNote: (gateId, word) =>
     `ゲート ${gateId} に '${word}' と答えます。rondo answer と同じ動作です`,
   answerHere: "押したときに何が記録されるかを読み、そこで答える",
+  answerAction: "確認して答える",
+  approvePlain: "この作業をこのまま受け入れます。",
+  undeterminedFold: (count) => `rondo が決められなかった項目 ${String(count)} 件`,
+  liveLabel: "ライブ",
+  keyMove: "移動",
+  keyOpen: "開く",
+  keyBack: "戻る",
 
   openReading: "これらが立っている読み下し: 根拠つきのすべての claim と、rondo 自身の会計",
   hideReading: "読み下しを閉じる",

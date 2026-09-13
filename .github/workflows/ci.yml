@@ -84,6 +84,21 @@ jobs:
         # executable is the first thing rondo ships that runs outside vitest.
         run: npm run build
 
+      - name: Check the page's served files against their manifest
+        # D-0059 R1's substitute: the browser receives build output (Tailwind's CSS, copies of htmx
+        # and two faces), so every served byte is named by sha256 in `page.manifest.json`, and a
+        # clean build on the runner has to reproduce it exactly. Right after the build, on a fresh
+        # checkout, so nothing but the lockfile and the tree can have produced `dist/page`.
+        #
+        # In all four cells, deliberately. Tailwind's `oxide` and `lightningcss` are native
+        # per-platform binaries and reproducibility was measured on one machine only (D-0059
+        # residuals, "cross-platform build reproducibility ... the implementing change's CI"). A
+        # Windows cell that emits different CSS bytes is that residual observed, and is D-0059's
+        # falsifier for R1; narrowing this step to ubuntu is then a decision to record, not a
+        # quiet edit here. A red here is that residual only once line endings are ruled out:
+        # `.gitattributes` pins the page's js and css to LF, so a CRLF checkout cannot change keys.js's digest.
+        run: npm run page:check
+
       - name: Type-check
         run: npm run typecheck
 

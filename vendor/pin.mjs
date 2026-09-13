@@ -2,21 +2,19 @@
 // `node vendor/pin.mjs record|check`, run from the repository root.
 //
 // Started as a copy of cadenza's `docs/artifact-delivery-bridge.md` (cadenza
-// D-0035), which prescribes it verbatim for one tarball; it is a list rather
-// than a single artifact since D-0054, which vendors idiomorph's minified file
-// beside the cadenza tarball on the same terms. Only the comments, the line
-// wrapping and the loop are rondo's. It is a Node script rather than
+// D-0035), which prescribes it verbatim for one tarball. It became a list with
+// D-0054, which vendored idiomorph's minified file beside the tarball; D-0059
+// R2 replaced that file with htmx out of `node_modules`, whose served bytes
+// `page.manifest.json` pins instead, so the list holds one artifact again and
+// stays a list. Only the comments, the line wrapping and the loop are rondo's. It is a Node script rather than
 // `sha256sum` because `sha256sum` is GNU coreutils -- absent on stock macOS and
 // on Windows, and rondo's CI matrix includes a Windows cell (DECISIONS.md
 // D-0018 rule 4).
 //
-// **The two artifacts are pinned for different consumers and checked by one
-// command.** The cadenza tarball is what npm installs, so the check exists to
-// run immediately before every install (cadenza's bridge, section 4). The
-// idiomorph file is not installed at all -- it is a static asset this process
-// serves to a browser (D-0054 rule 5), so `--ignore-scripts` is not weakened
-// and there is nothing npm would verify. What both share is the one property
-// worth a command: the bytes in the tree are the bytes somebody pinned.
+// **The cadenza tarball is what npm installs**, so the check exists to run
+// immediately before every install (cadenza's bridge, section 4). The one
+// property worth a command: the bytes in the tree are the bytes somebody
+// pinned.
 //
 // The paths are repo-root relative, as the bridge writes them, so this script
 // is run from the repository root and nowhere else. Run from anywhere else it
@@ -44,10 +42,6 @@ const ARTIFACTS = [
   {
     artifact: "vendor/suisya-systems-cadenza-0.0.0.tgz",
     digest: "vendor/cadenza.tgz.sha256",
-  },
-  {
-    artifact: "vendor/idiomorph-0.8.0.min.js",
-    digest: "vendor/idiomorph-0.8.0.min.js.sha256",
   },
 ];
 

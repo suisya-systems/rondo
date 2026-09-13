@@ -166,7 +166,11 @@ describe("the two digests describe the bytes that are committed", () => {
         cwd,
         encoding: "utf8",
       });
-      return { status: result.status, stdout: result.stdout, stderr: result.stderr };
+      return {
+        status: result.status,
+        stdout: result.stdout,
+        stderr: result.stderr,
+      };
     };
 
     const passing = run(ROOT);
@@ -184,18 +188,12 @@ describe("the two digests describe the bytes that are committed", () => {
     // expects is reproduced rather than configured.
     const scratch = mkdtempSync(join(tmpdir(), "rondo-pin-"));
     mkdirSync(join(scratch, "vendor"));
-    // **The whole of the helper's list, and not only cadenza's pair.** It is a
-    // list since D-0054, which vendors idiomorph's minified file on the same
-    // terms, and the helper fails with ENOENT on an artifact it cannot find --
-    // which is the right direction to fail in and the wrong fixture for this
-    // case, where what is under test is a digest that disagrees.
-    for (const file of [
-      manifest.tarball,
-      manifest.digestFile,
-      "vendor/idiomorph-0.8.0.min.js",
-      "vendor/idiomorph-0.8.0.min.js.sha256",
-      "vendor/pin.mjs",
-    ]) {
+    // **The whole of the helper's list.** The helper fails with ENOENT on an
+    // artifact it cannot find -- which is the right direction to fail in and
+    // the wrong fixture for this case, where what is under test is a digest
+    // that disagrees. (D-0054 added idiomorph to the list; D-0059 R2 took it
+    // out again, and the page's served bytes are `page.manifest.json`'s.)
+    for (const file of [manifest.tarball, manifest.digestFile, "vendor/pin.mjs"]) {
       copyFileSync(join(ROOT, ...file.split("/")), join(scratch, ...file.split("/")));
     }
     const wrong = "0".repeat(64);
