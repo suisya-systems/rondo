@@ -8,8 +8,9 @@
 //    and never before: on htmx's own report that the send succeeded, or, for a
 //    native submit, when the page the `303` landed on is anchored at the id
 //    that submit carried (the anchor exists only after the send was recorded).
-//    `Ctrl`/`Cmd`+`Enter` asks the form to submit, which is the same submit
-//    its button makes.
+//    `Ctrl`/`Cmd`+`Enter` asks a send form to submit, which is the same submit
+//    its button makes. The approve bar's claim box (#220 S2) is a draft too,
+//    keyed per gate, and is never submitted by that chord.
 // 2. **Keep the folds a person opened** -- across the in-place redraw, which
 //    replaces them shut every five seconds, and across a navigation, so a fold
 //    opened before a press is open on the page the press lands on. The ids are
@@ -136,7 +137,11 @@ document.addEventListener("keydown", (event) => {
     event.key === "Enter" &&
     (event.ctrlKey || event.metaKey) &&
     target instanceof HTMLTextAreaElement &&
-    target.dataset.draft !== undefined
+    target.dataset.draft !== undefined &&
+    // **Never the approve press** (#220 S2): the claim box keeps its draft here
+    // too, and a chord typed while writing a claim must not answer a gate. Only
+    // a send carries a message id.
+    target.form?.querySelector("input[name=message_id]")
   ) {
     event.preventDefault();
     target.form?.requestSubmit();

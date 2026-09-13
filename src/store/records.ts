@@ -591,6 +591,20 @@ export type FindingBasis =
   | { readonly kind: "event"; readonly index: number }
   | { readonly kind: "rule"; readonly path: string; readonly line: number };
 
+/** One basis of a model finding as a person reads it: a place, a commit, an event or a rule. */
+export function findingBasisText(basis: FindingBasis): string {
+  switch (basis.kind) {
+    case "file":
+      return `${basis.path}:${String(basis.line)}`;
+    case "commit":
+      return `commit ${basis.sha}`;
+    case "event":
+      return `transcript event ${String(basis.index)}`;
+    case "rule":
+      return `rule ${basis.path}:${String(basis.line)}`;
+  }
+}
+
 /**
  * The per-finding fields a model reading adds beside its one-line text.
  *
@@ -744,6 +758,37 @@ export function latestReading(
     }
   }
   return null;
+}
+
+/**
+ * The reading the answer screen calls "the review" and `publish` refuses on:
+ * the latest row that is not a model's (D-0065 5.5).
+ *
+ * "Not a model's" rather than "the deterministic drafter's": the interpreter
+ * writes its own `unavailable` row as `rondo/none` when the work could not be
+ * read, and that row carries the reason a person and `publish` must still see.
+ */
+export function reviewedReading(readings: readonly LapReading[]): LapReading | null {
+  return latestReading(readings, (drafter) => !isModelReadingDrafter(drafter));
+}
+
+/**
+ * Whether a model reading is still due for the iteration's current tip (D-0065
+ * 4.1: one round per tip).
+ *
+ * Not due when a model reading already carries the latest deterministic
+ * reading's tip: that round was taken over these commits. Due otherwise,
+ * including when the deterministic reading resolved no range, because then
+ * there is no tip to have taken a round over and the attempt records why.
+ */
+export function modelReadingDue(readings: readonly LapReading[]): boolean {
+  const tip = latestReading(readings, isDeterministicReadingDrafter)?.evidence?.tipCommit;
+  if (tip === undefined) {
+    return true;
+  }
+  return !readings.some(
+    (reading) => isModelReadingDrafter(reading.drafter) && reading.evidence?.tipCommit === tip,
+  );
 }
 
 /**

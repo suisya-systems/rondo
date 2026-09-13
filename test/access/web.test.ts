@@ -110,6 +110,9 @@ const fresh = () => {
   };
 };
 
+/** Material that is only its text: no gate question read and no range named. */
+const asText = (...lines: string[]) => ({ lines, why: null, work: null });
+
 /** Every press this surface let through, in order. */
 type Pressed = { iterationId: string; body: string }[];
 
@@ -137,7 +140,8 @@ function portsOver(
     }),
     policy: { maxOccupying: 4, maxLive: 6 },
     actorId,
-    material: pressed === null ? null : async (_wording, record) => [`work    rondo/${record.id}`],
+    material:
+      pressed === null ? null : async (_wording, record) => asText(`work    rondo/${record.id}`),
     answer:
       pressed === null
         ? null
@@ -644,7 +648,7 @@ test("a refusal from the write port is shown rather than redirected away", async
   await openGate(world, "i-0001");
   const ports: ServedPorts = {
     ...portsOver(world),
-    material: async () => await Promise.resolve(["work    rondo/i-0001"]),
+    material: async () => await Promise.resolve(asText("work    rondo/i-0001")),
     answer: new AnswerPort(
       async () =>
         await Promise.resolve({
@@ -877,7 +881,7 @@ test("the elements that quote material carry the lang the plan asked for (D-0053
   const html = await operatorPage(
     {
       ...portsOver(world, "ada", []),
-      material: async () => await Promise.resolve(["なぜ止まったか"]),
+      material: async () => await Promise.resolve(asText("なぜ止まったか")),
     },
     "t",
     { kind: "answer", iterationId: "i-0001" },
@@ -907,7 +911,7 @@ test('a lap nobody asked a language of says so with `lang=""` (D-0055 rule 8)', 
   await openGate(world, "i-0001");
   const ports = {
     ...portsOver(world, "ada", []),
-    material: async () => await Promise.resolve(["why it stopped"]),
+    material: async () => await Promise.resolve(asText("why it stopped")),
   };
   const view = { kind: "answer", iterationId: "i-0001" } as const;
   const html = await operatorPage(ports, "t", view);
@@ -1297,7 +1301,7 @@ test("the bytes a press records do not depend on the host's language (D-0055 rul
   for (const { world, wording } of worlds) {
     const ports = {
       ...portsOver(world, "ada", []),
-      material: async () => await Promise.resolve(["why it stopped"]),
+      material: async () => await Promise.resolve(asText("why it stopped")),
     };
     drawn.push(await operatorPage(ports, "t", { kind: "answer", iterationId: "i-0001" }, wording));
     expect(
@@ -1331,7 +1335,7 @@ test("a ja host reads in Japanese and leaves every token in its own bytes", asyn
   const ja = chromeFor("ja");
   const ports = {
     ...portsOver(world, "ada", []),
-    material: async () => await Promise.resolve(["why it stopped"]),
+    material: async () => await Promise.resolve(asText("why it stopped")),
   };
   const summary = await operatorPage(ports, "t", { kind: "summary" }, ja);
   const reading = await operatorPage(ports, "t", { kind: "reading" }, ja);
@@ -1389,7 +1393,7 @@ test("every view is complete under each of the three answers to the language que
   for (const wording of [chromeFor(null), chromeFor("de-CH-1901"), chromeFor("ja")]) {
     const ports = {
       ...portsOver(world, "ada", []),
-      material: async () => await Promise.resolve(["why it stopped"]),
+      material: async () => await Promise.resolve(asText("why it stopped")),
     };
     const views = [
       await operatorPage(ports, "t", { kind: "summary" }, wording),
@@ -1841,7 +1845,7 @@ test("the resolved set reaches the material port and not only the chrome (rule 1
     ...portsOver(world, "ada", [], "en"),
     material: async (wording) => {
       asked.push(wording.lang);
-      return await Promise.resolve([`set     ${wording.lang}`]);
+      return await Promise.resolve(asText(`set     ${wording.lang}`));
     },
   };
   const { base, stop, served } = await serving(ports);
@@ -2213,4 +2217,173 @@ test("the composer script keeps a draft and the open folds, and makes no request
   );
   stop.abort();
   expect(await served).toBe(0);
+});
+
+// -- The gate reading (#220 S2) --
+
+const EVIDENCE = {
+  baseRef: "origin/main",
+  baseCommit: "a".repeat(40),
+  tipCommit: "b".repeat(40),
+  materialDigest: "sha256:x",
+  commitCount: 2,
+  fileCount: 1,
+};
+
+/** A lap at its gate with the deterministic reading carried by its transition. */
+async function gateWithChecks(world: ReturnType<typeof fresh>): Promise<void> {
+  await reserve(world, "i-0001", "add a retry budget");
+  await openGate(world, "i-0001");
+  const carried = await world.store.transition(
+    "i-0001",
+    "awaiting_human",
+    "awaiting_human",
+    { permissionDenials: '[{"tool_name":"Bash","tool_input":{"command":"rm -rf /srv"}}]' },
+    3_000,
+    {
+      drafter: "rondo/deterministic/2",
+      verdict: "concerns",
+      findings: ["a binary file was not read"],
+      evidence: EVIDENCE,
+      unavailableReason: null,
+    },
+  );
+  expect(carried.kind).toBe("transitioned");
+}
+
+const structured = async () =>
+  await Promise.resolve({
+    lines: ["work    rondo/i-0001", "fence   the whole text"],
+    why: "I could not run the suite.",
+    work: {
+      kind: "read" as const,
+      baseRef: "origin/main",
+      baseCommit: "a".repeat(40),
+      tipCommit: "b".repeat(40),
+      commits: [{ abbreviatedSha: "3f2a1c9", subject: "feat: retry budget" }],
+      files: [{ path: "src/notifier.ts", added: 64, deleted: 12 }],
+      uncommitted: [],
+      checkedOut: "rondo/i-0001",
+    },
+  });
+
+test("the answer view draws both readings side by side from the rows, with the warning by approve (#220 S2)", async () => {
+  const world = fresh();
+  await gateWithChecks(world);
+  const appended = await world.store.appendReading(
+    "i-0001",
+    {
+      drafter: "rondo/model/1/gpt-6-astra",
+      verdict: "concerns",
+      findings: ["the loop never stops", "the backoff is not capped", "a typo"],
+      graded: [
+        {
+          severity: "blocker",
+          bases: [{ kind: "file", path: "src/notifier.ts", line: 41 }],
+          basisResolved: true,
+        },
+        {
+          severity: "major",
+          bases: [{ kind: "rule", path: "AGENTS.md", line: 12 }],
+          basisResolved: false,
+        },
+        { severity: "nit", bases: [], basisResolved: false },
+      ],
+      evidence: EVIDENCE,
+      unavailableReason: null,
+    },
+    4_000,
+  );
+  expect(appended.kind).toBe("appended");
+  const html = await operatorPage({ ...portsOver(world, "ada", []), material: structured }, "t", {
+    kind: "answer",
+    iterationId: "i-0001",
+  });
+
+  // The two cards, the checks' finding and the model's graded findings.
+  expect(html).toContain('id="checks"');
+  expect(html).toContain('id="model-review"');
+  expect(html).toMatch(/class="grid items-start gap-3 lg:grid-cols-2"><section id="checks"/);
+  expect(html).toContain("a binary file was not read");
+  expect(html).toMatch(/severity[^"]*">blocker<\/span><span[^>]*>the loop never stops/);
+  expect(html).toMatch(/severity[^"]*">major<\/span>/);
+  expect(html).toContain(">src/notifier.ts:41</code>");
+  expect(html).toContain(">rule AGENTS.md:12</code>");
+  expect(html).toContain("none of these matched the delivered work");
+  expect(html).toContain("no basis given");
+  expect(html).toContain(">gpt-6-astra</span>");
+  // What changed, as rows, and the worker's own words.
+  expect(html).toContain("feat: retry budget");
+  expect(html).toContain(">+64</span>");
+  expect(html).toContain("I could not run the suite.");
+  // No recommendation anywhere on the gate.
+  expect(html.toLowerCase()).not.toContain("recommend");
+
+  // The warning is inside the form, before the button, and links to the card.
+  const form = html.slice(html.indexOf('<form method="post"'), html.indexOf("</form>"));
+  expect(form).toContain("The model review raised 1 blocker and 1 major.");
+  expect(form.indexOf('id="model-raised"')).toBeLessThan(form.indexOf('type="submit"'));
+  expect(form).toContain('<a href="#model-review"');
+  // The claim box rides the press, keyed per gate, and is not cut by the browser.
+  expect(form).toMatch(/<textarea name="verified" rows="1" data-draft="claim:i-0001:gate-i-0001"/);
+  expect(form).not.toContain("maxlength");
+  // Not due: this model reading carries the checks' tip.
+  expect(html).not.toContain("may still arrive");
+
+  // The full text is still in the document, in its fold.
+  expect(html).toMatch(/<details id="material-text"[\s\S]*fence {3}the whole text/);
+});
+
+test("a model reading not yet taken is said as pending, beside the checks and by the button (#220 S2)", async () => {
+  const world = fresh();
+  await gateWithChecks(world);
+  const html = await operatorPage({ ...portsOver(world, "ada", []), material: structured }, "t", {
+    kind: "answer",
+    iterationId: "i-0001",
+  });
+  expect(html).toContain("Not here yet. It may still arrive; reading it first is wise.");
+  expect(html).toContain('href="/?answer=i-0001&amp;lang=en" class="font-medium text-link');
+  expect(html).toContain("The model review may still arrive.");
+  expect(html).not.toContain('id="model-raised"');
+});
+
+test("no approver, no claim box; the summary row says its facts plainly and keeps the raw ones (#220 S2)", async () => {
+  const world = fresh();
+  await gateWithChecks(world);
+  const bare = await operatorPage(portsOver(world, null), null, {
+    kind: "answer",
+    iterationId: "i-0001",
+  });
+  expect(bare).not.toContain('name="verified"');
+  expect(bare).not.toContain("<form");
+
+  const html = await operatorPage(portsOver(world, "ada", []), "t");
+  expect(lead(html)).toContain(">blocked 1 command</span>");
+  expect(lead(html)).not.toContain(">the fence refused");
+  expect(lead(html)).not.toContain(">answer gate gate-i-0001");
+  // The facts are still in the document, as titles.
+  expect(lead(html)).toContain('title="the fence refused [{&quot;tool_name&quot;');
+  expect(lead(html)).toContain("answer gate gate-i-0001");
+});
+
+test("an unreadable row links to its reason in the reading instead of naming a command (#220 S2)", async () => {
+  const world = fresh();
+  await reserve(world, "i-0002", "a row whose plan was corrupted");
+  world.connection
+    .prepare("UPDATE iteration SET plan = ? WHERE id = ?")
+    .run('{"not":"a plan"}', "i-0002");
+  const html = await operatorPage(portsOver(world, "ada", []), "t");
+  expect(lead(html)).not.toContain("rondo explain");
+  expect(lead(html)).toContain('href="/?reading=open&amp;lang=en#read-i-0002-reason"');
+  expect(lead(html)).toContain(">Read what went wrong</a>");
+  const read = await operatorPage(portsOver(world, "ada", []), "t", { kind: "reading" });
+  expect(read).toContain('<pre id="read-i-0002-reason"');
+
+  const ja = await operatorPage(
+    portsOver(world, "ada", []),
+    "t",
+    { kind: "summary" },
+    chromeFor("ja"),
+  );
+  expect(ja).toContain(">何が起きたかを読む</a>");
 });

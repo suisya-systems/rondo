@@ -54,14 +54,15 @@ import { revisionPlan } from "../refrain/revision.js";
 import {
   type AgentTypeRecordDraft,
   type IterationRecord,
-  isDeterministicReadingDrafter,
   isModelReadingDrafter,
   isTerminal,
   type JsonRecord,
   type LapReading,
   latestReading,
+  modelReadingDue,
   type OperatorVerificationClaim,
   readingCoverage,
+  reviewedReading,
   scopePayloadWithDefaults,
 } from "../store/records.js";
 import {
@@ -117,6 +118,7 @@ import {
   heldAgentTypeLines,
   type ScopedAdmission,
 } from "./scope.js";
+import type { LapMaterialRead } from "./web.js";
 import { AnswerPort, SayPort, serveOperatorPage } from "./web-app.js";
 import { type Chrome, EN } from "./wording.js";
 
@@ -2947,37 +2949,6 @@ export async function sayGateOpen(take: (() => Promise<readonly string[]>) | nul
   }
 }
 
-/**
- * The reading the answer screen calls "the review" and `publish` refuses on:
- * the latest row that is not a model's (D-0065 5.5).
- *
- * "Not a model's" rather than "the deterministic drafter's": the interpreter
- * writes its own `unavailable` row as `rondo/none` when the work could not be
- * read, and that row carries the reason a person and `publish` must still see.
- */
-export function reviewedReading(readings: readonly LapReading[]): LapReading | null {
-  return latestReading(readings, (drafter) => !isModelReadingDrafter(drafter));
-}
-
-/**
- * Whether a model reading is still due for the iteration's current tip (D-0065
- * 4.1: one round per tip).
- *
- * Not due when a model reading already carries the latest deterministic
- * reading's tip: that round was taken over these commits. Due otherwise,
- * including when the deterministic reading resolved no range, because then
- * there is no tip to have taken a round over and the attempt records why.
- */
-export function modelReadingDue(readings: readonly LapReading[]): boolean {
-  const tip = latestReading(readings, isDeterministicReadingDrafter)?.evidence?.tipCommit;
-  if (tip === undefined) {
-    return true;
-  }
-  return !readings.some(
-    (reading) => isModelReadingDrafter(reading.drafter) && reading.evidence?.tipCommit === tip,
-  );
-}
-
 /** Door two: see what is waiting, and answer it. */
 /**
  * What the operator is shown about the work itself, on every path that answers.
@@ -3028,6 +2999,23 @@ export async function lapMaterialLines(
   record: IterationRecord,
   continuo: VerifiedContinuo | null,
 ): Promise<readonly string[]> {
+  return (await lapMaterial(wording, store, record, continuo)).lines;
+}
+
+/**
+ * {@link lapMaterialLines}, with the workspace inspection its lines were
+ * composed from (#220 S2).
+ *
+ * **One `git` read, handed out twice**: the page draws the commits and files as
+ * rows from `work` and keeps `lines` whole in a fold, so the rows and the text
+ * are the same read and cannot disagree. Null `work` is a row naming no range.
+ */
+async function lapMaterial(
+  wording: Chrome,
+  store: IterationStore,
+  record: IterationRecord,
+  continuo: VerifiedContinuo | null,
+): Promise<{ readonly lines: readonly string[]; readonly work: LapWorkInspection | null }> {
   const workspace = planField(record, "workspace");
   const topicBranch = planField(record, "topic_branch");
   const lines: string[] = [
@@ -3041,10 +3029,11 @@ export async function lapMaterialLines(
   // point of asking is that a subject is the one place a lap says what it did
   // in words nobody generated for this screen.
   const range = readingRangeOf(record);
-  if (range === null) {
+  const work = range === null ? null : await inspectLapWork(range);
+  if (work === null) {
     lines.push("        the row does not name a range, so there is nothing to list");
   } else {
-    lines.push(...workLines(await inspectLapWork(range)));
+    lines.push(...workLines(work));
   }
   lines.push(...(await fenceLines(wording, continuo, record)));
   const readings = await store.readingsFor(record.id);
@@ -3068,7 +3057,7 @@ export async function lapMaterialLines(
   if (model !== null) {
     lines.push(...modelReadingLines(model));
   }
-  return lines;
+  return { lines, work };
 }
 
 /**
@@ -3700,8 +3689,9 @@ async function pageMaterial(
   environment: Readonly<Record<string, string | undefined>>,
   store: IterationStore,
   record: IterationRecord,
-): Promise<readonly string[]> {
+): Promise<LapMaterialRead> {
   const lines: string[] = [];
+  let why: string | null = null;
   const startup = await startContinuo(environment);
   if (startup.kind === "refused") {
     lines.push("why     the gate question could not be read: continuo is not usable");
@@ -3718,20 +3708,19 @@ async function pageMaterial(
       // encode what a worker wrote, and a browser has no such problem. The
       // paragraphs survive, which is rondo#90 on the path that matters most.
       lines.push(`why     ${gate.rationale}`);
+      why = gate.rationale;
       lines.push(`options ${String(gate.options)}`);
     } else {
       lines.push(`why     the gate question could not be read (${observed.kind})`);
     }
   }
-  return [
-    ...lines,
-    ...(await lapMaterialLines(
-      wording,
-      store,
-      record,
-      startup.kind === "refused" ? null : startup.continuo,
-    )),
-  ];
+  const material = await lapMaterial(
+    wording,
+    store,
+    record,
+    startup.kind === "refused" ? null : startup.continuo,
+  );
+  return { lines: [...lines, ...material.lines], why, work: material.work };
 }
 
 /**

@@ -191,6 +191,51 @@ export interface Chrome {
   readonly unreadableTitle: string;
   readonly unreadableAction: (iterationId: string) => string;
   readonly unreadableDetail: string;
+  /** The link from an unreadable row to its section of the reading. */
+  readonly unreadableRead: string;
+
+  // -- The gate reading on the answer view, page only (#220 S2). The console's
+  // entries above stay as they are; these say the same facts in plain words,
+  // and the console sentence rides along as the element's `title` --
+  /** A row's refused calls, counted; the raw list is the `title`. */
+  readonly blockedCount: (count: number) => string;
+  readonly blockedNothing: string;
+  readonly blockedUnknown: string;
+  /** A running row whose transcript rondo could not name; the reason is the `title`. */
+  readonly logNotFound: string;
+  readonly logFound: string;
+  readonly whyStopped: string;
+  readonly whyNotRead: string;
+  readonly workHeading: string;
+  readonly changedAgainst: (baseRef: string) => string;
+  readonly changedUnreadable: (reason: string) => string;
+  readonly changedNoRange: string;
+  readonly noCommits: string;
+  readonly noFiles: string;
+  readonly binaryFile: string;
+  readonly moreRows: (count: number) => string;
+  readonly checksHeading: string;
+  readonly modelHeading: string;
+  /** A reading's verdict as a pill: `clear`, `concerns` or `unavailable`. */
+  readonly verdictPill: (verdict: string, count: number) => string;
+  readonly checksNone: string;
+  readonly checksCounted: (commits: number, files: number) => string;
+  readonly readingUnavailable: (reason: string) => string;
+  readonly readBy: (drafter: string) => string;
+  readonly whatItRead: string;
+  readonly basisNone: string;
+  readonly basisUnresolved: string;
+  readonly modelPending: string;
+  readonly modelOlder: string;
+  readonly reloadPage: string;
+  readonly readingsNote: string;
+  readonly allAsText: string;
+  readonly claimLabel: string;
+  readonly claimPlaceholder: string;
+  /** The line by the button when the model review raised a blocker or a major. */
+  readonly modelRaised: (blockers: number, majors: number) => string;
+  readonly modelRaisedLink: string;
+  readonly modelMayArrive: string;
 
   // -- The page's chrome under stack H (D-0059 rule 5): the live indicator and
   // the key hints, both drawn only once the key script has run --
@@ -472,8 +517,59 @@ explanation you pressed on and then answers the gate.`,
   attentionHeading: (count) => `needs attention (${String(count)})`,
   unreadableTitle: "A run's record cannot be read",
   unreadableAction: (iterationId) =>
-    `rondo cannot show or answer ${iterationId}, and it still holds a slot. Look at it in the terminal with rondo explain.`,
+    `The record of ${iterationId} will not read, so it cannot be shown or answered here, and it still takes a run slot. Read what went wrong; the slot frees once the record is repaired or the run is withdrawn.`,
   unreadableDetail: "What rondo could not read",
+  unreadableRead: "Read what went wrong",
+  blockedCount: (count) => `blocked ${String(count)} command${count === 1 ? "" : "s"}`,
+  blockedNothing: "blocked nothing",
+  blockedUnknown: "not known what was blocked",
+  logNotFound: "log not found",
+  logFound: "writing a log",
+  whyStopped: "Why it stopped",
+  whyNotRead: "The worker's own account could not be read; it is in the text below if it was.",
+  workHeading: "What changed",
+  changedAgainst: (baseRef) => `against ${baseRef}`,
+  changedUnreadable: (reason) => `The workspace could not be read: ${reason}`,
+  changedNoRange: "This run names no branch to compare, so there is nothing to list.",
+  noCommits: "No commits on the branch.",
+  noFiles: "No files changed.",
+  binaryFile: "binary",
+  moreRows: (count) => `and ${String(count)} more`,
+  checksHeading: "Checks",
+  modelHeading: "Model review",
+  verdictPill: (verdict, count) =>
+    verdict === "clear"
+      ? "nothing raised"
+      : verdict === "concerns"
+        ? `${String(count)} raised`
+        : verdict === "unavailable"
+          ? "not taken"
+          : verdict,
+  checksNone: "No check of this work was recorded. Publishing will ask you to confirm that.",
+  checksCounted: (commits, files) =>
+    `Read ${String(commits)} commit${commits === 1 ? "" : "s"} and ${String(files)} file${files === 1 ? "" : "s"}.`,
+  readingUnavailable: (reason) => `No reading could be taken: ${reason}`,
+  readBy: (drafter) => `read by ${drafter}`,
+  whatItRead: "What it read, and what it did not",
+  basisNone: "no basis given",
+  basisUnresolved: "none of these matched the delivered work",
+  modelPending: "Not here yet. It may still arrive; reading it first is wise.",
+  modelOlder: "This one is about earlier commits. A reading of the current ones may still arrive.",
+  reloadPage: "Reload",
+  readingsNote:
+    "Both readings are material for you to weigh. Neither approves anything; the answer is yours.",
+  allAsText: "Everything above, as text",
+  claimLabel: "What did you check? (optional)",
+  claimPlaceholder: "e.g. ran the tests locally; read the diff; opened the page on a phone",
+  modelRaised: (blockers, majors) =>
+    `The model review raised ${[
+      blockers === 0 ? "" : `${String(blockers)} blocker${blockers === 1 ? "" : "s"}`,
+      majors === 0 ? "" : `${String(majors)} major`,
+    ]
+      .filter((part) => part !== "")
+      .join(" and ")}.`,
+  modelRaisedLink: "Read it",
+  modelMayArrive: "The model review may still arrive.",
   liveLabel: "live",
   keyMove: "move",
   keyOpen: "open",
@@ -711,8 +807,59 @@ const JA: Partial<Chrome> = Object.freeze({
   attentionHeading: (count) => `確認が必要なもの (${String(count)})`,
   unreadableTitle: "実行の記録を読み取れません",
   unreadableAction: (iterationId) =>
-    `rondo は ${iterationId} を表示も回答もできませんが、枠はまだ使っています。ターミナルの rondo explain で確認してください。`,
+    `${iterationId} の記録が読み取れないため、ここでは表示も回答もできません。実行枠はまだ使っています。何が起きたかを読んでください。記録が直るか実行が取り下げられると枠は空きます。`,
   unreadableDetail: "rondo が読み取れなかった内容",
+  unreadableRead: "何が起きたかを読む",
+  blockedCount: (count) => `${String(count)} 件のコマンドを止めた`,
+  blockedNothing: "止めたコマンドなし",
+  blockedUnknown: "止めたコマンドは不明",
+  logNotFound: "ログが見つかりません",
+  logFound: "ログを書き込み中",
+  whyStopped: "止まった理由",
+  whyNotRead: "作業者自身の説明は読み取れませんでした。読めていれば下のテキストにあります。",
+  workHeading: "変わったもの",
+  changedAgainst: (baseRef) => `${baseRef} との比較`,
+  changedUnreadable: (reason) => `作業場所を読み取れませんでした: ${reason}`,
+  changedNoRange: "この実行には比べるブランチの名前がないので、一覧にするものがありません。",
+  noCommits: "ブランチにコミットはありません。",
+  noFiles: "変わったファイルはありません。",
+  binaryFile: "バイナリ",
+  moreRows: (count) => `ほか ${String(count)} 件`,
+  checksHeading: "チェック",
+  modelHeading: "モデルレビュー",
+  verdictPill: (verdict, count) =>
+    verdict === "clear"
+      ? "指摘なし"
+      : verdict === "concerns"
+        ? `指摘 ${String(count)} 件`
+        : verdict === "unavailable"
+          ? "取れず"
+          : verdict,
+  checksNone: "この作業のチェックは記録されていません。公開するときに確認を求められます。",
+  checksCounted: (commits, files) =>
+    `コミット ${String(commits)} 件とファイル ${String(files)} 件を読みました。`,
+  readingUnavailable: (reason) => `読み取りを取れませんでした: ${reason}`,
+  readBy: (drafter) => `読んだもの: ${drafter}`,
+  whatItRead: "読んだものと読んでいないもの",
+  basisNone: "根拠の指定なし",
+  basisUnresolved: "どれも渡した作業と一致しませんでした",
+  modelPending: "まだ届いていません。これから届くかもしれないので、先に読むのが賢明です。",
+  modelOlder:
+    "これは以前のコミットについてのものです。いまのコミットの読み取りがこれから届くかもしれません。",
+  reloadPage: "読み込み直す",
+  readingsNote: "どちらの読み取りも判断材料です。どちらも何も承認しません。答えるのはあなたです。",
+  allAsText: "ここまでの内容をテキストで",
+  claimLabel: "何を確認しましたか (任意)",
+  claimPlaceholder: "例: 手元でテストを実行した / 差分を読んだ / スマートフォンで画面を開いた",
+  modelRaised: (blockers, majors) =>
+    `モデルレビューの指摘: ${[
+      blockers === 0 ? "" : `blocker ${String(blockers)} 件`,
+      majors === 0 ? "" : `major ${String(majors)} 件`,
+    ]
+      .filter((part) => part !== "")
+      .join("、")}。`,
+  modelRaisedLink: "読む",
+  modelMayArrive: "モデルレビューはこれから届くかもしれません。",
   liveLabel: "ライブ",
   keyMove: "移動",
   keyOpen: "開く",

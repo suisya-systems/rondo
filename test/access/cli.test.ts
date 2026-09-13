@@ -27,7 +27,6 @@ import {
   FLAGS_BY_COMMAND,
   forgeHost,
   type GateVerbs,
-  modelReadingDue,
   operatorLanguage,
   type PreflightInput,
   type PullRequestTextInput,
@@ -39,7 +38,6 @@ import {
   pullRequestText,
   readingRangeOf,
   repositoryFromRemoteUrl,
-  reviewedReading,
   reviewGate,
   reviewLines,
   revisionBlocker,
@@ -57,7 +55,13 @@ import { type Chrome, chromeFor, EN } from "../../src/access/wording.js";
 import { BASIS_FORMS } from "../../src/advisory/proposal.js";
 import type { VerifiedContinuo } from "../../src/continuo/invoker.js";
 import type { ContinuoResult } from "../../src/continuo/protocol.js";
-import type { IterationRecord, JsonRecord, LapReading } from "../../src/store/records.js";
+import {
+  type IterationRecord,
+  type JsonRecord,
+  type LapReading,
+  modelReadingDue,
+  reviewedReading,
+} from "../../src/store/records.js";
 
 /** A handle no test reaches past: every verb below is a fake. */
 const continuo: VerifiedContinuo = {
