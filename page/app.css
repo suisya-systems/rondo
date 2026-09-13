@@ -14,7 +14,7 @@
 /*
  * The two faces are copied beside this file by the build, so the URLs are relative to the served
  * directory rather than to `node_modules`. Latin subset, variable weight: CJK stays on system fonts
- * (D-0059 residuals).
+ * (D-0059 residuals), which is why the stacks below name the CJK faces after the Latin one.
  */
 @font-face {
   font-family: "Inter Variable";
@@ -29,4 +29,106 @@
   font-display: swap;
   font-weight: 100 800;
   src: url(./jetbrains-mono-latin-wght-normal.woff2) format("woff2-variations");
+}
+
+/*
+ * Both palettes, written out rather than inverted (D-0059 section 1, Vercel's row).
+ *
+ * Every surface, rule and ink is a token declared in both modes: a page that leaned on the user
+ * agent would have its contrast decided elsewhere, and the one thing this screen has to hold is that
+ * waiting reads as waiting from across a room. `color-scheme` is kept so form controls and scroll
+ * bars follow the reader's setting.
+ *
+ * The floors are the old stylesheet's (rondo#153): `--faint` carries bases, ids and ages, which are
+ * text a person reads, so it clears 4.5:1 on the page ground and on a card in both modes; recessive
+ * is a step down in weight and never below legible. `--wait` is the one filled button's ground, so
+ * its ink clears 4.5:1 on it at the button's size.
+ */
+:root {
+  color-scheme: light dark;
+  --background: #f8f9fa;
+  --foreground: #16181d;
+  --card: #ffffff;
+  --muted: #eef0f3;
+  --muted-foreground: #525a66;
+  --faint: #636b77;
+  --border: #dfe2e7;
+  --accent: #eef1f6;
+  --ring: #2f6fdb;
+  --link: #1f56b3;
+  --wait: #a65300;
+  --wait-foreground: #ffffff;
+  --wait-ink: #8a4500;
+  --wait-wash: #fff4e5;
+  --run: #2f6fdb;
+  --run-ink: #1d50a8;
+  --run-wash: #edf3ff;
+  --ok: #1a7f47;
+  --fail: #c0332b;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0d0f12;
+    --foreground: #e6e8ec;
+    --card: #14171b;
+    --muted: #1b1f24;
+    --muted-foreground: #a3abb5;
+    --faint: #8c95a0;
+    --border: #282d34;
+    --accent: #1c222a;
+    --ring: #5b9bff;
+    --link: #7aafff;
+    --wait: #f0a232;
+    --wait-foreground: #1a1206;
+    --wait-ink: #f5b95e;
+    --wait-wash: #241a0c;
+    --run: #5b9bff;
+    --run-ink: #8cb8ff;
+    --run-wash: #111b2b;
+    --ok: #46c081;
+    --fail: #f2716a;
+  }
+}
+
+@theme inline {
+  --font-sans:
+    "Inter Variable", ui-sans-serif, system-ui, "Hiragino Sans", "Noto Sans CJK JP", "Yu Gothic UI",
+    sans-serif;
+  --font-mono:
+    "JetBrains Mono Variable", ui-monospace, SFMono-Regular, Menlo, Consolas,
+    "Noto Sans Mono CJK JP", monospace;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-faint: var(--faint);
+  --color-border: var(--border);
+  --color-accent: var(--accent);
+  --color-ring: var(--ring);
+  --color-link: var(--link);
+  --color-wait: var(--wait);
+  --color-wait-foreground: var(--wait-foreground);
+  --color-wait-ink: var(--wait-ink);
+  --color-wait-wash: var(--wait-wash);
+  --color-run: var(--run);
+  --color-run-ink: var(--run-ink);
+  --color-run-wash: var(--run-wash);
+  --color-ok: var(--ok);
+  --color-fail: var(--fail);
+}
+
+/* Inter's straight-sided `a`, `l` and `1`, so an id in running text is not misread. */
+body {
+  font-feature-settings: "cv11";
+}
+
+/*
+ * What only the key script makes true is hidden until it has run (D-0059 R3, D-0054 rule 7): the
+ * key hints and the live indicator. `page/keys.js` adds `js` to the root element as its first act.
+ * Unlayered, so it wins over a utility such as `sm:flex` on the same element without `!important`:
+ * Tailwind's utilities sit in a cascade layer, and unlayered rules beat every layer.
+ */
+html:not(.js) .js-only {
+  display: none;
 }

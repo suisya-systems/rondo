@@ -390,7 +390,7 @@ const OPERATOR_LANGUAGE_ENV = "RONDO_OPERATOR_LANGUAGE";
  * variable.
  *
  * **A tag and not a set** (D-0056 rule 3): the lookup happens per request in
- * `src/access/web.ts`, beside the other four steps of rule 2, because a step
+ * `src/access/web.tsx`, beside the other four steps of rule 2, because a step
  * that resolved to `EN` here could not be told from a step that said nothing.
  * `null` is *nobody asked*.
  *

@@ -369,7 +369,11 @@ const ALLOWED_EXTERNALS_BY_MODULE: Readonly<
   // the socket, the served files and the token moved to `src/access/web-app.ts`,
   // and what is left is one parser. `hono/utils/accept` splits
   // `Accept-Language` (D-0059 rule 4); the weight is still read by rondo.
-  "src/access/web.ts": {
+  //
+  // **A `.tsx` since the views became server JSX** (D-0059 rule 2). The JSX
+  // runtime `tsc` emits an import of is not written in the source and so is
+  // not an import this sweep sees; what the module names is still one parser.
+  "src/access/web.tsx": {
     "hono/utils/accept": ["parseAccept"],
   },
   // The HTTP access point, on Hono (D-0059 rule 2), keyed by module for every
@@ -380,20 +384,19 @@ const ALLOWED_EXTERNALS_BY_MODULE: Readonly<
   // request reaches can start a process.
   //
   // **Reads, and only of a fixed map.** `readFile` serves the files
-  // `page.manifest.json` names plus D-0054's two, and `readFileSync` reads that
+  // `page.manifest.json` names, and `readFileSync` reads that
   // manifest once at load; no request contributes to a path, which
   // `test/access/web-app.test.ts` asserts from the outside with paths that
   // exist in the tree and answer 404. One binding each, not the module: no
   // write, no `readdir`.
   //
-  // **`node:crypto`, three bindings**: `randomUUID` for the per-process token
-  // (D-0041 rule 3b), `timingSafeEqual` to compare it, and `createHash` for the
-  // one inline stylesheet's CSP digest.
+  // **`node:crypto`, two bindings**: `randomUUID` for the per-process token
+  // (D-0041 rule 3b) and `timingSafeEqual` to compare it.
   //
   // **Hono by binding**: the app and its context type, the adapter's server,
   // and exactly the four middleware D-0059 rule 2 names for this surface.
   "src/access/web-app.ts": {
-    "node:crypto": ["createHash", "randomUUID", "timingSafeEqual"],
+    "node:crypto": ["randomUUID", "timingSafeEqual"],
     "node:fs": ["readFileSync"],
     "node:fs/promises": ["readFile"],
     // One listening socket, handed Hono's request listener.
@@ -444,7 +447,7 @@ const EXPECTED_MODULES: readonly string[] = [
   "src/access/console.ts",
   "src/access/local.ts",
   "src/access/web-app.ts",
-  "src/access/web.ts",
+  "src/access/web.tsx",
   "src/advisory/proposal.ts",
   "src/cadenza/facade.ts",
   "src/continuo/invoker.ts",
@@ -782,7 +785,11 @@ function scanModule(source: string, from: string): ModuleScan {
   const calleesJudged = new Set<ts.Node>();
 
   const record = (specifier: string, names: readonly string[]): void => {
-    found.push({ specifier, resolved: resolveRelative(specifier, directory), names });
+    found.push({
+      specifier,
+      resolved: resolveRelative(specifier, directory),
+      names,
+    });
   };
 
   const clauseNames = (clause: ts.ImportClause | undefined): string[] => {

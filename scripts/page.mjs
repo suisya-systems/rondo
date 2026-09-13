@@ -2,7 +2,7 @@
  * The page's browser files: build them, and record or check their digests (DECISIONS.md D-0059
  * rule 9, R1).
  *
- *   node scripts/page.mjs build [dir]    compile page/app.css, copy htmx and the two faces
+ *   node scripts/page.mjs build [dir]    compile page/app.css, copy htmx, keys.js and the faces
  *   node scripts/page.mjs record [dir]   write page.manifest.json from a built directory
  *   node scripts/page.mjs check [dir]    fail unless the built directory is the manifest, exactly
  *
@@ -37,9 +37,14 @@ const root = resolve(import.meta.dirname, "..");
 const require = createRequire(join(root, "package.json"));
 const manifestPath = join(root, "page.manifest.json");
 
-/** Files copied verbatim, by served name. The faces are the Latin variable-weight subsets. */
+/**
+ * Files copied verbatim, by served name. The faces are the Latin variable-weight subsets; `keys.js`
+ * is rondo's own key script (D-0059 rule 5), copied so that every file the browser receives is in
+ * one directory under one manifest.
+ */
 const COPIES = {
   "htmx.min.js": require.resolve("htmx.org/dist/htmx.min.js"),
+  "keys.js": join(root, "page/keys.js"),
   "inter-latin-wght-normal.woff2": require.resolve(
     "@fontsource-variable/inter/files/inter-latin-wght-normal.woff2",
   ),

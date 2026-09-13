@@ -35,10 +35,11 @@
  * to a type. No type can tell an unattended redraw from a human's click -- they
  * differ in whether somebody was at the keyboard, which is not in the data -- so
  * two runtime facts do it instead. **D-0054 amended one of them, and narrowed
- * what the pair guarantees.** Two of the three views now carry a script that
- * `GET`s its own address every five seconds and morphs the result in place
- * ({@link isLive}), so *"nothing here can emit a `POST`"* has stopped being
- * true of this page. What still holds -- and what D-0042's invariant now rests
+ * what the pair guarantees.** Two of the three views now carry a library that
+ * `GET`s its own address every five seconds and swaps the ledger in place
+ * ({@link isLive}; htmx since D-0059 R2), so *"nothing here can emit a `POST`"*
+ * has stopped being true of this page -- and D-0059 section 5 moved the rest of
+ * it into the write port, which mints a press only from a person's navigation. What still holds -- and what D-0042's invariant now rests
  * on alone -- is the server half of the same fact: a `GET` reaches this
  * renderer, this renderer holds only the read ports, and the compiler says so,
  * so an unattended redraw writes nothing because the code path it reaches
@@ -76,6 +77,14 @@
  * is rondo's content and D-0056's five steps (D-0059 rule 4), both of which are
  * functions of values and not of a socket, which is also why none of this
  * module's tests needs one.
+ *
+ * **The markup is server JSX and the look is Tailwind** (D-0059 rules 1 and 2).
+ * The strings are the ones this module always drew -- every claim, basis, lap
+ * line, fence line and catalogue sentence -- in the elements section 1's bar
+ * names: one row per lap with a leading glyph, a state pill and a muted
+ * right-aligned column; groups labelled with their counts; a short filled call
+ * to action; the press in a bar that stays in reach. `page/app.css` holds both
+ * palettes, and the build compiles the classes named in this file.
  */
 import { parseAccept } from "hono/utils/accept";
 import {
@@ -181,146 +190,7 @@ export type LapMaterial = (wording: Chrome, record: IterationRecord) => Promise<
  */
 export const APPROVE_BODY = "approve";
 
-/**
- * The page's stylesheet, as the exact bytes between `<style>` and `</style>`.
- *
- * **A constant so that its digest can be the policy** (D-0059 rule 6, R4's
- * `default-src 'self'`). The server's CSP admits this one inline block by its
- * `sha256` and no other inline style, which keeps `style-src` from needing
- * `'unsafe-inline'` while the views are still this module's hand-written
- * markup. It goes when the views move onto the built `app.css`.
- */
-export const PAGE_STYLE = `/* A ledger read by one person many times a day, so: two type roles, one spacing
-   scale, and three states that do not weigh the same.
-
-   Both palettes are written out rather than inherited. color-scheme is kept
-   so the button and the scrollbars follow the reader's setting, but every
-   surface, rule and ink below is a token declared in both modes -- a page that
-   leaned on the user-agent defaults would have its contrast decided elsewhere,
-   and the one thing this screen has to hold is that 'waiting' reads as waiting
-   from across a room. */
-:root {
-  color-scheme: light dark;
-  /* Space is a scale, not a per-element decision (rondo#153). */
-  --s1: .25rem; --s2: .5rem; --s3: .75rem; --s4: 1.25rem; --s5: 2rem;
-  /* Values are monospace because they are a ledger and columns must line up;
-     headings, notes and labels are not, because they are prose about it. */
-  /* The tertiary ink is the floor: it carries the basis lines, the claim
-     labels and an ended lap's own request, which are text a person reads
-     rather than decoration. Both values clear 4.5:1 against all three grounds
-     they land on -- page, section surface and the waiting wash -- so recessive
-     is a step down in weight and never a step below legible. */
-  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  --sans: ui-sans-serif, system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  --bg: #eceef1;
-  --surface: #fbfcfd;
-  --ink: #14181c;
-  --ink-2: #4b545d;
-  --ink-3: #646d77;
-  --rule: #d2d8de;
-  --link: #0f5480;
-  --wait-edge: #b26206;
-  --wait-ink: #8a4b04;
-  --wait-wash: #fbf1e0;
-  --wait-press: #a75c06;
-  --wait-press-ink: #fffaf3;
-  --run-edge: #2a79ad;
-  --run-ink: #1b5a83;
-}
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0f1214;
-    --surface: #171b1f;
-    --ink: #e3e7ea;
-    --ink-2: #a2abb3;
-    --ink-3: #848e97;
-    --rule: #292f35;
-    --link: #6cb2e6;
-    --wait-edge: #d18e2f;
-    --wait-ink: #e9b25f;
-    --wait-wash: #221a0d;
-    --wait-press: #d18e2f;
-    --wait-press-ink: #17130c;
-    --run-edge: #3d86bb;
-    --run-ink: #7dbce5;
-  }
-}
-body { background: var(--bg); color: var(--ink);
-  font: 14px/1.55 var(--mono); margin: 0 auto; max-width: 64rem;
-  padding: var(--s5) var(--s4); }
-/* Every block starts at zero and the scale puts it back, so no two margins
-   stack and nothing carries a spacing decision of its own. */
-h1, h2, p, pre, form { margin: 0; }
-body > * + * { margin-top: var(--s4); }
-h1 { color: var(--ink-3); font: 600 .75rem/1 var(--sans); letter-spacing: .16em;
-  text-transform: uppercase; }
-h2 { color: var(--ink-2); font: 600 .95rem/1.3 var(--sans); margin: 0 0 var(--s3); }
-section { background: var(--surface); border-left: 3px solid var(--rule);
-  padding: var(--s3) var(--s4); }
-section + section { margin-top: var(--s3); }
-a { color: var(--link); text-underline-offset: .2em; }
-pre { white-space: pre-wrap; word-break: break-word; margin: 0; }
-.note, .basis, .label { color: var(--ink-3); font-family: var(--sans); }
-.note { color: var(--ink-2); font-size: .8125rem; }
-.basis { font-size: .75rem; }
-.group { border-left: 2px solid var(--rule); padding-left: var(--s3); }
-.group + .group { margin-top: var(--s3); }
-.lap > * + *, .group > * + * { margin-top: var(--s1); }
-/* Laps are separated by a hairline rather than each carrying a rule of its own:
-   the section's own edge already says which question they answer. */
-.lap + .lap { border-top: 1px solid var(--rule); margin-top: var(--s3);
-  padding-top: var(--s3); }
-.head { font-weight: 600; }
-.request, .line, .value { white-space: pre-wrap; word-break: break-word; }
-.line { color: var(--ink-2); font-size: .8125rem; }
-.claim { display: grid; grid-template-columns: minmax(9rem, 14rem) 1fr; gap: var(--s3); }
-.label { font-size: .8125rem; }
-pre, .material { background: var(--bg); border: 1px solid var(--rule);
-  font-size: .8125rem; padding: var(--s2) var(--s3); }
-.material { margin-top: var(--s3); }
-
-/* *What needs me* is the only part of this page anybody can act on, so it is
-   the only part that is allowed to shout: its own wash, a heavier edge, the
-   request set a size larger, and the one button on the page. */
-.waiting { background: var(--wait-wash); border-left: 4px solid var(--wait-edge); }
-.waiting h2 { color: var(--wait-ink); font-size: 1.05rem; font-weight: 700; }
-.waiting .head { color: var(--wait-ink); font-size: .9375rem; }
-.waiting .request { font-size: .9375rem; }
-.waiting .lap + .lap { border-top-color: var(--wait-edge); }
-.running { border-left-color: var(--run-edge); }
-.running h2 { color: var(--run-ink); }
-/* An ended lap is over: it is on the page to be checked against, not read, so
-   it recedes to the page's own ground and to secondary ink. (No section's own
-   heading text is spelled in this stylesheet -- the lead is found by position
-   on the page, and a comment naming one would be found first.) */
-.ended { background: none; }
-.ended h2, .ended .head, .ended .request { color: var(--ink-3); }
-.ended .head { font-weight: 500; }
-.idle { border-left-color: var(--rule); }
-.nothing { color: var(--ink-2); font-family: var(--sans); font-size: 1rem; }
-
-.approve { align-items: center; display: flex; flex-wrap: wrap; gap: var(--s3);
-  margin-top: var(--s4); }
-.approve button { background: var(--wait-press); border: 0; color: var(--wait-press-ink);
-  cursor: pointer; font: 600 .875rem var(--sans); letter-spacing: .04em;
-  padding: .55rem 1.75rem; }
-.approve button:hover { filter: brightness(1.08); }
-:focus-visible { outline: 2px solid var(--wait-edge); outline-offset: 2px; }
-.fold { border-top: 1px solid var(--rule); font-family: var(--sans);
-  font-size: .8125rem; margin-top: var(--s5); padding-top: var(--s3); }
-/* The switch sits with the fold's link and reads as the same kind of thing: the
-   two ways off this screen, in the same type at the same size (D-0056 rule 10).
-   No second rule above it -- one line separates the chrome from the ledger, and
-   a second would make the switch a footer of its own. */
-.switch { font-family: var(--sans); font-size: .8125rem; margin-top: var(--s2); }
-@media (max-width: 40rem) {
-  body { padding: var(--s4) var(--s3); }
-  section { padding: var(--s3); }
-  .claim { grid-template-columns: 1fr; gap: 0; }
-}
-`;
-
-/** How often a live view redraws itself, in seconds. Matches `page/poll.js`. */
+/** How often a live view redraws itself, in seconds: the `<noscript>` refresh and htmx's `every 5s`. */
 const REFRESH_SECONDS = 5;
 
 /**
@@ -328,10 +198,11 @@ const REFRESH_SECONDS = 5;
  *
  * **The whole of this surface's state is in the address**, which is what makes
  * it survivable: the view is a query the server reads, so every redraw --
- * the `<noscript>` refresh, or the script's own `GET` -- asks for the view
+ * the `<noscript>` refresh, or htmx's own `GET` -- asks for the view
  * being read and is answered with it. A view outlives every redraw because the
  * server is the one holding it, and not because a client remembered anything;
- * D-0054 adds a script and deliberately does not add client state or a router.
+ * D-0054 added a script and D-0059 a library, and neither adds client state or
+ * a router.
  *
  * `summary` answers the three questions and nothing else. `reading` adds
  * rondo's own compositions -- the inbox, what spans the live laps, every row's
@@ -356,8 +227,10 @@ export type PageView =
  * never of the page (D-0054 rule 1).
  *
  * `summary` and `reading` are *what is running* and want to be current, so
- * they carry the script -- and, with scripting off, the meta refresh inside
- * `<noscript>`. **`answer` updates by nothing at all: no script, no refresh.**
+ * they carry htmx's poll -- and, with scripting off, the meta refresh inside
+ * `<noscript>`. **`answer` updates by nothing at all: no poll, no refresh.** (It
+ * does load the key script, which moves focus and follows links and changes
+ * nothing on the screen by itself.)
  * It is one row's framing beside its button, read by a person in order to
  * press, and rondo#160's complaint was exactly this screen being re-laid-out
  * under the reader while they read it. It costs no staleness risk, which is why
@@ -376,8 +249,8 @@ function isLive(view: PageView): boolean {
  * 11). The tag is not optional and there is no overload without it: rule 4
  * makes the URL the only home of the language in force, so an address that
  * dropped it is a page that silently re-resolves -- and with scripting on it
- * would *appear* to stick, because the poller fetches whatever the address bar
- * holds. A switch the fold drops is D-0055's failure reproduced by the entry
+ * would *appear* to stick, because the poll asks for the address it was
+ * rendered with. A switch the fold drops is D-0055's failure reproduced by the entry
  * that fixed it, so the parameter is required and the compiler is what asserts
  * rule 11 rather than a comment.
  *
@@ -573,13 +446,117 @@ export function isSwitch(asked: LanguageAsked, resolved: Chrome): boolean {
   return resolveLanguage({ ...asked, query: null }).lang !== resolved.lang;
 }
 
-/** Text as HTML text: the four characters that would otherwise be markup. */
-export function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+/**
+ * The design vocabulary, as class strings the Tailwind build can read (D-0059
+ * sections 1 and 2).
+ *
+ * **Written out in full and never assembled**, because `page/app.css` compiles
+ * only the class names that appear literally under `src/access/**\/*.tsx`: a
+ * class built from a template would be served as markup and never as CSS. The
+ * tokens they name (`wait`, `run`, `ok`, `fail`, `faint`, ...) are declared in
+ * `page/app.css` in both palettes, so nothing here decides a colour for one
+ * mode only.
+ *
+ * **A marker class leads each string where a test or a reader finds an element
+ * by it** (`request`, `basis`, `line`, `label`, `value`, `material`). None is a
+ * Tailwind utility, so it names the element and styles nothing.
+ */
+const PILL =
+  "inline-flex shrink-0 items-center rounded-full border px-2 py-px font-mono text-[11px] font-medium leading-4 whitespace-nowrap";
+
+/** One tone per state, which is the whole of what a pill says (section 1, Vercel's row). */
+const TONE = {
+  wait: "border-wait/40 bg-wait-wash text-wait-ink",
+  run: "border-run/35 bg-run-wash text-run-ink",
+  ok: "border-border text-ok",
+  fail: "border-fail/40 text-fail",
+  muted: "border-border text-muted-foreground",
+} as const;
+
+type Tone = keyof typeof TONE;
+
+/** The one filled button shape, at two sizes: the way to a press, and the press. */
+const PRIMARY =
+  "inline-flex cursor-pointer items-center gap-1.5 rounded-md bg-wait font-semibold text-wait-foreground shadow-xs outline-none hover:bg-wait/90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card";
+
+/**
+ * A row a person can move to with `j`/`k` (D-0059 rule 5): focusable by script
+ * and not by Tab, so the tab order is still the links and the one button.
+ */
+const ROW =
+  "grid grid-cols-[1rem_minmax(0,1fr)] gap-x-3 px-4 py-2.5 outline-none first:rounded-t-lg last:rounded-b-lg focus-visible:bg-accent focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:grid-cols-[1rem_minmax(0,1fr)_auto]";
+
+/** The muted, right-aligned column of identifiers and ages (section 1, GitHub's run list). */
+const META =
+  "col-start-2 flex gap-x-3 font-mono text-[11.5px] leading-5 text-faint tabular-nums sm:col-start-auto sm:flex-col sm:items-end sm:text-right";
+
+/**
+ * A status glyph, drawn by the page rather than fetched (section 1: "a status
+ * glyph in a leading column").
+ *
+ * Inline SVG rather than an icon package, because five shapes are fewer lines
+ * than the dependency (D-0059 rule 5's ladder), and `aria-hidden` because the
+ * state is also the pill's text beside it: the glyph is for the eye across the
+ * room and never the only carrier.
+ */
+function glyph(tone: Tone | "alert") {
+  const color = {
+    wait: "text-wait",
+    run: "text-run",
+    ok: "text-ok",
+    fail: "text-fail",
+    muted: "text-faint",
+    alert: "text-fail",
+  }[tone];
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.6"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      class={`mt-0.5 size-4 ${color}`}
+    >
+      {tone === "wait" ? (
+        <>
+          <circle cx="8" cy="8" r="6.2" />
+          <circle cx="8" cy="8" r="2.4" fill="currentColor" stroke="none" />
+        </>
+      ) : tone === "run" ? (
+        <>
+          <circle cx="8" cy="8" r="6.2" opacity="0.3" />
+          <path d="M8 1.8a6.2 6.2 0 0 1 6.2 6.2" class="origin-center motion-safe:animate-spin" />
+        </>
+      ) : tone === "ok" ? (
+        <>
+          <circle cx="8" cy="8" r="6.2" />
+          <path d="m5.4 8.2 1.8 1.8 3.4-3.6" />
+        </>
+      ) : tone === "fail" ? (
+        <>
+          <circle cx="8" cy="8" r="6.2" />
+          <path d="m5.8 5.8 4.4 4.4m0-4.4-4.4 4.4" />
+        </>
+      ) : tone === "alert" ? (
+        <path d="M8 2.2 14.2 13H1.8L8 2.2Zm0 4.3v2.8m0 2v.1" />
+      ) : (
+        <>
+          <circle cx="8" cy="8" r="6.2" />
+          <path d="m3.8 12.2 8.4-8.4" />
+        </>
+      )}
+    </svg>
+  );
+}
+
+/** The tone of an ended lap: a failure is red and everything else that finished is quiet. */
+function endedTone(record: IterationRecord): Tone {
+  if (record.status === "failed") {
+    return "fail";
+  }
+  return record.status === "closed" ? "ok" : "muted";
 }
 
 /**
@@ -588,8 +565,13 @@ export function escapeHtml(text: string): string {
  * Consecutive claims are grouped, never reordered: the order of the claims is
  * the payload's own and rondo does not rank them, so a grouping that sorted by
  * basis would be this surface inventing an emphasis the drafter did not have.
+ *
+ * **A definition list, two columns wide and one column narrow**: the label is
+ * the muted term and the value is what a person reads, so the eye runs down the
+ * values and not across a sentence. The basis heads its group in mono, because
+ * it is a locator and not prose.
  */
-function claimsHtml(claims: readonly Claim[], snapshot: object): string {
+function claimsView(claims: readonly Claim[], snapshot: object) {
   const groups: { basis: string; claims: Claim[] }[] = [];
   for (const claim of claims) {
     const basis = basisLine(claim.basis, snapshot);
@@ -600,18 +582,27 @@ function claimsHtml(claims: readonly Claim[], snapshot: object): string {
       groups.push({ basis, claims: [claim] });
     }
   }
-  return groups
-    .map(
-      (group) =>
-        `<div class="group"><p class="basis">${escapeHtml(withoutRepeat(group))}</p>${group.claims
-          .map(
-            (claim) =>
-              `<p class="claim"><span class="label">${escapeHtml(claim.label)}</span>` +
-              `<span class="value">${escapeHtml(claim.value)}</span></p>`,
-          )
-          .join("")}</div>`,
-    )
-    .join("");
+  return (
+    <div class="divide-y divide-border rounded-md border border-border">
+      {groups.map((group) => (
+        <div>
+          <p class="basis wrap-anywhere bg-muted/60 px-3 py-1.5 font-mono text-[11px] leading-4 text-faint">
+            {withoutRepeat(group)}
+          </p>
+          <dl class="divide-y divide-border/70">
+            {group.claims.map((claim) => (
+              <div class="claim grid gap-x-4 px-3 py-1.5 sm:grid-cols-[minmax(9rem,14rem)_minmax(0,1fr)]">
+                <dt class="label text-[12.5px] leading-5 text-muted-foreground">{claim.label}</dt>
+                <dd class="value text-[13px] leading-5 wrap-anywhere whitespace-pre-wrap">
+                  {claim.value}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 /**
@@ -631,26 +622,6 @@ function withoutRepeat(group: { basis: string; claims: readonly Claim[] }): stri
   return tail !== "" && group.basis.endsWith(tail)
     ? group.basis.slice(0, -tail.length)
     : group.basis;
-}
-
-/**
- * One section, and the one thing its markup carries beyond its content: which
- * of the three questions it answers.
- *
- * The class is the whole of what the visual weight rests on. *Waiting*,
- * *running* and *ended* are the same shape and the same words as before -- what
- * differs is that a stylesheet can now tell them apart, which is what makes a
- * page ordered by the three questions read as three questions rather than as
- * one uniform list (rondo#153). No section is drawn on the strength of the
- * class and none is hidden by it, so a browser that loads no CSS still gets
- * every claim in the same order.
- */
-function section(heading: string, note: string, body: string, weight = ""): string {
-  return (
-    `<section${weight === "" ? "" : ` class="${weight}"`}><h2>${escapeHtml(heading)}</h2>` +
-    (note === "" ? "" : `<p class="note">${escapeHtml(note)}</p>`) +
-    `${body}</section>`
-  );
 }
 
 /**
@@ -692,59 +663,13 @@ const RECENT_ENDED = 5;
  * Read off the row's own plan payload rather than through `readRunPlan`,
  * because a page that redraws every five seconds may not refuse a row over a
  * field it is only decorating: absent, null and anything that is not a string
- * all mean *no ask*, which is the same empty attribute list. `runPlan` already
- * refused every tag that could reach a written payload, so what arrives here is
- * `[A-Za-z0-9-]` -- escaped anyway, because the escaping is what makes that
- * sentence a property of this function rather than of a file two modules away.
+ * all mean *no ask*, which is the same empty attribute. `runPlan` already
+ * refused every tag that could reach a written payload, and the JSX renderer
+ * escapes the attribute anyway.
  */
-function langAttribute(record: IterationRecord): string {
+function materialLanguage(record: IterationRecord): string {
   const asked = record.plan["material_language"];
-  return typeof asked === "string" ? ` lang="${escapeHtml(asked)}"` : ' lang=""';
-}
-
-/**
- * One lap in the lead, with the row it rests on cited once above it (D-0032,
- * rondo#91).
- *
- * Every line in the block is read off **one iteration row**, so the basis is
- * that row and it is written once -- the shape {@link claimsHtml} already uses
- * for a shared snapshot pointer. The field-level pointers are not dropped: the
- * reading below carries every one of these fields as its own claim under its own
- * `snapshot /iteration/...` locator. That is what makes this a fold and not a
- * hiding.
- *
- * {@link basisLine} is called rather than the string being spelled here,
- * because a second spelling of a basis is a second thing an operator has to
- * learn to trust. The `iteration` form reads no snapshot, so it is handed none.
- *
- * **The `id` is what makes the morph identity-based rather than positional**
- * (D-0054 rule 2). These blocks come and go -- a lap ends, a gate opens -- and
- * with no id on them idiomorph matches the repeated children by position: a
- * list going from `[A, B]` to `[B]` is then A's node rewritten into B and B's
- * own node removed, which takes the reader's focus with it if it was on the
- * answer link inside. The row id is already unique per document and already the
- * thing every line here is read off, so it is also the identity the merge
- * should use. The two other repeated blocks in the lead (an open proposal, a
- * row that will not decode) carry one for the same reason.
- */
-function lapHtml(
-  record: IterationRecord,
-  head: string,
-  lines: readonly (string | null)[],
-  tail = "",
-): string {
-  const basis = basisLine({ form: "iteration", iterationId: record.id }, {});
-  return (
-    `<div class="lap" id="lap-${escapeHtml(record.id)}"><p class="basis">${escapeHtml(basis)}</p>` +
-    `<p class="head">${escapeHtml(head)}</p>` +
-    `<p class="request"${langAttribute(record)}>${escapeHtml(record.request)}</p>` +
-    lines
-      .filter((line): line is string => line !== null)
-      .map((line) => `<p class="line">${escapeHtml(line)}</p>`)
-      .join("") +
-    tail +
-    `</div>`
-  );
+  return typeof asked === "string" ? asked : "";
 }
 
 /**
@@ -806,6 +731,126 @@ function endedHow(wording: Chrome, record: IterationRecord, nowMs: number): stri
   return wording.endedHead(record.status, ago(record.updatedAtMs, nowMs), why);
 }
 
+/** Which of the three questions a row answers, which is what its weight is decided by. */
+type Question = "waiting" | "running" | "ended";
+
+/**
+ * One lap as one row, with the row it rests on cited once beside it (D-0032,
+ * rondo#91).
+ *
+ * **The shape is section 1's bar**: a status glyph in the leading column; the
+ * request as the row's title; the state as a pill; the basis and the age in a
+ * muted right-aligned column of tabular figures; and every line the lead used
+ * to stack -- the head sentence, what releases it, what it spent, what its
+ * fence refused, where it runs -- as one muted metadata line under the title.
+ * Nothing that was on the page left it: the same strings, in fewer lines.
+ *
+ * **Waiting reads from across the room and finished recedes** (section 2's
+ * shared gap): a waiting row's request is set larger, whole and with its
+ * paragraphs (rondo#90), because it is what a person came to answer; a running
+ * row's request is one line; an ended one is one line in secondary ink.
+ *
+ * {@link basisLine} is called rather than the string being spelled here,
+ * because a second spelling of a basis is a second thing an operator has to
+ * learn to trust. The `iteration` form reads no snapshot, so it is handed none.
+ *
+ * **The `id` is what keeps a person's place across the in-place refresh**
+ * (D-0054 rule 2, D-0059 R2). htmx swaps the ledger and puts focus back on the
+ * element whose `id` held it, and `j`/`k` focus is on these rows -- so a row
+ * with no id, or one whose id moved to another lap, would drop the reader's
+ * place every five seconds. The row id is already unique per document and
+ * already the thing every line here is read off.
+ */
+function lapRow(
+  question: Question,
+  record: IterationRecord,
+  head: string,
+  lines: readonly (string | null)[],
+  nowMs: number,
+  tail: unknown = null,
+  below: unknown = null,
+) {
+  const tone: Tone =
+    question === "waiting" ? "wait" : question === "running" ? "run" : endedTone(record);
+  return (
+    <li id={`lap-${record.id}`} data-row="" tabindex={-1} class={ROW}>
+      {glyph(tone)}
+      <div class="min-w-0">
+        <p
+          class={
+            question === "waiting"
+              ? "request text-[15px] leading-6 font-semibold wrap-anywhere whitespace-pre-wrap"
+              : question === "running"
+                ? "request truncate text-sm leading-6 font-medium"
+                : "request truncate text-sm leading-6 text-muted-foreground"
+          }
+          lang={materialLanguage(record)}
+        >
+          {record.request}
+        </p>
+        <p class="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[12.5px] leading-5 text-muted-foreground">
+          <span class={`${PILL} ${TONE[tone]}`}>{record.status}</span>
+          <span class="head wrap-anywhere">{head}</span>
+          {lines
+            .filter((line): line is string => line !== null)
+            .map((line) => (
+              <span class="line min-w-0 wrap-anywhere whitespace-pre-wrap">{line}</span>
+            ))}
+        </p>
+        {tail}
+      </div>
+      <div class={META}>
+        <p class="basis">{basisLine({ form: "iteration", iterationId: record.id }, {})}</p>
+        <p>{ago(record.updatedAtMs, nowMs)}</p>
+      </div>
+      {below === null ? null : <div class="col-span-full">{below}</div>}
+    </li>
+  );
+}
+
+/**
+ * One of the three questions: a group label that carries its count, and its
+ * rows (section 1, Vercel's hierarchy of group, row and metadata).
+ *
+ * `data-question` is the whole of what the visual weight rests on, as the
+ * section's class was before (rondo#153): *waiting*, *running* and *ended* are
+ * the same shape and the same words, and what differs is how much each is
+ * allowed to shout. No group is drawn on the strength of it and none is hidden
+ * by it, so a browser that loads no CSS still gets every claim in the same
+ * order. An empty group is its label alone, which is how *running now (0)* is
+ * said once.
+ */
+function questionGroup(question: Question, heading: string, rows: readonly unknown[]) {
+  return (
+    <section data-question={question} class="space-y-2">
+      <h2
+        class={
+          question === "waiting"
+            ? "text-lg leading-7 font-semibold tracking-tight text-wait-ink"
+            : question === "running"
+              ? "text-sm leading-6 font-semibold text-run-ink"
+              : "text-sm leading-6 font-medium text-muted-foreground"
+        }
+      >
+        {heading}
+      </h2>
+      {rows.length === 0 ? null : (
+        <ul
+          class={
+            question === "waiting"
+              ? "divide-y divide-wait/25 rounded-lg border border-wait/45 bg-card shadow-[inset_3px_0_0_var(--color-wait)]"
+              : question === "running"
+                ? "divide-y divide-border rounded-lg border border-border bg-card"
+                : "divide-y divide-border/70 rounded-lg border border-border/70"
+          }
+        >
+          {rows}
+        </ul>
+      )}
+    </section>
+  );
+}
+
 /**
  * *What needs me* -- the laps stopped at a question, and the proposals open.
  *
@@ -814,43 +859,58 @@ function endedHow(wording: Chrome, record: IterationRecord, nowMs: number): stri
  * would be pressed over are **here** rather than in the reading below, because
  * D-0042 makes the press this surface's presentation: what a person is shown
  * before they write has to be beside the thing they press.
+ *
+ * **The row being answered is hoisted to the top of its group** (D-0059 section
+ * 2, second round): it opens in place into the framing, the material and the
+ * press, so the one thing the view is about is the first thing on it.
  */
-function waitingHtml(
+function waitingView(
   wording: Chrome,
   waiting: readonly IterationRecord[],
   open: readonly OpenProposal[],
   nowMs: number,
   token: string | null,
-  shown: ReadonlyMap<string, string>,
-): string {
-  return section(
-    wording.waitingHeading(waiting.length + open.length),
-    "",
-    waiting
-      .map((record) =>
-        lapHtml(
-          record,
-          wording.waitingHead(record.status, ago(record.updatedAtMs, nowMs)),
-          [unblockedBy(wording, record), spentLine(wording, record), fenceLine(wording, record)],
-          shown.has(record.id)
-            ? approveHtml(wording, record, token, shown.get(record.id) ?? "")
-            : answerHref(wording, record, token),
-        ),
-      )
-      .join("") +
-      open
-        .map(
-          (proposal) =>
-            `<div class="lap" id="proposal-${escapeHtml(proposal.proposalId)}">` +
-            `<p class="basis">${escapeHtml(wording.proposalBasis(proposal.proposalId))}</p>` +
-            `<p class="head">${escapeHtml(
-              wording.proposalHead(proposal.kind, ago(proposal.createdAtMs, nowMs)),
-            )}</p>` +
-            `<p class="line">${escapeHtml(wording.aboutIteration(proposal.iterationId))}</p></div>`,
-        )
-        .join(""),
-    "waiting",
-  );
+  shown: ReadonlyMap<string, Shown>,
+) {
+  const hoisted = [
+    ...waiting.filter((record) => shown.has(record.id)),
+    ...waiting.filter((record) => !shown.has(record.id)),
+  ];
+  return questionGroup("waiting", wording.waitingHeading(waiting.length + open.length), [
+    ...hoisted.map((record) => {
+      const framing = shown.get(record.id);
+      return lapRow(
+        "waiting",
+        record,
+        wording.waitingHead(record.status, ago(record.updatedAtMs, nowMs)),
+        [unblockedBy(wording, record), spentLine(wording, record), fenceLine(wording, record)],
+        nowMs,
+        framing === undefined ? answerLink(wording, record, token) : null,
+        framing === undefined ? null : approveView(wording, record, token, framing),
+      );
+    }),
+    ...open.map((proposal) => (
+      <li id={`proposal-${proposal.proposalId}`} data-row="" tabindex={-1} class={ROW}>
+        {glyph("wait")}
+        <div class="min-w-0">
+          <p class="head text-[15px] leading-6 font-semibold wrap-anywhere">
+            {wording.proposalHead(proposal.kind, ago(proposal.createdAtMs, nowMs))}
+          </p>
+          <p class="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[12.5px] leading-5 text-muted-foreground">
+            <span class={`${PILL} ${TONE.wait}`}>{proposal.kind}</span>
+            <span class="line wrap-anywhere">{wording.aboutIteration(proposal.iterationId)}</span>
+            <span class="basis font-mono text-[11.5px] wrap-anywhere text-faint">
+              {wording.proposalBasis(proposal.proposalId)}
+            </span>
+          </p>
+        </div>
+        <div class={META}>
+          <p>{proposal.proposalId}</p>
+          <p>{ago(proposal.createdAtMs, nowMs)}</p>
+        </div>
+      </li>
+    )),
+  ]);
 }
 
 /**
@@ -864,52 +924,57 @@ function waitingHtml(
  * A live row that will not decode is here rather than missing, for the inbox's
  * reason: it holds a slot, so leaving it out would understate what is running.
  */
-function runningHtml(
+function runningView(
   wording: Chrome,
   running: readonly IterationRecord[],
   unreadable: readonly LiveRow[],
   transcripts: ReadonlyMap<string, TranscriptLocation>,
   nowMs: number,
-): string {
-  return section(
-    wording.runningHeading(running.length + unreadable.length),
-    "",
-    running
-      .map((record) =>
-        lapHtml(record, wording.runningHead(record.status, ago(record.updatedAtMs, nowMs)), [
+) {
+  return questionGroup("running", wording.runningHeading(running.length + unreadable.length), [
+    ...running.map((record) =>
+      lapRow(
+        "running",
+        record,
+        wording.runningHead(record.status, ago(record.updatedAtMs, nowMs)),
+        [
           whereItRuns(wording, record, transcripts.get(record.id)),
           spentLine(wording, record),
           fenceLine(wording, record),
-        ]),
-      )
-      .join("") +
-      unreadable
-        .map((row) =>
-          row.kind === "unreadable"
-            ? `<div class="lap" id="unreadable-${escapeHtml(row.id)}">` +
-              `<p class="head">${escapeHtml(row.id)}</p>` +
-              `<p class="line">${escapeHtml(wording.willNotDecode(row.reason))}</p></div>`
-            : "",
-        )
-        .join(""),
-    "running",
-  );
+        ],
+        nowMs,
+      ),
+    ),
+    ...unreadable.map((row) =>
+      row.kind === "unreadable" ? (
+        <li id={`unreadable-${row.id}`} data-row="" tabindex={-1} class={ROW}>
+          {glyph("alert")}
+          <div class="min-w-0">
+            <p class="head font-mono text-[13px] leading-6 text-fail">{row.id}</p>
+            <p class="line text-[12.5px] leading-5 wrap-anywhere text-muted-foreground">
+              {wording.willNotDecode(row.reason)}
+            </p>
+          </div>
+        </li>
+      ) : null,
+    ),
+  ]);
 }
 
 /** *What just finished* -- the last few endings, newest first (rondo#145). */
-function endedHtml(wording: Chrome, ended: readonly IterationRecord[], nowMs: number): string {
-  return section(
-    wording.endedHeading(ended.length),
-    "",
-    ended
-      .map((record) =>
-        lapHtml(record, endedHow(wording, record, nowMs), [
-          spentLine(wording, record),
-          fenceLine(wording, record),
-        ]),
-      )
-      .join(""),
+function endedView(wording: Chrome, ended: readonly IterationRecord[], nowMs: number) {
+  return questionGroup(
     "ended",
+    wording.endedHeading(ended.length),
+    ended.map((record) =>
+      lapRow(
+        "ended",
+        record,
+        endedHow(wording, record, nowMs),
+        [spentLine(wording, record), fenceLine(wording, record)],
+        nowMs,
+      ),
+    ),
   );
 }
 
@@ -925,36 +990,67 @@ function endedHtml(wording: Chrome, ended: readonly IterationRecord[], nowMs: nu
  * is that the basis is cited once for the three claims instead of once per
  * phrasing of zero.
  */
-function nothingHtml(wording: Chrome): string {
+function nothingView(wording: Chrome) {
   return (
-    `<section class="idle"><p class="nothing">${escapeHtml(wording.nothingAtAll)}</p>` +
-    `<p class="basis">${escapeHtml(wording.nothingBasis)}</p></section>`
-  );
-}
-
-/** The inbox section: the same lines `rondo inbox` prints, and no mark moved. */
-function inboxHtml(ports: WebPorts, wording: Chrome, snapshot: InboxSnapshot | null): string {
-  if (snapshot === null || ports.actorId === null) {
-    return section(wording.inboxHeading, wording.inboxNoApprover, "");
-  }
-  return section(
-    wording.inboxHeading,
-    wording.inboxNote,
-    `<pre>${escapeHtml(inboxLines(wording, ports.actorId, snapshot).join("\n"))}</pre>`,
-  );
-}
-
-/** The between-laps section: `rondo between`'s composition, unrecorded. */
-function betweenHtml(wording: Chrome, snapshot: HostSnapshot): string {
-  return section(
-    wording.betweenHeading,
-    wording.betweenNote,
-    claimsHtml(proposeHost(snapshot).payload.claims, snapshot),
+    <section
+      data-question="idle"
+      class="flex gap-3 rounded-lg border border-dashed border-border px-5 py-6"
+    >
+      {glyph("ok")}
+      <div class="space-y-1">
+        <p class="nothing text-base leading-6 font-medium">{wording.nothingAtAll}</p>
+        <p class="basis font-mono text-[11.5px] leading-5 text-faint">{wording.nothingBasis}</p>
+      </div>
+    </section>
   );
 }
 
 /**
- * The one button, drawn only where there is something for it to answer.
+ * One section of the reading: a heading, the note that says what reading it
+ * does not do, and its body.
+ */
+function readingSection(heading: string, note: string, body: unknown) {
+  return (
+    <section class="space-y-3 rounded-lg border border-border bg-card px-4 py-4 sm:px-5">
+      <h2 class="text-sm leading-6 font-semibold">{heading}</h2>
+      {note === "" ? null : <p class="note text-[13px] leading-5 text-muted-foreground">{note}</p>}
+      {body}
+    </section>
+  );
+}
+
+/** A block of lines read as columns, which may scroll sideways rather than rewrap. */
+const PRE =
+  "overflow-x-auto rounded-md border border-border bg-muted/50 p-3 font-mono text-[12px] leading-5 whitespace-pre";
+
+/** The inbox section: the same lines `rondo inbox` prints, and no mark moved. */
+function inboxView(ports: WebPorts, wording: Chrome, snapshot: InboxSnapshot | null) {
+  if (snapshot === null || ports.actorId === null) {
+    return readingSection(wording.inboxHeading, wording.inboxNoApprover, null);
+  }
+  return readingSection(
+    wording.inboxHeading,
+    wording.inboxNote,
+    <pre class={PRE}>{inboxLines(wording, ports.actorId, snapshot).join("\n")}</pre>,
+  );
+}
+
+/** The between-laps section: `rondo between`'s composition, unrecorded. */
+function betweenView(wording: Chrome, snapshot: HostSnapshot) {
+  return readingSection(
+    wording.betweenHeading,
+    wording.betweenNote,
+    claimsView(proposeHost(snapshot).payload.claims, snapshot),
+  );
+}
+
+/** Whether a row carries a question this page can put a button under. */
+function answerable(record: IterationRecord, token: string | null): token is string {
+  return token !== null && record.status === "awaiting_human" && record.gateId !== null;
+}
+
+/**
+ * The press, drawn only where there is something for it to answer.
  *
  * Three conditions, and each is a different way of not having a question in
  * front of a person: no write port (nobody to act as), a status that is not
@@ -962,55 +1058,99 @@ function betweenHtml(wording: Chrome, snapshot: HostSnapshot): string {
  * says a gate is open and the row does not name one, which `answer` refuses
  * too). A button drawn anyway would be one that fails when pressed.
  *
- * `method="post"` is not decoration: the redraw above is a document `GET`, and
- * this form is the only thing on the page that can produce anything else.
+ * **The framing first and the button in a bar that stays in reach** (D-0059
+ * section 2): the form sticks to the bottom of the window for as long as the
+ * framing it answers is on screen, so a 21-claim table never puts `approve`
+ * below the fold -- and it is still after every claim in the document, so a
+ * reader without CSS meets the press where it always was.
+ *
+ * **A native form, and nothing else can press it** (D-0059 section 5): no
+ * `hx-post`, no script, a real `<button type="submit">`. `method="post"` is not
+ * decoration: the refresh is a `GET`, and this form is the only thing on the
+ * page that can produce anything else -- and only a person's click produces the
+ * `Sec-Fetch-User: ?1` the press is minted from.
  */
-function approveHtml(
+function approveView(
   wording: Chrome,
   record: IterationRecord,
   token: string | null,
-  material: string,
-): string {
-  if (token === null || record.status !== "awaiting_human" || record.gateId === null) {
-    return "";
+  framing: Shown,
+) {
+  if (!answerable(record, token) || record.gateId === null) {
+    return null;
   }
   return (
-    material +
-    `<form class="approve" method="post" action="${escapeHtml(
-      viewHref({ kind: "summary" }, wording.lang),
-    )}">` +
-    `<input type="hidden" name="token" value="${escapeHtml(token)}">` +
-    `<input type="hidden" name="iteration" value="${escapeHtml(record.id)}">` +
-    `<button type="submit">${escapeHtml(APPROVE_BODY)}</button>` +
-    `<span class="note">${escapeHtml(wording.approveNote(record.gateId, APPROVE_BODY))}</span>` +
-    `</form>`
+    <div id="answering" class="mt-3 space-y-3">
+      <p class="note text-[13px] leading-5 text-muted-foreground">{wording.pressNote}</p>
+      {claimsView(framing.claims, framing.snapshot)}
+      {framing.material === null ? null : (
+        <pre
+          class="material overflow-x-auto rounded-md border border-border bg-muted/50 p-3 font-mono text-[12px] leading-5 wrap-anywhere whitespace-pre-wrap"
+          lang={materialLanguage(record)}
+        >
+          {framing.material}
+        </pre>
+      )}
+      <form
+        method="post"
+        action={viewHref({ kind: "summary" }, wording.lang)}
+        class="sticky bottom-0 z-[1] -mx-4 flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-wait/30 bg-card/95 px-4 py-3 backdrop-blur-sm"
+      >
+        <input type="hidden" name="token" value={token} />
+        <input type="hidden" name="iteration" value={record.id} />
+        <button type="submit" class={`${PRIMARY} h-9 px-5 text-sm`}>
+          {APPROVE_BODY}
+        </button>
+        <span class="note min-w-0 text-[12.5px] leading-5 text-muted-foreground">
+          {wording.approveNote(record.gateId, APPROVE_BODY)}
+        </span>
+      </form>
+    </div>
   );
 }
 
 /**
  * The way to the button, drawn on exactly the rows that would have one.
  *
- * The conditions are {@link approveHtml}'s, so a link is never offered into a
- * view that would refuse to draw a button -- and the words say what the second
- * address adds, because *"answer"* on its own would read as though the press
- * were here.
+ * The conditions are {@link approveView}'s, so a link is never offered into a
+ * view that would refuse to draw a button. **A short filled call to action with
+ * the longer sentence beside it** (section 2's shared gap): the button says what
+ * to do and the sentence says what the second address adds, because *answer* on
+ * its own would read as though the press were here. `data-open` is what `Enter`
+ * follows from a focused row.
  */
-function answerHref(wording: Chrome, record: IterationRecord, token: string | null): string {
-  if (token === null || record.status !== "awaiting_human" || record.gateId === null) {
-    return "";
+function answerLink(wording: Chrome, record: IterationRecord, token: string | null) {
+  if (!answerable(record, token)) {
+    return null;
   }
-  return `<p class="line"><a href="${escapeHtml(
-    viewHref({ kind: "answer", iterationId: record.id }, wording.lang),
-  )}">${escapeHtml(wording.answerHere)}</a></p>`;
+  return (
+    <p class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+      <a
+        href={viewHref({ kind: "answer", iterationId: record.id }, wording.lang)}
+        data-open=""
+        class={`${PRIMARY} h-7 px-3 text-[13px]`}
+      >
+        {wording.answerAction}
+      </a>
+      <span class="line text-[12.5px] leading-5 text-muted-foreground">{wording.answerHere}</span>
+    </p>
+  );
 }
 
 /** One iteration, explained the way `rondo explain` explains it. */
-function explainHtml(wording: Chrome, record: IterationRecord, snapshot: AdvisorySnapshot): string {
-  return section(
+function explainView(wording: Chrome, record: IterationRecord, snapshot: AdvisorySnapshot) {
+  return readingSection(
     wording.iterationHeading(record.id),
     wording.explainNote,
-    claimsHtml(propose(snapshot).payload.claims, snapshot),
+    claimsView(propose(snapshot).payload.claims, snapshot),
   );
+}
+
+/** What a press on one row would be recorded as having shown, composed for that row. */
+interface Shown {
+  readonly claims: readonly Claim[];
+  readonly snapshot: AdvisorySnapshot;
+  readonly material: string | null;
 }
 
 /**
@@ -1039,17 +1179,13 @@ async function shownBeforePress(
   waiting: readonly IterationRecord[],
   token: string | null,
   view: PageView,
-): Promise<ReadonlyMap<string, string>> {
-  const shown = new Map<string, string>();
-  if (token === null || view.kind !== "answer") {
+): Promise<ReadonlyMap<string, Shown>> {
+  const shown = new Map<string, Shown>();
+  if (view.kind !== "answer") {
     return shown;
   }
   for (const record of waiting) {
-    if (
-      record.id !== view.iterationId ||
-      record.status !== "awaiting_human" ||
-      record.gateId === null
-    ) {
+    if (record.id !== view.iterationId || !answerable(record, token)) {
       continue;
     }
     const snapshot = gather(record, await ports.store.readingsFor(record.id));
@@ -1057,14 +1193,11 @@ async function shownBeforePress(
     // the fence block's standing sentences are inside these lines.
     const material =
       ports.material === null ? null : (await ports.material(wording, record)).join("\n");
-    shown.set(
-      record.id,
-      `<p class="note">${escapeHtml(wording.pressNote)}</p>` +
-        claimsHtml(propose(snapshot).payload.claims, snapshot) +
-        (material === null
-          ? ""
-          : `<pre class="material"${langAttribute(record)}>${escapeHtml(material)}</pre>`),
-    );
+    shown.set(record.id, {
+      claims: propose(snapshot).payload.claims,
+      snapshot,
+      material,
+    });
   }
   return shown;
 }
@@ -1086,6 +1219,15 @@ function endedRecently(outcomes: readonly ReadOutcome[]): readonly IterationReco
     .slice(0, RECENT_ENDED);
 }
 
+/** A key as the keyboard shows it. */
+function kbd(key: string) {
+  return (
+    <kbd class="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded border border-border bg-card px-1 font-mono text-[10px] text-muted-foreground shadow-[inset_0_-1px_0_var(--color-border)]">
+      {key}
+    </kbd>
+  );
+}
+
 /**
  * The whole page: the three questions an operator arrives with, and then the
  * reading the answers rest on (rondo#145).
@@ -1095,8 +1237,8 @@ function endedRecently(outcomes: readonly ReadOutcome[]): readonly IterationReco
  * what just ended -- which is `inbox`'s own order carried to the surface a
  * person actually looks at, and not the order `inbox`, `between` and `explain`
  * happen to be laid out in. rondo's own vocabulary -- bounds, adjacency,
- * last-look marks, a field-by-field reading of every row -- is one `<details>`
- * below, unchanged and complete.
+ * last-look marks, a field-by-field reading of every row -- is at a second
+ * address below, unchanged and complete.
  *
  * **Folded is not hidden** (D-0032). Every claim that was on this page before
  * is still on it, under the same basis, in the same words; what moved is which
@@ -1105,9 +1247,13 @@ function endedRecently(outcomes: readonly ReadOutcome[]): readonly IterationReco
  * cites the field -- so a number in the lead is checkable twice over rather
  * than asserted once.
  *
- * **Nothing here writes** (D-0041). Every read above is a read, the `<details>`
- * is a browser's own element and carries no script, and the only thing on the
- * page that can produce anything but a `GET` is still the one form.
+ * **Nothing here writes** (D-0041). Every read above is a read, the refresh and
+ * the key script issue nothing but `GET`s, and the only thing on the page that
+ * can produce anything but a `GET` is still the one form.
+ *
+ * **Server JSX, rendered to one string** (D-0059 rule 2): `hono/jsx` escapes
+ * every text child and attribute, which is what the hand-written `escapeHtml`
+ * did, so a request's `<b>` is still text.
  */
 export async function operatorPage(
   ports: WebPorts,
@@ -1165,138 +1311,208 @@ export async function operatorPage(
   // D-0059 rule 3a): the renderer is handed the reading ports and nothing that
   // could write, so whether a button is drawn is decided by the one caller that
   // does hold the writer (`src/access/web-app.ts`) and handed down as a token.
-  const pressToken = token;
-  const shown = await shownBeforePress(ports, wording, waiting, pressToken, view);
+  const shown = await shownBeforePress(ports, wording, waiting, token, view);
 
-  const lead =
-    waiting.length + running.length + ended.length + open.length + unreadable.length === 0
-      ? nothingHtml(wording)
-      : [
-          waitingHtml(wording, waiting, open, nowMs, pressToken, shown),
-          runningHtml(wording, running, unreadable, transcripts, nowMs),
-          endedHtml(wording, ended, nowMs),
-        ].join("\n");
-
-  const reading =
+  const readingSections =
     view.kind !== "reading"
-      ? ""
+      ? []
       : [
-          inboxHtml(ports, wording, inbox),
-          betweenHtml(wording, host),
+          inboxView(ports, wording, inbox),
+          betweenView(wording, host),
           ...(await Promise.all(
-            [...waiting, ...running, ...ended]
-              .filter((record) => !shown.has(record.id))
-              .map(async (record) =>
-                explainHtml(
-                  wording,
-                  record,
-                  gather(record, await ports.store.readingsFor(record.id)),
-                ),
+            [...waiting, ...running, ...ended].map(async (record) =>
+              explainView(
+                wording,
+                record,
+                gather(record, await ports.store.readingsFor(record.id)),
               ),
+            ),
           )),
           ...unreadable.map((row) =>
             row.kind === "unreadable"
-              ? section(
+              ? readingSection(
                   wording.iterationHeading(row.id),
                   "",
-                  `<pre>${escapeHtml(wording.willNotDecode(row.reason))}</pre>`,
+                  <pre class={PRE}>{wording.willNotDecode(row.reason)}</pre>,
                 )
-              : "",
+              : null,
           ),
-        ].join("\n");
+        ];
 
-  return `<!doctype html>
-${
-  // **The document declares the language rondo actually wrote it in, and never
-  // the one that was asked for** (D-0055 rule 7). `wording.lang` is the tag of
-  // the set that was selected, so a well-formed tag this tree ships no set for
-  // renders an English page that says `en` -- which is what the document *is*.
-  // rondo does not declare an intention as a fact.
-  //
-  // Escaped like anything else that reaches markup: the tag was already refused
-  // outside `[A-Za-z0-9-]` where it was read, and the escaping is what makes
-  // that a property of this line rather than of a file two modules away.
-  `<html lang="${escapeHtml(wording.lang)}">`
-}
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-${
-  // **What keeps a live view current, in both modes** (D-0054 rules 1 and 7).
-  //
-  // With scripting on, the two files below poll this same address and morph
-  // the answer in place, so the reader's scroll position, selection and focus
-  // survive the redraw. With scripting off, the meta refresh inside
-  // `<noscript>` keeps exactly the liveness this page had before D-0054 --
-  // throwing the document away every five seconds, which is what rondo#160
-  // complained about and is still better than a screen that goes stale
-  // without saying so.
-  //
-  // `defer` on both, in this order: it is what guarantees `Idiomorph` is
-  // defined before `poll.js` runs, and what keeps either from running before
-  // the document it morphs exists. Neither draws anything -- the whole
-  // document is already here, rendered by the server (rule 7).
-  //
-  // The `answer` view reaches none of this: it has no script and no refresh,
-  // so there is nothing for it to degrade to either.
-  keepsCurrent
-    ? `<noscript><meta http-equiv="refresh" content="${String(
-        REFRESH_SECONDS,
-      )};url=${escapeHtml(viewHref(view, wording.lang))}"></noscript>
-<script src="/idiomorph-0.8.0.min.js" defer></script>
-<script src="/poll.js" defer></script>
-`
-    : ""
-}<title>rondo</title>
-<style>
-${PAGE_STYLE}</style>
-</head>
-<body>
-<h1>rondo</h1>
-${
-  // **Each view says which of the two it is**, because "redraws every 5s" on a
-  // view that does not would be the page's own copy lying about the one
-  // property D-0054 rule 1 spends itself on. Both branches say the same thing
-  // about writing, which is the fact that did not change: a read writes
-  // nothing, whoever or whatever issued it.
-  keepsCurrent
-    ? `<p class="note">${escapeHtml(wording.liveNote(REFRESH_SECONDS))}</p>`
-    : `<p class="note">${escapeHtml(wording.stillNote)}</p>`
-}
-${
-  // **Said on the visible page and not only in the reading.** With no approver
-  // there is no write port and so no button anywhere, and a page that explained
-  // that only inside the fold would leave an operator looking for a button that
-  // is missing for a reason rondo knows and did not say (D-0020 rule 2).
-  ports.actorId === null ? `<p class="note">${escapeHtml(wording.noApproverNote)}</p>` : ""
-}
-${lead}
-<p class="fold"><a href="${escapeHtml(
-    viewHref(view.kind === "reading" ? { kind: "summary" } : { kind: "reading" }, wording.lang),
-  )}">${escapeHtml(view.kind === "reading" ? wording.hideReading : wording.openReading)}</a></p>
-${
-  // **The switch, and it is the first element of this chrome that exists in
-  // order to be operated rather than read** (D-0056 rule 10). One link per
-  // shipped set other than the one on screen, beside the fold's link, labelled
-  // with that language's own name in its own language -- so the label is the
-  // same bytes in every set and needs no special case for going back.
-  //
-  // **It keeps the view it was pressed on**, because a switch that returned the
-  // reader to the summary would cost them their place to change a word; and it
-  // is a `GET` that writes nothing to the ledger, which is the whole of what
-  // D-0041 rule 4 asks of it. It is also the only thing on this page that
-  // writes rule 5's memory.
-  `<p class="switch">${[...SHIPPED_SETS]
-    .filter(([tag]) => tag !== wording.lang)
-    .map(
-      ([tag, endonym]) =>
-        `<a href="${escapeHtml(viewHref(view, tag))}" lang="${escapeHtml(tag)}">` +
-        `${escapeHtml(endonym)}</a>`,
-    )
-    .join(" ")}</p>`
-}
-${reading}
-</body>
-</html>
-`;
+  const here = viewHref(view, wording.lang);
+  const page = (
+    // **The document declares the language rondo actually wrote it in, and
+    // never the one that was asked for** (D-0055 rule 7). `wording.lang` is the
+    // tag of the set that was selected, so a well-formed tag this tree ships no
+    // set for renders an English page that says `en` -- which is what the
+    // document *is*. rondo does not declare an intention as a fact.
+    <html lang={wording.lang}>
+      <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        {
+          // **What keeps a live view current, in both modes** (D-0054 rules 1
+          // and 7, D-0059 R2). With scripting off, the meta refresh inside
+          // `<noscript>` throws the document away every five seconds, which is
+          // still better than a screen that goes stale without saying so. With
+          // scripting on, htmx polls this same address (below, on `#ledger`)
+          // and swaps the ledger in place, so the reader's scroll and focus
+          // survive. The `answer` view reaches none of this: it has no refresh
+          // in either mode, so there is nothing for it to degrade to.
+          keepsCurrent ? (
+            <>
+              <noscript>
+                <meta http-equiv="refresh" content={`${String(REFRESH_SECONDS)};url=${here}`} />
+              </noscript>
+              {/*
+               * R2's substitute, as the library's own configuration: requests
+               * to this origin only, no `eval`, no script out of a response, no
+               * history cache, and no inline indicator style the CSP would
+               * refuse anyway.
+               */}
+              <meta
+                name="htmx-config"
+                content='{"selfRequestsOnly":true,"allowEval":false,"allowScriptTags":false,"historyEnabled":false,"includeIndicatorStyles":false}'
+              />
+            </>
+          ) : null
+        }
+        <title>rondo</title>
+        <link rel="stylesheet" href="/app.css" />
+        {
+          // `defer` on both, in this order: htmx is defined before the key
+          // script runs, and neither runs before the document exists. Neither
+          // draws anything a person must read -- the whole document is already
+          // here, rendered by the server (D-0054 rule 7).
+          keepsCurrent ? <script src="/htmx.min.js" defer /> : null
+        }
+        <script src="/keys.js" defer />
+      </head>
+      <body class="min-h-screen bg-background font-sans text-foreground antialiased">
+        <header class="sticky top-0 z-10 border-b border-border bg-background/90 backdrop-blur-sm">
+          <div class="mx-auto flex h-12 max-w-5xl items-center gap-3 px-4 sm:px-6">
+            <h1 class="text-[15px] font-semibold tracking-tight">
+              {
+                // `data-back` is what `Esc` follows; on the summary there is
+                // nowhere further back to go, so it is absent there.
+                view.kind === "summary" ? (
+                  <a href={here}>rondo</a>
+                ) : (
+                  <a href={viewHref({ kind: "summary" }, wording.lang)} data-back="">
+                    rondo
+                  </a>
+                )
+              }
+            </h1>
+            {keepsCurrent ? (
+              <span class={`js-only ${PILL} gap-1.5 font-sans ${TONE.ok}`}>
+                <span class="size-1.5 rounded-full bg-ok motion-safe:animate-pulse" />
+                {wording.liveLabel}
+              </span>
+            ) : null}
+            <span class="flex-1" />
+            <span class="js-only hidden items-center gap-1.5 text-[11.5px] text-faint sm:flex">
+              {kbd("j")}
+              {kbd("k")}
+              <span class="mr-2">{wording.keyMove}</span>
+              {kbd("↵")}
+              <span class="mr-2">{wording.keyOpen}</span>
+              {kbd("esc")}
+              <span>{wording.keyBack}</span>
+            </span>
+            {
+              // **The switch, and it is the first element of this chrome that
+              // exists in order to be operated rather than read** (D-0056 rule
+              // 10). One link per shipped set other than the one on screen,
+              // labelled with that language's own name in its own language --
+              // so the label is the same bytes in every set and needs no special
+              // case for going back. **It keeps the view it was pressed on**,
+              // and it is a `GET` that writes nothing to the ledger. It is also
+              // the only thing on this page that writes rule 5's memory. The
+              // links carry no class of their own; the nav styles them, so a
+              // link is still exactly its address, its tag and its name.
+              <nav class="switch flex gap-3 text-[13px] text-link [&>a]:hover:underline">
+                {[...SHIPPED_SETS]
+                  .filter(([tag]) => tag !== wording.lang)
+                  .map(([tag, endonym]) => (
+                    <a href={viewHref(view, tag)} lang={tag}>
+                      {endonym}
+                    </a>
+                  ))}
+              </nav>
+            }
+          </div>
+        </header>
+        <main class="mx-auto max-w-5xl space-y-6 px-4 py-6 sm:px-6">
+          {
+            // **Each view says which of the two it is**, because "redraws every
+            // 5s" on a view that does not would be the page's own copy lying
+            // about the one property D-0054 rule 1 spends itself on. Both say
+            // the same thing about writing, which is the fact that did not
+            // change: a read writes nothing, whoever or whatever issued it.
+            <p class="note max-w-3xl text-[12.5px] leading-5 text-muted-foreground">
+              {keepsCurrent ? wording.liveNote(REFRESH_SECONDS) : wording.stillNote}
+            </p>
+          }
+          {
+            // **Said on the visible page and not only in the reading.** With no
+            // approver there is no write port and so no button anywhere, and a
+            // page that explained that only inside the fold would leave an
+            // operator looking for a button that is missing for a reason rondo
+            // knows and did not say (D-0020 rule 2).
+            ports.actorId === null ? (
+              <p class="note rounded-md border border-border bg-muted/60 px-3 py-2 text-[13px] leading-5">
+                {wording.noApproverNote}
+              </p>
+            ) : null
+          }
+          {
+            // **The ledger is what the refresh swaps**, and only on a live
+            // view: htmx `GET`s this view's own address every five seconds and
+            // takes `#ledger` out of the document that comes back. There is no
+            // fragment endpoint -- the response is the whole page a navigating
+            // browser gets (D-0054 rule 2) -- so there is no second rendering
+            // of anything to keep true.
+            <div
+              id="ledger"
+              class="space-y-8"
+              {...(keepsCurrent
+                ? {
+                    "hx-get": here,
+                    "hx-trigger": "every 5s",
+                    "hx-select": "#ledger",
+                    "hx-swap": "outerHTML",
+                  }
+                : {})}
+            >
+              {waiting.length + running.length + ended.length + open.length + unreadable.length ===
+              0 ? (
+                nothingView(wording)
+              ) : (
+                <>
+                  {waitingView(wording, waiting, open, nowMs, token, shown)}
+                  {runningView(wording, running, unreadable, transcripts, nowMs)}
+                  {endedView(wording, ended, nowMs)}
+                </>
+              )}
+            </div>
+          }
+          <p id="fold" class="border-t border-border pt-4 text-[13px]">
+            <a
+              href={viewHref(
+                view.kind === "reading" ? { kind: "summary" } : { kind: "reading" },
+                wording.lang,
+              )}
+              class="text-link hover:underline"
+              {...(view.kind === "reading" ? { "data-back": "" } : {})}
+            >
+              {view.kind === "reading" ? wording.hideReading : wording.openReading}
+            </a>
+          </p>
+          {readingSections.length === 0 ? null : <div class="space-y-4">{readingSections}</div>}
+        </main>
+      </body>
+    </html>
+  );
+  return `<!doctype html>\n${await page.toString()}\n`;
 }

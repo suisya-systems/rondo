@@ -52,7 +52,7 @@ export interface Chrome {
   /** The tag this set is written in, which is what the document declares. */
   readonly lang: string;
 
-  // -- The page's two standing notes (src/access/web.ts) --
+  // -- The page's two standing notes (src/access/web.tsx) --
   readonly liveNote: (seconds: number) => string;
   readonly stillNote: string;
   readonly noApproverNote: string;
@@ -90,6 +90,19 @@ export interface Chrome {
   readonly pressNote: string;
   readonly approveNote: (gateId: string, word: string) => string;
   readonly answerHere: string;
+  /**
+   * The short label on the filled button that leads to the press (D-0059
+   * section 2: a short primary call to action). `answerHere` stays beside it as
+   * the sentence that says what the second address adds.
+   */
+  readonly answerAction: string;
+
+  // -- The page's chrome under stack H (D-0059 rule 5): the live indicator and
+  // the key hints, both drawn only once the key script has run --
+  readonly liveLabel: string;
+  readonly keyMove: string;
+  readonly keyOpen: string;
+  readonly keyBack: string;
 
   // -- The fold, and the sections inside it --
   readonly openReading: string;
@@ -271,6 +284,11 @@ explanation you pressed on and then answers the gate.`,
   approveNote: (gateId, word) =>
     `answers gate ${gateId} as '${word}', which is what rondo answer does`,
   answerHere: "read what a press would record, and answer there",
+  answerAction: "Review and answer",
+  liveLabel: "live",
+  keyMove: "move",
+  keyOpen: "open",
+  keyBack: "back",
 
   openReading: "the reading these rest on: every claim with its basis, and rondo's own accounting",
   hideReading: "hide the reading",
@@ -408,6 +426,11 @@ const JA: Partial<Chrome> = Object.freeze({
   approveNote: (gateId, word) =>
     `ゲート ${gateId} に '${word}' と答えます。rondo answer と同じ動作です`,
   answerHere: "押したときに何が記録されるかを読み、そこで答える",
+  answerAction: "確認して答える",
+  liveLabel: "ライブ",
+  keyMove: "移動",
+  keyOpen: "開く",
+  keyBack: "戻る",
 
   openReading: "これらが立っている読み下し: 根拠つきのすべての claim と、rondo 自身の会計",
   hideReading: "読み下しを閉じる",

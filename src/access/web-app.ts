@@ -1,7 +1,7 @@
 /**
  * The operator page's server, on Hono (D-0059 rule 2).
  *
- * **What moved here and what did not.** `src/access/web.ts` still renders the
+ * **What moved here and what did not.** `src/access/web.tsx` still renders the
  * three views and still runs D-0056's five steps; this module is the part of
  * the old hand-written `node:http` server that D-0059 section 3 classes as
  * generic -- routing, 404/405, the fixed map of served files, the security
@@ -29,7 +29,7 @@
  * however it reached the port. `test/access/web-app.test.ts` carries the
  * audit's planted writers as tests that must fail to write.
  */
-import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
+import { randomUUID, timingSafeEqual } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { createServer } from "node:http";
@@ -46,7 +46,6 @@ import {
   LANG_COOKIE_SECONDS,
   type LanguageAsked,
   operatorPage,
-  PAGE_STYLE,
   type PageView,
   resolveLanguage,
   viewHref,
@@ -143,7 +142,10 @@ export function mintPress(
 ): { readonly press: Press } | { readonly status: 403; readonly line: string } {
   const incoming = (c.env as Partial<PageEnv["Bindings"]> | undefined)?.incoming;
   if (incoming === undefined || !live.has(incoming)) {
-    return { status: 403, line: "that request did not arrive on this page's socket" };
+    return {
+      status: 403,
+      line: "that request did not arrive on this page's socket",
+    };
   }
   if (incoming.method !== "POST") {
     return { status: 403, line: "only a POST can answer a gate" };
@@ -232,7 +234,10 @@ export class AnswerPort {
     iterationId: string,
   ): Promise<{ readonly ok: boolean; readonly note: string }> {
     if (!minted.has(press)) {
-      return { ok: false, note: "nothing was answered: this was not a person's press" };
+      return {
+        ok: false,
+        note: "nothing was answered: this was not a person's press",
+      };
     }
     minted.delete(press);
     return await this.#answer(iterationId, APPROVE_BODY);
@@ -272,9 +277,6 @@ function fromThisMachine(host: string | undefined): boolean {
   return name === "127.0.0.1" || name === "localhost" || name === "[::1]";
 }
 
-/** The stylesheet's sha256, for the CSP's one inline-style exception. */
-const STYLE_SHA256 = createHash("sha256").update(PAGE_STYLE).digest("base64");
-
 /**
  * The cap on a request body. Not a performance measure: the form is two short
  * fields, and a request bigger than that is not the page's form.
@@ -284,10 +286,11 @@ const MAX_FORM_BYTES = 4096;
 /**
  * The files this process serves, as a fixed map from path to file (D-0059 R1).
  *
- * **The manifest's files and the two D-0054 files, and nothing else static.**
- * The built files are named by `page.manifest.json`, the digest list CI checks
- * `dist/page` against, so the set this server will serve and the set CI
- * vouches for are one list; a name that is not a plain file name is dropped
+ * **The manifest's files, and nothing else static** (D-0059 R2 retired D-0054's
+ * two hand-served scripts). The built files are named by `page.manifest.json`,
+ * the digest list CI checks `dist/page` against, so the set this server will
+ * serve and the set CI vouches for are one list -- the stylesheet, htmx, the
+ * key script and the two faces; a name that is not a plain file name is dropped
  * rather than joined into a path. No request contributes to a path: an address
  * not in this map is a 404 even when a file of that name exists.
  *
@@ -296,8 +299,8 @@ const MAX_FORM_BYTES = 4096;
  * missing file is a 404 and not a 500 (D-0054 rule 7), which is also what a
  * test run before `npm run build` sees for the built half.
  */
-const SERVED: ReadonlyMap<string, { readonly file: URL; readonly type: string }> = new Map([
-  ...Object.keys(
+const SERVED: ReadonlyMap<string, { readonly file: URL; readonly type: string }> = new Map(
+  Object.keys(
     JSON.parse(
       readFileSync(new URL("../../page.manifest.json", import.meta.url), "utf8"),
     ) as Record<string, string>,
@@ -307,24 +310,13 @@ const SERVED: ReadonlyMap<string, { readonly file: URL; readonly type: string }>
       (name) =>
         [
           `/${name}`,
-          { file: new URL(`../../dist/page/${name}`, import.meta.url), type: typeOf(name) },
+          {
+            file: new URL(`../../dist/page/${name}`, import.meta.url),
+            type: typeOf(name),
+          },
         ] as const,
     ),
-  [
-    "/idiomorph-0.8.0.min.js",
-    {
-      file: new URL("../../vendor/idiomorph-0.8.0.min.js", import.meta.url),
-      type: "text/javascript; charset=utf-8",
-    },
-  ],
-  [
-    "/poll.js",
-    {
-      file: new URL("../../page/poll.js", import.meta.url),
-      type: "text/javascript; charset=utf-8",
-    },
-  ],
-]);
+);
 
 /** A served file's content type, by its extension. */
 function typeOf(name: string): string {
@@ -352,7 +344,9 @@ function viewOf(query: URLSearchParams): PageView {
 
 /** A plain-text response a person can read, for every refusal. */
 function said(c: Context<PageEnv>, status: 400 | 403 | 404 | 409 | 413 | 421 | 500, line: string) {
-  return c.body(`${line}\n`, status, { "content-type": "text/plain; charset=utf-8" });
+  return c.body(`${line}\n`, status, {
+    "content-type": "text/plain; charset=utf-8",
+  });
 }
 
 /**
@@ -387,17 +381,26 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
       // rule 3): a page elsewhere cannot read this one, but it can frame it
       // under a button of its own, and the click would carry the real token.
       // `default-src` and `script-src` `'self'` are R2's substitute: nothing
-      // runs that this process did not serve. The one inline block is the
-      // stylesheet, admitted by its digest.
+      // runs that this process did not serve. Since the views moved onto the
+      // built `app.css` there is no inline style at all, so `style-src` is
+      // `'self'` with no exception.
       contentSecurityPolicy: {
         defaultSrc: ["'self'"],
         scriptSrc: ["'self'"],
-        styleSrc: ["'self'", `'sha256-${STYLE_SHA256}'`],
+        styleSrc: ["'self'"],
         frameAncestors: ["'none'"],
         baseUri: ["'none'"],
         formAction: ["'self'"],
       },
       xFrameOptions: "DENY",
+      // **`same-origin`, and not the middleware's `no-referrer`**, because the
+      // press depends on it. Under `no-referrer` Chromium sends a form `POST`
+      // with `Origin: null` (measured on this page, 2026-09-14, headless
+      // Chromium 151), and {@link mintPress} refuses a null `Origin` -- so the
+      // default refused every real click on `approve` while every test that
+      // wrote the headers by hand passed. `same-origin` sends the origin to
+      // this page and still sends nothing to anywhere else.
+      referrerPolicy: "same-origin",
       // HSTS on an http loopback page would at best be ignored and at worst
       // pin every localhost server on this machine to https.
       strictTransportSecurity: false,

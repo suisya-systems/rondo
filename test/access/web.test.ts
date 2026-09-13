@@ -21,7 +21,11 @@ import { DatabaseSync } from "node:sqlite";
 import { expect, test } from "vitest";
 
 import { recordPagePress } from "../../src/access/cli.js";
-import { type LanguageAsked, operatorPage, resolveLanguage } from "../../src/access/web.js";
+import {
+  type LanguageAsked,
+  operatorPage as renderPage,
+  resolveLanguage,
+} from "../../src/access/web.js";
 import { AnswerPort, type ServedPorts, serveOperatorPage } from "../../src/access/web-app.js";
 import { type Chrome, chromeFor, EN } from "../../src/access/wording.js";
 import { allocate } from "../../src/refrain/allocator.js";
@@ -61,7 +65,10 @@ const PLAN: RunPlan = {
   catalogLayers: [{ layer: "git_url", origin: "o", baseDir: "/srv/catalog", data: {} }],
   projectName: "rondo",
   agentTypeInput: {} as RunPlan["agentTypeInput"],
-  parties: { grantor: "rondo", grantee: "unset" } as unknown as RunPlan["parties"],
+  parties: {
+    grantor: "rondo",
+    grantee: "unset",
+  } as unknown as RunPlan["parties"],
   intendedAction: {} as RunPlan["intendedAction"],
 };
 
@@ -80,6 +87,19 @@ function planFor(id: string, materialLanguage: string | null = null): JsonRecord
   }
   return planPayload(admitted.plan);
 }
+
+/**
+ * The page as a person's browser reads its text.
+ *
+ * **One spelling normalised, and only one.** `hono/jsx` escapes `'` as `&#39;`
+ * where the hand-written renderer left it alone (D-0059 rule 2), which is the
+ * same character to every browser. The catalogue's sentences quote tokens in
+ * `'...'`, so the content assertions below are made against the character and
+ * not against which of two correct spellings the escaper chose. Every other
+ * escape -- `&lt;`, `&quot;`, `&amp;` -- is still asserted as written.
+ */
+const operatorPage = async (...args: Parameters<typeof renderPage>): Promise<string> =>
+  (await renderPage(...args)).replaceAll("&#39;", "'");
 
 const fresh = () => {
   const connection = new DatabaseSync(":memory:");
@@ -111,7 +131,10 @@ function portsOver(
     // The page draws `inbox`'s lines, so it carries `inbox`'s one outward
     // port; nothing in these tests runs a lap, so it is never asked (D-0048
     // rule 6 asks only of `performing` rows).
-    locateTranscript: async () => ({ kind: "unknown", reason: "no continuo in this test" }),
+    locateTranscript: async () => ({
+      kind: "unknown",
+      reason: "no continuo in this test",
+    }),
     policy: { maxOccupying: 4, maxLive: 6 },
     actorId,
     material: pressed === null ? null : async (_wording, record) => [`work    rondo/${record.id}`],
@@ -260,7 +283,13 @@ async function reserve(
 }
 
 const rows = (connection: DatabaseSync, table: string): number =>
-  Number((connection.prepare(`SELECT count(*) AS n FROM ${table}`).get() as { n: number }).n);
+  Number(
+    (
+      connection.prepare(`SELECT count(*) AS n FROM ${table}`).get() as {
+        n: number;
+      }
+    ).n,
+  );
 
 /** One request carrying a `Host` of our choosing, which `fetch` will not send. */
 function withHost(base: string, host: string): Promise<{ status: number; body: string }> {
@@ -285,7 +314,9 @@ test("the page shows what inbox, between and explain show", async () => {
   await reserve(world, "i-0001", "do the thing");
 
   const html = await operatorPage(portsOver(world));
-  const opened = await operatorPage(portsOver(world), null, { kind: "reading" });
+  const opened = await operatorPage(portsOver(world), null, {
+    kind: "reading",
+  });
 
   // The lead answers the operator's questions; the reading is where the three
   // commands' own compositions are, whole (rondo#145).
@@ -336,7 +367,10 @@ test("a press records the framing it rests on, and one that cannot be recorded a
     present: () => undefined,
   };
 
-  expect(await recordPagePress(ports, "i-0001")).toEqual({ ok: true, note: "" });
+  expect(await recordPagePress(ports, "i-0001")).toEqual({
+    ok: true,
+    note: "",
+  });
 
   // The two rows the page drew and never held: the framing itself, and the
   // count of it having reached somebody (D-0042 rule 1). Written on the press
@@ -366,7 +400,10 @@ test("a press records the framing it rests on, and one that cannot be recorded a
       record: {
         ...world.record,
         recordAttention: async () =>
-          await Promise.resolve({ kind: "refused" as const, reason: "the table is locked" }),
+          await Promise.resolve({
+            kind: "refused" as const,
+            reason: "the table is locked",
+          }),
       },
     },
     "i-0001",
@@ -411,7 +448,7 @@ test("one basis is written once above the claims that rest on it (rondo#91)", as
   await reserve(world, "i-0001", "do the thing");
 
   const html = await operatorPage(portsOver(world));
-  const bases = [...html.matchAll(/<p class="basis">([^<]*)<\/p>/g)].map((match) => match[1]);
+  const bases = [...html.matchAll(/<p class="basis[^"]*">([^<]*)<\/p>/g)].map((match) => match[1]);
 
   // Every group's basis differs from the one before it, which is what makes the
   // repetition impossible rather than merely absent from this fixture.
@@ -444,6 +481,12 @@ test("it serves the page on localhost, and only the one page", async () => {
   expect(policy.split(/;\s*/)).toContain("frame-ancestors 'none'");
   expect(policy.split(/;\s*/)).toContain("default-src 'self'");
   expect(policy.split(/;\s*/)).toContain("script-src 'self'");
+  // **The referrer policy is part of the press, not decoration.** Under
+  // `no-referrer` (the middleware's default) a browser sends the form's `POST`
+  // with `Origin: null`, which the press refuses -- so a real person's click on
+  // `approve` was refused while every hand-written request here passed.
+  // Observed in headless Chromium against this page on 2026-09-14.
+  expect(page.headers.get("referrer-policy")).toBe("same-origin");
   expect(await page.text()).toContain("waiting for your answer");
 
   // **The reading is the same page at a second address**, and the redraw it
@@ -541,7 +584,11 @@ test("a person's press answers the gate and an unattended redraw cannot", async 
   expect(pressed).toEqual([]);
 
   const token = tokenIn(await (await fetch(`${base}/?answer=i-0001`)).text());
-  const answered = await post(base, { token, iteration: "i-0001", body: "revise" });
+  const answered = await post(base, {
+    token,
+    iteration: "i-0001",
+    body: "revise",
+  });
 
   // The body the form carried is ignored: the button's word is the module's
   // constant, so a hand-written post cannot widen what this surface may say.
@@ -592,7 +639,11 @@ test("a refusal from the write port is shown rather than redirected away", async
     ...portsOver(world),
     material: async () => await Promise.resolve(["work    rondo/i-0001"]),
     answer: new AnswerPort(
-      async () => await Promise.resolve({ ok: false, note: "continuo is not usable: no CLI" }),
+      async () =>
+        await Promise.resolve({
+          ok: false,
+          note: "continuo is not usable: no CLI",
+        }),
     ),
   };
   const { base, stop, served } = await serving(ports);
@@ -611,17 +662,19 @@ test("a refusal from the write port is shown rather than redirected away", async
 
 /** The visible page: everything a browser draws before the fold is opened. */
 function lead(html: string): string {
-  return html.slice(0, html.indexOf('<p class="fold">'));
+  return html.slice(0, html.indexOf('<p id="fold"'));
 }
 
 /** The fold: what the second address of the page adds below the link. */
 function reading(html: string): string {
-  return html.slice(html.indexOf('<p class="fold">'));
+  return html.slice(html.indexOf('<p id="fold"'));
 }
 
 test("an idle store says zero once rather than nine times (rondo#145)", async () => {
   const html = await operatorPage(portsOver(fresh()));
-  const opened = await operatorPage(portsOver(fresh()), null, { kind: "reading" });
+  const opened = await operatorPage(portsOver(fresh()), null, {
+    kind: "reading",
+  });
 
   // The measurement in the issue: nine phrasings of nothing, of which this is
   // the shape. One sentence now stands where they did, and it carries what it
@@ -650,7 +703,9 @@ test("the page is ordered by the operator's three questions (rondo#145)", async 
 
   const html = await operatorPage(portsOver(world));
   const at = (heading: string) => lead(html).indexOf(heading);
-  const opened = await operatorPage(portsOver(world), null, { kind: "reading" });
+  const opened = await operatorPage(portsOver(world), null, {
+    kind: "reading",
+  });
 
   expect(at("waiting for your answer")).toBeGreaterThan(-1);
   expect(at("running now")).toBeGreaterThan(at("waiting for your answer"));
@@ -668,20 +723,22 @@ test("the three questions are told apart in the markup, not only in the order (r
   const html = lead(await operatorPage(portsOver(world)));
 
   // The order alone put the three questions in a row and gave them the same
-  // weight; the class is the whole of what a stylesheet has to weigh them by,
-  // and each section carries exactly one.
-  expect(html).toContain('<section class="waiting">');
-  expect(html).toContain('<section class="running">');
-  expect(html).toContain('<section class="ended">');
+  // weight; `data-question` is the whole of what the markup weighs them by,
+  // and each group carries exactly one.
+  expect(html).toContain('<section data-question="waiting"');
+  expect(html).toContain('<section data-question="running"');
+  expect(html).toContain('<section data-question="ended"');
   // Both palettes are declared rather than inherited from the user agent, so a
-  // dark reader gets rondo's contrast and not the browser's (rondo#153).
+  // dark reader gets rondo's contrast and not the browser's (rondo#153). Since
+  // D-0059 they are the stylesheet's source rather than an inline block.
   const page = await operatorPage(portsOver(world));
-  expect(page).toContain("@media (prefers-color-scheme: dark)");
-  // Still no *inline* script, and still nothing but the one form that can
-  // write. D-0054 put two `<script src>` tags on this view and nothing else:
-  // what the page executes is files this tree holds and a reader can diff
-  // against the pin, which an inline script would not be.
+  expect(bytesOf("page/app.css").toString("utf8")).toContain("@media (prefers-color-scheme: dark)");
+  expect(page).toContain('<link rel="stylesheet" href="/app.css"/>');
+  // No *inline* script and no inline style, and still nothing but the one form
+  // that can write: what the page executes is files this process serves under
+  // `script-src 'self'`, each named in the served-file manifest (D-0059 R1).
   expect(page).not.toMatch(/<script(?![^>]*\bsrc=)/);
+  expect(page).not.toContain("<style");
 });
 
 test("a lap at a gate carries its cost and its fence beside the button (rondo#145)", async () => {
@@ -777,14 +834,21 @@ test("an explanation nobody can answer is not a thing waiting on you (rondo#145)
       // Before the bound this page's clock reads: `openProposals` is asked
       // `uptoMs`, so a proposal recorded after it would be outside the window
       // for a reason that has nothing to do with what is under test here.
-      { store: world.store, record: world.record, now: () => 4_000, present: () => undefined },
+      {
+        store: world.store,
+        record: world.record,
+        now: () => 4_000,
+        present: () => undefined,
+      },
       "i-0001",
     ),
   ).toEqual({ ok: true, note: "" });
   expect(rows(world.connection, "proposal")).toBe(1);
 
   const html = await operatorPage(portsOver(world));
-  const opened = await operatorPage(portsOver(world), null, { kind: "reading" });
+  const opened = await operatorPage(portsOver(world), null, {
+    kind: "reading",
+  });
 
   // One row waits: the iteration at its gate. The explanation is material, and
   // it is in the reading where the inbox already lists it by authority.
@@ -807,8 +871,8 @@ test("the elements that quote material carry the lang the plan asked for (D-0053
 
   // The two elements rule 12 names, and nothing else: the request paragraph the
   // lap wrote for this operator, and the block a press records as shown.
-  expect(html).toContain('<p class="request" lang="ja">');
-  expect(html).toContain('<pre class="material" lang="ja">');
+  expect(html).toMatch(/<p class="request[^"]*" lang="ja">/);
+  expect(html).toMatch(/<pre class="material[^"]*" lang="ja">/);
   // **The chrome is `en` because this host asked for nothing**, which is what
   // D-0055 rule 7 leaves unchanged: the document names the language rondo
   // actually wrote it in, and with no ask that is still English.
@@ -834,20 +898,20 @@ test('a lap nobody asked a language of says so with `lang=""` (D-0055 rule 8)', 
   const view = { kind: "answer", iterationId: "i-0001" } as const;
   const html = await operatorPage(ports, "t", view);
 
-  expect(html).toContain('<p class="request" lang="">');
-  expect(html).toContain('<pre class="material" lang="">');
+  expect(html).toMatch(/<p class="request[^"]*" lang="">/);
+  expect(html).toMatch(/<pre class="material[^"]*" lang="">/);
   // It does not become the chrome's tag on a host that asked for one, which is
   // the whole of what the empty string is here to refuse: the two attributes
   // are true about different things and nothing reconciles them.
   const inJapanese = await operatorPage(ports, "t", view, chromeFor("ja"));
   expect(inJapanese).toContain('<html lang="ja">');
-  expect(inJapanese).toContain('<p class="request" lang="">');
-  expect(inJapanese).toContain('<pre class="material" lang="">');
+  expect(inJapanese).toMatch(/<p class="request[^"]*" lang="">/);
+  expect(inJapanese).toMatch(/<pre class="material[^"]*" lang="">/);
 });
 
 /**
- * The two files a live view loads, resolved from the repository root the way
- * `src/access/web.ts` resolves them.
+ * The files a view loads, resolved from the repository root the way
+ * `src/access/web-app.ts` resolves them.
  */
 const ROOT = new URL("../../", import.meta.url);
 
@@ -855,20 +919,6 @@ const bytesOf = (path: string): Buffer => readFileSync(new URL(path, ROOT));
 
 const digestOf = (bytes: Buffer | string): string =>
   createHash("sha256").update(bytes).digest("hex");
-
-/**
- * The digest and the size D-0054 measured, written out here rather than read
- * off the tree.
- *
- * A test that hashed the file and compared it to the digest file beside it
- * would agree with itself after any bump: both would move together, and the
- * question *is this the release the decision priced* would stop being asked.
- * These two constants are the decision's own measurements (D-0054, "what was
- * measured, and how"), so a version bump fails here and has to be re-argued
- * rather than re-recorded -- which is the falsifier that entry names.
- */
-const IDIOMORPH_SHA256 = "4cbd535caf7663a51eda9bce6595371c384fc430d54b8d414e29a61167f19f96";
-const IDIOMORPH_BYTES = 10_587;
 
 /** Every `<script>` start tag in one document. */
 const scriptTagsIn = (html: string): readonly string[] =>
@@ -878,15 +928,15 @@ const scriptTagsIn = (html: string): readonly string[] =>
 const withoutScripts = (html: string): string =>
   html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/g, "");
 
-/** `page/poll.js` with its commentary removed, so a claim is read off code. */
-const pollCode = (): string =>
-  bytesOf("page/poll.js")
+/** `page/keys.js` with its commentary removed, so a claim is read off code. */
+const keysCode = (): string =>
+  bytesOf("page/keys.js")
     .toString("utf8")
     .split("\n")
     .filter((line) => !/^\s*\/\//.test(line))
     .join("\n");
 
-test("liveness is per view: two views poll and morph, and the answer view updates by nothing", async () => {
+test("liveness is per view: two views poll and swap, and the answer view updates by nothing", async () => {
   const world = fresh();
   await reserve(world, "i-0001", "do the thing");
   await openGate(world, "i-0001");
@@ -894,35 +944,64 @@ test("liveness is per view: two views poll and morph, and the answer view update
 
   const summary = await operatorPage(ports, "t");
   const opened = await operatorPage(ports, "t", { kind: "reading" });
-  const answering = await operatorPage(ports, "t", { kind: "answer", iterationId: "i-0001" });
+  const answering = await operatorPage(ports, "t", {
+    kind: "answer",
+    iterationId: "i-0001",
+  });
 
   for (const [html, href] of [
     [summary, "/?lang=en"],
     [opened, "/?reading=open&amp;lang=en"],
   ] as const) {
-    // The two files, in the order that makes `Idiomorph` defined before the
-    // poller runs, and both deferred so neither runs before the document.
+    // htmx, then rondo's key script, both deferred so neither runs before the
+    // document, and both served by this process (D-0059 R1, R2): root-relative
+    // paths and no scheme anywhere, because a CDN tag is the one distribution
+    // D-0054 rule 5 refused and R1 did not reopen.
     expect(scriptTagsIn(html)).toEqual([
-      '<script src="/idiomorph-0.8.0.min.js" defer>',
-      '<script src="/poll.js" defer>',
+      '<script src="/htmx.min.js" defer="">',
+      '<script src="/keys.js" defer="">',
     ]);
-    // **Served by this process, from this tree** (D-0054 rule 5): root-relative
-    // paths and no scheme anywhere in either tag, because a CDN tag is the one
-    // distribution that entry refuses.
     expect(html).not.toContain("//cdn");
     expect(scriptTagsIn(html).filter((tag) => tag.includes("://"))).toEqual([]);
+    // **The refresh is a `GET` of this view's own address**, and the one
+    // element it swaps is the ledger (D-0054 rules 1 and 2, R3).
+    expect(html).toContain(
+      `<div id="ledger" class="space-y-8" hx-get="${href}" hx-trigger="every 5s" hx-select="#ledger" hx-swap="outerHTML">`,
+    );
+    expect([...html.matchAll(/hx-[a-z]+=/g)].map((found) => found[0])).toEqual([
+      "hx-get=",
+      "hx-trigger=",
+      "hx-select=",
+      "hx-swap=",
+    ]);
+    // **R2's substitute is the library's configuration**, and it is on the
+    // page rather than assumed from htmx's defaults.
+    const config = JSON.parse(
+      (/<meta name="htmx-config" content="([^"]*)"/.exec(html)?.[1] ?? "{}").replaceAll(
+        "&quot;",
+        '"',
+      ),
+    ) as Record<string, unknown>;
+    expect(config).toEqual({
+      selfRequestsOnly: true,
+      allowEval: false,
+      allowScriptTags: false,
+      historyEnabled: false,
+      includeIndicatorStyles: false,
+    });
     // The meta refresh has not been deleted -- it has moved, and it is what a
     // browser with scripting off still runs on.
-    expect(html).toContain(`<noscript><meta http-equiv="refresh" content="5;url=${href}">`);
+    expect(html).toContain(`<noscript><meta http-equiv="refresh" content="5;url=${href}"/>`);
     expect(html).toContain("Redraws every 5s, and a redraw writes nothing");
   }
 
-  // **The answer view updates by nothing at all** (D-0054 rule 1): no script,
-  // no refresh, not even inside `<noscript>` -- it has no auto-update in either
-  // mode, so there is nothing to degrade to. This is rondo#160's largest
-  // complaint answered by deletion, and the page says so where the other two
-  // say the opposite.
-  expect(scriptTagsIn(answering)).toEqual([]);
+  // **The answer view updates by nothing at all** (D-0054 rule 1): no poll, no
+  // library, no refresh, not even inside `<noscript>` -- it has no auto-update
+  // in either mode, so there is nothing to degrade to. It carries only the key
+  // script, which moves focus and follows links and changes nothing by itself.
+  expect(scriptTagsIn(answering)).toEqual(['<script src="/keys.js" defer="">']);
+  expect(answering).not.toMatch(/hx-[a-z]+=/);
+  expect(answering).not.toContain("htmx");
   expect(answering).not.toContain('http-equiv="refresh"');
   expect(answering).not.toContain("<noscript>");
   expect(answering).toContain("This view does not update itself");
@@ -937,8 +1016,8 @@ test("every view is whole with the script gone", async () => {
   const ports = portsOver(world, "ada", []);
 
   // The document a browser with scripting disabled draws, and the document a
-  // browser whose `/poll.js` 404s is left holding: the same one, because
-  // nothing on this page is produced by script (D-0054 rule 7).
+  // browser whose scripts 404 is left holding: the same one, because nothing
+  // on this page is produced by script (D-0054 rule 7).
   const summary = withoutScripts(await operatorPage(ports, "t"));
   const opened = withoutScripts(await operatorPage(ports, "t", { kind: "reading" }));
   const answering = withoutScripts(
@@ -950,7 +1029,7 @@ test("every view is whole with the script gone", async () => {
   expect(summary).toContain("do the thing");
   expect(summary).toContain("waiting for your answer");
   expect(summary).toContain('href="/?answer=i-0001&amp;lang=en"');
-  expect(summary).toContain('<meta http-equiv="refresh" content="5;url=/?lang=en">');
+  expect(summary).toContain('<meta http-equiv="refresh" content="5;url=/?lang=en"/>');
 
   // Every claim under its own basis, unchanged.
   expect(opened).toContain("inbox for 'ada'");
@@ -958,12 +1037,22 @@ test("every view is whole with the script gone", async () => {
 
   // **And the press**: the form, the gate it answers, the one word it carries
   // and the material it is answered over. A button only script renders is the
-  // first thing rule 7 names as a violation of it.
+  // first thing rule 7 names as a violation of it -- and the press is a native
+  // form, never an `hx-post`, because only a person's navigation mints one
+  // (D-0059 section 5).
   expect(answering).toContain('method="post"');
-  expect(answering).toContain("<button");
+  expect(answering).toContain('<button type="submit"');
+  expect(answering).not.toContain("hx-post");
   expect(answering).toContain("gate-i-0001");
   expect(answering).toContain("work    rondo/i-0001");
   expect(tokenIn(answering)).toBe("t");
+
+  // **What only the script makes true is marked so, and hidden until it runs**
+  // (D-0059 R3): the key hints and the live indicator. `page/app.css` hides
+  // `.js-only` unless `page/keys.js` has put `js` on the root element.
+  expect(summary).toMatch(/<span class="js-only [^"]*"><span[^>]*><\/span>live<\/span>/);
+  expect(summary).not.toContain('<html lang="en" class="js"');
+  expect(bytesOf("page/app.css").toString("utf8")).toContain("html:not(.js) .js-only");
 });
 
 test("an unattended poll writes nothing, however many times it goes round", async () => {
@@ -976,16 +1065,21 @@ test("an unattended poll writes nothing, however many times it goes round", asyn
   // asserting anything (D-0041 rule 4).
   const { base, stop, served } = await serving(portsOver(world, "ada", pressed));
 
-  // **What the script does, done over the socket the script would use.** Five
-  // rounds of each live view plus the answering one, which is what a page left
-  // open on a desk for half a minute issues while nobody is there. Every one of
-  // them is the request `page/poll.js` makes -- a `GET` of the address being
-  // read -- and every one reaches a renderer holding only the read ports, which
-  // after D-0054 rule 3 is the whole of what stands between an unattended
-  // redraw and the ledger.
+  // **What the refresh does, done over the socket it would use.** Five rounds
+  // of each live view plus the answering one, which is what a page left open on
+  // a desk for half a minute issues while nobody is there. Every one of them is
+  // the request htmx's poll makes -- a `GET` of the address being read, with
+  // htmx's own headers -- and every one reaches a renderer holding only the
+  // read ports, and a port that mints no press from a `GET` (D-0059 R4).
   for (let poll = 0; poll < 5; poll += 1) {
     for (const address of ["/", "/?reading=open", "/?answer=i-0001"]) {
-      expect((await fetch(`${base}${address}`)).status).toBe(200);
+      const response = await fetch(`${base}${address}`, {
+        headers: {
+          "hx-request": "true",
+          "hx-current-url": `${base}${address}`,
+        },
+      });
+      expect(response.status).toBe(200);
     }
   }
 
@@ -1002,78 +1096,50 @@ test("an unattended poll writes nothing, however many times it goes round", asyn
   expect(await served).toBe(0);
 });
 
-test("it serves the two script files, as the bytes the tree holds", async () => {
+test("it serves rondo's key script as the bytes the tree holds, and D-0054's two files no more", async () => {
   const world = fresh();
   await reserve(world, "i-0001", "do the thing");
   const { base, stop, served } = await serving(portsOver(world));
 
-  const morph = await fetch(`${base}/idiomorph-0.8.0.min.js`);
-  expect(morph.status).toBe(200);
-  expect(morph.headers.get("content-type")).toBe("text/javascript; charset=utf-8");
-  // **The served bytes are the pinned bytes.** Not "a file was served": the
-  // digest of what came down the socket, against the digest D-0054 recorded.
-  const served256 = digestOf(Buffer.from(await morph.arrayBuffer()));
-  expect(served256).toBe(IDIOMORPH_SHA256);
+  // **The served bytes are the tree's bytes.** Not "a file was served": the
+  // digest of what came down the socket, against the source the build copies
+  // (the manifest's own check is `test/access/web-app.test.ts`).
+  const keys = await fetch(`${base}/keys.js`);
+  expect(keys.status).toBe(200);
+  expect(keys.headers.get("content-type")).toBe("text/javascript; charset=utf-8");
+  expect(digestOf(Buffer.from(await keys.arrayBuffer()))).toBe(digestOf(bytesOf("page/keys.js")));
 
-  const poll = await fetch(`${base}/poll.js`);
-  expect(poll.status).toBe(200);
-  expect(digestOf(Buffer.from(await poll.arrayBuffer()))).toBe(digestOf(bytesOf("page/poll.js")));
-
-  // Still one page and two files, and no directory behind them: a path rondo
-  // did not choose to serve is a 404 even when a file of that name exists.
-  expect((await fetch(`${base}/idiomorph.js`)).status).toBe(404);
+  // **R2 retired the vendored morph and its poller**, so their addresses are
+  // the 404 any other path is -- not a stale copy left in reach.
+  expect((await fetch(`${base}/idiomorph-0.8.0.min.js`)).status).toBe(404);
+  expect((await fetch(`${base}/poll.js`)).status).toBe(404);
   expect((await fetch(`${base}/package.json`)).status).toBe(404);
   expect((await fetch(`${base}/../package.json`)).status).toBe(404);
   // And a script path is not a second door: the only writable address is `/`,
   // so a POST to one is the same 404 a POST to any other path is.
-  expect((await fetch(`${base}/poll.js`, { method: "POST" })).status).toBe(404);
+  expect((await fetch(`${base}/keys.js`, { method: "POST" })).status).toBe(404);
 
   stop.abort();
   expect(await served).toBe(0);
 });
 
-test("the vendored morph is the release D-0054 priced, and the pin checks it", () => {
-  const vendored = bytesOf("vendor/idiomorph-0.8.0.min.js");
+test("rondo's own script moves focus and follows the server's links, and asks for nothing", () => {
+  const code = keysCode();
 
-  // The two measurements out of the entry itself.
-  expect(vendored.byteLength).toBe(IDIOMORPH_BYTES);
-  expect(digestOf(vendored)).toBe(IDIOMORPH_SHA256);
+  // **Its three targets are elements the server rendered**: the rows, the
+  // row's link, and the view's way back (D-0059 rule 5, R3).
+  expect(code).toContain('"[data-row]"');
+  expect(code).toContain('"a[data-open]"');
+  expect(code).toContain('"a[data-back]"');
+  // And the one mark it leaves, which is what un-hides the hints (rule 7).
+  expect(code).toContain('document.documentElement.classList.add("js")');
 
-  // Recorded beside it, in the file `vendor/pin.mjs` reads.
-  expect(bytesOf("vendor/idiomorph-0.8.0.min.js.sha256").toString("utf8").trim()).toBe(
-    IDIOMORPH_SHA256,
-  );
-  // And the helper checks *this* artifact and not only cadenza's tarball: it is
-  // a list since D-0054, and a digest file nothing checks is a digest file.
-  const helper = bytesOf("vendor/pin.mjs").toString("utf8");
-  expect(helper).toContain("vendor/idiomorph-0.8.0.min.js");
-  expect(helper).toContain("vendor/idiomorph-0.8.0.min.js.sha256");
-
-  // The distribution D-0007 requires, asserted as the absence of the one it
-  // refuses: the file is in the tree, and nothing fetches it at runtime.
-  expect(vendored.toString("utf8")).not.toContain("cdn.jsdelivr.net");
-  expect(vendored.toString("utf8")).not.toContain("unpkg.com");
-  // It is a classic script defining the one global `page/poll.js` calls, which
-  // is why the page needs no module graph and no build step.
-  expect(vendored.toString("utf8").startsWith("var Idiomorph=")).toBe(true);
-});
-
-test("rondo's own script has one method, one address and one target", () => {
-  const code = pollCode();
-
-  // **One address**: the view being read, and nothing derived from it.
-  expect(code).toContain("fetch(location.href");
-  expect([...code.matchAll(/fetch\(/g)]).toHaveLength(1);
-
-  // **One target**: the document, morphed in place.
-  expect(code).toContain("Idiomorph.morph(document");
-  expect([...code.matchAll(/Idiomorph\./g)]).toHaveLength(1);
-
-  // **One method**, which is the read the server answers. This is the whole of
-  // what is left of D-0041 rule 3(a)'s client-side half (D-0054 rules 4 and 6),
-  // so it is asserted as the absence of every way of asking for anything else:
-  // no method of its own, no second transport, no form to submit, no state.
+  // **No request of its own.** Following a rendered link is a navigation `GET`
+  // the server wrote the address of; everything else a script could ask for is
+  // asserted absent, so D-0054 rule 6's audit is still one file's worth of
+  // `not.toContain`.
   for (const forbidden of [
+    "fetch",
     "POST",
     "method",
     "XMLHttpRequest",
@@ -1087,12 +1153,14 @@ test("rondo's own script has one method, one address and one target", () => {
     "eval",
     "innerHTML",
     "document.write",
+    "location.href =",
+    "htmx",
   ]) {
     expect(code).not.toContain(forbidden);
   }
 });
 
-test("every repeated block in the lead carries the identity the morph merges on", async () => {
+test("every repeated block in the lead carries the identity the refresh restores focus by", async () => {
   const world = fresh();
   await reserve(world, "i-0001", "the one at a gate");
   await reserve(world, "i-0002", "the one still running");
@@ -1107,19 +1175,17 @@ test("every repeated block in the lead carries the identity the morph merges on"
 
   const html = await operatorPage(portsOver(world, "ada", []), "t");
 
-  // **Identity and not position** (D-0054 rule 2). idiomorph matches by `id`
-  // first and falls back to matching repeated children by position, and these
-  // blocks come and go: a waiting lap ending while the operator's focus is on
-  // another lap's answer link is `[A, B]` becoming `[B]`, which positionally is
-  // A rewritten into B and B's own node -- the focused one -- removed.
-  const ids = [...html.matchAll(/<div class="lap" id="([^"]+)"/g)].map((found) => found[1]);
+  // **Identity and not position** (D-0054 rule 2, D-0059 R2). htmx swaps the
+  // ledger and puts focus back on the element whose `id` held it, and `j`/`k`
+  // focus is on these rows: a row with no id would drop the reader's place on
+  // every refresh, and silently -- the page would still look right.
+  const ids = [...html.matchAll(/<li id="([^"]+)" data-row=""/g)].map((found) => found[1]);
   expect(ids).toContain("lap-i-0001");
   expect(ids).toContain("lap-i-0002");
-  // Unique, because an id the document repeats is an id the merge cannot use.
+  // Unique, because an id the document repeats is an id focus cannot return to.
   expect(new Set(ids).size).toBe(ids.length);
-  // And no lap block without one: the fallback is silent, so a block that grew
-  // back into the lead without an id would poll and morph and look fine.
-  expect([...html.matchAll(/<div class="lap"(?! id=)/g)]).toEqual([]);
+  // And no row without one.
+  expect([...html.matchAll(/<li(?! id=)[^>]*data-row/g)]).toEqual([]);
 });
 
 /**
@@ -1177,7 +1243,12 @@ test("the bytes a press records do not depend on the host's language (D-0055 rul
     drawn.push(await operatorPage(ports, "t", { kind: "answer", iterationId: "i-0001" }, wording));
     expect(
       await recordPagePress(
-        { store: world.store, record: world.record, now: () => 6_000, present: () => undefined },
+        {
+          store: world.store,
+          record: world.record,
+          now: () => 6_000,
+          present: () => undefined,
+        },
         "i-0001",
       ),
     ).toEqual({ ok: true, note: "" });
@@ -1226,13 +1297,13 @@ test("a ja host reads in Japanese and leaves every token in its own bytes", asyn
   expect(reading).not.toContain("ロンド");
   // Material is still quoted byte for byte, under the tag its plan asked for.
   expect(summary).toContain("重みが足りない");
-  expect(summary).toContain('<p class="request" lang="ja">');
+  expect(summary).toMatch(/<p class="request[^"]*" lang="ja">/);
 
   // **What the ledger records stays English even here** (rule 4): the claim
   // labels beside the button are the bytes a press stores.
   const answering = await operatorPage(ports, "t", { kind: "answer", iterationId: "i-0001" }, ja);
   expect(answering).toContain("approve を押すと");
-  expect(answering).toContain('<span class="label">request</span>');
+  expect(answering).toMatch(/<dt class="label[^"]*">request<\/dt>/);
 });
 
 test("<html lang> names the set rondo wrote, and never the tag that was asked for", async () => {
@@ -1294,7 +1365,13 @@ test("every view is complete under each of the three answers to the language que
 
 /** Rule 2's four inputs, defaulted to a host and a browser that said nothing. */
 function askedWith(over: Partial<LanguageAsked> = {}): LanguageAsked {
-  return { query: null, cookie: undefined, host: null, header: undefined, ...over };
+  return {
+    query: null,
+    cookie: undefined,
+    host: null,
+    header: undefined,
+    ...over,
+  };
 }
 
 /** The tag one set of inputs resolves to. */
@@ -1421,7 +1498,10 @@ async function get(
   vary: string | null;
   body: string;
 }> {
-  const response = await fetch(`${base}${path}`, { headers, redirect: "manual" });
+  const response = await fetch(`${base}${path}`, {
+    headers,
+    redirect: "manual",
+  });
   return {
     status: response.status,
     location: response.headers.get("location"),
@@ -1697,7 +1777,12 @@ test("the bytes a press records depend on neither the query, the cookie nor the 
     expect(declaredIn(body)).toBe("ja");
     expect(
       await recordPagePress(
-        { store: world.store, record: world.record, now: () => 6_000, present: () => undefined },
+        {
+          store: world.store,
+          record: world.record,
+          now: () => 6_000,
+          present: () => undefined,
+        },
         "i-0001",
       ),
     ).toEqual({ ok: true, note: "" });
