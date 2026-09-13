@@ -2396,6 +2396,31 @@ test("an unavailable model reading of these commits is its outcome, not a pendin
   expect(html).toContain("Only the checks read this; the model review was not taken.");
   expect(html).not.toContain("may still arrive");
   expect(html).not.toContain("earlier commits");
+  // **And when the checks could not read it either, the bar does not say they
+  // did** (#220 S2, Codex).
+  // The deterministic reading lands with a transition (D-0029 rule 8).
+  const checksGone = await world.store.transition(
+    "i-0001",
+    "awaiting_human",
+    "awaiting_human",
+    {},
+    5_000,
+    {
+      drafter: "rondo/deterministic/2",
+      verdict: "unavailable",
+      findings: [],
+      evidence: null,
+      unavailableReason: "the workspace could not be read",
+    },
+  );
+  expect(checksGone.kind).toBe("transitioned");
+  const neither = await operatorPage(
+    { ...portsOver(world, "ada", []), material: structured },
+    "t",
+    { kind: "answer", iterationId: "i-0001" },
+  );
+  expect(neither).toContain("Neither the checks nor the model review could read this work.");
+  expect(neither).not.toContain("Only the checks read this");
 });
 
 test("an approved lap's row says back the claim its press carried (#220 S2 design pass)", async () => {

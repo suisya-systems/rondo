@@ -2130,7 +2130,13 @@ function approveView(
           {modelDue ? (
             <span>{wording.modelMayArrive}</span>
           ) : model?.verdict === "unavailable" ? (
-            <span id="model-not-taken">{wording.modelNotTaken}</span>
+            // Said as "only the checks read this" only when the checks did
+            // read it (#220 S2, Codex): both readers can be unavailable.
+            <span id="model-not-taken">
+              {checks !== null && checks.verdict !== "unavailable"
+                ? wording.modelNotTaken
+                : wording.neitherReadingTaken}
+            </span>
           ) : null}
         </p>
         <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:gap-3">

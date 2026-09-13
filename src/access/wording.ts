@@ -260,6 +260,7 @@ export interface Chrome {
   readonly checksWorkUnreadable: string;
   /** In the approve bar when the model's round ended with no reading. */
   readonly modelNotTaken: string;
+  readonly neitherReadingTaken: string;
   /** The fold holding what the approve press records. */
   readonly recordsFold: (count: number) => string;
   /** A refused call whose shape rondo cannot read, on the fence card. */
@@ -623,6 +624,7 @@ explanation you pressed on and then answers the gate.`,
   checksWorkUnreadable:
     "What changed cannot be read now, so this reading cannot be matched against the work.",
   modelNotTaken: "Only the checks read this; the model review was not taken.",
+  neitherReadingTaken: "Neither the checks nor the model review could read this work.",
   recordsFold: (count) => `What approve records (${String(count)} fields), and the full text`,
   denialUnreadable: "rondo could not record which command this was.",
   unreadableLead:
@@ -941,6 +943,7 @@ const JA: Partial<Chrome> = Object.freeze({
   checksWorkUnreadable:
     "いまは変わったものを読み取れないため、この読み取りを作業と照らし合わせられません。",
   modelNotTaken: "チェックだけが読みました。モデルレビューは取れていません。",
+  neitherReadingTaken: "チェックもモデルレビューも、この作業を読めませんでした。",
   recordsFold: (count) => `approve で記録される内容 (${String(count)} 項目) と記録全文`,
   denialUnreadable: "どのコマンドだったかを rondo は記録できませんでした。",
   unreadableLead:
