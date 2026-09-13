@@ -559,7 +559,7 @@ explanation you pressed on and then answers the gate.`,
   whatItRead: "What it read, and what it did not",
   basisNone: "no basis given",
   basisUnresolved: "none of these matched the delivered work",
-  modelPending: "Not here yet. It may still arrive; reading it first is wise.",
+  modelPending: "Not here yet; it may still arrive.",
   modelOlder: "This one is about earlier commits. A reading of the current ones may still arrive.",
   reloadPage: "Reload",
   readingsNote:
@@ -852,7 +852,7 @@ const JA: Partial<Chrome> = Object.freeze({
   whatItRead: "読んだものと読んでいないもの",
   basisNone: "根拠の指定なし",
   basisUnresolved: "どれも渡した作業と一致しませんでした",
-  modelPending: "まだ届いていません。これから届くかもしれないので、先に読むのが賢明です。",
+  modelPending: "まだ届いていません。これから届くかもしれません。",
   modelOlder:
     "これは以前のコミットについてのものです。いまのコミットの読み取りがこれから届くかもしれません。",
   reloadPage: "読み込み直す",

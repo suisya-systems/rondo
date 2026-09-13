@@ -2358,7 +2358,8 @@ test("a model reading not yet taken is said as pending, beside the checks and by
     kind: "answer",
     iterationId: "i-0001",
   });
-  expect(html).toContain("Not here yet. It may still arrive; reading it first is wise.");
+  expect(html).toContain("Not here yet; it may still arrive.");
+  expect(html).not.toContain("reading it first");
   expect(html).toContain('href="/?answer=i-0001&amp;lang=en" class="font-medium text-link');
   expect(html).toContain("The model review may still arrive.");
   expect(html).not.toContain('id="model-raised"');
