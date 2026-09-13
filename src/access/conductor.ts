@@ -71,6 +71,7 @@ import type { AdvisoryRecord, IterationStore } from "../store/sqlite.js";
 import { DETERMINISTIC_DRAFTER, proposeAfterAbandon, type UnpromptedPorts } from "./advisory.js";
 import { discard, writeDelegationRecord } from "./delegation.js";
 import { inspectLapWork } from "./forge.js";
+import { modelReadingLines } from "./model-review.js";
 import { READING_REMOTE, readingOf } from "./review.js";
 
 export type { ConductorReport };
@@ -631,18 +632,11 @@ export async function reportToRequest(
       return `No model reading was reported to the request '${request}': none is recorded.`;
     }
     messageId = `report-model-${iterationId}-${String(reading.readAtMs)}`;
-    const findings = reading.findings.map((text, i) => {
-      const severity = reading.graded?.[i]?.severity;
-      return severity === undefined ? ` - ${text}` : ` - [${severity}] ${text}`;
-    });
+    // The screen's own lines, so the thread carries the same severities,
+    // bases and unresolved-basis marks a person at the terminal is shown.
     body =
-      `Lap '${iterationId}' has a model reading (${reading.drafter}) at gate ` +
-      `'${row.gateId ?? "(none recorded)"}': ` +
-      (reading.verdict === "unavailable"
-        ? `none could be taken: ${reading.unavailableReason ?? "no reason recorded"}.`
-        : `'${reading.verdict}' with ${String(reading.findings.length)} finding(s).`) +
-      (findings.length === 0 ? "" : `\n${findings.join("\n")}`) +
-      "\nThis is material, not a check; the answer is still a person's.";
+      `Lap '${iterationId}' has a model reading at gate '${row.gateId ?? "(none recorded)"}':\n` +
+      modelReadingLines(reading).join("\n");
   } else {
     messageId = `report-published-${iterationId}`;
     body =

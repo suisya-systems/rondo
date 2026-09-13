@@ -290,8 +290,9 @@ test("rondo#218: the landed reading is reported into the request's thread, findi
   expect(written[0]).toMatchObject({ inReplyTo: "req-1", authorKind: "drafter", asks: false });
   const body = String(written[0]?.["body"]);
   expect(body).toContain("rondo/model/1/gpt-6-astra");
-  expect(body).toContain("'concerns' with 1 finding(s)");
+  expect(body).toContain("1 point(s) raised");
   expect(body).toContain("[major] the commit says it speeds run up");
+  expect(body).toContain("src/check.ts:1");
   expect(lines.at(-1)).toContain("Reported to the request 'req-1'");
 });
 
