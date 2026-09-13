@@ -2181,7 +2181,12 @@ function composerView(
             "hx-target": "#ledger",
             "hx-select": "#ledger",
             "hx-swap": "outerHTML show:window:bottom",
-            "hx-select-oob": "#composer-fields,#waiting-count",
+            // **The whole form and not only its fields** (#220 S1, Codex): the
+            // thread's default target after a send can be a waiting ask, and
+            // answering one is a press with its own `action` and no `hx-post`.
+            // Swapping the fields alone left the send's mode on a box aimed at
+            // an ask; `page/composer.js` puts back any words typed meanwhile.
+            "hx-select-oob": "#composer,#waiting-count",
             // **One send per press, visibly** (the S1 design pass): the button
             // is disabled while its request is in flight. The store's refusal
             // of a repeated id is still what makes a double send one message.

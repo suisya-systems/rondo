@@ -2193,8 +2193,10 @@ test("the composer script keeps a draft and the open folds, and makes no request
   ]) {
     expect(code).not.toContain(forbidden);
   }
-  // The one htmx event it hears is a send's end, where all it does is clear the draft.
+  // The two htmx events it hears are a send's start, where it notes the words
+  // sent, and its end, where it clears only those from the draft.
   expect([...code.matchAll(/htmx:[A-Za-z]+/g)].map((found) => found[0])).toEqual([
+    "htmx:beforeRequest",
     "htmx:afterRequest",
   ]);
   // A refusal with no `#send-refused` (csrf, Host, a defect) still says "not sent", as text.

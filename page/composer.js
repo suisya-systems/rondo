@@ -74,11 +74,34 @@ document.addEventListener("submit", (event) => {
   }
 });
 
+// The words a send carried, so that only those are cleared when it succeeds:
+// the box stays editable while the send is in flight, and what a person typed
+// meanwhile was never sent (#220 S1, Codex).
+// Read back from this tab's store and not off the box, because the response
+// has replaced the form (its target can change mode) by the time htmx says the
+// send succeeded; the input listener above kept the store current meanwhile.
+let sending = null;
+document.addEventListener("htmx:beforeRequest", (event) => {
+  const draft = event.detail.elt.querySelector?.("textarea[data-draft]");
+  if (draft) {
+    sending = draft.value;
+  }
+});
+
 document.addEventListener("htmx:afterRequest", (event) => {
   const draft = event.detail.elt.querySelector?.("textarea[data-draft]");
   if (draft && event.detail.successful) {
-    store.set(draftKey(draft), null);
-    draft.value = "";
+    const now = store.get(draftKey(draft)) ?? "";
+    // Words added after the sent ones are what is left; a draft rewritten
+    // meanwhile is kept whole, since which part was sent cannot be told.
+    const rest =
+      sending !== null && now.startsWith(sending) ? now.slice(sending.length).trimStart() : now;
+    const unsent = rest === "" ? null : rest;
+    store.set(draftKey(draft), unsent);
+    const current = box();
+    if (current !== null) {
+      current.value = unsent ?? "";
+    }
   }
   // A refusal that came from before the send route (Hono's own `csrf`, the
   // `Host` check, a defect) carries no `#send-refused` for htmx to put under the
