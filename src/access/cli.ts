@@ -84,7 +84,14 @@ import {
   showProposal,
   type UnpromptedPorts,
 } from "./advisory.js";
-import { abandon, admit, conductorPorts, resume } from "./conductor.js";
+import {
+  abandon,
+  admit,
+  conductorPorts,
+  type ReportingPorts,
+  reportToRequest,
+  resume,
+} from "./conductor.js";
 import { asciiEscape, consoleSeams, legibleAsciiEscape, relayUpstream } from "./console.js";
 import { allowedBashIn } from "./delegation.js";
 import {
@@ -1448,7 +1455,7 @@ export async function main(
   // needed. It drives no continuo verb -- that is D-0019 rule 11's design, not
   // an accident here -- so there is nothing for it to need.
   if (parsed.command === "abandon") {
-    return await commandAbandon(parsed, conductorPorts(unverifiedContinuo(), store));
+    return await commandAbandon(parsed, conductorPorts(unverifiedContinuo(), store, null));
   }
 
   // **`explain` is dispatched before continuo is started, for `abandon`'s
@@ -1602,7 +1609,7 @@ export async function main(
     return refuse(`continuo is not usable: ${startup.reason}`);
   }
   const continuo = startup.continuo;
-  const ports = conductorPorts(continuo, store);
+  const ports = conductorPorts(continuo, store, openAdvisoryRecord(opened.path));
 
   switch (parsed.command) {
     case "start":
@@ -1644,7 +1651,7 @@ export async function main(
         continuo,
       );
     default:
-      return await commandPublish(parsed, environment, store, continuo);
+      return await commandPublish(parsed, environment, store, continuo, ports);
   }
 }
 
@@ -3719,7 +3726,10 @@ async function answerFromPage(
         "continuo's own diagnosis.",
     };
   }
-  const report = await resume(conductorPorts(continuo, store), record.id);
+  const report = await resume(
+    conductorPorts(continuo, store, openAdvisoryRecord(storePath)),
+    record.id,
+  );
   sayReport(report);
   // **A walk that closed the gate and a row that settled are two facts**, and
   // `resume` is total: a gate it cannot observe comes back as a report with
@@ -4408,6 +4418,7 @@ async function commandPublish(
   environment: Readonly<Record<string, string | undefined>>,
   store: IterationStore,
   continuo: VerifiedContinuo,
+  ports: ReportingPorts,
 ): Promise<number> {
   if (parsed.repo === null) {
     return refuse(
@@ -4674,6 +4685,17 @@ async function commandPublish(
     return relayFailure("run close", closed);
   }
   say(`run ${closed.payload.runId}: ${closed.payload.from} -> ${closed.payload.to}`);
+  if (ports.thread !== undefined && ports.thread !== null) {
+    const reported = await reportToRequest(
+      ports.thread,
+      record.id,
+      { kind: "published" },
+      Date.now(),
+    );
+    if (reported !== null) {
+      say(reported);
+    }
+  }
   say("");
   say("Published. rondo did not merge anything; that is still yours.");
   return 0;
