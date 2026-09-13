@@ -93,6 +93,7 @@ import {
   type HostSnapshot,
   propose,
   proposeHost,
+  UNDETERMINED,
 } from "../advisory/proposal.js";
 import type { HostPolicy } from "../refrain/policy.js";
 import {
@@ -462,7 +463,7 @@ export function isSwitch(asked: LanguageAsked, resolved: Chrome): boolean {
  * Tailwind utility, so it names the element and styles nothing.
  */
 const PILL =
-  "inline-flex shrink-0 items-center rounded-full border px-2 py-px font-mono text-[11px] font-medium leading-4 whitespace-nowrap";
+  "inline-flex shrink-0 items-center rounded-full border px-2 py-px font-mono text-xs font-medium leading-4 whitespace-nowrap";
 
 /** One tone per state, which is the whole of what a pill says (section 1, Vercel's row). */
 const TONE = {
@@ -484,11 +485,11 @@ const PRIMARY =
  * and not by Tab, so the tab order is still the links and the one button.
  */
 const ROW =
-  "grid grid-cols-[1rem_minmax(0,1fr)] gap-x-3 px-4 py-2.5 outline-none first:rounded-t-lg last:rounded-b-lg focus-visible:bg-accent focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:grid-cols-[1rem_minmax(0,1fr)_auto]";
+  "grid grid-cols-[1rem_minmax(0,1fr)] gap-x-3 px-4 py-2.5 outline-none first:rounded-t-lg last:rounded-b-lg focus-visible:bg-accent focus-visible:shadow-[inset_4px_0_0_var(--color-ring)] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:grid-cols-[1rem_minmax(0,1fr)_auto]";
 
 /** The muted, right-aligned column of identifiers and ages (section 1, GitHub's run list). */
 const META =
-  "col-start-2 flex gap-x-3 font-mono text-[11.5px] leading-5 text-faint tabular-nums sm:col-start-auto sm:flex-col sm:items-end sm:text-right";
+  "col-start-2 flex gap-x-2 font-mono text-xs leading-6 whitespace-nowrap text-faint tabular-nums sm:col-start-auto sm:justify-end";
 
 /**
  * A status glyph, drawn by the page rather than fetched (section 1: "a status
@@ -583,17 +584,29 @@ function claimsView(claims: readonly Claim[], snapshot: object) {
     }
   }
   return (
+    // **One line per claim, with its basis as the trailing muted cell** (the
+    // design pass on #220): the basis still comes first in the document, so a
+    // reader without CSS meets the locator above the claims it covers, and only
+    // `order-last` moves it to the right. A value that is `undetermined` is
+    // drawn in faint ink and never folded away: the press records every claim
+    // as shown (D-0042), so every claim stays on the screen.
     <div class="divide-y divide-border rounded-md border border-border">
       {groups.map((group) => (
-        <div>
-          <p class="basis wrap-anywhere bg-muted/60 px-3 py-1.5 font-mono text-[11px] leading-4 text-faint">
+        <div class="flex flex-col sm:flex-row sm:items-start">
+          <p class="basis wrap-anywhere px-3 pt-1.5 font-mono text-[11px] leading-5 text-faint sm:order-last sm:w-[38%] sm:shrink-0 sm:py-1.5 sm:text-right">
             {withoutRepeat(group)}
           </p>
-          <dl class="divide-y divide-border/70">
+          <dl class="min-w-0 flex-1 divide-y divide-border/60">
             {group.claims.map((claim) => (
-              <div class="claim grid gap-x-4 px-3 py-1.5 sm:grid-cols-[minmax(9rem,14rem)_minmax(0,1fr)]">
+              <div class="claim grid grid-cols-[7rem_minmax(0,1fr)] gap-x-3 px-3 py-1.5 sm:grid-cols-[minmax(8rem,11rem)_minmax(0,1fr)] sm:gap-x-4">
                 <dt class="label text-[12.5px] leading-5 text-muted-foreground">{claim.label}</dt>
-                <dd class="value text-[13px] leading-5 wrap-anywhere whitespace-pre-wrap">
+                <dd
+                  class={
+                    claim.value === UNDETERMINED
+                      ? "value text-[13px] leading-5 wrap-anywhere whitespace-pre-wrap text-faint"
+                      : "value text-[13px] leading-5 wrap-anywhere whitespace-pre-wrap"
+                  }
+                >
                   {claim.value}
                 </dd>
               </div>
@@ -766,7 +779,6 @@ function lapRow(
   record: IterationRecord,
   head: string,
   lines: readonly (string | null)[],
-  nowMs: number,
   tail: unknown = null,
   below: unknown = null,
 ) {
@@ -792,8 +804,13 @@ function lapRow(
         >
           {record.request}
         </p>
+        {/*
+         * **The state is said once, by the head** (the design pass on #220):
+         * the head sentence already names the status and the age, and the
+         * glyph carries it for the eye, so a pill and an age column repeating
+         * both were the same fact three times over.
+         */}
         <p class="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[12.5px] leading-5 text-muted-foreground">
-          <span class={`${PILL} ${TONE[tone]}`}>{record.status}</span>
           <span class="head wrap-anywhere">{head}</span>
           {lines
             .filter((line): line is string => line !== null)
@@ -805,7 +822,6 @@ function lapRow(
       </div>
       <div class={META}>
         <p class="basis">{basisLine({ form: "iteration", iterationId: record.id }, {})}</p>
-        <p>{ago(record.updatedAtMs, nowMs)}</p>
       </div>
       {below === null ? null : <div class="col-span-full">{below}</div>}
     </li>
@@ -827,22 +843,17 @@ function lapRow(
 function questionGroup(question: Question, heading: string, rows: readonly unknown[]) {
   return (
     <section data-question={question} class="space-y-2">
-      <h2
-        class={
-          question === "waiting"
-            ? "text-lg leading-7 font-semibold tracking-tight text-wait-ink"
-            : question === "running"
-              ? "text-sm leading-6 font-semibold text-run-ink"
-              : "text-sm leading-6 font-medium text-muted-foreground"
-        }
-      >
-        {heading}
-      </h2>
+      {/*
+       * One heading style for the three (the design pass on #220): they are
+       * the same level, so the rows below and not the heading carry which of
+       * them shouts.
+       */}
+      <h2 class="text-[13px] leading-6 font-semibold text-muted-foreground">{heading}</h2>
       {rows.length === 0 ? null : (
         <ul
           class={
             question === "waiting"
-              ? "divide-y divide-wait/25 rounded-lg border border-wait/45 bg-card shadow-[inset_3px_0_0_var(--color-wait)]"
+              ? "divide-y divide-wait/20 rounded-lg border border-wait/35 bg-card shadow-[inset_3px_0_0_var(--color-wait)]"
               : question === "running"
                 ? "divide-y divide-border rounded-lg border border-border bg-card"
                 : "divide-y divide-border/70 rounded-lg border border-border/70"
@@ -888,7 +899,6 @@ function waitingView(
         record,
         wording.waitingHead(record.status, ago(record.updatedAtMs, nowMs)),
         [unblockedBy(wording, record), spentLine(wording, record), fenceLine(wording, record)],
-        nowMs,
         framing === undefined ? answerLink(wording, record, token) : null,
         framing === undefined ? null : approveView(wording, record, token, framing),
       );
@@ -901,7 +911,6 @@ function waitingView(
             {wording.proposalHead(proposal.kind, ago(proposal.createdAtMs, nowMs))}
           </p>
           <p class="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[12.5px] leading-5 text-muted-foreground">
-            <span class={`${PILL} ${TONE.wait}`}>{proposal.kind}</span>
             <span class="line wrap-anywhere">{wording.aboutIteration(proposal.iterationId)}</span>
             <span class="basis font-mono text-[11.5px] wrap-anywhere text-faint">
               {wording.proposalBasis(proposal.proposalId)}
@@ -910,7 +919,6 @@ function waitingView(
         </div>
         <div class={META}>
           <p>{proposal.proposalId}</p>
-          <p>{ago(proposal.createdAtMs, nowMs)}</p>
         </div>
       </li>
     )),
@@ -946,7 +954,6 @@ function runningView(
           spentLine(wording, record),
           fenceLine(wording, record),
         ],
-        nowMs,
       ),
     ),
     ...unreadable.map((row) =>
@@ -955,7 +962,15 @@ function runningView(
           {glyph("alert")}
           <div class="min-w-0">
             <p class="head font-mono text-[13px] leading-6 text-fail">{row.id}</p>
-            <p class="line text-[12.5px] leading-5 wrap-anywhere text-muted-foreground">
+            {/*
+             * Cut to two lines, with the whole reason in `title` and in the
+             * reading's own section for this row (the design pass on #220): two
+             * full digests in running text were the heaviest block on the page.
+             */}
+            <p
+              class="line line-clamp-2 font-mono text-[11.5px] leading-5 wrap-anywhere text-muted-foreground"
+              title={wording.willNotDecode(row.reason)}
+            >
               {wording.willNotDecode(row.reason)}
             </p>
           </div>
@@ -971,13 +986,10 @@ function endedView(wording: Chrome, ended: readonly IterationRecord[], nowMs: nu
     "ended",
     wording.endedHeading(ended.length),
     ended.map((record) =>
-      lapRow(
-        "ended",
-        record,
-        endedHow(wording, record, nowMs),
-        [spentLine(wording, record), fenceLine(wording, record)],
-        nowMs,
-      ),
+      lapRow("ended", record, endedHow(wording, record, nowMs), [
+        spentLine(wording, record),
+        fenceLine(wording, record),
+      ]),
     ),
   );
 }
@@ -1013,9 +1025,12 @@ function nothingView(wording: Chrome) {
  * One section of the reading: a heading, the note that says what reading it
  * does not do, and its body.
  */
-function readingSection(heading: string, note: string, body: unknown) {
+function readingSection(heading: string, note: string, body: unknown, id?: string) {
   return (
-    <section class="space-y-3 rounded-lg border border-border bg-card px-4 py-4 sm:px-5">
+    <section
+      id={id}
+      class="scroll-mt-16 space-y-3 rounded-lg border border-border bg-card px-4 py-4 sm:px-5"
+    >
       <h2 class="text-sm leading-6 font-semibold">{heading}</h2>
       {note === "" ? null : <p class="note text-[13px] leading-5 text-muted-foreground">{note}</p>}
       {body}
@@ -1098,14 +1113,20 @@ function approveView(
       <form
         method="post"
         action={viewHref({ kind: "summary" }, wording.lang)}
-        class="sticky bottom-0 z-[1] -mx-4 flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-wait/30 bg-card/95 px-4 py-3 backdrop-blur-sm"
+        // A solid bar with a rule and a lift on top, so where it overlaps the
+        // claims it reads as the window's footer and not as a row of the
+        // table; full width under `sm`, where it is the bottom sheet.
+        class="sticky bottom-0 z-[1] -mx-4 flex flex-col gap-2 border-t border-border bg-card px-4 py-3 shadow-[0_-8px_16px_-10px_rgb(0_0_0/0.35)] sm:flex-row sm:items-center sm:gap-3"
       >
         <input type="hidden" name="token" value={token} />
         <input type="hidden" name="iteration" value={record.id} />
-        <button type="submit" class={`${PRIMARY} h-9 px-5 text-sm`}>
+        <button
+          type="submit"
+          class={`${PRIMARY} h-10 w-full justify-center px-6 text-sm sm:h-9 sm:w-auto`}
+        >
           {APPROVE_BODY}
         </button>
-        <span class="note min-w-0 text-[12.5px] leading-5 text-muted-foreground">
+        <span class="note min-w-0 text-xs leading-5 text-muted-foreground">
           {wording.approveNote(record.gateId, APPROVE_BODY)}
         </span>
       </form>
@@ -1136,7 +1157,8 @@ function answerLink(wording: Chrome, record: IterationRecord, token: string | nu
       >
         {wording.answerAction}
       </a>
-      <span class="line text-[12.5px] leading-5 text-muted-foreground">{wording.answerHere}</span>
+      {/* The sentence recedes and drops out under `sm`, where it cost a line per card. */}
+      <span class="line hidden text-xs leading-5 text-faint sm:inline">{wording.answerHere}</span>
     </p>
   );
 }
@@ -1147,6 +1169,7 @@ function explainView(wording: Chrome, record: IterationRecord, snapshot: Advisor
     wording.iterationHeading(record.id),
     wording.explainNote,
     claimsView(propose(snapshot).payload.claims, snapshot),
+    `read-${record.id}`,
   );
 }
 
@@ -1338,6 +1361,7 @@ export async function operatorPage(
                   wording.iterationHeading(row.id),
                   "",
                   <pre class={PRE}>{wording.willNotDecode(row.reason)}</pre>,
+                  `read-${row.id}`,
                 )
               : null,
           ),
@@ -1409,20 +1433,47 @@ export async function operatorPage(
               }
             </h1>
             {keepsCurrent ? (
-              <span class={`js-only ${PILL} gap-1.5 font-sans ${TONE.ok}`}>
-                <span class="size-1.5 rounded-full bg-ok motion-safe:animate-pulse" />
-                {wording.liveLabel}
-              </span>
+              <>
+                <span class={`js-only ${PILL} gap-1.5 font-sans ${TONE.ok}`}>
+                  <span class="size-1.5 rounded-full bg-ok motion-safe:animate-pulse" />
+                  {wording.liveLabel}
+                </span>
+                {
+                  // **Script off is live too**: the meta refresh above redraws
+                  // this view every five seconds, so the reader is told so
+                  // rather than finding the indicator silently gone. A still
+                  // dot, because nothing on the page is moving between loads.
+                }
+                <noscript>
+                  <span class={`${PILL} gap-1.5 font-sans ${TONE.ok}`}>
+                    <span class="size-1.5 rounded-full bg-ok" />
+                    {wording.liveLabel}
+                  </span>
+                </noscript>
+              </>
             ) : null}
             <span class="flex-1" />
             <span class="js-only hidden items-center gap-1.5 text-[11.5px] text-faint sm:flex">
-              {kbd("j")}
-              {kbd("k")}
-              <span class="mr-2">{wording.keyMove}</span>
-              {kbd("↵")}
-              <span class="mr-2">{wording.keyOpen}</span>
-              {kbd("esc")}
-              <span>{wording.keyBack}</span>
+              {
+                // Each view names only the keys that do something on it: the
+                // answer view has no rows to move between, and the summary has
+                // nowhere to go back to.
+                view.kind === "answer" ? null : (
+                  <>
+                    {kbd("j")}
+                    {kbd("k")}
+                    <span class="mr-2">{wording.keyMove}</span>
+                    {kbd("↵")}
+                    <span class="mr-2">{wording.keyOpen}</span>
+                  </>
+                )
+              }
+              {view.kind === "summary" ? null : (
+                <>
+                  {kbd("esc")}
+                  <span>{wording.keyBack}</span>
+                </>
+              )}
             </span>
             {
               // **The switch, and it is the first element of this chrome that
@@ -1448,16 +1499,6 @@ export async function operatorPage(
           </div>
         </header>
         <main class="mx-auto max-w-5xl space-y-6 px-4 py-6 sm:px-6">
-          {
-            // **Each view says which of the two it is**, because "redraws every
-            // 5s" on a view that does not would be the page's own copy lying
-            // about the one property D-0054 rule 1 spends itself on. Both say
-            // the same thing about writing, which is the fact that did not
-            // change: a read writes nothing, whoever or whatever issued it.
-            <p class="note max-w-3xl text-[12.5px] leading-5 text-muted-foreground">
-              {keepsCurrent ? wording.liveNote(REFRESH_SECONDS) : wording.stillNote}
-            </p>
-          }
           {
             // **Said on the visible page and not only in the reading.** With no
             // approver there is no write port and so no button anywhere, and a
@@ -1518,11 +1559,49 @@ export async function operatorPage(
                 // under a note that says the view redraws.
                 readingSections.length === 0 ? null : (
                   <div id="reading" class="space-y-4">
+                    {
+                      // **An index of the rows the reading explains** (the
+                      // design pass on #220): anchors, so it works with script
+                      // off and survives the swap, and nothing is folded -- a
+                      // `<details>` would shut again on the next redraw.
+                      <nav class="z-[2] sm:sticky sm:top-12 -mx-1 flex flex-wrap gap-1.5 rounded-lg border border-border bg-background/95 p-2 font-mono text-xs backdrop-blur-sm">
+                        {[...waiting, ...running, ...ended].map((record) => (
+                          <a
+                            href={`#read-${record.id}`}
+                            class="rounded px-1.5 py-0.5 text-link hover:bg-accent"
+                          >
+                            {record.id}
+                          </a>
+                        ))}
+                        {unreadable.map((row) =>
+                          row.kind === "unreadable" ? (
+                            <a
+                              href={`#read-${row.id}`}
+                              class="rounded px-1.5 py-0.5 text-fail hover:bg-accent"
+                            >
+                              {row.id}
+                            </a>
+                          ) : null,
+                        )}
+                      </nav>
+                    }
                     {readingSections}
                   </div>
                 )
               }
             </div>
+          }
+          {
+            // **Each view says which of the two it is**, because "redraws every
+            // 5s" on a view that does not would be the page's own copy lying
+            // about the one property D-0054 rule 1 spends itself on. Both say
+            // the same thing about writing, which is the fact that did not
+            // change: a read writes nothing, whoever or whatever issued it.
+            // At the foot rather than the head (the design pass on #220): it is
+            // the page's account of itself, and what needs the reader leads.
+            <p class="note max-w-3xl text-xs leading-5 text-faint">
+              {keepsCurrent ? wording.liveNote(REFRESH_SECONDS) : wording.stillNote}
+            </p>
           }
         </main>
       </body>

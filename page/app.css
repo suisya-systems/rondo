@@ -78,9 +78,9 @@
     --accent: #1c222a;
     --ring: #5b9bff;
     --link: #7aafff;
-    --wait: #f0a232;
+    --wait: #d48a2c;
     --wait-foreground: #1a1206;
-    --wait-ink: #f5b95e;
+    --wait-ink: #e9a854;
     --wait-wash: #241a0c;
     --run: #5b9bff;
     --run-ink: #8cb8ff;
@@ -92,11 +92,11 @@
 
 @theme inline {
   --font-sans:
-    "Inter Variable", ui-sans-serif, system-ui, "Hiragino Sans", "Noto Sans CJK JP", "Yu Gothic UI",
-    sans-serif;
+    "Inter Variable", ui-sans-serif, system-ui, "Hiragino Sans", "Noto Sans JP", "Noto Sans CJK JP",
+    "Yu Gothic UI", sans-serif;
   --font-mono:
     "JetBrains Mono Variable", ui-monospace, SFMono-Regular, Menlo, Consolas,
-    "Noto Sans Mono CJK JP", monospace;
+    "Noto Sans Mono CJK JP", "Noto Sans CJK JP", monospace;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
