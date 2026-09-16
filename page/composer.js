@@ -10,7 +10,9 @@
 //    that submit carried (the anchor exists only after the send was recorded).
 //    `Ctrl`/`Cmd`+`Enter` asks a send form to submit, which is the same submit
 //    its button makes. The approve bar's claim box (#220 S2) is a draft too,
-//    keyed per gate, and is never submitted by that chord.
+//    keyed per gate, and is never submitted by that chord; neither is an answer
+//    to a waiting question (#206), whose form has one button per answer and no
+//    submit that means both.
 // 2. **Keep the folds a person opened** -- across the in-place redraw, which
 //    replaces them shut every five seconds, and across a navigation, so a fold
 //    opened before a press is open on the page the press lands on. The ids are
@@ -152,7 +154,13 @@ document.addEventListener("keydown", (event) => {
     // **Never the approve press** (#220 S2): the claim box keeps its draft here
     // too, and a chord typed while writing a claim must not answer a gate. Only
     // a send carries a message id.
-    target.form?.querySelector("input[name=message_id]")
+    target.form?.querySelector("input[name=message_id]") &&
+    // **Never a waiting question either** (#206, D-0072 rule 4): that form has
+    // one button per answer, and which of them is pressed is the whole content
+    // of the press. `requestSubmit()` names no submitter, so the chord would
+    // send no answer at all -- and rondo must not pick one. A person answering
+    // presses the answer they mean; the hint for this chord is not drawn there.
+    !target.form?.querySelector("button[name=outcome]")
   ) {
     event.preventDefault();
     target.form?.requestSubmit();

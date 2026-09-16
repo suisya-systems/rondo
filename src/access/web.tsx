@@ -4733,11 +4733,19 @@ function composerView(
           {answers ? wording.answerOutcomeNote : wording.sendNote}
         </span>
         <span class="ml-auto flex items-center gap-3">
-          <span class="js-only hidden items-center gap-1 text-[11.5px] text-faint sm:flex">
-            {kbd("Ctrl/⌘")}
-            {kbd("↵")}
-            <span>{wording.keySend}</span>
-          </span>
+          {
+            // **Not advertised where it does not work** (#206, Codex): the
+            // chord submits without naming a button, and an answer *is* which
+            // button was pressed, so `page/composer.js` leaves this one form
+            // alone rather than sending an answer nobody chose.
+            answers ? null : (
+              <span class="js-only hidden items-center gap-1 text-[11.5px] text-faint sm:flex">
+                {kbd("Ctrl/⌘")}
+                {kbd("↵")}
+                <span>{wording.keySend}</span>
+              </span>
+            )
+          }
           {
             // **One button per answer, and the press is what rondo acts on**
             // (D-0072 rule 4). Two submits of one form, each carrying its own

@@ -2154,6 +2154,10 @@ test("a request thread is drawn whole: every body byte for byte, voices apart, b
   expect(html.indexOf('value="stop"')).toBeLessThan(html.indexOf('value="carry_on"'));
   // And the note under the box says what each of them does.
   expect(html).toContain("Stop this line keeps it stopped");
+  // **The send chord is not advertised here** (#206, Codex): it submits without
+  // naming a button, so on this one form it would answer nothing -- and it is
+  // guarded in `page/composer.js` rather than left to be pressed and refused.
+  expect(html).not.toContain("Ctrl/⌘");
   expect(html).not.toContain('class="not-answer');
   const ledgerAt = html.indexOf('<div id="ledger"');
   const composerAt = html.indexOf('<form id="composer"');
@@ -2334,6 +2338,10 @@ test("the composer script keeps a draft and the open folds, and makes no request
   expect(code).toContain("HTMLDetailsElement");
   // Ctrl/Cmd+Enter asks the form for the submit its own button makes.
   expect(code).toContain("requestSubmit()");
+  // **And never on a form whose submit has to name an answer** (#206, D-0072
+  // rule 4): `requestSubmit()` names no submitter, so the chord would send an
+  // answer nobody chose. The two guards are the gate's claim box and this.
+  expect(code).toContain('!target.form?.querySelector("button[name=outcome]")');
   for (const forbidden of [
     "fetch",
     "POST",
