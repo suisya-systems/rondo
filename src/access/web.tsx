@@ -126,7 +126,7 @@ import {
   type ThreadMessageDraft,
   WAIT_SIDE,
 } from "../store/records.js";
-import type { AdvisoryRecord, IterationStore, ReadOutcome } from "../store/sqlite.js";
+import type { AdvisoryRecord, IterationStore } from "../store/sqlite.js";
 import { basisLine, gather, gatherHost } from "./advisory.js";
 import type { LapWorkInspection } from "./forge.js";
 import {
@@ -1257,6 +1257,32 @@ function stateHead(wording: Chrome, record: IterationRecord, tone: Tone, age: st
 /** Which of the three questions a row answers, which is what its weight is decided by. */
 type Question = "waiting" | "attention" | "running" | "ended";
 
+/** The lap a request has under it, as the requests list says it (rondo#244). */
+interface LapUnderRequest {
+  readonly record: IterationRecord;
+  readonly question: Question;
+}
+
+/**
+ * Which of two laps a request is better said by: a live one, else the newest.
+ *
+ * **Live outranks terminal whatever their ages** (Codex round 2). A request can
+ * hold more than one lap -- a retry beside the lap it supersedes -- and going
+ * by age alone would let a failure that ended a minute ago speak for a request
+ * whose other lap is still at its gate, and bring back *Set the scope* over
+ * work that is still running. What the row answers is *what is this request
+ * doing*, and an ended lap only answers that when nothing is left.
+ */
+function saysMore(candidate: LapUnderRequest, held: LapUnderRequest | undefined): boolean {
+  if (held === undefined) {
+    return true;
+  }
+  const live = (lap: LapUnderRequest) => lap.question !== "ended";
+  return live(candidate) === live(held)
+    ? held.record.updatedAtMs < candidate.record.updatedAtMs
+    : live(candidate);
+}
+
 /**
  * One lap as one row, with the row it rests on cited once beside it (D-0032,
  * rondo#91).
@@ -1298,6 +1324,15 @@ function lapRow(
     <li id={`lap-${record.id}`} data-row="" tabindex={-1} class={ROW}>
       {glyph(tone)}
       <div class="min-w-0">
+        {/*
+         * **A running lap says it is running above its request, not under it**
+         * (rondo#244). A running row's request is drawn whole with its
+         * paragraphs, so *running / 10 min* -- the one fact a person watching
+         * a lap came for -- sat last and smallest under a wall of the words
+         * they themselves wrote. It is the same head, in the same line; only
+         * its place moved, and every other question keeps its own order.
+         */}
+        {question === "running" ? metaLine(head) : null}
         <p
           class={
             question === "waiting"
@@ -1327,7 +1362,7 @@ function lapRow(
          */}
         {metaLine(
           <>
-            {head}
+            {question === "running" ? null : head}
             {lines
               .filter((line) => line !== null)
               .map((line) =>
@@ -2860,17 +2895,18 @@ async function shownBeforePress(
 /**
  * The laps that have ended, newest first and only the last few (rondo#145).
  *
- * **An ended row that will not decode is dropped here and nowhere else.** The
- * live side shows one, because it holds a slot and understating what is running
- * misleads the one reader deciding whether to start something else; an ended row
- * holds nothing and asks nothing, and it has no `updated_at_ms` to place in a
- * "just finished" list at all. It stays in the ledger and `rondo explain` still
- * refuses it by name.
+ * **An ended row that will not decode is dropped on the terminal side and
+ * nowhere else.** The live side shows one, because it holds a slot and
+ * understating what is running misleads the one reader deciding whether to
+ * start something else; an ended row holds nothing and asks nothing, and it has
+ * no `updated_at_ms` to place in a "just finished" list at all. It stays in the
+ * ledger and `rondo explain` still refuses it by name. The decoding is the
+ * caller's since rondo#244, because the requests list reads the same rows
+ * without this slice.
  */
-function endedRecently(outcomes: readonly ReadOutcome[]): readonly IterationRecord[] {
-  return outcomes
-    .flatMap((outcome) => (outcome.kind === "read" ? [outcome.record] : []))
-    .sort((left, right) => right.updatedAtMs - left.updatedAtMs)
+function endedRecently(records: readonly IterationRecord[]): readonly IterationRecord[] {
+  return records
+    .toSorted((left, right) => right.updatedAtMs - left.updatedAtMs)
     .slice(0, RECENT_ENDED);
 }
 
@@ -3254,6 +3290,8 @@ function requestsView(
   nowMs: number,
   actorId: string | null,
   scopeTo: (messageId: string) => unknown,
+  /** The lap that is under a request, newest first, or null where none is. */
+  lapUnder: (messageId: string) => LapUnderRequest | null,
 ) {
   const rows = threads.messages
     .filter((message) => message.inReplyTo === null)
@@ -3283,40 +3321,76 @@ function requestsView(
         </p>
       ) : (
         <ul class="divide-y divide-border rounded-lg border border-border bg-card">
-          {rows.map((row) => (
-            <li id={`request-${row.root.messageId}`} data-row="" tabindex={-1} class={ROW}>
-              {glyph(row.waiting > 0 ? "wait" : "message")}
-              <div class="min-w-0">
-                <a
-                  id={`open-${row.root.messageId}`}
-                  href={viewHref(
-                    { kind: "thread", messageId: row.root.messageId, to: null },
-                    wording.lang,
-                  )}
-                  data-open=""
-                  class="request line-clamp-2 text-sm leading-6 font-medium wrap-anywhere hover:underline"
-                  title={row.root.body}
-                  lang=""
-                >
-                  {firstLine(row.root.body)}
-                </a>
-                {metaLine(
-                  <>
-                    {row.waiting > 0 ? (
-                      <span>
-                        <span class={`${PILL} font-sans ${TONE.wait}`}>
-                          {wording.asksWaiting(row.waiting)}
+          {rows.map((row) => {
+            const lap = lapUnder(row.root.messageId);
+            return (
+              <li id={`request-${row.root.messageId}`} data-row="" tabindex={-1} class={ROW}>
+                {glyph(row.waiting > 0 ? "wait" : "message")}
+                <div class="min-w-0">
+                  <a
+                    id={`open-${row.root.messageId}`}
+                    href={viewHref(
+                      { kind: "thread", messageId: row.root.messageId, to: null },
+                      wording.lang,
+                    )}
+                    data-open=""
+                    class="request line-clamp-2 text-sm leading-6 font-medium wrap-anywhere hover:underline"
+                    title={row.root.body}
+                    lang=""
+                  >
+                    {firstLine(row.root.body)}
+                  </a>
+                  {metaLine(
+                    <>
+                      {row.waiting > 0 ? (
+                        <span>
+                          <span class={`${PILL} font-sans ${TONE.wait}`}>
+                            {wording.asksWaiting(row.waiting)}
+                          </span>
                         </span>
+                      ) : null}
+                      <span>{whoWrote(wording, row.root, actorId)}</span>
+                      <span>
+                        {wording.threadSize(row.size, wording.age(ago(row.lastMs, nowMs)))}
                       </span>
-                    ) : null}
-                    <span>{whoWrote(wording, row.root, actorId)}</span>
-                    <span>{wording.threadSize(row.size, wording.age(ago(row.lastMs, nowMs)))}</span>
-                    <span>{scopeTo(row.root.messageId)}</span>
-                  </>,
-                )}
-              </div>
-            </li>
-          ))}
+                      {/*
+                       * **A request with a lap under it says the lap's state**
+                       * (rondo#244). This list went on offering *Set the scope*
+                       * through a whole lap, which is the one screen a person
+                       * watching a run is most likely to be looking at and the
+                       * one place it said nothing.
+                       *
+                       * **The entrance goes only while the lap is live.** Asking
+                       * for more work on a request whose lap has ended is a real
+                       * act and keeps its way in; starting a second scope beside
+                       * a lap that is still running is the confusion.
+                       */}
+                      {lap === null ? null : (
+                        <span>
+                          {pill(
+                            lap.question === "waiting"
+                              ? "wait"
+                              : lap.question === "running"
+                                ? "run"
+                                : endedTone(lap.record),
+                            wording.statePill(lap.record.status, lap.record.gateOutcome),
+                          )}
+                        </span>
+                      )}
+                      {lap === null ? null : (
+                        <span class="tabular-nums">
+                          {wording.age(ago(lap.record.updatedAtMs, nowMs))}
+                        </span>
+                      )}
+                      {lap !== null && lap.question !== "ended" ? null : (
+                        <span>{scopeTo(row.root.messageId)}</span>
+                      )}
+                    </>,
+                  )}
+                </div>
+              </li>
+            );
+          })}
         </ul>
       )}
     </section>
@@ -4005,6 +4079,10 @@ async function scopeApproved(
               names the lap (D-0023) and a double press is one lap. */}
           <input type="hidden" name="iteration" value={newIterationId()} />
           <p class="note text-[12.5px] leading-5 text-muted-foreground">{wording.startNote}</p>
+          {/* **The one press that spends money, saying what the refusals
+              already say** (rondo#244): the join is real, and a guarantee
+              nobody is told about is paid for in suspicion. */}
+          <p class="note text-[12.5px] leading-5 text-muted-foreground">{wording.startAgainSafe}</p>
           <button
             type="submit"
             data-row=""
@@ -4734,7 +4812,15 @@ export async function operatorPage(
         return [];
     }
   });
-  const ended = endedRecently(await ports.store.terminalIterations());
+  // **The whole terminal history, and the last few of it** (rondo#244, Codex):
+  // the summary's *what just finished* is the last five, while the requests
+  // list is not bounded at all -- so a request whose lap fell out of those five
+  // would have gone back to saying nothing about it. The slice is the summary's
+  // and not the store's.
+  const terminal = (await ports.store.terminalIterations()).flatMap((outcome): IterationRecord[] =>
+    outcome.kind === "read" ? [outcome.record] : [],
+  );
+  const ended = endedRecently(terminal);
   // **Whose word it is stays with the words** (#220 S2, Codex): a claim another
   // operator recorded, on the page or with `rondo answer --verified`, is theirs
   // and never "you said"; `by` is null only when it is this page's own actor.
@@ -4813,6 +4899,24 @@ export async function operatorPage(
       : null;
   /** The link onto the scope screen, drawn on a request wherever one is listed. */
   const scopeTo = (messageId: string) => scopeLink(wording, ports, token, messageId);
+  // **Which request each lap is under** (rondo#244), off the rows already
+  // read: a lap names the request it was started from, so the requests list
+  // can say what became of one instead of going on offering the entrance.
+  // Newest wins, which is the same order every other list here is in.
+  const lapsByRequest = new Map<string, LapUnderRequest>();
+  for (const [question, group] of [
+    ["waiting", waiting],
+    ["running", running],
+    ["ended", terminal],
+  ] as const) {
+    for (const record of group) {
+      const request = record.requestMessageId;
+      if (request !== null && saysMore({ record, question }, lapsByRequest.get(request))) {
+        lapsByRequest.set(request, { record, question });
+      }
+    }
+  }
+  const lapUnder = (messageId: string) => lapsByRequest.get(messageId) ?? null;
   // **Awaited here** for `scoping`'s reason: the dry-run reads a workspace and
   // the forge's own configuration, and the tree is composed from what it read.
   const publishing =
@@ -5139,7 +5243,7 @@ export async function operatorPage(
                 ) : null
               }
               {view.kind === "requests" ? (
-                requestsView(wording, threads, nowMs, ports.actorId, scopeTo)
+                requestsView(wording, threads, nowMs, ports.actorId, scopeTo, lapUnder)
               ) : view.kind === "thread" ? (
                 threadView(wording, threads, view, nowMs, ports.actorId, forms, scopeTo)
               ) : view.kind === "scope" ? (

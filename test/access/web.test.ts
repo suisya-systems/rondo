@@ -3303,6 +3303,13 @@ test("the approval reads what its predecessor spent, and repeats that the review
     "the reviewer's cost is not counted, and a lap whose cost is not read yet holds the reserve",
   );
   expect(html).toContain('id="start-form"');
+  // **The press that spends money says a second press is safe** (rondo#244).
+  // `startScopedFromPage` joins a second press of this form to the first; the
+  // refusal screens say *pressing again is safe* and this one said nothing.
+  expect(html).toContain(
+    "Pressing this button twice is one lap and not two: the second press joins the first and " +
+      "starts nothing more.",
+  );
 
   // **The retired approval's own screen draws no start button** (rule 1.4).
   // `scopeVerdict` refuses that press at the `superseded` test, so drawing it
@@ -4664,4 +4671,127 @@ test("the published row is in the page's language (#245, D-0055)", async () => {
   );
   expect(lead(html)).toContain(">プルリクエスト</a>");
   expect(lead(html)).not.toContain("Published:");
+});
+
+/** More ended laps than the summary's "what just finished" window holds. */
+const RECENT_ENDED_OVERFLOW = 6;
+
+/** A lap that is running: reserved and walked as far as `performing`. */
+async function runningLap(
+  world: ReturnType<typeof fresh>,
+  id: string,
+  request: string,
+): Promise<void> {
+  await reserve(world, id, request);
+  for (const [from, to] of [
+    ["planned", "admitting"],
+    ["admitting", "admitted"],
+    ["admitted", "performing"],
+  ] as const) {
+    const moved = await world.store.transition(id, from, to, {}, 2_000);
+    expect(moved.kind).toBe("transitioned");
+  }
+}
+
+test("a running lap says it is running above its request, not under a wall of it (#244)", async () => {
+  const world = fresh();
+  const request = "Please look at the flaky test.\n\nIt fails about one run in five, and\n";
+  await runningLap(world, "i-0001", request);
+  const html = await operatorPage(portsOver(world), "t");
+  const row = html.slice(html.indexOf('id="lap-i-0001"'));
+
+  // The state and the age are both still said, once, in the row's own head.
+  expect(row).toContain(">Running</span>");
+  // **Above the request and not below it**: the one fact a person watching a
+  // lap came for used to sit last, under the words they wrote themselves.
+  expect(row.indexOf(">Running</span>")).toBeLessThan(row.indexOf("Please look at the flaky test"));
+
+  // A waiting row keeps the order it had: its request is what it is about.
+  const other = fresh();
+  await reserve(other, "i-0002", "Waiting on you.");
+  await openGate(other, "i-0002");
+  const gate = await operatorPage(portsOver(other), "t");
+  const waiting = gate.slice(gate.indexOf('id="lap-i-0002"'));
+  expect(waiting.indexOf("Waiting on you.")).toBeLessThan(
+    waiting.indexOf(">Waiting on you</span>"),
+  );
+});
+
+test("a request with a lap under it says the lap's state instead of offering the scope again (#244)", async () => {
+  const world = fresh();
+  const requestId = "request-running";
+  await seedScopeRequest(world, requestId, "Fix the flaky test, please.");
+  await runningLap(world, "i-0001", "Fix the flaky test, please.");
+  world.connection
+    .prepare("UPDATE iteration SET request_message_id = ? WHERE id = ?")
+    .run(requestId, "i-0001");
+  const dir = mkdtempSync(join(tmpdir(), "rondo-requests-lap-"));
+  const { file: planFile } = scopePlanFile(dir);
+  const ports = { ...portsOver(world, "ada", []), plan: planPortOver(planFile, world.record) };
+
+  const live = await operatorPage(ports, "t", { kind: "requests" });
+  const row = live.slice(live.indexOf(`id="request-${requestId}"`));
+  expect(row).toContain(">Running</span>");
+  // The entrance goes while the lap is live: a second scope beside a running
+  // lap is the confusion this list was causing.
+  expect(row).not.toContain("Set the scope");
+
+  // **And comes back when the lap has ended**: asking for more work on an
+  // answered request is a real act, and the row says what became of the first.
+  const closed = await world.store.transition(
+    "i-0001",
+    "performing",
+    "closed",
+    { gateOutcome: "approve" },
+    5_000,
+  );
+  expect(closed.kind).toBe("transitioned");
+  const after = await operatorPage(ports, "t", { kind: "requests" });
+  const ended = after.slice(after.indexOf(`id="request-${requestId}"`));
+  expect(ended).toContain(">Approved</span>");
+  expect(ended).toContain("Set the scope");
+
+  // **The summary's five-row window is the summary's** (Codex round 1). The
+  // requests list is not bounded, so a lap that has dropped out of *what just
+  // finished* must still be what its request says about itself -- otherwise a
+  // recorded outcome quietly becomes "nobody has started anything".
+  for (let n = 0; n < RECENT_ENDED_OVERFLOW; n += 1) {
+    const id = `i-other-${String(n)}`;
+    await reserve(world, id, "another request entirely");
+    const moved = await world.store.transition(id, "planned", "abandoned", {}, 6_000 + n);
+    expect(moved.kind).toBe("transitioned");
+  }
+  const later = await operatorPage(ports, "t", { kind: "requests" });
+  const pushedOut = later.slice(later.indexOf(`id="request-${requestId}"`));
+  expect(pushedOut).toContain(">Approved</span>");
+
+  // **A live lap speaks for its request over a terminal one, however new**
+  // (Codex round 2). A retry can end while the lap it supersedes is still at
+  // its gate; going by age alone would have shown only the ending and brought
+  // the entrance back over work that is still live.
+  await reserve(world, "i-0002", "Fix the flaky test, please.");
+  await openGate(world, "i-0002");
+  world.connection
+    .prepare("UPDATE iteration SET request_message_id = ? WHERE id = ?")
+    .run(requestId, "i-0002");
+  const failed = await world.store.transition("i-0001", "closed", "closed", {}, 9_000);
+  expect(failed.kind).toBe("transitioned");
+  const alive = await operatorPage(ports, "t", { kind: "requests" });
+  const stillLive = alive.slice(alive.indexOf(`id="request-${requestId}"`));
+  expect(stillLive).toContain(">Waiting on you</span>");
+  expect(stillLive).not.toContain("Set the scope");
+
+  // A request nobody has started anything for is unchanged: the entrance only.
+  await seedScopeRequest(world, "request-idle", "And this one too, some time.");
+  const both = await operatorPage(ports, "t", { kind: "requests" });
+  const idle = both.slice(both.indexOf('id="request-request-idle"'));
+  expect(idle.slice(0, idle.indexOf("</li>"))).toContain("Set the scope");
+});
+
+test("the sentence that says a second start press is safe is in both catalogues (#244)", () => {
+  // Half-translated is worse than untranslated here: a Japanese page would
+  // fall into English in the middle of the one paragraph beside the press.
+  expect(EN.startAgainSafe).not.toBe("");
+  expect(chromeFor("ja").startAgainSafe).not.toBe(EN.startAgainSafe);
+  expect(chromeFor("ja").startAgainSafe).toContain("2 回目の押下は 1 回目に合流し");
 });

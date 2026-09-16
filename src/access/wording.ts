@@ -644,6 +644,17 @@ export interface Chrome {
   readonly startPlain: string;
   readonly startNote: string;
   /**
+   * That a second press of this button is one lap and not two (rondo#244).
+   *
+   * **Said because it is true and was not said.** `startScopedFromPage` holds
+   * the in-flight start per lap id and joins a second press to the first, so
+   * the one press on this page that spends money is already safe to repeat --
+   * and it was the only one saying nothing about it, while every refusal
+   * screen says *pressing again is safe* out loud. The sentence is about this
+   * button, which is the whole of what the id it carries covers.
+   */
+  readonly startAgainSafe: string;
+  /**
    * Why a press recorded or started nothing, one sentence each, with no id and
    * no D-number in front of a person -- {@link sendRefusedForm}'s rule applied
    * to this screen's two presses.
@@ -1268,6 +1279,9 @@ explanation you pressed on and then answers the gate.`,
   startNote:
     "The words of your request are what the work is asked to do, exactly as you wrote them. " +
     "rondo names the lap; you do not.",
+  startAgainSafe:
+    "Pressing this button twice is one lap and not two: the second press joins the first and " +
+    "starts nothing more.",
   scopeRefusedNoApprover:
     "Nothing was recorded: RONDO_APPROVER is not set, so there is nobody this page could " +
     "approve a scope as.",
@@ -1924,6 +1938,9 @@ const JA: Partial<Chrome> = Object.freeze({
     "始めるなら、置き換えた側の範囲になります。",
   startAction: "作業を始める",
   startPlain: "この承認のもとで 1 周回を始めます",
+  startAgainSafe:
+    "このボタンを二度押しても周回は 1 つです。2 回目の押下は 1 回目に合流し、それ以上は" +
+    "始めません。",
   startNote:
     "依頼に書いた言葉が、そのまま作業への指示になります。周回の名前は rondo が付けるので、" +
     "あなたが決める必要はありません。",
