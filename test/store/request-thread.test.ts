@@ -19,6 +19,17 @@ import { CONSERVATIVE_HOST_POLICY } from "../../src/refrain/policy.js";
 import type { ThreadMessageDraft } from "../../src/store/records.js";
 import { advisoryRecord, iterationStore, openAdvisoryRecord } from "../../src/store/sqlite.js";
 
+/**
+ * The test marked with this drives `main` over an on-disk store rather than
+ * `:memory:`, and is the only test in this file that Windows slows down: on
+ * the two Windows cells of main's green run 35089584019 it measured 2.0 s to
+ * 2.8 s against the 10 s default, and it has already timed out in CI at that
+ * headroom (rondo#222). The number is the one #191 gave the real-git
+ * review-material tests -- a floor under Windows process and filesystem
+ * variance, not a budget.
+ */
+const WINDOWS_HEAVY_TIMEOUT_MS = 60_000;
+
 const operator = (parts: Partial<ThreadMessageDraft> = {}): ThreadMessageDraft => ({
   messageId: "m-request",
   body: "  please make the inbox show requests\n\nand nothing else  ",
@@ -344,53 +355,60 @@ test("request and reply take only their own flags", () => {
   expect(parseCommand(["start", "--message-id", "m-1"]).kind).toBe("parsed");
 });
 
-test("rondo request and rondo reply write operator messages as the approver", async () => {
-  const path = join(mkdtempSync(join(tmpdir(), "rondo-thread-")), "store.db");
-  const environment = { RONDO_STORE: path, RONDO_APPROVER: "me" };
-  const errors: string[] = [];
-  const originalWrite = consoleSeams.write;
-  const originalError = consoleSeams.writeError;
-  consoleSeams.write = () => {};
-  consoleSeams.writeError = (text: string) => {
-    errors.push(text);
-  };
-  try {
+test(
+  "rondo request and rondo reply write operator messages as the approver",
+  async () => {
+    const path = join(mkdtempSync(join(tmpdir(), "rondo-thread-")), "store.db");
+    const environment = { RONDO_STORE: path, RONDO_APPROVER: "me" };
+    const errors: string[] = [];
+    const originalWrite = consoleSeams.write;
+    const originalError = consoleSeams.writeError;
+    consoleSeams.write = () => {};
+    consoleSeams.writeError = (text: string) => {
+      errors.push(text);
+    };
+    try {
+      expect(
+        await main(
+          ["request", "--actor-id", "me", "--message-id", "m-1", "--body=-- leading dash kept"],
+          environment,
+        ),
+      ).toBe(0);
+      expect(
+        await main(
+          ["reply", "--actor-id", "me", "--message-id", "m-2", "--in-reply-to", "m-1", "--body=ok"],
+          environment,
+        ),
+      ).toBe(0);
+      // Somebody else is refused before anything is written, and so is a reply to nothing.
+      expect(
+        await main(
+          ["request", "--actor-id", "you", "--message-id", "m-3", "--body=x"],
+          environment,
+        ),
+      ).toBe(2);
+      expect(
+        await main(
+          ["reply", "--actor-id", "me", "--message-id", "m-4", "--in-reply-to", "m-9", "--body=x"],
+          environment,
+        ),
+      ).toBe(2);
+    } finally {
+      consoleSeams.write = originalWrite;
+      consoleSeams.writeError = originalError;
+    }
+    expect(errors.join("")).toContain("m-9");
+    const changes = await openAdvisoryRecord(path).changedSince(0);
+    expect(changes.map((change) => change.id)).toEqual(["m-1", "m-2"]);
+    const connection = new DatabaseSync(path);
     expect(
-      await main(
-        ["request", "--actor-id", "me", "--message-id", "m-1", "--body=-- leading dash kept"],
-        environment,
-      ),
-    ).toBe(0);
-    expect(
-      await main(
-        ["reply", "--actor-id", "me", "--message-id", "m-2", "--in-reply-to", "m-1", "--body=ok"],
-        environment,
-      ),
-    ).toBe(0);
-    // Somebody else is refused before anything is written, and so is a reply to nothing.
-    expect(
-      await main(["request", "--actor-id", "you", "--message-id", "m-3", "--body=x"], environment),
-    ).toBe(2);
-    expect(
-      await main(
-        ["reply", "--actor-id", "me", "--message-id", "m-4", "--in-reply-to", "m-9", "--body=x"],
-        environment,
-      ),
-    ).toBe(2);
-  } finally {
-    consoleSeams.write = originalWrite;
-    consoleSeams.writeError = originalError;
-  }
-  expect(errors.join("")).toContain("m-9");
-  const changes = await openAdvisoryRecord(path).changedSince(0);
-  expect(changes.map((change) => change.id)).toEqual(["m-1", "m-2"]);
-  const connection = new DatabaseSync(path);
-  expect(
-    connection
-      .prepare(
-        "SELECT body, author_kind, author_id, asks FROM conversation_message WHERE message_id = 'm-1'",
-      )
-      .get(),
-  ).toEqual({ body: "-- leading dash kept", author_kind: "operator", author_id: "me", asks: 0 });
-  connection.close();
-});
+      connection
+        .prepare(
+          "SELECT body, author_kind, author_id, asks FROM conversation_message WHERE message_id = 'm-1'",
+        )
+        .get(),
+    ).toEqual({ body: "-- leading dash kept", author_kind: "operator", author_id: "me", asks: 0 });
+    connection.close();
+  },
+  WINDOWS_HEAVY_TIMEOUT_MS,
+);
