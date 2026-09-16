@@ -39,6 +39,16 @@ it needs its own `unsetopt` line if its own commands are exotic enough to
 trigger correction — check by actually running the block in an interactive
 zsh, not by reading it.
 
+**Do not explain the `unsetopt` line with a trailing `#` comment on the same
+line.** An early draft of this fix wrote
+`unsetopt correct correct_all          # ... (#221)`, and a review that
+actually pasted it into an interactive zsh hit `zsh: unknown file attribute:
+#`: zsh's default `INTERACTIVE_COMMENTS off` means a bare `#` is not a
+comment leader in an interactive shell, so `(#221)` is parsed as a glob
+qualifier list instead, and the whole line -- including the `unsetopt` it was
+meant to explain -- fails. Say why in the prose above the block, never in a
+comment inside it.
+
 ## 2. Expected files come from the change's call sites, not from the issue
 
 lap 9 built its "files this lap should touch" table by reading the issue and

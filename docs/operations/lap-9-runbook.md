@@ -67,8 +67,13 @@ git clone https://github.com/suisya-systems/rondo.git /tmp/claude-1000/rondo-dog
 
 ### Step 1. 環境を読み込む
 
+1 行目は zsh の対話的スペル訂正を切る（放置すると毎ステップ「correct ... ?」と聞かれる、#221）。
+説明はコマンド行の外に書く: 行末に `#` と `(...)` を続けるコメントは、zsh の既定
+`INTERACTIVE_COMMENTS off` の下では glob qualifier と解釈され、訂正を切るはずのその行自体が
+壊れる。
+
 ```sh
-unsetopt correct correct_all          # zsh asks about unfamiliar words otherwise (#221)
+unsetopt correct correct_all
 cd /tmp/claude-1000/rondo-dogfood-lap-9-env/rondo-host
 . /tmp/claude-1000/rondo-dogfood-lap-9-env/env.sh
 R=/tmp/claude-1000/rondo-dogfood-lap-9-env; date +%T

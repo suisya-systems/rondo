@@ -40,8 +40,13 @@ Re-running any of them is safe.
 `$R` below is the environment root. lap 9 put it under `/tmp` and lost it to a reboot; this one
 lives in your home directory so a lap can be walked across two days.
 
+The first line turns off zsh's interactive spelling correction, which otherwise asks about
+unfamiliar words on every step (#221). Its own comment stays out of the pasted line: a trailing
+`#` with a `(...)` after it reads as a glob qualifier rather than a comment under zsh's default
+`INTERACTIVE_COMMENTS off`, and breaks the very line it is explaining.
+
 ```sh
-unsetopt correct correct_all          # zsh asks about unfamiliar words otherwise (#221)
+unsetopt correct correct_all
 R=$HOME/rondo-lap-10; mkdir -p "$R"
 git clone https://github.com/suisya-systems/rondo.git "$R/rondo-host"
 git clone https://github.com/suisya-systems/rondo.git "$R/rondo-gh"
