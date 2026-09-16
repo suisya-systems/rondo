@@ -2915,9 +2915,14 @@ function endedRecently(records: readonly IterationRecord[]): readonly IterationR
  * facts every thread view needs derived once per render: which request a
  * message belongs to, and which asks still wait on the person.
  *
- * **An ask waits while nothing replies to it**, which is rule 2.7's own
- * definition and the one `openAsksIn` queries -- read here off the same rows
- * rather than asked once per request, because the page draws every thread.
+ * **An ask waits while no answer of the person's has carried it on** (D-0072
+ * rule 3), which is the reading `openAsksIn` queries -- read here off the same
+ * rows rather than asked once per request, because the page draws every thread.
+ * An ordinary reply, a drafter's report and an answer that says to stop all
+ * leave it waiting, and **the page must agree with the store about this or it
+ * has no working answering path**: a question the page thought closed would be
+ * drawn with a Reply box, and the reply would be refused by the write port
+ * while the line stayed held (#206, Codex).
  */
 interface Threads {
   readonly messages: readonly ThreadMessageDraft[];
@@ -2937,7 +2942,18 @@ function threadsOf(
   inReading: ReadonlySet<string>,
 ): Threads {
   const byId = new Map(messages.map((message) => [message.messageId, message]));
-  const replied = new Set(messages.flatMap((message) => message.inReplyTo ?? []));
+  // Only an operator's `carry_on` closes a question (D-0072 rule 3). The
+  // `author_kind` is rule 4.4's "the person's reply" read literally: a drafter
+  // message threaded under a stop does not release it.
+  const carriedOn = new Set(
+    messages.flatMap((message) =>
+      message.authorKind === "operator" &&
+      message.answerOutcome === "carry_on" &&
+      message.inReplyTo !== null
+        ? [message.inReplyTo]
+        : [],
+    ),
+  );
   // ponytail: a walk per message per render, which is O(messages x depth); a
   // thread is a conversation's worth of rows. A `root` column is the upgrade.
   const rootOf = (messageId: string): string | null => {
@@ -2955,7 +2971,7 @@ function threadsOf(
     rootOf,
     waiting: new Set(
       messages
-        .filter((message) => message.asks && !replied.has(message.messageId))
+        .filter((message) => message.asks && !carriedOn.has(message.messageId))
         .map((message) => message.messageId),
     ),
     inReading,
@@ -3041,8 +3057,8 @@ function basisChip(
 /**
  * One message in a thread (D-0061 rule 2): who wrote it and in which voice, how
  * long ago, the words byte for byte with their paragraphs (rondo#90), what it
- * rests on, and -- where it asks and nothing has replied -- the one mark that
- * it waits on the person.
+ * rests on, and -- where it asks and no answer has carried it on (D-0072 rule
+ * 3) -- the one mark that it waits on the person.
  *
  * **The voices are told apart three ways, none of them alone**: an initial in a
  * round mark (blue for the drafter), a badge that names the drafter's voice, and
@@ -4713,35 +4729,62 @@ function composerView(
         class="block max-h-[40vh] min-h-[4.5rem] w-full resize-y bg-transparent px-4 pt-2 text-[14px] leading-6 outline-none [field-sizing:content] placeholder:text-faint"
       />
       <div class="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 pt-1 pb-2.5">
-        <span class="note px-1 text-[11.5px] leading-5 text-faint">{wording.sendNote}</span>
+        <span class="note px-1 text-[11.5px] leading-5 text-faint">
+          {answers ? wording.answerOutcomeNote : wording.sendNote}
+        </span>
         <span class="ml-auto flex items-center gap-3">
           <span class="js-only hidden items-center gap-1 text-[11.5px] text-faint sm:flex">
             {kbd("Ctrl/⌘")}
             {kbd("↵")}
             <span>{wording.keySend}</span>
           </span>
-          <button
-            type="submit"
-            class={
-              answers
-                ? `${PRIMARY} h-9 px-4 text-sm`
-                : "inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-md bg-foreground px-4 text-sm font-semibold text-background shadow-xs outline-none hover:bg-foreground/85 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card disabled:cursor-wait disabled:opacity-60"
-            }
-          >
-            <svg
-              aria-hidden="true"
-              viewBox="0 0 16 16"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.8"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              class="size-3.5"
-            >
-              <path d="M8 13V3m-4 4 4-4 4 4" />
-            </svg>
-            {answers ? wording.answerAskAction : wording.sendAction}
-          </button>
+          {
+            // **One button per answer, and the press is what rondo acts on**
+            // (D-0072 rule 4). Two submits of one form, each carrying its own
+            // `outcome`: a native submit sends the clicked button's name and
+            // value, so this needs no script and works with script off -- and
+            // the route refuses a press naming neither, so there is no default
+            // for a browser that sends none.
+            answers ? (
+              <>
+                <button
+                  type="submit"
+                  name="outcome"
+                  value="stop"
+                  class={`${SECONDARY} h-9 px-4 text-sm`}
+                >
+                  {wording.answerStopAction}
+                </button>
+                <button
+                  type="submit"
+                  name="outcome"
+                  value="carry_on"
+                  class={`${PRIMARY} h-9 px-4 text-sm`}
+                >
+                  {wording.answerCarryOnAction}
+                </button>
+              </>
+            ) : (
+              <button
+                type="submit"
+                class="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-md bg-foreground px-4 text-sm font-semibold text-background shadow-xs outline-none hover:bg-foreground/85 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card disabled:cursor-wait disabled:opacity-60"
+              >
+                <svg
+                  aria-hidden="true"
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  class="size-3.5"
+                >
+                  <path d="M8 13V3m-4 4 4-4 4 4" />
+                </svg>
+                {wording.sendAction}
+              </button>
+            )
+          }
         </span>
       </div>
     </form>

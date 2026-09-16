@@ -209,6 +209,15 @@ export interface Chrome {
   readonly answeringTo: (who: string, since: string) => string;
   /** The filled button that answers a waiting question (a press, not a send). */
   readonly answerAskAction: string;
+  /**
+   * The two answers a waiting question can be pressed with (D-0072 rule 4).
+   * `answerAskAction` stays the box's own label -- what the person is doing --
+   * and these two are the presses: which of them it is, is what rondo acts on.
+   */
+  readonly answerCarryOnAction: string;
+  readonly answerStopAction: string;
+  /** What each of the two presses does, said where the words are typed. */
+  readonly answerOutcomeNote: string;
   readonly newRequestHeading: string;
   readonly requestPlaceholder: string;
   readonly replyPlaceholder: string;
@@ -975,6 +984,11 @@ explanation you pressed on and then answers the gate.`,
   replyingTo: (who, since) => `Replying to ${who}, ${since} ago`,
   answeringTo: (who, since) => `Answering ${who}'s question, ${since} ago`,
   answerAskAction: "Answer",
+  answerCarryOnAction: "Carry on",
+  answerStopAction: "Stop this line",
+  answerOutcomeNote:
+    "Sent as written. Carry on lets the work be tried again; Stop this line keeps it stopped, " +
+    "and you can carry on later.",
   newRequestHeading: "New request",
   requestPlaceholder: "What do you want done? Write it as you would say it.",
   replyPlaceholder: "Write a reply.",
@@ -1627,6 +1641,11 @@ const JA: Partial<Chrome> = Object.freeze({
   replyingTo: (who, since) => `${who} に返信 · ${since}前`,
   answeringTo: (who, since) => `${who} の質問に回答 · ${since}前`,
   answerAskAction: "回答する",
+  answerCarryOnAction: "続ける",
+  answerStopAction: "この線を止める",
+  answerOutcomeNote:
+    "書いたとおりに送られます。「続ける」は仕事をもう一度試させ、「この線を止める」は止めたままにします。" +
+    "あとから「続ける」こともできます。",
   newRequestHeading: "新しい依頼",
   requestPlaceholder: "何をしてほしいですか。話すときの言葉のまま書いてください。",
   replyPlaceholder: "返信を書く",

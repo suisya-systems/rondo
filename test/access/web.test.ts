@@ -64,6 +64,7 @@ import {
   APPROVED_OUTCOME,
   type JsonRecord,
   scopePayloadWithDefaults,
+  type ThreadMessageDraft,
 } from "../../src/store/records.js";
 import { advisoryRecord, iterationStore } from "../../src/store/sqlite.js";
 
@@ -2129,7 +2130,7 @@ test("a request thread is drawn whole: every body byte for byte, voices apart, b
 
   // **The box answers the waiting question by default, on a press**: a native
   // `POST` to `/answer-ask` with no `hx-post` (D-0059 section 5a's falsifier,
-  // D-0069 rule 5), a filled Answer button, and a target line of who and when.
+  // D-0069 rule 5), one button per answer, and a target line of who and when.
   // It carries the id rondo minted -- once, hidden, never shown -- and sits
   // outside the ledger the redraw swaps, so no redraw touches a draft.
   expect(html).toContain('<form id="composer" method="post" action="/answer-ask?lang=en" class=');
@@ -2138,7 +2139,21 @@ test("a request thread is drawn whole: every body byte for byte, voices apart, b
   expect(html.split(MINTED.reply)).toHaveLength(2);
   expect(html).toContain(`<input type="hidden" name="message_id" value="${MINTED.reply}"/>`);
   expect(html).toMatch(/Answering rondo-drafter's question, \d+s ago/);
-  expect(html).toMatch(/<button type="submit" class="[^"]*bg-wait[^"]*">[\s\S]*?Answer<\/button>/);
+  // **Two presses, each naming the answer it is** (D-0072 rule 4): the route
+  // refuses a press naming neither, so a form with one unnamed button would
+  // answer nothing. `name`/`value` on the button is what a native submit sends,
+  // so this works with script off.
+  expect(html).toMatch(
+    /<button type="submit" name="outcome" value="carry_on" class="[^"]*bg-wait[^"]*">Carry on<\/button>/,
+  );
+  expect(html).toMatch(
+    /<button type="submit" name="outcome" value="stop" class="[^"]*">Stop this line<\/button>/,
+  );
+  // The stop is drawn before the carry-on, so the press that releases work is
+  // not the one under the thumb by accident.
+  expect(html.indexOf('value="stop"')).toBeLessThan(html.indexOf('value="carry_on"'));
+  // And the note under the box says what each of them does.
+  expect(html).toContain("Stop this line keeps it stopped");
   expect(html).not.toContain('class="not-answer');
   const ledgerAt = html.indexOf('<div id="ledger"');
   const composerAt = html.indexOf('<form id="composer"');
@@ -2198,6 +2213,59 @@ test("with no approver the threads are read and never written: no form, and the 
   }
 });
 
+test("D-0072: the page keeps a question waiting until an answer carries it on, as the store does", async () => {
+  // Codex, on #206: if the page closed a question the store still holds, it
+  // would draw a Reply box for it, and that reply would be refused by the write
+  // port -- leaving no way to release the hold from the page at all. So the two
+  // readings have to agree, and this is the test that they do.
+  const world = fresh();
+  await seedThread(world);
+  const ports = portsOver(world, "ada", []);
+  const answered = async (messageId: string, parts: Partial<ThreadMessageDraft>): Promise<void> => {
+    const outcome = await world.record.recordThreadMessage({
+      messageId,
+      body: "this line: stop it",
+      authorKind: "operator",
+      authorId: "ada",
+      inReplyTo: "ask-b",
+      atMs: 4_000,
+      bases: [],
+      asks: false,
+      ...parts,
+    });
+    expect(outcome.kind, JSON.stringify(outcome)).toBe("recorded");
+  };
+  /** What the store says, and what the page drew, about the one ask. */
+  const openInStore = async (): Promise<readonly string[]> => {
+    const read = await world.record.openAsksIn("request-a");
+    return read.kind === "read" ? read.asks.map((ask) => ask.messageId) : ["unreadable"];
+  };
+  const page = async (): Promise<string> =>
+    await operatorPage(ports, "t", { kind: "summary" }, EN, mint);
+
+  // A bare reply: the store holds the line, and so does the page.
+  await answered("m-chat", {});
+  expect(await openInStore()).toEqual(["ask-b"]);
+  expect(await page()).toContain("waiting for your answer (1)");
+
+  // An answer that stops: still held, still drawn as waiting.
+  await answered("m-stop", { answerOutcome: "stop", atMs: 5_000 });
+  expect(await openInStore()).toEqual(["ask-b"]);
+  const stopped = await page();
+  expect(stopped).toContain("waiting for your answer (1)");
+  expect(stopped).toContain('<li id="ask-ask-b"');
+
+  // The answer that carries on is the one that ends it, in both readings.
+  await answered("m-go", { answerOutcome: "carry_on", body: "go on", atMs: 6_000 });
+  expect(await openInStore()).toEqual([]);
+  const released = await page();
+  // The ask's own row is gone from the summary, and the header's one count --
+  // the number the heading and the pill both say -- is empty rather than 1.
+  expect(released).not.toContain('<li id="ask-ask-b"');
+  expect(released).toContain('<span id="waiting-count" class="empty:hidden"></span>');
+  expect(released).not.toContain("waiting for your answer (1)");
+});
+
 test("the summary counts an ask waiting on the person and leads to the reply, and the requests list reads at a glance", async () => {
   const world = fresh();
   await seedThread(world);
@@ -2244,7 +2312,8 @@ test("the threads speak Japanese where the page does, tokens and words untouched
   expect(html).toContain(">あなた</span>");
   expect(html).toContain("あなたの回答待ち");
   expect(html).toContain("rondo-drafter の質問に回答 · ");
-  expect(html).toContain(">回答する</button>");
+  expect(html).toContain(">続ける</button>");
+  expect(html).toContain(">この線を止める</button>");
   expect(html).toContain('action="/answer-ask?lang=ja"');
   expect(bodiesIn(html)).toEqual([ROOT_BODY, ASK_BODY, LATER_BODY]);
 });
