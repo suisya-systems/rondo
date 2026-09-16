@@ -572,6 +572,55 @@ export type LapWorkInspection =
     }
   | { readonly kind: "unreadable"; readonly reason: string };
 
+/** Where a branch points, or why git would not say. */
+export type BranchTip =
+  | { readonly kind: "read"; readonly tipCommit: string }
+  | { readonly kind: "unreadable"; readonly reason: string };
+
+/**
+ * The commit one topic branch points at, asked of git and nothing else.
+ *
+ * **Separate from {@link inspectLapWork} because the two can disagree about
+ * whether anything is readable** (rondo#233 S5, Codex round 3). That function
+ * needs a base ref to compare against, and a worktree that holds none reads as
+ * `unreadable` while the branch it would push is perfectly resolvable. Anything
+ * that has to identify *what would be pushed* -- rather than summarise what it
+ * changed -- asks this instead, so a workspace with no base still has a
+ * fingerprint and work that moved under a screen is still caught moving.
+ */
+export async function inspectBranchTip(request: {
+  readonly workspace: string;
+  readonly topicBranch: string;
+}): Promise<BranchTip> {
+  // `refs/heads/...` spelled out, for `inspectPushTarget`'s reason: a tag or a
+  // remote ref of the same name must not answer for the branch.
+  const resolved = await runCommand(
+    "git",
+    [
+      "-C",
+      request.workspace,
+      "rev-parse",
+      "--verify",
+      "--quiet",
+      `refs/heads/${request.topicBranch}`,
+    ],
+    PREFLIGHT_TIMEOUT_MS,
+  );
+  if (resolved.spawnError !== null) {
+    return { kind: "unreadable", reason: `${resolved.commandLine}: ${resolved.spawnError}` };
+  }
+  const tipCommit = resolved.stdout.trim();
+  if (resolved.status !== 0 || tipCommit === "") {
+    return {
+      kind: "unreadable",
+      reason:
+        queryFailure(resolved) ??
+        `git could not say what '${request.topicBranch}' points at in ${request.workspace}`,
+    };
+  }
+  return { kind: "read", tipCommit };
+}
+
 /**
  * Read the commits and the touched paths the topic branch adds to its base.
  *

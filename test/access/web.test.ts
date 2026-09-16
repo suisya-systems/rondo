@@ -4237,3 +4237,71 @@ test("work amended out of sight of the pull request's text still moves the confi
   expect(stale.ok).toBe(false);
   expect(stale.why).toBe("publishRefusedChanged");
 });
+
+test("a branch whose history will not read is still identified by its tip (#233 S5)", async () => {
+  // **`unreadable` is about the base, not about the branch** (Codex round 3).
+  // A worktree that holds no base ref reads as unreadable while the branch it
+  // would push resolves perfectly well -- and that is exactly the case where
+  // the pull request's text falls back to a fixed shape and the review refusal
+  // carries no tip, so nothing else in the plan would notice the work moving.
+  const world = await publishableWorld("none", 1);
+  const record = await world.store.read(world.iterationId);
+  if (record.kind !== "read") {
+    throw new Error("the fixture row would not read");
+  }
+  const git = (...args: string[]) =>
+    execFileSync("git", ["-C", world.workspace, ...args], {
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        GIT_AUTHOR_NAME: "rondo test",
+        GIT_AUTHOR_EMAIL: "test@example.invalid",
+        GIT_COMMITTER_NAME: "rondo test",
+        GIT_COMMITTER_EMAIL: "test@example.invalid",
+      },
+    });
+  // The base this lap was cut from, gone from the workspace: neither
+  // `refs/remotes/origin/main` nor `refs/heads/main` resolves now.
+  git("branch", "--quiet", "-D", "main");
+  expect(
+    (
+      await inspectLapWork({
+        workspace: world.workspace,
+        remote: READING_REMOTE,
+        baseBranch: "main",
+        topicBranch: String(record.record.plan["topic_branch"]),
+      })
+    ).kind,
+  ).toBe("unreadable");
+
+  const reading = async () =>
+    await publishingForPage({ RONDO_APPROVER: "ada" }, world.store, world.asked, record.record);
+  const before = await reading();
+  if (before.kind !== "ready") {
+    throw new Error(`the fixture would not plan: ${JSON.stringify(before)}`);
+  }
+  // The tip amended: the same subject and the same one file, different bytes.
+  writeFileSync(join(world.workspace, "counter-1.ts"), "export const laps = 99;\n", "utf8");
+  git("add", "counter-1.ts");
+  git("commit", "--quiet", "--amend", "--no-edit");
+  const after = await reading();
+  if (after.kind !== "ready") {
+    throw new Error(`the fixture would not plan: ${JSON.stringify(after)}`);
+  }
+  // Nothing a person read changed: the body is the fallback shape and the
+  // refusal is the constant one.
+  expect(after.title).toBe(before.title);
+  expect(after.body).toBe(before.body);
+  expect(after.review).toEqual(before.review);
+
+  const stale = await publishFromPage(
+    { RONDO_APPROVER: "ada" },
+    world.store,
+    world.storePath,
+    "ada",
+    world.asked,
+    { iterationId: world.iterationId, shown: before.shown, despiteReview: true },
+  );
+  expect(stale.ok).toBe(false);
+  expect(stale.why).toBe("publishRefusedChanged");
+});

@@ -104,6 +104,7 @@ import {
 import { asciiEscape, consoleSeams, legibleAsciiEscape, relayUpstream } from "./console.js";
 import { allowedBashIn } from "./delegation.js";
 import {
+  inspectBranchTip,
   inspectLapWork,
   inspectPushTarget,
   inspectTopicBranch,
@@ -5702,8 +5703,8 @@ export interface PublishPlan {
    */
   readonly pushUrls: readonly string[];
   /**
-   * What the branch was when this plan was composed: the tip, and the digest of
-   * the material under it, or null when the workspace would not read.
+   * What the branch was when this plan was composed: the tip it points at, and
+   * the digest of the material under it when the history could be read.
    *
    * **The pull request's text is not a fingerprint of the work** (Codex round
    * 2). `pullRequestText` truncates the commit list past twenty and the file
@@ -5713,8 +5714,21 @@ export interface PublishPlan {
    * displayed list could leave every other field of this plan identical and let
    * an old override form publish work nobody confirmed. What identifies the work
    * is what git measured over it, so that is carried and digested.
+   *
+   * **The tip is read on its own and never off the history** (Codex round 3).
+   * `inspectLapWork` needs a base ref to compare against and answers
+   * `unreadable` for a worktree that holds none -- while the branch it would
+   * push resolves perfectly well. Taking the fingerprint from that read would
+   * leave exactly those publishes with no fingerprint at all, which is the one
+   * case where the fallback pull request text and the review refusal are both
+   * constant. So the tip comes from {@link inspectBranchTip}, and a tip git
+   * will not answer for is a refusal rather than a null.
    */
-  readonly workFingerprint: { readonly tipCommit: string; readonly materialDigest: string } | null;
+  readonly workFingerprint: {
+    readonly tipCommit: string;
+    /** Null when the history could not be read; the tip is never null. */
+    readonly materialDigest: string | null;
+  };
   readonly topicBranch: string;
   readonly baseBranch: string;
   /** What `gh pr create --head` is given: the branch, or `owner:branch`. */
@@ -5867,6 +5881,20 @@ export async function publishPlanFor(
       reason: preflight.reason,
     };
   }
+  // **What would be pushed, identified before anything describes it** (Codex
+  // round 3). Asked of git on its own, so that a workspace whose base ref is
+  // missing -- which `inspectLapWork` answers `unreadable` for -- still gets a
+  // fingerprint. A tip git will not answer for is refused here rather than
+  // carried as an absence: there would be nothing left to tell one version of
+  // this branch from another.
+  const tip = await inspectBranchTip({ workspace, topicBranch });
+  if (tip.kind !== "read") {
+    return {
+      kind: "refused",
+      block: { why: "target", reason: tip.reason },
+      reason: tip.reason,
+    };
+  }
   // **The host that was checked is the host that is named**, rather than left
   // to the forge CLI to resolve a second time from its own configuration. It
   // resolves a bare `OWNER/NAME` against whatever host it is set up for, so a
@@ -5945,15 +5973,12 @@ export async function publishPlanFor(
       // `read` is the only shape that carries them, and the preflight has
       // already refused every other one.
       pushUrls: inspection.kind === "read" ? inspection.pushUrls : [],
-      // Null on a workspace that would not read, which is a fact and not a
-      // fingerprint: the reading's own refusal is what speaks to that case.
-      workFingerprint:
-        work.kind === "read"
-          ? {
-              tipCommit: evidenceOf(work).tipCommit,
-              materialDigest: evidenceOf(work).materialDigest,
-            }
-          : null,
+      workFingerprint: {
+        tipCommit: tip.tipCommit,
+        // Only the history carries this, and a workspace with no base ref has
+        // none to carry -- which is why the tip above is read separately.
+        materialDigest: work.kind === "read" ? evidenceOf(work).materialDigest : null,
+      },
       topicBranch,
       baseBranch,
       headRef: preflight.headRef,
@@ -5991,8 +6016,8 @@ function publishShownDigest(plan: PublishPlan): string {
     push_urls: [...plan.pushUrls],
     // What the work *is*, rather than what the pull request's text says about
     // it: see {@link PublishPlan.workFingerprint}.
-    tip_commit: plan.workFingerprint?.tipCommit ?? null,
-    material_digest: plan.workFingerprint?.materialDigest ?? null,
+    tip_commit: plan.workFingerprint.tipCommit,
+    material_digest: plan.workFingerprint.materialDigest,
     topic_branch: plan.topicBranch,
     base_branch: plan.baseBranch,
     head_ref: plan.headRef,
