@@ -4,6 +4,12 @@ Conventions every `lap-N-runbook.md` (and any other docs/operations page a
 person pastes commands from) is expected to follow. Each was paid for by a
 real lap going wrong in a way the runbook itself could have prevented.
 
+This applies to a *runbook* -- a script for a walk not yet taken. A
+`lap-N-dogfood.md` is the opposite: a record of what a specific walk actually
+did. Editing one after the fact to match a convention would make the record
+say something that did not happen at the time, so these conventions are
+enforced by fixing the next runbook, never by rewriting a past dogfood note.
+
 ## 1. A paste block must not depend on the shell's interactive options
 
 lap 9 hit `zsh: correct ... [nyae]?` on every step ([`lap-9-dogfood.md`](lap-9-dogfood.md)
