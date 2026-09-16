@@ -772,7 +772,86 @@ export class RevisePort {
   }
 }
 
-/** The ports the server is handed: the reading half, and the four writers. */
+/** What one publish press names; the person typed none of it. */
+export interface PublishInput {
+  /** The lap whose approved work this press would push. */
+  readonly iterationId: string;
+  /**
+   * The digest of the dry-run this press was made on ({@link PublishShown}).
+   *
+   * **Carried so the press can refuse what the screen did not show** (D-0042
+   * rules 2 and 3, and rondo#233 S5's own reason): the publish is re-planned
+   * inside the port, and a re-plan that does not match the one a person read is
+   * a different act with the same button on it.
+   */
+  readonly shown: string;
+  /** Whether this is the second press: the reading's refusal overruled. */
+  readonly despiteReview: boolean;
+}
+
+/** Why a publish press published nothing, as the wording key the page says it in. */
+export type PublishRefusal =
+  | "publishRefusedGone"
+  | "publishRefusedNotClosed"
+  | "publishRefusedNotApproved"
+  | "publishRefusedNoRun"
+  | "publishRefusedPlanField"
+  | "publishRefusedTarget"
+  | "publishRefusedUncommitted"
+  | "publishRefusedNoContinuo"
+  | "publishRefusedNotRead"
+  | "publishRefusedNothingOverruled"
+  | "publishRefusedChanged"
+  | "publishRefusedStillRunning"
+  | "publishRefusedPushFailed"
+  | "publishRefusedPullRequestFailed"
+  | "publishRefusedRunNotClosed"
+  | "publishRefusedNotStarted";
+
+/** What one publish press came to; `detail` is git's or the forge's own line. */
+export interface Published {
+  readonly ok: boolean;
+  readonly note: string;
+  readonly why?: PublishRefusal;
+  readonly detail?: string;
+}
+
+/** Push the branch, open the pull request and close the run, on one press. */
+export type PublishFromWeb = (input: PublishInput) => Promise<Published>;
+
+/**
+ * The fifth thing this surface may write (D-0059 section 5a, the rondo#233 S5
+ * row): a branch pushed, a pull request opened and the run closed -- the one
+ * write on this page that leaves this machine.
+ *
+ * **The check is inside this capability**, as it is in {@link AnswerPort},
+ * {@link SayPort}, {@link ScopePort} and {@link RevisePort}: whoever holds this
+ * object pushes nothing without a press {@link mintPress} minted and nobody has
+ * spent. Its own class for {@link RevisePort}'s reason, sharpened: publishing is
+ * the one act here that is outward, and a holder of any other port must not
+ * become able to reach it.
+ */
+export class PublishPort {
+  readonly #publish: PublishFromWeb;
+
+  constructor(publish: PublishFromWeb) {
+    this.#publish = publish;
+  }
+
+  /** Publish one approved lap, on one press. */
+  async publish(press: Press, input: PublishInput): Promise<Published> {
+    if (!minted.has(press)) {
+      return {
+        ok: false,
+        note: "nothing was published: this was not a person's press",
+      };
+    }
+    minted.delete(press);
+    return await this.#publish(input);
+  }
+}
+
+/** The ports the server is handed: the reading half, and the five writers. */
 export interface ServedPorts extends WebPorts {
   /**
    * Null when `RONDO_APPROVER` is unset, which is also when no button is drawn
@@ -794,6 +873,12 @@ export interface ServedPorts extends WebPorts {
    * accepts (rondo#233 S4).
    */
   readonly revise: RevisePort | null;
+  /**
+   * Null on {@link revise}'s condition and on one of its own: publishing
+   * closes a run as somebody, and the forge repository is the one fact no plan
+   * carries, so a host that named none draws no publish screen (rondo#233 S5).
+   */
+  readonly publish: PublishPort | null;
 }
 
 /**
@@ -872,10 +957,17 @@ const SCOPE_ROUTE = "/scope";
 const START_ROUTE = "/start";
 
 /**
+ * The route that pushes an approved lap's work and opens its pull request
+ * (D-0059 section 5a as annotated from rondo#233 S5, D-0060). A press, as every
+ * approval is, and pressed only from the screen that shows its dry-run.
+ */
+const PUBLISH_ROUTE = "/publish";
+
+/**
  * The routes whose body is numbers and minted ids and never prose, and so take
  * {@link MAX_FORM_BYTES} rather than the send limit.
  */
-const PRESS_ROUTES: ReadonlySet<string> = new Set([SCOPE_ROUTE, START_ROUTE]);
+const PRESS_ROUTES: ReadonlySet<string> = new Set([SCOPE_ROUTE, START_ROUTE, PUBLISH_ROUTE]);
 
 /** A whole count of at least 0, as a form posts one, or null when it is not one. */
 function wholeNumber(value: unknown): number | null {
@@ -1069,6 +1161,10 @@ function viewOf(query: URLSearchParams): PageView {
   if (answering !== null && answering !== "") {
     return { kind: "answer", iterationId: answering };
   }
+  const publishing = query.get("publish");
+  if (publishing !== null && publishing !== "") {
+    return { kind: "publish", iterationId: publishing };
+  }
   return query.get("reading") === "open" ? { kind: "reading" } : { kind: "summary" };
 }
 
@@ -1095,14 +1191,15 @@ function said(c: Context<PageEnv>, status: 400 | 403 | 404 | 409 | 413 | 421 | 5
  * `GET /` for the three views, and section 5a's closed table of write routes:
  * `POST /`, the lap-end `approve` press, the two sends, `POST /request`
  * and `POST /reply`, the question's answer on a press, `POST /answer-ask`, the
- * scope screen's two presses, `POST /scope` and `POST /start`, and the gate's
- * other answer, `POST /revise`. `test/access/web-app.test.ts` enumerates `app.routes` and
+ * scope screen's two presses, `POST /scope` and `POST /start`, the gate's
+ * other answer, `POST /revise`, and the one write that leaves this machine,
+ * `POST /publish`. `test/access/web-app.test.ts` enumerates `app.routes` and
  * fails on any other non-`GET` entry.
  */
 export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
   // The writer is taken off before anything reading is handed the rest, so
   // the renderer does not hold it at runtime either (D-0041 rule 4).
-  const { answer, say, scope, revise, ...reading } = ports;
+  const { answer, say, scope, revise, publish, ...reading } = ports;
   const app = new Hono<PageEnv>();
   tokens.set(app, token);
 
@@ -1529,6 +1626,60 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     );
   });
 
+  // **The publish press** (section 5a's rondo#233 S5 row): the branch pushed,
+  // the pull request opened and the run closed. The one write on this page that
+  // leaves this machine, and the only one whose screen is a precondition --
+  // D-0059 section 5a's Q1 answer is that `publish` is pressed only from a
+  // screen already showing its dry-run, so the digest of that dry-run is
+  // carried and the port refuses a press that does not match a fresh one.
+  //
+  // **`--despite-review` is a second press and not a checkbox rondo reads
+  // lightly**: it arrives as its own form's own field, on a screen that shows
+  // the refusal it overrules, and the port refuses it when there is nothing to
+  // overrule (D-0060 rule 5 stays a person's act, not a default).
+  app.post(PUBLISH_ROUTE, async (c) => {
+    if (publish === null) {
+      return publishRefused(c, 403, "publishRefusedNoApprover", null);
+    }
+    const form = await c.req.parseBody();
+    const iterationId = typeof form["iteration"] === "string" ? form["iteration"] : "";
+    const minting = mintPress(c, form["token"]);
+    if (!("press" in minting)) {
+      return publishRefused(c, minting.status, "publishRefusedPress", iterationId);
+    }
+    // **The lap's id is the page's own and not a minted one**, so it is checked
+    // for being there rather than against a shape (the revise route's rule for
+    // the same field): what names the lap is what the screen read off the store.
+    // The digest is what makes this press a press from a screen, so a form
+    // carrying none is refused here, before the port.
+    const shown = form["shown"];
+    if (typeof shown !== "string" || shown === "" || iterationId === "") {
+      return publishRefused(c, 400, "publishRefusedForm", iterationId);
+    }
+    const published = await publish.publish(minting.press, {
+      iterationId,
+      shown,
+      // One spelling and not "truthy": a field that is there but says something
+      // else is a form this page did not draw.
+      despiteReview: form["despite_review"] === "yes",
+    });
+    if (!published.ok) {
+      return publishRefused(
+        c,
+        409,
+        published.why ?? "publishRefusedNotStarted",
+        iterationId,
+        published.detail ?? null,
+      );
+    }
+    // The summary, anchored at the lap just published, which is where the
+    // approve press, the scoped start and the revise press all already land.
+    return c.redirect(
+      `${viewHref({ kind: "summary" }, tagOf(c))}#${encodeURIComponent(`lap-${iterationId}`)}`,
+      303,
+    );
+  });
+
   /** Whether the thread already holds exactly this operator message. */
   async function alreadyThere(message: SentMessage): Promise<boolean> {
     const read = await reading.record.threadMessages();
@@ -1679,6 +1830,38 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
         wording.lang,
       ),
       wording.gateBack,
+    );
+  }
+
+  /**
+   * A publish press's refusal, in the page's language, with the way back to the
+   * screen it was pressed on -- which is the screen that shows the dry-run, so
+   * a person lands on the reason beside the thing it is about.
+   *
+   * `detail` is git's or the forge's own line, carried for the refusals whose
+   * sentence needs it, and never a D-number.
+   */
+  function publishRefused(
+    c: Context<PageEnv>,
+    status: 400 | 403 | 409,
+    why: "publishRefusedNoApprover" | "publishRefusedPress" | "publishRefusedForm" | PublishRefusal,
+    iterationId: string | null,
+    detail: string | null = null,
+  ) {
+    const wording = wordingOf(c);
+    const said = wording[why];
+    return pressRefused(
+      c,
+      status,
+      wording.publishAction,
+      typeof said === "function" ? said(detail ?? "") : said,
+      viewHref(
+        iterationId === null || iterationId === ""
+          ? { kind: "summary" }
+          : { kind: "publish", iterationId },
+        wording.lang,
+      ),
+      wording.publishBack,
     );
   }
 

@@ -13229,6 +13229,45 @@ answer" below. Supersedes `D-0057`. Refs rondo#172, `D-0057`, `D-0054`, `D-0041`
 > - The write S5 adds (`publish`) is added to the table by its own annotation. Nothing above is
 >   edited.
 
+> **Annotation (2026-09-16, from rondo#233 S5, publishing an approved lap from the page).**
+> Added under the same answer of rondo's human gate as the four annotations above -- every write
+> the page adds beyond section 5a's table is a press, recorded as a row added to that table -- and
+> additive.
+> - **Section 5a's table gains a row: publishing an approved lap, on one press** (`POST /publish`).
+>   It is an approval of an irreversible act -- the table's second row -- and it is the first write
+>   on this page that leaves this machine: a branch pushed, a pull request opened and a run closed.
+>   Its own port and its own brand check (`PublishPort`), for the reason `RevisePort` is its own,
+>   sharpened: a holder of any other port must not become able to publish.
+> - **The screen is the press's precondition** (Q1: `publish` is pressed only from a screen that
+>   already shows its dry-run result). That is made true by construction rather than by the button's
+>   placement: the screen is drawn from `publishPlanFor`, the same function the command line runs,
+>   and the press carries the digest of what was drawn. The port re-plans, re-digests and refuses
+>   when the two disagree, so nothing posted is believed except which lap this is -- the page never
+>   publishes from a value a form carried, which is S3's and S4's rule about the plan and the scope
+>   digests applied to the one act here that cannot be taken back.
+> - **The refusals are said in the page's words, and none of them names a flag.** `D-0060` rule 4's
+>   uncommitted-work refusal, the deterministic reading's refusal and the model reading as material
+>   beside it (`D-0065` rule 5.5) are the same facts the terminal prints, in the page-only
+>   catalogue: the command line's sentences end in `--despite-review`, and a flag is a terminal,
+>   which is the one place this page must never send a person.
+> - **`--despite-review` stays a person's act, as its own press.** Where the reading does not cover
+>   what would be pushed, the ordinary publish button is not drawn at all; what is drawn is the
+>   refusal, and under it a second form with a second button and the one field that says which press
+>   this is. A screen offering both would make overruling a reading a choice of button rather than
+>   something a person decided to do. The port refuses the override when there is nothing to
+>   overrule, so the two presses cannot be confused for each other in either direction.
+> - **What this row costs is what section 5a already priced, plus the one thing no other row has**:
+>   the act is outward and irreversible, and rondo does not hold how far it got. So continuo is
+>   checked before anything is pushed -- a push that cannot be taken back followed by "there is no
+>   continuo here" is the state this screen exists to avoid -- and the one refusal that can land
+>   after the push says exactly that: the branch is pushed, the pull request is not open, and
+>   pressing again is safe.
+> - **The forge repository is the host's, not a field.** It is the one fact no plan carries, so
+>   `rondo web --repo OWNER/NAME` decides whether a host may publish at all; a host that named none
+>   serves the page with no publish screen and one sentence saying why, rather than a button that
+>   would be refused. Nothing above is edited, and rondo#233's writes are now the whole of what this
+>   page can do.
+
 `D-0057` priced four frameworks by **the lines they take over** (96 of 1,233) and by **whether the
 served bytes can still be checked without a build**, and kept the page hand-written. It never asked
 whether the screen an operator looks at reaches the level engineers now hold a developer tool to.
