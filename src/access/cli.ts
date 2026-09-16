@@ -5940,6 +5940,10 @@ function publishShownDigest(plan: PublishPlan): string {
     head_ref: plan.headRef,
     repo: plan.forgeRepo,
     run_id: plan.runId,
+    // Acted on rather than shown, and covered all the same: the close goes to
+    // this database, and a digest that left it out would let the one leg the
+    // screen does not draw move under a press that matched everything else.
+    db: plan.db,
     title: plan.pullRequest.title,
     body: plan.pullRequest.body,
     warnings: [...plan.warnings],

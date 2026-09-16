@@ -4119,8 +4119,13 @@ async function publishView(
           <p class="text-[13px] leading-5 wrap-anywhere">{reviewBlockLine(wording, review)}</p>
         </section>
       )}
+      {/* **No approver, no press, and no sentence here either**: nothing was
+          pressed on this screen, so a refusal's wording would be a report of
+          something that did not happen. The page already says at the top of
+          every view that an unset approver is why there are no buttons
+          (D-0020 rule 2, `noApproverNote`). */}
       {token === null
-        ? note(wording.publishRefusedNoApprover)
+        ? null
         : review === null
           ? publishForm(wording, record, token, shown.shown)
           : despiteForm(wording, record, token, shown.shown)}
