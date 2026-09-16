@@ -1697,6 +1697,8 @@ function endedView(
   facts: ReadonlyMap<string, EndedFacts>,
   /** The way onto the publish screen, drawn only on rows that could publish. */
   publishTo: (record: IterationRecord) => unknown,
+  /** Where a publish that happened is read back from ({@link publishedReport}). */
+  threads: Threads,
 ) {
   return questionGroup(
     "ended",
@@ -1704,6 +1706,7 @@ function endedView(
     ended.map((record) => {
       const said = facts.get(record.id)?.claim ?? null;
       const raised = facts.get(record.id)?.raised ?? null;
+      const published = publishedReport(threads, record.id);
       return lapRow(
         "ended",
         record,
@@ -1733,13 +1736,73 @@ function endedView(
               {wording.checkedEcho(said.claim, said.by)}
             </span>
           ),
+          // **What the publish came to, on the row it was pressed from**
+          // (rondo#245). The three legs all succeeded or this report was never
+          // written, so the row says so and the way in is gone: unlike *Start
+          // the work*, a second press cannot join the first -- `gh` refuses a
+          // pull request that already exists -- so re-offering it is not a
+          // harmless repetition but a press that fails.
+          published === null ? null : publishedLine(wording, record, published),
           // The one thing left to do to an approved lap, where the lap is
           // (rondo#233 S5). A link and not a button: what it leads to is the
           // screen that presses.
-          publishTo(record),
+          published === null ? publishTo(record) : null,
         ],
       );
     }),
+  );
+}
+
+/**
+ * Where a publish's outcome is read back from: the report `reportToRequest`
+ * writes into the request thread once all three legs are done (rondo#245).
+ *
+ * **The thread message is the fact, and rondo holds no other.** It is written
+ * after the push, the pull request and the run close have all succeeded and
+ * never before, so its presence is the whole of "this was published" --
+ * `publishFromPage` deliberately persists nothing about how far a publish that
+ * failed had got (`src/access/cli.ts`, the `publishRefusedPullRequestFailed`
+ * arm), because that would be a durable record of somebody else's state.
+ *
+ * **A lap whose row names no request has no report**, because there is no
+ * thread to write one into. That row keeps its publish link after a publish,
+ * which is the state this page was in for every row before this: nothing is
+ * made worse, and nothing here can invent the fact.
+ *
+ * The id is the one `reportToRequest` mints (`src/access/conductor.ts`), and
+ * the URL is read off the sentence it composed rather than stored twice.
+ */
+function publishedReport(threads: Threads, iterationId: string): { url: string | null } | null {
+  const report = threads.byId.get(`report-published-${iterationId}`);
+  if (report === undefined) {
+    return null;
+  }
+  return { url: /https?:\/\/[^\s]+/.exec(report.body)?.[0] ?? null };
+}
+
+/** The publish's three legs in the past tense, the pull request as a link. */
+function publishedLine(
+  wording: Chrome,
+  record: IterationRecord,
+  published: { readonly url: string | null },
+) {
+  return (
+    <span class="line published min-w-0 wrap-anywhere">
+      {wording.published(record.topicBranch, record.runId)}
+      {published.url === null ? null : (
+        <>
+          {" "}
+          <a
+            id={`published-${record.id}`}
+            href={published.url}
+            class="font-medium text-link hover:underline"
+            title={published.url}
+          >
+            {wording.publishedPullRequest}
+          </a>
+        </>
+      )}
+    </span>
   );
 }
 
@@ -4056,6 +4119,7 @@ async function publishView(
   wording: Chrome,
   view: Extract<PageView, { kind: "publish" }>,
   token: string | null,
+  threads: Threads,
 ): Promise<unknown> {
   const head = (heading: string) => (
     <header class="space-y-2">
@@ -4107,6 +4171,15 @@ async function publishView(
     );
   }
   const record = found.record;
+  // **An address a person can retype is the row's link's second door**
+  // (rondo#245). The summary stops drawing the way in once a publish is
+  // reported, and the screen it led to says the same thing rather than drawing
+  // a dry-run and a button for a press that `gh` would refuse. Ahead of the
+  // dry-run, which shells out to git for an answer nobody would act on.
+  const published = publishedReport(threads, record.id);
+  if (published !== null) {
+    return framed(note(wording.published(record.topicBranch, record.runId)));
+  }
   const shown = await ports.publishing(record);
   if (shown.kind === "refused") {
     return framed(
@@ -4743,7 +4816,7 @@ export async function operatorPage(
   // **Awaited here** for `scoping`'s reason: the dry-run reads a workspace and
   // the forge's own configuration, and the tree is composed from what it read.
   const publishing =
-    view.kind === "publish" ? await publishView(ports, wording, view, token) : null;
+    view.kind === "publish" ? await publishView(ports, wording, view, token, threads) : null;
   /** The way onto the publish screen, drawn on an ended lap wherever one is listed. */
   const publishTo = (record: IterationRecord) => publishLink(wording, ports, token, record);
 
@@ -5097,7 +5170,7 @@ export async function operatorPage(
                   )}
                   {attentionView(wording, unreadable)}
                   {runningView(wording, running, transcripts, nowMs)}
-                  {endedView(wording, ended, nowMs, endedFacts, publishTo)}
+                  {endedView(wording, ended, nowMs, endedFacts, publishTo, threads)}
                 </>
               )}
               {onThreads || view.kind === "scope" || view.kind === "publish" ? null : (

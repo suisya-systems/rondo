@@ -769,6 +769,18 @@ export interface Chrome {
    */
   readonly publishAction: string;
   readonly publishHere: string;
+  /**
+   * What a publish of this lap came to, on the row it was pressed from
+   * (rondo#245).
+   *
+   * **Past tense, and the three legs by name.** The press is the one act on
+   * this page that leaves the machine and the one that cannot be repeated, so
+   * a row that says nothing after it sends a person to the forge to find out.
+   * The pull request is a link rather than a URL to copy, for the reason every
+   * other locator on this page is.
+   */
+  readonly published: (branch: string | null, runId: string | null) => string;
+  readonly publishedPullRequest: string;
   readonly publishHeading: string;
   readonly publishLead: string;
   /** The lead where there is no press: the same fact, without the button's half. */
@@ -1360,6 +1372,10 @@ explanation you pressed on and then answers the gate.`,
 
   publishAction: "Publish",
   publishHere: "Read what publishing would do, and publish from there",
+  published: (branch, runId) =>
+    `Published: ${branch === null ? "the branch" : `the branch ${branch}`} is pushed, and ` +
+    `${runId === null ? "the run" : `the run ${runId}`} is closed.`,
+  publishedPullRequest: "The pull request",
   publishHeading: "Publish this work",
   publishLead:
     "Nothing has left this machine yet. This is what publishing would do, read just now; the " +
@@ -2015,6 +2031,10 @@ const JA: Partial<Chrome> = Object.freeze({
 
   publishAction: "公開する",
   publishHere: "公開すると何が起きるかを読み、その画面から公開する",
+  published: (branch, runId) =>
+    `公開済み: ${branch === null ? "ブランチ" : `ブランチ ${branch}`} を push し、` +
+    `${runId === null ? "run" : `run ${runId}`} を閉じました。`,
+  publishedPullRequest: "プルリクエスト",
   publishHeading: "この作業を公開する",
   publishLead:
     "まだ何もこのマシンの外へ出ていません。以下は公開したときに起きることを今読み取ったもので、" +

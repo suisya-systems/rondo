@@ -32,6 +32,7 @@ import {
   scopeDraftingFromPlan,
   startScopedFromPage,
 } from "../../src/access/cli.js";
+import { reportToRequest } from "../../src/access/conductor.js";
 import { inspectLapWork } from "../../src/access/forge.js";
 import { evidenceOf, READING_REMOTE } from "../../src/access/review.js";
 import { agentTypeRecordOf, heldAgentTypeLines } from "../../src/access/scope.js";
@@ -4571,3 +4572,96 @@ test(
   },
   WINDOWS_HEAVY_TIMEOUT_MS,
 );
+
+/**
+ * A published lap, as rondo records one: the report `reportToRequest` writes
+ * into the request thread when all three legs are done.
+ *
+ * **The real writer and not a hand-built row** (rondo#245). What the page reads
+ * back is a message id and a sentence composed in `src/access/conductor.ts`; a
+ * fixture that spelled either of them here would keep passing after the writer
+ * moved, which is exactly the coupling worth sealing.
+ */
+async function publishReported(
+  world: ReturnType<typeof fresh>,
+  pullRequestUrl: string | null,
+): Promise<void> {
+  await seedScopeRequest(world, "request-publish", "Ship it when it is done, please.");
+  world.connection
+    .prepare("UPDATE iteration SET request_message_id = ? WHERE id = ?")
+    .run("request-publish", "i-0001");
+  const line = await reportToRequest(
+    { record: world.record, store: world.store },
+    "i-0001",
+    { kind: "published", pullRequestUrl },
+    6_000,
+  );
+  expect(line).toContain("Reported to the request 'request-publish'");
+}
+
+test("a published lap says what the publish came to, and is not offered the press again (#245)", async () => {
+  const world = fresh();
+  await approvedLap(world);
+  const publishing = async () => DRY_RUN;
+  const ports = portsOver(world, "ada", [], null, null, publishing);
+
+  // Before: the way in is drawn and nothing claims anything happened.
+  const before = await operatorPage(ports, "t", { kind: "summary" });
+  expect(before).toContain('href="/?publish=i-0001&amp;lang=en"');
+  expect(before).not.toContain("Published:");
+
+  await publishReported(world, "https://github.com/suisya-systems/rondo/pull/242");
+  const after = await operatorPage(ports, "t", { kind: "summary" });
+
+  // **What happened, off the row's own columns and the report's URL.**
+  expect(lead(after)).toContain(
+    "Published: the branch rondo/i-0001 is pushed, and the run rondo-i-0001 is closed.",
+  );
+  expect(lead(after)).toContain('href="https://github.com/suisya-systems/rondo/pull/242"');
+  expect(lead(after)).toContain(">The pull request</a>");
+  // **And the press is not re-offered.** Unlike a start, a second press cannot
+  // join the first: a pull request that exists cannot be opened again.
+  expect(after).not.toContain("?publish=i-0001");
+
+  // The screen the link led to says the same thing, for an address retyped.
+  const screen = await operatorPage(ports, "t", { kind: "publish", iterationId: "i-0001" });
+  expect(screen).toContain(
+    "Published: the branch rondo/i-0001 is pushed, and the run rondo-i-0001 is closed.",
+  );
+  expect(screen).not.toContain("<form");
+  expect(screen).not.toContain("Push the branch rondo/i-0001 to origin.");
+});
+
+test("a publish whose forge printed no URL still says what it came to (#245)", async () => {
+  const world = fresh();
+  await approvedLap(world);
+  await publishReported(world, null);
+  const html = await operatorPage(
+    portsOver(world, "ada", [], null, null, async () => DRY_RUN),
+    "t",
+    { kind: "summary" },
+  );
+
+  expect(lead(html)).toContain("Published: the branch rondo/i-0001 is pushed");
+  // No link where there is no URL, and no half-written one either.
+  expect(lead(html)).not.toContain(">The pull request</a>");
+  expect(html).not.toContain("?publish=i-0001");
+});
+
+test("the published row is in the page's language (#245, D-0055)", async () => {
+  const world = fresh();
+  await approvedLap(world);
+  await publishReported(world, "https://github.com/suisya-systems/rondo/pull/242");
+  const html = await operatorPage(
+    portsOver(world, "ada", [], null, null, async () => DRY_RUN),
+    "t",
+    { kind: "summary" },
+    chromeFor("ja"),
+  );
+
+  expect(lead(html)).toContain(
+    "公開済み: ブランチ rondo/i-0001 を push し、run rondo-i-0001 を閉じました。",
+  );
+  expect(lead(html)).toContain(">プルリクエスト</a>");
+  expect(lead(html)).not.toContain("Published:");
+});
