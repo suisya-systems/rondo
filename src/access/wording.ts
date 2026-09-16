@@ -41,6 +41,40 @@
 import { isLanguageTag } from "../refrain/plan.js";
 
 /**
+ * Where a listed agent type's record was read from (D-0069 section 1).
+ *
+ * `iteration` and `scope` are rows rondo holds; `plan` is the plan the scope
+ * being drafted would record, which nothing holds yet -- shown before the press
+ * so the first scope in a store is not a hash a person approves blind
+ * (rondo#233 S3).
+ */
+export type AgentTypeSource = "iteration" | "scope" | "plan";
+
+/** The three sources as English, for the {@link EN} set's three lines about them. */
+function agentTypeSourceEn(from: AgentTypeSource): string {
+  switch (from) {
+    case "iteration":
+      return "a lap's plan";
+    case "scope":
+      return "a plan recorded for a scope";
+    default:
+      return "the plan this scope records";
+  }
+}
+
+/** The same three, as the {@link JA} set says them. */
+function agentTypeSourceJa(from: AgentTypeSource): string {
+  switch (from) {
+    case "iteration":
+      return "周回のプラン";
+    case "scope":
+      return "範囲に記録されたプラン";
+    default:
+      return "この範囲が記録するプラン";
+  }
+}
+
+/**
  * Every sentence rondo composes for the operator to read, keyed by string.
  *
  * `lang` is the one member that is not prose: it is the tag the rest of the set
@@ -450,6 +484,11 @@ export interface Chrome {
    * One line per listed agent type, read back from the held record (D-0069
    * section 1): what it is allowed, or why that cannot be shown.
    *
+   * `from` says where the record was read, and the three are not the same
+   * claim: two of them are rows rondo already holds, and `plan` is the plan
+   * this very scope would record -- nothing is held yet, and the person is
+   * being shown what the press is about to write rather than what it wrote.
+   *
    * `granted` are cadenza's own capability keys and stay their own bytes in
    * both sets (rule 3); the prose around them is rewritten.
    */
@@ -457,20 +496,12 @@ export interface Chrome {
     digest: string,
     tier: string,
     granted: readonly string[],
-    from: "iteration" | "scope",
+    from: AgentTypeSource,
   ) => string;
   readonly scopeHeldNone: (digest: string) => string;
   readonly scopeHeldUnreadable: (digest: string, reason: string) => string;
-  readonly scopeHeldRebuilds: (
-    digest: string,
-    rebuilt: string,
-    from: "iteration" | "scope",
-  ) => string;
-  readonly scopeHeldNoBuild: (
-    digest: string,
-    from: "iteration" | "scope",
-    reason: string,
-  ) => string;
+  readonly scopeHeldRebuilds: (digest: string, rebuilt: string, from: AgentTypeSource) => string;
+  readonly scopeHeldNoBuild: (digest: string, from: AgentTypeSource, reason: string) => string;
   /** The review-rounds control, and the residual of drawing it as links rather than a form. */
   readonly scopeRoundsAsk: string;
   readonly scopeRoundsRedraw: string;
@@ -932,18 +963,16 @@ explanation you pressed on and then answers the gate.`,
     "this is a fresh draft either way. Pressing records a second one.",
   scopeHeldBounds: (digest, tier, granted, from) =>
     `agent type ${digest}: tier ${tier}, granted ` +
-    `${granted.length === 0 ? "nothing" : granted.join(", ")}, read back from ` +
-    `${from === "iteration" ? "a lap's plan" : "a plan recorded for a scope"}`,
+    `${granted.length === 0 ? "nothing" : granted.join(", ")}, read from ` +
+    `${agentTypeSourceEn(from)}`,
   scopeHeldNone: (digest) => `agent type ${digest}: rondo holds no record of what it is allowed`,
   scopeHeldUnreadable: (digest, reason) =>
     `agent type ${digest}: the record will not read, so what it is allowed cannot be shown: ${reason}`,
   scopeHeldRebuilds: (digest, rebuilt, from) =>
-    `agent type ${digest}: the record read back from ` +
-    `${from === "iteration" ? "a lap's plan" : "a plan recorded for a scope"} rebuilds to ` +
+    `agent type ${digest}: the record read from ${agentTypeSourceEn(from)} rebuilds to ` +
     `${rebuilt}, so what it is allowed cannot be shown`,
   scopeHeldNoBuild: (digest, from, reason) =>
-    `agent type ${digest}: the record read back from ` +
-    `${from === "iteration" ? "a lap's plan" : "a plan recorded for a scope"} does not build, so ` +
+    `agent type ${digest}: the record read from ${agentTypeSourceEn(from)} does not build, so ` +
     `what it is allowed cannot be shown: ${reason}`,
   scopeRoundsAsk: "Review rounds",
   scopeRoundsRedraw:
@@ -1410,18 +1439,18 @@ const JA: Partial<Chrome> = Object.freeze({
   scopeHeldBounds: (digest, tier, granted, from) =>
     `エージェント種別 ${digest}: tier ${tier}、許可は` +
     `${granted.length === 0 ? "なし" : granted.join(", ")}` +
-    `（${from === "iteration" ? "周回のプラン" : "範囲に記録されたプラン"}から読み戻し）`,
+    `（${agentTypeSourceJa(from)}から読み取り）`,
   scopeHeldNone: (digest) =>
     `エージェント種別 ${digest}: 何が許されているかの記録を rondo は持っていません`,
   scopeHeldUnreadable: (digest, reason) =>
     `エージェント種別 ${digest}: 記録を読めないので、何が許されているかを出せません: ${reason}`,
   scopeHeldRebuilds: (digest, rebuilt, from) =>
     `エージェント種別 ${digest}: ` +
-    `${from === "iteration" ? "周回のプラン" : "範囲に記録されたプラン"}から読み戻した記録は ` +
+    `${agentTypeSourceJa(from)}から読み取った記録は ` +
     `${rebuilt} に組み直されるので、何が許されているかを出せません`,
   scopeHeldNoBuild: (digest, from, reason) =>
     `エージェント種別 ${digest}: ` +
-    `${from === "iteration" ? "周回のプラン" : "範囲に記録されたプラン"}から読み戻した記録は` +
+    `${agentTypeSourceJa(from)}から読み取った記録は` +
     `組み立てられないので、何が許されているかを出せません: ${reason}`,
   scopeRoundsAsk: "レビュー回数",
   scopeRoundsRedraw:

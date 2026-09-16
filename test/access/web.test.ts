@@ -28,7 +28,7 @@ import {
   scopeDraftingFromPlan,
   startScopedFromPage,
 } from "../../src/access/cli.js";
-import { agentTypeRecordOf } from "../../src/access/scope.js";
+import { agentTypeRecordOf, heldAgentTypeLines } from "../../src/access/scope.js";
 import {
   type LanguageAsked,
   operatorPage as renderPage,
@@ -3262,4 +3262,42 @@ test("a scoped start press that names a row already there admits nothing, rather
   // Not vacuous: a scope decision nobody approved is what the second press
   // carries, and it reached no scope test at all -- one iteration row, still.
   expect(rows(connection, "iteration")).toBe(1);
+});
+
+test("the first scope in a store shows what its agent type is allowed, read from the plan the press will record", async () => {
+  // **D-0069 section 1 in the one case the store cannot answer** (rondo#233 S3,
+  // Codex round 3). A fresh store holds no `agent_type_record` and has run no
+  // lap, so the held read is absent and the line could only say rondo holds no
+  // record -- while the form goes on offering the press. The person would be
+  // approving a hash, which is what that section exists to stop. The plan the
+  // press is about to record is what the record is built from, so it answers
+  // before the press; nothing is written by asking it.
+  const world = fresh();
+  const dir = mkdtempSync(join(tmpdir(), "rondo-scope-firstplan-"));
+  const plan = scopePlanFile(dir);
+
+  const drafted = await scopeDraftingFromPlan(plan.file, world.record, EN);
+  expect(drafted.kind).toBe("drafted");
+  if (drafted.kind !== "drafted") return;
+  const line = drafted.heldLines.join("\n");
+  expect(line).toContain(plan.agentTypeDigest);
+  expect(line).toContain("tier ");
+  expect(line).toContain("read from the plan this scope records");
+  // Not the blind line: that one is still what a digest with no plan behind it
+  // gets, which is the assertion that keeps this from passing vacuously.
+  expect(line).not.toContain("rondo holds no record of what it is allowed");
+  expect(
+    (await heldAgentTypeLines(EN, world.record, ["sha256:" + "0".repeat(64)])).join("\n"),
+  ).toContain("rondo holds no record of what it is allowed");
+
+  // Asking wrote nothing: the record is still the press's to write.
+  expect(rows(world.connection, "agent_type_record")).toBe(0);
+  expect(rows(world.connection, "scope")).toBe(0);
+
+  // And it is said in the page's language too, not only in English.
+  const ja = await scopeDraftingFromPlan(plan.file, world.record, chromeFor("ja"));
+  expect(ja.kind).toBe("drafted");
+  if (ja.kind === "drafted") {
+    expect(ja.heldLines.join("\n")).toContain("この範囲が記録するプラン");
+  }
 });

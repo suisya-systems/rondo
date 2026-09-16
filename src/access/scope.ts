@@ -60,7 +60,7 @@ import {
   reviewRoundDecision,
   reviewRoundsAlong,
 } from "./model-review.js";
-import type { Chrome } from "./wording.js";
+import type { AgentTypeSource, Chrome } from "./wording.js";
 
 /**
  * An admission under a scope (D-0066 rule 3.2: the one writable act kind).
@@ -883,16 +883,31 @@ export function agentTypeRecordOf(
  * the inbox: these lines are read on the page and printed by `rondo scope`, and
  * a line composed here in English was English inside an otherwise Japanese page
  * (rondo#233 S3 screen review). The command line passes {@link EN}.
+ *
+ * **`fromPlan` is the first scope's answer to "held by whom?"** (rondo#233 S3,
+ * Codex round 3). A store's first scope lists a digest no lap has run and no
+ * scope has recorded, so the held read is `absent` and the only line this could
+ * say was *rondo holds no record of what it is allowed* -- with the form still
+ * offering the press. That is a person approving a hash, which is the one thing
+ * D-0069 section 1 exists to stop. The plan that would record the digest is in
+ * the caller's hand at that moment and is what the record is built from, so its
+ * own `agentTypeInput` answers the question **before** the press instead of
+ * after it. Reading it writes nothing: the row is still written by the press,
+ * in the scope's own transaction. Given only for a digest the caller is about
+ * to record; a digest the store already holds is read back from the store, so a
+ * plan cannot overstate what an existing record bounds.
  */
 export async function heldAgentTypeLines(
   wording: Chrome,
   record: Pick<AdvisoryRecord, "heldAgentType">,
   digests: readonly string[],
+  fromPlan: ReadonlyMap<string, JsonValue> = new Map(),
 ): Promise<readonly string[]> {
   const lines: string[] = [];
   for (const digest of digests) {
     const held = await record.heldAgentType(digest);
-    if (held.kind !== "read") {
+    const drafted = held.kind === "absent" ? fromPlan.get(digest) : undefined;
+    if (held.kind !== "read" && drafted === undefined) {
       lines.push(
         held.kind === "absent"
           ? wording.scopeHeldNone(digest)
@@ -900,9 +915,12 @@ export async function heldAgentTypeLines(
       );
       continue;
     }
-    const from = held.source === "iteration" ? "iteration" : "scope";
+    const read = held.kind === "read" ? held : null;
+    const from: AgentTypeSource =
+      read === null ? "plan" : read.source === "iteration" ? "iteration" : "scope";
+    const input = read === null ? (drafted as JsonValue) : read.agentTypeInput;
     try {
-      const built = agentTypeRecord(held.agentTypeInput as unknown as AgentTypeInput);
+      const built = agentTypeRecord(input as unknown as AgentTypeInput);
       lines.push(
         built.agentTypeDigest === digest
           ? wording.scopeHeldBounds(digest, built.executorPolicy.modelTier, built.granted, from)

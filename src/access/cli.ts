@@ -520,7 +520,19 @@ export async function scopeDraftingFromPlan(
     workspaces: [
       { repository: planned.plan.repository, workspace_root: planned.plan.workspaceRoot },
     ],
-    heldLines: await heldAgentTypeLines(wording, record, [recorded.record.agentTypeDigest]),
+    // **The plan answers for the digest the store does not hold yet** (D-0069
+    // section 1, rondo#233 S3): a store's first scope lists an agent type no lap
+    // has run, so the held read is absent and the screen could only say rondo
+    // holds no record -- with the press still offered. That is a hash approved
+    // blind. The record is built from this very plan, so its own input says what
+    // the type bounds *before* the press writes the row, and reading it writes
+    // nothing.
+    heldLines: await heldAgentTypeLines(
+      wording,
+      record,
+      [recorded.record.agentTypeDigest],
+      new Map([[recorded.record.agentTypeDigest, recorded.record.agentTypeInput]]),
+    ),
   };
 }
 
@@ -4334,6 +4346,43 @@ export async function recordScopeFromPage(
  * {@link answerFromPage}'s reasoning and not a new one.
  */
 export async function startScopedFromPage(
+  environment: Readonly<Record<string, string | undefined>>,
+  store: IterationStore,
+  storePath: string,
+  approver: string,
+  planFile: string | null,
+  input: ScopedStartInput,
+): Promise<Started> {
+  // **Two presses of one form are one start, even when they overlap** (rondo#233
+  // S3, Codex round 3). The row check below closes the replay that arrives after
+  // the first start finished; it cannot close the one that arrives while it is
+  // still running, because both reads say the row is absent and both then go on
+  // to `startContinuo`. The second would reach `admitUnderScope` after the first
+  // reserved its lap -- against a budget that lap has just spent -- and a
+  // refused test writes the asking message that stops the request (D-0066 rule
+  // 4.4). So the id is held here for as long as a start under it is in flight,
+  // and a second press joins the first rather than starting anything.
+  //
+  // **One process's map, which is all this page is.** The store's write lock is
+  // what orders two *processes*; this orders the one process that serves the
+  // button, which is where a double click arrives.
+  const started = starting.get(input.iterationId);
+  if (started !== undefined) {
+    return await started;
+  }
+  const running = startScoped(environment, store, storePath, approver, planFile, input);
+  starting.set(input.iterationId, running);
+  try {
+    return await running;
+  } finally {
+    starting.delete(input.iterationId);
+  }
+}
+
+/** Every scoped start this process has in flight, by iteration id. */
+const starting = new Map<string, Promise<Started>>();
+
+async function startScoped(
   environment: Readonly<Record<string, string | undefined>>,
   store: IterationStore,
   storePath: string,
