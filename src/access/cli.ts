@@ -1779,7 +1779,7 @@ export async function main(
               // `AnswerPort`: whatever holds it records nothing without a send
               // minted from a same-origin `POST` carrying the token.
               new SayPort(
-                async (message) => {
+                async (message, answerOutcome) => {
                   const outcome = await record.recordThreadMessage({
                     messageId: message.messageId,
                     body: message.body,
@@ -1789,6 +1789,9 @@ export async function main(
                     atMs: Date.now(),
                     bases: [],
                     asks: false,
+                    // Absent and not null, for `exactOptionalPropertyTypes`:
+                    // a send answers nothing (D-0072 rule 2).
+                    ...(answerOutcome === null ? {} : { answerOutcome }),
                   });
                   return outcome.kind === "recorded"
                     ? { ok: true, note: "" }

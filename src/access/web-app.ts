@@ -49,6 +49,12 @@ import { setCookie } from "hono/cookie";
 import { csrf } from "hono/csrf";
 import { secureHeaders } from "hono/secure-headers";
 import {
+  // Aliased: this module already exports an `AnswerOutcome` of its own, for
+  // what one *gate* answer came to (D-0041). The store's is what a person's
+  // answer does to a waiting question (D-0072), a different thing with the
+  // same natural name, so the narrower name is taken here rather than either
+  // one renamed out from under its callers.
+  type AnswerOutcome as AskAnswer,
   FINDING_SEVERITIES,
   type FindingSeverity,
   SCOPE_OUTWARD_ACTS,
@@ -452,6 +458,17 @@ export interface SentMessage {
  */
 export type SayFromWeb = (
   message: SentMessage,
+  /**
+   * Which of D-0072's two answers this message carries, null for a message
+   * that answers nothing.
+   *
+   * **An argument of its own rather than a field of {@link SentMessage}**, so
+   * that a holder of {@link SayPort.say} cannot express an answer at all:
+   * `say` always passes null and only {@link SayPort.answerAsk} passes a
+   * value. The capability boundary D-0059 section 5a draws between a send and
+   * a press is then the type's, not a reviewer's.
+   */
+  answerOutcome: AskAnswer | null,
 ) => Promise<{ readonly ok: boolean; readonly note: string }>;
 
 /** What {@link SayPort.say} answers: `waitingAsk` marks the one refusal the port makes itself. */
@@ -505,7 +522,7 @@ export class SayPort {
         waitingAsk: true,
       };
     }
-    return await this.#say(message);
+    return await this.#say(message, null);
   }
 
   /**
@@ -525,21 +542,42 @@ export class SayPort {
   async answerAsk(
     press: Press,
     message: SentMessage & { readonly inReplyTo: string },
+    /**
+     * What the person pressed (D-0072 rule 4): `carry_on` releases the hold,
+     * `stop` records that they stopped the line and leaves it held. **The page
+     * never defaults it** -- the route refuses a press that names neither,
+     * because a default would be rondo answering for the person on the one
+     * press whose whole content is which answer it is.
+     */
+    answerOutcome: AskAnswer,
   ): Promise<Said> {
     if (!minted.has(press)) {
       return { ok: false, note: "nothing was answered: this was not a person's press" };
     }
     minted.delete(press);
-    return await this.#say(message);
+    return await this.#say(message, answerOutcome);
   }
 
-  /** Whether `messageId` asks and nothing replies to it yet, or the thread cannot be read. */
+  /**
+   * Whether `messageId` asks and is still open, or the thread cannot be read.
+   *
+   * **The same reading `openAsksIn` takes** (D-0072 rule 3), off the same rows:
+   * open while no operator reply carries `carry_on`. So a plain reply to a
+   * question the person answered `stop` is still refused and still routed to
+   * the press -- the hold is still there, and a send must not be the thing that
+   * lifts it.
+   */
   async #waiting(messageId: string): Promise<boolean> {
     const read = await this.#threads();
     return (
       read.kind !== "read" ||
       (read.messages.some((held) => held.messageId === messageId && held.asks) &&
-        !read.messages.some((held) => held.inReplyTo === messageId))
+        !read.messages.some(
+          (held) =>
+            held.inReplyTo === messageId &&
+            held.authorKind === "operator" &&
+            held.answerOutcome === "carry_on",
+        ))
     );
   }
 }
@@ -1461,8 +1499,17 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     if (typeof body !== "string" || body.trim() === "") {
       return refused(c, 400, "sendRefusedNoWords", back);
     }
+    // **Which answer the press is, read off the form and never defaulted**
+    // (D-0072 rule 4). The screen draws one button per answer, both carrying
+    // this field; a press naming neither is the form refusal the rest of this
+    // route uses, because rondo guessing here would put a word in the person's
+    // mouth on the one press whose content is that word.
+    const outcome = form["outcome"];
+    if (outcome !== "carry_on" && outcome !== "stop") {
+      return refused(c, 400, "sendRefusedForm", back);
+    }
     const message = { messageId, body, inReplyTo: back };
-    const answered = await say.answerAsk(minting.press, message);
+    const answered = await say.answerAsk(minting.press, message, outcome);
     if (!answered.ok && !(await alreadyThere(message))) {
       return refused(c, 409, "sendRefusedNotTaken", back);
     }

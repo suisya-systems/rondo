@@ -2051,7 +2051,7 @@ async function askWaiting() {
     ...spyPorts([]),
     record,
     say: new SayPort(
-      async (message) => {
+      async (message, answerOutcome) => {
         const outcome = await record.recordThreadMessage({
           ...message,
           authorKind: "operator",
@@ -2059,6 +2059,7 @@ async function askWaiting() {
           atMs: 2,
           bases: [],
           asks: false,
+          ...(answerOutcome === null ? {} : { answerOutcome }),
         });
         return outcome.kind === "recorded"
           ? { ok: true, note: "" }
@@ -2088,6 +2089,7 @@ test("(answer) a person's press answers a waiting question once, and the questio
     message_id: newMessageId("reply"),
     in_reply_to: "ask",
     body: "yes, go",
+    outcome: "carry_on",
   };
   expect(await waitingAsks()).toEqual(["ask"]);
 
@@ -2103,6 +2105,51 @@ test("(answer) a person's press answers a waiting question once, and the questio
   expect(await closed).toBe(0);
 });
 
+test("(answer) the press says which answer it is, and a stop leaves the question standing", async () => {
+  // D-0072 rule 4. The screen draws one button per answer; a press naming
+  // neither is refused rather than defaulted, because rondo guessing here would
+  // put a word in the person's mouth on the one press whose content is that word.
+  const { ports, waitingAsks, record } = await askWaiting();
+  const { base, stop, closed } = await served(createApp(ports, TOKEN));
+  const form = (extra: Record<string, string>) => ({
+    token: TOKEN,
+    message_id: newMessageId("reply"),
+    in_reply_to: "ask",
+    body: "this line: stop it",
+    ...extra,
+  });
+
+  // No answer named, and an answer that is not one of the two.
+  expect((await send(base, "/answer-ask", "POST", pressHeaders(base), form({}))).status).toBe(400);
+  expect(
+    (await send(base, "/answer-ask", "POST", pressHeaders(base), form({ outcome: "maybe" })))
+      .status,
+  ).toBe(400);
+  expect(await waitingAsks()).toEqual(["ask"]);
+
+  // A stop is recorded, and the question it answers is still standing.
+  const stopped = form({ outcome: "stop" });
+  expect((await send(base, "/answer-ask", "POST", pressHeaders(base), stopped)).status).toBe(303);
+  expect(await waitingAsks()).toEqual(["ask"]);
+  const open = await record.openAsksIn("req");
+  expect(open.kind === "read" && open.asks[0]?.answeredStop).toBe(true);
+  // The words are in the thread under the answer they were pressed with.
+  const read = await record.threadMessages();
+  expect(
+    read.kind === "read" &&
+      read.messages.find((one) => one.messageId === stopped.message_id)?.answerOutcome,
+  ).toBe("stop");
+
+  // **A plain reply is still not the way out of it** (`SayPort.say`): the hold
+  // is still there, so a send must not be what lifts it.
+  const replied = await send(base, "/reply", "POST", htmxHeaders(base), form({}));
+  expect(replied.status).toBe(409);
+  expect(await waitingAsks()).toEqual(["ask"]);
+
+  stop.abort();
+  expect(await closed).toBe(0);
+});
+
 test("(answer) every shape that is not a person's press is refused, and the question keeps waiting", async () => {
   const { ports, waitingAsks, operatorRows } = await askWaiting();
   const app = createApp(ports, TOKEN);
@@ -2111,11 +2158,15 @@ test("(answer) every shape that is not a person's press is refused, and the ques
   app.post("/planted/send-as-press", async (c) => {
     const minting = mintSend(c, TOKEN);
     if ("send" in minting) {
-      const said = await sayOf(ports).answerAsk(minting.send as unknown as Press, {
-        messageId: newMessageId("reply"),
-        body: "nobody pressed",
-        inReplyTo: "ask",
-      });
+      const said = await sayOf(ports).answerAsk(
+        minting.send as unknown as Press,
+        {
+          messageId: newMessageId("reply"),
+          body: "nobody pressed",
+          inReplyTo: "ask",
+        },
+        "carry_on",
+      );
       outcomes.push(String(said.ok));
     }
     return c.text("done");
@@ -2130,6 +2181,7 @@ test("(answer) every shape that is not a person's press is refused, and the ques
           await sayOf(ports).answerAsk(
             "press" in minting ? minting.press : (Object.freeze({}) as Press),
             message,
+            "carry_on",
           )
         ).ok,
       ),
