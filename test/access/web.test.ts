@@ -32,6 +32,7 @@ import {
   scopeDraftingFromPlan,
   startScopedFromPage,
 } from "../../src/access/cli.js";
+import { reportToRequest } from "../../src/access/conductor.js";
 import { inspectLapWork } from "../../src/access/forge.js";
 import { evidenceOf, READING_REMOTE } from "../../src/access/review.js";
 import { agentTypeRecordOf, heldAgentTypeLines } from "../../src/access/scope.js";
@@ -2837,6 +2838,27 @@ async function gateWithClearChecks(world: ReturnType<typeof fresh>): Promise<voi
   expect(carried.kind).toBe("transitioned");
 }
 
+/**
+ * The class a pill was drawn with, so a test can see its tone and not only its
+ * words (rondo#243, the model review's major on lap 10).
+ *
+ * **Because the wording alone does not seal the fix.** rondo#237 is two
+ * changes at once: over work that cannot be read, a `clear` stops saying
+ * *nothing raised* **and** stops being green. The tests asserted the first and
+ * never the second, so a regression that restored the green pill while keeping
+ * the new sentence -- or that kept a verdict's colour where only its words were
+ * meant to change -- would pass the suite unchanged. The tone is the half a
+ * person reads first across a room.
+ */
+function pillTone(html: string, text: string): string {
+  const at = html.indexOf(`>${text}</span>`);
+  expect(at).toBeGreaterThan(-1);
+  const opens = '<span class="';
+  const open = html.lastIndexOf(opens, at);
+  expect(open).toBeGreaterThan(-1);
+  return html.slice(open + opens.length, html.indexOf('"', open + opens.length));
+}
+
 test("a recorded 'clear' is not drawn as a pass over work that cannot be read (#237)", async () => {
   const world = fresh();
   await gateWithClearChecks(world);
@@ -2861,6 +2883,12 @@ test("a recorded 'clear' is not drawn as a pass over work that cannot be read (#
   const bar = html.slice(html.indexOf('id="answer-bar"'));
   expect(card).toContain(">not matched</span>");
   expect(bar).toContain(">not matched</span>");
+  // **And the tone, beside the words** (rondo#243). A pill that said *not
+  // matched* in the green a pass is drawn in would be the same claim back.
+  for (const where of [card, bar]) {
+    expect(pillTone(where, "not matched")).toContain("text-muted-foreground");
+    expect(pillTone(where, "not matched")).not.toContain("text-ok");
+  }
   // And the sentence that says why is still beside the count it disagrees with.
   expect(html).toContain(
     "What changed cannot be read now, so this reading cannot be matched against the work.",
@@ -2874,6 +2902,9 @@ test("a recorded 'clear' is not drawn as a pass over work that cannot be read (#
   });
   expect(read).toContain(">nothing raised</span>");
   expect(read).not.toContain(">not matched</span>");
+  // Read, and the pass is green again: the colour is the verdict's, and it
+  // comes back with the work rather than being muted for good.
+  expect(pillTone(read, "nothing raised")).toContain("text-ok");
 });
 
 test("a reading that raised something keeps its own word where the work is gone (#237)", async () => {
@@ -2892,6 +2923,16 @@ test("a reading that raised something keeps its own word where the work is gone 
   // `1 raised` is not a pass, so it is not replaced -- only its colour goes.
   expect(html).toContain(">1 raised</span>");
   expect(html).not.toContain(">not matched</span>");
+  // **"Only its colour goes" is the claim, so the colour is what is asserted**
+  // (rondo#243): muted where the work is gone, and the verdict's own amber
+  // where it is there. Neither of those was under test before.
+  expect(pillTone(html, "1 raised")).toContain("text-muted-foreground");
+  const read = await operatorPage({ ...portsOver(world, "ada", []), material: structured }, "t", {
+    kind: "answer",
+    iterationId: "i-0001",
+  });
+  expect(pillTone(read, "1 raised")).toContain("text-wait-ink");
+  expect(pillTone(read, "1 raised")).not.toContain("text-muted-foreground");
 });
 
 test("what the fence blocked is on the gate, each call in words, not only in the text fold (#220 S2)", async () => {
@@ -3302,6 +3343,13 @@ test("the approval reads what its predecessor spent, and repeats that the review
     "the reviewer's cost is not counted, and a lap whose cost is not read yet holds the reserve",
   );
   expect(html).toContain('id="start-form"');
+  // **The press that spends money says a second press is safe** (rondo#244).
+  // `startScopedFromPage` joins a second press of this form to the first; the
+  // refusal screens say *pressing again is safe* and this one said nothing.
+  expect(html).toContain(
+    "Pressing this button twice is one lap and not two: the second press joins the first and " +
+      "starts nothing more.",
+  );
 
   // **The retired approval's own screen draws no start button** (rule 1.4).
   // `scopeVerdict` refuses that press at the `superseded` test, so drawing it
@@ -4571,3 +4619,267 @@ test(
   },
   WINDOWS_HEAVY_TIMEOUT_MS,
 );
+
+/**
+ * A published lap, as rondo records one: the report `reportToRequest` writes
+ * into the request thread when all three legs are done.
+ *
+ * **The real writer and not a hand-built row** (rondo#245). What the page reads
+ * back is a message id and a sentence composed in `src/access/conductor.ts`; a
+ * fixture that spelled either of them here would keep passing after the writer
+ * moved, which is exactly the coupling worth sealing.
+ */
+async function publishReported(
+  world: ReturnType<typeof fresh>,
+  pullRequestUrl: string | null,
+): Promise<void> {
+  await seedScopeRequest(world, "request-publish", "Ship it when it is done, please.");
+  world.connection
+    .prepare("UPDATE iteration SET request_message_id = ? WHERE id = ?")
+    .run("request-publish", "i-0001");
+  const line = await reportToRequest(
+    { record: world.record, store: world.store },
+    "i-0001",
+    { kind: "published", pullRequestUrl },
+    6_000,
+  );
+  expect(line).toContain("Reported to the request 'request-publish'");
+}
+
+test("a published lap says what the publish came to, and is not offered the press again (#245)", async () => {
+  const world = fresh();
+  await approvedLap(world);
+  const publishing = async () => DRY_RUN;
+  const ports = portsOver(world, "ada", [], null, null, publishing);
+
+  // Before: the way in is drawn and nothing claims anything happened.
+  const before = await operatorPage(ports, "t", { kind: "summary" });
+  expect(before).toContain('href="/?publish=i-0001&amp;lang=en"');
+  expect(before).not.toContain("Published:");
+
+  await publishReported(world, "https://github.com/suisya-systems/rondo/pull/242");
+  const after = await operatorPage(ports, "t", { kind: "summary" });
+
+  // **What happened, off the row's own columns and the report's URL.**
+  expect(lead(after)).toContain(
+    "Published: the branch rondo/i-0001 is pushed, and the run rondo-i-0001 is closed.",
+  );
+  expect(lead(after)).toContain('href="https://github.com/suisya-systems/rondo/pull/242"');
+  expect(lead(after)).toContain(">The pull request</a>");
+  // **And the press is not re-offered.** Unlike a start, a second press cannot
+  // join the first: a pull request that exists cannot be opened again.
+  expect(after).not.toContain("?publish=i-0001");
+
+  // The screen the link led to says the same thing, for an address retyped.
+  const screen = await operatorPage(ports, "t", { kind: "publish", iterationId: "i-0001" });
+  expect(screen).toContain(
+    "Published: the branch rondo/i-0001 is pushed, and the run rondo-i-0001 is closed.",
+  );
+  expect(screen).not.toContain("<form");
+  expect(screen).not.toContain("Push the branch rondo/i-0001 to origin.");
+});
+
+test("a publish whose forge printed no URL still says what it came to (#245)", async () => {
+  const world = fresh();
+  await approvedLap(world);
+  await publishReported(world, null);
+  const html = await operatorPage(
+    portsOver(world, "ada", [], null, null, async () => DRY_RUN),
+    "t",
+    { kind: "summary" },
+  );
+
+  expect(lead(html)).toContain("Published: the branch rondo/i-0001 is pushed");
+  // No link where there is no URL, and no half-written one either.
+  expect(lead(html)).not.toContain(">The pull request</a>");
+  expect(html).not.toContain("?publish=i-0001");
+});
+
+test("the published row is in the page's language (#245, D-0055)", async () => {
+  const world = fresh();
+  await approvedLap(world);
+  await publishReported(world, "https://github.com/suisya-systems/rondo/pull/242");
+  const html = await operatorPage(
+    portsOver(world, "ada", [], null, null, async () => DRY_RUN),
+    "t",
+    { kind: "summary" },
+    chromeFor("ja"),
+  );
+
+  expect(lead(html)).toContain(
+    "公開済み: ブランチ rondo/i-0001 を push し、run rondo-i-0001 を閉じました。",
+  );
+  expect(lead(html)).toContain(">プルリクエスト</a>");
+  expect(lead(html)).not.toContain("Published:");
+});
+
+/** More ended laps than the summary's "what just finished" window holds. */
+const RECENT_ENDED_OVERFLOW = 6;
+
+/** A lap that is running: reserved and walked as far as `performing`. */
+async function runningLap(
+  world: ReturnType<typeof fresh>,
+  id: string,
+  request: string,
+): Promise<void> {
+  await reserve(world, id, request);
+  for (const [from, to] of [
+    ["planned", "admitting"],
+    ["admitting", "admitted"],
+    ["admitted", "performing"],
+  ] as const) {
+    const moved = await world.store.transition(id, from, to, {}, 2_000);
+    expect(moved.kind).toBe("transitioned");
+  }
+}
+
+test("a running lap says it is running above its request, not under a wall of it (#244)", async () => {
+  const world = fresh();
+  const request = "Please look at the flaky test.\n\nIt fails about one run in five, and\n";
+  await runningLap(world, "i-0001", request);
+  const html = await operatorPage(portsOver(world), "t");
+  const row = html.slice(html.indexOf('id="lap-i-0001"'));
+
+  // The state and the age are both still said, once, in the row's own head.
+  expect(row).toContain(">Running</span>");
+  // **Above the request and not below it**: the one fact a person watching a
+  // lap came for used to sit last, under the words they wrote themselves.
+  expect(row.indexOf(">Running</span>")).toBeLessThan(row.indexOf("Please look at the flaky test"));
+
+  // A waiting row keeps the order it had: its request is what it is about.
+  const other = fresh();
+  await reserve(other, "i-0002", "Waiting on you.");
+  await openGate(other, "i-0002");
+  const gate = await operatorPage(portsOver(other), "t");
+  const waiting = gate.slice(gate.indexOf('id="lap-i-0002"'));
+  expect(waiting.indexOf("Waiting on you.")).toBeLessThan(
+    waiting.indexOf(">Waiting on you</span>"),
+  );
+});
+
+test("a request with a lap under it says the lap's state instead of offering the scope again (#244)", async () => {
+  const world = fresh();
+  const requestId = "request-running";
+  await seedScopeRequest(world, requestId, "Fix the flaky test, please.");
+  await runningLap(world, "i-0001", "Fix the flaky test, please.");
+  world.connection
+    .prepare("UPDATE iteration SET request_message_id = ? WHERE id = ?")
+    .run(requestId, "i-0001");
+  const dir = mkdtempSync(join(tmpdir(), "rondo-requests-lap-"));
+  const { file: planFile } = scopePlanFile(dir);
+  const ports = { ...portsOver(world, "ada", []), plan: planPortOver(planFile, world.record) };
+
+  const live = await operatorPage(ports, "t", { kind: "requests" });
+  const row = live.slice(live.indexOf(`id="request-${requestId}"`));
+  expect(row).toContain(">Running</span>");
+  // The entrance goes while the lap is live: a second scope beside a running
+  // lap is the confusion this list was causing.
+  expect(row).not.toContain("Set the scope");
+
+  // **And comes back when the lap has ended**: asking for more work on an
+  // answered request is a real act, and the row says what became of the first.
+  const closed = await world.store.transition(
+    "i-0001",
+    "performing",
+    "closed",
+    { gateOutcome: "approve" },
+    5_000,
+  );
+  expect(closed.kind).toBe("transitioned");
+  const after = await operatorPage(ports, "t", { kind: "requests" });
+  const ended = after.slice(after.indexOf(`id="request-${requestId}"`));
+  expect(ended).toContain(">Approved</span>");
+  expect(ended).toContain("Set the scope");
+
+  // **The summary's five-row window is the summary's** (Codex round 1). The
+  // requests list is not bounded, so a lap that has dropped out of *what just
+  // finished* must still be what its request says about itself -- otherwise a
+  // recorded outcome quietly becomes "nobody has started anything".
+  for (let n = 0; n < RECENT_ENDED_OVERFLOW; n += 1) {
+    const id = `i-other-${String(n)}`;
+    await reserve(world, id, "another request entirely");
+    const moved = await world.store.transition(id, "planned", "abandoned", {}, 6_000 + n);
+    expect(moved.kind).toBe("transitioned");
+  }
+  const later = await operatorPage(ports, "t", { kind: "requests" });
+  const pushedOut = later.slice(later.indexOf(`id="request-${requestId}"`));
+  expect(pushedOut).toContain(">Approved</span>");
+
+  // **A live lap speaks for its request over a terminal one, however new**
+  // (Codex round 2). A retry can end while the lap it supersedes is still at
+  // its gate; going by age alone would have shown only the ending and brought
+  // the entrance back over work that is still live.
+  await reserve(world, "i-0002", "Fix the flaky test, please.");
+  await openGate(world, "i-0002");
+  world.connection
+    .prepare("UPDATE iteration SET request_message_id = ? WHERE id = ?")
+    .run(requestId, "i-0002");
+  const failed = await world.store.transition("i-0001", "closed", "closed", {}, 9_000);
+  expect(failed.kind).toBe("transitioned");
+  const alive = await operatorPage(ports, "t", { kind: "requests" });
+  const stillLive = alive.slice(alive.indexOf(`id="request-${requestId}"`));
+  expect(stillLive).toContain(">Waiting on you</span>");
+  expect(stillLive).not.toContain("Set the scope");
+
+  // A request nobody has started anything for is unchanged: the entrance only.
+  await seedScopeRequest(world, "request-idle", "And this one too, some time.");
+  const both = await operatorPage(ports, "t", { kind: "requests" });
+  const idle = both.slice(both.indexOf('id="request-request-idle"'));
+  expect(idle.slice(0, idle.indexOf("</li>"))).toContain("Set the scope");
+});
+
+test("the sentence that says a second start press is safe is in both catalogues (#244)", () => {
+  // Half-translated is worse than untranslated here: a Japanese page would
+  // fall into English in the middle of the one paragraph beside the press.
+  expect(EN.startAgainSafe).not.toBe("");
+  expect(chromeFor("ja").startAgainSafe).not.toBe(EN.startAgainSafe);
+  expect(chromeFor("ja").startAgainSafe).toContain("2 回目の押下は 1 回目に合流し");
+});
+
+test("the entrances carry the weight of the acts behind them, and the refusal on the publish screen is untouched (#246)", async () => {
+  const world = fresh();
+  await approvedLap(world);
+  const requestId = "request-entrances";
+  await seedScopeRequest(world, requestId, "Have a look at this, please.");
+  const dir = mkdtempSync(join(tmpdir(), "rondo-entrances-"));
+  const { file: planFile } = scopePlanFile(dir);
+  const ports = {
+    ...portsOver(world, "ada", [], null, null, async () => DRY_RUN),
+    plan: planPortOver(planFile, world.record),
+  };
+
+  // **Publish is the row's action, in the shape the answer entrance already
+  // has** -- not a faint link inside the metadata line.
+  const summary = await operatorPage(ports, "t", { kind: "summary" });
+  const entrance = summary.slice(summary.indexOf('id="publish-i-0001"'));
+  expect(entrance).toContain('class="inline-flex cursor-pointer items-center gap-1.5 rounded-md');
+  expect(entrance).toContain("h-7 px-3 text-[13px]");
+  expect(summary).not.toContain(
+    '<a id="publish-i-0001" href="/?publish=i-0001&amp;lang=en" data-open="" ' +
+      'class="text-[12.5px] font-medium text-link hover:underline"',
+  );
+
+  // The same for the way onto the scope screen.
+  const requests = await operatorPage(ports, "t", { kind: "requests" });
+  const scope = requests.slice(requests.indexOf(`id="scope-${requestId}"`));
+  expect(scope).toContain("h-7 px-3 text-[13px]");
+
+  // **The refusal design on the publish screen is not what this touches**: a
+  // reading that does not cover the work still draws no publish button at all,
+  // and the one press there is is the override, inside its fold.
+  const refused = await operatorPage(
+    {
+      ...ports,
+      publishing: async () => ({
+        ...DRY_RUN,
+        review: { why: "noReading" as const },
+      }),
+    },
+    "t",
+    { kind: "publish", iterationId: "i-0001" },
+  );
+  const screen = refused.slice(refused.indexOf('id="publish"'));
+  expect(screen).not.toContain('id="publish-form"');
+  expect(screen).toContain('id="publish-despite"');
+  expect(screen).toContain(">Publish anyway</button>");
+});
