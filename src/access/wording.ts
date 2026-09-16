@@ -732,8 +732,8 @@ export interface Chrome {
   readonly publishNote: string;
   readonly publishPlain: string;
   readonly publishBack: string;
-  /** Why there is no publish screen at all: the host named no repository. */
-  readonly publishNoRepo: string;
+  /** Why there is no publish screen at all: this host cannot publish from the page. */
+  readonly publishNotOffered: string;
   /** Why this lap cannot be published, one sentence each ({@link PublishBlock}). */
   readonly publishNotClosed: (status: string) => string;
   readonly publishNotApproved: (outcome: string) => string;
@@ -1326,8 +1326,9 @@ explanation you pressed on and then answers the gate.`,
     "says so.",
   publishPlain: "Pushes this branch, opens its pull request and closes the run.",
   publishBack: "Back to publishing",
-  publishNoRepo:
-    "This host was not told which repository to publish to, so nothing here can publish. It is " +
+  publishNotOffered:
+    "Nothing can be published from this page. Publishing needs a repository to publish to and a " +
+    "person this host accepts to publish as, and it was started without one of them. Both are " +
     "given to rondo when the page is started.",
   publishNotClosed: (status) =>
     `This lap is ${status}. Publishing is for work a person has already approved at the gate.`,
@@ -1409,8 +1410,10 @@ explanation you pressed on and then answers the gate.`,
     "will not push work it could not then finish.",
   publishRefusedPushFailed: (detail) => `Nothing was published: the branch did not push. ${detail}`,
   publishRefusedPullRequestFailed: (detail) =>
-    `The branch is pushed; the pull request was not opened. ${detail} Nothing else was done, ` +
-    "and pressing again is safe: a push that already happened changes nothing.",
+    `The branch is pushed; rondo could not open the pull request. ${detail} Whether one was ` +
+    "created before that is not something rondo holds: go and look at the forge before pressing " +
+    "again, because a second press cannot open a pull request that is already there. If it " +
+    "exists, the only leg left is closing the run, and the terminal running rondo has the line.",
   publishRefusedRunNotClosed:
     "The branch is pushed and the pull request is open; the run did not close. That is the one " +
     "leg left, and the terminal running rondo has what it said.",
@@ -1977,9 +1980,10 @@ const JA: Partial<Chrome> = Object.freeze({
     "その旨が出ます。",
   publishPlain: "このブランチを push し、プルリクエストを作り、run を閉じます。",
   publishBack: "公開の画面に戻る",
-  publishNoRepo:
-    "このホストには公開先のリポジトリが伝えられていないため、ここからは公開できません。" +
-    "ページを起動するときに rondo へ渡します。",
+  publishNotOffered:
+    "このページからは何も公開できません。公開には、公開先のリポジトリと、このホストが受け付ける" +
+    "公開者の 2 つが要りますが、そのどちらかがないまま起動されています。どちらもページを" +
+    "起動するときに rondo へ渡します。",
   publishNotClosed: (status) =>
     `この周回は ${status} です。公開は、人がゲートで承認済みの作業に対して行うものです。`,
   publishNotApproved: (outcome) =>
@@ -2059,8 +2063,10 @@ const JA: Partial<Chrome> = Object.freeze({
   publishRefusedPushFailed: (detail) =>
     `何も公開していません。ブランチを push できませんでした。${detail}`,
   publishRefusedPullRequestFailed: (detail) =>
-    `ブランチは push 済みで、プルリクエストは作られていません。${detail} ほかには何もしていません。` +
-    "もう一度押しても安全です。すでに済んだ push は何も変えません。",
+    `ブランチは push 済みで、プルリクエストは作れませんでした。${detail} その前に作られていたか` +
+    "どうかは rondo が持っている情報ではありません。もう一度押す前にフォージ側を見てください。" +
+    "すでにあるプルリクエストを 2 回目の押下で作ることはできません。ある場合、残っているのは " +
+    "run を閉じることだけで、その 1 行は rondo を動かしているターミナルに出ています。",
   publishRefusedRunNotClosed:
     "ブランチは push 済みで、プルリクエストも作られています。run が閉じていません。残っているのは" +
     "その 1 つで、詳細は rondo を動かしているターミナルに出ています。",

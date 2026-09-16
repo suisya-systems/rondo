@@ -1860,10 +1860,17 @@ export async function main(
                     input,
                   ),
               ),
-        // The dry-run this screen is read from, on the same condition: the same
-        // function the press runs, so what is shown is what would happen.
+        // **The dry-run this screen is read from, on exactly the press's own
+        // condition.** The same function the press runs, so what is shown is
+        // what would happen -- and null wherever the port is null, because a
+        // screen that drew the dry-run without the port behind it would draw a
+        // button that is refused on every press, with a sentence about an
+        // approver that is set. That is the shape the other presses get for
+        // free from their minted ids (`newScopeId`, `newIterationId`), which
+        // are null exactly when their ports are; publish mints nothing, so the
+        // condition is written out here instead.
         publishing:
-          asked === null
+          sender === null || "refusal" in sender || asked === null
             ? null
             : async (row) => await publishingForPage(environment, store, asked, row),
         // Read for the same reason and on the same condition: the material is
@@ -6177,8 +6184,20 @@ async function publishPage(
   const openFailed = commandFailure(opened);
   if (openFailed !== null) {
     // **The push already happened, and it is the one leg that cannot be undone
-    // from here**, so the sentence says what is true rather than "nothing
-    // happened" -- which is what the command line says in its own words too.
+    // from here.** rondo does not persist how far a publish got -- that would
+    // be a durable record of somebody else's state -- so what this cannot know
+    // is whether the pull request was in fact created and only the reporting
+    // failed. Pressing again is *not* free there: `gh` refuses a duplicate for
+    // ever, and the run row stays open. So the screen says go and look, and the
+    // one leg that would be left is said in the terminal `rondo web` runs in,
+    // which is where `commandPublish` says it too (D-0015 rule 7's shape).
+    say("");
+    say(`The branch '${plan.topicBranch}' was pushed to '${plan.remote}'; that part is done.`);
+    say("If the pull request already exists, the only leg left is the run close:");
+    say(
+      `  ${continuo.cliPath} run close --db ${plan.db} --run-id ${plan.runId} ` +
+        `--outcome completed --actor-id ${actor.actorId}`,
+    );
     return {
       ok: false,
       why: "publishRefusedPullRequestFailed",

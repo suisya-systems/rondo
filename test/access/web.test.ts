@@ -14,8 +14,9 @@
  * terminal got wrong and this page must not (rondo#90's paragraphs, rondo#91's
  * repeated basis), and both are properties of the bytes that reach a browser.
  */
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { request as httpRequest } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -24,12 +25,15 @@ import { expect, test } from "vitest";
 
 import {
   publishFromPage,
+  publishingForPage,
   recordPagePress,
   recordScopeFromPage,
   reviseFromPage,
   scopeDraftingFromPlan,
   startScopedFromPage,
 } from "../../src/access/cli.js";
+import { inspectLapWork } from "../../src/access/forge.js";
+import { evidenceOf, READING_REMOTE } from "../../src/access/review.js";
 import { agentTypeRecordOf, heldAgentTypeLines } from "../../src/access/scope.js";
 import {
   type LanguageAsked,
@@ -3729,7 +3733,7 @@ test("a lap that cannot be published says why on the screen, and draws no button
   expect(screen).not.toContain("<form");
 });
 
-test("the way onto the publish screen is drawn on approved rows only, and never without a repository (#233 S5)", async () => {
+test("the way onto the publish screen is drawn on approved rows only, and never where a press would be refused (#233 S5)", async () => {
   const world = fresh();
   await approvedLap(world);
   const publishing = async () => DRY_RUN;
@@ -3739,15 +3743,16 @@ test("the way onto the publish screen is drawn on approved rows only, and never 
   });
   expect(summary).toContain('href="/?publish=i-0001&amp;lang=en"');
 
-  // A host that named no forge repository draws no way in, and says so on the
-  // screen itself rather than leaving a button missing for an unsaid reason.
+  // A host that cannot publish -- no forge repository, or no person it accepts
+  // to publish as -- draws no way in, and says so on the screen itself rather
+  // than leaving a button missing for an unsaid reason.
   const noRepo = await operatorPage(portsOver(world, "ada", []), "t", { kind: "summary" });
   expect(noRepo).not.toContain("?publish=");
   const screen = await operatorPage(portsOver(world, "ada", []), "t", {
     kind: "publish",
     iterationId: "i-0001",
   });
-  expect(screen).toContain("was not told which repository to publish to");
+  expect(screen).toContain("Nothing can be published from this page");
   expect(screen).not.toContain("<form");
 
   // A gate that ended without a person answering it is not an approval, so the
@@ -3871,4 +3876,189 @@ test("a publish press refuses on the lap's own state before anything leaves this
   expect(same).toEqual(first);
   expect(other.ok).toBe(false);
   expect(other.why).toBe("publishRefusedStillRunning");
+});
+
+/**
+ * One closed, approved lap with a real git workspace to publish from, for the
+ * checks that only exist once a plan can actually be composed (rondo#233 S5).
+ *
+ * `git` is spawned here rather than faked, because what is under test is the
+ * comparison between two reads of the same workspace, and a faked read cannot
+ * disagree with itself the way the real thing is meant to be caught doing.
+ */
+async function publishableWorld(staleReading: boolean): Promise<{
+  readonly store: ReturnType<typeof iterationStore>;
+  readonly storePath: string;
+  readonly iterationId: string;
+  readonly asked: { repo: string; remote: string; allowRemoteMismatch: boolean };
+}> {
+  const dir = mkdtempSync(join(tmpdir(), "rondo-publish-"));
+  const storePath = join(dir, "store.db");
+  const store = iterationStore(new DatabaseSync(storePath), { maxOccupying: 4, maxLive: 6 });
+  const iterationId = "lap-00000000-0000-4000-8000-0000000000c1";
+  const workspaceRoot = join(dir, "work");
+  const planned = runPlan({ ...PLAN, workspaceRoot, repository: join(dir, "repo") });
+  if (planned.kind !== "planned") {
+    throw new Error(`the fixture plan is not valid: ${planned.reason}`);
+  }
+  const allocation = allocate(iterationId, workspaceRoot);
+  if (allocation.kind !== "allocated") {
+    throw new Error(`the fixture id does not allocate: ${allocation.reason}`);
+  }
+  const admitted = admittedPlan(planned.plan, allocation.allocation);
+  if (admitted.kind !== "planned") {
+    throw new Error(`the fixture allocation is not valid: ${admitted.reason}`);
+  }
+  const payload = planPayload(admitted.plan);
+  const workspace = String(payload["workspace"]);
+  const topicBranch = String(payload["topic_branch"]);
+  const run = (...args: string[]) =>
+    execFileSync("git", ["-C", workspace, ...args], {
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        GIT_AUTHOR_NAME: "rondo test",
+        GIT_AUTHOR_EMAIL: "test@example.invalid",
+        GIT_COMMITTER_NAME: "rondo test",
+        GIT_COMMITTER_EMAIL: "test@example.invalid",
+      },
+    });
+  mkdirSync(workspace, { recursive: true });
+  execFileSync("git", ["init", "--quiet", "--initial-branch", "main", workspace], {
+    encoding: "utf8",
+  });
+  writeFileSync(join(workspace, "README.md"), "# base\n", "utf8");
+  run("add", "README.md");
+  run("commit", "--quiet", "-m", "chore: the base");
+  run("checkout", "--quiet", "-b", topicBranch);
+  writeFileSync(join(workspace, "counter.ts"), "export const laps = 1;\n", "utf8");
+  run("add", "counter.ts");
+  run("commit", "--quiet", "-m", "feat: count the laps");
+  // A remote that agrees with `asked.repo` and is not a repository anybody has:
+  // the preflight needs one, and no test may be one press away from a push.
+  run("remote", "add", "origin", "https://github.com/suisya-systems/rondo-not-real.git");
+
+  const reserved = await store.reserve({
+    id: iterationId,
+    request: "count the laps",
+    plan: payload,
+    spend: null,
+    scopeSpend: null,
+    nowMs: 1_000,
+    supersedesIterationId: null,
+    requestMessageId: null,
+    runId: `rondo-${iterationId}`,
+    topicBranch,
+    workspace,
+  });
+  expect(reserved.kind).toBe("reserved");
+  const read = await inspectLapWork({
+    workspace,
+    remote: READING_REMOTE,
+    baseBranch: String(payload["base_branch"]),
+    topicBranch,
+  });
+  if (read.kind !== "read") {
+    throw new Error(`the fixture workspace would not read: ${JSON.stringify(read)}`);
+  }
+  const measured = evidenceOf(read);
+  const reading = {
+    drafter: "rondo/deterministic/2",
+    verdict: "clear" as const,
+    findings: [],
+    // A stale reading is one taken over a tip the branch has moved off, which
+    // is D-0060 rule 5's refusal and the only thing the second press overrules.
+    evidence: staleReading ? { ...measured, tipCommit: "9".repeat(40) } : measured,
+    unavailableReason: null,
+  };
+  for (const [from, to, fields, taken] of [
+    ["planned", "admitting", {}, undefined],
+    ["admitting", "admitted", {}, undefined],
+    ["admitted", "performing", {}, undefined],
+    ["performing", "awaiting_human", { gateId: `gate-${iterationId}` }, reading],
+    ["awaiting_human", "closed", { gateOutcome: "answered_and_forwarded" }, undefined],
+  ] as const) {
+    const moved = await store.transition(iterationId, from, to, fields, 2_000, taken);
+    expect(moved.kind, to).toBe("transitioned");
+  }
+  return {
+    store,
+    storePath,
+    iterationId,
+    asked: {
+      repo: "suisya-systems/rondo-not-real",
+      remote: "origin",
+      allowRemoteMismatch: false,
+    },
+  };
+}
+
+test("a publish press acts only on the dry-run the screen showed, re-read inside the press (#233 S5)", async () => {
+  // **The property D-0059 section 5a's Q1 is built on**, and the only one of
+  // this slice's checks a person cannot see working: what the screen drew is
+  // read again here, and a press carrying anything else publishes nothing.
+  // Every press below refuses before the push, so nothing leaves this machine.
+  const world = await publishableWorld(false);
+  const record = await world.store.read(world.iterationId);
+  if (record.kind !== "read") {
+    throw new Error("the fixture row would not read");
+  }
+  const shown = await publishingForPage(
+    { RONDO_APPROVER: "ada" },
+    world.store,
+    world.asked,
+    record.record,
+  );
+  if (shown.kind !== "ready") {
+    throw new Error(`the fixture would not plan: ${JSON.stringify(shown)}`);
+  }
+  // The reading covers this work, so the screen drew the ordinary press.
+  expect(shown.review).toBe(null);
+  const pressing = (input: { shown: string; despiteReview: boolean }) =>
+    publishFromPage({ RONDO_APPROVER: "ada" }, world.store, world.storePath, "ada", world.asked, {
+      iterationId: world.iterationId,
+      ...input,
+    });
+
+  // A digest that is not this dry-run's is a press from some other screen.
+  const elsewhere = await pressing({ shown: `sha256:${"e".repeat(64)}`, despiteReview: false });
+  expect(elsewhere.ok).toBe(false);
+  expect(elsewhere.why).toBe("publishRefusedChanged");
+
+  // The override is refused where there is nothing to override: it is an answer
+  // to a question this screen did not ask.
+  const overruling = await pressing({ shown: shown.shown, despiteReview: true });
+  expect(overruling.ok).toBe(false);
+  expect(overruling.why).toBe("publishRefusedNothingOverruled");
+});
+
+test("a publish press does not publish past the reading's refusal; only the second press does (#233 S5, D-0060)", async () => {
+  const world = await publishableWorld(true);
+  const record = await world.store.read(world.iterationId);
+  if (record.kind !== "read") {
+    throw new Error("the fixture row would not read");
+  }
+  const shown = await publishingForPage(
+    { RONDO_APPROVER: "ada" },
+    world.store,
+    world.asked,
+    record.record,
+  );
+  if (shown.kind !== "ready") {
+    throw new Error(`the fixture would not plan: ${JSON.stringify(shown)}`);
+  }
+  // The reading was taken over a tip this branch has moved off, so the screen
+  // drew the refusal and, under it, the press that overrules it.
+  expect(shown.review?.why).toBe("moved");
+
+  const ordinary = await publishFromPage(
+    { RONDO_APPROVER: "ada" },
+    world.store,
+    world.storePath,
+    "ada",
+    world.asked,
+    { iterationId: world.iterationId, shown: shown.shown, despiteReview: false },
+  );
+  expect(ordinary.ok).toBe(false);
+  expect(ordinary.why).toBe("publishRefusedNotRead");
 });

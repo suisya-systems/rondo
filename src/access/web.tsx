@@ -4011,7 +4011,7 @@ async function publishView(
     </div>
   );
   if (ports.publishing === null) {
-    return framed(note(wording.publishNoRepo));
+    return framed(note(wording.publishNotOffered));
   }
   const found = await ports.store.read(view.iterationId);
   if (found.kind !== "read") {
