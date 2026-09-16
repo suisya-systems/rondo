@@ -706,10 +706,12 @@ export interface ReviseInput {
 export type ReviseRefusal =
   | "reviseRefusedNoWords"
   | "reviseRefusedGateClosed"
+  | "reviseRefusedNotItsScope"
   | "reviseRefusedNotSetUp"
   | "reviseRefusedNoContinuo"
   | "reviseRefusedOutside"
   | "reviseRefusedWalkFailed"
+  | "reviseRefusedNotSettled"
   | "reviseRefusedAfterGate"
   | "reviseRefusedNotStarted";
 

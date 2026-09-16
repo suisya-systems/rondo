@@ -4472,6 +4472,28 @@ async function revisePage(
       note: `iteration '${record.id}' is ${record.status}, and no gate is open on it.`,
     };
   }
+  // **The approval is re-read here, and the form's is only ever compared
+  // against it** (rondo#233 S4, Codex round 2). The page draws the decision the
+  // lap being revised was admitted under so that nobody types one; a hidden
+  // field is still a thing a person can edit, and a different approval that
+  // happens to cover the same request, workspace and agent type would be tested
+  // and charged instead -- past the exhausted budget of the one this lineage
+  // actually ran on. So what D-0070 section 1.2 says is true by construction
+  // rather than by the form's good behaviour: no admission row, or a decision
+  // that is not the one on it, answers nothing and walks no gate.
+  const admittedUnder = await openAdvisoryRecord(storePath).scopeDecisionAdmitting(record.id);
+  if (admittedUnder === null || admittedUnder !== input.scopeDecisionId) {
+    return {
+      ok: false,
+      why: "reviseRefusedNotItsScope",
+      note:
+        admittedUnder === null
+          ? `iteration '${record.id}' was not admitted under any approval, so there is nothing ` +
+            "to count a second lap against"
+          : `iteration '${record.id}' was admitted under '${admittedUnder}', and the press named ` +
+            `'${input.scopeDecisionId}'`,
+    };
+  }
   // **Written before the press acts on it** (D-0042 rules 2 and 3), as the
   // approve press writes it: the framing a person pressed on is the same
   // framing whichever of the gate's two answers they chose.
@@ -4560,7 +4582,10 @@ async function revisePage(
     if (report.status === "closed") {
       return null;
     }
-    halted = "reviseRefusedAfterGate";
+    // **Not the scope's refusal** (Codex round 2): the store's re-test has not
+    // run, no stop was written into the request's thread, and the after-the-gate
+    // sentence sends a person to a message that is not there.
+    halted = "reviseRefusedNotSettled";
     return 1;
   };
   const outcome = await admitUnderScope(
@@ -4615,9 +4640,11 @@ async function revisePage(
   const report = outcome.report;
   sayReport(report);
   if (report.iterationId === null) {
+    // The admission itself did not name a lap, which is not the approval
+    // refusing one either (Codex round 2): the terminal has the report's lines.
     return {
       ok: false,
-      why: "reviseRefusedAfterGate",
+      why: "reviseRefusedNotSettled",
       note: report.lines.join("\n"),
     };
   }

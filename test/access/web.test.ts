@@ -3477,6 +3477,41 @@ test("a revise press on a stale page answers nothing, and writes no framing for 
       body: "narrow it to the parser",
     });
 
+  // A lap that is at its gate, and was admitted under no approval: the page
+  // draws no revise form on one, and a press that names an approval anyway is
+  // refused before the gate is touched (Codex round 2 -- the hidden field is
+  // compared against the admission row and never trusted).
+  const gated = "lap-gated";
+  const openedReserve = await store.reserve({
+    id: gated,
+    request: "Please do it.",
+    plan: planFor(gated),
+    spend: null,
+    scopeSpend: null,
+    nowMs: 1_000,
+    supersedesIterationId: null,
+    requestMessageId: null,
+    runId: `rondo-${gated}`,
+    topicBranch: `rondo/${gated}`,
+    workspace: `/srv/work/${gated}`,
+  });
+  expect(openedReserve.kind).toBe("reserved");
+  for (const [from, to] of [
+    ["planned", "admitting"],
+    ["admitting", "admitted"],
+    ["admitted", "performing"],
+    ["performing", "awaiting_human"],
+  ] as const) {
+    const moved = await store.transition(
+      gated,
+      from,
+      to,
+      to === "awaiting_human" ? { gateId: `gate-${gated}` } : {},
+      2_000,
+    );
+    expect(moved.kind).toBe("transitioned");
+  }
+
   const absent = await pressing("lap-not-there");
   expect(absent.ok).toBe(false);
   expect(absent.why).toBe("reviseRefusedGateClosed");
@@ -3485,6 +3520,11 @@ test("a revise press on a stale page answers nothing, and writes no framing for 
   const noGate = await pressing(ended);
   expect(noGate.ok).toBe(false);
   expect(noGate.why).toBe("reviseRefusedGateClosed");
+  // The approval the press named is not the one this lap was admitted under --
+  // it was admitted under none -- so nothing is answered and no gate is walked.
+  const wrongScope = await pressing(gated);
+  expect(wrongScope.ok).toBe(false);
+  expect(wrongScope.why).toBe("reviseRefusedNotItsScope");
   // Nothing was recorded for either: no proposal, no attention row, no message.
   expect(rows(connection, "proposal")).toBe(0);
   expect(rows(connection, "conversation_message")).toBe(0);

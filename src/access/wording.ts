@@ -659,6 +659,13 @@ export interface Chrome {
   readonly reviseRefusedForm: string;
   readonly reviseRefusedNoWords: string;
   readonly reviseRefusedGateClosed: string;
+  /**
+   * The press named an approval that is not the one this lap was admitted
+   * under, or the lap was admitted under none (rondo#233 S4, Codex round 2).
+   * The page draws the right one, so a person reading this has a screen that
+   * went stale under them -- or a form that was edited.
+   */
+  readonly reviseRefusedNotItsScope: string;
   readonly reviseRefusedNotSetUp: string;
   readonly reviseRefusedNoContinuo: string;
   /** The `test` token is the `ScopeTest` name, ASCII in both sets (rule 3). */
@@ -669,6 +676,13 @@ export interface Chrome {
    * is true -- look before pressing again -- and never as "nothing happened".
    */
   readonly reviseRefusedWalkFailed: string;
+  /**
+   * The gate took the words and the lap that was answered did not settle, so no
+   * second lap started and no scope refused anything (Codex round 2): kept
+   * apart from {@link reviseRefusedAfterGate}, whose sentence points at a
+   * message in the request's thread that this case never wrote.
+   */
+  readonly reviseRefusedNotSettled: string;
   /**
    * The one refusal that lands after the gate was answered (D-0070 section
    * 2.4): the person's words are recorded at continuo and no second lap ran.
@@ -1167,6 +1181,9 @@ explanation you pressed on and then answers the gate.`,
     "Nothing was answered: a change has to say what to change, and the box was empty.",
   reviseRefusedGateClosed:
     "Nothing was answered: this lap has no gate open any more. Go back to see how it ended.",
+  reviseRefusedNotItsScope:
+    "Nothing was answered: the approval this asks to spend is not the one this lap ran under. " +
+    "Reload the gate and press again.",
   reviseRefusedNotSetUp:
     "Nothing was answered and the gate was not touched: the second lap could not be set up. The " +
     "terminal running rondo has what it said.",
@@ -1180,6 +1197,9 @@ explanation you pressed on and then answers the gate.`,
     "Answering this gate did not finish, and no second lap started. Your words may already have " +
     "reached it: go back and read how the gate stands before pressing again. The terminal " +
     "running rondo has what it said.",
+  reviseRefusedNotSettled:
+    "The gate was answered with your words, and no second lap started: the lap you answered did " +
+    "not finish settling. Nothing was spent. The terminal running rondo has what it said.",
   reviseRefusedAfterGate:
     "The gate was answered with your words, and no second lap started: the approval would not " +
     "take another lap. What you wrote is recorded; a message in the request's thread says what " +
@@ -1689,6 +1709,9 @@ const JA: Partial<Chrome> = Object.freeze({
   reviseRefusedGateClosed:
     "何も回答していません。この周回にはもう開いているゲートがありません。戻って結果を" +
     "確認してください。",
+  reviseRefusedNotItsScope:
+    "何も回答していません。消費しようとしている承認は、この周回が動いた承認ではありません。" +
+    "ゲートを読み込み直してから押してください。",
   reviseRefusedNotSetUp:
     "何も回答せず、ゲートにも触れていません。2 周目を用意できませんでした。詳細は rondo を" +
     "動かしているターミナルに出ています。",
@@ -1700,6 +1723,10 @@ const JA: Partial<Chrome> = Object.freeze({
     "ゲートへの回答が途中で終わり、2 周目も開始していません。書かれた言葉はすでにゲートに" +
     "届いているかもしれません。もう一度押す前に、戻ってゲートの状態を確認してください。" +
     "詳細は rondo を動かしているターミナルに出ています。",
+  reviseRefusedNotSettled:
+    "ゲートには書かれた言葉で回答しましたが、2 周目は開始していません。回答した周回の後始末が" +
+    "終わりませんでした。何も消費していません。詳細は rondo を動かしているターミナルに" +
+    "出ています。",
   reviseRefusedAfterGate:
     "ゲートには書かれた言葉で回答しましたが、2 周目は開始していません。承認がもう 1 周回を" +
     "受け付けませんでした。書かれた内容は記録されています。選択肢は依頼のスレッドに書かれた" +
