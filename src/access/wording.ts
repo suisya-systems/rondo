@@ -193,6 +193,13 @@ export interface Chrome {
   /** The pill on a request, or on a message, that waits for the person's reply. */
   readonly asksWaiting: (count: number) => string;
   readonly askWaitingPill: string;
+  /**
+   * The same question, still held, but answered by stopping the line (D-0072
+   * rule 3), and what the answer itself was where it was said.
+   */
+  readonly askStoppedPill: string;
+  readonly answerStoppedPill: string;
+  readonly answerCarriedOnPill: string;
   /** The operator's own messages are "you"; the voice badge says which voice spoke (rule 2.3). */
   readonly you: string;
   readonly operatorVoice: string;
@@ -973,6 +980,9 @@ explanation you pressed on and then answers the gate.`,
   asksWaiting: (count) =>
     `${String(count)} ${count === 1 ? "question" : "questions"} waiting on you`,
   askWaitingPill: "Waiting on you",
+  askStoppedPill: "You stopped this line",
+  answerStoppedPill: "Stopped this line",
+  answerCarriedOnPill: "Carried on",
   you: "you",
   operatorVoice: "operator",
   drafterVoice: "drafter",
@@ -1630,6 +1640,9 @@ const JA: Partial<Chrome> = Object.freeze({
   threadSize: (count, since) => `メッセージ ${String(count)} 件、最後は ${since}前`,
   asksWaiting: (count) => `あなたへの質問 ${String(count)}`,
   askWaitingPill: "あなたの回答待ち",
+  askStoppedPill: "あなたが止めた線",
+  answerStoppedPill: "この線を止めた",
+  answerCarriedOnPill: "続けた",
   you: "あなた",
   operatorVoice: "オペレーター",
   drafterVoice: "下書き役",

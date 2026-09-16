@@ -2259,6 +2259,26 @@ test("D-0072: the page keeps a question waiting until an answer carries it on, a
   expect(stopped).toContain("waiting for your answer (1)");
   expect(stopped).toContain('<li id="ask-ask-b"');
 
+  // **The page says which of the two reasons a question is still held for, and
+  // what the answer was** (D-0072 rules 1 and 3, Codex): the words are kept
+  // byte for byte either way, so without these marks two answers that read
+  // alike and did opposite things would be one entry in the thread.
+  const thread = await operatorPage(
+    ports,
+    "t",
+    { kind: "thread", messageId: "ask-b", to: null },
+    EN,
+    mint,
+  );
+  expect(messageIn(thread, "ask-b")).toContain(">You stopped this line</span>");
+  expect(messageIn(thread, "ask-b")).not.toContain(">Waiting on you</span>");
+  expect(messageIn(thread, "m-stop")).toContain(">Stopped this line</span>");
+  // A reply that answered nothing is marked as neither.
+  expect(messageIn(thread, "m-chat")).not.toContain(">Stopped this line</span>");
+  expect(messageIn(thread, "m-chat")).not.toContain(">Carried on</span>");
+  // The summary's row for the same question says it too.
+  expect(stopped).toContain(">You stopped this line</span>");
+
   // The answer that carries on is the one that ends it, in both readings.
   await answered("m-go", { answerOutcome: "carry_on", body: "go on", atMs: 6_000 });
   expect(await openInStore()).toEqual([]);
@@ -2268,6 +2288,16 @@ test("D-0072: the page keeps a question waiting until an answer carries it on, a
   expect(released).not.toContain('<li id="ask-ask-b"');
   expect(released).toContain('<span id="waiting-count" class="empty:hidden"></span>');
   expect(released).not.toContain("waiting for your answer (1)");
+  // And the answer that released it is marked as the one that carried on.
+  const onward = await operatorPage(
+    ports,
+    "t",
+    { kind: "thread", messageId: "ask-b", to: null },
+    EN,
+    mint,
+  );
+  expect(messageIn(onward, "m-go")).toContain(">Carried on</span>");
+  expect(messageIn(onward, "ask-b")).not.toContain(">You stopped this line</span>");
 });
 
 test("the summary counts an ask waiting on the person and leads to the reply, and the requests list reads at a glance", async () => {

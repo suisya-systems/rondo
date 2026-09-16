@@ -105,6 +105,7 @@ import {
 } from "../advisory/proposal.js";
 import type { HostPolicy } from "../refrain/policy.js";
 import {
+  type AnswerOutcome,
   approvedForPublication,
   FINDING_SEVERITIES,
   type FindingSeverity,
@@ -1515,7 +1516,9 @@ function waitingView(
                   <span
                     class={`inline-flex shrink-0 items-center rounded-full border px-2 py-px text-[11.5px] font-medium leading-4 whitespace-nowrap ${TONE.wait}`}
                   >
-                    {wording.askWaitingPill}
+                    {threads.stopped.has(ask.messageId)
+                      ? wording.askStoppedPill
+                      : wording.askWaitingPill}
                   </span>
                   <span class="tabular-nums">{wording.age(ago(ask.atMs, nowMs))}</span>
                 </span>
@@ -2930,6 +2933,16 @@ interface Threads {
   readonly rootOf: (messageId: string) => string | null;
   readonly waiting: ReadonlySet<string>;
   /**
+   * Of {@link waiting}, the questions the person answered by stopping the line
+   * (D-0072 rule 3): `OpenAsk.answeredStop` read off the same rows.
+   *
+   * **Both are held, and the difference is the record.** An unanswered question
+   * says nobody has been back to it; a stopped one says the person has, and
+   * said to stop. Telling someone who wrote "stop this line" that nobody has
+   * answered is the thing this set exists to stop the page doing.
+   */
+  readonly stopped: ReadonlySet<string>;
+  /**
    * The laps the reading view draws a section for, so an `iteration` basis is
    * a link only when its anchor exists (#220 S1, Codex): a cited lap older than
    * the reading's window is named and not linked to nowhere.
@@ -2945,15 +2958,18 @@ function threadsOf(
   // Only an operator's `carry_on` closes a question (D-0072 rule 3). The
   // `author_kind` is rule 4.4's "the person's reply" read literally: a drafter
   // message threaded under a stop does not release it.
-  const carriedOn = new Set(
-    messages.flatMap((message) =>
-      message.authorKind === "operator" &&
-      message.answerOutcome === "carry_on" &&
-      message.inReplyTo !== null
-        ? [message.inReplyTo]
-        : [],
-    ),
-  );
+  const answered = (outcome: AnswerOutcome): ReadonlySet<string> =>
+    new Set(
+      messages.flatMap((message) =>
+        message.authorKind === "operator" &&
+        message.answerOutcome === outcome &&
+        message.inReplyTo !== null
+          ? [message.inReplyTo]
+          : [],
+      ),
+    );
+  const carriedOn = answered("carry_on");
+  const stoppedBy = answered("stop");
   // ponytail: a walk per message per render, which is O(messages x depth); a
   // thread is a conversation's worth of rows. A `root` column is the upgrade.
   const rootOf = (messageId: string): string | null => {
@@ -2972,6 +2988,14 @@ function threadsOf(
     waiting: new Set(
       messages
         .filter((message) => message.asks && !carriedOn.has(message.messageId))
+        .map((message) => message.messageId),
+    ),
+    stopped: new Set(
+      messages
+        .filter(
+          (message) =>
+            message.asks && !carriedOn.has(message.messageId) && stoppedBy.has(message.messageId),
+        )
         .map((message) => message.messageId),
     ),
     inReading,
@@ -3133,8 +3157,33 @@ function messageView(
             <span class={`voice ${PILL} font-sans ${TONE.muted}`}>{wording.operatorVoice}</span>
           )}
           {waiting ? (
-            <span class={`${PILL} font-sans ${TONE.wait}`}>{wording.askWaitingPill}</span>
+            // **Which of the two reasons it is still waiting** (D-0072 rule 3):
+            // nobody has been back to it, or the person has and said to stop.
+            // The hold is the same; saying "waiting on you" for the second would
+            // tell a person who wrote "stop this line" that they had not answered.
+            <span class={`${PILL} font-sans ${TONE.wait}`}>
+              {threads.stopped.has(message.messageId)
+                ? wording.askStoppedPill
+                : wording.askWaitingPill}
+            </span>
           ) : null}
+          {
+            // **What this message answered, where it was said** (D-0072 rule 1):
+            // the words are kept byte for byte either way, so with no mark here
+            // two answers that read alike and did opposite things would be one
+            // entry in the thread.
+            message.answerOutcome === undefined ? null : (
+              <span
+                class={`${PILL} font-sans ${
+                  message.answerOutcome === "stop" ? TONE.wait : TONE.muted
+                }`}
+              >
+                {message.answerOutcome === "stop"
+                  ? wording.answerStoppedPill
+                  : wording.answerCarriedOnPill}
+              </span>
+            )
+          }
           <a
             href={`#${encodeURIComponent(message.messageId)}`}
             class="text-faint tabular-nums hover:text-foreground"
