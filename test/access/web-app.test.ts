@@ -36,6 +36,8 @@ import {
   newScopeId,
   type PageEnv,
   type Press,
+  type ReviseInput,
+  RevisePort,
   SayPort,
   type ScopedStartInput,
   type ScopeFormDraft,
@@ -61,6 +63,9 @@ type Scoped = ScopeFormDraft[];
 /** Every scoped start the scope port admitted, as the spy's implementation saw it. */
 type Started = ScopedStartInput[];
 
+/** Every revise the revise port admitted, as the spy's implementation saw it. */
+type Revised = ReviseInput[];
+
 /**
  * Ports that hold a spy writer and nothing a `POST` reads.
  *
@@ -72,6 +77,7 @@ function spyPorts(
   sent: Sent = [],
   scoped: Scoped = [],
   started: Started = [],
+  revised: Revised = [],
 ): ServedPorts {
   return {
     hostLanguage: null,
@@ -98,6 +104,10 @@ function spyPorts(
         return await Promise.resolve({ ok: true, note: "" });
       },
     ),
+    revise: new RevisePort(async (input) => {
+      revised.push(input);
+      return await Promise.resolve({ ok: true, note: "" });
+    }),
   } as unknown as ServedPorts;
 }
 
@@ -115,6 +125,14 @@ function sayOf(ports: ServedPorts): SayPort {
     throw new Error("the fixture has no say port");
   }
   return ports.say;
+}
+
+/** The revise port out of the ports, typed as present. */
+function reviseOf(ports: ServedPorts): RevisePort {
+  if (ports.revise === null) {
+    throw new Error("the fixture has no revise port");
+  }
+  return ports.revise;
 }
 
 /** The port out of the ports, typed as present. */
@@ -235,6 +253,23 @@ function startForm(overrides: Record<string, string> = {}): Record<string, strin
     request: "req-1",
     scope_decision: "decision-1",
     iteration: newIterationId(),
+    ...overrides,
+  };
+}
+
+/**
+ * A revise form, as the page draws it: the lap being answered, the successor
+ * minted at render (`newIterationId()`), the approval it runs under, and
+ * rondo's draft, left with the leading and trailing space a person's edit box
+ * carries but a press does not (rondo#233 S4).
+ */
+function reviseForm(overrides: Record<string, string> = {}): Record<string, string> {
+  return {
+    token: TOKEN,
+    iteration: "i-0001",
+    successor: newIterationId(),
+    scope_decision: "decision-1",
+    body: "  fix the parser, and leave the command line alone  ",
     ...overrides,
   };
 }
@@ -729,6 +764,215 @@ test("(scope, start) the planted writers, reached by a GET, record and start not
   expect(await closed).toBe(0);
 });
 
+test("(revise) a person's native press answers the gate with a change, once", async () => {
+  const revised: Revised = [];
+  const { base, stop, closed } = await served(createApp(spyPorts([], [], [], [], revised), TOKEN));
+
+  const form = reviseForm();
+  const pressed = await send(base, "/revise", "POST", pressHeaders(base), form);
+  expect(pressed.status).toBe(303);
+  expect(pressed.location).toBe(`/?lang=en#${encodeURIComponent(`lap-${form["successor"]}`)}`);
+  expect(revised).toEqual([
+    {
+      iterationId: "i-0001",
+      successorId: form["successor"],
+      scopeDecisionId: "decision-1",
+      body: (form["body"] ?? "").trim(),
+    },
+  ]);
+
+  stop.abort();
+  expect(await closed).toBe(0);
+});
+
+test("(revise) every other shape of request to the revise route is refused and writes nothing", async () => {
+  const revised: Revised = [];
+  const { base, stop, closed } = await served(createApp(spyPorts([], [], [], [], revised), TOKEN));
+  const person = pressHeaders(base);
+
+  const refusals: [string, Record<string, string | undefined>, Record<string, string>][] = [
+    ["missing Sec-Fetch-User", { ...person, "sec-fetch-user": undefined }, reviseForm()],
+    [
+      "an htmx hx-post",
+      {
+        ...person,
+        "hx-request": "true",
+        "sec-fetch-mode": "cors",
+        "sec-fetch-dest": "empty",
+        "sec-fetch-user": undefined,
+      },
+      reviseForm(),
+    ],
+    [
+      "a same-origin fetch",
+      { ...person, "sec-fetch-mode": "cors", "sec-fetch-user": undefined },
+      reviseForm(),
+    ],
+    ["a wrong token", person, reviseForm({ token: "not-the-token" })],
+    ["no token", person, withoutToken(reviseForm())],
+    ["a foreign Origin", { ...person, origin: "https://evil.example" }, reviseForm()],
+    ["a cross-site Sec-Fetch-Site", { ...person, "sec-fetch-site": "cross-site" }, reviseForm()],
+    ["a same-site Sec-Fetch-Site", { ...person, "sec-fetch-site": "same-site" }, reviseForm()],
+    ["no Origin at all", { ...person, origin: undefined }, reviseForm()],
+    ["an opaque Origin", { ...person, origin: "null" }, reviseForm()],
+  ];
+  for (const [shape, headers, form] of refusals) {
+    const answered = await send(base, "/revise", "POST", headers, form);
+    expect(answered.status, shape).toBe(403);
+    expect(answered.body, shape).not.toBe("");
+  }
+  expect((await send(base, "/revise", "GET", person)).status).toBe(404);
+  expect(revised).toEqual([]);
+
+  stop.abort();
+  expect(await closed).toBe(0);
+});
+
+test("(revise) a send minted for the revise route cannot be spent there: only a press can", async () => {
+  const revised: Revised = [];
+  const ports = spyPorts([], [], [], [], revised);
+  const app = createApp(ports, TOKEN);
+  const outcomes: string[] = [];
+  const input: ReviseInput = {
+    iterationId: "i-0001",
+    successorId: newIterationId(),
+    scopeDecisionId: "decision-1",
+    body: "fix the parser",
+  };
+  app.post("/planted/send-as-revise-press", async (c) => {
+    const minting = mintSend(c, TOKEN);
+    if ("send" in minting) {
+      const result = await reviseOf(ports).revise(minting.send as unknown as Press, input);
+      outcomes.push(String(result.ok));
+    }
+    return c.text("done");
+  });
+  const { base, stop, closed } = await served(app);
+
+  await send(base, "/planted/send-as-revise-press", "POST", htmxHeaders(base), { token: TOKEN });
+  expect(outcomes).toEqual(["false"]);
+  expect(revised).toEqual([]);
+
+  stop.abort();
+  expect(await closed).toBe(0);
+});
+
+test("(revise) a revise press is one write: the port spends it, and a request mints at most one", async () => {
+  const revised: Revised = [];
+  const ports = spyPorts([], [], [], [], revised);
+  const app = createApp(ports, TOKEN);
+  const outcomes: string[] = [];
+  const input: ReviseInput = {
+    iterationId: "i-0001",
+    successorId: newIterationId(),
+    scopeDecisionId: "decision-1",
+    body: "fix the parser",
+  };
+  app.post("/twice-revise", async (c) => {
+    const form = await c.req.parseBody();
+    const first = mintPress(c, form["token"]);
+    if (!("press" in first)) {
+      return c.text(first.line, first.status);
+    }
+    outcomes.push(String((await reviseOf(ports).revise(first.press, input)).ok));
+    outcomes.push(String((await reviseOf(ports).revise(first.press, input)).ok));
+    outcomes.push("press" in mintPress(c, form["token"]) ? "minted" : "refused");
+    return c.text("done");
+  });
+  const { base, stop, closed } = await served(app);
+
+  expect((await send(base, "/twice-revise", "POST", pressHeaders(base), FORM)).status).toBe(200);
+  expect(outcomes).toEqual(["true", "false", "refused"]);
+  expect(revised).toEqual([input]);
+
+  stop.abort();
+  expect(await closed).toBe(0);
+});
+
+test("(revise) the planted writers, reached by a GET, revise nothing", async () => {
+  const revised: Revised = [];
+  const ports = spyPorts([], [], [], [], revised);
+  const port = reviseOf(ports);
+  const ran: string[] = [];
+  const app = createApp(ports, TOKEN);
+  const input: ReviseInput = {
+    iterationId: "i-0001",
+    successorId: newIterationId(),
+    scopeDecisionId: "decision-1",
+    body: "fix the parser",
+  };
+  const plantedRevise = async (c: Context<PageEnv>, name: string): Promise<void> => {
+    ran.push(name);
+    const minting = mintPress(c, TOKEN);
+    await port.revise("press" in minting ? minting.press : ({} as Press), input);
+    await port.revise(Object.freeze({}) as Press, input);
+  };
+
+  // 1. A `GET` handler calling the port directly.
+  app.get("/planted/revise-handler", async (c) => {
+    await plantedRevise(c, "handler");
+    return c.text("drawn");
+  });
+  // 2. A middleware calling it on the way through.
+  app.use("/planted/revise-middleware", async (c, next) => {
+    await plantedRevise(c, "middleware");
+    await next();
+  });
+  // 3. A mounted sub-app calling it.
+  const sub = new Hono<PageEnv>();
+  sub.get("/", async (c) => {
+    await plantedRevise(c, "sub-app");
+    return c.text("drawn");
+  });
+  app.route("/planted/revise-sub", sub);
+  // 4. A loader: it reads the token the page renders, returns it to the
+  // client as data, and then calls the port with a press minted from its own
+  // request.
+  app.get("/planted/revise-loader", async (c) => {
+    ran.push("loader");
+    const minting = mintPress(c, TOKEN);
+    if ("press" in minting) {
+      await port.revise(minting.press, input);
+    }
+    return c.json({ token: TOKEN, refused: "status" in minting });
+  });
+
+  const { base, stop, closed } = await served(app);
+  for (const path of [
+    "/planted/revise-handler",
+    "/planted/revise-middleware",
+    "/planted/revise-sub",
+    `/planted/revise-loader?token=${TOKEN}`,
+  ]) {
+    await send(base, path, "GET", pressHeaders(base));
+  }
+
+  expect(new Set(ran)).toEqual(new Set(["handler", "middleware", "sub-app", "loader"]));
+  expect(revised).toEqual([]);
+
+  stop.abort();
+  expect(await closed).toBe(0);
+});
+
+test("(revise) an empty or whitespace-only body is refused by the port, not the route's shape check", async () => {
+  // The route's own shape check reads only the three ids; a blank box passes
+  // it and is refused inside the capability instead (`RevisePort.revise`),
+  // the same way an approve press's blank claim is refused inside `AnswerPort`.
+  const revised: Revised = [];
+  const { base, stop, closed } = await served(createApp(spyPorts([], [], [], [], revised), TOKEN));
+  const person = pressHeaders(base);
+
+  for (const body of ["", "   \n\t  "]) {
+    const answered = await send(base, "/revise", "POST", person, reviseForm({ body }));
+    expect(answered.status, JSON.stringify(body)).toBe(400);
+    expect(answered.body, JSON.stringify(body)).toContain("the box was empty");
+  }
+  expect(revised).toEqual([]);
+
+  stop.abort();
+  expect(await closed).toBe(0);
+});
+
 test("(claim) a press carries what the person verified, trimmed; blank is none, and too long answers nothing", async () => {
   const written: Written = [];
   const { base, stop, closed } = await served(createApp(spyPorts(written), TOKEN));
@@ -843,12 +1087,15 @@ function nonReads(app: Hono<PageEnv>): string[] {
 
 /**
  * **The closed table** (D-0059 section 5a and R4): middleware -- method and
- * `Host`, security headers, `csrf` on each of the five write addresses, body
- * limit -- and six write routes: the lap-end `approve` press, the two
+ * `Host`, security headers, `csrf` on each of the six write addresses, body
+ * limit -- and seven write routes: the lap-end `approve` press, the two
  * sends into a request thread, the answer to a waiting question (which is a
- * press, D-0059 section 5a's falsifier, D-0069 rule 5), and the two rondo#233
- * S3 rows -- the record-scope press and the scoped-start press. A new write
- * kind is a new row here, argued in the decision first.
+ * press, D-0059 section 5a's falsifier, D-0069 rule 5), the two rondo#233 S3
+ * rows -- the record-scope press and the scoped-start press -- and the
+ * rondo#233 S4 row: the revise press, which answers the same gate as the
+ * approve press with what to change and starts the second lap under the
+ * approval the first ran under (D-0070). A new write kind is a new row here,
+ * argued in the decision first.
  */
 const WRITE_TABLE = [
   "ALL /*",
@@ -857,6 +1104,7 @@ const WRITE_TABLE = [
   "ALL /request",
   "ALL /reply",
   "ALL /answer-ask",
+  "ALL /revise",
   "ALL /scope",
   "ALL /start",
   "ALL /*",
@@ -866,6 +1114,7 @@ const WRITE_TABLE = [
   "POST /answer-ask",
   "POST /scope",
   "POST /start",
+  "POST /revise",
 ];
 
 test("(b) the page's writing vocabulary is enumerated off the running app", () => {

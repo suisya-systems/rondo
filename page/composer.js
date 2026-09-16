@@ -62,9 +62,20 @@ if (sentFrom !== null) {
   store.set(sentFrom, null);
   store.set(`rondo:sent:${landed}`, null);
 }
-const opening = box();
-if (opening !== null && opening.value === "") {
-  opening.value = store.get(draftKey(opening)) ?? "";
+// **Every box on the page and not the first one** (rondo#233 S4): the gate now
+// carries two -- the claim beside `approve`, and what to change beside *ask for
+// a change* -- and restoring only the first would throw away the words a person
+// edited into the other on the way back from a refused press. A kept draft wins
+// over what the server drew, which matters for exactly one of them: the revise
+// box arrives holding rondo's own draft, and a person who rewrote it gets their
+// own words back rather than the draft again. Emptying the box clears the store
+// (the `input` listener below), so clearing it and reloading is how rondo's
+// draft comes back.
+for (const opening of document.querySelectorAll("textarea[data-draft]")) {
+  const kept = store.get(draftKey(opening));
+  if (kept !== null && kept !== "") {
+    opening.value = kept;
+  }
 }
 
 document.addEventListener("input", (event) => {

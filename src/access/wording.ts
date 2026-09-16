@@ -627,6 +627,48 @@ export interface Chrome {
   readonly startRefusedNotAdmitted: string;
   /** Script off, a refused press lands on its own page: the way back to this screen. */
   readonly scopeBack: string;
+
+  /**
+   * The gate's other answer (rondo#233 S4, D-0070): ask for a change instead of
+   * approving, with rondo's draft of what to change already in the box.
+   */
+  readonly reviseAction: string;
+  readonly reviseFold: string;
+  readonly revisePlain: string;
+  readonly reviseLabel: string;
+  readonly revisePlaceholder: string;
+  readonly reviseNote: string;
+  /**
+   * Why there is no revise here: the lap was not admitted under an approval, so
+   * a second lap has no budget to be counted against (D-0070 section 1.2). Said
+   * where the form would be, rather than drawing a press that cannot work.
+   */
+  readonly reviseNoScope: string;
+  /**
+   * rondo's draft of the instruction, quoting the model review's findings
+   * (D-0065 rule 5.3): a lead line, one line per finding with its severity, and
+   * its bases under it. **The findings themselves are never translated** -- they
+   * are the reviewer's own words, quoted byte for byte (rule 4 of this file).
+   */
+  readonly reviseDraftLead: string;
+  readonly reviseDraftFinding: (severity: string, text: string) => string;
+  readonly reviseDraftBases: (bases: string) => string;
+  /** Why a revise press answered nothing, one sentence each, as the scope screen's are. */
+  readonly reviseRefusedNoApprover: string;
+  readonly reviseRefusedPress: string;
+  readonly reviseRefusedForm: string;
+  readonly reviseRefusedNoWords: string;
+  readonly reviseRefusedGateClosed: string;
+  readonly reviseRefusedNotSetUp: string;
+  readonly reviseRefusedNoContinuo: string;
+  /** The `test` token is the `ScopeTest` name, ASCII in both sets (rule 3). */
+  readonly reviseRefusedOutside: (test: string) => string;
+  /**
+   * The one refusal that lands after the gate was answered (D-0070 section
+   * 2.4): the person's words are recorded at continuo and no second lap ran.
+   */
+  readonly reviseRefusedAfterGate: string;
+  readonly reviseRefusedNotStarted: string;
 }
 
 /** The three measurements a basis names, in {@link EN}'s words. */
@@ -1090,6 +1132,50 @@ explanation you pressed on and then answers the gate.`,
   startRefusedNotAdmitted:
     "Nothing was started, and nothing was spent. The approval stands; pressing again is safe.",
   scopeBack: "Back to the scope",
+
+  reviseAction: "Ask for a change",
+  reviseFold: "Ask for a change instead",
+  revisePlain:
+    "Sends what you wrote to this gate, and runs a second lap with it under the same approval.",
+  reviseLabel: "What to change (rondo drafted this from the model review; edit it if you like)",
+  revisePlaceholder: "e.g. keep the change to the parser, and leave the command line alone",
+  reviseNote:
+    "Your words go to the gate exactly as you leave them, and the second lap is asked to do the " +
+    "work again with them. The lap and its cost are counted against the approval this one ran " +
+    "under. rondo names the lap; you do not.",
+  reviseNoScope:
+    "This lap was not started under an approved scope, so a second lap has no budget to be " +
+    "counted against, and asking for a change is not offered here.",
+  reviseDraftLead: "Please fix what the model review raised:",
+  reviseDraftFinding: (severity, text) => `- [${severity}] ${text}`,
+  reviseDraftBases: (bases) => `  where: ${bases}`,
+  reviseRefusedNoApprover:
+    "Nothing was answered: RONDO_APPROVER is not set, so there is nobody this page could " +
+    "answer as.",
+  reviseRefusedPress:
+    "Nothing was answered: a gate is answered by a person pressing this page's button, and a " +
+    "script cannot.",
+  reviseRefusedForm:
+    "Nothing was answered: that form did not come from this page. Reload it and press again.",
+  reviseRefusedNoWords:
+    "Nothing was answered: a change has to say what to change, and the box was empty.",
+  reviseRefusedGateClosed:
+    "Nothing was answered: this lap has no gate open any more. Go back to see how it ended.",
+  reviseRefusedNotSetUp:
+    "Nothing was answered and the gate was not touched: the second lap could not be set up. The " +
+    "terminal running rondo has what it said.",
+  reviseRefusedNoContinuo:
+    "Nothing was answered: the part of rondo that runs the work will not start.",
+  reviseRefusedOutside: (test) =>
+    `Nothing was answered and nothing was spent: a second lap is outside the scope this one ran ` +
+    `under, at the ${test} test. The gate is untouched, and a message in the request's thread ` +
+    `says what the choices are.`,
+  reviseRefusedAfterGate:
+    "The gate was answered with your words, and no second lap started: the approval would not " +
+    "take another lap. What you wrote is recorded; a message in the request's thread says what " +
+    "the choices are.",
+  reviseRefusedNotStarted:
+    "No second lap started. The terminal running rondo has what it said; nothing here is lost.",
 } satisfies Chrome);
 
 /** The three measurements a basis names, in the Japanese set's words. */
@@ -1564,6 +1650,49 @@ const JA: Partial<Chrome> = Object.freeze({
   startRefusedNotAdmitted:
     "何も開始せず、何も消費していません。承認はそのまま有効なので、もう一度押しても安全です。",
   scopeBack: "範囲に戻る",
+
+  reviseAction: "変更を依頼する",
+  reviseFold: "承認せずに変更を依頼する",
+  revisePlain: "書かれた内容をこのゲートに送り、同じ承認のもとで 2 周目をその内容で動かします。",
+  reviseLabel: "変更してほしいこと (モデルレビューから rondo が下書きしました。編集できます)",
+  revisePlaceholder: "例: パーサーの変更はそのまま、コマンドラインには手を入れないでほしい",
+  reviseNote:
+    "書かれた言葉はそのままゲートに渡り、2 周目はその言葉で作業をやり直すよう頼まれます。" +
+    "その周回と費用は、この周回が動いた承認の budget に数えられます。周回の名前は rondo が" +
+    "付けるので、入力の必要はありません。",
+  reviseNoScope:
+    "この周回は承認済みの範囲のもとで開始されていないため、2 周目を数える budget がありません。" +
+    "ここでは変更の依頼を出せません。",
+  reviseDraftLead: "モデルレビューが挙げた点を直してください:",
+  reviseDraftFinding: (severity, text) => `- [${severity}] ${text}`,
+  reviseDraftBases: (bases) => `  場所: ${bases}`,
+  reviseRefusedNoApprover:
+    "何も回答していません。RONDO_APPROVER が未設定なので、このページが誰として回答するか" +
+    "決まりません。",
+  reviseRefusedPress:
+    "何も回答していません。ゲートへの回答は人がこのページのボタンを押して行うもので、" +
+    "スクリプトにはできません。",
+  reviseRefusedForm:
+    "何も回答していません。そのフォームはこのページのものではありません。読み込み直してから" +
+    "押してください。",
+  reviseRefusedNoWords: "何も回答していません。変更の依頼には内容が要りますが、入力欄が空でした。",
+  reviseRefusedGateClosed:
+    "何も回答していません。この周回にはもう開いているゲートがありません。戻って結果を" +
+    "確認してください。",
+  reviseRefusedNotSetUp:
+    "何も回答せず、ゲートにも触れていません。2 周目を用意できませんでした。詳細は rondo を" +
+    "動かしているターミナルに出ています。",
+  reviseRefusedNoContinuo: "何も回答していません。作業を動かす部分が起動しません。",
+  reviseRefusedOutside: (test) =>
+    `何も回答せず、何も消費していません。2 周目はこの周回が動いた範囲の外で、${test} の判定で` +
+    `外れました。ゲートはそのままです。選択肢は依頼のスレッドに書かれたメッセージにあります。`,
+  reviseRefusedAfterGate:
+    "ゲートには書かれた言葉で回答しましたが、2 周目は開始していません。承認がもう 1 周回を" +
+    "受け付けませんでした。書かれた内容は記録されています。選択肢は依頼のスレッドに書かれた" +
+    "メッセージにあります。",
+  reviseRefusedNotStarted:
+    "2 周目は開始していません。詳細は rondo を動かしているターミナルに出ています。ここで" +
+    "書いた内容は失われていません。",
 } satisfies Partial<Chrome>);
 
 /**

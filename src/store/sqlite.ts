@@ -2407,6 +2407,20 @@ export interface AdvisoryRecord {
   /** What an approval has spent, counted from its consumption rows (D-0066 rule 3.4). */
   scopeSpent(scopeDecisionId: string): Promise<ScopeSpent>;
   /**
+   * The approval one lap was admitted under, read off its `admission`
+   * consumption row, or null when it was admitted under none (rondo#233 S4,
+   * rondo#228's reading of the same row).
+   *
+   * **It is what lets a surface name a scope nobody typed.** The page offers an
+   * in-scope revise at a gate, and the alternative to this read is a person
+   * copying a decision id off an earlier screen -- which is the thing the page
+   * exists not to ask for. Null, and never a guess, when the row is not there
+   * or when more than one names this lap: an `admission` is written once per
+   * lap inside `reserve()`'s transaction, so a second row is a store this
+   * reader has no business choosing between.
+   */
+  scopeDecisionAdmitting(iterationId: string): Promise<string | null>;
+  /**
    * Whether some successor of this scope, at any depth, carries an `approved`
    * decision (D-0066 rule 1.4). A drafted-only or declined successor retires
    * nothing.
@@ -3425,6 +3439,10 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
       return spentUnder(connection, scopeDecisionId);
     },
 
+    async scopeDecisionAdmitting(iterationId: string): Promise<string | null> {
+      return admittedUnder(connection, iterationId);
+    },
+
     async scopeSupersededByApproved(scopeId: string): Promise<boolean> {
       return supersededByApproved(connection, scopeId);
     },
@@ -3783,6 +3801,25 @@ function toScopeDecision(row: SqlRow): StoredScopeDecision {
  * lap that cost nothing. `COALESCE` because `SUM` over no rows is null, and an
  * empty ledger has spent 0.
  */
+/**
+ * The approval that admitted one lap, or null when no single row says.
+ *
+ * `LIMIT 2` rather than `LIMIT 1`: two rows would mean two approvals claim one
+ * admission, and the honest answer to "which scope is this lap under" is then
+ * none at all rather than whichever the database listed first.
+ */
+function admittedUnder(connection: DatabaseSync, iterationId: string): string | null {
+  const rows = connection
+    .prepare(
+      "SELECT scope_decision_id FROM scope_consumption " +
+        "WHERE subject_id = ? AND act_kind = 'admission' LIMIT 2",
+    )
+    .all(iterationId) as SqlRow[];
+  const only = rows.length === 1 ? rows[0] : undefined;
+  const decision = only === undefined ? undefined : only["scope_decision_id"];
+  return typeof decision === "string" && decision !== "" ? decision : null;
+}
+
 function spentUnder(connection: DatabaseSync, scopeDecisionId: string): ScopeSpent {
   const row = connection
     .prepare(

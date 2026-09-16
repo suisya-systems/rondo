@@ -690,7 +690,85 @@ export class ScopePort {
   }
 }
 
-/** The ports the server is handed: the reading half, and the three writers. */
+/** What one revise press names; the person typed none of the three ids. */
+export interface ReviseInput {
+  /** The lap whose gate this press answers. */
+  readonly iterationId: string;
+  /** The lap the revision runs as, minted at render (`newIterationId`). */
+  readonly successorId: string;
+  /** The approval the lap being revised was admitted under (D-0070 section 1.2). */
+  readonly scopeDecisionId: string;
+  /** What to change, as the person left it: rondo's draft, edited or not. */
+  readonly body: string;
+}
+
+/** Why a revise press revised nothing, as the wording key the page says it in. */
+export type ReviseRefusal =
+  | "reviseRefusedNoWords"
+  | "reviseRefusedGateClosed"
+  | "reviseRefusedNotSetUp"
+  | "reviseRefusedNoContinuo"
+  | "reviseRefusedOutside"
+  | "reviseRefusedAfterGate"
+  | "reviseRefusedNotStarted";
+
+/** What one revise press came to; `test` is the `ScopeTest` that refused, on `reviseRefusedOutside`. */
+export interface Revised {
+  readonly ok: boolean;
+  readonly note: string;
+  readonly why?: ReviseRefusal;
+  readonly test?: string;
+}
+
+/** Answer one gate with what to change, and run the second lap under the scope. */
+export type ReviseFromWeb = (input: ReviseInput) => Promise<Revised>;
+
+/**
+ * The fourth thing this surface may write (D-0059 section 5a, the rondo#233 S4
+ * row): a gate answered with what to change, and the second lap it starts under
+ * the approval the first was admitted under (D-0070).
+ *
+ * **The check is inside this capability**, as it is in {@link AnswerPort},
+ * {@link SayPort} and {@link ScopePort}: whoever holds this object reaches the
+ * implementation only through {@link revise}, which walks no gate without a
+ * press {@link mintPress} minted and nobody has spent. Its own class and not a
+ * method on {@link AnswerPort}, because that port's one word is `approve`
+ * (D-0041 rule 7) and a holder of it must not be able to answer with anything
+ * else.
+ */
+export class RevisePort {
+  readonly #revise: ReviseFromWeb;
+
+  constructor(revise: ReviseFromWeb) {
+    this.#revise = revise;
+  }
+
+  /** Answer one gate with a change and start the second lap, on one press. */
+  async revise(press: Press, input: ReviseInput): Promise<Revised> {
+    if (!minted.has(press)) {
+      return {
+        ok: false,
+        note: "nothing was answered: this was not a person's press",
+      };
+    }
+    minted.delete(press);
+    // **Trimmed and refused here, inside the capability**, so every holder gets
+    // one rule: nothing but whitespace is not an instruction, and a gate
+    // answered with it would carry the person nothing to act on. What is left
+    // is carried byte for byte (D-0009, D-0027 rule 7).
+    const said = input.body.trim();
+    if (said === "") {
+      return {
+        ok: false,
+        why: "reviseRefusedNoWords",
+        note: "nothing was answered: a revise carries what to change, and this carried nothing",
+      };
+    }
+    return await this.#revise({ ...input, body: said });
+  }
+}
+
+/** The ports the server is handed: the reading half, and the four writers. */
 export interface ServedPorts extends WebPorts {
   /**
    * Null when `RONDO_APPROVER` is unset, which is also when no button is drawn
@@ -706,6 +784,12 @@ export interface ServedPorts extends WebPorts {
    * (rondo#233 S3).
    */
   readonly scope: ScopePort | null;
+  /**
+   * Null on {@link scope}'s condition: a revise answers a gate as somebody and
+   * admits a lap under an approval, and both need an actor the allowlist
+   * accepts (rondo#233 S4).
+   */
+  readonly revise: RevisePort | null;
 }
 
 /**
@@ -755,8 +839,25 @@ const SEND_ROUTES: ReadonlyMap<string, SentKind> = new Map([
  */
 const ANSWER_ASK_ROUTE = "/answer-ask";
 
-/** The routes whose body is a person's words, and so takes the larger limit. */
-const MESSAGE_ROUTES: ReadonlySet<string> = new Set([...SEND_ROUTES.keys(), ANSWER_ASK_ROUTE]);
+/**
+ * The route that answers a lap's gate with what to change and starts the second
+ * lap under the first's approval (D-0059 section 5a as annotated from rondo#233
+ * S4, D-0070). A press, as every approval is, and a native form `POST` only.
+ */
+const REVISE_ROUTE = "/revise";
+
+/**
+ * The routes whose body is a person's words, and so takes the larger limit.
+ *
+ * Two of them are presses and not sends -- the answer to a waiting ask, and the
+ * revise -- because what a body is made of and what minting it needs are two
+ * questions (D-0059 section 5a).
+ */
+const MESSAGE_ROUTES: ReadonlySet<string> = new Set([
+  ...SEND_ROUTES.keys(),
+  ANSWER_ASK_ROUTE,
+  REVISE_ROUTE,
+]);
 
 /**
  * The scope screen's two write routes (D-0059 section 5a, the two rondo#233 S3
@@ -989,13 +1090,15 @@ function said(c: Context<PageEnv>, status: 400 | 403 | 404 | 409 | 413 | 421 | 5
  * **The routes are the vocabulary** (D-0059 R4): `GET` of the fixed files,
  * `GET /` for the three views, and section 5a's closed table of write routes:
  * `POST /`, the lap-end `approve` press, the two sends, `POST /request`
- * and `POST /reply`, and the question's answer on a press, `POST /answer-ask`. `test/access/web-app.test.ts` enumerates `app.routes` and
+ * and `POST /reply`, the question's answer on a press, `POST /answer-ask`, the
+ * scope screen's two presses, `POST /scope` and `POST /start`, and the gate's
+ * other answer, `POST /revise`. `test/access/web-app.test.ts` enumerates `app.routes` and
  * fails on any other non-`GET` entry.
  */
 export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
   // The writer is taken off before anything reading is handed the rest, so
   // the renderer does not hold it at runtime either (D-0041 rule 4).
-  const { answer, say, scope, ...reading } = ports;
+  const { answer, say, scope, revise, ...reading } = ports;
   const app = new Hono<PageEnv>();
   tokens.set(app, token);
 
@@ -1124,7 +1227,9 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
       wording,
       say === null ? null : newMessageId,
       scope === null ? null : newScopeId,
-      scope === null ? null : newIterationId,
+      // The scoped start mints one, and so does the revise: both reserve a lap
+      // rondo names (D-0023), and neither screen is drawn without a write port.
+      scope === null && revise === null ? null : newIterationId,
     );
     return c.body(html, 200, { "content-type": "text/html; charset=utf-8" });
   });
@@ -1364,6 +1469,62 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     );
   });
 
+  // **The revise press** (section 5a's rondo#233 S4 row): the gate answered
+  // with what to change, and the second lap admitted under the approval the
+  // first was admitted under (D-0070). A press and not a send, for the reason
+  // the approve press is one -- it answers a gate -- and the body is a person's
+  // words, so this address takes the message limit while needing the press.
+  //
+  // **Three ids and none of them typed**: the lap being answered and the
+  // approval it ran under are what the page read and drew, and the successor's
+  // id was minted when the form was drawn, so a double press names one lap.
+  app.post(REVISE_ROUTE, async (c) => {
+    if (revise === null) {
+      return reviseRefused(c, 403, "reviseRefusedNoApprover", null);
+    }
+    const form = await c.req.parseBody();
+    const iterationId = typeof form["iteration"] === "string" ? form["iteration"] : "";
+    const minting = mintPress(c, form["token"]);
+    if (!("press" in minting)) {
+      return reviseRefused(c, minting.status, "reviseRefusedPress", iterationId);
+    }
+    const successorId = form["successor"];
+    const decision = typeof form["scope_decision"] === "string" ? form["scope_decision"] : "";
+    if (
+      typeof successorId !== "string" ||
+      !PAGE_ITERATION_ID.test(successorId) ||
+      iterationId === "" ||
+      decision === ""
+    ) {
+      return reviseRefused(c, 400, "reviseRefusedForm", iterationId);
+    }
+    const body = form["body"];
+    if (typeof body !== "string") {
+      return reviseRefused(c, 400, "reviseRefusedForm", iterationId);
+    }
+    const revised = await revise.revise(minting.press, {
+      iterationId,
+      successorId,
+      scopeDecisionId: decision,
+      body,
+    });
+    if (!revised.ok) {
+      return reviseRefused(
+        c,
+        revised.why === "reviseRefusedNoWords" ? 400 : 409,
+        revised.why ?? "reviseRefusedNotStarted",
+        iterationId,
+        revised.test ?? null,
+      );
+    }
+    // The summary, anchored at the lap this press started, which is where the
+    // approve press and the scoped start both already land.
+    return c.redirect(
+      `${viewHref({ kind: "summary" }, tagOf(c))}#${encodeURIComponent(`lap-${successorId}`)}`,
+      303,
+    );
+  });
+
   /** Whether the thread already holds exactly this operator message. */
   async function alreadyThere(message: SentMessage): Promise<boolean> {
     const read = await reading.record.threadMessages();
@@ -1484,6 +1645,39 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     );
   }
 
+  /**
+   * A revise press's refusal, said the same way as the scope screen's two and
+   * with the way back to the gate it was pressed at.
+   *
+   * **The gate is the way back and not the summary**, because the draft the
+   * person may have edited only exists in the browser's own history: a refusal
+   * that landed them on the summary would lose words they wrote.
+   */
+  function reviseRefused(
+    c: Context<PageEnv>,
+    status: 400 | 403 | 409,
+    why: "reviseRefusedNoApprover" | "reviseRefusedPress" | "reviseRefusedForm" | ReviseRefusal,
+    iterationId: string | null,
+    test: string | null = null,
+  ) {
+    const wording = wordingOf(c);
+    const line =
+      why === "reviseRefusedOutside" ? wording.reviseRefusedOutside(test ?? "") : wording[why];
+    return pressRefused(
+      c,
+      status,
+      wording.reviseAction,
+      line,
+      viewHref(
+        iterationId === null || iterationId === ""
+          ? { kind: "summary" }
+          : { kind: "answer", iterationId },
+        wording.lang,
+      ),
+      wording.gateBack,
+    );
+  }
+
   /** The address the two refusals send a person back to: the screen they pressed on. */
   function backToScope(
     wording: Chrome,
@@ -1511,6 +1705,8 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     title: string,
     line: string,
     href: string,
+    /** What the one link says; the scope screen's two presses name that screen. */
+    back: string = wordingOf(c).scopeBack,
   ) {
     const wording = wordingOf(c);
     return c.html(
@@ -1522,7 +1718,7 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
         // claim both already say: with script off this page *is* the response,
         // and the draft only exists in the browser's own history.
         `<p>${escapeHtml(wording.sendBackNote)}</p>` +
-        `<p><a href="${escapeHtml(href)}">${escapeHtml(wording.scopeBack)}</a></p></body></html>`,
+        `<p><a href="${escapeHtml(href)}">${escapeHtml(back)}</a></p></body></html>`,
       status,
     );
   }

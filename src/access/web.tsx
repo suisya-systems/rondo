@@ -177,6 +177,9 @@ export interface WebPorts extends InboxReadPorts {
       | "scopeDecisionOf"
       | "scopeSpent"
       | "scopeSupersededByApproved"
+      // rondo#233 S4: the gate's revise offers the approval this lap was
+      // admitted under, so nobody copies a decision id (D-0070 section 1.2).
+      | "scopeDecisionAdmitting"
     >;
   readonly policy: HostPolicy;
   readonly actorId: string | null;
@@ -649,6 +652,18 @@ type Tone = keyof typeof TONE;
 /** The one filled button shape, at two sizes: the way to a press, and the press. */
 const PRIMARY =
   "inline-flex cursor-pointer items-center gap-1.5 rounded-md bg-wait font-semibold text-wait-foreground shadow-xs outline-none hover:bg-wait/90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card";
+
+/**
+ * The same shape, outlined: the gate's second answer beside its first
+ * (rondo#233 S4).
+ *
+ * **Outlined and not filled, and not because it matters less.** Two filled
+ * buttons in one bar read as a choice with a default, and D-0065's gate has no
+ * recommendation; one filled and one outlined reads as the common answer and
+ * the other one, which is what the two are.
+ */
+const SECONDARY =
+  "inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-border bg-background font-semibold text-foreground shadow-xs outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card";
 
 /**
  * A row a person can move to with `j`/`k` (D-0059 rule 5): focusable by script
@@ -1273,6 +1288,8 @@ function waitingView(
   threads: Threads,
   actorId: string | null,
   count: number,
+  /** The lap a revise would run as, minted per draw (rondo#233 S4). */
+  newIterationId: MintIterationId | null,
 ) {
   const asks = threads.messages.filter((message) => threads.waiting.has(message.messageId));
   const hoisted = [
@@ -1304,7 +1321,7 @@ function waitingView(
           fenceLine(wording, record),
         ],
         framing === undefined ? answerLink(wording, record, token) : null,
-        framing === undefined ? null : approveView(wording, record, token, framing),
+        framing === undefined ? null : approveView(wording, record, token, framing, newIterationId),
       );
     }),
     // **An ask in a request thread waits on the person too** (D-0061 rule 2.7,
@@ -1757,7 +1774,11 @@ function changedView(wording: Chrome, record: IterationRecord, work: LapWorkInsp
       {work === null ? (
         <p class="mt-1 text-[13px] leading-5 text-muted-foreground">{wording.changedNoRange}</p>
       ) : work.kind !== "read" ? (
-        <p class="mt-1 text-[13px] leading-5 text-muted-foreground">
+        // **`wrap-anywhere`, because the reason is git's own line** and carries
+        // an absolute path with no space in it: at 420 it pushed the whole
+        // document sideways, which is the one thing a phone width must not do
+        // (rondo#233 S4's screenshot pass).
+        <p class="mt-1 text-[13px] leading-5 wrap-anywhere text-muted-foreground">
           {wording.changedUnreadable(work.reason)}
         </p>
       ) : (
@@ -2031,6 +2052,38 @@ function modelRaised(wording: Chrome, reading: LapReading | null): string | null
   return blockers + majors === 0 ? null : wording.modelRaised(blockers, majors);
 }
 
+/**
+ * rondo's draft of what to change, quoting the model review's findings (D-0065
+ * rule 5.3, rondo#233 S4).
+ *
+ * **Drafted by deterministic code and not by a model.** D-0071's drafter is out
+ * of scope here (rondo#233's Q2), so what stands in for the organisation is
+ * this: a lead line rondo wrote, and then **the reviewer's findings quoted byte
+ * for byte** with their severity and their bases. Nothing here summarises,
+ * ranks or drops a finding -- dismissing what a reviewer raised is the one
+ * thing D-0065 rule 5.3 forbids -- and the person is free to replace every word
+ * of it before pressing, which is the point of putting it in a text box.
+ *
+ * Empty when there is nothing to quote: a gate with no model findings gets an
+ * empty box and its placeholder, rather than a lead line about findings that do
+ * not exist.
+ */
+function reviseDraft(wording: Chrome, reading: LapReading | null): string {
+  if (reading === null || reading.verdict === "unavailable" || reading.findings.length === 0) {
+    return "";
+  }
+  const lines = reading.findings.flatMap((text, index) => {
+    const graded = reading.graded?.[index];
+    // A reading whose severities did not decode still has its findings, and a
+    // quote of one is worth more than a severity it cannot name.
+    const said =
+      graded === undefined ? `- ${text}` : wording.reviseDraftFinding(graded.severity, text);
+    const bases = (graded?.bases ?? []).map((basis) => findingBasisText(basis));
+    return bases.length === 0 ? [said] : [said, wording.reviseDraftBases(bases.join(", "))];
+  });
+  return [wording.reviseDraftLead, ...lines].join("\n");
+}
+
 /** Whether a row carries a question this page can put a button under. */
 function answerable(record: IterationRecord, token: string | null): token is string {
   return token !== null && record.status === "awaiting_human" && record.gateId !== null;
@@ -2062,6 +2115,12 @@ function approveView(
   record: IterationRecord,
   token: string | null,
   framing: Shown,
+  /**
+   * The lap a revise would run as, minted at render for the scoped start's
+   * reason (D-0023, and a double press is one lap). Null where there is no
+   * write port, which is also where no button is drawn at all.
+   */
+  newIterationId: MintIterationId | null = null,
 ) {
   if (!answerable(record, token) || record.gateId === null) {
     return null;
@@ -2175,18 +2234,27 @@ function approveView(
           )}
         </div>
       </details>
-      <form
-        method="post"
-        action={viewHref({ kind: "summary" }, wording.lang)}
+      {/*
+       * **The bar holds both of the gate's answers** (rondo#233 S4, the critic
+       * gap S2 left open): approving, and asking for a change. Two forms and
+       * not one, because a form cannot nest and each posts to its own address
+       * with its own press -- and the bar around them is a `div`, so nothing
+       * about where a control sits decides which press it makes.
+       */}
+      <div
+        id="answer-bar"
         // A solid bar with a rule and a lift on top, so where it overlaps the
         // claims it reads as the window's footer and not as a row of the
         // table; full width under `sm`, where it is the bottom sheet. The lift
         // is shallow and the material ends a gap above it, so where the bar
         // rests at the end of the framing it covers nothing.
-        class="sticky bottom-0 z-[1] -mx-4 mt-5 flex flex-col gap-2 border-t border-border bg-card px-4 py-3 shadow-[0_-4px_10px_-8px_rgb(0_0_0/0.3)]"
+        // **And it never takes more than three-quarters of the window**
+        // (rondo#233 S4): with the change opened, a bar that grew without a
+        // ceiling covered the readings it sits under at a phone width. Past
+        // that it scrolls inside itself, so the gate is still readable behind
+        // it and nothing in the bar is out of reach.
+        class="sticky bottom-0 z-[1] -mx-4 mt-5 flex max-h-[75svh] flex-col gap-2 overflow-y-auto border-t border-border bg-card px-4 py-3 shadow-[0_-4px_10px_-8px_rgb(0_0_0/0.3)]"
       >
-        <input type="hidden" name="token" value={token} />
-        <input type="hidden" name="iteration" value={record.id} />
         {/*
          * **Both readings' verdicts pinned in the bar** (the S2 design pass on
          * #220): the bar stays on screen at every scroll, so the decision's
@@ -2241,7 +2309,14 @@ function approveView(
             </span>
           ) : null}
         </p>
-        <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:gap-3">
+        <form
+          id="approve-form"
+          method="post"
+          action={viewHref({ kind: "summary" }, wording.lang)}
+          class="flex flex-col gap-2 sm:flex-row sm:items-end sm:gap-3"
+        >
+          <input type="hidden" name="token" value={token} />
+          <input type="hidden" name="iteration" value={record.id} />
           {/*
            * **What the person says they checked, carried by this press** (D-0045
            * as annotated from #220): optional, their words byte for byte, and no
@@ -2285,9 +2360,104 @@ function approveView(
           >
             {wording.approvePlain}
           </span>
-        </div>
-      </form>
+        </form>
+        {reviseForm(wording, record, token, framing, newIterationId)}
+      </div>
     </div>
+  );
+}
+
+/**
+ * The gate's other answer, beside approve in the same bar (rondo#233 S4,
+ * D-0070): rondo's draft of what to change, which the person edits or does not,
+ * and one press that carries it to the gate and runs the second lap under the
+ * approval this lap ran under.
+ *
+ * **Folded, and never in the way of approving.** D-0065's gate answer keeps
+ * approve unrefused whatever the model raised, so the change is an equal second
+ * answer a person opens rather than a step in front of the first. The fold is
+ * in the document either way (D-0042's rule about folds), and with script off
+ * `page/app.css` draws it open.
+ *
+ * **No press without an approval to count the lap against.** D-0070 counts the
+ * second lap as an `admission` through the `redo` arm, and a lap admitted under
+ * no scope has nothing to count it against -- so what is drawn there is the
+ * sentence saying so, not a button that would be refused.
+ */
+function reviseForm(
+  wording: Chrome,
+  record: IterationRecord,
+  token: string,
+  framing: Shown,
+  newIterationId: MintIterationId | null,
+) {
+  if (newIterationId === null) {
+    return null;
+  }
+  if (framing.scopeDecisionId === null) {
+    return (
+      <p id="revise-none" class="note text-[12.5px] leading-5 text-faint">
+        {wording.reviseNoScope}
+      </p>
+    );
+  }
+  const model = latestReading(framing.readings, isModelReadingDrafter);
+  return (
+    <details id="revise" class="group">
+      <summary
+        data-row=""
+        class="flex cursor-pointer list-none items-center gap-2 rounded-md py-1 text-[12.5px] leading-5 font-medium text-link outline-none select-none hover:underline focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden"
+      >
+        {chevron()}
+        {wording.reviseFold}
+      </summary>
+      <form
+        id="revise-form"
+        method="post"
+        action={`/revise?lang=${encodeURIComponent(wording.lang)}`}
+        class="mt-2 flex flex-col gap-2"
+      >
+        <input type="hidden" name="token" value={token} />
+        <input type="hidden" name="iteration" value={record.id} />
+        <input type="hidden" name="scope_decision" value={framing.scopeDecisionId} />
+        {/* Minted at render, as the scoped start's is, and for its reason:
+            rondo names the lap (D-0023) and a double press is one lap. */}
+        <input type="hidden" name="successor" value={newIterationId()} />
+        <label class="flex min-w-0 flex-col gap-1">
+          <span class="text-[12.5px] leading-5 font-medium text-muted-foreground">
+            {wording.reviseLabel}
+          </span>
+          {/* **The draft is the field's content and not a `placeholder`**: a
+              placeholder is not sent, and what the person presses with has to
+              be what they read. `data-draft` is the composer script's duty,
+              keyed per gate; an edit survives a refusal, and an untouched box
+              still carries rondo's draft. The findings inside it are the
+              reviewer's own words, so the box states no language. */}
+          <textarea
+            name="body"
+            rows={4}
+            lang=""
+            data-draft={`revise:${record.id}:${record.gateId ?? ""}`}
+            placeholder={wording.revisePlaceholder}
+            class="max-h-64 min-h-20 w-full resize-y rounded-md border border-border bg-background px-2.5 py-1.5 font-mono text-[12.5px] leading-5 outline-none placeholder:text-faint focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {reviseDraft(wording, model)}
+          </textarea>
+        </label>
+        <p class="note text-[12.5px] leading-5 text-muted-foreground">{wording.reviseNote}</p>
+        <button
+          type="submit"
+          data-row=""
+          aria-describedby="revise-plain"
+          class={`${SECONDARY} h-10 w-full justify-center px-6 text-sm sm:h-9 sm:w-auto sm:self-end`}
+        >
+          {wording.reviseAction}
+        </button>
+        <span id="revise-plain" class="note sr-only">
+          {wording.revisePlain}
+        </span>
+      </form>
+    </details>
   );
 }
 
@@ -2351,6 +2521,15 @@ interface Shown {
   readonly material: LapMaterialRead | null;
   /** The row's readings, which the two reading cards are drawn from. */
   readonly readings: readonly LapReading[];
+  /**
+   * The approval this lap was admitted under, or null when it was admitted
+   * under none (rondo#233 S4).
+   *
+   * **Read here so that the revise form can carry it and nobody types it.** A
+   * lap with none gets no revise press: D-0070 counts the second lap against
+   * the first's approval, and there is nothing here to count it against.
+   */
+  readonly scopeDecisionId: string | null;
 }
 
 /**
@@ -2398,6 +2577,7 @@ async function shownBeforePress(
       snapshot,
       material,
       readings,
+      scopeDecisionId: await ports.record.scopeDecisionAdmitting(record.id),
     });
   }
   return shown;
@@ -4336,6 +4516,7 @@ export async function operatorPage(
                     threads,
                     ports.actorId,
                     waitingCount,
+                    newIterationId,
                   )}
                   {attentionView(wording, unreadable)}
                   {runningView(wording, running, transcripts, nowMs)}
