@@ -33,6 +33,18 @@ import { canonicalJson, contentDigest } from "../../src/store/plan.js";
 import { type JsonRecord, type LapReading, modelReadingDrafter } from "../../src/store/records.js";
 import { advisoryRecord, iterationStore } from "../../src/store/sqlite.js";
 
+/**
+ * The tests marked with this drive the CLI over an on-disk store rather than
+ * `:memory:`, and are the only tests in this file that Windows slows down: on
+ * the two Windows cells of main's green run 35089584019 they measured 2.1 s to
+ * 4.1 s against the 10 s default, while the rest of the file stayed under the
+ * reporter's slow threshold. Two of them have already timed out in CI at that
+ * headroom (rondo#222). The number is the one #191 gave the real-git
+ * review-material tests -- a floor under Windows process and filesystem
+ * variance, not a budget.
+ */
+const WINDOWS_HEAVY_TIMEOUT_MS = 60_000;
+
 const ABS = (p: string) => resolve(p);
 const ROOT = "m-root";
 const POLICY: LoopPolicy = { autonomy: "ask_before_landing", maxIterations: 1 };
@@ -867,44 +879,52 @@ async function retryHarness() {
   return { ...h, errors, retry };
 }
 
-test("retry: inherits the predecessor's request, writes the stop and exits 2, then is held", async () => {
-  const h = await retryHarness();
-  expect(await h.retry("i-b")).toBe(2);
-  const first = h.errors.join("");
-  // Tested as the predecessor's request: refused at expiry, not at the request test.
-  expect(first).toContain("at the expiry test");
-  expect(first).toContain("The line is stopped by message 'scope-stop-i-b-");
-  expect(h.stops()).toHaveLength(1);
-  h.errors.length = 0;
-  expect(await h.retry("i-c")).toBe(2);
-  expect(h.errors.join("")).toContain("already holds this line");
-  expect(h.stops()).toHaveLength(1);
-});
+test(
+  "retry: inherits the predecessor's request, writes the stop and exits 2, then is held",
+  async () => {
+    const h = await retryHarness();
+    expect(await h.retry("i-b")).toBe(2);
+    const first = h.errors.join("");
+    // Tested as the predecessor's request: refused at expiry, not at the request test.
+    expect(first).toContain("at the expiry test");
+    expect(first).toContain("The line is stopped by message 'scope-stop-i-b-");
+    expect(h.stops()).toHaveLength(1);
+    h.errors.length = 0;
+    expect(await h.retry("i-c")).toBe(2);
+    expect(h.errors.join("")).toContain("already holds this line");
+    expect(h.stops()).toHaveLength(1);
+  },
+  WINDOWS_HEAVY_TIMEOUT_MS,
+);
 
-test("PLANTED: retry exits 1 when the stop is not recorded", async () => {
-  const h = await retryHarness();
-  const now = 50_000;
-  const clock = vi.spyOn(Date, "now").mockReturnValue(now);
-  try {
-    // The id the stop would take is already a message, so its write is refused.
-    expect(
-      await h.record.recordThreadMessage({
-        messageId: `scope-stop-i-b-${String(now)}`,
-        body: "an unrelated note",
-        authorKind: "operator",
-        authorId: "oidc|operator-1",
-        inReplyTo: ROOT,
-        atMs: 2,
-        bases: [],
-        asks: false,
-      }),
-    ).toEqual({ kind: "recorded" });
-    expect(await h.retry("i-b")).toBe(1);
-    expect(h.errors.join("")).toContain("was NOT recorded");
-  } finally {
-    clock.mockRestore();
-  }
-});
+test(
+  "PLANTED: retry exits 1 when the stop is not recorded",
+  async () => {
+    const h = await retryHarness();
+    const now = 50_000;
+    const clock = vi.spyOn(Date, "now").mockReturnValue(now);
+    try {
+      // The id the stop would take is already a message, so its write is refused.
+      expect(
+        await h.record.recordThreadMessage({
+          messageId: `scope-stop-i-b-${String(now)}`,
+          body: "an unrelated note",
+          authorKind: "operator",
+          authorId: "oidc|operator-1",
+          inReplyTo: ROOT,
+          atMs: 2,
+          bases: [],
+          asks: false,
+        }),
+      ).toEqual({ kind: "recorded" });
+      expect(await h.retry("i-b")).toBe(1);
+      expect(h.errors.join("")).toContain("was NOT recorded");
+    } finally {
+      clock.mockRestore();
+    }
+  },
+  WINDOWS_HEAVY_TIMEOUT_MS,
+);
 
 test("a refusal ahead of the asks test does not write a second stop over a held line", async () => {
   const h = await harness();
@@ -1079,61 +1099,65 @@ async function captured(argv: string[], environment: Record<string, string>) {
   }
 }
 
-test("scope --plan records an agent type no lap has run, and the screen reads its tier and grants back", async () => {
-  const dir = mkdtempSync(join(tmpdir(), "rondo-scope-plan-"));
-  const path = join(dir, "rondo.sqlite3");
-  const connection = new DatabaseSync(path);
-  const record = advisoryRecord(connection);
-  iterationStore(connection, { maxOccupying: 100, maxLive: 100 });
-  expect(
-    await record.recordThreadMessage({
-      messageId: ROOT,
-      body: "please teach rondo to count",
-      authorKind: "operator",
-      authorId: "oidc|operator-1",
-      inReplyTo: null,
-      atMs: 1,
-      bases: [],
-      asks: false,
-    }),
-  ).toEqual({ kind: "recorded" });
-  const payloadFile = join(dir, "scope.json");
-  writeFileSync(payloadFile, JSON.stringify(PAYLOAD));
-  const environment = { RONDO_STORE: path, RONDO_APPROVER: "oidc|operator-1" };
-  const argv = ["scope", "--payload-file", payloadFile, "--actor-id", "oidc|operator-1"];
-  const digest = agentTypeOf(PLAN);
+test(
+  "scope --plan records an agent type no lap has run, and the screen reads its tier and grants back",
+  async () => {
+    const dir = mkdtempSync(join(tmpdir(), "rondo-scope-plan-"));
+    const path = join(dir, "rondo.sqlite3");
+    const connection = new DatabaseSync(path);
+    const record = advisoryRecord(connection);
+    iterationStore(connection, { maxOccupying: 100, maxLive: 100 });
+    expect(
+      await record.recordThreadMessage({
+        messageId: ROOT,
+        body: "please teach rondo to count",
+        authorKind: "operator",
+        authorId: "oidc|operator-1",
+        inReplyTo: null,
+        atMs: 1,
+        bases: [],
+        asks: false,
+      }),
+    ).toEqual({ kind: "recorded" });
+    const payloadFile = join(dir, "scope.json");
+    writeFileSync(payloadFile, JSON.stringify(PAYLOAD));
+    const environment = { RONDO_STORE: path, RONDO_APPROVER: "oidc|operator-1" };
+    const argv = ["scope", "--payload-file", payloadFile, "--actor-id", "oidc|operator-1"];
+    const digest = agentTypeOf(PLAN);
 
-  // Control: with no plan, the fresh store holds no record of the agent type.
-  const bare = await captured(argv, environment);
-  expect(bare.code).not.toBe(0);
-  expect(bare.text).toContain("which is no record rondo holds");
+    // Control: with no plan, the fresh store holds no record of the agent type.
+    const bare = await captured(argv, environment);
+    expect(bare.code).not.toBe(0);
+    expect(bare.text).toContain("which is no record rondo holds");
 
-  const recorded = await captured([...argv, "--plan", planFile(dir)], environment);
-  expect(recorded.text).toContain(`agent type ${digest}`);
-  expect(recorded.code).toBe(0);
-  expect(recorded.text).toContain(`plan ${join(dir, "plan.json")}: agent type ${digest}`);
-  expect(recorded.text).toContain(
-    `agent type ${digest}: tier standard, granted command.run, read from a plan recorded for a scope`,
-  );
-  expect(recorded.text).toMatch(/^[\x20-\x7E\n]*$/);
-  const rows = connection
-    .prepare("SELECT agent_type_digest, agent_type_input, recorded_by FROM agent_type_record")
-    .all() as Record<string, unknown>[];
-  expect(rows).toEqual([
-    {
-      agent_type_digest: digest,
-      agent_type_input: canonicalJson(PLAN.agentTypeInput as never),
-      recorded_by: "oidc|operator-1",
-    },
-  ]);
-  expect(await record.heldAgentType(digest)).toEqual({
-    kind: "read",
-    source: "agent_type_record",
-    agentTypeInput: PLAN.agentTypeInput,
-  });
-  // A relative plan path is refused before anything is written.
-  expect((await captured([...argv, "--plan", "plan.json"], environment)).code).not.toBe(0);
-});
+    const recorded = await captured([...argv, "--plan", planFile(dir)], environment);
+    expect(recorded.text).toContain(`agent type ${digest}`);
+    expect(recorded.code).toBe(0);
+    expect(recorded.text).toContain(`plan ${join(dir, "plan.json")}: agent type ${digest}`);
+    expect(recorded.text).toContain(
+      `agent type ${digest}: tier standard, granted command.run, read from a plan recorded for a scope`,
+    );
+    expect(recorded.text).toMatch(/^[\x20-\x7E\n]*$/);
+    const rows = connection
+      .prepare("SELECT agent_type_digest, agent_type_input, recorded_by FROM agent_type_record")
+      .all() as Record<string, unknown>[];
+    expect(rows).toEqual([
+      {
+        agent_type_digest: digest,
+        agent_type_input: canonicalJson(PLAN.agentTypeInput as never),
+        recorded_by: "oidc|operator-1",
+      },
+    ]);
+    expect(await record.heldAgentType(digest)).toEqual({
+      kind: "read",
+      source: "agent_type_record",
+      agentTypeInput: PLAN.agentTypeInput,
+    });
+    // A relative plan path is refused before anything is written.
+    expect((await captured([...argv, "--plan", "plan.json"], environment)).code).not.toBe(0);
+  },
+  WINDOWS_HEAVY_TIMEOUT_MS,
+);
 
 test("start --scope-decision-id: refused without --message-id before any verdict", () => {
   const refused = parseCommand([
@@ -1168,50 +1192,54 @@ test("start --scope-decision-id: refused without --message-id before any verdict
   ).toMatchObject({ kind: "parsed", parsed: { planFiles: ["/a.json", "/b.json"] } });
 });
 
-test("start --scope-decision-id goes through the verdict: refused at expiry with a stop, then held", async () => {
-  const dir = mkdtempSync(join(tmpdir(), "rondo-scope-start-"));
-  const path = join(dir, "rondo.sqlite3");
-  const h = await harness(path);
-  const errors: string[] = [];
-  const run = async (iterationId: string): Promise<number> => {
-    const parsed = parseCommand([
-      "start",
-      "--plan",
-      planFile(dir),
-      "--iteration-id",
-      iterationId,
-      "--scope-decision-id",
-      "sd-1",
-      "--message-id",
-      ROOT,
-    ]);
-    if (parsed.kind !== "parsed") throw new Error("the start did not parse");
-    const original = { write: consoleSeams.write, writeError: consoleSeams.writeError };
-    consoleSeams.write = () => {};
-    consoleSeams.writeError = (text: string) => {
-      errors.push(text);
+test(
+  "start --scope-decision-id goes through the verdict: refused at expiry with a stop, then held",
+  async () => {
+    const dir = mkdtempSync(join(tmpdir(), "rondo-scope-start-"));
+    const path = join(dir, "rondo.sqlite3");
+    const h = await harness(path);
+    const errors: string[] = [];
+    const run = async (iterationId: string): Promise<number> => {
+      const parsed = parseCommand([
+        "start",
+        "--plan",
+        planFile(dir),
+        "--iteration-id",
+        iterationId,
+        "--scope-decision-id",
+        "sd-1",
+        "--message-id",
+        ROOT,
+      ]);
+      if (parsed.kind !== "parsed") throw new Error("the start did not parse");
+      const original = { write: consoleSeams.write, writeError: consoleSeams.writeError };
+      consoleSeams.write = () => {};
+      consoleSeams.writeError = (text: string) => {
+        errors.push(text);
+      };
+      try {
+        // The wall clock is past the fixture's expiry: refused before `admit`.
+        return await commandStart(parsed.parsed, h.store, path, {} as never, {} as never, {
+          cliPath: "/opt/continuo/dist/cli.js",
+          revision: "0".repeat(40),
+        });
+      } finally {
+        consoleSeams.write = original.write;
+        consoleSeams.writeError = original.writeError;
+      }
     };
-    try {
-      // The wall clock is past the fixture's expiry: refused before `admit`.
-      return await commandStart(parsed.parsed, h.store, path, {} as never, {} as never, {
-        cliPath: "/opt/continuo/dist/cli.js",
-        revision: "0".repeat(40),
-      });
-    } finally {
-      consoleSeams.write = original.write;
-      consoleSeams.writeError = original.writeError;
-    }
-  };
-  expect(await run("i-a")).toBe(2);
-  expect(errors.join("")).toContain(
-    "Refused: the first admission is outside the scope at the expiry test",
-  );
-  expect(errors.join("")).toContain("The line is stopped by message 'scope-stop-i-a-");
-  expect(h.stops()).toHaveLength(1);
-  errors.length = 0;
-  expect(await run("i-b")).toBe(2);
-  expect(errors.join("")).toContain("at the asks test");
-  expect(errors.join("")).toContain("already holds this line");
-  expect(h.stops()).toHaveLength(1);
-  expect(h.consumptions()).toBe(0);
-});
+    expect(await run("i-a")).toBe(2);
+    expect(errors.join("")).toContain(
+      "Refused: the first admission is outside the scope at the expiry test",
+    );
+    expect(errors.join("")).toContain("The line is stopped by message 'scope-stop-i-a-");
+    expect(h.stops()).toHaveLength(1);
+    errors.length = 0;
+    expect(await run("i-b")).toBe(2);
+    expect(errors.join("")).toContain("at the asks test");
+    expect(errors.join("")).toContain("already holds this line");
+    expect(h.stops()).toHaveLength(1);
+    expect(h.consumptions()).toBe(0);
+  },
+  WINDOWS_HEAVY_TIMEOUT_MS,
+);
