@@ -68,6 +68,7 @@ git clone https://github.com/suisya-systems/rondo.git /tmp/claude-1000/rondo-dog
 ### Step 1. 環境を読み込む
 
 ```sh
+unsetopt correct correct_all          # zsh asks about unfamiliar words otherwise (#221)
 cd /tmp/claude-1000/rondo-dogfood-lap-9-env/rondo-host
 . /tmp/claude-1000/rondo-dogfood-lap-9-env/env.sh
 R=/tmp/claude-1000/rondo-dogfood-lap-9-env; date +%T

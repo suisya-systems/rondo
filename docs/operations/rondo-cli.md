@@ -83,6 +83,7 @@ before the first command, and so do the four directories in section 3's plan (`a
 missing one is an error from inside a lap rather than at setup.
 
 ```sh
+unsetopt correct correct_all          # zsh asks about unfamiliar words otherwise (#221)
 S=/abs/where/the/environment/lives
 mkdir -p "$S" "$S/artifacts" "$S/session-state" "$S/dropbox" "$S/catalog"
 
