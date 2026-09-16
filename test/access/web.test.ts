@@ -2838,6 +2838,27 @@ async function gateWithClearChecks(world: ReturnType<typeof fresh>): Promise<voi
   expect(carried.kind).toBe("transitioned");
 }
 
+/**
+ * The class a pill was drawn with, so a test can see its tone and not only its
+ * words (rondo#243, the model review's major on lap 10).
+ *
+ * **Because the wording alone does not seal the fix.** rondo#237 is two
+ * changes at once: over work that cannot be read, a `clear` stops saying
+ * *nothing raised* **and** stops being green. The tests asserted the first and
+ * never the second, so a regression that restored the green pill while keeping
+ * the new sentence -- or that kept a verdict's colour where only its words were
+ * meant to change -- would pass the suite unchanged. The tone is the half a
+ * person reads first across a room.
+ */
+function pillTone(html: string, text: string): string {
+  const at = html.indexOf(`>${text}</span>`);
+  expect(at).toBeGreaterThan(-1);
+  const opens = '<span class="';
+  const open = html.lastIndexOf(opens, at);
+  expect(open).toBeGreaterThan(-1);
+  return html.slice(open + opens.length, html.indexOf('"', open + opens.length));
+}
+
 test("a recorded 'clear' is not drawn as a pass over work that cannot be read (#237)", async () => {
   const world = fresh();
   await gateWithClearChecks(world);
@@ -2862,6 +2883,12 @@ test("a recorded 'clear' is not drawn as a pass over work that cannot be read (#
   const bar = html.slice(html.indexOf('id="answer-bar"'));
   expect(card).toContain(">not matched</span>");
   expect(bar).toContain(">not matched</span>");
+  // **And the tone, beside the words** (rondo#243). A pill that said *not
+  // matched* in the green a pass is drawn in would be the same claim back.
+  for (const where of [card, bar]) {
+    expect(pillTone(where, "not matched")).toContain("text-muted-foreground");
+    expect(pillTone(where, "not matched")).not.toContain("text-ok");
+  }
   // And the sentence that says why is still beside the count it disagrees with.
   expect(html).toContain(
     "What changed cannot be read now, so this reading cannot be matched against the work.",
@@ -2875,6 +2902,9 @@ test("a recorded 'clear' is not drawn as a pass over work that cannot be read (#
   });
   expect(read).toContain(">nothing raised</span>");
   expect(read).not.toContain(">not matched</span>");
+  // Read, and the pass is green again: the colour is the verdict's, and it
+  // comes back with the work rather than being muted for good.
+  expect(pillTone(read, "nothing raised")).toContain("text-ok");
 });
 
 test("a reading that raised something keeps its own word where the work is gone (#237)", async () => {
@@ -2893,6 +2923,16 @@ test("a reading that raised something keeps its own word where the work is gone 
   // `1 raised` is not a pass, so it is not replaced -- only its colour goes.
   expect(html).toContain(">1 raised</span>");
   expect(html).not.toContain(">not matched</span>");
+  // **"Only its colour goes" is the claim, so the colour is what is asserted**
+  // (rondo#243): muted where the work is gone, and the verdict's own amber
+  // where it is there. Neither of those was under test before.
+  expect(pillTone(html, "1 raised")).toContain("text-muted-foreground");
+  const read = await operatorPage({ ...portsOver(world, "ada", []), material: structured }, "t", {
+    kind: "answer",
+    iterationId: "i-0001",
+  });
+  expect(pillTone(read, "1 raised")).toContain("text-wait-ink");
+  expect(pillTone(read, "1 raised")).not.toContain("text-muted-foreground");
 });
 
 test("what the fence blocked is on the gate, each call in words, not only in the text fold (#220 S2)", async () => {
