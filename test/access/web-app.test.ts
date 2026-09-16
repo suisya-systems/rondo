@@ -31,10 +31,15 @@ import {
   MAX_CLAIM_CHARS,
   mintPress,
   mintSend,
+  newIterationId,
   newMessageId,
+  newScopeId,
   type PageEnv,
   type Press,
   SayPort,
+  type ScopedStartInput,
+  type ScopeFormDraft,
+  ScopePort,
   type Send,
   type SentMessage,
   type ServedPorts,
@@ -50,13 +55,24 @@ type Written = { iterationId: string; body: string; claim?: string }[];
 /** Every message the say port let through to its implementation. */
 type Sent = SentMessage[];
 
+/** Every scope the scope port recorded and approved, as the spy's implementation saw it. */
+type Scoped = ScopeFormDraft[];
+
+/** Every scoped start the scope port admitted, as the spy's implementation saw it. */
+type Started = ScopedStartInput[];
+
 /**
  * Ports that hold a spy writer and nothing a `POST` reads.
  *
  * The write route reads only the host's language off the reading half, so the
  * rest is absent and a route that tried to render would fail loudly.
  */
-function spyPorts(written: Written, sent: Sent = []): ServedPorts {
+function spyPorts(
+  written: Written,
+  sent: Sent = [],
+  scoped: Scoped = [],
+  started: Started = [],
+): ServedPorts {
   return {
     hostLanguage: null,
     answer: new AnswerPort(async (iterationId, body, claim) => {
@@ -72,7 +88,25 @@ function spyPorts(written: Written, sent: Sent = []): ServedPorts {
       },
       async () => await Promise.resolve({ kind: "read", messages: [] }),
     ),
+    scope: new ScopePort(
+      async (draft) => {
+        scoped.push(draft);
+        return await Promise.resolve({ ok: true, note: "", scopeDecisionId: "decision-1" });
+      },
+      async (input) => {
+        started.push(input);
+        return await Promise.resolve({ ok: true, note: "" });
+      },
+    ),
   } as unknown as ServedPorts;
+}
+
+/** The scope port out of the ports, typed as present. */
+function scopeOf(ports: ServedPorts): ScopePort {
+  if (ports.scope === null) {
+    throw new Error("the fixture has no scope port");
+  }
+  return ports.scope;
 }
 
 /** The say port out of the ports, typed as present. */
@@ -170,6 +204,47 @@ function send(
 }
 
 const FORM = { token: TOKEN, iteration: "i-0001" };
+
+/**
+ * A record-scope form, as the page draws it: the hidden ids it minted and the
+ * five budget numbers a person set (rondo#233 S3, D-0066 rule 1).
+ */
+function scopeForm(overrides: Record<string, string> = {}): Record<string, string> {
+  return {
+    token: TOKEN,
+    request: "req-1",
+    scope_id: newScopeId(),
+    // The two digests the form was drawn from, which the write compares its own
+    // re-read of the plan against (rondo#233 S3 press review).
+    plan_digest: `sha256:${"0".repeat(64)}`,
+    agent_type: `sha256:${"1".repeat(64)}`,
+    laps: "3",
+    review_rounds: "2",
+    cost_usd: "10",
+    cost_reserve_usd: "2",
+    expires_at_ms: "2026-01-01T00:00",
+    severity_threshold: "major",
+    ...overrides,
+  };
+}
+
+/** A scoped-start form, as the page draws it: hidden ids only, no typed prompt. */
+function startForm(overrides: Record<string, string> = {}): Record<string, string> {
+  return {
+    token: TOKEN,
+    request: "req-1",
+    scope_decision: "decision-1",
+    iteration: newIterationId(),
+    ...overrides,
+  };
+}
+
+/** A form with its `token` field dropped, the shape a request with no token takes. */
+function withoutToken(form: Record<string, string>): Record<string, string> {
+  const rest = { ...form };
+  delete rest["token"];
+  return rest;
+}
 
 test("(a) a person's native press is minted, and it writes the one word once", async () => {
   const written: Written = [];
@@ -281,6 +356,374 @@ test("(a) a press is one write: the port spends it, and a request mints at most 
   expect((await send(base, "/twice", "POST", pressHeaders(base), FORM)).status).toBe(200);
   expect(outcomes).toEqual(["true", "false", "refused"]);
   expect(written).toEqual([{ iterationId: "i-0001", body: "approve" }]);
+
+  stop.abort();
+  expect(await closed).toBe(0);
+});
+
+test("(scope) a person's native press records one scope and approves it, once", async () => {
+  const scoped: Scoped = [];
+  const { base, stop, closed } = await served(createApp(spyPorts([], [], scoped), TOKEN));
+
+  const form = scopeForm();
+  const pressed = await send(base, "/scope", "POST", pressHeaders(base), form);
+  expect(pressed.status).toBe(303);
+  expect(pressed.location).toBe("/?scope=req-1&decision=decision-1&lang=en#scope");
+  expect(scoped).toEqual([
+    {
+      scopeId: form["scope_id"],
+      requestMessageId: "req-1",
+      planDigest: form["plan_digest"],
+      agentTypeDigest: form["agent_type"],
+      budgets: {
+        laps: 3,
+        review_rounds: 2,
+        cost_usd: 10,
+        cost_reserve_usd: 2,
+        expires_at_ms: Date.parse("2026-01-01T00:00Z"),
+      },
+      severityThreshold: "major",
+      outwardActs: [],
+    },
+  ]);
+
+  stop.abort();
+  expect(await closed).toBe(0);
+});
+
+test("(scope) every other shape of request to the record-scope route is refused and writes nothing", async () => {
+  const scoped: Scoped = [];
+  const { base, stop, closed } = await served(createApp(spyPorts([], [], scoped), TOKEN));
+  const person = pressHeaders(base);
+
+  const refusals: [string, Record<string, string | undefined>, Record<string, string>][] = [
+    ["missing Sec-Fetch-User", { ...person, "sec-fetch-user": undefined }, scopeForm()],
+    [
+      "an htmx hx-post",
+      {
+        ...person,
+        "hx-request": "true",
+        "sec-fetch-mode": "cors",
+        "sec-fetch-dest": "empty",
+        "sec-fetch-user": undefined,
+      },
+      scopeForm(),
+    ],
+    [
+      "a same-origin fetch",
+      { ...person, "sec-fetch-mode": "cors", "sec-fetch-user": undefined },
+      scopeForm(),
+    ],
+    ["a GET-shaped POST with a wrong token", person, scopeForm({ token: "not-the-token" })],
+    ["no token", person, withoutToken(scopeForm())],
+    ["a foreign Origin", { ...person, origin: "https://evil.example" }, scopeForm()],
+    ["a cross-site Sec-Fetch-Site", { ...person, "sec-fetch-site": "cross-site" }, scopeForm()],
+    ["a same-site Sec-Fetch-Site", { ...person, "sec-fetch-site": "same-site" }, scopeForm()],
+    ["no Origin at all", { ...person, origin: undefined }, scopeForm()],
+    ["an opaque Origin", { ...person, origin: "null" }, scopeForm()],
+  ];
+  for (const [shape, headers, form] of refusals) {
+    const answered = await send(base, "/scope", "POST", headers, form);
+    expect(answered.status, shape).toBe(403);
+    expect(answered.body, shape).not.toBe("");
+  }
+  expect((await send(base, "/scope", "GET", person)).status).toBe(404);
+  expect(scoped).toEqual([]);
+
+  stop.abort();
+  expect(await closed).toBe(0);
+});
+
+test("(scope) a refused press writes nothing and leads back to the screen it was pressed on, at the rounds it was drawn at", async () => {
+  const scoped: Scoped = [];
+  const { base, stop, closed } = await served(createApp(spyPorts([], [], scoped), TOKEN));
+  const person = pressHeaders(base);
+
+  // The form is drawn from the plan, so a press missing what it was drawn from
+  // is a press from something that is not this page's form (rondo#233 S3 press
+  // review). Refused rather than re-read, because a plan read at press time
+  // with nothing to compare it against is the hole the hidden fields close.
+  for (const missing of ["plan_digest", "agent_type"]) {
+    const form = scopeForm({ review_rounds: "5" });
+    delete form[missing];
+    const refused = await send(base, "/scope", "POST", person, form);
+    expect(refused.status, missing).toBe(400);
+    expect(refused.body, missing).toContain("one of the numbers is not a number rondo can use");
+    // **The way back to what was typed**, as a refused send and a refused claim
+    // both already say, and back to the *rounds the person chose*: the address
+    // carries that choice and the form posts no address, so a refusal that
+    // dropped it redrew every budget at rondo's default.
+    expect(refused.body, missing).toContain("Back button returns to what you wrote");
+    expect(refused.body, missing).toContain("/?scope=req-1&amp;rounds=5&amp;lang=en");
+  }
+  expect(scoped).toEqual([]);
+
+  stop.abort();
+  expect(await closed).toBe(0);
+});
+
+test("(scope) a send minted for the record-scope route cannot be spent there: only a press can", async () => {
+  const scoped: Scoped = [];
+  const ports = spyPorts([], [], scoped);
+  const app = createApp(ports, TOKEN);
+  const outcomes: string[] = [];
+  const draft = {
+    scopeId: newScopeId(),
+    requestMessageId: "req-1",
+    planDigest: `sha256:${"0".repeat(64)}`,
+    agentTypeDigest: `sha256:${"1".repeat(64)}`,
+    budgets: { laps: 1, review_rounds: 1, cost_usd: 1, cost_reserve_usd: 1, expires_at_ms: 1 },
+    severityThreshold: "major" as const,
+    outwardActs: [],
+  };
+  app.post("/planted/send-as-scope-press", async (c) => {
+    const minting = mintSend(c, TOKEN);
+    if ("send" in minting) {
+      const result = await scopeOf(ports).recordAndApprove(minting.send as unknown as Press, draft);
+      outcomes.push(String(result.ok));
+    }
+    return c.text("done");
+  });
+  const { base, stop, closed } = await served(app);
+
+  await send(base, "/planted/send-as-scope-press", "POST", htmxHeaders(base), { token: TOKEN });
+  expect(outcomes).toEqual(["false"]);
+  expect(scoped).toEqual([]);
+
+  stop.abort();
+  expect(await closed).toBe(0);
+});
+
+test("(scope) a record-scope press is one write: the port spends it, and a request mints at most one", async () => {
+  const scoped: Scoped = [];
+  const ports = spyPorts([], [], scoped);
+  const app = createApp(ports, TOKEN);
+  const outcomes: string[] = [];
+  const draft = {
+    scopeId: newScopeId(),
+    requestMessageId: "req-1",
+    planDigest: `sha256:${"0".repeat(64)}`,
+    agentTypeDigest: `sha256:${"1".repeat(64)}`,
+    budgets: { laps: 1, review_rounds: 1, cost_usd: 1, cost_reserve_usd: 1, expires_at_ms: 1 },
+    severityThreshold: "major" as const,
+    outwardActs: [],
+  };
+  app.post("/twice-scope", async (c) => {
+    const form = await c.req.parseBody();
+    const first = mintPress(c, form["token"]);
+    if (!("press" in first)) {
+      return c.text(first.line, first.status);
+    }
+    outcomes.push(String((await scopeOf(ports).recordAndApprove(first.press, draft)).ok));
+    outcomes.push(String((await scopeOf(ports).recordAndApprove(first.press, draft)).ok));
+    outcomes.push("press" in mintPress(c, form["token"]) ? "minted" : "refused");
+    return c.text("done");
+  });
+  const { base, stop, closed } = await served(app);
+
+  expect((await send(base, "/twice-scope", "POST", pressHeaders(base), FORM)).status).toBe(200);
+  expect(outcomes).toEqual(["true", "false", "refused"]);
+  expect(scoped).toEqual([draft]);
+
+  stop.abort();
+  expect(await closed).toBe(0);
+});
+
+test("(start) a person's native press starts one lap under the scope, once", async () => {
+  const started: Started = [];
+  const { base, stop, closed } = await served(createApp(spyPorts([], [], [], started), TOKEN));
+
+  const form = startForm();
+  const pressed = await send(base, "/start", "POST", pressHeaders(base), form);
+  expect(pressed.status).toBe(303);
+  expect(pressed.location).toBe(`/?lang=en#${encodeURIComponent(`lap-${form["iteration"]}`)}`);
+  expect(started).toEqual([
+    {
+      iterationId: form["iteration"],
+      requestMessageId: "req-1",
+      scopeDecisionId: "decision-1",
+    },
+  ]);
+
+  stop.abort();
+  expect(await closed).toBe(0);
+});
+
+test("(start) every other shape of request to the scoped-start route is refused and writes nothing", async () => {
+  const started: Started = [];
+  const { base, stop, closed } = await served(createApp(spyPorts([], [], [], started), TOKEN));
+  const person = pressHeaders(base);
+
+  const refusals: [string, Record<string, string | undefined>, Record<string, string>][] = [
+    ["missing Sec-Fetch-User", { ...person, "sec-fetch-user": undefined }, startForm()],
+    [
+      "an htmx hx-post",
+      {
+        ...person,
+        "hx-request": "true",
+        "sec-fetch-mode": "cors",
+        "sec-fetch-dest": "empty",
+        "sec-fetch-user": undefined,
+      },
+      startForm(),
+    ],
+    [
+      "a same-origin fetch",
+      { ...person, "sec-fetch-mode": "cors", "sec-fetch-user": undefined },
+      startForm(),
+    ],
+    ["a wrong token", person, startForm({ token: "not-the-token" })],
+    ["no token", person, withoutToken(startForm())],
+    ["a foreign Origin", { ...person, origin: "https://evil.example" }, startForm()],
+    ["a cross-site Sec-Fetch-Site", { ...person, "sec-fetch-site": "cross-site" }, startForm()],
+    ["a same-site Sec-Fetch-Site", { ...person, "sec-fetch-site": "same-site" }, startForm()],
+    ["no Origin at all", { ...person, origin: undefined }, startForm()],
+    ["an opaque Origin", { ...person, origin: "null" }, startForm()],
+  ];
+  for (const [shape, headers, form] of refusals) {
+    const answered = await send(base, "/start", "POST", headers, form);
+    expect(answered.status, shape).toBe(403);
+    expect(answered.body, shape).not.toBe("");
+  }
+  expect((await send(base, "/start", "GET", person)).status).toBe(404);
+  expect(started).toEqual([]);
+
+  stop.abort();
+  expect(await closed).toBe(0);
+});
+
+test("(start) a send minted for the scoped-start route cannot be spent there: only a press can", async () => {
+  const started: Started = [];
+  const ports = spyPorts([], [], [], started);
+  const app = createApp(ports, TOKEN);
+  const outcomes: string[] = [];
+  const input = {
+    iterationId: newIterationId(),
+    requestMessageId: "req-1",
+    scopeDecisionId: "decision-1",
+  };
+  app.post("/planted/send-as-start-press", async (c) => {
+    const minting = mintSend(c, TOKEN);
+    if ("send" in minting) {
+      const result = await scopeOf(ports).start(minting.send as unknown as Press, input);
+      outcomes.push(String(result.ok));
+    }
+    return c.text("done");
+  });
+  const { base, stop, closed } = await served(app);
+
+  await send(base, "/planted/send-as-start-press", "POST", htmxHeaders(base), { token: TOKEN });
+  expect(outcomes).toEqual(["false"]);
+  expect(started).toEqual([]);
+
+  stop.abort();
+  expect(await closed).toBe(0);
+});
+
+test("(start) a scoped-start press is one write: the port spends it, and a request mints at most one", async () => {
+  const started: Started = [];
+  const ports = spyPorts([], [], [], started);
+  const app = createApp(ports, TOKEN);
+  const outcomes: string[] = [];
+  const input = {
+    iterationId: newIterationId(),
+    requestMessageId: "req-1",
+    scopeDecisionId: "decision-1",
+  };
+  app.post("/twice-start", async (c) => {
+    const form = await c.req.parseBody();
+    const first = mintPress(c, form["token"]);
+    if (!("press" in first)) {
+      return c.text(first.line, first.status);
+    }
+    outcomes.push(String((await scopeOf(ports).start(first.press, input)).ok));
+    outcomes.push(String((await scopeOf(ports).start(first.press, input)).ok));
+    outcomes.push("press" in mintPress(c, form["token"]) ? "minted" : "refused");
+    return c.text("done");
+  });
+  const { base, stop, closed } = await served(app);
+
+  expect((await send(base, "/twice-start", "POST", pressHeaders(base), FORM)).status).toBe(200);
+  expect(outcomes).toEqual(["true", "false", "refused"]);
+  expect(started).toEqual([input]);
+
+  stop.abort();
+  expect(await closed).toBe(0);
+});
+
+test("(scope, start) the planted writers, reached by a GET, record and start nothing", async () => {
+  const scoped: Scoped = [];
+  const started: Started = [];
+  const ports = spyPorts([], [], scoped, started);
+  const port = scopeOf(ports);
+  const ran: string[] = [];
+  const app = createApp(ports, TOKEN);
+  const draft = {
+    scopeId: newScopeId(),
+    requestMessageId: "req-1",
+    planDigest: `sha256:${"0".repeat(64)}`,
+    agentTypeDigest: `sha256:${"1".repeat(64)}`,
+    budgets: { laps: 1, review_rounds: 1, cost_usd: 1, cost_reserve_usd: 1, expires_at_ms: 1 },
+    severityThreshold: "major" as const,
+    outwardActs: [],
+  };
+  const input = {
+    iterationId: newIterationId(),
+    requestMessageId: "req-1",
+    scopeDecisionId: "decision-1",
+  };
+  const plantedScope = async (c: Context<PageEnv>, name: string): Promise<void> => {
+    ran.push(name);
+    const minting = mintPress(c, TOKEN);
+    await port.recordAndApprove("press" in minting ? minting.press : ({} as Press), draft);
+    await port.recordAndApprove(Object.freeze({}) as Press, draft);
+    await port.start("press" in minting ? minting.press : ({} as Press), input);
+    await port.start(Object.freeze({}) as Press, input);
+  };
+
+  // 1. A `GET` handler calling the port directly.
+  app.get("/planted/scope-handler", async (c) => {
+    await plantedScope(c, "handler");
+    return c.text("drawn");
+  });
+  // 2. A middleware calling it on the way through.
+  app.use("/planted/scope-middleware", async (c, next) => {
+    await plantedScope(c, "middleware");
+    await next();
+  });
+  // 3. A mounted sub-app calling it.
+  const sub = new Hono<PageEnv>();
+  sub.get("/", async (c) => {
+    await plantedScope(c, "sub-app");
+    return c.text("drawn");
+  });
+  app.route("/planted/scope-sub", sub);
+  // 4. A loader: it reads the token the page renders, returns it to the
+  // client as data, and then calls the port with a press minted from its own
+  // request.
+  app.get("/planted/scope-loader", async (c) => {
+    ran.push("loader");
+    const minting = mintPress(c, TOKEN);
+    if ("press" in minting) {
+      await port.recordAndApprove(minting.press, draft);
+      await port.start(minting.press, input);
+    }
+    return c.json({ token: TOKEN, refused: "status" in minting });
+  });
+
+  const { base, stop, closed } = await served(app);
+  for (const path of [
+    "/planted/scope-handler",
+    "/planted/scope-middleware",
+    "/planted/scope-sub",
+    `/planted/scope-loader?token=${TOKEN}`,
+  ]) {
+    await send(base, path, "GET", pressHeaders(base));
+  }
+
+  expect(new Set(ran)).toEqual(new Set(["handler", "middleware", "sub-app", "loader"]));
+  expect(scoped).toEqual([]);
+  expect(started).toEqual([]);
 
   stop.abort();
   expect(await closed).toBe(0);
@@ -400,11 +843,12 @@ function nonReads(app: Hono<PageEnv>): string[] {
 
 /**
  * **The closed table** (D-0059 section 5a and R4): middleware -- method and
- * `Host`, security headers, `csrf` on each of the three write addresses, body
- * limit -- and four write routes: the lap-end `approve` press, the two
- * sends into a request thread, and the answer to a waiting question, which is
- * a press (D-0059 section 5a's falsifier, D-0069 rule 5). A new write kind is a new row here, argued in
- * the decision first.
+ * `Host`, security headers, `csrf` on each of the five write addresses, body
+ * limit -- and six write routes: the lap-end `approve` press, the two
+ * sends into a request thread, the answer to a waiting question (which is a
+ * press, D-0059 section 5a's falsifier, D-0069 rule 5), and the two rondo#233
+ * S3 rows -- the record-scope press and the scoped-start press. A new write
+ * kind is a new row here, argued in the decision first.
  */
 const WRITE_TABLE = [
   "ALL /*",
@@ -413,11 +857,15 @@ const WRITE_TABLE = [
   "ALL /request",
   "ALL /reply",
   "ALL /answer-ask",
+  "ALL /scope",
+  "ALL /start",
   "ALL /*",
   "POST /",
   "POST /request",
   "POST /reply",
   "POST /answer-ask",
+  "POST /scope",
+  "POST /start",
 ];
 
 test("(b) the page's writing vocabulary is enumerated off the running app", () => {
@@ -425,8 +873,9 @@ test("(b) the page's writing vocabulary is enumerated off the running app", () =
   expect(nonReads(app)).toEqual(WRITE_TABLE);
 
   // Not vacuously: each way of adding a writer changes the enumeration.
+  // `/publish` is S5's route, which this slice does not add.
   const posted = createApp(spyPorts([]), TOKEN);
-  posted.post("/scope", (c) => c.text(""));
+  posted.post("/publish", (c) => c.text(""));
   expect(nonReads(posted)).not.toEqual(WRITE_TABLE);
   const used = createApp(spyPorts([]), TOKEN);
   used.use(async (_c, next) => {

@@ -48,6 +48,13 @@ import { bodyLimit } from "hono/body-limit";
 import { setCookie } from "hono/cookie";
 import { csrf } from "hono/csrf";
 import { secureHeaders } from "hono/secure-headers";
+import {
+  FINDING_SEVERITIES,
+  type FindingSeverity,
+  SCOPE_OUTWARD_ACTS,
+  type ScopeBudgets,
+  type ScopeOutwardAct,
+} from "../store/records.js";
 import type { ThreadMessagesReadOutcome } from "../store/sqlite.js";
 import {
   APPROVE_BODY,
@@ -55,12 +62,14 @@ import {
   LANG_COOKIE,
   LANG_COOKIE_SECONDS,
   type LanguageAsked,
+  MAX_REVIEW_ROUNDS,
   operatorPage,
   type PageView,
   resolveLanguage,
   viewHref,
   type WebPorts,
 } from "./web.js";
+import type { Chrome } from "./wording.js";
 
 /**
  * What the socket said about one request, as `@hono/node-server` hands it to
@@ -535,7 +544,153 @@ export class SayPort {
   }
 }
 
-/** The ports the server is handed: the reading half, and the two writers. */
+/**
+ * The id one scope form carries, minted **when the form is rendered** and held
+ * in it as a hidden field (D-0061 rule 2.1's reason, applied to a scope).
+ *
+ * **Rondo names the scope, and the person never types an id.** Minted at render
+ * rather than at arrival so that one form pressed twice -- a double click, a
+ * resend after a slow write -- carries one id, and the store's uniqueness
+ * refuses the second rather than recording two scopes the person drafted once.
+ * `commandScope` mints `scope-<ms>` for the same row; a page cannot, because
+ * two presses in one millisecond are one form and two clocks are not a
+ * uniqueness argument.
+ */
+export function newScopeId(): string {
+  return `scope-${randomUUID()}`;
+}
+
+/**
+ * The iteration id a scoped start reserves, minted at render for
+ * {@link newScopeId}'s reason (D-0023: rondo derives the run id, the topic
+ * branch and the workspace from it, and on a page nobody types one).
+ *
+ * `lap-` and a UUID is 40 characters of `[a-z0-9-]` after a lowercase letter,
+ * so it passes the closed alphabet `commandStart` names
+ * (`ITERATION_ID_PATTERN`, `src/refrain/allocator.ts`).
+ */
+export function newIterationId(): string {
+  return `lap-${randomUUID()}`;
+}
+
+/** The shape {@link newScopeId} mints, and the only shape `POST /scope` accepts. */
+const PAGE_SCOPE_ID = /^scope-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+/** The shape {@link newIterationId} mints, and the only shape `POST /start` accepts. */
+const PAGE_ITERATION_ID = /^lap-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+/**
+ * The five budget numbers a scope form posts, after this module has read them
+ * as numbers, with the two digests the form was **drawn** from.
+ *
+ * The digests are not written: the writer re-reads the plan and records what is
+ * on disk (D-0066 rule 2.2's purpose, `recordScopeFromPage`). They are what that
+ * re-read is compared against, so a plan that moved between the draw and the
+ * press refuses the press instead of approving a workspace and an agent type
+ * nobody saw.
+ */
+export interface ScopeFormDraft {
+  readonly scopeId: string;
+  readonly requestMessageId: string;
+  readonly planDigest: string;
+  readonly agentTypeDigest: string;
+  readonly budgets: ScopeBudgets;
+  readonly severityThreshold: FindingSeverity;
+  readonly outwardActs: readonly ScopeOutwardAct[];
+}
+
+/** Why a record-scope press recorded nothing, as the wording key the page says it in. */
+export type ScopeRefusal =
+  | "scopeRefusedNotTaken"
+  | "scopeRefusedPlanChanged"
+  | "scopeRefusedEdited"
+  | "scopeRefusedNotRead"
+  | "scopeRefusedNotShown"
+  | "scopeRefusedNotApproved";
+
+/** What one record-scope press came to; `why` is set only on a refusal. */
+export interface ScopeRecorded {
+  readonly ok: boolean;
+  readonly note: string;
+  readonly why?: ScopeRefusal;
+  /** The decision the press approved, for the `303` to address the screen's second state with. */
+  readonly scopeDecisionId?: string;
+}
+
+/** Record the framing, the scope and its approval, and say what happened. */
+export type RecordScopeFromWeb = (draft: ScopeFormDraft) => Promise<ScopeRecorded>;
+
+/** What a scoped start names; every field was minted or read by rondo, never typed. */
+export interface ScopedStartInput {
+  readonly iterationId: string;
+  readonly requestMessageId: string;
+  readonly scopeDecisionId: string;
+}
+
+/** Why a scoped start admitted nothing, as the wording key the page says it in. */
+export type StartRefusal =
+  | "startRefusedNoRequest"
+  | "startRefusedNoPlan"
+  | "startRefusedNoContinuo"
+  | "startRefusedOutside"
+  | "startRefusedNotAdmitted";
+
+/** What one scoped start came to; `test` is the `ScopeTest` that refused, on `startRefusedOutside`. */
+export interface Started {
+  readonly ok: boolean;
+  readonly note: string;
+  readonly why?: StartRefusal;
+  readonly test?: string;
+}
+
+export type ScopedStartFromWeb = (input: ScopedStartInput) => Promise<Started>;
+
+/**
+ * The third thing this surface may write (D-0059 section 5a, the two rondo#233
+ * S3 rows): a scope with its approval, and a lap started under that approval.
+ *
+ * **Both checks are inside this capability**, as the press check is in
+ * {@link AnswerPort} and the send check in {@link SayPort}: whoever holds this
+ * object reaches neither implementation without a press {@link mintPress}
+ * minted and nobody has spent. Two methods on one class rather than two classes
+ * because they are one screen's two presses over one approval, and a caller
+ * that could hold the start without the record could start a lap under a scope
+ * this surface never showed anybody.
+ */
+export class ScopePort {
+  readonly #record: RecordScopeFromWeb;
+  readonly #start: ScopedStartFromWeb;
+
+  constructor(record: RecordScopeFromWeb, start: ScopedStartFromWeb) {
+    this.#record = record;
+    this.#start = start;
+  }
+
+  /** Record one drafted scope and approve it, on one press. */
+  async recordAndApprove(press: Press, draft: ScopeFormDraft): Promise<ScopeRecorded> {
+    if (!minted.has(press)) {
+      return {
+        ok: false,
+        note: "nothing was recorded: this was not a person's press",
+      };
+    }
+    minted.delete(press);
+    return await this.#record(draft);
+  }
+
+  /** Start one lap under one approved scope, on one press. */
+  async start(press: Press, input: ScopedStartInput): Promise<Started> {
+    if (!minted.has(press)) {
+      return {
+        ok: false,
+        note: "nothing was started: this was not a person's press",
+      };
+    }
+    minted.delete(press);
+    return await this.#start(input);
+  }
+}
+
+/** The ports the server is handed: the reading half, and the three writers. */
 export interface ServedPorts extends WebPorts {
   /**
    * Null when `RONDO_APPROVER` is unset, which is also when no button is drawn
@@ -545,6 +700,12 @@ export interface ServedPorts extends WebPorts {
   readonly answer: AnswerPort | null;
   /** Null on the same condition as {@link answer}: no approver, no forms. */
   readonly say: SayPort | null;
+  /**
+   * Null on the same condition as {@link say}: a scope row and a decision row
+   * both need an actor the allowlist accepts, so no approver is no forms
+   * (rondo#233 S3).
+   */
+  readonly scope: ScopePort | null;
 }
 
 /**
@@ -596,6 +757,121 @@ const ANSWER_ASK_ROUTE = "/answer-ask";
 
 /** The routes whose body is a person's words, and so takes the larger limit. */
 const MESSAGE_ROUTES: ReadonlySet<string> = new Set([...SEND_ROUTES.keys(), ANSWER_ASK_ROUTE]);
+
+/**
+ * The scope screen's two write routes (D-0059 section 5a, the two rondo#233 S3
+ * rows): recording a scope with its approval, and starting a lap under that
+ * approval. Paths and not queries on `/`, so the write table names each.
+ */
+const SCOPE_ROUTE = "/scope";
+const START_ROUTE = "/start";
+
+/**
+ * The routes whose body is numbers and minted ids and never prose, and so take
+ * {@link MAX_FORM_BYTES} rather than the send limit.
+ */
+const PRESS_ROUTES: ReadonlySet<string> = new Set([SCOPE_ROUTE, START_ROUTE]);
+
+/** A whole count of at least 0, as a form posts one, or null when it is not one. */
+function wholeNumber(value: unknown): number | null {
+  if (typeof value !== "string" || value.trim() === "") {
+    return null;
+  }
+  const read = Number(value);
+  return Number.isSafeInteger(read) && read >= 0 ? read : null;
+}
+
+/** An amount of at least 0, as a form posts one, or null when it is not one. */
+function amount(value: unknown): number | null {
+  if (typeof value !== "string" || value.trim() === "") {
+    return null;
+  }
+  const read = Number(value);
+  return Number.isFinite(read) && read >= 0 ? read : null;
+}
+
+/**
+ * The expiry as the form posts it: a native `datetime-local`'s wall clock,
+ * **read as UTC**.
+ *
+ * A person does not read or type a Unix millisecond, and with no script on the
+ * screen the browser's zone is not a fact this process has. So the field has
+ * one meaning, the label says which (`scopeExpiresLabel` names UTC), and a
+ * browser with no `datetime-local` degrades to a text box of the same shape
+ * that this reads identically.
+ */
+function expiryMs(value: unknown): number | null {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/.test(value)) {
+    return null;
+  }
+  const at = Date.parse(`${value}Z`);
+  return Number.isFinite(at) ? at : null;
+}
+
+/**
+ * What one scope form posted, read as values -- or null when one of them is not
+ * a value rondo can use.
+ *
+ * Refused rather than repaired: a budget silently corrected is a person
+ * approving a scope they did not draft.
+ */
+function scopeDraftOf(
+  form: Record<string, unknown>,
+  scopeId: string,
+  requestMessageId: string,
+): ScopeFormDraft | null {
+  const planDigest = form["plan_digest"];
+  const agentTypeDigest = form["agent_type"];
+  if (typeof planDigest !== "string" || typeof agentTypeDigest !== "string") {
+    return null;
+  }
+  const laps = wholeNumber(form["laps"]);
+  const reviewRounds = wholeNumber(form["review_rounds"]);
+  const costUsd = amount(form["cost_usd"]);
+  const costReserveUsd = amount(form["cost_reserve_usd"]);
+  const expiresAtMs = expiryMs(form["expires_at_ms"]);
+  if (
+    laps === null ||
+    reviewRounds === null ||
+    costUsd === null ||
+    costReserveUsd === null ||
+    expiresAtMs === null
+  ) {
+    return null;
+  }
+  const severity = form["severity_threshold"];
+  if (
+    typeof severity !== "string" ||
+    !(FINDING_SEVERITIES as readonly string[]).includes(severity)
+  ) {
+    return null;
+  }
+  const posted = form["outward_acts"];
+  const acts = posted === undefined ? [] : Array.isArray(posted) ? posted : [posted];
+  if (
+    !acts.every(
+      (act): act is ScopeOutwardAct =>
+        typeof act === "string" && (SCOPE_OUTWARD_ACTS as readonly string[]).includes(act),
+    )
+  ) {
+    return null;
+  }
+  return {
+    scopeId,
+    requestMessageId,
+    planDigest,
+    agentTypeDigest,
+    budgets: {
+      laps,
+      review_rounds: reviewRounds,
+      cost_usd: costUsd,
+      cost_reserve_usd: costReserveUsd,
+      expires_at_ms: expiresAtMs,
+    },
+    severityThreshold: severity as FindingSeverity,
+    outwardActs: acts,
+  };
+}
 
 /**
  * The cap on a send's body: a person's words, not two short fields. 64 KiB is
@@ -665,6 +941,22 @@ function viewOf(query: URLSearchParams): PageView {
       to: to === null || to === "" ? null : to,
     };
   }
+  const scoping = query.get("scope");
+  if (scoping !== null && scoping !== "") {
+    const asked = query.get("rounds");
+    const rounds = asked === null ? Number.NaN : Number.parseInt(asked, 10);
+    const decision = query.get("decision");
+    return {
+      kind: "scope",
+      messageId: scoping,
+      // Total, as the rest of this function is: a typo in a query is an
+      // operator who wanted the page, so an unreadable or out-of-range count is
+      // the default rather than a refusal.
+      rounds:
+        Number.isSafeInteger(rounds) && rounds >= 0 && rounds <= MAX_REVIEW_ROUNDS ? rounds : null,
+      decisionId: decision === null || decision === "" ? null : decision,
+    };
+  }
   if (query.get("requests") === "open") {
     return { kind: "requests" };
   }
@@ -703,7 +995,7 @@ function said(c: Context<PageEnv>, status: 400 | 403 | 404 | 409 | 413 | 421 | 5
 export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
   // The writer is taken off before anything reading is handed the rest, so
   // the renderer does not hold it at runtime either (D-0041 rule 4).
-  const { answer, say, ...reading } = ports;
+  const { answer, say, scope, ...reading } = ports;
   const app = new Hono<PageEnv>();
   tokens.set(app, token);
 
@@ -756,6 +1048,9 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
   // served file stays the 404 any unknown write is.
   app.use("/", csrf());
   for (const path of MESSAGE_ROUTES) {
+    app.use(path, csrf());
+  }
+  for (const path of PRESS_ROUTES) {
     app.use(path, csrf());
   }
   // One limit middleware, sized by the address: a send carries a person's
@@ -828,6 +1123,8 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
       view,
       wording,
       say === null ? null : newMessageId,
+      scope === null ? null : newScopeId,
+      scope === null ? null : newIterationId,
     );
     return c.body(html, 200, { "content-type": "text/html; charset=utf-8" });
   });
@@ -969,6 +1266,104 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     );
   });
 
+  // **The record-and-approve press** (D-0059 section 5a as annotated from
+  // rondo#233 S3, the first of its two rows). One press, four writes in
+  // `commandScope`'s own order, and the digest approved is the one read back
+  // off the row -- so D-0066 rule 2.2 holds by construction and there is no
+  // line for a person to copy. Everything that decides whether this request may
+  // write happens in `mintPress`, and the port checks the press again itself.
+  app.post(SCOPE_ROUTE, async (c) => {
+    if (scope === null) {
+      return scopeRefused(c, 403, "scopeRefusedNoApprover", null);
+    }
+    // `all` because the outward acts are checkboxes of one name: without it a
+    // person who ticked both would have approved one.
+    const form = await c.req.parseBody({ all: true });
+    const request = typeof form["request"] === "string" ? form["request"] : "";
+    // The rounds the form was drawn at, so every refusal below leads back to
+    // the screen the person pressed on rather than to rondo's default draft.
+    const rounds = wholeNumber(form["review_rounds"]);
+    const minting = mintPress(c, form["token"]);
+    if (!("press" in minting)) {
+      return scopeRefused(c, minting.status, "scopeRefusedPress", request, rounds);
+    }
+    const scopeId = form["scope_id"];
+    if (typeof scopeId !== "string" || !PAGE_SCOPE_ID.test(scopeId) || request === "") {
+      return scopeRefused(c, 400, "scopeRefusedForm", request, rounds);
+    }
+    const draft = scopeDraftOf(form, scopeId, request);
+    if (draft === null) {
+      return scopeRefused(c, 400, "scopeRefusedFields", request, rounds);
+    }
+    const recorded = await scope.recordAndApprove(minting.press, draft);
+    if (!recorded.ok || recorded.scopeDecisionId === undefined) {
+      return scopeRefused(c, 409, recorded.why ?? "scopeRefusedNotTaken", request, rounds);
+    }
+    // **The same view, in its second state**, so the digest the person reads
+    // after the press is the digest the press approved.
+    return c.redirect(
+      `${viewHref(
+        {
+          kind: "scope",
+          messageId: request,
+          rounds: null,
+          decisionId: recorded.scopeDecisionId,
+        },
+        tagOf(c),
+      )}#scope`,
+      303,
+    );
+  });
+
+  // **The scoped start** (section 5a's second rondo#233 S3 row): a first
+  // admission through `admitUnderScope`, so the one call site that computes a
+  // verdict is still the only way an act reaches a scope (D-0066 rule 4.1).
+  // **No prompt field**: the request message's body is what the work is asked
+  // to do, read in the port out of the store, because a posted prompt would be
+  // a second authority for what the person asked for.
+  app.post(START_ROUTE, async (c) => {
+    if (scope === null) {
+      return startRefused(c, 403, "startRefusedNoApprover", null, null);
+    }
+    const form = await c.req.parseBody();
+    const request = typeof form["request"] === "string" ? form["request"] : "";
+    const decision = typeof form["scope_decision"] === "string" ? form["scope_decision"] : "";
+    const minting = mintPress(c, form["token"]);
+    if (!("press" in minting)) {
+      return startRefused(c, minting.status, "startRefusedPress", request, decision);
+    }
+    const iterationId = form["iteration"];
+    if (
+      typeof iterationId !== "string" ||
+      !PAGE_ITERATION_ID.test(iterationId) ||
+      request === "" ||
+      decision === ""
+    ) {
+      return startRefused(c, 400, "startRefusedForm", request, decision);
+    }
+    const started = await scope.start(minting.press, {
+      iterationId,
+      requestMessageId: request,
+      scopeDecisionId: decision,
+    });
+    if (!started.ok) {
+      return startRefused(
+        c,
+        409,
+        started.why ?? "startRefusedNotAdmitted",
+        request,
+        decision,
+        started.test ?? null,
+      );
+    }
+    // The summary, anchored at the lap just started, which is where the approve
+    // press already lands.
+    return c.redirect(
+      `${viewHref({ kind: "summary" }, tagOf(c))}#${encodeURIComponent(`lap-${iterationId}`)}`,
+      303,
+    );
+  });
+
   /** Whether the thread already holds exactly this operator message. */
   async function alreadyThere(message: SentMessage): Promise<boolean> {
     const read = await reading.record.threadMessages();
@@ -1025,6 +1420,109 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
         `<title>${escapeHtml(wording.sendAction)}</title></head><body>` +
         `<p id="send-refused">${line}</p><p>${escapeHtml(wording.sendBackNote)}</p>` +
         `<p><a href="${href}">${escapeHtml(wording.sendBack)}</a></p></body></html>`,
+      status,
+    );
+  }
+
+  /**
+   * A record-scope press's refusal, as one catalogue sentence in the page's
+   * language with the way back to the screen it was pressed on.
+   *
+   * No htmx fragment, because this form carries no htmx: the scope screen is a
+   * form a person fills in, and it neither polls nor posts with a script.
+   */
+  function scopeRefused(
+    c: Context<PageEnv>,
+    status: 400 | 403 | 409,
+    why:
+      | "scopeRefusedNoApprover"
+      | "scopeRefusedPress"
+      | "scopeRefusedForm"
+      | "scopeRefusedFields"
+      | ScopeRefusal,
+    request: string | null,
+    /**
+     * The review-rounds choice the refused press was made under, read back off
+     * the form's own number.
+     *
+     * The address carries the choice (`viewHref`) and the form posts no
+     * address, so a refusal that dropped it sent the person back to a form
+     * redrawn at rondo's default -- with every other budget they had typed
+     * (rondo#233 S3 screen review). Null before the body is read, which is the
+     * one refusal that cannot know.
+     */
+    rounds: number | null = null,
+  ) {
+    const wording = wordingOf(c);
+    return pressRefused(
+      c,
+      status,
+      wording.scopeAction,
+      wording[why],
+      backToScope(wording, request, null, rounds),
+    );
+  }
+
+  /** A scoped start's refusal, said the same way and with the same way back. */
+  function startRefused(
+    c: Context<PageEnv>,
+    status: 400 | 403 | 409,
+    why: "startRefusedNoApprover" | "startRefusedPress" | "startRefusedForm" | StartRefusal,
+    request: string | null,
+    decision: string | null,
+    test: string | null = null,
+  ) {
+    const wording = wordingOf(c);
+    const line =
+      why === "startRefusedOutside" ? wording.startRefusedOutside(test ?? "") : wording[why];
+    return pressRefused(
+      c,
+      status,
+      wording.startAction,
+      line,
+      backToScope(wording, request, decision),
+    );
+  }
+
+  /** The address the two refusals send a person back to: the screen they pressed on. */
+  function backToScope(
+    wording: Chrome,
+    request: string | null,
+    decision: string | null = null,
+    rounds: number | null = null,
+  ): string {
+    return viewHref(
+      request === null || request === ""
+        ? { kind: "requests" }
+        : {
+            kind: "scope",
+            messageId: request,
+            rounds,
+            decisionId: decision === null || decision === "" ? null : decision,
+          },
+      wording.lang,
+    );
+  }
+
+  /** One refusal page: what it is, why nothing happened, and the one link back. */
+  function pressRefused(
+    c: Context<PageEnv>,
+    status: 400 | 403 | 409,
+    title: string,
+    line: string,
+    href: string,
+  ) {
+    const wording = wordingOf(c);
+    return c.html(
+      `<!doctype html><html lang="${escapeHtml(wording.lang)}"><head><meta charset="utf-8">` +
+        `<meta name="viewport" content="width=device-width, initial-scale=1">` +
+        `<title>${escapeHtml(title)}</title></head><body>` +
+        `<p id="scope-refused">${escapeHtml(line)}</p>` +
+        // The way back to what was typed, as a refused send and a refused
+        // claim both already say: with script off this page *is* the response,
+        // and the draft only exists in the browser's own history.
+        `<p>${escapeHtml(wording.sendBackNote)}</p>` +
+        `<p><a href="${escapeHtml(href)}">${escapeHtml(wording.scopeBack)}</a></p></body></html>`,
       status,
     );
   }

@@ -403,7 +403,207 @@ export interface Chrome {
    * print).
    */
   readonly secondFence: readonly string[];
+
+  // -- The scope screen (rondo#233 S3, D-0066 rule 1) --
+  /**
+   * The way in, and the screen's own title. One short filled call to action
+   * with the longer sentence as the pointer's `title`, the shape
+   * {@link answerAction} and {@link answerHere} already have.
+   */
+  readonly scopeAction: string;
+  readonly scopeHere: string;
+  readonly scopeHeading: string;
+  readonly backToThread: string;
+  readonly scopeLead: string;
+  /** No plan, no form: the screen says which of the two reasons it is (D-0020 rule 2's shape). */
+  readonly scopeNoPlan: string;
+  readonly scopePlanRefused: (reason: string) => string;
+  readonly scopeNoApprover: string;
+  /** What the plan says, quiet, above the numbers it drafted them from. */
+  readonly scopeWorkspace: (repository: string, root: string) => string;
+  readonly scopePlanDigest: (digest: string) => string;
+  readonly scopeAgentType: (digest: string) => string;
+  readonly scopeAgentTypeBounds: string;
+  /**
+   * The card's own heading, and the fold the two digests sit in.
+   *
+   * The card holds the plan, the workspace, the two digests and what the agent
+   * type is allowed, and its only heading named the last of those -- so nothing
+   * on the screen said plainly *this is the plan rondo will run and where*
+   * (rondo#233 S3 screen review). The digests are folded for the same review's
+   * other half: three 71-character hashes were a third of the first screenful
+   * at 420px, and there is nothing a person does with one.
+   */
+  readonly scopePlanHeading: string;
+  readonly scopeDigestsFold: string;
+  /**
+   * What this screen cannot tell the person: whether they already approved a
+   * scope for this request.
+   *
+   * The store holds no listing of a request's scopes (`AdvisoryRecord`), so a
+   * second press here records and approves a second scope and the screen would
+   * not know. Said rather than hidden -- a blank draft presented as if none
+   * existed is the screen lying by omission.
+   */
+  readonly scopeMaybeApproved: string;
+  /**
+   * One line per listed agent type, read back from the held record (D-0069
+   * section 1): what it is allowed, or why that cannot be shown.
+   *
+   * `granted` are cadenza's own capability keys and stay their own bytes in
+   * both sets (rule 3); the prose around them is rewritten.
+   */
+  readonly scopeHeldBounds: (
+    digest: string,
+    tier: string,
+    granted: readonly string[],
+    from: "iteration" | "scope",
+  ) => string;
+  readonly scopeHeldNone: (digest: string) => string;
+  readonly scopeHeldUnreadable: (digest: string, reason: string) => string;
+  readonly scopeHeldRebuilds: (
+    digest: string,
+    rebuilt: string,
+    from: "iteration" | "scope",
+  ) => string;
+  readonly scopeHeldNoBuild: (
+    digest: string,
+    from: "iteration" | "scope",
+    reason: string,
+  ) => string;
+  /** The review-rounds control, and the residual of drawing it as links rather than a form. */
+  readonly scopeRoundsAsk: string;
+  readonly scopeRoundsRedraw: string;
+  readonly scopeLapsLabel: string;
+  readonly scopeRoundsLabel: string;
+  readonly scopeCostLabel: string;
+  readonly scopeReserveLabel: string;
+  /** The expiry is a native `datetime-local` read as UTC, so the label says UTC. */
+  readonly scopeExpiresLabel: string;
+  /**
+   * How a number follows from its bases, one arm per budget, and the fold the
+   * bases themselves sit in.
+   *
+   * `computeScopeBudgets` returns the arithmetic as facts and not as a sentence
+   * (`src/advisory/budget.ts`), because a line it composed was a line no second
+   * set could rewrite: rondo#233 S3's screen review found every formula and
+   * every basis rendering English inside a Japanese page.
+   */
+  readonly scopeFormula: (how: string) => string;
+  readonly scopeFormulaRounds: string;
+  readonly scopeFormulaLaps: (plans: number, rounds: number) => string;
+  readonly scopeFormulaReserve: string;
+  readonly scopeFormulaCost: (
+    plans: number,
+    reserve: string,
+    laterRounds: number,
+    redo: string,
+  ) => string;
+  readonly scopeFormulaExpires: (laps: number, seconds: number) => string;
+  readonly scopeBasesFold: (count: number) => string;
+  /**
+   * Where one number came from: the laps it was measured over, the fact that
+   * nothing in this store measured it, or a number rondo was given.
+   *
+   * `tier` is the model tier when the measurement fell through to it, and null
+   * when the rows are the agent type's own. **No D-number** (rule 5 of this
+   * catalogue's own bounds): the default review rounds cited one until
+   * rondo#233 S3's screen review found it in front of a person, folded but
+   * present, in four of the five budgets.
+   */
+  readonly scopeBasisRows: (measurement: string, laps: number, tier: string | null) => string;
+  readonly scopeBasisColdStart: (measurement: string) => string;
+  readonly scopeBasisPlans: (plans: number) => string;
+  readonly scopeBasisRounds: (rounds: number, byDefault: boolean) => string;
+  readonly scopeBasisReplyAllowance: string;
+  /** A `rows` basis's lap, drawn as a link into that lap's answer view and never as an id to copy. */
+  readonly scopeBasisLap: (iterationId: string) => string;
+  readonly scopeDefaultsHeading: string;
+  readonly scopeDefaultNote: string;
+  readonly scopeSeverityLabel: string;
+  readonly scopeOutwardLabel: string;
+  /**
+   * One outward act as a person reads it. The enum value is the token a scope
+   * records and `rondo scope` prints, so it stays beside the words rather than
+   * being replaced by them (rule 3).
+   */
+  readonly scopeOutwardAct: (act: string) => string;
+  readonly scopeOutwardNone: string;
+  readonly scopeIrreversibleNone: string;
+  /** D-0066's gate answer 1: what the cost budget does not see, on both states of the screen. */
+  readonly scopeCostCaveat: string;
+  readonly scopePressNote: string;
+  readonly scopePlain: string;
+  /** The approval this screen's second state is showing, and the digest it was made over. */
+  readonly scopeApproved: (since: string) => string;
+  readonly scopeDigest: (digest: string) => string;
+  readonly scopeNotThisRequest: string;
+  /** What a superseded scope's approval spent, which is part of what a successor decides (rule 1.4). */
+  readonly scopePredecessorSpent: (laps: number, usd: string, unread: number) => string;
+  readonly scopePredecessorNoApproval: string;
+  readonly scopePredecessorUnreadable: (reason: string) => string;
+  /**
+   * Why this approval has no start button: a later scope replaced it (rule
+   * 1.4), and `scopeVerdict` would refuse the press at the `superseded` test.
+   * Said where the button was, rather than drawn and refused.
+   */
+  readonly scopeRetired: string;
+  /** The scoped start, beside the approval it runs under. */
+  readonly startAction: string;
+  readonly startPlain: string;
+  readonly startNote: string;
+  /**
+   * Why a press recorded or started nothing, one sentence each, with no id and
+   * no D-number in front of a person -- {@link sendRefusedForm}'s rule applied
+   * to this screen's two presses.
+   */
+  readonly scopeRefusedNoApprover: string;
+  readonly scopeRefusedPress: string;
+  readonly scopeRefusedForm: string;
+  readonly scopeRefusedFields: string;
+  readonly scopeRefusedNotTaken: string;
+  /**
+   * The plan moved between the draw and the press, so the workspace and the
+   * agent type on the screen are not the ones on disk.
+   *
+   * D-0066 rule 2.2 asks that the approval names what was shown, and a scope
+   * recorded over a re-read plan satisfies its letter while approving a
+   * workspace and an agent type nobody saw (rondo#233 S3 press review). The
+   * form carries the two digests it was drawn from and the write compares them;
+   * the redraw is the person's own reload.
+   */
+  readonly scopeRefusedPlanChanged: string;
+  /**
+   * The form was recorded once already and has been edited since.
+   *
+   * The id is minted per draw, so a second press of an edited form is refused
+   * by the store on the id and the numbers on the screen are not the numbers
+   * stored. Saying *approved* about numbers the person has just replaced is the
+   * screen lying; this says which it is.
+   */
+  readonly scopeRefusedEdited: string;
+  readonly scopeRefusedNotRead: string;
+  readonly scopeRefusedNotShown: string;
+  readonly scopeRefusedNotApproved: string;
+  readonly startRefusedNoApprover: string;
+  readonly startRefusedPress: string;
+  readonly startRefusedForm: string;
+  readonly startRefusedNoPlan: string;
+  readonly startRefusedNoRequest: string;
+  readonly startRefusedNoContinuo: string;
+  /** The `test` token is the `ScopeTest` name, ASCII in both sets (rule 3). */
+  readonly startRefusedOutside: (test: string) => string;
+  readonly startRefusedNotAdmitted: string;
+  /** Script off, a refused press lands on its own page: the way back to this screen. */
+  readonly scopeBack: string;
 }
+
+/** The three measurements a basis names, in {@link EN}'s words. */
+const EN_MEASURE: Record<string, string> = {
+  first_lap_cost: "first-lap cost",
+  redo_cost: "cost of doing a lap again",
+  lap_duration: "lap duration",
+};
 
 /**
  * The strings as they were before D-0055, moved and not rewritten.
@@ -709,7 +909,166 @@ explanation you pressed on and then answers the gate.`,
     "disabled prints here exactly like one that did not. The worker's own account",
     "at the gate is the only place that has ever reported it (D-0050).",
   ]),
+
+  scopeAction: "Set the scope",
+  scopeHere: "Draft what this request is allowed to spend, and approve it",
+  scopeHeading: "The scope for this request",
+  backToThread: "Back to the request",
+  scopeLead:
+    "rondo drafted this from your plan and from the laps this store has recorded. Read it, " +
+    "change what you want to change, and one press records it and approves it.",
+  scopeNoPlan: "RONDO_PLAN is not set, so there is no plan to draft a scope from.",
+  scopePlanRefused: (reason) => `The plan could not be read, so nothing was drafted: ${reason}`,
+  scopeNoApprover:
+    "RONDO_APPROVER is not set, so there is nobody this page could approve a scope as.",
+  scopeWorkspace: (repository, root) => `${repository} at ${root}`,
+  scopePlanDigest: (digest) => `plan ${digest}`,
+  scopeAgentType: (digest) => `agent type ${digest}`,
+  scopeAgentTypeBounds: "What that agent type is allowed, read back from the record rondo holds",
+  scopePlanHeading: "The plan rondo will run, and where it will run it",
+  scopeDigestsFold: "The digests rondo will record",
+  scopeMaybeApproved:
+    "rondo cannot tell from here whether you have already approved a scope for this request, so " +
+    "this is a fresh draft either way. Pressing records a second one.",
+  scopeHeldBounds: (digest, tier, granted, from) =>
+    `agent type ${digest}: tier ${tier}, granted ` +
+    `${granted.length === 0 ? "nothing" : granted.join(", ")}, read back from ` +
+    `${from === "iteration" ? "a lap's plan" : "a plan recorded for a scope"}`,
+  scopeHeldNone: (digest) => `agent type ${digest}: rondo holds no record of what it is allowed`,
+  scopeHeldUnreadable: (digest, reason) =>
+    `agent type ${digest}: the record will not read, so what it is allowed cannot be shown: ${reason}`,
+  scopeHeldRebuilds: (digest, rebuilt, from) =>
+    `agent type ${digest}: the record read back from ` +
+    `${from === "iteration" ? "a lap's plan" : "a plan recorded for a scope"} rebuilds to ` +
+    `${rebuilt}, so what it is allowed cannot be shown`,
+  scopeHeldNoBuild: (digest, from, reason) =>
+    `agent type ${digest}: the record read back from ` +
+    `${from === "iteration" ? "a lap's plan" : "a plan recorded for a scope"} does not build, so ` +
+    `what it is allowed cannot be shown: ${reason}`,
+  scopeRoundsAsk: "Review rounds",
+  scopeRoundsRedraw:
+    "Choosing a number redraws every budget from the plan, so anything you typed goes back to " +
+    "rondo's draft.",
+  scopeLapsLabel: "Laps",
+  scopeRoundsLabel: "Review rounds",
+  scopeCostLabel: "Cost (USD)",
+  scopeReserveLabel: "Reserve per unread lap (USD)",
+  scopeExpiresLabel: "Expires (UTC)",
+  scopeFormula: (how) => `how: ${how}`,
+  scopeFormulaRounds: "the rounds you chose",
+  scopeFormulaLaps: (plans, rounds) =>
+    `plans x review rounds = ${String(plans)} x ${String(rounds)}`,
+  scopeFormulaReserve: "the highest first-lap cost, rounded up to the next 0.10 USD",
+  scopeFormulaCost: (plans, reserve, laterRounds, redo) =>
+    `plans x (reserve + later rounds x redo) = ` +
+    `${String(plans)} x (${reserve} + ${String(laterRounds)} x ${redo})`,
+  scopeFormulaExpires: (laps, seconds) =>
+    `draft time + laps x the longest lap + a day for your replies = draft time + ` +
+    `${String(laps)} x ${String(seconds)}s + 24h`,
+  scopeBasesFold: (count) => `where this came from (${String(count)})`,
+  scopeBasisRows: (measurement, laps, tier) =>
+    `the highest ${EN_MEASURE[measurement] ?? measurement} of the ${String(laps)} most recent ` +
+    `recorded lap${laps === 1 ? "" : "s"} of ` +
+    `${tier === null ? "this agent type" : `tier ${tier}`}`,
+  scopeBasisColdStart: (measurement) =>
+    `${EN_MEASURE[measurement] ?? measurement}: nothing in this store has measured it, so rondo ` +
+    `used its own starting figure`,
+  scopeBasisPlans: (plans) => `plans: ${String(plans)}`,
+  scopeBasisRounds: (rounds, byDefault) =>
+    byDefault
+      ? `review rounds: ${String(rounds)}, which is what rondo uses when nobody chooses`
+      : `review rounds: ${String(rounds)}, as you chose`,
+  scopeBasisReplyAllowance:
+    "a day for your own replies, which is an allowance and not a measurement",
+  scopeBasisLap: (iterationId) => `lap ${iterationId}`,
+  scopeDefaultsHeading: "What rondo filled in for you",
+  scopeDefaultNote: "A default, not derived from your request.",
+  scopeSeverityLabel: "Findings this severe or worse end a round",
+  scopeOutwardLabel: "Outward acts this scope allows",
+  scopeOutwardAct: (act) =>
+    ({
+      push_branch: "push a branch",
+      open_pull_request: "open a pull request",
+    })[act] ?? act,
+  scopeOutwardNone: "none",
+  scopeIrreversibleNone: "No act is added to the irreversible list.",
+  scopeCostCaveat:
+    "The cost budget counts the laps' own cost only: the reviewer's cost is not counted, and a " +
+    "lap whose cost is not read yet holds the reserve, which is a guess.",
+  scopePressNote:
+    "One press records this scope and approves it, under your name. Nothing is spent by " +
+    "approving it: every act is tested against it at the moment it is taken.",
+  scopePlain: "Records this scope and approves it",
+  scopeApproved: (since) => `Approved ${since} ago`,
+  scopeDigest: (digest) => `digest ${digest}`,
+  scopeNotThisRequest: "That approval is not this request's, so nothing of it is shown here.",
+  scopePredecessorSpent: (laps, usd, unread) =>
+    `The scope this one replaces has spent ${String(laps)} laps and $${usd} read, with ` +
+    `${String(unread)} laps whose cost is not read yet holding their reserve.`,
+  scopePredecessorNoApproval:
+    "The scope this one replaces was never approved, so it has spent nothing.",
+  scopePredecessorUnreadable: (reason) =>
+    `What the replaced scope spent could not be read: ${reason}`,
+  scopeRetired:
+    "A later scope has replaced this one, so nothing starts under this approval any more. The " +
+    "scope that replaced it is the one to start under.",
+  startAction: "Start the work",
+  startPlain: "Starts one lap under this approval",
+  startNote:
+    "The words of your request are what the work is asked to do, exactly as you wrote them. " +
+    "rondo names the lap; you do not.",
+  scopeRefusedNoApprover:
+    "Nothing was recorded: RONDO_APPROVER is not set, so there is nobody this page could " +
+    "approve a scope as.",
+  scopeRefusedPress:
+    "Nothing was recorded: a scope is approved by a person pressing this page's button, and a " +
+    "script cannot.",
+  scopeRefusedForm:
+    "Nothing was recorded: that form did not come from this page. Reload it and press again.",
+  scopeRefusedFields:
+    "Nothing was recorded: one of the numbers is not a number rondo can use. Check the budgets " +
+    "and press again.",
+  scopeRefusedNotTaken: "Nothing was recorded: the store would not take this scope.",
+  scopeRefusedPlanChanged:
+    "Nothing was recorded: the plan changed while you were reading it, so the workspace and the " +
+    "agent type on that screen are not the ones rondo would have recorded. Reload to see the " +
+    "plan as it is now.",
+  scopeRefusedEdited:
+    "Nothing was recorded this time: that form had already been recorded and approved, and what " +
+    "you just changed is not what is stored. Reload to draft a new scope.",
+  scopeRefusedNotRead: "The scope was recorded and will not read back, so nothing was approved.",
+  scopeRefusedNotShown:
+    "The scope was recorded and rondo could not write down that it showed it to you, so nothing " +
+    "was approved.",
+  scopeRefusedNotApproved: "The scope was recorded and not approved. Nothing has been spent.",
+  startRefusedNoApprover:
+    "Nothing was started: RONDO_APPROVER is not set, so there is nobody this page could start " +
+    "work as.",
+  startRefusedPress:
+    "Nothing was started: work is started by a person pressing this page's button, and a script " +
+    "cannot.",
+  startRefusedForm:
+    "Nothing was started: that form did not come from this page. Reload it and press again.",
+  startRefusedNoPlan: "Nothing was started: the plan this host names could not be read.",
+  startRefusedNoRequest:
+    "Nothing was started: your request could not be read back, so there is nothing to ask the " +
+    "work to do.",
+  startRefusedNoContinuo:
+    "Nothing was started: the part of rondo that runs the work will not start.",
+  startRefusedOutside: (test) =>
+    `Nothing was started and nothing was spent: this work is outside the scope you approved, at ` +
+    `the ${test} test. A message in the request's thread says what the choices are.`,
+  startRefusedNotAdmitted:
+    "Nothing was started, and nothing was spent. The approval stands; pressing again is safe.",
+  scopeBack: "Back to the scope",
 } satisfies Chrome);
+
+/** The three measurements a basis names, in the Japanese set's words. */
+const JA_MEASURE: Record<string, string> = {
+  first_lap_cost: "初回周回の費用",
+  redo_cost: "やり直した周回の費用",
+  lap_duration: "周回の所要時間",
+};
 
 /**
  * Japanese, because it is the language of the operator who raised rondo#155 and
@@ -1026,6 +1385,157 @@ const JA: Partial<Chrome> = Object.freeze({
     "まったく同じように表示されます。それを報告したことがあるのは、ゲートに置かれた",
     "worker 自身の記述だけです (D-0050)。",
   ]),
+
+  scopeAction: "範囲を決める",
+  scopeHere: "この依頼に使ってよい範囲を下書きして承認する",
+  scopeHeading: "この依頼の範囲",
+  backToThread: "依頼に戻る",
+  scopeLead:
+    "rondo がプランとこのストアに記録された周回から下書きしました。読んで、変えたいところを" +
+    "変えてください。1 回押せば記録と承認の両方が行われます。",
+  scopeNoPlan: "RONDO_PLAN が設定されていないので、範囲を下書きできるプランがありません。",
+  scopePlanRefused: (reason) => `プランを読めなかったので、何も下書きしていません: ${reason}`,
+  scopeNoApprover:
+    "RONDO_APPROVER が設定されていないので、このページが誰として範囲を承認することもできません。",
+  scopeWorkspace: (repository, root) => `${repository}（${root}）`,
+  scopePlanDigest: (digest) => `プラン ${digest}`,
+  scopeAgentType: (digest) => `エージェント種別 ${digest}`,
+  scopeAgentTypeBounds:
+    "そのエージェント種別に許されていること（rondo が持つ記録から読み戻したもの）",
+  scopePlanHeading: "rondo が動かすプランと、動かす場所",
+  scopeDigestsFold: "rondo が記録するダイジェスト",
+  scopeMaybeApproved:
+    "この依頼の範囲をすでに承認済みかどうかは、ここからは分かりません。どちらであってもこれは" +
+    "新しい下書きで、押せば 2 つめが記録されます。",
+  scopeHeldBounds: (digest, tier, granted, from) =>
+    `エージェント種別 ${digest}: tier ${tier}、許可は` +
+    `${granted.length === 0 ? "なし" : granted.join(", ")}` +
+    `（${from === "iteration" ? "周回のプラン" : "範囲に記録されたプラン"}から読み戻し）`,
+  scopeHeldNone: (digest) =>
+    `エージェント種別 ${digest}: 何が許されているかの記録を rondo は持っていません`,
+  scopeHeldUnreadable: (digest, reason) =>
+    `エージェント種別 ${digest}: 記録を読めないので、何が許されているかを出せません: ${reason}`,
+  scopeHeldRebuilds: (digest, rebuilt, from) =>
+    `エージェント種別 ${digest}: ` +
+    `${from === "iteration" ? "周回のプラン" : "範囲に記録されたプラン"}から読み戻した記録は ` +
+    `${rebuilt} に組み直されるので、何が許されているかを出せません`,
+  scopeHeldNoBuild: (digest, from, reason) =>
+    `エージェント種別 ${digest}: ` +
+    `${from === "iteration" ? "周回のプラン" : "範囲に記録されたプラン"}から読み戻した記録は` +
+    `組み立てられないので、何が許されているかを出せません: ${reason}`,
+  scopeRoundsAsk: "レビュー回数",
+  scopeRoundsRedraw:
+    "数を選ぶと予算はプランから引き直されるので、入力した値は rondo の下書きに戻ります。",
+  scopeLapsLabel: "周回数",
+  scopeRoundsLabel: "レビュー回数",
+  scopeCostLabel: "費用（USD）",
+  scopeReserveLabel: "費用未読の周回ごとの引当（USD）",
+  scopeExpiresLabel: "有効期限（UTC）",
+  scopeFormula: (how) => `計算: ${how}`,
+  scopeFormulaRounds: "選んだレビュー回数そのもの",
+  scopeFormulaLaps: (plans, rounds) =>
+    `プラン数 x レビュー回数 = ${String(plans)} x ${String(rounds)}`,
+  scopeFormulaReserve: "最も高かった初回周回の費用を、0.10 USD 単位で切り上げた値",
+  scopeFormulaCost: (plans, reserve, laterRounds, redo) =>
+    `プラン数 x（引当 + 2 回目以降のラウンド数 x やり直し費用）= ` +
+    `${String(plans)} x（${reserve} + ${String(laterRounds)} x ${redo}）`,
+  scopeFormulaExpires: (laps, seconds) =>
+    `下書き時刻 + 周回数 x 最長の周回 + 返信のための 1 日 = 下書き時刻 + ` +
+    `${String(laps)} x ${String(seconds)} 秒 + 24 時間`,
+  scopeBasesFold: (count) => `この数の出どころ (${String(count)})`,
+  scopeBasisRows: (measurement, laps, tier) =>
+    `${tier === null ? "このエージェント種別" : `tier ${tier}`}の直近 ${String(laps)} 周回のうち、` +
+    `${JA_MEASURE[measurement] ?? measurement}が最も高かったもの`,
+  scopeBasisColdStart: (measurement) =>
+    `${JA_MEASURE[measurement] ?? measurement}: このストアでは一度も測っていないので、rondo の` +
+    `初期値を使いました`,
+  scopeBasisPlans: (plans) => `プラン数: ${String(plans)}`,
+  scopeBasisRounds: (rounds, byDefault) =>
+    byDefault
+      ? `レビュー回数: ${String(rounds)}（誰も選ばなかったときに rondo が使う数）`
+      : `レビュー回数: ${String(rounds)}（あなたが選んだ数）`,
+  scopeBasisReplyAllowance: "あなたの返信のための 1 日。測った値ではなく、見込みの余裕です",
+  scopeBasisLap: (iterationId) => `周回 ${iterationId}`,
+  scopeDefaultsHeading: "rondo が埋めたもの",
+  scopeDefaultNote: "既定値で、依頼から導いたものではありません。",
+  scopeSeverityLabel: "この重大度以上の指摘が出たら 1 ラウンド終了",
+  scopeOutwardLabel: "この範囲で許す外向きの行為",
+  scopeOutwardAct: (act) =>
+    ({
+      push_branch: "ブランチを push する",
+      open_pull_request: "プルリクエストを開く",
+    })[act] ?? act,
+  scopeOutwardNone: "なし",
+  scopeIrreversibleNone: "取り返しのつかない行為の一覧には何も足しません。",
+  scopeCostCaveat:
+    "費用の予算は周回そのものの費用だけを数えます。レビュー側の費用は数えず、費用がまだ読めて" +
+    "いない周回は引当を保持しますが、これは見積もりです。",
+  scopePressNote:
+    "1 回押すと、この範囲があなたの名前で記録され、承認されます。承認しただけでは何も消費" +
+    "しません。行為はそれが取られた時点で毎回この範囲に照らして判定されます。",
+  scopePlain: "この範囲を記録して承認します",
+  scopeApproved: (since) => `${since}前に承認済み`,
+  scopeDigest: (digest) => `ダイジェスト ${digest}`,
+  scopeNotThisRequest: "その承認はこの依頼のものではないので、ここには何も表示しません。",
+  scopePredecessorSpent: (laps, usd, unread) =>
+    `これが置き換える範囲は、これまでに ${String(laps)} 周回と読み取り済み $${usd} を使い、` +
+    `費用がまだ読めていない ${String(unread)} 周回が引当を保持しています。`,
+  scopePredecessorNoApproval:
+    "これが置き換える範囲は承認されたことがないので、何も使っていません。",
+  scopePredecessorUnreadable: (reason) =>
+    `置き換える範囲が何を使ったかは読めませんでした: ${reason}`,
+  scopeRetired:
+    "この範囲は後から入った範囲に置き換えられたので、この承認のもとでは何も始まりません。" +
+    "始めるなら、置き換えた側の範囲になります。",
+  startAction: "作業を始める",
+  startPlain: "この承認のもとで 1 周回を始めます",
+  startNote:
+    "依頼に書いた言葉が、そのまま作業への指示になります。周回の名前は rondo が付けるので、" +
+    "あなたが決める必要はありません。",
+  scopeRefusedNoApprover:
+    "何も記録していません。RONDO_APPROVER が設定されていないので、このページが誰として範囲を" +
+    "承認することもできません。",
+  scopeRefusedPress:
+    "何も記録していません。範囲の承認はこのページのボタンを人が押したときだけ行われ、" +
+    "スクリプトからはできません。",
+  scopeRefusedForm:
+    "何も記録していません。そのフォームはこのページのものではありません。読み込み直してから" +
+    "押してください。",
+  scopeRefusedFields:
+    "何も記録していません。数値のどれかが rondo の使える値になっていません。予算を確かめてから" +
+    "押してください。",
+  scopeRefusedNotTaken: "何も記録していません。ストアがこの範囲を受け付けませんでした。",
+  scopeRefusedPlanChanged:
+    "何も記録していません。読んでいる間にプランが変わったので、あの画面に出ていた作業場所と" +
+    "エージェント種別は、rondo が記録することになる内容とは違います。読み込み直して、今の" +
+    "プランを確かめてください。",
+  scopeRefusedEdited:
+    "今回は何も記録していません。そのフォームはすでに記録・承認済みで、いま変えた内容は" +
+    "保存されている内容とは違います。読み込み直して、新しい範囲を下書きしてください。",
+  scopeRefusedNotRead: "範囲は記録されましたが読み戻せないので、承認はしていません。",
+  scopeRefusedNotShown:
+    "範囲は記録されましたが、あなたに見せたことを rondo が書き残せなかったので、承認は" +
+    "していません。",
+  scopeRefusedNotApproved: "範囲は記録されましたが、承認されていません。何も消費されていません。",
+  startRefusedNoApprover:
+    "何も開始していません。RONDO_APPROVER が設定されていないので、このページが誰として作業を" +
+    "始めることもできません。",
+  startRefusedPress:
+    "何も開始していません。作業の開始はこのページのボタンを人が押したときだけ行われ、" +
+    "スクリプトからはできません。",
+  startRefusedForm:
+    "何も開始していません。そのフォームはこのページのものではありません。読み込み直してから" +
+    "押してください。",
+  startRefusedNoPlan: "何も開始していません。このホストが指しているプランを読めませんでした。",
+  startRefusedNoRequest:
+    "何も開始していません。依頼を読み戻せなかったので、作業に頼むことがありません。",
+  startRefusedNoContinuo: "何も開始していません。作業を動かす部分が起動しません。",
+  startRefusedOutside: (test) =>
+    `何も開始せず、何も消費していません。この作業は承認した範囲の外で、${test} の判定で` +
+    `外れました。選択肢は依頼のスレッドに書かれたメッセージにあります。`,
+  startRefusedNotAdmitted:
+    "何も開始せず、何も消費していません。承認はそのまま有効なので、もう一度押しても安全です。",
+  scopeBack: "範囲に戻る",
 } satisfies Partial<Chrome>);
 
 /**

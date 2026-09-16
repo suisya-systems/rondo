@@ -60,6 +60,7 @@ import {
   reviewRoundDecision,
   reviewRoundsAlong,
 } from "./model-review.js";
+import type { Chrome } from "./wording.js";
 
 /**
  * An admission under a scope (D-0066 rule 3.2: the one writable act kind).
@@ -877,8 +878,14 @@ export function agentTypeRecordOf(
  * (D-0069 section 1): its tier and granted keys, so the person approving the
  * list sees more than a hash. One line per digest; a record that will not
  * rebuild, or rebuilds to another digest, says so in place of the tier.
+ *
+ * **The set is an argument** (D-0055 rule 10), as it is for the fence block and
+ * the inbox: these lines are read on the page and printed by `rondo scope`, and
+ * a line composed here in English was English inside an otherwise Japanese page
+ * (rondo#233 S3 screen review). The command line passes {@link EN}.
  */
 export async function heldAgentTypeLines(
+  wording: Chrome,
   record: Pick<AdvisoryRecord, "heldAgentType">,
   digests: readonly string[],
 ): Promise<readonly string[]> {
@@ -887,25 +894,27 @@ export async function heldAgentTypeLines(
     const held = await record.heldAgentType(digest);
     if (held.kind !== "read") {
       lines.push(
-        `agent type ${digest}: ${held.kind === "absent" ? "no record is held" : `the record will not read: ${held.reason}`}`,
+        held.kind === "absent"
+          ? wording.scopeHeldNone(digest)
+          : wording.scopeHeldUnreadable(digest, held.reason),
       );
       continue;
     }
-    const from =
-      held.source === "iteration" ? "an iteration's plan" : "a plan recorded for a scope";
+    const from = held.source === "iteration" ? "iteration" : "scope";
     try {
       const built = agentTypeRecord(held.agentTypeInput as unknown as AgentTypeInput);
       lines.push(
         built.agentTypeDigest === digest
-          ? `agent type ${digest}: tier ${built.executorPolicy.modelTier}, granted ` +
-              `${built.granted.length === 0 ? "none" : built.granted.join(", ")} (held from ${from})`
-          : `agent type ${digest}: the record held from ${from} rebuilds to ` +
-              `${built.agentTypeDigest}, so what it bounds cannot be shown`,
+          ? wording.scopeHeldBounds(digest, built.executorPolicy.modelTier, built.granted, from)
+          : wording.scopeHeldRebuilds(digest, built.agentTypeDigest, from),
       );
     } catch (error) {
       lines.push(
-        `agent type ${digest}: the record held from ${from} does not build: ` +
-          (error instanceof Error ? error.message : String(error)),
+        wording.scopeHeldNoBuild(
+          digest,
+          from,
+          error instanceof Error ? error.message : String(error),
+        ),
       );
     }
   }

@@ -13153,6 +13153,46 @@ answer" below. Supersedes `D-0057`. Refs rondo#172, `D-0057`, `D-0054`, `D-0041`
 >   own, so it needs exactly the press that row already needs. How it is recorded is `D-0045`'s, as
 >   annotated from rondo#220. Nothing above is edited.
 
+> **Annotation (2026-09-16, from rondo#233 S3, recording a scope and starting under it on the
+> page).** Added under the same answer of rondo's human gate as the two annotations above -- every
+> write the page adds beyond section 5a's table is a press, recorded as a row added to that table --
+> and additive.
+> - **Section 5a's table gains a row: recording a scope and approving it, on one press** (`POST
+>   /scope`). It is the table's third row arriving, *"Approving a scope (`D-0064` P1), and widening
+>   one -- yes (gate, Q5b)"*, and it is **one** row and not two: the person is shown a drafted scope
+>   and presses once, and rondo writes `recordScope`, reads the row back, records that it presented
+>   it (`D-0042` rule 3) and writes the `scope_decision` `approved` with the digest it read back --
+>   never with a digest a form posted, so what `D-0066` rule 2.2 requires is true by construction
+>   rather than by a person copying a line. The page names itself as the surface
+>   (`OPERATOR_PAGE_SURFACE`, `rondo/page`), beside the command line's own, because `recorded_by` and
+>   `actor_id` are two facts.
+> - **And the form carries the two digests it was drawn from.** Rule 2.2 asks that the approval names
+>   what was shown, and the write re-reads the plan file -- as it must, since what is recorded has to
+>   be what is on disk at the moment of the write. The two fields the form does not post, the
+>   workspace and the agent type, are exactly the ones that say *where the work may act*: a plan
+>   rewritten while the person read the screen satisfied rule 2.2's letter while they approved a
+>   repository and an agent type they never saw. So the form posts the plan digest and the agent type
+>   digest it was drawn with, and the write **compares** its re-read against them and records nothing
+>   when they differ. They are not a second authority: nothing is ever written from them.
+> - **A second press of one form is the write it repeats, and only while it is still that scope.** The
+>   scope id is minted per draw so the store refuses the second row; the payload is compared too,
+>   because a form returned by the browser's Back button carries the same id and whatever has been
+>   typed since, and the approval already recorded would otherwise be reported as an approval of
+>   numbers that were just replaced.
+> - **Section 5a's table gains a row: starting a lap under an approved scope** (`POST /start`), the
+>   same press. It is a first admission through `admitUnderScope`, so the one call site that computes
+>   a verdict is still the only way an act reaches a scope (`D-0066` rule 4.1); the request's own
+>   body is the prompt, byte for byte, under the rule `--prompt-file` already runs under; and rondo
+>   mints the iteration id (`D-0023`), so no person types or copies a name.
+> - **What both rows cost is what section 5a already priced for P1**: each is a navigation, so the
+>   screen is redrawn from the server and anything typed into the form and not sent is lost -- so a
+>   refused press says so, and leads back to the screen at the review-rounds choice it was drawn at,
+>   which the address and not the form is what carries. The
+>   scope screen carries no htmx and no poll for the same reason the `answer` view carries none -- it
+>   is a form a person is filling in.
+> - The writes the later slices of rondo#233 add (`revise`, `publish`) are added to the table by
+>   their own annotations. Nothing above is edited.
+
 `D-0057` priced four frameworks by **the lines they take over** (96 of 1,233) and by **whether the
 served bytes can still be checked without a build**, and kept the page hand-written. It never asked
 whether the screen an operator looks at reaches the level engineers now hold a developer tool to.
