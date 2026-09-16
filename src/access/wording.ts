@@ -955,7 +955,7 @@ explanation you pressed on and then answers the gate.`,
   scopeWorkspace: (repository, root) => `${repository} at ${root}`,
   scopePlanDigest: (digest) => `plan ${digest}`,
   scopeAgentType: (digest) => `agent type ${digest}`,
-  scopeAgentTypeBounds: "What that agent type is allowed, read back from the record rondo holds",
+  scopeAgentTypeBounds: "What that agent type is allowed, and where that was read from",
   scopePlanHeading: "The plan rondo will run, and where it will run it",
   scopeDigestsFold: "The digests rondo will record",
   scopeMaybeApproved:
@@ -1429,8 +1429,7 @@ const JA: Partial<Chrome> = Object.freeze({
   scopeWorkspace: (repository, root) => `${repository}（${root}）`,
   scopePlanDigest: (digest) => `プラン ${digest}`,
   scopeAgentType: (digest) => `エージェント種別 ${digest}`,
-  scopeAgentTypeBounds:
-    "そのエージェント種別に許されていること（rondo が持つ記録から読み戻したもの）",
+  scopeAgentTypeBounds: "そのエージェント種別に許されていることと、それをどこから読んだか",
   scopePlanHeading: "rondo が動かすプランと、動かす場所",
   scopeDigestsFold: "rondo が記録するダイジェスト",
   scopeMaybeApproved:
