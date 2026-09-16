@@ -1778,11 +1778,11 @@ function endedView(
           // pull request that already exists -- so re-offering it is not a
           // harmless repetition but a press that fails.
           published === null ? null : publishedLine(wording, record, published),
-          // The one thing left to do to an approved lap, where the lap is
-          // (rondo#233 S5). A link and not a button: what it leads to is the
-          // screen that presses.
-          published === null ? publishTo(record) : null,
         ],
+        // The one thing left to do to an approved lap, where the lap is
+        // (rondo#233 S5): the row's action, in its own place under the
+        // metadata rather than inside it (rondo#246).
+        published === null ? publishTo(record) : null,
       );
     }),
   );
@@ -3382,11 +3382,12 @@ function requestsView(
                           {wording.age(ago(lap.record.updatedAtMs, nowMs))}
                         </span>
                       )}
-                      {lap !== null && lap.question !== "ended" ? null : (
-                        <span>{scopeTo(row.root.messageId)}</span>
-                      )}
                     </>,
                   )}
+                  {/* The row's one action, under the metadata and not inside
+                      it (rondo#246). It goes while the lap under this request
+                      is live, for rondo#244's reason. */}
+                  {lap !== null && lap.question !== "ended" ? null : scopeTo(row.root.messageId)}
                 </div>
               </li>
             );
@@ -4131,19 +4132,30 @@ async function predecessorLine(
  * Two conditions, each a different way of having no scope to draft: no plan to
  * draft one from, and no approver to approve it as. A link drawn anyway would
  * lead to a screen with no form on it.
+ *
+ * **As plain as the act behind it** (rondo#246), in {@link answerLink}'s shape:
+ * the row's one action, under the metadata rather than a faint link inside it.
+ * The entrances were the quiet things on this page while the execute buttons on
+ * the screens they lead to were large and coloured, which is the wrong way
+ * round -- what protects a person from a mis-press is reading what the press
+ * will do, and that reading is the screen this leads to.
  */
 function scopeLink(wording: Chrome, ports: WebPorts, token: string | null, messageId: string) {
   if (ports.plan === null || token === null) {
     return null;
   }
   return (
-    <a
-      href={viewHref({ kind: "scope", messageId, rounds: null, decisionId: null }, wording.lang)}
-      class="text-[12.5px] font-medium text-link hover:underline"
-      title={wording.scopeHere}
-    >
-      {wording.scopeAction}
-    </a>
+    <p class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+      <a
+        id={`scope-${messageId}`}
+        href={viewHref({ kind: "scope", messageId, rounds: null, decisionId: null }, wording.lang)}
+        data-open=""
+        class={`${PRIMARY} h-7 px-3 text-[13px]`}
+        title={wording.scopeHere}
+      >
+        {wording.scopeAction}
+      </a>
+    </p>
   );
 }
 
@@ -4151,8 +4163,12 @@ function scopeLink(wording: Chrome, ports: WebPorts, token: string | null, messa
  * The way onto the publish screen, drawn on exactly the rows that screen would
  * draw a button for ({@link answerLink}'s rule, rondo#233 S5).
  *
- * Quiet and not filled: an ended lap is not asking for anything, and a lap
- * whose work is already pushed is published from the forge rather than here.
+ * **As plain as the act behind it** (rondo#246), in {@link answerLink}'s shape:
+ * the entrance is the row's one action, and the weight of the press belongs on
+ * the screen it opens. That screen's refusal design is untouched -- a reading
+ * that does not cover the work still draws no publish button at all, with the
+ * override inside a fold, because unread and read-and-nothing-raised must not
+ * look alike.
  */
 function publishLink(
   wording: Chrome,
@@ -4164,15 +4180,17 @@ function publishLink(
     return null;
   }
   return (
-    <a
-      id={`publish-${record.id}`}
-      href={viewHref({ kind: "publish", iterationId: record.id }, wording.lang)}
-      data-open=""
-      class="text-[12.5px] font-medium text-link hover:underline"
-      title={wording.publishHere}
-    >
-      {wording.publishAction}
-    </a>
+    <p class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+      <a
+        id={`publish-${record.id}`}
+        href={viewHref({ kind: "publish", iterationId: record.id }, wording.lang)}
+        data-open=""
+        class={`${PRIMARY} h-7 px-3 text-[13px]`}
+        title={wording.publishHere}
+      >
+        {wording.publishAction}
+      </a>
+    </p>
   );
 }
 

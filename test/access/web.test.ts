@@ -4795,3 +4795,51 @@ test("the sentence that says a second start press is safe is in both catalogues 
   expect(chromeFor("ja").startAgainSafe).not.toBe(EN.startAgainSafe);
   expect(chromeFor("ja").startAgainSafe).toContain("2 回目の押下は 1 回目に合流し");
 });
+
+test("the entrances carry the weight of the acts behind them, and the refusal on the publish screen is untouched (#246)", async () => {
+  const world = fresh();
+  await approvedLap(world);
+  const requestId = "request-entrances";
+  await seedScopeRequest(world, requestId, "Have a look at this, please.");
+  const dir = mkdtempSync(join(tmpdir(), "rondo-entrances-"));
+  const { file: planFile } = scopePlanFile(dir);
+  const ports = {
+    ...portsOver(world, "ada", [], null, null, async () => DRY_RUN),
+    plan: planPortOver(planFile, world.record),
+  };
+
+  // **Publish is the row's action, in the shape the answer entrance already
+  // has** -- not a faint link inside the metadata line.
+  const summary = await operatorPage(ports, "t", { kind: "summary" });
+  const entrance = summary.slice(summary.indexOf('id="publish-i-0001"'));
+  expect(entrance).toContain('class="inline-flex cursor-pointer items-center gap-1.5 rounded-md');
+  expect(entrance).toContain("h-7 px-3 text-[13px]");
+  expect(summary).not.toContain(
+    '<a id="publish-i-0001" href="/?publish=i-0001&amp;lang=en" data-open="" ' +
+      'class="text-[12.5px] font-medium text-link hover:underline"',
+  );
+
+  // The same for the way onto the scope screen.
+  const requests = await operatorPage(ports, "t", { kind: "requests" });
+  const scope = requests.slice(requests.indexOf(`id="scope-${requestId}"`));
+  expect(scope).toContain("h-7 px-3 text-[13px]");
+
+  // **The refusal design on the publish screen is not what this touches**: a
+  // reading that does not cover the work still draws no publish button at all,
+  // and the one press there is is the override, inside its fold.
+  const refused = await operatorPage(
+    {
+      ...ports,
+      publishing: async () => ({
+        ...DRY_RUN,
+        review: { why: "noReading" as const },
+      }),
+    },
+    "t",
+    { kind: "publish", iterationId: "i-0001" },
+  );
+  const screen = refused.slice(refused.indexOf('id="publish"'));
+  expect(screen).not.toContain('id="publish-form"');
+  expect(screen).toContain('id="publish-despite"');
+  expect(screen).toContain(">Publish anyway</button>");
+});
