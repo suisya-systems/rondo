@@ -82,7 +82,13 @@ before the first command, and so do the four directories in section 3's plan (`a
 `state_root`, the dropbox and the catalog dir): **no continuo verb creates a directory**, and a
 missing one is an error from inside a lap rather than at setup.
 
+The first line turns off zsh's interactive spelling correction, which otherwise asks about
+unfamiliar words on every step (#221). Its own comment stays out of the pasted line: a trailing
+`#` with a `(...)` after it reads as a glob qualifier rather than a comment under zsh's default
+`INTERACTIVE_COMMENTS off`, and breaks the very line it is explaining.
+
 ```sh
+unsetopt correct correct_all
 S=/abs/where/the/environment/lives
 mkdir -p "$S" "$S/artifacts" "$S/session-state" "$S/dropbox" "$S/catalog"
 
