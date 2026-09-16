@@ -75,6 +75,34 @@ function agentTypeSourceJa(from: AgentTypeSource): string {
 }
 
 /**
+ * What a model review raised, counted, as the {@link EN} set says it.
+ *
+ * Spelled once because two sentences carry it since rondo#237 -- the line by
+ * the gate's button, and the ended row of a lap approved over it -- and two
+ * spellings of one count is the page disagreeing with itself about what was
+ * open. The counts are never both zero at a call site: neither sentence is
+ * composed when nothing was raised.
+ */
+function raisedEn(blockers: number, majors: number): string {
+  return [
+    blockers === 0 ? "" : `${String(blockers)} blocker${blockers === 1 ? "" : "s"}`,
+    majors === 0 ? "" : `${String(majors)} major`,
+  ]
+    .filter((part) => part !== "")
+    .join(" and ");
+}
+
+/** The same count, as the {@link JA} set says it. */
+function raisedJa(blockers: number, majors: number): string {
+  return [
+    blockers === 0 ? "" : `阻害 ${String(blockers)} 件`,
+    majors === 0 ? "" : `重大 ${String(majors)} 件`,
+  ]
+    .filter((part) => part !== "")
+    .join("、");
+}
+
+/**
  * Every sentence rondo composes for the operator to read, keyed by string.
  *
  * `lang` is the one member that is not prose: it is the tag the rest of the set
@@ -133,6 +161,18 @@ export interface Chrome {
   readonly approveNote: (gateId: string, word: string) => string;
   /** The plain sentence beside the button; `approveNote` stays as its `title`. */
   readonly approvePlain: string;
+  /**
+   * The button's face, and the sentence beside it, when the model review has a
+   * blocker or a major open (rondo#237).
+   *
+   * **Not a second press and not a refusal.** D-0065 keeps approve unrefused
+   * whatever a model raised, and `approveNote` still says the gate is answered
+   * `'approve'` -- what these two change is that the press says which of the
+   * two approvals it is, so a person scanning the bar can tell them apart
+   * without reading the red line above it.
+   */
+  readonly approveDespite: string;
+  readonly approveDespitePlain: string;
   /** The fold that holds the claims rondo could not determine. */
   readonly undeterminedFold: (count: number) => string;
   readonly answerHere: string;
@@ -284,6 +324,15 @@ export interface Chrome {
   readonly gateBack: string;
   /** The line by the button when the model review raised a blocker or a major. */
   readonly modelRaised: (blockers: number, majors: number) => string;
+  /**
+   * An ended row's line when its gate was approved with a blocker or a major
+   * open in the model review (rondo#237).
+   *
+   * The same two counts the gate's own warning carried, said on the summary:
+   * a finished lap reads as finished, and which of the two approvals ended it
+   * was otherwise only findable by opening the lap.
+   */
+  readonly approvedOverRaised: (blockers: number, majors: number) => string;
   /** A model finding's severity (`blocker`, `major`, `minor`, `nit`) as a word, and counted. */
   readonly severityWord: (severity: string) => string;
   readonly severityCount: (severity: string, count: number) => string;
@@ -292,6 +341,17 @@ export interface Chrome {
   readonly whyNotTaken: string;
   /** Beside the checks when *what changed* cannot be read now. */
   readonly checksWorkUnreadable: string;
+  /**
+   * The checks' pill in place of a recorded `clear` when the work it would be
+   * matched against cannot be read (rondo#237).
+   *
+   * **A recorded verdict is not a reading of work nobody can read.** S5 made
+   * this a refusal on the publish screen (`reviewBlock`'s `unreadable` arm);
+   * the gate screen said *nothing raised* over the same fact, beside a *what
+   * changed* card that could count nothing. The other two verdicts already say
+   * something that is not a pass, so they keep their own word.
+   */
+  readonly checksNotMatched: string;
   /** In the approve bar when the model's round ended with no reading. */
   readonly modelNotTaken: string;
   readonly neitherReadingTaken: string;
@@ -865,6 +925,9 @@ explanation you pressed on and then answers the gate.`,
   approveNote: (gateId, word) =>
     `answers gate ${gateId} as '${word}', which is what rondo answer does`,
   approvePlain: "Accept this work as it is.",
+  approveDespite: "approve despite what was raised",
+  approveDespitePlain:
+    "Accept this work as it is, with what the model review raised left unanswered.",
   undeterminedFold: (count) =>
     `${String(count)} ${count === 1 ? "field" : "fields"} rondo could not determine`,
   answerHere: "read what a press would record, and answer there",
@@ -990,13 +1053,9 @@ explanation you pressed on and then answers the gate.`,
     "rondo could not record what you said you checked, so nothing was answered. Go back to the gate and try again.",
   answerNotDone: "Nothing was answered",
   gateBack: "Back to the gate",
-  modelRaised: (blockers, majors) =>
-    `The model review raised ${[
-      blockers === 0 ? "" : `${String(blockers)} blocker${blockers === 1 ? "" : "s"}`,
-      majors === 0 ? "" : `${String(majors)} major`,
-    ]
-      .filter((part) => part !== "")
-      .join(" and ")}.`,
+  modelRaised: (blockers, majors) => `The model review raised ${raisedEn(blockers, majors)}.`,
+  approvedOverRaised: (blockers, majors) =>
+    `approved with ${raisedEn(blockers, majors)} open in the model review`,
   modelRaisedLink: "Read it",
   severityWord: (severity) => severity,
   severityCount: (severity, count) => `${String(count)} ${severity}`,
@@ -1004,6 +1063,7 @@ explanation you pressed on and then answers the gate.`,
   whyNotTaken: "Why",
   checksWorkUnreadable:
     "What changed cannot be read now, so this reading cannot be matched against the work.",
+  checksNotMatched: "not matched",
   modelNotTaken: "Only the checks read this; the model review was not taken.",
   neitherReadingTaken: "Neither the checks nor the model review could read this work.",
   recordsFold: (count) => `What approve records (${String(count)} fields), and the full text`,
@@ -1572,6 +1632,8 @@ const JA: Partial<Chrome> = Object.freeze({
   threadNoReload:
     "スクリプトが無効なとき、この画面は自動で読み込み直しません。書きかけの文が消えないためです。新しいメッセージは読み込み直して確認してください。",
   approvePlain: "この作業をこのまま受け入れます。",
+  approveDespite: "指摘を残したまま承認する",
+  approveDespitePlain: "モデルレビューが挙げた点に答えないまま、この作業をこのまま受け入れます。",
   undeterminedFold: (count) => `rondo が決められなかった項目 ${String(count)} 件`,
   liveShort: (seconds) => `ライブ · ${String(seconds)}秒ごとに更新`,
   stillShort: "読んでいるあいだは動きません",
@@ -1646,13 +1708,9 @@ const JA: Partial<Chrome> = Object.freeze({
     "rondo が確認した内容を記録できなかったため、何も回答していません。ゲートに戻って、もう一度試してください。",
   answerNotDone: "回答されませんでした",
   gateBack: "ゲートに戻る",
-  modelRaised: (blockers, majors) =>
-    `モデルレビューの指摘: ${[
-      blockers === 0 ? "" : `阻害 ${String(blockers)} 件`,
-      majors === 0 ? "" : `重大 ${String(majors)} 件`,
-    ]
-      .filter((part) => part !== "")
-      .join("、")}。`,
+  modelRaised: (blockers, majors) => `モデルレビューの指摘: ${raisedJa(blockers, majors)}。`,
+  approvedOverRaised: (blockers, majors) =>
+    `モデルレビューの指摘 (${raisedJa(blockers, majors)}) を残したまま承認`,
   modelRaisedLink: "読む",
   severityWord: (severity) =>
     ({ blocker: "阻害", major: "重大", minor: "軽微", nit: "細部" })[severity] ?? severity,
@@ -1662,6 +1720,7 @@ const JA: Partial<Chrome> = Object.freeze({
   whyNotTaken: "理由",
   checksWorkUnreadable:
     "いまは変わったものを読み取れないため、この読み取りを作業と照らし合わせられません。",
+  checksNotMatched: "照合できず",
   modelNotTaken: "チェックだけが読みました。モデルレビューは取れていません。",
   neitherReadingTaken: "チェックもモデルレビューも、この作業を読めませんでした。",
   recordsFold: (count) => `approve で記録される内容 (${String(count)} 項目) と記録全文`,

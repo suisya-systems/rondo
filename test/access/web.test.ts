@@ -59,7 +59,11 @@ import {
   runPlan,
 } from "../../src/refrain/plan.js";
 import { contentDigest } from "../../src/store/plan.js";
-import { type JsonRecord, scopePayloadWithDefaults } from "../../src/store/records.js";
+import {
+  APPROVED_OUTCOME,
+  type JsonRecord,
+  scopePayloadWithDefaults,
+} from "../../src/store/records.js";
 import { advisoryRecord, iterationStore } from "../../src/store/sqlite.js";
 
 /**
@@ -2493,9 +2497,12 @@ test("the gate offers a change beside approve, drafted from the findings and edi
   expect(box).toContain("where: rule AGENTS.md:12");
   expect(box).toContain('data-draft="revise:i-0001:gate-i-0001"');
   expect(box).not.toContain("maxlength");
-  // The change is offered, and approve is not qualified by it: the same button
-  // with the same word, whatever the model raised (D-0065 as annotated).
-  expect(bar).toContain(">approve</button>");
+  // The change is offered, and approve is not refused by it: the same form
+  // posting to the same address, whatever the model raised (D-0065 as
+  // annotated). What rondo#237 moved is the face, not the press -- the answer
+  // carried to the gate is still 'approve'.
+  expect(bar).toContain(">approve despite what was raised</button>");
+  expect(bar).toContain("title=\"answers gate gate-i-0001 as 'approve'");
   expect(bar).not.toContain('id="revise-none"');
 });
 
@@ -2516,7 +2523,7 @@ test("a lap admitted under no approval is told so where the change would be (#23
   expect(html).toContain("has no budget to be counted against");
   expect(html).not.toContain('id="revise-form"');
   // Approving is untouched by the absence of the other answer.
-  expect(html).toContain(">approve</button>");
+  expect(html).toContain(">approve despite what was raised</button>");
 });
 
 test("with no minted lap id there is no change form at all (#233 S4)", async () => {
@@ -2670,6 +2677,221 @@ test("an approved lap's row says back the claim its press carried (#220 S2 desig
   const other = await operatorPage(portsOver(world, "grace", []), "t", { kind: "summary" });
   expect(other).toContain("ada said they checked: ran npm test");
   expect(other).not.toContain("you said you checked");
+});
+
+// -- The three residues S2 left on the gate screen (rondo#237) --
+
+test("approve says which of the two approvals it is when a blocker is open (#237)", async () => {
+  const world = fresh();
+  await gateWithChecks(world);
+  await modelFindings(world);
+  const ports = { ...portsOver(world, "ada", []), material: structured };
+  const html = await operatorPage(ports, "t", { kind: "answer", iterationId: "i-0001" });
+  const bar = html.slice(html.indexOf('id="answer-bar"'));
+
+  // **The face moves; the press does not.** D-0065 refuses no approval over a
+  // model finding, so this is still one form, to the same address, answering
+  // the gate as 'approve' -- and the red line it is read beside is still there.
+  expect(bar).toContain(">approve despite what was raised</button>");
+  expect(bar).not.toContain(">approve</button>");
+  expect(bar).toContain(
+    "Accept this work as it is, with what the model review raised left unanswered.",
+  );
+  expect(bar).toContain("title=\"answers gate gate-i-0001 as 'approve'");
+  expect(bar).toContain('<form id="approve-form" method="post" action="/?lang=en"');
+  expect(bar).toContain("The model review raised 1 blocker and 1 major.");
+
+  // **A major on its own moves it too**, which is what D-0065's threshold is.
+  const majorOnly = fresh();
+  await gateWithChecks(majorOnly);
+  const only = await majorOnly.store.appendReading(
+    "i-0001",
+    {
+      drafter: "rondo/model/1/gpt-6-astra",
+      verdict: "concerns",
+      findings: ["the backoff is not capped"],
+      graded: [{ severity: "major", bases: [], basisResolved: false }],
+      evidence: EVIDENCE,
+      unavailableReason: null,
+    },
+    4_000,
+  );
+  expect(only.kind).toBe("appended");
+  const major = await operatorPage(
+    { ...portsOver(majorOnly, "ada", []), material: structured },
+    "t",
+    { kind: "answer", iterationId: "i-0001" },
+  );
+  expect(major).toContain(">approve despite what was raised</button>");
+});
+
+test("with nothing that heavy raised, approve keeps its one word (#237)", async () => {
+  const world = fresh();
+  await gateWithChecks(world);
+  // A nit is a finding and not an override: the threshold is blocker or major.
+  const appended = await world.store.appendReading(
+    "i-0001",
+    {
+      drafter: "rondo/model/1/gpt-6-astra",
+      verdict: "concerns",
+      findings: ["a typo"],
+      graded: [{ severity: "nit", bases: [], basisResolved: false }],
+      evidence: EVIDENCE,
+      unavailableReason: null,
+    },
+    4_000,
+  );
+  expect(appended.kind).toBe("appended");
+  const html = await operatorPage({ ...portsOver(world, "ada", []), material: structured }, "t", {
+    kind: "answer",
+    iterationId: "i-0001",
+  });
+  const bar = html.slice(html.indexOf('id="answer-bar"'));
+  expect(bar).toContain(">approve</button>");
+  expect(bar).toContain("Accept this work as it is.");
+  expect(bar).not.toContain("despite");
+  expect(html).not.toContain('id="model-raised"');
+});
+
+test("the qualified approve is in the page's language too (#237)", async () => {
+  const world = fresh();
+  await gateWithChecks(world);
+  await modelFindings(world);
+  const html = await operatorPage(
+    { ...portsOver(world, "ada", []), material: structured },
+    "t",
+    { kind: "answer", iterationId: "i-0001" },
+    chromeFor("ja"),
+  );
+  const bar = html.slice(html.indexOf('id="answer-bar"'));
+  expect(bar).toContain(">指摘を残したまま承認する</button>");
+  expect(bar).toContain("モデルレビューが挙げた点に答えないまま、この作業をこのまま受け入れます。");
+  // The answer carried to the gate is a token and stays ASCII (D-0055 rule 3).
+  expect(bar).toContain("'approve'");
+});
+
+test("an ended lap says on its row that it was approved over what was raised (#237)", async () => {
+  const world = fresh();
+  await gateWithChecks(world);
+  await modelFindings(world);
+  await world.store.recordVerificationClaim("i-0001", "ada", "read the diff", 4_000);
+  const closed = await world.store.transition(
+    "i-0001",
+    "awaiting_human",
+    "closed",
+    { gateOutcome: APPROVED_OUTCOME },
+    5_000,
+  );
+  expect(closed.kind).toBe("transitioned");
+  const html = await operatorPage(portsOver(world, "ada", []), "t", { kind: "summary" });
+
+  // The summary, without opening the lap: the same two counts the gate's own
+  // warning carried, beside the claim the press recorded.
+  expect(html).toContain("approved with 1 blocker and 1 major open in the model review");
+  expect(html).toContain("you said you checked: read the diff");
+  const ja = await operatorPage(
+    portsOver(world, "ada", []),
+    "t",
+    { kind: "summary" },
+    chromeFor("ja"),
+  );
+  expect(ja).toContain("モデルレビューの指摘 (阻害 1 件、重大 1 件) を残したまま承認");
+});
+
+test("a lap nobody approved says nothing about what was raised (#237)", async () => {
+  const world = fresh();
+  await gateWithChecks(world);
+  await modelFindings(world);
+  // The same readings, and a gate that ended without a person saying yes: the
+  // line is about an override, and nothing was overridden here.
+  const closed = await world.store.transition(
+    "i-0001",
+    "awaiting_human",
+    "closed",
+    { gateOutcome: "withdrawn" },
+    5_000,
+  );
+  expect(closed.kind).toBe("transitioned");
+  const html = await operatorPage(portsOver(world, "ada", []), "t", { kind: "summary" });
+  expect(html).not.toContain("open in the model review");
+});
+
+/** A lap at its gate whose deterministic reading raised nothing at all. */
+async function gateWithClearChecks(world: ReturnType<typeof fresh>): Promise<void> {
+  await reserve(world, "i-0001", "add a retry budget");
+  await openGate(world, "i-0001");
+  const carried = await world.store.transition(
+    "i-0001",
+    "awaiting_human",
+    "awaiting_human",
+    {},
+    3_000,
+    {
+      drafter: "rondo/deterministic/2",
+      verdict: "clear",
+      findings: [],
+      evidence: EVIDENCE,
+      unavailableReason: null,
+    },
+  );
+  expect(carried.kind).toBe("transitioned");
+}
+
+test("a recorded 'clear' is not drawn as a pass over work that cannot be read (#237)", async () => {
+  const world = fresh();
+  await gateWithClearChecks(world);
+  const gone = async () =>
+    await Promise.resolve({
+      lines: ["work    rondo/i-0001"],
+      why: null,
+      work: {
+        kind: "unreadable" as const,
+        reason: "neither refs/remotes/origin/main nor refs/heads/main is a ref in /srv/work",
+      },
+    });
+  const html = await operatorPage({ ...portsOver(world, "ada", []), material: gone }, "t", {
+    kind: "answer",
+    iterationId: "i-0001",
+  });
+
+  // **Not in the card and not in the bar** -- the bar is the one a person
+  // scanning reads, and it kept the green pill through S2.
+  expect(html).not.toContain(">nothing raised</span>");
+  const card = html.slice(html.indexOf('<section id="checks"'));
+  const bar = html.slice(html.indexOf('id="answer-bar"'));
+  expect(card).toContain(">not matched</span>");
+  expect(bar).toContain(">not matched</span>");
+  // And the sentence that says why is still beside the count it disagrees with.
+  expect(html).toContain(
+    "What changed cannot be read now, so this reading cannot be matched against the work.",
+  );
+  expect(html).toContain("Read 2 commits and 1 file.");
+
+  // Read, and the verdict is the verdict: nothing else about the card moved.
+  const read = await operatorPage({ ...portsOver(world, "ada", []), material: structured }, "t", {
+    kind: "answer",
+    iterationId: "i-0001",
+  });
+  expect(read).toContain(">nothing raised</span>");
+  expect(read).not.toContain(">not matched</span>");
+});
+
+test("a reading that raised something keeps its own word where the work is gone (#237)", async () => {
+  const world = fresh();
+  await gateWithChecks(world);
+  const gone = async () =>
+    await Promise.resolve({
+      lines: ["work    rondo/i-0001"],
+      why: null,
+      work: { kind: "unreadable" as const, reason: "the workspace is not a git repository" },
+    });
+  const html = await operatorPage({ ...portsOver(world, "ada", []), material: gone }, "t", {
+    kind: "answer",
+    iterationId: "i-0001",
+  });
+  // `1 raised` is not a pass, so it is not replaced -- only its colour goes.
+  expect(html).toContain(">1 raised</span>");
+  expect(html).not.toContain(">not matched</span>");
 });
 
 test("what the fence blocked is on the gate, each call in words, not only in the text fold (#220 S2)", async () => {

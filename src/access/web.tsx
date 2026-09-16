@@ -1663,25 +1663,48 @@ function runsWhere(
   );
 }
 
+/**
+ * What an ended row says beyond its own record, read per row in
+ * {@link operatorPage} because both halves live in other tables.
+ */
+interface EndedFacts {
+  /** The latest verification claim its press carried (D-0045), or null where it carried none. */
+  readonly claim: { readonly claim: string; readonly by: string | null } | null;
+  /**
+   * What the model review had open when the gate was approved (rondo#237), or
+   * null where it had nothing that heavy -- and null on every row nobody
+   * approved, which is where the question does not arise.
+   */
+  readonly raised: RaisedCounts | null;
+}
+
 /** *What just finished* -- the last few endings, newest first (rondo#145). */
 /**
- * `claims` is each ended lap's latest verification claim (D-0045), echoed on its
- * row (the S2 design pass on #220): an approve press lands on this list, and
- * the row it moved says back what the person said they checked.
+ * **The claim is echoed on the row** (the S2 design pass on #220): an approve
+ * press lands on this list, and the row it moved says back what the person
+ * said they checked.
+ *
+ * **And so is what the approval was given over** (rondo#237). A lap approved
+ * with a blocker or a major open is finished like any other and its pill says
+ * so; which of the two approvals ended it was only findable by opening the lap
+ * again. Both facts were already recorded -- the claim, and the reading -- so
+ * this is the summary drawing what the store holds, not the store holding more.
  */
 function endedView(
   wording: Chrome,
   ended: readonly IterationRecord[],
   nowMs: number,
-  claims: ReadonlyMap<string, { readonly claim: string; readonly by: string | null }>,
+  facts: ReadonlyMap<string, EndedFacts>,
   /** The way onto the publish screen, drawn only on rows that could publish. */
   publishTo: (record: IterationRecord) => unknown,
 ) {
   return questionGroup(
     "ended",
     wording.endedHeading(ended.length),
-    ended.map((record) =>
-      lapRow(
+    ended.map((record) => {
+      const said = facts.get(record.id)?.claim ?? null;
+      const raised = facts.get(record.id)?.raised ?? null;
+      return lapRow(
         "ended",
         record,
         stateHead(
@@ -1698,21 +1721,25 @@ function endedView(
             : endedWhy(wording, record),
           spentLine(wording, record),
           fenceLine(wording, record),
-          claims.has(record.id) ? (
-            <span class="line min-w-0 wrap-anywhere whitespace-pre-wrap" lang="">
-              {wording.checkedEcho(
-                claims.get(record.id)?.claim ?? "",
-                claims.get(record.id)?.by ?? null,
-              )}
+          // In the gate's own ink, on a row whose glyph is otherwise quiet: an
+          // override is not the quiet ending the rest of the row reads as.
+          raised === null ? null : (
+            <span class="line over-raised min-w-0 wrap-anywhere text-fail">
+              {wording.approvedOverRaised(raised.blockers, raised.majors)}
             </span>
-          ) : null,
+          ),
+          said === null ? null : (
+            <span class="line min-w-0 wrap-anywhere whitespace-pre-wrap" lang="">
+              {wording.checkedEcho(said.claim, said.by)}
+            </span>
+          ),
           // The one thing left to do to an approved lap, where the lap is
           // (rondo#233 S5). A link and not a button: what it leads to is the
           // screen that presses.
           publishTo(record),
         ],
-      ),
-    ),
+      );
+    }),
   );
 }
 
@@ -1975,14 +2002,25 @@ function changedView(wording: Chrome, record: IterationRecord, work: LapWorkInsp
  * The checks' verdict as a pill; muted rather than green where the work it
  * would be matched against cannot be read now (the S2 design pass on #220), so
  * an unreadable workspace never reads as a clean pass.
+ *
+ * **And a `clear` does not keep its word there either** (rondo#237). Muting the
+ * colour left the pill still saying *nothing raised* beside a *what changed*
+ * card that could count nothing, so the reading's count and the work's could
+ * disagree with nothing on the screen saying which was which. S5 answered the
+ * same fact on the publish screen by refusing (`reviewBlock`'s `unreadable`
+ * arm, `src/access/cli.ts`); the gate refuses nothing, so what it does instead
+ * is stop asserting the verdict. `concerns` and `unavailable` already say
+ * something that is not a pass and keep their own word.
  */
 function checksPill(wording: Chrome, reading: LapReading | null, workGone = false) {
-  return reading === null
-    ? null
-    : pill(
-        workGone ? "muted" : verdictTone(reading.verdict),
-        wording.verdictPill(reading.verdict, reading.findings.length),
-      );
+  if (reading === null) {
+    return null;
+  }
+  const said =
+    workGone && reading.verdict === "clear"
+      ? wording.checksNotMatched
+      : wording.verdictPill(reading.verdict, reading.findings.length);
+  return pill(workGone ? "muted" : verdictTone(reading.verdict), said);
 }
 
 /**
@@ -2033,8 +2071,12 @@ function notTakenView(wording: Chrome, id: string, reason: string | null) {
   );
 }
 
-function checksView(wording: Chrome, reading: LapReading | null, work: LapWorkInspection | null) {
-  const workGone = work !== null && work.kind !== "read";
+/**
+ * `workGone` is decided by the caller rather than here (rondo#237): the bar
+ * pins this same verdict above the button, and one judgement drawn in two
+ * places must be made once or the two will disagree.
+ */
+function checksView(wording: Chrome, reading: LapReading | null, workGone: boolean) {
   return (
     <section id="checks" class={`${CARD} scroll-mt-16`}>
       <div class="flex items-center gap-2">
@@ -2178,17 +2220,34 @@ function modelView(wording: Chrome, reading: LapReading | null, due: boolean, re
   );
 }
 
+/** How many blockers and majors one model reading left open. */
+interface RaisedCounts {
+  readonly blockers: number;
+  readonly majors: number;
+}
+
 /**
- * The line by the button, or null: how many blockers and majors the latest
- * model reading raised (D-0065 as annotated from #220). Counted from the
- * graded findings, so a reading whose severities did not decode says nothing
- * here -- its findings are still every one of them on the card.
+ * What a model reading raised at or above `major`, or null where it raised
+ * none (D-0065 as annotated from #220). Counted from the graded findings, so a
+ * reading whose severities did not decode counts nothing here -- its findings
+ * are still every one of them on the card.
+ *
+ * **The count and not the sentence** (rondo#237), because two screens say it:
+ * the line by the gate's button, and the row of a lap somebody approved over
+ * it. The gate's warning and the summary's line disagreeing about what was
+ * open would be worse than either of them being absent.
  */
-function modelRaised(wording: Chrome, reading: LapReading | null): string | null {
+function raisedIn(reading: LapReading | null): RaisedCounts | null {
   const graded = reading?.graded ?? [];
   const blockers = graded.filter((finding) => finding.severity === "blocker").length;
   const majors = graded.filter((finding) => finding.severity === "major").length;
-  return blockers + majors === 0 ? null : wording.modelRaised(blockers, majors);
+  return blockers + majors === 0 ? null : { blockers, majors };
+}
+
+/** The line by the button, or null where the model review raised nothing that heavy. */
+function modelRaised(wording: Chrome, reading: LapReading | null): string | null {
+  const open = raisedIn(reading);
+  return open === null ? null : wording.modelRaised(open.blockers, open.majors);
 }
 
 /**
@@ -2270,6 +2329,10 @@ function approveView(
   const modelDue = modelPendingOnPage(framing.readings, model);
   const raised = modelRaised(wording, model);
   const checks = reviewedReading(framing.readings);
+  // **Read once and drawn twice** (rondo#237): the checks' card and the bar's
+  // pinned line are the same verdict about the same work.
+  const work = framing.material?.work ?? null;
+  const workGone = work !== null && work.kind !== "read";
   const reload = viewHref({ kind: "answer", iterationId: record.id }, wording.lang);
   return (
     <div id="answering" class="mt-3 space-y-3">
@@ -2298,7 +2361,7 @@ function approveView(
        * own words. Stacked under `lg`.
        */}
       <div class="grid items-start gap-3 lg:grid-cols-2">
-        {checksView(wording, checks, framing.material?.work ?? null)}
+        {checksView(wording, checks, workGone)}
         {modelView(wording, model, modelDue, reload)}
       </div>
       <p class="note text-[12.5px] leading-5 text-faint">{wording.readingsNote}</p>
@@ -2401,7 +2464,8 @@ function approveView(
          * too. Side by side and in the same weight, no recommendation between
          * them (D-0065 as annotated from #220). The model's blocker or major
          * line is part of it -- seen before pressing and never in the way of
-         * it; the button is the same button whatever it says.
+         * it; the press below it is the same press whatever this says, and
+         * since rondo#237 it wears the difference on its face.
          */}
         <p
           id="bar-readings"
@@ -2412,7 +2476,7 @@ function approveView(
             class="inline-flex items-center gap-1.5 whitespace-nowrap hover:underline"
           >
             {wording.checksHeading}
-            {checksPill(wording, checks)}
+            {checksPill(wording, checks, workGone)}
           </a>
           <a
             href="#model-review"
@@ -2483,6 +2547,14 @@ function approveView(
            * presses nothing, and `Enter` on it is the browser's own activation
            * of a native submit -- a person's key, which is what mints a press.
            * What approving means is its description, not a second label.
+           *
+           * **And the face says which approval this is** (rondo#237): with a
+           * blocker or a major open, approving overrides a reading, and a bar
+           * scanned rather than read gave the two the same word. What moves is
+           * the label and the sentence under it -- not the press, not the
+           * route and not the answer, which is {@link APPROVE_BODY} in the
+           * `title` here and read from that constant on the way in (D-0065
+           * refuses no approval over a model finding).
            */}
           <button
             type="submit"
@@ -2490,14 +2562,14 @@ function approveView(
             aria-describedby={`approve-plain-${record.id}`}
             class={`${PRIMARY} h-10 w-full justify-center px-6 text-sm sm:h-9 sm:w-auto`}
           >
-            {APPROVE_BODY}
+            {raised === null ? APPROVE_BODY : wording.approveDespite}
           </button>
           <span
             id={`approve-plain-${record.id}`}
             class="note sr-only"
             title={wording.approveNote(record.gateId, APPROVE_BODY)}
           >
-            {wording.approvePlain}
+            {raised === null ? wording.approvePlain : wording.approveDespitePlain}
           </span>
         </form>
         {reviseForm(wording, record, token, framing, newIterationId)}
@@ -4593,22 +4665,31 @@ export async function operatorPage(
   // **Whose word it is stays with the words** (#220 S2, Codex): a claim another
   // operator recorded, on the page or with `rondo answer --verified`, is theirs
   // and never "you said"; `by` is null only when it is this page's own actor.
-  const endedClaims = new Map(
-    (
-      await Promise.all(
-        ended.map(async (record) => {
-          const last = (await ports.store.verificationClaimsFor(record.id)).at(-1);
-          return [
-            record.id,
-            last === undefined
-              ? undefined
-              : { claim: last.claim, by: last.actorId === ports.actorId ? null : last.actorId },
-          ] as const;
-        }),
-      )
-    ).filter(
-      (entry): entry is readonly [string, { claim: string; by: string | null }] =>
-        entry[1] !== undefined,
+  //
+  // **And what the approval was given over** (rondo#237), off the same pass:
+  // the readings are read only where an approval could have overridden one, so
+  // a list of failures and withdrawals costs the redraw nothing.
+  const endedFacts = new Map(
+    await Promise.all(
+      ended.map(async (record) => {
+        const [claims, readings] = await Promise.all([
+          ports.store.verificationClaimsFor(record.id),
+          approvedForPublication(record)
+            ? ports.store.readingsFor(record.id)
+            : ([] as readonly LapReading[]),
+        ]);
+        const last = claims.at(-1);
+        return [
+          record.id,
+          {
+            claim:
+              last === undefined
+                ? null
+                : { claim: last.claim, by: last.actorId === ports.actorId ? null : last.actorId },
+            raised: raisedIn(latestReading(readings, isModelReadingDrafter)),
+          },
+        ] as const;
+      }),
     ),
   );
   const waiting: IterationRecord[] = [];
@@ -5016,7 +5097,7 @@ export async function operatorPage(
                   )}
                   {attentionView(wording, unreadable)}
                   {runningView(wording, running, transcripts, nowMs)}
-                  {endedView(wording, ended, nowMs, endedClaims, publishTo)}
+                  {endedView(wording, ended, nowMs, endedFacts, publishTo)}
                 </>
               )}
               {onThreads || view.kind === "scope" || view.kind === "publish" ? null : (
