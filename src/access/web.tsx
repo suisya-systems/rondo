@@ -343,6 +343,14 @@ export type ReviewBlock =
 export interface PublishTarget {
   readonly workspace: string;
   readonly remote: string;
+  /**
+   * Where a push to that remote actually goes, as git resolved it.
+   *
+   * **Shown because it is digested** (Codex round 1): the press refuses when the
+   * destination has moved since the screen was drawn, and a screen that named
+   * only the remote would be refusing over something it never showed.
+   */
+  readonly pushUrls: readonly string[];
   readonly topicBranch: string;
   readonly baseBranch: string;
   /** What the forge is given as the head: the branch, or `owner:branch`. */
@@ -4055,6 +4063,13 @@ async function publishView(
           {wording.publishOpens(shown.target.repo, shown.target.baseBranch)}
         </p>
         <p class="text-[13px] leading-5">{wording.publishCloses(shown.target.runId)}</p>
+        {/* Where the push actually goes, quietly, beside the name it goes by:
+            the press refuses when this moves, so this is what moved. */}
+        {shown.target.pushUrls.map((url) => (
+          <p class="text-[12.5px] leading-5 wrap-anywhere text-muted-foreground" lang="">
+            {wording.publishPushUrl(url)}
+          </p>
+        ))}
         <p class="text-[12.5px] leading-5 text-muted-foreground" lang="">
           {wording.publishWorkspace(shown.target.workspace)}
         </p>

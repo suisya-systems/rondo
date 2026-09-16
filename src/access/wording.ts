@@ -720,6 +720,8 @@ export interface Chrome {
   readonly publishPushes: (branch: string, remote: string) => string;
   readonly publishOpens: (repo: string, base: string) => string;
   readonly publishCloses: (runId: string) => string;
+  /** Where that push actually goes, which is what a moved destination moves. */
+  readonly publishPushUrl: (url: string) => string;
   readonly publishWorkspace: (workspace: string) => string;
   readonly publishTargetHeading: string;
   readonly publishRequestHeading: string;
@@ -1312,6 +1314,7 @@ explanation you pressed on and then answers the gate.`,
   publishPushes: (branch, remote) => `Push the branch ${branch} to ${remote}.`,
   publishOpens: (repo, base) => `Open a pull request on ${repo}, against ${base}.`,
   publishCloses: (runId) => `Close the run ${runId} as completed.`,
+  publishPushUrl: (url) => `That push reaches ${url}.`,
   publishWorkspace: (workspace) => `The work is in ${workspace}.`,
   publishRequestHeading: "The pull request it would open",
   publishTitleLabel: "Title",
@@ -1967,6 +1970,7 @@ const JA: Partial<Chrome> = Object.freeze({
   publishPushes: (branch, remote) => `ブランチ ${branch} を ${remote} へ push します。`,
   publishOpens: (repo, base) => `${repo} に、${base} 向けのプルリクエストを作ります。`,
   publishCloses: (runId) => `run ${runId} を completed として閉じます。`,
+  publishPushUrl: (url) => `その push が届くのは ${url} です。`,
   publishWorkspace: (workspace) => `作業は ${workspace} にあります。`,
   publishRequestHeading: "作られるプルリクエスト",
   publishTitleLabel: "タイトル",

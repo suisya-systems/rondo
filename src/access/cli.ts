@@ -5689,6 +5689,18 @@ export interface PublishAsked {
 export interface PublishPlan {
   readonly workspace: string;
   readonly remote: string;
+  /**
+   * Every URL a push to that remote would reach, as git resolved them.
+   *
+   * **The name is not the destination** (Codex round 1). `--allow-remote-mismatch`
+   * is permission for the remote and `--repo` to differ, and under it a remote
+   * re-pointed at another repository of the same owner leaves the head, the
+   * warning and every other field of this plan unchanged -- so a digest over the
+   * remote's *name* would let an open screen authorise a push to somewhere it
+   * never showed. What a person is being asked to approve is where the work
+   * goes, so where it goes is what is carried and digested.
+   */
+  readonly pushUrls: readonly string[];
   readonly topicBranch: string;
   readonly baseBranch: string;
   /** What `gh pr create --head` is given: the branch, or `owner:branch`. */
@@ -5820,6 +5832,11 @@ export async function publishPlanFor(
   // where the real thing would fail is the failure it was meant to prevent
   // (see `publishPreflight`).
   const host = forgeHost(environment);
+  // **Kept rather than discarded**: the preflight answers whether this may run,
+  // and the destinations it answered over are what the plan is about. They are
+  // carried into {@link PublishPlan.pushUrls} so that where the work goes is
+  // part of what a person confirmed (Codex round 1).
+  const inspection = await inspectPushTarget({ workspace, remote: asked.remote, topicBranch });
   const preflight = publishPreflight({
     repo: asked.repo,
     remote: asked.remote,
@@ -5827,7 +5844,7 @@ export async function publishPlanFor(
     topicBranch,
     forgeHost: host,
     allowRemoteMismatch: asked.allowRemoteMismatch,
-    inspection: await inspectPushTarget({ workspace, remote: asked.remote, topicBranch }),
+    inspection,
   });
   if (preflight.kind === "refused") {
     return {
@@ -5911,6 +5928,9 @@ export async function publishPlanFor(
     plan: {
       workspace,
       remote: asked.remote,
+      // `read` is the only shape that carries them, and the preflight has
+      // already refused every other one.
+      pushUrls: inspection.kind === "read" ? inspection.pushUrls : [],
       topicBranch,
       baseBranch,
       headRef: preflight.headRef,
@@ -5942,6 +5962,10 @@ function publishShownDigest(plan: PublishPlan): string {
   return contentDigest({
     workspace: plan.workspace,
     remote: plan.remote,
+    // Where the push actually goes, and not only what the remote is called: see
+    // {@link PublishPlan.pushUrls}. Under `--allow-remote-mismatch` this is the
+    // one field that moves when a remote is re-pointed at another repository.
+    push_urls: [...plan.pushUrls],
     topic_branch: plan.topicBranch,
     base_branch: plan.baseBranch,
     head_ref: plan.headRef,
@@ -5984,6 +6008,7 @@ export async function publishingForPage(
     target: {
       workspace: plan.workspace,
       remote: plan.remote,
+      pushUrls: plan.pushUrls,
       topicBranch: plan.topicBranch,
       baseBranch: plan.baseBranch,
       headRef: plan.headRef,
@@ -6215,11 +6240,18 @@ async function publishPage(
     actorId: actor.actorId,
   });
   if (closed.kind !== "answered") {
+    // **Relayed, and not only returned** (Codex round 1, the rule S4's revise
+    // press already follows): the screen's sentence sends a person to the
+    // terminal `rondo web` runs in for the detail, so the detail has to be
+    // there. `relayFailure` is where continuo's own diagnosis is printed for
+    // every other verb, ASCII-escaped on the way out (`AGENTS.md`); its exit
+    // status is nobody's here, because this surface answers with a refusal and
+    // not a status.
+    relayFailure("run close", closed);
     return {
       ok: false,
       why: "publishRefusedRunNotClosed",
       note: `the branch is pushed and the pull request is open; the run did not close`,
-      detail: closed.kind,
     };
   }
   await reportToRequest(

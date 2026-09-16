@@ -3638,6 +3638,7 @@ const DRY_RUN = {
   target: {
     workspace: "/tmp/work/i-0001",
     remote: "origin",
+    pushUrls: ["https://github.com/suisya-systems/rondo.git"],
     topicBranch: "rondo/i-0001",
     baseBranch: "main",
     headRef: "rondo/i-0001",
@@ -3666,6 +3667,9 @@ test("the publish screen shows the dry-run and one press, and nothing has left t
   expect(screen).toContain("Push the branch rondo/i-0001 to origin.");
   expect(screen).toContain("Open a pull request on github.com/suisya-systems/rondo, against main.");
   expect(screen).toContain("Close the run run-0001 as completed.");
+  // Where the push goes, and not only what the remote is called: it is part of
+  // what the press's digest refuses over, so it is part of what was shown.
+  expect(screen).toContain("That push reaches https://github.com/suisya-systems/rondo.git.");
   // The text a reviewer will read, on the screen that publishes it.
   expect(screen).toContain("feat: a retry budget");
   expect(screen).toContain("## What changed");
@@ -4030,6 +4034,57 @@ test("a publish press acts only on the dry-run the screen showed, re-read inside
   const overruling = await pressing({ shown: shown.shown, despiteReview: true });
   expect(overruling.ok).toBe(false);
   expect(overruling.why).toBe("publishRefusedNothingOverruled");
+
+  // **The destination moving is the screen drifting** (Codex round 1). Under
+  // `--allow-remote-mismatch` a remote re-pointed at another repository of the
+  // same owner leaves the head, the warning and every other field of the plan
+  // alone, so a digest over the remote's *name* would have let this press
+  // through to a repository the screen never named.
+  //
+  // **Two forks of one owner, which is the case nothing else here can see**:
+  // the head is spelled `owner:branch` and the warning names the owner, so both
+  // are the same string before and after. Only the destination moved.
+  const workspace = String(record.record.plan["workspace"]);
+  const setUrl = (url: string) =>
+    execFileSync("git", ["-C", workspace, "remote", "set-url", "origin", url], {
+      encoding: "utf8",
+    });
+  setUrl("https://github.com/grace/fork-a.git");
+  const moved = { ...world.asked, allowRemoteMismatch: true };
+  const before = await publishingForPage(
+    { RONDO_APPROVER: "ada" },
+    world.store,
+    moved,
+    record.record,
+  );
+  if (before.kind !== "ready") {
+    throw new Error(`the fixture would not plan: ${JSON.stringify(before)}`);
+  }
+  setUrl("https://github.com/grace/fork-b.git");
+  const after = await publishingForPage(
+    { RONDO_APPROVER: "ada" },
+    world.store,
+    moved,
+    record.record,
+  );
+  if (after.kind !== "ready") {
+    throw new Error(`the fixture would not plan: ${JSON.stringify(after)}`);
+  }
+  // Everything a person could have read on the screen is the same; the
+  // destination is not, and that is what the digest has to catch.
+  expect(after.target.headRef).toBe(before.target.headRef);
+  expect(after.warnings).toEqual(before.warnings);
+  expect(after.target.pushUrls).not.toEqual(before.target.pushUrls);
+  const elsewhereEntirely = await publishFromPage(
+    { RONDO_APPROVER: "ada" },
+    world.store,
+    world.storePath,
+    "ada",
+    moved,
+    { iterationId: world.iterationId, shown: before.shown, despiteReview: false },
+  );
+  expect(elsewhereEntirely.ok).toBe(false);
+  expect(elsewhereEntirely.why).toBe("publishRefusedChanged");
 });
 
 test("a publish press does not publish past the reading's refusal; only the second press does (#233 S5, D-0060)", async () => {
