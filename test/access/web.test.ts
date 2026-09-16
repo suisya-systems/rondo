@@ -3531,6 +3531,41 @@ test("a revise press on a stale page answers nothing, and writes no framing for 
   expect(rows(connection, "scope_consumption")).toBe(0);
 });
 
+test("a second revise press of one form joins the first only when it says the same thing (#233 S4)", async () => {
+  // **The successor's id is minted per draw, so a double click carries one id**
+  // -- and so does a press made from the same form after the browser's Back
+  // button, with the words edited since (Codex round 3). The first is the press
+  // that is running and the second is its repeat; the third is a different
+  // instruction, and answering *sent* over words that were never sent is the
+  // failure this screen exists not to have. Both presses here refuse before
+  // continuo, on the lap's own state, which is what makes this reachable in a
+  // file with no continuo -- what is under test is which of them joined.
+  const dir = mkdtempSync(join(tmpdir(), "rondo-revise-twice-"));
+  const storePath = join(dir, "store.db");
+  const connection = new DatabaseSync(storePath);
+  const store = iterationStore(connection, { maxOccupying: 4, maxLive: 6 });
+  const successorId = "lap-00000000-0000-4000-8000-00000000000a";
+  const pressing = (body: string) =>
+    reviseFromPage({ RONDO_APPROVER: "ada" }, store, storePath, "ada", {
+      iterationId: "lap-not-there",
+      successorId,
+      scopeDecisionId: "sd-0001",
+      body,
+    });
+
+  const [first, same, other] = await Promise.all([
+    pressing("narrow it to the parser"),
+    pressing("narrow it to the parser"),
+    pressing("actually, leave the parser alone"),
+  ]);
+  // The repeat is the press that made it: the same answer, whatever it was.
+  expect(same).toEqual(first);
+  // The one carrying other words is refused, and says the first is running.
+  expect(other.ok).toBe(false);
+  expect(other.why).toBe("reviseRefusedStillRunning");
+  expect(rows(connection, "proposal")).toBe(0);
+});
+
 test("the first scope in a store shows what its agent type is allowed, read from the plan the press will record", async () => {
   // **D-0069 section 1 in the one case the store cannot answer** (rondo#233 S3,
   // Codex round 3). A fresh store holds no `agent_type_record` and has run no

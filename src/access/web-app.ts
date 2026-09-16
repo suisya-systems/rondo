@@ -707,6 +707,7 @@ export type ReviseRefusal =
   | "reviseRefusedNoWords"
   | "reviseRefusedGateClosed"
   | "reviseRefusedNotItsScope"
+  | "reviseRefusedStillRunning"
   | "reviseRefusedNotSetUp"
   | "reviseRefusedNoContinuo"
   | "reviseRefusedOutside"

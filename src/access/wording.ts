@@ -666,6 +666,13 @@ export interface Chrome {
    * went stale under them -- or a form that was edited.
    */
   readonly reviseRefusedNotItsScope: string;
+  /**
+   * The same form is already being pressed with other words (Codex round 3):
+   * the second press is refused rather than folded into the first, because a
+   * press answered *sent* over words nobody sent is the one thing this screen
+   * exists not to do.
+   */
+  readonly reviseRefusedStillRunning: string;
   readonly reviseRefusedNotSetUp: string;
   readonly reviseRefusedNoContinuo: string;
   /** The `test` token is the `ScopeTest` name, ASCII in both sets (rule 3). */
@@ -1184,6 +1191,9 @@ explanation you pressed on and then answers the gate.`,
   reviseRefusedNotItsScope:
     "Nothing was answered: the approval this asks to spend is not the one this lap ran under. " +
     "Reload the gate and press again.",
+  reviseRefusedStillRunning:
+    "Nothing was answered: this gate is already being answered with other words, and that is " +
+    "still running. Wait for it, then reload the gate to see how it stands.",
   reviseRefusedNotSetUp:
     "Nothing was answered and the gate was not touched: the second lap could not be set up. The " +
     "terminal running rondo has what it said.",
@@ -1712,6 +1722,9 @@ const JA: Partial<Chrome> = Object.freeze({
   reviseRefusedNotItsScope:
     "何も回答していません。消費しようとしている承認は、この周回が動いた承認ではありません。" +
     "ゲートを読み込み直してから押してください。",
+  reviseRefusedStillRunning:
+    "何も回答していません。このゲートはすでに別の言葉で回答中で、その処理が続いています。" +
+    "終わるのを待ってから、ゲートを読み込み直して状態を確認してください。",
   reviseRefusedNotSetUp:
     "何も回答せず、ゲートにも触れていません。2 周目を用意できませんでした。詳細は rondo を" +
     "動かしているターミナルに出ています。",

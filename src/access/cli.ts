@@ -4415,6 +4415,14 @@ const starting = new Map<string, Promise<Started>>();
  * `startScopedFromPage`'s reason and more sharply: the second would walk a gate
  * the first is walking. The successor's id is minted per draw, so it is the key
  * a double click arrives under.
+ *
+ * **But only when the second press carries the same words** (Codex round 3).
+ * A person can reach the same form again -- the browser's Back button -- edit
+ * what to change and press, and the id it carries is still the one minted for
+ * that draw. Joining the press already running would answer *sent* over words
+ * that were never sent, which is the failure this whole screen exists not to
+ * have. So a second press with different words is refused instead, and the
+ * refusal says the first one is still running.
  */
 export async function reviseFromPage(
   environment: Readonly<Record<string, string | undefined>>,
@@ -4425,10 +4433,18 @@ export async function reviseFromPage(
 ): Promise<Revised> {
   const already = revising.get(input.successorId);
   if (already !== undefined) {
-    return await already;
+    return already.body === input.body
+      ? await already.running
+      : {
+          ok: false,
+          why: "reviseRefusedStillRunning",
+          note:
+            `a revise of '${input.iterationId}' as '${input.successorId}' is already running, ` +
+            "and it carries other words",
+        };
   }
   const running = revisePage(environment, store, storePath, approver, input);
-  revising.set(input.successorId, running);
+  revising.set(input.successorId, { running, body: input.body });
   try {
     return await running;
   } finally {
@@ -4436,8 +4452,12 @@ export async function reviseFromPage(
   }
 }
 
-/** Every revise press this process has in flight, by the successor's id. */
-const revising = new Map<string, Promise<Revised>>();
+/**
+ * Every revise press this process has in flight, by the successor's id, with
+ * the words it is carrying: a second press of the same form joins the first
+ * only when the two say the same thing.
+ */
+const revising = new Map<string, { running: Promise<Revised>; body: string }>();
 
 async function revisePage(
   environment: Readonly<Record<string, string | undefined>>,
