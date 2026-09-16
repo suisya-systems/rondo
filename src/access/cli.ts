@@ -4368,6 +4368,30 @@ export async function startScopedFromPage(
           : `the request threads will not read: ${threads.reason}`,
     };
   }
+  // **A second submit of one form is the lap it already started**, which is the
+  // argument the send routes make about a repeated message (`alreadyThere` in
+  // `src/access/web-app.ts`): the iteration id was minted when the form was
+  // drawn, precisely so the store holds one row however many times the button
+  // is pressed. Telling the person "nothing started" would be false, and it is
+  // worse than false here -- `admitUnderScope` would test a scope whose budget
+  // that very lap has just spent, and a refused test writes an **asking message
+  // into the request's thread** (D-0066 rule 4.4) which then holds the line
+  // (D-0069 rule 5). A question nobody asked, stopping the work, because
+  // somebody pressed back and submit. So the press that names a row already
+  // there is the press that made it, and it admits nothing and writes nothing.
+  const already = await store.read(input.iterationId);
+  if (already.kind === "read") {
+    return { ok: true, note: `iteration '${input.iterationId}' was already admitted` };
+  }
+  if (already.kind === "unreadable") {
+    return {
+      ok: false,
+      why: "startRefusedNotAdmitted",
+      note:
+        `a row for iteration '${input.iterationId}' is already there and will not read: ` +
+        `${already.reason}. Nothing was admitted a second time.`,
+    };
+  }
   const read = readPlanDocument(planFile);
   if ("refusal" in read) {
     return { ok: false, why: "startRefusedNoPlan", note: read.refusal };
@@ -4444,6 +4468,24 @@ export async function startScopedFromPage(
       why: "startRefusedNotAdmitted",
       note: outcome.report.lines.join("\n"),
     };
+  }
+  // **A lap this button started gets the reading the same lap started from a
+  // terminal gets** (D-0065): `finishScopedAdmission` takes it the moment a
+  // scoped admission stops at `awaiting_human`, and a page that skipped it
+  // would open a gate whose *Model review* half is empty for ever -- while the
+  // gate screen goes on saying the reading may still arrive (`modelMayArrive`,
+  // #220 S2), which is the page telling a person to wait for something nobody
+  // is taking. It is awaited rather than left running, for the reason the whole
+  // press is awaited: the lap itself already ran inside it, and a reading is
+  // the short part of that. Its own words go to the terminal `rondo web` runs
+  // in, as `answerFromPage` leaves `walkGate`'s there.
+  if (outcome.report.status === "awaiting_human") {
+    await sayGateOpen(() =>
+      takeModelReading(
+        modelReviewPorts(continuo, store, ports.thread ?? null),
+        outcome.report.iterationId ?? input.iterationId,
+      ),
+    );
   }
   return { ok: true, note: `iteration '${input.iterationId}' was admitted` };
 }

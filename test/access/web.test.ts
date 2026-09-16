@@ -26,6 +26,7 @@ import {
   recordPagePress,
   recordScopeFromPage,
   scopeDraftingFromPlan,
+  startScopedFromPage,
 } from "../../src/access/cli.js";
 import { agentTypeRecordOf } from "../../src/access/scope.js";
 import {
@@ -3196,4 +3197,69 @@ test("a second press of an edited form is refused, and never reported as an appr
   expect(repeated.ok).toBe(true);
   expect(repeated.scopeDecisionId).toBe(first.scopeDecisionId);
   expect(rows(new DatabaseSync(storePath), "scope_decision")).toBe(1);
+});
+
+test("a scoped start press that names a row already there admits nothing, rather than asking the request a question nobody asked", async () => {
+  // **The replay the minted id makes possible** (rondo#233 S3, the Codex review
+  // of this branch). The iteration id is minted when the form is drawn, so back
+  // and submit posts the id the first press already admitted. Sending it through
+  // the scope test again is not harmless: the lap it started has spent the
+  // budget it was testing against, so the verdict fails and the refusal writes
+  // an **asking message into the request's thread** (D-0066 rule 4.4) which then
+  // holds the line (D-0069 rule 5) -- a question nobody asked, stopping the
+  // work, because somebody pressed back. The guard runs before continuo is
+  // started, which is what makes this reachable in a file with no continuo.
+  const dir = mkdtempSync(join(tmpdir(), "rondo-start-replay-"));
+  const storePath = join(dir, "store.db");
+  const connection = new DatabaseSync(storePath);
+  const record = advisoryRecord(connection);
+  const store = iterationStore(connection, { maxOccupying: 4, maxLive: 6 });
+  const requestId = "request-start-replay";
+  await record.recordThreadMessage({
+    messageId: requestId,
+    body: "Please do it.",
+    authorKind: "operator",
+    authorId: "ada",
+    inReplyTo: null,
+    atMs: 1_000,
+    bases: [],
+    asks: false,
+  });
+  const iterationId = "lap-already-there";
+  const reserved = await store.reserve({
+    id: iterationId,
+    request: "Please do it.",
+    plan: planFor(iterationId),
+    spend: null,
+    scopeSpend: null,
+    nowMs: 1_000,
+    supersedesIterationId: null,
+    requestMessageId: requestId,
+    runId: `rondo-${iterationId}`,
+    topicBranch: `rondo/${iterationId}`,
+    workspace: `/srv/work/${iterationId}`,
+  });
+  expect(reserved.kind).toBe("reserved");
+
+  const before = rows(connection, "conversation_message");
+  const started = await startScopedFromPage(
+    { RONDO_APPROVER: "ada" },
+    store,
+    storePath,
+    "ada",
+    scopePlanFile(dir).file,
+    {
+      iterationId,
+      requestMessageId: requestId,
+      scopeDecisionId: "scope-decision-nobody-approved",
+    },
+  );
+  // The press is the one that made the row, so it is not a refusal to show.
+  expect(started.ok).toBe(true);
+  expect(started.why).toBeUndefined();
+  // And nothing was asked of the request: the thread is exactly as it was.
+  expect(rows(connection, "conversation_message")).toBe(before);
+  // Not vacuous: a scope decision nobody approved is what the second press
+  // carries, and it reached no scope test at all -- one iteration row, still.
+  expect(rows(connection, "iteration")).toBe(1);
 });
