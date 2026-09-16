@@ -337,9 +337,20 @@ on. Reading it moves no last-look mark and counts no presentation.
 - **Any answer releases the hold** (#206). Writing "stop" releases it as surely as writing "go on";
   the next admission is simply tested from scratch. To actually stop, leave the question
   unanswered -- an unanswered question does no harm.
-- If the cause was the budget, record a new scope first (**Set the scope** again on the same
-  request) and then answer the question. The new screen says what the scope it replaces already
-  spent.
+- **If the cause was the budget, the page cannot mend it, and this is worth knowing before you go
+  looking.** A scope recorded here never supersedes another one -- S3 draws no screen for that, and
+  `recordScopeFromPage` records `supersedes` as nothing at all. So pressing **Set the scope** again
+  on the same request does not replace the spent approval, does not retire it, and shows nothing of
+  what it spent; the screen says as much, in the line about rondo not being able to tell whether you
+  have already approved one. What you get is a *second* approval, standing beside the first.
+  - That second approval is enough to **start fresh work**: its own **Start the work** button sits on
+    its own screen and carries its own approval.
+  - It is not enough to **continue the lap you already have**. **Ask for a change** always spends the
+    approval that lap was admitted under, which is the exhausted one, so it will be refused again
+    however many scopes you record. Answering the stop question does not change that.
+  - The way through, from the page alone, is to send the remaining work as a new request and start it
+    under the new approval. Write it down if you hit this -- it is the second hole in "the page is the
+    whole walk", and a bigger one than the abandon below.
 - A lap that never comes back is the one thing with no press. Take its id off the summary's
   **Show the full reading** (`iteration '<id>'`), stop the page with ctrl-c, and run
   `node bin/rondo.mjs abandon --iteration-id lap-<the UUID> --reason "..."` in the same terminal,
