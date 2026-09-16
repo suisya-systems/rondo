@@ -664,6 +664,12 @@ export interface Chrome {
   /** The `test` token is the `ScopeTest` name, ASCII in both sets (rule 3). */
   readonly reviseRefusedOutside: (test: string) => string;
   /**
+   * The walk stopped part way, so whether the words reached the gate is not a
+   * fact rondo holds (rondo#233 S4, Codex round 1). Said as the one thing that
+   * is true -- look before pressing again -- and never as "nothing happened".
+   */
+  readonly reviseRefusedWalkFailed: string;
+  /**
    * The one refusal that lands after the gate was answered (D-0070 section
    * 2.4): the person's words are recorded at continuo and no second lap ran.
    */
@@ -1170,6 +1176,10 @@ explanation you pressed on and then answers the gate.`,
     `Nothing was answered and nothing was spent: a second lap is outside the scope this one ran ` +
     `under, at the ${test} test. The gate is untouched, and a message in the request's thread ` +
     `says what the choices are.`,
+  reviseRefusedWalkFailed:
+    "Answering this gate did not finish, and no second lap started. Your words may already have " +
+    "reached it: go back and read how the gate stands before pressing again. The terminal " +
+    "running rondo has what it said.",
   reviseRefusedAfterGate:
     "The gate was answered with your words, and no second lap started: the approval would not " +
     "take another lap. What you wrote is recorded; a message in the request's thread says what " +
@@ -1686,6 +1696,10 @@ const JA: Partial<Chrome> = Object.freeze({
   reviseRefusedOutside: (test) =>
     `何も回答せず、何も消費していません。2 周目はこの周回が動いた範囲の外で、${test} の判定で` +
     `外れました。ゲートはそのままです。選択肢は依頼のスレッドに書かれたメッセージにあります。`,
+  reviseRefusedWalkFailed:
+    "ゲートへの回答が途中で終わり、2 周目も開始していません。書かれた言葉はすでにゲートに" +
+    "届いているかもしれません。もう一度押す前に、戻ってゲートの状態を確認してください。" +
+    "詳細は rondo を動かしているターミナルに出ています。",
   reviseRefusedAfterGate:
     "ゲートには書かれた言葉で回答しましたが、2 周目は開始していません。承認がもう 1 周回を" +
     "受け付けませんでした。書かれた内容は記録されています。選択肢は依頼のスレッドに書かれた" +

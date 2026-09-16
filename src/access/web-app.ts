@@ -709,6 +709,7 @@ export type ReviseRefusal =
   | "reviseRefusedNotSetUp"
   | "reviseRefusedNoContinuo"
   | "reviseRefusedOutside"
+  | "reviseRefusedWalkFailed"
   | "reviseRefusedAfterGate"
   | "reviseRefusedNotStarted";
 

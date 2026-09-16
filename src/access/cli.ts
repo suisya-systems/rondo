@@ -129,6 +129,7 @@ import {
   type Revised,
   type ReviseInput,
   RevisePort,
+  type ReviseRefusal,
   SayPort,
   type ScopedStartInput,
   type ScopeFormDraft,
@@ -4492,14 +4493,21 @@ async function revisePage(
   const continuo = startup.continuo;
   const ready = await revisionPreflight(record, input.successorId, input.body, store, continuo);
   if (ready.kind !== "ready") {
-    // continuo's own words went to the terminal `rondo web` runs in, as
-    // `walkGate`'s do; the page says the half a person can act on.
-    return {
-      ok: false,
-      why: "reviseRefusedNotSetUp",
-      note:
-        ready.kind === "refused" ? ready.reason : `the gate would not read: ${ready.result.kind}`,
-    };
+    // **Said to the terminal `rondo web` runs in, and not only returned**
+    // (rondo#233 S4, Codex round 1): the screen's sentence sends a person to
+    // that terminal for the detail, so the detail has to be there. A seam
+    // failure is relayed through `relayFailure`, which is where continuo's own
+    // diagnosis is printed for every other verb; its exit status is nobody's
+    // here, because this surface answers with a refusal and not a status.
+    const note =
+      ready.kind === "refused"
+        ? ready.reason
+        : `the gate for '${record.id}' would not read, so nothing was answered`;
+    if (ready.kind === "relayed") {
+      relayFailure("gate show", ready.result);
+    }
+    refuse(note);
+    return { ok: false, why: "reviseRefusedNotSetUp", note };
   }
   const gateId = record.gateId;
   const advisory = openAdvisoryRecord(storePath);
@@ -4508,6 +4516,12 @@ async function revisePage(
   // step, handed to `admitUnderScope` so a refused verdict walks nothing
   // (D-0070 section 2.1). A number halts the admission; null lets it go ahead.
   let gateAnswered = false;
+  // **Why the walk stopped, in the page's words, and never a guess**
+  // (rondo#233 S4, Codex round 1). A halted admission alone cannot say what a
+  // person needs to know -- whether their words reached the gate -- so each way
+  // of stopping names its own sentence here, and the one case rondo cannot
+  // settle says so rather than claiming the gate was untouched.
+  let halted: ReviseRefusal | null = null;
   const answerGate = async (): Promise<number | null> => {
     const walked = await walkGate(continuo, {
       db: planField(record, "db"),
@@ -4517,7 +4531,15 @@ async function revisePage(
       actorId: actor.actorId,
       body: input.body,
     });
+    // **A walk that failed part way is not a gate that was not touched.** The
+    // walk is present, deliver, ack (`walkGate`); an answer that reached
+    // continuo and then a delivery that did not still comes back `failed`, and
+    // whether the person's words are recorded is not a fact this process holds.
+    // Saying "nothing was answered" there would send them back to edit and
+    // press again over an answer already spent, so the sentence says what is
+    // true: go and look before pressing again.
     if (walked.kind === "failed") {
+      halted = "reviseRefusedWalkFailed";
       return 1;
     }
     // **A walk that sent nothing is not permission to start a lap** (the
@@ -4526,6 +4548,7 @@ async function revisePage(
     // is true and useful.
     if (!walked.answerSent) {
       sayReport(await resume(ports, record.id));
+      halted = "reviseRefusedGateClosed";
       return 1;
     }
     gateAnswered = true;
@@ -4534,7 +4557,11 @@ async function revisePage(
     // The second lap does not start until the first row is terminal, for
     // `commandRevise`'s reason: `reserve` would answer `occupied` and say so
     // about a lap the person had just answered.
-    return report.status === "closed" ? null : 1;
+    if (report.status === "closed") {
+      return null;
+    }
+    halted = "reviseRefusedAfterGate";
+    return 1;
   };
   const outcome = await admitUnderScope(
     {
@@ -4581,7 +4608,7 @@ async function revisePage(
   if (outcome.kind === "halted") {
     return {
       ok: false,
-      why: gateAnswered ? "reviseRefusedAfterGate" : "reviseRefusedNotSetUp",
+      why: halted ?? (gateAnswered ? "reviseRefusedAfterGate" : "reviseRefusedNotSetUp"),
       note: `nothing was admitted; the gate walk stopped with status ${String(outcome.status)}`,
     };
   }
