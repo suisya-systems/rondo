@@ -13193,6 +13193,42 @@ answer" below. Supersedes `D-0057`. Refs rondo#172, `D-0057`, `D-0054`, `D-0041`
 > - The writes the later slices of rondo#233 add (`revise`, `publish`) are added to the table by
 >   their own annotations. Nothing above is edited.
 
+> **Annotation (2026-09-16, from rondo#233 S4, asking for a change at the gate on the page).**
+> Added under the same answer of rondo's human gate as the three annotations above -- every write
+> the page adds beyond section 5a's table is a press, recorded as a row added to that table -- and
+> additive.
+> - **Section 5a's table gains a row: answering a lap's gate with a change, on one press** (`POST
+>   /revise`). It is the table's first row again -- *"`approve` at a lap's end gate, the person's
+>   press"* -- for the gate's other answer, and it needs the same press for the same reason: a gate
+>   answer is a person's act, and `D-0070` section 1.1 keeps it the person's under a scope too. Its
+>   own port and its own brand check (`RevisePort`), and not a second method on the port that
+>   answers `approve`, because that port's one word is `approve` (`D-0041` rule 7) and a holder of
+>   it must not become able to answer with anything else.
+> - **The body is a person's words, and the press is still a press.** The route takes the message
+>   limit rather than the press limit, because what a body is made of and what minting it needs are
+>   two questions: `POST /answer-ask` already sits on that pair. The words are trimmed inside the
+>   port and carried byte for byte after that (`D-0009`, `D-0027` rule 7); an empty box answers
+>   nothing and says so.
+> - **The organisation drafts and the person presses.** The box is drawn holding rondo's draft of
+>   what to change, which quotes the model review's findings with their severities and bases
+>   (`D-0065` rule 5.3's drafting duty, stood in for by deterministic code while `D-0071`'s drafter
+>   is out of scope). It is the field's content and never a placeholder, so what the press carries
+>   is what the person read; editing it is optional, and replacing all of it is ordinary.
+> - **The page passes the scope decision itself, and nobody types an id.** The approval is the one
+>   the lap being revised was admitted under, read off its `admission` consumption row
+>   (`scopeDecisionAdmitting`), so the second lap is counted where `D-0070` section 1.2 says it is.
+>   A lap admitted under no approval gets no revise press and one sentence saying why, rather than a
+>   button that would be refused. rondo mints the successor's iteration id at render (`D-0023`), so
+>   a double press names one lap and the id is held in flight while the walk runs.
+> - **What this row costs is what section 5a already priced, plus one thing the others do not
+>   have**: the press walks a gate, which cannot be taken back. So the preflight `revise` has always
+>   run before its walk is the *same function* the command line runs (`revisionPreflight`), the
+>   verdict is computed before the walk at the one call site (`D-0070` section 2), and the one
+>   refusal that can land after the gate was answered -- the store's re-test, section 2.4's named
+>   race -- says exactly that on the screen: the words are recorded and no lap ran.
+> - The write S5 adds (`publish`) is added to the table by its own annotation. Nothing above is
+>   edited.
+
 `D-0057` priced four frameworks by **the lines they take over** (96 of 1,233) and by **whether the
 served bytes can still be checked without a build**, and kept the page hand-written. It never asked
 whether the screen an operator looks at reaches the level engineers now hold a developer tool to.

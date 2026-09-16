@@ -39,7 +39,7 @@ import {
   startContinuo,
   type VerifiedContinuo,
 } from "../continuo/invoker.js";
-import type { ContinuoResult, ObservedSession } from "../continuo/protocol.js";
+import type { ContinuoResult, GateDetail, ObservedSession } from "../continuo/protocol.js";
 import { probeUnixSocket, workerSandboxRefusal } from "../continuo/sandbox.js";
 import { lapTranscriptDirectory } from "../continuo/transcript.js";
 import { allocate } from "../refrain/allocator.js";
@@ -126,6 +126,10 @@ import type { LapMaterialRead, ScopeDrafted } from "./web.js";
 import {
   AnswerPort,
   type ClaimRefusal,
+  type Revised,
+  type ReviseInput,
+  RevisePort,
+  type ReviseRefusal,
   SayPort,
   type ScopedStartInput,
   type ScopeFormDraft,
@@ -1814,6 +1818,19 @@ export async function main(
                     planFile,
                     input,
                   ),
+              ),
+        // **The press is checked inside this port too** (rondo#233 S4): a gate
+        // answered with a change and the lap it starts are one act, and nothing
+        // reaches it without a press. Null on `scope`'s condition, and for its
+        // reason: answering a gate and admitting a lap both need an actor the
+        // allowlist accepts. **No plan file is read**: the second lap's plan is
+        // composed from the predecessor's own (`revisionPlan`).
+        revise:
+          sender === null || "refusal" in sender
+            ? null
+            : new RevisePort(
+                async (input) =>
+                  await reviseFromPage(environment, store, opened.path, sender.actorId, input),
               ),
         // Read for the same reason and on the same condition: the material is
         // what a person is shown before they press, so it is drawn exactly
@@ -4382,6 +4399,289 @@ export async function startScopedFromPage(
 /** Every scoped start this process has in flight, by iteration id. */
 const starting = new Map<string, Promise<Started>>();
 
+/**
+ * One press of the page's *ask for a change* button: the gate answered with the
+ * person's words, and the second lap run under the approval the first ran under
+ * (rondo#233 S4, D-0070).
+ *
+ * **It is `commandRevise`'s scoped arm over a row it did not parse for**, the
+ * way `answerFromPage` is `commandAnswer`'s writing half: the preflight is
+ * literally the same function ({@link revisionPreflight}), and the walk, the
+ * settlement and the admission are the same calls in the same order, with
+ * `admitUnderScope` running the walk between the verdict and the admission
+ * (D-0070 section 2). What differs is only what a screen can do with a refusal.
+ *
+ * **Two presses of one form are one revise, even when they overlap**, for
+ * `startScopedFromPage`'s reason and more sharply: the second would walk a gate
+ * the first is walking. The successor's id is minted per draw, so it is the key
+ * a double click arrives under.
+ *
+ * **But only when the second press carries the same words** (Codex round 3).
+ * A person can reach the same form again -- the browser's Back button -- edit
+ * what to change and press, and the id it carries is still the one minted for
+ * that draw. Joining the press already running would answer *sent* over words
+ * that were never sent, which is the failure this whole screen exists not to
+ * have. So a second press with different words is refused instead, and the
+ * refusal says the first one is still running.
+ */
+export async function reviseFromPage(
+  environment: Readonly<Record<string, string | undefined>>,
+  store: IterationStore,
+  storePath: string,
+  approver: string,
+  input: ReviseInput,
+): Promise<Revised> {
+  const already = revising.get(input.successorId);
+  if (already !== undefined) {
+    return already.body === input.body
+      ? await already.running
+      : {
+          ok: false,
+          why: "reviseRefusedStillRunning",
+          note:
+            `a revise of '${input.iterationId}' as '${input.successorId}' is already running, ` +
+            "and it carries other words",
+        };
+  }
+  const running = revisePage(environment, store, storePath, approver, input);
+  revising.set(input.successorId, { running, body: input.body });
+  try {
+    return await running;
+  } finally {
+    revising.delete(input.successorId);
+  }
+}
+
+/**
+ * Every revise press this process has in flight, by the successor's id, with
+ * the words it is carrying: a second press of the same form joins the first
+ * only when the two say the same thing.
+ */
+const revising = new Map<string, { running: Promise<Revised>; body: string }>();
+
+async function revisePage(
+  environment: Readonly<Record<string, string | undefined>>,
+  store: IterationStore,
+  storePath: string,
+  approver: string,
+  input: ReviseInput,
+): Promise<Revised> {
+  const actor = approvedActor(approver, environment);
+  if ("refusal" in actor) {
+    return { ok: false, why: "reviseRefusedNotStarted", note: actor.refusal };
+  }
+  const found = await store.read(input.iterationId);
+  if (found.kind !== "read") {
+    return {
+      ok: false,
+      why: "reviseRefusedGateClosed",
+      note:
+        found.kind === "absent"
+          ? `There is no iteration '${input.iterationId}'.`
+          : `That iteration row would not read: ${found.reason}`,
+    };
+  }
+  const record = found.record;
+  // `answerFromPage`'s two refusals, for its reasons: a terminal row's gate is
+  // not this surface's to close, and a row naming no gate has nothing to
+  // answer. Neither draws a button; both catch a page that went stale.
+  if (isTerminal(record.status) || record.gateId === null) {
+    return {
+      ok: false,
+      why: "reviseRefusedGateClosed",
+      note: `iteration '${record.id}' is ${record.status}, and no gate is open on it.`,
+    };
+  }
+  // **The approval is re-read here, and the form's is only ever compared
+  // against it** (rondo#233 S4, Codex round 2). The page draws the decision the
+  // lap being revised was admitted under so that nobody types one; a hidden
+  // field is still a thing a person can edit, and a different approval that
+  // happens to cover the same request, workspace and agent type would be tested
+  // and charged instead -- past the exhausted budget of the one this lineage
+  // actually ran on. So what D-0070 section 1.2 says is true by construction
+  // rather than by the form's good behaviour: no admission row, or a decision
+  // that is not the one on it, answers nothing and walks no gate.
+  const admittedUnder = await openAdvisoryRecord(storePath).scopeDecisionAdmitting(record.id);
+  if (admittedUnder === null || admittedUnder !== input.scopeDecisionId) {
+    return {
+      ok: false,
+      why: "reviseRefusedNotItsScope",
+      note:
+        admittedUnder === null
+          ? `iteration '${record.id}' was not admitted under any approval, so there is nothing ` +
+            "to count a second lap against"
+          : `iteration '${record.id}' was admitted under '${admittedUnder}', and the press named ` +
+            `'${input.scopeDecisionId}'`,
+    };
+  }
+  // **Written before the press acts on it** (D-0042 rules 2 and 3), as the
+  // approve press writes it: the framing a person pressed on is the same
+  // framing whichever of the gate's two answers they chose.
+  const shown = await recordPagePress(
+    advisoryPorts(store, storePath, () => {}),
+    input.iterationId,
+  );
+  if (!shown.ok) {
+    return { ok: false, why: "reviseRefusedNotSetUp", note: shown.note };
+  }
+  const startup = await startContinuo(environment);
+  if (startup.kind === "refused") {
+    return {
+      ok: false,
+      why: "reviseRefusedNoContinuo",
+      note: `continuo is not usable: ${startup.reason}`,
+    };
+  }
+  const continuo = startup.continuo;
+  const ready = await revisionPreflight(record, input.successorId, input.body, store, continuo);
+  if (ready.kind !== "ready") {
+    // **Said to the terminal `rondo web` runs in, and not only returned**
+    // (rondo#233 S4, Codex round 1): the screen's sentence sends a person to
+    // that terminal for the detail, so the detail has to be there. A seam
+    // failure is relayed through `relayFailure`, which is where continuo's own
+    // diagnosis is printed for every other verb; its exit status is nobody's
+    // here, because this surface answers with a refusal and not a status.
+    const note =
+      ready.kind === "refused"
+        ? ready.reason
+        : `the gate for '${record.id}' would not read, so nothing was answered`;
+    if (ready.kind === "relayed") {
+      relayFailure("gate show", ready.result);
+    }
+    refuse(note);
+    return { ok: false, why: "reviseRefusedNotSetUp", note };
+  }
+  const gateId = record.gateId;
+  const advisory = openAdvisoryRecord(storePath);
+  const ports = conductorPorts(continuo, store, advisory);
+  // **The gate walk and the first row's settlement**, `commandRevise`'s own
+  // step, handed to `admitUnderScope` so a refused verdict walks nothing
+  // (D-0070 section 2.1). A number halts the admission; null lets it go ahead.
+  let gateAnswered = false;
+  // **Why the walk stopped, in the page's words, and never a guess**
+  // (rondo#233 S4, Codex round 1). A halted admission alone cannot say what a
+  // person needs to know -- whether their words reached the gate -- so each way
+  // of stopping names its own sentence here, and the one case rondo cannot
+  // settle says so rather than claiming the gate was untouched.
+  let halted: ReviseRefusal | null = null;
+  const answerGate = async (): Promise<number | null> => {
+    const walked = await walkGate(continuo, {
+      db: planField(record, "db"),
+      gateId,
+      destinationDir: planField(record, "endpoint_destination_dir"),
+      holder: planField(record, "lease_claimant_id"),
+      actorId: actor.actorId,
+      body: input.body,
+    });
+    // **A walk that failed part way is not a gate that was not touched.** The
+    // walk is present, deliver, ack (`walkGate`); an answer that reached
+    // continuo and then a delivery that did not still comes back `failed`, and
+    // whether the person's words are recorded is not a fact this process holds.
+    // Saying "nothing was answered" there would send them back to edit and
+    // press again over an answer already spent, so the sentence says what is
+    // true: go and look before pressing again.
+    if (walked.kind === "failed") {
+      halted = "reviseRefusedWalkFailed";
+      return 1;
+    }
+    // **A walk that sent nothing is not permission to start a lap** (the
+    // predecessor's own check): somebody else closed the gate in between, so
+    // the instruction reached nothing. The row is still settled, because that
+    // is true and useful.
+    if (!walked.answerSent) {
+      sayReport(await resume(ports, record.id));
+      halted = "reviseRefusedGateClosed";
+      return 1;
+    }
+    gateAnswered = true;
+    const report = await resume(ports, record.id);
+    sayReport(report);
+    // The second lap does not start until the first row is terminal, for
+    // `commandRevise`'s reason: `reserve` would answer `occupied` and say so
+    // about a lap the person had just answered.
+    if (report.status === "closed") {
+      return null;
+    }
+    // **Not the scope's refusal** (Codex round 2): the store's re-test has not
+    // run, no stop was written into the request's thread, and the after-the-gate
+    // sentence sends a person to a message that is not there.
+    halted = "reviseRefusedNotSettled";
+    return 1;
+  };
+  const outcome = await admitUnderScope(
+    {
+      store,
+      record: advisory,
+      nowMs: Date.now,
+      beforeAdmit: answerGate,
+      admit: (plan, id, supersedes, requestMessageId, scopeSpend) =>
+        admit(
+          ports,
+          unpromptedPorts(store, storePath),
+          plan,
+          START_POLICY,
+          id,
+          supersedes,
+          null,
+          requestMessageId,
+          scopeSpend,
+        ),
+    },
+    input.scopeDecisionId,
+    {
+      kind: "redo",
+      iterationId: input.successorId,
+      plan: ready.plan,
+      predecessorId: record.id,
+      requestMessageId: record.requestMessageId,
+    },
+  );
+  if (outcome.kind === "refused") {
+    // **Which side of the gate the refusal landed on is the whole of what the
+    // person needs** (D-0070 section 2.4): a verdict refused before the walk
+    // leaves the gate open and nothing said, and the store's re-test after it
+    // leaves their words recorded at continuo with no lap running.
+    return gateAnswered
+      ? { ok: false, why: "reviseRefusedAfterGate", note: outcome.reason }
+      : {
+          ok: false,
+          why: "reviseRefusedOutside",
+          test: outcome.test,
+          note: `the ${outcome.verdict} verdict at the ${outcome.test} test: ${outcome.reason}`,
+        };
+  }
+  if (outcome.kind === "halted") {
+    return {
+      ok: false,
+      why: halted ?? (gateAnswered ? "reviseRefusedAfterGate" : "reviseRefusedNotSetUp"),
+      note: `nothing was admitted; the gate walk stopped with status ${String(outcome.status)}`,
+    };
+  }
+  const report = outcome.report;
+  sayReport(report);
+  if (report.iterationId === null) {
+    // The admission itself did not name a lap, which is not the approval
+    // refusing one either (Codex round 2): the terminal has the report's lines.
+    return {
+      ok: false,
+      why: "reviseRefusedNotSettled",
+      note: report.lines.join("\n"),
+    };
+  }
+  // A lap this button started gets the reading a lap started from a terminal
+  // gets (`startScoped`'s reason, D-0065): otherwise its gate would open with
+  // the *Model review* half empty for ever.
+  if (report.status === "awaiting_human") {
+    await sayGateOpen(() =>
+      takeModelReading(
+        modelReviewPorts(continuo, store, ports.thread ?? null),
+        report.iterationId ?? input.successorId,
+      ),
+    );
+  }
+  return { ok: true, note: `iteration '${input.successorId}' was admitted` };
+}
+
 async function startScoped(
   environment: Readonly<Record<string, string | undefined>>,
   store: IterationStore,
@@ -4643,6 +4943,140 @@ export function revisionBlocker(input: {
 }
 
 /**
+ * What has to be true before a `revise` may walk a gate, and what the walk and
+ * the admission then need.
+ *
+ * `relayed` is continuo's own failure to show the gate, which the command line
+ * relays verbatim (`D-0015` rule 7) and a page says in its own words.
+ */
+export type RevisionReady =
+  | { readonly kind: "refused"; readonly reason: string }
+  | { readonly kind: "relayed"; readonly result: ContinuoResult<unknown> }
+  | { readonly kind: "ready"; readonly plan: RunPlan; readonly gate: GateDetail };
+
+/**
+ * Everything that happens before a `revise` answers a gate, as one function.
+ *
+ * **Extracted so the terminal and the page cannot drift** (rondo#233 S4, the
+ * argument `answerFromPage` makes for reaching `walkGate` and `resume` through
+ * the same calls the command line makes). Every step here is a read or a pure
+ * composition: the successor's plan, the gate document, the allocation, the
+ * store's row, git's answer about the branch and continuo's about the run id.
+ * **Nothing in it can be taken back**, which is the property that lets both
+ * surfaces run it before the walk and refuse for free.
+ *
+ * The order is `commandRevise`'s own, unchanged: the plan is composed and
+ * validated first (`D-0027` rule 6), and `revisionBlocker` has the last word.
+ */
+export async function revisionPreflight(
+  record: IterationRecord,
+  successorId: string,
+  body: string,
+  store: Pick<IterationStore, "read">,
+  continuo: VerifiedContinuo,
+): Promise<RevisionReady> {
+  const successor = revisionPlan({
+    predecessor: record,
+    iterationId: successorId,
+    instruction: body,
+  });
+  if (successor.kind === "refused") {
+    return {
+      kind: "refused",
+      reason: `The second lap's plan was refused, and the gate was not touched: ${successor.reason}`,
+    };
+  }
+  if (record.gateId === null) {
+    return {
+      kind: "refused",
+      reason: `iteration '${record.id}' is ${record.status}, and no gate is open on it.`,
+    };
+  }
+  const observed = await showGate(continuo, { db: planField(record, "db"), gateId: record.gateId });
+  if (observed.kind !== "answered") {
+    return { kind: "relayed", result: observed };
+  }
+  const gate = observed.payload;
+
+  // The last two refusals, and the last things that cost nothing. See
+  // `revisionBlocker`: the id the successor will be reserved under is not part
+  // of the plan that was just validated, and a gate continuo has already closed
+  // is walked successfully and silently.
+  //
+  // **The successor's branch and workspace are derived here rather than read
+  // off the plan** (`D-0023` rule 9): the plan no longer carries them, and what
+  // the preflight has to ask git about is the name `admit()` will actually
+  // mint. Deriving it twice -- once here, once at admission -- is safe because
+  // the derivation is a pure function of the id, which is the property that
+  // makes the check meaningful at all.
+  const allocation = allocate(successorId, successor.plan.workspaceRoot);
+  if (allocation.kind === "refused") {
+    return {
+      kind: "refused",
+      reason: `The second lap's iteration id was refused: ${allocation.reason}`,
+    };
+  }
+  const successorTopicBranch = allocation.allocation.topicBranch;
+  const successorWorkspace = allocation.allocation.workspace;
+  const existing = await store.read(successorId);
+  // **Asked of git, and a refusal when git will not say.** The branch is the
+  // one preflight that needs a process, so it is `forge.ts`'s (this module has
+  // no spawn binding, and D-0025 rule 7 is that property rather than a
+  // promise). An unreadable answer is refused rather than read as room to
+  // proceed: the next thing this command does cannot be undone.
+  const branch = await inspectTopicBranch({
+    repository: successor.plan.repository,
+    topicBranch: successorTopicBranch,
+  });
+  if (branch.kind === "malformed") {
+    return {
+      kind: "refused",
+      reason:
+        `'${successorTopicBranch}' is not a name git will accept for a branch, so nothing ` +
+        "could create it -- and a name that cannot exist reads as a name that is free. Nothing " +
+        "was touched. Choose another --iteration-id.",
+    };
+  }
+  if (branch.kind !== "read") {
+    return {
+      kind: "refused",
+      reason:
+        `git could not say whether '${successorTopicBranch}' already exists in ` +
+        `${successor.plan.repository}: ${branch.reason}. continuo requires a topic branch that ` +
+        "is not there, and rondo will not answer the gate without knowing. Nothing was touched.",
+    };
+  }
+  // **Asked of continuo, and only an answer is a fact.** This is the field
+  // `D-0027` rule 9 left open: `run admit` refuses a run id the control plane
+  // already holds, and for a revision that refusal arrives after the gate is
+  // spent. An answered document means the id is taken; every other outcome --
+  // continuo refusing, a database rondo cannot read, a seam that did not answer
+  // -- leaves this command as it was, because a verb driven to learn about an
+  // absence must not turn continuo's refusals into a taxonomy (`D-0015`
+  // rule 2). The database is the predecessor's own, which `gate show` has just
+  // read successfully.
+  const successorRun = await showRun(continuo, {
+    db: planField(record, "db"),
+    runId: allocation.allocation.runId,
+  });
+  const blocker = revisionBlocker({
+    predecessorId: record.id,
+    gateOutcome: gate.outcome,
+    successorId,
+    successorRow: existing.kind,
+    successorRunId: allocation.allocation.runId,
+    successorRunStatus: successorRun.kind === "answered" ? successorRun.payload.status : null,
+    topicBranch: successorTopicBranch,
+    topicBranchExists: branch.exists,
+    workspace: successorWorkspace,
+    workspaceExists: existsSync(successorWorkspace),
+  });
+  return blocker === null
+    ? { kind: "ready", plan: successor.plan, gate }
+    : { kind: "refused", reason: blocker };
+}
+
+/**
  * Door two and a half: answer the gate with a change, and run a second lap.
  *
  * **The defect this closes, stated plainly.** `gate_options` has offered
@@ -4729,93 +5163,18 @@ async function commandRevise(
     return 0;
   }
 
-  // Composed and validated first. Nothing below this line is undoable.
-  const successor = revisionPlan({
-    predecessor: record,
-    iterationId: successorId,
-    instruction: body,
-  });
-  if (successor.kind === "refused") {
-    return refuse(
-      `The second lap's plan was refused, and the gate was not touched: ${successor.reason}`,
-    );
+  // **Composed, read and preflighted first. Nothing below the walk is undoable.**
+  // One function, shared with the page's revise press, so the two surfaces
+  // cannot drift on what has to be true before a gate is spent.
+  const ready = await revisionPreflight(record, successorId, body, store, continuo);
+  if (ready.kind === "relayed") {
+    return relayFailure("gate show", ready.result);
   }
-
-  const observed = await showGate(continuo, { db: planField(record, "db"), gateId: record.gateId });
-  if (observed.kind !== "answered") {
-    return relayFailure("gate show", observed);
+  if (ready.kind === "refused") {
+    return refuse(ready.reason);
   }
-  const gate = observed.payload;
-
-  // The last two refusals, and the last things that cost nothing. See
-  // `revisionBlocker`: the id the successor will be reserved under is not part
-  // of the plan that was just validated, and a gate continuo has already closed
-  // is walked successfully and silently.
-  //
-  // **The successor's branch and workspace are derived here rather than read
-  // off the plan** (`D-0023` rule 9): the plan no longer carries them, and what
-  // the preflight has to ask git about is the name `admit()` will actually
-  // mint. Deriving it twice -- once here, once at admission -- is safe because
-  // the derivation is a pure function of the id, which is the property that
-  // makes the check meaningful at all.
-  const allocation = allocate(successorId, successor.plan.workspaceRoot);
-  if (allocation.kind === "refused") {
-    return refuse(`The second lap's iteration id was refused: ${allocation.reason}`);
-  }
-  const successorTopicBranch = allocation.allocation.topicBranch;
-  const successorWorkspace = allocation.allocation.workspace;
-  const existing = await store.read(successorId);
-  // **Asked of git, and a refusal when git will not say.** The branch is the
-  // one preflight that needs a process, so it is `forge.ts`'s (this module has
-  // no spawn binding, and D-0025 rule 7 is that property rather than a
-  // promise). An unreadable answer is refused rather than read as room to
-  // proceed: the next thing this command does cannot be undone.
-  const branch = await inspectTopicBranch({
-    repository: successor.plan.repository,
-    topicBranch: successorTopicBranch,
-  });
-  if (branch.kind === "malformed") {
-    return refuse(
-      `'${successorTopicBranch}' is not a name git will accept for a branch, so nothing ` +
-        "could create it -- and a name that cannot exist reads as a name that is free. Nothing " +
-        "was touched. Choose another --iteration-id.",
-    );
-  }
-  if (branch.kind !== "read") {
-    return refuse(
-      `git could not say whether '${successorTopicBranch}' already exists in ` +
-        `${successor.plan.repository}: ${branch.reason}. continuo requires a topic branch that ` +
-        "is not there, and rondo will not answer the gate without knowing. Nothing was touched.",
-    );
-  }
-  // **Asked of continuo, and only an answer is a fact.** This is the field
-  // `D-0027` rule 9 left open: `run admit` refuses a run id the control plane
-  // already holds, and for a revision that refusal arrives after the gate is
-  // spent. An answered document means the id is taken; every other outcome --
-  // continuo refusing, a database rondo cannot read, a seam that did not answer
-  // -- leaves this command as it was, because a verb driven to learn about an
-  // absence must not turn continuo's refusals into a taxonomy (`D-0015`
-  // rule 2). The database is the predecessor's own, which `gate show` has just
-  // read successfully.
-  const successorRun = await showRun(continuo, {
-    db: planField(record, "db"),
-    runId: allocation.allocation.runId,
-  });
-  const blocker = revisionBlocker({
-    predecessorId: record.id,
-    gateOutcome: gate.outcome,
-    successorId,
-    successorRow: existing.kind,
-    successorRunId: allocation.allocation.runId,
-    successorRunStatus: successorRun.kind === "answered" ? successorRun.payload.status : null,
-    topicBranch: successorTopicBranch,
-    topicBranchExists: branch.exists,
-    workspace: successorWorkspace,
-    workspaceExists: existsSync(successorWorkspace),
-  });
-  if (blocker !== null) {
-    return refuse(blocker);
-  }
+  const successor = { plan: ready.plan };
+  const gate = ready.gate;
 
   // **The gate walk and the first row's settlement, as one step** that returns
   // null when the second lap may start and an exit status when it may not. An

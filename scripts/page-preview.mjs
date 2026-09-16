@@ -31,6 +31,7 @@ let modules;
 try {
   modules = {
     sqlite: await import(dist("store/sqlite.js")),
+    records: await import(dist("store/records.js")),
     plan: await import(dist("refrain/plan.js")),
     allocator: await import(dist("refrain/allocator.js")),
     cli: await import(dist("access/cli.js")),
@@ -232,6 +233,168 @@ await endedLap("lap-preview-0001", 1.42, 22 * 60 * 1000, null);
 await endedLap("lap-preview-0002", 0.86, 14 * 60 * 1000, null);
 await endedLap("lap-preview-0003", 2.15, 31 * 60 * 1000, "lap-preview-0001");
 
+// An approved scope over the same request, recorded through the store's own
+// verbs in the order `recordScopeFromPage` uses (rondo#233 S4): record the
+// scope, read its digest back, then approve it. The agent-type digest is
+// already `iteration`-held from the three ended laps above, so this scope
+// records no `agent_type_record` of its own -- an operator's scope may, but
+// D-0069 section 1's other door (an iteration row already carrying the
+// digest) is open here and a second write would only repeat it. Budgets leave
+// a lap and a review round for the waiting lap below to spend, and an expiry
+// nowhere near the "now" this script computed.
+const scopeId = "scope-preview-0001";
+const scopePayload = modules.records.scopePayloadWithDefaults({
+  requests: [requestMessageId],
+  workspaces: [{ repository, workspace_root: workspaceRoot }],
+  agent_types: [drafted.kind === "drafted" ? drafted.agentTypeDigest : ""],
+  budgets: {
+    laps: 4,
+    review_rounds: 3,
+    cost_usd: 50,
+    cost_reserve_usd: 5,
+    expires_at_ms: now + 24 * 60 * 60 * 1000,
+  },
+  severity_threshold: "major",
+  outward_acts: [],
+  irreversible_additions: [],
+});
+const scopeWritten = await record.recordScope({
+  scopeId,
+  payload: scopePayload,
+  supersedesScopeId: null,
+  authorKind: "operator",
+  authorId: "ada",
+  bases: [],
+  createdAtMs: now,
+  agentTypeRecords: [],
+});
+if (scopeWritten.kind !== "recorded") {
+  refuse(`the preview scope did not record: ${JSON.stringify(scopeWritten)}`);
+}
+const scopeStored = await record.readScope(scopeId);
+if (scopeStored.kind !== "read") {
+  refuse(`the preview scope will not read back: ${JSON.stringify(scopeStored)}`);
+}
+const scopeDecisionId = `scope-decision-${scopeId}`;
+const scopeDecided = await record.recordScopeDecision({
+  scopeDecisionId,
+  scopeId,
+  scopeDigest: scopeStored.scope.scopeDigest,
+  outcome: "approved",
+  actorId: "ada",
+  recordedBy: "rondo/page",
+  decidedAtMs: now,
+});
+if (scopeDecided.kind !== "recorded") {
+  refuse(`the preview scope decision did not record: ${JSON.stringify(scopeDecided)}`);
+}
+
+// One more lap, reserved under that approval and left waiting at the gate
+// (rondo#233 S4): the screen this whole preview exists to reach. It carries
+// two readings -- the deterministic one every lap gets, and a model reading
+// with a blocker and a major finding -- so the gate view draws the red line
+// beside approve and rondo's own revise draft has real findings to quote.
+const waitingLapId = "lap-preview-0004";
+const waitingGateId = `gate-${waitingLapId}`;
+const waitingReserved = await store.reserve({
+  id: waitingLapId,
+  request: "teach rondo to count",
+  plan: planDocument(waitingLapId),
+  spend: null,
+  scopeSpend: {
+    scopeDecisionId,
+    proposalId: null,
+    agentTypeDigest: drafted.kind === "drafted" ? drafted.agentTypeDigest : "",
+  },
+  nowMs: now - 8 * 60 * 1000,
+  supersedesIterationId: null,
+  requestMessageId,
+  runId: `rondo-${waitingLapId}`,
+  topicBranch: `rondo/${waitingLapId}`,
+  workspace: join(workspaceRoot, waitingLapId),
+});
+if (waitingReserved.kind !== "reserved") {
+  refuse(`the preview waiting lap did not reserve: ${JSON.stringify(waitingReserved)}`);
+}
+for (const [from, to, fields] of [
+  ["planned", "admitting", {}],
+  ["admitting", "admitted", {}],
+  [
+    "admitted",
+    "performing",
+    {
+      agentTypeDigest: drafted.kind === "drafted" ? drafted.agentTypeDigest : null,
+      modelTier: "standard",
+    },
+  ],
+]) {
+  const moved = await store.transition(waitingLapId, from, to, fields, now);
+  if (moved.kind !== "transitioned") {
+    refuse(`the preview waiting lap did not reach '${to}': ${JSON.stringify(moved)}`);
+  }
+}
+const checksReading = {
+  drafter: modules.records.DETERMINISTIC_READING_DRAFTER,
+  verdict: "clear",
+  findings: [],
+  evidence: {
+    baseRef: "refs/remotes/origin/main",
+    baseCommit: "b".repeat(40),
+    tipCommit: "a".repeat(40),
+    materialDigest: `sha256:${"c".repeat(64)}`,
+    commitCount: 3,
+    fileCount: 4,
+  },
+  unavailableReason: null,
+};
+const finalTransition = await store.transition(
+  waitingLapId,
+  "performing",
+  "awaiting_human",
+  { gateId: waitingGateId },
+  now,
+  checksReading,
+);
+if (finalTransition.kind !== "transitioned") {
+  refuse(
+    `the preview waiting lap did not reach 'awaiting_human': ${JSON.stringify(finalTransition)}`,
+  );
+}
+const modelReading = {
+  drafter: modules.records.modelReadingDrafter("gpt-6-astra"),
+  verdict: "concerns",
+  findings: [
+    "the count line reads the iteration table directly instead of the ledger's own tally",
+    "a redo's cost is added into the sum before its own cost is read",
+  ],
+  graded: [
+    {
+      severity: "blocker",
+      bases: [{ kind: "file", path: "src/access/web.tsx", line: 214 }],
+      basisResolved: true,
+    },
+    {
+      severity: "major",
+      bases: [{ kind: "file", path: "src/store/sqlite.ts", line: 118 }],
+      basisResolved: true,
+    },
+  ],
+  evidence: {
+    baseRef: "refs/remotes/origin/main",
+    baseCommit: "b".repeat(40),
+    tipCommit: "a".repeat(40),
+    materialDigest: `sha256:${"c".repeat(64)}`,
+    commitCount: 3,
+    fileCount: 4,
+    deliveredDigest: `sha256:${"d".repeat(64)}`,
+  },
+  unavailableReason: null,
+};
+const appended = await store.appendReading(waitingLapId, modelReading, now);
+if (appended.kind !== "appended") {
+  refuse(`the preview model reading did not append: ${JSON.stringify(appended)}`);
+}
+
 const base = "http://127.0.0.1:7334";
 process.stdout.write(
   [
@@ -240,7 +403,16 @@ process.stdout.write(
     drafted.kind === "drafted"
       ? `agent:   ${drafted.agentTypeDigest}`
       : `agent:   the plan was refused: ${drafted.reason}`,
-    `open:    ${base}/?scope=${requestMessageId}&lang=en`,
+    `gate id: ${waitingGateId}`,
+    "",
+    "The gate view of the waiting lap is the S4 screen (rondo#233): its approve bar",
+    "offers revise beside approve, and the revise form's draft quotes the blocker and",
+    "major findings seeded onto it. Open this first, at 1280 and at 420 wide:",
+    `open:    ${base}/?answer=${waitingLapId}&lang=en`,
+    `also:    ${base}/?answer=${waitingLapId}&lang=ja`,
+    "",
+    "The scope screens from S3 are still here:",
+    `also:    ${base}/?scope=${requestMessageId}&lang=en`,
     `also:    ${base}/?scope=${requestMessageId}&lang=ja`,
     `also:    ${base}/?requests=open&lang=en`,
     "",

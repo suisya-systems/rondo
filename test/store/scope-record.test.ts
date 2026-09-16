@@ -630,6 +630,31 @@ test("spent is per approval and per admission: another decision's or another kin
   });
 });
 
+test("the approval a lap was admitted under is read back off its admission row (rondo#233 S4)", async () => {
+  const { connection, record } = await approved();
+  // Nothing yet: a lap admitted under no approval has no row to read, and the
+  // page offers no in-scope revise on one.
+  expect(await record.scopeDecisionAdmitting("i-a")).toBe(null);
+  admitted(connection, "i-a", null);
+  expect(await record.scopeDecisionAdmitting("i-a")).toBe("sd-0001");
+  // Per subject and per kind: another lap's row, and a row of a kind that is
+  // not an admission, say nothing about this lap.
+  expect(await record.scopeDecisionAdmitting("i-b")).toBe(null);
+  admitted(connection, "i-c", null, "sd-0001", "push_branch");
+  expect(await record.scopeDecisionAdmitting("i-c")).toBe(null);
+  // **Two approvals claiming one admission is not a choice this reader makes.**
+  // `reserve()` writes one row per lap, so a second is a store that cannot
+  // happen -- and the honest answer to "which scope is this under" is then
+  // none, not whichever the database listed first.
+  connection
+    .prepare(
+      "INSERT INTO scope_consumption (scope_decision_id, act_kind, subject_id, proposal_id, " +
+        "consumed_at_ms) VALUES ('sd-0002', 'admission', 'i-a', NULL, 1)",
+    )
+    .run();
+  expect(await record.scopeDecisionAdmitting("i-a")).toBe(null);
+});
+
 // --- The spend inside reserve() (D-0066 rule 4.3) ---------------------------
 
 const refusalOf = async (

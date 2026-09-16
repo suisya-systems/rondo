@@ -25,6 +25,7 @@ import { expect, test } from "vitest";
 import {
   recordPagePress,
   recordScopeFromPage,
+  reviseFromPage,
   scopeDraftingFromPlan,
   startScopedFromPage,
 } from "../../src/access/cli.js";
@@ -147,10 +148,18 @@ function portsOver(
   // rather than a member of the ports, because five steps decide it per
   // request; `null` is a host that said nothing.
   hostLanguage: string | null = null,
+  // **The approval the lap at the gate was admitted under** (rondo#233 S4), or
+  // null for a lap admitted under none -- which is the real reader's answer for
+  // every row these tests reserve, and the state the gate says *no change from
+  // here* in. The row itself is `test/store/scope-record.test.ts`'s.
+  scopeDecision: string | null = null,
 ): ServedPorts {
   return {
     store: world.store,
-    record: world.record,
+    record:
+      scopeDecision === null
+        ? world.record
+        : { ...world.record, scopeDecisionAdmitting: async () => scopeDecision },
     hostLanguage,
     now: () => 5_000,
     // The page draws `inbox`'s lines, so it carries `inbox`'s one outward
@@ -178,6 +187,10 @@ function portsOver(
     // no plan this page test draws no scope form (rondo#233 S3).
     plan: null,
     scope: null,
+    // The revise press's own door is `test/access/web-app.test.ts`'s, as the
+    // approve press's is; what this file tests is the form the page draws for
+    // it (rondo#233 S4).
+    revise: null,
   };
 }
 
@@ -2362,11 +2375,15 @@ test("the answer view draws both readings side by side from the rows, with the w
   // No recommendation anywhere on the gate.
   expect(html.toLowerCase()).not.toContain("recommend");
 
-  // The warning is inside the form, before the button, and links to the card.
-  const form = html.slice(html.indexOf('<form method="post"'), html.indexOf("</form>"));
-  expect(form).toContain("The model review raised 1 blocker and 1 major.");
-  expect(form.indexOf('id="model-raised"')).toBeLessThan(form.indexOf('type="submit"'));
-  expect(form).toContain('<a href="#model-review"');
+  // The warning is inside the bar, before the button, and links to the card.
+  // **The bar and not the form** since rondo#233 S4 put the gate's second
+  // answer beside the first: two forms cannot nest, so what sticks to the
+  // bottom of the window is the `div` around them.
+  const bar = html.slice(html.indexOf('id="answer-bar"'));
+  const form = html.slice(html.indexOf('<form id="approve-form"'), html.indexOf("</form>"));
+  expect(bar).toContain("The model review raised 1 blocker and 1 major.");
+  expect(bar.indexOf('id="model-raised"')).toBeLessThan(bar.indexOf('type="submit"'));
+  expect(bar).toContain('<a href="#model-review"');
   // The claim box rides the press, keyed per gate, and is not cut by the browser.
   expect(form).toMatch(/<textarea name="verified" rows="1" data-draft="claim:i-0001:gate-i-0001"/);
   expect(form).not.toContain("maxlength");
@@ -2374,14 +2391,175 @@ test("the answer view draws both readings side by side from the rows, with the w
   expect(html).not.toContain("may still arrive");
   // Both verdicts pinned in the bar, the model's worst finding first in its pill
   // (the S2 design pass), and what the press records folded shut by default.
-  expect(form).toContain('id="bar-readings"');
-  expect(form).toContain(">1 blocker · 1 major · 1 nit</span>");
+  expect(bar).toContain('id="bar-readings"');
+  expect(bar).toContain(">1 blocker · 1 major · 1 nit</span>");
   expect(html).toMatch(
     /<details id="records" class="group[^"]*"><summary[^>]*>[\s\S]*?What approve records \(\d+ fields\)/,
   );
 
   // The full text is still in the document, in its fold.
   expect(html).toMatch(/<details id="material-text"[\s\S]*fence {3}the whole text/);
+});
+
+/** The model reading the S4 tests draft from: one blocker and one major, with bases. */
+async function modelFindings(world: ReturnType<typeof fresh>): Promise<void> {
+  const appended = await world.store.appendReading(
+    "i-0001",
+    {
+      drafter: "rondo/model/1/gpt-6-astra",
+      verdict: "concerns",
+      findings: ["the loop never stops", "the backoff is not capped"],
+      graded: [
+        {
+          severity: "blocker",
+          bases: [{ kind: "file", path: "src/notifier.ts", line: 41 }],
+          basisResolved: true,
+        },
+        {
+          severity: "major",
+          bases: [{ kind: "rule", path: "AGENTS.md", line: 12 }],
+          basisResolved: true,
+        },
+      ],
+      evidence: EVIDENCE,
+      unavailableReason: null,
+    },
+    4_000,
+  );
+  expect(appended.kind).toBe("appended");
+}
+
+test("the gate offers a change beside approve, drafted from the findings and editable (#233 S4)", async () => {
+  const world = fresh();
+  await gateWithChecks(world);
+  await modelFindings(world);
+  const html = await operatorPage(
+    { ...portsOver(world, "ada", [], null, "decision-1"), material: structured },
+    "t",
+    { kind: "answer", iterationId: "i-0001" },
+    EN,
+    null,
+    null,
+    () => "lap-00000000-0000-4000-8000-000000000001",
+  );
+  const bar = html.slice(html.indexOf('id="answer-bar"'));
+
+  // **Two answers in one bar, and two forms**: approve posts to the summary's
+  // address as it always did, the change posts to its own route.
+  expect(bar).toContain('<form id="approve-form" method="post" action="/?lang=en"');
+  expect(bar).toContain('<form id="revise-form" method="post" action="/revise?lang=en"');
+  expect(bar).toContain("Ask for a change instead");
+  expect(bar).toContain(">Ask for a change</button>");
+  // Every id the press carries is rondo's, and none of them is typed.
+  expect(bar).toContain('<input type="hidden" name="iteration" value="i-0001"/>');
+  expect(bar).toContain('<input type="hidden" name="scope_decision" value="decision-1"/>');
+  expect(bar).toContain(
+    '<input type="hidden" name="successor" value="lap-00000000-0000-4000-8000-000000000001"/>',
+  );
+  // **rondo's draft is the field's content, and it quotes the findings with
+  // their severities and bases** (D-0065 rule 5.3): a placeholder is not sent,
+  // and the words are the reviewer's own.
+  const opened = bar.indexOf('<textarea name="body"');
+  const box = bar.slice(opened, bar.indexOf("</textarea>", opened));
+  expect(box).toContain("Please fix what the model review raised:");
+  expect(box).toContain("- [blocker] the loop never stops");
+  expect(box).toContain("where: src/notifier.ts:41");
+  expect(box).toContain("- [major] the backoff is not capped");
+  expect(box).toContain("where: rule AGENTS.md:12");
+  expect(box).toContain('data-draft="revise:i-0001:gate-i-0001"');
+  expect(box).not.toContain("maxlength");
+  // The change is offered, and approve is not qualified by it: the same button
+  // with the same word, whatever the model raised (D-0065 as annotated).
+  expect(bar).toContain(">approve</button>");
+  expect(bar).not.toContain('id="revise-none"');
+});
+
+test("a lap admitted under no approval is told so where the change would be (#233 S4)", async () => {
+  const world = fresh();
+  await gateWithChecks(world);
+  await modelFindings(world);
+  const html = await operatorPage(
+    { ...portsOver(world, "ada", []), material: structured },
+    "t",
+    { kind: "answer", iterationId: "i-0001" },
+    EN,
+    null,
+    null,
+    () => "lap-00000000-0000-4000-8000-000000000002",
+  );
+  expect(html).toContain('id="revise-none"');
+  expect(html).toContain("has no budget to be counted against");
+  expect(html).not.toContain('id="revise-form"');
+  // Approving is untouched by the absence of the other answer.
+  expect(html).toContain(">approve</button>");
+});
+
+test("with no minted lap id there is no change form at all (#233 S4)", async () => {
+  const world = fresh();
+  await gateWithChecks(world);
+  await modelFindings(world);
+  const html = await operatorPage(
+    { ...portsOver(world, "ada", [], null, "decision-1"), material: structured },
+    "t",
+    { kind: "answer", iterationId: "i-0001" },
+  );
+  expect(html).not.toContain('id="revise-form"');
+  expect(html).not.toContain('id="revise-none"');
+});
+
+test("a gate with no model findings drafts nothing, and still offers the change (#233 S4)", async () => {
+  const world = fresh();
+  await gateWithChecks(world);
+  const appended = await world.store.appendReading(
+    "i-0001",
+    {
+      drafter: "rondo/model/1/gpt-6-astra",
+      verdict: "clear",
+      findings: [],
+      graded: [],
+      evidence: EVIDENCE,
+      unavailableReason: null,
+    },
+    4_000,
+  );
+  expect(appended.kind).toBe("appended");
+  const html = await operatorPage(
+    { ...portsOver(world, "ada", [], null, "decision-1"), material: structured },
+    "t",
+    { kind: "answer", iterationId: "i-0001" },
+    EN,
+    null,
+    null,
+    () => "lap-00000000-0000-4000-8000-000000000003",
+  );
+  const bar = html.slice(html.indexOf('id="answer-bar"'));
+  expect(bar).toContain('id="revise-form"');
+  // An empty box with its example, and no lead line about findings there are none of.
+  expect(bar).toMatch(/<textarea name="body"[^>]*><\/textarea>/);
+  expect(bar).not.toContain("Please fix what the model review raised:");
+  expect(bar).toContain("keep the change to the parser");
+});
+
+test("the change is offered in the page's language, and the findings stay the reviewer's words (#233 S4)", async () => {
+  const world = fresh();
+  await gateWithChecks(world);
+  await modelFindings(world);
+  const html = await operatorPage(
+    { ...portsOver(world, "ada", [], null, "decision-1"), material: structured },
+    "t",
+    { kind: "answer", iterationId: "i-0001" },
+    chromeFor("ja"),
+    null,
+    null,
+    () => "lap-00000000-0000-4000-8000-000000000004",
+  );
+  const bar = html.slice(html.indexOf('id="answer-bar"'));
+  expect(bar).toContain("承認せずに変更を依頼する");
+  expect(bar).toContain(">変更を依頼する</button>");
+  expect(bar).toContain("モデルレビューが挙げた点を直してください:");
+  // Quoted, not translated (D-0055 rule 4): the finding and its basis as given.
+  expect(bar).toContain("- [blocker] the loop never stops");
+  expect(bar).toContain("場所: src/notifier.ts:41");
 });
 
 test("a model reading not yet taken is said as pending, beside the checks and by the button (#220 S2)", async () => {
@@ -3262,6 +3440,130 @@ test("a scoped start press that names a row already there admits nothing, rather
   // Not vacuous: a scope decision nobody approved is what the second press
   // carries, and it reached no scope test at all -- one iteration row, still.
   expect(rows(connection, "iteration")).toBe(1);
+});
+
+test("a revise press on a stale page answers nothing, and writes no framing for it (#233 S4)", async () => {
+  // **The three refusals that catch a page that went stale**, which is what a
+  // page redrawing itself every five seconds sometimes is: a lap that is not
+  // there, one that has ended, and one whose row names no gate. None of them is
+  // a person answering, so none of them puts a framing in the ledger and none
+  // of them starts continuo (D-0042 rule 3's order, `answerFromPage`'s reading
+  // of it). Reachable in a file with no continuo for exactly that reason.
+  const dir = mkdtempSync(join(tmpdir(), "rondo-revise-stale-"));
+  const storePath = join(dir, "store.db");
+  const connection = new DatabaseSync(storePath);
+  const store = iterationStore(connection, { maxOccupying: 4, maxLive: 6 });
+  const ended = "lap-ended";
+  const reserved = await store.reserve({
+    id: ended,
+    request: "Please do it.",
+    plan: planFor(ended),
+    spend: null,
+    scopeSpend: null,
+    nowMs: 1_000,
+    supersedesIterationId: null,
+    requestMessageId: null,
+    runId: `rondo-${ended}`,
+    topicBranch: `rondo/${ended}`,
+    workspace: `/srv/work/${ended}`,
+  });
+  expect(reserved.kind).toBe("reserved");
+
+  const pressing = (iterationId: string) =>
+    reviseFromPage({ RONDO_APPROVER: "ada" }, store, storePath, "ada", {
+      iterationId,
+      successorId: "lap-00000000-0000-4000-8000-000000000009",
+      scopeDecisionId: "sd-0001",
+      body: "narrow it to the parser",
+    });
+
+  // A lap that is at its gate, and was admitted under no approval: the page
+  // draws no revise form on one, and a press that names an approval anyway is
+  // refused before the gate is touched (Codex round 2 -- the hidden field is
+  // compared against the admission row and never trusted).
+  const gated = "lap-gated";
+  const openedReserve = await store.reserve({
+    id: gated,
+    request: "Please do it.",
+    plan: planFor(gated),
+    spend: null,
+    scopeSpend: null,
+    nowMs: 1_000,
+    supersedesIterationId: null,
+    requestMessageId: null,
+    runId: `rondo-${gated}`,
+    topicBranch: `rondo/${gated}`,
+    workspace: `/srv/work/${gated}`,
+  });
+  expect(openedReserve.kind).toBe("reserved");
+  for (const [from, to] of [
+    ["planned", "admitting"],
+    ["admitting", "admitted"],
+    ["admitted", "performing"],
+    ["performing", "awaiting_human"],
+  ] as const) {
+    const moved = await store.transition(
+      gated,
+      from,
+      to,
+      to === "awaiting_human" ? { gateId: `gate-${gated}` } : {},
+      2_000,
+    );
+    expect(moved.kind).toBe("transitioned");
+  }
+
+  const absent = await pressing("lap-not-there");
+  expect(absent.ok).toBe(false);
+  expect(absent.why).toBe("reviseRefusedGateClosed");
+  // A row that is live but names no gate: the button is not drawn on one, and
+  // a press that arrives anyway answers nothing.
+  const noGate = await pressing(ended);
+  expect(noGate.ok).toBe(false);
+  expect(noGate.why).toBe("reviseRefusedGateClosed");
+  // The approval the press named is not the one this lap was admitted under --
+  // it was admitted under none -- so nothing is answered and no gate is walked.
+  const wrongScope = await pressing(gated);
+  expect(wrongScope.ok).toBe(false);
+  expect(wrongScope.why).toBe("reviseRefusedNotItsScope");
+  // Nothing was recorded for either: no proposal, no attention row, no message.
+  expect(rows(connection, "proposal")).toBe(0);
+  expect(rows(connection, "conversation_message")).toBe(0);
+  expect(rows(connection, "scope_consumption")).toBe(0);
+});
+
+test("a second revise press of one form joins the first only when it says the same thing (#233 S4)", async () => {
+  // **The successor's id is minted per draw, so a double click carries one id**
+  // -- and so does a press made from the same form after the browser's Back
+  // button, with the words edited since (Codex round 3). The first is the press
+  // that is running and the second is its repeat; the third is a different
+  // instruction, and answering *sent* over words that were never sent is the
+  // failure this screen exists not to have. Both presses here refuse before
+  // continuo, on the lap's own state, which is what makes this reachable in a
+  // file with no continuo -- what is under test is which of them joined.
+  const dir = mkdtempSync(join(tmpdir(), "rondo-revise-twice-"));
+  const storePath = join(dir, "store.db");
+  const connection = new DatabaseSync(storePath);
+  const store = iterationStore(connection, { maxOccupying: 4, maxLive: 6 });
+  const successorId = "lap-00000000-0000-4000-8000-00000000000a";
+  const pressing = (body: string) =>
+    reviseFromPage({ RONDO_APPROVER: "ada" }, store, storePath, "ada", {
+      iterationId: "lap-not-there",
+      successorId,
+      scopeDecisionId: "sd-0001",
+      body,
+    });
+
+  const [first, same, other] = await Promise.all([
+    pressing("narrow it to the parser"),
+    pressing("narrow it to the parser"),
+    pressing("actually, leave the parser alone"),
+  ]);
+  // The repeat is the press that made it: the same answer, whatever it was.
+  expect(same).toEqual(first);
+  // The one carrying other words is refused, and says the first is running.
+  expect(other.ok).toBe(false);
+  expect(other.why).toBe("reviseRefusedStillRunning");
+  expect(rows(connection, "proposal")).toBe(0);
 });
 
 test("the first scope in a store shows what its agent type is allowed, read from the plan the press will record", async () => {
