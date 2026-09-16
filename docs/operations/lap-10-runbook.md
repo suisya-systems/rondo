@@ -47,8 +47,13 @@ git clone https://github.com/suisya-systems/rondo.git "$R/rondo-host"
 git clone https://github.com/suisya-systems/rondo.git "$R/rondo-gh"
 cd "$R/rondo-host"
 node vendor/pin.mjs check && npm ci --ignore-scripts && npm run build
-./scripts/dogfood-env.sh --root "$R" --target-repo "$R/rondo-gh" --iteration-id lap10-001
+./scripts/dogfood-env.sh --root "$R" --target-repo "$R/rondo-gh"
 ```
+
+`dogfood-env.sh --iteration-id` is deliberately not on that line: it only names the laps in the
+*command lines* the script prints, and the page does not use them. **A lap started from the page is
+named by the page**, as `lap-` and a UUID, minted when the button is drawn -- which is what makes a
+double press one lap rather than two.
 
 | Path | What it is |
 |---|---|
@@ -56,7 +61,7 @@ node vendor/pin.mjs check && npm ci --ignore-scripts && npm run build
 | `$R/rondo-gh` | the repository the lap changes. Its `origin` is `suisya-systems/rondo`, which is what makes publishing reach a real forge |
 | `$R/env.sh` | `RONDO_CONTINUO_CLI`, `RONDO_STORE`, `RONDO_APPROVER` |
 | `$R/plan.json` | the plan the page drafts a scope from, written by `dogfood-env.sh` with a `review_criterion` in it (without one the model review is `unavailable` on every lap, #205) |
-| `$R/workspaces/iter-lap10-001` | where the lap's work will appear, once it has started |
+| `$R/workspaces/` | where the lap's work will appear, in `iter-<lap id>`, once it has started. The lap id is the page's, not one you chose -- see step 3 |
 
 ## 2. Before you start
 
@@ -198,15 +203,26 @@ Still on the approved scope screen, at the bottom, in a bar that stays visible w
 **Start the work**.
 
 The note beside it is the thing to check before pressing: *"The words of your request are what the
-work is asked to do, exactly as you wrote them."* The page posts no prompt. If the request needs
-changing, go back to the thread and send another message first -- there is no prompt field here to
-fix it in.
+work is asked to do, exactly as you wrote them."* There is no prompt field on this screen, and the
+press posts none.
 
-rondo names the lap. Press once.
+**Read the request once more before you press, because a reply will not fix it.** What the lap is
+asked to do is the body of the one message the scope names -- the request itself, not the thread.
+A reply you send afterwards is in the conversation and is not in the work. To change what the lap
+is asked to do, go back to **Requests**, send the corrected words as a **new request**, and set a
+scope on *that* one (step 2 again). The scope you already approved names the old message and will
+keep starting the old words.
+
+rondo names the lap too. Press once.
 
 **Where it is recorded:** the page goes to the summary and lands on the new lap's row, under
 **running now**, with its state pill and how long it has been going. The page redraws itself every
 few seconds and a redraw writes nothing.
+
+**The lap's name is now a fact you may need**, and only one press away: it is `lap-` and a UUID, and
+the foot of the summary (**Show the full reading**) prints it as `iteration '<id>'`. Its workspace is
+`$R/workspaces/iter-<lap id>`. Write it into the record sheet -- section 5's one terminal command
+needs it.
 
 **If it is refused:** *"Nothing was started and nothing was spent: this work is outside the scope
 you approved, at the <name> test."* The named test is the reason, and a message appears **in the
@@ -324,9 +340,11 @@ on. Reading it moves no last-look mark and counts no presentation.
 - If the cause was the budget, record a new scope first (**Set the scope** again on the same
   request) and then answer the question. The new screen says what the scope it replaces already
   spent.
-- A lap that never comes back is the one thing with no press: stop the page with ctrl-c and run
-  `node bin/rondo.mjs abandon --iteration-id lap10-001 --reason "..."`. Write that down if it
-  happens -- it is the hole in "the page is the whole walk".
+- A lap that never comes back is the one thing with no press. Take its id off the summary's
+  **Show the full reading** (`iteration '<id>'`), stop the page with ctrl-c, and run
+  `node bin/rondo.mjs abandon --iteration-id lap-<the UUID> --reason "..."` in the same terminal,
+  with `env.sh` still sourced. Write that down if it happens -- it is the hole in "the page is the
+  whole walk", and it is the only step here that needs both a terminal and an id off a screen.
 
 ## 6. Clearing up
 
@@ -356,6 +374,7 @@ up.
 
 Overall:
 
+- The lap's id (`lap-` and a UUID), off **Show the full reading**:
 - Time from **Send** to the gate answered:
 - Times you were asked to decide (scope, gate, a stop, publish):
 - What the lap cost (the cost on the lap's row in the summary):
