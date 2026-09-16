@@ -1510,7 +1510,7 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     }
     const message = { messageId, body, inReplyTo: back };
     const answered = await say.answerAsk(minting.press, message, outcome);
-    if (!answered.ok && !(await alreadyThere(message))) {
+    if (!answered.ok && !(await alreadyThere(message, outcome))) {
       return refused(c, 409, "sendRefusedNotTaken", back);
     }
     return c.redirect(
@@ -1727,8 +1727,19 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     );
   });
 
-  /** Whether the thread already holds exactly this operator message. */
-  async function alreadyThere(message: SentMessage): Promise<boolean> {
+  /**
+   * Whether the thread already holds exactly this operator message.
+   *
+   * **The answer it carries is part of "exactly"** (D-0072 rule 1). Without it,
+   * a form resubmitted with the *other* answer -- same id, same words, same
+   * parent -- would be refused by the store's uniqueness and then reported to
+   * the person as the answer they just pressed, while the line kept whatever the
+   * first press did to it. Only an exact replay is the send it repeats.
+   */
+  async function alreadyThere(
+    message: SentMessage,
+    answerOutcome: AskAnswer | null = null,
+  ): Promise<boolean> {
     const read = await reading.record.threadMessages();
     return (
       read.kind === "read" &&
@@ -1737,7 +1748,8 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
           held.messageId === message.messageId &&
           held.authorKind === "operator" &&
           held.body === message.body &&
-          held.inReplyTo === message.inReplyTo,
+          held.inReplyTo === message.inReplyTo &&
+          (held.answerOutcome ?? null) === answerOutcome,
       )
     );
   }

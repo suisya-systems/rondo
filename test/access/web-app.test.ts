@@ -2146,6 +2146,15 @@ test("(answer) the press says which answer it is, and a stop leaves the question
   expect(replied.status).toBe(409);
   expect(await waitingAsks()).toEqual(["ask"]);
 
+  // **The same form pressed again with the other answer is not that answer.**
+  // The store refuses the repeated id; reporting it as a carry-on would tell
+  // the person their line was released while the stop still holds it.
+  const flipped = { ...stopped, outcome: "carry_on" };
+  expect((await send(base, "/answer-ask", "POST", pressHeaders(base), flipped)).status).toBe(409);
+  expect(await waitingAsks()).toEqual(["ask"]);
+  // A true replay -- the same press, the same answer -- is still the answer it repeats.
+  expect((await send(base, "/answer-ask", "POST", pressHeaders(base), stopped)).status).toBe(303);
+
   stop.abort();
   expect(await closed).toBe(0);
 });
