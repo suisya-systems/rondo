@@ -34,6 +34,7 @@ try {
     plan: await import(dist("refrain/plan.js")),
     allocator: await import(dist("refrain/allocator.js")),
     cli: await import(dist("access/cli.js")),
+    wording: await import(dist("access/wording.js")),
   };
 } catch {
   process.stderr.write("rondo is not built. Run: npm run build\n");
@@ -140,7 +141,7 @@ writeFileSync(planPath, `${JSON.stringify(planDocument("lap-preview-0001"), null
 // The agent type the plan records, so the seeded laps carry the digest the
 // scope form drafts its budgets from: without it every basis is a cold start,
 // which is the one thing seeding laps at all is meant to avoid.
-const drafted = await modules.cli.scopeDraftingFromPlan(planPath, record);
+const drafted = await modules.cli.scopeDraftingFromPlan(planPath, record, modules.wording.EN);
 
 const requestMessageId = "request-preview-0001";
 const now = Date.now();
