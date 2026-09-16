@@ -711,6 +711,11 @@ export interface Chrome {
   readonly publishHere: string;
   readonly publishHeading: string;
   readonly publishLead: string;
+  /** The lead where there is no press: the same fact, without the button's half. */
+  readonly publishNotYetLead: string;
+  /** The lead where the only press is the one that overrules the reading. */
+  readonly publishReviewLead: string;
+  readonly publishNotYetHeading: string;
   /** What would happen, one line per leg, with nothing to copy or type. */
   readonly publishPushes: (branch: string, remote: string) => string;
   readonly publishOpens: (repo: string, base: string) => string;
@@ -1297,6 +1302,12 @@ explanation you pressed on and then answers the gate.`,
   publishLead:
     "Nothing has left this machine yet. This is what publishing would do, read just now; the " +
     "button below is the only thing that does it.",
+  publishNotYetLead:
+    "Nothing has left this machine, and this work cannot be published as it stands.",
+  publishReviewLead:
+    "Nothing has left this machine yet. This is what publishing would do, read just now -- and " +
+    "the reading of this work does not cover it, so the only press here is the one that says so.",
+  publishNotYetHeading: "What stops it",
   publishTargetHeading: "What would happen",
   publishPushes: (branch, remote) => `Push the branch ${branch} to ${remote}.`,
   publishOpens: (repo, base) => `Open a pull request on ${repo}, against ${base}.`,
@@ -1943,6 +1954,12 @@ const JA: Partial<Chrome> = Object.freeze({
   publishLead:
     "まだ何もこのマシンの外へ出ていません。以下は公開したときに起きることを今読み取ったもので、" +
     "実際に行うのは下のボタンだけです。",
+  publishNotYetLead: "まだ何もこのマシンの外へ出ていません。この作業はこのままでは公開できません。",
+  publishReviewLead:
+    "まだ何もこのマシンの外へ出ていません。以下は公開したときに起きることを今読み取ったものです。" +
+    "ただしこの作業の読み取りがそれを説明していないため、ここで押せるのはそれを承知で進める" +
+    "ボタンだけです。",
+  publishNotYetHeading: "何が止めているか",
   publishTargetHeading: "何が起きるか",
   publishPushes: (branch, remote) => `ブランチ ${branch} を ${remote} へ push します。`,
   publishOpens: (repo, base) => `${repo} に、${base} 向けのプルリクエストを作ります。`,

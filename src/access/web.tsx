@@ -4026,10 +4026,13 @@ async function publishView(
   if (shown.kind === "refused") {
     return framed(
       <>
-        <p class="text-[13px] leading-6">{wording.publishLead}</p>
+        {/* Not `publishLead`: that sentence ends in the button below it, and
+            there is no button here (rondo#233 S5 screen pass). */}
+        <p class="text-[13px] leading-6">{wording.publishNotYetLead}</p>
         <section id="publish-not-yet" class={`${CARD} space-y-1`}>
+          <h3 class={CARD_HEADING}>{wording.publishNotYetHeading}</h3>
           {publishBlockLines(wording, shown.block).map((line) => (
-            <p class="text-[13px] leading-5">{line}</p>
+            <p class="text-[13px] leading-5 wrap-anywhere">{line}</p>
           ))}
         </section>
       </>,
@@ -4038,7 +4041,11 @@ async function publishView(
   const review = shown.review;
   return framed(
     <>
-      <p class="text-[13px] leading-6">{wording.publishLead}</p>
+      {/* The lead says which screen this is, because the two differ in what a
+          person may do here and not only in what they are told. */}
+      <p class="text-[13px] leading-6">
+        {review === null ? wording.publishLead : wording.publishReviewLead}
+      </p>
       <section id="publish-target" class={`${CARD} space-y-1`}>
         <h3 class={CARD_HEADING}>{wording.publishTargetHeading}</h3>
         <p class="text-[13px] leading-5">
@@ -4987,7 +4994,7 @@ export async function operatorPage(
                   {endedView(wording, ended, nowMs, endedClaims, publishTo)}
                 </>
               )}
-              {onThreads || view.kind === "scope" ? null : (
+              {onThreads || view.kind === "scope" || view.kind === "publish" ? null : (
                 <p id="fold" class="border-t border-border pt-4 text-[13px]">
                   <a
                     id="fold-link"

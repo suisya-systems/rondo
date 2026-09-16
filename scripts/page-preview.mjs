@@ -21,6 +21,7 @@
  * too. The two seeded message bodies are file content rather than console
  * prose, so they are ordinary text.
  */
+import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -35,6 +36,8 @@ try {
     plan: await import(dist("refrain/plan.js")),
     allocator: await import(dist("refrain/allocator.js")),
     cli: await import(dist("access/cli.js")),
+    forge: await import(dist("access/forge.js")),
+    review: await import(dist("access/review.js")),
     wording: await import(dist("access/wording.js")),
   };
 } catch {
@@ -395,6 +398,150 @@ if (appended.kind !== "appended") {
   refuse(`the preview model reading did not append: ${JSON.stringify(appended)}`);
 }
 
+/**
+ * The forge repository the preview's page may publish to (rondo#233 S5).
+ *
+ * **A repository that does not exist, on purpose.** The dry-run screen needs a
+ * remote whose URL agrees with this name, and nothing in a preview should be
+ * able to push a scratch branch to a real repository if somebody presses the
+ * button on a machine that happens to hold credentials. The screen is complete
+ * either way; the press refuses at the push, in words.
+ */
+const PREVIEW_REPO = "suisya-systems/rondo-preview-not-a-real-repository";
+const PREVIEW_REMOTE_URL = `https://github.com/${PREVIEW_REPO}.git`;
+
+/** One git workspace with a base branch and a lap's commit on its topic branch. */
+function workOn(workspace, topicBranch, leaveUncommitted) {
+  const git = (...args) =>
+    execFileSync("git", ["-C", workspace, ...args], {
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        GIT_AUTHOR_NAME: "rondo preview",
+        GIT_AUTHOR_EMAIL: "preview@example.invalid",
+        GIT_COMMITTER_NAME: "rondo preview",
+        GIT_COMMITTER_EMAIL: "preview@example.invalid",
+      },
+    });
+  mkdirSync(workspace, { recursive: true });
+  execFileSync("git", ["init", "--quiet", "--initial-branch", "main", workspace], {
+    encoding: "utf8",
+  });
+  writeFileSync(join(workspace, "README.md"), "# the preview's repository\n", "utf8");
+  git("add", "README.md");
+  git("commit", "--quiet", "-m", "chore: the base this lap was cut from");
+  git("checkout", "--quiet", "-b", topicBranch);
+  writeFileSync(
+    join(workspace, "counter.ts"),
+    "export function lapsSpent(rows: readonly { cost: number }[]): number {\n" +
+      "  return rows.reduce((sum, row) => sum + row.cost, 0);\n" +
+      "}\n",
+    "utf8",
+  );
+  git("add", "counter.ts");
+  git(
+    "commit",
+    "--quiet",
+    "-m",
+    "feat: count what a request has spent, from the rows that were read",
+  );
+  git("remote", "add", "origin", PREVIEW_REMOTE_URL);
+  if (leaveUncommitted) {
+    // D-0060 rule 4's refusal, which is about paths and not about publishing:
+    // work in the worktree that the push would leave behind.
+    writeFileSync(join(workspace, "notes.md"), "half of the second half\n", "utf8");
+  }
+}
+
+/**
+ * One closed lap a person approved, with a real workspace to publish from
+ * (rondo#233 S5).
+ *
+ * `answered_and_forwarded` and not `approve`: that is the one gate outcome that
+ * records a person having answered, and it is what `approvedForPublication`
+ * asks for. The reading is recorded over what git actually reports, so the
+ * screen shows the publish rather than the reading's refusal -- except on the
+ * lap that is meant to refuse, where the paths left behind are the point.
+ */
+async function publishableLap(id, leaveUncommitted, staleReading = false) {
+  const payload = planDocument(id);
+  const workspace = payload.workspace;
+  const topicBranch = payload.topic_branch;
+  workOn(workspace, topicBranch, leaveUncommitted);
+  const reserved = await store.reserve({
+    id,
+    request: "teach rondo to count",
+    plan: payload,
+    spend: null,
+    scopeSpend: null,
+    nowMs: now - 40 * 60 * 1000,
+    supersedesIterationId: null,
+    requestMessageId,
+    runId: `rondo-${id}`,
+    topicBranch,
+    workspace,
+  });
+  if (reserved.kind !== "reserved") {
+    refuse(`the preview publishable lap did not reserve: ${JSON.stringify(reserved)}`);
+  }
+  // The reading is taken over the range the reader saw, which is the range
+  // `publish` re-reads it against (`readingRangeOf`).
+  const read = await modules.forge.inspectLapWork({
+    workspace,
+    remote: modules.review.READING_REMOTE,
+    baseBranch: payload.base_branch,
+    topicBranch,
+  });
+  if (read.kind !== "read") {
+    refuse(`the preview workspace would not read: ${JSON.stringify(read)}`);
+  }
+  const measured = modules.review.evidenceOf(read);
+  const reading = {
+    drafter: modules.records.DETERMINISTIC_READING_DRAFTER,
+    verdict: "clear",
+    findings: [],
+    // A stale reading is one taken over a tip that is not the tip now: the lap
+    // was read, and then the branch moved. That is D-0060 rule 5's refusal, and
+    // the only thing on this page that overrules it is the second press.
+    evidence: staleReading ? { ...measured, tipCommit: "9".repeat(40) } : measured,
+    unavailableReason: null,
+  };
+  for (const [from, to, fields, taken] of [
+    ["planned", "admitting", {}, undefined],
+    ["admitting", "admitted", {}, undefined],
+    [
+      "admitted",
+      "performing",
+      {
+        agentTypeDigest: drafted.kind === "drafted" ? drafted.agentTypeDigest : null,
+        modelTier: "standard",
+      },
+      undefined,
+    ],
+    ["performing", "awaiting_human", { gateId: `gate-${id}` }, reading],
+    [
+      "awaiting_human",
+      "closed",
+      { gateOutcome: "answered_and_forwarded", lapCostUsd: 1.1, lapDurationMs: 18 * 60 * 1000 },
+      undefined,
+    ],
+  ]) {
+    const moved = await store.transition(id, from, to, fields, now, taken);
+    if (moved.kind !== "transitioned") {
+      refuse(`the preview publishable lap did not reach '${to}': ${JSON.stringify(moved)}`);
+    }
+  }
+  return id;
+}
+
+// The two publish screens worth photographing: one that would publish, and one
+// that refuses on D-0060 rule 4 because the workspace still holds work.
+const publishableLapId = await publishableLap("lap-preview-0005", false);
+const refusingLapId = await publishableLap("lap-preview-0006", true);
+// The third publish screen: the work is publishable, and the reading no longer
+// describes it, so the only press offered is the one that overrules it.
+const staleLapId = await publishableLap("lap-preview-0007", false, true);
+
 const base = "http://127.0.0.1:7334";
 process.stdout.write(
   [
@@ -416,6 +563,23 @@ process.stdout.write(
     `also:    ${base}/?scope=${requestMessageId}&lang=ja`,
     `also:    ${base}/?requests=open&lang=en`,
     "",
+    `publish: ${base}/?publish=${publishableLapId}&lang=en`,
+    `also:    ${base}/?publish=${publishableLapId}&lang=ja`,
+    "",
+    "The publish screen shows what publishing would do, read just now out of a real",
+    "git workspace: the push target, the pull request's title and body, and the one",
+    "press. The second one refuses on D-0060 rule 4, because that workspace still",
+    "holds a path the push would leave behind:",
+    `also:    ${base}/?publish=${refusingLapId}&lang=en`,
+    "",
+    "The third holds a reading taken over a tip the branch has moved off, so the",
+    "ordinary press is not drawn at all and the only one offered is the second press",
+    "that overrules it (D-0060 rule 5):",
+    `also:    ${base}/?publish=${staleLapId}&lang=en`,
+    "",
+    "Pressing publish under this preview refuses in words at the push: the remote is",
+    "a repository that does not exist, on purpose.",
+    "",
     "The scoped start press refuses in words under this preview, because there is no",
     "continuo here to run a lap. That refusal screen is one of the screens worth",
     "photographing.",
@@ -423,7 +587,7 @@ process.stdout.write(
   ].join("\n"),
 );
 
-process.exitCode = await modules.cli.main(["web", "--port", "7334"], {
+process.exitCode = await modules.cli.main(["web", "--port", "7334", "--repo", PREVIEW_REPO], {
   ...process.env,
   RONDO_STORE: storePath,
   RONDO_APPROVER: "ada",
