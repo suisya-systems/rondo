@@ -109,6 +109,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0069 | A scope before the first lap: an agent type becomes a record rondo holds when an operator's scope is written from a plan, `start` spends a scope through the `lineage_start` arm, and an operator-written first admission waits on every open question in its request's thread | superseded by D-0071 |
 | D-0070 | A revise inside a scope: the person still answers the gate, the lap it starts spends the scope through the `redo` arm, the verdict is computed before the gate is walked, and the added text is carried and never tested | accepted |
 | D-0071 | The model drafter: a Claude model rondo runs outside the lap over a thread it hands over, which chooses among held plans and agent types and writes words, while every number in a drafted scope is computed from recorded laps and may only be narrowed; and a plan the person pastes into the thread is how a fresh store gets its first template and agent type | accepted |
+| D-0072 | What a reply to a scope stop does: an answering press carries one of two words, the line opens on the absence of "carry on" rather than on the presence of a reply, and stopping becomes a row instead of a second approval | accepted |
 
 ---
 
@@ -14072,6 +14073,23 @@ number.
 >   **The refused test is a closed name and not a row**, so no locator reaches it: the stop's body
 >   names it, with the scope's digest. Nothing above is edited.
 
+> **Annotation (2026-09-17, from D-0072), and the one that is not additive.** Added after this entry
+> was accepted, by the answer of rondo's human gate to rondo#206.
+> - **Rule 4.4's closing "and the person's reply is what ends it" is superseded by `D-0072`.** What
+>   ends a stop is the person's *answer that carries on*, pressed as one of two words and recorded on
+>   the reply (`D-0072` rules 1 and 4); a reply that carries no answer, and an answer that says to
+>   stop, both leave the line stopped. This is rondo#206: `openAsksIn` implemented the sentence as
+>   written, so in lap 8 a reply saying *"Stop this line"* released the line as surely as "go on", and
+>   the row could not tell the two apart (lap 8's N-31). Stopping now has the durable form it lacked,
+>   and no longer needs a successor scope with `laps` 0.
+> - **Rule 4.2's asks bullet**, "no message with `asks` set and no reply stands over the act's line",
+>   is read as `D-0072` rule 3: no message with `asks` set **that no answer has carried on**. The
+>   reply must also be the person's -- no message rondo writes releases a hold rondo put on the line --
+>   which is rule 4.4's own "the person's reply" read literally.
+> - **Everything else in rules 4.2 and 4.4 stands as written**, the rondo#197 and `D-0069`
+>   annotations included: which line an ask stands over is still read off its bases, and the verdict is
+>   still a read over rows inside rule 4.3's write lock, reading no property of any text.
+
 > **Annotation (2026-09-14, from D-0070).** Added after this entry was accepted, and additive, by the
 > answer of rondo's human gate to `D-0070`'s second and third points.
 > - **Rule 4.1's single call site**, for `revise`: the gate walk runs **between** the verdict and the
@@ -15082,6 +15100,11 @@ budgets and the request's asks, which is what `D-0066` section 3.2 says an admis
 5. **`D-0066` rule 4.2's asks bullet and rule 4.4**: a first admission **that names no proposal** is
    held back by **every** unanswered `asks` message in its request's thread, whatever its bases. A
    first admission from a split proposal keeps rule 4.4 as written.
+   > **Annotation (2026-09-17, from `D-0072`).** "Unanswered" is read as `D-0072` rule 3: every
+   > `asks` message **that no answer has carried on**. So an answer that says to stop holds such a
+   > plan back exactly as an unanswered question does, and releasing one takes a `carry_on` on every
+   > open question in the thread. The coupling, its confinement to operator-written first admissions
+   > within one request, and its end condition are otherwise unchanged.
 
 **The five checks against section 4, one per way round it:**
 
@@ -15805,3 +15828,165 @@ Each dated and additive unless marked, and added with this entry's acceptance:
   Point 1 (a)'s trust in an operator message is then too wide.
 - **A drafter-table model that is the reviewer's family**, if a reviewer over drafts is later built.
 - Any measurement in "What was measured" failing to reproduce at rondo `765dd6e`.
+
+## D-0072 — What a reply to a scope stop does: an answering press carries one of two words, the line opens on the absence of "carry on" rather than on the presence of a reply, and stopping becomes a row instead of a second approval
+
+**Status:** accepted (2026-09-17, rondo's human gate). One point was put to the gate with four
+options and it chose the recommended one; the answer is recorded in "What was put to the human gate,
+and its answer" below. Refs `D-0009`, `D-0032`, `D-0041`, `D-0047`, `D-0059`, `D-0061`, `D-0064`,
+`D-0066`, `D-0069`, `D-0070`, `D-0071`.
+
+**This entry decides and builds**, in one change: the store's column and query, the writer's
+refusals, the page's answering press and the runbook sentence that described the old behaviour.
+
+`D-0066` rule 4.4 built the one point where the organisation stops: a refused act writes a drafter
+message with `asks` set, "**that message is what keeps the line stopped** ... and the person's reply
+is what ends it". `openAsksIn` implemented that sentence exactly -- an ask is open while no message
+replies to it -- and lap 8 walked it. The person wrote *"Stop this line"*, the thread then held no
+open ask, and the next in-scope admission would have been tested from the top as if they had said
+"carry on" (`docs/operations/lap-8-dogfood.md` N-31, rondo#206).
+
+**So the defect is not that rondo failed to read the reply. It is that the stop offers the person
+three options and only two of them could be recorded.** A successor scope and a change to the work
+leave a row; "stopping" left nothing, and the only durable form was a successor scope with `laps` 0
+(rule 1.4) -- a second P1 press for something the person had already said in words. This entry gives
+the third option a row, and in doing so stops the other two from being reached by accident.
+
+### 1. An answer is one of two words, on the message that carries it
+
+**One nullable column on `conversation_message`, `answer_outcome`, holding `carry_on` or `stop`**,
+NULL on every message that answers nothing. It is `D-0061` rule 2's eighth column and the migration
+grows by a line (`CONVERSATION_ADDED_COLUMNS`), which is the shape `D-0023` chose and `D-0030` tested.
+
+**Two values and no third.** They are not a scale and not a verdict: they are which of the stop's
+three options the person took, folded onto what it does to the line. A successor scope and a change
+to the work are both `carry_on` -- the act is tested again from the top, which is what rule 4.4
+always did -- and stopping is `stop`.
+
+**No column for anything `D-0061` rule 3 refuses.** An answer is not a decision, a status, a plan or
+a gate answer; it is which of two words a person pressed, and a gate answer's one home stays
+continuo's (`D-0020` rule 5).
+
+### 2. Only a person answers, only one question, and the writer holds it
+
+`recordThreadMessage` refuses a value that is not one of the two words; a value on a `drafter`
+message; a value on a message replying to nothing; and a value on a message replying to something
+with `asks` unset.
+
+**Held in the writer, inside the transaction that writes the row**, and not at the one caller that
+means well. This is the column `reserve()`'s re-test reads under the write lock (`D-0066` rule 4.3),
+so it decides whether work runs: anything that could write a value that reader honours has to be
+refused where the write happens. A caller's care is not an invariant.
+
+**"Only a person" is `D-0066` rule 4.4's own words read literally** -- "**the person's** reply is
+what ends it". No message rondo writes about a request may release the hold rondo put on it. Nothing
+could reach that before this entry, because every drafter write targets the thread root and the root
+carries no `asks`; it is refused by construction rather than left to the shape of today's callers.
+
+### 3. The line opens on the absence of a `carry_on`
+
+**`openAsksIn` counts an ask open while no `operator` reply to it carries `carry_on`.** An ordinary
+reply, a drafter's report threaded under it and a `stop` answer all leave it standing. **It does not
+open on the presence of a `stop`**: the two are told apart only so that a refusal can say which it is
+rather than telling a person who wrote "stop this line" that nobody has answered (`OpenAsk` carries
+`answeredStop` for that, and no verdict branches on it).
+
+**Nothing else in `D-0066` section 4 moves.** Which line an ask stands over is still read off its
+bases (rule 4.4, as annotated from rondo#197), the verdict is still a read over rows inside the write
+lock (rule 4.3), and **no test reads any property of the text** -- an answer reaches the verdict as a
+column, never as prose. That is what ruled out reading the reply's words, below.
+
+**`D-0069` rule 5 follows without being edited.** A first admission naming no proposal is held back by
+every open ask in its request's thread, whatever its bases; "open" now means this, so a `stop` on any
+question in the thread holds such a plan too, and a `carry_on` on all of them releases it. The
+coupling and its end condition are unchanged.
+
+**No back-fill, and that changes behaviour on an existing store deliberately.** A reply written before
+this entry released its ask whatever it said, and nothing on the row says which the person meant --
+that is the defect, not a gap a migration could fill. Those replies stay NULL, their asks re-open,
+and the lines they held stop until the person answers once more. Fail closed, in `D-0047` rule 7's
+direction: the alternative is admitting work under a reading nobody recorded.
+
+### 4. The press says which answer it is, and never defaults
+
+The page already told an **Answer** from a **Reply** (`D-0059` section 5a as revisited from
+rondo#220 S1: answering releases work, so it is a press and not a send), but both wrote the same row
+and nothing recorded which press it had been. **The answering press now carries the word**: the
+screen draws one button per answer, the route reads it off the form, and **a press naming neither is
+refused rather than defaulted** -- rondo guessing would put a word in the person's mouth on the one
+press whose whole content is that word.
+
+**A plain reply to a question answered `stop` is still refused and still routed to the press.** The
+hold is still there, and `SayPort.say`'s check reads the same rule 3 definition off the same rows, so
+a send is never what lifts it. **The answer is expressible only through the press**: it is an argument
+of the write port rather than a field of the message, so whoever holds the send capability cannot
+express one at all. The boundary `D-0059` section 5a draws is the type's.
+
+### What was put to the human gate, and its answer
+
+The question was whether the content-blind release is intent or defect, and what replaces it. Kept as
+put, with what each option gives up and one recommendation (`D-0064` rule 4.1).
+
+| Option | What it gives up |
+|---|---|
+| **(a) Read the reply's words** and branch on what they say | Puts a natural-language judgment inside rule 4.3's rows-only re-test, and contradicts `D-0070`'s annotation that rule 4.2's tests read no property of the text. Deciding it with a model would make an admission's verdict wait on a model run |
+| **(b) Record the answer on the answering press** (recommended) | One nullable column and a second button on one screen; rule 4.4's closing sentence is superseded |
+| **(c) Require an explicit "carry on" and keep no `stop` value** | Smaller than (b) by one value and one button, but cannot tell "nobody has answered" from "answered, and said stop" -- which is the fact N-31 asked for |
+| **(d) Leave the semantics and make stopping a scope-side row** | Is what today already allows (a successor with `laps` 0), and is the second P1 press N-31 objected to. Answers nothing |
+
+**The gate's answer: (b).** (a) and (d) were refused for the reasons above; (c) was refused for its
+missing fact. The defect was located as N-31 stated it -- not that the release is content-blind, but
+that stopping had no durable form -- and the additional `author_kind` reading in section 2 was
+accepted as following from rule 4.4's existing words rather than as a new rule.
+
+### What this gives up
+
+- **A person must press the answer, and cannot end a stop by talking.** Replying in prose now leaves
+  the line held. That is the point, and it is also a step the old behaviour did not have.
+- **An existing store's answered stops re-open once**, as section 3 says. On a dogfood store this is
+  one press per open line; there is no path that makes it none.
+- **Two buttons where there was one**, on the one screen that answers a question.
+- **It does not read what the person wrote**, so an answer whose words and whose press disagree
+  records the press. `D-0009` keeps the words verbatim beside it, so a reader can see both.
+- **It adds no invariant beyond `D-0064`'s two lines.**
+
+### Residuals, with who decides
+
+| Residual | Why not here | Who decides |
+|---|---|---|
+| A `stop` that also retires the scope | Ending a line and retiring an approval are different acts; rule 1.4's successor is still how an approval is retired | a later entry, if a person routinely does both |
+| Which of the stop's three options a `carry_on` was | The row records what it does to the line, not which option was taken; the person's words are beside it (`D-0009`) | a later entry, if the distinction is ever read |
+| An answer by an operator other than the one the question was put to | No column names an addressee; `author_id` records who answered | unchanged (`D-0061` rule 2.3) |
+| The CLI's `reply` verb writing an answer | It writes `asks` unset and no outcome, so the terminal cannot release a hold today; the page is the surface `D-0059` gives the press | the entry that gives the CLI an answering verb, if one is wanted |
+
+### Annotations this entry adds
+
+Each dated and additive unless marked, and added with this entry's acceptance:
+
+- **`D-0066` rule 4.4**: its closing "**and the person's reply is what ends it**" is **superseded by
+  `D-0072`** -- what ends it is the person's answer that carries on, and a reply that carries no
+  answer leaves the line stopped. Everything else in rule 4.4 stands as written, the rondo#197 and
+  `D-0069` annotations included.
+- **`D-0066` rule 4.2's asks bullet**: "no message with `asks` set and no reply stands over the act's
+  line" is read as `D-0072` rule 3: no message with `asks` set that no answer has carried on.
+- **`D-0069` rule 5** (carried in `D-0071` section 6.2): "every unanswered `asks` message" is read
+  the same way, and the coupling is otherwise unchanged.
+- **`D-0061` rule 2**: the thread's columns are eight; rule 3's refusals are unchanged and still held
+  by the shape.
+- **`D-0059` section 5a**, the answering-press row (from rondo#220 S1): the press carries which
+  answer it is, and refuses a press naming neither.
+
+### What would falsify it
+
+- **People pressing `stop` and then immediately `carry_on`** to get past a question they did not mean
+  to stop, often enough that the second press is routine. The screen's two buttons are then not
+  telling them what each does.
+- **Lines left stopped that the person believed they had released**, because they replied in prose and
+  the page's refusal did not reach them. Section 4's refusal wording is what moves.
+- **A `stop` that a person expects to retire the approval**, observed as a spent scope carrying on
+  under a successor they did not mean to need. The first residual comes back on evidence.
+- **The re-opening in section 3 costing more than one press per line** on the dogfood store, which
+  would mean asks are answered far more often than they are written.
+- **An answer needing a third word** (a hold with a release fact, say), which would make the two-value
+  column the wrong shape rather than a narrow one -- and would meet `D-0070` section 2's `sequence`
+  rather than this column.

@@ -336,12 +336,18 @@ on. Reading it moves no last-look mark and counts no presentation.
   thread** (a `scope-stop-...`), and it carries a question. Until you answer it, the next admission
   on that line stays stopped. You will see it as **N questions waiting on you** on the request's
   row, and as the header count.
-- Open the thread and press **Answer**. That is a press, not a send -- answering a question releases
-  a hold on work, which is why the button is not **Send**. The page will refuse a plain **Reply** to
-  a waiting question and tell you to press **Answer** instead.
-- **Any answer releases the hold** (#206). Writing "stop" releases it as surely as writing "go on";
-  the next admission is simply tested from scratch. To actually stop, leave the question
-  unanswered -- an unanswered question does no harm.
+- Open the thread and answer it. **The answer is a press, not a send** -- it releases a hold on
+  work, which is why the button is not **Send**. The page will refuse a plain **Reply** to a waiting
+  question and tell you to answer it instead.
+- **There are two answers, and which you press is what decides** (#206, D-0072). Write your words in
+  the box either way; the press is what rondo acts on.
+  - **Carry on** releases the hold. The next admission on that line is tested again from the top --
+    so it can still be refused, for the same reason or a new one, and write a new question.
+  - **Stop this line** records that you stopped it and **leaves the question standing**. The line
+    stays held, the row says you stopped it rather than that nobody answered, and you do not need a
+    second approval to say so. Changing your mind is just pressing **Carry on** afterwards.
+- Leaving the question unanswered holds the line too, and does no harm. The difference is the record:
+  an unanswered question says nobody has been back to it, and a **Stop this line** says you have.
 - **If the cause was the budget, the page cannot mend it, and this is worth knowing before you go
   looking.** A scope recorded here never supersedes another one -- S3 draws no screen for that, and
   `recordScopeFromPage` records `supersedes` as nothing at all. So pressing **Set the scope** again
@@ -352,7 +358,7 @@ on. Reading it moves no last-look mark and counts no presentation.
     its own screen and carries its own approval.
   - It is not enough to **continue the lap you already have**. **Ask for a change** always spends the
     approval that lap was admitted under, which is the exhausted one, so it will be refused again
-    however many scopes you record. Answering the stop question does not change that.
+    however many scopes you record. Answering the stop question, either way, does not change that.
   - The way through, from the page alone, is to send the remaining work as a new request and start it
     under the new approval. Write it down if you hit this -- it is the second hole in "the page is the
     whole walk", and a bigger one than the abandon below.
