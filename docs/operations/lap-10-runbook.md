@@ -343,13 +343,21 @@ on. Reading it moves no last-look mark and counts no presentation.
 - A lap that never comes back is the one thing with no press. Take its id off the summary's
   **Show the full reading** (`iteration '<id>'`), stop the page with ctrl-c, and run
   `node bin/rondo.mjs abandon --iteration-id lap-<the UUID> --reason "..."` in the same terminal,
-  with `env.sh` still sourced. Write that down if it happens -- it is the hole in "the page is the
-  whole walk", and it is the only step here that needs both a terminal and an id off a screen.
+  with `env.sh` still sourced. That releases rondo's lock on the lap and nothing else: it drives no
+  continuo verb, and if a gate is still open its own output tells you so and says that closing it is
+  a person's act on continuo's surface. Write it down if it happens -- it is the hole in "the page is
+  the whole walk", and the only step here needing both a terminal and an id read off a screen.
 
 ## 6. Clearing up
 
-- Published: **Publish** closed the run. Not published: the lap holds a run slot until it is
-  abandoned (the line above).
+- **Publish is the only thing on this page that closes a continuo run.** A lap you approved and did
+  not publish leaves its run open, and rondo will not close it for you: `abandon` writes nothing at
+  all on a lap that already ended (*"already terminal at 'closed'; nothing was written"*), and even
+  on a live one it drives no continuo verb -- it says so in its own output. Closing such a run is an
+  act on continuo's own surface, not rondo's.
+- That open run costs nothing and blocks nothing **here**: `closed` is terminal, so the lap holds
+  none of rondo's capacity and the next lap starts regardless. It is tidiness, not a blocker -- but
+  do not write "cleaned up" in the record sheet on the strength of an `abandon` that wrote nothing.
 - The approved scope expires on its own clock. Nothing to do.
 - The page stops with ctrl-c in its terminal. Stopping it writes nothing.
 - `$R` is yours to delete when you are done. Before you do: a lap you did not publish exists only
