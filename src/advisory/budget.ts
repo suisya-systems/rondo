@@ -8,12 +8,16 @@
  * (rule 4.3, D-0066 rule 1.2.4).
  *
  * **Every value carries its bases** (rule 4.2's last item): the iteration rows it
- * was read from, or the words {@link COLD_START}. A value is never returned
- * without them, so a screen can show where each number came from.
+ * was read from, or the fact that nothing in this store measured it. A value is
+ * never returned without them, so a screen can show where each number came from.
+ *
+ * **Nothing here is a sentence** (D-0055 rules 3 and 12). A basis and a formula
+ * are the facts they are made of -- which measurement, at which level, over how
+ * many rows -- and the words for them live in one catalogue per language
+ * (`src/access/wording.ts`). This module composed English here until rondo#233
+ * S3's screen review found a Japanese page whose every formula and every basis
+ * was English: a pre-interpolated line is a line no second set can rewrite.
  */
-
-/** The words a value not measured in this store carries (rule 4.2). */
-export const COLD_START = "cold start: not measured in this store";
 
 /** Rule 4.2.2: the reserve laps 8 and 9 chose by hand. */
 export const COLD_START_RESERVE_USD = 2.5;
@@ -58,8 +62,9 @@ export type Measurement = "first_lap_cost" | "redo_cost" | "lap_duration";
 /**
  * Where one measurement came from, for one listed agent type.
  *
- * `text` is a sentence a person reads at a glance; `iterationIds` are the rows,
- * for a screen to link rather than for anyone to copy.
+ * `iterationIds` are the rows, for a screen to link rather than for anyone to
+ * copy. A `given` basis is a number nobody measured, and `given` says which of
+ * the three it is, because each is said in its own words.
  */
 export type BudgetBasis =
   | {
@@ -71,21 +76,47 @@ export type BudgetBasis =
       /** The highest value those rows hold. */
       readonly value: number;
       readonly iterationIds: readonly string[];
-      readonly text: string;
     }
   | {
       readonly kind: "cold_start";
       readonly measurement: Measurement;
       readonly agentTypeDigest: string | null;
       readonly value: number;
-      readonly text: string;
     }
-  | { readonly kind: "given"; readonly text: string };
+  | {
+      readonly kind: "given";
+      readonly given: "plans" | "review_rounds" | "reply_allowance";
+      readonly value: number;
+      /** `review_rounds` only: no caller named one, so D-0064's default stands. */
+      readonly byDefault: boolean;
+    };
+
+/**
+ * How one value follows from its bases: the arithmetic, with the numbers that
+ * went into it, for a catalogue to say in either language.
+ *
+ * One member per field rather than a tree of operators: five budgets have five
+ * fixed shapes, and an expression tree would be a small language nobody asked
+ * for and a screen would still have to spell out arm by arm.
+ */
+export type BudgetFormula =
+  | { readonly kind: "review_rounds" }
+  | { readonly kind: "laps"; readonly plans: number; readonly reviewRounds: number }
+  | { readonly kind: "cost_reserve_usd" }
+  | {
+      readonly kind: "cost_usd";
+      readonly plans: number;
+      readonly reserveUsd: number;
+      /** The rounds after the first, each budgeted at `redoUsd`. */
+      readonly laterRounds: number;
+      readonly redoUsd: number;
+    }
+  | { readonly kind: "expires_at_ms"; readonly laps: number; readonly longestMs: number };
 
 export interface BudgetValue {
   readonly value: number;
-  /** How the value follows from its bases, in words. */
-  readonly formula: string;
+  /** How the value follows from its bases (the words are the catalogue's). */
+  readonly formula: BudgetFormula;
   readonly bases: readonly BudgetBasis[];
 }
 
@@ -96,12 +127,6 @@ export interface ScopeBudgets {
   readonly cost_reserve_usd: BudgetValue;
   readonly expires_at_ms: BudgetValue;
 }
-
-const LABEL: Record<Measurement, string> = {
-  first_lap_cost: "first-lap cost",
-  redo_cost: "redo cost",
-  lap_duration: "lap duration",
-};
 
 function measured(row: BudgetRow, measurement: Measurement): number | null {
   switch (measurement) {
@@ -141,7 +166,6 @@ function lookUp(
   for (const [level, found] of levels) {
     if (agentType === null || found.length === 0) continue;
     const value = Math.max(...found.map((row) => measured(row, measurement) as number));
-    const of = level === "agent_type" ? "this agent type" : `tier ${agentType.modelTier}`;
     return {
       kind: "rows",
       measurement,
@@ -150,7 +174,6 @@ function lookUp(
       modelTier: agentType.modelTier,
       value,
       iterationIds: found.map((row) => row.id),
-      text: `highest ${LABEL[measurement]} of the ${found.length} most recent recorded lap${found.length === 1 ? "" : "s"} of ${of}`,
     };
   }
   return {
@@ -158,7 +181,6 @@ function lookUp(
     measurement,
     agentTypeDigest: agentType?.digest ?? null,
     value: coldStart,
-    text: `${LABEL[measurement]}: ${COLD_START}`,
   };
 }
 
@@ -199,39 +221,43 @@ export function computeScopeBudgets(input: BudgetInput): ScopeBudgets {
   const laps = P * rounds;
   const roundsBasis: BudgetBasis = {
     kind: "given",
-    text:
-      input.reviewRounds === undefined
-        ? `review rounds: the default ${DEFAULT_REVIEW_ROUNDS} (D-0064 rule 3.1.4)`
-        : `review rounds: ${rounds}, as given`,
+    given: "review_rounds",
+    value: rounds,
+    byDefault: input.reviewRounds === undefined,
   };
-  const plansBasis: BudgetBasis = { kind: "given", text: `plans: ${P}` };
+  const plansBasis: BudgetBasis = { kind: "given", given: "plans", value: P, byDefault: false };
+  const laterRounds = Math.max(rounds - 1, 0);
+  const redoUsd = Math.max(redo, reserve);
   return {
-    review_rounds: { value: rounds, formula: "review rounds", bases: [roundsBasis] },
+    review_rounds: { value: rounds, formula: { kind: "review_rounds" }, bases: [roundsBasis] },
     laps: {
       value: laps,
-      formula: `plans x review rounds = ${P} x ${rounds}`,
+      formula: { kind: "laps", plans: P, reviewRounds: rounds },
       bases: [plansBasis, roundsBasis],
     },
     cost_reserve_usd: {
       value: reserve,
-      formula: "highest first-lap cost, rounded up to the next 0.10 USD",
+      formula: { kind: "cost_reserve_usd" },
       bases: firstBases,
     },
     cost_usd: {
-      value: cents(P * (reserve + Math.max(rounds - 1, 0) * Math.max(redo, reserve))),
-      formula:
-        `plans x (reserve + (review rounds - 1) x max(redo, reserve)) = ` +
-        `${P} x (${reserve.toFixed(2)} + ${Math.max(rounds - 1, 0)} x ${Math.max(redo, reserve).toFixed(2)})`,
+      value: cents(P * (reserve + laterRounds * redoUsd)),
+      formula: { kind: "cost_usd", plans: P, reserveUsd: reserve, laterRounds, redoUsd },
       bases: [plansBasis, roundsBasis, ...firstBases, ...redoBases],
     },
     expires_at_ms: {
       value: input.draftedAtMs + laps * longest + REPLY_ALLOWANCE_MS,
-      formula: `draft time + laps x longest lap duration + 24 h = draft time + ${laps} x ${Math.round(longest / 1000)} s + 24 h`,
+      formula: { kind: "expires_at_ms", laps, longestMs: longest },
       bases: [
         plansBasis,
         roundsBasis,
         ...durationBases,
-        { kind: "given", text: "24 h for the person's replies: not a measurement" },
+        {
+          kind: "given",
+          given: "reply_allowance",
+          value: REPLY_ALLOWANCE_MS,
+          byDefault: false,
+        },
       ],
     },
   };

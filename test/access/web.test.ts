@@ -15,22 +15,44 @@
  * repeated basis), and both are properties of the bytes that reach a browser.
  */
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { request as httpRequest } from "node:http";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { expect, test } from "vitest";
 
-import { recordPagePress } from "../../src/access/cli.js";
+import {
+  recordPagePress,
+  recordScopeFromPage,
+  scopeDraftingFromPlan,
+  startScopedFromPage,
+} from "../../src/access/cli.js";
+import { agentTypeRecordOf, heldAgentTypeLines } from "../../src/access/scope.js";
 import {
   type LanguageAsked,
   operatorPage as renderPage,
   resolveLanguage,
+  type ScopeDrafting,
 } from "../../src/access/web.js";
-import { AnswerPort, type ServedPorts, serveOperatorPage } from "../../src/access/web-app.js";
+import {
+  AnswerPort,
+  newScopeId,
+  type ScopeFormDraft,
+  type ServedPorts,
+  serveOperatorPage,
+} from "../../src/access/web-app.js";
 import { type Chrome, chromeFor, EN } from "../../src/access/wording.js";
 import { allocate } from "../../src/refrain/allocator.js";
-import { admittedPlan, planPayload, type RunPlan, runPlan } from "../../src/refrain/plan.js";
-import type { JsonRecord } from "../../src/store/records.js";
+import {
+  admittedPlan,
+  planPayload,
+  type RunPlan,
+  readRunPlan,
+  runPlan,
+} from "../../src/refrain/plan.js";
+import { contentDigest } from "../../src/store/plan.js";
+import { type JsonRecord, scopePayloadWithDefaults } from "../../src/store/records.js";
 import { advisoryRecord, iterationStore } from "../../src/store/sqlite.js";
 
 const PLAN: RunPlan = {
@@ -152,6 +174,10 @@ function portsOver(
     // The thread's sends are `test/access/web-app.test.ts`'s door; this page
     // test draws no send form.
     say: null,
+    // The scope screen's own door is `test/access/web-app.test.ts`'s too; with
+    // no plan this page test draws no scope form (rondo#233 S3).
+    plan: null,
+    scope: null,
   };
 }
 
@@ -2496,4 +2522,782 @@ test("an unreadable row links to its reason in the reading instead of naming a c
     chromeFor("ja"),
   );
   expect(ja).toContain(">何が起きたかを読む</a>");
+});
+
+// -- The scope screen (rondo#233 S3, D-0066 rule 1) --
+
+/**
+ * A real, cadenza-valid agent type. `PLAN.agentTypeInput` above is `{}`
+ * (no test on that fixture's path ever built a record from it), but the scope
+ * screen calls `agentTypeRecordOf` on every render and cadenza refuses `{}`.
+ */
+const SCOPE_AGENT_TYPE_INPUT = {
+  agentTypeId: "worker-basic",
+  vocabularyVersion: 1,
+  granted: ["command.run"],
+  askable: ["branch.push"],
+  loopPolicy: { maxReviewRounds: 2, noProgressWindow: 3, noProgressRepeat: 2 },
+  executorPolicy: { roleName: "worker", modelTier: "standard", reportingDuties: [] },
+};
+
+const SCOPE_PLAN: RunPlan = {
+  ...PLAN,
+  agentTypeInput: SCOPE_AGENT_TYPE_INPUT as unknown as RunPlan["agentTypeInput"],
+  parties: { issuer: "rondo-host", grantee: "unset" } as unknown as RunPlan["parties"],
+  intendedAction: { capabilities: ["command.run"] } as unknown as RunPlan["intendedAction"],
+};
+
+/** The plan document `RONDO_PLAN` would name, as `scopeDraftingFromPlan` reads it. */
+function scopePlanDocument(): JsonRecord {
+  const validated = runPlan(SCOPE_PLAN);
+  if (validated.kind !== "planned") {
+    throw new Error(`the scope fixture plan is not valid: ${validated.reason}`);
+  }
+  const allocation = allocate("scope-plan-fixture", SCOPE_PLAN.workspaceRoot);
+  if (allocation.kind !== "allocated") {
+    throw new Error(`the scope fixture id does not allocate: ${allocation.reason}`);
+  }
+  const admitted = admittedPlan(validated.plan, allocation.allocation);
+  if (admitted.kind !== "planned") {
+    throw new Error(`the scope fixture allocation is not valid: ${admitted.reason}`);
+  }
+  return planPayload(admitted.plan);
+}
+
+/**
+ * `RONDO_PLAN`, written to a real file (`scopeDraftingFromPlan` reads a path,
+ * never a document), plus the two digests the screen will draft with -- read
+ * the same way `scopeDraftingFromPlan` does, so a fixture and the render it
+ * feeds can never silently diverge.
+ */
+function scopePlanFile(dir: string): { file: string; agentTypeDigest: string; planDigest: string } {
+  const document = scopePlanDocument();
+  const file = join(dir, "plan.json");
+  writeFileSync(file, JSON.stringify(document), "utf8");
+  const planned = readRunPlan(document);
+  if (planned.kind !== "planned") {
+    throw new Error(`the scope fixture document does not read back: ${planned.reason}`);
+  }
+  const recorded = agentTypeRecordOf(planned.plan, document);
+  if ("refusal" in recorded) {
+    throw new Error(`the scope fixture agent type builds no record: ${recorded.refusal}`);
+  }
+  return {
+    file,
+    agentTypeDigest: recorded.record.agentTypeDigest,
+    planDigest: contentDigest(document),
+  };
+}
+
+/** `WebPorts.plan`, over one file on disk (rondo#233 S3). */
+function planPortOver(file: string, record: ReturnType<typeof fresh>["record"]): ScopeDrafting {
+  return async (wording) => await scopeDraftingFromPlan(file, record, wording);
+}
+
+/** A request message that opens a thread, for the scope screen to draft over. */
+async function seedScopeRequest(
+  world: ReturnType<typeof fresh>,
+  messageId: string,
+  body: string,
+): Promise<void> {
+  const outcome = await world.record.recordThreadMessage({
+    messageId,
+    body,
+    authorKind: "operator",
+    authorId: "ada",
+    inReplyTo: null,
+    atMs: 1_000,
+    bases: [],
+    asks: false,
+  });
+  if (outcome.kind !== "recorded") {
+    throw new Error(`the scope fixture request did not record: ${JSON.stringify(outcome)}`);
+  }
+}
+
+/**
+ * A closed lap with a cost and a duration, for `scopeBudgetsFromStore`'s
+ * `rows` bases (D-0071 rule 4.2). `store.reserve` has no verb for "a worker
+ * reported this cost" -- those three columns are read off a real transcript at
+ * a suspend -- so they are set with SQL after the row exists, exactly as
+ * `test/store/scope-record.test.ts` already does for the same reading.
+ */
+async function seedEndedLap(
+  world: ReturnType<typeof fresh>,
+  id: string,
+  opts: {
+    agentTypeDigest: string;
+    costUsd: number;
+    durationMs: number;
+    supersedesIterationId?: string | null;
+  },
+): Promise<void> {
+  const outcome = await world.store.reserve({
+    id,
+    request: "seeded for the scope screen's budgets",
+    // The plan `heldAgentType`'s "iteration" source rebuilds `agentTypeInput`
+    // from, when no `agent_type_record` row holds the digest -- it must be
+    // {@link SCOPE_AGENT_TYPE_INPUT}'s plan, or the digest column and the
+    // input the record rebuilds from disagree (rondo#233 S3).
+    plan: scopePlanDocument(),
+    spend: null,
+    scopeSpend: null,
+    nowMs: 1_000,
+    supersedesIterationId: opts.supersedesIterationId ?? null,
+    requestMessageId: null,
+    runId: `rondo-${id}`,
+    topicBranch: `rondo/${id}`,
+    workspace: `/srv/work/${id}`,
+  });
+  if (outcome.kind !== "reserved") {
+    throw new Error(`the scope fixture did not reserve '${id}': ${JSON.stringify(outcome)}`);
+  }
+  world.connection
+    .prepare(
+      "UPDATE iteration SET status = 'closed', lap_cost_usd = ?, lap_duration_ms = ?, " +
+        "agent_type_digest = ? WHERE id = ?",
+    )
+    .run(opts.costUsd, opts.durationMs, opts.agentTypeDigest, id);
+}
+
+test("the scope screen drafts a form pre-filled from the request and the plan, every budget's formula and bases shown, the defaults marked as defaults", async () => {
+  const world = fresh();
+  await seedScopeRequest(world, "request-scope-1", "Fix the flaky test, please.");
+  const dir = mkdtempSync(join(tmpdir(), "rondo-scope-"));
+  const { file: planFile, agentTypeDigest, planDigest } = scopePlanFile(dir);
+  await seedEndedLap(world, "i-scope-1", { agentTypeDigest, costUsd: 1.2, durationMs: 6 * 60_000 });
+  await seedEndedLap(world, "i-scope-2", {
+    agentTypeDigest,
+    costUsd: 3.4,
+    durationMs: 9 * 60_000,
+    supersedesIterationId: "i-scope-1",
+  });
+
+  const ports = { ...portsOver(world, "ada", []), plan: planPortOver(planFile, world.record) };
+  const html = await operatorPage(
+    ports,
+    "t",
+    { kind: "scope", messageId: "request-scope-1", rounds: null, decisionId: null },
+    EN,
+    mint,
+    () => "MINT-SCOPE-1",
+    () => "MINT-LAP-1",
+  );
+
+  // Pre-filled from the seeded request and the plan (rondo#233 S3): the
+  // request's own words, its id carried hidden, the plan's two digests and its
+  // workspace, and the agent type's grants read back from the held record.
+  expect(html).toContain("Fix the flaky test, please.");
+  expect(html).toContain('<input type="hidden" name="request" value="request-scope-1"/>');
+  expect(html).toContain('<input type="hidden" name="scope_id" value="MINT-SCOPE-1"/>');
+  expect(html).toContain(`agent type ${agentTypeDigest}`);
+  expect(html).toContain(`plan ${planDigest}`);
+  expect(html).toContain(`${SCOPE_PLAN.repository} at ${SCOPE_PLAN.workspaceRoot}`);
+  expect(html).toContain("tier standard, granted command.run");
+
+  // Every budget's formula, and its bases folded but present.
+  expect(html).toContain("how: plans x review rounds = 1 x 3");
+  expect(html).toContain("where this came from");
+  // A `rows` basis's laps are links into their answer view, never bare text.
+  expect(html).toContain('href="/?answer=i-scope-1&amp;lang=en"');
+  expect(html).toContain('href="/?answer=i-scope-2&amp;lang=en"');
+  expect(html).not.toContain(">i-scope-1<");
+  expect(html).not.toContain(">i-scope-2<");
+
+  // The deterministic defaults, marked as defaults and not derived from the
+  // request (rondo#233 S3 -- `severity_threshold`, `outward_acts` and
+  // `irreversible_additions` are none of them editable here).
+  expect(html).toMatch(/<option value="major"[^>]*selected/);
+  expect(html).not.toContain("checked=");
+  expect(html).toContain("No act is added to the irreversible list.");
+  expect(html).toContain("A default, not derived from your request.");
+
+  // **What the screen cannot check, said** (rondo#233 S3 screen review): there
+  // is no listing of a request's scopes, so a blank draft is not evidence
+  // there is no approval already.
+  expect(html).toContain("rondo cannot tell from here whether you have already approved a scope");
+  // **The card says which plan, and the digests are folded**: three
+  // 71-character hashes as plain text were a third of the first screenful at
+  // 420px, and there is nothing a person does with one.
+  expect(html).toContain("The plan rondo will run, and where it will run it");
+  expect(html).toContain("The digests rondo will record");
+  expect(html.indexOf("The digests rondo will record")).toBeLessThan(
+    html.indexOf(`plan ${planDigest}`),
+  );
+  // The two digests it was drawn from ride along, for the write to compare its
+  // own re-read against -- never as a second authority for what is recorded.
+  expect(html).toContain(`<input type="hidden" name="plan_digest" value="${planDigest}"/>`);
+  expect(html).toContain(`<input type="hidden" name="agent_type" value="${agentTypeDigest}"/>`);
+
+  // No script needed to draft or to press it.
+  expect(html).not.toContain("hx-get");
+  expect(html).not.toContain('http-equiv="refresh"');
+});
+
+test("choosing review rounds redraws the budgets from the plan, with script off", async () => {
+  const world = fresh();
+  await seedScopeRequest(world, "request-scope-rounds", "Do the thing.");
+  const dir = mkdtempSync(join(tmpdir(), "rondo-scope-"));
+  const { file: planFile } = scopePlanFile(dir);
+  const ports = { ...portsOver(world, "ada", []), plan: planPortOver(planFile, world.record) };
+  const view = (rounds: number | null) =>
+    ({ kind: "scope", messageId: "request-scope-rounds", rounds, decisionId: null }) as const;
+
+  const defaulted = await operatorPage(
+    ports,
+    "t",
+    view(null),
+    EN,
+    mint,
+    () => "x",
+    () => "y",
+  );
+  const five = await operatorPage(
+    ports,
+    "t",
+    view(5),
+    EN,
+    mint,
+    () => "x",
+    () => "y",
+  );
+
+  // D-0064 rule 3.1.4's default is 3 review rounds, over one plan: laps = 3.
+  expect(defaulted).toContain('value="3"');
+  expect(defaulted).not.toContain('value="5"');
+  // Asking for 5 redraws every budget that depends on it, laps included.
+  expect(five).toContain('value="5"');
+  expect(five).not.toContain('value="3"');
+
+  // **Explicit links, not a `method="get"` form** (rondo#233 S3): a link works
+  // identically with script off, so nothing here needs `hx-get`.
+  expect(five).toContain('href="/?scope=request-scope-rounds&amp;rounds=0&amp;lang=en"');
+  expect(five).not.toContain("hx-get");
+  expect(five).not.toContain('method="get"');
+});
+
+test("the approval reads what its predecessor spent, and repeats that the reviewer's own cost is never counted", async () => {
+  const world = fresh();
+  const requestId = "request-scope-pred";
+  await seedScopeRequest(world, requestId, "Please continue the migration.");
+  const dir = mkdtempSync(join(tmpdir(), "rondo-scope-"));
+  const { file: planFile, agentTypeDigest } = scopePlanFile(dir);
+  await seedEndedLap(world, "i-scope-pred", { agentTypeDigest, costUsd: 4.5, durationMs: 60_000 });
+
+  const payload: JsonRecord = scopePayloadWithDefaults({
+    requests: [requestId],
+    workspaces: [{ repository: SCOPE_PLAN.repository, workspace_root: SCOPE_PLAN.workspaceRoot }],
+    agent_types: [agentTypeDigest],
+    budgets: {
+      laps: 1,
+      review_rounds: 1,
+      cost_usd: 5,
+      cost_reserve_usd: 1,
+      expires_at_ms: 9_999_999_999,
+    },
+    severity_threshold: "major",
+    outward_acts: [],
+    irreversible_additions: [],
+  });
+
+  await world.record.recordScope({
+    scopeId: "scope-pred",
+    payload,
+    supersedesScopeId: null,
+    authorKind: "operator",
+    authorId: "ada",
+    bases: [],
+    createdAtMs: 1_000,
+    agentTypeRecords: [],
+  });
+  const predStored = await world.record.readScope("scope-pred");
+  if (predStored.kind !== "read") {
+    throw new Error(`the scope fixture predecessor did not record: ${JSON.stringify(predStored)}`);
+  }
+  await world.record.recordScopeDecision({
+    scopeDecisionId: "decision-pred",
+    scopeId: "scope-pred",
+    scopeDigest: predStored.scope.scopeDigest,
+    outcome: "approved",
+    actorId: "ada",
+    recordedBy: "rondo/page",
+    decidedAtMs: 1_500,
+  });
+  // One admission planted directly against the predecessor's decision, as
+  // `test/store/scope-record.test.ts` plants one for the same reading (D-0066
+  // rule 3.4) rather than replaying `admitUnderScope`'s whole verdict.
+  world.connection
+    .prepare(
+      "INSERT INTO scope_consumption (scope_decision_id, act_kind, subject_id, proposal_id, " +
+        "consumed_at_ms) VALUES ('decision-pred', 'admission', 'i-scope-pred', NULL, 2000)",
+    )
+    .run();
+
+  await world.record.recordScope({
+    scopeId: "scope-succ",
+    payload,
+    supersedesScopeId: "scope-pred",
+    authorKind: "operator",
+    authorId: "ada",
+    bases: [],
+    createdAtMs: 3_000,
+    agentTypeRecords: [],
+  });
+  const succStored = await world.record.readScope("scope-succ");
+  if (succStored.kind !== "read") {
+    throw new Error(`the scope fixture successor did not record: ${JSON.stringify(succStored)}`);
+  }
+  await world.record.recordScopeDecision({
+    scopeDecisionId: "decision-succ",
+    scopeId: "scope-succ",
+    scopeDigest: succStored.scope.scopeDigest,
+    outcome: "approved",
+    actorId: "ada",
+    recordedBy: "rondo/page",
+    decidedAtMs: 3_500,
+  });
+
+  const ports = { ...portsOver(world, "ada", []), plan: planPortOver(planFile, world.record) };
+  const html = await operatorPage(
+    ports,
+    "t",
+    { kind: "scope", messageId: requestId, rounds: null, decisionId: "decision-succ" },
+    EN,
+    mint,
+    () => "x",
+    () => "y",
+  );
+
+  // D-0066 rule 1.4: what a predecessor's approval spent is read on its
+  // successor's own screen, in laps and read dollars, with unread laps named.
+  expect(html).toContain("has spent 1 laps and $4.50 read");
+  expect(html).toContain("with 0 laps whose cost is not read yet holding their reserve");
+  // D-0066's first gate answer, said again beside the approval and not only on the form.
+  expect(html).toContain(
+    "the reviewer's cost is not counted, and a lap whose cost is not read yet holds the reserve",
+  );
+  expect(html).toContain('id="start-form"');
+
+  // **The retired approval's own screen draws no start button** (rule 1.4).
+  // `scopeVerdict` refuses that press at the `superseded` test, so drawing it
+  // is the screen offering a press it already knows cannot work; it says why
+  // instead (rondo#233 S3 press review).
+  const retired = await operatorPage(
+    ports,
+    "t",
+    { kind: "scope", messageId: requestId, rounds: null, decisionId: "decision-pred" },
+    EN,
+    mint,
+    () => "x",
+    () => "y",
+  );
+  expect(retired).toContain("A later scope has replaced this one");
+  expect(retired).not.toContain('id="start-form"');
+});
+
+test("the scope screen speaks Japanese, and every id, digest and 'rondo' token stays ASCII", async () => {
+  const world = fresh();
+  const requestId = "request-scope-ja";
+  await seedScopeRequest(world, requestId, "テストの不安定さを直してください。");
+  const dir = mkdtempSync(join(tmpdir(), "rondo-scope-"));
+  const { file: planFile, agentTypeDigest, planDigest } = scopePlanFile(dir);
+  await seedEndedLap(world, "i-scope-ja", { agentTypeDigest, costUsd: 1, durationMs: 60_000 });
+  const ports = { ...portsOver(world, "ada", []), plan: planPortOver(planFile, world.record) };
+
+  const html = await operatorPage(
+    ports,
+    "t",
+    { kind: "scope", messageId: requestId, rounds: null, decisionId: null },
+    chromeFor("ja"),
+    mint,
+    () => "x",
+    () => "y",
+  );
+
+  expect(html).toContain("この依頼の範囲");
+  expect(html).toContain("範囲を決める");
+  expect(html).toContain(
+    "rondo がプランとこのストアに記録された周回から下書きしました。読んで、変えたいところを変えてください。",
+  );
+  expect(html).toContain("既定値で、依頼から導いたものではありません。");
+  expect(html).toContain(`エージェント種別 ${agentTypeDigest}`);
+  expect(html).toContain(`プラン ${planDigest}`);
+
+  // **The evidence layer is in Japanese too** (rondo#233 S3 screen review).
+  // The formulas, the bases and the agent type's bounds are the whole reason
+  // the fold exists, and every one of them rendered English inside this page
+  // while `computeScopeBudgets` composed the sentence itself. The numbers,
+  // digests and capability keys they frame stay their own bytes (rule 3).
+  expect(html).toContain("計算: プラン数 x レビュー回数 = 1 x 3");
+  expect(html).toContain("この数の出どころ");
+  expect(html).toContain("レビュー回数: 3（誰も選ばなかったときに rondo が使う数）");
+  expect(html).toContain("初回周回の費用が最も高かったもの");
+  expect(html).toContain("あなたの返信のための 1 日");
+  expect(html).toContain("tier standard、許可はcommand.run");
+  expect(html).toContain("ブランチを push する");
+  expect(html).toContain("重大 (major)");
+  // Not one English sentence left in the fold, and no D-number in front of
+  // anybody in either language (this catalogue's own rule).
+  expect(html).not.toContain("highest");
+  expect(html).not.toContain("most recent recorded lap");
+  expect(html).not.toContain("held from");
+  expect(html).not.toContain("D-0064");
+  // The EN-only sentence this screen did not draw in Japanese.
+  expect(html).not.toContain("Set the scope");
+  // D-0055 rule 3: ids, digests and the `rondo` token stay ASCII in JA too.
+  expect(agentTypeDigest).toMatch(/^[\x20-\x7E]+$/);
+  expect(planDigest).toMatch(/^[\x20-\x7E]+$/);
+  expect(html).toContain(">rondo</");
+});
+
+test("rendering the scope screen writes nothing, however many times or in which state it is drawn", async () => {
+  const world = fresh();
+  const requestId = "request-scope-idle";
+  await seedScopeRequest(world, requestId, "Look at this.");
+  const dir = mkdtempSync(join(tmpdir(), "rondo-scope-"));
+  const { file: planFile, agentTypeDigest } = scopePlanFile(dir);
+  await seedEndedLap(world, "i-scope-idle", { agentTypeDigest, costUsd: 1, durationMs: 60_000 });
+  const ports = { ...portsOver(world, "ada", []), plan: planPortOver(planFile, world.record) };
+
+  for (let i = 0; i < 5; i++) {
+    await operatorPage(
+      ports,
+      "t",
+      { kind: "scope", messageId: requestId, rounds: i % 4, decisionId: null },
+      EN,
+      mint,
+      () => "x",
+      () => "y",
+    );
+  }
+  // With no port, too (no `RONDO_APPROVER`): the plan is still read, and the
+  // form is not drawn at all, buttons included (rondo#233 S3).
+  const bare = await operatorPage(
+    ports,
+    null,
+    { kind: "scope", messageId: requestId, rounds: null, decisionId: null },
+    EN,
+    null,
+    null,
+    null,
+  );
+  expect(bare).not.toContain("<form");
+  expect(bare).not.toContain("<button");
+  expect(bare).toContain(
+    "RONDO_APPROVER is not set, so there is nobody this page could approve a scope as.",
+  );
+
+  expect(rows(world.connection, "scope")).toBe(0);
+  expect(rows(world.connection, "scope_decision")).toBe(0);
+  expect(rows(world.connection, "operator_attention")).toBe(0);
+});
+
+test("the record-scope press writes the scope, reads it back, counts it and approves it with the digest read back -- and never a decision when the write refused", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "rondo-scope-write-"));
+  const storePath = join(dir, "store.db");
+  const record = advisoryRecord(new DatabaseSync(storePath));
+  const requestId = "request-scope-write";
+  await record.recordThreadMessage({
+    messageId: requestId,
+    body: "Please fix it.",
+    authorKind: "operator",
+    authorId: "ada",
+    inReplyTo: null,
+    atMs: 1_000,
+    bases: [],
+    asks: false,
+  });
+  const plan = scopePlanFile(dir);
+  const planFile = plan.file;
+  const environment = { RONDO_APPROVER: "ada" };
+  const draft: ScopeFormDraft = {
+    scopeId: newScopeId(),
+    requestMessageId: requestId,
+    planDigest: plan.planDigest,
+    agentTypeDigest: plan.agentTypeDigest,
+    budgets: {
+      laps: 1,
+      review_rounds: 1,
+      cost_usd: 5,
+      cost_reserve_usd: 1,
+      expires_at_ms: 9_999_999_999,
+    },
+    severityThreshold: "major",
+    outwardActs: [],
+  };
+
+  const recorded = await recordScopeFromPage(environment, storePath, "ada", planFile, draft);
+  expect(recorded.ok).toBe(true);
+  expect(recorded.why).toBeUndefined();
+  expect(recorded.scopeDecisionId).toBeDefined();
+
+  const stored = await record.readScope(draft.scopeId);
+  expect(stored.kind).toBe("read");
+  const decision = await record.readScopeDecision(recorded.scopeDecisionId as string);
+  expect(decision.kind).toBe("read");
+  if (decision.kind === "read" && stored.kind === "read") {
+    // D-0066 rule 2.2: the digest approved is the digest read back, never one
+    // a form posted -- true here by construction (`recordScopeFromPage`'s own
+    // order), not by a person copying a line.
+    expect(decision.decision.scopeDigest).toBe(stored.scope.scopeDigest);
+    expect(decision.decision.outcome).toBe("approved");
+  }
+  // Presented, once, for the row this press wrote (D-0042 rule 3).
+  const attention = new DatabaseSync(storePath)
+    .prepare(
+      "SELECT count(*) AS n FROM operator_attention " +
+        "WHERE subject_kind = 'scope' AND subject_id = ? AND disposition = 'presented'",
+    )
+    .get(draft.scopeId) as { n: number };
+  expect(Number(attention.n)).toBe(1);
+
+  // A second row, over a request this store never heard of: `recordScope`
+  // refuses it, and a decision is never recorded for a scope that was not
+  // taken (D-0036 rule 1's order -- write, present, count).
+  const refusedDraft: ScopeFormDraft = {
+    ...draft,
+    scopeId: newScopeId(),
+    requestMessageId: "no-such-request",
+  };
+  const refused = await recordScopeFromPage(environment, storePath, "ada", planFile, refusedDraft);
+  expect(refused.ok).toBe(false);
+  expect(refused.why).toBe("scopeRefusedNotTaken");
+  expect(refused.scopeDecisionId).toBeUndefined();
+  expect(await record.readScope(refusedDraft.scopeId)).toEqual({ kind: "absent" });
+  expect(rows(new DatabaseSync(storePath), "scope_decision")).toBe(1);
+});
+
+test("a plan that moved between the draw and the press records nothing, because the approval would name a workspace nobody saw", async () => {
+  // **The hole rule 2.2 leaves open by itself** (rondo#233 S3 press review).
+  // The write re-reads the plan, as it must, and the two fields the form does
+  // not post -- the workspace and the agent type -- are exactly the ones that
+  // say where the work may act. The digest approved is the row's own either
+  // way, so rule 2.2's letter holds while the person approves a repository
+  // they never read. The form carries what it was drawn from; this compares.
+  const dir = mkdtempSync(join(tmpdir(), "rondo-scope-moved-"));
+  const storePath = join(dir, "store.db");
+  const record = advisoryRecord(new DatabaseSync(storePath));
+  const requestId = "request-scope-moved";
+  await record.recordThreadMessage({
+    messageId: requestId,
+    body: "Please fix it.",
+    authorKind: "operator",
+    authorId: "ada",
+    inReplyTo: null,
+    atMs: 1_000,
+    bases: [],
+    asks: false,
+  });
+  const plan = scopePlanFile(dir);
+  const drawn: ScopeFormDraft = {
+    scopeId: newScopeId(),
+    requestMessageId: requestId,
+    planDigest: plan.planDigest,
+    agentTypeDigest: plan.agentTypeDigest,
+    budgets: {
+      laps: 1,
+      review_rounds: 1,
+      cost_usd: 5,
+      cost_reserve_usd: 1,
+      expires_at_ms: 9_999_999_999,
+    },
+    severityThreshold: "major",
+    outwardActs: [],
+  };
+
+  // The file moves while the person is reading the screen it was drawn from.
+  // Absolute, because a repository on a plan is a path (`requireAbsolute`):
+  // the point is a *valid* plan naming somewhere else, not a broken one.
+  const moved = { ...scopePlanDocument(), repository: "/srv/other-repo" };
+  writeFileSync(plan.file, JSON.stringify(moved), "utf8");
+
+  const refused = await recordScopeFromPage(
+    { RONDO_APPROVER: "ada" },
+    storePath,
+    "ada",
+    plan.file,
+    drawn,
+  );
+  expect(refused.ok).toBe(false);
+  expect(refused.why).toBe("scopeRefusedPlanChanged");
+  expect(refused.scopeDecisionId).toBeUndefined();
+  // Nothing at all: not the scope, not the presentation, not the approval.
+  expect(await record.readScope(drawn.scopeId)).toEqual({ kind: "absent" });
+  expect(rows(new DatabaseSync(storePath), "scope")).toBe(0);
+  expect(rows(new DatabaseSync(storePath), "scope_decision")).toBe(0);
+
+  // And the same press against the plan it was drawn from still records.
+  writeFileSync(plan.file, JSON.stringify(scopePlanDocument()), "utf8");
+  const recorded = await recordScopeFromPage(
+    { RONDO_APPROVER: "ada" },
+    storePath,
+    "ada",
+    plan.file,
+    drawn,
+  );
+  expect(recorded.ok).toBe(true);
+});
+
+test("a second press of an edited form is refused, and never reported as an approval of numbers that were replaced", async () => {
+  // The id is minted per draw, so the store refuses the second row on the id
+  // and the approval already there reads back -- which is a screen saying
+  // *approved* about a budget the person has just replaced (rondo#233 S3 press
+  // review). The id says which form this is; the payload says whether it is
+  // still the same scope.
+  const dir = mkdtempSync(join(tmpdir(), "rondo-scope-edited-"));
+  const storePath = join(dir, "store.db");
+  const record = advisoryRecord(new DatabaseSync(storePath));
+  const requestId = "request-scope-edited";
+  await record.recordThreadMessage({
+    messageId: requestId,
+    body: "Please fix it.",
+    authorKind: "operator",
+    authorId: "ada",
+    inReplyTo: null,
+    atMs: 1_000,
+    bases: [],
+    asks: false,
+  });
+  const plan = scopePlanFile(dir);
+  const environment = { RONDO_APPROVER: "ada" };
+  const draft: ScopeFormDraft = {
+    scopeId: newScopeId(),
+    requestMessageId: requestId,
+    planDigest: plan.planDigest,
+    agentTypeDigest: plan.agentTypeDigest,
+    budgets: {
+      laps: 3,
+      review_rounds: 1,
+      cost_usd: 5,
+      cost_reserve_usd: 1,
+      expires_at_ms: 9_999_999_999,
+    },
+    severityThreshold: "major",
+    outwardActs: [],
+  };
+  const first = await recordScopeFromPage(environment, storePath, "ada", plan.file, draft);
+  expect(first.ok).toBe(true);
+
+  // The same form, back from the browser's history, with one number changed.
+  const edited: ScopeFormDraft = { ...draft, budgets: { ...draft.budgets, laps: 10 } };
+  const again = await recordScopeFromPage(environment, storePath, "ada", plan.file, edited);
+  expect(again.ok).toBe(false);
+  expect(again.why).toBe("scopeRefusedEdited");
+  expect(again.scopeDecisionId).toBeUndefined();
+
+  // What is stored is still the first press's scope, approved once.
+  const stored = await record.readScope(draft.scopeId);
+  expect(stored.kind === "read" && stored.scope.payload.budgets.laps).toBe(3);
+  expect(rows(new DatabaseSync(storePath), "scope")).toBe(1);
+  expect(rows(new DatabaseSync(storePath), "scope_decision")).toBe(1);
+
+  // An unedited re-press -- a double click, a resend after a slow write -- is
+  // still the write it repeats, and still lands on the approval it made.
+  const repeated = await recordScopeFromPage(environment, storePath, "ada", plan.file, draft);
+  expect(repeated.ok).toBe(true);
+  expect(repeated.scopeDecisionId).toBe(first.scopeDecisionId);
+  expect(rows(new DatabaseSync(storePath), "scope_decision")).toBe(1);
+});
+
+test("a scoped start press that names a row already there admits nothing, rather than asking the request a question nobody asked", async () => {
+  // **The replay the minted id makes possible** (rondo#233 S3, the Codex review
+  // of this branch). The iteration id is minted when the form is drawn, so back
+  // and submit posts the id the first press already admitted. Sending it through
+  // the scope test again is not harmless: the lap it started has spent the
+  // budget it was testing against, so the verdict fails and the refusal writes
+  // an **asking message into the request's thread** (D-0066 rule 4.4) which then
+  // holds the line (D-0069 rule 5) -- a question nobody asked, stopping the
+  // work, because somebody pressed back. The guard runs before continuo is
+  // started, which is what makes this reachable in a file with no continuo.
+  const dir = mkdtempSync(join(tmpdir(), "rondo-start-replay-"));
+  const storePath = join(dir, "store.db");
+  const connection = new DatabaseSync(storePath);
+  const record = advisoryRecord(connection);
+  const store = iterationStore(connection, { maxOccupying: 4, maxLive: 6 });
+  const requestId = "request-start-replay";
+  await record.recordThreadMessage({
+    messageId: requestId,
+    body: "Please do it.",
+    authorKind: "operator",
+    authorId: "ada",
+    inReplyTo: null,
+    atMs: 1_000,
+    bases: [],
+    asks: false,
+  });
+  const iterationId = "lap-already-there";
+  const reserved = await store.reserve({
+    id: iterationId,
+    request: "Please do it.",
+    plan: planFor(iterationId),
+    spend: null,
+    scopeSpend: null,
+    nowMs: 1_000,
+    supersedesIterationId: null,
+    requestMessageId: requestId,
+    runId: `rondo-${iterationId}`,
+    topicBranch: `rondo/${iterationId}`,
+    workspace: `/srv/work/${iterationId}`,
+  });
+  expect(reserved.kind).toBe("reserved");
+
+  const before = rows(connection, "conversation_message");
+  const started = await startScopedFromPage(
+    { RONDO_APPROVER: "ada" },
+    store,
+    storePath,
+    "ada",
+    scopePlanFile(dir).file,
+    {
+      iterationId,
+      requestMessageId: requestId,
+      scopeDecisionId: "scope-decision-nobody-approved",
+    },
+  );
+  // The press is the one that made the row, so it is not a refusal to show.
+  expect(started.ok).toBe(true);
+  expect(started.why).toBeUndefined();
+  // And nothing was asked of the request: the thread is exactly as it was.
+  expect(rows(connection, "conversation_message")).toBe(before);
+  // Not vacuous: a scope decision nobody approved is what the second press
+  // carries, and it reached no scope test at all -- one iteration row, still.
+  expect(rows(connection, "iteration")).toBe(1);
+});
+
+test("the first scope in a store shows what its agent type is allowed, read from the plan the press will record", async () => {
+  // **D-0069 section 1 in the one case the store cannot answer** (rondo#233 S3,
+  // Codex round 3). A fresh store holds no `agent_type_record` and has run no
+  // lap, so the held read is absent and the line could only say rondo holds no
+  // record -- while the form goes on offering the press. The person would be
+  // approving a hash, which is what that section exists to stop. The plan the
+  // press is about to record is what the record is built from, so it answers
+  // before the press; nothing is written by asking it.
+  const world = fresh();
+  const dir = mkdtempSync(join(tmpdir(), "rondo-scope-firstplan-"));
+  const plan = scopePlanFile(dir);
+
+  const drafted = await scopeDraftingFromPlan(plan.file, world.record, EN);
+  expect(drafted.kind).toBe("drafted");
+  if (drafted.kind !== "drafted") return;
+  const line = drafted.heldLines.join("\n");
+  expect(line).toContain(plan.agentTypeDigest);
+  expect(line).toContain("tier ");
+  expect(line).toContain("read from the plan this scope records");
+  // Not the blind line: that one is still what a digest with no plan behind it
+  // gets, which is the assertion that keeps this from passing vacuously.
+  expect(line).not.toContain("rondo holds no record of what it is allowed");
+  expect(
+    (await heldAgentTypeLines(EN, world.record, ["sha256:" + "0".repeat(64)])).join("\n"),
+  ).toContain("rondo holds no record of what it is allowed");
+
+  // Asking wrote nothing: the record is still the press's to write.
+  expect(rows(world.connection, "agent_type_record")).toBe(0);
+  expect(rows(world.connection, "scope")).toBe(0);
+
+  // And it is said in the page's language too, not only in English.
+  const ja = await scopeDraftingFromPlan(plan.file, world.record, chromeFor("ja"));
+  expect(ja.kind).toBe("drafted");
+  if (ja.kind === "drafted") {
+    expect(ja.heldLines.join("\n")).toContain("この範囲が記録するプラン");
+  }
 });

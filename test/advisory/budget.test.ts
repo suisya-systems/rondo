@@ -6,7 +6,7 @@ import { expect, test } from "vitest";
 import { scopeBudgetsFromStore } from "../../src/access/scope.js";
 import {
   type BudgetRow,
-  COLD_START,
+  COLD_START_RESERVE_USD,
   computeScopeBudgets,
   REPLY_ALLOWANCE_MS,
 } from "../../src/advisory/budget.js";
@@ -44,8 +44,16 @@ test("a fresh store gets the cold start on every field, and 5.00 for one plan an
   expect(b.laps.value).toBe(2);
   expect(b.review_rounds.value).toBe(2);
   expect(b.expires_at_ms.value).toBe(T0 + 2 * 30 * MIN + REPLY_ALLOWANCE_MS);
-  expect(b.cost_reserve_usd.bases).toEqual([expect.objectContaining({ kind: "cold_start" })]);
-  expect(b.cost_reserve_usd.bases[0]?.text).toContain(COLD_START);
+  expect(b.cost_reserve_usd.bases).toEqual([
+    expect.objectContaining({ kind: "cold_start", value: COLD_START_RESERVE_USD }),
+  ]);
+  // The bases are facts and not a sentence: the words for them are the
+  // catalogue's, so both languages can say where a number came from.
+  expect(b.laps.formula).toEqual({ kind: "laps", plans: 1, reviewRounds: 2 });
+  expect(b.laps.bases).toEqual([
+    { kind: "given", given: "plans", value: 1, byDefault: false },
+    { kind: "given", given: "review_rounds", value: 2, byDefault: false },
+  ]);
 });
 
 test("recorded laps of the agent type set the reserve, the redo and the duration, with their rows", () => {
@@ -59,6 +67,12 @@ test("recorded laps of the agent type set the reserve, the redo and the duration
     draftedAtMs: T0,
   });
   expect(b.review_rounds.value).toBe(3);
+  expect(b.review_rounds.bases[0]).toEqual({
+    kind: "given",
+    given: "review_rounds",
+    value: 3,
+    byDefault: true,
+  });
   expect(b.cost_reserve_usd.value).toBe(1.1);
   // 2 x (1.10 + 2 x max(7.10, 1.10))
   expect(b.cost_usd.value).toBe(30.6);

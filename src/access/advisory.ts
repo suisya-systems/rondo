@@ -707,6 +707,17 @@ async function explainedBy(
  */
 export const COMMAND_LINE_SURFACE = "rondo/cli";
 
+/**
+ * The operator page, as the surface that recorded a decision.
+ *
+ * Beside {@link COMMAND_LINE_SURFACE} and for its reason: `recorded_by` and
+ * `actor_id` are two columns because they are two facts, and a surface that
+ * recorded itself as the approver is the one substitution that table exists to
+ * make visible. The page approves a scope on a person's press (D-0059 section
+ * 5a, rondo#233 S3), so it names itself here.
+ */
+export const OPERATOR_PAGE_SURFACE = "rondo/page";
+
 /** What one `propose` did, or the first reason it did not. */
 export type ProposeOutcome =
   | { readonly kind: "proposed"; readonly proposalId: string; readonly options: readonly Option[] }

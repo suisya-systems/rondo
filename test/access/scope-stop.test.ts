@@ -1113,7 +1113,7 @@ test("scope --plan records an agent type no lap has run, and the screen reads it
   expect(recorded.code).toBe(0);
   expect(recorded.text).toContain(`plan ${join(dir, "plan.json")}: agent type ${digest}`);
   expect(recorded.text).toContain(
-    `agent type ${digest}: tier standard, granted command.run (held from a plan recorded for a scope)`,
+    `agent type ${digest}: tier standard, granted command.run, read from a plan recorded for a scope`,
   );
   expect(recorded.text).toMatch(/^[\x20-\x7E\n]*$/);
   const rows = connection

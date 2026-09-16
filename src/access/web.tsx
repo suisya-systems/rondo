@@ -88,6 +88,12 @@
  */
 import { parseAccept } from "hono/utils/accept";
 import {
+  type BudgetBasis,
+  type BudgetFormula,
+  type BudgetValue,
+  DEFAULT_REVIEW_ROUNDS,
+} from "../advisory/budget.js";
+import {
   type AdvisorySnapshot,
   BASIS_FORMS,
   type Basis,
@@ -99,6 +105,7 @@ import {
 } from "../advisory/proposal.js";
 import type { HostPolicy } from "../refrain/policy.js";
 import {
+  FINDING_SEVERITIES,
   type FindingSeverity,
   findingBasisText,
   type IterationRecord,
@@ -112,6 +119,9 @@ import {
   type OpenProposal,
   readingCoverage,
   reviewedReading,
+  SCOPE_OUTWARD_ACTS,
+  type ScopeWorkspace,
+  type StoredScope,
   type ThreadMessageDraft,
   WAIT_SIDE,
 } from "../store/records.js";
@@ -131,6 +141,7 @@ import {
   whereItRuns,
 } from "./inbox.js";
 import { denialLine, LIST_LIMIT } from "./review.js";
+import { heldAgentTypeLines, scopeBudgetsFromStore } from "./scope.js";
 import { type Chrome, EN, SHIPPED_SETS, setFor } from "./wording.js";
 
 /**
@@ -152,7 +163,21 @@ export interface WebPorts extends InboxReadPorts {
     | "verificationClaimsFor"
   >;
   readonly record: InboxReadPorts["record"] &
-    Pick<AdvisoryRecord, "admissionRefusals" | "threadMessages">;
+    Pick<
+      AdvisoryRecord,
+      | "admissionRefusals"
+      | "threadMessages"
+      // rondo#233 S3: the budgets read a digest's tier back from the held
+      // record (D-0069 section 1), and the scope screen's second state reads
+      // the approval the press wrote and what a predecessor of it spent
+      // (D-0066 rules 1.4 and 3.4).
+      | "heldAgentType"
+      | "readScope"
+      | "readScopeDecision"
+      | "scopeDecisionOf"
+      | "scopeSpent"
+      | "scopeSupersededByApproved"
+    >;
   readonly policy: HostPolicy;
   readonly actorId: string | null;
   /**
@@ -186,7 +211,38 @@ export interface WebPorts extends InboxReadPorts {
    * not also be the screen that asks for less before it writes.
    */
   readonly material: LapMaterial | null;
+  /**
+   * The plan `RONDO_PLAN` names, or null when the host named none: no plan, no
+   * scope form, and the screen says which (D-0020 rule 2's shape).
+   */
+  readonly plan: ScopeDrafting | null;
 }
+
+/**
+ * What one host's plan says, for a scope form to start from (D-0069 section 1).
+ *
+ * A function and not a value, for {@link LapMaterial}'s reason turned the same
+ * way round: the plan is a file, and a renderer that could read one would hold
+ * a capability nothing on this surface should hold. The caller reads it and
+ * this module renders it. A refusal is words, never a throw and never a
+ * D-number.
+ *
+ * **The set is an argument**, for {@link LapMaterial}'s other reason: the held
+ * agent-type lines are prose, and a port that composed them at boot rendered
+ * the host's language inside a document declaring another.
+ */
+export type ScopeDrafting = (wording: Chrome) => Promise<ScopeDrafted>;
+
+export type ScopeDrafted =
+  | {
+      readonly kind: "drafted";
+      readonly agentTypeDigest: string;
+      readonly planDigest: string;
+      readonly workspaces: readonly ScopeWorkspace[];
+      /** `heldAgentTypeLines`' one line per digest: tier and granted keys, no probe. */
+      readonly heldLines: readonly string[];
+    }
+  | { readonly kind: "refused"; readonly reason: string };
 
 /**
  * The lines `rondo answer` prints about the work itself, for one iteration, in
@@ -272,7 +328,38 @@ export type PageView =
       readonly kind: "thread";
       readonly messageId: string;
       readonly to: string | null;
+    }
+  /**
+   * One request's scope (rondo#233 S3, D-0066 rule 1): the form rondo drafts
+   * from the plan and this store's laps, and -- once a press has recorded and
+   * approved one -- that approval with the scoped start beside it.
+   *
+   * **The rounds and the decision are in the address for the same reason the
+   * view is** (D-0056 rule 11): the language switch calls {@link viewHref} with
+   * the view it is on, so a member kept anywhere else is a switch that silently
+   * re-drafts the budgets or loses the approval just recorded.
+   */
+  | {
+      readonly kind: "scope";
+      readonly messageId: string;
+      /** Review rounds the person asked for, or null for D-0064 rule 3.1.4's default. */
+      readonly rounds: number | null;
+      /** The approval this screen is showing, or null while there is none. */
+      readonly decisionId: string | null;
     };
+
+/**
+ * The most review rounds this screen will draft for.
+ *
+ * Not a policy: a bound, so a typed `?rounds=1000000` cannot ask
+ * `computeScopeBudgets` for a lap count and a cost nobody would approve and a
+ * screen could not draw. Past it the view falls to the default, which is what
+ * every other unreadable query on this page does.
+ */
+export const MAX_REVIEW_ROUNDS = 20;
+
+/** The round counts the screen offers as links. */
+const REVIEW_ROUND_CHOICES: readonly number[] = [0, 1, 2, 3, 4, 5, 6];
 
 /**
  * Whether this view keeps itself current, which is a property of the view and
@@ -289,9 +376,17 @@ export type PageView =
  * it is deletion rather than machinery: D-0042 re-composes the framing at press
  * time and refuses a press naming a row that is not there, so a page a minute
  * old cannot answer a gate that moved.
+ *
+ * **`scope` updates by nothing at all either**, for `answer`'s reason and one
+ * more. It is a form a person is filling in: with script on a poll would swap
+ * `#ledger` out from under half-typed budgets, and with script off the meta
+ * refresh would throw the whole draft away every five seconds -- which is the
+ * argument the composer views already make for themselves (`onThreads &&
+ * forms`). It costs no staleness risk: nothing on it is a live row, and what
+ * the press writes is re-tested at press time.
  */
 function isLive(view: PageView): boolean {
-  return view.kind !== "answer";
+  return view.kind !== "answer" && view.kind !== "scope";
 }
 
 /**
@@ -323,6 +418,13 @@ export function viewHref(view: PageView, tag: string): string {
       return `/?thread=${encodeURIComponent(view.messageId)}${
         view.to === null ? "" : `&to=${encodeURIComponent(view.to)}`
       }&${lang}`;
+    case "scope":
+      return (
+        `/?scope=${encodeURIComponent(view.messageId)}` +
+        (view.decisionId === null ? "" : `&decision=${encodeURIComponent(view.decisionId)}`) +
+        (view.rounds === null ? "" : `&rounds=${String(view.rounds)}`) +
+        `&${lang}`
+      );
     default:
       return `/?${lang}`;
   }
@@ -2591,6 +2693,8 @@ function threadView(
   nowMs: number,
   actorId: string | null,
   forms: boolean,
+  /** The way to this request's scope screen, or null where there is none (rondo#233 S3). */
+  scopeTo: (messageId: string) => unknown,
 ) {
   const root = threads.rootOf(view.messageId);
   if (root === null) {
@@ -2642,6 +2746,7 @@ function threadView(
           >
             {request === undefined ? null : firstLine(request.body)}
           </h2>
+          {scopeTo(root)}
           {forms ? (
             <noscript>
               <a
@@ -2689,7 +2794,13 @@ function threadView(
  * person. The row's words are the link into the thread, so opening one is a
  * click or `Enter`, never an id.
  */
-function requestsView(wording: Chrome, threads: Threads, nowMs: number, actorId: string | null) {
+function requestsView(
+  wording: Chrome,
+  threads: Threads,
+  nowMs: number,
+  actorId: string | null,
+  scopeTo: (messageId: string) => unknown,
+) {
   const rows = threads.messages
     .filter((message) => message.inReplyTo === null)
     .map((root) => {
@@ -2746,6 +2857,7 @@ function requestsView(wording: Chrome, threads: Threads, nowMs: number, actorId:
                     ) : null}
                     <span>{whoWrote(wording, row.root, actorId)}</span>
                     <span>{wording.threadSize(row.size, wording.age(ago(row.lastMs, nowMs)))}</span>
+                    <span>{scopeTo(row.root.messageId)}</span>
                   </>,
                 )}
               </div>
@@ -2801,6 +2913,706 @@ function replyTarget(
         answers: threads.waiting.has(target.messageId),
         asksWaiting: asks.length > 0,
       };
+}
+
+/** A scope id minted for one form (`newScopeId` in `src/access/web-app.ts`). */
+export type MintScopeId = () => string;
+
+/** A lap id minted for one scoped start (`newIterationId` in `src/access/web-app.ts`). */
+export type MintIterationId = () => string;
+
+/** A budget number in a box: whole for a count, two decimals for money. */
+const whole = (value: number) => String(Math.trunc(value));
+const money = (value: number) => value.toFixed(2);
+
+/**
+ * An expiry as a native `datetime-local` reads and writes it, **in UTC**.
+ *
+ * A person does not read or type a Unix millisecond, and a page with no script
+ * cannot know the browser's zone -- so the one value has one meaning, the label
+ * says which (`scopeExpiresLabel` names UTC), and the route parses the same
+ * `YYYY-MM-DDTHH:MM` back as UTC. Where `datetime-local` is unsupported the
+ * browser degrades to a text box of that shape, which the route reads
+ * identically.
+ */
+function localTime(atMs: number): string {
+  return new Date(atMs).toISOString().slice(0, 16);
+}
+
+/**
+ * Where one number came from, said in the page's language.
+ *
+ * The basis is facts (`src/advisory/budget.ts`) and the words are the
+ * catalogue's, so a Japanese page says them in Japanese -- which is the whole
+ * point of showing the evidence at all (D-0071 rule 4.2) and was not true while
+ * `computeScopeBudgets` composed the sentence itself.
+ */
+function basisSaid(wording: Chrome, basis: BudgetBasis): string {
+  switch (basis.kind) {
+    case "rows":
+      return wording.scopeBasisRows(
+        basis.measurement,
+        basis.iterationIds.length,
+        basis.level === "model_tier" ? basis.modelTier : null,
+      );
+    case "cold_start":
+      return wording.scopeBasisColdStart(basis.measurement);
+    case "given":
+      return basis.given === "plans"
+        ? wording.scopeBasisPlans(basis.value)
+        : basis.given === "review_rounds"
+          ? wording.scopeBasisRounds(basis.value, basis.byDefault)
+          : wording.scopeBasisReplyAllowance;
+  }
+}
+
+/** How one value follows from its bases, in the page's language. */
+function formulaSaid(wording: Chrome, formula: BudgetFormula): string {
+  switch (formula.kind) {
+    case "review_rounds":
+      return wording.scopeFormulaRounds;
+    case "laps":
+      return wording.scopeFormulaLaps(formula.plans, formula.reviewRounds);
+    case "cost_reserve_usd":
+      return wording.scopeFormulaReserve;
+    case "cost_usd":
+      return wording.scopeFormulaCost(
+        formula.plans,
+        money(formula.reserveUsd),
+        formula.laterRounds,
+        money(formula.redoUsd),
+      );
+    case "expires_at_ms":
+      return wording.scopeFormulaExpires(formula.laps, Math.round(formula.longestMs / 1000));
+  }
+}
+
+/**
+ * One basis of one budget: the sentence it comes to, and a `rows` basis's laps
+ * as links into their answer view.
+ *
+ * **Never an id to copy** ({@link basisChip}'s rule, D-0071 rule 4.2's *"for a
+ * screen to link rather than for anyone to copy"*). A `cold_start` or `given`
+ * basis names no row, so it is prose and not a link that led nowhere.
+ */
+function basisRow(wording: Chrome, basis: BudgetBasis) {
+  return (
+    <p class="basis flex flex-wrap items-baseline gap-x-2 gap-y-1 text-[12px] leading-5 text-muted-foreground">
+      <span>{basisSaid(wording, basis)}</span>
+      {basis.kind === "rows"
+        ? basis.iterationIds.map((iterationId) => (
+            <a
+              href={viewHref({ kind: "answer", iterationId }, wording.lang)}
+              class="font-mono text-[11.5px] text-link underline-offset-2 hover:underline"
+            >
+              {wording.scopeBasisLap(iterationId)}
+            </a>
+          ))
+        : null}
+    </p>
+  );
+}
+
+/**
+ * One budget: the control in a box, the formula quietly under it, and the bases
+ * one press away.
+ *
+ * **Evidence visible but quiet** (D-0071 rule 4.2): every number on this screen
+ * was derived from rows, and the derivation is on the screen rather than in a
+ * terminal -- folded, because a person reading five budgets is reading five
+ * numbers and not forty citations. The control is passed in rather than built
+ * here: four of the five are numbers and the fifth is a date, and a field that
+ * branched on its own name would be the same code with a switch in it.
+ */
+function budgetField(
+  wording: Chrome,
+  name: string,
+  label: string,
+  control: unknown,
+  value: BudgetValue,
+) {
+  return (
+    <div class="min-w-0 space-y-1">
+      <label for={name} class="flex flex-col gap-1">
+        <span class="text-[12.5px] leading-5 font-medium text-muted-foreground">{label}</span>
+        {control}
+      </label>
+      <p class="note text-[12px] leading-5 text-faint">
+        {wording.scopeFormula(formulaSaid(wording, value.formula))}
+      </p>
+      {value.bases.length === 0 ? null : (
+        <details class="group rounded-md border border-border">
+          <summary class="flex cursor-pointer list-none items-center gap-2 rounded-md px-3 py-1.5 text-[12px] leading-5 text-muted-foreground outline-none select-none hover:bg-accent focus-visible:bg-accent [&::-webkit-details-marker]:hidden">
+            {chevron()}
+            {wording.scopeBasesFold(value.bases.length)}
+          </summary>
+          <div class="space-y-1 border-t border-border px-3 py-2">
+            {value.bases.map((basis) => basisRow(wording, basis))}
+          </div>
+        </details>
+      )}
+    </div>
+  );
+}
+
+/** The class every budget box carries: one box, one number, no decoration. */
+const BOX =
+  "w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-[13px] leading-5 outline-none focus-visible:ring-2 focus-visible:ring-ring";
+
+/**
+ * The scope screen (rondo#233 S3, D-0066 rule 1): the form rondo drafted, or
+ * the approval it recorded with the scoped start beside it.
+ *
+ * **Two states on one address**, and the address is what carries which: the
+ * store holds no listing of a request's scopes and no index by request
+ * (`AdvisoryRecord`), so the record press's `303` names the decision it wrote
+ * and this renderer reads it back. That read is also the check -- a decision
+ * that is not approved, or whose scope does not list this request, shows
+ * nothing of itself (`scopeNotThisRequest`), because an address is a thing a
+ * person can retype.
+ *
+ * **It writes nothing on a `GET`**, and it keeps itself current by nothing at
+ * all ({@link isLive}).
+ */
+async function scopeView(
+  ports: WebPorts,
+  wording: Chrome,
+  view: Extract<PageView, { kind: "scope" }>,
+  threads: Threads,
+  token: string | null,
+  newScopeId: MintScopeId | null,
+  newIterationId: MintIterationId | null,
+  nowMs: number,
+): Promise<unknown> {
+  const request = threads.byId.get(view.messageId);
+  if (request === undefined) {
+    return (
+      <p class="note rounded-lg border border-dashed border-border px-5 py-6 text-[13px]">
+        {wording.noSuchThread}
+      </p>
+    );
+  }
+  const head = (
+    <header class="space-y-2">
+      <div class="flex min-w-0 items-center gap-2">
+        <a
+          href={viewHref({ kind: "thread", messageId: view.messageId, to: null }, wording.lang)}
+          data-back=""
+          class="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          title={wording.backToThread}
+        >
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            class="size-4"
+          >
+            <path d="M13 8H3m4-4-4 4 4 4" />
+          </svg>
+          <span class="sr-only">{wording.backToThread}</span>
+        </a>
+        <h2 class="min-w-0 flex-1 truncate text-[15px] leading-6 font-semibold">
+          {wording.scopeHeading}
+        </h2>
+      </div>
+      {/* The words the scope is about, as they were written (D-0061 rule 2.2):
+          a person drafting a budget is reading what they asked for. */}
+      <p
+        class="request ml-9 text-[13.5px] leading-6 wrap-anywhere whitespace-pre-wrap"
+        title={request.body}
+        lang=""
+      >
+        {request.body}
+      </p>
+    </header>
+  );
+  const decisionId = view.decisionId;
+  const body =
+    decisionId === null
+      ? await scopeForm(ports, wording, view, token, newScopeId, nowMs)
+      : await scopeApproved(ports, wording, view, decisionId, token, newIterationId, nowMs);
+  return (
+    <div id="scope" class="space-y-4">
+      {head}
+      {body}
+    </div>
+  );
+}
+
+/** State A: what rondo drafted, and the one press that records it and approves it. */
+async function scopeForm(
+  ports: WebPorts,
+  wording: Chrome,
+  view: Extract<PageView, { kind: "scope" }>,
+  token: string | null,
+  newScopeId: MintScopeId | null,
+  nowMs: number,
+): Promise<unknown> {
+  const lead = <p class="text-[13px] leading-6">{wording.scopeLead}</p>;
+  const note = (line: string) => (
+    <p class="note rounded-md border border-border bg-muted/60 px-3 py-2 text-[13px] leading-5">
+      {line}
+    </p>
+  );
+  if (ports.plan === null) {
+    return (
+      <>
+        {lead}
+        {note(wording.scopeNoPlan)}
+      </>
+    );
+  }
+  const drafted = await ports.plan(wording);
+  if (drafted.kind === "refused") {
+    return (
+      <>
+        {lead}
+        {note(wording.scopePlanRefused(drafted.reason))}
+      </>
+    );
+  }
+  if (token === null || newScopeId === null) {
+    return (
+      <>
+        {lead}
+        {note(wording.scopeNoApprover)}
+      </>
+    );
+  }
+  const rounds = view.rounds;
+  const budgets = await scopeBudgetsFromStore(
+    { store: ports.store, record: ports.record },
+    {
+      agentTypes: [drafted.agentTypeDigest],
+      // One plan, because `RONDO_PLAN` names one (rondo#233 S3): a scope over
+      // several plans is a screen with a plan picker, which is another screen.
+      plans: 1,
+      ...(rounds === null ? {} : { reviewRounds: rounds }),
+      draftedAtMs: nowMs,
+    },
+  );
+  return (
+    <>
+      {lead}
+      {/* What this screen cannot check, said rather than left to be discovered
+          (rondo#233 S3 screen review): there is no listing of a request's
+          scopes to look in, so a blank draft is not evidence there is none. */}
+      <p class="note rounded-md border border-border bg-muted/60 px-3 py-2 text-[13px] leading-5">
+        {wording.scopeMaybeApproved}
+      </p>
+      <section class={`${CARD} space-y-1`}>
+        {/* **The card says what it holds**: the plan, where it runs, and what
+            its agent type is allowed. Its heading named only the last of those
+            until rondo#233 S3's screen review, so the plan rondo would run was
+            the one thing the card never said out loud. */}
+        <h3 class={CARD_HEADING}>{wording.scopePlanHeading}</h3>
+        {drafted.workspaces.map((workspace) => (
+          <p class="text-[12.5px] leading-5 text-muted-foreground">
+            {wording.scopeWorkspace(workspace.repository, workspace.workspace_root)}
+          </p>
+        ))}
+        <p class="text-[12.5px] leading-5 font-medium text-muted-foreground">
+          {wording.scopeAgentTypeBounds}
+        </p>
+        {drafted.heldLines.map((line) => (
+          <p class="text-[12px] leading-5 wrap-anywhere text-muted-foreground">{line}</p>
+        ))}
+        {/* **Folded, because there is nothing to do with a hash.** Three
+            71-character digests as plain text were a third of the first
+            screenful at 420px and not one of them was actionable; they are
+            still on the screen, because what rondo records is what rondo
+            shows. */}
+        <details class="group rounded-md border border-border">
+          <summary class="flex cursor-pointer list-none items-center gap-2 rounded-md px-3 py-1.5 text-[12px] leading-5 text-muted-foreground outline-none select-none hover:bg-accent focus-visible:bg-accent [&::-webkit-details-marker]:hidden">
+            {chevron()}
+            {wording.scopeDigestsFold}
+          </summary>
+          <div class="space-y-1 border-t border-border px-3 py-2">
+            <p class="font-mono text-[11.5px] leading-5 wrap-anywhere text-faint">
+              {wording.scopePlanDigest(drafted.planDigest)}
+            </p>
+            <p class="font-mono text-[11.5px] leading-5 wrap-anywhere text-faint">
+              {wording.scopeAgentType(drafted.agentTypeDigest)}
+            </p>
+          </div>
+        </details>
+      </section>
+      {/*
+       * **Explicit links, and not a `method="get"` form** (rondo#233 S3). This
+       * view carries no htmx to fight; a `get` form would need every other
+       * query as a hidden input to survive a submit, which is a second home for
+       * state the address already holds (D-0054); and a link works identically
+       * with script off, with no second submit button beside the one that
+       * writes. The residual -- choosing a number redraws the boxes from the
+       * plan -- is said on the screen rather than discovered.
+       */}
+      <p id="rounds" class="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-[13px] leading-6">
+        <span class="font-medium">{wording.scopeRoundsAsk}</span>
+        {REVIEW_ROUND_CHOICES.map((n) =>
+          n === (rounds ?? DEFAULT_REVIEW_ROUNDS) ? (
+            <span aria-current="page" class={`${PILL} font-sans ${TONE.ok}`}>
+              {String(n)}
+            </span>
+          ) : (
+            <a
+              href={viewHref({ ...view, rounds: n }, wording.lang)}
+              class="rounded-md px-1.5 text-link underline-offset-2 hover:underline"
+            >
+              {String(n)}
+            </a>
+          ),
+        )}
+        <span class="note w-full text-[12px] leading-5 text-faint">
+          {wording.scopeRoundsRedraw}
+        </span>
+      </p>
+      <form
+        id="scope-form"
+        method="post"
+        action={`/scope?lang=${encodeURIComponent(wording.lang)}`}
+        class="space-y-4"
+      >
+        <input type="hidden" name="token" value={token} />
+        <input type="hidden" name="request" value={view.messageId} />
+        {/*
+         * **Minted when this form is drawn** (D-0061 rule 2.1's reason applied
+         * to a scope): one form pressed twice -- a double click, a resend after
+         * a slow write -- carries one id, and the store's uniqueness refuses
+         * the second rather than recording two scopes the person drafted once.
+         */}
+        <input type="hidden" name="scope_id" value={newScopeId()} />
+        {/*
+         * **The two digests this form was drawn from** (rondo#233 S3 press
+         * review). The plan is a file, and a file can move between the draw and
+         * the press: the write re-reads it, as it must, and would otherwise
+         * record a workspace and an agent type nobody saw while satisfying
+         * D-0066 rule 2.2's letter. These are not a second authority for what
+         * is recorded -- nothing is written from them -- they are what the
+         * re-read is compared against, and a difference is a refusal.
+         */}
+        <input type="hidden" name="plan_digest" value={drafted.planDigest} />
+        <input type="hidden" name="agent_type" value={drafted.agentTypeDigest} />
+        <div class={`${CARD} grid gap-4 sm:grid-cols-2`}>
+          {budgetField(
+            wording,
+            "laps",
+            wording.scopeLapsLabel,
+            <input
+              type="number"
+              name="laps"
+              id="laps"
+              min="0"
+              step="1"
+              value={whole(budgets.laps.value)}
+              class={BOX}
+            />,
+            budgets.laps,
+          )}
+          {budgetField(
+            wording,
+            "review_rounds",
+            wording.scopeRoundsLabel,
+            // Read-only in the box because the links above are what changes it:
+            // two controls over one number would disagree the moment one moved.
+            <input
+              type="number"
+              name="review_rounds"
+              id="review_rounds"
+              min="0"
+              step="1"
+              readonly={true}
+              value={whole(budgets.review_rounds.value)}
+              class={`${BOX} bg-muted/60`}
+            />,
+            budgets.review_rounds,
+          )}
+          {budgetField(
+            wording,
+            "cost_usd",
+            wording.scopeCostLabel,
+            <input
+              type="number"
+              name="cost_usd"
+              id="cost_usd"
+              min="0"
+              step="0.01"
+              value={money(budgets.cost_usd.value)}
+              class={BOX}
+            />,
+            budgets.cost_usd,
+          )}
+          {budgetField(
+            wording,
+            "cost_reserve_usd",
+            wording.scopeReserveLabel,
+            <input
+              type="number"
+              name="cost_reserve_usd"
+              id="cost_reserve_usd"
+              min="0"
+              step="0.01"
+              value={money(budgets.cost_reserve_usd.value)}
+              class={BOX}
+            />,
+            budgets.cost_reserve_usd,
+          )}
+          {budgetField(
+            wording,
+            "expires_at_ms",
+            wording.scopeExpiresLabel,
+            <input
+              type="datetime-local"
+              name="expires_at_ms"
+              id="expires_at_ms"
+              value={localTime(budgets.expires_at_ms.value)}
+              class={BOX}
+            />,
+            budgets.expires_at_ms,
+          )}
+        </div>
+        <section class={`${CARD} space-y-3`}>
+          <h3 class={CARD_HEADING}>{wording.scopeDefaultsHeading}</h3>
+          <label class="flex flex-col gap-1">
+            <span class="text-[12.5px] leading-5 font-medium text-muted-foreground">
+              {wording.scopeSeverityLabel}
+            </span>
+            {/* The word, with the enum value it records beside it: the value is
+                what `rondo scope` prints and a scope holds (D-0055 rule 3), and
+                `blocker` alone was the whole option in both languages. */}
+            <select name="severity_threshold" class={BOX}>
+              {FINDING_SEVERITIES.map((severity) => (
+                <option value={severity} {...(severity === "major" ? { selected: true } : {})}>
+                  {`${wording.severityWord(severity)} (${severity})`}
+                </option>
+              ))}
+            </select>
+          </label>
+          <fieldset class="space-y-1">
+            <legend class="text-[12.5px] leading-5 font-medium text-muted-foreground">
+              {wording.scopeOutwardLabel}
+            </legend>
+            {SCOPE_OUTWARD_ACTS.map((act) => (
+              <label class="flex items-center gap-2 text-[13px] leading-6">
+                <input type="checkbox" name="outward_acts" value={act} class="size-3.5" />
+                <span>{wording.scopeOutwardAct(act)}</span>
+                <span class="font-mono text-[12px] text-faint">{act}</span>
+              </label>
+            ))}
+          </fieldset>
+          {/*
+           * **Not a box** (rondo#233 S3): `irreversible_additions` adds
+           * free-text names to a closed list, and a text field that widens what
+           * counts as irreversible by typo is exactly what the screen's own
+           * axis forbids. Always empty, and said so rather than hidden.
+           */}
+          <p class="text-[13px] leading-6">{wording.scopeIrreversibleNone}</p>
+          <p class="note text-[12px] leading-5 text-faint">{wording.scopeDefaultNote}</p>
+        </section>
+        {/* D-0066's first gate answer, on the screen and not only in a terminal. */}
+        <p class="note text-[12.5px] leading-5 text-muted-foreground">{wording.scopeCostCaveat}</p>
+        <div class="sticky bottom-0 z-[1] -mx-4 flex flex-col gap-2 border-t border-border bg-card px-4 py-3 shadow-[0_-4px_10px_-8px_rgb(0_0_0/0.3)]">
+          <p class="note text-[12.5px] leading-5 text-muted-foreground">{wording.scopePressNote}</p>
+          <button
+            type="submit"
+            data-row=""
+            aria-describedby="scope-plain"
+            class={`${PRIMARY} h-10 w-full justify-center px-6 text-sm sm:h-9 sm:w-auto sm:self-end`}
+          >
+            {wording.scopeAction}
+          </button>
+          <span id="scope-plain" class="note sr-only">
+            {wording.scopePlain}
+          </span>
+        </div>
+      </form>
+    </>
+  );
+}
+
+/** State B: the approval the press recorded, read back, and the start it allows. */
+async function scopeApproved(
+  ports: WebPorts,
+  wording: Chrome,
+  view: Extract<PageView, { kind: "scope" }>,
+  /** The decision this address named, already known not to be null. */
+  decisionId: string,
+  token: string | null,
+  newIterationId: MintIterationId | null,
+  nowMs: number,
+): Promise<unknown> {
+  const notThis = (
+    <p class="note rounded-md border border-border bg-muted/60 px-3 py-2 text-[13px] leading-5">
+      {wording.scopeNotThisRequest}
+    </p>
+  );
+  const decided = await ports.record.readScopeDecision(decisionId);
+  if (decided.kind !== "read" || decided.decision.outcome !== "approved") {
+    return notThis;
+  }
+  const stored = await ports.record.readScope(decided.decision.scopeId);
+  // **The address is a thing a person can retype**, so the request this screen
+  // is about has to be one the approved scope actually names (D-0066 rule
+  // 1.2.1). Anything else shows nothing of the scope at all.
+  //
+  // **The digest is checked and not merely printed.** Scope rows are immutable,
+  // so today this cannot diverge; the screen prints the row's digest under the
+  // word *approved*, and a heading that vouches for a value it never compared
+  // is the kind of thing that stays true until the day it does not.
+  if (
+    stored.kind !== "read" ||
+    !stored.scope.payload.requests.includes(view.messageId) ||
+    decided.decision.scopeDigest !== stored.scope.scopeDigest
+  ) {
+    return notThis;
+  }
+  const scope = stored.scope;
+  const payload = scope.payload;
+  // Rule 1.4: an approval a successor retired is not one to start under, and
+  // `scopeVerdict` refuses that press at the `superseded` test. Drawing the
+  // button anyway would be this screen offering a press it knows cannot work.
+  const retired = await ports.record.scopeSupersededByApproved(scope.scopeId);
+  const held = await heldAgentTypeLines(wording, ports.record, payload.agent_types);
+  return (
+    <>
+      <section class={`${CARD} space-y-1`}>
+        <h3 class={CARD_HEADING}>
+          {wording.scopeApproved(wording.age(ago(decided.decision.decidedAtMs, nowMs)))}
+        </h3>
+        <p class="font-mono text-[11.5px] leading-5 wrap-anywhere text-faint">
+          {wording.scopeDigest(scope.scopeDigest)}
+        </p>
+      </section>
+      <section class={`${CARD} space-y-2`}>
+        {payload.workspaces.map((workspace) => (
+          <p class="text-[12.5px] leading-5 text-muted-foreground">
+            {wording.scopeWorkspace(workspace.repository, workspace.workspace_root)}
+          </p>
+        ))}
+        {held.map((line) => (
+          <p class="text-[12px] leading-5 wrap-anywhere text-muted-foreground">{line}</p>
+        ))}
+        <dl class="grid gap-x-4 gap-y-1 text-[13px] leading-6 sm:grid-cols-2">
+          {(
+            [
+              [wording.scopeLapsLabel, whole(payload.budgets.laps)],
+              [wording.scopeRoundsLabel, whole(payload.budgets.review_rounds)],
+              [wording.scopeCostLabel, money(payload.budgets.cost_usd)],
+              [wording.scopeReserveLabel, money(payload.budgets.cost_reserve_usd)],
+              [wording.scopeExpiresLabel, localTime(payload.budgets.expires_at_ms)],
+              [wording.scopeSeverityLabel, wording.severityWord(payload.severity_threshold)],
+              [
+                wording.scopeOutwardLabel,
+                payload.outward_acts.length === 0
+                  ? wording.scopeOutwardNone
+                  : payload.outward_acts.map((act) => wording.scopeOutwardAct(act)).join(", "),
+              ],
+            ] as const
+          ).map(([label, value]) => (
+            <div class="flex min-w-0 items-baseline justify-between gap-3 border-b border-border/60 py-0.5">
+              <dt class="text-[12.5px] text-muted-foreground">{label}</dt>
+              <dd class="font-mono text-[12.5px]">{value}</dd>
+            </div>
+          ))}
+        </dl>
+        <p class="text-[13px] leading-6">
+          {payload.irreversible_additions.length === 0
+            ? wording.scopeIrreversibleNone
+            : payload.irreversible_additions.join(", ")}
+        </p>
+      </section>
+      {/* Rule 1.4: approving a successor retires the predecessor's approval, so
+          what that approval already spent is part of what was decided. */}
+      {scope.supersedesScopeId === null ? null : (
+        <p class="note text-[12.5px] leading-5 text-muted-foreground">
+          {await predecessorLine(ports, wording, scope)}
+        </p>
+      )}
+      <p class="note text-[12.5px] leading-5 text-muted-foreground">{wording.scopeCostCaveat}</p>
+      {retired ? (
+        <p class="note rounded-md border border-border bg-muted/60 px-3 py-2 text-[13px] leading-5">
+          {wording.scopeRetired}
+        </p>
+      ) : null}
+      {token === null || newIterationId === null || retired ? null : (
+        <form
+          id="start-form"
+          method="post"
+          action={`/start?lang=${encodeURIComponent(wording.lang)}`}
+          class="sticky bottom-0 z-[1] -mx-4 flex flex-col gap-2 border-t border-border bg-card px-4 py-3 shadow-[0_-4px_10px_-8px_rgb(0_0_0/0.3)]"
+        >
+          <input type="hidden" name="token" value={token} />
+          <input type="hidden" name="request" value={view.messageId} />
+          <input type="hidden" name="scope_decision" value={decisionId} />
+          {/* Minted at render, as the scope id is, and for its reason: rondo
+              names the lap (D-0023) and a double press is one lap. */}
+          <input type="hidden" name="iteration" value={newIterationId()} />
+          <p class="note text-[12.5px] leading-5 text-muted-foreground">{wording.startNote}</p>
+          <button
+            type="submit"
+            data-row=""
+            aria-describedby="start-plain"
+            class={`${PRIMARY} h-10 w-full justify-center px-6 text-sm sm:h-9 sm:w-auto sm:self-end`}
+          >
+            {wording.startAction}
+          </button>
+          <span id="start-plain" class="note sr-only">
+            {wording.startPlain}
+          </span>
+        </form>
+      )}
+    </>
+  );
+}
+
+/** What the scope this one replaces has spent, or why that could not be read. */
+async function predecessorLine(
+  ports: WebPorts,
+  wording: Chrome,
+  scope: StoredScope,
+): Promise<string> {
+  const supersedes = scope.supersedesScopeId;
+  if (supersedes === null) {
+    return wording.scopePredecessorNoApproval;
+  }
+  const prior = await ports.record.scopeDecisionOf(supersedes);
+  if (prior.kind === "unreadable") {
+    return wording.scopePredecessorUnreadable(prior.reason);
+  }
+  if (prior.kind !== "read" || prior.decision.outcome !== "approved") {
+    return wording.scopePredecessorNoApproval;
+  }
+  const spent = await ports.record.scopeSpent(prior.decision.scopeDecisionId);
+  return wording.scopePredecessorSpent(
+    spent.admissions,
+    money(spent.readCostUsd),
+    spent.unreadLaps,
+  );
+}
+
+/**
+ * The way to the scope screen, drawn on a request and nowhere else.
+ *
+ * Two conditions, each a different way of having no scope to draft: no plan to
+ * draft one from, and no approver to approve it as. A link drawn anyway would
+ * lead to a screen with no form on it.
+ */
+function scopeLink(wording: Chrome, ports: WebPorts, token: string | null, messageId: string) {
+  if (ports.plan === null || token === null) {
+    return null;
+  }
+  return (
+    <a
+      href={viewHref({ kind: "scope", messageId, rounds: null, decisionId: null }, wording.lang)}
+      class="text-[12.5px] font-medium text-link hover:underline"
+      title={wording.scopeHere}
+    >
+      {wording.scopeAction}
+    </a>
+  );
 }
 
 /** A message id minted for one form (`newMessageId` in `src/access/web-app.ts`). */
@@ -3081,6 +3893,14 @@ export async function operatorPage(
    * nothing that writes, and is not granted `node:crypto` either.
    */
   newId: MintMessageId | null = null,
+  /**
+   * rondo#233 S3: the scope screen's two minted ids, minted where `newId` is
+   * minted and null on the same condition -- no scope port, no forms. Here and
+   * not in this module for `newId`'s reason: the renderer is not granted
+   * `node:crypto`, and the server hands it ids.
+   */
+  newScopeId: MintScopeId | null = null,
+  newIterationId: MintIterationId | null = null,
 ): Promise<string> {
   const nowMs = ports.now();
   // **Read on every view**: the summary counts the asks waiting and the header
@@ -3163,6 +3983,14 @@ export async function operatorPage(
   // could write, so whether a button is drawn is decided by the one caller that
   // does hold the writer (`src/access/web-app.ts`) and handed down as a token.
   const shown = await shownBeforePress(ports, wording, waiting, token, view);
+  // **Awaited here** and not inside the tree: the scope screen reads the plan
+  // and, in its second state, the approval and what a predecessor spent.
+  const scoping =
+    view.kind === "scope"
+      ? await scopeView(ports, wording, view, threads, token, newScopeId, newIterationId, nowMs)
+      : null;
+  /** The link onto the scope screen, drawn on a request wherever one is listed. */
+  const scopeTo = (messageId: string) => scopeLink(wording, ports, token, messageId);
 
   // ponytail: the thread views still gather the laps above, as the summary
   // does, on every redraw; skip those reads for them if a redraw costs.
@@ -3296,7 +4124,7 @@ export async function operatorPage(
                 // `data-back` is what `Esc` follows; on the summary there is
                 // nowhere further back to go, so it is absent there, and on a
                 // thread the way back is the requests link beside this.
-                view.kind === "summary" || view.kind === "thread" ? (
+                view.kind === "summary" || view.kind === "thread" || view.kind === "scope" ? (
                   <a href={here}>rondo</a>
                 ) : (
                   <a href={viewHref({ kind: "summary" }, wording.lang)} data-back="">
@@ -3483,9 +4311,11 @@ export async function operatorPage(
                 ) : null
               }
               {view.kind === "requests" ? (
-                requestsView(wording, threads, nowMs, ports.actorId)
+                requestsView(wording, threads, nowMs, ports.actorId, scopeTo)
               ) : view.kind === "thread" ? (
-                threadView(wording, threads, view, nowMs, ports.actorId, forms)
+                threadView(wording, threads, view, nowMs, ports.actorId, forms, scopeTo)
+              ) : view.kind === "scope" ? (
+                scoping
               ) : waiting.length +
                   running.length +
                   ended.length +
@@ -3512,7 +4342,7 @@ export async function operatorPage(
                   {endedView(wording, ended, nowMs, endedClaims)}
                 </>
               )}
-              {onThreads ? null : (
+              {onThreads || view.kind === "scope" ? null : (
                 <p id="fold" class="border-t border-border pt-4 text-[13px]">
                   <a
                     id="fold-link"

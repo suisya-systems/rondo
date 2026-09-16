@@ -2319,7 +2319,13 @@ test("the terminal's wording is ASCII, which is what D-0004's escape needs", () 
       spelled.push(...(value as string[]));
     } else if (typeof value === "function") {
       // Called with placeholders: what is under test is the prose around them.
-      spelled.push(String((value as (...args: unknown[]) => string)("x", "x", "x", "x", "x")));
+      // A one-element array, because an entry that frames a *list* of tokens
+      // (`scopeHeldBounds`' granted keys) joins it, and `String(["x"])` is "x"
+      // wherever an entry only interpolates its argument.
+      const probe = ["x"];
+      spelled.push(
+        String((value as (...args: unknown[]) => string)(probe, probe, probe, probe, probe)),
+      );
     }
   }
   expect(spelled.length).toBeGreaterThan(40);
