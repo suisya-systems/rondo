@@ -336,6 +336,8 @@ test("a verdict refusal writes one asking drafter message; the next attempt is h
       atMs: 2_001,
       bases: [],
       asks: false,
+      // D-0072 rule 3: the answer that carries on is what ends the hold.
+      answerOutcome: "carry_on",
     }),
   ).toEqual({ kind: "recorded" });
   const third = await admitUnderScope(h.ports, "sd-1", start("i-a"));
@@ -474,6 +476,8 @@ test("PLANTED (D-0069 rule 5): a stopped line is not re-run as a new lineage by 
       atMs: 2_001,
       bases: [],
       asks: false,
+      // D-0072 rule 3: the answer that carries on is what ends the hold.
+      answerOutcome: "carry_on",
     }),
   ).toEqual({ kind: "recorded" });
   h.beforeReserve.run = async () => {
@@ -511,6 +515,8 @@ test("PLANTED (D-0069 rule 5): a stopped line is not re-run as a new lineage by 
       atMs: 2_003,
       bases: [],
       asks: false,
+      // D-0072 rule 3: the answer that carries on is what ends the hold.
+      answerOutcome: "carry_on",
     }),
   ).toEqual({ kind: "recorded" });
   expect(await admitUnderScope(h.ports, "sd-1", start("i-again"))).toMatchObject({
@@ -679,6 +685,8 @@ test("PLANTED: a stop over the latest lap holds a redo of an earlier lap, until 
       atMs: 2_001,
       bases: [],
       asks: false,
+      // D-0072 rule 3: the answer that carries on is what ends the hold.
+      answerOutcome: "carry_on",
     }),
   ).toEqual({ kind: "recorded" });
   expect(await admitUnderScope(h.ports, "sd-1", redoOf("i-s2", "i-a"))).toMatchObject({
@@ -769,6 +777,8 @@ test("D-0070 2: a refused verdict runs no step; an inside one runs it once, befo
       atMs: 2_001,
       bases: [],
       asks: false,
+      // D-0072 rule 3: the answer that carries on is what ends the hold.
+      answerOutcome: "carry_on",
     }),
   ).toEqual({ kind: "recorded" });
   h.clock.now = 2_002;

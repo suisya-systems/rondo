@@ -529,7 +529,29 @@ export interface ThreadMessageDraft {
   readonly bases: readonly JsonRecord[];
   /** Whether the message asks the person for an answer (rule 2.7). */
   readonly asks: boolean;
+  /**
+   * Which of D-0072's two answers this message carries, absent on a message
+   * that answers nothing.
+   *
+   * **Absent is the default and the honest one**: an ordinary reply, a
+   * drafter's report and every row written before D-0072 carry no answer, and
+   * the ask they reply to stays open. Only the answering press sets it, and
+   * the writer refuses it anywhere else (rule 2 of that entry).
+   */
+  readonly answerOutcome?: AnswerOutcome;
 }
+
+/**
+ * What a person's answer to a waiting question does to the line it holds
+ * (D-0072 rule 1).
+ *
+ * **Two values and no third**, because the stop offers the person three options
+ * and only two of them are answers: a successor scope and a change to the work
+ * are `carry_on` -- the line is tested again from the top, which is what
+ * D-0066 rule 4.4 always did -- and stopping is `stop`, which leaves the ask
+ * open and is the durable form lap 8's N-31 found missing.
+ */
+export type AnswerOutcome = "carry_on" | "stop";
 
 /** The two voices a thread message can be written in (D-0061 rule 2.3). */
 export type ThreadAuthorKind = "operator" | "drafter";
@@ -1589,16 +1611,25 @@ export interface ScopeSpent {
 }
 
 /**
- * A message in a request's thread with `asks` set and no reply (D-0061 rule
- * 2.7), with the lineages its bases name (D-0066 rule 4.2).
+ * A message in a request's thread with `asks` set that no answer has carried on
+ * (D-0061 rule 2.7, D-0072 rule 3), with the lineages its bases name (D-0066
+ * rule 4.2).
  *
  * `iterationIds` are its `iteration` bases; empty when it names no lap, which is
  * rule 4.4's first bullet: it stands over the request's acts that continue no
  * lineage.
+ *
+ * `answeredStop` is why it is still open: false when nobody has answered it,
+ * true when the person answered it `stop`. **The hold is the same either way**
+ * -- D-0072 rule 3 opens on the absence of a `carry_on` and not on the presence
+ * of a `stop` -- and the two are told apart only so that a refusal can say
+ * which it is rather than telling a person who wrote "stop this line" that
+ * nobody has answered.
  */
 export interface OpenAsk {
   readonly messageId: string;
   readonly iterationIds: readonly string[];
+  readonly answeredStop: boolean;
 }
 
 /** Which of D-0066 rule 4.2's tests refused, as a closed name a test and a screen can both read. */

@@ -105,6 +105,7 @@ import {
 } from "../advisory/proposal.js";
 import type { HostPolicy } from "../refrain/policy.js";
 import {
+  type AnswerOutcome,
   approvedForPublication,
   FINDING_SEVERITIES,
   type FindingSeverity,
@@ -1515,7 +1516,9 @@ function waitingView(
                   <span
                     class={`inline-flex shrink-0 items-center rounded-full border px-2 py-px text-[11.5px] font-medium leading-4 whitespace-nowrap ${TONE.wait}`}
                   >
-                    {wording.askWaitingPill}
+                    {threads.stopped.has(ask.messageId)
+                      ? wording.askStoppedPill
+                      : wording.askWaitingPill}
                   </span>
                   <span class="tabular-nums">{wording.age(ago(ask.atMs, nowMs))}</span>
                 </span>
@@ -2915,15 +2918,30 @@ function endedRecently(records: readonly IterationRecord[]): readonly IterationR
  * facts every thread view needs derived once per render: which request a
  * message belongs to, and which asks still wait on the person.
  *
- * **An ask waits while nothing replies to it**, which is rule 2.7's own
- * definition and the one `openAsksIn` queries -- read here off the same rows
- * rather than asked once per request, because the page draws every thread.
+ * **An ask waits while no answer of the person's has carried it on** (D-0072
+ * rule 3), which is the reading `openAsksIn` queries -- read here off the same
+ * rows rather than asked once per request, because the page draws every thread.
+ * An ordinary reply, a drafter's report and an answer that says to stop all
+ * leave it waiting, and **the page must agree with the store about this or it
+ * has no working answering path**: a question the page thought closed would be
+ * drawn with a Reply box, and the reply would be refused by the write port
+ * while the line stayed held (#206, Codex).
  */
 interface Threads {
   readonly messages: readonly ThreadMessageDraft[];
   readonly byId: ReadonlyMap<string, ThreadMessageDraft>;
   readonly rootOf: (messageId: string) => string | null;
   readonly waiting: ReadonlySet<string>;
+  /**
+   * Of {@link waiting}, the questions the person answered by stopping the line
+   * (D-0072 rule 3): `OpenAsk.answeredStop` read off the same rows.
+   *
+   * **Both are held, and the difference is the record.** An unanswered question
+   * says nobody has been back to it; a stopped one says the person has, and
+   * said to stop. Telling someone who wrote "stop this line" that nobody has
+   * answered is the thing this set exists to stop the page doing.
+   */
+  readonly stopped: ReadonlySet<string>;
   /**
    * The laps the reading view draws a section for, so an `iteration` basis is
    * a link only when its anchor exists (#220 S1, Codex): a cited lap older than
@@ -2937,7 +2955,21 @@ function threadsOf(
   inReading: ReadonlySet<string>,
 ): Threads {
   const byId = new Map(messages.map((message) => [message.messageId, message]));
-  const replied = new Set(messages.flatMap((message) => message.inReplyTo ?? []));
+  // Only an operator's `carry_on` closes a question (D-0072 rule 3). The
+  // `author_kind` is rule 4.4's "the person's reply" read literally: a drafter
+  // message threaded under a stop does not release it.
+  const answered = (outcome: AnswerOutcome): ReadonlySet<string> =>
+    new Set(
+      messages.flatMap((message) =>
+        message.authorKind === "operator" &&
+        message.answerOutcome === outcome &&
+        message.inReplyTo !== null
+          ? [message.inReplyTo]
+          : [],
+      ),
+    );
+  const carriedOn = answered("carry_on");
+  const stoppedBy = answered("stop");
   // ponytail: a walk per message per render, which is O(messages x depth); a
   // thread is a conversation's worth of rows. A `root` column is the upgrade.
   const rootOf = (messageId: string): string | null => {
@@ -2955,7 +2987,15 @@ function threadsOf(
     rootOf,
     waiting: new Set(
       messages
-        .filter((message) => message.asks && !replied.has(message.messageId))
+        .filter((message) => message.asks && !carriedOn.has(message.messageId))
+        .map((message) => message.messageId),
+    ),
+    stopped: new Set(
+      messages
+        .filter(
+          (message) =>
+            message.asks && !carriedOn.has(message.messageId) && stoppedBy.has(message.messageId),
+        )
         .map((message) => message.messageId),
     ),
     inReading,
@@ -3041,8 +3081,8 @@ function basisChip(
 /**
  * One message in a thread (D-0061 rule 2): who wrote it and in which voice, how
  * long ago, the words byte for byte with their paragraphs (rondo#90), what it
- * rests on, and -- where it asks and nothing has replied -- the one mark that
- * it waits on the person.
+ * rests on, and -- where it asks and no answer has carried it on (D-0072 rule
+ * 3) -- the one mark that it waits on the person.
  *
  * **The voices are told apart three ways, none of them alone**: an initial in a
  * round mark (blue for the drafter), a badge that names the drafter's voice, and
@@ -3117,8 +3157,33 @@ function messageView(
             <span class={`voice ${PILL} font-sans ${TONE.muted}`}>{wording.operatorVoice}</span>
           )}
           {waiting ? (
-            <span class={`${PILL} font-sans ${TONE.wait}`}>{wording.askWaitingPill}</span>
+            // **Which of the two reasons it is still waiting** (D-0072 rule 3):
+            // nobody has been back to it, or the person has and said to stop.
+            // The hold is the same; saying "waiting on you" for the second would
+            // tell a person who wrote "stop this line" that they had not answered.
+            <span class={`${PILL} font-sans ${TONE.wait}`}>
+              {threads.stopped.has(message.messageId)
+                ? wording.askStoppedPill
+                : wording.askWaitingPill}
+            </span>
           ) : null}
+          {
+            // **What this message answered, where it was said** (D-0072 rule 1):
+            // the words are kept byte for byte either way, so with no mark here
+            // two answers that read alike and did opposite things would be one
+            // entry in the thread.
+            message.answerOutcome === undefined ? null : (
+              <span
+                class={`${PILL} font-sans ${
+                  message.answerOutcome === "stop" ? TONE.wait : TONE.muted
+                }`}
+              >
+                {message.answerOutcome === "stop"
+                  ? wording.answerStoppedPill
+                  : wording.answerCarriedOnPill}
+              </span>
+            )
+          }
           <a
             href={`#${encodeURIComponent(message.messageId)}`}
             class="text-faint tabular-nums hover:text-foreground"
@@ -4713,35 +4778,70 @@ function composerView(
         class="block max-h-[40vh] min-h-[4.5rem] w-full resize-y bg-transparent px-4 pt-2 text-[14px] leading-6 outline-none [field-sizing:content] placeholder:text-faint"
       />
       <div class="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 pt-1 pb-2.5">
-        <span class="note px-1 text-[11.5px] leading-5 text-faint">{wording.sendNote}</span>
+        <span class="note px-1 text-[11.5px] leading-5 text-faint">
+          {answers ? wording.answerOutcomeNote : wording.sendNote}
+        </span>
         <span class="ml-auto flex items-center gap-3">
-          <span class="js-only hidden items-center gap-1 text-[11.5px] text-faint sm:flex">
-            {kbd("Ctrl/⌘")}
-            {kbd("↵")}
-            <span>{wording.keySend}</span>
-          </span>
-          <button
-            type="submit"
-            class={
-              answers
-                ? `${PRIMARY} h-9 px-4 text-sm`
-                : "inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-md bg-foreground px-4 text-sm font-semibold text-background shadow-xs outline-none hover:bg-foreground/85 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card disabled:cursor-wait disabled:opacity-60"
-            }
-          >
-            <svg
-              aria-hidden="true"
-              viewBox="0 0 16 16"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.8"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              class="size-3.5"
-            >
-              <path d="M8 13V3m-4 4 4-4 4 4" />
-            </svg>
-            {answers ? wording.answerAskAction : wording.sendAction}
-          </button>
+          {
+            // **Not advertised where it does not work** (#206, Codex): the
+            // chord submits without naming a button, and an answer *is* which
+            // button was pressed, so `page/composer.js` leaves this one form
+            // alone rather than sending an answer nobody chose.
+            answers ? null : (
+              <span class="js-only hidden items-center gap-1 text-[11.5px] text-faint sm:flex">
+                {kbd("Ctrl/⌘")}
+                {kbd("↵")}
+                <span>{wording.keySend}</span>
+              </span>
+            )
+          }
+          {
+            // **One button per answer, and the press is what rondo acts on**
+            // (D-0072 rule 4). Two submits of one form, each carrying its own
+            // `outcome`: a native submit sends the clicked button's name and
+            // value, so this needs no script and works with script off -- and
+            // the route refuses a press naming neither, so there is no default
+            // for a browser that sends none.
+            answers ? (
+              <>
+                <button
+                  type="submit"
+                  name="outcome"
+                  value="stop"
+                  class={`${SECONDARY} h-9 px-4 text-sm`}
+                >
+                  {wording.answerStopAction}
+                </button>
+                <button
+                  type="submit"
+                  name="outcome"
+                  value="carry_on"
+                  class={`${PRIMARY} h-9 px-4 text-sm`}
+                >
+                  {wording.answerCarryOnAction}
+                </button>
+              </>
+            ) : (
+              <button
+                type="submit"
+                class="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-md bg-foreground px-4 text-sm font-semibold text-background shadow-xs outline-none hover:bg-foreground/85 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card disabled:cursor-wait disabled:opacity-60"
+              >
+                <svg
+                  aria-hidden="true"
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  class="size-3.5"
+                >
+                  <path d="M8 13V3m-4 4 4-4 4 4" />
+                </svg>
+                {wording.sendAction}
+              </button>
+            )
+          }
         </span>
       </div>
     </form>

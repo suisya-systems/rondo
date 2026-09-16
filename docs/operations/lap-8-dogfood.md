@@ -370,6 +370,15 @@ person's reply is what ends the stop, so this is as decided, but the option the 
 ("Stopping") has no durable form. Ending a line today takes a successor scope with `laps` 0
 (rule 1.4), which is a second P1 for what the person already said in words.
 
+> **What came of it (2026-09-17, #206 / D-0072).** Added below the note and not into it: the
+> paragraph above records what lap 8 actually did and stays as written. The gate decided the defect
+> is the one this note names -- not that the release reads no words, but that "Stopping" had no
+> durable form -- so an answer is now a press carrying one of two words, recorded on the reply.
+> `openAsksIn` opens on the absence of a `carry_on` instead of the presence of a reply, so a reply
+> saying *"Stop this line"* leaves the line held and says on the row that the person stopped it.
+> D-0066 rule 4.4's "the person's reply is what ends it" is superseded accordingly. Re-walking lap 8
+> today, the reply quoted here would hold the line rather than release it.
+
 ## 9. Compared with doing #195 in the current organisation
 
 The same issue, as a secretary + worker task in claude-org, would be: the secretary writes a brief,
@@ -433,7 +442,9 @@ Drafted in English as candidate issue bodies. Filing is the secretary's.
    thread then held no open ask, so a later in-scope redo of the same line would be tested as if
    the person had said "carry on". The stop offers "Stopping" as an option, but there is no durable
    form for it short of a successor scope with `laps` 0 (a second P1). Consider an outcome on the
-   reply (carry on / stop), or have `reply` to a scope stop say which it records.*
+   reply (carry on / stop), or have `reply` to a scope stop say which it records.* **Decided
+   (2026-09-17): the first of the two, as D-0072 -- an outcome on the answering press, and the line
+   opens on the absence of a `carry_on`.**
 7. **Decide the "successor naming a different request is a defect" rule from lap 8's #195 change**
    (low priority, decided at publish). *`de36852` on `rondo/lap8-001` refuses as a defect a successor
    whose caller names a request other than its predecessor's. #195 did not ask for this. Keep it (and

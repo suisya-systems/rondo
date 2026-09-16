@@ -75,10 +75,14 @@ const REDO: ScopeAct = {
   requestMessageId: "m-1",
 };
 
-const asks = (...open: { messageId?: string; iterationIds: string[] }[]) =>
+const asks = (...open: { messageId?: string; iterationIds: string[]; answeredStop?: boolean }[]) =>
   ({
     kind: "read",
-    asks: open.map((ask, n) => ({ messageId: ask.messageId ?? `m-ask-${String(n)}`, ...ask })),
+    asks: open.map((ask, n) => ({
+      messageId: ask.messageId ?? `m-ask-${String(n)}`,
+      answeredStop: false,
+      ...ask,
+    })),
   }) as const;
 
 function reading(severities: readonly ("blocker" | "major" | "minor" | "nit")[]): LapReading {

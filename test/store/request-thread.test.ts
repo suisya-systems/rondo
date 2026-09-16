@@ -16,7 +16,7 @@ import { expect, test } from "vitest";
 import { main, parseBasis, parseCommand } from "../../src/access/cli.js";
 import { consoleSeams } from "../../src/access/console.js";
 import { CONSERVATIVE_HOST_POLICY } from "../../src/refrain/policy.js";
-import type { ThreadMessageDraft } from "../../src/store/records.js";
+import type { AnswerOutcome, ThreadMessageDraft } from "../../src/store/records.js";
 import { advisoryRecord, iterationStore, openAdvisoryRecord } from "../../src/store/sqlite.js";
 
 /**
@@ -100,6 +100,7 @@ test("a request and its reply are stored column by column, the body byte for byt
       at_ms: 1_000,
       bases: "[]",
       asks: 0,
+      answer_outcome: null,
     },
     {
       message_id: "m-question",
@@ -110,7 +111,72 @@ test("a request and its reply are stored column by column, the body byte for byt
       at_ms: 2_000,
       bases: '[{"form":"message","messageId":"m-request"}]',
       asks: 1,
+      answer_outcome: null,
     },
+  ]);
+});
+
+test("D-0072 rule 2: an answer is a person's, answers one question, and is one of two words", async () => {
+  // The four refusals sit in the writer and not at a caller, because the column
+  // is what `openAsksIn` reads under the write lock to decide whether work may
+  // run: anything that could write a value that reader honours is refused here.
+  const connection = new DatabaseSync(":memory:");
+  const record = advisoryRecord(connection);
+  const refusal = async (parts: Partial<ThreadMessageDraft>): Promise<string> => {
+    const outcome = await record.recordThreadMessage(operator({ messageId: "m-x", ...parts }));
+    expect(outcome.kind, JSON.stringify(outcome)).toBe("refused");
+    return outcome.kind === "refused" ? outcome.reason : "";
+  };
+  expect(await record.recordThreadMessage(operator())).toEqual({ kind: "recorded" });
+  expect(await record.recordThreadMessage(drafter())).toEqual({ kind: "recorded" });
+
+  // Not one of the two words.
+  expect(
+    await refusal({
+      inReplyTo: "m-question",
+      answerOutcome: "maybe" as unknown as AnswerOutcome,
+    }),
+  ).toContain("'carry_on' or 'stop'");
+  // Not the person's.
+  expect(
+    await refusal({
+      authorKind: "drafter",
+      authorId: "rondo/deterministic/1",
+      bases: [{ form: "message", messageId: "m-request" }],
+      inReplyTo: "m-question",
+      answerOutcome: "carry_on",
+    }),
+  ).toContain("never rondo's own");
+  // Answering nothing: a message that opens a request.
+  expect(await refusal({ inReplyTo: null, answerOutcome: "carry_on" })).toContain(
+    "replies to nothing",
+  );
+  // Replying to something that asks nothing.
+  expect(await refusal({ inReplyTo: "m-request", answerOutcome: "stop" })).toContain(
+    "which asks nothing",
+  );
+  // The one shape that is written, and the column holds the word as pressed.
+  expect(
+    await record.recordThreadMessage(
+      operator({
+        messageId: "m-answer",
+        inReplyTo: "m-question",
+        atMs: 3_000,
+        answerOutcome: "stop",
+      }),
+    ),
+  ).toEqual({ kind: "recorded" });
+  expect(
+    connection
+      .prepare("SELECT answer_outcome FROM conversation_message WHERE message_id = 'm-answer'")
+      .get(),
+  ).toEqual({ answer_outcome: "stop" });
+  // And it reads back on the message, so a screen can say which answer it was.
+  const read = await record.threadMessages();
+  expect(read.kind === "read" && read.messages.map((one) => one.answerOutcome)).toEqual([
+    undefined,
+    undefined,
+    "stop",
   ]);
 });
 
@@ -131,6 +197,10 @@ test("rule 3: the thread has no column for a gate answer, a decision, a status, 
     "at_ms",
     "bases",
     "asks",
+    // D-0072 rule 1: which of the two answers a message carries. Still no
+    // column for anything rule 3 refuses -- an answer is not a decision, a
+    // status or a gate answer, it is which of the two words the person pressed.
+    "answer_outcome",
   ]);
 });
 

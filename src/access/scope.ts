@@ -216,16 +216,22 @@ export function scopeVerdict(act: ScopeAct, snapshot: ScopeSnapshot): ScopeVerdi
   const unproposed = unproposedStart(act);
   const standing = openAsks.asks.find((ask) => askStandsOver(ask, line, unproposed));
   if (standing !== undefined) {
+    // **Which of the two reasons it is standing for, said once** (D-0072 rule
+    // 3): telling a person who wrote "stop this line" that nobody has answered
+    // would be false, and the hold is the same either way.
+    const question = standing.answeredStop
+      ? `the question '${standing.messageId}', which the person answered by stopping this line,`
+      : `the unanswered question '${standing.messageId}'`;
     return outside(
       "asks",
       unproposed
-        ? `the unanswered question '${standing.messageId}' in the request's thread holds back ` +
+        ? `${question} in the request's thread holds back ` +
             "every first admission that names no proposal, since nothing says which line such " +
             "a plan continues (D-0069 rule 5)"
         : standing.iterationIds.length === 0
-          ? `the unanswered question '${standing.messageId}' about the request holds back its plans ` +
+          ? `${question} about the request holds back its plans ` +
             "not yet admitted (D-0066 rule 4.4)"
-          : `the unanswered question '${standing.messageId}' stands over this line (D-0066 rule 4.4)`,
+          : `${question} stands over this line (D-0066 rule 4.4)`,
     );
   }
   // 5. The workspace pair, byte for byte (rule 1.2.2).

@@ -18,6 +18,7 @@ import { expect, test } from "vitest";
 import type { HostPolicy } from "../../src/refrain/policy.js";
 import { contentDigest } from "../../src/store/plan.js";
 import {
+  type AnswerOutcome,
   isApprovableKind,
   type JsonRecord,
   type ScopeDecisionDraft,
@@ -62,6 +63,16 @@ const message = (parts: Partial<ThreadMessageDraft> = {}): ThreadMessageDraft =>
   asks: false,
   ...parts,
 });
+
+/**
+ * The person's answer to `inReplyTo` (D-0072 rule 1). `carry_on` is what ends
+ * the hold; `stop` records that they stopped the line and leaves it held.
+ */
+const answer = (
+  messageId: string,
+  inReplyTo: string,
+  answerOutcome: AnswerOutcome = "carry_on",
+): ThreadMessageDraft => message({ messageId, body: "answered", inReplyTo, answerOutcome });
 
 /** A drafter's question in `m-0001`'s thread, over whatever its bases name (D-0066 rule 4.4). */
 const ask = (messageId: string, bases: JsonRecord[], inReplyTo = "m-0001"): ThreadMessageDraft =>
@@ -826,7 +837,7 @@ test("5. an ask over the lineage refuses a redo, at any depth, and not a split's
   connection
     .prepare("UPDATE iteration SET supersedes_iteration_id = 'i-root' WHERE id = 'i-held'")
     .run();
-  await record.recordThreadMessage(message({ messageId: "m-ans", inReplyTo: "m-ask" }));
+  await record.recordThreadMessage(answer("m-ans", "m-ask"));
   await reserves(store, redo());
   await record.recordThreadMessage(
     ask("m-ask-root", [{ form: "iteration", iterationId: "i-root" }]),
@@ -834,8 +845,55 @@ test("5. an ask over the lineage refuses a redo, at any depth, and not a split's
   expect(await refusalOf(store, redo())).toContain("'m-ask-root'");
   expect(await record.openAsksIn("m-0001")).toEqual({
     kind: "read",
-    asks: [{ messageId: "m-ask-root", iterationIds: ["i-root"] }],
+    asks: [{ messageId: "m-ask-root", iterationIds: ["i-root"], answeredStop: false }],
   });
+});
+
+test("D-0072: only an answer that carries on releases the line; 'stop' and a bare reply hold it", async () => {
+  // #206 and lap 8's N-31: before this, any reply at all released the hold, so
+  // "stop this line" released it as surely as "go on" and no row could tell the
+  // two apart. The line now opens on the absence of a `carry_on`.
+  const { record, store, start } = await askable();
+  await record.recordThreadMessage(ask("m-ask", []));
+
+  // A bare reply -- what the page's `Reply` writes -- answers nothing.
+  await record.recordThreadMessage(message({ messageId: "m-chat", inReplyTo: "m-ask" }));
+  expect(await refusalOf(store, start())).toContain("nobody has answered");
+  // The person's own words, said to be a stop: the hold stays, and the row says why.
+  await record.recordThreadMessage(answer("m-stopped", "m-ask", "stop"));
+  const refusal = await refusalOf(store, start());
+  expect(refusal).toContain("'m-ask'");
+  expect(refusal).toContain("answered by stopping this line");
+  expect(await record.openAsksIn("m-0001")).toEqual({
+    kind: "read",
+    asks: [{ messageId: "m-ask", iterationIds: [], answeredStop: true }],
+  });
+  // Changing their mind is a second answer, and it is the one that carries on.
+  await record.recordThreadMessage(answer("m-go", "m-ask"));
+  await reserves(store, start());
+  expect(await record.openAsksIn("m-0001")).toEqual({ kind: "read", asks: [] });
+});
+
+test("D-0072: no message rondo writes releases a hold rondo put on the line", async () => {
+  // D-0066 rule 4.4's "the person's reply", read literally. A drafter's report
+  // threaded under a stop used to end it, because the old query counted rows
+  // and not voices.
+  const { record, store, start } = await askable();
+  await record.recordThreadMessage(ask("m-ask", []));
+  expect(
+    await record.recordThreadMessage(
+      ask("m-report", [{ form: "iteration", iterationId: "i-held" }], "m-ask"),
+    ),
+  ).toEqual({ kind: "recorded" });
+  expect(await refusalOf(store, start())).toContain("'m-ask'");
+  // And a drafter cannot write the answer itself, whatever it replies to.
+  const refused = await record.recordThreadMessage({
+    ...ask("m-self-answer", [], "m-ask"),
+    answerOutcome: "carry_on",
+  });
+  expect(refused).toMatchObject({ kind: "refused" });
+  expect(refused.kind === "refused" && refused.reason).toContain("never rondo's own");
+  expect(await refusalOf(store, start())).toContain("'m-ask'");
 });
 
 test("5. an ask naming no lap holds back a lineage start, and lineages running carry on", async () => {
@@ -853,7 +911,7 @@ test("5. controls: an answered ask, one in another request's thread, one on anot
   // Answered: a reply to the ask ends it.
   await record.recordThreadMessage(ask("m-ask", []));
   expect(await refusalOf(store, start())).toContain("'m-ask'");
-  await record.recordThreadMessage(message({ messageId: "m-ans", inReplyTo: "m-ask" }));
+  await record.recordThreadMessage(answer("m-ans", "m-ask"));
   await reserves(store, start());
   // Another request's thread: its question does not stand over this request's acts.
   await record.recordThreadMessage(message({ messageId: "m-0002" }));
@@ -877,7 +935,7 @@ test("PLANTED 5 (D-0069 rule 5): every open ask holds back a start naming no pro
   expect(count(connection, "SELECT COUNT(*) AS n FROM iteration WHERE id LIKE 'i-plan-%'")).toBe(0);
   await reserves(store, start());
   // Answered, it holds nothing; a question in another request's thread holds nothing either.
-  await record.recordThreadMessage(message({ messageId: "m-ans", inReplyTo: "m-stop" }));
+  await record.recordThreadMessage(answer("m-ans", "m-stop"));
   await record.recordThreadMessage(message({ messageId: "m-0002" }));
   await record.recordThreadMessage(
     ask("m-ask-2", [{ form: "iteration", iterationId: "i-held" }], "m-0002"),
@@ -903,7 +961,7 @@ test("5. an ask over a lap stands over its whole lineage, so a branch from an ea
   expect(await record.lineageOf("i-held")).toEqual(["i-held", "i-p"]);
   expect(await record.lineageOf("i-p")).toEqual(["i-held", "i-p"]);
   // Control: once answered, the branch from the earlier lap is admitted.
-  await record.recordThreadMessage(message({ messageId: "m-ans", inReplyTo: "m-stop" }));
+  await record.recordThreadMessage(answer("m-ans", "m-stop"));
   await reserves(store, redoOf("i-s2", "i-held"));
   expect(await record.lineageOf("i-p")).toEqual(["i-held", "i-p", "i-s2"]);
 });

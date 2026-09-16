@@ -51,6 +51,7 @@ import { DatabaseSync } from "node:sqlite";
 import { canonicalJson, contentDigest, planDigest } from "./plan.js";
 import {
   type AdmissionRefusal,
+  type AnswerOutcome,
   type AttentionCount,
   type AttentionInterval,
   askStandsOver,
@@ -911,7 +912,14 @@ CREATE TABLE IF NOT EXISTS conversation_message (
   in_reply_to                 TEXT,
   at_ms                       INTEGER,
   bases                       TEXT,
-  asks                        INTEGER
+  asks                        INTEGER,
+  -- D-0072 rule 1: which of the two answers an answering press carried, NULL
+  -- on every message that answers nothing. Nullable like the seven above and
+  -- for a stronger reason -- a row written before this column cannot be told
+  -- from one written after it, which is the defect (#206) rather than a gap to
+  -- back-fill -- and the writer refuses a value anywhere but on an operator's
+  -- reply to an ask.
+  answer_outcome              TEXT
 );
 
 -- D-0022 rule 4, extended by D-0032 rules 1, 2, 3, 7 and 8.
@@ -1342,6 +1350,15 @@ const LAP_READING_ADDED_COLUMNS = Object.freeze({
  * D-0061 rule 2's seven columns, for a `conversation_message` created while it
  * was one column. No back-fill: an existing row is an elevation's id and has
  * no body, author or clock to recover.
+ *
+ * **`answer_outcome` (D-0072) is the one column whose absence of a back-fill
+ * changes behaviour, and it is deliberate.** A reply written before this entry
+ * released the hold on its ask whatever it said, which is #206; nothing on the
+ * row says whether the person meant "carry on" or "stop", so no back-fill could
+ * be honest. Those replies stay NULL and their asks re-open, which stops the
+ * lines they held rather than admitting work under a reading nobody recorded --
+ * fail closed, in D-0047 rule 7's direction. A person ends such a stop by
+ * answering it once more, now with an outcome.
  */
 const CONVERSATION_ADDED_COLUMNS = Object.freeze({
   body: "TEXT",
@@ -1351,6 +1368,7 @@ const CONVERSATION_ADDED_COLUMNS = Object.freeze({
   at_ms: "INTEGER",
   bases: "TEXT",
   asks: "INTEGER",
+  answer_outcome: "TEXT",
 });
 
 /** Add every column of `columns` that `table` lacks, inside the caller's transaction. */
@@ -2608,7 +2626,8 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
         connection
           .prepare(
             "INSERT INTO conversation_message (message_id, body, author_kind, author_id, " +
-              "in_reply_to, at_ms, bases, asks) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+              "in_reply_to, at_ms, bases, asks, answer_outcome) " +
+              "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
           )
           .run(
             messageId,
@@ -2619,6 +2638,7 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
             thread.atMs,
             canonicalJson([...thread.bases]),
             thread.asks ? 1 : 0,
+            thread.answerOutcome ?? null,
           );
       }
       return { kind: "recorded" };
@@ -3649,6 +3669,10 @@ function threadMessageRefusal(connection: DatabaseSync, draft: ThreadMessageDraf
       "thread: a reply to nothing would be a thread nobody can follow back (D-0061 rule 2.4)"
     );
   }
+  const outcomeRefusal = answerOutcomeRefusal(connection, draft);
+  if (outcomeRefusal !== null) {
+    return outcomeRefusal;
+  }
   for (const basis of draft.bases) {
     const form = basis["form"];
     const fields = typeof form === "string" ? BASIS_LOCATOR_FIELDS[form] : undefined;
@@ -3686,6 +3710,53 @@ function threadMessageRefusal(connection: DatabaseSync, draft: ThreadMessageDraf
         "row: a locator to nothing is a basis nobody can follow (D-0061 rule 2.6)"
       );
     }
+  }
+  return null;
+}
+
+/**
+ * Why a message may not carry the answer it carries, or null (D-0072 rule 2).
+ *
+ * **Four refusals, and each one keeps a reading off the row that the row cannot
+ * support.** An answer is a person's (D-0066 rule 4.4 says "the person's
+ * reply"), it answers one question and not the thread at large, and it is one of
+ * two words. Held here rather than at the surface because the answer is what
+ * releases work: `openAsksIn` reads this column under the write lock (rule
+ * 4.3), so anything that could write a value this reader would honour has to be
+ * refused where the write happens, not where one caller happens to be careful.
+ */
+function answerOutcomeRefusal(connection: DatabaseSync, draft: ThreadMessageDraft): string | null {
+  const outcome = draft.answerOutcome;
+  if (outcome === undefined) {
+    return null;
+  }
+  if (outcome !== "carry_on" && outcome !== "stop") {
+    return (
+      `'${draft.messageId}' carries the answer '${String(outcome)}', and an answer is ` +
+      "'carry_on' or 'stop' (D-0072 rule 1)"
+    );
+  }
+  if (draft.authorKind !== "operator") {
+    return (
+      `'${draft.messageId}' is a drafter message carrying the answer '${outcome}', and what ends ` +
+      "a stop is the person's answer and never rondo's own (D-0066 rule 4.4, D-0072 rule 2)"
+    );
+  }
+  if (draft.inReplyTo === null) {
+    return (
+      `'${draft.messageId}' carries the answer '${outcome}' and replies to nothing: an answer ` +
+      "answers one question, and a message that opens a request answers none (D-0072 rule 2)"
+    );
+  }
+  const asked =
+    connection
+      .prepare("SELECT 1 FROM conversation_message WHERE message_id = ? AND asks = 1")
+      .get(draft.inReplyTo) !== undefined;
+  if (!asked) {
+    return (
+      `'${draft.messageId}' carries the answer '${outcome}' and replies to '${draft.inReplyTo}', ` +
+      "which asks nothing: only a question put to the person can be answered (D-0072 rule 2)"
+    );
   }
   return null;
 }
@@ -4063,8 +4134,13 @@ function scopeRefusal(
   if (standing !== undefined) {
     return outside(
       "asks",
-      `the message '${standing.messageId}' asks a question nobody has answered, and it stands ` +
-        "over this line: the person's reply is what lets it carry on (D-0066 rule 4.4)",
+      standing.answeredStop
+        ? `the message '${standing.messageId}' asks a question the person answered by stopping ` +
+            "this line, and it stands over it: an answer that stops leaves the question standing, " +
+            "and only an answer that carries on lets the line go on (D-0072 rule 3)"
+        : `the message '${standing.messageId}' asks a question nobody has answered, and it stands ` +
+            "over this line: the person's answer to carry on is what lets it go on (D-0066 rule " +
+            "4.4, D-0072 rule 3)",
     );
   }
   // 6. The admitted plan's own pair, byte for byte.
@@ -4163,7 +4239,21 @@ function lineageOf(connection: DatabaseSync, tipId: string | null): readonly str
 /**
  * The open asks in the thread `requestMessageId` opens (D-0061 rule 2.7, D-0066
  * rule 4.2): messages whose `in_reply_to` chain reaches the root, the root
- * included, with `asks = 1` and no message replying to them.
+ * included, with `asks = 1` that **no operator's `carry_on` answer has carried
+ * on** (D-0072 rule 3).
+ *
+ * **It opens on the absence of a `carry_on`, not on the presence of a `stop`**,
+ * and that is the whole of #206. Before D-0072 any reply at all closed an ask,
+ * so "stop this line" released the line as surely as "go on" and the row could
+ * not tell the two apart (lap 8's N-31). Now an ordinary reply, a drafter's
+ * report and a `stop` answer all leave the ask standing, and the one thing that
+ * ends a stop is the person pressing the answer that says to carry on. The
+ * `author_kind` in the same clause is D-0066 rule 4.4's "**the person's**
+ * reply" read literally: no message rondo writes about a request can release
+ * the hold rondo put on it.
+ *
+ * `answeredStop` comes back per row so a refusal can say which of the two
+ * reasons it is standing for; nothing in the verdict branches on it.
  *
  * `UNION` rather than `UNION ALL` in the thread walk, so it terminates even
  * over a cycle nobody could write through `recordThreadMessage`.
@@ -4173,9 +4263,13 @@ function openAsksIn(connection: DatabaseSync, requestMessageId: string): OpenAsk
     .prepare(
       "WITH RECURSIVE thread(id) AS (SELECT ? " +
         "UNION SELECT m.message_id FROM conversation_message m JOIN thread t ON m.in_reply_to = t.id" +
-        ") SELECT m.message_id, m.bases FROM conversation_message m " +
+        ") SELECT m.message_id, m.bases, EXISTS (SELECT 1 FROM conversation_message s " +
+        "WHERE s.in_reply_to = m.message_id AND s.author_kind = 'operator' " +
+        "AND s.answer_outcome = 'stop') AS answered_stop " +
+        "FROM conversation_message m " +
         "WHERE m.message_id IN (SELECT id FROM thread) AND m.asks = 1 AND NOT EXISTS " +
-        "(SELECT 1 FROM conversation_message r WHERE r.in_reply_to = m.message_id) " +
+        "(SELECT 1 FROM conversation_message r WHERE r.in_reply_to = m.message_id " +
+        "AND r.author_kind = 'operator' AND r.answer_outcome = 'carry_on') " +
         "ORDER BY m.at_ms, m.message_id",
     )
     .all(requestMessageId) as SqlRow[];
@@ -4216,7 +4310,13 @@ function openAsksIn(connection: DatabaseSync, requestMessageId: string): OpenAsk
         iterationIds.push(iterationId);
       }
     }
-    asks.push(Object.freeze({ messageId, iterationIds: Object.freeze(iterationIds) }));
+    asks.push(
+      Object.freeze({
+        messageId,
+        iterationIds: Object.freeze(iterationIds),
+        answeredStop: Number(row["answered_stop"]) === 1,
+      }),
+    );
   }
   return { kind: "read", asks: Object.freeze(asks) };
 }
@@ -4229,8 +4329,9 @@ function openAsksIn(connection: DatabaseSync, requestMessageId: string): OpenAsk
 function threadMessages(connection: DatabaseSync): ThreadMessagesReadOutcome {
   const rows = connection
     .prepare(
-      "SELECT message_id, body, author_kind, author_id, in_reply_to, at_ms, bases, asks " +
-        "FROM conversation_message WHERE author_kind IS NOT NULL ORDER BY at_ms, rowid",
+      "SELECT message_id, body, author_kind, author_id, in_reply_to, at_ms, bases, asks, " +
+        "answer_outcome FROM conversation_message WHERE author_kind IS NOT NULL " +
+        "ORDER BY at_ms, rowid",
     )
     .all() as SqlRow[];
   const messages: ThreadMessageDraft[] = [];
@@ -4261,6 +4362,12 @@ function threadMessages(connection: DatabaseSync): ThreadMessagesReadOutcome {
         atMs: Number(row["at_ms"] ?? 0),
         bases: Object.freeze(bases as JsonRecord[]),
         asks: Number(row["asks"]) === 1,
+        // Spread rather than set, because `exactOptionalPropertyTypes` makes
+        // "absent" and "present and undefined" two different drafts, and the
+        // one this row is holds no answer (D-0072 rule 1).
+        ...(row["answer_outcome"] === null || row["answer_outcome"] === undefined
+          ? {}
+          : { answerOutcome: String(row["answer_outcome"]) as AnswerOutcome }),
       }),
     );
   }
