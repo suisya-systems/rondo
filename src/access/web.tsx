@@ -344,11 +344,16 @@ export interface PublishTarget {
   readonly workspace: string;
   readonly remote: string;
   /**
-   * Where a push to that remote actually goes, as git resolved it.
+   * Where a push to that remote actually goes, as git resolved it, with any
+   * credentials in it replaced.
    *
    * **Shown because it is digested** (Codex round 1): the press refuses when the
    * destination has moved since the screen was drawn, and a screen that named
    * only the remote would be refusing over something it never showed.
+   *
+   * **Redacted, because a page is kept** (Codex round 2): a push URL can carry
+   * a token in its userinfo, and what the digest compares is the unredacted URL
+   * the caller holds, never this.
    */
   readonly pushUrls: readonly string[];
   readonly topicBranch: string;

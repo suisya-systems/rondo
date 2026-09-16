@@ -5701,6 +5701,20 @@ export interface PublishPlan {
    * goes, so where it goes is what is carried and digested.
    */
   readonly pushUrls: readonly string[];
+  /**
+   * What the branch was when this plan was composed: the tip, and the digest of
+   * the material under it, or null when the workspace would not read.
+   *
+   * **The pull request's text is not a fingerprint of the work** (Codex round
+   * 2). `pullRequestText` truncates the commit list past twenty and the file
+   * statistics survive an amend, and the two refusals that carry no tip -- a
+   * missing reading and a reading that raised something -- are exactly the
+   * screens the override press is offered on. So an amended commit beyond the
+   * displayed list could leave every other field of this plan identical and let
+   * an old override form publish work nobody confirmed. What identifies the work
+   * is what git measured over it, so that is carried and digested.
+   */
+  readonly workFingerprint: { readonly tipCommit: string; readonly materialDigest: string } | null;
   readonly topicBranch: string;
   readonly baseBranch: string;
   /** What `gh pr create --head` is given: the branch, or `owner:branch`. */
@@ -5931,6 +5945,15 @@ export async function publishPlanFor(
       // `read` is the only shape that carries them, and the preflight has
       // already refused every other one.
       pushUrls: inspection.kind === "read" ? inspection.pushUrls : [],
+      // Null on a workspace that would not read, which is a fact and not a
+      // fingerprint: the reading's own refusal is what speaks to that case.
+      workFingerprint:
+        work.kind === "read"
+          ? {
+              tipCommit: evidenceOf(work).tipCommit,
+              materialDigest: evidenceOf(work).materialDigest,
+            }
+          : null,
       topicBranch,
       baseBranch,
       headRef: preflight.headRef,
@@ -5966,6 +5989,10 @@ function publishShownDigest(plan: PublishPlan): string {
     // {@link PublishPlan.pushUrls}. Under `--allow-remote-mismatch` this is the
     // one field that moves when a remote is re-pointed at another repository.
     push_urls: [...plan.pushUrls],
+    // What the work *is*, rather than what the pull request's text says about
+    // it: see {@link PublishPlan.workFingerprint}.
+    tip_commit: plan.workFingerprint?.tipCommit ?? null,
+    material_digest: plan.workFingerprint?.materialDigest ?? null,
     topic_branch: plan.topicBranch,
     base_branch: plan.baseBranch,
     head_ref: plan.headRef,
@@ -6008,7 +6035,13 @@ export async function publishingForPage(
     target: {
       workspace: plan.workspace,
       remote: plan.remote,
-      pushUrls: plan.pushUrls,
+      // **Redacted on the way to the screen, and not in the plan** (Codex round
+      // 2). A push URL can carry a token in its userinfo, and a page is a thing
+      // that is screenshotted, saved and pasted; the terminal already prints
+      // these through the same redaction. What the digest compares stays the
+      // URL git actually answered with, so a remote re-pointed at another
+      // repository behind the same credentials still moves the digest.
+      pushUrls: plan.pushUrls.map(redactRemoteUrl),
       topicBranch: plan.topicBranch,
       baseBranch: plan.baseBranch,
       headRef: plan.headRef,

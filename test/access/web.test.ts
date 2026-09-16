@@ -3890,10 +3890,23 @@ test("a publish press refuses on the lap's own state before anything leaves this
  * comparison between two reads of the same workspace, and a faked read cannot
  * disagree with itself the way the real thing is meant to be caught doing.
  */
-async function publishableWorld(staleReading: boolean): Promise<{
+async function publishableWorld(
+  /**
+   * What the store holds about this work: a reading that describes it, one
+   * taken over a tip it has moved off, or none at all -- which is the state the
+   * override press exists for and the one whose refusal carries no tip of its
+   * own (Codex round 2).
+   */
+  reading: "clear" | "stale" | "none",
+  /** Commits on the topic branch, one file each: past `LIST_LIMIT` the body truncates. */
+  commits = 1,
+  /** The remote's URL; the default is a repository nobody has. */
+  remoteUrl = "https://github.com/suisya-systems/rondo-not-real.git",
+): Promise<{
   readonly store: ReturnType<typeof iterationStore>;
   readonly storePath: string;
   readonly iterationId: string;
+  readonly workspace: string;
   readonly asked: { repo: string; remote: string; allowRemoteMismatch: boolean };
 }> {
   const dir = mkdtempSync(join(tmpdir(), "rondo-publish-"));
@@ -3935,12 +3948,18 @@ async function publishableWorld(staleReading: boolean): Promise<{
   run("add", "README.md");
   run("commit", "--quiet", "-m", "chore: the base");
   run("checkout", "--quiet", "-b", topicBranch);
-  writeFileSync(join(workspace, "counter.ts"), "export const laps = 1;\n", "utf8");
-  run("add", "counter.ts");
-  run("commit", "--quiet", "-m", "feat: count the laps");
+  for (let n = 1; n <= commits; n += 1) {
+    writeFileSync(
+      join(workspace, `counter-${String(n)}.ts`),
+      `export const laps = ${n};\n`,
+      "utf8",
+    );
+    run("add", `counter-${String(n)}.ts`);
+    run("commit", "--quiet", "-m", `feat: count the laps (${n})`);
+  }
   // A remote that agrees with `asked.repo` and is not a repository anybody has:
   // the preflight needs one, and no test may be one press away from a push.
-  run("remote", "add", "origin", "https://github.com/suisya-systems/rondo-not-real.git");
+  run("remote", "add", "origin", remoteUrl);
 
   const reserved = await store.reserve({
     id: iterationId,
@@ -3966,29 +3985,33 @@ async function publishableWorld(staleReading: boolean): Promise<{
     throw new Error(`the fixture workspace would not read: ${JSON.stringify(read)}`);
   }
   const measured = evidenceOf(read);
-  const reading = {
-    drafter: "rondo/deterministic/2",
-    verdict: "clear" as const,
-    findings: [],
-    // A stale reading is one taken over a tip the branch has moved off, which
-    // is D-0060 rule 5's refusal and the only thing the second press overrules.
-    evidence: staleReading ? { ...measured, tipCommit: "9".repeat(40) } : measured,
-    unavailableReason: null,
-  };
-  for (const [from, to, fields, taken] of [
+  const taken =
+    reading === "none"
+      ? undefined
+      : {
+          drafter: "rondo/deterministic/2",
+          verdict: "clear" as const,
+          findings: [],
+          // A stale reading is one taken over a tip the branch has moved off,
+          // which is D-0060 rule 5's refusal and what the second press is for.
+          evidence: reading === "stale" ? { ...measured, tipCommit: "9".repeat(40) } : measured,
+          unavailableReason: null,
+        };
+  for (const [from, to, fields, carried] of [
     ["planned", "admitting", {}, undefined],
     ["admitting", "admitted", {}, undefined],
     ["admitted", "performing", {}, undefined],
-    ["performing", "awaiting_human", { gateId: `gate-${iterationId}` }, reading],
+    ["performing", "awaiting_human", { gateId: `gate-${iterationId}` }, taken],
     ["awaiting_human", "closed", { gateOutcome: "answered_and_forwarded" }, undefined],
   ] as const) {
-    const moved = await store.transition(iterationId, from, to, fields, 2_000, taken);
+    const moved = await store.transition(iterationId, from, to, fields, 2_000, carried);
     expect(moved.kind, to).toBe("transitioned");
   }
   return {
     store,
     storePath,
     iterationId,
+    workspace,
     asked: {
       repo: "suisya-systems/rondo-not-real",
       remote: "origin",
@@ -4002,7 +4025,7 @@ test("a publish press acts only on the dry-run the screen showed, re-read inside
   // this slice's checks a person cannot see working: what the screen drew is
   // read again here, and a press carrying anything else publishes nothing.
   // Every press below refuses before the push, so nothing leaves this machine.
-  const world = await publishableWorld(false);
+  const world = await publishableWorld("clear");
   const record = await world.store.read(world.iterationId);
   if (record.kind !== "read") {
     throw new Error("the fixture row would not read");
@@ -4088,7 +4111,7 @@ test("a publish press acts only on the dry-run the screen showed, re-read inside
 });
 
 test("a publish press does not publish past the reading's refusal; only the second press does (#233 S5, D-0060)", async () => {
-  const world = await publishableWorld(true);
+  const world = await publishableWorld("stale");
   const record = await world.store.read(world.iterationId);
   if (record.kind !== "read") {
     throw new Error("the fixture row would not read");
@@ -4116,4 +4139,101 @@ test("a publish press does not publish past the reading's refusal; only the seco
   );
   expect(ordinary.ok).toBe(false);
   expect(ordinary.why).toBe("publishRefusedNotRead");
+});
+
+test("a token in a remote's URL never reaches the screen, and the press still sees the move (#233 S5)", async () => {
+  // **A page is screenshotted, saved and pasted.** A push URL may carry a token
+  // in its userinfo, and the terminal already prints these redacted; the screen
+  // must not be the one place the secret survives (Codex round 2).
+  const token = "ghp_notarealtokenbutshapedlikeone";
+  const world = await publishableWorld(
+    "clear",
+    1,
+    `https://ada:${token}@github.com/suisya-systems/rondo-not-real.git`,
+  );
+  const record = await world.store.read(world.iterationId);
+  if (record.kind !== "read") {
+    throw new Error("the fixture row would not read");
+  }
+  const shown = await publishingForPage(
+    { RONDO_APPROVER: "ada" },
+    world.store,
+    world.asked,
+    record.record,
+  );
+  if (shown.kind !== "ready") {
+    throw new Error(`the fixture would not plan: ${JSON.stringify(shown)}`);
+  }
+  expect(shown.target.pushUrls).toEqual([
+    "https://<redacted>@github.com/suisya-systems/rondo-not-real.git",
+  ]);
+  expect(JSON.stringify(shown)).not.toContain(token);
+
+  // And what the screen draws is that, not something composed again from the
+  // raw URL: the projection is the only thing the renderer is handed.
+  const page = fresh();
+  await approvedLap(page);
+  const html = await operatorPage(
+    portsOver(page, "ada", [], null, null, async () => shown),
+    "t",
+    { kind: "publish", iterationId: "i-0001" },
+  );
+  expect(html).not.toContain(token);
+  expect(html).toContain("&lt;redacted&gt;@github.com/suisya-systems/rondo-not-real.git");
+});
+
+test("work amended out of sight of the pull request's text still moves the confirmation (#233 S5)", async () => {
+  // **The pull request's text is not a fingerprint of the work** (Codex round
+  // 2). Past `LIST_LIMIT` the body lists the oldest twenty commits and counts
+  // the rest, so amending the newest one changes no line of it; the file
+  // statistics survive an amend that keeps the line counts; and the refusal on
+  // this screen -- no reading was recorded -- carries no tip of its own. Every
+  // field a person could have read is identical across the amend below.
+  const world = await publishableWorld("none", 21);
+  const record = await world.store.read(world.iterationId);
+  if (record.kind !== "read") {
+    throw new Error("the fixture row would not read");
+  }
+  const reading = async () =>
+    await publishingForPage({ RONDO_APPROVER: "ada" }, world.store, world.asked, record.record);
+  const before = await reading();
+  if (before.kind !== "ready") {
+    throw new Error(`the fixture would not plan: ${JSON.stringify(before)}`);
+  }
+  expect(before.review?.why).toBe("noReading");
+
+  // The newest commit, amended: same subject, same file, same one line changed.
+  writeFileSync(join(world.workspace, "counter-21.ts"), "export const laps = 99;\n", "utf8");
+  execFileSync("git", ["-C", world.workspace, "add", "counter-21.ts"], { encoding: "utf8" });
+  execFileSync("git", ["-C", world.workspace, "commit", "--quiet", "--amend", "--no-edit"], {
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      GIT_AUTHOR_NAME: "rondo test",
+      GIT_AUTHOR_EMAIL: "test@example.invalid",
+      GIT_COMMITTER_NAME: "rondo test",
+      GIT_COMMITTER_EMAIL: "test@example.invalid",
+    },
+  });
+  const after = await reading();
+  if (after.kind !== "ready") {
+    throw new Error(`the fixture would not plan: ${JSON.stringify(after)}`);
+  }
+  // Nothing the screen showed changed -- which is exactly why the text cannot
+  // be what identifies the work.
+  expect(after.title).toBe(before.title);
+  expect(after.body).toBe(before.body);
+  expect(after.review).toEqual(before.review);
+  expect(after.warnings).toEqual(before.warnings);
+
+  const stale = await publishFromPage(
+    { RONDO_APPROVER: "ada" },
+    world.store,
+    world.storePath,
+    "ada",
+    world.asked,
+    { iterationId: world.iterationId, shown: before.shown, despiteReview: true },
+  );
+  expect(stale.ok).toBe(false);
+  expect(stale.why).toBe("publishRefusedChanged");
 });
