@@ -433,6 +433,37 @@ export interface IterationRecord {
 }
 
 /**
+ * The one gate outcome that means a person answered.
+ *
+ * continuo reaches it itself, as `actor_kind: "system"`, when the forwarded
+ * relay is acked -- so it is the only outcome that records an answer having
+ * been carried all the way out. The other three (`withdrawn`, `expired`,
+ * `unanswerable`) also close a gate and also close the iteration, and none of
+ * them is a person saying yes.
+ */
+export const APPROVED_OUTCOME = "answered_and_forwarded";
+
+/**
+ * Whether an iteration records a person having actually approved the work.
+ *
+ * A predicate rather than an inline comparison because it is the check that
+ * stands between "a gate ended" and "a person said yes", and those are not the
+ * same fact: `withdrawn`, `expired` and `unanswerable` each close a gate and
+ * each close the iteration. Publishing on one of them would push the work and
+ * open a pull request whose body says a human approved it -- rondo making a
+ * false statement about somebody else.
+ *
+ * **Here and not in `src/access/cli.ts`** (rondo#233 S5): the page draws the
+ * way onto a publish screen on exactly the rows that screen would draw a button
+ * for, which means the renderer asks this question too -- and a second spelling
+ * of it beside the first is the two surfaces disagreeing about who approved
+ * what.
+ */
+export function approvedForPublication(record: IterationRecord): boolean {
+  return record.status === "closed" && record.gateOutcome === APPROVED_OUTCOME;
+}
+
+/**
  * The fields a transition may write beside the new status.
  *
  * A partial of the record minus the identity, the status and the timestamps:

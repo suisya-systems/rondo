@@ -23,6 +23,7 @@ import { DatabaseSync } from "node:sqlite";
 import { expect, test } from "vitest";
 
 import {
+  publishFromPage,
   recordPagePress,
   recordScopeFromPage,
   reviseFromPage,
@@ -32,6 +33,7 @@ import {
 import { agentTypeRecordOf, heldAgentTypeLines } from "../../src/access/scope.js";
 import {
   type LanguageAsked,
+  type PublishReading,
   operatorPage as renderPage,
   resolveLanguage,
   type ScopeDrafting,
@@ -153,6 +155,10 @@ function portsOver(
   // every row these tests reserve, and the state the gate says *no change from
   // here* in. The row itself is `test/store/scope-record.test.ts`'s.
   scopeDecision: string | null = null,
+  // **The dry-run the publish screen is drawn from** (rondo#233 S5), or null
+  // for a host that named no forge repository -- which is every other test
+  // here, and the state the summary draws no publish link in.
+  publishing: PublishReading | null = null,
 ): ServedPorts {
   return {
     store: world.store,
@@ -189,8 +195,11 @@ function portsOver(
     scope: null,
     // The revise press's own door is `test/access/web-app.test.ts`'s, as the
     // approve press's is; what this file tests is the form the page draws for
-    // it (rondo#233 S4).
+    // it (rondo#233 S4). The publish press is the same split (rondo#233 S5):
+    // the door is that file's, the screen is this one's.
     revise: null,
+    publish: null,
+    publishing,
   };
 }
 
@@ -3602,4 +3611,264 @@ test("the first scope in a store shows what its agent type is allowed, read from
   if (ja.kind === "drafted") {
     expect(ja.heldLines.join("\n")).toContain("この範囲が記録するプラン");
   }
+});
+
+/** One approved, ended lap: the only state with a publish screen (rondo#233 S5). */
+async function approvedLap(world: ReturnType<typeof fresh>): Promise<void> {
+  await gateWithChecks(world);
+  const closed = await world.store.transition(
+    "i-0001",
+    "awaiting_human",
+    "closed",
+    // The one outcome that is a person having answered (`approvedForPublication`).
+    { gateOutcome: "answered_and_forwarded" },
+    5_000,
+  );
+  expect(closed.kind).toBe("transitioned");
+}
+
+/** A dry-run as `publishingForPage` reads one, with nothing refusing. */
+const DRY_RUN = {
+  kind: "ready" as const,
+  shown: `sha256:${"a".repeat(64)}`,
+  target: {
+    workspace: "/tmp/work/i-0001",
+    remote: "origin",
+    topicBranch: "rondo/i-0001",
+    baseBranch: "main",
+    headRef: "rondo/i-0001",
+    repo: "github.com/suisya-systems/rondo",
+    runId: "run-0001",
+  },
+  title: "feat: a retry budget",
+  body: "## What changed\n\n- a retry budget\n",
+  warnings: [],
+  modelReading: [],
+  review: null,
+};
+
+test("the publish screen shows the dry-run and one press, and nothing has left the machine (#233 S5)", async () => {
+  const world = fresh();
+  await approvedLap(world);
+  const html = await operatorPage(
+    portsOver(world, "ada", [], null, null, async () => DRY_RUN),
+    "t",
+    { kind: "publish", iterationId: "i-0001" },
+  );
+  const screen = html.slice(html.indexOf('id="publish"'));
+
+  // What would happen, in sentences and not in command lines: this page never
+  // sends a person to a terminal.
+  expect(screen).toContain("Push the branch rondo/i-0001 to origin.");
+  expect(screen).toContain("Open a pull request on github.com/suisya-systems/rondo, against main.");
+  expect(screen).toContain("Close the run run-0001 as completed.");
+  // The text a reviewer will read, on the screen that publishes it.
+  expect(screen).toContain("feat: a retry budget");
+  expect(screen).toContain("## What changed");
+  // One press, carrying the digest of exactly this dry-run and nothing typed.
+  expect(screen).toContain('<form id="publish-form" method="post" action="/publish?lang=en"');
+  expect(screen).toContain('<input type="hidden" name="iteration" value="i-0001"/>');
+  expect(screen).toContain(`<input type="hidden" name="shown" value="${DRY_RUN.shown}"/>`);
+  expect(screen).toContain(">Publish</button>");
+  // No override where there is nothing to override.
+  expect(screen).not.toContain('id="publish-despite"');
+  // **The screen does not redraw itself**: it is what a person is reading in
+  // order to press (`isLive`).
+  expect(html).not.toContain('hx-trigger="every 5s"');
+});
+
+test("the publish screen offers the override as its own press, under the refusal it overrules (#233 S5, D-0060)", async () => {
+  const world = fresh();
+  await approvedLap(world);
+  const html = await operatorPage(
+    portsOver(world, "ada", [], null, null, async () => ({
+      ...DRY_RUN,
+      review: {
+        why: "moved" as const,
+        readTip: "b".repeat(40),
+        nowTip: "c".repeat(40),
+      },
+    })),
+    "t",
+    { kind: "publish", iterationId: "i-0001" },
+  );
+  const screen = html.slice(html.indexOf('id="publish"'));
+
+  expect(screen).toContain("The reading does not cover this");
+  expect(screen).toContain(`The reading was taken over ${"b".repeat(40)}`);
+  // **Its own press**, with the field that says which of the two it is, and
+  // the ordinary publish button is not drawn beside it.
+  expect(screen).toContain('<form id="publish-despite-form" method="post"');
+  expect(screen).toContain('<input type="hidden" name="despite_review" value="yes"/>');
+  expect(screen).toContain(">Publish anyway</button>");
+  expect(screen).not.toContain('id="publish-form"');
+});
+
+test("a lap that cannot be published says why on the screen, and draws no button (#233 S5, D-0060 rule 4)", async () => {
+  const world = fresh();
+  await approvedLap(world);
+  const html = await operatorPage(
+    portsOver(world, "ada", [], null, null, async () => ({
+      kind: "refused" as const,
+      block: {
+        why: "uncommitted" as const,
+        paths: ["src/notifier.ts", "notes.md"],
+        elsewhere: "main",
+      },
+    })),
+    "t",
+    { kind: "publish", iterationId: "i-0001" },
+  );
+  const screen = html.slice(html.indexOf('id="publish"'));
+
+  expect(screen).toContain("src/notifier.ts, notes.md");
+  expect(screen).toContain("The workspace has main checked out");
+  // The remedies are about the paths, and none of them is a flag.
+  expect(screen).toContain("commit them yourself in the workspace");
+  expect(screen).not.toContain("--despite-review");
+  expect(screen).not.toContain("<form");
+});
+
+test("the way onto the publish screen is drawn on approved rows only, and never without a repository (#233 S5)", async () => {
+  const world = fresh();
+  await approvedLap(world);
+  const publishing = async () => DRY_RUN;
+
+  const summary = await operatorPage(portsOver(world, "ada", [], null, null, publishing), "t", {
+    kind: "summary",
+  });
+  expect(summary).toContain('href="/?publish=i-0001&amp;lang=en"');
+
+  // A host that named no forge repository draws no way in, and says so on the
+  // screen itself rather than leaving a button missing for an unsaid reason.
+  const noRepo = await operatorPage(portsOver(world, "ada", []), "t", { kind: "summary" });
+  expect(noRepo).not.toContain("?publish=");
+  const screen = await operatorPage(portsOver(world, "ada", []), "t", {
+    kind: "publish",
+    iterationId: "i-0001",
+  });
+  expect(screen).toContain("was not told which repository to publish to");
+  expect(screen).not.toContain("<form");
+
+  // A gate that ended without a person answering it is not an approval, so the
+  // row has no way in either (`approvedForPublication`).
+  const other = fresh();
+  await gateWithChecks(other);
+  const withdrawn = await other.store.transition(
+    "i-0001",
+    "awaiting_human",
+    "closed",
+    { gateOutcome: "withdrawn" },
+    5_000,
+  );
+  expect(withdrawn.kind).toBe("transitioned");
+  const closedOther = await operatorPage(portsOver(other, "ada", [], null, null, publishing), "t", {
+    kind: "summary",
+  });
+  expect(closedOther).not.toContain("?publish=");
+});
+
+test("the publish screen is in the page's language, and the model's reading is material beside it (#233 S5, D-0065 5.5)", async () => {
+  const world = fresh();
+  await approvedLap(world);
+  const html = await operatorPage(
+    portsOver(world, "ada", [], null, null, async () => ({
+      ...DRY_RUN,
+      warnings: ["--allow-remote-mismatch: pushing to 'grace' and opening against upstream."],
+      modelReading: ["review  2 point(s) raised (rondo/model/gpt-6-astra):"],
+    })),
+    "t",
+    { kind: "publish", iterationId: "i-0001" },
+    chromeFor("ja"),
+  );
+  const screen = html.slice(html.indexOf('id="publish"'));
+
+  expect(html).toContain('<html lang="ja">');
+  expect(screen).toContain("ブランチ rondo/i-0001 を origin へ push します。");
+  expect(screen).toContain("モデルが読んだこと");
+  expect(screen).toContain("review  2 point(s) raised");
+  expect(screen).toContain("rondo が気づいたこと");
+  expect(screen).toContain('action="/publish?lang=ja"');
+});
+
+test("a publish press refuses on the lap's own state before anything leaves this machine (#233 S5)", async () => {
+  // **Every refusal here is reached before git or the forge is asked**, which
+  // is what makes them reachable in a file with no repository on disk: a lap
+  // that would not read, one that has not ended, and one whose gate ended
+  // without a person answering it are all refused off the row.
+  const dir = mkdtempSync(join(tmpdir(), "rondo-publish-refusals-"));
+  const storePath = join(dir, "store.db");
+  const connection = new DatabaseSync(storePath);
+  const store = iterationStore(connection, { maxOccupying: 4, maxLive: 6 });
+  const asked = { repo: "suisya-systems/rondo", remote: "origin", allowRemoteMismatch: false };
+  const pressing = (iterationId: string, despiteReview = false) =>
+    publishFromPage({ RONDO_APPROVER: "ada" }, store, storePath, "ada", asked, {
+      iterationId,
+      shown: `sha256:${"a".repeat(64)}`,
+      despiteReview,
+    });
+
+  const gone = await pressing("lap-not-there");
+  expect(gone.ok).toBe(false);
+  expect(gone.why).toBe("publishRefusedGone");
+
+  const live = "lap-00000000-0000-4000-8000-0000000000b1";
+  const reserved = await store.reserve({
+    id: live,
+    request: "add a retry budget",
+    plan: planFor(live),
+    spend: null,
+    scopeSpend: null,
+    nowMs: 1_000,
+    supersedesIterationId: null,
+    requestMessageId: null,
+    runId: `rondo-${live}`,
+    topicBranch: `rondo/${live}`,
+    workspace: `/srv/work/${live}`,
+  });
+  expect(reserved.kind).toBe("reserved");
+  const running = await pressing(live);
+  expect(running.ok).toBe(false);
+  expect(running.why).toBe("publishRefusedNotClosed");
+
+  for (const [from, to] of [
+    ["planned", "admitting"],
+    ["admitting", "admitted"],
+    ["admitted", "performing"],
+    ["performing", "awaiting_human"],
+  ] as const) {
+    const moved = await store.transition(
+      live,
+      from,
+      to,
+      to === "awaiting_human" ? { gateId: `gate-${live}` } : {},
+      2_000,
+    );
+    expect(moved.kind).toBe("transitioned");
+  }
+  // A gate that ended without a person answering it closes the lap and is not
+  // an approval: publishing on it would open a pull request whose body says
+  // somebody approved this.
+  const closed = await store.transition(
+    live,
+    "awaiting_human",
+    "closed",
+    { gateOutcome: "withdrawn" },
+    3_000,
+  );
+  expect(closed.kind).toBe("transitioned");
+  const withdrawn = await pressing(live);
+  expect(withdrawn.ok).toBe(false);
+  expect(withdrawn.why).toBe("publishRefusedNotApproved");
+
+  // **Two presses of one screen are one publish**, and a press that read
+  // something else is refused rather than joined: a push cannot be taken back.
+  const [first, same, other] = await Promise.all([
+    pressing("lap-not-there"),
+    pressing("lap-not-there"),
+    pressing("lap-not-there", true),
+  ]);
+  expect(same).toEqual(first);
+  expect(other.ok).toBe(false);
+  expect(other.why).toBe("publishRefusedStillRunning");
 });

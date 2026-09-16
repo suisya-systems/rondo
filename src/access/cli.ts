@@ -51,9 +51,11 @@ import {
   type LoopPolicy,
 } from "../refrain/policy.js";
 import { revisionPlan } from "../refrain/revision.js";
-import { canonicalJson } from "../store/plan.js";
+import { canonicalJson, contentDigest } from "../store/plan.js";
 import {
   type AgentTypeRecordDraft,
+  APPROVED_OUTCOME,
+  approvedForPublication,
   type IterationRecord,
   isModelReadingDrafter,
   isTerminal,
@@ -122,10 +124,20 @@ import {
   heldAgentTypeLines,
   type ScopedAdmission,
 } from "./scope.js";
-import type { LapMaterialRead, ScopeDrafted } from "./web.js";
+import type {
+  LapMaterialRead,
+  PublishBlock,
+  PublishShown,
+  ReviewBlock,
+  ScopeDrafted,
+} from "./web.js";
 import {
   AnswerPort,
   type ClaimRefusal,
+  type Published,
+  type PublishInput,
+  PublishPort,
+  type PublishRefusal,
   type Revised,
   type ReviseInput,
   RevisePort,
@@ -304,7 +316,8 @@ export const USAGE = `rondo - the operator surface for delegated work
                           records what it said and proposes nothing: an
                           adjacency is where to look, not a collision rondo
                           observed
-  rondo web [--port N]
+  rondo web [--port N] [--repo OWNER/NAME] [--remote NAME]
+                [--allow-remote-mismatch]
                           serve one page on 127.0.0.1 (default port ${String(DEFAULT_WEB_PORT)})
                           showing what inbox, between and explain show, redrawn
                           every few seconds. Looking at it moves no last-look
@@ -312,8 +325,12 @@ export const USAGE = `rondo - the operator surface for delegated work
                           nothing. The one thing that does is an approve button
                           beside each open gate: it answers that gate 'approve'
                           as RONDO_APPROVER, by the same path rondo answer
-                          takes, and is drawn only when that is set. There is
-                          no authentication
+                          takes, and is drawn only when that is set. --repo
+                          names the forge repository the page may publish an
+                          approved lap to, with the same meaning the three
+                          flags have on rondo publish; without it the page
+                          serves without a publish screen. There is no
+                          authentication
                           because there is no route in from anywhere but this
                           machine
   rondo explain --iteration-id ID
@@ -543,31 +560,6 @@ export async function scopeDraftingFromPlan(
 /** The remote a push goes to when the operator does not name one. */
 const DEFAULT_REMOTE = "origin";
 
-/**
- * The one gate outcome that means a person answered.
- *
- * continuo reaches it itself, as `actor_kind: "system"`, when the forwarded
- * relay is acked -- so it is the only outcome that records an answer having
- * been carried all the way out. The other three (`withdrawn`, `expired`,
- * `unanswerable`) also close a gate and also close the iteration, and none of
- * them is a person saying yes.
- */
-const APPROVED_OUTCOME = "answered_and_forwarded";
-
-/**
- * Whether an iteration records a person having actually approved the work.
- *
- * A predicate rather than an inline comparison because it is the check that
- * stands between "a gate ended" and "a person said yes", and those are not the
- * same fact: `withdrawn`, `expired` and `unanswerable` each close a gate and
- * each close the iteration. Publishing on one of them would push the work and
- * open a pull request whose body says a human approved it -- rondo making a
- * false statement about somebody else.
- */
-export function approvedForPublication(record: IterationRecord): boolean {
-  return record.status === "closed" && record.gateOutcome === APPROVED_OUTCOME;
-}
-
 /** One command, as the parser understood it. Pure: this type holds no I/O. */
 export interface ParsedCommand {
   readonly command:
@@ -787,11 +779,14 @@ export const FLAGS_BY_COMMAND: Readonly<Record<string, readonly string[]>> = {
   // identity. What it does write is the presentation (D-0036 rule 1), which is
   // a fact about the surface rather than about a person.
   show: ["proposal-id"],
-  // One flag, and no `--actor-id`: whose inbox the page draws is
-  // `RONDO_APPROVER`, the same identity every other command checks against, and
-  // a second way to name it would be a way to read somebody else's inbox by
-  // typing their name. The page writes nothing, so there is nothing to approve.
-  web: ["port"],
+  // No `--actor-id`: whose inbox the page draws is `RONDO_APPROVER`, the same
+  // identity every other command checks against, and a second way to name it
+  // would be a way to read somebody else's inbox by typing their name.
+  // **`--repo`, `--remote` and `--allow-remote-mismatch` for rondo#233 S5**:
+  // the page's publish screen needs the one fact no plan carries, and they are
+  // the same three flags `publish` takes, read the same way. A host that names
+  // no repository serves the page without a publish press.
+  web: ["port", "repo", "remote", "allow-remote-mismatch"],
 };
 
 /**
@@ -1724,6 +1719,19 @@ export async function main(
     // allowlist refuses, is no say port, and so no forms.
     const sender =
       approver === undefined || approver === "" ? null : approvedActor(approver, environment);
+    // **What a publish would need that no plan carries** (rondo#233 S5): the
+    // forge repository, and the remote to push to. `--repo` is the same flag
+    // `publish` takes, read once here, so a host serving the page either may
+    // publish or says it may not -- there is no third state where a button is
+    // drawn over a repository nobody named.
+    const asked: PublishAsked | null =
+      parsed.repo === null
+        ? null
+        : {
+            repo: parsed.repo,
+            remote: parsed.remote ?? DEFAULT_REMOTE,
+            allowRemoteMismatch: parsed.allowRemoteMismatch,
+          };
     return await serveOperatorPage(
       {
         store,
@@ -1832,6 +1840,32 @@ export async function main(
                 async (input) =>
                   await reviseFromPage(environment, store, opened.path, sender.actorId, input),
               ),
+        // **The press is checked inside this port too** (rondo#233 S5), and it
+        // is null on one condition of its own beside `revise`'s: the forge
+        // repository is the one fact no plan carries, so `rondo web --repo
+        // OWNER/NAME` is what decides whether this host may publish at all. A
+        // host that named none draws the screen's sentence saying so, and not a
+        // button that would be refused.
+        publish:
+          sender === null || "refusal" in sender || asked === null
+            ? null
+            : new PublishPort(
+                async (input) =>
+                  await publishFromPage(
+                    environment,
+                    store,
+                    opened.path,
+                    sender.actorId,
+                    asked,
+                    input,
+                  ),
+              ),
+        // The dry-run this screen is read from, on the same condition: the same
+        // function the press runs, so what is shown is what would happen.
+        publishing:
+          asked === null
+            ? null
+            : async (row) => await publishingForPage(environment, store, asked, row),
         // Read for the same reason and on the same condition: the material is
         // what a person is shown before they press, so it is drawn exactly
         // where the button is (D-0029 rule 2 and D-0041 rule 6).
@@ -3555,31 +3589,38 @@ export function reviewGate(
   work: LapWorkInspection,
   despiteReview: boolean,
 ): { readonly kind: "ready" } | { readonly kind: "refused"; readonly reason: string } {
-  const overruled = { kind: "ready" } as const;
+  const block = reviewBlock(reading, work);
+  return block === null || despiteReview
+    ? { kind: "ready" }
+    : { kind: "refused", reason: reviewBlockSentence(block) };
+}
+
+/**
+ * Why the recorded reading does not let `publish` run, or null when it does.
+ *
+ * **Split out of {@link reviewGate} so a screen can say it in its own words**
+ * (rondo#233 S5). The command line's sentences end in "pass `--despite-review`",
+ * which is a flag and therefore a terminal, and D-0059's page must never send a
+ * person to one. Two surfaces wording one judgement two ways is only safe while
+ * the judgement itself has one definition, so this function is it and
+ * `reviewGate` is a sentence composed over it. The type is declared beside the
+ * screen that words it ({@link ReviewBlock} in `./web.tsx`), as
+ * `LapMaterialRead` is.
+ */
+export function reviewBlock(
+  reading: LapReading | null,
+  work: LapWorkInspection,
+): ReviewBlock | null {
   if (reading === null) {
-    return despiteReview
-      ? overruled
-      : {
-          kind: "refused",
-          reason:
-            "no independent reading of this work was recorded, so publishing it would put " +
-            "work in front of the world that nothing read. That is the same refusal a reading " +
-            "which raised something gets, on purpose: unread and read-and-fine must not look " +
-            "alike. Pass --despite-review to publish anyway.",
-        };
+    return { why: "noReading" };
   }
   if (reading.verdict !== "clear") {
-    return despiteReview
-      ? overruled
-      : {
-          kind: "refused",
-          reason:
-            `the independent reading of this work is '${reading.verdict}'` +
-            `${reading.findings.length === 0 ? "" : `: ${reading.findings.join("; ")}`}` +
-            `${reading.unavailableReason === null ? "" : `: ${reading.unavailableReason}`}. ` +
-            "It settles nothing and it is not a veto; it is a point you have not answered. " +
-            "Pass --despite-review to publish anyway.",
-        };
+    return {
+      why: "notClear",
+      verdict: reading.verdict,
+      findings: reading.findings,
+      unavailableReason: reading.unavailableReason,
+    };
   }
   const evidence = reading.evidence;
   if (evidence === null) {
@@ -3588,38 +3629,53 @@ export function reviewGate(
     // the same: a clear whose evidence is missing is a clear nothing can be
     // compared against, and the branch below is the only one that would be
     // silently skipped if it ever became reachable.
-    return despiteReview
-      ? overruled
-      : {
-          kind: "refused",
-          reason:
-            "the recorded reading is 'clear' but carries no measurement of what was read, so " +
-            "there is nothing to check it against. Pass --despite-review to publish anyway.",
-        };
+    return { why: "noEvidence" };
   }
   if (work.kind !== "read") {
-    return despiteReview
-      ? overruled
-      : {
-          kind: "refused",
-          reason:
-            `the workspace cannot be read now (${work.reason}), so the recorded reading cannot ` +
-            "be checked against what would be pushed. Pass --despite-review to publish anyway.",
-        };
+    return { why: "unreadable", reason: work.reason };
   }
   const now = evidenceOf(work);
   if (now.tipCommit !== evidence.tipCommit || now.materialDigest !== evidence.materialDigest) {
-    return despiteReview
-      ? overruled
-      : {
-          kind: "refused",
-          reason:
-            `the reading was taken over ${evidence.tipCommit} and this would push ` +
-            `${now.tipCommit}, so it does not describe the work any more. Read it again, or ` +
-            "pass --despite-review to publish anyway.",
-        };
+    return { why: "moved", readTip: evidence.tipCommit, nowTip: now.tipCommit };
   }
-  return overruled;
+  return null;
+}
+
+/** One {@link ReviewBlock} as the command line says it, unchanged since D-0060. */
+export function reviewBlockSentence(block: ReviewBlock): string {
+  switch (block.why) {
+    case "noReading":
+      return (
+        "no independent reading of this work was recorded, so publishing it would put " +
+        "work in front of the world that nothing read. That is the same refusal a reading " +
+        "which raised something gets, on purpose: unread and read-and-fine must not look " +
+        "alike. Pass --despite-review to publish anyway."
+      );
+    case "notClear":
+      return (
+        `the independent reading of this work is '${block.verdict}'` +
+        `${block.findings.length === 0 ? "" : `: ${block.findings.join("; ")}`}` +
+        `${block.unavailableReason === null ? "" : `: ${block.unavailableReason}`}. ` +
+        "It settles nothing and it is not a veto; it is a point you have not answered. " +
+        "Pass --despite-review to publish anyway."
+      );
+    case "noEvidence":
+      return (
+        "the recorded reading is 'clear' but carries no measurement of what was read, so " +
+        "there is nothing to check it against. Pass --despite-review to publish anyway."
+      );
+    case "unreadable":
+      return (
+        `the workspace cannot be read now (${block.reason}), so the recorded reading cannot ` +
+        "be checked against what would be pushed. Pass --despite-review to publish anyway."
+      );
+    default:
+      return (
+        `the reading was taken over ${block.readTip} and this would push ` +
+        `${block.nowTip}, so it does not describe the work any more. Read it again, or ` +
+        "pass --despite-review to publish anyway."
+      );
+  }
 }
 
 async function commandAnswer(
@@ -5614,6 +5670,545 @@ export function publishPreflight(input: PreflightInput): PreflightOutcome {
   };
 }
 
+/** What a publish needs to know that the lap's own row does not carry. */
+export interface PublishAsked {
+  /** `OWNER/NAME` on the forge: the one fact the plan does not hold. */
+  readonly repo: string;
+  readonly remote: string;
+  readonly allowRemoteMismatch: boolean;
+}
+
+/** Everything a publish would do, read and composed before anything runs. */
+export interface PublishPlan {
+  readonly workspace: string;
+  readonly remote: string;
+  readonly topicBranch: string;
+  readonly baseBranch: string;
+  /** What `gh pr create --head` is given: the branch, or `owner:branch`. */
+  readonly headRef: string;
+  /** `HOST/OWNER/NAME`, the host that was checked and not one resolved twice. */
+  readonly forgeRepo: string;
+  readonly runId: string;
+  readonly db: string;
+  readonly warnings: readonly string[];
+  readonly pullRequest: PullRequestText;
+  /** The model's reading beside the deterministic one, as material (D-0065 5.5). */
+  readonly modelReading: readonly string[];
+  /**
+   * Why the recorded reading does not cover what would be pushed, or null.
+   *
+   * **Carried rather than acted on**, because who may overrule it differs by
+   * surface: the command line's `--despite-review` and the page's second press
+   * are the same person's act reached two ways, and both need the refusal in
+   * their hands to show it before they overrule it (D-0060 rules 4 and 5).
+   */
+  readonly reviewRefusal: ReviewBlock | null;
+}
+
+export type PublishPlanned =
+  | {
+      readonly kind: "refused";
+      /** The facts, for a screen to word ({@link PublishBlock}, in `./web.tsx`). */
+      readonly block: PublishBlock;
+      /** The same refusal as the command line says it, flags and all. */
+      readonly reason: string;
+    }
+  | { readonly kind: "ready"; readonly plan: PublishPlan };
+
+/**
+ * Everything that happens before a publish pushes anything, as one function.
+ *
+ * **Extracted so the terminal and the page cannot drift** (rondo#233 S5), which
+ * is `revisionPreflight`'s argument in S4 and, here, a sharper one: D-0059
+ * section 5a's `publish` press is pressed only from a screen that already shows
+ * this result, so the screen and the act have to be computed by the same code
+ * or the screen is a description of something else.
+ *
+ * **Every step is a read**, in `commandPublish`'s own order: the plan's fields,
+ * git's answer about the push target, git's answer about the work, the pull
+ * request's text, and the stored readings. Nothing in it can be taken back,
+ * which is what lets both surfaces run it and refuse for free -- and what lets
+ * the page run it twice, once to show and once inside the press.
+ *
+ * **The uncommitted-work refusal is here and the review refusal is not.**
+ * D-0060 rule 4's refusal is not overridable by anybody, so it is a refusal;
+ * the reading's is a judgement a person may overrule, so it is carried.
+ */
+export async function publishPlanFor(
+  record: IterationRecord,
+  asked: PublishAsked,
+  environment: Readonly<Record<string, string | undefined>>,
+  store: Pick<IterationStore, "read" | "readingsFor" | "verificationClaimsFor">,
+): Promise<PublishPlanned> {
+  if (record.status !== "closed") {
+    return {
+      kind: "refused",
+      block: { why: "notClosed", status: record.status },
+      reason:
+        `iteration '${record.id}' is ${record.status}, not closed. Publishing is for work a ` +
+        "person has already approved at the gate.",
+    };
+  }
+  // **A closed iteration is not an approved one.** `withdrawn`, `expired` and
+  // `unanswerable` all close a gate and therefore close the iteration, and
+  // none of them is a person saying yes. Publishing on any of those would push
+  // the work and open a pull request whose body claims a human approved it --
+  // a false statement about somebody else, written by rondo. Only the outcome
+  // that continuo reaches by carrying an answer through to its forward may
+  // publish.
+  if (!approvedForPublication(record)) {
+    return {
+      kind: "refused",
+      block: { why: "notApproved", outcome: record.gateOutcome },
+      reason:
+        `iteration '${record.id}' closed at gate outcome ` +
+        `'${record.gateOutcome ?? "(none recorded)"}', not '${APPROVED_OUTCOME}'. That is a gate ` +
+        "that ended without a person answering it, so there is no approval to publish under.",
+    };
+  }
+  const workspace = planField(record, "workspace");
+  const topicBranch = planField(record, "topic_branch");
+  const cutFromBranch = planField(record, "base_branch");
+  // **A revision's pull request is opened against the branch the *first* lap
+  // was cut from, and not the branch *this* lap was cut from.** They are the
+  // same value until a `revise` happens, at which point the plan carries both:
+  // the second lap's worktree is cut from the first lap's topic branch, which
+  // is a branch on this machine that nothing has pushed (`D-0010`), so a pull
+  // request against it would name a branch the forge does not have. An absent
+  // key is a plan no revision has touched, which is every plan an operator
+  // writes.
+  const revisionBase = planField(record, "pull_request_base_branch");
+  const baseBranch = revisionBase === "" ? cutFromBranch : revisionBase;
+  const db = planField(record, "db");
+  const runId = record.runId;
+  if (runId === null) {
+    return {
+      kind: "refused",
+      block: { why: "noRun" },
+      reason: `iteration '${record.id}' records no run id, so there is no run to close.`,
+    };
+  }
+  // The plan validated before the row existed, so a blank here is a row edited
+  // out of band rather than an operator's mistake -- and every leg below is
+  // built from these three, so guessing past one would print a command line
+  // with a hole in it.
+  for (const [field, value] of [
+    ["workspace", workspace],
+    ["topic_branch", topicBranch],
+    ["base_branch", baseBranch],
+  ] as const) {
+    if (value === "") {
+      return {
+        kind: "refused",
+        block: { why: "planField", field },
+        reason:
+          `iteration '${record.id}' records no '${field}' in its plan, and publish is built from ` +
+          "it. The row cannot be published as it stands.",
+      };
+    }
+  }
+
+  // **Before anything is shown, and whether or not this will run.** A preview
+  // exists to catch a mistake before the real run, so a preview that passes
+  // where the real thing would fail is the failure it was meant to prevent
+  // (see `publishPreflight`).
+  const host = forgeHost(environment);
+  const preflight = publishPreflight({
+    repo: asked.repo,
+    remote: asked.remote,
+    workspace,
+    topicBranch,
+    forgeHost: host,
+    allowRemoteMismatch: asked.allowRemoteMismatch,
+    inspection: await inspectPushTarget({ workspace, remote: asked.remote, topicBranch }),
+  });
+  if (preflight.kind === "refused") {
+    return {
+      kind: "refused",
+      block: { why: "target", reason: preflight.reason },
+      reason: preflight.reason,
+    };
+  }
+  // **The host that was checked is the host that is named**, rather than left
+  // to the forge CLI to resolve a second time from its own configuration. It
+  // resolves a bare `OWNER/NAME` against whatever host it is set up for, so a
+  // preflight that agreed about one host and a command that then reached
+  // another would be two answers to one question. `HOST/OWNER/NAME` is a
+  // spelling the CLI already accepts, and it makes the two the same answer.
+  const forgeRepo = `${host}/${asked.repo}`;
+
+  // **Read before the text is composed, for the same reason the preflight is.**
+  // The title and the body are what the operator is being asked to approve, so
+  // a preview that showed the three legs and left the text to be composed later
+  // would preview everything except the part a person can only check by reading.
+  const work = await inspectLapWork({
+    workspace,
+    remote: asked.remote,
+    baseBranch,
+    topicBranch,
+  });
+  // **Before the reading is weighed, and not reachable by an override**
+  // (D-0060 rules 4 and 5). Checked on this fresh read rather than trusted from
+  // the reading, because work added to the worktree after a clean reading is a
+  // staleness the material digest cannot see. First among the review refusals
+  // so an operator is not sent to an override that cannot answer it.
+  const left = uncommittedRefusal(work, workspace, topicBranch);
+  if (left !== null) {
+    return {
+      kind: "refused",
+      block: {
+        why: "uncommitted",
+        paths: work.kind === "read" ? work.uncommitted : [],
+        elsewhere: work.kind === "read" && work.checkedOut !== topicBranch ? work.checkedOut : null,
+      },
+      reason: left,
+    };
+  }
+  // **The predecessor is read, not assumed** (#132). Whether that lap's commits
+  // are on this branch is a fact about its row, and since D-0047 a predecessor
+  // is as likely to be a retry's abandoned subject as a revision's answered
+  // one. A row that will not read is left as null and said out loud, because a
+  // missing predecessor is not evidence for either lineage.
+  const predecessorRead =
+    record.supersedesIterationId === null ? null : await store.read(record.supersedesIterationId);
+  const pullRequest = pullRequestText({
+    record,
+    runId,
+    topicBranch,
+    baseBranch,
+    headIsQualified: preflight.headRef !== topicBranch,
+    work,
+    predecessor:
+      predecessorRead !== null && predecessorRead.kind === "read" ? predecessorRead.record : null,
+    verificationClaims: await store.verificationClaimsFor(record.id),
+  });
+
+  const readings = await store.readingsFor(record.id);
+  // **A second inspection, over the range the *reading* was taken across.**
+  // `work` above is built for the pull request, which after `rondo revise` is a
+  // different range: `publish` compares against `pull_request_base_branch` --
+  // the first lap's base, carried along the chain -- while the reader saw
+  // `base_branch`, the predecessor's topic branch. The material digest covers
+  // the base ref, the base commit, the commits and the files, so comparing the
+  // two would report every unchanged revision as stale and send the operator to
+  // an override as a matter of routine. That is this design's own falsifier
+  // fired on the first day, and the fix is one query rather than a looser
+  // comparison.
+  const range = readingRangeOf(record);
+  const asRead: LapWorkInspection =
+    range === null
+      ? { kind: "unreadable", reason: "the row does not name the range a reading was taken across" }
+      : await inspectLapWork(range);
+  return {
+    kind: "ready",
+    plan: {
+      workspace,
+      remote: asked.remote,
+      topicBranch,
+      baseBranch,
+      headRef: preflight.headRef,
+      forgeRepo,
+      runId,
+      db,
+      warnings: preflight.warnings,
+      pullRequest,
+      // The model reading beside the deterministic one, as material only
+      // (D-0065 5.5): shown, and read by nothing that decides.
+      modelReading: publishModelReadingLines(readings),
+      // Every reading but a model's (D-0065 5.5): a model reading is material
+      // beside it and is not part of this refusal, and the interpreter's
+      // `rondo/none` unavailable row still refuses with its own reason.
+      reviewRefusal: reviewBlock(reviewedReading(readings), asRead),
+    },
+  };
+}
+
+/**
+ * The digest of one dry-run, over everything the screen draws from it.
+ *
+ * **It is the whole of what was shown and not a summary of it** (D-0042 rules 2
+ * and 3): the press carries this back, the port re-plans and re-digests, and a
+ * publish whose target, text, warnings, material or refusal has moved since the
+ * screen was drawn is a different act wearing the same button.
+ */
+function publishShownDigest(plan: PublishPlan): string {
+  return contentDigest({
+    workspace: plan.workspace,
+    remote: plan.remote,
+    topic_branch: plan.topicBranch,
+    base_branch: plan.baseBranch,
+    head_ref: plan.headRef,
+    repo: plan.forgeRepo,
+    run_id: plan.runId,
+    title: plan.pullRequest.title,
+    body: plan.pullRequest.body,
+    warnings: [...plan.warnings],
+    model_reading: [...plan.modelReading],
+    // The sentence rather than the shape, because the sentence carries every
+    // fact the shape holds and nothing reads it back.
+    review_refusal: plan.reviewRefusal === null ? null : reviewBlockSentence(plan.reviewRefusal),
+  });
+}
+
+/**
+ * The dry-run as the page shows it, for one closed lap (rondo#233 S5).
+ *
+ * The reading half of the publish screen: the same {@link publishPlanFor} the
+ * command line runs and the press runs, projected into what the renderer draws.
+ */
+export async function publishingForPage(
+  environment: Readonly<Record<string, string | undefined>>,
+  store: Pick<IterationStore, "read" | "readingsFor" | "verificationClaimsFor">,
+  asked: PublishAsked,
+  record: IterationRecord,
+): Promise<PublishShown> {
+  const planned = await publishPlanFor(record, asked, environment, store);
+  if (planned.kind === "refused") {
+    return { kind: "refused", block: planned.block };
+  }
+  const plan = planned.plan;
+  return {
+    kind: "ready",
+    shown: publishShownDigest(plan),
+    target: {
+      workspace: plan.workspace,
+      remote: plan.remote,
+      topicBranch: plan.topicBranch,
+      baseBranch: plan.baseBranch,
+      headRef: plan.headRef,
+      repo: plan.forgeRepo,
+      runId: plan.runId,
+    },
+    title: plan.pullRequest.title,
+    body: plan.pullRequest.body,
+    warnings: plan.warnings,
+    modelReading: plan.modelReading,
+    review: plan.reviewRefusal,
+  };
+}
+
+/** Which refusal one {@link PublishBlock} is, in the page's vocabulary. */
+function publishBlockRefusal(block: PublishBlock): PublishRefusal {
+  switch (block.why) {
+    case "notClosed":
+      return "publishRefusedNotClosed";
+    case "notApproved":
+      return "publishRefusedNotApproved";
+    case "noRun":
+      return "publishRefusedNoRun";
+    case "planField":
+      return "publishRefusedPlanField";
+    case "target":
+      return "publishRefusedTarget";
+    default:
+      return "publishRefusedUncommitted";
+  }
+}
+
+/** What a forge command's failure was, or null when it succeeded. */
+function commandFailure(outcome: {
+  readonly status: number | null;
+  readonly stderr: string;
+  readonly spawnError: string | null;
+}): string | null {
+  if (outcome.spawnError !== null) {
+    return outcome.spawnError;
+  }
+  return outcome.status === 0 ? null : outcome.stderr.trim();
+}
+
+/**
+ * One press of the page's *publish* button: the branch pushed, the pull request
+ * opened and the run closed (rondo#233 S5, D-0060).
+ *
+ * **It is `commandPublish`'s three legs over a row it did not parse for**, the
+ * way `reviseFromPage` is `commandRevise`'s: the preflight is literally the
+ * same function ({@link publishPlanFor}), the legs are the same calls in the
+ * same order, and what differs is only what a screen can do with a refusal.
+ *
+ * **The dry-run is read again here and compared with the one that was shown.**
+ * D-0059 section 5a's Q1 makes the screen a precondition of the press, which is
+ * only true while the screen and the press are about the same act -- so nothing
+ * posted is believed except which lap this is and which digest was read, and a
+ * plan that no longer matches publishes nothing and says so.
+ *
+ * **continuo is checked before anything is pushed.** The close is the third
+ * leg, and a push that cannot be taken back followed by "there is no continuo
+ * here" would leave a person with the one state this screen exists to avoid.
+ */
+export async function publishFromPage(
+  environment: Readonly<Record<string, string | undefined>>,
+  store: IterationStore,
+  storePath: string,
+  approver: string,
+  asked: PublishAsked,
+  input: PublishInput,
+): Promise<Published> {
+  const already = publishing.get(input.iterationId);
+  if (already !== undefined) {
+    // `reviseFromPage`'s rule, for its reason: a double press of one screen is
+    // one act, and a press carrying anything else is a second act that must not
+    // join the first.
+    return already.shown === input.shown && already.despiteReview === input.despiteReview
+      ? await already.running
+      : {
+          ok: false,
+          why: "publishRefusedStillRunning",
+          note: `a publish of '${input.iterationId}' is already running, and it read something else`,
+        };
+  }
+  const running = publishPage(environment, store, storePath, approver, asked, input);
+  publishing.set(input.iterationId, {
+    running,
+    shown: input.shown,
+    despiteReview: input.despiteReview,
+  });
+  try {
+    return await running;
+  } finally {
+    publishing.delete(input.iterationId);
+  }
+}
+
+/** Every publish press this process has in flight, by the lap it publishes. */
+const publishing = new Map<
+  string,
+  { running: Promise<Published>; shown: string; despiteReview: boolean }
+>();
+
+async function publishPage(
+  environment: Readonly<Record<string, string | undefined>>,
+  store: IterationStore,
+  storePath: string,
+  approver: string,
+  asked: PublishAsked,
+  input: PublishInput,
+): Promise<Published> {
+  const actor = approvedActor(approver, environment);
+  if ("refusal" in actor) {
+    return { ok: false, why: "publishRefusedNotStarted", note: actor.refusal };
+  }
+  const found = await store.read(input.iterationId);
+  if (found.kind !== "read") {
+    return {
+      ok: false,
+      why: "publishRefusedGone",
+      note:
+        found.kind === "absent"
+          ? `There is no iteration '${input.iterationId}'.`
+          : `That iteration row would not read: ${found.reason}`,
+    };
+  }
+  const record = found.record;
+  const planned = await publishPlanFor(record, asked, environment, store);
+  if (planned.kind === "refused") {
+    const block = planned.block;
+    return {
+      ok: false,
+      why: publishBlockRefusal(block),
+      note: planned.reason,
+      ...(block.why === "target"
+        ? { detail: block.reason }
+        : block.why === "uncommitted"
+          ? { detail: block.paths.join(", ") }
+          : {}),
+    };
+  }
+  const plan = planned.plan;
+  if (publishShownDigest(plan) !== input.shown) {
+    return {
+      ok: false,
+      why: "publishRefusedChanged",
+      note: `what the screen showed for '${record.id}' is not what this publish would do now`,
+    };
+  }
+  // **Both ways round, and both refusals.** A press that overrules nothing is a
+  // person answering a question this screen did not ask, and a press that does
+  // not overrule a refusal that is there would publish past it.
+  if (plan.reviewRefusal === null && input.despiteReview) {
+    return {
+      ok: false,
+      why: "publishRefusedNothingOverruled",
+      note: `the reading of '${record.id}' covers this work, so there is nothing to overrule`,
+    };
+  }
+  if (plan.reviewRefusal !== null && !input.despiteReview) {
+    return {
+      ok: false,
+      why: "publishRefusedNotRead",
+      note: reviewBlockSentence(plan.reviewRefusal),
+    };
+  }
+  const startup = await startContinuo(environment);
+  if (startup.kind === "refused") {
+    return {
+      ok: false,
+      why: "publishRefusedNoContinuo",
+      note: `continuo is not usable: ${startup.reason}`,
+      detail: startup.reason,
+    };
+  }
+  const continuo = startup.continuo;
+  const pushed = await pushTopicBranch({
+    workspace: plan.workspace,
+    remote: plan.remote,
+    topicBranch: plan.topicBranch,
+  });
+  const pushFailed = commandFailure(pushed);
+  if (pushFailed !== null) {
+    return {
+      ok: false,
+      why: "publishRefusedPushFailed",
+      note: `the branch '${plan.topicBranch}' did not push: ${pushFailed}`,
+      detail: pushFailed,
+    };
+  }
+  const opened = await openPullRequest({
+    repo: plan.forgeRepo,
+    baseBranch: plan.baseBranch,
+    headRef: plan.headRef,
+    title: plan.pullRequest.title,
+    body: plan.pullRequest.body,
+  });
+  const openFailed = commandFailure(opened);
+  if (openFailed !== null) {
+    // **The push already happened, and it is the one leg that cannot be undone
+    // from here**, so the sentence says what is true rather than "nothing
+    // happened" -- which is what the command line says in its own words too.
+    return {
+      ok: false,
+      why: "publishRefusedPullRequestFailed",
+      note: `the branch is pushed; the pull request was not opened: ${openFailed}`,
+      detail: openFailed,
+    };
+  }
+  // The close records the operator's observation that the work landed. It is
+  // last because it is a claim about the other two having happened, and it is
+  // not idempotent: continuo refuses a second close, on purpose.
+  const closed = await closeRun(continuo, {
+    db: plan.db,
+    runId: plan.runId,
+    outcome: "completed",
+    actorId: actor.actorId,
+  });
+  if (closed.kind !== "answered") {
+    return {
+      ok: false,
+      why: "publishRefusedRunNotClosed",
+      note: `the branch is pushed and the pull request is open; the run did not close`,
+      detail: closed.kind,
+    };
+  }
+  await reportToRequest(
+    { record: openAdvisoryRecord(storePath), store },
+    record.id,
+    // gh prints the new pull request's URL as the last line of its stdout.
+    { kind: "published", pullRequestUrl: opened.stdout.trim().split("\n").at(-1) || null },
+    Date.now(),
+  );
+  return { ok: true, note: "" };
+}
+
 /**
  * Door three: push the branch, open the pull request, close the run.
  *
@@ -5673,153 +6268,33 @@ async function commandPublish(
     return refuse(`${chosen.note} Name one with --iteration-id ID to publish a closed iteration.`);
   }
   const record = chosen.record;
-  if (record.status !== "closed") {
-    return refuse(
-      `iteration '${record.id}' is ${record.status}, not closed. Publishing is for work a ` +
-        "person has already approved at the gate.",
-    );
-  }
-  // **A closed iteration is not an approved one.** `withdrawn`, `expired` and
-  // `unanswerable` all close a gate and therefore close the iteration, and
-  // none of them is a person saying yes. Publishing on any of those would push
-  // the work and open a pull request whose body claims a human approved it --
-  // a false statement about somebody else, written by rondo. Only the outcome
-  // that continuo reaches by carrying an answer through to its forward may
-  // publish.
-  if (!approvedForPublication(record)) {
-    return refuse(
-      `iteration '${record.id}' closed at gate outcome ` +
-        `'${record.gateOutcome ?? "(none recorded)"}', not '${APPROVED_OUTCOME}'. That is a gate ` +
-        "that ended without a person answering it, so there is no approval to publish under.",
-    );
-  }
-
-  const workspace = planField(record, "workspace");
-  const topicBranch = planField(record, "topic_branch");
-  const cutFromBranch = planField(record, "base_branch");
-  // **A revision's pull request is opened against the branch the *first* lap
-  // was cut from, and not the branch *this* lap was cut from.** They are the
-  // same value until a `revise` happens, at which point the plan carries both:
-  // the second lap's worktree is cut from the first lap's topic branch, which
-  // is a branch on this machine that nothing has pushed (`D-0010`), so a pull
-  // request against it would name a branch the forge does not have. An absent
-  // key is a plan no revision has touched, which is every plan an operator
-  // writes.
-  const revisionBase = planField(record, "pull_request_base_branch");
-  const baseBranch = revisionBase === "" ? cutFromBranch : revisionBase;
-  const db = planField(record, "db");
-  const runId = record.runId;
-  if (runId === null) {
-    return refuse(`iteration '${record.id}' records no run id, so there is no run to close.`);
-  }
-  const remote = parsed.remote ?? DEFAULT_REMOTE;
-  // The plan validated before the row existed, so a blank here is a row edited
-  // out of band rather than an operator's mistake -- and every leg below is
-  // built from these three, so guessing past one would print a command line
-  // with a hole in it.
-  for (const [field, value] of [
-    ["workspace", workspace],
-    ["topic_branch", topicBranch],
-    ["base_branch", baseBranch],
-  ] as const) {
-    if (value === "") {
-      return refuse(
-        `iteration '${record.id}' records no '${field}' in its plan, and publish is built from ` +
-          "it. The row cannot be published as it stands.",
-      );
-    }
-  }
-
-  // **Before the plan is printed, and whether or not this is a dry run.** A
-  // preview exists to catch a mistake before the real run, so a preview that
-  // passes where the real thing would fail is the failure it was meant to
-  // prevent (see `publishPreflight`).
-  const host = forgeHost(environment);
-  const preflight = publishPreflight({
-    repo: parsed.repo,
-    remote,
-    workspace,
-    topicBranch,
-    forgeHost: host,
-    allowRemoteMismatch: parsed.allowRemoteMismatch,
-    inspection: await inspectPushTarget({ workspace, remote, topicBranch }),
-  });
-  if (preflight.kind === "refused") {
-    return refuse(preflight.reason);
-  }
-  const headRef = preflight.headRef;
-  // **The host that was checked is the host that is named**, rather than left
-  // to the forge CLI to resolve a second time from its own configuration. It
-  // resolves a bare `OWNER/NAME` against whatever host it is set up for, so a
-  // preflight that agreed about one host and a command that then reached
-  // another would be two answers to one question. `HOST/OWNER/NAME` is a
-  // spelling the CLI already accepts, and it makes the two the same answer.
-  const forgeRepo = `${host}/${parsed.repo}`;
-
-  // **Read before the plan is printed, for the same reason the preflight is.**
-  // The title and the body are what the operator is being asked to approve, so
-  // a dry run that printed the three command lines and left the text to be
-  // composed later would preview everything except the part a person can only
-  // check by reading it.
-  const work = await inspectLapWork({ workspace, remote, baseBranch, topicBranch });
-  // **Before the reading is weighed, and not reachable by `--despite-review`**
-  // (D-0060 rules 4 and 5). Checked on this fresh read rather than trusted from
-  // the reading, because work added to the worktree after a clean reading is a
-  // staleness the material digest cannot see. First among the review refusals
-  // so an operator is not sent to a flag that cannot answer it.
-  const left = uncommittedRefusal(work, workspace, topicBranch);
-  if (left !== null) {
-    return refuse(left);
-  }
-  // **The predecessor is read, not assumed** (#132). Whether that lap's commits
-  // are on this branch is a fact about its row, and since D-0047 a predecessor
-  // is as likely to be a retry's abandoned subject as a revision's answered
-  // one. A row that will not read is left as null and said out loud, because a
-  // missing predecessor is not evidence for either lineage.
-  const predecessorRead =
-    record.supersedesIterationId === null ? null : await store.read(record.supersedesIterationId);
-  const pullRequest = pullRequestText({
+  // **Every read and every refusal ahead of the push, as one function the page
+  // runs too** (rondo#233 S5). The ordering doctrine this file states for the
+  // preflight -- a preview must not pass where the real run would fail -- is
+  // now a property of `publishPlanFor`: everything below is printing and the
+  // three legs.
+  const planned = await publishPlanFor(
     record,
-    runId,
-    topicBranch,
-    baseBranch,
-    headIsQualified: headRef !== topicBranch,
-    work,
-    predecessor:
-      predecessorRead !== null && predecessorRead.kind === "read" ? predecessorRead.record : null,
-    verificationClaims: await store.verificationClaimsFor(record.id),
-  });
-
-  // **Before the first line is printed, and therefore before `--dry-run`
-  // returns.** The ordering doctrine this file already states for the preflight
-  // is that a preview must not pass where the real run would fail; a review
-  // refusal a dry run hid would be the same defect with a different cause.
-  const readings = await store.readingsFor(record.id);
-  // **A second inspection, over the range the *reading* was taken across.**
-  // `work` above is built for the pull request, which after `rondo revise` is a
-  // different range: `publish` compares against `pull_request_base_branch` --
-  // the first lap's base, carried along the chain -- while the reader saw
-  // `base_branch`, the predecessor's topic branch. The material digest covers
-  // the base ref, the base commit, the commits and the files, so comparing the
-  // two would report every unchanged revision as stale and send the operator to
-  // `--despite-review` as a matter of routine. That is this design's own
-  // falsifier fired on the first day, and the fix is one query rather than a
-  // looser comparison.
-  const range = readingRangeOf(record);
-  const asRead: LapWorkInspection =
-    range === null
-      ? { kind: "unreadable", reason: "the row does not name the range a reading was taken across" }
-      : await inspectLapWork(range);
-  // Every reading but a model's (D-0065 5.5): a model reading is material
-  // beside it and is not part of this refusal, and the interpreter's
-  // `rondo/none` unavailable row still refuses with its own reason.
-  const gateOnReview = reviewGate(reviewedReading(readings), asRead, parsed.despiteReview);
-  if (gateOnReview.kind === "refused") {
-    return refuse(gateOnReview.reason);
+    {
+      repo: parsed.repo,
+      remote: parsed.remote ?? DEFAULT_REMOTE,
+      allowRemoteMismatch: parsed.allowRemoteMismatch,
+    },
+    environment,
+    store,
+  );
+  if (planned.kind === "refused") {
+    return refuse(planned.reason);
   }
-  // The model reading beside it, as material only (D-0065 5.5): printed, and
-  // read by nothing above.
-  const modelReading = publishModelReadingLines(readings);
+  const plan = planned.plan;
+  const { workspace, remote, topicBranch, baseBranch, headRef, forgeRepo, runId, db } = plan;
+  const pullRequest = plan.pullRequest;
+  // **Before the first line is printed, and therefore before `--dry-run`
+  // returns**: a review refusal a dry run hid would be the preflight's defect
+  // with a different cause. `--despite-review` is the one thing that passes it.
+  if (plan.reviewRefusal !== null && !parsed.despiteReview) {
+    return refuse(reviewBlockSentence(plan.reviewRefusal));
+  }
 
   say(`iteration '${record.id}' is closed; gate outcome '${record.gateOutcome ?? "(none)"}'`);
   if (parsed.despiteReview) {
@@ -5832,13 +6307,13 @@ async function commandPublish(
         "decide; rondo is recording that you decided it.",
     );
   }
-  for (const warning of preflight.warnings) {
+  for (const warning of plan.warnings) {
     say("");
     say(warning);
   }
-  if (modelReading.length > 0) {
+  if (plan.modelReading.length > 0) {
     say("");
-    for (const line of modelReading) {
+    for (const line of plan.modelReading) {
       say(line);
     }
   }

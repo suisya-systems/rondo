@@ -105,6 +105,7 @@ import {
 } from "../advisory/proposal.js";
 import type { HostPolicy } from "../refrain/policy.js";
 import {
+  approvedForPublication,
   FINDING_SEVERITIES,
   type FindingSeverity,
   findingBasisText,
@@ -219,6 +220,12 @@ export interface WebPorts extends InboxReadPorts {
    * scope form, and the screen says which (D-0020 rule 2's shape).
    */
   readonly plan: ScopeDrafting | null;
+  /**
+   * What publishing one lap would do, or null when the host named no forge
+   * repository: no repository, no publish screen, and the page says which
+   * (D-0020 rule 2's shape, rondo#233 S5).
+   */
+  readonly publishing: PublishReading | null;
 }
 
 /**
@@ -277,6 +284,97 @@ export interface LapMaterialRead {
   /** What `git` reported about the lap's work; null when the row names no range. */
   readonly work: LapWorkInspection | null;
 }
+
+/**
+ * What a publish would do, read at render and again inside the press
+ * (rondo#233 S5, D-0059 section 5a's Q1: `publish` is pressed only from a
+ * screen that already shows its dry-run result).
+ *
+ * A function for {@link LapMaterial}'s reason: publishing is read out of a
+ * workspace with `git` and out of the forge's own configuration, and a renderer
+ * that could spawn either would hold a capability nothing on this surface
+ * should hold. The caller reads it and this module renders it.
+ */
+export type PublishReading = (record: IterationRecord) => Promise<PublishShown>;
+
+/**
+ * Why a publish cannot be planned at all, structured so that each surface says
+ * it in its own words.
+ *
+ * **Declared here, beside the screen that words them, and produced in
+ * `src/access/cli.ts`** -- {@link LapMaterialRead}'s split, for a sharper
+ * reason: the command line's sentences name flags, and a flag is a terminal,
+ * which is the one place D-0059 must never send a person.
+ */
+export type PublishBlock =
+  | { readonly why: "notClosed"; readonly status: string }
+  | { readonly why: "notApproved"; readonly outcome: string | null }
+  | { readonly why: "noRun" }
+  | { readonly why: "planField"; readonly field: string }
+  | { readonly why: "target"; readonly reason: string }
+  | {
+      readonly why: "uncommitted";
+      /** The paths git reported, which is what D-0060 rule 4 refuses over. */
+      readonly paths: readonly string[];
+      /** What the workspace has checked out, when it is not the topic branch. */
+      readonly elsewhere: string | null;
+    };
+
+/**
+ * Why the recorded reading does not cover what would be pushed, or null when it
+ * does (D-0060 rules 4 and 5).
+ *
+ * Carried and not acted on: it is the one refusal on this screen a person may
+ * overrule, and overruling it is a press of its own.
+ */
+export type ReviewBlock =
+  | { readonly why: "noReading" }
+  | {
+      readonly why: "notClear";
+      readonly verdict: string;
+      readonly findings: readonly string[];
+      readonly unavailableReason: string | null;
+    }
+  | { readonly why: "noEvidence" }
+  | { readonly why: "unreadable"; readonly reason: string }
+  | { readonly why: "moved"; readonly readTip: string; readonly nowTip: string };
+
+/** Where the work would go, in the four names the screen says it with. */
+export interface PublishTarget {
+  readonly workspace: string;
+  readonly remote: string;
+  readonly topicBranch: string;
+  readonly baseBranch: string;
+  /** What the forge is given as the head: the branch, or `owner:branch`. */
+  readonly headRef: string;
+  /** `HOST/OWNER/NAME`, the host that was checked and not one resolved twice. */
+  readonly repo: string;
+  readonly runId: string;
+}
+
+/** What {@link PublishReading} read: the dry-run, or why there is not one. */
+export type PublishShown =
+  | { readonly kind: "refused"; readonly block: PublishBlock }
+  | {
+      readonly kind: "ready";
+      /**
+       * The digest of everything below, which the press carries back.
+       *
+       * **What was shown is what may be published** (D-0042 rules 2 and 3): the
+       * press re-reads the whole dry-run and refuses when the two disagree, so
+       * the screen cannot become a description of a different act while a
+       * person is reading it.
+       */
+      readonly shown: string;
+      readonly target: PublishTarget;
+      readonly title: string;
+      readonly body: string;
+      /** Preflight's own warnings: true, and none of them fatal. */
+      readonly warnings: readonly string[];
+      /** The model's reading, as material beside the rest (D-0065 rule 5.5). */
+      readonly modelReading: readonly string[];
+      readonly review: ReviewBlock | null;
+    };
 
 /**
  * The one word the button carries (D-0041 rule 7).
@@ -349,7 +447,19 @@ export type PageView =
       readonly rounds: number | null;
       /** The approval this screen is showing, or null while there is none. */
       readonly decisionId: string | null;
-    };
+    }
+  /**
+   * One ended lap's publish (rondo#233 S5, D-0060): the dry-run, and the press
+   * that runs it.
+   *
+   * **It is a view of its own and not a section of `answer`**, because D-0059
+   * section 5a's Q1 makes the screen a precondition of the press: `publish` is
+   * pressed only from a screen that already shows its dry-run result, and a
+   * press whose screen is a fold inside another screen is a press whose
+   * precondition nobody can point at. The gate's screen is about answering a
+   * gate; this one is about what would leave this machine.
+   */
+  | { readonly kind: "publish"; readonly iterationId: string };
 
 /**
  * The most review rounds this screen will draft for.
@@ -387,9 +497,17 @@ const REVIEW_ROUND_CHOICES: readonly number[] = [0, 1, 2, 3, 4, 5, 6];
  * argument the composer views already make for themselves (`onThreads &&
  * forms`). It costs no staleness risk: nothing on it is a live row, and what
  * the press writes is re-tested at press time.
+ *
+ * **`publish` updates by nothing at all either** (rondo#233 S5), for `answer`'s
+ * reason and a stricter one: it *is* the dry-run a person is reading in order
+ * to press, so a redraw under them would be the screen quietly becoming about a
+ * different act. It costs no staleness risk either, and for the same reason
+ * turned into a mechanism: the press carries the digest of what was drawn and
+ * the port re-reads the whole dry-run, so a screen that has gone stale publishes
+ * nothing and says so.
  */
 function isLive(view: PageView): boolean {
-  return view.kind !== "answer" && view.kind !== "scope";
+  return view.kind !== "answer" && view.kind !== "scope" && view.kind !== "publish";
 }
 
 /**
@@ -415,6 +533,8 @@ export function viewHref(view: PageView, tag: string): string {
       return `/?reading=open&${lang}`;
     case "answer":
       return `/?answer=${encodeURIComponent(view.iterationId)}&${lang}`;
+    case "publish":
+      return `/?publish=${encodeURIComponent(view.iterationId)}&${lang}`;
     case "requests":
       return `/?requests=open&${lang}`;
     case "thread":
@@ -1541,6 +1661,8 @@ function endedView(
   ended: readonly IterationRecord[],
   nowMs: number,
   claims: ReadonlyMap<string, { readonly claim: string; readonly by: string | null }>,
+  /** The way onto the publish screen, drawn only on rows that could publish. */
+  publishTo: (record: IterationRecord) => unknown,
 ) {
   return questionGroup(
     "ended",
@@ -1571,6 +1693,10 @@ function endedView(
               )}
             </span>
           ) : null,
+          // The one thing left to do to an approved lap, where the lap is
+          // (rondo#233 S5). A link and not a button: what it leads to is the
+          // screen that presses.
+          publishTo(record),
         ],
       ),
     ),
@@ -3795,6 +3921,336 @@ function scopeLink(wording: Chrome, ports: WebPorts, token: string | null, messa
   );
 }
 
+/**
+ * The way onto the publish screen, drawn on exactly the rows that screen would
+ * draw a button for ({@link answerLink}'s rule, rondo#233 S5).
+ *
+ * Quiet and not filled: an ended lap is not asking for anything, and a lap
+ * whose work is already pushed is published from the forge rather than here.
+ */
+function publishLink(
+  wording: Chrome,
+  ports: WebPorts,
+  token: string | null,
+  record: IterationRecord,
+) {
+  if (ports.publishing === null || token === null || !approvedForPublication(record)) {
+    return null;
+  }
+  return (
+    <a
+      id={`publish-${record.id}`}
+      href={viewHref({ kind: "publish", iterationId: record.id }, wording.lang)}
+      data-open=""
+      class="text-[12.5px] font-medium text-link hover:underline"
+      title={wording.publishHere}
+    >
+      {wording.publishAction}
+    </a>
+  );
+}
+
+/**
+ * The publish screen: the dry-run, and the press that runs it (rondo#233 S5,
+ * D-0059 section 5a's `publish` row, D-0060).
+ *
+ * **The screen is the precondition of the press**, which is section 5a's Q1
+ * answer: `publish` is pressed only from a screen that already shows its
+ * dry-run result. So everything here comes from one read of
+ * `publishingForPage`, the press carries that read's digest, and the port
+ * re-reads and refuses when the two disagree. A screen that could not be read
+ * draws no button rather than a button over a guess.
+ *
+ * **What the page draws and what the command line prints are the same facts in
+ * two languages.** The terminal prints three command lines because a person
+ * there can run them; here they are three sentences, because a person here
+ * cannot and must not be sent to a terminal to try.
+ */
+async function publishView(
+  ports: WebPorts,
+  wording: Chrome,
+  view: Extract<PageView, { kind: "publish" }>,
+  token: string | null,
+): Promise<unknown> {
+  const head = (heading: string) => (
+    <header class="space-y-2">
+      <div class="flex min-w-0 items-center gap-2">
+        <a
+          href={viewHref({ kind: "summary" }, wording.lang)}
+          data-back=""
+          class="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          title={wording.keyBack}
+        >
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            class="size-4"
+          >
+            <path d="M13 8H3m4-4-4 4 4 4" />
+          </svg>
+          <span class="sr-only">{wording.keyBack}</span>
+        </a>
+        <h2 class="min-w-0 flex-1 truncate text-[15px] leading-6 font-semibold">{heading}</h2>
+      </div>
+    </header>
+  );
+  const note = (line: string) => (
+    <p class="note rounded-md border border-border bg-muted/60 px-3 py-2 text-[13px] leading-5">
+      {line}
+    </p>
+  );
+  const framed = (body: unknown) => (
+    <div id="publish" class="space-y-4">
+      {head(wording.publishHeading)}
+      {body}
+    </div>
+  );
+  if (ports.publishing === null) {
+    return framed(note(wording.publishNoRepo));
+  }
+  const found = await ports.store.read(view.iterationId);
+  if (found.kind !== "read") {
+    return framed(
+      note(
+        found.kind === "absent" ? wording.publishRefusedGone : wording.willNotDecode(found.reason),
+      ),
+    );
+  }
+  const record = found.record;
+  const shown = await ports.publishing(record);
+  if (shown.kind === "refused") {
+    return framed(
+      <>
+        <p class="text-[13px] leading-6">{wording.publishLead}</p>
+        <section id="publish-not-yet" class={`${CARD} space-y-1`}>
+          {publishBlockLines(wording, shown.block).map((line) => (
+            <p class="text-[13px] leading-5">{line}</p>
+          ))}
+        </section>
+      </>,
+    );
+  }
+  const review = shown.review;
+  return framed(
+    <>
+      <p class="text-[13px] leading-6">{wording.publishLead}</p>
+      <section id="publish-target" class={`${CARD} space-y-1`}>
+        <h3 class={CARD_HEADING}>{wording.publishTargetHeading}</h3>
+        <p class="text-[13px] leading-5">
+          {wording.publishPushes(shown.target.headRef, shown.target.remote)}
+        </p>
+        <p class="text-[13px] leading-5">
+          {wording.publishOpens(shown.target.repo, shown.target.baseBranch)}
+        </p>
+        <p class="text-[13px] leading-5">{wording.publishCloses(shown.target.runId)}</p>
+        <p class="text-[12.5px] leading-5 text-muted-foreground" lang="">
+          {wording.publishWorkspace(shown.target.workspace)}
+        </p>
+      </section>
+      {shown.warnings.length === 0 ? null : (
+        <section id="publish-noticed" class={`${CARD} space-y-1`}>
+          <h3 class={CARD_HEADING}>{wording.publishNoticedHeading}</h3>
+          {shown.warnings.map((warning) => (
+            <p class="text-[13px] leading-5 wrap-anywhere">{warning}</p>
+          ))}
+        </section>
+      )}
+      {/* **The text a reviewer will read, on the screen that publishes it.**
+          The title is one line and the body is long, so the body is a fold the
+          page always renders shut and `page/app.css` draws open with script
+          off -- the same treatment every other long quotation here gets. The
+          words are the pull request's own, so the block states no language. */}
+      <section id="publish-request" class={`${CARD} space-y-2`}>
+        <h3 class={CARD_HEADING}>{wording.publishRequestHeading}</h3>
+        <p class="text-[12.5px] leading-5 font-medium text-muted-foreground">
+          {wording.publishTitleLabel}
+        </p>
+        <p id="publish-title" class="text-[13.5px] leading-6 wrap-anywhere" lang="">
+          {shown.title}
+        </p>
+        <details id="publish-body" class="group">
+          <summary
+            data-row=""
+            class="flex cursor-pointer list-none items-center gap-2 rounded-md py-1 text-[12.5px] leading-5 font-medium text-link outline-none select-none hover:underline focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden"
+          >
+            {chevron()}
+            {wording.publishBodyLabel}
+          </summary>
+          <pre
+            class={`${PRE.replace(/whitespace-pre$/, "whitespace-pre-wrap")} mt-2 wrap-anywhere`}
+            lang=""
+          >
+            {shown.body}
+          </pre>
+        </details>
+      </section>
+      {shown.modelReading.length === 0 ? null : (
+        <section id="publish-model" class={`${CARD} space-y-1`}>
+          <h3 class={CARD_HEADING}>{wording.publishModelHeading}</h3>
+          <pre
+            class={`${PRE.replace(/whitespace-pre$/, "whitespace-pre-wrap")} wrap-anywhere`}
+            lang=""
+          >
+            {shown.modelReading.join("\n")}
+          </pre>
+          <p class="note text-[12.5px] leading-5 text-muted-foreground">
+            {wording.publishModelNote}
+          </p>
+        </section>
+      )}
+      {review === null ? null : (
+        <section
+          id="publish-review"
+          class="min-w-0 space-y-1 rounded-lg border border-warn/40 bg-card px-4 py-3"
+        >
+          <h3 class={CARD_HEADING}>{wording.publishReviewHeading}</h3>
+          <p class="text-[13px] leading-5 wrap-anywhere">{reviewBlockLine(wording, review)}</p>
+        </section>
+      )}
+      {token === null
+        ? note(wording.publishRefusedNoApprover)
+        : review === null
+          ? publishForm(wording, record, token, shown.shown)
+          : despiteForm(wording, record, token, shown.shown)}
+      <p class="note text-[12.5px] leading-5 text-muted-foreground">{wording.publishNote}</p>
+    </>,
+  );
+}
+
+/** Why this lap cannot be published, in the page's words and never a flag's. */
+function publishBlockLines(wording: Chrome, block: PublishBlock): readonly string[] {
+  switch (block.why) {
+    case "notClosed":
+      return [wording.publishNotClosed(block.status)];
+    case "notApproved":
+      return [wording.publishNotApproved(block.outcome ?? "")];
+    case "noRun":
+      return [wording.publishNoRun];
+    case "planField":
+      return [wording.publishPlanField(block.field)];
+    case "target":
+      return [wording.publishTargetRefused(block.reason)];
+    default:
+      return [
+        wording.publishUncommitted(block.paths.join(", ")),
+        ...(block.elsewhere === null ? [] : [wording.publishUncommittedElsewhere(block.elsewhere)]),
+        wording.publishUncommittedRemedies,
+      ];
+  }
+}
+
+/** Why the reading does not cover what would be pushed, in the page's words. */
+function reviewBlockLine(wording: Chrome, block: ReviewBlock): string {
+  switch (block.why) {
+    case "noReading":
+      return wording.publishReviewNoReading;
+    case "notClear":
+      return wording.publishReviewNotClear(
+        block.verdict,
+        [
+          ...block.findings,
+          ...(block.unavailableReason === null ? [] : [block.unavailableReason]),
+        ].join("; "),
+      );
+    case "noEvidence":
+      return wording.publishReviewNoEvidence;
+    case "unreadable":
+      return wording.publishReviewUnreadable(block.reason);
+    default:
+      return wording.publishReviewMoved(block.readTip, block.nowTip);
+  }
+}
+
+/**
+ * The press (D-0059 section 5a's `publish` row): a native form, no script, and
+ * three hidden fields none of which a person types.
+ *
+ * `shown` is the digest of the dry-run above it. It is the whole of what makes
+ * this press safe to offer from a page that does not redraw itself: the port
+ * re-reads everything and refuses when what it reads is not this.
+ */
+function publishForm(wording: Chrome, record: IterationRecord, token: string, shown: string) {
+  return (
+    <form
+      id="publish-form"
+      method="post"
+      action={`/publish?lang=${encodeURIComponent(wording.lang)}`}
+      class="flex flex-col gap-2"
+    >
+      <input type="hidden" name="token" value={token} />
+      <input type="hidden" name="iteration" value={record.id} />
+      <input type="hidden" name="shown" value={shown} />
+      <button
+        type="submit"
+        data-row=""
+        aria-describedby="publish-plain"
+        class={`${PRIMARY} h-10 w-full justify-center px-6 text-sm sm:h-9 sm:w-auto sm:self-start`}
+      >
+        {wording.publishAction}
+      </button>
+      <span id="publish-plain" class="note sr-only">
+        {wording.publishPlain}
+      </span>
+    </form>
+  );
+}
+
+/**
+ * The second press, and the only thing that overrules the reading's refusal
+ * (D-0060 rule 5, rondo#233 S5).
+ *
+ * **Its own press, folded, under the refusal it overrules.** The ordinary
+ * publish button is not drawn at all where this one is: a screen offering both
+ * would be a screen where the reading's refusal is a choice of button rather
+ * than something a person decided to publish past. The fold is in the document
+ * either way, and with script off `page/app.css` draws it open.
+ */
+function despiteForm(wording: Chrome, record: IterationRecord, token: string, shown: string) {
+  return (
+    <details id="publish-despite" class="group">
+      <summary
+        data-row=""
+        class="flex cursor-pointer list-none items-center gap-2 rounded-md py-1 text-[12.5px] leading-5 font-medium text-link outline-none select-none hover:underline focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden"
+      >
+        {chevron()}
+        {wording.publishDespiteFold}
+      </summary>
+      <form
+        id="publish-despite-form"
+        method="post"
+        action={`/publish?lang=${encodeURIComponent(wording.lang)}`}
+        class="mt-2 flex flex-col gap-2"
+      >
+        <input type="hidden" name="token" value={token} />
+        <input type="hidden" name="iteration" value={record.id} />
+        <input type="hidden" name="shown" value={shown} />
+        {/* The one field that says which of the two presses this is, and the
+            port refuses it when the refusal it names is not there. */}
+        <input type="hidden" name="despite_review" value="yes" />
+        <p class="note text-[12.5px] leading-5 text-muted-foreground">
+          {wording.publishDespiteNote}
+        </p>
+        <button
+          type="submit"
+          data-row=""
+          aria-describedby="publish-despite-plain"
+          class={`${SECONDARY} h-10 w-full justify-center px-6 text-sm sm:h-9 sm:w-auto sm:self-start`}
+        >
+          {wording.publishDespiteAction}
+        </button>
+        <span id="publish-despite-plain" class="note sr-only">
+          {wording.publishDespitePlain}
+        </span>
+      </form>
+    </details>
+  );
+}
+
 /** A message id minted for one form (`newMessageId` in `src/access/web-app.ts`). */
 export type MintMessageId = (kind: "request" | "reply") => string;
 
@@ -4171,6 +4627,12 @@ export async function operatorPage(
       : null;
   /** The link onto the scope screen, drawn on a request wherever one is listed. */
   const scopeTo = (messageId: string) => scopeLink(wording, ports, token, messageId);
+  // **Awaited here** for `scoping`'s reason: the dry-run reads a workspace and
+  // the forge's own configuration, and the tree is composed from what it read.
+  const publishing =
+    view.kind === "publish" ? await publishView(ports, wording, view, token) : null;
+  /** The way onto the publish screen, drawn on an ended lap wherever one is listed. */
+  const publishTo = (record: IterationRecord) => publishLink(wording, ports, token, record);
 
   // ponytail: the thread views still gather the laps above, as the summary
   // does, on every redraw; skip those reads for them if a redraw costs.
@@ -4496,6 +4958,8 @@ export async function operatorPage(
                 threadView(wording, threads, view, nowMs, ports.actorId, forms, scopeTo)
               ) : view.kind === "scope" ? (
                 scoping
+              ) : view.kind === "publish" ? (
+                publishing
               ) : waiting.length +
                   running.length +
                   ended.length +
@@ -4520,7 +4984,7 @@ export async function operatorPage(
                   )}
                   {attentionView(wording, unreadable)}
                   {runningView(wording, running, transcripts, nowMs)}
-                  {endedView(wording, ended, nowMs, endedClaims)}
+                  {endedView(wording, ended, nowMs, endedClaims, publishTo)}
                 </>
               )}
               {onThreads || view.kind === "scope" ? null : (

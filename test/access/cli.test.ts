@@ -22,7 +22,6 @@ import { join } from "node:path";
 import { expect, test } from "vitest";
 import {
   approvedActor,
-  approvedForPublication,
   claimThenWalk,
   FLAGS_BY_COMMAND,
   forgeHost,
@@ -56,6 +55,7 @@ import { BASIS_FORMS } from "../../src/advisory/proposal.js";
 import type { VerifiedContinuo } from "../../src/continuo/invoker.js";
 import type { ContinuoResult } from "../../src/continuo/protocol.js";
 import {
+  approvedForPublication,
   type IterationRecord,
   type JsonRecord,
   type LapReading,

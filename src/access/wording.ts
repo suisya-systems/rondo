@@ -696,6 +696,80 @@ export interface Chrome {
    */
   readonly reviseRefusedAfterGate: string;
   readonly reviseRefusedNotStarted: string;
+
+  /**
+   * The publish screen (rondo#233 S5, D-0059 section 5a's row for it): the
+   * dry-run in the page's words, and the one press that runs it.
+   *
+   * **No flag is named in any of these** -- the command line's own sentences
+   * end in `--despite-review` and `--allow-remote-mismatch`, and a flag is a
+   * terminal, which is the one place this page must never send a person. What
+   * the page offers instead is a second button with the refusal it overrules
+   * drawn above it.
+   */
+  readonly publishAction: string;
+  readonly publishHere: string;
+  readonly publishHeading: string;
+  readonly publishLead: string;
+  /** What would happen, one line per leg, with nothing to copy or type. */
+  readonly publishPushes: (branch: string, remote: string) => string;
+  readonly publishOpens: (repo: string, base: string) => string;
+  readonly publishCloses: (runId: string) => string;
+  readonly publishWorkspace: (workspace: string) => string;
+  readonly publishTargetHeading: string;
+  readonly publishRequestHeading: string;
+  readonly publishTitleLabel: string;
+  readonly publishBodyLabel: string;
+  readonly publishNoticedHeading: string;
+  /** The model's reading, material beside the rest and read by nothing (D-0065 5.5). */
+  readonly publishModelHeading: string;
+  readonly publishModelNote: string;
+  readonly publishNote: string;
+  readonly publishPlain: string;
+  readonly publishBack: string;
+  /** Why there is no publish screen at all: the host named no repository. */
+  readonly publishNoRepo: string;
+  /** Why this lap cannot be published, one sentence each ({@link PublishBlock}). */
+  readonly publishNotClosed: (status: string) => string;
+  readonly publishNotApproved: (outcome: string) => string;
+  readonly publishNoRun: string;
+  readonly publishPlanField: (field: string) => string;
+  readonly publishTargetRefused: (reason: string) => string;
+  readonly publishUncommitted: (paths: string) => string;
+  readonly publishUncommittedElsewhere: (branch: string) => string;
+  readonly publishUncommittedRemedies: string;
+  /** Why the reading does not cover this work, one sentence each ({@link ReviewBlock}). */
+  readonly publishReviewHeading: string;
+  readonly publishReviewNoReading: string;
+  readonly publishReviewNotClear: (verdict: string, findings: string) => string;
+  readonly publishReviewNoEvidence: string;
+  readonly publishReviewUnreadable: (reason: string) => string;
+  readonly publishReviewMoved: (readTip: string, nowTip: string) => string;
+  /** The second press, which overrules exactly the refusal drawn above it. */
+  readonly publishDespiteFold: string;
+  readonly publishDespiteAction: string;
+  readonly publishDespiteNote: string;
+  readonly publishDespitePlain: string;
+  /** Why a publish press published nothing, one sentence each. */
+  readonly publishRefusedNoApprover: string;
+  readonly publishRefusedPress: string;
+  readonly publishRefusedForm: string;
+  readonly publishRefusedGone: string;
+  readonly publishRefusedNotClosed: string;
+  readonly publishRefusedNotApproved: string;
+  readonly publishRefusedNoRun: string;
+  readonly publishRefusedPlanField: string;
+  readonly publishRefusedTarget: (detail: string) => string;
+  readonly publishRefusedUncommitted: (detail: string) => string;
+  readonly publishRefusedNotRead: string;
+  readonly publishRefusedNothingOverruled: string;
+  readonly publishRefusedChanged: string;
+  readonly publishRefusedStillRunning: string;
+  readonly publishRefusedNoContinuo: string;
+  readonly publishRefusedPushFailed: (detail: string) => string;
+  readonly publishRefusedPullRequestFailed: (detail: string) => string;
+  readonly publishRefusedRunNotClosed: string;
+  readonly publishRefusedNotStarted: string;
 }
 
 /** The three measurements a basis names, in {@link EN}'s words. */
@@ -1216,6 +1290,121 @@ explanation you pressed on and then answers the gate.`,
     "the choices are.",
   reviseRefusedNotStarted:
     "No second lap started. The terminal running rondo has what it said; nothing here is lost.",
+
+  publishAction: "Publish",
+  publishHere: "Read what publishing would do, and publish from there",
+  publishHeading: "Publish this work",
+  publishLead:
+    "Nothing has left this machine yet. This is what publishing would do, read just now; the " +
+    "button below is the only thing that does it.",
+  publishTargetHeading: "What would happen",
+  publishPushes: (branch, remote) => `Push the branch ${branch} to ${remote}.`,
+  publishOpens: (repo, base) => `Open a pull request on ${repo}, against ${base}.`,
+  publishCloses: (runId) => `Close the run ${runId} as completed.`,
+  publishWorkspace: (workspace) => `The work is in ${workspace}.`,
+  publishRequestHeading: "The pull request it would open",
+  publishTitleLabel: "Title",
+  publishBodyLabel: "Body",
+  publishNoticedHeading: "What rondo noticed",
+  publishModelHeading: "What the model read",
+  publishModelNote:
+    "Material for you to weigh. It is not an approval, and nothing above was decided by it.",
+  publishNote:
+    "rondo pushes, opens the pull request and closes the run, as you. It merges nothing; that " +
+    "is still yours. If any of this has changed since the page was drawn, the press stops and " +
+    "says so.",
+  publishPlain: "Pushes this branch, opens its pull request and closes the run.",
+  publishBack: "Back to publishing",
+  publishNoRepo:
+    "This host was not told which repository to publish to, so nothing here can publish. It is " +
+    "given to rondo when the page is started.",
+  publishNotClosed: (status) =>
+    `This lap is ${status}. Publishing is for work a person has already approved at the gate.`,
+  publishNotApproved: (outcome) =>
+    `This lap's gate ended as ${outcome}, which is not a person having answered it, so there is ` +
+    "no approval to publish under.",
+  publishNoRun: "This lap records no run, so there is no run to close.",
+  publishPlanField: (field) =>
+    `This lap's plan records no ${field}, and publishing is built from it. It cannot be ` +
+    "published as it stands.",
+  publishTargetRefused: (reason) =>
+    `The push has nowhere to go that rondo can vouch for: ${reason}`,
+  publishUncommitted: (paths) =>
+    `The workspace still holds work that is not on the branch: ${paths}. The push would leave ` +
+    "it behind, and no button here changes that.",
+  publishUncommittedElsewhere: (branch) =>
+    `The workspace has ${branch} checked out, which is not the branch this would push.`,
+  publishUncommittedRemedies:
+    "Answer it about those paths rather than about the publish: run the lap again so it commits " +
+    "its own work and is read again, commit them yourself in the workspace, or discard them if " +
+    "they are not work.",
+  publishReviewHeading: "The reading does not cover this",
+  publishReviewNoReading:
+    "Nothing read this work independently. Unread and read-and-nothing-raised must not look " +
+    "alike, so publishing stops here by default.",
+  publishReviewNotClear: (verdict, findings) =>
+    `The reading of this work is '${verdict}'${findings === "" ? "" : `: ${findings}`}. It ` +
+    "settles nothing and it is not a veto; it is a point you have not answered.",
+  publishReviewNoEvidence:
+    "The reading says it found nothing, but records no measurement of what it read, so there is " +
+    "nothing to check it against.",
+  publishReviewUnreadable: (reason) =>
+    `The workspace cannot be read now (${reason}), so the reading cannot be checked against ` +
+    "what would be pushed.",
+  publishReviewMoved: (readTip, nowTip) =>
+    `The reading was taken over ${readTip} and this would push ${nowTip}, so it does not ` +
+    "describe the work any more.",
+  publishDespiteFold: "Publish without that reading",
+  publishDespiteAction: "Publish anyway",
+  publishDespiteNote:
+    "That is yours to decide, and it is a second press of its own. rondo records that you " +
+    "decided it; the reading stays where it is.",
+  publishDespitePlain: "Publishes this work although the reading above does not cover it.",
+  publishRefusedNoApprover:
+    "Nothing was published: RONDO_APPROVER is not set, so there is nobody this page could " +
+    "publish as.",
+  publishRefusedPress:
+    "Nothing was published: this is done by a person pressing this page's button, and a script " +
+    "cannot.",
+  publishRefusedForm:
+    "Nothing was published: that form did not come from this page. Reload it and press again.",
+  publishRefusedGone:
+    "Nothing was published: this lap would not read any more. Go back to the summary.",
+  publishRefusedNotClosed: "Nothing was published: this lap has not ended at an approved gate.",
+  publishRefusedNotApproved:
+    "Nothing was published: this lap's gate ended without a person answering it, so there is no " +
+    "approval to publish under.",
+  publishRefusedNoRun: "Nothing was published: this lap records no run to close.",
+  publishRefusedPlanField:
+    "Nothing was published: this lap's plan is missing something publishing is built from.",
+  publishRefusedTarget: (detail) =>
+    `Nothing was published: the push has nowhere to go that rondo can vouch for. ${detail}`,
+  publishRefusedUncommitted: (detail) =>
+    `Nothing was published: the workspace still holds work that is not on the branch (${detail}).`,
+  publishRefusedNotRead:
+    "Nothing was published: the reading of this work does not cover what would be pushed. " +
+    "Reload this screen; publishing past that is a press of its own.",
+  publishRefusedNothingOverruled:
+    "Nothing was published: the reading of this work covers it, so there was nothing to " +
+    "overrule. Reload this screen and press publish.",
+  publishRefusedChanged:
+    "Nothing was published: what this screen showed is not what publishing would do now. " +
+    "Reload it, read it again, and press again.",
+  publishRefusedStillRunning:
+    "Nothing was published twice: this lap is already being published, from a screen that read " +
+    "something else. Wait for it, then reload.",
+  publishRefusedNoContinuo:
+    "Nothing was published: the part of rondo that closes the run will not start, and rondo " +
+    "will not push work it could not then finish.",
+  publishRefusedPushFailed: (detail) => `Nothing was published: the branch did not push. ${detail}`,
+  publishRefusedPullRequestFailed: (detail) =>
+    `The branch is pushed; the pull request was not opened. ${detail} Nothing else was done, ` +
+    "and pressing again is safe: a push that already happened changes nothing.",
+  publishRefusedRunNotClosed:
+    "The branch is pushed and the pull request is open; the run did not close. That is the one " +
+    "leg left, and the terminal running rondo has what it said.",
+  publishRefusedNotStarted:
+    "Nothing was published. The terminal running rondo has what it said; nothing here is lost.",
 } satisfies Chrome);
 
 /** The three measurements a basis names, in the Japanese set's words. */
@@ -1747,6 +1936,120 @@ const JA: Partial<Chrome> = Object.freeze({
   reviseRefusedNotStarted:
     "2 周目は開始していません。詳細は rondo を動かしているターミナルに出ています。ここで" +
     "書いた内容は失われていません。",
+
+  publishAction: "公開する",
+  publishHere: "公開すると何が起きるかを読み、その画面から公開する",
+  publishHeading: "この作業を公開する",
+  publishLead:
+    "まだ何もこのマシンの外へ出ていません。以下は公開したときに起きることを今読み取ったもので、" +
+    "実際に行うのは下のボタンだけです。",
+  publishTargetHeading: "何が起きるか",
+  publishPushes: (branch, remote) => `ブランチ ${branch} を ${remote} へ push します。`,
+  publishOpens: (repo, base) => `${repo} に、${base} 向けのプルリクエストを作ります。`,
+  publishCloses: (runId) => `run ${runId} を completed として閉じます。`,
+  publishWorkspace: (workspace) => `作業は ${workspace} にあります。`,
+  publishRequestHeading: "作られるプルリクエスト",
+  publishTitleLabel: "タイトル",
+  publishBodyLabel: "本文",
+  publishNoticedHeading: "rondo が気づいたこと",
+  publishModelHeading: "モデルが読んだこと",
+  publishModelNote: "判断の材料です。承認ではなく、上の内容がこれで決まったわけでもありません。",
+  publishNote:
+    "rondo があなたとして push し、プルリクエストを作り、run を閉じます。マージはしません。" +
+    "それはあなたの手に残ります。この画面を描いてから内容が変わっていた場合、押しても止まり、" +
+    "その旨が出ます。",
+  publishPlain: "このブランチを push し、プルリクエストを作り、run を閉じます。",
+  publishBack: "公開の画面に戻る",
+  publishNoRepo:
+    "このホストには公開先のリポジトリが伝えられていないため、ここからは公開できません。" +
+    "ページを起動するときに rondo へ渡します。",
+  publishNotClosed: (status) =>
+    `この周回は ${status} です。公開は、人がゲートで承認済みの作業に対して行うものです。`,
+  publishNotApproved: (outcome) =>
+    `この周回のゲートは ${outcome} で終わっており、人が回答した結果ではないため、` +
+    "公開の根拠となる承認がありません。",
+  publishNoRun: "この周回には run の記録がないため、閉じる run がありません。",
+  publishPlanField: (field) =>
+    `この周回の plan に ${field} がなく、公開はそこから組み立てられます。このままでは` +
+    "公開できません。",
+  publishTargetRefused: (reason) => `push の宛先を rondo が保証できません: ${reason}`,
+  publishUncommitted: (paths) =>
+    `ワークスペースにブランチへ載っていない作業が残っています: ${paths}。push はそれを` +
+    "置き去りにしますし、ここのボタンでは変えられません。",
+  publishUncommittedElsewhere: (branch) =>
+    `ワークスペースは ${branch} をチェックアウトしており、push 対象のブランチではありません。`,
+  publishUncommittedRemedies:
+    "公開ではなくそのパスについて答えてください。周回をやり直して作業自体をコミットさせ" +
+    "読み直させる、ワークスペースで自分でコミットする、作業でないなら捨てる、のいずれかです。",
+  publishReviewHeading: "読み取りがこの作業を説明していません",
+  publishReviewNoReading:
+    "この作業を独立に読んだものがありません。「読まれていない」と「読んで何も出なかった」が" +
+    "同じに見えてはいけないので、既定では公開はここで止まります。",
+  publishReviewNotClear: (verdict, findings) =>
+    `この作業の読み取りは '${verdict}' です${findings === "" ? "" : `: ${findings}`}。` +
+    "これは結論でも拒否権でもなく、まだ答えられていない指摘です。",
+  publishReviewNoEvidence:
+    "読み取りは何も出なかったと言っていますが、何を読んだかの測定が記録されていないため、" +
+    "照合する相手がありません。",
+  publishReviewUnreadable: (reason) =>
+    `いまワークスペースを読めません (${reason})。そのため、読み取りと push される内容を` +
+    "照合できません。",
+  publishReviewMoved: (readTip, nowTip) =>
+    `読み取りは ${readTip} に対して取られ、push されるのは ${nowTip} です。もうこの作業を` +
+    "説明していません。",
+  publishDespiteFold: "その読み取りなしで公開する",
+  publishDespiteAction: "それでも公開する",
+  publishDespiteNote:
+    "これを決めるのはあなたで、そのための押下は別に 1 回必要です。rondo はあなたが決めたことを" +
+    "記録します。読み取りはそのまま残ります。",
+  publishDespitePlain: "上の読み取りがこの作業を説明していないまま公開します。",
+  publishRefusedNoApprover:
+    "何も公開していません。RONDO_APPROVER が未設定なので、このページが誰として公開するか" +
+    "決まりません。",
+  publishRefusedPress:
+    "何も公開していません。これは人がこのページのボタンを押して行うもので、スクリプトには" +
+    "できません。",
+  publishRefusedForm:
+    "何も公開していません。そのフォームはこのページのものではありません。読み込み直してから" +
+    "押してください。",
+  publishRefusedGone: "何も公開していません。この周回はもう読めません。一覧に戻ってください。",
+  publishRefusedNotClosed: "何も公開していません。この周回は承認済みのゲートで終わっていません。",
+  publishRefusedNotApproved:
+    "何も公開していません。この周回のゲートは人が回答しないまま終わっており、公開の根拠となる" +
+    "承認がありません。",
+  publishRefusedNoRun: "何も公開していません。この周回には閉じる run がありません。",
+  publishRefusedPlanField:
+    "何も公開していません。この周回の plan に、公開の組み立てに要るものが欠けています。",
+  publishRefusedTarget: (detail) =>
+    `何も公開していません。push の宛先を rondo が保証できません。${detail}`,
+  publishRefusedUncommitted: (detail) =>
+    `何も公開していません。ワークスペースにブランチへ載っていない作業が残っています (${detail})。`,
+  publishRefusedNotRead:
+    "何も公開していません。この作業の読み取りが、push される内容を説明していません。" +
+    "この画面を読み込み直してください。それを踏み越えて公開するには、別の押下が要ります。",
+  publishRefusedNothingOverruled:
+    "何も公開していません。読み取りはこの作業を説明しているので、踏み越えるものがありません。" +
+    "この画面を読み込み直して、公開を押してください。",
+  publishRefusedChanged:
+    "何も公開していません。この画面が示していた内容は、いま公開したときに起きることと違います。" +
+    "読み込み直し、もう一度読んでから押してください。",
+  publishRefusedStillRunning:
+    "二重には公開していません。この周回は、別の内容を読んだ画面からすでに公開処理中です。" +
+    "終わるのを待ってから読み込み直してください。",
+  publishRefusedNoContinuo:
+    "何も公開していません。run を閉じる部分が起動しないため、rondo は最後まで終えられない" +
+    "push を行いません。",
+  publishRefusedPushFailed: (detail) =>
+    `何も公開していません。ブランチを push できませんでした。${detail}`,
+  publishRefusedPullRequestFailed: (detail) =>
+    `ブランチは push 済みで、プルリクエストは作られていません。${detail} ほかには何もしていません。` +
+    "もう一度押しても安全です。すでに済んだ push は何も変えません。",
+  publishRefusedRunNotClosed:
+    "ブランチは push 済みで、プルリクエストも作られています。run が閉じていません。残っているのは" +
+    "その 1 つで、詳細は rondo を動かしているターミナルに出ています。",
+  publishRefusedNotStarted:
+    "何も公開していません。詳細は rondo を動かしているターミナルに出ています。ここで見た内容は" +
+    "失われていません。",
 } satisfies Partial<Chrome>);
 
 /**

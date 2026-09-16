@@ -36,6 +36,8 @@ import {
   newScopeId,
   type PageEnv,
   type Press,
+  type PublishInput,
+  PublishPort,
   type ReviseInput,
   RevisePort,
   SayPort,
@@ -66,6 +68,9 @@ type Started = ScopedStartInput[];
 /** Every revise the revise port admitted, as the spy's implementation saw it. */
 type Revised = ReviseInput[];
 
+/** Every publish the publish port admitted, as the spy's implementation saw it. */
+type Published = PublishInput[];
+
 /**
  * Ports that hold a spy writer and nothing a `POST` reads.
  *
@@ -78,6 +83,7 @@ function spyPorts(
   scoped: Scoped = [],
   started: Started = [],
   revised: Revised = [],
+  published: Published = [],
 ): ServedPorts {
   return {
     hostLanguage: null,
@@ -108,6 +114,10 @@ function spyPorts(
       revised.push(input);
       return await Promise.resolve({ ok: true, note: "" });
     }),
+    publish: new PublishPort(async (input) => {
+      published.push(input);
+      return await Promise.resolve({ ok: true, note: "" });
+    }),
   } as unknown as ServedPorts;
 }
 
@@ -133,6 +143,14 @@ function reviseOf(ports: ServedPorts): RevisePort {
     throw new Error("the fixture has no revise port");
   }
   return ports.revise;
+}
+
+/** The publish port out of the ports, typed as present. */
+function publishOf(ports: ServedPorts): PublishPort {
+  if (ports.publish === null) {
+    throw new Error("the fixture has no publish port");
+  }
+  return ports.publish;
 }
 
 /** The port out of the ports, typed as present. */
@@ -272,6 +290,34 @@ function reviseForm(overrides: Record<string, string> = {}): Record<string, stri
     body: "  fix the parser, and leave the command line alone  ",
     ...overrides,
   };
+}
+
+/**
+ * The digest a publish screen drew, as the press carries it back (rondo#233
+ * S5). Its value is the renderer's; what this file tests is that it is carried
+ * and that nothing is published without one.
+ */
+const SHOWN = `sha256:${"a".repeat(64)}`;
+
+/**
+ * A publish form, as the page draws it: the lap, the digest of the dry-run it
+ * was drawn from, and nothing a person typed. The override press adds one more
+ * field, and this form is the one without it.
+ */
+function publishForm(overrides: Record<string, string> = {}): Record<string, string> {
+  return {
+    token: TOKEN,
+    iteration: "i-0001",
+    shown: SHOWN,
+    ...overrides,
+  };
+}
+
+/** A publish form with its `shown` field dropped: a press from no screen. */
+function withoutShown(form: Record<string, string>): Record<string, string> {
+  const rest = { ...form };
+  delete rest["shown"];
+  return rest;
 }
 
 /** A form with its `token` field dropped, the shape a request with no token takes. */
@@ -973,6 +1019,258 @@ test("(revise) an empty or whitespace-only body is refused by the port, not the 
   expect(await closed).toBe(0);
 });
 
+test("(publish) a person's native press publishes the lap it was shown, once", async () => {
+  const published: Published = [];
+  const { base, stop, closed } = await served(
+    createApp(spyPorts([], [], [], [], [], published), TOKEN),
+  );
+
+  const form = publishForm();
+  const pressed = await send(base, "/publish", "POST", pressHeaders(base), form);
+  expect(pressed.status).toBe(303);
+  expect(pressed.location).toBe("/?lang=en#lap-i-0001");
+  expect(published).toEqual([{ iterationId: "i-0001", shown: SHOWN, despiteReview: false }]);
+
+  stop.abort();
+  expect(await closed).toBe(0);
+});
+
+test("(publish) the second press carries the override, and only when the form says exactly that", async () => {
+  const published: Published = [];
+  const { base, stop, closed } = await served(
+    createApp(spyPorts([], [], [], [], [], published), TOKEN),
+  );
+  const person = pressHeaders(base);
+
+  expect(
+    (await send(base, "/publish", "POST", person, publishForm({ despite_review: "yes" }))).status,
+  ).toBe(303);
+  // Anything else in that field is a form this page did not draw, and it is
+  // read as the ordinary press rather than as the override.
+  for (const said of ["true", "1", "on", "Yes", ""]) {
+    expect(
+      (await send(base, "/publish", "POST", person, publishForm({ despite_review: said }))).status,
+      said,
+    ).toBe(303);
+  }
+  expect(published.map((input) => input.despiteReview)).toEqual([
+    true,
+    false,
+    false,
+    false,
+    false,
+    false,
+  ]);
+
+  stop.abort();
+  expect(await closed).toBe(0);
+});
+
+test("(publish) every other shape of request to the publish route is refused and publishes nothing", async () => {
+  const published: Published = [];
+  const { base, stop, closed } = await served(
+    createApp(spyPorts([], [], [], [], [], published), TOKEN),
+  );
+  const person = pressHeaders(base);
+
+  const refusals: [string, Record<string, string | undefined>, Record<string, string>][] = [
+    ["missing Sec-Fetch-User", { ...person, "sec-fetch-user": undefined }, publishForm()],
+    [
+      "an htmx hx-post",
+      {
+        ...person,
+        "hx-request": "true",
+        "sec-fetch-mode": "cors",
+        "sec-fetch-dest": "empty",
+        "sec-fetch-user": undefined,
+      },
+      publishForm(),
+    ],
+    [
+      "a same-origin fetch",
+      { ...person, "sec-fetch-mode": "cors", "sec-fetch-user": undefined },
+      publishForm(),
+    ],
+    ["a wrong token", person, publishForm({ token: "not-the-token" })],
+    ["no token", person, withoutToken(publishForm())],
+    ["a foreign Origin", { ...person, origin: "https://evil.example" }, publishForm()],
+    ["a cross-site Sec-Fetch-Site", { ...person, "sec-fetch-site": "cross-site" }, publishForm()],
+    ["a same-site Sec-Fetch-Site", { ...person, "sec-fetch-site": "same-site" }, publishForm()],
+    ["no Origin at all", { ...person, origin: undefined }, publishForm()],
+    ["an opaque Origin", { ...person, origin: "null" }, publishForm()],
+  ];
+  for (const [shape, headers, form] of refusals) {
+    const pressed = await send(base, "/publish", "POST", headers, form);
+    expect(pressed.status, shape).toBe(403);
+    expect(pressed.body, shape).not.toBe("");
+  }
+  expect((await send(base, "/publish", "GET", person)).status).toBe(404);
+  expect(published).toEqual([]);
+
+  stop.abort();
+  expect(await closed).toBe(0);
+});
+
+test("(publish) a press naming no dry-run is refused by the route's shape check", async () => {
+  // **What was shown is what may be published** (D-0059 section 5a's Q1): a
+  // press with no digest is a press from no screen, and the route refuses it
+  // before the port is reached.
+  const published: Published = [];
+  const { base, stop, closed } = await served(
+    createApp(spyPorts([], [], [], [], [], published), TOKEN),
+  );
+  const person = pressHeaders(base);
+
+  for (const form of [
+    withoutShown(publishForm()),
+    publishForm({ shown: "" }),
+    publishForm({ iteration: "" }),
+  ]) {
+    const pressed = await send(base, "/publish", "POST", person, form);
+    expect(pressed.status).toBe(400);
+    expect(pressed.body).not.toBe("");
+  }
+  expect(published).toEqual([]);
+
+  stop.abort();
+  expect(await closed).toBe(0);
+});
+
+test("(publish) a send minted for the publish route cannot be spent there: only a press can", async () => {
+  const published: Published = [];
+  const ports = spyPorts([], [], [], [], [], published);
+  const app = createApp(ports, TOKEN);
+  const outcomes: string[] = [];
+  const input: PublishInput = { iterationId: "i-0001", shown: SHOWN, despiteReview: false };
+  app.post("/planted/send-as-publish-press", async (c) => {
+    const minting = mintSend(c, TOKEN);
+    if ("send" in minting) {
+      const result = await publishOf(ports).publish(minting.send as unknown as Press, input);
+      outcomes.push(String(result.ok));
+    }
+    return c.text("done");
+  });
+  const { base, stop, closed } = await served(app);
+
+  await send(base, "/planted/send-as-publish-press", "POST", htmxHeaders(base), { token: TOKEN });
+  expect(outcomes).toEqual(["false"]);
+  expect(published).toEqual([]);
+
+  stop.abort();
+  expect(await closed).toBe(0);
+});
+
+test("(publish) a publish press is one write: the port spends it, and a request mints at most one", async () => {
+  const published: Published = [];
+  const ports = spyPorts([], [], [], [], [], published);
+  const app = createApp(ports, TOKEN);
+  const outcomes: string[] = [];
+  const input: PublishInput = { iterationId: "i-0001", shown: SHOWN, despiteReview: false };
+  app.post("/twice-publish", async (c) => {
+    const form = await c.req.parseBody();
+    const first = mintPress(c, form["token"]);
+    if (!("press" in first)) {
+      return c.text(first.line, first.status);
+    }
+    outcomes.push(String((await publishOf(ports).publish(first.press, input)).ok));
+    outcomes.push(String((await publishOf(ports).publish(first.press, input)).ok));
+    outcomes.push("press" in mintPress(c, form["token"]) ? "minted" : "refused");
+    return c.text("done");
+  });
+  const { base, stop, closed } = await served(app);
+
+  expect((await send(base, "/twice-publish", "POST", pressHeaders(base), FORM)).status).toBe(200);
+  expect(outcomes).toEqual(["true", "false", "refused"]);
+  expect(published).toEqual([input]);
+
+  stop.abort();
+  expect(await closed).toBe(0);
+});
+
+test("(publish) the planted writers, reached by a GET, publish nothing", async () => {
+  const published: Published = [];
+  const ports = spyPorts([], [], [], [], [], published);
+  const port = publishOf(ports);
+  const ran: string[] = [];
+  const app = createApp(ports, TOKEN);
+  const input: PublishInput = { iterationId: "i-0001", shown: SHOWN, despiteReview: false };
+  const plantedPublish = async (c: Context<PageEnv>, name: string): Promise<void> => {
+    ran.push(name);
+    const minting = mintPress(c, TOKEN);
+    await port.publish("press" in minting ? minting.press : ({} as Press), input);
+    await port.publish(Object.freeze({}) as Press, input);
+  };
+
+  // 1. A `GET` handler calling the port directly.
+  app.get("/planted/publish-handler", async (c) => {
+    await plantedPublish(c, "handler");
+    return c.text("drawn");
+  });
+  // 2. A middleware calling it on the way through.
+  app.use("/planted/publish-middleware", async (c, next) => {
+    await plantedPublish(c, "middleware");
+    await next();
+  });
+  // 3. A mounted sub-app calling it.
+  const sub = new Hono<PageEnv>();
+  sub.get("/", async (c) => {
+    await plantedPublish(c, "sub-app");
+    return c.text("drawn");
+  });
+  app.route("/planted/publish-sub", sub);
+  // 4. A loader: it reads the token the page renders, returns it to the client
+  // as data, and then calls the port with a press minted from its own request.
+  app.get("/planted/publish-loader", async (c) => {
+    ran.push("loader");
+    const minting = mintPress(c, TOKEN);
+    if ("press" in minting) {
+      await port.publish(minting.press, input);
+    }
+    return c.json({ token: TOKEN, refused: "status" in minting });
+  });
+
+  const { base, stop, closed } = await served(app);
+  for (const path of [
+    "/planted/publish-handler",
+    "/planted/publish-middleware",
+    "/planted/publish-sub",
+    `/planted/publish-loader?token=${TOKEN}`,
+  ]) {
+    await send(base, path, "GET", pressHeaders(base));
+  }
+
+  expect(new Set(ran)).toEqual(new Set(["handler", "middleware", "sub-app", "loader"]));
+  expect(published).toEqual([]);
+
+  stop.abort();
+  expect(await closed).toBe(0);
+});
+
+test("(publish) a port's refusal is said in the press's language, with the way back to that screen", async () => {
+  const refusing = spyPorts([], [], [], [], [], []);
+  const app = createApp(
+    {
+      ...refusing,
+      publish: new PublishPort(async () => ({
+        ok: false,
+        why: "publishRefusedChanged",
+        note: "the dry-run moved",
+      })),
+    },
+    TOKEN,
+  );
+  const { base, stop, closed } = await served(app);
+
+  const pressed = await send(base, "/publish?lang=ja", "POST", pressHeaders(base), publishForm());
+  expect(pressed.status).toBe(409);
+  expect(pressed.body).toContain('<html lang="ja">');
+  expect(pressed.body).toContain("公開の画面に戻る");
+  expect(pressed.body).toContain('href="/?publish=i-0001&amp;lang=ja"');
+
+  stop.abort();
+  expect(await closed).toBe(0);
+});
+
 test("(claim) a press carries what the person verified, trimmed; blank is none, and too long answers nothing", async () => {
   const written: Written = [];
   const { base, stop, closed } = await served(createApp(spyPorts(written), TOKEN));
@@ -1088,14 +1386,16 @@ function nonReads(app: Hono<PageEnv>): string[] {
 /**
  * **The closed table** (D-0059 section 5a and R4): middleware -- method and
  * `Host`, security headers, `csrf` on each of the six write addresses, body
- * limit -- and seven write routes: the lap-end `approve` press, the two
+ * limit -- and eight write routes: the lap-end `approve` press, the two
  * sends into a request thread, the answer to a waiting question (which is a
  * press, D-0059 section 5a's falsifier, D-0069 rule 5), the two rondo#233 S3
- * rows -- the record-scope press and the scoped-start press -- and the
- * rondo#233 S4 row: the revise press, which answers the same gate as the
- * approve press with what to change and starts the second lap under the
- * approval the first ran under (D-0070). A new write kind is a new row here,
- * argued in the decision first.
+ * rows -- the record-scope press and the scoped-start press -- the rondo#233 S4
+ * row: the revise press, which answers the same gate as the approve press with
+ * what to change and starts the second lap under the approval the first ran
+ * under (D-0070) -- and the rondo#233 S5 row: the publish press, the one write
+ * here that leaves this machine, pressed only from the screen that shows its
+ * dry-run (D-0060). A new write kind is a new row here, argued in the decision
+ * first.
  */
 const WRITE_TABLE = [
   "ALL /*",
@@ -1107,6 +1407,7 @@ const WRITE_TABLE = [
   "ALL /revise",
   "ALL /scope",
   "ALL /start",
+  "ALL /publish",
   "ALL /*",
   "POST /",
   "POST /request",
@@ -1115,6 +1416,7 @@ const WRITE_TABLE = [
   "POST /scope",
   "POST /start",
   "POST /revise",
+  "POST /publish",
 ];
 
 test("(b) the page's writing vocabulary is enumerated off the running app", () => {
@@ -1122,9 +1424,10 @@ test("(b) the page's writing vocabulary is enumerated off the running app", () =
   expect(nonReads(app)).toEqual(WRITE_TABLE);
 
   // Not vacuously: each way of adding a writer changes the enumeration.
-  // `/publish` is S5's route, which this slice does not add.
+  // `/withdraw` is nobody's route: the page has no such write kind, and adding
+  // one would be a decision before it was a row here.
   const posted = createApp(spyPorts([]), TOKEN);
-  posted.post("/publish", (c) => c.text(""));
+  posted.post("/withdraw", (c) => c.text(""));
   expect(nonReads(posted)).not.toEqual(WRITE_TABLE);
   const used = createApp(spyPorts([]), TOKEN);
   used.use(async (_c, next) => {
