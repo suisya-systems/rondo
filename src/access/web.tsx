@@ -3260,6 +3260,13 @@ function threadView(
     );
   }
   const members = threads.messages.filter((message) => threads.rootOf(message.messageId) === root);
+  // **An open ask is pinned above the reports** (rondo#199, pin-only): a stop
+  // still waiting on a person is what the thread is for right now, so it
+  // comes straight after the request; the sort is stable, so each part keeps
+  // the store's order.
+  const rank = (message: ThreadMessageDraft): number =>
+    message.messageId === root ? 0 : threads.waiting.has(message.messageId) ? 1 : 2;
+  const shown = [...members].sort((a, b) => rank(a) - rank(b));
   const request = threads.byId.get(root);
   const waitingHere = members.filter((message) => threads.waiting.has(message.messageId)).length;
   return (
@@ -3334,8 +3341,8 @@ function threadView(
         </div>
       </header>
       <ol data-thread={root} class="space-y-4">
-        {members.map((message, at) =>
-          messageView(wording, threads, message, members[at - 1], root, nowMs, actorId, forms),
+        {shown.map((message, at) =>
+          messageView(wording, threads, message, shown[at - 1], root, nowMs, actorId, forms),
         )}
       </ol>
     </div>

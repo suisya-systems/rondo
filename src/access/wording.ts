@@ -39,6 +39,7 @@
  */
 
 import { isLanguageTag } from "../refrain/plan.js";
+import { APPROVED_OUTCOME } from "../store/records.js";
 
 /**
  * Where a listed agent type's record was read from (D-0069 section 1).
@@ -912,7 +913,8 @@ explanation you pressed on and then answers the gate.`,
   waitingHead: (status, waited) => `${status} -- waiting ${waited}`,
   runningHead: (status, ran) => `${status} -- running ${ran}`,
   endedHead: (status, since, why) => `${status} ${since} ago -- ${why}`,
-  gateAnswered: (outcome) => `gate answered '${outcome}'`,
+  gateAnswered: (outcome) =>
+    outcome === APPROVED_OUTCOME ? "approved at the gate" : `gate answered '${outcome}'`,
   statePill: (status, gateOutcome) =>
     (
       ({
@@ -925,7 +927,7 @@ explanation you pressed on and then answers the gate.`,
         admitted: "Starting",
         performing: "Running",
         closed:
-          gateOutcome === "approve"
+          gateOutcome === "approve" || gateOutcome === APPROVED_OUTCOME
             ? "Approved"
             : gateOutcome === "revise"
               ? "Revised"
@@ -1581,7 +1583,8 @@ const JA: Partial<Chrome> = Object.freeze({
   waitingHead: (status, waited) => `${status} -- ${waited} 待機中`,
   runningHead: (status, ran) => `${status} -- ${ran} 実行中`,
   endedHead: (status, since, why) => `${status} ${since}前 -- ${why}`,
-  gateAnswered: (outcome) => `ゲートに '${outcome}' と答えた`,
+  gateAnswered: (outcome) =>
+    outcome === APPROVED_OUTCOME ? "ゲートで承認された" : `ゲートに '${outcome}' と答えた`,
   statePill: (status, gateOutcome) =>
     (
       ({
@@ -1594,7 +1597,7 @@ const JA: Partial<Chrome> = Object.freeze({
         admitted: "開始中",
         performing: "実行中",
         closed:
-          gateOutcome === "approve"
+          gateOutcome === "approve" || gateOutcome === APPROVED_OUTCOME
             ? "承認済み"
             : gateOutcome === "revise"
               ? "差し戻し"
