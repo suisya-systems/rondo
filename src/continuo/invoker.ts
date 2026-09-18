@@ -684,6 +684,13 @@ export interface AdmitRunRequest {
  * request content -- which is what keeps `--prompt` the operator's text plus a
  * known constant rather than something rondo partly wrote.
  *
+ * **It names the reader, not a field.** Everything the worker writes back is
+ * what the operator reads at the gate in order to answer, so the sentence asks
+ * for all of it in the language. Naming one field -- as it once named the gate
+ * rationale -- was read narrowly on lapja-001 (#159): an English report followed
+ * by one paragraph in the asked language, so the operator still had to read
+ * English to answer.
+ *
  * **ASCII**, so D-0004 is untouched on every path that could print an argv,
  * even though this sentence is not printed to a console today. The tag itself
  * is already `[A-Za-z0-9-]` by `runPlan`'s own check, so the whole sentence is
@@ -700,7 +707,11 @@ export interface AdmitRunRequest {
  * of the sentence rather than of the spawn.
  */
 export function materialLanguageSentence(tag: string): string {
-  return `Write your gate rationale in the language with IETF language tag ${tag}.`;
+  return (
+    `The person who answers at the gate reads the language with IETF language tag ${tag}, ` +
+    "so write everything you write back for them in that language: the report, any summary " +
+    "and the gate rationale alike, not one part of it."
+  );
 }
 
 /**
