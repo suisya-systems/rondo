@@ -908,6 +908,31 @@ test("a lap that has ended is on the page it just left (rondo#145)", async () =>
   expect(lead(html)).toContain("running now (0)");
 });
 
+test("an approved lap says so in words, not the store's outcome constant (rondo#248)", async () => {
+  for (const [chrome, pill, why] of [
+    [EN, ">Approved</span>", "approved at the gate"],
+    [chromeFor("ja"), ">承認済み</span>", "ゲートで承認した"],
+  ] as const) {
+    const world = fresh();
+    await reserve(world, "i-0001", "do the thing");
+    await openGate(world, "i-0001");
+    const closed = await world.store.transition(
+      "i-0001",
+      "awaiting_human",
+      "closed",
+      { gateOutcome: APPROVED_OUTCOME },
+      4_000,
+    );
+    expect(closed.kind).toBe("transitioned");
+
+    const html = await operatorPage(portsOver(world), "t", { kind: "summary" }, chrome);
+
+    expect(lead(html)).toContain(pill);
+    expect(lead(html)).toContain(why);
+    expect(lead(html)).not.toContain(APPROVED_OUTCOME);
+  }
+});
+
 test("an explanation nobody can answer is not a thing waiting on you (rondo#145)", async () => {
   const world = fresh();
   await reserve(world, "i-0001", "do the thing");
@@ -2074,6 +2099,47 @@ const bodiesIn = (html: string): readonly string[] =>
 /** One message's `<li>`, by its id. */
 const messageIn = (html: string, id: string): string =>
   /<li id="[^"]*"[\s\S]*?<\/li>/.exec(html.slice(html.indexOf(`<li id="${id}"`)))?.[0] ?? "";
+
+test("an ask still open is pinned above the reports that came before it (rondo#199)", async () => {
+  const world = fresh();
+  await reserve(world, "i-0001", "do the thing");
+  const drafts = [
+    ["request-a", "operator", "ada", null, 1_000, false],
+    ["report-b", "drafter", "rondo-drafter", "request-a", 2_000, false],
+    ["report-c", "drafter", "rondo-drafter", "report-b", 3_000, false],
+    ["ask-d", "drafter", "rondo-drafter", "report-c", 4_000, true],
+  ] as const;
+  for (const [messageId, authorKind, authorId, inReplyTo, atMs, asks] of drafts) {
+    const outcome = await world.record.recordThreadMessage({
+      messageId,
+      body: messageId,
+      authorKind,
+      authorId,
+      inReplyTo,
+      atMs,
+      bases: authorKind === "drafter" ? [{ form: "iteration", iterationId: "i-0001" }] : [],
+      asks,
+    });
+    expect(outcome.kind, JSON.stringify(outcome)).toBe("recorded");
+  }
+  const html = await operatorPage(
+    portsOver(world, "ada", []),
+    "t",
+    { kind: "thread", messageId: "request-a", to: null },
+    EN,
+    mint,
+  );
+
+  // The request, then the open ask, then the reports in the store's order.
+  expect(bodiesIn(html)).toEqual(["request-a", "ask-d", "report-b", "report-c"]);
+  // **The neighbour is the one drawn**: the ask now sits under the request, not
+  // under the report it answers (its neighbour in the store), so it names
+  // that report as its parent.
+  expect(messageIn(html, "ask-d")).toContain('href="#report-c"');
+  expect(messageIn(html, "ask-d")).toContain("in reply to");
+  // And a report drawn right under the one it answers needs no such line.
+  expect(messageIn(html, "report-c")).not.toContain("in reply to");
+});
 
 test("a request thread is drawn whole: every body byte for byte, voices apart, bases as links, the ask marked", async () => {
   const world = fresh();
