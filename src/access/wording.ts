@@ -1584,7 +1584,7 @@ const JA: Partial<Chrome> = Object.freeze({
   runningHead: (status, ran) => `${status} -- ${ran} 実行中`,
   endedHead: (status, since, why) => `${status} ${since}前 -- ${why}`,
   gateAnswered: (outcome) =>
-    outcome === APPROVED_OUTCOME ? "ゲートで承認した" : `ゲートに '${outcome}' と答えた`,
+    outcome === APPROVED_OUTCOME ? "ゲートで承認された" : `ゲートに '${outcome}' と答えた`,
   statePill: (status, gateOutcome) =>
     (
       ({

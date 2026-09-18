@@ -911,7 +911,7 @@ test("a lap that has ended is on the page it just left (rondo#145)", async () =>
 test("an approved lap says so in words, not the store's outcome constant (rondo#248)", async () => {
   for (const [chrome, pill, why] of [
     [EN, ">Approved</span>", "approved at the gate"],
-    [chromeFor("ja"), ">承認済み</span>", "ゲートで承認した"],
+    [chromeFor("ja"), ">承認済み</span>", "ゲートで承認された"],
   ] as const) {
     const world = fresh();
     await reserve(world, "i-0001", "do the thing");
