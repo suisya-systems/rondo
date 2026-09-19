@@ -110,6 +110,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0070 | A revise inside a scope: the person still answers the gate, the lap it starts spends the scope through the `redo` arm, the verdict is computed before the gate is walked, and the added text is carried and never tested | accepted |
 | D-0071 | The model drafter: a Claude model rondo runs outside the lap over a thread it hands over, which chooses among held plans and agent types and writes words, while every number in a drafted scope is computed from recorded laps and may only be narrowed; and a plan the person pastes into the thread is how a fresh store gets its first template and agent type | accepted |
 | D-0072 | What a reply to a scope stop does: an answering press carries one of two words, the line opens on the absence of "carry on" rather than on the presence of a reply, and stopping becomes a row instead of a second approval | accepted |
+| D-0073 | Which lines may run together: a lane ledger that allocates paths to a line from its admission until its work lands, refuses an admission that would share one, and releases it by reading the default branch; `D-0067` rule 1 gives way for two authorities, approving and every judgement no row settles stay with the person, and it is not a bigger capacity number | proposed (number proposed, not allocated) |
 
 ---
 
@@ -15990,3 +15991,460 @@ Each dated and additive unless marked, and added with this entry's acceptance:
 - **An answer needing a third word** (a hold with a release fact, say), which would make the two-value
   column the wrong shape rather than a narrow one -- and would meet `D-0070` section 2's `sequence`
   rather than this column.
+
+---
+
+## D-0073 — Which lines may run together: a lane ledger that allocates paths to a line from its admission until its work lands, refuses an admission that would share one, and releases it by reading the default branch; `D-0067` rule 1 gives way for two authorities, approving and every judgement no row settles stay with the person, and it is not a bigger capacity number
+
+**Status:** proposed (2026-09-19). **The number `D-0073` is proposed, not allocated**: another task
+may be taking numbers at the same time, and whichever of the two merges second renumbers. Two points
+are put to the human gate; see "What is put to the human gate". Refs `D-0012`, `D-0023`, `D-0027`,
+`D-0030`, `D-0033`, `D-0048`, `D-0061`, `D-0063`, `D-0064`, `D-0065`, `D-0066`, `D-0067`, `D-0068`,
+`D-0070`, `D-0071`, rondo#8, rondo#250.
+
+**This entry decides and does not build.** Nothing in `src/` changes with it, and no earlier entry is
+edited by it. The annotations it would add on acceptance are listed in "Annotations this entry adds".
+
+On **2026-09-17** three agents worked seven rondo issues at once (#243-#248, #206, #221, #219), and a
+coordinator outside rondo did six things no single lap could do (rondo#250): it decided **what may run
+beside what**, cutting the seven into three lanes by the files each would own; it **moved ownership
+between lanes over time**; it **refused a landing order** that was correct in isolation; it **held an
+agent** that needed a decision from a person who was asleep; it **routed a consequence across a lane
+boundary**; and it **decided what not to start**. The operator's words while watching it: *"rondo
+needs the kind of control I am doing right now."*
+
+rondo already has two neighbours of that control, and neither is it:
+
+- **`D-0063` has the drafting half.** The advisory reads, asks back, drafts a split, brings points in
+  dispute with a recommendation, reports, and proposes what comes next; "handing over and approving
+  stay elsewhere". This entry is part of *elsewhere* and does not re-specify the drafting.
+- **rondo#8 framed parallel admission as an identifier allocator and a capacity ledger**, and
+  `D-0023` built both. A capacity ledger answers *how many* may run at once. **It does not answer
+  which two**, and on 2026-09-17 a bound of three would have admitted exactly the arrangement that
+  collides.
+
+A third neighbour is closer, and this entry has to say plainly where it stops. **`D-0067` placed the
+secretary's running half on existing parts** and decided "no new role, no new layer and no new
+authority" (its rule 1). Its cross-lineage reading (rule 2) finds a collision **from the paths a lap
+has already changed**, so "a lap that has not yet committed has an empty set and collides with
+nothing". That answers *which lands first* after both lines have spent a lap. The coordinator of
+2026-09-17 answered *which may start*, before any lap was spent, from what each lane **would** own.
+That is the gap, and it is the part of this entry `D-0067` rule 1 does not allow.
+
+It keeps `D-0064`'s two lines and **adds no third**:
+
+- **Every summary and proposal leads back to its material** (`bases`, `D-0032` rule 2, `D-0061`
+  rule 2.6).
+- **An act that cannot be undone is approved by a person**, at the time, for that act (`D-0064`
+  rule 3.4).
+
+It protects **one property of the store**, stated in rule 3, and guards nothing else.
+
+### What was measured, and how
+
+At rondo `470af3b` on **2026-09-19**, by reading. Line numbers drift; re-measure the claim, not the
+number.
+
+- **The day, as it landed on `main`.** Lane 2 (`docs/operations/**`, #221 and #219) merged as #251
+  (`b67f24a`, 04:59 +0900): four files under `docs/operations/`, including `lap-10-runbook.md`. Lane 1
+  (the page, #243-#246) merged as #252 (`657a47d`, 05:12): `src/access/web.tsx`,
+  `src/access/wording.ts`, `test/access/web.test.ts`, and nothing else. Lane 3 (`src/store/`, #206)
+  merged as #253 (`4ad4b00`, 06:18), **after** #252: eighteen files, among them `src/store/records.ts`,
+  `src/store/sqlite.ts`, **the same three files #252 changed**, and
+  `docs/operations/lap-10-runbook.md`, which #251 had changed an hour earlier. So the handover of the
+  page files from lane 1 to lane 3 at lane 1's merge, and the runbook correction routed into #206's own
+  pull request, are both visible in the history. #247, #228 and #248 were held and not started.
+- **This repository lands by squash as well as by merge commit.** #251, #252 and #253 are single
+  commits on `main`; #234, #235 and #236 are merge commits. A squashed pull request's branch tip is
+  never an ancestor of `main`.
+- **What rondo refuses at admission today.** `reserve()` counts `maxLive` and `maxOccupying` inside its
+  `BEGIN IMMEDIATE` (`D-0023` rules 8 and 10). `RONDO_MAX_LIVE` defaults to 3 and
+  `RONDO_MAX_OCCUPYING` to 1 (`src/access/cli.ts`, the usage text). A capacity refusal writes an
+  `admission_refusal` row with `refused_at_ms`, `request`, `bound_name`, `bound` and `occupancy`
+  (`src/store/sqlite.ts`). **Nothing at admission reads which files a lap will touch.**
+- **`D-0067` and `D-0068` are decided and not built.** Their commits (`1db9112`, `da93919`) change
+  `DECISIONS.md` only; `src/` has no `sequence` proposal kind, no `standing_policy`, no wait reading
+  and no patrol. Their rules are cited here as decided text, and amending them costs no code.
+- **What a split carries.** A split's plan is a template chosen by `plan_digest` with two fields that
+  may differ, `prompt` and the agent type (`D-0063` rules 4.1 and 4.2). No field says which paths the
+  work will touch.
+- **How a lap continues.** `revise` starts a second lap with fresh identifiers, the predecessor's
+  branch as its base, and the instruction carried into the prompt (`D-0027`). The model session is not
+  resumed; what carries over is the branch, the transcript `D-0048` names, and the words.
+- **What rondo cannot see.** Whether two changes that share no path break each other (`D-0067`
+  section 4), and whether a change is right alone but wrong landed alone. On 2026-09-17 the second was
+  seen by the coordinator reading #206's store change against a page that could not write the new
+  field.
+
+### 1. The six capabilities, one by one
+
+| # | On 2026-09-17 | What rondo has without this entry | New in this entry | Stays with the person |
+|---|---|---|---|---|
+| **C1. What may run beside what** | Seven issues cut into three lanes by the files each would own, sized to the collisions and not to the issue count | A count (`D-0023`); a collision read from committed paths, after a lap (`D-0067` rule 2) | **A claim on paths, drafted before admission and tested at it** (rules 2 and 3) | Nothing inside a scope. The cut is drafted (`D-0063`) and tested; it is `D-0064` O1 |
+| **C2. Ownership moved over time** | "The page files pass to lane 3 when lane 1 merges" | Nothing: `D-0067` rule 4's release list has `first_terminal` only, and a release on a merge is a P3 to the person each time | **A claim widens, narrows and is released by successor rows; a line's work landing is read off the default branch** (rules 4 and 6) | The merge that lands the work, which is a person's act (`D-0064` rule 3.4). No press releases the other line; a line at its gate still continues by the person's `revise` press, offered once the paths are free (rule 7.1) |
+| **C3. A landing order refused that was correct in isolation** | #206's store change alone would have left no ask releasable; store, page and docs had to land in one pull request | `D-0067` case 4: a merge order drafted and carried out by the person | **Changes that must land together are folded into one line**, not ordered (rule 9.2). The claim moves; the redo is `D-0027`'s | **Seeing that a change alone breaks something** is a reader's judgement, not the ledger's. The `revise` press and the merge stay the person's while O4 and merge are theirs |
+| **C4. An agent held without ending it** | Lane 3 told to stop and wait, context intact, while the person slept | A lap at its gate is `awaiting_human`, occupies no capacity (`D-0023` rule 2), and waits for ever | **A held line keeps its claim**, so nothing takes its files while it waits (rules 2 and 10) | The decision it waits on (`D-0064` P2 or P3). **The session is not kept** (rule 10) |
+| **C5. A consequence routed across a boundary** | #206 made `lap-10-runbook.md` section 5 false; the fix went into #206's pull request | Nothing: a lap may write any path, and `D-0067` rule 2 finds it only if another open line changed the same path | **A widening onto a path another line holds but has not changed takes it by a narrowing now**, and one it has changed waits for it to land (rule 4) | **Seeing that the prose became false** is a reader's judgement (`D-0065`'s reviewer or a drafter's premise claim). Whether the fix changes something the person owns is `D-0064` P3's test, unchanged |
+| **C6. What not to start** | #247 and #228 held for an owner's decision; #248 held because it would collide with lane 1 | An open ask holds a line (`D-0066` rule 4.2); a count refuses (`D-0023`) | **A plan whose claim overlaps an open line's waits on that line, with a reason on the screen**; **a plan not yet admitted holds no path**, so a plan waiting on a decision holds no other line's paths (rules 2.4, 3.4 and 8); it still holds its own request's other unadmitted plans (`D-0066` rule 4.4) | The decision a deferred plan waits on |
+
+### Decision
+
+1. **The layer is named the lane ledger. It is rows and tests at points that already exist, not a
+   component.** It is: a `lane_claim` record (rule 2); one test inside `reserve()`'s transaction,
+   beside `D-0023`'s two counts (rule 3); `D-0067` rule 2's gate-time reading, which now also compares
+   what a lap changed with what its line claims (rule 5); and one reading of whether a line's work has
+   landed (rule 6). **It has two authorities of its own: it allocates paths, and it refuses an
+   admission or a claim that would share one.** What it defers and what it re-orders are `D-0066`'s
+   `asks` test and `D-0067`'s `sequence`, fed by the ledger's rows. **`D-0067` rule 1's "no new
+   authority" is superseded for those two authorities and nothing else**; its "no new role", and its
+   refusal of a coordinator component (its option A), stand. A "lane" of 2026-09-17 is, in rondo, an
+   in-force claim and the lines that inherit it in order; no record groups lines.
+
+2. **Allocate: a line holds a claim on paths from its admission until its work lands or it ends.**
+   1. **`lane_claim` is a record kind of its own, immutable and append-only, with no status column**
+      (`D-0022` rule 4's shape). Columns: `claim_id`; `lineage_id`, the lineage's first iteration id
+      (`D-0030`); `repository`; `paths`; `supersedes_claim_id`, nullable; `author_kind` and `author_id`
+      (`D-0061` rule 2.3); `bases`; `created_at_ms`. **A line's in-force claim is the row no successor
+      names**, and there is exactly one: **`supersedes_claim_id` is unique**, so a successor must name
+      the current head, and a second successor written from the same stale read is refused by the
+      database rather than left as a second live claim.
+   2. **A path is repository-relative. One ending in `/` is a directory and covers everything under
+      it; the whole repository is `/`. Two paths overlap when they are equal or one is a directory
+      that covers the other.** There are no patterns: a pattern is where a match stops being an
+      equality, and a claim whose overlap cannot be decided would have to be read as `/` anyway.
+   3. **The advisory drafts a claim beside each plan of a split** (`D-0063` rule 4), derived from the
+      code paths the work touches (rondo#219's lesson, already the runbooks' convention), with bases.
+      The claim sits beside the plan in the split proposal and **is not a plan field**, so `D-0063`
+      rule 4.2's "only two fields may differ" stands.
+   4. **A plan not yet admitted holds nothing.** Its drafted claim is a request. The first
+      `lane_claim` row is written by `reserve()` in the same `BEGIN IMMEDIATE` as the iteration row,
+      both or neither, which is `D-0023` rule 5's reason for the triple.
+   5. **A plan admitted with no drafted claim claims `/`**: an operator-written plan (`D-0071`), or a
+      redo of a line admitted before this entry. Parallelism comes from declaring, and a line that
+      declares nothing collides with everything, which is today's behaviour at `RONDO_MAX_OCCUPYING` 1.
+   6. **A redo continues its lineage's claim** and writes no row unless the claim changes. **A redo of
+      a line whose claim was released** (rule 4.3: an `abandoned` or `failed` line retried) re-requests
+      the last claim the release superseded, and `reserve()` tests it as it tests a first admission:
+      the paths were given up, and taking them back is an allocation, not a continuation.
+
+3. **Refuse: no path is held by two open lines of one repository.** This is the one property the
+   ledger protects.
+   1. **`reserve()` tests the admission's claim against the in-force claim of every other open line in
+      the same repository**, inside its `BEGIN IMMEDIATE`, beside `maxLive` and `maxOccupying`
+      (`D-0023` rule 10). An overlap refuses: no act, no consumption, and a refusal recorded beside the
+      capacity refusal (`D-0023` rule 14), naming the holding lineage and the shared paths. The row's
+      shape is the building change's.
+   2. **Every successor `lane_claim` row is tested the same way, in the transaction that writes it.**
+   3. **"Open" is `D-0067` rule 2's open lineage, read over the whole lineage tree**: a lineage is a
+      tree, since a redo may continue an earlier lap (`D-0066` rule 4.4 as annotated for rondo#197).
+      It is open while **any** lap of the tree is not terminal, or any closed tip's work (rule 6) has
+      not landed, where "landed" is rule 6's reading. One branch of the tree failing does not release a
+      claim another branch still needs.
+   4. **The refusal is the backstop, not the ordinary path.** The in-force claims are rows in the
+      advisory's snapshot, so a split is drafted knowing them. For a plan whose claim overlaps an open
+      line, the advisory drafts a `sequence` (`D-0067` rule 3): `first` the holder, `then` the plan,
+      `holds` `admission`, `until` `paths_free`. After a backstop refusal it drafts the same
+      sequence. Either way the line waits as `held_by_order` with bases the person can follow
+      (`D-0068` rule 2), and a refusal becomes an order rather than a failure.
+   5. **`paths_free` joins `D-0067` rule 3.4's closed list of release facts**: `first`'s in-force claim
+      no longer overlaps the paths `then` asks for. It is a fact of the store, since every way a path
+      leaves a line is a `lane_claim` row (rule 4). A hold therefore ends on whichever comes first,
+      `first` landing, ending, narrowing or being released by a person, and never waits for a landing
+      that will not come.
+   6. **The capacity ledger is untouched and still answers its own question.** `maxOccupying` and
+      `maxLive` bound how many; the claim decides which. Both are tested in one transaction, and
+      neither is expressed through the other.
+
+4. **Move ownership: a claim changes only by a successor row, in three ways.**
+   1. **Widen**: add paths, tested by rule 3.2. A widening onto a path another open line holds is
+      drafted as a `sequence` on that line, releasing at `paths_free`. **The paths asked for are
+      carried in the `sequence` as a `paths` member**, beside `first`, `then`, `holds` and `until`, so a
+      held widening survives a restart and `paths_free` has something to test; the widening row is
+      written in the transaction that admits the held act. For a plan not yet admitted, `paths` is its
+      drafted claim. **This is the handover (C2)**: lane 3's claim on the page files is a widening held
+      until lane 1's paths are free.
+   2. **Narrow**: drop paths. **A path the line has already changed cannot be dropped before the line
+      lands or ends.** "Changed" here is **every lap of the tree that has committed, whatever its
+      status**: the paths between the lineage's first `baseCommit` and each lap's `tipCommit`, a lap at
+      its gate or still performing included. It is wider than rule 6's landing set on purpose; that
+      one decides what must land, this one what already exists. Its work on that path exists and
+      would meet the other line at merge. Narrowing a path the line has not touched is how one line gives it
+      to another at once (C5).
+   3. **Release**: a successor with no paths, written when the line stops being open (rule 3.3): in
+      the transaction that writes a terminal status the surface itself writes (`abandoned`,
+      `failed`), when that status leaves no other lap of the tree open, or when rule 6 reads the line
+      landed. **A person may also release a line**, by a press of its own
+      that writes the row with `author_kind` `operator`: it is how a line whose work landed in a form
+      rule 6 cannot recognise is closed out (rule 6.4), and how a `closed` line a fold retires gives up
+      its paths (rule 9.3). `D-0023` rule 15 keeps `abandon()` off a `closed` row, so this press is not
+      `abandon()`; it ends the claim, not the iteration. Whether the work landed is then the person's
+      judgement, recorded as theirs.
+   4. **Who decides.** The advisory drafts every claim row, and like a `sequence` a claim row is not
+      approvable: **inside approved scopes it is decided without asking by being a row** (`D-0064` O1,
+      "in what order and how many at once they run", read as which beside which), and every widening,
+      narrowing and hold is listed in the report (P5). **Outside every scope nothing is decided**
+      (`D-0067` rule 5.3): a claim the drafter would move is an `explanation`, and an operator writes
+      the row.
+
+5. **The gate compares what a lap changed with what its line claims.** `D-0067` rule 2 already gathers
+   the changed paths when a lap reaches its gate. **A changed path its line does not claim is widened
+   onto at once when no other open line holds it** (a row written and listed in P5), **and is
+   `D-0067` rule 2's collision when one does**, unchanged. There is no write fence: a lap can still
+   write any path, and a claim drafted too narrow is corrected here, at most one lap late, which is
+   `D-0067` as it stands. A claim drafted too wide costs parallelism and never a collision.
+
+6. **A line has landed when the default branch holds what it changed.** Landing is read only for a
+   line whose every lap is terminal and at least one is `closed`: a lap at its gate is held by rule
+   10, whatever its diff says. **What must land is the line's closed tips**: a `closed` lap that no
+   other lap of the tree continues. A lap a redo continues (`D-0027`: `revise` closes its predecessor
+   and starts from its branch) is superseded by that redo, whatever the redo's end, so a lap's work
+   that was revised is never owed to the default branch in its revised-away form. The line's landing
+   set is the union, over its closed tips, of the paths changed between the lineage's first
+   `baseCommit` and that tip's `tipCommit`. A line whose only continuation ended `abandoned` or
+   `failed` has no closed tip and nothing to land: it is not open, and its claim is released (rule
+   4.3). Retrying it takes the claim back (rule 2.6). **It has landed
+   when, for every path in that set, the tree entry at the default branch's head equals the tree entry
+   at the tip (object id, mode and type), a deleted path being absent from both.** A blob alone is not
+   enough: a change of mode only keeps the blob and would read as landed before it had. **The default
+   branch read is the forge's, not the local one**: a squash merge on the forge moves neither local
+   `main` nor a remote-tracking ref until something fetches. So the reading first fetches the
+   default branch from the remote `publish` pushes to, into a ref rondo owns, and reads that. **A
+   fetch that fails makes the reading `undetermined`**: nothing is released, and the line waiting on
+   it shows `undetermined` on the screen, never "waiting on a merge" (`D-0068` rule 2.3). The reading
+   is gathered at the points rule 7 names and is stored only as the release row it causes.
+   1. **It holds under squash**, which is how #251, #252 and #253 landed, where `D-0067` rule 2's
+      ancestry test ("its `tipCommit` is not an ancestor of the default branch") never fires. **It is
+      sound because of rule 3**: while the line was open no other line held its paths, so a default
+      branch that holds its tree entries holds its work.
+   2. **It supersedes `D-0067` rule 2's ancestry clause**, which answers `D-0067`'s own residual "a
+      squash-merged line whose branch is kept stays open to the reading". This is the gate's second
+      point.
+   3. **The release row it causes is what `paths_free` reads** (rule 3.5). Landing is the
+      `first_merged` `D-0067` anticipated, in the only form rondo can read without observing a merge.
+   4. **A line whose work was changed on the way in** (a conflict resolved, an edit made on the forge)
+      does not read landed. It stays open, and `D-0068`'s wait reading shows it as a closed line
+      waiting on the person, with what it holds behind it. **The person's answer is the release press
+      of rule 4.3**, one press on that item, and it releases every line held behind it.
+
+7. **When a held act is attempted.** `D-0067` rule 4 attempts a held act when the surface writes the
+   release fact. **A landing is read, not written by an act of rondo's**: the person merges on the
+   forge. So **the resident host's tick (`D-0068` rule 2.2's timer) reads rule 6 for every line some
+   `sequence` waits on, writes the release, and the surface attempts the held act**. The release is
+   written only if the claim head and the lineage's laps are still the ones the reading was taken
+   over, re-tested in the transaction that writes it; a redo admitted in between makes the reading
+   stale and nothing is released. The held act is attempted with `D-0066`
+   section 4's verdict computed then, unchanged. The patrol's function is not changed and still acts
+   on nothing; the tick carries a second duty. Without a resident host, rule 6 is read at the next
+   admission the surface attempts. This is the gate's first point.
+   1. **What the tick may attempt is an admission the organisation may make without a gate answer**:
+      a plan's first admission, or an in-scope `retry` (`D-0064` O1 and O4). **A held line that is at
+      its gate continues only by `revise`, which answers that gate, and the gate is the person's**
+      while `D-0064` rule 3.6 is closed (`D-0070` section 1). So for that line the hold is on the
+      offer, not the act: the gate's drafted **Ask for a change** is drawn as waiting on the other line,
+      with its reason and bases, until `paths_free`; then it is offered, and the screen says the paths
+      are free. **The handover is then one press, the one the person would make anyway to continue
+      the line, and the person never has to know when to make it.** When `D-0064` rule 3.6 opens, the
+      organisation's `revise` is a held act like any other, by the entry that opens it.
+
+8. **Defer: nothing new, and deferring now costs no other line anything.** A plan waits when an `asks`
+   message stands over it (`D-0066` rule 4.2), when a `sequence` holds it (`D-0067` rule 4), or when a
+   count refuses (`D-0023`). Because a plan not yet admitted holds no path (rule 2.4), **a plan waiting
+   on a person's decision holds no path from any other line**, which is how #247 and #228 were held
+   beside running lanes. **What it still holds is its own request's other plans**: an ask about one
+   plan not yet admitted names no iteration, and `D-0066` rule 4.4 reads it as standing over every
+   not-yet-admitted plan of that request. This entry does not amend that; it is a residual.
+
+9. **Re-order landings.**
+   1. **An order between lines that each land alone** is a `sequence` whose held act is the landing
+      act. Today landing is the person's `publish` press and a merge, and `D-0066` rule 3.2's
+      `act_kind` union cannot hold either. **So the order is drawn beside the press as its
+      recommendation, with bases**, which is `D-0067` case 4 unchanged. When publishing or merging
+      becomes the organisation's (`D-0064` O7, and rule 3.4's merge transition), the entry that opens
+      it adds the member, and the order becomes a hold. **This entry adds no member.**
+   2. **Changes that must land together are folded into one line, not ordered.** When a drafter's
+      premise claim or a reviewer's finding says a line's change alone leaves the default branch
+      broken without another change (the #206 case), the remedy drafted is one line: its claim widens
+      onto the other change's paths (rule 4.1, held until they are free), and a redo on the same
+      branch (`D-0027`) makes the other change, so one pull request carries both. **Today the redo is
+      the person's `revise` press, drafted with its words (`D-0070`)**; the organisation's own `revise`
+      waits on `D-0064` rule 3.6. **The fold is a redo, so it is available only while the line's gate
+      is open**: `revise` answers that gate (`D-0027` rules 1 and 6) and refuses one already answered.
+      **Once the line is `closed` or published, the fold is P3**, because it changes what the person
+      has already approved or been shown. The recommended option is to retire the line with the
+      release press (rule 4.3, after its pull request is closed) and admit a new line that claims both
+      path sets, with the retired branch named in its instruction as material; the other option is to
+      land the other change first and hold this merge, which is rule 9.1's order carried out by the
+      person.
+   3. **When both lines have already changed the paths the other needs, the fold cannot wait for either
+      to land**, since neither may land alone and neither may narrow a changed path (rule 4.2). **Which
+      line survives is then the person's, as P3**: the drafted options name the survivor, what the
+      retired line's work becomes (its branch is kept and named in the survivor's redo instruction as
+      material), and one recommendation. The retired line gives up its paths by ending: `abandon()`
+      while it is at its gate, or the release press (rule 4.3) once it is `closed`. The survivor's
+      widening is then free, and its redo carries both changes.
+
+10. **Hold: rondo holds the line, not the session.** A line at its gate is `awaiting_human`: it occupies
+    no capacity (`D-0023` rule 2), **keeps its claim** (it is open, rule 3.3), keeps its branch and
+    workspace, and the decision it needs is an `asks` message with a recommendation (`D-0064` rule
+    4.1). It can wait for ever at the cost of its own paths and nothing else. **What is not kept is
+    the model session**: the next lap starts from the branch, the transcript and the carried words
+    (`D-0027`). The instruction a worker runs on (`D-0064` O3) tells it to end its lap at a committed
+    point with its question rather than guess. The mid-lap relay stays empty (`D-0061` rule 6).
+
+11. **Where the person's part falls.** **The person approves** (a scope, P1; an irreversible act,
+    P4, which includes the merge that releases a claim; the gate while O6 is closed) **and decides
+    every point no row settles**: whether a change alone breaks something the person sees, the
+    decision a held line waits on, a fold after the person has been shown the pull request, and
+    anything outside every scope. **Everything the ledger derives from claim rows, changed paths and
+    the default branch** (which lines may run together, when a path passes, what waits on what) **is
+    the organisation's inside a scope and is never asked.**
+
+12. **The screen says what the ledger knows.** Every open line on the page and in the inbox shows its
+    in-force claim; every waiting line shows its reason and what it waits on (`D-0068` rule 2.6); a
+    closed line that has not landed shows what its landing releases. **The person never types a path
+    or a lineage id and never has to remember which line owns what**: the drafter writes claims, and
+    an operator who writes a plan by hand writes none (rule 2.5).
+
+### 2. The six capabilities of 2026-09-17, under this entry
+
+| Case | What rondo does | Handled? |
+|---|---|---|
+| **C1.** Seven issues, five touching `web.tsx` and `wording.ts` | The drafter drafts three claims (the page files; `docs/operations/`; `src/store/`) and folds the page issues into one line. A plan overlapping an open line waits as `held_by_order` (rule 3.4) | **Yes**, as far as the drafter cuts well. A bad cut costs parallelism (too wide) or one lap (too narrow, rule 5), never an unseen collision on a shared path |
+| **C2.** Page files pass to lane 3 when lane 1 merges | Lane 3's widening onto the page files is a `sequence` on lane 1 with `until` `paths_free`. The person merges #252 on the forge; the tick fetches, reads it landed (rule 6) and writes the release. Lane 3 is at its gate, so its drafted change is offered from that moment and the person's `revise` press starts the lap (rule 7.1) | **Yes**, under both gate points (a): the merge, and the one press that continues lane 3 anyway. Under point 1 (b) the person also answers one P3 per handover |
+| **C3.** #206's store change could not land alone | Seen by a reviewer's finding or a premise claim, or not at all. The drafted remedy is a fold (rule 9.2): widen onto the page and docs, then a drafted `revise` the person presses | **Half.** The fold is mechanical once the break is seen; seeing it is a reader's judgement over code the change did not touch, and nothing derives it |
+| **C4.** Lane 3 held overnight | The lap ends at its gate with its question; the line keeps its claim and holds no capacity; the ask carries a recommendation | **Yes for the line; no for the session.** The next lap re-reads the branch and the transcript rather than remembering |
+| **C5.** `lap-10-runbook.md` section 5 made false | The reviewer or drafter names the consequence; the claim widens onto the runbook. On the day lane 2 had landed an hour earlier, so the path was free; had lane 2 held it untouched, a narrowing would give it at once (rule 4.2); had lane 2 changed it, the widening waits for lane 2 to land | **Yes once seen**, with the same half as C3 for seeing it |
+| **C6.** #247, #228 and #248 not started | #247 and #228 wait on an open ask and hold no path (rule 8). #248's plan overlaps lane 1's claim and waits as `held_by_order` (rule 3.4). Both reasons are on the screen | **Yes** |
+
+### 3. What this is not
+
+- **Not the drafting half.** `D-0063` drafts the split, the claims and the sequences. The ledger tests
+  and records them.
+- **Not a bigger capacity number.** `D-0023`'s counts are untouched (rule 3.6), and raising
+  `RONDO_MAX_OCCUPYING` is still a policy edit. What this entry adds is what makes a larger number
+  safe to set.
+- **Not a write fence.** A lap can write any path; the ledger finds it at the gate (rule 5).
+- **Not a coordinator.** No part watches every line or runs a loop of its own. `D-0067` option A stays
+  refused; rule 7's tick reads a fact and hands the act to the surface.
+- **Not an approver.** It approves nothing, merges nothing, and answers no gate.
+- **Not a reader of meaning.** Two changes that break each other without sharing a path are not
+  caught (`D-0067` section 4), and neither is a change that is right alone and wrong landed alone
+  (C3).
+- **Not single-flight.** A line serialises only against the lines whose paths it shares; the one
+  exception is a line that declares nothing (rule 2.5).
+
+### 4. The options, and why the others were refused
+
+| Option | Outcome |
+|---|---|
+| **A. A bigger capacity number** (rondo#8's frame) | **Refused.** It answers how many and never which. On 2026-09-17 a bound of three admits the five page issues in any three |
+| **B. `D-0067` as accepted**: collisions read from what laps have changed | **Refused as the whole answer, kept as rule 5.** A lap's first set is empty, so every line is admitted and meets its neighbours at their gates, a lap each already spent. **What it would have kept**: no declaration, so no claim a drafter can get wrong |
+| **C. A write fence per claim**: cadenza grants narrowed to the claimed paths | **Refused.** A scope is not a grant (`D-0064` rule 3.2), a grant is the agent type's, and a fence turns a claim drafted one file too narrow into a failed lap where rule 5 costs at most a lap's lateness. **What it would have kept**: a claim that is a guarantee rather than a declaration |
+| **D. A coordinator component** that watches lines and admits them | **Refused**, for `D-0067` option A's reason: a second place, beside `D-0066` section 4's verdict, where the organisation decides that an act does not happen, holding the only view of all lines. The claim test sits in `reserve()` beside the capacity count, which is where "an admission does not happen" already lives |
+| **E. A lane record** that owns several lines | **Refused.** A claim plus a `sequence` already says everything a lane said on the day; a record that groups lines names nothing the rows do not |
+| **F. A claim on paths, tested at admission, moved by successor rows, released by reading the default branch** | **Taken** (rules 1-12) |
+
+### 5. What this gives up
+
+- **A plan written by hand runs alone in its repository.** It claims `/` (rule 2.5). An operator who
+  wants parallel work has to go through a drafted split, or write a claim.
+- **A drafter's claim can be wrong and the ledger cannot tell.** Too wide, lines wait that need not,
+  visible only as `held_by_order` time in the report; too narrow, a collision on a path the claim
+  missed is found a lap late (rule 5).
+- **Append-only files serialise.** Two lines that each append to `DECISIONS.md` share a path and cannot
+  run together, where claude-org-ja runs them in parallel and orders the merges (`D-0067` case 4).
+- **The session.** A held line resumes from its branch and words, not from what the model had in
+  mind (rule 10).
+- **A handover is only as prompt as the tick.** With no resident host, a line held on a landing waits
+  for the next admission attempt (rule 7), and `D-0068`'s patrol does not run either.
+- **A landing altered on the way in never reads landed** (rule 6.4) and needs the person's release
+  press.
+- **Two lines that each changed what the other needs cannot both survive a fold** (rule 9.3): one
+  line's lap is retired, and the survivor re-makes its change from the kept branch.
+- **One git read per changed path, per waiting line, per tick.** `D-0067` section 4's snapshot cost,
+  paid again for landing.
+
+### What is put to the human gate
+
+1. **Whether a held act is released by reading the default branch on a clock.**
+   - **(a) Yes: the resident host's tick reads rule 6 for every line a `sequence` waits on, writes the
+     release, and the surface attempts the held act** (recommended, rule 7). Handover at landing needs
+     no press beyond the merge and, for a line at its gate, the press that continues it (rule 7.1). *Loses:* an admission rondo starts because a minute passed, which is a
+     self-started act the person did not make at that moment. `D-0067` rule 4 already starts a held
+     act on a fact the surface writes; this starts one on a fact the surface reads.
+   - **(b) No: a release on a landing stays `D-0067` rule 4's P3.** Every handover is a question the
+     person answers after merging. *Loses:* the person has to remember that merging one line releases
+     another, which is the state the product's axis says rondo keeps and the screen says. `D-0068`
+     rule 2.6's "answering this releases B" softens it and does not remove the press.
+2. **What "landed" means. This point changes how an accepted entry reads, so it is put to the gate
+   rather than taken.**
+   - **(a) The default branch holds the line's blobs, for every path it changed** (recommended, rule
+     6). Supersedes `D-0067` rule 2's ancestry clause and answers its squash residual. *Loses:* a line
+     whose work was edited on the way in stays open until a person acts (rule 6.4), and the reading is
+     not a merge observation: a person who copies the same bytes to `main` by hand releases the claim.
+   - **(b) Keep the ancestry clause.** *Loses:* every squash-merged line stays open until its branch is
+     deleted, which on this repository's practice is most lines, and every handover behind one waits
+     for a person.
+   - **(c) Wait for continuo's merge observation** (`D-0064` section 5, survey G5), and until then every
+     handover is point 1 (b). *Loses:* parallel work that hands ownership over is P3 per handover until
+     a change in another repository lands.
+
+### Annotations this entry adds
+
+On acceptance, each dated and additive, per the answers the gate gives:
+
+- **`D-0067` rule 1**: "no new authority" is superseded by `D-0073` rule 1 for allocating paths and
+  refusing an overlap, and for nothing else.
+- **`D-0067` rule 2**: under the second point (a), the ancestry clause of "open lineage" is superseded by
+  `D-0073` rule 6, and section 4's squash residual is answered.
+- **`D-0067` rule 3**: the `sequence` payload gains `paths`, the paths `then` asks for (`D-0073`
+  rule 4.1).
+- **`D-0067` rule 3.4**: `paths_free` joins the closed list of release facts.
+- **`D-0067` rule 4**: under the first point (a), a release that is a reading is written on the resident
+  host's tick and the held act attempted then.
+- **`D-0023` rules 10 and 14**: `reserve()` also tests claims, and the refusal record names which bound
+  refused.
+- **`D-0063` rule 4**: a split carries a drafted claim beside each plan; the plan's bytes and rule 4.2
+  are unchanged.
+- **`D-0068` rule 2.2**: the tick carries rule 7's duty beside the patrol; the patrol still acts on
+  nothing. **Table in rule 2.1**: `held_by_bound`'s refusal row may be a claim refusal.
+- **`D-0033` rule 9**, after `D-0067`'s annotation: collisions on a path a line declared are now refused
+  before they are written, and those it did not declare are found at the gate as before.
+
+### What this does not do
+
+- **It does not build** the record, the test in `reserve()`, the gate-time comparison, the landing
+  reading, the tick's duty, the drafter's claim or any screen.
+- **It does not change a capacity bound** or `D-0023`'s counting.
+- **It does not add a held act** to `D-0066` rule 3.2's union (rule 9.1).
+- **It does not resume a model session**, or fill the mid-lap relay.
+- **It does not add an invariant beyond rule 3.** No check that a claim is complete, no cap on how long
+  a line may hold a path, no fence on what a lap writes, no rule that a person read a claim.
+
+### Residuals, with who decides
+
+| Residual | Why not here | Who decides |
+|---|---|---|
+| Keeping the model session across a hold | A continuo change to `lap perform`, with the fence and identity questions a resumed session raises | continuo, if asked; asked only if the second falsifier below fires |
+| A shared-append path (`DECISIONS.md`) that two lines may both hold | Needs a merge rule for one file kind, which is a judgement about that file's shape | a later entry, if serialising on it costs the parallel-work requirement in practice |
+| Holding a landing act (push, pull request, merge) | Landing is the person's until `D-0064` O7 and rule 3.4's transition | the entry that makes publishing or merging the organisation's |
+| Collisions that share no path, and a change right alone and wrong landed alone | Needs a reader of what the work means | the reviewer's criterion (`D-0065` section 1.2.6), or a later entry if they are missed in practice |
+| An ask about one plan not yet admitted holds its request's other plans | `D-0066` rule 4.4 reads an ask with no `iteration_id` basis as standing over the whole request's first admissions; naming a plan in a basis is a change to that rule | a later entry, if disjoint plans of one request are held on each other's questions in practice |
+| How a claim is drawn on the page and the inbox | A screen question | the building change |
+
+### What would falsify it
+
+- **Two lines under this ledger colliding after merge on a path both declared**, which would mean rule 3
+  is not held where it is tested.
+- **Held lines resuming worse than a session would have**, measured as a successor lap re-deriving what
+  its predecessor had already found, often enough to cost more than the continuo change. The session
+  residual comes back.
+- **Drafted claims routinely too wide**, seen as `held_by_order` time between lines that never shared a
+  changed path. Claims then need a narrowing drafted at the gate, not only a widening.
+- **Drafted claims routinely too narrow**, seen as rule 5's collisions, so that the ledger is `D-0067`
+  with extra rows. The drafter's derivation is what moves; option C comes back if it cannot.
+- **A line read as landed whose work was not on the default branch**, under the second point (a).
+  Merge observation becomes the release.
+- **Parallel work on a day like 2026-09-17 run under rondo coming out less parallel than the
+  coordinator's**, with the difference traced to rules 2.5 or the append-only residual.
+- Any measurement in "What was measured" failing to reproduce at rondo `470af3b`.
