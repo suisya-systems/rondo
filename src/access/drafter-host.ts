@@ -102,8 +102,14 @@ export function drafterHost(ports: DrafterHostPorts): DrafterHost {
             }
           }
         } catch (error) {
-          ports.log(`drafter  ${one.requestMessageId}: ${describe(error)}`);
-          written = "failed";
+          // **A throw is a fault of the moment** -- a locked database, a
+          // lease that could not be taken -- and not the store answering this
+          // draft: the request stays due for the next scan. Only a refusal
+          // `write` returned is given up on (rule 1.5).
+          ports.log(
+            `drafter  ${one.requestMessageId}: ${describe(error)}; tried again on the next scan`,
+          );
+          written = "held";
         }
         if (written === "stale") {
           again = true;

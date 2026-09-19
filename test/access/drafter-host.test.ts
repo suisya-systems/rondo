@@ -228,7 +228,7 @@ test("a run that throws is logged and costs only its own request; the host goes 
   });
   host.kick();
   await host.idle();
-  expect(logged).toContain("drafter  r1: the disk is full");
+  expect(logged).toContain("drafter  r1: the disk is full; tried again on the next scan");
   expect((await drafterMessages(w)).map((m) => m.inReplyTo)).toEqual(["r2"]);
 });
 
@@ -275,6 +275,40 @@ test("a thread drafted by another host while this one worked through its list is
     }
     return { kind: "failed", reason: "no claude" };
   });
+  host.kick();
+  await host.idle();
+  expect(handed).toHaveLength(1);
+});
+
+test("a lease that cannot be taken for a moment leaves the request due for the next scan", async () => {
+  const w = await world();
+  await w.say("r1", "Fix it.", null, 1_000);
+  let busy = true;
+  const handed: string[] = [];
+  const host = drafterHost({
+    store: w.store,
+    record: {
+      ...w.record,
+      claimDraft: async (...args: Parameters<typeof w.record.claimDraft>) => {
+        if (busy) {
+          throw new Error("database is locked");
+        }
+        return await w.record.claimDraft(...args);
+      },
+    },
+    now: () => 10_000,
+    language: null,
+    log: () => undefined,
+    mintId: (kind) => `${kind}-x`,
+    runDrafter: async (_row, document) => {
+      handed.push(document);
+      return { kind: "failed", reason: "no claude" };
+    },
+  });
+  host.kick();
+  await host.idle();
+  expect(handed).toEqual([]);
+  busy = false;
   host.kick();
   await host.idle();
   expect(handed).toHaveLength(1);
