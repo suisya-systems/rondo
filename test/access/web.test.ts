@@ -2654,13 +2654,25 @@ async function draftRevise(
   opts: {
     readonly admitted?: string | null;
     readonly during?: () => Promise<void>;
+    /** Stands in for the store's write, to fail it. */
+    readonly write?: (
+      real: ReturnType<typeof fresh>["record"]["recordReviseDraft"],
+    ) => ReturnType<typeof fresh>["record"]["recordReviseDraft"];
+    /** Kicks before the host is let go: one host, several scans. */
+    readonly scans?: number;
   } = {},
 ): Promise<string[]> {
   const documents: string[] = [];
   const admitted = opts.admitted === undefined ? "decision-1" : opts.admitted;
   const host = reviseDrafterHost({
     store: world.store,
-    record: { ...world.record, scopeDecisionAdmitting: async () => admitted },
+    record: {
+      ...world.record,
+      scopeDecisionAdmitting: async () => admitted,
+      recordReviseDraft:
+        opts.write?.(world.record.recordReviseDraft.bind(world.record)) ??
+        world.record.recordReviseDraft.bind(world.record),
+    },
     runDrafter: async (_row, document) => {
       documents.push(document);
       await opts.during?.();
@@ -2681,8 +2693,10 @@ async function draftRevise(
     language: null,
     log: () => undefined,
   });
-  host.kick();
-  await host.idle();
+  for (let scan = 0; scan < (opts.scans ?? 1); scan += 1) {
+    host.kick();
+    await host.idle();
+  }
   return documents;
 }
 
@@ -2797,6 +2811,27 @@ test("an unavailable run writes its reason and is not retried; the next reading 
   expect(html).not.toContain("rondo could not draft what to change");
 });
 
+test("a store fault at the write keeps the draft and writes it on the next scan, without running again (D-0077 rules 2.2, 4.2)", async () => {
+  const world = fresh();
+  await gateWithChecks(world);
+  await modelFindings(world);
+  let faults = 1;
+  const documents = await draftRevise(world, REVISE_ANSWER, {
+    scans: 2,
+    write: (real) => async (proposal, gateId) => {
+      if (faults > 0) {
+        faults -= 1;
+        return { kind: "defect", reason: "database is locked" };
+      }
+      return await real(proposal, gateId);
+    },
+  });
+  // One model call; the first scan's write met the lock, and the second wrote
+  // the same draft -- not an unavailable row about the lock.
+  expect(documents).toHaveLength(1);
+  expect(reviseRows(world).map((r) => r.payload["kind"])).toEqual(["drafted"]);
+});
+
 test("a reading that lands while the draft is written makes that draft stale: nothing is written for it (D-0077 rule 2.3)", async () => {
   const world = fresh();
   await gateWithChecks(world);
@@ -2909,7 +2944,9 @@ test("the gate offers a change beside approve, drafted from the findings and edi
   expect(box).toContain('data-draft="revise:i-0001:gate-i-0001"');
   // **No deterministic draft anywhere** (D-0077 rule 4.2): the stand-in's lead is gone.
   expect(html).not.toContain("Please fix what the model review raised");
-  expect(bar).toContain("rondo drafted this from what the review found.");
+  expect(bar).toMatch(
+    /<p id="revise-draft-state" data-draft-state="revise:i-0001:gate-i-0001"[^>]*>rondo drafted this from what the review found\./,
+  );
   // The note for a draft that lands over the person's own words is drawn
   // hidden, for the composer script to show (rule 4.4).
   expect(bar).toMatch(

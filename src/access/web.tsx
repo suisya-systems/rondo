@@ -3103,7 +3103,11 @@ function reviseForm(
           </textarea>
         </label>
         {box.kind === "none" ? null : (
-          <p id="revise-draft-state" class="note text-[12.5px] leading-5 text-muted-foreground">
+          <p
+            id="revise-draft-state"
+            data-draft-state={draftKey}
+            class="note text-[12.5px] leading-5 text-muted-foreground"
+          >
             {box.kind === "drafted"
               ? wording.reviseDrafted
               : box.kind === "pending"
@@ -3111,9 +3115,10 @@ function reviseForm(
                 : wording.reviseUndrafted}
           </p>
         )}
-        {/* Drawn hidden; the composer script shows it when it put back the
-            person's own words over a draft that landed after they began
-            (D-0077 rule 4.4). With script off nothing was kept to say so of. */}
+        {/* Drawn hidden; the composer script shows it, in place of the line
+            above, when it put back the person's own words over a draft that
+            landed after they began (D-0077 rule 4.4). With script off nothing
+            was kept to say so of. */}
         {box.kind === "drafted" ? (
           <p
             id="revise-draft-arrived"

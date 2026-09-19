@@ -101,6 +101,9 @@ export function reviseDrafterHost(ports: ReviseDrafterPorts): ReviseDrafterHost 
   // rule 1.5's "not retried"), so a store that refuses does not cost a draft
   // on every scan. The next reading on the lap is a new key.
   const givenUp = new Set<string>();
+  // A finished run whose write met a store fault (a locked database): kept so
+  // the next scan writes it without paying for the run again.
+  const unwritten = new Map<string, Finished>();
   const holder = ports.mintId("drafter-host");
   let running: Promise<void> | null = null;
   let again = false;
@@ -126,7 +129,7 @@ export function reviseDrafterHost(ports: ReviseDrafterPorts): ReviseDrafterHost 
             // Still due now that it is ours: another host may have drafted it.
             const still = (await dueLaps(ports, givenUp)).find((d) => d.record.id === id);
             if (still !== undefined) {
-              const written = await draftAndWrite(ports, still);
+              const written = await draftAndWrite(ports, still, unwritten);
               if (written === "stale") {
                 again = true;
               } else if (written === "failed") {
@@ -283,47 +286,77 @@ export async function gatherReviseMaterial(
   };
 }
 
-/** Run once over one due lap and write its row (D-0077 rules 4.2 and 5.1). */
-async function draftAndWrite(
-  ports: ReviseDrafterPorts,
-  due: Due,
-): Promise<"written" | "stale" | "failed" | "held"> {
-  const row = drafterRow();
-  const drafter = reviseDrafterName(row);
-  const id = due.record.id;
+/** One finished run, as it is written: what came of it and what it was handed. */
+interface Finished {
+  readonly outcome: ReviseOutcome;
+  readonly document: string | null;
+  readonly costUsd: number | null;
+}
+
+/** Run once over one due lap, never throwing, and say what came of it. */
+async function runOnce(ports: ReviseDrafterPorts, due: Due): Promise<Finished | null> {
   let material: ReviseMaterial;
   try {
     material = await gatherReviseMaterial(ports, due, ports.language);
   } catch (error) {
     // **Nothing was read, so nothing was spent or written**: a store that
     // would not read is a fault of the moment, and the lap stays due.
-    ports.log(`revise drafter  ${id}: nothing was written: ${describe(error)}`);
-    return "held";
+    ports.log(`revise drafter  ${due.record.id}: nothing was written: ${describe(error)}`);
+    return null;
   }
-  let document: string | null = null;
-  let costUsd: number | null = null;
-  let outcome: ReviseOutcome;
   const prepared = prepareRevise(material);
   if (prepared.kind === "refused") {
-    outcome = { kind: "unavailable", reason: prepared.reason };
-  } else {
-    document = prepared.document;
-    try {
-      const run = await ports.runDrafter(row, prepared.document);
-      costUsd = run.kind === "answered" ? run.costUsd : null;
-      outcome = reviseDraftOf(due.reading, run);
-    } catch (error) {
-      outcome = { kind: "unavailable", reason: `the drafter could not be run: ${describe(error)}` };
-    }
+    return {
+      outcome: { kind: "unavailable", reason: prepared.reason },
+      document: null,
+      costUsd: null,
+    };
   }
+  try {
+    const run = await ports.runDrafter(drafterRow(), prepared.document);
+    return {
+      outcome: reviseDraftOf(due.reading, run),
+      document: prepared.document,
+      costUsd: run.kind === "answered" ? run.costUsd : null,
+    };
+  } catch (error) {
+    return {
+      outcome: { kind: "unavailable", reason: `the drafter could not be run: ${describe(error)}` },
+      document: prepared.document,
+      costUsd: null,
+    };
+  }
+}
 
+/**
+ * Run once over one due lap and write its row (D-0077 rules 4.2 and 5.1).
+ *
+ * **A store fault is not the store's answer.** A `defect` -- a locked
+ * database, which nothing here waits out -- keeps the finished run in
+ * `unwritten` and leaves the lap due, so the next scan writes the same draft
+ * without paying for it again; only a `refused` write becomes an unavailable
+ * row naming why.
+ */
+async function draftAndWrite(
+  ports: ReviseDrafterPorts,
+  due: Due,
+  unwritten: Map<string, Finished>,
+): Promise<"written" | "stale" | "failed" | "held"> {
+  const drafter = reviseDrafterName(drafterRow());
+  const id = due.record.id;
+  const key = memoryKey(id, due.reading);
+  const finished = unwritten.get(key) ?? (await runOnce(ports, due));
+  if (finished === null) {
+    return "held";
+  }
+  const { outcome, document, costUsd } = finished;
   const write = async (payload: JsonRecord) =>
     await ports.record.recordReviseDraft(
       proposalOf(ports, drafter, due, payload, document, costUsd),
       due.gateId,
     );
   let written = await write(payloadOf(outcome));
-  if (written.kind === "refused" || written.kind === "defect") {
+  if (written.kind === "refused") {
     // A draft the store would not take is an unavailable run naming why, so
     // the reading does not stay due for ever over a row that never lands.
     written = await write({
@@ -331,6 +364,15 @@ async function draftAndWrite(
       reason: `the draft could not be recorded: ${written.reason}`,
     });
   }
+  if (written.kind === "defect") {
+    unwritten.set(key, finished);
+    ports.log(
+      `revise drafter  ${id}: the row could not be written now (${written.reason}); ` +
+        "written on the next scan",
+    );
+    return "held";
+  }
+  unwritten.delete(key);
   const cost = costUsd === null ? "cost not reported" : `$${costUsd.toFixed(4)}`;
   switch (written.kind) {
     case "recorded":

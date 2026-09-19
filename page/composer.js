@@ -77,7 +77,8 @@ if (sentFrom !== null) {
 // **A draft that landed after the person began is said, not put in** (D-0077
 // rule 4.4): what the server drew when they began is kept beside their words,
 // and a box that now arrives holding something else shows the note drawn for
-// it -- their words stay, and the note says how to see the draft.
+// it in place of the line saying the box holds the draft -- their words stay,
+// and the note says how to see the draft.
 const drewKey = (box) => `rondo:drew:${box.dataset.draft}`;
 for (const opening of document.querySelectorAll("textarea[data-draft]")) {
   const kept = store.get(draftKey(opening));
@@ -87,6 +88,11 @@ for (const opening of document.querySelectorAll("textarea[data-draft]")) {
       for (const note of document.querySelectorAll("[data-draft-arrived]")) {
         if (note.dataset.draftArrived === opening.dataset.draft) {
           note.hidden = false;
+        }
+      }
+      for (const line of document.querySelectorAll("[data-draft-state]")) {
+        if (line.dataset.draftState === opening.dataset.draft) {
+          line.hidden = true;
         }
       }
     }
