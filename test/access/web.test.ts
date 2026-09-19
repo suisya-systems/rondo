@@ -32,8 +32,11 @@ import {
   startScopedFromPage,
 } from "../../src/access/cli.js";
 import { reportToRequest } from "../../src/access/conductor.js";
+import { draftedStanding } from "../../src/access/drafted-view.js";
+import { drafterHost } from "../../src/access/drafter-host.js";
 import { inspectLapWork } from "../../src/access/forge.js";
 import type { TranscriptLocation } from "../../src/access/inbox.js";
+import { draftedPlanRun } from "../../src/access/model-drafter.js";
 import { evidenceOf, READING_REMOTE } from "../../src/access/review.js";
 import { agentTypeRecordOf, heldAgentTypeLines } from "../../src/access/scope.js";
 import {
@@ -66,6 +69,11 @@ import {
   type ThreadMessageDraft,
 } from "../../src/store/records.js";
 import { advisoryRecord, iterationStore } from "../../src/store/sqlite.js";
+import {
+  planDocument as drafterPlanDocument,
+  agentTypeDigestOf as drafterTypeOf,
+  world as drafterWorld,
+} from "./fixtures/drafter.js";
 
 /**
  * The tests marked with this build a real git repository or write an on-disk
@@ -5689,5 +5697,199 @@ test("the address `?log=` is the log screen, named by the row and never by a pat
   } finally {
     stop.abort();
     await served;
+  }
+});
+
+const DRAFTED_PROMPTS = ["Fix the scope screen cost box.", "Title-case the approve button."];
+
+/**
+ * A request the model drafter drafted into two plans over a pasted plan, the
+ * way the host writes one (rondo#238 C2b), in memory; `narrow` adds the
+ * person's "keep it under $3" and the drafter's narrowing on it.
+ */
+async function draftedRequest(narrow = false) {
+  const w = await drafterWorld();
+  const document = drafterPlanDocument();
+  await w.say("r1", "Two things, please.", null, 1_000);
+  await w.say("r1-plan", JSON.stringify(document), "r1", 1_100);
+  if (narrow) {
+    await w.say("r1-cap", "Keep it under $3.", "r1", 1_200);
+  }
+  const typeDigest = drafterTypeOf(document);
+  let n = 0;
+  const host = drafterHost({
+    store: w.store,
+    record: w.record,
+    now: () => 1_500,
+    language: null,
+    log: () => undefined,
+    mintId: (kind) => {
+      n += 1;
+      return `${kind}-${String(n)}`;
+    },
+    runDrafter: async () => ({
+      kind: "answered",
+      costUsd: 0.05,
+      finalMessage: JSON.stringify({
+        act: "split",
+        summary: { text: "Two plans.", bases: ["r1"] },
+        plans: DRAFTED_PROMPTS.map((prompt) => ({
+          template_plan_digest: planDigest(document),
+          agent_type_digest: typeDigest,
+          prompt,
+          bases: ["r1"],
+        })),
+        narrowings: narrow ? [{ field: "cost_usd", value: 3, basis: "r1-cap" }] : [],
+      }),
+    }),
+  });
+  host.kick();
+  await host.idle();
+  const scopeId = (
+    w.connection.prepare("SELECT scope_id FROM scope WHERE author_kind = 'drafter'").get() as {
+      scope_id: string;
+    }
+  ).scope_id;
+  const proposalId = (
+    w.connection.prepare("SELECT proposal_id FROM proposal WHERE kind = 'split'").get() as {
+      proposal_id: string;
+    }
+  ).proposal_id;
+  const read = await w.record.readScope(scopeId);
+  if (read.kind !== "read") throw new Error("the drafted scope did not read");
+  return { ...w, draft: read.scope, proposalId };
+}
+
+const scopeScreen = (decisionId: string | null) =>
+  ({ kind: "scope", messageId: "r1", rounds: null, decisionId, plan: null }) as const;
+
+test("a drafted request's scope screen is the draft: its plans, its values in the boxes, and one approve press (rondo#238 C2b)", async () => {
+  const w = await draftedRequest();
+  const ports = portsOver(w, "ada", []);
+  const budgets = w.draft.payload.budgets;
+  for (const wording of [EN, chromeFor("ja")]) {
+    const page = await operatorPage(
+      ports,
+      "t",
+      scopeScreen(null),
+      wording,
+      mint,
+      () => "scope-x",
+      () => "lap-y",
+    );
+    expect(page).toContain(wording.scopeDraftedLead);
+    expect(page).toContain('id="scope-draft-form"');
+    expect(page).not.toContain('id="scope-form"');
+    expect(page).toContain(`action="/scope-draft?lang=${wording.lang}"`);
+    expect(page).toContain(`<input type="hidden" name="draft_scope" value="${w.draft.scopeId}"/>`);
+    expect(page).toContain(
+      `<input type="hidden" name="draft_digest" value="${w.draft.scopeDigest}"/>`,
+    );
+    expect(page).toContain('id="drafted-plans"');
+    for (const prompt of DRAFTED_PROMPTS) {
+      expect(page).toContain(prompt);
+    }
+    expect(page).toContain(`value="${String(budgets.laps)}"`);
+    expect(page).toContain(`value="${budgets.cost_usd.toFixed(2)}"`);
+    expect(page).toContain(wording.scopeDraftedAction);
+    // Nothing narrowed, so nothing says it was.
+    expect(page).not.toContain(wording.scopeNarrowed(budgets.cost_usd.toFixed(2)));
+  }
+});
+
+test("a narrowed drafted value says what it was computed as, and links the person's words it rests on (rondo#238 C2b)", async () => {
+  const w = await draftedRequest(true);
+  const standing = await draftedStanding(w, "r1");
+  if (standing.kind !== "drafted") throw new Error(standing.kind);
+  const computed = standing.drafted.computed.cost_usd.value.toFixed(2);
+  const page = await operatorPage(
+    portsOver(w, "ada", []),
+    "t",
+    scopeScreen(null),
+    EN,
+    mint,
+    () => "scope-x",
+    () => "lap-y",
+  );
+  expect(page).toContain('value="3.00"');
+  expect(page).toContain(EN.scopeNarrowed(computed));
+  // To the thread view at that message: the scope screen draws no messages,
+  // so a bare anchor would lead nowhere.
+  expect(page).toContain('href="/?thread=r1-cap&amp;lang=en#r1-cap"');
+  expect(page).not.toContain('href="#r1-cap"');
+});
+
+test("an approved drafted scope offers each plan its own start, and says so where one cannot start (rondo#238 C2b)", async () => {
+  const w = await draftedRequest();
+  const decided = await w.record.recordScopeDecision({
+    scopeDecisionId: "decision-draft",
+    scopeId: w.draft.scopeId,
+    scopeDigest: w.draft.scopeDigest,
+    outcome: "approved",
+    actorId: "ada",
+    recordedBy: "test",
+    decidedAtMs: 2_000,
+  });
+  expect(decided.kind).toBe("recorded");
+  const ports = portsOver(w, "ada", []);
+  const render = async (p: ServedPorts, wording: Chrome = EN) =>
+    await operatorPage(
+      p,
+      "t",
+      scopeScreen("decision-draft"),
+      wording,
+      mint,
+      () => "scope-x",
+      () => "lap-y",
+    );
+  const starts = (page: string) => page.split('action="/start-plan?lang=').length - 1;
+
+  const ready = await render(ports);
+  expect(ready).toContain('id="drafted-plans"');
+  expect(starts(ready)).toBe(2);
+  expect(ready).toContain('<input type="hidden" name="plan_index" value="0"/>');
+  expect(ready).toContain('<input type="hidden" name="plan_index" value="1"/>');
+  expect(ready).toContain(`<input type="hidden" name="proposal" value="${w.proposalId}"/>`);
+  // The person's held-plan start is not drawn under a drafted scope.
+  expect(ready).not.toContain('id="start-form"');
+
+  // A lap admitted from plan 0 exactly: plan 0 is started, plan 1 still offered.
+  const run = await draftedPlanRun(w, "r1", w.proposalId, 0);
+  if (run.kind !== "runnable") throw new Error(run.reason);
+  const allocation = allocate("lap-plan-0", run.plan.workspaceRoot);
+  if (allocation.kind !== "allocated") throw new Error(allocation.reason);
+  const admitted = admittedPlan(run.plan, allocation.allocation);
+  if (admitted.kind !== "planned") throw new Error(admitted.reason);
+  const reserved = await w.store.reserve({
+    id: "lap-plan-0",
+    request: "Two things, please.",
+    plan: planPayload(admitted.plan),
+    spend: null,
+    scopeSpend: null,
+    nowMs: 3_000,
+    supersedesIterationId: null,
+    requestMessageId: "r1",
+    runId: "rondo-lap-plan-0",
+    topicBranch: "rondo/lap-plan-0",
+    workspace: "/srv/work/lap-plan-0",
+  });
+  expect(reserved.kind).toBe("reserved");
+  const once = await render(ports);
+  expect(starts(once)).toBe(1);
+  expect(once).toContain(EN.planStarted);
+  expect(once).toContain(`#${encodeURIComponent("lap-lap-plan-0")}`);
+
+  // No room: the reason, and no button to press.
+  const full = await render({ ...ports, policy: { maxOccupying: 4, maxLive: 1 } });
+  expect(starts(full)).toBe(0);
+  expect(full).toContain(EN.planFull(1, 1));
+
+  // The scope's own test says no -- expired -- in words, in both languages.
+  const late = { ...ports, now: () => 9_000_000_000_000 };
+  for (const wording of [EN, chromeFor("ja")]) {
+    const expired = await render(late, wording);
+    expect(starts(expired)).toBe(0);
+    expect(expired).toContain(wording.planOutside("expiry"));
+    expect(expired).not.toContain("expiry test");
   }
 });

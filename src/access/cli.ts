@@ -1758,6 +1758,18 @@ export async function main(
                   await recordScopeFromPage(environment, store, opened.path, sender.actorId, draft),
                 async (input) =>
                   await startScopedFromPage(environment, store, opened.path, sender.actorId, input),
+                // The drafted scope's two presses (rondo#238 C2b, D-0071 rule 5.3).
+                async (form) =>
+                  await recordDraftedScopeFromPage(environment, opened.path, sender.actorId, form),
+                async (input) =>
+                  await startSplitFromPage(
+                    environment,
+                    store,
+                    opened.path,
+                    sender.actorId,
+                    bounds.policy,
+                    input,
+                  ),
               ),
         // **The press is checked inside this port too** (rondo#233 S4): a gate
         // answered with a change and the lap it starts are one act, and nothing
@@ -4557,6 +4569,7 @@ async function startSplit(
         note: `this host has no room for another lap (${ready.kind})`,
       };
     case "outside":
+    case "undecidable":
     case "ready": {
       const run = await draftedPlanRun(
         { record },

@@ -37,6 +37,12 @@ export type DraftedStartReadiness =
   | { readonly kind: "full"; readonly live: number; readonly limit: number }
   /** The scope's own verdict for this start: which test, and its reason. */
   | { readonly kind: "outside"; readonly test: string; readonly reason: string }
+  /**
+   * The scope's tests could not be read (D-0066's `undecidable`): not a no,
+   * and said as that -- a row that will not read is not a reason the work is
+   * outside the scope.
+   */
+  | { readonly kind: "undecidable"; readonly test: string; readonly reason: string }
   /** The plan will not run at all (its template or agent type is gone). */
   | { readonly kind: "unrunnable"; readonly reason: string };
 
@@ -91,7 +97,7 @@ export async function draftedStartReadiness(
     ports.nowMs,
   );
   if (gathered.kind !== "gathered") {
-    return { kind: "outside", test: gathered.test, reason: gathered.reason };
+    return { kind: "undecidable", test: gathered.test, reason: gathered.reason };
   }
   const verdict = scopeVerdict(
     {
@@ -105,7 +111,7 @@ export async function draftedStartReadiness(
   );
   return verdict.kind === "inside"
     ? { kind: "ready", run }
-    : { kind: "outside", test: verdict.test, reason: verdict.reason };
+    : { kind: verdict.kind, test: verdict.test, reason: verdict.reason };
 }
 
 /**

@@ -239,10 +239,11 @@ test(
       policy,
       nowMs: 20_000,
     });
-    // No approval yet: the scope's own decision test says so.
+    // An approval that is not there: the decision will not read, which is not
+    // a no from the scope but a check that could not be made.
     expect(
       await draftedStartReadiness(ports(), "r1", "scope-decision-none", w.proposalId, 0),
-    ).toMatchObject({ kind: "outside", test: "decision" });
+    ).toMatchObject({ kind: "undecidable", test: "decision" });
 
     const approved = await recordDraftedScopeFromPage(ENV, w.storePath, "ada", {
       draftScopeId: w.draft.scopeId,

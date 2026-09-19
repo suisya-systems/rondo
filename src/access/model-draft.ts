@@ -793,13 +793,18 @@ function draftedScope(
     rows: material.rows,
     draftedAtMs: material.draftedAtMs,
   });
+  // **Stored as the form shows them** (rondo#238 C2b): the page draws a cost to
+  // the cent and an expiry to the minute, so a draft kept finer than that could
+  // never be pressed back unchanged -- an untouched form would read as the
+  // person's own version. Both round down, which only ever narrows.
   const budgets = {
     laps: winner("laps", numeric, computed.laps.value),
     review_rounds: reviewRounds,
-    cost_usd: winner("cost_usd", numeric, computed.cost_usd.value),
+    cost_usd: Math.floor(winner("cost_usd", numeric, computed.cost_usd.value) * 100 + 1e-6) / 100,
     // Rule 4.1's table: a lower reserve admits more laps at once, which widens.
     cost_reserve_usd: computed.cost_reserve_usd.value,
-    expires_at_ms: winner("expires_at", numeric, computed.expires_at_ms.value),
+    expires_at_ms:
+      Math.floor(winner("expires_at", numeric, computed.expires_at_ms.value) / 60_000) * 60_000,
   };
   // Stricter is later in the closed four, which run blocker..nit.
   const rank = (severity: string) => -FINDING_SEVERITIES.indexOf(severity as FindingSeverity);

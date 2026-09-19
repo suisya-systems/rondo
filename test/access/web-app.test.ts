@@ -28,6 +28,7 @@ import { expect, test } from "vitest";
 import {
   AnswerPort,
   createApp,
+  type DraftedScopeFormDraft,
   MAX_CLAIM_CHARS,
   mintPress,
   mintSend,
@@ -35,6 +36,7 @@ import {
   newMessageId,
   newScopeId,
   type PageEnv,
+  type PlanStartInput,
   type Press,
   type PublishInput,
   PublishPort,
@@ -1429,6 +1431,9 @@ const WRITE_TABLE = [
   "ALL /revise",
   "ALL /scope",
   "ALL /start",
+  // The drafted scope's two presses (rondo#238 C2b, D-0071 rule 5.3).
+  "ALL /scope-draft",
+  "ALL /start-plan",
   "ALL /publish",
   "ALL /*",
   "POST /",
@@ -1436,6 +1441,8 @@ const WRITE_TABLE = [
   "POST /reply",
   "POST /answer-ask",
   "POST /scope",
+  "POST /scope-draft",
+  "POST /start-plan",
   "POST /start",
   "POST /revise",
   "POST /publish",
@@ -2265,6 +2272,199 @@ test("(answer) every shape that is not a person's press is refused, and the ques
 
   expect(await waitingAsks()).toEqual(["ask"]);
   expect(operatorRows()).toEqual({ n: 1 });
+  stop.abort();
+  expect(await closed).toBe(0);
+});
+
+/**
+ * Ports whose scope port also takes the drafted scope's two presses
+ * (rondo#238 C2b), each a spy: the approval of a draft and one drafted plan's
+ * start, as the routes hand them over.
+ */
+function draftedPorts(
+  approved: DraftedScopeFormDraft[],
+  planStarts: PlanStartInput[],
+  answer: { readonly ok: boolean } = { ok: true },
+): ServedPorts {
+  return {
+    ...spyPorts([]),
+    scope: new ScopePort(
+      async () => await Promise.resolve({ ok: false, note: "not this route" }),
+      async () => await Promise.resolve({ ok: false, note: "not this route" }),
+      async (form) => {
+        approved.push(form);
+        return await Promise.resolve(
+          answer.ok
+            ? { ok: true, note: "", scopeDecisionId: "decision-2" }
+            : { ok: false, note: "refused", why: "scopeRefusedNotTaken" as const },
+        );
+      },
+      async (input) => {
+        planStarts.push(input);
+        return await Promise.resolve({ ok: true, note: "" });
+      },
+    ),
+  } as unknown as ServedPorts;
+}
+
+/** The drafted scope's form, as the page draws it (rondo#238 C2b). */
+function draftedScopeForm(overrides: Record<string, string> = {}): Record<string, string> {
+  return {
+    token: TOKEN,
+    request: "req-1",
+    draft_scope: "drafted-scope-7",
+    draft_digest: `sha256:${"d".repeat(64)}`,
+    scope_id: newScopeId(),
+    laps: "6",
+    review_rounds: "3",
+    cost_usd: "4.5",
+    cost_reserve_usd: "2.5",
+    expires_at_ms: "2026-01-01T00:00",
+    severity_threshold: "minor",
+    ...overrides,
+  };
+}
+
+/** One drafted plan's start form, as the page draws it: hidden ids only. */
+function planStartForm(overrides: Record<string, string> = {}): Record<string, string> {
+  return {
+    token: TOKEN,
+    request: "req-1",
+    scope_decision: "decision-2",
+    proposal: "draft-3",
+    plan_index: "1",
+    iteration: newIterationId(),
+    ...overrides,
+  };
+}
+
+test("(scope-draft) a person's press approves the draft it was drawn over, with the values read as /scope reads them (rondo#238 C2b)", async () => {
+  const approved: DraftedScopeFormDraft[] = [];
+  const { base, stop, closed } = await served(createApp(draftedPorts(approved, []), TOKEN));
+
+  const form = draftedScopeForm();
+  const pressed = await send(base, "/scope-draft", "POST", pressHeaders(base), form);
+  expect(pressed.status).toBe(303);
+  expect(pressed.location).toBe("/?scope=req-1&decision=decision-2&lang=en#scope");
+  expect(approved).toEqual([
+    {
+      draftScopeId: "drafted-scope-7",
+      draftDigest: `sha256:${"d".repeat(64)}`,
+      scopeId: form["scope_id"],
+      budgets: {
+        laps: 6,
+        review_rounds: 3,
+        cost_usd: 4.5,
+        cost_reserve_usd: 2.5,
+        expires_at_ms: Date.parse("2026-01-01T00:00Z"),
+      },
+      severityThreshold: "minor",
+      outwardActs: [],
+    },
+  ]);
+
+  stop.abort();
+  expect(await closed).toBe(0);
+});
+
+test("(scope-draft) every other shape is refused and approves nothing (rondo#238 C2b)", async () => {
+  const approved: DraftedScopeFormDraft[] = [];
+  const { base, stop, closed } = await served(createApp(draftedPorts(approved, []), TOKEN));
+  const person = pressHeaders(base);
+
+  for (const [shape, form, status] of [
+    ["no draft scope", draftedScopeForm({ draft_scope: "" }), 400],
+    ["no draft digest", draftedScopeForm({ draft_digest: "" }), 400],
+    ["a scope id this page did not mint", draftedScopeForm({ scope_id: "scope-1" }), 400],
+    ["no request", draftedScopeForm({ request: "" }), 400],
+    ["a budget that is not a number", draftedScopeForm({ laps: "many" }), 400],
+    ["a severity outside the four", draftedScopeForm({ severity_threshold: "grave" }), 400],
+    ["a wrong token", draftedScopeForm({ token: "not-the-token" }), 403],
+  ] as const) {
+    const answered = await send(base, "/scope-draft", "POST", person, form);
+    expect(answered.status, shape).toBe(status);
+    expect(answered.body, shape).not.toBe("");
+  }
+  const noPress = await send(
+    base,
+    "/scope-draft",
+    "POST",
+    { ...person, "sec-fetch-user": undefined },
+    draftedScopeForm(),
+  );
+  expect(noPress.status).toBe(403);
+  expect((await send(base, "/scope-draft", "GET", person)).status).toBe(404);
+  expect(approved).toEqual([]);
+
+  stop.abort();
+  expect(await closed).toBe(0);
+});
+
+test("(scope-draft) a draft the port refuses is said, and leads back to the scope (rondo#238 C2b)", async () => {
+  const approved: DraftedScopeFormDraft[] = [];
+  const { base, stop, closed } = await served(
+    createApp(draftedPorts(approved, [], { ok: false }), TOKEN),
+  );
+  const refused = await send(base, "/scope-draft", "POST", pressHeaders(base), draftedScopeForm());
+  expect(refused.status).toBe(409);
+  expect(refused.body).toContain("/?scope=req-1&amp;lang=en");
+  expect(approved).toHaveLength(1);
+
+  stop.abort();
+  expect(await closed).toBe(0);
+});
+
+test("(start-plan) a person's press starts the drafted plan it names, under the approval it names (rondo#238 C2b)", async () => {
+  const planStarts: PlanStartInput[] = [];
+  const { base, stop, closed } = await served(createApp(draftedPorts([], planStarts), TOKEN));
+
+  const form = planStartForm();
+  const pressed = await send(base, "/start-plan", "POST", pressHeaders(base), form);
+  expect(pressed.status).toBe(303);
+  expect(pressed.location).toBe(`/?lang=en#${encodeURIComponent(`lap-${form["iteration"]}`)}`);
+  expect(planStarts).toEqual([
+    {
+      iterationId: form["iteration"],
+      requestMessageId: "req-1",
+      scopeDecisionId: "decision-2",
+      proposalId: "draft-3",
+      planIndex: 1,
+    },
+  ]);
+
+  stop.abort();
+  expect(await closed).toBe(0);
+});
+
+test("(start-plan) every other shape is refused and starts nothing (rondo#238 C2b)", async () => {
+  const planStarts: PlanStartInput[] = [];
+  const { base, stop, closed } = await served(createApp(draftedPorts([], planStarts), TOKEN));
+  const person = pressHeaders(base);
+
+  for (const [shape, form, status] of [
+    ["no proposal", planStartForm({ proposal: "" }), 400],
+    ["a plan index that is not a whole number", planStartForm({ plan_index: "one" }), 400],
+    ["a negative plan index", planStartForm({ plan_index: "-1" }), 400],
+    ["an iteration id this page did not mint", planStartForm({ iteration: "i-1" }), 400],
+    ["no approval", planStartForm({ scope_decision: "" }), 400],
+    ["no request", planStartForm({ request: "" }), 400],
+    ["a wrong token", planStartForm({ token: "not-the-token" }), 403],
+  ] as const) {
+    const answered = await send(base, "/start-plan", "POST", person, form);
+    expect(answered.status, shape).toBe(status);
+    expect(answered.body, shape).not.toBe("");
+  }
+  const noPress = await send(
+    base,
+    "/start-plan",
+    "POST",
+    { ...person, "sec-fetch-user": undefined },
+    planStartForm(),
+  );
+  expect(noPress.status).toBe(403);
+  expect((await send(base, "/start-plan", "GET", person)).status).toBe(404);
+  expect(planStarts).toEqual([]);
+
   stop.abort();
   expect(await closed).toBe(0);
 });
