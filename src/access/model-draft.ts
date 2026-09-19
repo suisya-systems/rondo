@@ -29,6 +29,7 @@ import {
 } from "../advisory/budget.js";
 import type { SplitPayload, SplitPlan } from "../advisory/proposal.js";
 import type { DrafterRow } from "../continuo/roles.js";
+import { normalizeClaim } from "../store/lanes.js";
 import {
   FINDING_SEVERITIES,
   type FindingSeverity,
@@ -41,7 +42,7 @@ import {
  * The version of the drafter's own instructions (D-0071 rule 1.4): a changed
  * {@link INSTRUCTIONS} is a new version, a changed model a new table entry.
  */
-const DRAFTER_INSTRUCTIONS_VERSION = 2;
+const DRAFTER_INSTRUCTIONS_VERSION = 3;
 
 /** What every row a model drafter writes is named under (rule 1.4). */
 export const MODEL_DRAFTER_PREFIX = "rondo/drafter/";
@@ -236,6 +237,13 @@ const INSTRUCTIONS = [
   '  Holes go only with "ask", and the recommended option is that the person paste a plan for',
   "  that kind of work into the thread.",
   "- A question has options, what each gives up, and exactly one recommended option.",
+  "- Each plan claims the repository paths its work will change, so plans that touch different",
+  "  paths can run at the same time and plans that share one run one after the other. A path is",
+  "  relative to the repository root and spelled with '/': a file ('README.md'), or a directory",
+  "  ending in '/' ('src/store/') that covers everything under it. No patterns ('*', '?', '[').",
+  "  '/' alone is the whole repository. Claim from what the thread says the work touches; when it",
+  "  does not say, or you are unsure, claim wider: a claim too wide only makes plans wait, a",
+  "  claim too narrow lets two plans change one file at once. When nothing narrows it, claim '/'.",
   "- Every summary, question, plan and narrowing has bases: ids of messages in THREAD it rests on.",
   "- rondo computes the scope's budgets from recorded laps (MEASUREMENTS shows what it reads). You",
   '  may only narrow one, when an operator message says so in words ("keep it under $3"), with',
@@ -304,7 +312,8 @@ export function drafterDocument(material: DrafterMaterial): string {
     '               "recommended": <option index from 0>, "recommendation": "why, in words",',
     '               "bases": ["<message id>"]},                              ("ask" only)',
     '  "plans": [{"template_plan_digest": "sha256:...", "agent_type_digest": "sha256:...",',
-    '             "prompt": "...", "bases": ["<message id>"]}],               ("split" only)',
+    '             "prompt": "...", "claim": ["src/store/", "README.md"],',
+    '             "bases": ["<message id>"]}],                                ("split" only)',
     '  "holes": ["what has no template or agent type"],',
     '  "narrowings": [{"field": "cost_usd", "value": 3, "basis": "<message id>"}]',
     "}",
@@ -693,7 +702,11 @@ function plan(
   what: string,
   bases: (value: unknown, what: string) => string[],
 ): CheckedPlan {
-  const p = only(value, ["template_plan_digest", "agent_type_digest", "prompt", "bases"], what);
+  const p = only(
+    value,
+    ["template_plan_digest", "agent_type_digest", "prompt", "claim", "bases"],
+    what,
+  );
   const templateDigest = words(p["template_plan_digest"], `${what}'s template_plan_digest`);
   const template = material.templates.find((t) => t.planDigest === templateDigest);
   if (template === undefined) {
@@ -717,6 +730,17 @@ function plan(
     );
   }
   const cited = bases(p["bases"], what);
+  // **Checked by the store's own spelling of a claim** (D-0073 rule 2.2), so a
+  // draft rondo keeps is one `reserve()` will take: no pattern, no absolute or
+  // `..` path, and not empty -- a line is admitted holding something.
+  const claim = normalizeClaim(
+    list(p["claim"], `${what}'s claim`).map((path, i) =>
+      typeof path === "string" ? path : words(path, `${what}'s claim path ${String(i)}`),
+    ),
+  );
+  if (claim.kind === "refused") {
+    throw new DraftDefect(`${what}'s claim: ${claim.reason}`);
+  }
   return {
     template,
     agentType,
@@ -725,6 +749,7 @@ function plan(
       prompt: words(p["prompt"], `${what}'s prompt`),
       agent_type_digest: typeDigest,
       bases: cited.map((messageId) => ({ form: "message", messageId })),
+      claim: claim.paths,
     },
   };
 }

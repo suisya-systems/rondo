@@ -61,6 +61,7 @@ import {
   isTerminal,
   type JsonRecord,
   type JsonValue,
+  type LaneClaimAsk,
   type LapReading,
   latestReading,
   modelReadingDue,
@@ -4893,6 +4894,7 @@ async function startSplit(
         input,
         run.plan,
         input.proposalId,
+        run.claim,
       );
     }
   }
@@ -5363,7 +5365,16 @@ async function startScoped(
       note: `The plan was refused: ${planned.reason}`,
     };
   }
-  return await admitScopedPlan(environment, store, storePath, record, input, planned.plan, null);
+  return await admitScopedPlan(
+    environment,
+    store,
+    storePath,
+    record,
+    input,
+    planned.plan,
+    null,
+    null,
+  );
 }
 
 /**
@@ -5434,6 +5445,8 @@ async function admitScopedPlan(
   },
   unquoted: RunPlan,
   proposalId: string | null,
+  /** The drafted split's claim (D-0073 rule 2.3), or null for the whole repository (rule 2.5). */
+  claim: LaneClaimAsk | null,
 ): Promise<Started> {
   const plan = await withNamedIssues(record, input.requestMessageId, unquoted);
   if ("refusal" in plan) {
@@ -5465,6 +5478,7 @@ async function admitScopedPlan(
           null,
           requestMessageId,
           scopeSpend,
+          claim,
         ),
     },
     input.scopeDecisionId,

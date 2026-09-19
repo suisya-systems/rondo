@@ -104,6 +104,7 @@ const SPLIT = {
       agent_type_digest: STANDARD,
       prompt: "Fix the flaky test in the scope screen.",
       bases: ["r1"],
+      claim: ["/"],
     },
   ],
   holes: [],
@@ -126,7 +127,7 @@ function refusal(answer: unknown, material: DrafterMaterial = MATERIAL): string 
 }
 
 test("the row name counts the drafter's instructions and names the table's model (D-0071 rule 1.4)", () => {
-  expect(modelDrafterName(drafterRow())).toBe("rondo/drafter/2/claude-opus-5");
+  expect(modelDrafterName(drafterRow())).toBe("rondo/drafter/3/claude-opus-5");
 });
 
 test("the document carries the thread, the templates, the agent types and the measurements, and never a ceiling", () => {
@@ -204,6 +205,7 @@ test("a split: the model's plan and words, and a scope whose lists and budgets r
         agent_type_digest: STANDARD,
         prompt: "Fix the flaky test in the scope screen.",
         bases: [{ form: "message", messageId: "r1" }],
+        claim: ["/"],
       },
     ],
     holes: [],
@@ -410,6 +412,37 @@ test.each([
     "no message in the thread",
   ],
   ["a plan with no basis", { ...SPLIT, plans: [{ ...SPLIT.plans[0], bases: [] }] }, "has no basis"],
+  // D-0073 rule 2.2, in the store's own spelling: what `reserve()` would refuse is never kept.
+  [
+    "a plan with no claim",
+    { ...SPLIT, plans: [{ ...SPLIT.plans[0], claim: undefined }] },
+    "plan 0's claim is not a list",
+  ],
+  [
+    "a claim of no paths, which is a release",
+    { ...SPLIT, plans: [{ ...SPLIT.plans[0], claim: [] }] },
+    "a claim with none is a release",
+  ],
+  [
+    "a claimed pattern",
+    { ...SPLIT, plans: [{ ...SPLIT.plans[0], claim: ["src/*.ts"] }] },
+    "is a pattern",
+  ],
+  [
+    "a claimed absolute path",
+    { ...SPLIT, plans: [{ ...SPLIT.plans[0], claim: ["/srv/repo/src/"] }] },
+    "not a repository-relative path",
+  ],
+  [
+    "a claimed path that climbs out",
+    { ...SPLIT, plans: [{ ...SPLIT.plans[0], claim: ["src/../../etc/"] }] },
+    "'..' segment",
+  ],
+  [
+    "a claimed path that is not a string",
+    { ...SPLIT, plans: [{ ...SPLIT.plans[0], claim: [3] }] },
+    "claim path 0 is not a non-empty string",
+  ],
   [
     "an ask with plans",
     {
@@ -457,6 +490,23 @@ test.each([
       : draftOf(MATERIAL, answered(answer));
   expect(outcome.kind).toBe("unavailable");
   expect(outcome.kind === "unavailable" && outcome.reason).toContain(reason);
+});
+
+test("a plan's claim is kept as the store would write it: deduplicated and sorted (D-0073 rule 2.3)", () => {
+  const outcome = drafted(
+    draftOf(
+      MATERIAL,
+      answered({
+        ...SPLIT,
+        plans: [{ ...SPLIT.plans[0], claim: ["src/store/", "README.md", "src/store/"] }],
+      }),
+    ),
+  );
+  expect(outcome.split?.plans[0]?.claim).toEqual(["README.md", "src/store/"]);
+  // The document tells the drafter what a claim is, and asks for one per plan.
+  const document = drafterDocument(MATERIAL);
+  expect(document).toContain('"claim": ["src/store/", "README.md"]');
+  expect(document).toContain("claim wider");
 });
 
 test("one narrowing wins per field, and only the winner is cited: the scope's bases support the value it carries", () => {

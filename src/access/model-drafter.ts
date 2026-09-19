@@ -20,7 +20,7 @@ import { drafterRow } from "../continuo/roles.js";
 import { PRICED_MODEL_TIERS } from "../refrain/classification.js";
 import { planPayload, type RunPlan, readPlan, readRunPlan } from "../refrain/plan.js";
 import { canonicalJson, planDigest } from "../store/plan.js";
-import type { IterationRecord, JsonRecord, JsonValue } from "../store/records.js";
+import type { IterationRecord, JsonRecord, JsonValue, LaneClaimAsk } from "../store/records.js";
 import type { AdvisoryRecord, IterationStore } from "../store/sqlite.js";
 import type { runDrafter } from "./forge.js";
 import {
@@ -553,6 +553,13 @@ export type DraftedPlanRun =
       readonly split: SplitPlan;
       readonly repository: string;
       readonly workspaceRoot: string;
+      /**
+       * What the line asks to hold at its first admission (D-0073 rule 2.3),
+       * authored by the drafter run that wrote the split and resting on it and
+       * the plan's own bases; null for a split drafted before claims were,
+       * which claims the whole repository (rule 2.5).
+       */
+      readonly claim: LaneClaimAsk | null;
     }
   | { readonly kind: "refused"; readonly reason: string };
 
@@ -637,5 +644,14 @@ export async function draftedPlanRun(
     split,
     repository: planned.plan.repository,
     workspaceRoot: planned.plan.workspaceRoot,
+    claim:
+      split.claim === undefined
+        ? null
+        : {
+            paths: split.claim,
+            authorKind: "drafter",
+            authorId: proposal.drafter,
+            bases: [{ form: "proposal", proposalId }, ...split.bases],
+          },
   };
 }

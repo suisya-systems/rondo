@@ -6319,6 +6319,7 @@ async function draftedRequest(narrow = false) {
           agent_type_digest: typeDigest,
           prompt,
           bases: ["r1"],
+          claim: ["/"],
         })),
         narrowings: narrow ? [{ field: "cost_usd", value: 3, basis: "r1-cap" }] : [],
       }),

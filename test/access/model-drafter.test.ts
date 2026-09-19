@@ -70,6 +70,7 @@ test("a fresh store: the plan the person pasted is a template, and its agent typ
           agent_type_digest: typeDigest,
           prompt: "Fix the flaky test.",
           bases: ["r1", "r1-plan"],
+          claim: ["/"],
         },
       ],
     }),
@@ -77,7 +78,7 @@ test("a fresh store: the plan the person pasted is a template, and its agent typ
   const run = await draftRequest(ports, "r1", "ja");
 
   expect(ports.handed).toHaveLength(1);
-  expect(run.drafter).toBe("rondo/drafter/2/claude-opus-5");
+  expect(run.drafter).toBe("rondo/drafter/3/claude-opus-5");
   expect(run.costUsd).toBe(0.31);
   expect(run.document).toBe(ports.handed[0]);
   expect(run.material?.thread.map((m) => m.messageId)).toEqual(["r1", "r1-plan"]);
@@ -386,6 +387,7 @@ test("a fresh store setup finished holds its first plan: offered with nothing pa
           agent_type_digest: typeDigest,
           prompt: "Fix the flaky test.",
           bases: ["r1"],
+          claim: ["/"],
         },
       ],
     }),

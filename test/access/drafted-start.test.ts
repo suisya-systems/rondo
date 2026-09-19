@@ -12,7 +12,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { expect, test } from "vitest";
+import { expect, test, vi } from "vitest";
 
 import { recordDraftedScopeFromPage, startSplitFromPage } from "../../src/access/cli.js";
 import { draftedStartReadiness } from "../../src/access/drafted-start.js";
@@ -28,6 +28,36 @@ import { ownLane } from "../lane-claims.js";
 import { AGENT_TYPE_INPUT, agentTypeDigestOf, planDocument } from "./fixtures/drafter.js";
 
 const PROMPTS = ["Fix the scope screen's cost box.", "Title-case the approve button."];
+/** What each plan claims (D-0073 rule 2.3): two paths no other plan shares. */
+const CLAIMS = [["src/access/scope.ts"], ["src/access/web.tsx", "test/access/"]];
+
+/**
+ * The two seams a start press needs past its own reads: continuo, which is not
+ * on this machine, and the conductor's `admit`, whose arguments are what the
+ * press hands admission. Real unless a test sets `pressed`.
+ */
+const seams = vi.hoisted(() => ({ pressed: null as unknown[] | null }));
+vi.mock("../../src/continuo/invoker.js", async (original) => {
+  const real = await original<typeof import("../../src/continuo/invoker.js")>();
+  return {
+    ...real,
+    startContinuo: async (environment?: Readonly<Record<string, string | undefined>>) =>
+      seams.pressed === null
+        ? await real.startContinuo(environment)
+        : { kind: "ready", continuo: {} as never },
+  };
+});
+vi.mock("../../src/access/conductor.js", async (original) => {
+  const real = await original<typeof import("../../src/access/conductor.js")>();
+  return {
+    ...real,
+    admit: async (...args: Parameters<typeof real.admit>) => {
+      if (seams.pressed === null) return await real.admit(...args);
+      seams.pressed.push(...args);
+      return { iterationId: null, status: null, lines: ["captured by the test"] };
+    },
+  };
+});
 
 async function drafted() {
   const dir = mkdtempSync(join(tmpdir(), "rondo-drafted-start-"));
@@ -70,11 +100,12 @@ async function drafted() {
       finalMessage: JSON.stringify({
         act: "split",
         summary: { text: "Two plans.", bases: ["r1"] },
-        plans: PROMPTS.map((prompt) => ({
+        plans: PROMPTS.map((prompt, i) => ({
           template_plan_digest: planDigest(document),
           agent_type_digest: typeDigest,
           prompt,
           bases: ["r1"],
+          claim: CLAIMS[i],
         })),
       }),
     }),
@@ -136,6 +167,17 @@ test(
     expect(run.plan.prompt).toBe(PROMPTS[1]);
     expect(run.plan.agentTypeInput).toEqual(AGENT_TYPE_INPUT);
     expect(run.split.prompt).toBe(PROMPTS[1]);
+    // The claim beside the plan, as the first admission asks for it (D-0073 rule 2.3):
+    // the drafter run's own, resting on the split row and the plan's words.
+    expect(run.claim).toEqual({
+      paths: ["src/access/web.tsx", "test/access/"],
+      authorKind: "drafter",
+      authorId: expect.stringMatching(/^rondo\/drafter\/3\//),
+      bases: [
+        { form: "proposal", proposalId: w.proposalId },
+        { form: "message", messageId: "r1" },
+      ],
+    });
     // Everything else is the template's.
     expect(run.plan.repository).toBe((w.document as JsonRecord)["repository"]);
 
@@ -355,6 +397,58 @@ test(
     expect(
       w.connection.prepare("SELECT count(*) AS n FROM conversation_message WHERE asks = 1").get(),
     ).toEqual({ n: 0 });
+  },
+  WINDOWS_HEAVY_TIMEOUT_MS,
+);
+
+test(
+  "the start press hands admission the plan's drafted claim, not the whole repository (D-0073 rule 2.3)",
+  async () => {
+    const w = await drafted();
+    const approved = await recordDraftedScopeFromPage(ENV, w.storePath, "ada", {
+      draftScopeId: w.draft.scopeId,
+      draftDigest: w.draft.scopeDigest,
+      scopeId: "scope-mine-1",
+      budgets: w.draft.payload.budgets,
+      severityThreshold: w.draft.payload.severity_threshold,
+      outwardActs: w.draft.payload.outward_acts,
+    });
+    seams.pressed = [];
+    // The draft's clock, so its scope has not expired when the press reads the time.
+    vi.useFakeTimers({ toFake: ["Date"], now: 20_000 });
+    try {
+      const result = await startSplitFromPage(
+        ENV,
+        w.store,
+        w.storePath,
+        "ada",
+        DEFAULT_HOST_POLICY,
+        {
+          iterationId: "lap-pressed",
+          requestMessageId: "r1",
+          scopeDecisionId: approved.scopeDecisionId as string,
+          proposalId: w.proposalId,
+          planIndex: 0,
+        },
+      );
+      expect(result.note, JSON.stringify(result)).toContain("captured by the test");
+      // conductor.admit(ports, advisory, plan, policy, id, supersedes, spend, request, scopeSpend, claim)
+      const [, , , , id, supersedes, , , , claim] = seams.pressed;
+      expect(id).toBe("lap-pressed");
+      expect(supersedes).toBeNull();
+      expect(claim).toEqual({
+        paths: ["src/access/scope.ts"],
+        authorKind: "drafter",
+        authorId: expect.stringMatching(/^rondo\/drafter\/3\//),
+        bases: [
+          { form: "proposal", proposalId: w.proposalId },
+          { form: "message", messageId: "r1" },
+        ],
+      });
+    } finally {
+      vi.useRealTimers();
+      seams.pressed = null;
+    }
   },
   WINDOWS_HEAVY_TIMEOUT_MS,
 );
