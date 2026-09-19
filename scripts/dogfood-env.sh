@@ -19,6 +19,11 @@
 # run repairs whatever is missing and leaves the rest -- including the control
 # plane, the iteration store and the target repository, which hold state a
 # rebuild must not discard.
+#
+# Re-running with another --target-repo is how a second repository is added
+# (D-0081 rule 6.2). One store and one host serve all of them: the two files
+# this script writes per repository -- the plan and the catalog layer -- are
+# named for it, and the store keeps every plan it has been handed.
 
 set -euo pipefail
 
@@ -45,6 +50,10 @@ options:
       hand-edited plan does not report until the lap has already run.
       DIR is used as it stands and is never modified: no seed commit, no
       `git config`, and its remotes are left exactly as they are.
+      Running this script again under the same --root with another DIR adds a
+      second repository rather than replacing the first (D-0081): the plan and
+      the catalog layer are named for the repository, and the store holds the
+      plans of all of them.
   --target-base-branch NAME
       the branch a lap is cut from. Default: `main` for the scratch target, and
       for --target-repo the branch that repository's own HEAD is on.
@@ -485,18 +494,28 @@ else
     die "target's origin still pushes to '$(printf '%s' "$verified_origin" | tr '\n' ' ')'"
 fi
 
-# **One repository per root** (D-0075 rule 1.1). The store under this root
-# holds the plans setup recorded for one repository, and the host serving it
-# publishes to one --repo; setup for another repository would rewrite the
-# catalog under the first one's plans. Checked before anything below rewrites
-# them, and the store refuses the same thing at the last step.
-if [ -f "$env_root/plan.json" ]; then
+# **Several repositories per root** (D-0081 rule 6.2, withdrawing D-0075 rule
+# 1.1). Adding a repository is this script run again under the same root with
+# another --target-repo, so the two files it writes -- the plan and the catalog
+# layer -- are named for the repository rather than for the root. A second run
+# then leaves the first run's pair where it is, and the store keeps both plans
+# because its refusal went with the rule.
+#
+# The name is `$project_name`, which is derived from the target above and
+# already checked against cadenza's identifier rule -- so it is also a safe
+# filename. Two repositories whose basenames agree derive the same name, which
+# would silently overwrite the first one's pair and give cadenza two projects
+# under one id; that is the one case worth stopping, and it is stopped here
+# rather than at the overwrite.
+plan="$env_root/plan-$project_name.json"
+catalog_origin="$env_root/catalog/$project_name.toml"
+if [ -f "$plan" ]; then
   held_repository=$(node -e '
     const plan = JSON.parse(require("node:fs").readFileSync(process.argv[1], "utf8"));
     process.stdout.write(String(plan.repository));
-  ' "$env_root/plan.json")
+  ' "$plan")
   [ "$held_repository" = "$target" ] ||
-    die "root '$env_root' is set up for '$held_repository'; give '$target' a --root of its own (one repository per root)"
+    die "this root already holds '$plan' for '$held_repository', which derives the same project name as '$target'; rename one of the two directories or give this one a --root of its own"
 fi
 
 step "Catalog"
@@ -509,7 +528,6 @@ step "Catalog"
 # that declares it declares, and a path is under itself -- so naming the target
 # exactly admits the target and nothing beside it, which a parent directory
 # would not.
-catalog_origin="$env_root/catalog/projects.toml"
 cat > "$catalog_origin" <<TOML
 # Written by scripts/dogfood-env.sh. The plan file carries this same content
 # inline as catalog_layers[0].data, which is what cadenza actually reads.
@@ -529,7 +547,6 @@ TOML
 note "$catalog_origin"
 
 step "Plan"
-plan="$env_root/plan.json"
 # The request itself is deliberately trivial. What is being walked is the
 # mechanism, not the change: a lap that appends one line proves the same six
 # verbs as a lap that rewrites a module, and costs the same one dollar-ish.
@@ -1003,6 +1020,11 @@ the page reads, so the scope screen offers it as the plan to run on and the
 drafter drafts from it. The file stays on disk as a record of this run; rondo
 does not read it again. Running this script again records the plan again, and
 the newest one is offered first.
+
+** A second repository is this script again, same --root, another
+--target-repo. ** Its plan is recorded beside this one and offered as another
+choice on the same page; this run's plan and catalog file are named for
+'$project_name' and are left alone (D-0081).
 
   cd $q_repo_root
   . $q_env_file

@@ -486,17 +486,34 @@ test("held plans are one per choice, ordered by when rondo came to hold them, wi
   ]);
 });
 
-test("one store holds the setup of one repository (D-0075 rule 1.1)", async () => {
+test("one store holds the setups of several repositories (D-0081 rule 5, withdrawing D-0075 rule 1.1)", async () => {
   const w = await world();
   await recordSetup(w, "setup-1", setupDocument(), 1_000);
+  // Setup run again under the same root with another target: admitted, and the
+  // first repository's row is left exactly where it was.
   const other = await w.record.recordSetupPlan({
     setupId: "setup-2",
     plan: setupDocument({ repository: "/srv/other-repo" }),
     recordedBy: "ada",
     recordedAtMs: 2_000,
   });
-  expect(other).toMatchObject({ kind: "refused", reason: expect.stringContaining("D-0075") });
-  expect((await w.record.setupPlans()).map((s) => s.setupId)).toEqual(["setup-1"]);
+  expect(other).toEqual({ kind: "recorded" });
+  expect((await w.record.setupPlans()).map((s) => s.setupId)).toEqual(["setup-1", "setup-2"]);
+  // Which repository a row is for is the plan's own `repository`, and every
+  // reader already goes through it (rule 5.2).
+  expect((await w.record.setupPlans()).map((s) => s.plan["repository"])).toEqual([
+    setupDocument()["repository"],
+    "/srv/other-repo",
+  ]);
+  // A setup id is still one row: the only refusal left on this table.
+  expect(
+    await w.record.recordSetupPlan({
+      setupId: "setup-1",
+      plan: setupDocument({ repository: "/srv/third-repo" }),
+      recordedBy: "ada",
+      recordedAtMs: 3_000,
+    }),
+  ).toMatchObject({ kind: "refused", reason: expect.stringContaining("already recorded") });
   // A `setup` basis is a locator the writers follow, as a `proposal` one is.
   const cite = (setupId: string, messageId: string) =>
     w.record.recordThreadMessage({
