@@ -4399,6 +4399,19 @@ export async function recordDraftedScopeFromPage(
     }
     return await approveStoredScope(record, actor.actorId, drafted, createdAtMs);
   }
+  // An edited press against a draft another approved scope already replaced
+  // is refused too -- else two tabs would leave two approved successors with
+  // budgets of their own -- unless it is this form's own write, replayed.
+  if (
+    (await record.readScope(form.scopeId)).kind === "absent" &&
+    (await record.scopeSupersededByApproved(drafted.scopeId))
+  ) {
+    return {
+      ok: false,
+      why: "scopeRefusedPlanChanged",
+      note: "the draft was replaced by an approved scope",
+    };
+  }
   const written = await record.recordScope({
     scopeId: form.scopeId,
     payload,

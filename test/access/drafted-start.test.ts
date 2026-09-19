@@ -170,6 +170,24 @@ test("pressed as drafted, the approval is the drafter's own row; changed, it is 
   });
   expect(again).toMatchObject({ ok: false, why: "scopeRefusedPlanChanged" });
   expect((await w2.record.scopeDecisionOf(w2.draft.scopeId)).kind).toBe("absent");
+  // Nor edited again from another tab: one approved successor, not two.
+  const otherTab = await recordDraftedScopeFromPage(ENV, w2.storePath, "ada", {
+    ...form,
+    draftScopeId: w2.draft.scopeId,
+    draftDigest: w2.draft.scopeDigest,
+    scopeId: "scope-mine-3",
+    budgets: { ...w2.draft.payload.budgets, cost_usd: 2 },
+  });
+  expect(otherTab).toMatchObject({ ok: false, why: "scopeRefusedPlanChanged" });
+  expect((await w2.record.readScope("scope-mine-3")).kind).toBe("absent");
+  // The first edit's own form, pressed again, is still the write it repeats.
+  const replayed = await recordDraftedScopeFromPage(ENV, w2.storePath, "ada", {
+    ...form,
+    draftScopeId: w2.draft.scopeId,
+    draftDigest: w2.draft.scopeDigest,
+    budgets: { ...w2.draft.payload.budgets, cost_usd: 3 },
+  });
+  expect(replayed.ok).toBe(true);
 
   // A form drawn over another digest records nothing.
   const w3 = await drafted();
@@ -232,6 +250,25 @@ test("whether a drafted plan can start is answered before any press: the scope, 
     kind: "started",
     iterationId: "lap-plan-0",
   });
+  // A lap with plan 1's words and another plan is not plan 1 started: the plan
+  // is compared whole, identifiers aside.
+  const decoy = await w.store.reserve({
+    id: "lap-decoy",
+    request: "Two things, please.",
+    plan: { ...w.document, prompt: PROMPTS[1] as string, turn_timeout_ms: 600_000 },
+    spend: null,
+    scopeSpend: null,
+    nowMs: 16_000,
+    supersedesIterationId: null,
+    requestMessageId: "r1",
+    runId: "rondo-lap-decoy",
+    topicBranch: "rondo/lap-decoy",
+    workspace: "/srv/work/lap-decoy",
+  });
+  expect(decoy.kind).toBe("reserved");
+  expect((await draftedStartReadiness(ports(), "r1", decision, w.proposalId, 1)).kind).not.toBe(
+    "started",
+  );
   // With the one live lap as many as this host allows, plan 1 waits on room.
   expect(
     await draftedStartReadiness(
@@ -241,7 +278,7 @@ test("whether a drafted plan can start is answered before any press: the scope, 
       w.proposalId,
       1,
     ),
-  ).toMatchObject({ kind: "full", live: 1, limit: 1 });
+  ).toMatchObject({ kind: "full", live: 2, limit: 1 });
 
   // The press asks the same questions and admits nothing on a no.
   const pressed = await startSplitFromPage(ENV, w.store, w.storePath, "ada", DEFAULT_HOST_POLICY, {

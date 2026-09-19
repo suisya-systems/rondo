@@ -14,7 +14,9 @@
  * reason here yet; it is added where the ledger is.
  */
 
+import { readRunPlan } from "../refrain/plan.js";
 import type { HostPolicy } from "../refrain/policy.js";
+import { canonicalJson } from "../store/plan.js";
 import type { AdvisoryRecord, IterationStore } from "../store/sqlite.js";
 import { type DraftedPlanRun, draftedPlanRun } from "./model-drafter.js";
 import { gatherScopeSnapshot, type ScopeReadPorts, scopeVerdict } from "./scope.js";
@@ -107,16 +109,19 @@ export async function draftedStartReadiness(
 }
 
 /**
- * The lap of this request that already started from this plan, or null: one
- * whose own plan carries the split's prompt in the split's place. A lap's plan
- * is the only record of which drafted plan it ran, and the prompt is the one
- * field the drafter wrote (D-0063 rule 4.3).
+ * The lap of this request that already started from this plan, or null: a
+ * first lap whose own plan **is this plan** -- every field a lap runs on, with
+ * only the identifiers admission derives (run id, branch, workspace: D-0063
+ * rule 4.5) left out, because those are the lap's and not the plan's. A lap's
+ * plan is the only record of which drafted plan it ran, and two plans of one
+ * split may share a prompt and a place and still differ.
  */
 async function startedFrom(
   ports: Pick<DraftedStartPorts, "store">,
   requestMessageId: string,
   run: Extract<DraftedPlanRun, { kind: "runnable" }>,
 ): Promise<string | null> {
+  const identity = canonicalJson(run.plan as never);
   for (const outcome of [
     ...(await ports.store.readLive()),
     ...(await ports.store.terminalIterations()),
@@ -125,13 +130,11 @@ async function startedFrom(
       continue;
     }
     const lap = outcome.record;
-    if (
-      lap.requestMessageId === requestMessageId &&
-      lap.supersedesIterationId === null &&
-      lap.plan["prompt"] === run.split.prompt &&
-      lap.plan["repository"] === run.repository &&
-      lap.plan["workspace_root"] === run.workspaceRoot
-    ) {
+    if (lap.requestMessageId !== requestMessageId || lap.supersedesIterationId !== null) {
+      continue;
+    }
+    const ran = readRunPlan(lap.plan);
+    if (ran.kind === "planned" && canonicalJson(ran.plan as never) === identity) {
       return lap.id;
     }
   }
