@@ -130,6 +130,7 @@ import { denialLine, evidenceOf, LIST_LIMIT, READING_REMOTE, uncommittedPaths } 
 import {
   admitUnderScope,
   agentTypeRecordOf,
+  approvalTip,
   heldAgentTypeLines,
   type ScopedAdmission,
 } from "./scope.js";
@@ -142,6 +143,7 @@ import {
   type PublishInput,
   PublishPort,
   type PublishRefusal,
+  type RaiseInput,
   type Revised,
   type ReviseInput,
   RevisePort,
@@ -1781,6 +1783,9 @@ export async function main(
                     bounds.policy,
                     input,
                   ),
+                // The raise press (D-0074 section 4).
+                async (input) =>
+                  await raiseScopeFromPage(environment, store, opened.path, sender.actorId, input),
               ),
         // **The press is checked inside this port too** (rondo#233 S4): a gate
         // answered with a change and the lap it starts are one act, and nothing
@@ -4538,6 +4543,157 @@ export async function recordDraftedScopeFromPage(
   return await approveStoredScope(record, actor.actorId, stored.scope, createdAtMs);
 }
 
+/**
+ * One press of the raise form (D-0074 section 4): a successor of the approval
+ * the lap at this gate spends, **differing from it only in its budgets**,
+ * recorded and approved by the writes a first scope takes -- one scope row with
+ * `supersedes_scope_id` set, then its approval -- so a raise is recorded
+ * exactly as `recordScopeFromPage` records a first scope.
+ *
+ * **Everything but the budgets is copied from the stored row, never from the
+ * form** (rule 1.1): widening where the work may act is another question, and
+ * it keeps going through the full scope screen.
+ *
+ * **Refused, writing nothing** (rule 4.4): the lap is no longer at a gate; the
+ * posted approval is not its line's tip (somebody raised it already); the line
+ * has two tips. The store refuses the second approved successor itself (rule
+ * 1.3), so two raises drawn over one approval and pressed together leave one.
+ * A second press of one form is the write it repeats, as the scope forms' are.
+ *
+ * **One raise of an approval at a time** (Codex round 1), for
+ * `startSplitFromPage`'s reason: two presses over one approval would both pass
+ * the tip test before either approved, and the store's refusal of the second
+ * approval would come after its scope row was written -- a refusal that wrote
+ * something. Run after the first, the second finds the tip moved and writes
+ * nothing.
+ */
+export async function raiseScopeFromPage(
+  environment: Readonly<Record<string, string | undefined>>,
+  store: IterationStore,
+  storePath: string,
+  approver: string,
+  input: RaiseInput,
+): Promise<ScopeRecorded> {
+  const ahead = raising.get(input.scopeDecisionId) ?? Promise.resolve();
+  const running = ahead
+    .catch(() => undefined)
+    .then(() => raiseScope(environment, store, storePath, approver, input));
+  raising.set(input.scopeDecisionId, running);
+  try {
+    return await running;
+  } finally {
+    if (raising.get(input.scopeDecisionId) === running) {
+      raising.delete(input.scopeDecisionId);
+    }
+  }
+}
+
+/** Every raise this process is recording, by the approval it raises. */
+const raising = new Map<string, Promise<ScopeRecorded>>();
+
+async function raiseScope(
+  environment: Readonly<Record<string, string | undefined>>,
+  store: IterationStore,
+  storePath: string,
+  approver: string,
+  input: RaiseInput,
+): Promise<ScopeRecorded> {
+  const notTaken = (note: string): ScopeRecorded => ({
+    ok: false,
+    why: "scopeRefusedNotTaken",
+    note,
+  });
+  const actor = approvedActor(approver, environment);
+  if ("refusal" in actor) {
+    return notTaken(actor.refusal);
+  }
+  const found = await store.read(input.iterationId);
+  if (found.kind !== "read" || isTerminal(found.record.status) || found.record.gateId === null) {
+    return {
+      ok: false,
+      why: "raiseRefusedNotAtGate",
+      note: `iteration '${input.iterationId}' has no gate open`,
+    };
+  }
+  const record = openAdvisoryRecord(storePath);
+  const decided = await record.readScopeDecision(input.scopeDecisionId);
+  if (decided.kind !== "read" || decided.decision.outcome !== "approved") {
+    return notTaken(`'${input.scopeDecisionId}' is not an approval in this store`);
+  }
+  const read = await record.readScope(decided.decision.scopeId);
+  if (read.kind !== "read") {
+    return notTaken(`the scope '${decided.decision.scopeId}' will not read`);
+  }
+  const predecessor = read.scope;
+  if (!predecessor.payload.requests.includes(input.requestMessageId)) {
+    return notTaken(`the scope '${predecessor.scopeId}' does not list this request`);
+  }
+  const already = await record.readScope(input.scopeId);
+  const ours = (scope: StoredScope): boolean =>
+    scope.authorKind === "operator" &&
+    scope.authorId === actor.actorId &&
+    scope.supersedesScopeId === predecessor.scopeId;
+  // Checked against the lap's line, not the form: the approval raised is the
+  // one its next act would spend. A replay of this form's own write has moved
+  // the tip to that write, and is let through to find it.
+  const tip = await approvalTip(record, input.iterationId);
+  if (tip.kind === "forked") {
+    return {
+      ok: false,
+      why: "raiseRefusedForked",
+      note: `the line has two approved tips, ${tip.scopeDecisionIds.join(" and ")}`,
+    };
+  }
+  if (
+    !(already.kind === "read" && ours(already.scope)) &&
+    (tip.kind !== "tip" || tip.scopeDecisionId !== input.scopeDecisionId)
+  ) {
+    return {
+      ok: false,
+      why: "raiseRefusedNotTip",
+      note:
+        tip.kind === "tip"
+          ? `iteration '${input.iterationId}' now spends '${tip.scopeDecisionId}'`
+          : `iteration '${input.iterationId}' was admitted under no approval`,
+    };
+  }
+  const createdAtMs = Date.now();
+  const payload = scopePayloadWithDefaults({
+    ...(predecessor.payload as unknown as JsonRecord),
+    budgets: { ...input.budgets },
+  } as unknown as JsonRecord);
+  const written = await record.recordScope({
+    scopeId: input.scopeId,
+    payload,
+    supersedesScopeId: predecessor.scopeId,
+    authorKind: "operator",
+    authorId: actor.actorId,
+    bases: [{ form: "scope", scopeId: predecessor.scopeId }],
+    createdAtMs,
+    // The agent types are the predecessor's, which its own write recorded.
+    agentTypeRecords: [],
+  });
+  const stored = await record.readScope(input.scopeId);
+  if (written.kind !== "recorded" && !(stored.kind === "read" && ours(stored.scope))) {
+    return notTaken(written.reason);
+  }
+  if (stored.kind !== "read") {
+    return {
+      ok: false,
+      why: "scopeRefusedNotRead",
+      note: `scope '${input.scopeId}' was recorded and will not read back`,
+    };
+  }
+  if (
+    written.kind !== "recorded" &&
+    canonicalJson(stored.scope.payload as unknown as JsonValue) !==
+      canonicalJson(payload as unknown as JsonValue)
+  ) {
+    return { ok: false, why: "scopeRefusedEdited", note: "this form was recorded as it was drawn" };
+  }
+  return await approveStoredScope(record, actor.actorId, stored.scope, createdAtMs);
+}
+
 /** One press of a drafted plan's start button: which approval, which split, which plan. */
 export interface SplitStartInput {
   readonly iterationId: string;
@@ -4866,16 +5022,32 @@ async function revisePage(
   // actually ran on. So what D-0070 section 1.2 says is true by construction
   // rather than by the form's good behaviour: no admission row, or a decision
   // that is not the one on it, answers nothing and walks no gate.
-  const admittedUnder = await openAdvisoryRecord(storePath).scopeDecisionAdmitting(record.id);
-  if (admittedUnder === null || admittedUnder !== input.scopeDecisionId) {
+  //
+  // **What it is compared with is the approved tip of that approval's chain**
+  // (D-0074 section 2, amending D-0070 section 1.2): a raise approved over the
+  // admission row is what the second lap spends, and only the chain's own tip
+  // is accepted, so the reason above survives. A chain with two approved tips
+  // has none, and rondo does not pick one (D-0074 rule 2.1).
+  const tip = await approvalTip(openAdvisoryRecord(storePath), record.id);
+  if (tip.kind === "forked") {
+    return {
+      ok: false,
+      why: "reviseRefusedForked",
+      note:
+        `the undecidable verdict: iteration '${record.id}' was admitted under a line with two ` +
+        `approved tips, ${tip.scopeDecisionIds.map((id) => `'${id}'`).join(" and ")}, and ` +
+        "rondo does not pick one (D-0074 rule 2.1)",
+    };
+  }
+  if (tip.kind === "none" || tip.scopeDecisionId !== input.scopeDecisionId) {
     return {
       ok: false,
       why: "reviseRefusedNotItsScope",
       note:
-        admittedUnder === null
+        tip.kind === "none"
           ? `iteration '${record.id}' was not admitted under any approval, so there is nothing ` +
             "to count a second lap against"
-          : `iteration '${record.id}' was admitted under '${admittedUnder}', and the press named ` +
+          : `iteration '${record.id}' now spends '${tip.scopeDecisionId}', and the press named ` +
             `'${input.scopeDecisionId}'`,
     };
   }

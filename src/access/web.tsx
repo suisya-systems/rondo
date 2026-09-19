@@ -92,6 +92,7 @@ import {
   type BudgetFormula,
   type BudgetValue,
   DEFAULT_REVIEW_ROUNDS,
+  type ScopeBudgets,
 } from "../advisory/budget.js";
 import {
   type AdvisorySnapshot,
@@ -123,6 +124,8 @@ import {
   readingCoverage,
   reviewedReading,
   SCOPE_OUTWARD_ACTS,
+  type ScopePayload,
+  type ScopeSpent,
   type StoredScope,
   type ThreadMessageDraft,
   WAIT_SIDE,
@@ -153,7 +156,7 @@ import { markdownHtml } from "./markdown.js";
 import { isModelDrafterName } from "./model-draft.js";
 import { type HeldPlan, heldPlanByDigest, heldPlans } from "./model-drafter.js";
 import { denialLine, LIST_LIMIT } from "./review.js";
-import { heldAgentTypeLines, scopeBudgetsFromStore } from "./scope.js";
+import { approvalTip, budgetRefusal, heldAgentTypeLines, scopeBudgetsFromStore } from "./scope.js";
 import { type Chrome, EN, SHIPPED_SETS, setFor } from "./wording.js";
 
 /**
@@ -202,6 +205,8 @@ export interface WebPorts extends InboxReadPorts {
       // rondo#233 S4: the gate's revise offers the approval this lap was
       // admitted under, so nobody copies a decision id (D-0070 section 1.2).
       | "scopeDecisionAdmitting"
+      // D-0074 section 2: and that approval's approved tip, once raised.
+      | "scopeTip"
     >;
   readonly policy: HostPolicy;
   readonly actorId: string | null;
@@ -459,6 +464,12 @@ export type PageView =
       readonly decisionId: string | null;
       /** The held plan the person chose, by digest, or null for the screen's own pick. */
       readonly plan: string | null;
+      /**
+       * The third state (D-0074 rule 4.2): raising the budget of the approval
+       * the lap waiting at this gate spends. Absent everywhere else, so every
+       * other way to this screen is unchanged.
+       */
+      readonly raise?: { readonly decisionId: string; readonly iterationId: string };
     }
   /**
    * One ended lap's publish (rondo#233 S5, D-0060): the dry-run, and the press
@@ -578,6 +589,9 @@ export function viewHref(view: PageView, tag: string): string {
         (view.decisionId === null ? "" : `&decision=${encodeURIComponent(view.decisionId)}`) +
         (view.rounds === null ? "" : `&rounds=${String(view.rounds)}`) +
         (view.plan === null ? "" : `&plan=${encodeURIComponent(view.plan)}`) +
+        (view.raise === undefined
+          ? ""
+          : `&raise=${encodeURIComponent(view.raise.decisionId)}&gate=${encodeURIComponent(view.raise.iterationId)}`) +
         `&${lang}`
       );
     default:
@@ -2954,11 +2968,50 @@ function reviseForm(
   if (newIterationId === null) {
     return null;
   }
-  if (framing.scopeDecisionId === null) {
+  if (framing.forked || framing.scopeDecisionId === null) {
     return (
       <p id="revise-none" class="note text-[12.5px] leading-5 text-faint">
-        {wording.reviseNoScope}
+        {framing.forked ? wording.reviseForked : wording.reviseNoScope}
       </p>
+    );
+  }
+  // **A budget that would refuse the change is said before the press, with
+  // the way to raise it beside it** (D-0074 rule 4.1): a press drawn here would
+  // be refused and write a stop into the request's thread, which raising the
+  // budget afterwards would not lift (rule 3.4).
+  const closed = framing.closedBy;
+  if (closed !== null && record.requestMessageId !== null) {
+    const { budgets, spent } = closed;
+    const why =
+      closed.test === "laps"
+        ? wording.raiseWhyLaps(budgets.laps)
+        : closed.test === "cost"
+          ? wording.raiseWhyCost(
+              money(spent.readCostUsd + spent.unreadLaps * budgets.cost_reserve_usd),
+              money(budgets.cost_reserve_usd),
+              money(budgets.cost_usd),
+            )
+          : wording.raiseWhyExpiry(localTime(budgets.expires_at_ms).replace("T", " "));
+    return (
+      <div id="raise" class="space-y-2">
+        <p class="note text-[12.5px] leading-5 text-muted-foreground">{wording.raiseNeeded(why)}</p>
+        <a
+          href={viewHref(
+            {
+              kind: "scope",
+              messageId: record.requestMessageId,
+              rounds: null,
+              decisionId: null,
+              plan: null,
+              raise: { decisionId: framing.scopeDecisionId, iterationId: record.id },
+            },
+            wording.lang,
+          )}
+          class={`${SECONDARY} h-10 w-full justify-center px-6 text-sm sm:h-9 sm:w-auto`}
+        >
+          {wording.raiseLink}
+        </a>
+      </div>
     );
   }
   const model = latestReading(framing.readings, isModelReadingDrafter);
@@ -3082,14 +3135,49 @@ interface Shown {
   /** The row's readings, which the two reading cards are drawn from. */
   readonly readings: readonly LapReading[];
   /**
-   * The approval this lap was admitted under, or null when it was admitted
-   * under none (rondo#233 S4).
+   * The approval a revise here spends: the approved tip of the chain that
+   * starts at the one this lap was admitted under (D-0074 section 2), or null
+   * when it was admitted under none (rondo#233 S4).
    *
    * **Read here so that the revise form can carry it and nobody types it.** A
    * lap with none gets no revise press: D-0070 counts the second lap against
    * the first's approval, and there is nothing here to count it against.
    */
   readonly scopeDecisionId: string | null;
+  /** Its line has two approved tips, so no approval is spent (D-0074 rule 2.1). */
+  readonly forked: boolean;
+  /**
+   * The budget that would refuse the revise's lap, computed before any press
+   * with the verdict's own arithmetic (D-0074 rule 4.1), or null when none does.
+   */
+  readonly closedBy: BudgetClosed | null;
+}
+
+/** Which budget closes the change path, and the numbers the sentence says it with. */
+interface BudgetClosed {
+  readonly test: string;
+  readonly budgets: ScopePayload["budgets"];
+  readonly spent: ScopeSpent;
+}
+
+/** Whether one approval's budgets would refuse one more attempt now, and which. */
+async function budgetClosing(
+  ports: WebPorts,
+  scopeDecisionId: string,
+  nowMs: number,
+): Promise<BudgetClosed | null> {
+  const decided = await ports.record.readScopeDecision(scopeDecisionId);
+  if (decided.kind !== "read") {
+    return null;
+  }
+  const stored = await ports.record.readScope(decided.decision.scopeId);
+  if (stored.kind !== "read") {
+    return null;
+  }
+  const budgets = stored.scope.payload.budgets;
+  const spent = await ports.record.scopeSpent(scopeDecisionId);
+  const refused = budgetRefusal(budgets, spent, nowMs);
+  return refused === null ? null : { test: refused.test, budgets, spent };
 }
 
 /**
@@ -3132,12 +3220,16 @@ async function shownBeforePress(
     // The set this request resolved to and not the host's (D-0056 rule 12):
     // the fence block's standing sentences are inside these lines.
     const material = ports.material === null ? null : await ports.material(wording, record);
+    const tip = await approvalTip(ports.record, record.id);
     shown.set(record.id, {
       claims: propose(snapshot).payload.claims,
       snapshot,
       material,
       readings,
-      scopeDecisionId: await ports.record.scopeDecisionAdmitting(record.id),
+      scopeDecisionId: tip.kind === "tip" ? tip.scopeDecisionId : null,
+      forked: tip.kind === "forked",
+      closedBy:
+        tip.kind === "tip" ? await budgetClosing(ports, tip.scopeDecisionId, ports.now()) : null,
     });
   }
   return shown;
@@ -3969,7 +4061,8 @@ function budgetField(
  * precision nobody measured. The caveat names what the sample shares with this
  * work (the agent type, or only its tier), how far apart it is (lowest to
  * highest), and what it cannot know (size), and says the one thing a person can
- * do about it, because a running lap's budget cannot be raised.
+ * do about it now, before the first lap spends it (D-0074 lets it be raised
+ * later, from the gate).
  */
 function sampleCaveat(wording: Chrome, bases: readonly BudgetBasis[]) {
   return (
@@ -4070,6 +4163,16 @@ async function scopeView(
       </p>
     </header>
   );
+  // **The third state** (D-0074 rule 4.2): raising the approval a waiting lap
+  // spends, reached only from that lap's gate.
+  if (view.raise !== undefined) {
+    return (
+      <div id="scope" class="space-y-4">
+        {head}
+        {await raiseForm(ports, wording, view, view.raise, threads, token, newScopeId, nowMs)}
+      </div>
+    );
+  }
   // **A drafted scope comes first** (rondo#238 C2b): the drafter's, still
   // waiting on the person, or the approval that already decided it. Only a
   // request nothing was drafted for -- or whose draft the person declined --
@@ -4379,84 +4482,7 @@ async function scopeForm(
         <input type="hidden" name="plan_digest" value={drafted.planDigest} />
         <input type="hidden" name="agent_type" value={drafted.agentTypeDigest} />
         {sampleCaveat(wording, budgets.cost_reserve_usd.bases)}
-        <div class={`${CARD} grid gap-4 sm:grid-cols-2`}>
-          {budgetField(
-            wording,
-            "laps",
-            wording.scopeLapsLabel,
-            <input
-              type="number"
-              name="laps"
-              id="laps"
-              min="0"
-              step="1"
-              value={whole(budgets.laps.value)}
-              class={BOX}
-            />,
-            budgets.laps,
-          )}
-          {budgetField(
-            wording,
-            "review_rounds",
-            wording.scopeRoundsLabel,
-            // Read-only in the box because the links above are what changes it:
-            // two controls over one number would disagree the moment one moved.
-            <input
-              type="number"
-              name="review_rounds"
-              id="review_rounds"
-              min="0"
-              step="1"
-              readonly={true}
-              value={whole(budgets.review_rounds.value)}
-              class={`${BOX} bg-muted/60`}
-            />,
-            budgets.review_rounds,
-          )}
-          {budgetField(
-            wording,
-            "cost_usd",
-            wording.scopeCostLabel,
-            <input
-              type="number"
-              name="cost_usd"
-              id="cost_usd"
-              min="0"
-              step="0.01"
-              value={money(budgets.cost_usd.value)}
-              class={BOX}
-            />,
-            budgets.cost_usd,
-          )}
-          {budgetField(
-            wording,
-            "cost_reserve_usd",
-            wording.scopeReserveLabel,
-            <input
-              type="number"
-              name="cost_reserve_usd"
-              id="cost_reserve_usd"
-              min="0"
-              step="0.01"
-              value={money(budgets.cost_reserve_usd.value)}
-              class={BOX}
-            />,
-            budgets.cost_reserve_usd,
-          )}
-          {budgetField(
-            wording,
-            "expires_at_ms",
-            wording.scopeExpiresLabel,
-            <input
-              type="datetime-local"
-              name="expires_at_ms"
-              id="expires_at_ms"
-              value={localTime(budgets.expires_at_ms.value)}
-              class={BOX}
-            />,
-            budgets.expires_at_ms,
-          )}
-        </div>
+        {budgetBoxes(wording, budgets, true)}
         <section class={`${CARD} space-y-3`}>
           <h3 class={CARD_HEADING}>{wording.scopeDefaultsHeading}</h3>
           <label class="flex flex-col gap-1">
@@ -4509,6 +4535,225 @@ async function scopeForm(
           </button>
           <span id="scope-plain" class="note sr-only">
             {wording.scopePlain}
+          </span>
+        </div>
+      </form>
+    </>
+  );
+}
+
+/**
+ * The five budget boxes a scope form posts, each with where its number came
+ * from: the person's own form and the raise form (D-0074 rule 4.2) draw the
+ * same boxes, so a budget is drawn one way whichever screen posts it.
+ */
+function budgetBoxes(wording: Chrome, budgets: ScopeBudgets, roundsFixed: boolean) {
+  return (
+    <div class={`${CARD} grid gap-4 sm:grid-cols-2`}>
+      {budgetField(
+        wording,
+        "laps",
+        wording.scopeLapsLabel,
+        <input
+          type="number"
+          name="laps"
+          id="laps"
+          min="0"
+          step="1"
+          value={whole(budgets.laps.value)}
+          class={BOX}
+        />,
+        budgets.laps,
+      )}
+      {budgetField(
+        wording,
+        "review_rounds",
+        wording.scopeRoundsLabel,
+        // Read-only where the rounds links above change it, since
+        // two controls over one number would disagree the moment one moved.
+        <input
+          type="number"
+          name="review_rounds"
+          id="review_rounds"
+          min="0"
+          step="1"
+          readonly={roundsFixed}
+          value={whole(budgets.review_rounds.value)}
+          class={roundsFixed ? `${BOX} bg-muted/60` : BOX}
+        />,
+        budgets.review_rounds,
+      )}
+      {budgetField(
+        wording,
+        "cost_usd",
+        wording.scopeCostLabel,
+        <input
+          type="number"
+          name="cost_usd"
+          id="cost_usd"
+          min="0"
+          step="0.01"
+          value={money(budgets.cost_usd.value)}
+          class={BOX}
+        />,
+        budgets.cost_usd,
+      )}
+      {budgetField(
+        wording,
+        "cost_reserve_usd",
+        wording.scopeReserveLabel,
+        <input
+          type="number"
+          name="cost_reserve_usd"
+          id="cost_reserve_usd"
+          min="0"
+          step="0.01"
+          value={money(budgets.cost_reserve_usd.value)}
+          class={BOX}
+        />,
+        budgets.cost_reserve_usd,
+      )}
+      {budgetField(
+        wording,
+        "expires_at_ms",
+        wording.scopeExpiresLabel,
+        <input
+          type="datetime-local"
+          name="expires_at_ms"
+          id="expires_at_ms"
+          value={localTime(budgets.expires_at_ms.value)}
+          class={BOX}
+        />,
+        budgets.expires_at_ms,
+      )}
+    </div>
+  );
+}
+
+/**
+ * State C (D-0074 rule 4.2): raising the budget of the approval the lap
+ * waiting at a gate spends. What that approval allowed and what it has used;
+ * the budgets redrawn from the rows as they are now, so the attempt that used
+ * the old ones up is in the sample and the caveat names its cost; that the new
+ * budgets count from here on; and, if one stands, the stop that raising does
+ * not lift (rule 3.4).
+ *
+ * **Only budgets are posted.** Everything else the new approval holds is
+ * copied by the press from the stored row (rule 1.1), so this screen has no box
+ * for any of it. The checks are the press's to make again; the ones made here
+ * only keep a form off a screen whose press would be refused.
+ */
+async function raiseForm(
+  ports: WebPorts,
+  wording: Chrome,
+  view: Extract<PageView, { kind: "scope" }>,
+  raise: NonNullable<Extract<PageView, { kind: "scope" }>["raise"]>,
+  threads: Threads,
+  token: string | null,
+  newScopeId: MintScopeId | null,
+  nowMs: number,
+): Promise<unknown> {
+  const gate = viewHref({ kind: "answer", iterationId: raise.iterationId }, wording.lang);
+  const decided = await ports.record.readScopeDecision(raise.decisionId);
+  const stored =
+    decided.kind === "read" && decided.decision.outcome === "approved"
+      ? await ports.record.readScope(decided.decision.scopeId)
+      : null;
+  if (
+    stored === null ||
+    stored.kind !== "read" ||
+    !stored.scope.payload.requests.includes(view.messageId)
+  ) {
+    return note(wording.scopeNotThisRequest);
+  }
+  const tip = await approvalTip(ports.record, raise.iterationId);
+  if (tip.kind !== "tip" || tip.scopeDecisionId !== raise.decisionId) {
+    return (
+      <>
+        {note(tip.kind === "forked" ? wording.raiseRefusedForked : wording.raiseNotTip)}
+        <a href={gate} class="text-[13px] text-link underline-offset-2 hover:underline">
+          {wording.gateBack}
+        </a>
+      </>
+    );
+  }
+  if (token === null || newScopeId === null) {
+    return note(wording.scopeNoApprover);
+  }
+  const payload = stored.scope.payload;
+  const was = payload.budgets;
+  const spent = await ports.record.scopeSpent(raise.decisionId);
+  const budgets = await scopeBudgetsFromStore(
+    { store: ports.store, record: ports.record },
+    {
+      agentTypes: payload.agent_types,
+      plans: 1,
+      reviewRounds: was.review_rounds,
+      draftedAtMs: nowMs,
+    },
+  );
+  const asks = threads.messages.filter(
+    (message) =>
+      threads.waiting.has(message.messageId) &&
+      threads.rootOf(message.messageId) === view.messageId,
+  );
+  return (
+    <>
+      <p class="text-[13px] leading-6">{wording.raiseLead}</p>
+      <section class={`${CARD} space-y-1`}>
+        <h3 class={CARD_HEADING}>{wording.raiseWasHeading}</h3>
+        <p class="text-[13px] leading-6">
+          {wording.raiseWas(
+            was.laps,
+            money(was.cost_usd),
+            localTime(was.expires_at_ms).replace("T", " "),
+          )}
+        </p>
+        <p class="text-[13px] leading-6">
+          {wording.raiseUsed(spent.admissions, money(spent.readCostUsd), spent.unreadLaps)}
+        </p>
+      </section>
+      {asks.map((ask) => (
+        <p class="note rounded-md border border-border bg-muted/60 px-3 py-2 text-[13px] leading-5">
+          {wording.raiseAskStands}{" "}
+          <a
+            href={viewHref({ kind: "thread", messageId: ask.messageId, to: null }, wording.lang)}
+            class="text-link underline-offset-2 hover:underline"
+          >
+            {wording.raiseAskLink}
+          </a>
+        </p>
+      ))}
+      <form
+        id="raise-form"
+        method="post"
+        action={`/raise?lang=${encodeURIComponent(wording.lang)}`}
+        class="space-y-4"
+      >
+        <input type="hidden" name="token" value={token} />
+        <input type="hidden" name="request" value={view.messageId} />
+        <input type="hidden" name="raise" value={raise.decisionId} />
+        <input type="hidden" name="iteration" value={raise.iterationId} />
+        {/* Minted when drawn, as the person's own form's is: one form pressed
+            twice records one new approval. */}
+        <input type="hidden" name="scope_id" value={newScopeId()} />
+        {sampleCaveat(wording, budgets.cost_reserve_usd.bases)}
+        {budgetBoxes(wording, budgets, false)}
+        <p class="note text-[12.5px] leading-5 text-muted-foreground">{wording.raiseFromHere}</p>
+        <p class="note text-[12.5px] leading-5 text-muted-foreground">{wording.raiseRetires}</p>
+        <p class="note text-[12.5px] leading-5 text-muted-foreground">{wording.scopeCostCaveat}</p>
+        <div class="sticky bottom-0 z-[1] -mx-4 flex flex-col gap-2 border-t border-border bg-card px-4 py-3 shadow-[0_-4px_10px_-8px_rgb(0_0_0/0.3)]">
+          <p class="note text-[12.5px] leading-5 text-muted-foreground">{wording.raisePressNote}</p>
+          <button
+            type="submit"
+            data-row=""
+            aria-describedby="raise-plain"
+            class={`${PRIMARY} h-10 w-full justify-center px-6 text-sm sm:h-9 sm:w-auto sm:self-end`}
+          >
+            {wording.raiseAction}
+          </button>
+          <span id="raise-plain" class="note sr-only">
+            {wording.raisePlain}
           </span>
         </div>
       </form>

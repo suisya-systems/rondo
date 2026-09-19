@@ -40,12 +40,14 @@ import {
   type Press,
   type PublishInput,
   PublishPort,
+  type RaiseInput,
   type ReviseInput,
   RevisePort,
   SayPort,
   type ScopedStartInput,
   type ScopeFormDraft,
   ScopePort,
+  type ScopeRecorded,
   type Send,
   type SentMessage,
   type ServedPorts,
@@ -1433,6 +1435,8 @@ const WRITE_TABLE = [
   "ALL /start",
   // The drafted scope's two presses (rondo#238 C2b, D-0071 rule 5.3).
   "ALL /scope-draft",
+  // The raise press (D-0074 section 4): a budgets-only successor, approved.
+  "ALL /raise",
   "ALL /start-plan",
   "ALL /publish",
   "ALL /*",
@@ -1442,6 +1446,7 @@ const WRITE_TABLE = [
   "POST /answer-ask",
   "POST /scope",
   "POST /scope-draft",
+  "POST /raise",
   "POST /start-plan",
   "POST /start",
   "POST /revise",
@@ -2409,6 +2414,97 @@ test("(scope-draft) a draft the port refuses is said, and leads back to the scop
   expect(refused.status).toBe(409);
   expect(refused.body).toContain("/?scope=req-1&amp;lang=en");
   expect(approved).toHaveLength(1);
+
+  stop.abort();
+  expect(await closed).toBe(0);
+});
+
+/** A page whose scope port offers only the raise press (D-0074 section 4), recording what it was handed. */
+function raisePorts(raised: RaiseInput[], answer: ScopeRecorded): ServedPorts {
+  const notThis = async () => await Promise.resolve({ ok: false, note: "not this route" });
+  return {
+    ...spyPorts([]),
+    scope: new ScopePort(notThis, notThis, null, null, async (input) => {
+      raised.push(input);
+      return await Promise.resolve(answer);
+    }),
+  } as unknown as ServedPorts;
+}
+
+/** The raise form, as the page draws it: hidden ids and the five budgets, nothing else. */
+function raiseForm(overrides: Record<string, string> = {}): Record<string, string> {
+  return {
+    token: TOKEN,
+    request: "req-1",
+    raise: "decision-1",
+    iteration: "lap-at-gate",
+    scope_id: newScopeId(),
+    laps: "3",
+    review_rounds: "3",
+    cost_usd: "15",
+    cost_reserve_usd: "2.5",
+    expires_at_ms: "2026-01-01T00:00",
+    ...overrides,
+  };
+}
+
+test("(raise) a person's press records the budgets it was drawn with and returns to the gate (D-0074 rule 4.3)", async () => {
+  const raised: RaiseInput[] = [];
+  const { base, stop, closed } = await served(
+    createApp(raisePorts(raised, { ok: true, note: "", scopeDecisionId: "decision-2" }), TOKEN),
+  );
+  const form = raiseForm();
+  const pressed = await send(base, "/raise", "POST", pressHeaders(base), form);
+  expect(pressed.status).toBe(303);
+  expect(pressed.location).toBe("/?answer=lap-at-gate&lang=en");
+  expect(raised).toEqual([
+    {
+      scopeId: form["scope_id"],
+      requestMessageId: "req-1",
+      scopeDecisionId: "decision-1",
+      iterationId: "lap-at-gate",
+      budgets: {
+        laps: 3,
+        review_rounds: 3,
+        cost_usd: 15,
+        cost_reserve_usd: 2.5,
+        expires_at_ms: Date.parse("2026-01-01T00:00Z"),
+      },
+    },
+  ]);
+
+  stop.abort();
+  expect(await closed).toBe(0);
+});
+
+test("(raise) every other shape is refused, and a refusal leads back to the gate (D-0074 rule 4.4)", async () => {
+  const raised: RaiseInput[] = [];
+  const { base, stop, closed } = await served(
+    createApp(
+      raisePorts(raised, { ok: false, note: "raised already", why: "raiseRefusedNotTip" }),
+      TOKEN,
+    ),
+  );
+  const person = pressHeaders(base);
+  for (const [shape, form, status] of [
+    ["no approval", raiseForm({ raise: "" }), 400],
+    ["no lap", raiseForm({ iteration: "" }), 400],
+    ["no request", raiseForm({ request: "" }), 400],
+    ["a scope id this page did not mint", raiseForm({ scope_id: "scope-1" }), 400],
+    ["a budget that is not a number", raiseForm({ cost_usd: "lots" }), 400],
+    ["a wrong token", raiseForm({ token: "not-the-token" }), 403],
+  ] as const) {
+    const answered = await send(base, "/raise", "POST", person, form);
+    expect(answered.status, shape).toBe(status);
+    expect(answered.body, shape).not.toBe("");
+  }
+  expect(raised).toEqual([]);
+  const refused = await send(base, "/raise", "POST", person, raiseForm());
+  expect(refused.status).toBe(409);
+  expect(refused.body).toContain("already been raised");
+  expect(refused.body).toContain("/?answer=lap-at-gate&amp;lang=en");
+  expect(raised).toHaveLength(1);
+  expect((await send(base, "/raise", "GET", person)).status).toBe(404);
 
   stop.abort();
   expect(await closed).toBe(0);
