@@ -294,3 +294,50 @@ test.each([
   expect(read.kind).toBe("failed");
   expect(read.kind === "failed" && read.reason).toContain(reason);
 });
+
+test("a drafter port that throws is an unavailable run, with what was handed kept for the record", async () => {
+  const w = await world();
+  await w.say("r1", "Fix it.", null, 1_000);
+  const run = await draftRequest(
+    portsOver(w, () => {
+      throw new Error("spawn EACCES");
+    }),
+    "r1",
+    null,
+  );
+  expect(run.outcome).toEqual({
+    kind: "unavailable",
+    reason: "the drafter could not be run: spawn EACCES",
+  });
+  expect(run.document).not.toBeNull();
+  expect(run.material?.requestMessageId).toBe("r1");
+});
+
+test("an earlier lap of the request is handed over with what it was asked, so a redraft knows what already ran (rule 2.1.5)", async () => {
+  const w = await world();
+  await w.say("r1", "Fix it.", null, 1_000);
+  const reserved = await w.store.reserve({
+    id: "i-1",
+    request: "Fix it.",
+    plan: planDocument(),
+    spend: null,
+    scopeSpend: null,
+    nowMs: 1_500,
+    supersedesIterationId: null,
+    requestMessageId: "r1",
+    runId: "rondo-i-1",
+    topicBranch: "rondo/i-1",
+    workspace: "/srv/work/i-1",
+  });
+  expect(reserved.kind).toBe("reserved");
+  const run = await draftRequest(
+    portsOver(w, () => ({ kind: "answered", costUsd: null, finalMessage: '{"act":"none"}' })),
+    "r1",
+    null,
+  );
+  expect(run.material?.laps).toEqual([
+    expect.objectContaining({ iterationId: "i-1", prompt: "do the thing" }),
+  ]);
+  expect(run.document).toContain("--- lap i-1:");
+  expect(run.document).toContain("  asked: do the thing");
+});

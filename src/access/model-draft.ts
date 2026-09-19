@@ -113,6 +113,8 @@ export interface DraftLap {
   readonly status: string;
   readonly supersedesIterationId: string | null;
   readonly gateOutcome: string | null;
+  /** What the lap was asked, or null when its stored plan does not read: the work it did. */
+  readonly prompt: string | null;
   readonly readings: readonly {
     readonly drafter: string;
     readonly verdict: string;
@@ -223,7 +225,10 @@ function carried(material: DrafterMaterial): string[] {
   return [
     ...material.thread.flatMap((m) => [m.messageId, m.body]),
     ...material.templates.map((t) => JSON.stringify(t.plan)),
-    ...material.laps.flatMap((lap) => lap.readings.flatMap((r) => r.findings)),
+    ...material.laps.flatMap((lap) => [
+      lap.prompt ?? "",
+      ...lap.readings.flatMap((r) => r.findings),
+    ]),
   ];
 }
 
@@ -319,6 +324,7 @@ export function drafterDocument(material: DrafterMaterial): string {
             `--- lap ${lap.iterationId}: ${lap.status}` +
             `${lap.supersedesIterationId === null ? "" : `, redoes ${lap.supersedesIterationId}`}` +
             `, gate ${lap.gateOutcome ?? "not answered"}` +
+            `\n  asked: ${lap.prompt ?? "(its plan does not read)"}` +
             lap.readings
               .map(
                 (r) =>

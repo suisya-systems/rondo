@@ -25,6 +25,7 @@ import type { runDrafter } from "./forge.js";
 import {
   type DraftAgentType,
   type DrafterMaterial,
+  type DrafterRun,
   type DraftOutcome,
   type DraftTemplate,
   draftOf,
@@ -97,14 +98,34 @@ export async function draftRequest(
       outcome: { kind: "unavailable", reason: prepared.reason },
     };
   }
-  const run = await ports.runDrafter(row, prepared.document);
+  let run: DrafterRun;
+  try {
+    run = await ports.runDrafter(row, prepared.document);
+  } catch (error) {
+    run = {
+      kind: "failed",
+      reason: `the drafter could not be run: ${error instanceof Error ? error.message : String(error)}`,
+    };
+  }
   return {
     drafter,
     material,
     document: prepared.document,
     costUsd: run.kind === "answered" ? run.costUsd : null,
-    outcome: draftOf(material, run),
+    outcome: outcomeOf(material, run),
   };
+}
+
+/** {@link draftOf}, with a defect in rondo's own check an unavailable run and not a throw. */
+function outcomeOf(material: DrafterMaterial, run: DrafterRun): DraftOutcome {
+  try {
+    return draftOf(material, run);
+  } catch (error) {
+    return {
+      kind: "unavailable",
+      reason: `the draft could not be checked: ${error instanceof Error ? error.message : String(error)}`,
+    };
+  }
 }
 
 function budgetRow(record: IterationRecord): BudgetRow {
@@ -290,6 +311,9 @@ export async function gatherDrafterMaterial(
       status: record.status,
       supersedesIterationId: record.supersedesIterationId,
       gateOutcome: record.gateOutcome,
+      prompt: ((planned) => (planned.kind === "planned" ? planned.plan.prompt : null))(
+        readPlan(record.plan),
+      ),
       readings: (await ports.store.readingsFor(record.id)).map((reading) => ({
         drafter: reading.drafter,
         verdict: reading.verdict,
