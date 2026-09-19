@@ -628,6 +628,8 @@ export interface Chrome {
   readonly scopePlanFrom: (from: "message" | "iterations" | "setup") => string;
   /** One held plan as a line: where, the agent type's short digest, and where it came from. */
   readonly scopePlanLine: (where: string, agentType: string, from: string) => string;
+  /** A plan line another offered plan reads the same as, with when rondo came to hold it (UTC). */
+  readonly scopePlanHeldAt: (line: string, at: string) => string;
   /** A plan the address named that rondo no longer offers: said, and the choice put again. */
   readonly scopePlanGone: string;
   /** The drafted scope's screen (rondo#238 C2b, D-0071 rule 5.3). */
@@ -1398,6 +1400,7 @@ explanation you pressed on and then answers the gate.`,
         ? "from setting up this machine"
         : "the plan earlier laps ran on",
   scopePlanLine: (where, agentType, from) => `${where}, agent type ${agentType} (${from})`,
+  scopePlanHeldAt: (line, at) => `${line}, held since ${at.replace("T", " ")} UTC`,
   scopeDraftedLead:
     "rondo drafted this scope for your request: the work below, and budgets worked out from the " +
     "laps this store has recorded. Approve it as it is, or change a value first -- your version " +
@@ -2168,6 +2171,7 @@ const JA: Partial<Chrome> = Object.freeze({
         ? "このマシンのセットアップで用意したもの"
         : "以前の周回が使ったもの",
   scopePlanLine: (where, agentType, from) => `${where}、エージェント種別 ${agentType}（${from}）`,
+  scopePlanHeldAt: (line, at) => `${line}、${at.replace("T", " ")} UTC から保持`,
   scopeDraftedLead:
     "この依頼の範囲を rondo が下書きしました。下の作業と、このストアに記録された周回から出した" +
     "予算です。そのまま承認するか、先に値を変えてください。変えた場合は、rondo の下書きの" +

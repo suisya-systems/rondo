@@ -4182,7 +4182,13 @@ function planChoice(
       <p class="text-[13px] leading-6 font-medium">{wording.scopePlanAsk}</p>
       <ul class="space-y-1">
         {plans.map((plan) => {
-          const said = planLine(wording, plan);
+          // **Two choices that read alike say when rondo came to hold each**
+          // (D-0075 rule 2.3): a repaired setup and the stale plan it
+          // replaced differ in a path this line does not show, and the time
+          // is what a person can tell them apart by.
+          const line = planLine(wording, plan);
+          const alike = plans.filter((other) => planLine(wording, other) === line).length > 1;
+          const said = alike ? wording.scopePlanHeldAt(line, localTime(plan.heldAtMs)) : line;
           return (
             <li class="text-[12.5px] leading-5 wrap-anywhere">
               {plan.planDigest === chosen ? (

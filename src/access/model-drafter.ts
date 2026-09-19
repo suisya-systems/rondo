@@ -448,6 +448,8 @@ export interface HeldPlan {
   readonly agentTypeDigest: string;
   readonly agentTypeInput: JsonValue;
   readonly from: DraftTemplate["from"];
+  /** When rondo came to hold it (D-0075 rule 2.3): what tells two alike choices apart. */
+  readonly heldAtMs: number;
 }
 
 /** A template as a plan a person may pick, or null when it is not one (see {@link heldPlans}). */
@@ -472,6 +474,7 @@ function asHeldPlan(template: DraftTemplate): HeldPlan | null {
     agentTypeDigest: recorded.record.agentTypeDigest,
     agentTypeInput: recorded.record.agentTypeInput,
     from: template.from,
+    heldAtMs: template.heldAtMs,
   };
 }
 
