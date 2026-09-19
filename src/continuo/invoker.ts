@@ -691,6 +691,11 @@ export interface AdmitRunRequest {
  * by one paragraph in the asked language, so the operator still had to read
  * English to answer.
  *
+ * **It asks for composing, not for translating** (D-0079, rondo#257). A report
+ * written in English and translated at the end is English wearing the asked
+ * language's words, which the operator measured on rondo's own Japanese. Whether
+ * a worker did so is not checkable from the bytes; the sentence is the ask.
+ *
  * **ASCII**, so D-0004 is untouched on every path that could print an argv,
  * even though this sentence is not printed to a console today. The tag itself
  * is already `[A-Za-z0-9-]` by `runPlan`'s own check, so the whole sentence is
@@ -709,8 +714,9 @@ export interface AdmitRunRequest {
 export function materialLanguageSentence(tag: string): string {
   return (
     `The person who answers at the gate reads the language with IETF language tag ${tag}, ` +
-    "so write everything you write back for them in that language: the report, any summary " +
-    "and the gate rationale alike, not one part of it."
+    "so think and write in that language from the start: do not compose in English and " +
+    "translate. Everything you write back for them is in it -- the report, any summary and the " +
+    "gate rationale alike, not one part of it."
   );
 }
 

@@ -352,6 +352,8 @@ describe("run admit's own fields", () => {
     for (const tag of ["ja", "zh-Hant"]) {
       const sentence = materialLanguageSentence(tag);
       expect(sentence).toContain(tag);
+      // It asks for composing in the language, not translating into it (D-0079).
+      expect(sentence).toContain("do not compose in English and translate");
       // eslint of the eye: every byte printable ASCII, no per-language wording.
       expect(/^[\x20-\x7e]+$/.test(sentence)).toBe(true);
       expect(sentence).toBe(materialLanguageSentence(tag));

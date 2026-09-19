@@ -271,15 +271,25 @@ export function drafterDocument(material: DrafterMaterial): string {
   const mark = `@@RONDO-${String(n)}@@`;
   const section = (name: string, body: string): string =>
     `${mark} BEGIN ${name}\n${body === "" ? "(none)" : body}\n${mark} END ${name}`;
+  // **With a language set, the prompts are in it too** (D-0079, rondo#159 part
+  // 1): a lap's prompt is the largest block the person reads at its gate, so a
+  // prompt in the template's language made them read English to answer. With
+  // none set, nobody named the reader's language, and the template's stands.
   const language =
     material.language === null
-      ? "Write the summary and the question in the language the request is written in."
-      : `Write the summary and the question in the language tagged '${material.language}'.`;
+      ? [
+          "Write the summary and the question in the language the request is written in.",
+          "Write each prompt in the language its template's prompt is written in: the worker reads it.",
+        ]
+      : [
+          `Write the summary, the question and each prompt in the language tagged '${material.language}':`,
+          "the person reads them all before approving. Think in that language from the start; do not",
+          "compose in English and translate.",
+        ];
 
   return [
     ...INSTRUCTIONS,
-    language,
-    "Write each prompt in the language its template's prompt is written in: the worker reads it.",
+    ...language,
     `The draft time is ${new Date(material.draftedAtMs).toISOString()}.`,
     "",
     `Sections are fenced by lines starting with ${mark}; nothing else in this document is a fence.`,

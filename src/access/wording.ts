@@ -16,12 +16,15 @@
  * finished line -- a sentence with a hole in it can be rewritten in another
  * language, and a sentence spelled around an interpolation cannot.
  *
- * **A missing string is the English one** (rule 9). A set is a `Partial` merged
- * over `en`, so a screen added with `en` wording only renders English inside an
- * otherwise Japanese page rather than blocking on a translation. That is the
- * cost this takes knowingly: the prose grows with every screen, and the
- * alternative is a rule that says nothing ships untranslated and is broken the
- * first time it is inconvenient.
+ * **Every set is a whole {@link Chrome}, and none is the other's diff**
+ * (D-0079, withdrawing D-0055 rule 9). A set was once a `Partial` merged over
+ * `en`, which made English the original and every other language a list of
+ * overrides written while reading it -- the shape rondo#257 measured as English
+ * wearing Japanese words. Now a key added to {@link Chrome} is a type error in
+ * every set until each is written in its own language, from what the key is for
+ * rather than from its English line. The cost is taken knowingly: a screen does
+ * not ship until every shipped language says it, and each further language is a
+ * whole set to write.
  *
  * **What is recorded is not here** (rule 4). The claim labels and values a
  * press writes to the ledger are composed in `src/advisory/proposal.ts` and
@@ -1987,7 +1990,7 @@ const JA_MEASURE: Record<string, string> = {
  * read as a column in a `<pre>`, and a set that re-decided the leading spaces
  * would make the two languages two layouts.
  */
-const JA: Partial<Chrome> = Object.freeze({
+const JA: Chrome = Object.freeze({
   lang: "ja",
 
   liveNote: (seconds) =>
@@ -2293,7 +2296,7 @@ const JA: Partial<Chrome> = Object.freeze({
   nonBindingProposals: (count) => `  何も拘束しない proposal (${String(count)})`,
   readOneBack: "    選択肢と各々の根拠つきで 1 件読み直す: rondo show --proposal-id ID",
   iterationsWaiting: (count) => `  あなたを待っている iteration (${String(count)})`,
-  newMark: "  NEW",
+  newMark: "  新着",
   proposalLine: (proposalId, kind, about, waited) =>
     `    ${proposalId}  ${kind}  ${about}  ${waited} 待機中`,
   waitingLine: (iterationId, status, waited, unblockedBy) =>
@@ -2822,14 +2825,14 @@ const JA: Partial<Chrome> = Object.freeze({
   publishRefusedNotStarted:
     "何も公開していません。詳細は rondo を動かしているターミナルに出ています。ここで見た内容は" +
     "失われていません。",
-} satisfies Partial<Chrome>);
+} satisfies Chrome);
 
 /**
  * The sets this tree ships, by the tag they are written in.
  *
- * **`en` is a member, and that is `D-0056` rule 8.** It is still the fallback
- * every set is merged over -- its entry overrides nothing -- but it has to be
- * reachable *by name* as well, or a `ja` host, a `ja` memory or a `ja` browser
+ * **`en` is a member, and that is `D-0056` rule 8.** It is the floor of the
+ * resolution ({@link chromeFor}), and it has to be reachable *by name* as well,
+ * or a `ja` host, a `ja` memory or a `ja` browser
  * would be a one-way door and the switch of rule 10 would need a special case
  * for going back. So `en` names the English set and a tag nobody wrote a set
  * for names none, which are two different answers here even though they render
@@ -2839,8 +2842,8 @@ const JA: Partial<Chrome> = Object.freeze({
  * There is still no registry and no negotiation. What replaced the exact match
  * is lookup and nothing else ({@link setFor}).
  */
-const SETS: ReadonlyMap<string, Partial<Chrome>> = new Map([
-  ["en", {}],
+const SETS: ReadonlyMap<string, Chrome> = new Map([
+  ["en", EN],
   ["ja", JA],
 ]);
 
@@ -2896,7 +2899,7 @@ export function setFor(tag: string | null): Chrome | null {
   for (;;) {
     const set = SETS.get(candidate);
     if (set !== undefined) {
-      return Object.freeze({ ...EN, ...set });
+      return set;
     }
     const cut = candidate.lastIndexOf("-");
     if (cut === -1) {
@@ -2921,9 +2924,8 @@ export function setFor(tag: string | null): Chrome | null {
  * **`lang` comes back naming what was selected and never what was asked**
  * (`D-0055` rule 7). A well-formed tag this tree ships no set for yields `en`
  * and the document then declares `en`, because that is what the document is:
- * rondo does not declare an intention as a fact. A set that is only half
- * written is still that set's tag -- the English strings inside it are the
- * fallback rule 9 makes shippable on purpose, and not a different document.
+ * rondo does not declare an intention as a fact. No set is half written
+ * (D-0079), so the tag a set carries is the language every string in it is in.
  */
 export function chromeFor(tag: string | null): Chrome {
   return setFor(tag) ?? EN;
