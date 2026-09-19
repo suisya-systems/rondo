@@ -18,11 +18,22 @@
  * `forge` reply, so a restart loses nothing and a message the command line
  * wrote while the host runs is read on the next scan. Messages written before a
  * reading host first ran on the store are not read unasked.
+ *
+ * **A bare `#N` is read in the repository of the plan the request is drafted
+ * from** (D-0081 rule 3.4, D-0078 section 2's annotation), not in one slug the
+ * host was started with: since D-0081 one store and one host serve several
+ * repositories, and which one a request is in is the plan's fact.
+ * {@link bareIssueRepository} is that reckoning, and where it finds more than
+ * one repository still in play the read **waits for the person** rather than
+ * picking one -- which is the same answer the drafter gives that request
+ * (D-0081 rule 2.4). `OWNER/NAME#N` and a web address are unchanged: an
+ * explicit name is read where it points.
  */
 
 import type { ThreadMessageDraft } from "../store/records.js";
 import type { AdvisoryRecord } from "../store/sqlite.js";
 import type { CommandOutcome, IssueReadRequest } from "./forge.js";
+import type { HeldPlan } from "./model-drafter.js";
 
 /** The author id every `forge` message is written under. */
 export const ISSUE_READER = "rondo/issue-reader";
@@ -246,11 +257,69 @@ export type ForgeIssueRead = (request: IssueReadRequest) => Promise<{
 }>;
 
 /**
+ * Where a bare `#N` in one request is read, or that nothing has said yet.
+ *
+ * `repo` null is "no plan in play names a repository and this host was told
+ * none": the read fails with `no_repo` and says so, as it does today.
+ */
+export type BareIssueRepository =
+  | { readonly repo: string | null }
+  /** Several repositories are still in play: the read waits (D-0081 rule 2.4). */
+  | { readonly disputed: true };
+
+/** What {@link bareIssueRepository} reads, as values a test replaces. */
+export interface BareRepositoryPorts {
+  readonly record: Pick<AdvisoryRecord, "scopesFor">;
+  /** The plans rondo holds for this request (`heldPlans`): what a draft picks among. */
+  readonly held: (requestMessageId: string) => Promise<readonly HeldPlan[]>;
+  /**
+   * The host's `--repo`, for a store whose plans carry no slug: every row
+   * written before the slug moved onto the plan means "this plan names none",
+   * and such a store publishes and reads by the flag as it always has
+   * (D-0081 rule 6.3).
+   */
+  readonly hostRepo: string | null;
+}
+
+/**
+ * The repository a bare `#N` in `requestMessageId` is read in (D-0081 rule
+ * 3.4): the one named by the plan the request is drafted from.
+ *
+ * **Which plans are in play is read off the rows, never guessed.** The plans
+ * rondo holds for the request are what a draft picks among (rule 2.2: with
+ * several repositories held, the choice of template is the choice of
+ * repository), and a scope written for the request -- the drafter's split or
+ * the person's own -- has already said which workspaces the work runs in
+ * (D-0066 rule 1.2.2), so the plans it does not name are out of play. Where
+ * one repository is left, that is the answer, which is every store holding one
+ * repository and every store set up before D-0081. Where more than one is
+ * left, nothing has said which and **the answer is the person's**: the drafter
+ * asks back and rondo starts nothing until it is answered (rule 2.4), and this
+ * says `disputed` so the read waits for the same answer instead of guessing.
+ */
+export async function bareIssueRepository(
+  ports: BareRepositoryPorts,
+  requestMessageId: string,
+): Promise<BareIssueRepository> {
+  const held = await ports.held(requestMessageId);
+  const scoped = new Set(
+    (await ports.record.scopesFor(requestMessageId)).flatMap((scope) =>
+      scope.payload.workspaces.map((workspace) => workspace.repository),
+    ),
+  );
+  // Byte for byte against the plan's own `repository`, as the store's own
+  // re-test of a scope compares them (D-0066 rule 1.2.2).
+  const inPlay = scoped.size === 0 ? held : held.filter((plan) => scoped.has(plan.repository));
+  const slugs = [...new Set(inPlay.flatMap((plan) => plan.forgeRepository ?? []))];
+  return slugs.length > 1 ? { disputed: true } : { repo: slugs[0] ?? ports.hostRepo };
+}
+
+/**
  * Read one reference and say what came of it (sections 2.2 and 2.3), never
  * throwing: every outcome is a `forge` message.
  *
- * `forgeRepo` is where a bare `#N` is read. D-0078's first residual leaves
- * how rondo knows it open; where it is not known, the read fails and says so.
+ * `forgeRepo` is where a bare `#N` is read, which {@link bareIssueRepository}
+ * settles; where no repository is known, the read fails and says so.
  */
 export async function readNamedIssue(
   reference: NamedIssue,
@@ -267,8 +336,9 @@ export async function readNamedIssue(
   if (repo === null) {
     return failed(
       "no_repo",
-      `'${reference.named}' names no repository, and this host was not told the forge ` +
-        "repository its pull requests are opened in (rondo web --repo)",
+      `'${reference.named}' names no repository, and no plan this request could run on names ` +
+        "the repository it would be read in (D-0081 rule 3.4; setup records it, and rondo web " +
+        "--repo still answers for a store set up before it did)",
     );
   }
   let answered: Awaited<ReturnType<ForgeIssueRead>>;
@@ -566,8 +636,11 @@ export interface IssueReaderPorts {
     "threadMessages" | "recordThreadMessage" | "messagesBeforeIssueReader"
   >;
   readonly read: ForgeIssueRead;
-  /** `OWNER/NAME` a bare `#N` is read in, or null when this host was told none. */
-  readonly forgeRepo: string | null;
+  /**
+   * Where a bare `#N` in one request is read, by request (D-0081 rule 3.4):
+   * {@link bareIssueRepository} over the store's rows.
+   */
+  readonly bareRepository: (requestMessageId: string) => Promise<BareIssueRepository>;
   readonly now: () => number;
   /** A fresh message id. */
   readonly mintId: () => string;
@@ -582,8 +655,26 @@ export interface IssueReader {
   kick(): void;
   /** Resolves once no scan is in flight. */
   idle(): Promise<void>;
-  /** The operator messages still waiting on a read, for the drafter and the page. */
+  /**
+   * The operator messages still waiting on a read: what the page says is not
+   * read yet, and what the lap's door waits on, so nothing starts without an
+   * issue its request named.
+   */
   unread(
+    messages: readonly ThreadMessageDraft[],
+  ): Promise<ReadonlyMap<string, readonly NamedIssue[]>>;
+  /**
+   * {@link unread} without the references waiting on which repository their
+   * request is in (D-0081 rule 3.4): **what holds the drafter**.
+   *
+   * The drafter waits for a read that is coming (D-0078 section 3.3), and a
+   * disputed one is not coming until the person answers -- an answer the
+   * drafter's own ask is what asks for (D-0081 rule 2.4). Holding the drafter
+   * for it would leave the question unasked and the read waiting on it for
+   * ever. The lap's door keeps waiting on the whole of {@link unread}, so the
+   * drafter asking is all that happens meanwhile.
+   */
+  unreadUnderway(
     messages: readonly ThreadMessageDraft[],
   ): Promise<ReadonlyMap<string, readonly NamedIssue[]>>;
 }
@@ -600,6 +691,9 @@ export function issueReader(ports: IssueReaderPorts): IssueReader {
   // A reference whose message the store refused, not tried again by this
   // process: a refusal is the store's answer, not a fault of the moment.
   const givenUp = new Set<string>();
+  // A reference already said to be waiting on its repository, so a rescan every
+  // minute does not say it again.
+  const saidWaiting = new Set<string>();
   let running: Promise<void> | null = null;
   let again = false;
 
@@ -607,6 +701,37 @@ export function issueReader(ports: IssueReaderPorts): IssueReader {
     messages: readonly ThreadMessageDraft[],
   ): Promise<ReadonlyMap<string, readonly NamedIssue[]>> =>
     unreadIssues(messages, await ports.record.messagesBeforeIssueReader(ports.now()));
+
+  /** {@link IssueReaderPorts.bareRepository}, asked once per request in one pass. */
+  const whereBareReads = (): ((requestMessageId: string) => Promise<BareIssueRepository>) => {
+    const asked = new Map<string, Promise<BareIssueRepository>>();
+    return (requestMessageId) => {
+      let answer = asked.get(requestMessageId);
+      if (answer === undefined) {
+        answer = ports.bareRepository(requestMessageId);
+        asked.set(requestMessageId, answer);
+      }
+      return answer;
+    };
+  };
+
+  const unreadUnderway = async (
+    messages: readonly ThreadMessageDraft[],
+  ): Promise<ReadonlyMap<string, readonly NamedIssue[]>> => {
+    const where = whereBareReads();
+    const underway = new Map<string, readonly NamedIssue[]>();
+    for (const [messageId, references] of await unread(messages)) {
+      const left = references.some((reference) => reference.repo === null)
+        ? "disputed" in (await where(requestOf(messages, messageId) ?? messageId))
+          ? references.filter((reference) => reference.repo !== null)
+          : references
+        : references;
+      if (left.length > 0) {
+        underway.set(messageId, left);
+      }
+    }
+    return underway;
+  };
 
   const scanOnce = async (): Promise<boolean> => {
     const thread = await ports.record.threadMessages();
@@ -616,6 +741,7 @@ export function issueReader(ports: IssueReaderPorts): IssueReader {
     }
     let wrote = false;
     const rootOf = rootsOf(thread.messages);
+    const where = whereBareReads();
     // Each request's latest read per name, kept current as this scan writes,
     // so the bound counts what an earlier reference in this scan was given.
     const given = new Map<string, Map<string, ForgeRead>>();
@@ -628,7 +754,8 @@ export function issueReader(ports: IssueReaderPorts): IssueReader {
       return reads;
     };
     for (const [messageId, left] of await unread(thread.messages)) {
-      const request = givenTo(rootOf(messageId) ?? messageId);
+      const root = rootOf(messageId) ?? messageId;
+      const request = givenTo(root);
       // Which references are past the bound is by their place in the message,
       // so it does not move with how many were read before a restart.
       const body = thread.messages.find((m) => m.messageId === messageId)?.body ?? "";
@@ -639,19 +766,39 @@ export function issueReader(ports: IssueReaderPorts): IssueReader {
           continue;
         }
         const atMs = ports.now();
-        const read: ForgeRead =
-          place.indexOf(reference.named) >= MAX_ISSUES_PER_MESSAGE
-            ? {
-                named: reference.named,
-                atMs,
-                failed: {
-                  why: "too_many",
-                  detail: `more than ${String(MAX_ISSUES_PER_MESSAGE)} issues are named in one message`,
-                },
-              }
-            : withinRequest(await readNamedIssue(reference, ports.forgeRepo, ports.read, atMs), [
-                ...request.values(),
-              ]);
+        let read: ForgeRead;
+        if (place.indexOf(reference.named) >= MAX_ISSUES_PER_MESSAGE) {
+          read = {
+            named: reference.named,
+            atMs,
+            failed: {
+              why: "too_many",
+              detail: `more than ${String(MAX_ISSUES_PER_MESSAGE)} issues are named in one message`,
+            },
+          };
+        } else {
+          // **A bare `#N` waits rather than being read somewhere chosen for the
+          // person** (D-0081 rules 2.4 and 3.4). Nothing is written, so the
+          // reference stays unread: the lap's door keeps refusing, the drafter
+          // asks which work is meant, and the next scan after the answer reads
+          // it. An explicit `OWNER/NAME#N` or address asks nothing of this.
+          const reads: BareIssueRepository =
+            reference.repo === null ? await where(root) : { repo: reference.repo };
+          if ("disputed" in reads) {
+            const key = `${messageId}\u0000${reference.named}`;
+            if (!saidWaiting.has(key)) {
+              saidWaiting.add(key);
+              ports.log(
+                `issues   ${messageId}: ${reference.named} waits on which repository this ` +
+                  "request is in",
+              );
+            }
+            continue;
+          }
+          read = withinRequest(await readNamedIssue(reference, reads.repo, ports.read, atMs), [
+            ...request.values(),
+          ]);
+        }
         const outcome = await ports.record.recordThreadMessage({
           messageId: ports.mintId(),
           body: forgeBody(read),
@@ -711,5 +858,6 @@ export function issueReader(ports: IssueReaderPorts): IssueReader {
       }
     },
     unread,
+    unreadUnderway,
   };
 }

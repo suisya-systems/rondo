@@ -445,6 +445,12 @@ export interface HeldPlan {
   readonly document: JsonRecord;
   readonly repository: string;
   readonly workspaceRoot: string;
+  /**
+   * `OWNER/NAME` the plan names on the forge, or null when it names none
+   * (D-0081 rule 3.2): which repository picking this plan picks, for a reader
+   * that has to know one before a lap runs.
+   */
+  readonly forgeRepository: string | null;
   readonly agentTypeDigest: string;
   readonly agentTypeInput: JsonValue;
   readonly from: DraftTemplate["from"];
@@ -471,6 +477,7 @@ function asHeldPlan(template: DraftTemplate): HeldPlan | null {
     document: template.plan,
     repository: template.repository,
     workspaceRoot: template.workspaceRoot,
+    forgeRepository: planned.plan.forgeRepository,
     agentTypeDigest: recorded.record.agentTypeDigest,
     agentTypeInput: recorded.record.agentTypeInput,
     from: template.from,

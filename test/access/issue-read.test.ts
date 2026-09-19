@@ -14,6 +14,8 @@ import { withNamedIssues } from "../../src/access/cli.js";
 import { drafterHost } from "../../src/access/drafter-host.js";
 import type { CommandOutcome } from "../../src/access/forge.js";
 import {
+  type BareIssueRepository,
+  bareIssueRepository,
   type ForgeIssueRead,
   forgeBody,
   ISSUE_BOUND_BYTES,
@@ -25,7 +27,9 @@ import {
   parseForgeRead,
   readNamedIssue,
 } from "../../src/access/issue-read.js";
+import type { HeldPlan } from "../../src/access/model-drafter.js";
 import { readRunPlan } from "../../src/refrain/plan.js";
+import type { StoredScope } from "../../src/store/records.js";
 import { planDocument, world } from "./fixtures/drafter.js";
 
 type World = Awaited<ReturnType<typeof world>>;
@@ -68,13 +72,17 @@ function fakeForge(
   return { read, asked };
 }
 
-function readerOver(w: World, read: ForgeIssueRead, forgeRepo: string | null = "o/r") {
+function readerOver(
+  w: World,
+  read: ForgeIssueRead,
+  bareRepository: (requestMessageId: string) => BareIssueRepository = () => ({ repo: "o/r" }),
+) {
   let n = 0;
   let reads = 0;
   const reader = issueReader({
     record: w.record,
     read,
-    forgeRepo,
+    bareRepository: async (requestMessageId) => bareRepository(requestMessageId),
     now: () => 50_000,
     mintId: () => {
       n += 1;
@@ -356,6 +364,108 @@ test("a lap is not admitted while an issue its request names is still to be read
   });
   reader.kick();
   await reader.idle();
+  const quoted = await withNamedIssues(w.record, "r1", planned.plan);
+  expect("prompt" in quoted && quoted.prompt).toContain(ISSUE.title);
+});
+
+/** A held plan, as `bareIssueRepository` reads one: where it runs, and its slug. */
+const heldIn = (repository: string, forgeRepository: string | null): HeldPlan =>
+  ({ repository, forgeRepository }) as unknown as HeldPlan;
+
+/** Ports over the rows: the plans rondo holds, the workspaces its scopes name. */
+const rowsHolding = (
+  held: readonly HeldPlan[],
+  scoped: readonly string[],
+  hostRepo: string | null = null,
+) => ({
+  record: {
+    scopesFor: async () =>
+      [
+        { payload: { workspaces: scoped.map((repository) => ({ repository })) } },
+      ] as unknown as readonly StoredScope[],
+  },
+  held: async () => held,
+  hostRepo,
+});
+
+test("a bare #N is read in the repository of the plan its request is drafted from (D-0081 rule 3.4)", async () => {
+  const a = heldIn("/srv/a", "o/a");
+  const b = heldIn("/srv/b", "o/b");
+
+  // One repository in play: read there, whatever this host was started with.
+  expect(await bareIssueRepository(rowsHolding([a], [], "o/host"), "r1")).toEqual({ repo: "o/a" });
+  // Two, and nothing has said which: the read waits for the person (rule 2.4).
+  expect(await bareIssueRepository(rowsHolding([a, b], [], "o/host"), "r1")).toEqual({
+    disputed: true,
+  });
+  // A scope for the request -- the drafter's split, or the person's own -- has
+  // said which workspaces the work runs in, so the other plan is out of play.
+  expect(await bareIssueRepository(rowsHolding([a, b], ["/srv/b"]), "r1")).toEqual({ repo: "o/b" });
+  // Two plans of one repository are one answer, not a dispute.
+  expect(await bareIssueRepository(rowsHolding([a, heldIn("/srv/a2", "o/a")], []), "r1")).toEqual({
+    repo: "o/a",
+  });
+  // No plan in play names a slug: the host's `--repo` answers, as it does for
+  // every store set up before the slug moved onto the plan (rule 6.3).
+  expect(
+    await bareIssueRepository(rowsHolding([heldIn("/srv/a", null)], [], "o/host"), "r1"),
+  ).toEqual({ repo: "o/host" });
+  expect(await bareIssueRepository(rowsHolding([], []), "r1")).toEqual({ repo: null });
+});
+
+test("a bare #N still in dispute waits for the person: it holds the lap's door and not the drafter (D-0081 rules 2.4, 3.4)", async () => {
+  const w = await world();
+  const { read, asked } = fakeForge();
+  let disputed = true;
+  const { reader } = readerOver(w, read, () => (disputed ? { disputed: true } : { repo: "o/r" }));
+  await reader.unread([]);
+  await w.say("r1", "Fix #237, like o/r#237.", null, 1_000);
+  reader.kick();
+  await reader.idle();
+
+  // **Nothing is guessed**: the explicit name is read where it points, and the
+  // bare one is not read anywhere, so no `forge` message answers it yet.
+  expect(asked).toEqual([{ host: null, repo: "o/r", number: 237 }]);
+  expect((await forgeMessages(w)).map((m) => parseForgeRead(m.body)?.named)).toEqual(["o/r#237"]);
+
+  const thread = await w.record.threadMessages();
+  if (thread.kind !== "read") throw new Error(thread.reason);
+  const waiting = [{ named: "#237", host: null, repo: null, number: 237 }];
+  expect(await reader.unread(thread.messages)).toEqual(new Map([["r1", waiting]]));
+  // What holds the drafter leaves it out: the drafter's ask is what the read
+  // is waiting for, so holding it there would leave the question unasked.
+  expect(await reader.unreadUnderway(thread.messages)).toEqual(new Map());
+
+  const handed: string[] = [];
+  const drafter = drafterHost({
+    store: w.store,
+    record: w.record,
+    now: () => 60_000,
+    language: null,
+    log: () => undefined,
+    mintId: (kind) => `${kind}-${String(handed.length)}-${String(Math.random()).slice(2)}`,
+    runDrafter: async (_row, document) => {
+      handed.push(document);
+      return { kind: "failed", reason: "not under test" };
+    },
+    issuesUnread: reader.unreadUnderway,
+  });
+  drafter.kick();
+  await drafter.idle();
+  expect(handed).toHaveLength(1);
+
+  // **And rondo starts nothing meanwhile**: the door waits on the whole read.
+  const planned = readRunPlan({ ...planDocument(), prompt: "Fix #237." });
+  if (planned.kind !== "planned") throw new Error(planned.reason);
+  expect(await withNamedIssues(w.record, "r1", planned.plan)).toMatchObject({
+    refusal: expect.stringContaining("rondo has not yet read #237"),
+  });
+
+  // Answered -- a plan is drafted, or the person picks one -- and it is read.
+  disputed = false;
+  reader.kick();
+  await reader.idle();
+  expect(asked).toHaveLength(2);
   const quoted = await withNamedIssues(w.record, "r1", planned.plan);
   expect("prompt" in quoted && quoted.prompt).toContain(ISSUE.title);
 });
