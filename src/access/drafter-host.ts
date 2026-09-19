@@ -357,7 +357,7 @@ async function write(
               agentTypeDigest: r.agentTypeDigest,
               agentTypeInput: r.agentTypeInput,
               planDigest: r.planDigest,
-              fromMessageId: r.messageId,
+              ...("setupId" in r ? { fromSetupId: r.setupId } : { fromMessageId: r.messageId }),
             })),
           },
     messages,

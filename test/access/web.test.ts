@@ -4201,6 +4201,43 @@ test("with no plan held, the scope screen says how one comes to be held, on the 
   expect(ja).not.toContain('id="scope-form"');
   // Never sent to a terminal: no environment variable is named.
   expect(en).not.toContain("RONDO_PLAN");
+  // Nothing held means setup did not finish, not a paste owed (D-0075 rule 4.1).
+  for (const said of [EN.scopeNoPlanHeld, chromeFor("ja").scopeNoPlanHeld]) {
+    expect(said).not.toMatch(/JSON|paste|plan\.json|貼/);
+  }
+});
+
+test("a fresh store setup finished offers setup's plan, and two setups alike on the line say when each was held (D-0075)", async () => {
+  const world = fresh();
+  const requestId = "request-scope-setup";
+  await seedScopeRequest(world, requestId, "Fix it, please.");
+  const stale = { ...scopePlanDocument(), claude_command: ["/old/claude"] };
+  const repaired = scopePlanDocument();
+  for (const [setupId, plan, atMs] of [
+    ["setup-1", stale, Date.UTC(2026, 8, 19, 9, 5)],
+    ["setup-2", repaired, Date.UTC(2026, 8, 19, 10, 30)],
+  ] as const) {
+    expect(
+      await world.record.recordSetupPlan({ setupId, plan, recordedBy: "ada", recordedAtMs: atMs }),
+    ).toEqual({ kind: "recorded" });
+  }
+  const drawn = await operatorPage(
+    portsOver(world, "ada", []),
+    "t",
+    { kind: "scope", messageId: requestId, rounds: null, decisionId: null, plan: null },
+    EN,
+    mint,
+    () => "x",
+    () => "y",
+  );
+  const choice = drawn.slice(drawn.indexOf('id="plans"'));
+  expect(choice).toContain("(from setting up this machine), held since 2026-09-19 10:30 UTC");
+  expect(choice).toContain("(from setting up this machine), held since 2026-09-19 09:05 UTC");
+  // The newest setup is the screen's own pick.
+  expect(drawn).toContain(
+    `<input type="hidden" name="plan_digest" value="${planDigest(repaired)}"/>`,
+  );
+  expect(drawn).not.toContain(EN.scopeNoPlanHeld);
 });
 
 test("with two plans held, the screen offers the choice, the first marked, and the address picks the other (rondo#238)", async () => {

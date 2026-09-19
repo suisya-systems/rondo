@@ -18,8 +18,8 @@ import { readSplitPayload, type SplitPlan } from "../advisory/proposal.js";
 import { type AgentTypeInput, agentTypeRecord } from "../cadenza/facade.js";
 import { drafterRow } from "../continuo/roles.js";
 import { PRICED_MODEL_TIERS } from "../refrain/classification.js";
-import { type RunPlan, readPlan, readRunPlan } from "../refrain/plan.js";
-import { planDigest } from "../store/plan.js";
+import { planPayload, type RunPlan, readPlan, readRunPlan } from "../refrain/plan.js";
+import { canonicalJson, planDigest } from "../store/plan.js";
 import type { IterationRecord, JsonRecord, JsonValue } from "../store/records.js";
 import type { AdvisoryRecord, IterationStore } from "../store/sqlite.js";
 import type { runDrafter } from "./forge.js";
@@ -44,7 +44,7 @@ export interface DrafterPorts {
   readonly store: Pick<IterationStore, "readLive" | "terminalIterations" | "readingsFor">;
   readonly record: Pick<
     AdvisoryRecord,
-    "threadMessages" | "heldAgentType" | "heldAgentTypeDigests"
+    "threadMessages" | "heldAgentType" | "heldAgentTypeDigests" | "setupPlans"
   >;
   readonly runDrafter: typeof runDrafter;
   readonly now: () => number;
@@ -160,6 +160,25 @@ function builtFacts(
 const priced = (tier: string | null): boolean =>
   tier !== null && (PRICED_MODEL_TIERS as readonly string[]).includes(tier);
 
+/** The request and every reply under it. */
+function threadOf(
+  messages: readonly { readonly messageId: string; readonly inReplyTo: string | null }[],
+  requestMessageId: string,
+): Set<string> {
+  const inThread = new Set([requestMessageId]);
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const m of messages) {
+      if (!inThread.has(m.messageId) && m.inReplyTo !== null && inThread.has(m.inReplyTo)) {
+        inThread.add(m.messageId);
+        grew = true;
+      }
+    }
+  }
+  return inThread;
+}
+
 /**
  * Everything D-0071 rule 2.1 hands the drafter, each part read from its own
  * source. Throws only when a source will not read at all; the caller turns
@@ -175,18 +194,7 @@ export async function gatherDrafterMaterial(
   if (read.kind !== "read") {
     throw new Error(`the thread will not read: ${read.reason}`);
   }
-  // The request and every reply under it, in the store's order.
-  const inThread = new Set([requestMessageId]);
-  let grew = true;
-  while (grew) {
-    grew = false;
-    for (const m of read.messages) {
-      if (!inThread.has(m.messageId) && m.inReplyTo !== null && inThread.has(m.inReplyTo)) {
-        inThread.add(m.messageId);
-        grew = true;
-      }
-    }
-  }
+  const inThread = threadOf(read.messages, requestMessageId);
   const thread = read.messages
     .filter((m) => inThread.has(m.messageId))
     .map((m) => ({
@@ -202,36 +210,21 @@ export async function gatherDrafterMaterial(
     ...(await ports.store.terminalIterations()),
   ].flatMap((outcome) => (outcome.kind === "read" ? [outcome.record] : []));
 
-  // Templates: the distinct plans on the 20 most recent rows (rule 2.1.3).
-  const recent = [...records]
-    .sort((a, b) => b.createdAtMs - a.createdAtMs || (a.id < b.id ? 1 : -1))
-    .slice(0, TEMPLATE_ROWS);
+  // Templates: one per choice, newest first (rule 2.1.3 as D-0075 rule 2.3
+  // groups it), from the 20 most recent rows, the setup rows and the plans
+  // pasted into this thread.
   const templates = new Map<string, DraftTemplate>();
-  for (const record of recent) {
-    const known = templates.get(record.planDigest);
-    if (known !== undefined && known.from.kind === "iterations") {
-      templates.set(record.planDigest, {
-        ...known,
-        from: { kind: "iterations", iterationIds: [...known.from.iterationIds, record.id] },
-      });
-      continue;
+  for (const template of await heldTemplates(ports, records, read.messages, inThread)) {
+    // `delete` first, so a later occurrence also takes the later place: on a
+    // tie in time, the one the store wrote later is the newer.
+    const choice = choiceOf(template.plan);
+    const known = templates.get(choice);
+    if (known === undefined || template.heldAtMs >= known.heldAtMs) {
+      templates.delete(choice);
+      templates.set(choice, template);
     }
-    const planned = readPlan(record.plan);
-    // **A revise lap's plan is no template** (rondo#238 C1's rule, drafter
-    // side): its base is the revised lap's topic branch, so work drafted on it
-    // would be cut from another request's unmerged commits.
-    if (planned.kind !== "planned" || planned.plan.pullRequestBaseBranch !== null) {
-      continue;
-    }
-    templates.set(record.planDigest, {
-      planDigest: record.planDigest,
-      plan: record.plan,
-      repository: planned.plan.repository,
-      workspaceRoot: planned.plan.workspaceRoot,
-      agentTypeDigest: record.agentTypeDigest,
-      from: { kind: "iterations", iterationIds: [record.id] },
-    });
   }
+  const offered = [...templates.values()].reverse().sort((a, b) => b.heldAtMs - a.heldAtMs);
 
   // Held agent types: every digest a row names or a record holds (rule 2.1.2).
   const agentTypes = new Map<string, DraftAgentType>();
@@ -256,55 +249,36 @@ export async function gatherDrafterMaterial(
     }
   }
 
-  // A plan pasted into an operator message is a template, and its agent type
-  // is recordable when rondo does not hold it (the gate's answer to point 1).
-  for (const message of thread) {
-    if (message.authorKind !== "operator") {
+  // A plan pasted into an operator message, or recorded by setup, is a
+  // template, and its agent type is recordable when rondo does not hold it
+  // (the gate's answer to point 1, D-0075 rule 2.4) -- from the newest choice
+  // that builds it.
+  for (const template of offered) {
+    if (template.from.kind === "iterations" || template.agentTypeDigest === null) {
       continue;
     }
-    let document: unknown;
-    try {
-      document = JSON.parse(message.body);
-    } catch {
-      continue;
-    }
-    if (typeof document !== "object" || document === null || Array.isArray(document)) {
-      continue;
-    }
-    const planned = readRunPlan(document as JsonRecord);
-    if (planned.kind !== "planned") {
-      continue;
-    }
-    const recorded = agentTypeRecordOf(planned.plan, document as JsonRecord);
-    if ("refusal" in recorded) {
-      continue;
-    }
-    const digest = planDigest(document as JsonRecord);
-    // **The latest paste wins its place and its provenance**: a plan pasted
-    // again -- to restore it after another -- moves to the end, as the message
-    // that carries it now, even when a lap once ran on the same bytes.
-    templates.delete(digest);
-    templates.set(digest, {
-      planDigest: digest,
-      plan: document as JsonRecord,
-      repository: planned.plan.repository,
-      workspaceRoot: planned.plan.workspaceRoot,
-      agentTypeDigest: recorded.record.agentTypeDigest,
-      from: { kind: "message", messageId: message.messageId },
-    });
-    const typeDigest = recorded.record.agentTypeDigest;
-    const facts = builtFacts(typeDigest, recorded.record.agentTypeInput);
+    const typeDigest = template.agentTypeDigest;
+    const input = template.plan["agent_type_input"] as JsonValue;
+    const facts = builtFacts(typeDigest, input);
     if (!agentTypes.has(typeDigest) && facts !== null) {
       agentTypes.set(typeDigest, {
         digest: typeDigest,
         ...facts,
         priced: priced(facts.modelTier),
-        source: {
-          kind: "recordable",
-          messageId: message.messageId,
-          agentTypeInput: recorded.record.agentTypeInput,
-          planDigest: digest,
-        },
+        source:
+          template.from.kind === "message"
+            ? {
+                kind: "recordable",
+                messageId: template.from.messageId,
+                agentTypeInput: input,
+                planDigest: template.planDigest,
+              }
+            : {
+                kind: "recordable",
+                setupId: template.from.setupId,
+                agentTypeInput: input,
+                planDigest: template.planDigest,
+              },
       });
     }
   }
@@ -332,7 +306,7 @@ export async function gatherDrafterMaterial(
   return {
     requestMessageId,
     thread,
-    templates: [...templates.values()],
+    templates: offered,
     agentTypes: [...agentTypes.values()],
     policies: [],
     laps,
@@ -340,6 +314,124 @@ export async function gatherDrafterMaterial(
     draftedAtMs,
     language,
   };
+}
+
+/**
+ * What makes two held plans the same choice (D-0075 rule 2.3): **the plan a
+ * caller would write**, read through the plan reader so absent fields read as
+ * their defaults, with what admission adds or fills put aside -- the version,
+ * the allocated run id, lease claimant, workspace, topic branch and grantee --
+ * and `prompt`, which every lap sets. A document that does not read is its own
+ * choice, by digest.
+ */
+function choiceOf(plan: JsonRecord): string {
+  const read = readRunPlan(plan);
+  if (read.kind !== "planned") {
+    return planDigest(plan);
+  }
+  return canonicalJson(
+    planPayload({
+      ...read.plan,
+      prompt: "",
+      runId: "",
+      leaseClaimantId: "",
+      workspace: "",
+      topicBranch: "",
+      parties: { ...read.plan.parties, grantee: "" },
+    }),
+  );
+}
+
+/**
+ * Every plan rondo holds as a template, **ungrouped**: each of `records`' 20
+ * most recent rows, every setup row, and every operator message in `thread`
+ * whose body is a plan. A revise lap's plan is none (its base is another
+ * request's unmerged work), and neither is a pasted or setup plan whose agent
+ * type builds no record.
+ */
+async function heldTemplates(
+  ports: Pick<DrafterPorts, "record">,
+  records: readonly IterationRecord[],
+  messages: readonly { messageId: string; authorKind: string; body: string; atMs: number }[],
+  thread: ReadonlySet<string>,
+): Promise<DraftTemplate[]> {
+  const held: DraftTemplate[] = [];
+  const recent = [...records]
+    .sort((a, b) => b.createdAtMs - a.createdAtMs || (a.id < b.id ? 1 : -1))
+    .slice(0, TEMPLATE_ROWS)
+    // Oldest first, as the setup rows and the messages below are: the caller
+    // reads a later place as a later write when two share a time.
+    .reverse();
+  for (const record of recent) {
+    const planned = readPlan(record.plan);
+    // **A revise lap's plan is no template** (rondo#238 C1's rule, drafter
+    // side): its base is the revised lap's topic branch, so work drafted on it
+    // would be cut from another request's unmerged commits.
+    if (planned.kind !== "planned" || planned.plan.pullRequestBaseBranch !== null) {
+      continue;
+    }
+    held.push({
+      planDigest: record.planDigest,
+      plan: record.plan,
+      repository: planned.plan.repository,
+      workspaceRoot: planned.plan.workspaceRoot,
+      agentTypeDigest: record.agentTypeDigest,
+      from: { kind: "iterations", iterationIds: [record.id] },
+      heldAtMs: record.createdAtMs,
+    });
+  }
+  const written = (
+    document: JsonRecord,
+    from: DraftTemplate["from"],
+    heldAtMs: number,
+  ): DraftTemplate | null => {
+    const planned = readRunPlan(document);
+    if (planned.kind !== "planned" || planned.plan.pullRequestBaseBranch !== null) {
+      return null;
+    }
+    const recorded = agentTypeRecordOf(planned.plan, document);
+    if ("refusal" in recorded) {
+      return null;
+    }
+    return {
+      planDigest: planDigest(document),
+      plan: document,
+      repository: planned.plan.repository,
+      workspaceRoot: planned.plan.workspaceRoot,
+      agentTypeDigest: recorded.record.agentTypeDigest,
+      from,
+      heldAtMs,
+    };
+  };
+  for (const setup of await ports.record.setupPlans()) {
+    const template = written(
+      setup.plan,
+      { kind: "setup", setupId: setup.setupId },
+      setup.recordedAtMs,
+    );
+    if (template !== null) held.push(template);
+  }
+  for (const message of messages) {
+    if (message.authorKind !== "operator" || !thread.has(message.messageId)) {
+      continue;
+    }
+    let document: unknown;
+    try {
+      document = JSON.parse(message.body);
+    } catch {
+      continue;
+    }
+    if (typeof document !== "object" || document === null || Array.isArray(document)) {
+      continue;
+    }
+    const template = written(
+      document as JsonRecord,
+      { kind: "message", messageId: message.messageId },
+      message.atMs,
+    );
+    if (template !== null) held.push(template);
+  }
+  return held;
 }
 
 /**
@@ -356,6 +448,8 @@ export interface HeldPlan {
   readonly agentTypeDigest: string;
   readonly agentTypeInput: JsonValue;
   readonly from: DraftTemplate["from"];
+  /** When rondo came to hold it (D-0075 rule 2.3): what tells two alike choices apart. */
+  readonly heldAtMs: number;
 }
 
 /** A template as a plan a person may pick, or null when it is not one (see {@link heldPlans}). */
@@ -380,76 +474,71 @@ function asHeldPlan(template: DraftTemplate): HeldPlan | null {
     agentTypeDigest: recorded.record.agentTypeDigest,
     agentTypeInput: recorded.record.agentTypeInput,
     from: template.from,
+    heldAtMs: template.heldAtMs,
   };
 }
 
 /**
- * The plans rondo holds for one request: pasted into its thread, newest first,
- * then those recent laps ran, newest first -- **one per (repository, workspace
- * root, agent type)**, because every lap's plan carries its own run and prompt
- * and a list of twenty near-identical laps is not a choice a person can make.
- * The newest of each kind stands for it. A plan whose agent type builds no
- * record, or a revise lap's, is not offered.
+ * The plans rondo holds for one request, **one per choice, newest first**
+ * (D-0075 rule 2.3): the drafter's templates, which are pasted into its thread,
+ * recorded by setup, and those recent laps ran, grouped by the plan a caller
+ * would write and ordered by when rondo came to hold each, with no source
+ * ranked above another. A plan whose agent type builds no record, or a revise
+ * lap's, is not offered.
  */
 export async function heldPlans(
   ports: Pick<DrafterPorts, "store" | "record" | "now">,
   requestMessageId: string,
 ): Promise<readonly HeldPlan[]> {
   const material = await gatherDrafterMaterial(ports, requestMessageId, null);
-  const pasted = material.templates.filter((t) => t.from.kind === "message").reverse();
-  const ran = material.templates.filter((t) => t.from.kind === "iterations");
-  const plans = new Map<string, HeldPlan>();
-  for (const template of [...pasted, ...ran]) {
-    const plan = asHeldPlan(template);
-    if (plan === null) {
-      continue;
-    }
-    const kind = JSON.stringify([plan.repository, plan.workspaceRoot, plan.agentTypeDigest]);
-    if (!plans.has(kind)) {
-      plans.set(kind, plan);
-    }
-  }
-  return [...plans.values()];
+  return material.templates.flatMap((template) => asHeldPlan(template) ?? []);
 }
 
 /**
  * One plan a person chose, by digest, **wherever rondo holds it** (rondo#238):
- * pasted into this request's thread, or on any lap row -- not only the one of
- * each kind the list offers, and not only the twenty rows the list reads. What
- * a press and a redraw resolve the chosen plan by, so a newer lap in the
- * meantime neither hides it nor swaps it. Null when it is held nowhere, or is
- * no plan a person may pick ({@link asHeldPlan}).
+ * pasted into this request's thread, on a setup row, or on any lap row -- not
+ * only the one of each choice the list offers, and not only the twenty rows
+ * the list reads. What a press and a redraw resolve the chosen plan by, so a
+ * newer plan in the meantime neither hides it nor swaps it. Null when it is
+ * held nowhere, or is no plan a person may pick ({@link asHeldPlan}).
  */
 export async function heldPlanByDigest(
   ports: Pick<DrafterPorts, "store" | "record" | "now">,
   requestMessageId: string,
   planDigest: string,
 ): Promise<HeldPlan | null> {
-  const material = await gatherDrafterMaterial(ports, requestMessageId, null);
-  const pasted = material.templates.find(
-    (t) => t.planDigest === planDigest && t.from.kind === "message",
-  );
-  if (pasted !== undefined) {
-    return asHeldPlan(pasted);
-  }
-  for (const outcome of [
+  const records = [
     ...(await ports.store.readLive()),
     ...(await ports.store.terminalIterations()),
-  ]) {
-    if (outcome.kind !== "read" || outcome.record.planDigest !== planDigest) {
+  ].flatMap((outcome) => (outcome.kind === "read" ? [outcome.record] : []));
+  const read = await ports.record.threadMessages();
+  const messages = read.kind === "read" ? read.messages : [];
+  const thread = threadOf(messages, requestMessageId);
+  // Written plans first, newest first, so a pasted or setup plan names where
+  // it came from even when a lap once ran on the same bytes.
+  const written = (await heldTemplates(ports, [], messages, thread))
+    .reverse()
+    .sort((a, b) => b.heldAtMs - a.heldAtMs);
+  const found = written.find((t) => t.planDigest === planDigest);
+  if (found !== undefined) {
+    return asHeldPlan(found);
+  }
+  for (const record of records) {
+    if (record.planDigest !== planDigest) {
       continue;
     }
-    const planned = readPlan(outcome.record.plan);
+    const planned = readPlan(record.plan);
     if (planned.kind !== "planned") {
       continue;
     }
     return asHeldPlan({
       planDigest,
-      plan: outcome.record.plan,
+      plan: record.plan,
       repository: planned.plan.repository,
       workspaceRoot: planned.plan.workspaceRoot,
-      agentTypeDigest: outcome.record.agentTypeDigest,
-      from: { kind: "iterations", iterationIds: [outcome.record.id] },
+      agentTypeDigest: record.agentTypeDigest,
+      from: { kind: "iterations", iterationIds: [record.id] },
+      heldAtMs: record.createdAtMs,
     });
   }
   return null;

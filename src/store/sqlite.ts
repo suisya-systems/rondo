@@ -85,10 +85,12 @@ import {
   type ScopeRefusal,
   type ScopeSpent,
   type ScopeTest,
+  type SetupPlanDraft,
   type StoredDecision,
   type StoredProposal,
   type StoredScope,
   type StoredScopeDecision,
+  type StoredSetupPlan,
   SUSPENDED_STATUSES,
   TERMINAL_STATUSES,
   type ThreadMessageDraft,
@@ -1241,6 +1243,19 @@ CREATE TABLE IF NOT EXISTS scope_consumption (
 CREATE TABLE IF NOT EXISTS agent_type_record (
   agent_type_digest           TEXT    PRIMARY KEY,
   agent_type_input            TEXT    NOT NULL,
+  plan_digest                 TEXT    NOT NULL,
+  recorded_by                 TEXT    NOT NULL,
+  recorded_at_ms              INTEGER NOT NULL
+);
+
+-- D-0075 rule 2.2. The plan setup composed, recorded by setup's last step
+-- into the store it provisioned, so a fresh store holds its first plan without
+-- anyone carrying a file. **One row per setup run, append-only**: the same
+-- bytes recorded twice are two rows and the newer dates the plan. plan is
+-- canonical JSON and plan_digest is over it; recorded_by is the approver.
+CREATE TABLE IF NOT EXISTS setup_plan (
+  setup_id                    TEXT    PRIMARY KEY,
+  plan                        TEXT    NOT NULL,
   plan_digest                 TEXT    NOT NULL,
   recorded_by                 TEXT    NOT NULL,
   recorded_at_ms              INTEGER NOT NULL
@@ -2473,6 +2488,15 @@ export interface AdvisoryRecord {
    */
   heldAgentTypeDigests(): Promise<readonly string[]>;
   /**
+   * Append one setup row -- **or refuse it** (D-0075 rule 2.2). Refused when
+   * its plan names another `repository` than a setup row this store already
+   * holds: one store's setup rows are one repository's, and setup for another
+   * repository is given its own root (rule 1.1).
+   */
+  recordSetupPlan(draft: SetupPlanDraft): Promise<RecordOutcome>;
+  /** Every setup row, oldest first. A row whose bytes will not parse is skipped. */
+  setupPlans(): Promise<readonly StoredSetupPlan[]>;
+  /**
    * What one model drafter run writes, **all in one transaction or nothing**
    * (D-0071 rule 7.3): its proposal row, the scope it drafted, and its thread
    * messages -- or, for an unavailable run, its one message. `stale` when the
@@ -2626,6 +2650,7 @@ const CHANGE_SOURCES = Object.freeze([
     id: "agent_type_digest",
     at: "recorded_at_ms",
   },
+  { kind: "setup_plan", table: "setup_plan", id: "setup_id", at: "recorded_at_ms" },
 ] as const);
 
 /**
@@ -2904,7 +2929,10 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
       if (draft.authorKind === "operator") {
         recordedBy.set(recorded.agentTypeDigest, draft.authorId);
       } else {
-        const from = pastedPlanRefusal(connection, draft, recorded);
+        const from =
+          recorded.fromSetupId === undefined
+            ? pastedPlanRefusal(connection, draft, recorded)
+            : setupPlanRefusal(connection, draft, recorded, recorded.fromSetupId);
         if ("refusal" in from) {
           return { kind: "refused", reason: from.refusal };
         }
@@ -3650,6 +3678,67 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
       return scopes;
     },
 
+    async recordSetupPlan(draft: SetupPlanDraft): Promise<RecordOutcome> {
+      const plan = canonicalJson(draft.plan);
+      return immediateTransaction(connection, () => {
+        const repository = draft.plan["repository"];
+        const other = connection
+          .prepare(
+            "SELECT setup_id FROM setup_plan WHERE json_extract(plan, '$.repository') IS NOT ? LIMIT 1",
+          )
+          .get(typeof repository === "string" ? repository : null) as SqlRow | undefined;
+        if (other !== undefined) {
+          return {
+            kind: "refused",
+            reason:
+              `this store already holds setup '${String(other["setup_id"])}' for another ` +
+              `repository than '${String(repository)}': one store and host serve one ` +
+              "repository, and setup for another is given its own root (D-0075 rule 1.1)",
+          };
+        }
+        if (
+          connection.prepare("SELECT 1 FROM setup_plan WHERE setup_id = ?").get(draft.setupId) !==
+          undefined
+        ) {
+          return { kind: "refused", reason: `a setup row '${draft.setupId}' is already recorded` };
+        }
+        connection
+          .prepare(
+            "INSERT INTO setup_plan (setup_id, plan, plan_digest, recorded_by, recorded_at_ms) " +
+              "VALUES (?, ?, ?, ?, ?)",
+          )
+          .run(draft.setupId, plan, planDigest(draft.plan), draft.recordedBy, draft.recordedAtMs);
+        return { kind: "recorded" };
+      });
+    },
+
+    async setupPlans(): Promise<readonly StoredSetupPlan[]> {
+      return (
+        connection
+          .prepare("SELECT * FROM setup_plan ORDER BY recorded_at_ms, rowid")
+          .all() as SqlRow[]
+      ).flatMap((row) => {
+        let plan: unknown;
+        try {
+          plan = JSON.parse(String(row["plan"]));
+        } catch {
+          return [];
+        }
+        if (typeof plan !== "object" || plan === null || Array.isArray(plan)) {
+          return [];
+        }
+        return [
+          {
+            setupId: String(row["setup_id"]),
+            plan: plan as JsonRecord,
+            planDigest: planDigest(plan as JsonRecord),
+            recordedBy: String(row["recorded_by"]),
+            recordedAtMs: Number(row["recorded_at_ms"]),
+          },
+        ];
+      });
+    },
+
     async heldAgentTypeDigests(): Promise<readonly string[]> {
       return (
         connection
@@ -3887,6 +3976,8 @@ const BASIS_LOCATOR_FIELDS: Readonly<Record<string, Readonly<Record<string, stri
   scope: { scopeId: "string" },
   // D-0071 rule 7.3: a drafter message rests on the proposal row its run wrote.
   proposal: { proposalId: "string" },
+  // D-0075 rule 2.4: a drafted scope rests on the setup row it records from.
+  setup: { setupId: "string" },
 };
 
 /**
@@ -3998,6 +4089,63 @@ function pastedPlanRefusal(
 }
 
 /**
+ * Where a drafter's scope records an agent type from a setup row, or why it
+ * may not (D-0075 rule 2.4): `pastedPlanRefusal`'s check with the row standing
+ * where the message stood. The scope cites the row by a `setup` basis, the row
+ * exists, its plan's `agent_type_input` is the record's byte for byte in
+ * canonical form, and its plan is the one the record names. The record is the
+ * row's `recorded_by`'s.
+ */
+function setupPlanRefusal(
+  connection: DatabaseSync,
+  draft: ScopeDraft,
+  recorded: ScopeDraft["agentTypeRecords"][number],
+  setupId: string,
+): { readonly authorId: string } | { readonly refusal: string } {
+  const where = `the drafter's scope '${draft.scopeId}' records the agent type '${recorded.agentTypeDigest}' from setup '${setupId}'`;
+  if (
+    !draft.bases.some(
+      (basis) =>
+        typeof basis === "object" &&
+        basis !== null &&
+        !Array.isArray(basis) &&
+        (basis as JsonRecord)["form"] === "setup" &&
+        (basis as JsonRecord)["setupId"] === setupId,
+    )
+  ) {
+    return { refusal: `${where} and does not cite it (D-0075 rule 2.4)` };
+  }
+  const row = connection
+    .prepare("SELECT plan, plan_digest, recorded_by FROM setup_plan WHERE setup_id = ?")
+    .get(setupId) as SqlRow | undefined;
+  if (row === undefined) {
+    return { refusal: `${where}, which is no setup row (D-0075 rule 2.4)` };
+  }
+  let plan: unknown;
+  try {
+    plan = JSON.parse(String(row["plan"]));
+  } catch {
+    plan = null;
+  }
+  const input =
+    typeof plan === "object" && plan !== null && !Array.isArray(plan)
+      ? (plan as JsonRecord)["agent_type_input"]
+      : undefined;
+  if (
+    input === undefined ||
+    canonicalJson(input) !== canonicalJson(recorded.agentTypeInput) ||
+    planDigest(plan as JsonRecord) !== recorded.planDigest
+  ) {
+    return {
+      refusal:
+        `${where}, whose plan is not the plan the record is copied from: a record is setup's ` +
+        "bytes, never a copy that differs (D-0075 rule 2.4)",
+    };
+  }
+  return { authorId: String(row["recorded_by"]) };
+}
+
+/**
  * Why a thread message may not be written, or null (D-0061 rules 2 and 3).
  *
  * Read inside the writer's transaction, so the message a reply or a basis
@@ -4083,6 +4231,17 @@ function threadMessageRefusal(connection: DatabaseSync, draft: ThreadMessageDraf
       return (
         `a basis of '${draft.messageId}' is proposal:${String(basis["proposalId"])}, which is no ` +
         "proposal row: a locator to nothing is a basis nobody can follow (D-0061 rule 2.6)"
+      );
+    }
+    if (
+      basis["form"] === "setup" &&
+      connection
+        .prepare("SELECT 1 FROM setup_plan WHERE setup_id = ?")
+        .get(basis["setupId"] as string) === undefined
+    ) {
+      return (
+        `a basis of '${draft.messageId}' is setup:${String(basis["setupId"])}, which is no ` +
+        "setup row: a locator to nothing is a basis nobody can follow (D-0061 rule 2.6)"
       );
     }
   }

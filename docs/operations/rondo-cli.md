@@ -58,8 +58,9 @@ the repository that reason is satisfied too, and this one as well.
 
 It builds rondo, clones and builds the pinned continuo, creates the control plane, creates a scratch
 target repository with a `main` branch to run laps against and a bare repository beside it as that
-target's `origin`, writes a complete `plan.json` and an `env.sh` holding section 2's three exports --
-and then prints the commands below with the real paths filled in. It **never runs a lap**:
+target's `origin`, writes a complete `plan.json` and an `env.sh` holding section 2's three exports,
+records that plan into rondo's store with `rondo setup-plan` so the page offers it with nothing
+pasted (D-0075) -- and then prints the commands below with the real paths filled in. It **never runs a lap**:
 everything it does is free, and `start` is the line that is not.
 
 **It cannot demonstrate `publish` to the end, and it says so.** The bare `origin` makes the push leg
@@ -68,7 +69,10 @@ here at all: a bare repository on disk is not a forge, no `OWNER/NAME` names it,
 nothing for a pull request to be created against. Section 6 is the preflight that turns this from a
 plan that fails halfway into a refusal you get before anything runs.
 
-Re-running it is safe; every step checks for its own result first and repairs only what is missing.
+Re-running it is safe; every step checks for its own result first and repairs only what is missing,
+and the plan is recorded again as a new row, so the page offers the newest setup first. **One
+root is one repository**: a second `--target-repo` needs a `--root` of its own, and the script and
+the store both refuse otherwise (D-0075 rule 1.1).
 The three site paths it cannot discover -- the interlock checkout, the claude-org checkout and the
 worker CLI -- have defaults and `RONDO_DOGFOOD_*` overrides, and it fails by name rather than
 guessing when one is absent. `--help` lists them.

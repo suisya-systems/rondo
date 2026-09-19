@@ -441,6 +441,20 @@ else
     die "target's origin still pushes to '$(printf '%s' "$verified_origin" | tr '\n' ' ')'"
 fi
 
+# **One repository per root** (D-0075 rule 1.1). The store under this root
+# holds the plans setup recorded for one repository, and the host serving it
+# publishes to one --repo; setup for another repository would rewrite the
+# catalog under the first one's plans. Checked before anything below rewrites
+# them, and the store refuses the same thing at the last step.
+if [ -f "$env_root/plan.json" ]; then
+  held_repository=$(node -e '
+    const plan = JSON.parse(require("node:fs").readFileSync(process.argv[1], "utf8"));
+    process.stdout.write(String(plan.repository));
+  ' "$env_root/plan.json")
+  [ "$held_repository" = "$target" ] ||
+    die "root '$env_root' is set up for '$held_repository'; give '$target' a --root of its own (one repository per root)"
+fi
+
 step "Catalog"
 # cadenza resolves the project through this layer. `data` is what it reads;
 # `origin` and `base_dir` name where the layer came from, so the file is written
@@ -702,6 +716,14 @@ env_file="$env_root/env.sh"
 } > "$env_file"
 note "$env_file"
 
+step "Store (the plan above, recorded where the page reads it)"
+# **The last step, and the one that ends installation** (D-0075 rule 2): the
+# plan goes to the store the host will serve, not to a person to paste. Each
+# run records one row, so the newest setup is the one the page offers first.
+RONDO_STORE="$env_root/rondo-iterations.sqlite3" RONDO_APPROVER="$approver" \
+  node "$repo_root/bin/rondo.mjs" setup-plan --plan "$plan" --actor-id "$approver" |
+  sed 's/^/   /'
+
 # The same quoting for the commands printed below, which are meant to be copied
 # into a shell verbatim.
 q_repo_root=$(printf %q "$repo_root")
@@ -764,12 +786,11 @@ The lap is pointed at $target, branch $target_base_branch, as project '$project_
 That is written into all four places the plan has to say it, from the one value
 you named, so there is nothing in the plan file to hand-edit.
 
-** On the page, the plan is something you paste. ** 'rondo web' reads no plan
-file: write your request on the page, then reply in its thread with the whole
-contents of
-  $plan
-and the scope screen offers it as the plan to run on (and the drafter drafts
-from it). Once one lap has run on it, rondo holds it and nothing is pasted again.
+** On the page, nothing is pasted. ** The plan above is recorded in the store
+the page reads, so the scope screen offers it as the plan to run on and the
+drafter drafts from it. The file stays on disk as a record of this run; rondo
+does not read it again. Running this script again records the plan again, and
+the newest one is offered first.
 
   cd $q_repo_root
   . $q_env_file

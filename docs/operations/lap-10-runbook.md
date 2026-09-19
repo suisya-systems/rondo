@@ -65,7 +65,7 @@ double press one lap rather than two.
 | `$R/rondo-host` | rondo itself, built. **The page is served from here** |
 | `$R/rondo-gh` | the repository the lap changes. Its `origin` is `suisya-systems/rondo`, which is what makes publishing reach a real forge |
 | `$R/env.sh` | `RONDO_CONTINUO_CLI`, `RONDO_STORE`, `RONDO_APPROVER` |
-| `$R/plan.json` | the plan the page drafts a scope from, written by `dogfood-env.sh` with a `review_criterion` in it (without one the model review is `unavailable` on every lap, #205) |
+| `$R/plan.json` | the plan the page drafts a scope from, written by `dogfood-env.sh` with a `review_criterion` in it (without one the model review is `unavailable` on every lap, #205), and recorded by its last step into the store the page reads (D-0075), so it is never pasted |
 | `$R/workspaces/` | where the lap's work will appear, in `iter-<lap id>`, once it has started. The lap id is the page's, not one you chose -- see step 3 |
 
 ## 2. Before you start
@@ -106,12 +106,13 @@ It prints `rondo is reading and answering at http://127.0.0.1:7333/ -- ctrl-c to
 
 Two things decide whether the page has the screens you need, so read the refusals if they come:
 
-- **The page reads no plan file** (rondo#238). The scope screen offers the plans rondo holds: those
-  pasted into the request's thread, and those recent laps ran on. On a store no lap has run in yet,
-  reply in your request's thread with the whole contents of `$R/plan.json` -- the JSON document
-  alone -- and the scope screen offers it. Until then it says *"rondo has no plan to run this on
-  yet."* and draws no form. (Before rondo#266 the page read a plan file named by `RONDO_PLAN`;
-  nothing reads that variable now, so exporting it does nothing.)
+- **The page reads no plan file** (rondo#238). The scope screen offers the plans rondo holds:
+  those `dogfood-env.sh` recorded as its last step, those pasted into the request's thread, and
+  those recent laps ran on, newest first (D-0075). Nothing is pasted on a store setup finished. If
+  it says *"rondo has no plan to run this on: its setup on this machine has not given it one
+  yet."*, setup did not reach its last step for this store: run `dogfood-env.sh` again with the
+  same `--root`. (Before rondo#266 the page read a plan file named by `RONDO_PLAN`; nothing reads
+  that variable now, so exporting it does nothing.)
 - **`--repo` is what makes publishing exist at all.** Without it the publish screen says *"Nothing
   can be published from this page ... Both are given to rondo when the page is started."* There is
   no way to add it later from the browser; stop the page and start it again.

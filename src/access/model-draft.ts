@@ -76,8 +76,11 @@ export interface DraftMessage {
 /**
  * One template: a plan rondo holds whole, by its `plan_digest` (rule 2.1.3).
  *
- * `from` says where rondo holds it: on recent iteration rows, or in an operator
- * message of this thread (the gate's answer to point 1 (a)).
+ * `from` says where rondo holds it: on recent iteration rows, in an operator
+ * message of this thread (the gate's answer to point 1 (a)), or on a setup row
+ * (D-0075 rule 2.3). `heldAtMs` is when rondo came to hold it -- the lap's
+ * creation, the message's time, the setup row's -- which is what the choices
+ * are ordered by, newest first, with no source ranked above another.
  */
 export interface DraftTemplate {
   readonly planDigest: string;
@@ -88,7 +91,9 @@ export interface DraftTemplate {
   readonly agentTypeDigest: string | null;
   readonly from:
     | { readonly kind: "iterations"; readonly iterationIds: readonly string[] }
-    | { readonly kind: "message"; readonly messageId: string };
+    | { readonly kind: "message"; readonly messageId: string }
+    | { readonly kind: "setup"; readonly setupId: string };
+  readonly heldAtMs: number;
 }
 
 /**
@@ -97,7 +102,8 @@ export interface DraftTemplate {
  * `recordable` is an agent type rondo does not hold yet but a plan in an
  * operator message of this thread builds: a drafted scope listing it records
  * it from that message's bytes (point 1 (a)), so `agentTypeInput` and
- * `planDigest` are carried for that record and nothing else.
+ * `planDigest` are carried for that record and nothing else. One a setup row's
+ * plan builds is recordable the same way, from that row (D-0075 rule 2.4).
  */
 export interface DraftAgentType {
   readonly digest: string;
@@ -110,6 +116,12 @@ export interface DraftAgentType {
     | {
         readonly kind: "recordable";
         readonly messageId: string;
+        readonly agentTypeInput: JsonValue;
+        readonly planDigest: string;
+      }
+    | {
+        readonly kind: "recordable";
+        readonly setupId: string;
         readonly agentTypeInput: JsonValue;
         readonly planDigest: string;
       };
@@ -303,7 +315,9 @@ export function drafterDocument(material: DrafterMaterial): string {
             `${t.agentTypeDigest ?? "none it builds"}; ${
               t.from.kind === "message"
                 ? `pasted in message ${t.from.messageId}`
-                : `ran as ${t.from.iterationIds.join(", ")}`
+                : t.from.kind === "setup"
+                  ? `recorded by setup ${t.from.setupId}`
+                  : `ran as ${t.from.iterationIds.join(", ")}`
             })\n${JSON.stringify(t.plan, null, 2)}`,
         )
         .join("\n"),
@@ -318,7 +332,9 @@ export function drafterDocument(material: DrafterMaterial): string {
             `${a.granted.length === 0 ? "nothing" : a.granted.join(", ")}; ${
               a.source.kind === "held"
                 ? "held by rondo"
-                : `recorded from message ${a.source.messageId} if a scope lists it`
+                : "setupId" in a.source
+                  ? `recorded from setup ${a.source.setupId} if a scope lists it`
+                  : `recorded from message ${a.source.messageId} if a scope lists it`
             }`,
         )
         .join("\n"),
@@ -424,13 +440,15 @@ type NarrowableField = (typeof NARROWABLE_FIELDS)[number];
 export interface DraftedScope {
   readonly payload: JsonRecord;
   readonly bases: readonly JsonRecord[];
-  /** Agent types recorded from a pasted plan, with the message each came from (point 1 (a)). */
-  readonly agentTypeRecords: readonly {
+  /**
+   * Agent types recorded from a pasted plan, with the message each came from
+   * (point 1 (a)), or from a setup row, with its id (D-0075 rule 2.4).
+   */
+  readonly agentTypeRecords: readonly ({
     readonly agentTypeDigest: string;
     readonly agentTypeInput: JsonValue;
     readonly planDigest: string;
-    readonly messageId: string;
-  }[];
+  } & ({ readonly messageId: string } | { readonly setupId: string }))[];
   readonly computed: ScopeBudgets;
   readonly narrowed: readonly Narrowing[];
 }
@@ -819,13 +837,19 @@ function draftedScope(
     }
   }
 
-  // The request, each winning narrowing's words, and each pasted plan an agent
-  // type is recorded from (the store refuses a record whose message is uncited).
+  // The request, each winning narrowing's words, and each pasted plan or
+  // setup row an agent type is recorded from (the store refuses a record whose
+  // source is uncited).
   const cited = [
     material.requestMessageId,
     ...taken.map((n) => n.basisMessageId),
-    ...types.flatMap((t) => (t.source.kind === "recordable" ? [t.source.messageId] : [])),
+    ...types.flatMap((t) =>
+      t.source.kind === "recordable" && "messageId" in t.source ? [t.source.messageId] : [],
+    ),
   ];
+  const setups = types.flatMap((t) =>
+    t.source.kind === "recordable" && "setupId" in t.source ? [t.source.setupId] : [],
+  );
   return {
     payload: {
       requests: [material.requestMessageId],
@@ -836,7 +860,10 @@ function draftedScope(
       outward_acts: [],
       irreversible_additions: additions,
     },
-    bases: [...new Set(cited)].map((messageId) => ({ form: "message", messageId })),
+    bases: [
+      ...[...new Set(cited)].map((messageId) => ({ form: "message", messageId })),
+      ...[...new Set(setups)].map((setupId) => ({ form: "setup", setupId })),
+    ],
     agentTypeRecords: types.flatMap((t) =>
       t.source.kind === "recordable"
         ? [
@@ -844,7 +871,9 @@ function draftedScope(
               agentTypeDigest: t.digest,
               agentTypeInput: t.source.agentTypeInput,
               planDigest: t.source.planDigest,
-              messageId: t.source.messageId,
+              ...("setupId" in t.source
+                ? { setupId: t.source.setupId }
+                : { messageId: t.source.messageId }),
             },
           ]
         : [],

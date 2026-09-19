@@ -625,9 +625,11 @@ export interface Chrome {
   /** The plan choice, above the list of plans rondo holds. */
   readonly scopePlanAsk: string;
   /** Where a held plan came from: pasted into this thread, or run by earlier laps. */
-  readonly scopePlanFrom: (from: "message" | "iterations") => string;
+  readonly scopePlanFrom: (from: "message" | "iterations" | "setup") => string;
   /** One held plan as a line: where, the agent type's short digest, and where it came from. */
   readonly scopePlanLine: (where: string, agentType: string, from: string) => string;
+  /** A plan line another offered plan reads the same as, with when rondo came to hold it (UTC). */
+  readonly scopePlanHeldAt: (line: string, at: string) => string;
   /** A plan the address named that rondo no longer offers: said, and the choice put again. */
   readonly scopePlanGone: string;
   /** The drafted scope's screen (rondo#238 C2b, D-0071 rule 5.3). */
@@ -1384,9 +1386,7 @@ explanation you pressed on and then answers the gate.`,
     "the laps this store has recorded. Read it, change what you want to change, and one press " +
     "records it and approves it.",
   scopeNoPlanHeld:
-    "rondo has no plan to run this on yet. Reply in this request's thread with the plan your " +
-    "environment's setup wrote -- the JSON document alone, nothing else in the reply -- and it " +
-    "is offered here.",
+    "rondo has no plan to run this on: its setup on this machine has not given it one yet.",
   scopePlansUnread: (reason) =>
     `The plans rondo holds could not be read, so there is nothing to choose from: ${reason}`,
   scopePlanAsk: "Which plan the work runs on",
@@ -1394,8 +1394,13 @@ explanation you pressed on and then answers the gate.`,
     "The plan chosen on this screen is no longer one rondo offers for this request. Choose one " +
     "of these instead.",
   scopePlanFrom: (from) =>
-    from === "message" ? "pasted into this thread" : "the plan earlier laps ran on",
+    from === "message"
+      ? "pasted into this thread"
+      : from === "setup"
+        ? "from setting up this machine"
+        : "the plan earlier laps ran on",
   scopePlanLine: (where, agentType, from) => `${where}, agent type ${agentType} (${from})`,
+  scopePlanHeldAt: (line, at) => `${line}, held since ${at} UTC`,
   scopeDraftedLead:
     "rondo drafted this scope for your request: the work below, and budgets worked out from the " +
     "laps this store has recorded. Approve it as it is, or change a value first -- your version " +
@@ -2151,9 +2156,8 @@ const JA: Partial<Chrome> = Object.freeze({
     "記録された周回から出しています。読んで、変えたいところを変えてください。1 回押せば記録と" +
     "承認の両方が行われます。",
   scopeNoPlanHeld:
-    "この作業に使えるプランを rondo はまだ持っていません。環境の準備で書き出されたプランの" +
-    "JSON 文書だけを、ほかの文を付けずに、この依頼のスレッドに返信として貼ってください。" +
-    "ここで選べるようになります。",
+    "この作業に使えるプランを rondo はまだ持っていません。このマシンでの rondo のセットアップから、" +
+    "まだプランを受け取っていないためです。",
   scopePlansUnread: (reason) =>
     `rondo が持っているプランを読めなかったので、選べるものがありません: ${reason}`,
   scopePlanAsk: "作業に使うプラン",
@@ -2161,8 +2165,13 @@ const JA: Partial<Chrome> = Object.freeze({
     "この画面で選んだプランは、もうこの依頼で rondo が選べるものではありません。次の中から" +
     "選び直してください。",
   scopePlanFrom: (from) =>
-    from === "message" ? "このスレッドに貼られたもの" : "以前の周回が使ったもの",
+    from === "message"
+      ? "このスレッドに貼られたもの"
+      : from === "setup"
+        ? "このマシンのセットアップで用意したもの"
+        : "以前の周回が使ったもの",
   scopePlanLine: (where, agentType, from) => `${where}、エージェント種別 ${agentType}（${from}）`,
+  scopePlanHeldAt: (line, at) => `${line}、${at} UTC から保持`,
   scopeDraftedLead:
     "この依頼の範囲を rondo が下書きしました。下の作業と、このストアに記録された周回から出した" +
     "予算です。そのまま承認するか、先に値を変えてください。変えた場合は、rondo の下書きの" +

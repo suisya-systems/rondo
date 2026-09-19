@@ -243,7 +243,7 @@ export const USAGE = `rondo - the operator surface for delegated work
                           the observation rests: snapshot:/pointer,
                           iteration:ID, gate:ID#SEQ, run:ID,
                           repo:PATH@COMMIT#FIRST-LAST, message:ID,
-                          scope:ID or proposal:ID. Write
+                          scope:ID, proposal:ID or setup:ID. Write
                           --observation with
                           an equals sign: an observation may begin with a dash
   rondo propose --iteration-id ID --successor-id ID
@@ -283,6 +283,12 @@ export const USAGE = `rondo - the operator surface for delegated work
                      --outcome approved|declined
                           answer a scope. --scope-digest is the digest line
                           copied from the screen; one scope takes one answer
+  rondo setup-plan --plan FILE --actor-id ID
+                          record the plan setup composed into this store, so
+                          the page offers it with nothing pasted. Run by
+                          scripts/dogfood-env.sh as its last step; FILE is
+                          read once and never again. Each run is a row of its
+                          own, and a store holds the setup of one repository
   rondo retry --iteration-id ID --successor-id ID --scope-decision-id ID
                           an in-scope retry: admit the stored plan of
                           --iteration-id again as --successor-id, spending the
@@ -506,6 +512,7 @@ export interface ParsedCommand {
     | "decide"
     | "scope"
     | "decide-scope"
+    | "setup-plan"
     | "retry"
     | "show"
     | "web"
@@ -598,6 +605,7 @@ const COMMANDS = [
   "decide",
   "scope",
   "decide-scope",
+  "setup-plan",
   "retry",
   "show",
   "web",
@@ -702,6 +710,9 @@ export const FLAGS_BY_COMMAND: Readonly<Record<string, readonly string[]>> = {
   // that was shown, not a position in a list.
   scope: ["payload-file", "actor-id", "supersedes-scope-id", "plan"],
   "decide-scope": ["scope-id", "scope-digest", "outcome", "actor-id"],
+  // D-0075 rule 2.1: setup's last step, checked against the approver as every
+  // operator verb is. One plan, the one setup composed.
+  "setup-plan": ["plan", "actor-id"],
   // One flag, and no `--actor-id`: reading a proposal back is not answering it
   // and not looking at the inbox, so it moves no last-look mark and needs no
   // identity. What it does write is the presentation (D-0036 rule 1), which is
@@ -1865,6 +1876,9 @@ export async function main(
   if (parsed.command === "decide-scope") {
     return await commandDecideScope(parsed, environment, opened.path);
   }
+  if (parsed.command === "setup-plan") {
+    return await commandSetupPlan(parsed, environment, opened.path);
+  }
 
   // **`show` is dispatched here for `explain`'s reason.** It reads one of
   // rondo's own rows and drives no continuo verb, and the proposal most worth
@@ -2204,6 +2218,8 @@ export function parseBasis(text: string): Basis | null {
       return { form: "scope", scopeId: rest };
     case "proposal":
       return { form: "proposal", proposalId: rest };
+    case "setup":
+      return { form: "setup", setupId: rest };
     case "gate": {
       const hash = rest.lastIndexOf("#");
       const tail = rest.slice(hash + 1);
@@ -2242,7 +2258,7 @@ export function parseBasis(text: string): Basis | null {
 /** The one sentence that lists what a `--basis` may be, written once. */
 const BASIS_FORMS_LINE =
   "snapshot:/pointer, iteration:ID, gate:ID#SEQ, run:ID, repo:PATH@COMMIT#FIRST-LAST, message:ID, " +
-  "scope:ID or proposal:ID";
+  "scope:ID, proposal:ID or setup:ID";
 
 /**
  * Door nine: hand one observation to the advisory, and record that a person
@@ -2717,6 +2733,65 @@ async function commandRetry(
     return 2;
   }
   return report.status === "closed" ? 0 : 1;
+}
+
+/**
+ * Record the plan setup composed into the store it provisioned (D-0075 rule
+ * 2.1): the last thing setup does, so a fresh store holds its first plan and
+ * nobody carries the file to the page. The plan must be one a person could
+ * pick -- it reads, it is no revise lap's, and its agent type builds a record
+ * -- or the page would say nothing is held after setup said it was done.
+ */
+async function commandSetupPlan(
+  parsed: ParsedCommand,
+  environment: Readonly<Record<string, string | undefined>>,
+  storePath: string,
+): Promise<number> {
+  const file = parsed.planFile;
+  if (file === null || !isAbsolute(file)) {
+    return refuse(
+      "setup-plan needs --plan FILE, an absolute path to the plan setup wrote. A relative path " +
+        "would name a different file from a different directory.",
+    );
+  }
+  const actor = approvedActor(parsed.actorId, environment);
+  if ("refusal" in actor) {
+    return refuse(actor.refusal);
+  }
+  const read = readPlanDocument(file);
+  if ("refusal" in read) {
+    return refuse(`${file}: ${read.refusal}`);
+  }
+  const planned = readRunPlan(read.document);
+  if (planned.kind !== "planned") {
+    return refuse(`${file}: The plan was refused: ${planned.reason}`);
+  }
+  if (planned.plan.pullRequestBaseBranch !== null) {
+    return refuse(
+      `${file}: its pull_request_base_branch is set, which only a revise lap's plan has, and no ` +
+        "new work starts from one.",
+    );
+  }
+  const recorded = agentTypeRecordOf(planned.plan, read.document);
+  if ("refusal" in recorded) {
+    return refuse(`${file}: its agent type builds no record: ${recorded.refusal}`);
+  }
+  const atMs = Date.now();
+  const setupId = `setup-${String(atMs)}`;
+  const written = await openAdvisoryRecord(storePath).recordSetupPlan({
+    setupId,
+    plan: read.document,
+    recordedBy: actor.actorId,
+    recordedAtMs: atMs,
+  });
+  if (written.kind !== "recorded") {
+    return refuse(written.reason);
+  }
+  say(`recorded as setup '${setupId}'`);
+  say(`plan: ${recorded.record.planDigest}`);
+  say(`repository: ${planned.plan.repository} at ${planned.plan.workspaceRoot}`);
+  say(`agent type: ${recorded.record.agentTypeDigest}`);
+  return 0;
 }
 
 /**
