@@ -108,9 +108,11 @@ C-NN`, so the spaces can never be read as one.
 | D-0068 | One voice and a patrol: the person asks rondo why a line waits and gets an answer joined from rows with bases, a timer in the resident host reads rows against each lap's own declared patience, and nothing it finds is handled silently | accepted |
 | D-0069 | A scope before the first lap: an agent type becomes a record rondo holds when an operator's scope is written from a plan, `start` spends a scope through the `lineage_start` arm, and an operator-written first admission waits on every open question in its request's thread | superseded by D-0071 |
 | D-0070 | A revise inside a scope: the person still answers the gate, the lap it starts spends the scope through the `redo` arm, the verdict is computed before the gate is walked, and the added text is carried and never tested | accepted |
-| D-0071 | The model drafter: a Claude model rondo runs outside the lap over a thread it hands over, which chooses among held plans and agent types and writes words, while every number in a drafted scope is computed from recorded laps and may only be narrowed; and a plan the person pastes into the thread is how a fresh store gets its first template and agent type | accepted |
+| D-0071 | The model drafter: a Claude model rondo runs outside the lap over a thread it hands over, which chooses among held plans and agent types and writes words, while every number in a drafted scope is computed from recorded laps and may only be narrowed; and a plan the person pastes into the thread is how a fresh store gets its first template and agent type | superseded by D-0075 |
 | D-0072 | What a reply to a scope stop does: an answering press carries one of two words, the line opens on the absence of "carry on" rather than on the presence of a reply, and stopping becomes a row instead of a second approval | accepted |
-| D-0073 | Which lines may run together: a lane ledger that allocates paths to a line from its admission until its work lands, refuses an admission that would share one, and releases it by reading the default branch; `D-0067` rule 1 gives way for two authorities, approving and every judgement no row settles stay with the person, and it is not a bigger capacity number | proposed (number proposed, not allocated) |
+| D-0073 | Which lines may run together: a lane ledger that allocates paths to a line from its admission until its work lands, refuses an admission that would share one, and releases it by reading the default branch; `D-0067` rule 1 gives way for two authorities, approving and every judgement no row settles stay with the person, and it is not a bigger capacity number | accepted |
+| D-0074 | Raising a running lap's budget: a raise is a successor scope that changes only its budgets, the lap in flight follows its approval's approved successor, and the person presses it from the gate that refused them | accepted |
+| D-0075 | A fresh store's first plan is the last thing setup does: setup hands the plan it composed to the store and not to the person, the host reads no path and composes nothing, and naming a repository stays installation | accepted |
 
 ---
 
@@ -3718,6 +3720,15 @@ waiting, not the working.
     other artefact in the tree can produce: it is the only way to tell a bound that is *binding*
     from one that is merely *set*, which is the difference between raising it on evidence and
     raising it because somebody complained.
+
+    > **Annotation (2026-09-19, from D-0073).** Added after this entry was accepted, and additive, for
+    > rules 10 and 14. `reserve()`'s `BEGIN IMMEDIATE` also tests the admission's path claim against the
+    > in-force claim of every other open line in the same repository, beside the two counts, and writes
+    > the first `lane_claim` row with the iteration row, both or neither (`D-0073` rules 2.4 and 3.1).
+    > An overlap refuses as a capacity bound does, and the refusal row names which bound refused, with
+    > the holding lineage and the shared paths for a claim refusal. The counts and their bounds are
+    > unchanged (`D-0073` rule 3.6). Rules 10 and 14 are unedited.
+
 15. **The sites that change together are a closed list**, and it includes four that carry no
     `rondo#8` comment because they are types and API shapes rather than DDL: `readLiveRow`'s
     single-row read, `readLive()`'s singular answer, `occupied`'s single `liveIterationId`, and
@@ -5175,6 +5186,11 @@ field - a column for a computable value is a second home for a fact (`D-0022` ru
    > union gains `policy:ID`, a locator into a `standing_policy` row (`D-0067` rule 6.5), as `D-0061`
    > rule 2.6 added `message:ID`. The list above is unedited.
 
+   > **Annotation (2026-09-19, from D-0075).** Added after this entry was accepted, and additive. The
+   > union gains `setup` (`{ form: "setup", setupId }`), a locator into a setup row (`D-0075` rule
+   > 2.4), which the writers refuse when it names no setup row, as the `proposal` form was gained. The
+   > list above is unedited.
+
 3. **There is no rendered `summary` column, and its absence is the decision.** What the gate shows
    is **composed at render time** from the option set and its bases. A stored summary is a framing
    that outlives the material it was drawn from and can drift from it silently, which is the exact
@@ -5621,6 +5637,11 @@ that already exists.
    > residual this rule names is carried out by `D-0067` rule 2 for collisions that **share a path**:
    > the advisory compares the paths changed by open lineages. Collisions that share no path stay
    > unowned. This rule's text is unedited.
+
+   > **Annotation (2026-09-19, from D-0073).** Added after this entry was accepted, and additive, after
+   > `D-0067`'s annotation above. A collision on a path a line **declared** in its claim is now refused
+   > before it is written (`D-0073` rule 3); one on a path it did not declare is found at the gate as
+   > before (`D-0073` rule 5). Collisions that share no path stay unowned. This rule's text is unedited.
 
 10. **Whatever is built first for #40 writes to `operator_attention` or does not
     ship.** `D-0032` rule 10 designed the table with one writer in mind and this
@@ -12731,6 +12752,11 @@ the same, and only the thing that authorises its admission differs.
    5. **Identifiers stay derived at admission** (`D-0023`). A split proposes no run id, branch or
       workspace, which is what rule 7 meant by "never fill".
 
+   > **Annotation (2026-09-19, from D-0073).** Added after this entry was accepted, and additive. A
+   > split carries a drafted path claim beside each plan (`D-0073` rule 2.3). The claim is not a plan
+   > field: the plan's bytes and rule 4.2's "only two fields may differ" are unchanged. The rule above
+   > is unedited.
+
 5. **`D-0022` rule 4, restated for a model draft: re-readable, and no longer re-derivable.** The
    row keeps its snapshot verbatim, as now. For a deterministic draft, running `propose` over those
    bytes gives the same proposal. **For a model draft it does not**, and rule 4's "re-derivable"
@@ -13230,6 +13256,12 @@ answer" below. Supersedes `D-0057`. Refs rondo#172, `D-0057`, `D-0054`, `D-0041`
 >   race -- says exactly that on the screen: the words are recorded and no lap ran.
 > - The write S5 adds (`publish`) is added to the table by its own annotation. Nothing above is
 >   edited.
+
+> **Annotation (2026-09-19, from D-0074).** Added after this entry was accepted, and additive, to the
+> annotation above. "The approval is the one the lap being revised was admitted under" is read as
+> **that approval's approved tip** (`D-0074` section 2, and its annotation on `D-0070` section 1.2):
+> the press posts the tip, and the check compares against the tip. A lap whose scope was never changed
+> posts the approval it was admitted under, as before. Nothing above is edited.
 
 > **Annotation (2026-09-16, from rondo#233 S5, publishing an approved lap from the page).**
 > Added under the same answer of rondo's human gate as the four annotations above -- every write
@@ -13904,6 +13936,12 @@ number.
 > message's bytes and with `recorded_by` the message's author (`D-0071` section 6.2, superseding
 > `D-0069` section 1's operator-only clause). Nothing above is edited.
 
+> **Annotation (2026-09-19, from D-0075).** Added after this entry was accepted, and additive, to the
+> two annotations above. `D-0071` is superseded by `D-0075` with its other sections carried, so the
+> rule for recording an `agent_type_record` from a plan now lives in `D-0075` rule 2.4 and `D-0071`
+> section 6.2 as carried: a `drafter` scope may also record one from a setup row, cited by a `setup`
+> basis, with `recorded_by` the row's. Nothing above is edited.
+
 ### 2. The approval of a scope (P1)
 
 1. **A scope's approval is a row of its own, `scope_decision`, and never a `human_decision` row.**
@@ -14455,6 +14493,28 @@ names. Line numbers drift; re-measure the claim, not the number.
 8. **What stays empty, by name:** patrolling for stalls (R8), the curator (R9), and the relay of a
    question raised mid-lap (`D-0061` rule 6). None is taken here.
 
+> **Annotation (2026-09-19, from D-0073), and the two parts that are not additive.** Added after this
+> entry was accepted, by the answers of rondo's human gate to `D-0073`'s two points (rondo#250).
+> - **Rule 1's "no new authority" is superseded by `D-0073` rule 1** for two authorities and nothing
+>   else: allocating paths to a line, and refusing an admission or a claim that would share one. "No
+>   new role" and the refusal of option A (a coordinator component) stand.
+> - **Rule 2's ancestry clause is superseded by `D-0073` rule 6**, by the gate's second answer. A
+>   `closed` lap's line is open until the default branch holds, tree entry for tree entry, what its
+>   closed tips changed, read off a ref fetched from the forge; "its `tipCommit` is not an ancestor of
+>   the default branch" no longer decides it. Section 4's residual "a squash-merged line whose branch is
+>   kept stays open to the reading" is answered by it. The rest of rule 2, the collision test on
+>   changed paths included, stands, and `D-0073` rule 5 also compares those paths with the line's claim.
+> - **Rule 3**: the `sequence` payload gains **`paths`**, the paths `then` asks for (`D-0073` rule
+>   4.1), so a held widening survives a restart and `paths_free` has something to test.
+> - **Rule 3.4**: `paths_free` joins the closed list of release facts beside `first_terminal`
+>   (`D-0073` rule 3.5).
+> - **Rule 4**, by the gate's first answer: a release fact that is a reading and not a write (a
+>   landing) is read and written on the resident host's tick (`D-0068` section 2, rule 2.2), and the
+>   surface attempts the held act then, with `D-0066` section 4's verdict computed unchanged (`D-0073`
+>   rule 7). Without a resident host it is read at the next admission the surface attempts.
+>
+> The text above is not edited.
+
 ### 2. The five cases of 2026-09-13, under this entry
 
 | Case | What rondo does | Handled? |
@@ -14778,6 +14838,16 @@ scratch directory (the "prototype source"). Line numbers drift; re-measure the c
       finding that became true while it was down, late but not lost. This is the dispatcher's
       2026-08-09 accident (a cursor from a previous session silently skipping every event) designed
       out rather than guarded. **While no resident host runs, nothing patrols** (section 5).
+
+   > **Annotation (2026-09-19, from D-0073).** Added after this entry was accepted, and additive, by
+   > the answer of rondo's human gate to `D-0073`'s first point.
+   > - **Rule 2.2's tick carries a second duty beside the patrol**: it reads `D-0073` rule 6's landing
+   >   for every line some `sequence` waits on, writes the release, and the surface attempts the held
+   >   act (`D-0073` rule 7). The patrol itself still acts on nothing.
+   > - **Section 1, rule 2.1's table**: `held_by_bound`'s refusal row may be a claim refusal (`D-0073`
+   >   rule 3.1) as well as a capacity refusal.
+   >
+   > Nothing above is edited.
 3. **What it writes, and what it never does.**
    1. **A finding reaches the person once per episode.** Before writing a message, the tick writes a
       `presented` row with `subject_kind` `patrol` and `subject_id` `<finding>:<episode>`, through
@@ -15339,6 +15409,15 @@ of the successor's lap** (`D-0027` rules 1 and 6).
    predecessor that names no request is refused at the request test, with the `noThread` stop, as
    the in-scope `retry` is today.
 
+> **Annotation (2026-09-19, from D-0074), and the one that is not additive.** Added after this entry
+> was accepted, by the answer of rondo's human gate to rondo#247. **Section 1.2's approval is the
+> approved tip** of the chain that starts at the approval the predecessor was admitted under: from
+> that decision's scope, follow `supersedes_scope_id` to the approved descendant with no approved
+> descendant of its own (`D-0074` section 2). With no approved successor the tip is the admitting
+> approval, so a lap whose scope was never changed spends what it spent before. The successor's
+> admission is still an `admission` through the `redo` arm, written under the tip and tested against
+> the tip's budgets. Nothing else in section 1 moves, and the text above is not edited.
+
 ### 2. When the verdict is computed: before the gate is walked, at the one call site
 
 1. **The verdict is computed before the gate is walked, and a refusal walks nothing.** A walked gate
@@ -15485,9 +15564,28 @@ The points are kept as put, and the answer follows them.
 
 ## D-0071 — The model drafter: a Claude model rondo runs outside the lap over a thread it hands over, which chooses among held plans and agent types and writes words, while every number in a drafted scope is computed from recorded laps and may only be narrowed; and a plan the person pastes into the thread is how a fresh store gets its first template and agent type
 
-**Status:** accepted (2026-09-14, rondo's human gate). Three points were put to the gate and it chose
-the recommended option on each; the answers are recorded at the end of "What was put to the human
-gate, and its answer" directly below. Refs `D-0009`, `D-0010`,
+**Status:** superseded by D-0075 (2026-09-19). Accepted 2026-09-14 (rondo's human gate).
+
+> **Supersession note (2026-09-19, from D-0075).** By the answers of rondo's human gate to `D-0075`'s
+> three points (rondo#265), **a fresh store's first plan is the one setup records into the store**
+> (`D-0075` rule 2), not one the person pastes. That changes what this entry asserted about how a
+> store gets its first template and where a drafted scope may record an agent type from:
+> - **the title and point 1(a)**: a plan pasted into the thread stays a way a store gets a template and
+>   an agent type, and is still how a new kind of work arrives; **it is no longer how a fresh store
+>   gets its first**, which is the plan setup held;
+> - **rule 2.1.3**: the templates include setup rows, grouped and ordered by `D-0075` rule 2.3;
+> - **section 6.2**: a drafted scope records an agent type from a plan pasted into the thread **or
+>   from a setup row**, the latter by `D-0075` rule 2.4's `setup` basis and check;
+> - **point 1(c)**: still refused as a catalog; the setup row is the one narrow exception, for the
+>   reason in `D-0075`'s "What this gives up".
+>
+> Supersession is whole-entry, per "How to use this file", so **every other section, the gate's three
+> answers and the 2026-09-19 annotation from rondo#238's stage 2 build are not retired with it**: they
+> are carried as written and are still cited as `D-0071` section N. Nothing below is edited.
+
+Three points were put to the gate and it chose the recommended option on each; the answers are
+recorded at the end of "What was put to the human gate, and its answer" directly below. Refs
+`D-0009`, `D-0010`,
 `D-0022`, `D-0029`, `D-0032`, `D-0046`, `D-0052`, `D-0061`, `D-0062`, `D-0063`, `D-0064`, `D-0065`,
 `D-0066`, `D-0067`, `D-0068`, `D-0069`.
 
@@ -16026,14 +16124,14 @@ Each dated and additive unless marked, and added with this entry's acceptance:
 
 ## D-0073 — Which lines may run together: a lane ledger that allocates paths to a line from its admission until its work lands, refuses an admission that would share one, and releases it by reading the default branch; `D-0067` rule 1 gives way for two authorities, approving and every judgement no row settles stay with the person, and it is not a bigger capacity number
 
-**Status:** proposed (2026-09-19). **The number `D-0073` is proposed, not allocated**: another task
-may be taking numbers at the same time, and whichever of the two merges second renumbers. Two points
-are put to the human gate; see "What is put to the human gate". Refs `D-0012`, `D-0023`, `D-0027`,
+**Status:** accepted (2026-09-19, rondo's human gate, rondo#250). Two points were put to the gate and
+it chose the recommended option on both; the answers are recorded in section "What was put to the
+human gate, and its answer". Refs `D-0012`, `D-0023`, `D-0027`,
 `D-0030`, `D-0033`, `D-0048`, `D-0061`, `D-0063`, `D-0064`, `D-0065`, `D-0066`, `D-0067`, `D-0068`,
 `D-0070`, `D-0071`, rondo#8, rondo#250.
 
-**This entry decides and does not build.** Nothing in `src/` changes with it, and no earlier entry is
-edited by it. The annotations it would add on acceptance are listed in "Annotations this entry adds".
+**This entry decides and does not build.** Nothing in `src/` changes with it. The annotations it adds
+are listed in "Annotations this entry adds".
 
 On **2026-09-17** three agents worked seven rondo issues at once (#243-#248, #206, #221, #219), and a
 coordinator outside rondo did six things no single lap could do (rondo#250): it decided **what may run
@@ -16248,7 +16346,7 @@ number.
       branch that holds its tree entries holds its work.
    2. **It supersedes `D-0067` rule 2's ancestry clause**, which answers `D-0067`'s own residual "a
       squash-merged line whose branch is kept stays open to the reading". This is the gate's second
-      point.
+      answer.
    3. **The release row it causes is what `paths_free` reads** (rule 3.5). Landing is the
       `first_merged` `D-0067` anticipated, in the only form rondo can read without observing a merge.
    4. **A line whose work was changed on the way in** (a conflict resolved, an edit made on the forge)
@@ -16265,7 +16363,7 @@ number.
    stale and nothing is released. The held act is attempted with `D-0066`
    section 4's verdict computed then, unchanged. The patrol's function is not changed and still acts
    on nothing; the tick carries a second duty. Without a resident host, rule 6 is read at the next
-   admission the surface attempts. This is the gate's first point.
+   admission the surface attempts. This is the gate's first answer.
    1. **What the tick may attempt is an admission the organisation may make without a gate answer**:
       a plan's first admission, or an in-scope `retry` (`D-0064` O1 and O4). **A held line that is at
       its gate continues only by `revise`, which answers that gate, and the gate is the person's**
@@ -16340,7 +16438,7 @@ number.
 | Case | What rondo does | Handled? |
 |---|---|---|
 | **C1.** Seven issues, five touching `web.tsx` and `wording.ts` | The drafter drafts three claims (the page files; `docs/operations/`; `src/store/`) and folds the page issues into one line. A plan overlapping an open line waits as `held_by_order` (rule 3.4) | **Yes**, as far as the drafter cuts well. A bad cut costs parallelism (too wide) or one lap (too narrow, rule 5), never an unseen collision on a shared path |
-| **C2.** Page files pass to lane 3 when lane 1 merges | Lane 3's widening onto the page files is a `sequence` on lane 1 with `until` `paths_free`. The person merges #252 on the forge; the tick fetches, reads it landed (rule 6) and writes the release. Lane 3 is at its gate, so its drafted change is offered from that moment and the person's `revise` press starts the lap (rule 7.1) | **Yes**, under both gate points (a): the merge, and the one press that continues lane 3 anyway. Under point 1 (b) the person also answers one P3 per handover |
+| **C2.** Page files pass to lane 3 when lane 1 merges | Lane 3's widening onto the page files is a `sequence` on lane 1 with `until` `paths_free`. The person merges #252 on the forge; the tick fetches, reads it landed (rule 6) and writes the release. Lane 3 is at its gate, so its drafted change is offered from that moment and the person's `revise` press starts the lap (rule 7.1) | **Yes**, by both gate answers (a): the merge, and the one press that continues lane 3 anyway |
 | **C3.** #206's store change could not land alone | Seen by a reviewer's finding or a premise claim, or not at all. The drafted remedy is a fold (rule 9.2): widen onto the page and docs, then a drafted `revise` the person presses | **Half.** The fold is mechanical once the break is seen; seeing it is a reader's judgement over code the change did not touch, and nothing derives it |
 | **C4.** Lane 3 held overnight | The lap ends at its gate with its question; the line keeps its claim and holds no capacity; the ask carries a recommendation | **Yes for the line; no for the session.** The next lap re-reads the branch and the transcript rather than remembering |
 | **C5.** `lap-10-runbook.md` section 5 made false | The reviewer or drafter names the consequence; the claim widens onto the runbook. On the day lane 2 had landed an hour earlier, so the path was free; had lane 2 held it untouched, a narrowing would give it at once (rule 4.2); had lane 2 changed it, the widening waits for lane 2 to land | **Yes once seen**, with the same half as C3 for seeing it |
@@ -16394,7 +16492,9 @@ number.
 - **One git read per changed path, per waiting line, per tick.** `D-0067` section 4's snapshot cost,
   paid again for landing.
 
-### What is put to the human gate
+### What was put to the human gate, and its answer
+
+The points are kept as put, and the answer follows them.
 
 1. **Whether a held act is released by reading the default branch on a clock.**
    - **(a) Yes: the resident host's tick reads rule 6 for every line a `sequence` waits on, writes the
@@ -16419,18 +16519,32 @@ number.
      handover is point 1 (b). *Loses:* parallel work that hands ownership over is P3 per handover until
      a change in another repository lands.
 
+**The gate's answer (2026-09-19, rondo#250):**
+
+1. **(a).** A held act is released on a landing the resident host's tick reads (rule 7), and not by a
+   P3 after every merge: a press per merge puts a person in the loop for something every row already
+   settles.
+2. **(a).** "Landed" is rule 6's tree-entry equality, and it **supersedes `D-0067` rule 2's ancestry
+   clause**. Ancestry never fires on a squash merge, and every merge in this repository is a squash
+   (#254, #255, #256, #258, #260, #261, #263, #264, #266, #267, #268 and #269 all landed that way
+   on 2026-09-19), so keeping it would make the reading wrong in the only
+   case that occurs.
+
+The gate decided nothing else. The four limits found in this entry's last review round stand as
+residuals (below) and are not answered by it.
+
 ### Annotations this entry adds
 
-On acceptance, each dated and additive, per the answers the gate gives:
+Each dated and additive unless marked, and added with this entry's acceptance:
 
-- **`D-0067` rule 1**: "no new authority" is superseded by `D-0073` rule 1 for allocating paths and
+- **`D-0067` rule 1**, not additive: "no new authority" is superseded by `D-0073` rule 1 for allocating paths and
   refusing an overlap, and for nothing else.
-- **`D-0067` rule 2**: under the second point (a), the ancestry clause of "open lineage" is superseded by
+- **`D-0067` rule 2**, by the gate's second answer and not additive: the ancestry clause of "open lineage" is superseded by
   `D-0073` rule 6, and section 4's squash residual is answered.
 - **`D-0067` rule 3**: the `sequence` payload gains `paths`, the paths `then` asks for (`D-0073`
   rule 4.1).
 - **`D-0067` rule 3.4**: `paths_free` joins the closed list of release facts.
-- **`D-0067` rule 4**: under the first point (a), a release that is a reading is written on the resident
+- **`D-0067` rule 4**, by the gate's first answer: a release that is a reading is written on the resident
   host's tick and the held act attempted then.
 - **`D-0023` rules 10 and 14**: `reserve()` also tests claims, and the refusal record names which bound
   refused.
@@ -16461,6 +16575,10 @@ On acceptance, each dated and additive, per the answers the gate gives:
 | Collisions that share no path, and a change right alone and wrong landed alone | Needs a reader of what the work means | the reviewer's criterion (`D-0065` section 1.2.6), or a later entry if they are missed in practice |
 | An ask about one plan not yet admitted holds its request's other plans | `D-0066` rule 4.4 reads an ask with no `iteration_id` basis as standing over the whole request's first admissions; naming a plan in a basis is a change to that rule | a later entry, if disjoint plans of one request are held on each other's questions in practice |
 | How a claim is drawn on the page and the inbox | A screen question | the building change |
+| **Migration**: lines already open when the ledger is introduced (one at its gate, or `closed` with an unmerged branch) hold no claim until they are redone, so a new line could take their paths | Found in this entry's last review round; a migration giving every open line a claim (`/` by rule 2.5, or a drafted one) is needed **before claim tests are switched on** | the building change that switches them on |
+| **Quiescence**: a narrowing can take a declared, not yet committed path from a lap still performing that still means to change it (rule 4.2 protects only changed paths) | Found in the last review round; narrowing would be limited to lines with no lap in flight, re-checked when the narrowing is written | a later entry |
+| **Scope binding**: a claim change written on its own names no scope approval, so `D-0064` rule 3.5 and `D-0066`'s audit of which approval authorised it have no test for it | Found in the last review round; the claim row would need a `scope_decision_id` and a verdict at write time | a later entry |
+| **Two closed sibling tips** of one lineage tree that change the same path can never both equal the default branch, so rule 6 never reads the line landed | Found in the last review round; the person's release press (rule 4.3) closes it out, as for rule 6.4 | unchanged: the release press, until a later entry reads it otherwise |
 
 ### What would falsify it
 
@@ -16479,17 +16597,196 @@ On acceptance, each dated and additive, per the answers the gate gives:
   coordinator's**, with the difference traced to rules 2.5 or the append-only residual.
 - Any measurement in "What was measured" failing to reproduce at rondo `470af3b`.
 
+---
+
+## D-0074 — Raising a running lap's budget: a raise is a successor scope that changes only its budgets, the lap in flight follows its approval's approved successor, and the person presses it from the gate that refused them
+
+**Status:** accepted (2026-09-19, rondo's human gate, rondo#247). Three points were put to the gate
+and it chose the recommended option on each; the answers are recorded in section "What was put to the
+human gate, and its answer". Refs `D-0059`, `D-0066`, `D-0070`, `D-0071`, `D-0072`, rondo#247.
+
+**This entry decides and does not build.** Nothing in `src/` changes with it. The annotations it adds
+are listed in "Annotations this entry adds".
+
+**Numbering.** `D-0074` was reserved for this design on 2026-09-19, while rondo#250 held this file.
+`D-0073` and `D-0075` landed before it, and this entry fills the number between them.
+
+Lap 10 was admitted under 3 laps / $7.50 / $2.50 reserve and its first lap cost $8.46. **Ask for a
+change** spends the approval its lap was admitted under (`D-0070` section 1.2 as the page reads it,
+`D-0059`'s annotation from rondo#233 S4, and by construction: `reviseFromPage` compares the press
+against `scopeDecisionAdmitting(lap)` and refuses any other, `src/access/cli.ts` at rondo `fe4cad1`).
+With that approval spent, approve was the only answer left at the gate, and the owner took it with a
+`major` finding open (`docs/operations/lap-10-dogfood.md` N-42).
+
+The runbook's escape does not reach the lap: `recordScopeFromPage` writes `supersedesScopeId: null`,
+so **Set the scope** again yields a second approval beside the first. It can start fresh work. It
+cannot continue this lap, because the revise binds to the first.
+
+**The store already holds most of a raise.** `D-0066` rule 1.4 says a change is a successor, needs
+its own approval, states its own budgets, and shows the person what the predecessor spent;
+`supersededByApproved` retires a predecessor once any descendant is approved; `rondo scope show`
+already prints the predecessor's spend. What is missing is the one link from a running lap to an
+approval it was not admitted under, and a press.
+
+### 1. What supersession means for a raise
+
+1. **A raise is a successor scope under rule 1.4 whose payload differs from its predecessor's only
+   in `budgets`.** `requests`, `workspaces`, `agent_types`, `severity_threshold`, `outward_acts` and
+   `irreversible_additions` are copied from the predecessor row, byte for byte. Widening where the
+   work may act is a different question with different evidence, and it keeps going through the
+   drafter and the full scope screen. The writer does not police the difference (rule 1.4: rondo does
+   not need to tell widen from narrow); the **page** builds the successor from the predecessor, so
+   the person has no box for the other fields.
+2. **Budgets stay per approved row** (rule 1.4, unchanged). The successor's `laps` and `cost_usd`
+   are what it may admit **from here on**; the predecessor's spend stays under the predecessor's
+   decision and is not moved. The screen says so beside the boxes and shows what the predecessor
+   spent (`scopeSpent`, section 3.4), so "raise to $15" cannot be misread as "$15 in total".
+   *The alternative, a successor whose budgets are totals across the chain, was point 1 put to the
+   gate below, and the gate kept per-row budgets.*
+3. **One approved line per scope.** Approving a successor of a scope that already has an approved
+   successor is refused, in words that name the approved successor, so a chain of approvals never
+   forks. Without this, section 2's walk would have two answers and would have to pick one silently.
+   Drafted or declined successors do not count; only an approved one does, as in `supersededByApproved`.
+   This is `D-0066` rule 1.4 as already read and built from rondo#267 ("a scope is replaced once"),
+   and this entry relies on it rather than adding it.
+
+### 2. How a running lap picks up an approval it was not admitted under
+
+1. **A lap's approval is the approved tip of the chain that starts at the decision it was admitted
+   under.** From `scopeDecisionAdmitting(lap)`, read its scope, follow `supersedes_scope_id` downward
+   to the approved descendant with no approved descendant of its own, and take that approval. With no
+   successor the tip is the admitting decision itself, so nothing changes for a lap that was never
+   raised.
+2. **`D-0070` section 1.2 is amended to say "the approved tip of the approval the predecessor was
+   admitted under"** in place of "the approval the predecessor was admitted under", which is how
+   `D-0059`'s annotation from rondo#233 S4 reads it. The revise press compares the posted decision
+   with the tip, not with the admission row. The rule's reason survives: a hidden field still cannot
+   charge an unrelated approval that happens to cover the same request, because only the chain's own
+   tip is accepted.
+3. **The redo's consumption row is written under the tip**, and `scopeRefusal` tests it against the
+   tip's budgets, which is the ordinary `redo` arm with a different decision id. Test 3 (superseded)
+   already refuses the retired predecessor, so a stale page that posts the old id is refused in the
+   existing words.
+4. **A retired approval admits nothing new, including laps of other lines.** That is rule 1.4 as it
+   stands; the raise screen says it before the press, because a scope listing several requests is
+   retired for all of them.
+
+### 3. What happens to a lap in flight when its scope is superseded
+
+1. **Nothing, until its next act.** Scopes are tested when an act is taken (`D-0066` rule 3), not
+   continuously, so a performing lap is not stopped by a successor's approval, and a lap waiting at a
+   gate stays at the gate.
+2. **What it already spent stays where it was written.** Its admission row and its unread reserve
+   stay under the predecessor's decision (rule 1.4: "acts already recorded under it stay recorded
+   under it"). When its cost is read, it is read under the predecessor. The successor starts at
+   zero; the screen showing the successor says what the predecessor has spent and holds.
+3. **Its next act (a revise's lap) spends the tip** (section 2). Approve and publish do not spend a
+   scope, so they are unaffected.
+4. **A stop the refusal wrote still stands.** If the exhausted budget refused an act and wrote an
+   `asks` message (`D-0066` rule 4.4), raising lifts nothing: only the person's **carry on** does
+   (`D-0072` rule 3). The raise screen says this when an open ask stands over the line, and links to
+   it; it does not answer it for them, because a raise and a decision to go on are two answers.
+
+### 4. What the person presses
+
+1. **On the gate view, when the change path is closed by a budget.** The revise verdict is computed
+   before the gate is walked (`D-0070`). When it is `outside` on `laps`, `cost` or `expiry`, the view
+   says which budget, what is spent, and draws **Raise this approval's budget** beside the refusal,
+   where the gate's two answers are.
+2. **It opens the scope screen in a third state**, `?scope=<request>&raise=<decision>`, which draws:
+   the predecessor's budgets and what they have spent; the budgets redrawn by `computeScopeBudgets`
+   over the rows as they are now, **so the lap that broke the draft is in the sample** and the caveat
+   (rondo#247) names its cost; the sentence that the successor's budgets are from here on; and, if
+   one stands, the open ask.
+3. **One press, "Raise the budget", records the successor and approves it**, as **Set the scope**
+   does, by the same writes (one scope row with `supersedes_scope_id` set, then its approved
+   decision), so a raise is recorded exactly as a first scope is. It redirects to the gate view it
+   came from, where **Ask for a change** now spends the tip.
+4. **Refusals, in words, writing nothing:** the approval is not the chain's tip (someone raised it
+   already, and the words link to the tip); the predecessor already has an approved successor
+   (section 1.3); the posted plan digest no longer matches (the existing S3 check); the lap is no
+   longer at a gate.
+
+### 5. What changes where (for the build, not this entry)
+
+- `recordScopeFromPage`: accept a `supersedes` decision id from the raise form, copy the
+  predecessor's non-budget fields from the stored row (never from the form), and set
+  `supersedesScopeId`.
+- The store: add a `tipOf(decision)` read beside `supersededByApproved`. The refusal of a second
+  approved successor (section 1.3) is already built (rondo#267).
+- `reviseFromPage`: compare against `tipOf(scopeDecisionAdmitting(lap))`.
+- The gate view and the scope view: the press and the third state; wording in both catalogues.
+- The rondo#247 caveat's last clause ("once a lap is running its budget cannot be raised") changes
+  in the same build, in both catalogues, to point at the raise instead.
+- `docs/operations/lap-10-runbook.md`: the "second hole" paragraph is replaced.
+
+### What was put to the human gate, and its answer
+
+The points are kept as put, and the answer follows them.
+
+1. **Per-row budgets or chain totals.** *Recommended: per row*, rule 1.4 as it stands: no change to
+   `scopeRefusal`'s arithmetic, and the predecessor's spend is shown, not folded in. *The other:* a
+   successor's `cost_usd` is a total across the chain and `spentUnder` sums every decision in it.
+   That reads more naturally ("raise $7.50 to $15"), but it changes the arithmetic every admission is
+   tested with, and a successor could then be approved already exceeded.
+2. **Raise only, or any budget change.** *Recommended: any change to `budgets`, nothing else*: narrowing
+   through the same press is how a person ends a lap's line early without the `laps` 0 successor
+   having its own screen. *The other:* raise only (every budget greater than or equal to the
+   predecessor's), which is a smaller promise.
+3. **Where the press lives.** *Recommended: the gate view*, where the person is when the change path
+   closes. *The other:* also on the approved-scope view, for raising before any lap refuses. That can
+   follow later without changing sections 1 to 3.
+
+**The gate's answer (2026-09-19, rondo#247):**
+
+1. **Per row.** Budgets are per approved row, not chain totals. `D-0066` rule 1.4 already reads that
+   way: the successor's budget is what it may spend from here on, and the screen shows what the
+   predecessor spent.
+2. **Any change to `budgets`.** Any change to the budgets makes a successor, not raises only. A rule
+   that admits only increases would need to define which direction each field counts as a raise, and
+   a narrowing is already the shape `D-0071` uses elsewhere.
+3. **The gate view first.** The gate is where the person is standing when the refusal reaches them;
+   sending them elsewhere to fix it is the failure rondo#247 is about.
+
+### The two parts of rondo#247 are separable
+
+The caveat (built in rondo#260) is presentation over the draft; it reads no scope, writes nothing
+and binds nothing. The raise is store and press. The only coupling is one clause of the caveat's
+wording, which states today's truth and changes when the raise is built (section 5).
+
+### Annotations this entry adds
+
+Each dated, and added with this entry's acceptance:
+
+- **`D-0070` section 1.2**, not additive: the approval a `revise`'s lap spends is the approved tip of
+  the chain that starts at the approval the predecessor was admitted under (`D-0074` section 2).
+- **`D-0059`'s annotation from rondo#233 S4**, "The approval is the one the lap being revised was
+  admitted under": read as that approval's approved tip, by the same answer.
+
+### What would falsify it
+
+- **A lap's chain with two approved tips**, which would mean section 1.3's refusal is not held where
+  it is tested, and section 2's walk picks one silently.
+- **A raise the person meant as "in total"**, observed as a successor approved with budgets below
+  what the predecessor already spent. The gate's point 1 (b) comes back on evidence.
+- **People reaching the raise only after leaving the gate** (from the approved-scope view or the
+  runbook), often enough that the gate's point 3 other option is the usual walk.
+- **A raise that lifted a stop**, which would mean section 3.4 is not held and a raise was read as
+  **carry on**.
+- Any fact this entry cites from `src/` failing to reproduce at rondo `fe4cad1`.
+
+---
+
 ## D-0075 — A fresh store's first plan is the last thing setup does: setup hands the plan it composed to the store and not to the person, the host reads no path and composes nothing, and naming a repository stays installation
 
-**Status:** proposed (2026-09-19). **The number `D-0075` is proposed, not allocated**: `D-0073` is on
-`main` as proposed (rondo#250), and `D-0074` is reserved by the rondo#247 design (raising a running
-lap's budget), which is written and not yet in this file. Whichever entry merges later renumbers. Three
-points are put to the human gate; see "What is put to the human gate". Refs `D-0010`, `D-0019`,
+**Status:** accepted (2026-09-19, rondo's human gate, rondo#265). Three points were put to the gate
+and it chose the recommended option on each; the answers are recorded in section "What was put to the
+human gate, and its answer". Supersedes `D-0071`. Refs `D-0010`, `D-0019`,
 `D-0023`, `D-0025`, `D-0032`, `D-0041`, `D-0055`, `D-0064`, `D-0066`, `D-0069`, `D-0071`, rondo#238, rondo#259, rondo#265,
 rondo#266.
 
-**This entry decides and does not build.** Nothing in `src/` or `scripts/` changes with it. **On
-acceptance it supersedes `D-0071` as a whole, with every other section carried**, because it changes
+**This entry decides and does not build.** Nothing in `src/` or `scripts/` changes with it. **It
+supersedes `D-0071` as a whole, with every other section carried**, because it changes
 what `D-0071` asserted about where a drafted scope may record an agent type from (rule 2.4); this is
 `D-0071`'s own treatment of `D-0069`. The supersession and the annotations are listed in "Annotations
 this entry adds".
@@ -16553,8 +16850,12 @@ number.
    repository rondo works in and the fence roots around it, starting the resident host, and running
    setup again when one of the host's facts changes.** Each of these either creates something on this
    disk, widens what a lap may touch, or starts the process that serves the page. None of them is a
-   reply to a request. **K3 has no installation exception in the operator's words**, so this list is
-   the first point put to the gate, whole, and not taken here.
+   reply to a request. **K3 has no installation exception in the operator's words**, so this list was
+   the first point put to the gate, whole, and the gate took it (its answer 1). **One repository per
+   store and host**: setup for another repository is given its own root, so its store, control plane
+   and resident host are its own, and one store's setup rows are one repository's. This is the gate's
+   answer 2 made exact; the entry as proposed did not say which store a second repository's setup
+   uses (rondo#269's known limit).
 2. **Installation ends when the store holds a plan a lap can run on.** That is the change. Today setup
    ends one step short of that: it has composed the plan, and hands it to a person instead of to
    rondo. rondo#265 is right that the paste is past installation. **The plan's content is not**: every
@@ -16659,7 +16960,9 @@ number.
 - **Nothing on the page repairs an unfinished setup.** A store that setup never reached says so and
   cannot be fixed from the page. That is installation and is meant to be.
 
-### What is put to the human gate
+### What was put to the human gate, and its answer
+
+The points are kept as put, and the answer follows them.
 
 1. **Where installation ends, as rule 1.1 lists it.** It is put because K3 as the operator wrote it
    has no exception, and this entry leaves terminal acts in the walk. Every one of them, in full:
@@ -16727,9 +17030,29 @@ number.
      and `D-0039` rule 2 (rondo does not decide a project's command vocabulary) refuse; it is its
      own entry if it is wanted.
 
+**The gate's answer (2026-09-19, rondo#265):**
+
+1. **(a).** Installation covers the recurring terminal acts: starting the resident host at every host
+   start, and running setup again when a host fact moves. Not setup re-run from the page, and not the
+   host re-deriving paths: the completion definition is about the walk from a request to a pull
+   request, standing the program up is not part of that walk, and a host re-deriving paths would put
+   it back in the business of discovering its own environment, which rule 3.1 exists to prevent.
+2. **(a).** Naming a repository is installation, and working in another is setup again. Not picking
+   an existing checkout and approving a derived plan, and not cloning. **The known limit recorded in
+   rondo#269 is written in as part of this answer** (rule 1.1): one repository per store and host,
+   and setup for another repository is given its own root. Without it, setup re-run with another
+   target under the same root would put both repositories' setup rows in one store, rule 2.3 would
+   offer both, and the restarted host, which publishes to one `--repo`, could not publish a lap
+   started from the other's plan.
+3. **(a).** A new kind of work in an installed repository may still need a pasted plan for now, and
+   gets its own entry. Setup naming several kinds per repository is not taken; the drafter proposing
+   a new kind is refused by `D-0071` rule 5.4 and `D-0039` rule 2 anyway.
+
+`D-0071` is superseded on this acceptance, with its other sections carried.
+
 ### Annotations this entry adds
 
-On acceptance, each dated:
+Each dated, and added with this entry's acceptance:
 
 - **`D-0071` gains `Status: superseded by D-0075`** and a supersession note naming what changes, all
   in how a store gets a template and where a drafted scope records an agent type from; every other
@@ -16765,8 +17088,8 @@ On acceptance, each dated:
 |---|---|---|
 | Starting the resident host without a terminal (a service unit or its like) | Installation; K3 is unmet at each host start until it exists | an installation entry, when rondo is packaged for someone other than its developers |
 | A setup row whose paths have gone stale | Guarding it means rondo re-checking fence geometry, which rule 3.1 declines; a stale lap plan fails the same way today | a later entry, if a stale setup row is observed to cost a lap |
-| A new kind of work in the same repository still needs a pasted plan | The gate's point 3; `D-0071` section 6, carried | the gate, then the entry its (a) names |
-| More than one repository per host | The gate's second point; `rondo web` takes one `--repo` | the gate, then the entry its (b) would need |
+| A new kind of work in the same repository still needs a pasted plan | The gate's answer 3; `D-0071` section 6, carried | the entry the gate's answer 3 names |
+| More than one repository per store and host | The gate's answer 2 and rule 1.1: one repository per store and host; `rondo web` takes one `--repo` | the entry point 2 (b) would need, if it comes back on evidence |
 | The setup script is named for dogfooding | It is the only setup rondo has; renaming it is a building choice | the building change |
 
 ### What would falsify it
