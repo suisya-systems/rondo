@@ -4175,31 +4175,25 @@ async function scopeForm(
   nowMs: number,
 ): Promise<unknown> {
   const lead = <p class="text-[13px] leading-6">{wording.scopeLead}</p>;
-  const held = await plansFor(ports, wording, view.messageId, nowMs);
-  if ("note" in held) {
-    return (
-      <>
-        {lead}
-        {note(held.note)}
-      </>
-    );
-  }
-  // The person's pick, or the first: a plan pasted into this thread, else the
-  // one the latest lap ran on (`heldPlans`' order).
-  // The plan named in the address, wherever rondo holds it, or the first
-  // offered. One named and no longer held is said, with the list to choose
-  // from again, and no form -- never a different plan under the same address.
+  // The plan named in the address, wherever rondo holds it -- resolved first,
+  // so one chosen earlier stays usable when the list of recent plans no
+  // longer shows it -- else the first offered: pasted into this thread, else
+  // the one the latest lap ran on (`heldPlans`' order). One named and no
+  // longer held is said, with the list to choose from again, and no form:
+  // never a different plan under the same address.
   const named = await chosenPlan(ports, view, nowMs);
-  if (view.plan !== null && named === null) {
+  const held = await plansFor(ports, wording, view.messageId, nowMs);
+  const offered = "plans" in held ? held.plans : [];
+  if (named === null && (view.plan !== null || "note" in held)) {
     return (
       <>
         {lead}
-        {note(wording.scopePlanGone)}
-        {planChoice(wording, view, held.plans, null)}
+        {view.plan !== null ? note(wording.scopePlanGone) : null}
+        {"note" in held ? note(held.note) : planChoice(wording, view, offered, null)}
       </>
     );
   }
-  const chosen = named ?? (held.plans[0] as HeldPlan);
+  const chosen = named ?? (offered[0] as HeldPlan);
   // **The plan answers for a digest the store does not hold yet**, as it did
   // when the plan was a file (rondo#233 S3): a pasted plan's agent type is
   // recorded by the press, and its own input says what it bounds before then.
@@ -4243,7 +4237,7 @@ async function scopeForm(
       <p class="note rounded-md border border-border bg-muted/60 px-3 py-2 text-[13px] leading-5">
         {wording.scopeMaybeApproved}
       </p>
-      {planChoice(wording, view, held.plans, chosen.planDigest)}
+      {planChoice(wording, view, offered, chosen.planDigest)}
       <section class={`${CARD} space-y-1`}>
         {/* **The card says what it holds**: the plan, where it runs, and what
             its agent type is allowed. Its heading named only the last of those
@@ -4603,8 +4597,12 @@ async function scopeApproved(
           {wording.scopeRetired}
         </p>
       ) : null}
-      {retired || token === null || newIterationId === null ? null : allowed.length === 0 ? (
-        note("plans" in plans ? wording.scopeNoPlanForScope : plans.note)
+      {retired || token === null || newIterationId === null ? null : runsOn === null &&
+        allowed.length === 0 ? (
+        <>
+          {gone ? note(wording.scopePlanGone) : null}
+          {note("plans" in plans ? wording.scopeNoPlanForScope : plans.note)}
+        </>
       ) : runsOn === null ? (
         <>
           {gone ? note(wording.scopePlanGone) : null}
