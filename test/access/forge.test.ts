@@ -7,7 +7,7 @@
  * a bare remote, a base pushed on `main`, a `topic` branch with the case applied.
  */
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -579,4 +579,17 @@ test("a base that moved while the line ran is not the line's work: the set is ta
     kind: "landed",
     paths: ["a.txt", "b.txt", "c.txt"],
   });
+});
+
+test("a deleted file the default branch replaced with a directory of the same name is not landed", async () => {
+  const { merger, landing } = landingWorld();
+  writeFileSync(join(merger, "a.txt"), "changed\n");
+  git(merger, "rm", "-q", "b.txt");
+  mkdirSync(join(merger, "b.txt"));
+  writeFileSync(join(merger, "b.txt", "inside"), "a directory now\n");
+  writeFileSync(join(merger, "c.txt"), "new\n");
+  git(merger, "add", ".");
+  git(merger, "commit", "-m", "squash, with b.txt a directory");
+  git(merger, "push", "-q", "origin", "main");
+  expect(await readLanding(landing())).toMatchObject({ kind: "notLanded", differing: ["b.txt"] });
 });

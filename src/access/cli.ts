@@ -1600,7 +1600,7 @@ export async function main(
   // **`release` is dispatched here for `abandon`'s reason**: it writes one row
   // of rondo's own and drives no continuo verb (D-0073 rule 4.3).
   if (parsed.command === "release") {
-    return await commandRelease(parsed, store);
+    return await commandRelease(parsed, store, environment);
   }
 
   // **`explain` is dispatched before continuo is started, for `abandon`'s
@@ -7749,15 +7749,25 @@ function unverifiedContinuo(): VerifiedContinuo {
  * `abandon()`; whether the work landed is the person's judgement, recorded as
  * theirs by the row's operator author.
  */
-async function commandRelease(parsed: ParsedCommand, store: IterationStore): Promise<number> {
-  if (parsed.iterationId === null || parsed.actorId === null) {
-    return refuse("release needs --iteration-id ID and --actor-id ID.");
+async function commandRelease(
+  parsed: ParsedCommand,
+  store: IterationStore,
+  environment: Readonly<Record<string, string | undefined>>,
+): Promise<number> {
+  if (parsed.iterationId === null) {
+    return refuse("release needs --iteration-id ID.");
+  }
+  // The release is recorded as the person's judgement, so the person is the
+  // one allowed to answer a gate, checked as every such press is.
+  const actor = approvedActor(parsed.actorId, environment);
+  if ("refusal" in actor) {
+    return refuse(actor.refusal);
   }
   const outcome = await store.releaseLane({
     iterationId: parsed.iterationId,
     takenOver: null,
     authorKind: "operator",
-    authorId: parsed.actorId,
+    authorId: actor.actorId,
     bases: [{ form: "iteration", iterationId: parsed.iterationId }],
     nowMs: Date.now(),
   });

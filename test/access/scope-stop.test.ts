@@ -1402,6 +1402,13 @@ test(
     );
     const environment = { RONDO_STORE: path, RONDO_APPROVER: "oidc|operator-1" };
     const argv = ["release", "--iteration-id", "i-held", "--actor-id", "oidc|operator-1"];
+    // The press is the approver's, checked as every such press is.
+    const stranger = await captured(
+      ["release", "--iteration-id", "i-held", "--actor-id", "oidc|someone-else"],
+      environment,
+    );
+    expect(stranger.code).not.toBe(0);
+    expect(stranger.text).toContain("must be the same identity");
     const atGate = await captured(argv, environment);
     expect(atGate.code).not.toBe(0);
     expect(atGate.text).toContain("has not ended");

@@ -1005,14 +1005,15 @@ export async function readLanding(request: LandingRequest): Promise<LandingReadi
 
 /**
  * Every entry of a commit's tree, recursively, as `mode type oid` by path, or
- * why git would not list it. `-r` lists blobs and gitlinks and never a tree, so
- * a path is compared as the file it is.
+ * why git would not list it. `-t` lists the trees too, so a file one side
+ * deleted and the other replaced with a directory of the same name differs
+ * rather than reading as absent from both.
  */
 async function treeEntries(
   git: (argv: readonly string[]) => Promise<CommandOutcome>,
   commit: string,
 ): Promise<ReadonlyMap<string, string> | string> {
-  const listed = await git(["ls-tree", "-r", "-z", "--full-tree", commit]);
+  const listed = await git(["ls-tree", "-r", "-t", "-z", "--full-tree", commit]);
   const failure = queryFailure(listed);
   if (failure !== null) {
     return failure;
