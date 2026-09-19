@@ -4240,6 +4240,88 @@ test("the way onto the publish screen is drawn on approved rows only, and never 
   expect(closedOther).not.toContain("?publish=");
 });
 
+test("the publish screen draws the request fold as a fold, and the exact body is one press away (#248)", async () => {
+  // As `requestBlock` writes it: the request quotes a code block and a stray
+  // `</details>` of its own, and the fence is sized past its backticks.
+  const request = "Add a retry budget.\n```ts\nretry(3)\n```\n</details>\nDo not push.";
+  const body = [
+    "## What changed",
+    "",
+    "- a retry budget",
+    "",
+    "## How this got here",
+    "",
+    "- rondo walked run `run-0001`.",
+    "",
+    "<details>",
+    "<summary>The request this lap was given (written for the agent, not a description of the change)</summary>",
+    "",
+    "````",
+    request,
+    "````",
+    "",
+    "</details>",
+    "",
+    "This pull request was opened by `rondo publish`, which an operator ran. Merging it is not.",
+  ].join("\n");
+  const world = fresh();
+  await approvedLap(world);
+  const html = await operatorPage(
+    portsOver(world, "ada", [], null, null, async () => ({ ...DRY_RUN, body })),
+    "t",
+    { kind: "publish", iterationId: "i-0001" },
+  );
+  const screen = html.slice(html.indexOf('id="publish"'));
+  const drawn = screen.slice(
+    screen.indexOf('id="publish-body-drawn"'),
+    screen.indexOf('id="publish-body-exact"'),
+  );
+  const exact = screen.slice(screen.indexOf('id="publish-body-exact"'));
+
+  // Drawn: the wrapper is the page's own fold, labelled with the summary's
+  // words, and the markup that wrapped it is not in the text.
+  expect(drawn).toContain('<details id="publish-body-request"');
+  expect(drawn).toContain(
+    "The request this lap was given (written for the agent, not a description of the change)",
+  );
+  expect(drawn).not.toContain("&lt;summary&gt;");
+  expect(drawn).not.toContain("````");
+  // The request inside the fold is whole, its own `</details>` included, and
+  // the text on either side of the fold is still there.
+  expect(drawn).toContain("retry(3)\n```\n&lt;/details&gt;\nDo not push.");
+  expect(drawn).toContain("## What changed");
+  expect(drawn).toContain("which an operator ran. Merging it is not.");
+  // Raw: a named control beside Preview, and the body exactly as it is sent.
+  expect(screen).toContain('<legend class="sr-only">Show the body as</legend>');
+  expect(screen).toMatch(/id="publish-body-preview" class="sr-only" checked=""\/>Preview<\/label>/);
+  expect(screen).toContain('id="publish-body-raw" class="sr-only"/>Raw</label>');
+  expect(exact).toContain(
+    body.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;"),
+  );
+
+  // A body without the fold -- one too large to quote the request -- has
+  // nothing to draw differently, and is shown once, as text.
+  const plain = await operatorPage(
+    portsOver(world, "ada", [], null, null, async () => DRY_RUN),
+    "t",
+    { kind: "publish", iterationId: "i-0001" },
+  );
+  expect(plain).not.toContain('id="publish-body-raw"');
+  expect(plain).toContain("## What changed");
+
+  // A wrapper that does not close as `requestBlock` closes one is not guessed at.
+  const broken = await operatorPage(
+    portsOver(world, "ada", [], null, null, async () => ({
+      ...DRY_RUN,
+      body: body.replace("````\n\n</details>\n", "````\n\n"),
+    })),
+    "t",
+    { kind: "publish", iterationId: "i-0001" },
+  );
+  expect(broken).not.toContain('id="publish-body-request"');
+  expect(broken).toContain("&lt;summary&gt;The request this lap was given");
+});
+
 test("the publish screen is in the page's language, and the model's reading is material beside it (#233 S5, D-0065 5.5)", async () => {
   const world = fresh();
   await approvedLap(world);

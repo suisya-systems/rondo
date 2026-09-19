@@ -827,6 +827,11 @@ export interface Chrome {
   readonly publishRequestHeading: string;
   readonly publishTitleLabel: string;
   readonly publishBodyLabel: string;
+  /** The body drawn or byte for byte (rondo#248): the pair's name, its two sides, the exact side's line. */
+  readonly publishBodyViewLegend: string;
+  readonly publishBodyPreview: string;
+  readonly publishBodyRaw: string;
+  readonly publishBodyRawNote: string;
   readonly publishNoticedHeading: string;
   /** The model's reading, material beside the rest and read by nothing (D-0065 5.5). */
   readonly publishModelHeading: string;
@@ -1435,6 +1440,10 @@ explanation you pressed on and then answers the gate.`,
   publishRequestHeading: "The pull request it would open",
   publishTitleLabel: "Title",
   publishBodyLabel: "Body",
+  publishBodyViewLegend: "Show the body as",
+  publishBodyPreview: "Preview",
+  publishBodyRaw: "Raw",
+  publishBodyRawNote: "Exactly the text that will be sent, byte for byte.",
   publishNoticedHeading: "What rondo noticed",
   publishModelHeading: "What the model read",
   publishModelNote:
@@ -2106,6 +2115,10 @@ const JA: Partial<Chrome> = Object.freeze({
   publishRequestHeading: "作られるプルリクエスト",
   publishTitleLabel: "タイトル",
   publishBodyLabel: "本文",
+  publishBodyViewLegend: "本文の表示",
+  publishBodyPreview: "プレビュー",
+  publishBodyRaw: "原文",
+  publishBodyRawNote: "この本文が、一字一句このまま送信されます。",
   publishNoticedHeading: "rondo が気づいたこと",
   publishModelHeading: "モデルが読んだこと",
   publishModelNote: "判断の材料です。承認ではなく、上の内容がこれで決まったわけでもありません。",

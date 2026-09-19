@@ -1966,7 +1966,8 @@ function pill(tone: Tone, text: string, extra = "") {
   );
 }
 
-function chevron() {
+/** `open` names the fold that turns it, where one fold sits inside another. */
+function chevron(open = "group-open:rotate-90") {
   return (
     <svg
       aria-hidden="true"
@@ -1976,7 +1977,7 @@ function chevron() {
       stroke-width="1.6"
       stroke-linecap="round"
       stroke-linejoin="round"
-      class="size-3.5 shrink-0 text-faint transition-transform group-open:rotate-90"
+      class={`size-3.5 shrink-0 text-faint transition-transform ${open}`}
     >
       <path d="m6 3.5 4.5 4.5L6 12.5" />
     </svg>
@@ -4266,6 +4267,133 @@ function publishLink(
   );
 }
 
+/** A pull request body split around the request fold it carries. */
+interface RequestFold {
+  readonly before: string;
+  readonly summary: string;
+  readonly request: string;
+  readonly after: string;
+}
+
+/**
+ * The request fold `requestBlock` (cli.ts) writes into a pull request body, or
+ * null where the body carries none (rondo#248).
+ *
+ * **The fence is what makes the edge unambiguous.** `requestBlock` sizes it one
+ * longer than the longest run of backticks in what it quotes, so no line of the
+ * quotation can equal it, and the first line that does is the closing one. The
+ * first opening that does not close exactly as `requestBlock` closes one is
+ * taken for no fold at all: the body is then drawn as the text it is, which is
+ * never wrong, rather than as a guess.
+ */
+function requestFold(body: string): RequestFold | null {
+  const lines = body.split("\n");
+  const at = lines.indexOf("<details>");
+  if (at === -1) {
+    return null;
+  }
+  const summary = /^<summary>(.*)<\/summary>$/.exec(lines[at + 1] ?? "");
+  const fence = lines[at + 3] ?? "";
+  if (summary === null || lines[at + 2] !== "" || !/^`{3,}$/.test(fence)) {
+    return null;
+  }
+  const close = lines.indexOf(fence, at + 4);
+  if (close === -1 || lines[close + 1] !== "" || lines[close + 2] !== "</details>") {
+    return null;
+  }
+  return {
+    before: lines.slice(0, at).join("\n").trimEnd(),
+    summary: summary[1] ?? "",
+    request: lines.slice(at + 4, close).join("\n"),
+    after: lines
+      .slice(close + 3)
+      .join("\n")
+      .replace(/^\n+/, ""),
+  };
+}
+
+/** The body text as a block, wrapping rather than scrolling sideways. */
+const BODY_PRE = `${PRE.replace(/whitespace-pre$/, "whitespace-pre-wrap")} wrap-anywhere`;
+
+/**
+ * The pull request body on the publish screen (rondo#248): drawn, and exact.
+ *
+ * **The bytes are what is sent and the page does not change one of them.** It
+ * only draws the one piece of markup rondo writes itself -- the request fold --
+ * as this page's own fold, so a reader sees a fold and not `</details>`. The
+ * rest stays the text it is: there is no markdown renderer here, and this is
+ * not one. `Raw` beside `Preview` shows the body byte for byte, the way a forge
+ * offers the source of what it renders; a pair of radios and `:has()`, so it
+ * works with script off. A body with no fold has nothing to draw differently,
+ * and is shown once, as text.
+ */
+function publishBody(wording: Chrome, body: string) {
+  const fold = requestFold(body);
+  if (fold === null) {
+    return (
+      <pre class={`${BODY_PRE} mt-2`} lang="">
+        {body}
+      </pre>
+    );
+  }
+  const tab =
+    "cursor-pointer rounded px-2.5 py-0.5 text-[12px] leading-5 font-medium text-muted-foreground select-none hover:text-foreground has-checked:bg-card has-checked:text-foreground has-checked:shadow-sm has-focus-visible:ring-2 has-focus-visible:ring-ring";
+  return (
+    <div class="group/body mt-2 space-y-2">
+      <fieldset class="inline-flex rounded-md border border-border bg-muted/50 p-0.5">
+        <legend class="sr-only">{wording.publishBodyViewLegend}</legend>
+        <label class={tab}>
+          <input
+            type="radio"
+            name="publish-body-view"
+            id="publish-body-preview"
+            class="sr-only"
+            checked
+          />
+          {wording.publishBodyPreview}
+        </label>
+        <label class={tab}>
+          <input type="radio" name="publish-body-view" id="publish-body-raw" class="sr-only" />
+          {wording.publishBodyRaw}
+        </label>
+      </fieldset>
+      <div
+        id="publish-body-drawn"
+        class="space-y-2 group-has-[#publish-body-raw:checked]/body:hidden"
+      >
+        {fold.before === "" ? null : (
+          <pre class={BODY_PRE} lang="">
+            {fold.before}
+          </pre>
+        )}
+        <details id="publish-body-request" class="group/request rounded-md border border-border">
+          <summary class="flex cursor-pointer list-none items-center gap-2 rounded-md px-3 py-1.5 text-[12px] leading-5 text-muted-foreground outline-none select-none hover:bg-accent focus-visible:bg-accent [&::-webkit-details-marker]:hidden">
+            {chevron("group-open/request:rotate-90")}
+            <span lang="">{fold.summary}</span>
+          </summary>
+          <pre class={`${BODY_PRE} rounded-none border-0 border-t`} lang="">
+            {fold.request}
+          </pre>
+        </details>
+        {fold.after === "" ? null : (
+          <pre class={BODY_PRE} lang="">
+            {fold.after}
+          </pre>
+        )}
+      </div>
+      <div
+        id="publish-body-exact"
+        class="hidden space-y-1 group-has-[#publish-body-raw:checked]/body:block"
+      >
+        <p class="text-[12px] leading-5 text-muted-foreground">{wording.publishBodyRawNote}</p>
+        <pre class={BODY_PRE} lang="">
+          {body}
+        </pre>
+      </div>
+    </div>
+  );
+}
+
 /**
  * The publish screen: the dry-run, and the press that runs it (rondo#233 S5,
  * D-0059 section 5a's `publish` row, D-0060).
@@ -4421,12 +4549,7 @@ async function publishView(
             {chevron()}
             {wording.publishBodyLabel}
           </summary>
-          <pre
-            class={`${PRE.replace(/whitespace-pre$/, "whitespace-pre-wrap")} mt-2 wrap-anywhere`}
-            lang=""
-          >
-            {shown.body}
-          </pre>
+          {publishBody(wording, shown.body)}
         </details>
       </section>
       {shown.modelReading.length === 0 ? null : (
