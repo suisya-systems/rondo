@@ -3682,83 +3682,87 @@ test("rendering the scope screen writes nothing, however many times or in which 
   expect(rows(world.connection, "operator_attention")).toBe(0);
 });
 
-test("the record-scope press writes the scope, reads it back, counts it and approves it with the digest read back -- and never a decision when the write refused", async () => {
-  const dir = mkdtempSync(join(tmpdir(), "rondo-scope-write-"));
-  const storePath = join(dir, "store.db");
-  const connection = new DatabaseSync(storePath);
-  const record = advisoryRecord(connection);
-  const store = iterationStore(connection, { maxOccupying: 4, maxLive: 6 });
-  const requestId = "request-scope-write";
-  await record.recordThreadMessage({
-    messageId: requestId,
-    body: "Please fix it.",
-    authorKind: "operator",
-    authorId: "ada",
-    inReplyTo: null,
-    atMs: 1_000,
-    bases: [],
-    asks: false,
-  });
-  const plan = await seedScopePlan(record, requestId);
-  const environment = { RONDO_APPROVER: "ada" };
-  const draft: ScopeFormDraft = {
-    scopeId: newScopeId(),
-    requestMessageId: requestId,
-    planDigest: plan.planDigest,
-    agentTypeDigest: plan.agentTypeDigest,
-    budgets: {
-      laps: 1,
-      review_rounds: 1,
-      cost_usd: 5,
-      cost_reserve_usd: 1,
-      expires_at_ms: 9_999_999_999,
-    },
-    severityThreshold: "major",
-    outwardActs: [],
-  };
+test(
+  "the record-scope press writes the scope, reads it back, counts it and approves it with the digest read back -- and never a decision when the write refused",
+  async () => {
+    const dir = mkdtempSync(join(tmpdir(), "rondo-scope-write-"));
+    const storePath = join(dir, "store.db");
+    const connection = new DatabaseSync(storePath);
+    const record = advisoryRecord(connection);
+    const store = iterationStore(connection, { maxOccupying: 4, maxLive: 6 });
+    const requestId = "request-scope-write";
+    await record.recordThreadMessage({
+      messageId: requestId,
+      body: "Please fix it.",
+      authorKind: "operator",
+      authorId: "ada",
+      inReplyTo: null,
+      atMs: 1_000,
+      bases: [],
+      asks: false,
+    });
+    const plan = await seedScopePlan(record, requestId);
+    const environment = { RONDO_APPROVER: "ada" };
+    const draft: ScopeFormDraft = {
+      scopeId: newScopeId(),
+      requestMessageId: requestId,
+      planDigest: plan.planDigest,
+      agentTypeDigest: plan.agentTypeDigest,
+      budgets: {
+        laps: 1,
+        review_rounds: 1,
+        cost_usd: 5,
+        cost_reserve_usd: 1,
+        expires_at_ms: 9_999_999_999,
+      },
+      severityThreshold: "major",
+      outwardActs: [],
+    };
 
-  const recorded = await recordScopeFromPage(environment, store, storePath, "ada", draft);
-  expect(recorded.ok).toBe(true);
-  expect(recorded.why).toBeUndefined();
-  expect(recorded.scopeDecisionId).toBeDefined();
+    const recorded = await recordScopeFromPage(environment, store, storePath, "ada", draft);
+    expect(recorded.ok).toBe(true);
+    expect(recorded.why).toBeUndefined();
+    expect(recorded.scopeDecisionId).toBeDefined();
 
-  const stored = await record.readScope(draft.scopeId);
-  expect(stored.kind).toBe("read");
-  const decision = await record.readScopeDecision(recorded.scopeDecisionId as string);
-  expect(decision.kind).toBe("read");
-  if (decision.kind === "read" && stored.kind === "read") {
-    // D-0066 rule 2.2: the digest approved is the digest read back, never one
-    // a form posted -- true here by construction (`recordScopeFromPage`'s own
-    // order), not by a person copying a line.
-    expect(decision.decision.scopeDigest).toBe(stored.scope.scopeDigest);
-    expect(decision.decision.outcome).toBe("approved");
-  }
-  // Presented, once, for the row this press wrote (D-0042 rule 3).
-  const attention = new DatabaseSync(storePath)
-    .prepare(
-      "SELECT count(*) AS n FROM operator_attention " +
-        "WHERE subject_kind = 'scope' AND subject_id = ? AND disposition = 'presented'",
-    )
-    .get(draft.scopeId) as { n: number };
-  expect(Number(attention.n)).toBe(1);
+    const stored = await record.readScope(draft.scopeId);
+    expect(stored.kind).toBe("read");
+    const decision = await record.readScopeDecision(recorded.scopeDecisionId as string);
+    expect(decision.kind).toBe("read");
+    if (decision.kind === "read" && stored.kind === "read") {
+      // D-0066 rule 2.2: the digest approved is the digest read back, never one
+      // a form posted -- true here by construction (`recordScopeFromPage`'s own
+      // order), not by a person copying a line.
+      expect(decision.decision.scopeDigest).toBe(stored.scope.scopeDigest);
+      expect(decision.decision.outcome).toBe("approved");
+    }
+    // Presented, once, for the row this press wrote (D-0042 rule 3).
+    const attention = new DatabaseSync(storePath)
+      .prepare(
+        "SELECT count(*) AS n FROM operator_attention " +
+          "WHERE subject_kind = 'scope' AND subject_id = ? AND disposition = 'presented'",
+      )
+      .get(draft.scopeId) as { n: number };
+    expect(Number(attention.n)).toBe(1);
 
-  // A second row, over a request this store never heard of: `recordScope`
-  // refuses it, and a decision is never recorded for a scope that was not
-  // taken (D-0036 rule 1's order -- write, present, count).
-  const refusedDraft: ScopeFormDraft = {
-    ...draft,
-    scopeId: newScopeId(),
-    requestMessageId: "no-such-request",
-  };
-  const refused = await recordScopeFromPage(environment, store, storePath, "ada", refusedDraft);
-  expect(refused.ok).toBe(false);
-  // No plan is held for a request nobody made, so the press is refused before
-  // anything is written -- the same no-decision outcome, earlier.
-  expect(refused.why).toBe("scopeRefusedPlanChanged");
-  expect(refused.scopeDecisionId).toBeUndefined();
-  expect(await record.readScope(refusedDraft.scopeId)).toEqual({ kind: "absent" });
-  expect(rows(new DatabaseSync(storePath), "scope_decision")).toBe(1);
-});
+    // A second row, over a request this store never heard of: `recordScope`
+    // refuses it, and a decision is never recorded for a scope that was not
+    // taken (D-0036 rule 1's order -- write, present, count).
+    const refusedDraft: ScopeFormDraft = {
+      ...draft,
+      scopeId: newScopeId(),
+      requestMessageId: "no-such-request",
+    };
+    const refused = await recordScopeFromPage(environment, store, storePath, "ada", refusedDraft);
+    expect(refused.ok).toBe(false);
+    // No plan is held for a request nobody made, so the press is refused before
+    // anything is written -- the same no-decision outcome, earlier.
+    expect(refused.why).toBe("scopeRefusedPlanChanged");
+    expect(refused.scopeDecisionId).toBeUndefined();
+    expect(await record.readScope(refusedDraft.scopeId)).toEqual({ kind: "absent" });
+    expect(rows(new DatabaseSync(storePath), "scope_decision")).toBe(1);
+  },
+  WINDOWS_HEAVY_TIMEOUT_MS,
+);
 
 test(
   "a plan that moved between the draw and the press records nothing, because the approval would name a workspace nobody saw",
@@ -3834,216 +3838,228 @@ test(
   WINDOWS_HEAVY_TIMEOUT_MS,
 );
 
-test("a second press of an edited form is refused, and never reported as an approval of numbers that were replaced", async () => {
-  // The id is minted per draw, so the store refuses the second row on the id
-  // and the approval already there reads back -- which is a screen saying
-  // *approved* about a budget the person has just replaced (rondo#233 S3 press
-  // review). The id says which form this is; the payload says whether it is
-  // still the same scope.
-  const dir = mkdtempSync(join(tmpdir(), "rondo-scope-edited-"));
-  const storePath = join(dir, "store.db");
-  const connection = new DatabaseSync(storePath);
-  const record = advisoryRecord(connection);
-  const store = iterationStore(connection, { maxOccupying: 4, maxLive: 6 });
-  const requestId = "request-scope-edited";
-  await record.recordThreadMessage({
-    messageId: requestId,
-    body: "Please fix it.",
-    authorKind: "operator",
-    authorId: "ada",
-    inReplyTo: null,
-    atMs: 1_000,
-    bases: [],
-    asks: false,
-  });
-  const plan = await seedScopePlan(record, requestId);
-  const environment = { RONDO_APPROVER: "ada" };
-  const draft: ScopeFormDraft = {
-    scopeId: newScopeId(),
-    requestMessageId: requestId,
-    planDigest: plan.planDigest,
-    agentTypeDigest: plan.agentTypeDigest,
-    budgets: {
-      laps: 3,
-      review_rounds: 1,
-      cost_usd: 5,
-      cost_reserve_usd: 1,
-      expires_at_ms: 9_999_999_999,
-    },
-    severityThreshold: "major",
-    outwardActs: [],
-  };
-  const first = await recordScopeFromPage(environment, store, storePath, "ada", draft);
-  expect(first.ok).toBe(true);
-
-  // The same form, back from the browser's history, with one number changed.
-  const edited: ScopeFormDraft = { ...draft, budgets: { ...draft.budgets, laps: 10 } };
-  const again = await recordScopeFromPage(environment, store, storePath, "ada", edited);
-  expect(again.ok).toBe(false);
-  expect(again.why).toBe("scopeRefusedEdited");
-  expect(again.scopeDecisionId).toBeUndefined();
-
-  // What is stored is still the first press's scope, approved once.
-  const stored = await record.readScope(draft.scopeId);
-  expect(stored.kind === "read" && stored.scope.payload.budgets.laps).toBe(3);
-  expect(rows(new DatabaseSync(storePath), "scope")).toBe(1);
-  expect(rows(new DatabaseSync(storePath), "scope_decision")).toBe(1);
-
-  // An unedited re-press -- a double click, a resend after a slow write -- is
-  // still the write it repeats, and still lands on the approval it made.
-  const repeated = await recordScopeFromPage(environment, store, storePath, "ada", draft);
-  expect(repeated.ok).toBe(true);
-  expect(repeated.scopeDecisionId).toBe(first.scopeDecisionId);
-  expect(rows(new DatabaseSync(storePath), "scope_decision")).toBe(1);
-});
-
-test("a scoped start press that names a row already there admits nothing, rather than asking the request a question nobody asked", async () => {
-  // **The replay the minted id makes possible** (rondo#233 S3, the Codex review
-  // of this branch). The iteration id is minted when the form is drawn, so back
-  // and submit posts the id the first press already admitted. Sending it through
-  // the scope test again is not harmless: the lap it started has spent the
-  // budget it was testing against, so the verdict fails and the refusal writes
-  // an **asking message into the request's thread** (D-0066 rule 4.4) which then
-  // holds the line (D-0069 rule 5) -- a question nobody asked, stopping the
-  // work, because somebody pressed back. The guard runs before continuo is
-  // started, which is what makes this reachable in a file with no continuo.
-  const dir = mkdtempSync(join(tmpdir(), "rondo-start-replay-"));
-  const storePath = join(dir, "store.db");
-  const connection = new DatabaseSync(storePath);
-  const record = advisoryRecord(connection);
-  const store = iterationStore(connection, { maxOccupying: 4, maxLive: 6 });
-  const requestId = "request-start-replay";
-  await record.recordThreadMessage({
-    messageId: requestId,
-    body: "Please do it.",
-    authorKind: "operator",
-    authorId: "ada",
-    inReplyTo: null,
-    atMs: 1_000,
-    bases: [],
-    asks: false,
-  });
-  const iterationId = "lap-already-there";
-  const reserved = await store.reserve({
-    id: iterationId,
-    request: "Please do it.",
-    plan: planFor(iterationId),
-    spend: null,
-    scopeSpend: null,
-    nowMs: 1_000,
-    supersedesIterationId: null,
-    requestMessageId: requestId,
-    runId: `rondo-${iterationId}`,
-    topicBranch: `rondo/${iterationId}`,
-    workspace: `/srv/work/${iterationId}`,
-  });
-  expect(reserved.kind).toBe("reserved");
-
-  const before = rows(connection, "conversation_message");
-  const started = await startScopedFromPage({ RONDO_APPROVER: "ada" }, store, storePath, "ada", {
-    iterationId,
-    requestMessageId: requestId,
-    scopeDecisionId: "scope-decision-nobody-approved",
-    planDigest: "sha256:not-read-because-the-row-is-already-there",
-  });
-  // The press is the one that made the row, so it is not a refusal to show.
-  expect(started.ok).toBe(true);
-  expect(started.why).toBeUndefined();
-  // And nothing was asked of the request: the thread is exactly as it was.
-  expect(rows(connection, "conversation_message")).toBe(before);
-  // Not vacuous: a scope decision nobody approved is what the second press
-  // carries, and it reached no scope test at all -- one iteration row, still.
-  expect(rows(connection, "iteration")).toBe(1);
-});
-
-test("a revise press on a stale page answers nothing, and writes no framing for it (#233 S4)", async () => {
-  // **The three refusals that catch a page that went stale**, which is what a
-  // page redrawing itself every five seconds sometimes is: a lap that is not
-  // there, one that has ended, and one whose row names no gate. None of them is
-  // a person answering, so none of them puts a framing in the ledger and none
-  // of them starts continuo (D-0042 rule 3's order, `answerFromPage`'s reading
-  // of it). Reachable in a file with no continuo for exactly that reason.
-  const dir = mkdtempSync(join(tmpdir(), "rondo-revise-stale-"));
-  const storePath = join(dir, "store.db");
-  const connection = new DatabaseSync(storePath);
-  const store = iterationStore(connection, { maxOccupying: 4, maxLive: 6 });
-  const ended = "lap-ended";
-  const reserved = await store.reserve({
-    id: ended,
-    request: "Please do it.",
-    plan: planFor(ended),
-    spend: null,
-    scopeSpend: null,
-    nowMs: 1_000,
-    supersedesIterationId: null,
-    requestMessageId: null,
-    runId: `rondo-${ended}`,
-    topicBranch: `rondo/${ended}`,
-    workspace: `/srv/work/${ended}`,
-  });
-  expect(reserved.kind).toBe("reserved");
-
-  const pressing = (iterationId: string) =>
-    reviseFromPage({ RONDO_APPROVER: "ada" }, store, storePath, "ada", {
-      iterationId,
-      successorId: "lap-00000000-0000-4000-8000-000000000009",
-      scopeDecisionId: "sd-0001",
-      body: "narrow it to the parser",
+test(
+  "a second press of an edited form is refused, and never reported as an approval of numbers that were replaced",
+  async () => {
+    // The id is minted per draw, so the store refuses the second row on the id
+    // and the approval already there reads back -- which is a screen saying
+    // *approved* about a budget the person has just replaced (rondo#233 S3 press
+    // review). The id says which form this is; the payload says whether it is
+    // still the same scope.
+    const dir = mkdtempSync(join(tmpdir(), "rondo-scope-edited-"));
+    const storePath = join(dir, "store.db");
+    const connection = new DatabaseSync(storePath);
+    const record = advisoryRecord(connection);
+    const store = iterationStore(connection, { maxOccupying: 4, maxLive: 6 });
+    const requestId = "request-scope-edited";
+    await record.recordThreadMessage({
+      messageId: requestId,
+      body: "Please fix it.",
+      authorKind: "operator",
+      authorId: "ada",
+      inReplyTo: null,
+      atMs: 1_000,
+      bases: [],
+      asks: false,
     });
+    const plan = await seedScopePlan(record, requestId);
+    const environment = { RONDO_APPROVER: "ada" };
+    const draft: ScopeFormDraft = {
+      scopeId: newScopeId(),
+      requestMessageId: requestId,
+      planDigest: plan.planDigest,
+      agentTypeDigest: plan.agentTypeDigest,
+      budgets: {
+        laps: 3,
+        review_rounds: 1,
+        cost_usd: 5,
+        cost_reserve_usd: 1,
+        expires_at_ms: 9_999_999_999,
+      },
+      severityThreshold: "major",
+      outwardActs: [],
+    };
+    const first = await recordScopeFromPage(environment, store, storePath, "ada", draft);
+    expect(first.ok).toBe(true);
 
-  // A lap that is at its gate, and was admitted under no approval: the page
-  // draws no revise form on one, and a press that names an approval anyway is
-  // refused before the gate is touched (Codex round 2 -- the hidden field is
-  // compared against the admission row and never trusted).
-  const gated = "lap-gated";
-  const openedReserve = await store.reserve({
-    id: gated,
-    request: "Please do it.",
-    plan: planFor(gated),
-    spend: null,
-    scopeSpend: null,
-    nowMs: 1_000,
-    supersedesIterationId: null,
-    requestMessageId: null,
-    runId: `rondo-${gated}`,
-    topicBranch: `rondo/${gated}`,
-    workspace: `/srv/work/${gated}`,
-  });
-  expect(openedReserve.kind).toBe("reserved");
-  for (const [from, to] of [
-    ["planned", "admitting"],
-    ["admitting", "admitted"],
-    ["admitted", "performing"],
-    ["performing", "awaiting_human"],
-  ] as const) {
-    const moved = await store.transition(
-      gated,
-      from,
-      to,
-      to === "awaiting_human" ? { gateId: `gate-${gated}` } : {},
-      2_000,
-    );
-    expect(moved.kind).toBe("transitioned");
-  }
+    // The same form, back from the browser's history, with one number changed.
+    const edited: ScopeFormDraft = { ...draft, budgets: { ...draft.budgets, laps: 10 } };
+    const again = await recordScopeFromPage(environment, store, storePath, "ada", edited);
+    expect(again.ok).toBe(false);
+    expect(again.why).toBe("scopeRefusedEdited");
+    expect(again.scopeDecisionId).toBeUndefined();
 
-  const absent = await pressing("lap-not-there");
-  expect(absent.ok).toBe(false);
-  expect(absent.why).toBe("reviseRefusedGateClosed");
-  // A row that is live but names no gate: the button is not drawn on one, and
-  // a press that arrives anyway answers nothing.
-  const noGate = await pressing(ended);
-  expect(noGate.ok).toBe(false);
-  expect(noGate.why).toBe("reviseRefusedGateClosed");
-  // The approval the press named is not the one this lap was admitted under --
-  // it was admitted under none -- so nothing is answered and no gate is walked.
-  const wrongScope = await pressing(gated);
-  expect(wrongScope.ok).toBe(false);
-  expect(wrongScope.why).toBe("reviseRefusedNotItsScope");
-  // Nothing was recorded for either: no proposal, no attention row, no message.
-  expect(rows(connection, "proposal")).toBe(0);
-  expect(rows(connection, "conversation_message")).toBe(0);
-  expect(rows(connection, "scope_consumption")).toBe(0);
-});
+    // What is stored is still the first press's scope, approved once.
+    const stored = await record.readScope(draft.scopeId);
+    expect(stored.kind === "read" && stored.scope.payload.budgets.laps).toBe(3);
+    expect(rows(new DatabaseSync(storePath), "scope")).toBe(1);
+    expect(rows(new DatabaseSync(storePath), "scope_decision")).toBe(1);
+
+    // An unedited re-press -- a double click, a resend after a slow write -- is
+    // still the write it repeats, and still lands on the approval it made.
+    const repeated = await recordScopeFromPage(environment, store, storePath, "ada", draft);
+    expect(repeated.ok).toBe(true);
+    expect(repeated.scopeDecisionId).toBe(first.scopeDecisionId);
+    expect(rows(new DatabaseSync(storePath), "scope_decision")).toBe(1);
+  },
+  WINDOWS_HEAVY_TIMEOUT_MS,
+);
+
+test(
+  "a scoped start press that names a row already there admits nothing, rather than asking the request a question nobody asked",
+  async () => {
+    // **The replay the minted id makes possible** (rondo#233 S3, the Codex review
+    // of this branch). The iteration id is minted when the form is drawn, so back
+    // and submit posts the id the first press already admitted. Sending it through
+    // the scope test again is not harmless: the lap it started has spent the
+    // budget it was testing against, so the verdict fails and the refusal writes
+    // an **asking message into the request's thread** (D-0066 rule 4.4) which then
+    // holds the line (D-0069 rule 5) -- a question nobody asked, stopping the
+    // work, because somebody pressed back. The guard runs before continuo is
+    // started, which is what makes this reachable in a file with no continuo.
+    const dir = mkdtempSync(join(tmpdir(), "rondo-start-replay-"));
+    const storePath = join(dir, "store.db");
+    const connection = new DatabaseSync(storePath);
+    const record = advisoryRecord(connection);
+    const store = iterationStore(connection, { maxOccupying: 4, maxLive: 6 });
+    const requestId = "request-start-replay";
+    await record.recordThreadMessage({
+      messageId: requestId,
+      body: "Please do it.",
+      authorKind: "operator",
+      authorId: "ada",
+      inReplyTo: null,
+      atMs: 1_000,
+      bases: [],
+      asks: false,
+    });
+    const iterationId = "lap-already-there";
+    const reserved = await store.reserve({
+      id: iterationId,
+      request: "Please do it.",
+      plan: planFor(iterationId),
+      spend: null,
+      scopeSpend: null,
+      nowMs: 1_000,
+      supersedesIterationId: null,
+      requestMessageId: requestId,
+      runId: `rondo-${iterationId}`,
+      topicBranch: `rondo/${iterationId}`,
+      workspace: `/srv/work/${iterationId}`,
+    });
+    expect(reserved.kind).toBe("reserved");
+
+    const before = rows(connection, "conversation_message");
+    const started = await startScopedFromPage({ RONDO_APPROVER: "ada" }, store, storePath, "ada", {
+      iterationId,
+      requestMessageId: requestId,
+      scopeDecisionId: "scope-decision-nobody-approved",
+      planDigest: "sha256:not-read-because-the-row-is-already-there",
+    });
+    // The press is the one that made the row, so it is not a refusal to show.
+    expect(started.ok).toBe(true);
+    expect(started.why).toBeUndefined();
+    // And nothing was asked of the request: the thread is exactly as it was.
+    expect(rows(connection, "conversation_message")).toBe(before);
+    // Not vacuous: a scope decision nobody approved is what the second press
+    // carries, and it reached no scope test at all -- one iteration row, still.
+    expect(rows(connection, "iteration")).toBe(1);
+  },
+  WINDOWS_HEAVY_TIMEOUT_MS,
+);
+
+test(
+  "a revise press on a stale page answers nothing, and writes no framing for it (#233 S4)",
+  async () => {
+    // **The three refusals that catch a page that went stale**, which is what a
+    // page redrawing itself every five seconds sometimes is: a lap that is not
+    // there, one that has ended, and one whose row names no gate. None of them is
+    // a person answering, so none of them puts a framing in the ledger and none
+    // of them starts continuo (D-0042 rule 3's order, `answerFromPage`'s reading
+    // of it). Reachable in a file with no continuo for exactly that reason.
+    const dir = mkdtempSync(join(tmpdir(), "rondo-revise-stale-"));
+    const storePath = join(dir, "store.db");
+    const connection = new DatabaseSync(storePath);
+    const store = iterationStore(connection, { maxOccupying: 4, maxLive: 6 });
+    const ended = "lap-ended";
+    const reserved = await store.reserve({
+      id: ended,
+      request: "Please do it.",
+      plan: planFor(ended),
+      spend: null,
+      scopeSpend: null,
+      nowMs: 1_000,
+      supersedesIterationId: null,
+      requestMessageId: null,
+      runId: `rondo-${ended}`,
+      topicBranch: `rondo/${ended}`,
+      workspace: `/srv/work/${ended}`,
+    });
+    expect(reserved.kind).toBe("reserved");
+
+    const pressing = (iterationId: string) =>
+      reviseFromPage({ RONDO_APPROVER: "ada" }, store, storePath, "ada", {
+        iterationId,
+        successorId: "lap-00000000-0000-4000-8000-000000000009",
+        scopeDecisionId: "sd-0001",
+        body: "narrow it to the parser",
+      });
+
+    // A lap that is at its gate, and was admitted under no approval: the page
+    // draws no revise form on one, and a press that names an approval anyway is
+    // refused before the gate is touched (Codex round 2 -- the hidden field is
+    // compared against the admission row and never trusted).
+    const gated = "lap-gated";
+    const openedReserve = await store.reserve({
+      id: gated,
+      request: "Please do it.",
+      plan: planFor(gated),
+      spend: null,
+      scopeSpend: null,
+      nowMs: 1_000,
+      supersedesIterationId: null,
+      requestMessageId: null,
+      runId: `rondo-${gated}`,
+      topicBranch: `rondo/${gated}`,
+      workspace: `/srv/work/${gated}`,
+    });
+    expect(openedReserve.kind).toBe("reserved");
+    for (const [from, to] of [
+      ["planned", "admitting"],
+      ["admitting", "admitted"],
+      ["admitted", "performing"],
+      ["performing", "awaiting_human"],
+    ] as const) {
+      const moved = await store.transition(
+        gated,
+        from,
+        to,
+        to === "awaiting_human" ? { gateId: `gate-${gated}` } : {},
+        2_000,
+      );
+      expect(moved.kind).toBe("transitioned");
+    }
+
+    const absent = await pressing("lap-not-there");
+    expect(absent.ok).toBe(false);
+    expect(absent.why).toBe("reviseRefusedGateClosed");
+    // A row that is live but names no gate: the button is not drawn on one, and
+    // a press that arrives anyway answers nothing.
+    const noGate = await pressing(ended);
+    expect(noGate.ok).toBe(false);
+    expect(noGate.why).toBe("reviseRefusedGateClosed");
+    // The approval the press named is not the one this lap was admitted under --
+    // it was admitted under none -- so nothing is answered and no gate is walked.
+    const wrongScope = await pressing(gated);
+    expect(wrongScope.ok).toBe(false);
+    expect(wrongScope.why).toBe("reviseRefusedNotItsScope");
+    // Nothing was recorded for either: no proposal, no attention row, no message.
+    expect(rows(connection, "proposal")).toBe(0);
+    expect(rows(connection, "conversation_message")).toBe(0);
+    expect(rows(connection, "scope_consumption")).toBe(0);
+  },
+  WINDOWS_HEAVY_TIMEOUT_MS,
+);
 
 test(
   "a second revise press of one form joins the first only when it says the same thing (#233 S4)",
