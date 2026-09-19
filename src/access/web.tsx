@@ -6718,7 +6718,8 @@ export async function operatorPage(
   // a list of failures and withdrawals costs the redraw nothing.
   const endedFacts = new Map(
     await Promise.all(
-      ended.map(async (record) => {
+      // Both groups of ended rows: an older one still keeping files keeps its facts.
+      [...keptOlder, ...ended].map(async (record) => {
         const [claims, readings] = await Promise.all([
           ports.store.verificationClaimsFor(record.id),
           approvedForPublication(record)

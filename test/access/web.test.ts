@@ -6668,6 +6668,7 @@ test("each open line says what it keeps, and a finished one not yet landed says 
       ).kind,
     ).toBe("released");
   }
+  await world.store.recordVerificationClaim("i-0002", "ada", "kept it", 4_500);
   // The oldest ending of all, so *just finished*'s five would leave it out.
   await world.connection
     .prepare("UPDATE iteration SET updated_at_ms = 1 WHERE id = 'i-0002'")
@@ -6681,6 +6682,8 @@ test("each open line says what it keeps, and a finished one not yet landed says 
     // group of its own rather than under *just finished*.
     expect(lead(html)).toContain("the one still keeping its files");
     expect(lead(html)).toContain(wording.heldHeading(1));
+    // Its row keeps what its approval said, as a recent one would.
+    expect(lead(html)).toContain(wording.checkedEcho("kept it", null));
     expect(lead(html)).toContain(wording.endedHeading(5));
     expect(lead(html)).toContain(wording.holds(["lanes/i-0002/"]));
     expect(lead(html)).toContain(wording.notLanded);
