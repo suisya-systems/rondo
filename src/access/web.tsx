@@ -103,6 +103,7 @@ import {
   proposeHost,
   UNDETERMINED,
 } from "../advisory/proposal.js";
+import type { LapLogReading } from "../continuo/transcript.js";
 import type { HostPolicy } from "../refrain/policy.js";
 import {
   type AnswerOutcome,
@@ -228,6 +229,13 @@ export interface WebPorts extends InboxReadPorts {
    * (D-0020 rule 2's shape, rondo#233 S5).
    */
   readonly publishing: PublishReading | null;
+  /**
+   * A running lap's log, read at the directory `locateTranscript` named
+   * (rondo#248 item 3). A function for {@link LapMaterial}'s reason: the
+   * renderer opens no file, and what it is handed reads two named files under
+   * a directory rondo composed from the row, never a path from a request.
+   */
+  readonly readLog: (directory: string) => LapLogReading;
 }
 
 /**
@@ -474,7 +482,14 @@ export type PageView =
    * precondition nobody can point at. The gate's screen is about answering a
    * gate; this one is about what would leave this machine.
    */
-  | { readonly kind: "publish"; readonly iterationId: string };
+  | { readonly kind: "publish"; readonly iterationId: string }
+  /**
+   * One running lap's log (rondo#248 item 3): the commands it has run and what
+   * they returned, read through the same port the row's *log found* came from.
+   * Named by the row and never by a path, so the address carries nothing the
+   * server would open.
+   */
+  | { readonly kind: "log"; readonly iterationId: string };
 
 /**
  * The most review rounds this screen will draft for.
@@ -520,9 +535,19 @@ const REVIEW_ROUND_CHOICES: readonly number[] = [0, 1, 2, 3, 4, 5, 6];
  * turned into a mechanism: the press carries the digest of what was drawn and
  * the port re-reads the whole dry-run, so a screen that has gone stale publishes
  * nothing and says so.
+ *
+ * **`log` holds still too** (rondo#248 item 3). It is read to find something
+ * in -- the one output a person opened -- and a poll swapping `#ledger` would
+ * close every fold they opened and move the list under them. A reload reads it
+ * again, and the page's foot already says the view holds still.
  */
 function isLive(view: PageView): boolean {
-  return view.kind !== "answer" && view.kind !== "scope" && view.kind !== "publish";
+  return (
+    view.kind !== "answer" &&
+    view.kind !== "scope" &&
+    view.kind !== "publish" &&
+    view.kind !== "log"
+  );
 }
 
 /**
@@ -550,6 +575,8 @@ export function viewHref(view: PageView, tag: string): string {
       return `/?answer=${encodeURIComponent(view.iterationId)}&${lang}`;
     case "publish":
       return `/?publish=${encodeURIComponent(view.iterationId)}&${lang}`;
+    case "log":
+      return `/?log=${encodeURIComponent(view.iterationId)}&${lang}`;
     case "requests":
       return `/?requests=open&${lang}`;
     case "thread":
@@ -1666,6 +1693,7 @@ function runningView(
           spentLine(wording, record),
           fenceLine(wording, record),
         ],
+        logLink(wording, record, transcripts.get(record.id)),
       ),
     ),
   ]);
@@ -1699,6 +1727,234 @@ function runsWhere(
         <span class="font-mono text-faint"> {record.workspace}</span>
       )}
     </span>
+  );
+}
+
+/**
+ * The way into a running row's log (rondo#248 item 3), drawn only where
+ * {@link runsWhere} says *log found* -- the one state with something to read.
+ * *No log yet*, *could not check* and *not looked for* get no control, so the
+ * three stay told apart by their words as they were, and nothing is offered
+ * into a screen that would only say there is nothing.
+ *
+ * **Outlined, and a control rather than a link in the metadata**: the row's
+ * filled button is kept for a press, and reading the log is not one, but a way
+ * in drawn as faint text is a way in a reader has to hunt for.
+ */
+function logLink(
+  wording: Chrome,
+  record: IterationRecord,
+  located: TranscriptLocation | undefined,
+) {
+  if (located?.kind !== "named" || located.sessions === 0) {
+    return null;
+  }
+  return (
+    <p class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+      <a
+        id={`log-${record.id}`}
+        href={viewHref({ kind: "log", iterationId: record.id }, wording.lang)}
+        data-open=""
+        class={`${SECONDARY} h-7 px-3 text-[13px]`}
+        title={wording.logOpenHere}
+      >
+        {wording.logOpen}
+      </a>
+    </p>
+  );
+}
+
+/**
+ * How many of a log's commands the screen draws: the newest, newest first.
+ *
+ * **A running lap is read to learn what it is doing now and whether it is still
+ * moving**, and both are answered at the top of the log, not in its first
+ * hour. So the screen is the tail, and what is past the bound is not silent:
+ * the lead says how many are left out and the file holding all of them is
+ * named under the list.
+ */
+const LOG_COMMANDS = 50;
+/** A command past this is cut at its end: its start says what it was. */
+const LOG_COMMAND_CHARS = 2_000;
+/** An output past this is cut at its start: its end is where it stopped. */
+const LOG_OUTPUT_CHARS = 8_000;
+
+/** A block of text, cut to `max` characters at one end, and a line saying so. */
+function clipped(text: string, max: number, keep: "start" | "end", said: (n: number) => string) {
+  if (text.length <= max) {
+    return <pre class={PRE}>{text}</pre>;
+  }
+  const cut = text.length - max;
+  return (
+    <>
+      {keep === "end" ? <p class="text-[12px] leading-5 text-faint">{said(cut)}</p> : null}
+      <pre class={PRE}>{keep === "end" ? text.slice(cut) : text.slice(0, max)}</pre>
+      {keep === "start" ? <p class="text-[12px] leading-5 text-faint">{said(cut)}</p> : null}
+    </>
+  );
+}
+
+/**
+ * One running lap's log (rondo#248 item 3): the commands it ran and what they
+ * returned, read by `readLapLog`'s port at the directory the row's own
+ * *log found* came from -- the same `locateTranscript`, asked again here, so
+ * the screen and the row cannot disagree about where the log is.
+ *
+ * **Commands, not the whole transcript**, because that is what the reviewer
+ * is handed of the same file and the heading says so: the lap's prose between
+ * commands is not drawn and nothing here claims it is.
+ */
+async function logView(
+  ports: WebPorts,
+  wording: Chrome,
+  view: Extract<PageView, { kind: "log" }>,
+): Promise<unknown> {
+  const framed = (body: unknown) => (
+    <div id="log" class="space-y-4">
+      {backHead(wording, wording.logHeading)}
+      {body}
+    </div>
+  );
+  const found = await ports.store.read(view.iterationId);
+  if (found.kind !== "read") {
+    return framed(
+      note(found.kind === "absent" ? wording.logGone : wording.willNotDecode(found.reason)),
+    );
+  }
+  const record = found.record;
+  const located = await ports.locateTranscript(record);
+  const about = (
+    <div class="min-w-0 space-y-0.5">
+      <p
+        class="request truncate text-sm leading-6 font-medium"
+        title={record.request}
+        lang={materialLanguage(record)}
+      >
+        {record.request}
+      </p>
+      <p class="basis font-mono text-[11px] leading-4 wrap-anywhere text-faint">{record.id}</p>
+    </div>
+  );
+  if (located.kind === "unknown") {
+    return framed(
+      <>
+        {about}
+        {note(wording.logUnchecked(located.reason))}
+      </>,
+    );
+  }
+  if (located.sessions === 0) {
+    return framed(
+      <>
+        {about}
+        {note(wording.logNotYet)}
+      </>,
+    );
+  }
+  const log = ports.readLog(located.directory);
+  if (log.kind === "unread") {
+    return framed(
+      <>
+        {about}
+        {note(wording.logUnread(log.reason))}
+      </>,
+    );
+  }
+  const newest = log.commands.slice(-LOG_COMMANDS).reverse();
+  // The newest output is open: it is the one a person came for. The newest
+  // command may have none yet -- it is still running -- so it is the newest
+  // that has one.
+  const opened = newest.findIndex((command) => command.output !== "");
+  return framed(
+    <>
+      {about}
+      {log.finalMessage === null ? null : (
+        <section class={CARD}>
+          <h3 class={CARD_HEADING}>{wording.logFinal}</h3>
+          <p class="mt-1 text-[13px] leading-5 wrap-anywhere whitespace-pre-wrap">
+            {log.finalMessage}
+          </p>
+        </section>
+      )}
+      {log.unfinished ? note(wording.logUnfinished) : null}
+      {newest.length === 0 ? (
+        note(wording.logEmpty)
+      ) : (
+        <>
+          <p class="text-[13px] leading-5 text-muted-foreground">
+            {wording.logLead(newest.length, log.commands.length)}
+          </p>
+          <ol class="divide-y divide-border rounded-lg border border-border bg-card">
+            {newest.map((command, at) => (
+              <li class="min-w-0 space-y-2 px-4 py-3">
+                <p class="flex items-center gap-2 font-mono text-[11px] leading-4 text-faint">
+                  <span title={log.file}>L{String(command.index)}</span>
+                  {command.isError ? pill("fail", wording.logFailed) : null}
+                </p>
+                {clipped(command.command, LOG_COMMAND_CHARS, "start", wording.logCutAfter)}
+                {command.output === "" ? (
+                  <p class="text-[12px] leading-5 text-faint">{wording.logNoOutput}</p>
+                ) : (
+                  <details class="group" {...(at === opened ? { open: true } : {})}>
+                    <summary class="flex cursor-pointer list-none items-center gap-x-1.5 text-[12px] leading-5 text-muted-foreground select-none hover:text-foreground [&::-webkit-details-marker]:hidden">
+                      {chevron()}
+                      {command.isError ? wording.logOutputFailed : wording.logOutput}
+                    </summary>
+                    <div class="mt-1.5 space-y-1">
+                      {clipped(command.output, LOG_OUTPUT_CHARS, "end", wording.logCutBefore)}
+                    </div>
+                  </details>
+                )}
+              </li>
+            ))}
+          </ol>
+        </>
+      )}
+      <div class="space-y-1">
+        <p class="text-[12px] leading-5 text-faint">{wording.logWhole}</p>
+        <p class="basis font-mono text-[11px] leading-4 wrap-anywhere text-faint">{log.file}</p>
+      </div>
+    </>,
+  );
+}
+
+/** A view's head: the way back to the summary, and what the view is. */
+function backHead(wording: Chrome, heading: string) {
+  return (
+    <header class="space-y-2">
+      <div class="flex min-w-0 items-center gap-2">
+        <a
+          href={viewHref({ kind: "summary" }, wording.lang)}
+          data-back=""
+          class="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          title={wording.keyBack}
+        >
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            class="size-4"
+          >
+            <path d="M13 8H3m4-4-4 4 4 4" />
+          </svg>
+          <span class="sr-only">{wording.keyBack}</span>
+        </a>
+        <h2 class="min-w-0 flex-1 truncate text-[15px] leading-6 font-semibold">{heading}</h2>
+      </div>
+    </header>
+  );
+}
+
+/** A plain note in the views' muted box. */
+function note(line: string) {
+  return (
+    <p class="note rounded-md border border-border bg-muted/60 px-3 py-2 text-[13px] leading-5">
+      {line}
+    </p>
   );
 }
 
@@ -3756,11 +4012,6 @@ async function scopeForm(
   nowMs: number,
 ): Promise<unknown> {
   const lead = <p class="text-[13px] leading-6">{wording.scopeLead}</p>;
-  const note = (line: string) => (
-    <p class="note rounded-md border border-border bg-muted/60 px-3 py-2 text-[13px] leading-5">
-      {line}
-    </p>
-  );
   if (ports.plan === null) {
     return (
       <>
@@ -4417,41 +4668,9 @@ async function publishView(
   token: string | null,
   threads: Threads,
 ): Promise<unknown> {
-  const head = (heading: string) => (
-    <header class="space-y-2">
-      <div class="flex min-w-0 items-center gap-2">
-        <a
-          href={viewHref({ kind: "summary" }, wording.lang)}
-          data-back=""
-          class="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-          title={wording.keyBack}
-        >
-          <svg
-            aria-hidden="true"
-            viewBox="0 0 16 16"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.8"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            class="size-4"
-          >
-            <path d="M13 8H3m4-4-4 4 4 4" />
-          </svg>
-          <span class="sr-only">{wording.keyBack}</span>
-        </a>
-        <h2 class="min-w-0 flex-1 truncate text-[15px] leading-6 font-semibold">{heading}</h2>
-      </div>
-    </header>
-  );
-  const note = (line: string) => (
-    <p class="note rounded-md border border-border bg-muted/60 px-3 py-2 text-[13px] leading-5">
-      {line}
-    </p>
-  );
   const framed = (body: unknown) => (
     <div id="publish" class="space-y-4">
-      {head(wording.publishHeading)}
+      {backHead(wording, wording.publishHeading)}
       {body}
     </div>
   );
@@ -5169,6 +5388,7 @@ export async function operatorPage(
   // the forge's own configuration, and the tree is composed from what it read.
   const publishing =
     view.kind === "publish" ? await publishView(ports, wording, view, token, threads) : null;
+  const logging = view.kind === "log" ? await logView(ports, wording, view) : null;
   /** The way onto the publish screen, drawn on an ended lap wherever one is listed. */
   const publishTo = (record: IterationRecord) => publishLink(wording, ports, token, record);
 
@@ -5498,6 +5718,8 @@ export async function operatorPage(
                 scoping
               ) : view.kind === "publish" ? (
                 publishing
+              ) : view.kind === "log" ? (
+                logging
               ) : waiting.length +
                   running.length +
                   ended.length +
@@ -5525,7 +5747,10 @@ export async function operatorPage(
                   {endedView(wording, ended, nowMs, endedFacts, publishTo, threads)}
                 </>
               )}
-              {onThreads || view.kind === "scope" || view.kind === "publish" ? null : (
+              {onThreads ||
+              view.kind === "scope" ||
+              view.kind === "publish" ||
+              view.kind === "log" ? null : (
                 <p id="fold" class="border-t border-border pt-4 text-[13px]">
                   <a
                     id="fold-link"

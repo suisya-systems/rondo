@@ -41,7 +41,7 @@ import {
 } from "../continuo/invoker.js";
 import type { ContinuoResult, GateDetail, ObservedSession } from "../continuo/protocol.js";
 import { probeUnixSocket, workerSandboxRefusal } from "../continuo/sandbox.js";
-import { lapTranscriptDirectory } from "../continuo/transcript.js";
+import { lapTranscriptDirectory, readLapLog } from "../continuo/transcript.js";
 import { allocate } from "../refrain/allocator.js";
 import { isLanguageTag, type RunPlan, readPlan, readRunPlan } from "../refrain/plan.js";
 import {
@@ -1895,6 +1895,7 @@ export async function main(
         // continuo -- and it is the surface that redraws itself, which is the
         // one D-0048 rule 4's "read at render time" has to keep honest.
         locateTranscript: transcriptPort(environment),
+        readLog: readLapLog,
       },
       parsed.port ?? DEFAULT_WEB_PORT,
       say,

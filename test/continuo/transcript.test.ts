@@ -22,6 +22,7 @@ import { expect, test } from "vitest";
 import {
   lapTranscriptDirectory,
   readLapCommands,
+  readLapLog,
   readLapSpend,
 } from "../../src/continuo/transcript.js";
 
@@ -354,6 +355,29 @@ test("a line that is not an event makes the transcript unread, not shorter", () 
     expect(reading.kind).toBe("unread");
     expect(reading.kind === "unread" && reading.reason).toContain("is not a JSON event");
   }
+});
+
+test("a running lap's unfinished last line is held back and said, and a torn middle is still unread (#248)", () => {
+  const ls = JSON.stringify(toolUse("t1", "Bash", { command: "ls" }));
+  // Mid-write: the line after the last newline is the one being written.
+  const writing = sessionDir({ generation: 0, events: { "000": `${ls}\n{"type":"us` } });
+  const directory = join(writing, RUN, SESSION);
+  expect(readLapLog(directory)).toEqual({
+    kind: "read",
+    commands: [{ index: 1, command: "ls", output: "", isError: false }],
+    finalMessage: null,
+    file: join(directory, "events-000.jsonl"),
+    unfinished: true,
+  });
+  // Every line finished: nothing held back.
+  const done = sessionDir({ generation: 0, events: { "000": `${ls}\n` } });
+  const read = readLapLog(join(done, RUN, SESSION));
+  expect(read.kind === "read" && read.unfinished).toBe(false);
+  // A broken line with a newline after it is not being written: still unread.
+  const torn = sessionDir({ generation: 0, events: { "000": `not json\n${ls}\n` } });
+  expect(readLapLog(join(torn, RUN, SESSION)).kind).toBe("unread");
+  // And nothing there is an unread with a reason, never a throw.
+  expect(readLapLog(join(tmpdir(), "rondo-no-such-log")).kind).toBe("unread");
 });
 
 test("a transcript that cannot be read is unread with a reason, never a throw", () => {
