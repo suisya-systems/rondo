@@ -99,18 +99,19 @@ One terminal, once, and then leave it running.
 ```sh
 cd "$R/rondo-host"
 . "$R/env.sh"
-export RONDO_PLAN="$R/plan.json"
 node bin/rondo.mjs web --port 7333 --repo suisya-systems/rondo
 ```
 
 It prints `rondo is reading and answering at http://127.0.0.1:7333/ -- ctrl-c to stop`. Open that.
 
-Two of those lines decide whether the page has the screens you need, so read the refusals if they
-come:
+Two things decide whether the page has the screens you need, so read the refusals if they come:
 
-- **`RONDO_PLAN` is not in `env.sh`** and `dogfood-env.sh` does not write it -- that variable is for
-  the page, and the page is newer than the script. Without it the scope screen says
-  *"RONDO_PLAN is not set, so there is no plan to draft a scope from."* and draws no form.
+- **The page reads no plan file** (rondo#238). The scope screen offers the plans rondo holds: those
+  pasted into the request's thread, and those recent laps ran on. On a store no lap has run in yet,
+  reply in your request's thread with the whole contents of `$R/plan.json` -- the JSON document
+  alone -- and the scope screen offers it. Until then it says *"rondo has no plan to run this on
+  yet."* and draws no form. (Before rondo#266 the page read a plan file named by `RONDO_PLAN`;
+  nothing reads that variable now, so exporting it does nothing.)
 - **`--repo` is what makes publishing exist at all.** Without it the publish screen says *"Nothing
   can be published from this page ... Both are given to rondo when the page is started."* There is
   no way to add it later from the browser; stop the page and start it again.

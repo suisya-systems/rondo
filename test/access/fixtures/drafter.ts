@@ -54,7 +54,26 @@ export const PLAN = {
   gateDeadlineAtMs: null,
   pullRequestBaseBranch: null,
   invocationCeilingMs: 1_800_000,
-  catalogLayers: [{ layer: "git_url", origin: "o", baseDir: "/srv/catalog", data: {} }],
+  // A catalog cadenza classifies (as `test/access/scope-stop.test.ts` has it),
+  // so a scope's verdict over this plan gets past its agent-type test.
+  catalogLayers: [
+    {
+      layer: "tracked",
+      origin: "/srv/catalog/projects.toml",
+      baseDir: "/srv/catalog",
+      data: {
+        schema_version: 1,
+        catalog: { allowed_local_roots: ["/srv/repo"] },
+        project: {
+          rondo: {
+            source: { kind: "local_path", path: "/srv/repo" },
+            base_branch: "main",
+            aliases: [],
+          },
+        },
+      },
+    },
+  ],
   projectName: "rondo",
   agentTypeInput: AGENT_TYPE_INPUT,
   parties: { issuer: "rondo-host", grantee: "unset" },
