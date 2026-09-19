@@ -24,6 +24,7 @@ import {
   type BudgetBasis,
   type BudgetRow,
   computeScopeBudgets,
+  DEFAULT_REVIEW_ROUNDS,
   type ScopeBudgets,
 } from "../advisory/budget.js";
 import type { SplitPayload, SplitPlan } from "../advisory/proposal.js";
@@ -204,8 +205,9 @@ const INSTRUCTIONS = [
   "- Parts of the request that can be done, reviewed and approved independently are separate",
   "  plans, one per part, each prompt covering its part only. Work that must land together is",
   "  one plan.",
-  "- Work no template or no agent type fits is a hole: name it in holes and do not plan it. When",
-  "  there are holes, recommend that the person paste a plan for that kind of work into the thread.",
+  "- Work no template or no agent type fits is a hole: name it in holes, plan nothing, and ask.",
+  '  Holes go only with "ask", and the recommended option is that the person paste a plan for',
+  "  that kind of work into the thread.",
   "- A question has options, what each gives up, and exactly one recommended option.",
   "- Every summary, question, plan and narrowing has bases: ids of messages in THREAD it rests on.",
   "- rondo computes the scope's budgets from recorded laps (MEASUREMENTS shows what it reads). You",
@@ -565,6 +567,12 @@ function checked(material: DrafterMaterial, answer: unknown): DraftOutcome {
   const holes = list(row["holes"] ?? [], "'holes'").map((hole, i) =>
     words(hole, `hole ${String(i)}`),
   );
+  // A hole is named by a question with one recommendation (rule 6.1), so only
+  // an ask may carry one: a split or a silent run would record a hole nobody
+  // is asked about.
+  if (holes.length > 0 && act !== "ask") {
+    throw new DraftDefect(`a '${act}' draft names holes it asks nobody about`);
+  }
   const narrowings = list(row["narrowings"] ?? [], "'narrowings'").map((one, i) =>
     narrowing(one, `narrowing ${String(i)}`, operatorIds),
   );
@@ -743,42 +751,47 @@ function draftedScope(
     digest: t.digest,
     modelTier: t.modelTier,
   }));
+  // **One winner per field, the first on a tie**, so a scope cites the words
+  // behind the value it carries and not a narrowing it overrode (rule 4.1).
+  const taken: Narrowing[] = [];
+  const winner = (field: NarrowableField, rank: (n: Narrowing) => number, start: number) => {
+    let best: Narrowing | null = null;
+    let value = start;
+    for (const n of narrowings.filter((one) => one.field === field)) {
+      if (rank(n) < value) {
+        value = rank(n);
+        best = n;
+      }
+    }
+    if (best !== null) taken.push(best);
+    return value;
+  };
+  const numeric = (n: Narrowing) =>
+    n.field === "expires_at" ? Date.parse(n.value as string) : (n.value as number);
+  // **Rounds first, and the rest computed from them** (rule 4.2.4): a narrowed
+  // round budget is `R` in every formula that reads it.
+  const reviewRounds = winner("review_rounds", numeric, DEFAULT_REVIEW_ROUNDS);
   const computed = computeScopeBudgets({
     agentTypes: budgetTypes,
     plans: plans.length,
+    // Absent unless narrowed, so the page still shows D-0064's default as a default.
+    ...(reviewRounds === DEFAULT_REVIEW_ROUNDS ? {} : { reviewRounds }),
     rows: material.rows,
     draftedAtMs: material.draftedAtMs,
   });
-
-  const taken: Narrowing[] = [];
-  const narrowest = (field: NarrowableField, computedValue: number): number => {
-    let value = computedValue;
-    for (const n of narrowings.filter((one) => one.field === field)) {
-      const stated = field === "expires_at" ? Date.parse(n.value as string) : (n.value as number);
-      if (stated < value) {
-        value = stated;
-        taken.push(n);
-      }
-    }
-    return value;
-  };
   const budgets = {
-    laps: narrowest("laps", computed.laps.value),
-    review_rounds: narrowest("review_rounds", computed.review_rounds.value),
-    cost_usd: narrowest("cost_usd", computed.cost_usd.value),
+    laps: winner("laps", numeric, computed.laps.value),
+    review_rounds: reviewRounds,
+    cost_usd: winner("cost_usd", numeric, computed.cost_usd.value),
     // Rule 4.1's table: a lower reserve admits more laps at once, which widens.
     cost_reserve_usd: computed.cost_reserve_usd.value,
-    expires_at_ms: narrowest("expires_at", computed.expires_at_ms.value),
+    expires_at_ms: winner("expires_at", numeric, computed.expires_at_ms.value),
   };
-  // Stricter is lower in the closed four, which run blocker..nit.
-  let threshold: FindingSeverity = "major";
-  for (const n of narrowings.filter((one) => one.field === "severity_threshold")) {
-    const stated = n.value as FindingSeverity;
-    if (FINDING_SEVERITIES.indexOf(stated) > FINDING_SEVERITIES.indexOf(threshold)) {
-      threshold = stated;
-      taken.push(n);
-    }
-  }
+  // Stricter is later in the closed four, which run blocker..nit.
+  const rank = (severity: string) => -FINDING_SEVERITIES.indexOf(severity as FindingSeverity);
+  const threshold = FINDING_SEVERITIES[
+    -winner("severity_threshold", (n) => rank(n.value as string), rank("major"))
+  ] as FindingSeverity;
   const additions: string[] = [];
   for (const n of narrowings.filter((one) => one.field === "irreversible_additions")) {
     if (!additions.includes(n.value as string)) {

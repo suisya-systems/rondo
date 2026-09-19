@@ -450,3 +450,70 @@ test.each([
   expect(outcome.kind).toBe("unavailable");
   expect(outcome.kind === "unavailable" && outcome.reason).toContain(reason);
 });
+
+test("one narrowing wins per field, and only the winner is cited: the scope's bases support the value it carries", () => {
+  const material: DrafterMaterial = {
+    ...MATERIAL,
+    thread: [
+      ...MATERIAL.thread,
+      { messageId: "r2", authorKind: "operator", inReplyTo: "r1", asks: false, body: "$3 max." },
+    ],
+  };
+  for (const order of [
+    [
+      { field: "cost_usd", value: 4, basis: "r1" },
+      { field: "cost_usd", value: 3, basis: "r2" },
+    ],
+    [
+      { field: "cost_usd", value: 3, basis: "r2" },
+      { field: "cost_usd", value: 4, basis: "r1" },
+    ],
+  ]) {
+    const outcome = drafted(draftOf(material, answered({ ...SPLIT, narrowings: order })));
+    expect(outcome.scope?.narrowed).toEqual([
+      { field: "cost_usd", value: 3, basisMessageId: "r2" },
+    ]);
+    expect(outcome.scope?.bases).toEqual([
+      { form: "message", messageId: "r1" },
+      { form: "message", messageId: "r2" },
+    ]);
+  }
+  const severity = drafted(
+    draftOf(
+      material,
+      answered({
+        ...SPLIT,
+        narrowings: [
+          { field: "severity_threshold", value: "minor", basis: "r1" },
+          { field: "severity_threshold", value: "nit", basis: "r2" },
+        ],
+      }),
+    ),
+  );
+  expect(severity.scope?.payload["severity_threshold"]).toBe("nit");
+  expect(severity.scope?.narrowed).toEqual([
+    { field: "severity_threshold", value: "nit", basisMessageId: "r2" },
+  ]);
+});
+
+test("a narrowed round budget is R in every formula that reads it (rule 4.2.4)", () => {
+  const outcome = drafted(
+    draftOf(
+      MATERIAL,
+      answered({ ...SPLIT, narrowings: [{ field: "review_rounds", value: 1, basis: "r1" }] }),
+    ),
+  );
+  expect(outcome.scope?.payload["budgets"]).toMatchObject({
+    review_rounds: 1,
+    laps: 1,
+    cost_usd: 2.5,
+    expires_at_ms: T0 + COLD_START_LAP_DURATION_MS + REPLY_ALLOWANCE_MS,
+  });
+});
+
+test.each([
+  ["a split", { ...SPLIT, holes: ["the docs"] }],
+  ["a run that drafts nothing", { act: "none", holes: ["the docs"] }],
+])("holes are refused on %s: a hole is named by a question (rule 6.1)", (_what, answer) => {
+  expect(refusal(answer)).toContain("names holes it asks nobody about");
+});
