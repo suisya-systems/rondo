@@ -42,7 +42,7 @@ import {
  * The version of the drafter's own instructions (D-0071 rule 1.4): a changed
  * {@link INSTRUCTIONS} is a new version, a changed model a new table entry.
  */
-const DRAFTER_INSTRUCTIONS_VERSION = 3;
+const DRAFTER_INSTRUCTIONS_VERSION = 4;
 
 /** What every row a model drafter writes is named under (rule 1.4). */
 export const MODEL_DRAFTER_PREFIX = "rondo/drafter/";
@@ -230,6 +230,12 @@ const INSTRUCTIONS = [
   "- A plan is a template from TEMPLATES, by its plan_digest, an agent type from AGENT TYPES, by",
   "  its digest, and the prompt the worker will run on, which you write. Nothing else of the",
   "  template changes. Name only an agent type whose tier is priced.",
+  "- TEMPLATES may be of several repositories, and picking a template picks the repository the",
+  "  work happens in. Where they are all of one, there is nothing to settle. Where they are of",
+  "  several and neither the request nor its thread says which of them the work belongs in, ask:",
+  "  propose no plan, so nothing starts until the person answers. Put the question as which piece",
+  "  of work is meant, never as which repository -- name each option by the work, in the person's",
+  "  own words from the thread, and never by a path, a digest or a repository's slug.",
   "- Parts of the request that can be done, reviewed and approved independently are separate",
   "  plans, one per part, each prompt covering its part only. Work that must land together is",
   "  one plan.",

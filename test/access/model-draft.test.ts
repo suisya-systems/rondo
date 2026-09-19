@@ -127,7 +127,7 @@ function refusal(answer: unknown, material: DrafterMaterial = MATERIAL): string 
 }
 
 test("the row name counts the drafter's instructions and names the table's model (D-0071 rule 1.4)", () => {
-  expect(modelDrafterName(drafterRow())).toBe("rondo/drafter/3/claude-opus-5");
+  expect(modelDrafterName(drafterRow())).toBe("rondo/drafter/4/claude-opus-5");
 });
 
 test("the document carries the thread, the templates, the agent types and the measurements, and never a ceiling", () => {
@@ -168,6 +168,56 @@ test("the language the host's operator reads is asked for by its tag, prompts in
   expect(asked).toContain("do not\ncompose in English and translate");
   expect(asked).not.toContain("its template's prompt is written in");
   expect(drafterDocument(MATERIAL)).toContain("its template's prompt is written in");
+});
+
+test("a request that names no repository is asked back about, as a question about the work (D-0081 rule 2.4)", () => {
+  // Gate answer 3: the drafter asks with a recommendation and rondo starts
+  // nothing until the person answers. The templates are what span
+  // repositories, so picking one is picking a repository -- and the question
+  // the person reads is about which work is meant, in their own words, never
+  // about a path, a digest or a slug (D-0076, D-0079).
+  const document = drafterDocument(MATERIAL);
+  expect(document).toContain("picking a template picks the repository the");
+  expect(document).toContain("propose no plan, so nothing starts until the person answers");
+  expect(document).toContain("never as which repository");
+  expect(document).toContain("never by a path, a digest or a repository's slug");
+  // And an ask is already a stop that starts nothing: no plans, so no scope to
+  // approve and no lap to admit. No new kind of stop is added.
+  const outcome = drafted(
+    draftOf(
+      {
+        ...MATERIAL,
+        templates: [
+          MATERIAL.templates[0] as DrafterMaterial["templates"][number],
+          {
+            ...(MATERIAL.templates[0] as DrafterMaterial["templates"][number]),
+            planDigest: DIGEST("2"),
+            repository: "/srv/other",
+            workspaceRoot: "/srv/other-work",
+          },
+        ],
+      },
+      answered({
+        act: "ask",
+        summary: { text: "The request fits two pieces of work.", bases: ["r1"] },
+        question: {
+          text: "Which of these did you mean?",
+          options: [
+            { text: "The scope screen.", gives_up: "The reading page waits." },
+            { text: "The reading page.", gives_up: "The scope screen waits." },
+          ],
+          recommended: 0,
+          recommendation: "The request names the scope screen.",
+          bases: ["r1"],
+        },
+        holes: [],
+        narrowings: [],
+      }),
+    ),
+  );
+  expect(outcome.act).toBe("ask");
+  expect(outcome.split).toBeNull();
+  expect(outcome.scope).toBeNull();
 });
 
 test("nothing is handed over for a request that is not an operator's opening message, or for material over the bound", () => {
