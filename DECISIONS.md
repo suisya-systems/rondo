@@ -16081,7 +16081,7 @@ number.
 | # | On 2026-09-17 | What rondo has without this entry | New in this entry | Stays with the person |
 |---|---|---|---|---|
 | **C1. What may run beside what** | Seven issues cut into three lanes by the files each would own, sized to the collisions and not to the issue count | A count (`D-0023`); a collision read from committed paths, after a lap (`D-0067` rule 2) | **A claim on paths, drafted before admission and tested at it** (rules 2 and 3) | Nothing inside a scope. The cut is drafted (`D-0063`) and tested; it is `D-0064` O1 |
-| **C2. Ownership moved over time** | "The page files pass to lane 3 when lane 1 merges" | Nothing: `D-0067` rule 4's release list has `first_terminal` only, and a release on a merge is a P3 to the person each time | **A claim widens, narrows and is released by successor rows; a line's work landing is read off the default branch** (rules 4 and 6) | The merge that lands the work, which is a person's act (`D-0064` rule 3.4). No second press releases the other line |
+| **C2. Ownership moved over time** | "The page files pass to lane 3 when lane 1 merges" | Nothing: `D-0067` rule 4's release list has `first_terminal` only, and a release on a merge is a P3 to the person each time | **A claim widens, narrows and is released by successor rows; a line's work landing is read off the default branch** (rules 4 and 6) | The merge that lands the work, which is a person's act (`D-0064` rule 3.4). No press releases the other line; a line at its gate still continues by the person's `revise` press, offered once the paths are free (rule 7.1) |
 | **C3. A landing order refused that was correct in isolation** | #206's store change alone would have left no ask releasable; store, page and docs had to land in one pull request | `D-0067` case 4: a merge order drafted and carried out by the person | **Changes that must land together are folded into one line**, not ordered (rule 9.2). The claim moves; the redo is `D-0027`'s | **Seeing that a change alone breaks something** is a reader's judgement, not the ledger's. The `revise` press and the merge stay the person's while O4 and merge are theirs |
 | **C4. An agent held without ending it** | Lane 3 told to stop and wait, context intact, while the person slept | A lap at its gate is `awaiting_human`, occupies no capacity (`D-0023` rule 2), and waits for ever | **A held line keeps its claim**, so nothing takes its files while it waits (rules 2 and 10) | The decision it waits on (`D-0064` P2 or P3). **The session is not kept** (rule 10) |
 | **C5. A consequence routed across a boundary** | #206 made `lap-10-runbook.md` section 5 false; the fix went into #206's pull request | Nothing: a lap may write any path, and `D-0067` rule 2 finds it only if another open line changed the same path | **A widening onto a path another line holds but has not changed takes it by a narrowing now**, and one it has changed waits for it to land (rule 4) | **Seeing that the prose became false** is a reader's judgement (`D-0065`'s reviewer or a drafter's premise claim). Whether the fix changes something the person owns is `D-0064` P3's test, unchanged |
@@ -16137,8 +16137,8 @@ number.
    2. **Every successor `lane_claim` row is tested the same way, in the transaction that writes it.**
    3. **"Open" is `D-0067` rule 2's open lineage, read over the whole lineage tree**: a lineage is a
       tree, since a redo may continue an earlier lap (`D-0066` rule 4.4 as annotated for rondo#197).
-      It is open while **any** lap of the tree is not terminal, or any `closed` lap's work has not
-      landed, where "landed" is rule 6's reading. One branch of the tree failing does not release a
+      It is open while **any** lap of the tree is not terminal, or any closed tip's work (rule 6) has
+      not landed, where "landed" is rule 6's reading. One branch of the tree failing does not release a
       claim another branch still needs.
    4. **The refusal is the backstop, not the ordinary path.** The in-force claims are rows in the
       advisory's snapshot, so a split is drafted knowing them. For a plan whose claim overlaps an open
@@ -16157,11 +16157,18 @@ number.
 
 4. **Move ownership: a claim changes only by a successor row, in three ways.**
    1. **Widen**: add paths, tested by rule 3.2. A widening onto a path another open line holds is
-      drafted as a `sequence` on that line, releasing at `paths_free`. **This is the handover (C2)**:
-      lane 3's claim on the page files is a widening held until lane 1 lands.
+      drafted as a `sequence` on that line, releasing at `paths_free`. **The paths asked for are
+      carried in the `sequence` as a `paths` member**, beside `first`, `then`, `holds` and `until`, so a
+      held widening survives a restart and `paths_free` has something to test; the widening row is
+      written in the transaction that admits the held act. For a plan not yet admitted, `paths` is its
+      drafted claim. **This is the handover (C2)**: lane 3's claim on the page files is a widening held
+      until lane 1's paths are free.
    2. **Narrow**: drop paths. **A path the line has already changed cannot be dropped before the line
-      lands or ends**, where "changed" is the set rule 6 reads. Its work on that path exists and would
-      meet the other line at merge. Narrowing a path the line has not touched is how one line gives it
+      lands or ends.** "Changed" here is **every lap of the tree that has committed, whatever its
+      status**: the paths between the lineage's first `baseCommit` and each lap's `tipCommit`, a lap at
+      its gate or still performing included. It is wider than rule 6's landing set on purpose; that
+      one decides what must land, this one what already exists. Its work on that path exists and
+      would meet the other line at merge. Narrowing a path the line has not touched is how one line gives it
       to another at once (C5).
    3. **Release**: a successor with no paths, written when the line stops being open (rule 3.3): in
       the transaction that writes a terminal status the surface itself writes (`abandoned`,
@@ -16188,12 +16195,23 @@ number.
 
 6. **A line has landed when the default branch holds what it changed.** Landing is read only for a
    line whose every lap is terminal and at least one is `closed`: a lap at its gate is held by rule
-   10, whatever its diff says. The line's changed set is the union, over its `closed` laps, of the
-   paths changed between the lineage's first `baseCommit` and that lap's `tipCommit`. **It has landed
+   10, whatever its diff says. **What must land is the line's closed tips**: a `closed` lap that no
+   other lap of the tree continues. A lap a redo continues (`D-0027`: `revise` closes its predecessor
+   and starts from its branch) is superseded by that redo, whatever the redo's end, so a lap's work
+   that was revised is never owed to the default branch in its revised-away form. The line's landing
+   set is the union, over its closed tips, of the paths changed between the lineage's first
+   `baseCommit` and that tip's `tipCommit`. A line whose only continuation ended `abandoned` or
+   `failed` has no closed tip and nothing to land: it is not open, and its claim is released (rule
+   4.3). Retrying it takes the claim back (rule 2.6). **It has landed
    when, for every path in that set, the tree entry at the default branch's head equals the tree entry
    at the tip (object id, mode and type), a deleted path being absent from both.** A blob alone is not
-   enough: a change of mode only keeps the blob and would read as landed before it had. The reading is gathered from git at the points rule 7
-   names and is stored only as the release row it causes.
+   enough: a change of mode only keeps the blob and would read as landed before it had. **The default
+   branch read is the forge's, not the local one**: a squash merge on the forge moves neither local
+   `main` nor a remote-tracking ref until something fetches. So the reading first fetches the
+   default branch from the remote `publish` pushes to, into a ref rondo owns, and reads that. **A
+   fetch that fails makes the reading `undetermined`**: nothing is released, and the line waiting on
+   it shows `undetermined` on the screen, never "waiting on a merge" (`D-0068` rule 2.3). The reading
+   is gathered at the points rule 7 names and is stored only as the release row it causes.
    1. **It holds under squash**, which is how #251, #252 and #253 landed, where `D-0067` rule 2's
       ancestry test ("its `tipCommit` is not an ancestor of the default branch") never fires. **It is
       sound because of rule 3**: while the line was open no other line held its paths, so a default
@@ -16218,6 +16236,15 @@ number.
    section 4's verdict computed then, unchanged. The patrol's function is not changed and still acts
    on nothing; the tick carries a second duty. Without a resident host, rule 6 is read at the next
    admission the surface attempts. This is the gate's first point.
+   1. **What the tick may attempt is an admission the organisation may make without a gate answer**:
+      a plan's first admission, or an in-scope `retry` (`D-0064` O1 and O4). **A held line that is at
+      its gate continues only by `revise`, which answers that gate, and the gate is the person's**
+      while `D-0064` rule 3.6 is closed (`D-0070` section 1). So for that line the hold is on the
+      offer, not the act: the gate's drafted **Ask for a change** is drawn as waiting on the other line,
+      with its reason and bases, until `paths_free`; then it is offered, and the screen says the paths
+      are free. **The handover is then one press, the one the person would make anyway to continue
+      the line, and the person never has to know when to make it.** When `D-0064` rule 3.6 opens, the
+      organisation's `revise` is a held act like any other, by the entry that opens it.
 
 8. **Defer: nothing new, and deferring now costs no other line anything.** A plan waits when an `asks`
    message stands over it (`D-0066` rule 4.2), when a `sequence` holds it (`D-0067` rule 4), or when a
@@ -16283,7 +16310,7 @@ number.
 | Case | What rondo does | Handled? |
 |---|---|---|
 | **C1.** Seven issues, five touching `web.tsx` and `wording.ts` | The drafter drafts three claims (the page files; `docs/operations/`; `src/store/`) and folds the page issues into one line. A plan overlapping an open line waits as `held_by_order` (rule 3.4) | **Yes**, as far as the drafter cuts well. A bad cut costs parallelism (too wide) or one lap (too narrow, rule 5), never an unseen collision on a shared path |
-| **C2.** Page files pass to lane 3 when lane 1 merges | Lane 3's widening onto the page files is a `sequence` on lane 1 with `until` `paths_free`. The person merges #252 on the forge; the tick reads it landed (rule 6), writes the release, and attempts lane 3's held redo (rule 7) | **Yes**, under both gate points (a). Under point 1 (b) the person answers one P3 per handover |
+| **C2.** Page files pass to lane 3 when lane 1 merges | Lane 3's widening onto the page files is a `sequence` on lane 1 with `until` `paths_free`. The person merges #252 on the forge; the tick fetches, reads it landed (rule 6) and writes the release. Lane 3 is at its gate, so its drafted change is offered from that moment and the person's `revise` press starts the lap (rule 7.1) | **Yes**, under both gate points (a): the merge, and the one press that continues lane 3 anyway. Under point 1 (b) the person also answers one P3 per handover |
 | **C3.** #206's store change could not land alone | Seen by a reviewer's finding or a premise claim, or not at all. The drafted remedy is a fold (rule 9.2): widen onto the page and docs, then a drafted `revise` the person presses | **Half.** The fold is mechanical once the break is seen; seeing it is a reader's judgement over code the change did not touch, and nothing derives it |
 | **C4.** Lane 3 held overnight | The lap ends at its gate with its question; the line keeps its claim and holds no capacity; the ask carries a recommendation | **Yes for the line; no for the session.** The next lap re-reads the branch and the transcript rather than remembering |
 | **C5.** `lap-10-runbook.md` section 5 made false | The reviewer or drafter names the consequence; the claim widens onto the runbook. On the day lane 2 had landed an hour earlier, so the path was free; had lane 2 held it untouched, a narrowing would give it at once (rule 4.2); had lane 2 changed it, the widening waits for lane 2 to land | **Yes once seen**, with the same half as C3 for seeing it |
@@ -16342,7 +16369,7 @@ number.
 1. **Whether a held act is released by reading the default branch on a clock.**
    - **(a) Yes: the resident host's tick reads rule 6 for every line a `sequence` waits on, writes the
      release, and the surface attempts the held act** (recommended, rule 7). Handover at landing needs
-     no press beyond the merge. *Loses:* an admission rondo starts because a minute passed, which is a
+     no press beyond the merge and, for a line at its gate, the press that continues it (rule 7.1). *Loses:* an admission rondo starts because a minute passed, which is a
      self-started act the person did not make at that moment. `D-0067` rule 4 already starts a held
      act on a fact the surface writes; this starts one on a fact the surface reads.
    - **(b) No: a release on a landing stays `D-0067` rule 4's P3.** Every handover is a question the
@@ -16370,6 +16397,8 @@ On acceptance, each dated and additive, per the answers the gate gives:
   refusing an overlap, and for nothing else.
 - **`D-0067` rule 2**: under the second point (a), the ancestry clause of "open lineage" is superseded by
   `D-0073` rule 6, and section 4's squash residual is answered.
+- **`D-0067` rule 3**: the `sequence` payload gains `paths`, the paths `then` asks for (`D-0073`
+  rule 4.1).
 - **`D-0067` rule 3.4**: `paths_free` joins the closed list of release facts.
 - **`D-0067` rule 4**: under the first point (a), a release that is a reading is written on the resident
   host's tick and the held act attempted then.
