@@ -3041,6 +3041,13 @@ async function spentGate(world: ReturnType<typeof fresh>): Promise<void> {
     .run();
 }
 
+test("no draft is paid for where a spent budget draws the way to raise it instead of the form (D-0077 rule 2.1)", async () => {
+  const world = fresh();
+  await spentGate(world);
+  expect(await draftRevise(world, REVISE_ANSWER, { admitted: "sd-1" })).toHaveLength(0);
+  expect(reviseRows(world)).toHaveLength(0);
+});
+
 test("a gate whose approval is spent says which budget and offers to raise it, instead of a change it would refuse (D-0074 rule 4.1)", async () => {
   const world = fresh();
   await spentGate(world);

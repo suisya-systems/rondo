@@ -1674,8 +1674,8 @@ explanation you pressed on and then answers the gate.`,
   reviseDrafted:
     "rondo drafted this from what the review found. Edit it as you like: what you send is yours.",
   reviseDrafting:
-    "A draft of what to change is being written from what the review found. You do not have " +
-    "to wait for it: you can write your own now.",
+    "A draft of what to change is being written from what the review found; reload the page " +
+    "in a minute or two to see it. You do not have to wait for it: you can write your own now.",
   reviseUndrafted:
     "rondo could not draft what to change this time, and will not try again for this review. " +
     "Write what you want changed yourself; what the review found is above.",
@@ -2515,7 +2515,8 @@ const JA: Partial<Chrome> = Object.freeze({
   reviseDrafted:
     "レビューで見つかった点から rondo が下書きしました。自由に編集できます。送る内容はあなたのものです。",
   reviseDrafting:
-    "レビューで見つかった点から、変更内容の下書きを作成中です。待つ必要はなく、今すぐ自分で書くこともできます。",
+    "レビューで見つかった点から、変更内容の下書きを作成中です。1〜2 分後にページを再読み込みすると表示されます。" +
+    "待つ必要はなく、今すぐ自分で書くこともできます。",
   reviseUndrafted:
     "今回は rondo が変更内容を下書きできませんでした。このレビューについて再度試みることはありません。" +
     "変更してほしいことをご自身で書いてください。レビューで見つかった点は上にあります。",

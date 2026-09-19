@@ -43,7 +43,7 @@ import {
   reviseDrafterName,
   reviseDraftOf,
 } from "./revise-draft.js";
-import { approvalTip } from "./scope.js";
+import { approvalTip, budgetRefusal } from "./scope.js";
 
 /** As the scope drafter's lease: past the drafter's own timeout, and freed within a quarter hour. */
 const LEASE_MS = 15 * 60 * 1000;
@@ -61,6 +61,7 @@ export interface ReviseDrafterPorts {
     | "scopeTip"
     | "readScopeDecision"
     | "readScope"
+    | "scopeSpent"
     | "lineageOf"
     | "recordReviseDraft"
     | "reviseDraftFor"
@@ -192,7 +193,17 @@ async function dueLaps(
     if (givenUp.has(memoryKey(record.id, reading))) {
       continue;
     }
-    if ((await approvalTip(ports.record, record.id)).kind !== "tip") {
+    const tip = await approvalTip(ports.record, record.id);
+    if (tip.kind !== "tip") {
+      continue;
+    }
+    // **Nor where a budget closes the change path**: the gate view draws the
+    // way to raise it in place of the form (D-0074 rule 4.1), so a draft now
+    // is paid for and read by nobody. A scan after the raise drafts it.
+    if (
+      record.requestMessageId !== null &&
+      (await budgetClosed(ports, tip.scopeDecisionId, ports.now()))
+    ) {
       continue;
     }
     if ((await ports.record.reviseDraftFor(record.id, reading)) !== null) {
@@ -201,6 +212,24 @@ async function dueLaps(
     due.push({ record, gateId: record.gateId, reading });
   }
   return due;
+}
+
+/** Whether an approval's budgets would refuse one more attempt now: the gate view's own test. */
+async function budgetClosed(
+  ports: Pick<ReviseDrafterPorts, "record">,
+  scopeDecisionId: string,
+  nowMs: number,
+): Promise<boolean> {
+  const decided = await ports.record.readScopeDecision(scopeDecisionId);
+  if (decided.kind !== "read") {
+    return false;
+  }
+  const stored = await ports.record.readScope(decided.decision.scopeId);
+  if (stored.kind !== "read") {
+    return false;
+  }
+  const spent = await ports.record.scopeSpent(scopeDecisionId);
+  return budgetRefusal(stored.scope.payload.budgets, spent, nowMs) !== null;
 }
 
 /** A plan's prompt, or null when the stored plan does not read. */
