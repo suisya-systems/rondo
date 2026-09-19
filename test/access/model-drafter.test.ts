@@ -21,7 +21,14 @@ import {
 import { readRunPlan } from "../../src/refrain/plan.js";
 import { planDigest } from "../../src/store/plan.js";
 import type { JsonRecord } from "../../src/store/records.js";
-import { AGENT_TYPE_INPUT, agentTypeDigestOf, planDocument, world } from "./fixtures/drafter.js";
+import {
+  AGENT_TYPE_INPUT,
+  agentTypeDigestOf,
+  planDocument,
+  REPOSITORY,
+  WORKSPACE_ROOT,
+  world,
+} from "./fixtures/drafter.js";
 
 function portsOver(
   w: Awaited<ReturnType<typeof world>>,
@@ -110,7 +117,7 @@ test("an agent type rondo already holds is offered as held, from its record", as
     scopeId: "s-0",
     payload: {
       requests: ["r1"],
-      workspaces: [{ repository: "/srv/repo", workspace_root: "/srv/work" }],
+      workspaces: [{ repository: REPOSITORY, workspace_root: WORKSPACE_ROOT }],
       agent_types: [typeDigest],
       budgets: {
         laps: 1,

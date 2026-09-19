@@ -233,9 +233,10 @@ test("whether a drafted plan can start is answered before any press: the scope, 
     outwardActs: w.draft.payload.outward_acts,
   });
   const decision = approved.scopeDecisionId as string;
-  expect(await draftedStartReadiness(ports(), "r1", decision, w.proposalId, 0)).toMatchObject({
-    kind: "ready",
-  });
+  // The whole answer in the message, so a failure on another platform says
+  // which test refused and why rather than only that it was not ready.
+  const ready = await draftedStartReadiness(ports(), "r1", decision, w.proposalId, 0);
+  expect(ready.kind, JSON.stringify(ready)).toBe("ready");
   expect(await draftedStartReadiness(ports(), "r1", decision, w.proposalId, 9)).toMatchObject({
     kind: "unrunnable",
   });
