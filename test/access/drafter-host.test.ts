@@ -7,12 +7,14 @@
  * thread; an unavailable run writes its one message and is not retried; and a
  * draft the store refuses still leaves a row covering what it read.
  */
+import { DatabaseSync } from "node:sqlite";
 import { expect, test } from "vitest";
 
 import { type DrafterHostPorts, drafterHost } from "../../src/access/drafter-host.js";
 import type { DrafterRun } from "../../src/access/model-draft.js";
 import { draftRequest } from "../../src/access/model-drafter.js";
 import { planDigest } from "../../src/store/plan.js";
+import { advisoryRecord, iterationStore } from "../../src/store/sqlite.js";
 import { agentTypeDigestOf, planDocument, world } from "./fixtures/drafter.js";
 
 type World = Awaited<ReturnType<typeof world>>;
@@ -312,4 +314,60 @@ test("a lease that cannot be taken for a moment leaves the request due for the n
   host.kick();
   await host.idle();
   expect(handed).toHaveLength(1);
+});
+
+test("starting a host on a store with history spends nothing on the past; a reply in an old thread drafts that thread, and nothing else", async () => {
+  const connection = new DatabaseSync(":memory:");
+  const store = iterationStore(connection, { maxOccupying: 4, maxLive: 6 });
+  const record = advisoryRecord(connection);
+  const say = async (messageId: string, body: string, inReplyTo: string | null, atMs: number) =>
+    await record.recordThreadMessage({
+      messageId,
+      body,
+      authorKind: "operator",
+      authorId: "ada",
+      inReplyTo,
+      atMs,
+      bases: [],
+      asks: false,
+    });
+  // Written before any drafter host ran here.
+  await say("old-1", "An old request.", null, 1_000);
+  await say("old-2", "Another old one.", null, 2_000);
+  const handed: string[] = [];
+  const logged: string[] = [];
+  let n = 0;
+  const host = drafterHost({
+    store,
+    record,
+    now: () => 10_000,
+    language: null,
+    log: (line) => logged.push(line),
+    mintId: (kind) => {
+      n += 1;
+      return `${kind}-${String(n)}`;
+    },
+    runDrafter: async (_row, document) => {
+      handed.push(document);
+      return { kind: "failed", reason: "no claude" };
+    },
+  });
+  host.kick();
+  await host.idle();
+  expect(handed).toEqual([]);
+  expect(logged).toEqual([
+    "drafter  2 request thread(s) predate the drafter on this store and are not drafted: nothing is spent on them unless the person replies in one",
+  ]);
+  // A new request, and a reply in one old thread.
+  await say("new-1", "A new request.", null, 20_000);
+  await say("old-1-reply", "Picking this back up.", "old-1", 21_000);
+  host.kick();
+  await host.idle();
+  expect(handed).toHaveLength(2);
+  expect(
+    handed.some((d) => d.includes("An old request.") && d.includes("Picking this back up.")),
+  ).toBe(true);
+  expect(handed.some((d) => d.includes("Another old one."))).toBe(false);
+  // Said once per host.
+  expect(logged.filter((line) => line.includes("predate"))).toHaveLength(1);
 });

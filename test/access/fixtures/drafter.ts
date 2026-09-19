@@ -84,6 +84,9 @@ export async function world() {
   const connection = new DatabaseSync(":memory:");
   const store = iterationStore(connection, { maxOccupying: 4, maxLive: 6 });
   const record = advisoryRecord(connection);
+  // A drafter host has run on this store before any message below: what a
+  // test writes is the drafter's to draft, not the past a host leaves alone.
+  await record.messagesBeforeDrafter(0);
   const say = async (messageId: string, body: string, inReplyTo: string | null, atMs: number) => {
     const outcome = await record.recordThreadMessage({
       messageId,

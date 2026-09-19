@@ -36,7 +36,10 @@ const LEASE_MS = 15 * 60 * 1000;
 /** What the host reaches, as values a test can replace. */
 export interface DrafterHostPorts extends DrafterPorts {
   readonly record: DrafterPorts["record"] &
-    Pick<AdvisoryRecord, "recordDraft" | "draftedMessageIds" | "claimDraft" | "releaseDraft">;
+    Pick<
+      AdvisoryRecord,
+      "recordDraft" | "draftedMessageIds" | "claimDraft" | "releaseDraft" | "messagesBeforeDrafter"
+    >;
   /** A fresh row id with a readable prefix, as the page mints its own. */
   readonly mintId: (kind: "draft" | "drafted-scope" | "drafter" | "drafter-host") => string;
   /** The language the host's operator reads, or null (`RONDO_OPERATOR_LANGUAGE`). */
@@ -61,6 +64,8 @@ export function drafterHost(ports: DrafterHostPorts): DrafterHost {
   // (rule 1.5's "not retried"), so a store that refuses does not cost a draft
   // on every scan.
   const givenUp = new Map<string, string>();
+  // Said once per host, so the terminal says why old threads sit undrafted.
+  let saidPast = false;
   // Who this process is to the lease (rule 3.3), so a second host over the
   // same store does not pay for a thread this one is already drafting.
   const holder = ports.mintId("drafter-host");
@@ -72,7 +77,15 @@ export function drafterHost(ports: DrafterHostPorts): DrafterHost {
       again = false;
       let due: readonly Due[];
       try {
-        due = await dueRequests(ports, givenUp);
+        const scanned = await scan(ports, givenUp);
+        due = scanned.due;
+        if (!saidPast && scanned.past > 0) {
+          saidPast = true;
+          ports.log(
+            `drafter  ${String(scanned.past)} request thread(s) predate the drafter on this store and ` +
+              "are not drafted: nothing is spent on them unless the person replies in one",
+          );
+        }
       } catch (error) {
         ports.log(`drafter  the threads could not be scanned: ${describe(error)}`);
         return;
@@ -91,7 +104,7 @@ export function drafterHost(ports: DrafterHostPorts): DrafterHost {
             try {
               // Still due now that it is ours: the list was read before the
               // runs ahead of it, and another host may have drafted it since.
-              const still = (await dueRequests(ports, givenUp)).some(
+              const still = (await scan(ports, givenUp)).due.some(
                 (d) => d.requestMessageId === one.requestMessageId,
               );
               written = still
@@ -149,16 +162,23 @@ interface Due {
   readonly operatorKey: string;
 }
 
-/** Every request with an operator message no drafter row covers, oldest first. */
-async function dueRequests(
+/**
+ * Every request with an operator message no drafter row covers, oldest first,
+ * and how many request threads hold only messages from before the drafter.
+ */
+async function scan(
   ports: DrafterHostPorts,
   givenUp: ReadonlyMap<string, string>,
-): Promise<readonly Due[]> {
+): Promise<{ readonly due: readonly Due[]; readonly past: number }> {
   const read = await ports.record.threadMessages();
   if (read.kind !== "read") {
     throw new Error(read.reason);
   }
   const covered = await ports.record.draftedMessageIds(DRAFTER_PREFIX);
+  // **The past is not drafted unasked**: a message written before a drafter
+  // host first ran here makes no thread due. A reply the person writes now
+  // does, and that run reads the whole thread, old messages included.
+  const before = await ports.record.messagesBeforeDrafter(ports.now());
   const parent = new Map(read.messages.map((m) => [m.messageId, m.inReplyTo]));
   const rootOf = (id: string): string => {
     let at = id;
@@ -173,6 +193,7 @@ async function dueRequests(
   };
   const operatorIds = new Map<string, string[]>();
   const uncovered = new Set<string>();
+  const past = new Set<string>();
   for (const m of read.messages) {
     if (m.authorKind !== "operator") {
       continue;
@@ -185,13 +206,14 @@ async function dueRequests(
     }
     operatorIds.set(root, [...(operatorIds.get(root) ?? []), m.messageId]);
     if (!covered.has(m.messageId)) {
-      uncovered.add(root);
+      (before.has(m.messageId) ? past : uncovered).add(root);
     }
   }
-  return [...uncovered].flatMap((root) => {
+  const due = [...uncovered].flatMap((root) => {
     const key = [...(operatorIds.get(root) ?? [])].sort().join("\n");
     return givenUp.get(root) === key ? [] : [{ requestMessageId: root, operatorKey: key }];
   });
+  return { due, past: [...past].filter((root) => !uncovered.has(root)).length };
 }
 
 /**

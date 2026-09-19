@@ -1255,6 +1255,16 @@ CREATE TABLE IF NOT EXISTS drafter_lease (
   holder                      TEXT    NOT NULL,
   until_ms                    INTEGER NOT NULL
 );
+
+-- Where the conversation stood when a model drafter host first ran on this
+-- store: messages at or before last_rowid predate the drafter, and starting a
+-- host never spends a draft on them unasked. One row, written once. rowid and
+-- not at_ms, because a caller's clock can step back and insertion order cannot.
+CREATE TABLE IF NOT EXISTS drafter_epoch (
+  id                          INTEGER PRIMARY KEY CHECK (id = 1),
+  last_rowid                  INTEGER NOT NULL,
+  started_at_ms               INTEGER NOT NULL
+);
 `;
 
 /**
@@ -2482,6 +2492,12 @@ export interface AdvisoryRecord {
   ): Promise<boolean>;
   /** Give a thread's run back; a lease another holder took since is left alone. */
   releaseDraft(requestMessageId: string, holder: string): Promise<void>;
+  /**
+   * The operator messages written before a model drafter host first ran on
+   * this store, recording that moment on the first call. A host never drafts a
+   * thread for these alone: starting one must not spend on the past unasked.
+   */
+  messagesBeforeDrafter(nowMs: number): Promise<ReadonlySet<string>>;
   readScopeDecision(scopeDecisionId: string): Promise<ScopeDecisionReadOutcome>;
   /**
    * The one decision on a scope row, or `absent` while nobody has answered it.
@@ -3558,6 +3574,25 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
           .run(requestMessageId, holder, untilMs);
         return true;
       });
+    },
+
+    async messagesBeforeDrafter(nowMs: number): Promise<ReadonlySet<string>> {
+      const rows = immediateTransaction(connection, () => {
+        connection
+          .prepare(
+            "INSERT INTO drafter_epoch (id, last_rowid, started_at_ms) " +
+              "SELECT 1, COALESCE((SELECT MAX(rowid) FROM conversation_message), 0), ? " +
+              "WHERE NOT EXISTS (SELECT 1 FROM drafter_epoch)",
+          )
+          .run(nowMs);
+        return connection
+          .prepare(
+            "SELECT message_id FROM conversation_message WHERE author_kind = 'operator' " +
+              "AND rowid <= (SELECT last_rowid FROM drafter_epoch WHERE id = 1)",
+          )
+          .all() as SqlRow[];
+      });
+      return new Set(rows.map((row) => String(row["message_id"])));
     },
 
     async releaseDraft(requestMessageId: string, holder: string): Promise<void> {
