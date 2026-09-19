@@ -36,6 +36,7 @@ import { draftedStanding } from "../../src/access/drafted-view.js";
 import { drafterHost } from "../../src/access/drafter-host.js";
 import { inspectLapWork } from "../../src/access/forge.js";
 import type { TranscriptLocation } from "../../src/access/inbox.js";
+import { forgeBody, ISSUE_READER, namedIssues } from "../../src/access/issue-read.js";
 import { draftedPlanRun } from "../../src/access/model-drafter.js";
 import { evidenceOf, READING_REMOTE } from "../../src/access/review.js";
 import { reviseDrafterHost } from "../../src/access/revise-drafter.js";
@@ -6466,4 +6467,117 @@ test("an approved drafted scope offers each plan its own start, and says so wher
     expect(expired).toContain(wording.planOutside("expiry"));
     expect(expired).not.toContain("expiry test");
   }
+});
+
+test("what rondo read of a named issue is said under the message, and the scope screen says which the worker is given (D-0078 section 4)", async () => {
+  const world = fresh();
+  const requestId = "request-issues";
+  await seedScopeRequest(world, requestId, "Fix #237, #404 and #9.");
+  const read = async (messageId: string, body: string) => {
+    const outcome = await world.record.recordThreadMessage({
+      messageId,
+      body,
+      authorKind: "forge",
+      authorId: ISSUE_READER,
+      inReplyTo: requestId,
+      atMs: 2_000,
+      bases: [],
+      asks: false,
+    });
+    if (outcome.kind !== "recorded") throw new Error(JSON.stringify(outcome));
+  };
+  await read(
+    "forge-237",
+    forgeBody({
+      named: "#237",
+      atMs: 2_000,
+      read: {
+        url: "https://github.com/o/r/issues/237",
+        number: 237,
+        pullRequest: false,
+        title: "The worker cannot read issues",
+        state: "open",
+        author: "bob",
+        openedAt: "2026-09-01T00:00:00Z",
+        body: "Item one.\nItem two.",
+        comments: [{ author: "cy", at: "2026-09-02T00:00:00Z", body: "Item one is done." }],
+      },
+    }),
+  );
+  await read(
+    "forge-404",
+    forgeBody({
+      named: "#404",
+      atMs: 2_000,
+      failed: { why: "missing", detail: "gh api repos/o/r/issues/404: gh: Not Found (HTTP 404)" },
+    }),
+  );
+  const ports = {
+    ...portsOver(world, "ada", []),
+    // #9 is still to be read.
+    issuesUnread: async () => new Map([[requestId, namedIssues("#9")]]),
+  };
+  const thread = await operatorPage(
+    ports,
+    "t",
+    { kind: "thread", messageId: requestId, to: null },
+    EN,
+    mint,
+    () => "x",
+    () => "y",
+  );
+  const card = thread.slice(thread.indexOf('id="forge-237"'));
+  expect(card).toContain('href="https://github.com/o/r/issues/237"');
+  expect(card).toContain("The worker cannot read issues");
+  expect(card).toContain(EN.issueRead(false, 1));
+  expect(card.indexOf("<details")).toBeLessThan(card.indexOf("Item one is done."));
+  // Signed as rondo, never as the reader's row name, and never as its JSON.
+  expect(card.slice(0, card.indexOf("</header>"))).toContain(">rondo</span>");
+  expect(thread).not.toContain("rondo_issue_read");
+  const failed = thread.slice(thread.indexOf('id="forge-404"'));
+  expect(failed).toContain(EN.issueNotRead("missing"));
+  expect(failed).toContain(EN.issueNotReadTail);
+  expect(failed.indexOf("<details")).toBeLessThan(failed.indexOf("HTTP 404"));
+  expect(thread).toContain(EN.issuePending);
+
+  const scope = await operatorPage(
+    ports,
+    "t",
+    { kind: "scope", messageId: requestId, rounds: null, decisionId: null, plan: null },
+    EN,
+    mint,
+    () => "x",
+    () => "y",
+  );
+  const issues = scope.slice(scope.indexOf("scope-issues"), scope.indexOf("</section>"));
+  expect(issues).toContain(EN.scopeIssuesHeading);
+  expect(issues).toMatch(/data-issue="given".*#237.*given to the worker/s);
+  expect(issues).toMatch(/data-issue="not-given".*#404/s);
+  expect(issues).toMatch(/data-issue="pending".*#9/s);
+
+  // #237 named again and not read yet: said as pending, not as its older read.
+  const again = await operatorPage(
+    { ...ports, issuesUnread: async () => new Map([[requestId, namedIssues("#237 #9")]]) },
+    "t",
+    { kind: "scope", messageId: requestId, rounds: null, decisionId: null, plan: null },
+    EN,
+    mint,
+    () => "x",
+    () => "y",
+  );
+  const pendingAgain = again.slice(again.indexOf("scope-issues"), again.indexOf("</section>"));
+  expect(pendingAgain).not.toContain('data-issue="given"');
+  expect(pendingAgain).toMatch(/data-issue="pending".*#237/s);
+
+  const ja = await operatorPage(
+    ports,
+    "t",
+    { kind: "thread", messageId: requestId, to: null },
+    chromeFor("ja"),
+    mint,
+    () => "x",
+    () => "y",
+  );
+  expect(ja).toContain(chromeFor("ja").issueNotRead("missing"));
+  expect(ja).toContain(chromeFor("ja").issuePending);
 });

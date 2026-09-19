@@ -34,13 +34,14 @@ import {
   type FindingSeverity,
   type JsonRecord,
   type JsonValue,
+  type ThreadAuthorKind,
 } from "../store/records.js";
 
 /**
  * The version of the drafter's own instructions (D-0071 rule 1.4): a changed
  * {@link INSTRUCTIONS} is a new version, a changed model a new table entry.
  */
-const DRAFTER_INSTRUCTIONS_VERSION = 1;
+const DRAFTER_INSTRUCTIONS_VERSION = 2;
 
 /** What every row a model drafter writes is named under (rule 1.4). */
 export const MODEL_DRAFTER_PREFIX = "rondo/drafter/";
@@ -66,7 +67,8 @@ export const DRAFTER_INPUT_BOUND_BYTES = 400_000;
 /** One message of the request thread, as the document carries it (rule 2.1.1). */
 export interface DraftMessage {
   readonly messageId: string;
-  readonly authorKind: "operator" | "drafter";
+  /** `forge` is what rondo read of an issue the person named (D-0078 section 3.2). */
+  readonly authorKind: ThreadAuthorKind;
   readonly inReplyTo: string | null;
   readonly asks: boolean;
   /** The bytes as written (D-0009). */
@@ -213,6 +215,9 @@ const INSTRUCTIONS = [
   "organisation proposes to do about it; a person approves or edits it before anything runs.",
   "You can run nothing and fetch nothing; everything you may use is in this document. You cannot",
   "read the target repository.",
+  '- A message "by forge" is what rondo read of an issue a person named: JSON holding its title,',
+  "  state, body and comments, or why it could not be read. rondo quotes every such read into the",
+  "  worker's prompt itself, after your prompt, so do not copy or retell an issue in a prompt.",
   "",
   "You choose and you write words. You never invent a number, a template or an agent type:",
   '- Choose ONE act. "split": propose one or more plans. "ask": put one question to the person',

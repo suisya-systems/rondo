@@ -48,6 +48,14 @@ export interface DrafterHostPorts extends DrafterPorts {
   readonly log: (line: string) => void;
   /** Tests replace the run; the host runs the real one. */
   readonly draft?: typeof draftRequest;
+  /**
+   * The operator messages still waiting on an issue read (D-0078 section 3.3):
+   * a request with one is not due until every reference has its `forge`
+   * message. Absent where no reader runs, and then nothing waits.
+   */
+  readonly issuesUnread?: (
+    messages: readonly ThreadMessageDraft[],
+  ) => Promise<ReadonlyMap<string, unknown>>;
 }
 
 export interface DrafterHost {
@@ -191,8 +199,12 @@ async function scan(
     }
     return at;
   };
+  const unread =
+    ports.issuesUnread === undefined ? new Map() : await ports.issuesUnread(read.messages);
   const operatorIds = new Map<string, string[]>();
   const uncovered = new Set<string>();
+  // A draft is never composed while a read is still to come (D-0078 section 3.3).
+  const reading = new Set<string>();
   const past = new Set<string>();
   for (const m of read.messages) {
     if (m.authorKind !== "operator") {
@@ -205,11 +217,17 @@ async function scan(
       continue;
     }
     operatorIds.set(root, [...(operatorIds.get(root) ?? []), m.messageId]);
+    if (unread.has(m.messageId)) {
+      reading.add(root);
+    }
     if (!covered.has(m.messageId)) {
       (before.has(m.messageId) ? past : uncovered).add(root);
     }
   }
   const due = [...uncovered].flatMap((root) => {
+    if (reading.has(root)) {
+      return [];
+    }
     const key = [...(operatorIds.get(root) ?? [])].sort().join("\n");
     return givenUp.get(root) === key ? [] : [{ requestMessageId: root, operatorKey: key }];
   });

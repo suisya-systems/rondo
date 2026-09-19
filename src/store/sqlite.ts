@@ -1282,6 +1282,16 @@ CREATE TABLE IF NOT EXISTS drafter_epoch (
   last_rowid                  INTEGER NOT NULL,
   started_at_ms               INTEGER NOT NULL
 );
+
+-- drafter_epoch's shape for D-0078's issue reader: operator messages at or
+-- before last_rowid were written before a host that reads named issues first
+-- ran here, and their issues are not read unasked -- a thread that ended long
+-- ago does not gain the forge's words because rondo was upgraded.
+CREATE TABLE IF NOT EXISTS issue_reader_epoch (
+  id                          INTEGER PRIMARY KEY CHECK (id = 1),
+  last_rowid                  INTEGER NOT NULL,
+  started_at_ms               INTEGER NOT NULL
+);
 `;
 
 /**
@@ -2546,6 +2556,12 @@ export interface AdvisoryRecord {
    * thread for these alone: starting one must not spend on the past unasked.
    */
   messagesBeforeDrafter(nowMs: number): Promise<ReadonlySet<string>>;
+  /**
+   * {@link messagesBeforeDrafter} for D-0078's issue reader: the operator
+   * messages written before a host that reads named issues first ran on this
+   * store. Their issues are not read unasked.
+   */
+  messagesBeforeIssueReader(nowMs: number): Promise<ReadonlySet<string>>;
   readScopeDecision(scopeDecisionId: string): Promise<ScopeDecisionReadOutcome>;
   /**
    * The one decision on a scope row, or `absent` while nobody has answered it.
@@ -3653,22 +3669,11 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
     },
 
     async messagesBeforeDrafter(nowMs: number): Promise<ReadonlySet<string>> {
-      const rows = immediateTransaction(connection, () => {
-        connection
-          .prepare(
-            "INSERT INTO drafter_epoch (id, last_rowid, started_at_ms) " +
-              "SELECT 1, COALESCE((SELECT MAX(rowid) FROM conversation_message), 0), ? " +
-              "WHERE NOT EXISTS (SELECT 1 FROM drafter_epoch)",
-          )
-          .run(nowMs);
-        return connection
-          .prepare(
-            "SELECT message_id FROM conversation_message WHERE author_kind = 'operator' " +
-              "AND rowid <= (SELECT last_rowid FROM drafter_epoch WHERE id = 1)",
-          )
-          .all() as SqlRow[];
-      });
-      return new Set(rows.map((row) => String(row["message_id"])));
+      return messagesBeforeEpoch(connection, "drafter_epoch", nowMs);
+    },
+
+    async messagesBeforeIssueReader(nowMs: number): Promise<ReadonlySet<string>> {
+      return messagesBeforeEpoch(connection, "issue_reader_epoch", nowMs);
     },
 
     async recordReviseDraft(proposal: ProposalDraft, gateId: string): Promise<DraftWriteOutcome> {
@@ -4109,6 +4114,33 @@ function reviseDraftHolding(
   return null;
 }
 
+/**
+ * The operator messages at or before `table`'s one row, writing that row on
+ * the first call: the moment a host that does this work first ran here.
+ */
+function messagesBeforeEpoch(
+  connection: DatabaseSync,
+  table: "drafter_epoch" | "issue_reader_epoch",
+  nowMs: number,
+): ReadonlySet<string> {
+  const rows = immediateTransaction(connection, () => {
+    connection
+      .prepare(
+        `INSERT INTO ${table} (id, last_rowid, started_at_ms) ` +
+          "SELECT 1, COALESCE((SELECT MAX(rowid) FROM conversation_message), 0), ? " +
+          `WHERE NOT EXISTS (SELECT 1 FROM ${table})`,
+      )
+      .run(nowMs);
+    return connection
+      .prepare(
+        "SELECT message_id FROM conversation_message WHERE author_kind = 'operator' " +
+          `AND rowid <= (SELECT last_rowid FROM ${table} WHERE id = 1)`,
+      )
+      .all() as SqlRow[];
+  });
+  return new Set(rows.map((row) => String(row["message_id"])));
+}
+
 function coveredMessageIds(connection: DatabaseSync, drafterPrefix: string): Set<string> {
   const rows = connection
     .prepare(
@@ -4277,8 +4309,12 @@ function setupPlanRefusal(
  * refusal and is not repeated here.
  */
 function threadMessageRefusal(connection: DatabaseSync, draft: ThreadMessageDraft): string | null {
-  if (draft.authorKind !== "operator" && draft.authorKind !== "drafter") {
-    return `a thread message is written by an operator or a drafter, and '${String(draft.authorKind)}' is neither (D-0061 rule 2.3)`;
+  if (
+    draft.authorKind !== "operator" &&
+    draft.authorKind !== "drafter" &&
+    draft.authorKind !== "forge"
+  ) {
+    return `a thread message is written by an operator, a drafter or rondo's issue reader, and '${String(draft.authorKind)}' is none of them (D-0061 rule 2.3, D-0078 section 3.1)`;
   }
   if (draft.authorId.trim() === "") {
     return "a thread message names who wrote it, and its author id is blank (D-0061 rule 2.3)";
@@ -4303,6 +4339,23 @@ function threadMessageRefusal(connection: DatabaseSync, draft: ThreadMessageDraf
     return (
       `'${draft.messageId}' replies to '${draft.inReplyTo}', which is no message in a request ` +
       "thread: a reply to nothing would be a thread nobody can follow back (D-0061 rule 2.4)"
+    );
+  }
+  // **A read answers the message that named the issue, and nothing else**
+  // (D-0078 section 3.1): a `forge` row opening a request, or under a
+  // drafter's words, would be the forge speaking where only a person asked.
+  if (
+    draft.authorKind === "forge" &&
+    (draft.inReplyTo === null ||
+      connection
+        .prepare(
+          "SELECT 1 FROM conversation_message WHERE message_id = ? AND author_kind = 'operator'",
+        )
+        .get(draft.inReplyTo) === undefined)
+  ) {
+    return (
+      `'${draft.messageId}' is what rondo read of an issue, and it replies to no operator ` +
+      "message: a read is only ever of an issue a person's message named (D-0078 section 3.1)"
     );
   }
   const outcomeRefusal = answerOutcomeRefusal(connection, draft);
@@ -5122,7 +5175,10 @@ function threadMessages(connection: DatabaseSync): ThreadMessagesReadOutcome {
       Object.freeze({
         messageId,
         body: String(row["body"] ?? ""),
-        authorKind: row["author_kind"] === "drafter" ? "drafter" : "operator",
+        authorKind:
+          row["author_kind"] === "drafter" || row["author_kind"] === "forge"
+            ? row["author_kind"]
+            : "operator",
         authorId: String(row["author_id"] ?? ""),
         inReplyTo: row["in_reply_to"] === null ? null : String(row["in_reply_to"]),
         atMs: Number(row["at_ms"] ?? 0),

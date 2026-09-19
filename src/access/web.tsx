@@ -152,6 +152,13 @@ import {
   unblockedBy,
   whereItRuns,
 } from "./inbox.js";
+import {
+  type ForgeRead,
+  issueName,
+  latestReads,
+  type NamedIssue,
+  parseForgeRead,
+} from "./issue-read.js";
 import { markdownHtml } from "./markdown.js";
 import { isModelDrafterName } from "./model-draft.js";
 import { type HeldPlan, heldPlanByDigest, heldPlans } from "./model-drafter.js";
@@ -258,6 +265,14 @@ export interface WebPorts extends InboxReadPorts {
    * a directory rondo composed from the row, never a path from a request.
    */
   readonly readLog: (directory: string) => LapLogReading;
+  /**
+   * The operator messages whose named issues the host has not read yet
+   * (D-0078 section 4.3), or absent where no reader runs, and then no message
+   * is said to be waiting on one.
+   */
+  readonly issuesUnread?: (
+    messages: readonly ThreadMessageDraft[],
+  ) => Promise<ReadonlyMap<string, readonly NamedIssue[]>>;
 }
 
 /**
@@ -3358,6 +3373,8 @@ interface Threads {
    * answered is the thing this set exists to stop the page doing.
    */
   readonly stopped: ReadonlySet<string>;
+  /** The operator messages with issues not read yet, and which (D-0078 section 4.3). */
+  readonly unread: ReadonlyMap<string, readonly NamedIssue[]>;
   /**
    * The laps the reading view draws a section for, so an `iteration` basis is
    * a link only when its anchor exists (#220 S1, Codex): a cited lap older than
@@ -3369,6 +3386,7 @@ interface Threads {
 function threadsOf(
   messages: readonly ThreadMessageDraft[],
   inReading: ReadonlySet<string>,
+  unread: ReadonlyMap<string, readonly NamedIssue[]>,
 ): Threads {
   const byId = new Map(messages.map((message) => [message.messageId, message]));
   // Only an operator's `carry_on` closes a question (D-0072 rule 3). The
@@ -3414,6 +3432,7 @@ function threadsOf(
         )
         .map((message) => message.messageId),
     ),
+    unread,
     inReading,
   };
 }
@@ -3421,6 +3440,106 @@ function threadsOf(
 /** The first line of a message that says anything, for a chip or a list row. */
 function firstLine(body: string): string {
   return body.split("\n").find((line) => line.trim() !== "") ?? body;
+}
+
+/** {@link firstLine} of a message, where a read issue is its name and title, not its JSON. */
+function lineOf(message: ThreadMessageDraft): string {
+  const read = message.authorKind === "forge" ? parseForgeRead(message.body) : null;
+  return read === null
+    ? firstLine(message.body)
+    : `${issueName(read)}${"read" in read ? ` ${read.read.title}` : ""}`;
+}
+
+/** Where an issue's name links to (D-0076 rule 3.4): its address, when rondo knows it. */
+function issueHref(read: ForgeRead): string | null {
+  return "read" in read ? read.read.url : /^https?:\/\//.test(read.named) ? read.named : null;
+}
+
+/** An issue's own name, as a link where there is an address for it. */
+function issueNameLink(read: ForgeRead) {
+  const href = issueHref(read);
+  return href === null ? (
+    <span class="font-medium">{issueName(read)}</span>
+  ) : (
+    <a href={href} class="font-medium text-link hover:underline" title={href}>
+      {issueName(read)}
+    </a>
+  );
+}
+
+/**
+ * What rondo read of one issue (D-0078 sections 4.1 and 4.2): the name as a
+ * link, one line, and the words in a fold -- the forge's text as it came, or
+ * rondo's own reason, closed (D-0076 rule 4.5). Nothing to press.
+ */
+function forgeView(wording: Chrome, message: ThreadMessageDraft) {
+  const read = parseForgeRead(message.body);
+  if (read === null) {
+    return (
+      <p
+        class="body px-4 pt-1 pb-3 text-[14px] leading-6 wrap-anywhere whitespace-pre-wrap"
+        lang=""
+      >
+        {message.body}
+      </p>
+    );
+  }
+  if ("failed" in read) {
+    return (
+      <div class="issue-read space-y-2 px-4 pt-1 pb-3" data-issue="not-read">
+        <p class="text-[14px] leading-6">
+          {issueNameLink(read)} {wording.issueNotRead(read.failed.why)} {wording.issueNotReadTail}
+        </p>
+        <details class="group">
+          <summary class="flex cursor-pointer list-none items-center gap-2 text-[12.5px] leading-5 text-muted-foreground select-none [&::-webkit-details-marker]:hidden">
+            {chevron()}
+            {wording.drafterNoDraftWhy}
+          </summary>
+          <p
+            class="mt-1 text-[12.5px] leading-5 wrap-anywhere whitespace-pre-wrap text-muted-foreground"
+            lang="en"
+          >
+            {read.failed.detail}
+          </p>
+        </details>
+      </div>
+    );
+  }
+  const issue = read.read;
+  return (
+    <div class="issue-read space-y-2 px-4 pt-1 pb-3" data-issue="read">
+      <p class="text-[14px] leading-6">
+        {issueNameLink(read)}{" "}
+        <span class="font-medium" lang="">
+          {issue.title}
+        </span>
+      </p>
+      <p class="text-[13px] leading-5 text-muted-foreground">
+        {wording.issueRead(issue.pullRequest, issue.comments.length)}
+      </p>
+      <details class="group">
+        <summary class="flex cursor-pointer list-none items-center gap-2 text-[12.5px] leading-5 text-muted-foreground select-none [&::-webkit-details-marker]:hidden">
+          {chevron()}
+          {wording.issueReadFold}
+        </summary>
+        {/* The forge's words as it returned them: no trim, no reflow (D-0022 rule 4). */}
+        <div class="mt-1 space-y-2 text-[13px] leading-5" lang="">
+          <p class="text-faint">
+            {issue.author} · {issue.openedAt} · {issue.state}
+          </p>
+          <p class="wrap-anywhere whitespace-pre-wrap">{issue.body}</p>
+          {issue.comments.map((c) => (
+            <div class="border-t border-border/60 pt-2">
+              <p class="text-faint">
+                {c.author} · {c.at}
+              </p>
+              <p class="wrap-anywhere whitespace-pre-wrap">{c.body}</p>
+            </div>
+          ))}
+        </div>
+      </details>
+    </div>
+  );
 }
 
 /** Who wrote a message, as a person reads it: their own messages are "you". */
@@ -3432,7 +3551,10 @@ function whoWrote(wording: Chrome, message: ThreadMessageDraft, actorId: string 
   // `rondo/drafter/1/<model-id>` -- is a version and a model a person would
   // have to ask about. The row keeps it; the voice badge beside this says it
   // is the drafter.
-  return message.authorKind === "drafter" && isModelDrafterName(message.authorId)
+  // **A read of an issue signs as rondo too** (D-0078 section 3.1): rondo read
+  // it; the badge beside this says it is an issue.
+  return (message.authorKind === "drafter" && isModelDrafterName(message.authorId)) ||
+    message.authorKind === "forge"
     ? "rondo"
     : message.authorId;
 }
@@ -3466,7 +3588,7 @@ function basisChip(
     label =
       cited === undefined
         ? basisLine({ form: "message", messageId: basis["messageId"] }, {})
-        : `${whoWrote(wording, cited, actorId)}: ${firstLine(cited.body)}`;
+        : `${whoWrote(wording, cited, actorId)}: ${lineOf(cited)}`;
     if (cited !== undefined) {
       href =
         threads.rootOf(cited.messageId) === root
@@ -3590,6 +3712,8 @@ function messageView(
           </span>
           {drafter ? (
             <span class={`voice ${PILL} font-sans ${TONE.run}`}>{wording.drafterVoice}</span>
+          ) : message.authorKind === "forge" ? (
+            <span class={`voice ${PILL} font-sans ${TONE.muted}`}>{wording.issueVoice}</span>
           ) : message.authorId === actorId ? null : (
             <span class={`voice ${PILL} font-sans ${TONE.muted}`}>{wording.operatorVoice}</span>
           )}
@@ -3655,11 +3779,13 @@ function messageView(
               <path d="M3.5 2.5v5a3 3 0 0 0 3 3h6m-3-3 3 3-3 3" />
             </svg>
             <span class="truncate">
-              {wording.inReplyTo(whoWrote(wording, parent, actorId), firstLine(parent.body))}
+              {wording.inReplyTo(whoWrote(wording, parent, actorId), lineOf(parent))}
             </span>
           </a>
         ) : null}
-        {noDraft(message) ? (
+        {message.authorKind === "forge" ? (
+          forgeView(wording, message)
+        ) : noDraft(message) ? (
           // **A drafter run that drafted nothing, said as what happened**
           // (rondo#238): the row's words are rondo's own about its tools, so
           // they are kept, folded, and what is shown first is what the person
@@ -3699,6 +3825,15 @@ function messageView(
             {message.body}
           </p>
         )}
+        {
+          // **Named and not read yet** (D-0078 section 4.3): said until the
+          // host's read lands as its own message under this one.
+          (threads.unread.get(message.messageId) ?? []).map((ref) => (
+            <p class="issue-pending px-4 pb-3 text-[12.5px] leading-5 text-muted-foreground">
+              <span class="font-medium">{ref.named}</span> {wording.issuePending}
+            </p>
+          ))
+        }
         {message.bases.length === 0 ? null : (
           <div class="bases flex flex-wrap items-center gap-1.5 border-t border-border/60 px-4 py-2">
             <span class="text-[11px] font-medium text-faint">{wording.basesLabel}</span>
@@ -4237,6 +4372,7 @@ async function scopeView(
       >
         {request.body}
       </p>
+      {scopeIssues(wording, threads, view.messageId)}
     </header>
   );
   // **The third state** (D-0074 rule 4.2): raising the approval a waiting lap
@@ -4284,6 +4420,56 @@ async function scopeView(
       {head}
       {body}
     </div>
+  );
+}
+
+/**
+ * Which issues the worker will be given and which it will not, one line each
+ * (D-0078 section 4.4): on the screen where the person approves, because what
+ * they approve depends on it. Nothing when the request names none.
+ */
+function scopeIssues(wording: Chrome, threads: Threads, requestMessageId: string) {
+  // The latest read of each name, reckoned as the prompt's quote reckons it.
+  // A name still to be read again is said as that, not as its older read:
+  // the new read replaces it, and nothing starts until it lands.
+  const pending = [
+    ...new Map(
+      threads.messages.flatMap((m) =>
+        threads.rootOf(m.messageId) === requestMessageId
+          ? (threads.unread.get(m.messageId) ?? []).map((ref) => [ref.named, ref] as const)
+          : [],
+      ),
+    ).values(),
+  ];
+  const reads = new Map(
+    latestReads(threads.messages, requestMessageId)
+      .filter((r) => !pending.some((ref) => ref.named === r.named))
+      .map((r) => [r.named, r]),
+  );
+  if (reads.size === 0 && pending.length === 0) {
+    return null;
+  }
+  return (
+    <section class="scope-issues ml-9 space-y-1 text-[13px] leading-5">
+      <h3 class="text-[12.5px] font-medium text-muted-foreground">{wording.scopeIssuesHeading}</h3>
+      <ul class="space-y-1">
+        {[...reads.values()].map((read) => (
+          <li data-issue={"read" in read ? "given" : "not-given"}>
+            {issueNameLink(read)}
+            {"read" in read ? <span lang=""> {read.read.title}</span> : null}{" "}
+            <span class={`${PILL} font-sans ${"read" in read ? TONE.ok : TONE.wait}`}>
+              {"read" in read ? wording.scopeIssueGiven : wording.scopeIssueNotGiven}
+            </span>
+          </li>
+        ))}
+        {pending.map((ref) => (
+          <li data-issue="pending">
+            <span class="font-medium">{ref.named}</span>{" "}
+            <span class={`${PILL} font-sans ${TONE.muted}`}>{wording.scopeIssuePending}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
@@ -6310,9 +6496,15 @@ export async function operatorPage(
     (side === "waitingOnYou" ? waiting : running).push(row.record);
   }
   const unreadable = live.filter((row) => row.kind === "unreadable");
+  const threadRows = threadRead.kind === "read" ? threadRead.messages : [];
   const threads = threadsOf(
-    threadRead.kind === "read" ? threadRead.messages : [],
+    threadRows,
     new Set([...waiting, ...running, ...ended, ...unreadable].map((row) => row.id)),
+    // A reader that will not answer says nothing is waiting, rather than
+    // taking the page down with it.
+    ports.issuesUnread === undefined
+      ? new Map()
+      : await ports.issuesUnread(threadRows).catch(() => new Map()),
   );
   // **Only the ones an answer can settle** (D-0032 rule 5). `openProposals`
   // returns every proposal nobody has decided, and an explanation is

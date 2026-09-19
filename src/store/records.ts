@@ -514,7 +514,10 @@ export interface ThreadMessageDraft {
   readonly body: string;
   /** Which voice spoke is a column and never a property of the prose (rule 2.3). */
   readonly authorKind: ThreadAuthorKind;
-  /** The approved actor id for an operator, the drafter's name for a drafter. */
+  /**
+   * The approved actor id for an operator, the drafter's name for a drafter,
+   * the reader's name for a `forge` message.
+   */
   readonly authorId: string;
   /** Null opens a request; otherwise the message this one answers (rule 2.4). */
   readonly inReplyTo: string | null;
@@ -553,8 +556,15 @@ export interface ThreadMessageDraft {
  */
 export type AnswerOutcome = "carry_on" | "stop";
 
-/** The two voices a thread message can be written in (D-0061 rule 2.3). */
-export type ThreadAuthorKind = "operator" | "drafter";
+/**
+ * The voices a thread message can be written in (D-0061 rule 2.3).
+ *
+ * `forge` is D-0078 section 3.1's: what rondo read of an issue an operator
+ * message named, written by rondo and never by a model, always in reply to
+ * that operator message. Its body is rondo's framing around the forge's text,
+ * which is kept byte for byte.
+ */
+export type ThreadAuthorKind = "operator" | "drafter" | "forge";
 
 /**
  * What one independent reading of a lap's work concluded (D-0029).

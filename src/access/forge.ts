@@ -496,6 +496,58 @@ export async function openPullRequest(request: PullRequestRequest): Promise<Comm
   ]);
 }
 
+/** Which issue to read, as `readIssueFromForge` spells it (D-0078 section 2.1). */
+export interface IssueReadRequest {
+  /** The forge host for `--hostname`, or null for the one `gh` is set up for. */
+  readonly host: string | null;
+  /** `OWNER/NAME`. */
+  readonly repo: string;
+  readonly number: number;
+}
+
+/**
+ * How long one read of an issue may take. Nothing waits on it (the host reads
+ * in the background), so the bound only frees the reader from a forge that
+ * never answers.
+ */
+const ISSUE_READ_TIMEOUT_MS = 60_000;
+
+/**
+ * Read one issue or pull request's conversation (D-0078 section 2.2): the
+ * issue itself, then -- only if that answered -- every comment, oldest first.
+ *
+ * **A read, through the operator's own `gh`, and nothing else**: `gh api` with
+ * no method is a `GET`, the credential is the one in the operator's `gh`
+ * configuration that rondo neither stores nor reads (this module's header),
+ * and it runs in the host, never in a lap, whose fence stays closed to the
+ * forge (section 1.2). `issues/N` answers for a pull request too, with its
+ * conversation and never its diff. Links in what comes back are not followed.
+ */
+export async function readIssueFromForge(request: IssueReadRequest): Promise<{
+  readonly issue: CommandOutcome;
+  readonly comments: CommandOutcome | null;
+}> {
+  const host = request.host === null ? [] : ["--hostname", request.host];
+  const path = `repos/${request.repo}/issues/${String(request.number)}`;
+  const issue = await runCommand("gh", ["api", ...host, path], ISSUE_READ_TIMEOUT_MS);
+  if (issue.spawnError !== null || issue.status !== 0) {
+    return { issue, comments: null };
+  }
+  const comments = await runCommand(
+    "gh",
+    [
+      "api",
+      ...host,
+      "--paginate",
+      `${path}/comments?per_page=100`,
+      "--jq",
+      ".[] | {author: .user.login, at: .created_at, body: .body}",
+    ],
+    ISSUE_READ_TIMEOUT_MS,
+  );
+  return { issue, comments };
+}
+
 /** What reading the lap's work needs. Every value comes from the plan. */
 export interface LapWorkRequest {
   /** The worktree the lap materialised. Absolute; it is the plan's `workspace`. */
