@@ -37,10 +37,11 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import type { ReviewerRow } from "../continuo/roles.js";
+import type { DrafterRow, ReviewerRow } from "../continuo/roles.js";
 import { contentDigest } from "../store/plan.js";
 import type { ReadingEvidence } from "../store/records.js";
 
+import type { DrafterRun } from "./model-draft.js";
 import type { ReviewerRun } from "./model-review.js";
 
 /** What one forge command did. Streams as they arrived, unparsed. */
@@ -72,7 +73,7 @@ async function runCommand(
   executable: string,
   argv: readonly string[],
   timeoutMs: number = FORGE_TIMEOUT_MS,
-  options: { readonly input?: string } = {},
+  options: { readonly input?: string; readonly cwd?: string } = {},
 ): Promise<CommandOutcome> {
   const commandLine = [executable, ...argv].join(" ");
   return await new Promise<CommandOutcome>((resolve) => {
@@ -90,6 +91,8 @@ async function runCommand(
     // failed reviewer run -- an unavailable reading, never a clear one.
     const child = spawn(executable, [...argv], {
       stdio: [options.input === undefined ? "ignore" : "pipe", "pipe", "pipe"],
+      // Absent is the caller's directory; only the drafter names one (it has no `-C`).
+      ...(options.cwd === undefined ? {} : { cwd: options.cwd }),
     });
     // **Bytes, decoded once at the end.** A chunk boundary can fall inside a
     // multi-byte UTF-8 character; decoding chunk by chunk would turn both
@@ -1233,4 +1236,128 @@ export async function runReviewer(
       // would lose a reading that was already taken.
     }
   }
+}
+
+/**
+ * How long the model drafter may take over one document (D-0071 rule 1.5).
+ *
+ * ponytail: picked, not measured, on {@link REVIEWER_TIMEOUT_MS}'s reasoning. A
+ * draft runs off the message write and nobody waits on it (rule 3.4).
+ */
+const DRAFTER_TIMEOUT_MS = 600_000;
+
+/**
+ * The `claude` flags that make a run of the drafter a reading over one
+ * document (D-0071 rule 1.3), measured against claude 2.1.277 on 2026-09-19:
+ *
+ * - `--tools ""` removes every built-in tool, and `--strict-mcp-config` with no
+ *   `--mcp-config` every MCP server, so there is nothing to call;
+ * - `--safe-mode` drops the operator's own CLAUDE.md, skills, hooks and plugins,
+ *   so the drafter is handed rondo's document and not the operator's setup,
+ *   while keeping the operator's login (`--bare` would refuse an OAuth login,
+ *   and rondo holds no key: D-0010);
+ * - `--no-session-persistence` leaves no resumable session behind.
+ *
+ * "No tools" is the property and these flags are one way to it, so
+ * {@link runDrafter} still refuses an answer that reports a tool call.
+ */
+const DRAFTER_FLAGS = Object.freeze([
+  "--output-format",
+  "json",
+  "--tools",
+  "",
+  "--safe-mode",
+  "--strict-mcp-config",
+  "--no-session-persistence",
+]);
+
+/**
+ * Run the model drafter once over `document`, handed on standard input, in an
+ * empty directory (D-0071 rule 1.3), and read its one JSON result.
+ *
+ * A failure is a value: a spawn error, a non-zero exit, output that is not the
+ * CLI's result object, an error result, or **any sign of a tool call** -- more
+ * than one turn, a permission denial or a server-side tool request -- is
+ * `failed`, which the caller turns into an unavailable run (rule 1.5).
+ */
+export async function runDrafter(
+  row: DrafterRow,
+  document: string,
+  timeoutMs: number = DRAFTER_TIMEOUT_MS,
+): Promise<DrafterRun> {
+  let directory: string;
+  try {
+    directory = mkdtempSync(join(tmpdir(), "rondo-drafter-"));
+  } catch (error) {
+    return {
+      kind: "failed",
+      reason: `no empty directory for the drafter: ${error instanceof Error ? error.message : String(error)}`,
+    };
+  }
+  try {
+    const outcome = await runCommand(
+      row.executable,
+      ["-p", "--model", row.model, ...DRAFTER_FLAGS],
+      timeoutMs,
+      { input: document, cwd: directory },
+    );
+    if (outcome.spawnError !== null) {
+      return { kind: "failed", reason: `${outcome.commandLine}: ${outcome.spawnError}` };
+    }
+    if (outcome.status !== 0) {
+      const ended =
+        outcome.signal !== null
+          ? `was killed by ${outcome.signal}`
+          : `exited ${String(outcome.status)}`;
+      return { kind: "failed", reason: `${outcome.commandLine} ${ended}` };
+    }
+    return readDrafterResult(outcome.stdout, outcome.commandLine);
+  } finally {
+    try {
+      rmSync(directory, { recursive: true, force: true });
+    } catch {
+      // As runReviewer: an empty temp directory left behind costs nothing.
+    }
+  }
+}
+
+/** `claude -p --output-format json`'s one result object, read strictly. Exported for its test. */
+export function readDrafterResult(stdout: string, commandLine: string): DrafterRun {
+  let result: unknown;
+  try {
+    result = JSON.parse(stdout);
+  } catch {
+    return { kind: "failed", reason: `${commandLine}: its output is not one JSON object` };
+  }
+  if (!isObject(result) || result["type"] !== "result") {
+    return { kind: "failed", reason: `${commandLine}: its output is not a result object` };
+  }
+  if (result["is_error"] !== false || result["subtype"] !== "success") {
+    return {
+      kind: "failed",
+      reason: `${commandLine}: the run ended in an error (${boundedAscii(String(result["subtype"]))})`,
+    };
+  }
+  const denials = result["permission_denials"];
+  const usage = isObject(result["usage"]) ? result["usage"] : {};
+  const server = isObject(usage["server_tool_use"]) ? usage["server_tool_use"] : {};
+  const serverCalls = Object.values(server).some((n) => typeof n === "number" && n > 0);
+  if (result["num_turns"] !== 1 || (Array.isArray(denials) && denials.length > 0) || serverCalls) {
+    return {
+      kind: "failed",
+      reason:
+        "the drafter reported a tool call, so its draft is not over the delivered document " +
+        "only (D-0071 rule 1.3)",
+    };
+  }
+  const text = result["result"];
+  if (typeof text !== "string") {
+    return { kind: "failed", reason: `${commandLine}: the result carries no text` };
+  }
+  const cost = result["total_cost_usd"];
+  return {
+    kind: "answered",
+    finalMessage: text.trim(),
+    costUsd: typeof cost === "number" && Number.isFinite(cost) && cost >= 0 ? cost : null,
+  };
 }
