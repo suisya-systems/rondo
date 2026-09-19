@@ -75,6 +75,11 @@ export type BudgetBasis =
       readonly modelTier: string | null;
       /** The highest value those rows hold. */
       readonly value: number;
+      /**
+       * The lowest, so a screen can say how far apart the sample is (rondo#247).
+       * Not used in any arithmetic: the budget is the highest, and stays it.
+       */
+      readonly lowest: number;
       readonly iterationIds: readonly string[];
     }
   | {
@@ -165,14 +170,15 @@ function lookUp(
         ];
   for (const [level, found] of levels) {
     if (agentType === null || found.length === 0) continue;
-    const value = Math.max(...found.map((row) => measured(row, measurement) as number));
+    const values = found.map((row) => measured(row, measurement) as number);
     return {
       kind: "rows",
       measurement,
       agentTypeDigest: agentType.digest,
       level,
       modelTier: agentType.modelTier,
-      value,
+      value: Math.max(...values),
+      lowest: Math.min(...values),
       iterationIds: found.map((row) => row.id),
     };
   }

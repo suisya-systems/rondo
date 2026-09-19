@@ -3308,6 +3308,7 @@ test("the scope screen drafts a form pre-filled from the request and the plan, e
   await seedScopeRequest(world, "request-scope-1", "Fix the flaky test, please.");
   const dir = mkdtempSync(join(tmpdir(), "rondo-scope-"));
   const { file: planFile, agentTypeDigest, planDigest } = scopePlanFile(dir);
+  await seedEndedLap(world, "i-scope-0", { agentTypeDigest, costUsd: 0.4, durationMs: 3 * 60_000 });
   await seedEndedLap(world, "i-scope-1", { agentTypeDigest, costUsd: 1.2, durationMs: 6 * 60_000 });
   await seedEndedLap(world, "i-scope-2", {
     agentTypeDigest,
@@ -3337,6 +3338,15 @@ test("the scope screen drafts a form pre-filled from the request and the plan, e
   expect(html).toContain(`plan ${planDigest}`);
   expect(html).toContain(`${SCOPE_PLAN.repository} at ${SCOPE_PLAN.workspaceRoot}`);
   expect(html).toContain("tier standard, granted command.run");
+
+  // **What the draft assumed, above the numbers** (rondo#247): which laps it
+  // measured, how far apart they were, and that their size was never recorded.
+  expect(html).toContain("This draft assumes your request is the size of past laps");
+  expect(html).toContain(
+    "Drafted from 2 recorded first laps of this agent type, which cost 0.40 to 1.20 USD",
+  );
+  expect(html).toContain("once a lap is running its budget cannot be raised");
+  expect(html.indexOf("This draft assumes")).toBeLessThan(html.indexOf('name="cost_usd"'));
 
   // Every budget's formula, and its bases folded but present.
   expect(html).toContain("how: plans x review rounds = 1 x 3");
@@ -3375,6 +3385,34 @@ test("the scope screen drafts a form pre-filled from the request and the plan, e
   // No script needed to draft or to press it.
   expect(html).not.toContain("hx-get");
   expect(html).not.toContain('http-equiv="refresh"');
+});
+
+test("with no lap recorded, the scope screen says in Japanese that the reserve was measured by nobody", async () => {
+  const world = fresh();
+  await seedScopeRequest(world, "request-scope-cold", "表示の崩れを直してください。");
+  const dir = mkdtempSync(join(tmpdir(), "rondo-scope-"));
+  const { file: planFile } = scopePlanFile(dir);
+  const ports = { ...portsOver(world, "ada", []), plan: planPortOver(planFile, world.record) };
+  const html = await operatorPage(
+    ports,
+    "t",
+    { kind: "scope", messageId: "request-scope-cold", rounds: null, decisionId: null },
+    chromeFor("ja"),
+    mint,
+    () => "MINT-SCOPE-1",
+    () => "MINT-LAP-1",
+  );
+  expect(html).toContain(
+    "この予算は、依頼の大きさが過去の周回と同じくらいだという前提に立っています",
+  );
+  expect(html).toContain("rondo の初期値 2.50 USD で、誰かが測った値ではありません");
+  // A tier-level sample says it is other agent types' laps, in both languages.
+  expect(EN.scopeSampleRows(3, "standard", "0.22", "1.88")).toContain(
+    "3 recorded first laps of other agent types on tier standard, as none of this one's is recorded, which cost 0.22 to 1.88 USD",
+  );
+  expect(chromeFor("ja").scopeSampleRows(1, "standard", "1.04", "1.04")).toContain(
+    "同じ tier standard の別のエージェント種別の初回周回 1 件をもとに下書きしました。費用は 1.04 USD",
+  );
 });
 
 test("choosing review rounds redraws the budgets from the plan, with script off", async () => {
