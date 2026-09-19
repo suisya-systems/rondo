@@ -504,8 +504,8 @@ function list(value: unknown, what: string): readonly unknown[] {
   return value;
 }
 
-/** The answer's JSON, alone or inside one code fence. */
-function answerJson(finalMessage: string): unknown {
+/** The answer's JSON, alone or inside one code fence. Throws when it is neither. */
+export function answerJson(finalMessage: string): unknown {
   const fenced = /^```(?:json)?\s*\n([\s\S]*)\n```$/.exec(finalMessage.trim());
   try {
     return JSON.parse(fenced === null ? finalMessage : (fenced[1] as string));

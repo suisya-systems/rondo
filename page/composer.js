@@ -73,16 +73,32 @@ if (sentFrom !== null) {
 // own words back rather than the draft again. Emptying the box clears the store
 // (the `input` listener below), so clearing it and reloading is how rondo's
 // draft comes back.
+//
+// **A draft that landed after the person began is said, not put in** (D-0077
+// rule 4.4): what the server drew when they began is kept beside their words,
+// and a box that now arrives holding something else shows the note drawn for
+// it -- their words stay, and the note says how to see the draft.
+const drewKey = (box) => `rondo:drew:${box.dataset.draft}`;
 for (const opening of document.querySelectorAll("textarea[data-draft]")) {
   const kept = store.get(draftKey(opening));
   if (kept !== null && kept !== "") {
+    const drawn = opening.defaultValue;
+    if (drawn !== "" && drawn !== kept && drawn !== (store.get(drewKey(opening)) ?? "")) {
+      for (const note of document.querySelectorAll("[data-draft-arrived]")) {
+        if (note.dataset.draftArrived === opening.dataset.draft) {
+          note.hidden = false;
+        }
+      }
+    }
     opening.value = kept;
   }
 }
 
 document.addEventListener("input", (event) => {
   if (event.target instanceof HTMLTextAreaElement && event.target.dataset.draft !== undefined) {
-    store.set(draftKey(event.target), event.target.value === "" ? null : event.target.value);
+    const emptied = event.target.value === "";
+    store.set(draftKey(event.target), emptied ? null : event.target.value);
+    store.set(drewKey(event.target), emptied ? null : event.target.defaultValue);
   }
 });
 

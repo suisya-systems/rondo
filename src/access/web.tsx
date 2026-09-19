@@ -156,6 +156,7 @@ import { markdownHtml } from "./markdown.js";
 import { isModelDrafterName } from "./model-draft.js";
 import { type HeldPlan, heldPlanByDigest, heldPlans } from "./model-drafter.js";
 import { denialLine, LIST_LIMIT } from "./review.js";
+import { reviseText } from "./revise-draft.js";
 import { approvalTip, budgetRefusal, heldAgentTypeLines, scopeBudgetsFromStore } from "./scope.js";
 import { type Chrome, EN, SHIPPED_SETS, setFor } from "./wording.js";
 
@@ -207,6 +208,9 @@ export interface WebPorts extends InboxReadPorts {
       | "scopeDecisionAdmitting"
       // D-0074 section 2: and that approval's approved tip, once raised.
       | "scopeTip"
+      // D-0077 rule 2.2: the revise draft that holds the lap's latest model
+      // reading, which is what the box is filled from.
+      | "reviseDraftFor"
     >;
   readonly policy: HostPolicy;
   readonly actorId: string | null;
@@ -2276,6 +2280,26 @@ function coverageFold(id: string, wording: Chrome, drafter: string) {
 }
 
 /**
+ * rondo's own reason for something the person was told in their own terms
+ * (D-0076 rule 4.5): one closed fold beside that sentence, labelled for
+ * whoever maintains rondo on this machine, holding the reason as rondo
+ * received it. The person is never asked to open it.
+ */
+function maintainerFold(id: string, wording: Chrome, reason: string) {
+  return (
+    <details id={id} class="group">
+      <summary class="flex cursor-pointer list-none items-center gap-1.5 text-[12px] leading-5 text-faint select-none hover:text-foreground [&::-webkit-details-marker]:hidden">
+        {chevron()}
+        {wording.forMaintainer}
+      </summary>
+      <p class="mt-1 pl-5 text-[12px] leading-5 text-muted-foreground wrap-anywhere" lang="en">
+        {reason}
+      </p>
+    </details>
+  );
+}
+
+/**
  * *What changed* -- the commits and the files as rows (D-0029 rule 2), from the
  * inspection `workLines` prints, capped where it caps and saying how many it
  * hid. The branch and the base are quiet, and the workspace path is the
@@ -2614,35 +2638,54 @@ function modelRaised(wording: Chrome, reading: LapReading | null): string | null
 }
 
 /**
- * rondo's draft of what to change, quoting the model review's findings (D-0065
- * rule 5.3, rondo#233 S4).
+ * What the revise box holds, and what the view says beside it (D-0077 section
+ * 4). **There is no deterministic fallback** (rule 4.2): a lap with no draft
+ * gets an empty box and a sentence, and the person is the author of what they
+ * write there.
  *
- * **Drafted by deterministic code and not by a model.** D-0071's drafter is out
- * of scope here (rondo#233's Q2), so what stands in for the organisation is
- * this: a lead line rondo wrote, and then **the reviewer's findings quoted byte
- * for byte** with their severity and their bases. Nothing here summarises,
- * ranks or drops a finding -- dismissing what a reviewer raised is the one
- * thing D-0065 rule 5.3 forbids -- and the person is free to replace every word
- * of it before pressing, which is the point of putting it in a text box.
- *
- * Empty when there is nothing to quote: a gate with no model findings gets an
- * empty box and its placeholder, rather than a lead line about findings that do
- * not exist.
+ * - `none`: the latest model reading has no finding (or there is none), so
+ *   there is nothing to draft and nothing is said, as before any drafter.
+ * - `pending`: a reading with findings that no draft holds yet (rule 4.3).
+ * - `unavailable`: the run over it wrote no draft; `reason` is rondo's, for
+ *   D-0076 rule 4.5's closed fold and never inline.
+ * - `drafted`: the box's text, assembled by {@link reviseText} from the stored
+ *   reading and the drafter's words (rule 3.4).
  */
-function reviseDraft(wording: Chrome, reading: LapReading | null): string {
-  if (reading === null || reading.verdict === "unavailable" || reading.findings.length === 0) {
-    return "";
+type ReviseBox =
+  | { readonly kind: "none" }
+  | { readonly kind: "pending" }
+  | { readonly kind: "unavailable"; readonly reason: string }
+  | { readonly kind: "drafted"; readonly text: string };
+
+/** Read the revise box for one lap's readings (D-0077 rule 2.2's "drafted"). */
+async function reviseBox(
+  ports: WebPorts,
+  wording: Chrome,
+  iterationId: string,
+  readings: readonly LapReading[],
+): Promise<ReviseBox> {
+  const model = latestReading(readings, isModelReadingDrafter);
+  if (model === null || model.verdict !== "concerns" || model.findings.length === 0) {
+    return { kind: "none" };
   }
-  const lines = reading.findings.flatMap((text, index) => {
-    const graded = reading.graded?.[index];
-    // A reading whose severities did not decode still has its findings, and a
-    // quote of one is worth more than a severity it cannot name.
-    const said =
-      graded === undefined ? `- ${text}` : wording.reviseDraftFinding(graded.severity, text);
-    const bases = (graded?.bases ?? []).map((basis) => findingBasisText(basis));
-    return bases.length === 0 ? [said] : [said, wording.reviseDraftBases(bases.join(", "))];
+  const row = await ports.record.reviseDraftFor(iterationId, model);
+  if (row === null) {
+    return { kind: "pending" };
+  }
+  if (row.payload["kind"] === "unavailable") {
+    const reason = row.payload["reason"];
+    return { kind: "unavailable", reason: typeof reason === "string" ? reason : "" };
+  }
+  const text = reviseText(model, row.payload, {
+    finding: wording.reviseDraftFinding,
+    bases: wording.reviseDraftBases,
+    change: wording.reviseDraftChange,
   });
-  return [wording.reviseDraftLead, ...lines].join("\n");
+  // A row that does not decode as a whole draft of this reading is shown as
+  // none, never in part (D-0077 rule 4.1: not shown and not repaired).
+  return text === null
+    ? { kind: "unavailable", reason: "the stored draft does not read as a draft of this reading" }
+    : { kind: "drafted", text };
 }
 
 /** Whether a row carries a question this page can put a button under. */
@@ -3014,7 +3057,8 @@ function reviseForm(
       </div>
     );
   }
-  const model = latestReading(framing.readings, isModelReadingDrafter);
+  const box = framing.revise;
+  const draftKey = `revise:${record.id}:${record.gateId ?? ""}`;
   return (
     <details id="revise" class="group">
       <summary
@@ -3043,20 +3087,44 @@ function reviseForm(
           {/* **The draft is the field's content and not a `placeholder`**: a
               placeholder is not sent, and what the person presses with has to
               be what they read. `data-draft` is the composer script's duty,
-              keyed per gate; an edit survives a refusal, and an untouched box
-              still carries rondo's draft. The findings inside it are the
-              reviewer's own words, so the box states no language. */}
+              keyed per gate; an edit survives a refusal and a draft that lands
+              later (D-0077 rule 4.4), and an untouched box carries the draft.
+              The findings inside it are the reviewer's own words, so the box
+              states no language. */}
           <textarea
             name="body"
             rows={4}
             lang=""
-            data-draft={`revise:${record.id}:${record.gateId ?? ""}`}
+            data-draft={draftKey}
             placeholder={wording.revisePlaceholder}
             class="max-h-64 min-h-20 w-full resize-y rounded-md border border-border bg-background px-2.5 py-1.5 font-mono text-[12.5px] leading-5 outline-none placeholder:text-faint focus-visible:ring-2 focus-visible:ring-ring"
           >
-            {reviseDraft(wording, model)}
+            {box.kind === "drafted" ? box.text : ""}
           </textarea>
         </label>
+        {box.kind === "none" ? null : (
+          <p id="revise-draft-state" class="note text-[12.5px] leading-5 text-muted-foreground">
+            {box.kind === "drafted"
+              ? wording.reviseDrafted
+              : box.kind === "pending"
+                ? wording.reviseDrafting
+                : wording.reviseUndrafted}
+          </p>
+        )}
+        {/* Drawn hidden; the composer script shows it when it put back the
+            person's own words over a draft that landed after they began
+            (D-0077 rule 4.4). With script off nothing was kept to say so of. */}
+        {box.kind === "drafted" ? (
+          <p
+            id="revise-draft-arrived"
+            data-draft-arrived={draftKey}
+            hidden
+            class="note text-[12.5px] leading-5 text-muted-foreground"
+          >
+            {wording.reviseDraftArrived}
+          </p>
+        ) : null}
+        {box.kind === "unavailable" ? maintainerFold("revise-why", wording, box.reason) : null}
         <p class="note text-[12.5px] leading-5 text-muted-foreground">{wording.reviseNote}</p>
         <button
           type="submit"
@@ -3151,6 +3219,8 @@ interface Shown {
    * with the verdict's own arithmetic (D-0074 rule 4.1), or null when none does.
    */
   readonly closedBy: BudgetClosed | null;
+  /** The revise box's content and what is said beside it (D-0077 section 4). */
+  readonly revise: ReviseBox;
 }
 
 /** Which budget closes the change path, and the numbers the sentence says it with. */
@@ -3230,6 +3300,7 @@ async function shownBeforePress(
       forked: tip.kind === "forked",
       closedBy:
         tip.kind === "tip" ? await budgetClosing(ports, tip.scopeDecisionId, ports.now()) : null,
+      revise: await reviseBox(ports, wording, record.id, readings),
     });
   }
   return shown;

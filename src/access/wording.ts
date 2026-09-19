@@ -880,14 +880,27 @@ export interface Chrome {
    */
   readonly reviseNoScope: string;
   /**
-   * rondo's draft of the instruction, quoting the model review's findings
-   * (D-0065 rule 5.3): a lead line, one line per finding with its severity, and
-   * its bases under it. **The findings themselves are never translated** -- they
-   * are the reviewer's own words, quoted byte for byte (rule 4 of this file).
+   * How rondo lays out the drafted instruction around the drafter's words
+   * (D-0077 rule 3.4): per finding, its line with its severity, its bases
+   * under it, then the drafter's words for it. **The findings themselves are
+   * never translated** -- they are the reviewer's own words, quoted byte for
+   * byte (rule 4 of this file) -- and the lead and the words are the drafter's.
    */
-  readonly reviseDraftLead: string;
   readonly reviseDraftFinding: (severity: string, text: string) => string;
   readonly reviseDraftBases: (bases: string) => string;
+  readonly reviseDraftChange: (words: string) => string;
+  /**
+   * What is said beside the box (D-0077 section 4, written under D-0076): a
+   * draft is in it; one is being written (rule 4.3); none could be written
+   * (rule 4.2), in rule 4.1's order; and a draft landed after the person began
+   * writing, so their own words were kept (rule 4.4).
+   */
+  readonly reviseDrafted: string;
+  readonly reviseDrafting: string;
+  readonly reviseUndrafted: string;
+  readonly reviseDraftArrived: string;
+  /** D-0076 rule 4.5: the closed fold holding rondo's own reason, and whom it is for. */
+  readonly forMaintainer: string;
   /** Why a revise press answered nothing, one sentence each, as the scope screen's are. */
   readonly reviseRefusedNoApprover: string;
   readonly reviseRefusedPress: string;
@@ -1646,7 +1659,7 @@ explanation you pressed on and then answers the gate.`,
   reviseFold: "Ask for a change instead",
   revisePlain:
     "Sends what you wrote to this gate, and runs a second lap with it under the same approval.",
-  reviseLabel: "What to change (rondo drafted this from the model review; edit it if you like)",
+  reviseLabel: "What to change",
   revisePlaceholder: "e.g. keep the change to the parser, and leave the command line alone",
   reviseNote:
     "Your words go to the gate exactly as you leave them, and the second lap is asked to do the " +
@@ -1655,9 +1668,21 @@ explanation you pressed on and then answers the gate.`,
   reviseNoScope:
     "This lap was not started under an approved scope, so a second lap has no budget to be " +
     "counted against, and asking for a change is not offered here.",
-  reviseDraftLead: "Please fix what the model review raised:",
   reviseDraftFinding: (severity, text) => `- [${severity}] ${text}`,
   reviseDraftBases: (bases) => `  where: ${bases}`,
+  reviseDraftChange: (words) => `  to change: ${words}`,
+  reviseDrafted:
+    "rondo drafted this from what the review found. Edit it as you like: what you send is yours.",
+  reviseDrafting:
+    "A draft of what to change is being written from what the review found. You do not have " +
+    "to wait for it: you can write your own now.",
+  reviseUndrafted:
+    "rondo could not draft what to change this time, and will not try again for this review. " +
+    "Write what you want changed yourself; what the review found is above.",
+  reviseDraftArrived:
+    "A draft arrived after you started writing, and your own words were kept. To see the " +
+    "draft instead, empty the box and reload the page.",
+  forMaintainer: "For whoever maintains rondo on this machine",
   reviseRefusedNoApprover:
     "Nothing was answered: RONDO_APPROVER is not set, so there is nobody this page could " +
     "answer as.",
@@ -2475,7 +2500,7 @@ const JA: Partial<Chrome> = Object.freeze({
   reviseAction: "変更を依頼する",
   reviseFold: "承認せずに変更を依頼する",
   revisePlain: "書かれた内容をこのゲートに送り、同じ承認のもとで 2 周目をその内容で動かします。",
-  reviseLabel: "変更してほしいこと (モデルレビューから rondo が下書きしました。編集できます)",
+  reviseLabel: "変更してほしいこと",
   revisePlaceholder: "例: パーサーの変更はそのまま、コマンドラインには手を入れないでほしい",
   reviseNote:
     "書かれた言葉はそのままゲートに渡り、2 周目はその言葉で作業をやり直すよう頼まれます。" +
@@ -2484,9 +2509,20 @@ const JA: Partial<Chrome> = Object.freeze({
   reviseNoScope:
     "この周回は承認済みの範囲のもとで開始されていないため、2 周目を数える budget がありません。" +
     "ここでは変更の依頼を出せません。",
-  reviseDraftLead: "モデルレビューが挙げた点を直してください:",
   reviseDraftFinding: (severity, text) => `- [${severity}] ${text}`,
   reviseDraftBases: (bases) => `  場所: ${bases}`,
+  reviseDraftChange: (words) => `  直すこと: ${words}`,
+  reviseDrafted:
+    "レビューで見つかった点から rondo が下書きしました。自由に編集できます。送る内容はあなたのものです。",
+  reviseDrafting:
+    "レビューで見つかった点から、変更内容の下書きを作成中です。待つ必要はなく、今すぐ自分で書くこともできます。",
+  reviseUndrafted:
+    "今回は rondo が変更内容を下書きできませんでした。このレビューについて再度試みることはありません。" +
+    "変更してほしいことをご自身で書いてください。レビューで見つかった点は上にあります。",
+  reviseDraftArrived:
+    "書き始めた後に下書きが届きましたが、あなたの書いた内容をそのまま残しています。下書きを見るには、" +
+    "欄を空にしてからページを再読み込みしてください。",
+  forMaintainer: "このマシンで rondo を管理する人向け",
   reviseRefusedNoApprover:
     "何も回答していません。RONDO_APPROVER が未設定なので、このページが誰として回答するか" +
     "決まりません。",
