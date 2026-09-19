@@ -8,9 +8,12 @@
 # rather than the explanation. It provisions and prints; it never runs a lap,
 # because a lap spawns a real worker session and costs real money.
 #
-# Everything it writes lives under one directory (--root), and nothing outside
-# that directory is modified except the repository's own `node_modules` and
-# `dist`, which are the repository's ordinary build outputs.
+# Almost everything it writes lives under one directory (--root), and outside
+# it only four things are touched: the repository's own `node_modules` and
+# `dist`, which are its ordinary build outputs, and -- since D-0080 -- the two
+# things a start needs, the word itself in `~/.local/bin` and the user service
+# it hands the host to. Removing rondo means removing those two as well, which
+# is the cost D-0080 took knowingly.
 #
 # Re-running is safe. Every step checks for its own result first, so a second
 # run repairs whatever is missing and leaves the rest -- including the control
@@ -23,7 +26,8 @@ usage() {
   cat <<'USAGE'
 usage: scripts/dogfood-env.sh [--root DIR] [--iteration-id ID]
                               [--target-repo DIR] [--target-base-branch NAME]
-                              [--review-criterion FILE]
+                              [--review-criterion FILE] [--port N]
+                              [--remote NAME]
                               [--force-continuo-rebuild]
 
 Provision a working environment for the rondo operator CLI and print the
@@ -64,6 +68,13 @@ options:
       scripts/dogfood-review-criterion.json when that is unset. A plan with no
       criterion gets an `unavailable` model reading on every lap, and an
       in-scope `rondo retry` is never admitted without one (rondo#205).
+  --port N
+      the port the page listens on, written into the start command and the
+      service setup installs. Default: 7333. The forge repository is not
+      written there beside it: one host serves several repositories, each named
+      by the plan a request was drafted from (D-0081).
+  --remote NAME
+      the git remote publish pushes to, when it is not the default.
   --force-continuo-rebuild
       rebuild the pinned continuo even when the built one already reports the
       pinned version line.
@@ -101,6 +112,8 @@ repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)
 env_root=${RONDO_DOGFOOD_ROOT:-"${XDG_STATE_HOME:-$HOME/.local/state}/rondo/dogfood-env"}
 run_id=dogfood-001
 force_continuo_rebuild=0
+port=7333
+remote=
 target_repo=
 target_base_branch=
 review_criterion=${RONDO_DOGFOOD_REVIEW_CRITERION:-"$repo_root/scripts/dogfood-review-criterion.json"}
@@ -114,6 +127,8 @@ while [ $# -gt 0 ]; do
       [ $# -ge 2 ] || die "--target-base-branch needs a value"; target_base_branch=$2; shift 2 ;;
     --review-criterion)
       [ $# -ge 2 ] || die "--review-criterion needs a value"; review_criterion=$2; shift 2 ;;
+    --port) [ $# -ge 2 ] || die "--port needs a value"; port=$2; shift 2 ;;
+    --remote) [ $# -ge 2 ] || die "--remote needs a value"; remote=$2; shift 2 ;;
     --force-continuo-rebuild) force_continuo_rebuild=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) usage >&2; die "unknown argument '$1'" ;;
@@ -716,6 +731,146 @@ env_file="$env_root/env.sh"
 } > "$env_file"
 note "$env_file"
 
+step "Start command (the one word the person types, D-0080)"
+# **The word carries the environment, because a start no longer has a shell to
+# borrow one from.** The host runs four programs by bare name, and the service
+# manager's own PATH holds only the system directories, where of those four
+# only `git` is found (D-0080's measurement). Two of them resolve, in a shell,
+# to a per-shell directory under a version manager's run directory that does
+# not outlive that shell -- so every directory below is the real one, resolved
+# the way node_bin above is.
+#
+# **Both directories, resolved first.** Where a program is a link into a
+# package's own files -- an npm-installed CLI is `bin/something.js` behind a
+# link named for the command -- the resolved directory holds the file and not
+# the name the host will call, so resolving alone can take the program away.
+# The directory the link itself is in is added after it, which costs one entry
+# and keeps the name findable. A per-shell directory that does not outlive the
+# shell it was made for is then a dead entry rather than the only one.
+dirs_of() {
+  local found resolved
+  # A name to look up, or a path already in hand -- `claude` arrives here as
+  # the second, resolved far above for continuo's sake, and it needs the same
+  # two directories as the rest: the one holding the name, which may be a
+  # version manager's per-shell directory, and the one it really lives in.
+  case "$1" in
+    */*) found=$1 ;;
+    *) found=$(command -v "$1" 2>/dev/null || true) ;;
+  esac
+  [ -n "$found" ] || return 0
+  resolved=$(readlink -f -- "$found" 2>/dev/null || printf '%s' "$found")
+  (cd -- "$(dirname -- "$resolved")" && pwd -P)
+  (cd -- "$(dirname -- "$found")" && pwd -P)
+}
+
+host_path=
+add_path_dir() {
+  [ -n "$1" ] || return 0
+  case ":$host_path:" in
+    *":$1:"*) return 0 ;;
+  esac
+  if [ -z "$host_path" ]; then host_path=$1; else host_path="$host_path:$1"; fi
+}
+
+add_path_dir "$(dirname -- "$node_bin")"
+for program in "$claude_bin" git gh codex; do
+  program_dirs=$(dirs_of "$program")
+  if [ -n "$program_dirs" ]; then
+    while IFS= read -r program_dir; do
+      add_path_dir "$program_dir"
+    done <<<"$program_dirs"
+  else
+    # Not fatal here. One of these missing is a page whose publish or whose
+    # reviewer reports itself unavailable, which is a thing the person is told
+    # on the page; a setup that refused would give them nothing at all.
+    note "no '$program' on PATH: the host will not find it either"
+  fi
+done
+# The system directories last, so the resolved ones win.
+for system_dir in /usr/local/sbin /usr/local/bin /usr/sbin /usr/bin /sbin /bin; do
+  add_path_dir "$system_dir"
+done
+
+# What opens the page when the host answers (D-0080 rule 4.4). On WSL the
+# browser is on the Windows side, so `explorer.exe` is the last resort and a
+# real one; its directory stays out of the host's PATH and the command holds
+# its absolute path instead.
+opener=
+for candidate in xdg-open wslview explorer.exe open; do
+  candidate_path=$(command -v "$candidate" 2>/dev/null || true)
+  if [ -n "$candidate_path" ]; then
+    opener=$(readlink -f -- "$candidate_path" 2>/dev/null || printf '%s' "$candidate_path")
+    break
+  fi
+done
+[ -n "$opener" ] || note "nothing here opens a browser: the word will print the address instead"
+
+start_command_args=(
+  --node "$node_bin"
+  --checkout "$repo_root"
+  --port "$port"
+  --store "$env_root/rondo-iterations.sqlite3"
+  --approver "$approver"
+  --continuo-cli "$continuo_cli"
+  --path "$host_path"
+)
+if [ -n "$remote" ]; then start_command_args+=(--remote "$remote"); fi
+if [ -n "$opener" ]; then start_command_args+=(--opener "$opener"); fi
+if [ -n "${RONDO_OPERATOR_LANGUAGE:-}" ]; then
+  start_command_args+=(--language "$RONDO_OPERATOR_LANGUAGE")
+fi
+if [ -n "${RONDO_MAX_LIVE:-}" ]; then start_command_args+=(--max-live "$RONDO_MAX_LIVE"); fi
+if [ -n "${RONDO_MAX_OCCUPYING:-}" ]; then
+  start_command_args+=(--max-occupying "$RONDO_MAX_OCCUPYING")
+fi
+
+written=$("$repo_root/scripts/start-command.sh" "${start_command_args[@]}")
+start_command_path=$(printf '%s\n' "$written" | sed -n 1p)
+unit_path=$(printf '%s\n' "$written" | sed -n 2p)
+note "$start_command_path"
+note "$unit_path"
+
+# Writing the unit is not installing it. These acts are acts on the machine,
+# and the ones that can fail from here fail for one reason: inside a Claude
+# Code sandbox every systemctl call is refused the bus, which is the runbook's
+# "not inside a Claude Code sandbox" again (D-0080's measurement).
+#
+# **`try-restart` is the third act, and it is what makes rule 2.4 true.** When
+# a host fact moves, the repair is running setup again -- and a rewritten unit
+# is read by nothing until the process is replaced: `daemon-reload` and
+# `enable` leave a running host alone, and so does the `systemctl start` the
+# word does, because a service that is already active is already started. A
+# host would then keep running on the facts it was started with, and a changed
+# port would leave the word waiting on a page nothing serves. `try-restart`
+# replaces a running host and does not start a stopped one, which is the
+# word's to do.
+if systemctl --user daemon-reload >/dev/null 2>&1 &&
+  systemctl --user enable rondo.service >/dev/null 2>&1 &&
+  systemctl --user try-restart rondo.service >/dev/null 2>&1; then
+  note "the service is installed; the word starts it"
+else
+  note "could not reach the systemd user manager from here. In a normal terminal:"
+  note "  systemctl --user daemon-reload && systemctl --user enable rondo.service"
+  note "  systemctl --user try-restart rondo.service   # if a host is already running"
+fi
+# Without linger the user manager -- and the host with it -- is stopped when
+# the last session on this machine ends, so the page would die with the
+# terminal the word was typed in. Enabling it needs no root (measured
+# 2026-09-20 on this machine).
+if loginctl enable-linger "$(id -un)" >/dev/null 2>&1; then
+  note "the host keeps running after the terminal is closed"
+else
+  note "could not turn on lingering from here. In a normal terminal:"
+  note "  loginctl enable-linger $(printf %q "$(id -un)")"
+fi
+# D-0080 rule 2.5: a word in a directory the shell does not search does
+# nothing, and nothing says why.
+start_command_dir=$(dirname -- "$start_command_path")
+case ":${PATH:-}:" in
+  *":$start_command_dir:"*) ;;
+  *) note "$start_command_dir is not on your PATH, so the word is not found until it is" ;;
+esac
+
 step "Store (the plan above, recorded where the page reads it)"
 # **The last step, and the one that ends installation** (D-0075 rule 2): the
 # plan goes to the store the host will serve, not to a person to paste. Each
@@ -785,6 +940,16 @@ Ready. The environment is at $env_root
 The lap is pointed at $target, branch $target_base_branch, as project '$project_name'.
 That is written into all four places the plan has to say it, from the one value
 you named, so there is nothing in the plan file to hand-edit.
+
+** To start rondo, type one word. **
+
+  rondo
+
+That is all of it: no directory to be in, no file to source, no port and no
+repository (D-0080). It hands the host to the service this script installed,
+waits until the page answers and opens it, and comes back -- so the window may
+be closed. Everything below this line is the other way in: the terminal, for
+whoever installs and repairs rondo.
 
 ** On the page, nothing is pasted. ** The plan above is recorded in the store
 the page reads, so the scope screen offers it as the plan to run on and the
