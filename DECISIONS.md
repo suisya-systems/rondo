@@ -16483,7 +16483,7 @@ On acceptance, each dated and additive, per the answers the gate gives:
 
 **Status:** proposed (2026-09-19). **The number `D-0075` is proposed, not allocated**: `D-0073` is on
 `main` as proposed (rondo#250), and `D-0074` is reserved by the rondo#247 design (raising a running
-lap's budget), which is written and not yet in this file. Whichever entry merges later renumbers. Two
+lap's budget), which is written and not yet in this file. Whichever entry merges later renumbers. Three
 points are put to the human gate; see "What is put to the human gate". Refs `D-0010`, `D-0019`,
 `D-0023`, `D-0025`, `D-0032`, `D-0041`, `D-0055`, `D-0064`, `D-0066`, `D-0069`, `D-0071`, rondo#238, rondo#259, rondo#265,
 rondo#266.
@@ -16575,9 +16575,15 @@ number.
    B, then A again offers A first (rule 2.3), as a paste of A again does. No row is edited or removed,
    and nothing on the page or in the drafter writes one.
 3. **It is a third source of held plans, beside a pasted message and a lap's row, and no source
-   outranks another.** Two held plans are the same choice when they are equal with the fields one
-   run sets put aside (`prompt`, and `parties.grantee`, which the allocator fills with the run id);
-   otherwise they are two choices, **whatever their place and agent type**. `heldPlans` offers each
+   outranks another.** Two held plans are the same choice when **the plans a caller would write** are
+   equal: each is read through the plan reader, absent fields read as their defaults, and what
+   admission adds or fills is put aside (`payload_version`, and the allocated `run_id`,
+   `lease_claimant_id`, `workspace`, `topic_branch` and `parties.grantee`, `D-0023` rule 9), along
+   with `prompt`, which every lap sets. A setup row holds no allocated field, and a lap's stored plan
+   holds all of them (`planPayload`, `src/refrain/plan.ts`), so without this a lap would never be the
+   same choice as the setup row it ran on. Otherwise they are two choices, **whatever their place and
+   agent type**. Each held plan keeps its own digest for lookup and provenance; the comparison is only
+   how choices are grouped. `heldPlans` offers each
    choice once, as its newest occurrence, and orders the choices by when rondo came to hold them
    (a message's time, a setup row's `recorded_at_ms`, a lap's creation), newest first. So:
    1. **A repaired setup row and a stale plan are two choices**, and the repaired one is first
@@ -16636,7 +16642,7 @@ number.
 | **C. The host composes the plan from environment variables** it is started with (one per path) | met | met | met after installation | met | **Refused.** Ten host variables and a composer is the configuration layer `D-0019` rule 3 refuses, and the person still types every path, into an environment instead of a thread. `D-0055`'s precedent does not reach it: its variable is a host fact that is no plan field |
 | **D. A first-run page step**: rondo discovers `claude`, creates directories and the control plane, and asks for the rest | met | met only if every question is an approval; the fence roots and the repository are not | met after installing the program | **unmet**: it must ask for a workspace root and fence roots by path | **Refused.** It is rondo guessing a fence's geometry (`D-0019` rule 3), inside the resident host (rule 3.1), and the terminal is still needed to install and start rondo |
 | **E. The drafter writes the plan** | met | met | met | met | **Refused.** `D-0063` rule 4.2 lets a drafted plan differ from its template only in `prompt` and the agent type, and `D-0071` rule 5.4 forbids it composing an agent type; with no template there is nothing to differ from |
-| **F. Setup records its plan into the store** | met | met | **met after installation** as the gate's point 1 draws it; unmet for a new repository under point 2 (a) | met: the screen names no file | **Taken** (rules 1-4) |
+| **F. Setup records its plan into the store** | met | met for work a held plan covers; **unmet for a new kind of work** in an installed repository, which still needs a pasted plan (the gate's point 3) | **met after installation** as the gate's point 1 draws it; unmet for a new repository under point 2 (a) | met: the screen names no file | **Taken** (rules 1-4) |
 
 ### What this gives up
 
@@ -16701,6 +16707,26 @@ number.
      loses, and rondo also chooses where a checkout lives and runs a clone under the operator's
      credentials.
 
+3. **Whether a new kind of work in an installed repository may still need a pasted plan.** Setup
+   holds one plan per repository it names, with one agent type. A request that needs another agent
+   type, another command vocabulary (`allowed_bash`) or another base branch has no template, and
+   `D-0071` section 6, carried, has the drafter ask the person to paste one. That is neither an
+   approval nor a dispute, so K2 is unmet there, and neither point above covers it: the machine and
+   the repository have not changed.
+   - **(a) Keep the paste for now, and give a new kind of work its own entry** (recommended). The
+     first request on a fresh store and every request of a kind setup held need no paste, which is
+     what rondo#265 asked; a new kind is rarer, and closing it means deciding who composes a plan
+     that is not a copy of a held one, which rule 3.1 and `D-0071` rule 5.4 both keep from the
+     drafter. *Loses:* K2 for a person whose request needs a kind of work rondo has not run in that
+     repository; they paste a plan, and something outside rondo has to write it.
+   - **(b) Setup names several kinds per repository** (several agent types and vocabularies), so
+     each is a setup row. *Loses:* setup has to know in advance every kind of work a repository will
+     see, and a kind nobody foresaw is back at (a).
+   - **(c) The drafter proposes a new kind by changing a held plan's agent type or `allowed_bash`,
+     and the person approves it.** *Loses:* the drafter composes a grant, which `D-0071` rule 5.4
+     and `D-0039` rule 2 (rondo does not decide a project's command vocabulary) refuse; it is its
+     own entry if it is wanted.
+
 ### Annotations this entry adds
 
 On acceptance, each dated:
@@ -16739,7 +16765,7 @@ On acceptance, each dated:
 |---|---|---|
 | Starting the resident host without a terminal (a service unit or its like) | Installation; K3 is unmet at each host start until it exists | an installation entry, when rondo is packaged for someone other than its developers |
 | A setup row whose paths have gone stale | Guarding it means rondo re-checking fence geometry, which rule 3.1 declines; a stale lap plan fails the same way today | a later entry, if a stale setup row is observed to cost a lap |
-| A new kind of work in the same repository still needs a pasted plan | `D-0071` section 6, unchanged; nothing but a person or the drafter could compose it, and the drafter may not | a later entry, if pasting a new kind is observed in practice |
+| A new kind of work in the same repository still needs a pasted plan | The gate's point 3; `D-0071` section 6, carried | the gate, then the entry its (a) names |
 | More than one repository per host | The gate's second point; `rondo web` takes one `--repo` | the gate, then the entry its (b) would need |
 | The setup script is named for dogfooding | It is the only setup rondo has; renaming it is a building choice | the building change |
 
