@@ -12,9 +12,12 @@
 #
 # **Every fact the command needs is written into it.** The program reads no
 # file, sources nothing and looks at no variable: the store, the approver, the
-# language, the bounds, continuo's CLI, the port, the repository, node's real
-# path, the checkout and the PATH the host is to run with all arrive here as
-# arguments and are spelled into the two files. That is D-0080 rule 2: setup
+# language, the bounds, continuo's CLI, the port, the remote, node's real path,
+# the checkout and the PATH the host is to run with all arrive here as
+# arguments and are spelled into the two files. **The forge repository is not
+# among them** (D-0081's annotation on rule 2.1): one host serves several
+# repositories, each named by the plan a request was drafted from, so a slug on
+# the start line would be one host fact too many. That is D-0080 rule 2: setup
 # composes, the host is told what it is told today, and nothing discovers
 # anything at a start. When one of those facts moves, setup runs again and
 # writes these files again (rule 2.4); a hand-edited start command is outside
@@ -39,7 +42,7 @@ usage() {
   cat <<'USAGE'
 usage: scripts/start-command.sh --node PATH --checkout DIR --port N
                                 --store PATH --approver ID --continuo-cli PATH
-                                --path VALUE [--repo OWNER/NAME] [--remote NAME]
+                                --path VALUE [--remote NAME]
                                 [--language TAG] [--max-live N]
                                 [--max-occupying N] [--opener PATH]
                                 [--bin-dir DIR] [--unit-dir DIR]
@@ -56,8 +59,6 @@ options:
   --path VALUE         the PATH the host runs with, holding the real
                        directories of git, gh, claude, codex and node. The
                        service manager's own PATH holds none of them
-  --repo OWNER/NAME    the repository publishing reaches; without it the page
-                       serves without a publish press
   --remote NAME        the git remote publish pushes to
   --language TAG       RONDO_OPERATOR_LANGUAGE, and the language the start
                        command's own sentences are composed in
@@ -88,7 +89,6 @@ store=
 approver=
 continuo_cli=
 path_value=
-repo=
 remote=
 language=
 max_live=
@@ -106,7 +106,6 @@ while [ $# -gt 0 ]; do
     --approver) [ $# -ge 2 ] || die "--approver needs a value"; approver=$2; shift 2 ;;
     --continuo-cli) [ $# -ge 2 ] || die "--continuo-cli needs a value"; continuo_cli=$2; shift 2 ;;
     --path) [ $# -ge 2 ] || die "--path needs a value"; path_value=$2; shift 2 ;;
-    --repo) [ $# -ge 2 ] || die "--repo needs a value"; repo=$2; shift 2 ;;
     --remote) [ $# -ge 2 ] || die "--remote needs a value"; remote=$2; shift 2 ;;
     --language) [ $# -ge 2 ] || die "--language needs a value"; language=$2; shift 2 ;;
     --max-live) [ $# -ge 2 ] || die "--max-live needs a value"; max_live=$2; shift 2 ;;
@@ -294,7 +293,6 @@ mv -f "$command_tmp" "$command_path"
   printf 'WorkingDirectory=%s\n' "$(sd_path "$checkout")"
   printf 'ExecStart=%s %s web --port %s' \
     "$(sd_exec_quote "$node_bin")" "$(sd_exec_quote "$checkout/bin/rondo.mjs")" "$port"
-  if [ -n "$repo" ]; then printf ' --repo %s' "$(sd_exec_quote "$repo")"; fi
   if [ -n "$remote" ]; then printf ' --remote %s' "$(sd_exec_quote "$remote")"; fi
   printf '\n'
   # The service manager's PATH holds only the system directories, where of the

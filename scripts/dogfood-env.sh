@@ -27,7 +27,7 @@ usage() {
 usage: scripts/dogfood-env.sh [--root DIR] [--iteration-id ID]
                               [--target-repo DIR] [--target-base-branch NAME]
                               [--review-criterion FILE] [--port N]
-                              [--repo OWNER/NAME] [--remote NAME]
+                              [--remote NAME]
                               [--force-continuo-rebuild]
 
 Provision a working environment for the rondo operator CLI and print the
@@ -70,11 +70,9 @@ options:
       in-scope `rondo retry` is never admitted without one (rondo#205).
   --port N
       the port the page listens on, written into the start command and the
-      service setup installs. Default: 7333.
-  --repo OWNER/NAME
-      the repository publishing reaches, written into the same two files. A
-      host started without it serves the page with no publish press, and there
-      is no way to add it from the browser.
+      service setup installs. Default: 7333. The forge repository is not
+      written there beside it: one host serves several repositories, each named
+      by the plan a request was drafted from (D-0081).
   --remote NAME
       the git remote publish pushes to, when it is not the default.
   --force-continuo-rebuild
@@ -115,7 +113,6 @@ env_root=${RONDO_DOGFOOD_ROOT:-"${XDG_STATE_HOME:-$HOME/.local/state}/rondo/dogf
 run_id=dogfood-001
 force_continuo_rebuild=0
 port=7333
-repo=
 remote=
 target_repo=
 target_base_branch=
@@ -131,7 +128,6 @@ while [ $# -gt 0 ]; do
     --review-criterion)
       [ $# -ge 2 ] || die "--review-criterion needs a value"; review_criterion=$2; shift 2 ;;
     --port) [ $# -ge 2 ] || die "--port needs a value"; port=$2; shift 2 ;;
-    --repo) [ $# -ge 2 ] || die "--repo needs a value"; repo=$2; shift 2 ;;
     --remote) [ $# -ge 2 ] || die "--remote needs a value"; remote=$2; shift 2 ;;
     --force-continuo-rebuild) force_continuo_rebuild=1; shift ;;
     -h|--help) usage; exit 0 ;;
@@ -812,7 +808,6 @@ start_command_args=(
   --continuo-cli "$continuo_cli"
   --path "$host_path"
 )
-if [ -n "$repo" ]; then start_command_args+=(--repo "$repo"); fi
 if [ -n "$remote" ]; then start_command_args+=(--remote "$remote"); fi
 if [ -n "$opener" ]; then start_command_args+=(--opener "$opener"); fi
 if [ -n "${RONDO_OPERATOR_LANGUAGE:-}" ]; then

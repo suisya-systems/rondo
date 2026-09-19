@@ -167,10 +167,12 @@ posix("the person's language decides the sentences, and each set is whole", () =
 });
 
 posix("the unit carries every host fact, and the PATH setup resolved", () => {
-  const { unit } = write(["--repo", "suisya-systems/rondo", "--language", "ja", "--max-live", "3"]);
+  const { unit } = write(["--language", "ja", "--max-live", "3"]);
 
+  // No forge repository on the line: one host serves several, each named by
+  // the plan a request was drafted from (D-0081's annotation on rule 2.1).
   expect(unit).toContain(
-    'ExecStart="/opt/node/bin/node" "/home/p/rondo host/bin/rondo.mjs" web --port 7333 --repo "suisya-systems/rondo"',
+    'ExecStart="/opt/node/bin/node" "/home/p/rondo host/bin/rondo.mjs" web --port 7333\n',
   );
   expect(unit).toContain('Environment="PATH=/home/p/.local/bin:/opt/node/bin:/usr/bin"');
   expect(unit).toContain('Environment="RONDO_STORE=/home/p/it\'s.sqlite3"');
@@ -186,10 +188,8 @@ posix("the unit carries every host fact, and the PATH setup resolved", () => {
 posix("a fact that was not given is not written as an empty one", () => {
   const { unit } = write([]);
 
-  // An empty `--repo` would be a host that serves the page with no publish
-  // press; an empty `RONDO_OPERATOR_LANGUAGE` is not the same as an unset one,
-  // and a bound of nothing is not a bound.
-  expect(unit).not.toContain("--repo");
+  // An empty `RONDO_OPERATOR_LANGUAGE` is not the same as an unset one, and a
+  // bound of nothing is not a bound.
   expect(unit).not.toContain("--remote");
   expect(unit).not.toContain("RONDO_OPERATOR_LANGUAGE");
   expect(unit).not.toContain("RONDO_MAX_LIVE");

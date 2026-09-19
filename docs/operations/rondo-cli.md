@@ -90,14 +90,15 @@ rondo
 No directory to be in, no `env.sh` to source, no port and no repository. Setup writes that word as a
 program in `~/.local/bin` -- a directory your shell already searches, and it says so when it is not
 on your `PATH` -- carrying every fact it resolved: the store, the approver, the language, the two
-bounds, continuo's CLI, the port, the repository, `node`'s real path, the checkout, and a `PATH`
-holding the real directories of `git`, `gh`, `claude` and `codex`. It also installs a user service
+bounds, continuo's CLI, the port, `node`'s real path, the checkout, and a `PATH` holding the real
+directories of `git`, `gh`, `claude` and `codex`. **The forge repository is not one of them**
+(D-0081): one host serves several repositories, each named by the plan the request was drafted
+from, so there is no slug on that line to go stale. It also installs a user service
 from those same facts, because the service manager's own `PATH` holds none of those programs.
 
 What the word does is hand the host to that service, wait until the page answers, open it and come
 back -- so the terminal is free and its window may be closed, and a crash restarts the host.
-`--port 7333` and `--repo OWNER/NAME` are what setup writes into the service; `--port` and `--repo`
-on `scripts/dogfood-env.sh` are where you choose them.
+`--port` on `scripts/dogfood-env.sh` is where you choose the port it writes into the service.
 
 **When rondo will not come up, the word is what tells you**, in three sentences in your own
 language, naming no unit, no path and no log: setup on this computer has stopped working and
