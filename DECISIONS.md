@@ -16483,8 +16483,8 @@ On acceptance, each dated and additive, per the answers the gate gives:
 
 **Status:** proposed (2026-09-19). **The number `D-0075` is proposed, not allocated**: `D-0073` is on
 `main` as proposed (rondo#250), and `D-0074` is reserved by the rondo#247 design (raising a running
-lap's budget), which is written and not yet in this file. Whichever entry merges later renumbers. One
-point is put to the human gate; see "What is put to the human gate". Refs `D-0010`, `D-0019`,
+lap's budget), which is written and not yet in this file. Whichever entry merges later renumbers. Two
+points are put to the human gate; see "What is put to the human gate". Refs `D-0010`, `D-0019`,
 `D-0023`, `D-0025`, `D-0055`, `D-0064`, `D-0069`, `D-0071`, rondo#238, rondo#259, rondo#265,
 rondo#266.
 
@@ -16547,9 +16547,11 @@ number.
 ### 1. Where the line falls
 
 1. **Installation is: installing the program, creating the store and the control plane, naming the
-   repository rondo works in and the fence roots around it, and starting the resident host.** Each of
-   these either creates something on this disk, widens what a lap may touch, or starts the process that
-   serves the page. None of them is a reply to a request.
+   repository rondo works in and the fence roots around it, starting the resident host, and running
+   setup again when one of the host's facts changes.** Each of these either creates something on this
+   disk, widens what a lap may touch, or starts the process that serves the page. None of them is a
+   reply to a request. **K3 has no installation exception in the operator's words**, so this list is
+   the first point put to the gate, whole, and not taken here.
 2. **Installation ends when the store holds a plan a lap can run on.** That is the change. Today setup
    ends one step short of that: it has composed the plan, and hands it to a person instead of to
    rondo. rondo#265 is right that the paste is past installation. **The plan's content is not**: every
@@ -16564,16 +16566,25 @@ number.
 1. **Setup's last step records the plan it composed into the store it provisioned**, through one rondo
    verb run by the setup script, with `--actor-id` checked against `RONDO_APPROVER` as every operator
    verb is (`D-0025` rule 4). The verb's name and flags are the building change's.
-2. **The record is one append-only row: the plan's canonical bytes, its `plan_digest`, `recorded_by`
-   (the approver) and `recorded_at_ms`.** The same bytes twice are one row (by digest). A setup re-run
-   that composes different bytes (`claude` moved, a new fence root) writes a second row. No row is
-   edited or removed, and nothing on the page or in the drafter writes one.
+2. **Every setup run appends one row: an id, the plan's canonical bytes, its `plan_digest`,
+   `recorded_by` (the approver) and `recorded_at_ms`.** The row is the run, not the plan: the same
+   bytes recorded twice are two rows, and the newer stands. So setup that records A, then B, then A
+   again offers A, as a paste of A again does (`heldPlans`' "the latest paste wins its place"). No
+   row is edited or removed, and nothing on the page or in the drafter writes one.
 3. **It is a third source of held plans, beside a pasted message and a lap's row.** `heldPlans` offers
-   it, ordered with the laps' plans by time, newest first, so a re-run setup stands for its kind
-   (place and agent type) over laps that ran before it, and a lap run on it after stands for it in
-   turn. The drafter's template set (`D-0071` rule 2.1.3) includes it the same way.
-4. **Its agent type is recorded exactly as a pasted plan's is** (`D-0071` point 1(a)): in the drafted
-   or operator scope's own transaction, from the row's bytes, with `recorded_by` the row's
+   it, ordered with the laps' plans by time (a setup row by `recorded_at_ms`), newest first, so a
+   re-run setup stands for its kind (place and agent type) over laps that ran before it, and a lap run
+   on it after stands for it in turn. The drafter's template set (`D-0071` rule 2.1.3) includes it the
+   same way, and `heldPlanByDigest` finds it by digest as it finds a pasted one.
+4. **A drafted scope records its agent type from a setup row by the contract a pasted plan has
+   (`D-0071` point 1(a)), with the row standing where the message stood.** The scope cites the row by
+   a basis of its own form, **`setup`** (`{ form: "setup", setupId }`), which `D-0032` rule 2's
+   closed union gains as the `proposal` form was gained (rondo#197's precedent, by annotation). The
+   scope writer's check is `pastedPlanRefusal`'s with the row for the message: the record names the
+   row; the scope cites it; the row exists; its plan's `agent_type_input` is the record's byte for
+   byte in canonical form; its plan's digest is the record's `plan_digest`. `recorded_by` is the
+   row's `recorded_by`. **An operator scope records from a setup row as it records from any plan it
+   is written from** (`D-0069` section 1, carried by `D-0071`), with the person writing the scope as
    `recorded_by`. Nothing is recorded at setup time but the plan.
 5. **After the verb returns, no rondo process reads the file again.** The row holds the bytes; the
    scope screen and every press resolve the plan by digest from the store (rondo#266's rule). The
@@ -16609,7 +16620,7 @@ number.
 | **C. The host composes the plan from environment variables** it is started with (one per path) | met | met | met after installation | met | **Refused.** Ten host variables and a composer is the configuration layer `D-0019` rule 3 refuses, and the person still types every path, into an environment instead of a thread. `D-0055`'s precedent does not reach it: its variable is a host fact that is no plan field |
 | **D. A first-run page step**: rondo discovers `claude`, creates directories and the control plane, and asks for the rest | met | met only if every question is an approval; the fence roots and the repository are not | met after installing the program | **unmet**: it must ask for a workspace root and fence roots by path | **Refused.** It is rondo guessing a fence's geometry (`D-0019` rule 3), inside the resident host (rule 3.1), and the terminal is still needed to install and start rondo |
 | **E. The drafter writes the plan** | met | met | met | met | **Refused.** `D-0063` rule 4.2 lets a drafted plan differ from its template only in `prompt` and the agent type, and `D-0071` rule 5.4 forbids it composing an agent type; with no template there is nothing to differ from |
-| **F. Setup records its plan into the store** | met | met | **met after installation**; unmet for a new repository (the gate's point) | met: the screen names no file | **Taken** (rules 1-4) |
+| **F. Setup records its plan into the store** | met | met | **met after installation** as the gate's point 1 draws it; unmet for a new repository under point 2 (a) | met: the screen names no file | **Taken** (rules 1-4) |
 
 ### What this gives up
 
@@ -16628,22 +16639,44 @@ number.
 
 ### What is put to the human gate
 
-1. **Whether naming the repository rondo works in is installation.** This decides whether K3 holds for
-   work in a repository rondo has not yet worked in. It is put rather than taken because it is exactly
-   where the line could be drawn for convenience.
+1. **Where installation ends, as rule 1.1 lists it.** It is put because K3 as the operator wrote it
+   has no exception, and this entry leaves terminal acts in the walk. Every one of them, in full:
+   installing the program; creating the store and the control plane; naming the repository and the
+   fence roots; **starting the resident host, at every host start** (measurement: it is typed today);
+   and **running setup again when a host fact moves** (`claude` upgraded to another path, a fence root
+   moved), after which the new setup row stands (rule 2.2).
+   - **(a) All five are installation, and K3 reads "after installation, and until the host's own
+     facts change"** (recommended). The first three happen once per host; the fourth is removed by
+     installing the host as a service, which is packaging (residual); the fifth happens when the
+     machine changes under rondo, which is the same event that makes any installed program need its
+     installer again. *Loses:* K3 as a literal "never": a person on a host whose `claude` moved sees a
+     lap fail in its fence and has to run setup.
+   - **(b) K3 read literally.** The fourth needs a service install shipped with rondo, and the fifth
+     needs the resident host to re-derive a plan's paths when a lap fails on them. *Loses:* rule 3.1:
+     the host would compose fence geometry from an environment that drifts under it, which is
+     `D-0019` rule 3's refusal and the shape rondo#266 removed; and the service install is packaging
+     no entry has scoped.
+2. **Whether naming the repository rondo works in is installation.** This decides whether K3 holds
+   for work in a repository rondo has not worked in yet. It is put rather than taken because it is
+   exactly where the line could be drawn for convenience.
    - **(a) Yes: a repository is named at setup, and working in another is setup again**
      (recommended, rule 1.1). Three things change together when a repository is added, and all three
-     are host facts today: the checkout has to exist on this disk under the operator's credentials
-     (`D-0010`), the catalog's `allowed_local_roots` widens what a lap may write (a fence change), and
-     the host's publish target is one `--repo` given at start. A page step that did one of the three
-     would leave the other two to a terminal anyway. *Loses:* K3 for a person who wants rondo in a
-     second repository; they run setup for it, and until the host serves more than one `--repo` they
-     restart it too.
-   - **(b) No: the page asks which repository, and rondo clones it and writes its catalog entry.**
-     *Loses:* rondo chooses where a checkout lives and widens its own fence (rule 3.1 and `D-0019`
-     rule 3), gains a clone under the operator's credentials, and the host still needs a publish
-     target per repository, which is a change to `rondo web`'s one `--repo`. It is its own entry, not
-     a rule here.
+     are host facts today: the checkout has to exist on this disk, the catalog's
+     `allowed_local_roots` widens what a lap may write (a fence change), and the host's publish target
+     is one `--repo` given at start. *Loses:* K3 for a person who wants rondo in a second repository;
+     they run setup for it, and until the host serves more than one `--repo` they restart it too.
+   - **(b) The page offers checkouts already on this disk, and rondo proposes a plan for the one the
+     person picks**, copied from a held plan with only `repository`, `base_branch`, `project_name` and
+     the catalog layer changed, which the person approves as they approve a scope. No clone and no
+     credential. *Loses:* rondo composes the repository half of a plan, including a fence widening,
+     where today setup does (`D-0019` rule 3 and `D-0025` rule 5 would need an amendment of their own,
+     narrower than rule 3.1's refusal: a proposal a person approves, not a derivation the host acts
+     on); rondo must find checkouts, which means a root to search that setup names; and publishing
+     there still needs `rondo web` to take a publish target per plan instead of one `--repo`. It is
+     the option that would meet K3 here, and it is its own entry, not a rule in this one.
+   - **(c) The page asks for a repository by name, and rondo clones it.** *Loses:* everything (b)
+     loses, and rondo also chooses where a checkout lives and runs a clone under the operator's
+     credentials.
 
 ### Annotations this entry adds
 
@@ -16655,7 +16688,9 @@ On acceptance, each dated and additive:
   kind of work.
 - **`D-0071` rule 2.1.3**: the templates include the plans setup held, the newest of each kind.
 - **`D-0071` section 6.2**: the recording rule for a pasted plan's agent type applies to a setup-held
-  plan, with `recorded_by` the row's.
+  plan, with the `setup` basis in place of the `message:` one and `recorded_by` the row's.
+- **`D-0032` rule 2**: the closed union gains the `setup` form (`{ form: "setup", setupId }`), which
+  the writers refuse when it names no setup row.
 - **`D-0071` point 1(c)**: refused as a catalog; `D-0075`'s setup-held row is the narrow exception and
   the reason is recorded there.
 - **`D-0019` rule 3**: unchanged, and `D-0075` rule 3.1 relies on it.
@@ -16678,7 +16713,7 @@ On acceptance, each dated and additive:
 | Starting the resident host without a terminal (a service unit or its like) | Installation; K3 is unmet at each host start until it exists | an installation entry, when rondo is packaged for someone other than its developers |
 | A setup row whose paths have gone stale | Guarding it means rondo re-checking fence geometry, which rule 3.1 declines; a stale lap plan fails the same way today | a later entry, if a stale setup row is observed to cost a lap |
 | A new kind of work in the same repository still needs a pasted plan | `D-0071` section 6, unchanged; nothing but a person or the drafter could compose it, and the drafter may not | a later entry, if pasting a new kind is observed in practice |
-| More than one repository per host | The gate's point; `rondo web` takes one `--repo` | the gate, then the entry (b) would need |
+| More than one repository per host | The gate's second point; `rondo web` takes one `--repo` | the gate, then the entry its (b) would need |
 | The setup script is named for dogfooding | It is the only setup rondo has; renaming it is a building choice | the building change |
 
 ### What would falsify it
@@ -16689,8 +16724,10 @@ On acceptance, each dated and additive:
   then wrong, and it was wrong before this entry too; it is setup's defect and not this entry's, but
   it would mean rule 2's "installation ends when a plan a lap can run on is held" is not checked by
   anything.
-- **Repositories added often enough that rerunning setup is the usual walk**, under the gate's point
-  (a). Point (b) comes back on evidence.
+- **Repositories added often enough that rerunning setup is the usual walk**, under the gate's second
+  point (a). Its (b) comes back on evidence.
+- **Setup re-run because a host fact moved, often enough to be felt**, under the gate's first point
+  (a). Its (b) comes back on evidence.
 - **A reason to have the resident host re-read or re-derive a plan**, which would cross rule 3.1 and
   the line rondo#266 drew.
 - Any measurement in "What was measured" failing to reproduce at rondo `87099ad`.
