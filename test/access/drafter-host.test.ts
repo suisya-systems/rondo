@@ -76,12 +76,12 @@ test("a request is drafted once: its proposal, its scope and its summary land, a
   host.kick();
   await host.idle();
   expect(handed).toHaveLength(1);
-  expect((await w.record.readScope("drafted-scope-3")).kind).toBe("read");
+  expect((await w.record.readScope("drafted-scope-4")).kind).toBe("read");
   const said = await drafterMessages(w);
   expect(said.map((m) => m.body)).toEqual(["One plan: fix the flaky test."]);
   expect(said[0]?.bases).toEqual([
     { form: "message", messageId: "r1" },
-    { form: "proposal", proposalId: "draft-1" },
+    { form: "proposal", proposalId: "draft-2" },
   ]);
   expect(logged).toEqual(["drafter  r1: split ($0.0500), with a drafted scope"]);
   host.kick();
@@ -150,7 +150,7 @@ test("a draft the store refuses still covers what it read: it becomes an unavail
   const { host, handed } = hostOver(w, async () => split(templateDigest, typeDigest));
   // The run's proposal id is taken already, so its draft cannot land.
   const taken = await w.record.recordProposal({
-    proposalId: "draft-1",
+    proposalId: "draft-2",
     kind: "split",
     drafter: "someone-else",
     payload: { plans: [], holes: [] },
@@ -181,7 +181,7 @@ test("a draft the store refuses still covers what it read: it becomes an unavail
   expect(said[0]?.body).toContain(
     "rondo's drafter wrote no draft for this: the draft could not be recorded",
   );
-  expect((await w.record.readScope("drafted-scope-3")).kind).not.toBe("read");
+  expect((await w.record.readScope("drafted-scope-4")).kind).not.toBe("read");
 });
 
 test("a thread whose root is not an operator's request is not drafted", async () => {
@@ -230,4 +230,18 @@ test("a run that throws is logged and costs only its own request; the host goes 
   await host.idle();
   expect(logged).toContain("drafter  r1: the disk is full");
   expect((await drafterMessages(w)).map((m) => m.inReplyTo)).toEqual(["r2"]);
+});
+
+test("a thread another host is drafting is left to it: nothing runs and nothing is given up", async () => {
+  const w = await world();
+  await w.say("r1", "Fix it.", null, 1_000);
+  expect(await w.record.claimDraft("r1", "the-other-host", 0, 10_000_000)).toBe(true);
+  const { host, handed } = hostOver(w, async () => ({ kind: "failed", reason: "unused" }));
+  host.kick();
+  await host.idle();
+  expect(handed).toEqual([]);
+  await w.record.releaseDraft("r1", "the-other-host");
+  host.kick();
+  await host.idle();
+  expect(handed).toHaveLength(1);
 });

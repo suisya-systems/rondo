@@ -1245,6 +1245,16 @@ CREATE TABLE IF NOT EXISTS agent_type_record (
   recorded_by                 TEXT    NOT NULL,
   recorded_at_ms              INTEGER NOT NULL
 );
+
+-- D-0071 rule 3.3: at most one drafter run per thread at a time, across every
+-- process that serves this store. A lease, not a record: taken before the model
+-- is invoked so two hosts do not both pay for one thread, released when the
+-- run's write is done, and lapsed at until_ms if its holder died holding it.
+CREATE TABLE IF NOT EXISTS drafter_lease (
+  request_message_id          TEXT    PRIMARY KEY,
+  holder                      TEXT    NOT NULL,
+  until_ms                    INTEGER NOT NULL
+);
 `;
 
 /**
@@ -2179,8 +2189,12 @@ export type RecordOutcome =
 /** What one drafter run hands the store to write (D-0071 rule 7.3). */
 export interface DraftRunWrite {
   readonly requestMessageId: string;
-  /** The latest operator message of the thread the run's document held (rule 7.2). */
-  readonly latestOperatorMessageId: string;
+  /**
+   * Every operator message of the thread the run's document held (rule 7.2).
+   * A set and not the latest by clock: a reply written under a clock that
+   * stepped back is still a message the document did not hold.
+   */
+  readonly operatorMessageIds: readonly string[];
   /** What the drafter's rows are named under, for {@link AdvisoryRecord.draftedMessageIds}. */
   readonly drafterPrefix: string;
   /** Null only for an unavailable run, which writes its message and nothing else (rule 1.5). */
@@ -2191,7 +2205,7 @@ export interface DraftRunWrite {
 
 export type DraftWriteOutcome =
   | RecordOutcome
-  | { readonly kind: "stale"; readonly latestOperatorMessageId: string | null }
+  | { readonly kind: "stale" }
   /** Another run already covered the thread (a second host): nothing is written twice. */
   | { readonly kind: "covered" };
 
@@ -2456,6 +2470,18 @@ export interface AdvisoryRecord {
    * snapshot's `covers`, or one such a drafter's message cites by `message:`.
    */
   draftedMessageIds(drafterPrefix: string): Promise<ReadonlySet<string>>;
+  /**
+   * Take the one drafter run of a thread (D-0071 rule 3.3) until `untilMs`,
+   * or learn that another holder has it. True when `holder` now holds it.
+   */
+  claimDraft(
+    requestMessageId: string,
+    holder: string,
+    nowMs: number,
+    untilMs: number,
+  ): Promise<boolean>;
+  /** Give a thread's run back; a lease another holder took since is left alone. */
+  releaseDraft(requestMessageId: string, holder: string): Promise<void>;
   readScopeDecision(scopeDecisionId: string): Promise<ScopeDecisionReadOutcome>;
   /**
    * The one decision on a scope row, or `absent` while nobody has answered it.
@@ -3464,13 +3490,16 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
     async recordDraft(write: DraftRunWrite): Promise<DraftWriteOutcome> {
       try {
         return immediateTransaction<DraftWriteOutcome>(connection, () => {
-          const latest = latestOperatorMessage(connection, write.requestMessageId);
-          if (latest !== write.latestOperatorMessageId) {
-            return { kind: "stale", latestOperatorMessageId: latest };
+          const now = threadOperatorMessages(connection, write.requestMessageId);
+          const held = new Set(write.operatorMessageIds);
+          if (now.some((id) => !held.has(id))) {
+            return { kind: "stale" };
           }
-          // Under the same lock: a second host that ran over the same thread
-          // finds it drafted and writes nothing (rule 3.2's coverage).
-          if (latest !== null && coveredMessageIds(connection, write.drafterPrefix).has(latest)) {
+          // Under the same lock: a thread every operator message of which a
+          // drafter row already covers is drafted, and nothing is written twice
+          // (rule 3.2's coverage).
+          const covered = coveredMessageIds(connection, write.drafterPrefix);
+          if (now.length > 0 && now.every((id) => covered.has(id))) {
             return { kind: "covered" };
           }
           // **All or nothing**: a refusal after the first insert is thrown, so
@@ -3505,6 +3534,36 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
 
     async draftedMessageIds(drafterPrefix: string): Promise<ReadonlySet<string>> {
       return coveredMessageIds(connection, drafterPrefix);
+    },
+
+    async claimDraft(
+      requestMessageId: string,
+      holder: string,
+      nowMs: number,
+      untilMs: number,
+    ): Promise<boolean> {
+      return immediateTransaction(connection, () => {
+        const row = connection
+          .prepare("SELECT holder, until_ms FROM drafter_lease WHERE request_message_id = ?")
+          .get(requestMessageId) as SqlRow | undefined;
+        if (row !== undefined && row["holder"] !== holder && Number(row["until_ms"]) > nowMs) {
+          return false;
+        }
+        connection
+          .prepare(
+            "INSERT INTO drafter_lease (request_message_id, holder, until_ms) VALUES (?, ?, ?) " +
+              "ON CONFLICT (request_message_id) DO UPDATE SET holder = excluded.holder, " +
+              "until_ms = excluded.until_ms",
+          )
+          .run(requestMessageId, holder, untilMs);
+        return true;
+      });
+    },
+
+    async releaseDraft(requestMessageId: string, holder: string): Promise<void> {
+      connection
+        .prepare("DELETE FROM drafter_lease WHERE request_message_id = ? AND holder = ?")
+        .run(requestMessageId, holder);
     },
 
     async heldAgentTypeDigests(): Promise<readonly string[]> {
@@ -3769,20 +3828,20 @@ function coveredMessageIds(connection: DatabaseSync, drafterPrefix: string): Set
 }
 
 /**
- * The latest operator message in a request's thread -- the request and every
- * reply under it -- by the order the thread is read in, or null when there is
- * none (D-0071 rule 7.2).
+ * Every operator message in a request's thread -- the request and every reply
+ * under it, through any voice (D-0071 rule 7.2).
  */
-function latestOperatorMessage(connection: DatabaseSync, requestMessageId: string): string | null {
-  const row = connection
-    .prepare(
-      "WITH RECURSIVE thread(id) AS (SELECT ? UNION " +
-        "SELECT m.message_id FROM conversation_message m JOIN thread t ON m.in_reply_to = t.id) " +
-        "SELECT m.message_id FROM conversation_message m JOIN thread t ON m.message_id = t.id " +
-        "WHERE m.author_kind = 'operator' ORDER BY m.at_ms DESC, m.rowid DESC LIMIT 1",
-    )
-    .get(requestMessageId) as SqlRow | undefined;
-  return row === undefined ? null : String(row["message_id"]);
+function threadOperatorMessages(connection: DatabaseSync, requestMessageId: string): string[] {
+  return (
+    connection
+      .prepare(
+        "WITH RECURSIVE thread(id) AS (SELECT ? UNION " +
+          "SELECT m.message_id FROM conversation_message m JOIN thread t ON m.in_reply_to = t.id) " +
+          "SELECT m.message_id FROM conversation_message m JOIN thread t ON m.message_id = t.id " +
+          "WHERE m.author_kind = 'operator'",
+      )
+      .all(requestMessageId) as SqlRow[]
+  ).map((row) => String(row["message_id"]));
 }
 
 /**

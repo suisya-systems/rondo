@@ -617,7 +617,7 @@ export function newIterationId(): string {
  * apart. Here for {@link newMessageId}'s reason: this module is the one
  * granted `randomUUID`.
  */
-export function newDraftId(kind: "draft" | "drafted-scope" | "drafter"): string {
+export function newDraftId(kind: "draft" | "drafted-scope" | "drafter" | "drafter-host"): string {
   return `${kind}-${randomUUID()}`;
 }
 

@@ -26,12 +26,19 @@ import { draftRequest } from "./model-drafter.js";
 /** What every row a model drafter writes is named under (D-0071 rule 1.4). */
 const DRAFTER_PREFIX = "rondo/drafter/";
 
+/**
+ * How long a thread's lease is held (rule 3.3): past the drafter's own timeout
+ * (`./forge.ts`), so a live run never loses its lease, and short enough that a
+ * host that died holding one frees its thread within a quarter hour.
+ */
+const LEASE_MS = 15 * 60 * 1000;
+
 /** What the host reaches, as values a test can replace. */
 export interface DrafterHostPorts extends DrafterPorts {
   readonly record: DrafterPorts["record"] &
-    Pick<AdvisoryRecord, "recordDraft" | "draftedMessageIds">;
+    Pick<AdvisoryRecord, "recordDraft" | "draftedMessageIds" | "claimDraft" | "releaseDraft">;
   /** A fresh row id with a readable prefix, as the page mints its own. */
-  readonly mintId: (kind: "draft" | "drafted-scope" | "drafter") => string;
+  readonly mintId: (kind: "draft" | "drafted-scope" | "drafter" | "drafter-host") => string;
   /** The language the host's operator reads, or null (`RONDO_OPERATOR_LANGUAGE`). */
   readonly language: string | null;
   /** One line for the host's terminal. */
@@ -54,6 +61,9 @@ export function drafterHost(ports: DrafterHostPorts): DrafterHost {
   // (rule 1.5's "not retried"), so a store that refuses does not cost a draft
   // on every scan.
   const givenUp = new Map<string, string>();
+  // Who this process is to the lease (rule 3.3), so a second host over the
+  // same store does not pay for a thread this one is already drafting.
+  const holder = ports.mintId("drafter-host");
   let running: Promise<void> | null = null;
   let again = false;
 
@@ -70,9 +80,23 @@ export function drafterHost(ports: DrafterHostPorts): DrafterHost {
       for (const one of due) {
         // One request's failure is logged and costs only that request: a
         // throw here would end the page's process with it.
-        let written: "written" | "stale" | "failed";
+        let written: "written" | "stale" | "failed" | "held";
         try {
-          written = await write(ports, await draft(ports, one.requestMessageId, ports.language));
+          const nowMs = ports.now();
+          if (
+            !(await ports.record.claimDraft(one.requestMessageId, holder, nowMs, nowMs + LEASE_MS))
+          ) {
+            written = "held";
+          } else {
+            try {
+              written = await write(
+                ports,
+                await draft(ports, one.requestMessageId, ports.language),
+              );
+            } finally {
+              await ports.record.releaseDraft(one.requestMessageId, holder);
+            }
+          }
         } catch (error) {
           ports.log(`drafter  ${one.requestMessageId}: ${describe(error)}`);
           written = "failed";
@@ -80,7 +104,7 @@ export function drafterHost(ports: DrafterHostPorts): DrafterHost {
         if (written === "stale") {
           again = true;
         } else if (written === "failed") {
-          givenUp.set(one.requestMessageId, one.latestOperatorMessageId);
+          givenUp.set(one.requestMessageId, one.operatorKey);
         }
       }
     }
@@ -111,7 +135,8 @@ export function drafterHost(ports: DrafterHostPorts): DrafterHost {
 
 interface Due {
   readonly requestMessageId: string;
-  readonly latestOperatorMessageId: string;
+  /** The thread's operator messages, as one key: what a give-up is keyed on. */
+  readonly operatorKey: string;
 }
 
 /** Every request with an operator message no drafter row covers, oldest first. */
@@ -136,7 +161,7 @@ async function dueRequests(
     }
     return at;
   };
-  const latest = new Map<string, string>();
+  const operatorIds = new Map<string, string[]>();
   const uncovered = new Set<string>();
   for (const m of read.messages) {
     if (m.authorKind !== "operator") {
@@ -148,16 +173,14 @@ async function dueRequests(
     if (opening === undefined || opening.authorKind !== "operator" || opening.inReplyTo !== null) {
       continue;
     }
-    latest.set(root, m.messageId);
+    operatorIds.set(root, [...(operatorIds.get(root) ?? []), m.messageId]);
     if (!covered.has(m.messageId)) {
       uncovered.add(root);
     }
   }
   return [...uncovered].flatMap((root) => {
-    const last = latest.get(root) as string;
-    return givenUp.get(root) === last
-      ? []
-      : [{ requestMessageId: root, latestOperatorMessageId: last }];
+    const key = [...(operatorIds.get(root) ?? [])].sort().join("\n");
+    return givenUp.get(root) === key ? [] : [{ requestMessageId: root, operatorKey: key }];
   });
 }
 
@@ -190,7 +213,7 @@ async function write(
     const cites = operatorIds.filter((id) => !covered.has(id));
     const outcome = await ports.record.recordDraft({
       requestMessageId: material.requestMessageId,
-      latestOperatorMessageId,
+      operatorMessageIds: operatorIds,
       drafterPrefix: DRAFTER_PREFIX,
       proposal: null,
       scope: null,
@@ -274,7 +297,7 @@ async function write(
   }));
   const outcome = await ports.record.recordDraft({
     requestMessageId: material.requestMessageId,
-    latestOperatorMessageId,
+    operatorMessageIds: operatorIds,
     drafterPrefix: DRAFTER_PREFIX,
     proposal,
     scope:

@@ -124,7 +124,7 @@ test("a draft is written whole: the proposal, the drafted scope, the pasted plan
   const { w, typeDigest, record } = await pasted();
   const write: DraftRunWrite = {
     requestMessageId: "r1",
-    latestOperatorMessageId: "r1-plan",
+    operatorMessageIds: ["r1", "r1-plan"],
     drafterPrefix: "rondo/drafter/",
     proposal: proposal("draft-1", ["r1", "r1-plan"]),
     scope: drafterScope(typeDigest, [record], onPlan),
@@ -147,13 +147,13 @@ test("a stale run writes nothing: the thread gained an operator message after th
   await w.say("r1-more", "Also the other test.", "r1", 3_000);
   const outcome = await w.record.recordDraft({
     requestMessageId: "r1",
-    latestOperatorMessageId: "r1-plan",
+    operatorMessageIds: ["r1", "r1-plan"],
     drafterPrefix: "rondo/drafter/",
     proposal: proposal("draft-1", ["r1", "r1-plan"]),
     scope: null,
     messages: [drafterMessage("drafter-1", [{ form: "proposal", proposalId: "draft-1" }])],
   });
-  expect(outcome).toEqual({ kind: "stale", latestOperatorMessageId: "r1-more" });
+  expect(outcome).toEqual({ kind: "stale" });
   expect((await w.record.readProposal("draft-1")).kind).not.toBe("read");
   expect(await w.record.draftedMessageIds("rondo/drafter/")).toEqual(new Set());
 });
@@ -162,7 +162,7 @@ test("a refusal anywhere leaves no part of the draft behind", async () => {
   const { w, typeDigest, record } = await pasted();
   const outcome = await w.record.recordDraft({
     requestMessageId: "r1",
-    latestOperatorMessageId: "r1-plan",
+    operatorMessageIds: ["r1", "r1-plan"],
     drafterPrefix: "rondo/drafter/",
     proposal: proposal("draft-1", ["r1", "r1-plan"]),
     scope: drafterScope(typeDigest, [record], onPlan),
@@ -218,7 +218,7 @@ test("an unavailable run's message covers the operator messages it cites", async
   const { w } = await pasted();
   const outcome = await w.record.recordDraft({
     requestMessageId: "r1",
-    latestOperatorMessageId: "r1-plan",
+    operatorMessageIds: ["r1", "r1-plan"],
     drafterPrefix: "rondo/drafter/",
     proposal: null,
     scope: null,
@@ -248,7 +248,7 @@ test("a second host's run over a thread already drafted writes nothing (rule 3.2
   const { w } = await pasted();
   const once = (id: string): DraftRunWrite => ({
     requestMessageId: "r1",
-    latestOperatorMessageId: "r1-plan",
+    operatorMessageIds: ["r1", "r1-plan"],
     drafterPrefix: "rondo/drafter/",
     proposal: proposal(id, ["r1", "r1-plan"]),
     scope: null,
@@ -269,4 +269,34 @@ test("a damaged row covers nothing and does not stop the coverage read", async (
     )
     .run();
   expect(await w.record.draftedMessageIds("rondo/drafter/")).toEqual(new Set());
+});
+
+test("a reply is new to a run even when its clock is older than the message the run read last (rule 7.2)", async () => {
+  const { w } = await pasted();
+  // Written after the run's document, under a clock that stepped back.
+  await w.say("r1-late", "One more thing.", "r1", 500);
+  const outcome = await w.record.recordDraft({
+    requestMessageId: "r1",
+    operatorMessageIds: ["r1", "r1-plan"],
+    drafterPrefix: "rondo/drafter/",
+    proposal: proposal("draft-1", ["r1", "r1-plan"]),
+    scope: null,
+    messages: [],
+  });
+  expect(outcome).toEqual({ kind: "stale" });
+});
+
+test("one host holds a thread's run at a time, until it gives it back or its lease lapses (rule 3.3)", async () => {
+  const { w } = await pasted();
+  expect(await w.record.claimDraft("r1", "host-a", 1_000, 2_000)).toBe(true);
+  expect(await w.record.claimDraft("r1", "host-b", 1_500, 2_500)).toBe(false);
+  // Another thread is its own lease.
+  expect(await w.record.claimDraft("r9", "host-b", 1_500, 2_500)).toBe(true);
+  // A release by someone else leaves the lease with its holder.
+  await w.record.releaseDraft("r1", "host-b");
+  expect(await w.record.claimDraft("r1", "host-b", 1_500, 2_500)).toBe(false);
+  await w.record.releaseDraft("r1", "host-a");
+  expect(await w.record.claimDraft("r1", "host-b", 1_600, 2_600)).toBe(true);
+  // A holder that died is outlived by its lease's end.
+  expect(await w.record.claimDraft("r1", "host-a", 2_600, 3_600)).toBe(true);
 });
