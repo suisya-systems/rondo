@@ -115,6 +115,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0075 | A fresh store's first plan is the last thing setup does: setup hands the plan it composed to the store and not to the person, the host reads no path and composes nothing, and naming a repository stays installation | accepted |
 | D-0076 | Who the page is written for: the person who asked for the work and judges it, who knows their own repository and not rondo; rondo's own words, identifiers and failures never reach them as themselves, and what they cannot use is not shown | accepted |
 | D-0077 | The organisation drafts the revise instruction: the model drafter runs once a model reading with findings lands, its draft quotes every finding because rondo renders the quotes from the reading and only the drafter's words are the model's, and an unavailable draft leaves the person an empty box and a sentence, never a deterministic fallback | accepted |
+| D-0078 | What a lap knows of the issue it is sent to fix: rondo reads the issue outside the lap when the person's message names it, records what it read in the request thread, and carries it into the prompt quoted, so the lap stays closed to the forge and the person never has to copy an issue into a request | accepted |
 
 ---
 
@@ -12778,6 +12779,12 @@ the same, and only the thing that authorises its admission differs.
    > field: the plan's bytes and rule 4.2's "only two fields may differ" are unchanged. The rule above
    > is unedited.
 
+   > **Annotation (2026-09-20, from D-0078).** Added after this entry was accepted, and additive, by the
+   > answer of rondo's human gate on rondo#248. For a request whose thread holds `forge` messages, the
+   > prompt of a drafted plan is the drafter's text **followed by a section rondo renders from those
+   > rows**, quoting each issue read byte for byte (`D-0078` section 3.4). The drafter does not write
+   > that section, and rule 4.2's "only two fields may differ" is unchanged. The rule above is unedited.
+
 5. **`D-0022` rule 4, restated for a model draft: re-readable, and no longer re-derivable.** The
    row keeps its snapshot verbatim, as now. For a deterministic draft, running `propose` over those
    bytes gives the same proposal. **For a model draft it does not**, and rule 4's "re-derivable"
@@ -15790,6 +15797,12 @@ number.
 2. **It does not read the target repository**, CI, GitHub or any sibling checkout (`D-0063` rule 3.3).
    So a question the repository would settle may be asked anyway (`D-0064` P2's test names the
    repository); that is counted under "What this gives up".
+
+   > **Annotation (2026-09-20, from D-0078).** Added after this entry was accepted, and additive, by the
+   > answer of rondo's human gate on rondo#248. **Unchanged**: the drafter still reads no GitHub.
+   > Since `D-0078`, the thread it reads may hold `forge` messages, which are issues rondo read outside
+   > any lap and recorded in its store (`D-0078` sections 2 and 3). Nothing above is edited.
+
 3. **The document is the proposal row's snapshot, stored verbatim** (`D-0022` rule 4), so what the model
    was given is re-readable from the row. No separate delivered digest is added (`D-0063` rule 7).
 
@@ -15804,6 +15817,12 @@ number.
    message no such row covers has not been drafted. Every finished run writes one of the two (rule
    7.3), including a run that drafts nothing, so no message stays eligible after a run over it. So a message written by the CLI while the host runs is drafted too, and a host restart
    loses nothing. With no host running, nothing is drafted and the thread waits.
+
+   > **Annotation (2026-09-20, from D-0078).** Added after this entry was accepted, and additive, by the
+   > answer of rondo's human gate on rondo#248. An operator message that names an issue is not due
+   > for drafting until every issue it names has its `forge` message, read or failed (`D-0078` section
+   > 3.3). Nothing above is edited.
+
 3. **At most one run per thread at a time, and a stale run writes nothing.** A run whose thread gained
    an operator message after its document was assembled is discarded by the layer's check (rule 5.2)
    and run once more over the new thread.
@@ -17382,6 +17401,12 @@ running page on the same date. Line numbers drift; re-measure the claim, not the
 - **Not rondo#248.** That issue names leaks, and its one open item (a lap cannot read the issue it is
   sent to fix) is about a lap's sandbox, not about the page. This entry is the rule those leaks were
   instances of; it does not close that item.
+
+  > **Annotation (2026-09-20, from D-0078).** Added after this entry was accepted, and additive, by the
+  > answer of rondo's human gate on rondo#248. **The item is answered by `D-0078`**: rondo reads a
+  > named issue outside the lap and quotes it into the prompt, and the lap's fence is unchanged.
+  > Nothing above is edited.
+
 - **Not rondo#257.** That issue decides **which language the composing happens in**, and whether the
   catalogues stop being a base and an override. This entry decides **who the composing is addressed
   to**. They meet at rule 2.2: this entry fixes the concept, rondo#257's answer governs how its words
@@ -17792,3 +17817,283 @@ Each dated and additive, and added with this entry's acceptance:
 - **A draft read as a scope drafter's row**, or the reverse, which would mean section 1.2's separate
   name is not held where rows are read.
 - Any measurement in "What was measured" failing to reproduce at rondo `8f73373`.
+
+## D-0078 — What a lap knows of the issue it is sent to fix: rondo reads the issue outside the lap when the person's message names it, records what it read in the request thread, and carries it into the prompt quoted, so the lap stays closed to the forge and the person never has to copy an issue into a request
+
+**Status:** accepted (2026-09-20, rondo's human gate, on rondo#248). Four points were put to the gate
+and it chose the recommended option on each; the answers are recorded in section "What was put to the
+human gate, and its answer". Refs `D-0009`, `D-0010`, `D-0022`, `D-0027`, `D-0050`, `D-0063`,
+`D-0064`, `D-0068`, `D-0071`, `D-0075`, `D-0076`, `D-0077`, rondo#237, rondo#248.
+
+**This entry decides and does not build.** Nothing in `src/` or `page/` changes with it. The read, its
+row, the thread's lines, the scope screen's line and the quote in the prompt are the building
+change's. The annotations it adds are listed in "Annotations this entry adds".
+
+**Numbering.** `D-0078` is the next number after `D-0077` on `main` at `207c8be`.
+
+**Why an entry is needed at all.** rondo#248's fourth item, carried from lap 10
+(`docs/operations/lap-10-dogfood.md` N-43): lap 10's worker ran `gh issue view 237`, the sandbox
+boundary refused it (`api.github.com` denied), and it worked from the request body alone. The body had
+been written with care for the runbook, so the lap succeeded and the gap cost nothing. But the
+arrangement it rests on was never decided: **the request body is the lap's only way to know what the
+issue says, so it has to be complete.** Nothing on the page says so, and nobody chose it. `D-0076`'s
+boundaries name the item as "about a lap's sandbox, not about the page" and leave it open; this entry
+is where it is settled.
+
+**The axis it is judged on** is `D-0075`'s completion definition (the person writes the request;
+between request and pull request they only approve and answer disputes; they never open a terminal:
+K1 to K4) and `D-0076` rule 1.3.1: a screen may never require the person to type, paste or copy
+anything but their own words. **Under the present arrangement the burden sits with the person.** A
+person whose work is already written down in an issue must either restate it or copy it into the
+request, and a request that says only "fix #237" reaches a worker that cannot read #237. The first
+fails rule 1.3.1; the second is the thinner request N-43 warns about, and it fails silently.
+
+### What was measured, and how
+
+At rondo `207c8be` on **2026-09-20**, by reading, and at continuo as noted. Line numbers drift;
+re-measure the claim, not the number.
+
+- **What refused the read.** The lap's worker runs under continuo's worker fence. In continuo's
+  `src/fencing/roles.json`, the `worker` role **denies `WebFetch` and `Bash(curl *)`**, its `sandbox`
+  block declares **filesystem rules only and no network rule**, and the global
+  `forbidden_allow_exact` list refuses any render that allows `Bash(gh *)` or `Bash(gh:*)`. So a
+  worker has no tool that reaches a forge: the denials close the tools, and the sandbox's network
+  default closes the process. **Measured on the local continuo checkout at `38c667b`**, which is not
+  rondo's pin (`continuo.pin.json`, `fcf86eb`); the pinned revision was not available to read here, so
+  "the fence at the pin says the same" is a re-measurement this entry asks for, not a claim.
+- **Where rondo already reaches the forge.** Only `src/access/forge.ts` may spawn a process, and it
+  opens a pull request with `gh` under **the operator's own `gh` configuration**, "which rondo neither
+  stores nor reads" (the module's header), only after a person's press (the module's note on
+  `D-0010`). No module reads an issue: nothing under `src/` spells `gh issue` or an `issues/` address.
+- **Where the forge repository is known.** `publish` works it out at publish time as `HOST/OWNER/NAME`
+  from what it is given and the workspace's remote (`src/access/cli.ts:6414`). No row a request
+  thread can read holds it before a lap exists.
+- **What a lap is told.** A scoped start on the page has **no prompt field**: "the request message's
+  body is what the work is asked to do, read in the port out of the store"
+  (`src/access/web-app.ts:1889`). A drafted split's plan carries a `prompt` the drafter composed, with
+  `message:` bases into the thread (`D-0063` rule 4.3). Either way the lap's prompt is built from
+  thread messages and nothing else.
+- **Who writes a thread message.** `ThreadAuthorKind` is `"operator" | "drafter"`
+  (`src/store/records.ts:557`). The model drafter's document holds every thread message's body
+  (`D-0071` rule 2.1.1), and it reads no GitHub (`D-0071` rule 2.2, `D-0063` rule 3.3).
+- **What lap 10 lost by it**: nothing, by N-43's own account, because the runbook had written the
+  request body to stand alone (`docs/operations/lap-10-runbook.md` section 4, step 1).
+
+### 1. The line
+
+1. **The request is still what the person writes, and it no longer has to be complete.** A person may
+   name an issue in their own words ("fix #237") and rondo supplies what the issue says. They are never
+   asked to paste it, and a request that restates the issue is not wrong, only longer.
+2. **The lap stays closed to the forge.** Its fence is unchanged: no network rule, no credential, no
+   `gh`, no `WebFetch` (measured above). **rondo reads the issue, outside the lap, before any lap
+   exists**, and the lap gets what rondo read as text in its prompt. This is the gate's point 1.
+3. **The read is a consequence of the person's own send, not an act rondo takes by itself.** It happens
+   because the person pressed **Send** on a message that names an issue, it reads and never writes, and
+   it uses the operator's own `gh` as `forge.ts` does for publishing. So `D-0010` (rondo holds no push
+   credentials; publishing is the person's) is unchanged: no credential is stored, and the forge sees a
+   read.
+
+### 2. What is read
+
+1. **Which references.** An issue named in an **operator** message of a request thread, in the forms a
+   person writes: `#N`, `OWNER/NAME#N`, or the issue's address on the forge. `#N` means the forge
+   repository this store's pull requests are opened in (`D-0075` rule 1.1's one repository per store);
+   an address or `OWNER/NAME#N` for another repository is read if the operator's `gh` can read it, as
+   the person could. A pull request named the same way is read the same way: its conversation, never
+   its diff. A drafter's message is never a trigger.
+2. **What of each** (the gate's point 2): **the title, the body, its state, and every comment with its
+   author and time**, as the forge returns them at the moment of the read. **Links inside them are not
+   followed**, including links to other issues; an issue a person wants read is one they name.
+3. **Bounded.** A bound on how many references one message reads and on how many bytes one read may
+   hold, set and recorded by the building change. **Over the bound is not read, never truncated**: a
+   cut issue reads as a whole one to the worker, which is the failure this entry exists to prevent.
+4. **When.** Once, when the message is written, in the resident host (`D-0068`), which finds unread
+   references by rows as it finds undrafted messages (`D-0071` rule 3.2). With no host running, nothing
+   is read and the thread says so (section 4.3). **An issue edited after its read is not re-read by
+   itself**: naming it again in a later message reads it again, as of that message. A `revise`
+   successor (`D-0027`) carries its predecessor's prompt and reads nothing.
+
+### 3. Where it is recorded, and how it reaches the lap
+
+1. **One thread message per reference, of a new author kind `forge`**, `in_reply_to` the operator
+   message that named it. Its body is what was read, framed by rondo (the reference and the time of the
+   read, then title, state, body and comments in the forge's order), **with the forge's text stored byte
+   for byte** (`D-0022` rule 4). A read that failed writes the same message holding the reason and no
+   text (section 4). Adding a member to a closed union is additive; whether the store takes it without
+   a migration is the building change's to measure.
+2. **Why a thread message.** The thread is already the one source every consumer of a request reads:
+   the drafter's document holds every message (`D-0071` rule 2.1.1), a scoped start reads the request
+   body from it, and `D-0077`'s revise drafter is handed the thread. A `forge` message reaches all three
+   without widening what any of them may read, so `D-0063` rule 3.3 and `D-0071` rule 2.2 stand as
+   written: the drafter still reads no GitHub; it reads rondo's store, which now holds what rondo read.
+3. **An operator message that names an issue is not due for drafting until every reference it names
+   has its `forge` message**, read or failed. So a draft is never composed while a read is still to
+   come, and a failed read is part of what the drafter sees.
+4. **Into the lap: quoted by rondo, never retold by a model** (the gate's point 3). The prompt a lap is
+   admitted with, for a request whose thread holds `forge` messages, ends with a section rondo renders
+   from those rows: each issue read, byte for byte, under a line naming it. The model drafter's
+   composed text (`D-0063` rule 4.2) and a scoped start's request body stay as they are and come first.
+   This is `D-0077` section 3.4's construction applied to the prompt: the words that are the model's are
+   the only words rondo did not take from a row.
+5. **Composed and carried (`D-0009`).** The quote is carried: the issue's words, not rondo's and not the
+   drafter's. The line naming each issue is rondo's framing, recorded as such.
+6. **What the lap is told about what it was not given.** Where a reference could not be read, the
+   quoted section says so in one line (that the issue was named in the request and could not be read,
+   so the worker works from the request), so a worker is not left to try and fail at the fence as lap
+   10's did.
+
+### 4. What the person sees
+
+Every sentence below is written under `D-0076`: in the person's terms, with rondo's reasons only in its
+closed fold (rule 4.5), and the issue shown as the person's own identifier, as a link (rule 3.4).
+
+1. **A read that worked**: under the person's message, one line saying rondo read the issue (its number
+   and title, linked, and how many comments), with what was read in a fold for a person who wants to
+   check it. Nothing to press.
+2. **A read that failed**: under the person's message, in `D-0076` rule 4.1's order: that rondo could
+   not read the issue, so the worker will have only what the person wrote here; that nothing was spent;
+   and that if the issue says something the request does not, they can say it in another message. A
+   failure that only installation repairs (no `gh`, not signed in) says, as rule 4.3 has it, that rondo
+   on this machine cannot read issues yet. A failure in the person's world (the issue does not exist,
+   the forge refuses their access) is theirs and is said as itself (rule 4.4). Over the bound says the
+   issue was too long to hand over whole.
+3. **With no host running**, the line says the issue will be read when rondo is running here, as the
+   drafter's absence is said today.
+4. **On the scope screen, before the approval**: which issues the worker will be given and which it
+   will not, one line each. What the person approves depends on it, so it is on that screen (`D-0076`
+   rule 1.3.3), not only in the thread.
+5. **The drafter may ask back.** A request that is only a reference to an issue that could not be read
+   is `D-0064` P2's case (the request admits readings the material does not settle), and the drafter's
+   question is how it reaches the person. This entry adds no new question kind.
+
+### The options, and the clauses each meets
+
+| Option | K1 | K2 | K3 | `D-0076` rule 1.3.1 | Outcome |
+|---|---|---|---|---|---|
+| **A. The request body is the lap's only input, said on the page** ("the worker cannot open issues or links; say everything here") | met | met | met | **unmet**: a person whose work is in an issue restates or copies it | **Refused.** It makes the present arrangement honest instead of removing it; the burden stays with the person. **What it would have kept**: nothing to build but a sentence, and no new read |
+| **B. The lap reads the issue itself**: continuo's worker fence gains a network rule for the forge and a read credential | met | met | met | met | **Refused.** A credential inside the fence (continuo refuses a `gh` allow by design, and a `gh` token that reads can usually write); the read is not recorded where rondo can re-read it (`D-0022` rule 4), so what the worker read can differ from what anyone approved, and from lap to lap; and the fence is continuo's, so the change is a sibling's (`D-0050`: rondo claims nothing about the worker's sandbox) |
+| **C. rondo reads outside the lap, records it in the thread, quotes it into the prompt** | met | met | met after installation (a signed-in `gh`, which publishing already needs) | met | **Taken** (sections 1-4) |
+| **D. The drafter summarises the issue into the prompt** (C without the quote) | met | met | met after installation | met | **Refused** as the answer to point 3: a summary drops what the model did not think mattered, and the worker cannot tell. Kept as point 3's option (b) |
+
+### What this gives up
+
+- **A lap that sees the issue as it is now.** It sees the issue as it was when the person named it. An
+  issue edited after that is stale to the worker until someone names it again (section 2.4).
+- **Links.** A decision recorded in a linked issue, a design note, or a comment's link reaches the
+  worker only if the person names it.
+- **The fence as the only place trust is decided.** Comments on a public repository can be written by
+  anyone, and their words now reach the worker's prompt. The worker's fence is what limits what those
+  words can make it do, as it limits the request's words today, and the person sees what was read
+  before they approve (section 4.4). Counted under the gate's point 2.
+- **One more thing the host does at a person's send**: a read the person asked for only by naming an
+  issue. It writes nothing outward.
+
+### What was put to the human gate, and its answer
+
+The points are kept as put, each with options, what each gives up, and one recommendation (`D-0064`
+rule 4.1). The answer follows them.
+
+1. **The line: who reads the issue, if anyone.**
+   - **(a) rondo reads it outside the lap and quotes it into the prompt; the lap stays closed**
+     (recommended; option C). *Loses:* freshness (the issue as of the send), and the host gains a
+     read through the operator's `gh`.
+   - **(b) The lap reads it itself** (option B). *Loses:* a credential inside the fence, a read nobody
+     recorded or approved, and a change that is continuo's to make.
+   - **(c) Keep the request body as the only input, and say so on the page** (option A). *Loses:*
+     `D-0076` rule 1.3.1 for every person whose work is already written down in an issue, which is the
+     burden rondo#248 names.
+2. **What is read of each issue.**
+   - **(a) Title, body, state and every comment, with authors and times; no links followed**
+     (recommended). rondo#248 is the worked example: its body lists four items and **its comments say
+     three of them are done**. A worker given the body alone would redo them. *Loses:* comments by
+     anyone reach the prompt, and a long thread spends the byte bound.
+   - **(b) Title and body only.** *Loses:* exactly rondo#248's case: the state of the work lives in the
+     comments, and the body is stale.
+   - **(c) (a), plus the issues and pull requests the issue links to, one level.** *Loses:* the bound:
+     one issue can name twenty, and the person did not choose them.
+   - **(d) (a), with comments only from the repository's members.** *Loses:* a report from outside the
+     repository's members is often what an issue is for, and a filter by association is a judgement
+     the person cannot see being made.
+3. **How it reaches the worker.**
+   - **(a) rondo renders it into the prompt byte for byte, after the drafted or written request**
+     (recommended). *Loses:* a longer prompt, and a worker reading the same thing twice where the
+     person restated the issue.
+   - **(b) The drafter summarises it into the prompt it composes.** *Loses:* fidelity, invisibly: what
+     the model left out is what the worker never learns, which is N-43's failure moved one step.
+   - **(c) The issue is left in the thread for the drafter only, and the worker gets the drafter's
+     prompt as today.** *Loses:* a scoped start without a drafter (the request body as prompt) gets
+     nothing, so the result depends on which route started the lap.
+4. **What a read that failed does to the request.**
+   - **(a) It says so under the message and on the scope screen, and the request goes on from the
+     person's words; the drafter may ask back under P2** (recommended; section 4). *Loses:* a person who
+     does not read the line approves a lap that has only their words, which is today's case, now said.
+   - **(b) The request waits until the read succeeds or the person says to carry on.** *Loses:* K2: a
+     press that is neither an approval nor a dispute, for a failure the person often cannot fix from the
+     page.
+   - **(c) It says nothing to the person; only the worker is told, in its prompt.** *Loses:* `D-0076`
+     rule 5.1 the other way: the person decides what to approve without a fact that changes what the
+     worker can do.
+
+**The gate's answer (2026-09-20, on rondo#248):**
+
+1. **(a).** rondo reads the issue outside the lap, through the operator's own `gh`, and quotes it into
+   the prompt; the lap stays closed to the forge (section 1 as written).
+2. **(a).** Title, body, state and every comment with authors and times; no links followed (section
+   2.2 as written).
+3. **(a).** rondo renders what was read into the prompt byte for byte, after the drafted or written
+   request (section 3.4 as written).
+4. **(a).** A read that failed is said under the message and on the scope screen, and the request goes
+   on from the person's words, with the drafter free to ask back under P2 (section 4 as written).
+
+The first residual (how a bare `#N` is resolved to a forge repository before any lap exists) was left
+open by the same answer.
+
+### What this does not do
+
+- **It does not build** the read, the `forge` author kind, the host's scan, the thread's lines, the
+  scope screen's line or the quoted section of the prompt.
+- **It does not change the lap's fence**, continuo's worker role, or `D-0050`: rondo still claims
+  nothing about the worker's own sandbox.
+- **It does not let the drafter, the reviewer or the lap read GitHub.** `D-0063` rule 3.3 and `D-0071`
+  rule 2.2 are unchanged; rondo's store gains what rondo read.
+- **It does not write to the forge.** No comment, label or state change on the issue; the pull request
+  is still opened only by the person's press (`D-0010`).
+- **It does not make the forge repository a setup fact.** How rondo knows it before a lap exists is a
+  residual.
+
+### Residuals, with who decides
+
+| Residual | Why not here | Who decides |
+|---|---|---|
+| How rondo knows the forge repository for a bare `#N` before any lap exists | `publish` derives it at publish time from the workspace's remote (`cli.ts:6414`); setup names a local repository (`D-0075` rule 1.1) | the building change measures it; where it cannot be known, `#N` is a failed read that says so (section 4.2) |
+| The bound on references per message and bytes per read | A number with no measurement behind it yet | the building change, recorded in its pull request |
+| Whether continuo's worker fence at rondo's pin matches the one measured at `38c667b` | The pinned revision was not readable here | the building change re-measures it; a difference that opens the forge to the worker reopens point 1 |
+| Re-reading an issue that changed while a line was running | A second read mid-line changes what an approved lap was given | a later entry, if stale reads are observed to cost a lap |
+| A comment that tries to steer the worker | The fence is the limit today, and nothing reads the prompt for it | a later entry, if observed; the model reviewer reads the work the worker produced, not the prompt |
+
+### Annotations this entry adds
+
+Each dated and additive, and added with this entry's acceptance:
+
+- **`D-0076`'s boundaries**, first bullet ("Not rondo#248 ... it does not close that item"): the item is
+  answered by `D-0078`.
+- **`D-0071` rule 2.2** ("It does not read the target repository, CI, GitHub or any sibling
+  checkout"): unchanged; since `D-0078` the thread it reads may hold `forge` messages, which are
+  rondo's reads recorded in its store. **Rule 3.2**: an operator message naming an issue is due for
+  drafting once `D-0078` section 3.3 holds.
+- **`D-0063` rule 4.2**: the prompt of a drafted plan is the drafter's text followed by `D-0078`
+  section 3.4's quoted section, which rondo renders and the drafter does not write.
+
+### What would falsify it
+
+- **Laps that still fail for want of an issue's content** with the issue read and quoted: the worker
+  needed a link, a newer edit or something outside the issue. Point 2 (c) or re-reading is then due.
+- **Requests routinely thinned by failed reads**, so that the person meets section 4.2's line more
+  often than a quoted issue. The read's dependency on the operator's `gh` is then what moves.
+- **A lap steered by a quoted comment** into work the request did not ask for. The residual on steering
+  is then due, and point 2 (d) is reopened.
+- **Persons who keep pasting issues into requests** although rondo reads them: the line under the
+  message is not seen or not trusted, which is section 4.1 failing `D-0076`.
+- **continuo's worker fence at the pin allowing a forge read**, which would make section 1.2's "the
+  lap stays closed" untrue as measured.
+- Any measurement in "What was measured" failing to reproduce at rondo `207c8be`.
