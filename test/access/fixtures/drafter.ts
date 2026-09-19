@@ -1,0 +1,104 @@
+/**
+ * A plan an operator would paste into a request thread, and a store to paste
+ * it into, for the drafter's tests (D-0071 point 1 (a)).
+ */
+import { DatabaseSync } from "node:sqlite";
+
+import { agentTypeRecordOf } from "../../../src/access/scope.js";
+import { allocate } from "../../../src/refrain/allocator.js";
+import {
+  admittedPlan,
+  planPayload,
+  type RunPlan,
+  readRunPlan,
+  runPlan,
+} from "../../../src/refrain/plan.js";
+import type { JsonRecord } from "../../../src/store/records.js";
+import { advisoryRecord, iterationStore } from "../../../src/store/sqlite.js";
+
+export const AGENT_TYPE_INPUT = {
+  agentTypeId: "worker-basic",
+  vocabularyVersion: 1,
+  granted: ["command.run"],
+  askable: ["branch.push"],
+  loopPolicy: { maxReviewRounds: 2, noProgressWindow: 3, noProgressRepeat: 2 },
+  executorPolicy: { roleName: "worker", modelTier: "standard", reportingDuties: [] },
+};
+
+export const PLAN = {
+  db: "/srv/continuo.db",
+  workspaceRoot: "/srv/work",
+  baseBranch: "main",
+  prompt: "do the thing",
+  allowedBash: ["npm run:*"],
+  materialLanguage: null,
+  reviewCriterion: null,
+  repository: "/srv/repo",
+  artifactRoot: "/srv/artifacts",
+  stateRoot: "/srv/state",
+  interlockRoot: "/srv/interlock",
+  claudeOrgPath: "/srv/claude-org",
+  endpointRecipient: "external-notify",
+  endpointDestinationDir: "/srv/dropbox",
+  claudeCommand: ["/usr/bin/node", "/opt/claude/cli.js"],
+  endpointDb: null,
+  endpointModule: null,
+  node: null,
+  hookScript: null,
+  python: null,
+  pollIntervalMs: null,
+  turnTimeoutMs: 900_000,
+  gitTimeoutMs: 60_000,
+  identityReadbackTimeoutMs: 30_000,
+  gateOptions: ["approve", "revise"],
+  gateDeadlineAtMs: null,
+  pullRequestBaseBranch: null,
+  invocationCeilingMs: 1_800_000,
+  catalogLayers: [{ layer: "git_url", origin: "o", baseDir: "/srv/catalog", data: {} }],
+  projectName: "rondo",
+  agentTypeInput: AGENT_TYPE_INPUT,
+  parties: { issuer: "rondo-host", grantee: "unset" },
+  intendedAction: { capabilities: ["command.run"] },
+} as unknown as RunPlan;
+
+/** A plan document as an operator would paste it: validated, allocated, serialised. */
+export function planDocument(): JsonRecord {
+  const validated = runPlan(PLAN);
+  if (validated.kind !== "planned") throw new Error(validated.reason);
+  const allocation = allocate("drafter-fixture", PLAN.workspaceRoot);
+  if (allocation.kind !== "allocated") throw new Error(allocation.reason);
+  const admitted = admittedPlan(validated.plan, allocation.allocation);
+  if (admitted.kind !== "planned") throw new Error(admitted.reason);
+  return planPayload(admitted.plan);
+}
+
+export function agentTypeDigestOf(document: JsonRecord): string {
+  const planned = readRunPlan(document);
+  if (planned.kind !== "planned") throw new Error(planned.reason);
+  const recorded = agentTypeRecordOf(planned.plan, document);
+  if ("refusal" in recorded) throw new Error(recorded.refusal);
+  return recorded.record.agentTypeDigest;
+}
+
+export async function world() {
+  const connection = new DatabaseSync(":memory:");
+  const store = iterationStore(connection, { maxOccupying: 4, maxLive: 6 });
+  const record = advisoryRecord(connection);
+  // A drafter host has run on this store before any message below: what a
+  // test writes is the drafter's to draft, not the past a host leaves alone.
+  await record.messagesBeforeDrafter(0);
+  const say = async (messageId: string, body: string, inReplyTo: string | null, atMs: number) => {
+    const outcome = await record.recordThreadMessage({
+      messageId,
+      body,
+      authorKind: "operator",
+      authorId: "ada",
+      inReplyTo,
+      atMs,
+      bases: [],
+      asks: false,
+    });
+    if (outcome.kind !== "recorded") throw new Error(JSON.stringify(outcome));
+  };
+  return { connection, store, record, say };
+}

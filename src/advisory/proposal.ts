@@ -71,7 +71,13 @@ export type Basis =
    * locates what was cited. Added for D-0066 rule 4.4's stop, which names the
    * scope that refused (rondo#197).
    */
-  | { readonly form: "scope"; readonly scopeId: string };
+  | { readonly form: "scope"; readonly scopeId: string }
+  /**
+   * A proposal row, by its id: immutable, like a scope. Added for D-0071 rule
+   * 7.3, where a drafter's summary and question rest on the proposal row its
+   * run wrote.
+   */
+  | { readonly form: "proposal"; readonly proposalId: string };
 
 /** The seven forms of {@link Basis}, written once so a reader can check the union is closed. */
 export const BASIS_FORMS = Object.freeze([
@@ -82,6 +88,7 @@ export const BASIS_FORMS = Object.freeze([
   "repository",
   "message",
   "scope",
+  "proposal",
 ] as const satisfies readonly Basis["form"][]);
 
 /**
@@ -1143,6 +1150,8 @@ function readBasis(at: unknown, what: string): Basis {
       return { form, messageId: text(row, "messageId", `${what}'s basis`) };
     case "scope":
       return { form, scopeId: text(row, "scopeId", `${what}'s basis`) };
+    case "proposal":
+      return { form, proposalId: text(row, "proposalId", `${what}'s basis`) };
     default:
       throw new PayloadDefect(
         `${what}'s basis is of form '${form}', which is not one of ${BASIS_FORMS.join(", ")}. ` +
@@ -1304,11 +1313,10 @@ export function readSplitPayload(document: JsonRecord): SplitPayloadReading {
       }
       return hole;
     });
-    if (plans.length === 0 && holes.length === 0) {
-      throw new PayloadDefect(
-        "the split proposes no plan and lists no hole, so it says nothing (D-0063 rule 4.4)",
-      );
-    }
+    // **Neither is a payload** (D-0071 rule 7.3): a drafter run that drafts
+    // nothing still writes its split row, so that the messages its snapshot
+    // held count as drafted. D-0063 rule 4.4's "says nothing" was a refusal
+    // for a split nobody wrote on purpose; this one is the record of a run.
     return { kind: "split", payload: { plans, holes } };
   } catch (error) {
     if (error instanceof PayloadDefect) {

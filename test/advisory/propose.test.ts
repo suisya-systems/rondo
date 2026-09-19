@@ -579,9 +579,11 @@ test("a split reads back as plans against templates, or as holes, and nothing el
   // Rule 4.4: no template, so no plan, and the holes are the whole answer.
   const holes = { plans: [], holes: ["no persisted plan names this repository"] };
   expect(readSplitPayload(holes)).toEqual({ kind: "split", payload: holes });
+  // D-0071 rule 7.3: a drafter run that drafts nothing still writes its row.
+  const neither = { plans: [], holes: [] };
+  expect(readSplitPayload(neither)).toEqual({ kind: "split", payload: neither });
 
   for (const [why, document] of [
-    ["says nothing", { plans: [], holes: [] }],
     ["proposes an identifier (rule 4.5)", { plans: [{ ...plan, run_id: "r-1" }], holes: [] }],
     ["names no digest", { plans: [{ ...plan, agent_type_digest: "tier-standard" }], holes: [] }],
     [

@@ -611,6 +611,16 @@ export function newIterationId(): string {
   return `lap-${randomUUID()}`;
 }
 
+/**
+ * A row id for what the model drafter writes (D-0071 rule 7.3): its proposal,
+ * its scope and its thread messages, each with a prefix a reader can tell
+ * apart. Here for {@link newMessageId}'s reason: this module is the one
+ * granted `randomUUID`.
+ */
+export function newDraftId(kind: "draft" | "drafted-scope" | "drafter" | "drafter-host"): string {
+  return `${kind}-${randomUUID()}`;
+}
+
 /** The shape {@link newScopeId} mints, and the only shape `POST /scope` accepts. */
 const PAGE_SCOPE_ID = /^scope-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 /** The shape {@link newIterationId} mints, and the only shape `POST /start` accepts. */
