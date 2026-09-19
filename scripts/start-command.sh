@@ -228,6 +228,7 @@ unit_tmp="$unit_path.tmp.$$"
   printf 'PATH=%s\n' "$(sh_quote "$path_value")"
   printf '%s\n' 'export PATH'
   printf 'NODE=%s\n' "$(sh_quote "$node_bin")"
+  printf 'CLI=%s\n' "$(sh_quote "$checkout/bin/rondo.mjs")"
   printf 'URL=%s\n' "$(sh_quote "$url")"
   printf 'PORT=%s\n' "$port"
   printf 'UNIT=%s\n' "$(sh_quote "$unit_name")"
@@ -242,6 +243,15 @@ unit_tmp="$unit_path.tmp.$$"
   printf 'opened() {\n  printf %s "$URL"\n}\n' "$(sh_quote "$opened_line")"
   printf '%s\n' '# --- end sentences'
   cat <<'PROGRAM'
+
+# **A word with something after it is the other reader's** (D-0080 rules 1.1
+# and 1.2). The person types one word and nothing else; whoever installs and
+# repairs rondo keeps the terminal and every flag on it, and once this file is
+# what their shell finds, `rondo web --repo OWNER/NAME` has to be that command
+# and not this one quietly starting a service instead.
+if [ "$#" -gt 0 ]; then
+  exec "$NODE" "$CLI" "$@"
+fi
 
 # What the word does: make sure the host is running, wait until the page
 # answers, and open it (D-0080 rule 2.6). The host is a resident service, so
@@ -263,12 +273,19 @@ fi
 # stranger's page answers within a tenth of a second, and the word said rondo
 # was open. So the process holding the port is compared with the service's own,
 # and a page belonging to somebody else is a rondo that did not come up.
+# **A socket with no owner in it is somebody else's, not an answer to skip.**
+# `ss` prints the owning process only for sockets this user may see, so a
+# listener with no `pid=` belongs to another user -- which is precisely the
+# case this is here for. Not being able to ask at all (no `ss` on this machine)
+# is the different thing, and only that one leaves the answer to the page.
 answered_by_rondo() {
-  listener=$(ss -ltnpH "sport = :$PORT" 2>/dev/null | sed -n 's/.*pid=\([0-9]\{1,\}\).*/\1/p' | head -n 1)
-  # Where the question cannot be asked -- no `ss` on this machine -- the answer
-  # above is what there is, rather than a start that can never succeed.
-  if [ -z "$listener" ]; then
+  sockets=$(ss -ltnpH "sport = :$PORT" 2>/dev/null) || return 0
+  if [ -z "$sockets" ]; then
     return 0
+  fi
+  listener=$(printf '%s\n' "$sockets" | sed -n 's/.*pid=\([0-9]\{1,\}\).*/\1/p' | head -n 1)
+  if [ -z "$listener" ]; then
+    return 1
   fi
   [ "$listener" = "$(systemctl --user show -p MainPID --value "$UNIT" 2>/dev/null)" ]
 }

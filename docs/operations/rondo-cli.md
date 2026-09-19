@@ -106,7 +106,10 @@ whoever installed it is the one who can look. **A host fact that moved is repair
 again** (D-0080 rule 2.4), not by editing the word: nothing checks those facts at a start, and
 starting runs no setup.
 
-`rondo web` in a terminal stays exactly what it was, for whoever installs and repairs rondo.
+**Anything typed after the word is the terminal's command, not the word's.** `rondo web --repo
+OWNER/NAME`, `rondo inbox`, `rondo --help` are what they always were, run against the checkout
+setup built: the word hands them straight to it and only a bare `rondo` starts the service. So the
+second reader -- whoever installs and repairs rondo -- keeps the terminal and every flag on it.
 
 If you would rather do it by hand, or want to know what that script is doing, read on.
 

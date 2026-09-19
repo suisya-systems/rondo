@@ -223,3 +223,16 @@ posix("what systemd would expand is written as itself", () => {
   // would write the escape into the value.
   expect(unit).toContain('Environment="PATH=/home/p/100%% bin:/usr/bin"');
 });
+
+posix("a word with something after it is the terminal's command, not this one", () => {
+  // Once the word is what the shell finds, `rondo web --repo OWNER/NAME` has
+  // to be the command whoever installs rondo means by it (D-0080 rules 1.1
+  // and 1.2). `--node /bin/echo` stands in for the interpreter, so what the
+  // program would have run is what it prints -- and nothing here asks systemd
+  // for anything.
+  const { commandPath } = write(["--node", "/bin/echo"]);
+
+  const forwarded = execFileSync(commandPath, ["web", "--repo", "a/b"], { encoding: "utf8" });
+
+  expect(forwarded).toBe("/home/p/rondo host/bin/rondo.mjs web --repo a/b\n");
+});
