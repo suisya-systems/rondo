@@ -1710,7 +1710,7 @@ const JA: Partial<Chrome> = Object.freeze({
   approveDespitePlain: "モデルレビューが挙げた点に答えないまま、この作業をこのまま受け入れます。",
   undeterminedFold: (count) => `rondo が決められなかった項目 ${String(count)} 件`,
   liveShort: (seconds) => `ライブ · ${String(seconds)}秒ごとに更新`,
-  stillShort: "読んでいるあいだは動きません",
+  stillShort: "読んでいるあいだは更新しません",
   age: (ago) => {
     const unit = ago.slice(-1);
     const units: Record<string, string> = { s: "秒", m: "分", h: "時間", d: "日" };
@@ -2121,9 +2121,8 @@ const JA: Partial<Chrome> = Object.freeze({
   publishModelHeading: "モデルが読んだこと",
   publishModelNote: "判断の材料です。承認ではなく、上の内容がこれで決まったわけでもありません。",
   publishNote:
-    "rondo があなたとして push し、プルリクエストを作り、run を閉じます。マージはしません。" +
-    "それはあなたの手に残ります。この画面を描いてから内容が変わっていた場合、押しても止まり、" +
-    "その旨が出ます。",
+    "ボタンを押すと、rondo があなたの名前で push し、プルリクエストを作り、run を閉じます。" +
+    "マージはしません。画面を開いたあとに何か変わっていれば、実行せず、理由を表示します。",
   publishPlain: "このブランチを push し、プルリクエストを作り、run を閉じます。",
   publishBack: "公開の画面に戻る",
   publishNotOffered:
