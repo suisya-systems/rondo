@@ -376,6 +376,15 @@ const ALLOWED_EXTERNALS_BY_MODULE: Readonly<
   "src/access/web.tsx": {
     "hono/utils/accept": ["parseAccept"],
   },
+  // The pull request body drawn as markdown on the publish screen (rondo#248):
+  // the first dependency that transforms content, so it is one module and three
+  // named bindings, and that module is where what passes is decided -- raw HTML
+  // none, no link that runs, no image fetched. web.tsx takes the HTML from it
+  // and reaches micromark no other way.
+  "src/access/markdown.ts": {
+    micromark: ["micromark"],
+    "micromark-extension-gfm": ["gfm", "gfmHtml"],
+  },
   // The HTTP access point, on Hono (D-0059 rule 2), keyed by module for every
   // reason the spawn is: `src/access/` holds the whole operator surface, and a
   // layer-wide grant would put a listening socket in reach of the module that

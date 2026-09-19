@@ -4240,6 +4240,140 @@ test("the way onto the publish screen is drawn on approved rows only, and never 
   expect(closedOther).not.toContain("?publish=");
 });
 
+test("the publish screen draws the body as markdown with the request as a fold, and the exact body is one press away (#248)", async () => {
+  // As `requestBlock` writes it: the request quotes a code block and a stray
+  // `</details>` of its own, and the fence is sized past its backticks.
+  const request = "Add a retry budget.\n```ts\nretry(3)\n```\n</details>\nDo not push.";
+  const body = [
+    "## What changed",
+    "",
+    "- `abc1234` a retry budget",
+    "",
+    "## How this got here",
+    "",
+    "- rondo walked run `run-0001`.",
+    "",
+    "<details>",
+    "<summary>The request this lap was given (written for the agent, not a description of the change)</summary>",
+    "",
+    "````",
+    request,
+    "````",
+    "",
+    "</details>",
+    "",
+    "This pull request was opened by `rondo publish`, which an operator ran. Merging it is not.",
+  ].join("\n");
+  const world = fresh();
+  await approvedLap(world);
+  const html = await operatorPage(
+    portsOver(world, "ada", [], null, null, async () => ({ ...DRY_RUN, body })),
+    "t",
+    { kind: "publish", iterationId: "i-0001" },
+  );
+  const screen = html.slice(html.indexOf('id="publish"'));
+  const drawn = screen.slice(
+    screen.indexOf('id="publish-body-drawn"'),
+    screen.indexOf('id="publish-body-exact"'),
+  );
+  const exact = screen.slice(screen.indexOf('id="publish-body-exact"'));
+
+  // Drawn: markdown as a forge draws it, and the wrapper is the page's own
+  // fold, labelled with the summary's words, with none of its markup showing.
+  expect(drawn).toContain("<h2>What changed</h2>");
+  expect(drawn).toContain("<li><code>abc1234</code> a retry budget</li>");
+  expect(drawn).toContain('<details id="publish-body-request"');
+  expect(drawn).toContain(
+    "The request this lap was given (written for the agent, not a description of the change)",
+  );
+  expect(drawn).not.toContain("&lt;summary&gt;");
+  expect(drawn).not.toContain("&lt;details&gt;");
+  expect(drawn).not.toContain("````");
+  // The request inside the fold is a code block, whole, its own `</details>`
+  // included, and the text after the fold is still drawn.
+  expect(drawn).toContain("retry(3)\n```\n&lt;/details&gt;\nDo not push.");
+  expect(drawn).toContain("which an operator ran. Merging it is not.");
+  // Raw: a named control beside Preview, and the body exactly as it is sent.
+  expect(screen).toContain('<legend class="sr-only">Show the body as</legend>');
+  expect(screen).toMatch(/id="publish-body-preview" class="sr-only" checked=""\/>Preview<\/label>/);
+  expect(screen).toContain('id="publish-body-raw" class="sr-only"/>Raw</label>');
+  expect(exact).toContain(
+    body.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;"),
+  );
+
+  // A body without the fold -- one too large to quote the request -- is still
+  // drawn as markdown, and its source is still one press away.
+  const plain = await operatorPage(
+    portsOver(world, "ada", [], null, null, async () => DRY_RUN),
+    "t",
+    { kind: "publish", iterationId: "i-0001" },
+  );
+  expect(plain).toContain("<h2>What changed</h2>");
+  expect(plain).toContain('id="publish-body-raw"');
+  expect(plain).not.toContain('id="publish-body-request"');
+
+  // A wrapper that does not close as `requestBlock` closes one is not guessed
+  // at: no fold is drawn, and its markup is escaped as the text it is.
+  const broken = await operatorPage(
+    portsOver(world, "ada", [], null, null, async () => ({
+      ...DRY_RUN,
+      body: body.replace("````\n\n</details>\n", "````\n\n"),
+    })),
+    "t",
+    { kind: "publish", iterationId: "i-0001" },
+  );
+  expect(broken).not.toContain('id="publish-body-request"');
+  expect(broken).toContain("&lt;summary&gt;The request this lap was given");
+});
+
+test("the drawn body passes no HTML, runs no link, and fetches no image (#248)", async () => {
+  const world = fresh();
+  await approvedLap(world);
+  const html = await operatorPage(
+    portsOver(world, "ada", [], null, null, async () => ({
+      ...DRY_RUN,
+      body: [
+        "- `abc1234` <script>alert(1)</script> <img src=x onerror=alert(2)>",
+        "- [run me](javascript:alert(3)) and [read me](https://example.com/doc)",
+        "- ![a pixel](https://tracker.example/p.png) and [![a badge](https://t.example/b.svg)](https://t.example/)",
+        "- a note[^1]",
+        "",
+        "[^1]: the footnote",
+      ].join("\n"),
+    })),
+    "t",
+    { kind: "publish", iterationId: "i-0001" },
+  );
+  const screen = html.slice(html.indexOf('id="publish"'));
+  const drawn = screen.slice(
+    screen.indexOf('id="publish-body-drawn"'),
+    screen.indexOf('id="publish-body-exact"'),
+  );
+
+  // Raw HTML is escaped as text, and nothing in the body becomes a tag.
+  expect(drawn).toContain("&lt;script&gt;alert(1)&lt;/script&gt;");
+  expect(drawn).toContain("&lt;img src=x onerror=alert(2)&gt;");
+  expect(drawn).not.toContain("<script");
+  expect(drawn).not.toContain("<img");
+  // A link that would run is its text alone; one that would not opens in a
+  // new tab and carries no referrer.
+  expect(drawn).not.toContain("javascript:");
+  expect(drawn).toContain("<li>run me and <a ");
+  expect(drawn).toContain(
+    '<a target="_blank" rel="noopener noreferrer" href="https://example.com/doc">read me</a>',
+  );
+  // An image is a link to where it is, and is not fetched; inside a link it is
+  // its name, since a link cannot hold one.
+  expect(drawn).toContain(
+    '<a target="_blank" rel="noopener noreferrer" href="https://tracker.example/p.png">a pixel</a>',
+  );
+  expect(drawn).toContain(
+    '<a target="_blank" rel="noopener noreferrer" href="https://t.example/">a badge</a>',
+  );
+  // A footnote's link stays on this page.
+  expect(drawn).toContain('<a href="#user-content-fn-1"');
+});
+
 test("the publish screen is in the page's language, and the model's reading is material beside it (#233 S5, D-0065 5.5)", async () => {
   const world = fresh();
   await approvedLap(world);

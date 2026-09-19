@@ -142,6 +142,7 @@ import {
   unblockedBy,
   whereItRuns,
 } from "./inbox.js";
+import { markdownHtml } from "./markdown.js";
 import { denialLine, LIST_LIMIT } from "./review.js";
 import { heldAgentTypeLines, scopeBudgetsFromStore } from "./scope.js";
 import { type Chrome, EN, SHIPPED_SETS, setFor } from "./wording.js";
@@ -1966,7 +1967,8 @@ function pill(tone: Tone, text: string, extra = "") {
   );
 }
 
-function chevron() {
+/** `open` names the fold that turns it, where one fold sits inside another. */
+function chevron(open = "group-open:rotate-90") {
   return (
     <svg
       aria-hidden="true"
@@ -1976,7 +1978,7 @@ function chevron() {
       stroke-width="1.6"
       stroke-linecap="round"
       stroke-linejoin="round"
-      class="size-3.5 shrink-0 text-faint transition-transform group-open:rotate-90"
+      class={`size-3.5 shrink-0 text-faint transition-transform ${open}`}
     >
       <path d="m6 3.5 4.5 4.5L6 12.5" />
     </svg>
@@ -4266,6 +4268,132 @@ function publishLink(
   );
 }
 
+/** A pull request body split around the request fold it carries. */
+interface RequestFold {
+  readonly before: string;
+  readonly summary: string;
+  /** The quotation with its fences, as markdown: a code block. */
+  readonly fenced: string;
+  readonly after: string;
+}
+
+/**
+ * The request fold `requestBlock` (cli.ts) writes into a pull request body, or
+ * null where the body carries none (rondo#248).
+ *
+ * **The fence is what makes the edge unambiguous.** `requestBlock` sizes it one
+ * longer than the longest run of backticks in what it quotes, so no line of the
+ * quotation can equal it, and the first line that does is the closing one. The
+ * first opening that does not close exactly as `requestBlock` closes one is
+ * taken for no fold at all: the body is then drawn without one, its markup
+ * escaped as text, rather than as a guess.
+ */
+function requestFold(body: string): RequestFold | null {
+  const lines = body.split("\n");
+  const at = lines.indexOf("<details>");
+  if (at === -1) {
+    return null;
+  }
+  const summary = /^<summary>(.*)<\/summary>$/.exec(lines[at + 1] ?? "");
+  const fence = lines[at + 3] ?? "";
+  if (summary === null || lines[at + 2] !== "" || !/^`{3,}$/.test(fence)) {
+    return null;
+  }
+  const close = lines.indexOf(fence, at + 4);
+  if (close === -1 || lines[close + 1] !== "" || lines[close + 2] !== "</details>") {
+    return null;
+  }
+  return {
+    before: lines.slice(0, at).join("\n"),
+    summary: summary[1] ?? "",
+    fenced: lines.slice(at + 3, close + 1).join("\n"),
+    after: lines.slice(close + 3).join("\n"),
+  };
+}
+
+/**
+ * Markdown drawn as a forge draws it: `markdownHtml` escapes every tag and
+ * refuses every link that could run, so what it returns is the page's to show.
+ * `page/app.css` styles `.markdown` the way a forge styles a comment.
+ */
+function markdown(text: string) {
+  return text.trim() === "" ? null : (
+    <div class="markdown" dangerouslySetInnerHTML={{ __html: markdownHtml(text) }} />
+  );
+}
+
+/**
+ * The pull request body on the publish screen (rondo#248): drawn, and exact.
+ *
+ * **The bytes are what is sent and the page does not change one of them.**
+ * `Preview` draws them as markdown, the way the forge will; the one piece of
+ * HTML in them is the request fold rondo writes itself, which `requestFold`
+ * finds by its shape and the page draws as its own fold -- no other HTML is
+ * passed through (`markdown.ts`). `Raw` shows the body byte for byte, the way
+ * a forge offers the source of what it renders. Underlined tabs over a pair of
+ * radios and `:has()`, so the choice is plain in both schemes and works with
+ * script off.
+ */
+function publishBody(wording: Chrome, body: string) {
+  const fold = requestFold(body);
+  const tab =
+    "-mb-px cursor-pointer border-b-2 border-transparent px-3 py-2 text-[14px] leading-5 font-medium text-muted-foreground select-none hover:border-border hover:text-foreground has-checked:border-link has-checked:font-semibold has-checked:text-foreground has-focus-visible:rounded-t-md has-focus-visible:ring-2 has-focus-visible:ring-ring";
+  return (
+    <div class="group/body mt-2 space-y-3">
+      <div class="flex flex-wrap items-end gap-x-4 border-b border-border">
+        <fieldset class="flex">
+          <legend class="sr-only">{wording.publishBodyViewLegend}</legend>
+          <label class={tab}>
+            <input
+              type="radio"
+              name="publish-body-view"
+              id="publish-body-preview"
+              class="sr-only"
+              checked
+            />
+            {wording.publishBodyPreview}
+          </label>
+          <label class={tab}>
+            <input type="radio" name="publish-body-view" id="publish-body-raw" class="sr-only" />
+            {wording.publishBodyRaw}
+          </label>
+        </fieldset>
+        <p class="hidden py-2 text-[13px] leading-5 text-muted-foreground group-has-[#publish-body-raw:checked]/body:block">
+          {wording.publishBodyRawNote}
+        </p>
+      </div>
+      <div
+        id="publish-body-drawn"
+        class="rounded-md border border-border px-5 py-4 group-has-[#publish-body-raw:checked]/body:hidden"
+        lang=""
+      >
+        {fold === null ? (
+          markdown(body)
+        ) : (
+          <>
+            {markdown(fold.before)}
+            <details id="publish-body-request" class="group/request my-4">
+              <summary class="flex cursor-pointer list-none items-center gap-2 rounded-md py-1 text-[14px] leading-6 outline-none select-none hover:text-link focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+                {chevron("group-open/request:rotate-90")}
+                {fold.summary}
+              </summary>
+              <div class="mt-2">{markdown(fold.fenced)}</div>
+            </details>
+            {markdown(fold.after)}
+          </>
+        )}
+      </div>
+      <pre
+        id="publish-body-exact"
+        class={`${PRE.replace(/whitespace-pre$/, "whitespace-pre-wrap").replace("text-[12px]", "text-[13px]")} hidden wrap-anywhere group-has-[#publish-body-raw:checked]/body:block`}
+        lang=""
+      >
+        {body}
+      </pre>
+    </div>
+  );
+}
+
 /**
  * The publish screen: the dry-run, and the press that runs it (rondo#233 S5,
  * D-0059 section 5a's `publish` row, D-0060).
@@ -4421,12 +4549,7 @@ async function publishView(
             {chevron()}
             {wording.publishBodyLabel}
           </summary>
-          <pre
-            class={`${PRE.replace(/whitespace-pre$/, "whitespace-pre-wrap")} mt-2 wrap-anywhere`}
-            lang=""
-          >
-            {shown.body}
-          </pre>
+          {publishBody(wording, shown.body)}
         </details>
       </section>
       {shown.modelReading.length === 0 ? null : (

@@ -827,6 +827,11 @@ export interface Chrome {
   readonly publishRequestHeading: string;
   readonly publishTitleLabel: string;
   readonly publishBodyLabel: string;
+  /** The body drawn or byte for byte (rondo#248): the pair's name, its two sides, the exact side's line. */
+  readonly publishBodyViewLegend: string;
+  readonly publishBodyPreview: string;
+  readonly publishBodyRaw: string;
+  readonly publishBodyRawNote: string;
   readonly publishNoticedHeading: string;
   /** The model's reading, material beside the rest and read by nothing (D-0065 5.5). */
   readonly publishModelHeading: string;
@@ -1435,6 +1440,10 @@ explanation you pressed on and then answers the gate.`,
   publishRequestHeading: "The pull request it would open",
   publishTitleLabel: "Title",
   publishBodyLabel: "Body",
+  publishBodyViewLegend: "Show the body as",
+  publishBodyPreview: "Preview",
+  publishBodyRaw: "Raw",
+  publishBodyRawNote: "Exactly the text that will be sent, byte for byte.",
   publishNoticedHeading: "What rondo noticed",
   publishModelHeading: "What the model read",
   publishModelNote:
@@ -1701,7 +1710,7 @@ const JA: Partial<Chrome> = Object.freeze({
   approveDespitePlain: "モデルレビューが挙げた点に答えないまま、この作業をこのまま受け入れます。",
   undeterminedFold: (count) => `rondo が決められなかった項目 ${String(count)} 件`,
   liveShort: (seconds) => `ライブ · ${String(seconds)}秒ごとに更新`,
-  stillShort: "読んでいるあいだは動きません",
+  stillShort: "読んでいるあいだは更新しません",
   age: (ago) => {
     const unit = ago.slice(-1);
     const units: Record<string, string> = { s: "秒", m: "分", h: "時間", d: "日" };
@@ -2089,13 +2098,11 @@ const JA: Partial<Chrome> = Object.freeze({
   publishedPullRequest: "プルリクエスト",
   publishHeading: "この作業を公開する",
   publishLead:
-    "まだ何もこのマシンの外へ出ていません。以下は公開したときに起きることを今読み取ったもので、" +
-    "実際に行うのは下のボタンだけです。",
-  publishNotYetLead: "まだ何もこのマシンの外へ出ていません。この作業はこのままでは公開できません。",
+    "公開すると何が起きるかを、いまの状態から読み取って示します。下のボタンを押すまで、何も起きません。",
+  publishNotYetLead: "まだ何も送信していません。いまのままでは公開できません。",
   publishReviewLead:
-    "まだ何もこのマシンの外へ出ていません。以下は公開したときに起きることを今読み取ったものです。" +
-    "ただしこの作業の読み取りがそれを説明していないため、ここで押せるのはそれを承知で進める" +
-    "ボタンだけです。",
+    "まだ何も送信していません。公開すると何が起きるかを、いまの状態から読み取って示します。" +
+    "作業の読み取りはそこまで及んでいないので、押せるのは、それを承知で進めるボタンだけです。",
   publishNotYetHeading: "何が止めているか",
   publishTargetHeading: "何が起きるか",
   publishPushes: (branch, remote) => `ブランチ ${branch} を ${remote} へ push します。`,
@@ -2106,13 +2113,16 @@ const JA: Partial<Chrome> = Object.freeze({
   publishRequestHeading: "作られるプルリクエスト",
   publishTitleLabel: "タイトル",
   publishBodyLabel: "本文",
+  publishBodyViewLegend: "本文の表示",
+  publishBodyPreview: "プレビュー",
+  publishBodyRaw: "原文",
+  publishBodyRawNote: "この本文が、一字一句このまま送信されます。",
   publishNoticedHeading: "rondo が気づいたこと",
   publishModelHeading: "モデルが読んだこと",
   publishModelNote: "判断の材料です。承認ではなく、上の内容がこれで決まったわけでもありません。",
   publishNote:
-    "rondo があなたとして push し、プルリクエストを作り、run を閉じます。マージはしません。" +
-    "それはあなたの手に残ります。この画面を描いてから内容が変わっていた場合、押しても止まり、" +
-    "その旨が出ます。",
+    "ボタンを押すと、rondo があなたの名前で push し、プルリクエストを作り、run を閉じます。" +
+    "マージはしません。画面を開いたあとに何か変わっていれば、実行せず、理由を表示します。",
   publishPlain: "このブランチを push し、プルリクエストを作り、run を閉じます。",
   publishBack: "公開の画面に戻る",
   publishNotOffered:
