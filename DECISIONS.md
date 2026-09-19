@@ -114,6 +114,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0074 | Raising a running lap's budget: a raise is a successor scope that changes only its budgets, the lap in flight follows its approval's approved successor, and the person presses it from the gate that refused them | accepted |
 | D-0075 | A fresh store's first plan is the last thing setup does: setup hands the plan it composed to the store and not to the person, the host reads no path and composes nothing, and naming a repository stays installation | accepted |
 | D-0076 | Who the page is written for: the person who asked for the work and judges it, who knows their own repository and not rondo; rondo's own words, identifiers and failures never reach them as themselves, and what they cannot use is not shown | accepted |
+| D-0077 | The organisation drafts the revise instruction: the model drafter runs once a model reading with findings lands, its draft quotes every finding because rondo renders the quotes from the reading and only the drafter's words are the model's, and an unavailable draft leaves the person an empty box and a sentence, never a deterministic fallback | proposed (number proposed, not allocated) |
 
 ---
 
@@ -17463,3 +17464,290 @@ Each dated, and added with this entry's acceptance:
 - **An operator who does read the terminal alongside the page as the ordinary case**; then rule 1.1's
   one reader is wrong, and `D-0055` rule 2's second clause comes back on evidence.
 - Any measurement above failing to reproduce at rondo `03bbfe8`.
+
+---
+
+## D-0077 — The organisation drafts the revise instruction: the model drafter runs once a model reading with findings lands, its draft quotes every finding because rondo renders the quotes from the reading and only the drafter's words are the model's, and an unavailable draft leaves the person an empty box and a sentence, never a deterministic fallback
+
+**Status:** proposed (2026-09-19). **The number `D-0077` is proposed, not allocated**: it is the next
+number after `D-0076` on `main` at `8f73373`, and parallel work may take it; whichever entry merges
+later renumbers. Three points are put to the human gate; see "What is put to the human gate". Refs
+`D-0009`, `D-0022`, `D-0027`, `D-0032`, `D-0051`, `D-0053`, `D-0059`, `D-0063`, `D-0064`, `D-0065`,
+`D-0066`, `D-0070`, `D-0071`, `D-0074`, `D-0075`, `D-0076`, rondo#235, rondo#238, rondo#262.
+
+**This entry decides and does not build.** Nothing in `src/` or `page/` changes with it. Replacing
+`reviseDraft` in `src/access/web.tsx` is the building change's. The annotations it would add on
+acceptance are listed in "Annotations this entry adds".
+
+**Why an entry is needed at all.** Two accepted texts leave this drafter unwritten on purpose:
+
+- **`D-0071`'s "What this does not do"** excludes it: the model drafter "does not ... draft a `revise`
+  instruction (`D-0065` rule 5.3 and `D-0070`)". Its run is triggered by an operator message in a
+  request thread (`D-0071` section 3), and a model reading is not one.
+- **`D-0070`'s residual table** names this entry by its job: "A draft check that an
+  organisation-drafted instruction quotes the findings (`D-0065` rule 5.3) | A property of a draft,
+  not of a person's act | the entry that has the organisation draft `revise` instructions".
+
+So the box on the gate view is filled today by deterministic code standing in for `D-0065` rule 5.3's
+drafting duty (`D-0059`'s annotation from rondo#233 S4), and rondo#262 records that it cannot be
+removed until an accepted entry stands behind its replacement. rondo#238 settled the same question for
+the scope form: **one author per draft, and no deterministic fallback**. This entry takes that answer
+for the revise text and decides the rest.
+
+It keeps `D-0064`'s two lines (bases; an irreversible act is approved by a person) and **adds no
+third**. It changes nothing `D-0070` decided about the person's `revise`: the gate answer stays the
+person's press, and the verdict still tests nothing about the text the press carries (`D-0070`
+section 3).
+
+### What was measured, and how
+
+At rondo `8f73373` on **2026-09-19**, by reading. Line numbers drift; re-measure the claim, not the
+number.
+
+- **The stand-in.** `reviseDraft` (`src/access/web.tsx:2618`) returns `""` when there is no model
+  reading, the reading is `unavailable`, or it holds no finding; otherwise a lead line rondo wrote
+  (`reviseDraftLead`, "Please fix what the model review raised:", `src/access/wording.ts:1616`)
+  followed by **every finding byte for byte**, each with its severity when the graded fields decode
+  and its bases on the next line. It drops, ranks and summarises nothing.
+- **Where it is drawn.** It is the `<textarea>`'s content, never its `placeholder`, in the revise form
+  of the gate view (`web.tsx:3004`), so what the press carries is what the person read. The form is
+  drawn only for a lap admitted under an approval; any other lap gets `reviseNoScope`'s sentence and
+  no box (`web.tsx:2957`). The box is keyed `revise:<iteration>:<gate>` through `data-draft`, and
+  `page/composer.js` keeps an edit across a refusal and a redraw by that key.
+- **When the material exists.** The model reading is taken after `drive()` returns and lands as a
+  second `lap_reading` row while the gate's clock runs; "a person who answers first answers without
+  it" (`D-0065` rule 2.6, `src/access/model-reviewer.ts`'s header). So there is nothing to draft from
+  until that row exists.
+- **A reading has no id.** It is identified by what it says (`D-0051`), and the basis union has no
+  `reading` form: `snapshot`, `iteration`, `gateTransition`, `continuoRun`, `repository`, `message`,
+  `scope`, `proposal`, `setup` (`BASIS_FORMS`, `src/advisory/proposal.ts:89`).
+- **The model drafter as built** (rondo#238's stage 2). It runs in the `rondo web` process as the
+  resident host, finds work by rows rather than by a queue, takes one lease per request thread, and
+  writes its rows under names beginning `rondo/drafter/` (`MODEL_DRAFTER_PREFIX`,
+  `src/access/model-draft.ts:46`; `src/access/drafter-host.ts`'s header). A run that cannot draft
+  writes one `drafter` message into the thread and nothing else (`D-0071` rule 1.5).
+- **Proposal kinds** are a closed union: `agent_type`, `run_plan`, `contract_keys`,
+  `widening_successor`, `explanation`, `split`; only the first four are approvable
+  (`src/store/records.ts:907-949`).
+
+### 1. Who drafts, and how it is run
+
+1. **The drafter is `D-0071`'s: the same drafter table row** (`claude-opus-5` through the `claude`
+   CLI, `D-0071` point 3 (a)), run as `D-0071` rule 1.3 runs it: in `src/access`, outside `drive()`,
+   with no tools, handed one document on standard input, under the operator's own login. A changed
+   model is still a new entry.
+2. **Its instructions are its own**, a second constant beside the scope drafter's, and **its rows are
+   written under a name of their own**, `rondo/revise-drafter/1/<model-id>`, versioned as `D-0071`
+   rule 1.4 versions the scope drafter. Outside `MODEL_DRAFTER_PREFIX` on purpose: the scope screen
+   finds a drafter's scope by that prefix (`src/access/drafted-view.ts`), and a revise draft must never
+   be read as one.
+3. **The same family as the worker, and that is accepted.** `D-0065` rule 3.3's family check guards a
+   **reader**, whose independence is the point. This drafter reads the reviewer's findings, which are
+   already the other family's, and writes an instruction; the next model reading, again of the other
+   family, is what judges whether the correction worked (`D-0070` section 3.2).
+
+### 2. When it runs
+
+1. **Once a model reading with at least one finding lands on a lap whose gate view draws a revise
+   form**: the lap is `awaiting_human` with an open gate, it was admitted under an approval, and its
+   latest model reading's verdict is `concerns`. A `clear` reading has nothing to quote and an
+   `unavailable` one has nothing to draft from; both leave the box empty, as the stand-in does. *Which
+   readings are drafted is point 3 put to the gate.*
+2. **Found by rows, in the resident host** (`D-0071` rule 3.2's shape). A lap's latest model reading
+   is **drafted** once a proposal row of this drafter's (section 5.1) holds that reading in its
+   snapshot, compared by content (`D-0051`). A reading no such row holds has not been drafted. Every
+   finished run writes one, including a run that could not draft, so no reading stays due after a run
+   over it, and a host restart loses nothing. With no host running, nothing is drafted and the box
+   says so (section 4.2).
+3. **At most one run per lap at a time, and a stale run writes nothing.** A run whose lap left its
+   gate, or gained a newer model reading, after its document was assembled is discarded at the write;
+   a newer reading is run again as its own.
+4. **Nobody waits on it.** The reading's write, the gate view and the person's press never wait on a
+   draft; the draft arrives later, as the reading does (`D-0065` rule 2.6). **A person who answers
+   before it lands answers without it**, which is the same thing that rule says of the reading.
+
+### 3. What it is handed, and what it writes
+
+1. **The document holds, each taken by rondo from its own source**: the lap's latest model reading
+   whole (every finding's text, severity and bases, in its stored order); the prompt the lap ran on,
+   including any `revise` instruction earlier in its lineage (`D-0027`); the earlier model readings
+   along the lineage and the text each earlier `revise` carried, so a second round knows what the
+   first asked; the scope's `severity_threshold` and the rounds left (`D-0065` rules 4.2 and 5.1); and
+   the request thread's messages, for the person's words and the operator's language (`D-0053`).
+2. **It does not read the target repository, the diff or the transcript** (`D-0063` rule 3.3, as
+   `D-0071` rule 2.2 keeps it). The worker reads the repository; the instruction's job is to say what
+   to change, from what the reviewer found. Counted under "What this gives up".
+3. **What the model returns is structured, not a finished text** (point 1 (a) as recommended): an
+   optional lead in its own words, then **one entry per finding, addressed by the finding's position
+   in the reading**, holding the drafter's words for what to change about it. **The model never
+   returns a finding's text or bases.**
+4. **The box's text is assembled by rondo**: the lead, then for each finding in the reading's order,
+   **the finding quoted byte for byte from the stored reading, its severity and its bases** (as the
+   stand-in renders them today), followed by the drafter's words for it. So the quote cannot be
+   misquoted, reworded or truncated by the model, because the model never writes it; and the words
+   that are the model's are the only words rondo did not take from a row.
+5. **Composed and carried (`D-0009`).** The lead and the per-finding words are composed, recorded
+   under the drafter's name on the proposal row. The quotes are the reviewer's words, carried. Once
+   the person presses, the whole box is **the person's gate answer**, carried byte for byte to continuo
+   and appended to the successor's prompt as today (`D-0027` rule 7); rondo does not mark which of its
+   words the person kept.
+6. **It does not overrule a finding** (`D-0065` rule 5.3). Its words may say how to fix a finding and
+   may say that one below the scope's threshold may be left (`D-0065` rule 5.2); they never tell the
+   worker to leave a finding at or above it. No check can read that from the words (it is a judgement,
+   `D-0070` section 3.2's reason); it is a property of the draft, and "What would falsify it" names it.
+   A finding the organisation disputes is `D-0065` rule 5.3's P3, which this drafter does not write
+   (residual).
+
+### 4. The check, and what an unavailable draft leaves
+
+1. **The check, before anything is written** (the `D-0070` residual this entry answers): the output
+   parses; it names **every finding position in the reading exactly once**, and no position the
+   reading does not have; every words entry is non-empty. A draft that fails it is **not shown and not
+   repaired** (point 2 (a) as recommended), because a draft that silently drops a finding is worse
+   than the deterministic quoting it replaces: the person reading the gate would have no way to know.
+   With section 3.4 in place, "quotes every finding" (`D-0065` rule 5.3) is true of every draft that
+   passes by construction, and the check is what makes the construction hold.
+2. **An unavailable draft** (a timeout, output that does not parse, a tool call, material over the
+   input bound, or a draft the check refuses; `D-0071` rule 1.5's list) **writes its proposal row with
+   the reason and no draft** (section 5.1), and is not retried: the next model reading on the lap
+   triggers the next run. **The gate view then leaves the box empty, with its placeholder, and says in
+   the person's terms that rondo could not draft what to change and that they can write it
+   themselves**; the findings stay on the view above it, as the model reading is shown today. rondo's
+   own reason goes in `D-0076` rule 4.5's closed fold. **There is no deterministic fallback**: the
+   stand-in is removed, not kept behind the drafter. This is rondo#238's answer for the scope form
+   applied to the revise text: the person writing the text is not a second author of a draft, because
+   there is no draft and they are the author.
+3. **Before a draft lands, or with no host running**, the box is empty and the view says that a draft
+   of what to change is being written, or that none is being written while rondo is not running here,
+   and that the person may write their own now. The press is never held back waiting for a draft.
+4. **When a draft lands on a view already open**, the box takes it only if the person has not typed in
+   it. An edited box is never overwritten: the composer's per-gate key (measured above) already keeps
+   the person's text, and the view says a draft arrived. What the press carries is still what the
+   person read.
+
+### 5. Where it is recorded
+
+1. **One proposal row per finished run, of a new kind `revise_draft`**, absent from
+   `APPROVABLE_PROPOSAL_KINDS`: a draft is never approved; the person's press is a gate answer, not a
+   `human_decision` (`D-0032` rule 5). Its snapshot is the document of section 3.1, stored verbatim
+   (`D-0022` rule 4); it carries an `iteration` basis to the lap; and it holds either the returned
+   structure or the reason the run was unavailable. Adding a kind to a closed union is additive;
+   whether the store takes it without a migration is the building change's to measure.
+2. **Why a proposal row and not a thread message**, where `D-0071` rule 1.5 writes its unavailable
+   run. A thread message cannot cite a reading (there is no `reading` basis form, and a reading has no
+   id to cite), and the place the person meets this draft is the gate view, not the conversation. The
+   row holds the reading in its snapshot, which is how section 2.2 finds what is drafted. A thread
+   message would be a second write saying the same thing where the person is not looking.
+
+### What is put to the human gate
+
+The points are kept as put, each with options, what each gives up, and one recommendation (`D-0064`
+rule 4.1).
+
+1. **How "quotes every finding" is made true** (sections 3.3 and 3.4).
+   - **(a) The model returns words per finding position; rondo renders every quote from the stored
+     reading; the check is that every position is addressed exactly once** (recommended). *Loses:* the
+     box's shape is fixed (a lead, then quote and words per finding, in the reading's order); the model
+     cannot merge two findings into one instruction or reorder them by importance, and a draft that
+     wants to say "these two are the same bug" has to say it inside one finding's words.
+   - **(b) The model returns the finished text; the check is that every finding's text appears in it
+     byte for byte.** *Loses:* a long finding reflowed, a quote with one character changed, or a
+     finding quoted without its bases is refused whole, so drafts are unavailable more often; and
+     whether the bases were quoted correctly needs a second check of the same kind.
+   - **(c) No mechanical check; the draft is reviewed where drafts are reviewed** (`D-0065`'s first
+     residual). *Loses:* the property rondo#262 names as the reason for this entry: a draft that drops
+     a finding reaches the person, who has no way to know.
+2. **What a draft that fails the check becomes** (section 4.1).
+   - **(a) Unavailable: not shown, not repaired; the box is empty with a sentence, and the person
+     writes** (recommended). *Loses:* a draft that addressed every finding but one is thrown away whole,
+     and the person writes from nothing where they could have edited.
+   - **(b) Repaired: rondo adds the findings the draft missed, quoted, with a line of its own words.**
+     *Loses:* one author per draft (rondo#238, rondo#262): the box mixes the model's text with
+     deterministic text, which is the stand-in kept as a fallback inside every draft.
+   - **(c) Shown with a warning naming the finding it missed.** *Loses:* the person must now read the
+     draft against the findings to use it, and a press that ignores the warning carries an
+     instruction that drops a finding under the organisation's name.
+3. **Which readings are drafted** (section 2.1).
+   - **(a) Every model reading with at least one finding, on a lap whose gate view draws a revise
+     form** (recommended). It is what the stand-in fills today, so the box never gets emptier.
+     *Loses:* a draft is paid for when every finding is below the threshold and the line may exit
+     without a revise (`D-0065` rule 5.2); the cost is one call per reading and is not yet measured
+     (residual).
+   - **(b) Only when a finding is at or above the scope's threshold.** *Loses:* a person who wants
+     the minor findings fixed anyway gets an empty box on exactly the laps with the fewest findings,
+     and the box's behaviour turns on a field the page does not show beside it.
+   - **(c) Every reading with findings, whether or not the lap was admitted under an approval.**
+     *Loses:* nothing on the page shows the draft for such a lap (it has no revise form,
+     `web.tsx:2957`), so the cost buys a row nobody reads.
+
+**Decided here rather than put, because rondo#238 already answered it for the scope form and the
+brief for this entry is to align with that answer:** section 4.2's "no deterministic fallback; an
+empty box, a plain sentence, and the person writes".
+
+### What this gives up
+
+- **Re-derivability of the words**, which `D-0063`'s and `D-0071`'s gates already accepted for
+  drafted text. The quotes stay exact, because they are rendered from the row.
+- **The repository as material.** The drafter can say what to change only from what the reviewer
+  found; a fix that needs the code read is the worker's to find.
+- **A box ready at the moment the reading lands.** The draft follows the reading by one model call; a
+  person who answers in between answers from the findings, as they would without a drafter.
+- **The deterministic draft as a floor.** When the drafter is unavailable the person starts from an
+  empty box, with the findings above it.
+
+### What this does not do
+
+- **It does not build** the drafter's instructions, the row kind, the host's scan, the check, or the
+  gate view's lines. It does not remove `reviseDraft`; the building change does, in the same change
+  that draws the drafted box.
+- **It does not change `D-0070`.** The person's press is still a gate answer, the verdict still tests
+  nothing about the text the press carries (section 3), and a scoped `revise` still spends the
+  approved tip (`D-0074` section 2).
+- **It does not open O6 or O4's organisation-run `revise`.** The organisation drafts; the person still
+  presses once per lap (`D-0027` rule 2, `D-0064`'s first gate answer (a)).
+- **It does not write `D-0065` rule 5.3's P3** for a finding the organisation disputes, and does not
+  review a draft (`D-0065`'s first residual, unchanged).
+- **It does not add an invariant beyond `D-0064`'s two lines.**
+
+### Residuals, with who decides
+
+| Residual | Why not here | Who decides |
+|---|---|---|
+| What a revise draft costs, and whether it counts against the scope | The cost is readable from the CLI's output, but no draft has run; `D-0071`'s residual for the scope drafter is the same question | the building change records it; a later entry if it matters |
+| A dispute the drafter holds about a finding, raised as `D-0065` rule 5.3's P3 | A question in the thread with a recommendation is the scope drafter's shape, and this drafter writes no thread message | a later entry, if drafts that quietly work around a finding are observed |
+| Whether rondo records which draft a press was made from, and what the person changed | The press carries text to continuo (`D-0027` rule 7); a link from the successor to the proposal row is a new column with no reader yet | a later entry, if the edit rate is wanted as evidence (see the first falsifier) |
+| The language the drafter's words are written in | `D-0071`'s residual for the scope drafter, unchanged; the quotes stay in the reviewer's language | the building change, under `D-0053` and `D-0055` |
+| How a basis is shown inside the box, which both the person and the worker read | `D-0076` rule 5.3 wants links for the person; the worker needs a locator; a transcript event index is rondo's and not the person's | the building change, under `D-0076` rules 3.4 and 5.3 |
+
+### Annotations this entry adds
+
+Each dated and additive, and added with this entry's acceptance:
+
+- **`D-0070`'s residual table**, third row ("A draft check that an organisation-drafted instruction
+  quotes the findings"): answered by `D-0077` sections 3.4 and 4.1. **Section 3.3**'s "reviewed where
+  drafts are reviewed" is read as: checked by `D-0077` section 4.1 before the draft is written, and
+  still never tested on a person's `revise`.
+- **`D-0071`'s "What this does not do"**, third bullet: drafting a `revise` instruction is `D-0077`,
+  which uses this entry's drafter table row with instructions and a row name of its own.
+- **`D-0065` rule 5.3**: the organisation's drafting duty ("a `revise` instruction that quotes the
+  findings and their bases") is `D-0077`'s drafter, and "quotes" is held by section 3.4's construction.
+- **`D-0059`'s annotation from rondo#233 S4**, third bullet: the box's content is `D-0077`'s draft once
+  built, and "stood in for by deterministic code while `D-0071`'s drafter is out of scope" describes
+  the page before that build. The rule that the draft is the field's content and never a placeholder
+  is unchanged.
+
+### What would falsify it
+
+- **Drafts the person routinely rewrites whole** before pressing, so that the drafted box is not what
+  is pressed. The drafter is then not drafting well enough to delegate, which is `D-0071`'s first
+  falsifier for this drafter.
+- **Drafts routinely unavailable at the check**, so that the person mostly meets an empty box. Point 1
+  (a)'s shape or point 2 (a)'s refusal is then what moves.
+- **A draft whose words tell the worker to leave a finding at or above the threshold**, which section
+  3.6 forbids and no check reads. A reviewer over drafts (`D-0065`'s first residual) is then due.
+- **Rounds routinely spent on drafted instructions that miss the finding**, observed as the same
+  finding in the next reading after a drafted `revise` was pressed unedited. `D-0070`'s second
+  falsifier, now for drafted text; section 3.2's refusal of the repository is what moves first.
+- **A draft read as a scope drafter's row**, or the reverse, which would mean section 1.2's separate
+  name is not held where rows are read.
+- Any measurement in "What was measured" failing to reproduce at rondo `8f73373`.
