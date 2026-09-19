@@ -16485,11 +16485,14 @@ On acceptance, each dated and additive, per the answers the gate gives:
 `main` as proposed (rondo#250), and `D-0074` is reserved by the rondo#247 design (raising a running
 lap's budget), which is written and not yet in this file. Whichever entry merges later renumbers. Two
 points are put to the human gate; see "What is put to the human gate". Refs `D-0010`, `D-0019`,
-`D-0023`, `D-0025`, `D-0055`, `D-0064`, `D-0069`, `D-0071`, rondo#238, rondo#259, rondo#265,
+`D-0023`, `D-0025`, `D-0032`, `D-0041`, `D-0055`, `D-0064`, `D-0066`, `D-0069`, `D-0071`, rondo#238, rondo#259, rondo#265,
 rondo#266.
 
-**This entry decides and does not build.** Nothing in `src/` or `scripts/` changes with it. The
-annotations it would add on acceptance are listed in "Annotations this entry adds".
+**This entry decides and does not build.** Nothing in `src/` or `scripts/` changes with it. **On
+acceptance it supersedes `D-0071` as a whole, with every other section carried**, because it changes
+what `D-0071` asserted about where a drafted scope may record an agent type from (rule 2.4); this is
+`D-0071`'s own treatment of `D-0069`. The supersession and the annotations are listed in "Annotations
+this entry adds".
 
 **The completion definition it is judged by** (the operator's, 2026-09-19): the person writes the
 request and rondo goes as far as opening the pull request; in between they only approve and answer
@@ -16571,11 +16574,15 @@ number.
    bytes recorded twice are two rows, and the newer stands. So setup that records A, then B, then A
    again offers A, as a paste of A again does (`heldPlans`' "the latest paste wins its place"). No
    row is edited or removed, and nothing on the page or in the drafter writes one.
-3. **It is a third source of held plans, beside a pasted message and a lap's row.** `heldPlans` offers
-   it, ordered with the laps' plans by time (a setup row by `recorded_at_ms`), newest first, so a
-   re-run setup stands for its kind (place and agent type) over laps that ran before it, and a lap run
-   on it after stands for it in turn. The drafter's template set (`D-0071` rule 2.1.3) includes it the
-   same way, and `heldPlanByDigest` finds it by digest as it finds a pasted one.
+3. **It is a third source of held plans, beside a pasted message and a lap's row, and for its kind it
+   outranks the laps.** `heldPlans` offers, in order: plans pasted into this thread, newest first;
+   then the newest setup row of each kind (place and agent type); then lap plans, **only for kinds no
+   setup row holds**. A lap's plan differs from the setup row it was drafted from only in `prompt`
+   and its run, so nothing is lost, and **a lap started from an older plan does not bring that plan
+   back**: a scope or an open screen that resolves the older digest still starts it (rondo#266's rule:
+   the press runs what the person looked at), and the list keeps offering the newest setup row. The
+   drafter's template set (`D-0071` rule 2.1.3) is ordered the same way, and `heldPlanByDigest` finds
+   a setup row by digest as it finds a pasted one.
 4. **A drafted scope records its agent type from a setup row by the contract a pasted plan has
    (`D-0071` point 1(a)), with the row standing where the message stood.** The scope cites the row by
    a basis of its own form, **`setup`** (`{ form: "setup", setupId }`), which `D-0032` rule 2's
@@ -16651,11 +16658,18 @@ number.
      machine changes under rondo, which is the same event that makes any installed program need its
      installer again. *Loses:* K3 as a literal "never": a person on a host whose `claude` moved sees a
      lap fail in its fence and has to run setup.
-   - **(b) K3 read literally.** The fourth needs a service install shipped with rondo, and the fifth
-     needs the resident host to re-derive a plan's paths when a lap fails on them. *Loses:* rule 3.1:
-     the host would compose fence geometry from an environment that drifts under it, which is
-     `D-0019` rule 3's refusal and the shape rondo#266 removed; and the service install is packaging
-     no entry has scoped.
+   - **(b) K3 read literally, with setup re-run from the page**: a press runs the setup program as its
+     own process, and its new row is recorded by rule 2.1 as any setup run's is. The resident host
+     still composes nothing; setup does. *Loses:* the page gains a write that runs a provisioning
+     program on the host, outside `D-0041` rule 4's vocabulary and with no lap's fence around it; setup
+     has to hold the inputs it was told last time (the target, the fence roots) so a press can repeat
+     them, which is a stored configuration `D-0019` rule 3 refuses in rondo and would now sit beside
+     it; setup takes minutes and the network (`npm ci`, a continuo build); and it still covers only the
+     fifth act, so host start needs a service install anyway. It is the nearer route to a literal K3,
+     and its own entry.
+   - **(c) K3 read literally, with the resident host re-deriving a plan's paths** when a lap fails on
+     them. *Loses:* rule 3.1: the host composes fence geometry from an environment that drifts under
+     it, which is `D-0019` rule 3's refusal and the shape rondo#266 removed.
 2. **Whether naming the repository rondo works in is installation.** This decides whether K3 holds
    for work in a repository rondo has not worked in yet. It is put rather than taken because it is
    exactly where the line could be drawn for convenience.
@@ -16680,19 +16694,23 @@ number.
 
 ### Annotations this entry adds
 
-On acceptance, each dated and additive:
+On acceptance, each dated:
 
-- **`D-0071` title and point 1(a)**: a plan pasted into the thread stays a way a store gets a template
-  and agent type; **it is no longer how a fresh store gets its first**, which is the plan setup held
-  (`D-0075` rule 2). Point 1(a) resolves toward `D-0075` for a fresh store and is unchanged for a new
-  kind of work.
-- **`D-0071` rule 2.1.3**: the templates include the plans setup held, the newest of each kind.
-- **`D-0071` section 6.2**: the recording rule for a pasted plan's agent type applies to a setup-held
-  plan, with the `setup` basis in place of the `message:` one and `recorded_by` the row's.
+- **`D-0071` gains `Status: superseded by D-0075`** and a supersession note naming what changes, all
+  in how a store gets a template and where a drafted scope records an agent type from; every other
+  section, the gate's answers and the 2026-09-19 annotation stay under `D-0071`'s heading:
+  - **its title and point 1(a)**: a plan pasted into the thread stays a way a store gets a template
+    and agent type; **it is no longer how a fresh store gets its first**, which is the plan setup held
+    (`D-0075` rule 2). Point 1(a) is unchanged for a new kind of work;
+  - **rule 2.1.3**: the templates include setup rows, ordered by `D-0075` rule 2.3;
+  - **section 6.2**: a drafted scope records an agent type from a plan pasted into the thread **or
+    from a setup row**, the latter by `D-0075` rule 2.4's `setup` basis and check;
+  - **point 1(c)**: still refused as a catalog; the setup row is the one narrow exception, for the
+    reason in `D-0075`'s "What this gives up".
+- **`D-0066` rule 1.2.3's `D-0069` annotation** gains a dated note that the recording rule now lives in
+  `D-0075` rule 2.4 and `D-0071` section 6.2 as carried.
 - **`D-0032` rule 2**: the closed union gains the `setup` form (`{ form: "setup", setupId }`), which
-  the writers refuse when it names no setup row.
-- **`D-0071` point 1(c)**: refused as a catalog; `D-0075`'s setup-held row is the narrow exception and
-  the reason is recorded there.
+  the writers refuse when it names no setup row. Additive, as the `proposal` form was.
 - **`D-0019` rule 3**: unchanged, and `D-0075` rule 3.1 relies on it.
 
 ### What this does not do
@@ -16728,6 +16746,8 @@ On acceptance, each dated and additive:
   point (a). Its (b) comes back on evidence.
 - **Setup re-run because a host fact moved, often enough to be felt**, under the gate's first point
   (a). Its (b) comes back on evidence.
+- **A setup row outranking a lap plan the person meant**, seen as a person re-choosing an older plan
+  of the same kind on the scope screen. Rule 2.3's order is then wrong for that kind.
 - **A reason to have the resident host re-read or re-derive a plan**, which would cross rule 3.1 and
   the line rondo#266 drew.
 - Any measurement in "What was measured" failing to reproduce at rondo `87099ad`.
