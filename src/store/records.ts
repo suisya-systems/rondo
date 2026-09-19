@@ -1556,6 +1556,32 @@ export interface AgentTypeRecordDraft {
    * (D-0071 point 1 (a)). The record is then that message's author's.
    */
   readonly fromMessageId?: string;
+  /**
+   * On a drafter's scope only, instead of `fromMessageId`: the setup row whose
+   * plan it is (D-0075 rule 2.4). The record is then that row's `recorded_by`.
+   */
+  readonly fromSetupId?: string;
+}
+
+/**
+ * One run of setup, recording the plan it composed (D-0075 rule 2.2). The row
+ * is the run and not the plan: the same bytes recorded twice are two rows.
+ */
+export interface SetupPlanDraft {
+  readonly setupId: string;
+  readonly plan: JsonRecord;
+  /** The approver, checked by the verb before the write (D-0025 rule 4). */
+  readonly recordedBy: string;
+  readonly recordedAtMs: number;
+}
+
+/** One setup row read back, its digest re-derived over the stored bytes. */
+export interface StoredSetupPlan {
+  readonly setupId: string;
+  readonly plan: JsonRecord;
+  readonly planDigest: string;
+  readonly recordedBy: string;
+  readonly recordedAtMs: number;
 }
 
 /** One scope row read back, its digest re-derived (D-0022 rule 4). */

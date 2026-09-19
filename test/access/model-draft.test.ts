@@ -66,6 +66,7 @@ const MATERIAL: DrafterMaterial = {
       workspaceRoot: "/srv/work",
       agentTypeDigest: STANDARD,
       from: { kind: "iterations", iterationIds: ["i-1"] },
+      heldAtMs: 1_000,
     },
   ],
   agentTypes: [

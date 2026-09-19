@@ -332,3 +332,178 @@ test("a plan pasted again is the latest paste: A, then B, then A again offers A,
     [planDigest(a), { kind: "message", messageId: "paste-a-again" }],
   ]);
 });
+
+/** The plan as setup writes it: no allocated field, since no lap has run it (D-0075 rule 2.3). */
+function setupDocument(overrides: JsonRecord = {}): JsonRecord {
+  const {
+    run_id: _runId,
+    lease_claimant_id: _claimant,
+    workspace: _workspace,
+    topic_branch: _branch,
+    ...plan
+  } = planDocument();
+  return {
+    ...plan,
+    parties: { ...(plan["parties"] as JsonRecord), grantee: "rondo-allocates-this" },
+    prompt: "a placeholder",
+    ...overrides,
+  };
+}
+
+async function recordSetup(
+  w: Awaited<ReturnType<typeof world>>,
+  setupId: string,
+  plan: JsonRecord,
+  atMs: number,
+): Promise<void> {
+  const outcome = await w.record.recordSetupPlan({
+    setupId,
+    plan,
+    recordedBy: "ada",
+    recordedAtMs: atMs,
+  });
+  if (outcome.kind !== "recorded") throw new Error(JSON.stringify(outcome));
+}
+
+test("a fresh store setup finished holds its first plan: offered with nothing pasted, and its agent type recordable from the row (D-0075)", async () => {
+  const w = await world();
+  const plan = setupDocument();
+  const typeDigest = agentTypeDigestOf(plan);
+  await recordSetup(w, "setup-1", plan, 500);
+  await w.say("r1", "Fix the flaky test.", null, 1_000);
+  const ports = portsOver(w, () => ({
+    kind: "answered",
+    costUsd: null,
+    finalMessage: JSON.stringify({
+      act: "split",
+      summary: { text: "One plan.", bases: ["r1"] },
+      plans: [
+        {
+          template_plan_digest: planDigest(plan),
+          agent_type_digest: typeDigest,
+          prompt: "Fix the flaky test.",
+          bases: ["r1"],
+        },
+      ],
+    }),
+  }));
+
+  const offered = await heldPlans(ports, "r1");
+  expect(offered.map((p) => [p.planDigest, p.from])).toEqual([
+    [planDigest(plan), { kind: "setup", setupId: "setup-1" }],
+  ]);
+  expect((await heldPlanByDigest(ports, "r1", planDigest(plan)))?.from).toEqual({
+    kind: "setup",
+    setupId: "setup-1",
+  });
+
+  const run = await draftRequest(ports, "r1", null);
+  expect(run.document).toContain(`recorded by setup setup-1`);
+  expect(run.outcome.kind).toBe("drafted");
+  if (run.outcome.kind !== "drafted" || run.outcome.scope === null) return;
+  const scope = run.outcome.scope;
+  expect(scope.agentTypeRecords).toEqual([
+    {
+      agentTypeDigest: typeDigest,
+      agentTypeInput: AGENT_TYPE_INPUT,
+      planDigest: planDigest(plan),
+      setupId: "setup-1",
+    },
+  ]);
+  expect(scope.bases).toContainEqual({ form: "setup", setupId: "setup-1" });
+
+  // The store takes the record from the row it cites, as the row's approver's,
+  // and refuses one that does not cite it or copies other bytes (rule 2.4).
+  const draft = (scopeId: string, bases: readonly JsonRecord[], input: unknown) =>
+    w.record.recordScope({
+      scopeId,
+      payload: scope.payload,
+      supersedesScopeId: null,
+      authorKind: "drafter",
+      authorId: "rondo/drafter/1/test",
+      bases,
+      createdAtMs: 2_000,
+      agentTypeRecords: [
+        {
+          agentTypeDigest: typeDigest,
+          agentTypeInput: input as JsonRecord,
+          planDigest: planDigest(plan),
+          fromSetupId: "setup-1",
+        },
+      ],
+    });
+  expect(
+    await draft("s-uncited", [{ form: "message", messageId: "r1" }], AGENT_TYPE_INPUT),
+  ).toMatchObject({ kind: "refused", reason: expect.stringContaining("does not cite it") });
+  expect(
+    await draft("s-other", scope.bases, { ...AGENT_TYPE_INPUT, agentTypeId: "someone-else" }),
+  ).toMatchObject({ kind: "refused", reason: expect.stringContaining("not the plan") });
+  expect(await draft("s-1", scope.bases, AGENT_TYPE_INPUT)).toEqual({ kind: "recorded" });
+  expect(await w.record.heldAgentType(typeDigest)).toMatchObject({ kind: "read" });
+  expect(
+    w.connection
+      .prepare("SELECT recorded_by FROM agent_type_record WHERE agent_type_digest = ?")
+      .get(typeDigest),
+  ).toEqual({ recorded_by: "ada" });
+});
+
+test("held plans are one per choice, ordered by when rondo came to hold them, with no source ranked above another (D-0075 rule 2.3)", async () => {
+  const w = await world();
+  await w.say("r1", "Fix it.", null, 1_000);
+  const stale = setupDocument({ claude_command: ["/old/claude"] });
+  const repaired = setupDocument();
+  const ports = { store: w.store, record: w.record, now: () => 9_000 };
+  const offered = async () =>
+    (await heldPlans(ports, "r1")).map((p) => [p.planDigest, p.from.kind]);
+
+  // A stale plan pasted into the thread, then setup repaired: two choices,
+  // the repair first, and the stale one still offered with where it came from.
+  await w.say("paste", JSON.stringify(stale), "r1", 2_000);
+  await recordSetup(w, "setup-1", repaired, 3_000);
+  expect(await offered()).toEqual([
+    [planDigest(repaired), "setup"],
+    [planDigest(stale), "message"],
+  ]);
+
+  // A lap run on the setup plan is the same choice -- its allocated fields and
+  // prompt are put aside -- and dates it anew as the lap's.
+  await reserveLap(w, "lap-1", { ...planDocument(), prompt: "the work" }, 4_000);
+  expect(await offered()).toEqual([
+    [expect.any(String), "iterations"],
+    [planDigest(stale), "message"],
+  ]);
+
+  // Setup recording the same bytes again is a newer row, and it stands first.
+  await recordSetup(w, "setup-2", repaired, 5_000);
+  expect(await offered()).toEqual([
+    [planDigest(repaired), "setup"],
+    [planDigest(stale), "message"],
+  ]);
+});
+
+test("one store holds the setup of one repository (D-0075 rule 1.1)", async () => {
+  const w = await world();
+  await recordSetup(w, "setup-1", setupDocument(), 1_000);
+  const other = await w.record.recordSetupPlan({
+    setupId: "setup-2",
+    plan: setupDocument({ repository: "/srv/other-repo" }),
+    recordedBy: "ada",
+    recordedAtMs: 2_000,
+  });
+  expect(other).toMatchObject({ kind: "refused", reason: expect.stringContaining("D-0075") });
+  expect((await w.record.setupPlans()).map((s) => s.setupId)).toEqual(["setup-1"]);
+  // A `setup` basis is a locator the writers follow, as a `proposal` one is.
+  const cite = (setupId: string, messageId: string) =>
+    w.record.recordThreadMessage({
+      messageId,
+      body: "from setup",
+      authorKind: "operator",
+      authorId: "ada",
+      inReplyTo: null,
+      atMs: 3_000,
+      bases: [{ form: "setup", setupId }],
+      asks: false,
+    });
+  expect(await cite("setup-nope", "m-1")).toMatchObject({ kind: "refused" });
+  expect(await cite("setup-1", "m-2")).toEqual({ kind: "recorded" });
+});

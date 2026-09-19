@@ -4201,6 +4201,10 @@ test("with no plan held, the scope screen says how one comes to be held, on the 
   expect(ja).not.toContain('id="scope-form"');
   // Never sent to a terminal: no environment variable is named.
   expect(en).not.toContain("RONDO_PLAN");
+  // Nothing held means setup did not finish, not a paste owed (D-0075 rule 4.1).
+  for (const said of [EN.scopeNoPlanHeld, chromeFor("ja").scopeNoPlanHeld]) {
+    expect(said).not.toMatch(/JSON|paste|plan\.json|貼/);
+  }
 });
 
 test("with two plans held, the screen offers the choice, the first marked, and the address picks the other (rondo#238)", async () => {

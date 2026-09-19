@@ -1169,6 +1169,43 @@ test(
   WINDOWS_HEAVY_TIMEOUT_MS,
 );
 
+test(
+  "setup-plan records setup's plan as the approver, one row per run, and refuses another actor (D-0075 rule 2)",
+  async () => {
+    const dir = mkdtempSync(join(tmpdir(), "rondo-setup-plan-"));
+    const path = join(dir, "rondo.sqlite3");
+    const environment = { RONDO_STORE: path, RONDO_APPROVER: "oidc|operator-1" };
+    const file = planFile(dir);
+    const argv = ["setup-plan", "--plan", file, "--actor-id", "oidc|operator-1"];
+
+    const other = await captured(
+      ["setup-plan", "--plan", file, "--actor-id", "someone-else"],
+      environment,
+    );
+    expect(other.code).not.toBe(0);
+    expect(
+      (
+        await captured(
+          ["setup-plan", "--plan", "plan.json", "--actor-id", "oidc|operator-1"],
+          environment,
+        )
+      ).code,
+    ).not.toBe(0);
+
+    const first = await captured(argv, environment);
+    expect(first.code).toBe(0);
+    expect(first.text).toContain(`agent type: ${agentTypeOf(PLAN)}`);
+    expect(first.text).toMatch(/^[\x20-\x7E\n]*$/);
+    // Setup run again is a second row, not an edit of the first.
+    await new Promise((done) => setTimeout(done, 2));
+    expect((await captured(argv, environment)).code).toBe(0);
+    const rows = await advisoryRecord(new DatabaseSync(path)).setupPlans();
+    expect(rows.map((row) => row.recordedBy)).toEqual(["oidc|operator-1", "oidc|operator-1"]);
+    expect(new Set(rows.map((row) => row.planDigest)).size).toBe(1);
+  },
+  WINDOWS_HEAVY_TIMEOUT_MS,
+);
+
 test("start --scope-decision-id: refused without --message-id before any verdict", () => {
   const refused = parseCommand([
     "start",

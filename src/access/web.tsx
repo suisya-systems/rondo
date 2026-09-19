@@ -184,8 +184,10 @@ export interface WebPorts extends InboxReadPorts {
       // the approval the press wrote and what a predecessor of it spent
       // (D-0066 rules 1.4 and 3.4).
       | "heldAgentType"
-      // rondo#238: the plans a person picks from are the ones rondo holds.
+      // rondo#238: the plans a person picks from are the ones rondo holds,
+      // setup's among them (D-0075 rule 2.3).
       | "heldAgentTypeDigests"
+      | "setupPlans"
       // rondo#238 C2b: the drafted scope, its split, and whether a drafted
       // plan can start -- the scope's own verdict, read and never acted on.
       | "scopesFor"

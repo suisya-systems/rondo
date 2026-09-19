@@ -77,9 +77,15 @@ export type Basis =
    * 7.3, where a drafter's summary and question rest on the proposal row its
    * run wrote.
    */
-  | { readonly form: "proposal"; readonly proposalId: string };
+  | { readonly form: "proposal"; readonly proposalId: string }
+  /**
+   * A setup row, by its id: append-only, like a proposal. Added for D-0075
+   * rule 2.4, where a drafted scope rests on the setup row it records an agent
+   * type from.
+   */
+  | { readonly form: "setup"; readonly setupId: string };
 
-/** The seven forms of {@link Basis}, written once so a reader can check the union is closed. */
+/** The nine forms of {@link Basis}, written once so a reader can check the union is closed. */
 export const BASIS_FORMS = Object.freeze([
   "snapshot",
   "iteration",
@@ -89,6 +95,7 @@ export const BASIS_FORMS = Object.freeze([
   "message",
   "scope",
   "proposal",
+  "setup",
 ] as const satisfies readonly Basis["form"][]);
 
 /**
@@ -1152,6 +1159,8 @@ function readBasis(at: unknown, what: string): Basis {
       return { form, scopeId: text(row, "scopeId", `${what}'s basis`) };
     case "proposal":
       return { form, proposalId: text(row, "proposalId", `${what}'s basis`) };
+    case "setup":
+      return { form, setupId: text(row, "setupId", `${what}'s basis`) };
     default:
       throw new PayloadDefect(
         `${what}'s basis is of form '${form}', which is not one of ${BASIS_FORMS.join(", ")}. ` +

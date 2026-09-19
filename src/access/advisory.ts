@@ -297,6 +297,8 @@ export function basisLine(basis: Basis, snapshot: object): string {
       return `scope ${basis.scopeId}`;
     case "proposal":
       return `proposal ${basis.proposalId}`;
+    case "setup":
+      return `setup ${basis.setupId}`;
     default:
       return `${basis.path}:${String(basis.firstLine)}-${String(basis.lastLine)} at ${basis.commit}`;
   }
@@ -2124,6 +2126,9 @@ const BASIS_FRESHNESS: {
   // A proposal row is immutable too (D-0022 rule 4), and nothing here reads it either.
   proposal: () =>
     undetermined("nothing here reads the proposal row this basis names, so it cannot confirm it"),
+  // A setup row is append-only (D-0075 rule 2.2), and nothing here reads it.
+  setup: () =>
+    undetermined("nothing here reads the setup row this basis names, so it cannot confirm it"),
 };
 
 /** What re-gathering produced for a proposal's candidates or its readings, so bases can be compared. */
