@@ -65,7 +65,7 @@ import type {
   ScopeSpend,
   StorePort,
 } from "../refrain/ports.js";
-import { lineShape } from "../store/lanes.js";
+import { claimCover, lineShape, WHOLE_REPOSITORY } from "../store/lanes.js";
 import {
   isDeterministicReadingDrafter,
   isModelReadingDrafter,
@@ -78,7 +78,15 @@ import { type AdvisoryRecord, type IterationStore, LANE_LEDGER_AUTHOR } from "..
 
 import { DETERMINISTIC_DRAFTER, proposeAfterAbandon, type UnpromptedPorts } from "./advisory.js";
 import { discard, writeDelegationRecord } from "./delegation.js";
-import { inspectLapWork, type LandingReading, type LandingRequest, readLanding } from "./forge.js";
+import {
+  type ChangedPathsReading,
+  type ChangedPathsRequest,
+  inspectLapWork,
+  type LandingReading,
+  type LandingRequest,
+  readChangedPaths,
+  readLanding,
+} from "./forge.js";
 import { modelReadingLines } from "./model-review.js";
 import { READING_REMOTE, readingOf } from "./review.js";
 
@@ -256,7 +264,7 @@ export function conductorPorts(
   return {
     store: port,
     thread: record === null ? null : { record, store },
-    lanes: { store, readLanding, remote: READING_REMOTE },
+    lanes: { store, readLanding, readChangedPaths, remote: READING_REMOTE },
     now,
     classify: async (plan) => classifyPlan(plan),
     startContinuo: async () => ({ kind: "answered", value: { revision: continuo.revision } }),
@@ -492,7 +500,7 @@ export async function admit(
       : { ...report, lines: [...report.lines, ...read.lines] };
   }
   if (report.status === "awaiting_human") {
-    return await withGateReport(ports, report);
+    return await withGateReport(ports, await withClaimComparison(ports, report));
   }
   if (report.status !== "abandoned" || report.iterationId === null) {
     return report;
@@ -618,6 +626,89 @@ async function readHolder(
 }
 
 /**
+ * **The gate compares what the lap changed with what its line claims**
+ * (D-0073 rule 5): its reading's `base...tip`, the range the landing reading
+ * takes, against the in-force claim. A path outside the claim that another open
+ * line holds is `D-0067` rule 2's collision; one nobody holds is said as
+ * outside the claim. **Both are lines of the report and write nothing.** Rule
+ * 5's widening onto an unheld path is not written: the person answered at
+ * rondo#283's gate that the ledger does not widen a claim by itself, and
+ * whether to widen it is theirs. The collision's finding and its `sequence`
+ * are `D-0067`'s, not built. It cannot fail the step: the gate is already
+ * committed.
+ */
+async function withClaimComparison(
+  ports: ReportingPorts,
+  report: ConductorReport,
+): Promise<ConductorReport> {
+  if (ports.lanes === undefined || ports.lanes === null || report.iterationId === null) {
+    return report;
+  }
+  const lines = await compareClaim(ports.lanes, report.iterationId);
+  return lines.length === 0 ? report : { ...report, lines: [...report.lines, ...lines] };
+}
+
+async function compareClaim(lanes: LandingPorts, iterationId: string): Promise<readonly string[]> {
+  const uncompared = (reason: string) => [
+    `What lap ${iterationId} changed was not compared with its line's claim: ${reason}.`,
+  ];
+  const lap = await lanes.store.laneLine(iterationId);
+  if (lap.kind !== "read") {
+    return uncompared(lap.kind === "defect" ? lap.reason : "the lap is not in this store");
+  }
+  const claim = lap.line.claim;
+  // A claim on the whole repository, or a line from before the ledger (which
+  // holds `/` while a lap is in flight), has nothing outside it.
+  if (claim === null || claim.paths.includes(WHOLE_REPOSITORY)) {
+    return [];
+  }
+  const repository = lap.line.laps.find((each) => each.id === iterationId)?.plan["repository"];
+  const evidence = latestReading(
+    await lanes.store.readingsFor(iterationId),
+    isDeterministicReadingDrafter,
+  )?.evidence;
+  if (typeof repository !== "string" || evidence === undefined || evidence === null) {
+    return uncompared("its reading carries no base and tip to take the changed paths from");
+  }
+  const changed = await lanes.readChangedPaths({
+    repository,
+    baseCommit: evidence.baseCommit,
+    tipCommit: evidence.tipCommit,
+  });
+  if (changed.kind === "undetermined") {
+    return uncompared(changed.reason);
+  }
+  if (changed.paths.length === 0) {
+    return [];
+  }
+  const compared = await lanes.store.compareLane({
+    iterationId,
+    paths: changed.paths.map(claimCover),
+  });
+  if (compared.kind !== "compared") {
+    return uncompared(
+      compared.kind === "defect" ? compared.reason : "the lap is not in this store",
+    );
+  }
+  const quoted = (paths: readonly string[]) => paths.map((path) => `'${path}'`).join(", ");
+  return [
+    ...compared.held.map(
+      (holder) =>
+        `Lap ${iterationId} changed ${quoted(holder.sharedPaths)} outside line ` +
+        `${compared.lineageId}'s claim, and line ${holder.lineageId} holds it: the two lines ` +
+        "collide there.",
+    ),
+    ...(compared.unheld.length === 0
+      ? []
+      : [
+          `Lap ${iterationId} changed ${quoted(compared.unheld)} outside line ` +
+            `${compared.lineageId}'s claim, and no other open line holds it; the claim is ` +
+            "left as it is.",
+        ]),
+  ];
+}
+
+/**
  * One line for the report, saying what the unprompted door did.
  *
  * The `catch` is rule 11's and is deliberately total: this runs after a
@@ -663,7 +754,7 @@ export async function resume(ports: ReportingPorts, iterationId: string): Promis
   ) {
     return report;
   }
-  return await withGateReport(ports, report);
+  return await withGateReport(ports, await withClaimComparison(ports, report));
 }
 
 /**
@@ -683,8 +774,10 @@ export interface ReportingPorts extends ConductorPorts {
 
 /** What {@link admit} reads and writes to release a line whose work has landed. */
 export interface LandingPorts {
-  readonly store: Pick<IterationStore, "laneLine" | "readingsFor" | "releaseLane">;
+  readonly store: Pick<IterationStore, "laneLine" | "readingsFor" | "releaseLane" | "compareLane">;
   readonly readLanding: (request: LandingRequest) => Promise<LandingReading>;
+  /** What reads the paths a lap at its gate changed (D-0073 rule 5). */
+  readonly readChangedPaths: (request: ChangedPathsRequest) => Promise<ChangedPathsReading>;
   /** The remote `publish` pushes to, whose default branch is read. */
   readonly remote: string;
 }

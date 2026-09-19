@@ -49,6 +49,7 @@
 import { DatabaseSync } from "node:sqlite";
 
 import {
+  claimCovers,
   type LaneLap,
   lineShape,
   mayBeOpen,
@@ -591,7 +592,34 @@ export interface IterationStore {
    * ended by `abandon()` (rule 9.3), and its claim goes with it.
    */
   releaseLane(input: LaneReleaseInput): Promise<LaneReleaseOutcome>;
+  /**
+   * Compare the paths a lap changed with its line's in-force claim (D-0073
+   * rule 5): which fall outside it, split into those another open line of the
+   * repository holds (`D-0067` rule 2's collision) and those nobody holds.
+   * Reads only: the ledger does not widen a claim by itself (the person's
+   * answer at rondo#283's gate), so rule 5's widening is not written here.
+   */
+  compareLane(input: LaneCompareInput): Promise<LaneCompareOutcome>;
 }
+
+export interface LaneCompareInput {
+  /** Any lap of the line. */
+  readonly iterationId: string;
+  /** Changed paths, already claimable (`claimCover`). */
+  readonly paths: readonly string[];
+}
+
+export type LaneCompareOutcome =
+  | {
+      readonly kind: "compared";
+      readonly lineageId: string;
+      /** Outside the claim and held by no other open line, sorted. */
+      readonly unheld: readonly string[];
+      /** Outside the claim and held by another open line. */
+      readonly held: readonly LaneHolder[];
+    }
+  | { readonly kind: "absent" }
+  | { readonly kind: "defect"; readonly reason: string };
 
 /** One line of the lane ledger, as {@link IterationStore.laneLine} reads it. */
 export interface LaneLine {
@@ -2268,6 +2296,35 @@ export function iterationStore(connection: DatabaseSync, policy: HostPolicy): It
           );
           return { kind: "released", lineageId: root.id };
         });
+      } catch (error) {
+        return { kind: "defect", reason: describe(error) };
+      }
+    },
+
+    async compareLane(input: LaneCompareInput): Promise<LaneCompareOutcome> {
+      try {
+        const root = lineageOf(connection, input.iterationId)?.[0];
+        if (root === undefined) {
+          return { kind: "absent" };
+        }
+        const head = claimHead(connection, root);
+        // A line from before the ledger holds `/` while a lap is in flight
+        // (`openLines`), so nothing it changed is outside its claim.
+        if (head === null) {
+          return { kind: "compared", lineageId: root, unheld: [], held: [] };
+        }
+        const outside = input.paths.filter((path) => !claimCovers(head.paths, path));
+        const held = openLines(connection, head.repository, root).flatMap((line) => {
+          const shared = sharedPaths(outside, line.paths);
+          return shared.length === 0 ? [] : [{ lineageId: line.lineageId, sharedPaths: shared }];
+        });
+        const heldPaths = new Set(held.flatMap((holder) => holder.sharedPaths));
+        return {
+          kind: "compared",
+          lineageId: root,
+          unheld: [...new Set(outside.filter((path) => !heldPaths.has(path)))].sort(),
+          held,
+        };
       } catch (error) {
         return { kind: "defect", reason: describe(error) };
       }

@@ -90,6 +90,15 @@ export function pathsOverlap(a: string, b: string): boolean {
   return covers(a, b) || covers(b, a);
 }
 
+/**
+ * Whether some path of `claim` covers `path` (D-0073 rule 5). Containment, not
+ * overlap: a changed path's cover (`src/`) that merely overlaps a narrower
+ * claim (`src/a.ts`) is outside it.
+ */
+export function claimCovers(claim: readonly string[], path: string): boolean {
+  return claim.some((held) => covers(held, path));
+}
+
 /** The paths of `asked` that overlap some path of `held`, in `asked`'s order. */
 export function sharedPaths(asked: readonly string[], held: readonly string[]): readonly string[] {
   return asked.filter((path) => held.some((other) => pathsOverlap(path, other)));
@@ -138,4 +147,17 @@ export function lineShape(laps: readonly LaneLap[]): LineShape {
 /** Whether a line of this shape is open before its landing is read. */
 export function mayBeOpen(shape: LineShape): boolean {
   return shape.inFlight || shape.closedTips.length > 0;
+}
+
+/**
+ * The claimable path covering a path a lap changed (D-0073 rule 5): the path
+ * itself, or, when a segment of it is one a claim cannot spell (a `*`, a `\\`,
+ * a control character), the directory above that segment, down to `/`. A
+ * wider claim costs parallelism and never a collision, so a path is never
+ * dropped for being unspellable.
+ */
+export function claimCover(path: string): string {
+  const segments = path.split("/");
+  const bad = segments.findIndex((segment) => claimPathRefusal(segment) !== null);
+  return bad === -1 ? path : bad === 0 ? WHOLE_REPOSITORY : `${segments.slice(0, bad).join("/")}/`;
 }

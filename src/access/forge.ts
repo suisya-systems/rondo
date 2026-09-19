@@ -985,27 +985,15 @@ export async function readLanding(request: LandingRequest): Promise<LandingReadi
   const paths = new Set<string>();
   const differing = new Set<string>();
   for (const tip of request.tipCommits) {
-    // Three dots: from where the tip forked off the base, so a base that moved
-    // while the line ran (another line landed, a fetch) is not this line's
-    // work. `--ignore-submodules=none` so a gitlink bump is never hidden by
-    // `.gitmodules` or the person's config.
-    const changed = await git([
-      "diff",
-      "--name-only",
-      "-z",
-      "--no-renames",
-      "--ignore-submodules=none",
-      `${request.baseCommit}...${tip}`,
-    ]);
-    const changedFailure = queryFailure(changed);
-    if (changedFailure !== null) {
-      return { kind: "undetermined", reason: changedFailure };
+    const changed = await changedBetween(git, request.baseCommit, tip);
+    if (typeof changed === "string") {
+      return { kind: "undetermined", reason: changed };
     }
     const tipTree = await treeEntries(git, tip);
     if (typeof tipTree === "string") {
       return { kind: "undetermined", reason: tipTree };
     }
-    for (const path of changed.stdout.split("\0").filter((path) => path !== "")) {
+    for (const path of changed) {
       paths.add(path);
       if (tipTree.get(path) !== headTree.get(path)) {
         differing.add(path);
@@ -1015,6 +1003,55 @@ export async function readLanding(request: LandingRequest): Promise<LandingReadi
   return differing.size === 0
     ? { kind: "landed", branch, headCommit, paths: [...paths].sort() }
     : { kind: "notLanded", branch, headCommit, differing: [...differing].sort() };
+}
+
+/**
+ * The paths changed from where `tip` forked off `base` to `tip`, or why git
+ * would not say. Three dots, so a base that moved while the line ran (another
+ * line landed, a fetch) is not this line's work. `--ignore-submodules=none` so
+ * a gitlink bump is never hidden by `.gitmodules` or the person's config.
+ */
+async function changedBetween(
+  git: (argv: readonly string[]) => Promise<CommandOutcome>,
+  base: string,
+  tip: string,
+): Promise<readonly string[] | string> {
+  const changed = await git([
+    "diff",
+    "--name-only",
+    "-z",
+    "--no-renames",
+    "--ignore-submodules=none",
+    `${base}...${tip}`,
+  ]);
+  return queryFailure(changed) ?? changed.stdout.split("\0").filter((path) => path !== "");
+}
+
+/** What {@link readChangedPaths} is asked: one lap's range, in its repository. */
+export interface ChangedPathsRequest {
+  readonly repository: string;
+  readonly baseCommit: string;
+  readonly tipCommit: string;
+}
+
+export type ChangedPathsReading =
+  | { readonly kind: "read"; readonly paths: readonly string[] }
+  | { readonly kind: "undetermined"; readonly reason: string };
+
+/**
+ * The paths a lap changed (D-0073 rule 5), the set {@link readLanding} reads
+ * per closed tip, so the gate and the landing never disagree on what a lap
+ * changed.
+ */
+export async function readChangedPaths(request: ChangedPathsRequest): Promise<ChangedPathsReading> {
+  const changed = await changedBetween(
+    (argv) => runCommand("git", ["-C", request.repository, ...argv], PREFLIGHT_TIMEOUT_MS),
+    request.baseCommit,
+    request.tipCommit,
+  );
+  return typeof changed === "string"
+    ? { kind: "undetermined", reason: changed }
+    : { kind: "read", paths: changed };
 }
 
 /**

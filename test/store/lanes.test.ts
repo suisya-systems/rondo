@@ -6,6 +6,8 @@
 import { expect, test } from "vitest";
 
 import {
+  claimCover,
+  claimCovers,
   claimPathRefusal,
   lineShape,
   mayBeOpen,
@@ -81,4 +83,18 @@ test("a closed lap a redo continues is not a tip, whatever the redo's end; a clo
     inFlight: true,
     closedTips: [],
   });
+});
+
+test("D-0073 rule 5: a changed path a claim cannot spell is covered by the directory above it", () => {
+  expect(claimCover("src/store/sqlite.ts")).toBe("src/store/sqlite.ts");
+  expect(claimCover("src/*/x.ts")).toBe("src/");
+  expect(claimCover("a\\b/c.ts")).toBe("/");
+});
+
+test("D-0073 rule 5: a changed path is inside a claim only when the claim covers it", () => {
+  expect(claimCovers(["src/"], "src/a.ts")).toBe(true);
+  expect(claimCovers(["src/a.ts"], "src/a.ts")).toBe(true);
+  // A cover that only overlaps a narrower claim is outside it.
+  expect(claimCovers(["src/a.ts"], "src/")).toBe(false);
+  expect(claimCovers(["docs/"], "/")).toBe(false);
 });
