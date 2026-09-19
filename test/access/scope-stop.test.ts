@@ -1316,7 +1316,12 @@ test("D-0073 rule 7: a refusal by a closed line reads its landing, and only a la
     "awaiting_human",
   );
   const asked: LandingRequest[] = [];
-  let answer: LandingReading = { kind: "notLanded", headCommit: "h", differing: ["x.ts"] };
+  let answer: LandingReading = {
+    kind: "notLanded",
+    branch: "main",
+    headCommit: "h",
+    differing: ["x.ts"],
+  };
   const ports: ReportingPorts = {
     ...h.reporting,
     lanes: {
@@ -1344,7 +1349,6 @@ test("D-0073 rule 7: a refusal by a closed line reads its landing, and only a la
     {
       repository: PLAN.repository,
       remote: "origin",
-      defaultBranch: "main",
       baseCommit: "b".repeat(40),
       tipCommits: ["a".repeat(40)],
     },
@@ -1355,7 +1359,7 @@ test("D-0073 rule 7: a refusal by a closed line reads its landing, and only a la
   expect(unknown).toContain("undetermined: the forge did not answer");
   expect(unknown).not.toContain("not on");
 
-  answer = { kind: "landed", headCommit: "h", paths: ["x.ts"] };
+  answer = { kind: "landed", branch: "main", headCommit: "h", paths: ["x.ts"] };
   const through = await admit(ports, h.advisory, PLAN, POLICY, "i-next");
   expect(through.iterationId).toBe("i-next");
   expect(through.lines[0]).toContain("so its paths were released");

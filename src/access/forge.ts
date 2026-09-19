@@ -898,7 +898,6 @@ export interface LandingRequest {
   readonly repository: string;
   /** The remote `publish` pushes to, whose default branch is the forge's. */
   readonly remote: string;
-  readonly defaultBranch: string;
   /** The lineage's first `baseCommit`. */
   readonly baseCommit: string;
   /** Each closed tip's `tipCommit`: what must be on the default branch. */
@@ -913,9 +912,16 @@ export interface LandingRequest {
  * not say "waiting on a merge" for it (rule 6, `D-0068` rule 2.3).
  */
 export type LandingReading =
-  | { readonly kind: "landed"; readonly headCommit: string; readonly paths: readonly string[] }
+  | {
+      readonly kind: "landed";
+      /** The forge's default branch, as the remote named it. */
+      readonly branch: string;
+      readonly headCommit: string;
+      readonly paths: readonly string[];
+    }
   | {
       readonly kind: "notLanded";
+      readonly branch: string;
       readonly headCommit: string;
       /** The changed paths whose entry on the default branch is not the tip's. */
       readonly differing: readonly string[];
@@ -936,20 +942,28 @@ export type LandingReading =
  * because no other line held these paths while this one was open (rule 3).
  */
 export async function readLanding(request: LandingRequest): Promise<LandingReading> {
-  const ref = `refs/rondo/landing/${request.remote}/${request.defaultBranch}`;
   const git = (argv: readonly string[], timeoutMs = PREFLIGHT_TIMEOUT_MS) =>
     runCommand("git", ["-C", request.repository, ...argv], timeoutMs);
+  // **The forge's default branch, asked of the forge**, and not the plan's base
+  // branch: a line cut from `develop` has not landed on the default branch
+  // because it merged into `develop` (rule 6). A remote that will not name its
+  // HEAD leaves the reading undetermined.
+  const symref = await git(["ls-remote", "--symref", request.remote, "HEAD"], FORGE_TIMEOUT_MS);
+  const symrefFailure = queryFailure(symref);
+  const named = /^ref: refs\/heads\/(\S+)\tHEAD$/m.exec(symref.stdout)?.[1];
+  if (symrefFailure !== null || named === undefined) {
+    return {
+      kind: "undetermined",
+      reason: `the forge's default branch could not be named: ${symrefFailure ?? "no HEAD symref"}`,
+    };
+  }
+  const branch = named;
+  const ref = `refs/rondo/landing/${request.remote}/${branch}`;
   // `--refmap=` (empty) is load-bearing: with an explicit refspec, a fetch
   // from a configured remote also moves that remote's tracking ref, which is
   // the person's and not rondo's to move.
   const fetched = await git(
-    [
-      "fetch",
-      "--no-tags",
-      "--refmap=",
-      request.remote,
-      `+refs/heads/${request.defaultBranch}:${ref}`,
-    ],
+    ["fetch", "--no-tags", "--refmap=", request.remote, `+refs/heads/${branch}:${ref}`],
     FORGE_TIMEOUT_MS,
   );
   const fetchFailure = queryFailure(fetched);
@@ -999,8 +1013,8 @@ export async function readLanding(request: LandingRequest): Promise<LandingReadi
     }
   }
   return differing.size === 0
-    ? { kind: "landed", headCommit, paths: [...paths].sort() }
-    : { kind: "notLanded", headCommit, differing: [...differing].sort() };
+    ? { kind: "landed", branch, headCommit, paths: [...paths].sort() }
+    : { kind: "notLanded", branch, headCommit, differing: [...differing].sort() };
 }
 
 /**

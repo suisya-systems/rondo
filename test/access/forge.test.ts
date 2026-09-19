@@ -500,7 +500,6 @@ function landingWorld() {
   const landing = (tips: readonly string[] = [tipCommit], remoteName = "origin") => ({
     repository: work,
     remote: remoteName,
-    defaultBranch: "main",
     baseCommit,
     tipCommits: tips,
   });
@@ -592,4 +591,16 @@ test("a deleted file the default branch replaced with a directory of the same na
   git(merger, "commit", "-m", "squash, with b.txt a directory");
   git(merger, "push", "-q", "origin", "main");
   expect(await readLanding(landing())).toMatchObject({ kind: "notLanded", differing: ["b.txt"] });
+});
+
+test("work merged into a branch that is not the forge's default has not landed", async () => {
+  const { merger, landing } = landingWorld();
+  git(merger, "switch", "-q", "-c", "develop");
+  writeFileSync(join(merger, "a.txt"), "changed\n");
+  git(merger, "rm", "-q", "b.txt");
+  writeFileSync(join(merger, "c.txt"), "new\n");
+  git(merger, "add", ".");
+  git(merger, "commit", "-m", "squash into develop");
+  git(merger, "push", "-q", "origin", "develop");
+  expect(await readLanding(landing())).toMatchObject({ kind: "notLanded", branch: "main" });
 });

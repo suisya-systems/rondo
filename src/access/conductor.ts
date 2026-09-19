@@ -570,9 +570,8 @@ async function readHolder(
   }
   const root = line.laps[0];
   const repository = root?.plan["repository"];
-  const branch = root?.plan["pull_request_base_branch"] ?? root?.plan["base_branch"];
-  if (root === undefined || typeof repository !== "string" || typeof branch !== "string") {
-    return undetermined("its first lap's plan names no repository and base branch");
+  if (root === undefined || typeof repository !== "string") {
+    return undetermined("its first lap's plan names no repository");
   }
   // The lineage's first base is the root lap's, and only the root's: a later
   // lap's reading is taken over its predecessor's branch, and the root's own
@@ -595,7 +594,6 @@ async function readHolder(
   const landing = await lanes.readLanding({
     repository,
     remote: lanes.remote,
-    defaultBranch: branch,
     baseCommit,
     tipCommits,
   });
@@ -606,13 +604,13 @@ async function readHolder(
     return {
       released: false,
       line:
-        `Line ${lineageId}'s work is not on ${lanes.remote}/${branch} yet: ` +
+        `Line ${lineageId}'s work is not on ${lanes.remote}/${landing.branch} yet: ` +
         `${landing.differing.map((path) => `'${path}'`).join(", ")} differ.`,
     };
   }
   return await release(
     shape.closedTips,
-    `Line ${lineageId}'s work is on ${lanes.remote}/${branch}`,
+    `Line ${lineageId}'s work is on ${lanes.remote}/${landing.branch}`,
   );
 }
 
