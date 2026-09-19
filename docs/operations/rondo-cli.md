@@ -60,7 +60,8 @@ It builds rondo, clones and builds the pinned continuo, creates the control plan
 target repository with a `main` branch to run laps against and a bare repository beside it as that
 target's `origin`, writes a complete `plan.json` and an `env.sh` holding section 2's three exports,
 records that plan into rondo's store with `rondo setup-plan` so the page offers it with nothing
-pasted (D-0075) -- and then prints the commands below with the real paths filled in. It **never runs a lap**:
+pasted (D-0075), writes the one word that starts rondo and the service it hands the host to
+(D-0080, below) -- and then prints the commands below with the real paths filled in. It **never runs a lap**:
 everything it does is free, and `start` is the line that is not.
 
 **It cannot demonstrate `publish` to the end, and it says so.** The bare `origin` makes the push leg
@@ -76,6 +77,35 @@ the store both refuse otherwise (D-0075 rule 1.1).
 The three site paths it cannot discover -- the interlock checkout, the claude-org checkout and the
 worker CLI -- have defaults and `RONDO_DOGFOOD_*` overrides, and it fails by name rather than
 guessing when one is absent. `--help` lists them.
+
+### Starting rondo afterwards is one word
+
+The last thing setup writes is the command that starts rondo (D-0080), so nothing about a start is
+yours to remember:
+
+```sh
+rondo
+```
+
+No directory to be in, no `env.sh` to source, no port and no repository. Setup writes that word as a
+program in `~/.local/bin` -- a directory your shell already searches, and it says so when it is not
+on your `PATH` -- carrying every fact it resolved: the store, the approver, the language, the two
+bounds, continuo's CLI, the port, the repository, `node`'s real path, the checkout, and a `PATH`
+holding the real directories of `git`, `gh`, `claude` and `codex`. It also installs a user service
+from those same facts, because the service manager's own `PATH` holds none of those programs.
+
+What the word does is hand the host to that service, wait until the page answers, open it and come
+back -- so the terminal is free and its window may be closed, and a crash restarts the host.
+`--port 7333` and `--repo OWNER/NAME` are what setup writes into the service; `--port` and `--repo`
+on `scripts/dogfood-env.sh` are where you choose them.
+
+**When rondo will not come up, the word is what tells you**, in three sentences in your own
+language, naming no unit, no path and no log: setup on this computer has stopped working and
+whoever installed it is the one who can look. **A host fact that moved is repaired by running setup
+again** (D-0080 rule 2.4), not by editing the word: nothing checks those facts at a start, and
+starting runs no setup.
+
+`rondo web` in a terminal stays exactly what it was, for whoever installs and repairs rondo.
 
 If you would rather do it by hand, or want to know what that script is doing, read on.
 
