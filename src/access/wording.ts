@@ -1400,7 +1400,7 @@ explanation you pressed on and then answers the gate.`,
         ? "from setting up this machine"
         : "the plan earlier laps ran on",
   scopePlanLine: (where, agentType, from) => `${where}, agent type ${agentType} (${from})`,
-  scopePlanHeldAt: (line, at) => `${line}, held since ${at.replace("T", " ")} UTC`,
+  scopePlanHeldAt: (line, at) => `${line}, held since ${at} UTC`,
   scopeDraftedLead:
     "rondo drafted this scope for your request: the work below, and budgets worked out from the " +
     "laps this store has recorded. Approve it as it is, or change a value first -- your version " +
@@ -2171,7 +2171,7 @@ const JA: Partial<Chrome> = Object.freeze({
         ? "このマシンのセットアップで用意したもの"
         : "以前の周回が使ったもの",
   scopePlanLine: (where, agentType, from) => `${where}、エージェント種別 ${agentType}（${from}）`,
-  scopePlanHeldAt: (line, at) => `${line}、${at.replace("T", " ")} UTC から保持`,
+  scopePlanHeldAt: (line, at) => `${line}、${at} UTC から保持`,
   scopeDraftedLead:
     "この依頼の範囲を rondo が下書きしました。下の作業と、このストアに記録された周回から出した" +
     "予算です。そのまま承認するか、先に値を変えてください。変えた場合は、rondo の下書きの" +

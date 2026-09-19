@@ -4188,7 +4188,9 @@ function planChoice(
           // is what a person can tell them apart by.
           const line = planLine(wording, plan);
           const alike = plans.filter((other) => planLine(wording, other) === line).length > 1;
-          const said = alike ? wording.scopePlanHeldAt(line, localTime(plan.heldAtMs)) : line;
+          const said = alike
+            ? wording.scopePlanHeldAt(line, localTime(plan.heldAtMs).replace("T", " "))
+            : line;
           return (
             <li class="text-[12.5px] leading-5 wrap-anywhere">
               {plan.planDigest === chosen ? (
