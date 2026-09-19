@@ -4224,6 +4224,30 @@ test("with two plans held, the screen offers the choice, the first marked, and t
   );
 });
 
+test("a plan the address names and rondo no longer offers is said, with the list again and no form -- never another plan under its name (rondo#238)", async () => {
+  const world = fresh();
+  const requestId = "request-scope-gone";
+  await seedScopeRequest(world, requestId, "Fix it, please.");
+  const held = await seedScopePlan(world.record, requestId);
+  const ports = portsOver(world, "ada", []);
+  const gone = `sha256:${"9".repeat(64)}`;
+  for (const wording of [EN, chromeFor("ja")]) {
+    const page = await operatorPage(
+      ports,
+      "t",
+      { kind: "scope", messageId: requestId, rounds: null, decisionId: null, plan: gone },
+      wording,
+      mint,
+      () => "x",
+      () => "y",
+    );
+    expect(page).toContain(wording.scopePlanGone);
+    expect(page).not.toContain('id="scope-form"');
+    // The one plan there is, offered as the way on.
+    expect(page).toContain(`plan=${encodeURIComponent(held.planDigest)}`);
+  }
+});
+
 test("the approved scope's start runs on a held plan it allows, and says so where there is none (rondo#238)", async () => {
   const world = fresh();
   const requestId = "request-scope-startplan";

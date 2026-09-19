@@ -562,6 +562,8 @@ export interface Chrome {
   readonly scopePlanFrom: (from: "message" | "iterations") => string;
   /** One held plan as a line: where, the agent type's short digest, and where it came from. */
   readonly scopePlanLine: (where: string, agentType: string, from: string) => string;
+  /** A plan the address named that rondo no longer offers: said, and the choice put again. */
+  readonly scopePlanGone: string;
   /** An approved scope no plan rondo holds may run under. */
   readonly scopeNoPlanForScope: string;
   readonly scopeNoApprover: string;
@@ -1293,6 +1295,9 @@ explanation you pressed on and then answers the gate.`,
   scopePlansUnread: (reason) =>
     `The plans rondo holds could not be read, so there is nothing to choose from: ${reason}`,
   scopePlanAsk: "Which plan the work runs on",
+  scopePlanGone:
+    "The plan chosen on this screen is no longer one rondo offers for this request. Choose one " +
+    "of these instead.",
   scopePlanFrom: (from) =>
     from === "message" ? "pasted into this thread" : "the plan earlier laps ran on",
   scopePlanLine: (where, agentType, from) => `${where}, agent type ${agentType} (${from})`,
@@ -2019,6 +2024,9 @@ const JA: Partial<Chrome> = Object.freeze({
   scopePlansUnread: (reason) =>
     `rondo が持っているプランを読めなかったので、選べるものがありません: ${reason}`,
   scopePlanAsk: "作業に使うプラン",
+  scopePlanGone:
+    "この画面で選んだプランは、もうこの依頼で rondo が選べるものではありません。次の中から" +
+    "選び直してください。",
   scopePlanFrom: (from) =>
     from === "message" ? "このスレッドに貼られたもの" : "以前の周回が使ったもの",
   scopePlanLine: (where, agentType, from) => `${where}、エージェント種別 ${agentType}（${from}）`,

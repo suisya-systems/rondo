@@ -11,7 +11,12 @@ import { expect, test } from "vitest";
 
 import { readDrafterResult } from "../../src/access/forge.js";
 import type { DrafterRun } from "../../src/access/model-draft.js";
-import { type DrafterPorts, draftRequest, heldPlans } from "../../src/access/model-drafter.js";
+import {
+  type DrafterPorts,
+  draftRequest,
+  heldPlanByDigest,
+  heldPlans,
+} from "../../src/access/model-drafter.js";
 import { readRunPlan } from "../../src/refrain/plan.js";
 import { planDigest } from "../../src/store/plan.js";
 import type { JsonRecord } from "../../src/store/records.js";
@@ -293,8 +298,12 @@ test("the plans a person picks from: one per place and agent type, newest first,
   const offered = await heldPlans(ports, "r1");
   // One kind here, and its newest first lap stands for it: not the revise.
   expect(offered.map((p) => p.planDigest)).toEqual([planDigest(newer)]);
-  // A press looks up what it was drawn over among every plan, so a newer lap
-  // of the same kind since does not make the older one vanish.
-  const every = await heldPlans(ports, "r1", { every: true });
-  expect(every.map((p) => p.planDigest)).toEqual([planDigest(newer), planDigest(older)]);
+  // A press and a redraw resolve what was chosen by digest, wherever rondo
+  // holds it: a newer lap of the same kind since does not hide the older one.
+  expect((await heldPlanByDigest(ports, "r1", planDigest(older)))?.planDigest).toBe(
+    planDigest(older),
+  );
+  // Held, but a revise's: still not a plan for new work.
+  expect(await heldPlanByDigest(ports, "r1", planDigest(revised))).toBeNull();
+  expect(await heldPlanByDigest(ports, "r1", `sha256:${"0".repeat(64)}`)).toBeNull();
 });

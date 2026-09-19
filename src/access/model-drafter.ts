@@ -351,59 +351,99 @@ export interface HeldPlan {
   readonly from: DraftTemplate["from"];
 }
 
+/** A template as a plan a person may pick, or null when it is not one (see {@link heldPlans}). */
+function asHeldPlan(template: DraftTemplate): HeldPlan | null {
+  const planned = readRunPlan(template.plan);
+  // **A revise lap's plan is not a template for new work**: its base is the
+  // lap it revised's topic branch (`revisionPlan`), so a lap started from it
+  // would be cut from another request's unmerged work. A first lap's plan
+  // bases on the repository's own branch.
+  if (planned.kind !== "planned" || planned.plan.pullRequestBaseBranch !== null) {
+    return null;
+  }
+  const recorded = agentTypeRecordOf(planned.plan, template.plan);
+  if ("refusal" in recorded) {
+    return null;
+  }
+  return {
+    planDigest: template.planDigest,
+    document: template.plan,
+    repository: template.repository,
+    workspaceRoot: template.workspaceRoot,
+    agentTypeDigest: recorded.record.agentTypeDigest,
+    agentTypeInput: recorded.record.agentTypeInput,
+    from: template.from,
+  };
+}
+
 /**
  * The plans rondo holds for one request: pasted into its thread, newest first,
  * then those recent laps ran, newest first -- **one per (repository, workspace
  * root, agent type)**, because every lap's plan carries its own run and prompt
  * and a list of twenty near-identical laps is not a choice a person can make.
  * The newest of each kind stands for it. A plan whose agent type builds no
- * record is not offered.
+ * record, or a revise lap's, is not offered.
  */
 export async function heldPlans(
   ports: Pick<DrafterPorts, "store" | "record" | "now">,
   requestMessageId: string,
-  /**
-   * Every plan and not one per kind: what a press looks the plan it was drawn
-   * over up in, so a newer lap of the same kind in the meantime does not make
-   * the drawn one vanish. The screen offers one per kind.
-   */
-  options: { readonly every?: boolean } = {},
 ): Promise<readonly HeldPlan[]> {
   const material = await gatherDrafterMaterial(ports, requestMessageId, null);
   const pasted = material.templates.filter((t) => t.from.kind === "message").reverse();
   const ran = material.templates.filter((t) => t.from.kind === "iterations");
   const plans = new Map<string, HeldPlan>();
   for (const template of [...pasted, ...ran]) {
-    const planned = readRunPlan(template.plan);
-    // **A revise lap's plan is not a template for new work**: its base is the
-    // lap it revised's topic branch (`revisionPlan`), so a lap started from it
-    // would be cut from another request's unmerged work. A first lap's plan
-    // bases on the repository's own branch.
-    if (planned.kind !== "planned" || planned.plan.pullRequestBaseBranch !== null) {
+    const plan = asHeldPlan(template);
+    if (plan === null) {
       continue;
     }
-    const recorded = agentTypeRecordOf(planned.plan, template.plan);
-    if ("refusal" in recorded) {
-      continue;
-    }
-    const kind = options.every
-      ? template.planDigest
-      : JSON.stringify([
-          template.repository,
-          template.workspaceRoot,
-          recorded.record.agentTypeDigest,
-        ]);
+    const kind = JSON.stringify([plan.repository, plan.workspaceRoot, plan.agentTypeDigest]);
     if (!plans.has(kind)) {
-      plans.set(kind, {
-        planDigest: template.planDigest,
-        document: template.plan,
-        repository: template.repository,
-        workspaceRoot: template.workspaceRoot,
-        agentTypeDigest: recorded.record.agentTypeDigest,
-        agentTypeInput: recorded.record.agentTypeInput,
-        from: template.from,
-      });
+      plans.set(kind, plan);
     }
   }
   return [...plans.values()];
+}
+
+/**
+ * One plan a person chose, by digest, **wherever rondo holds it** (rondo#238):
+ * pasted into this request's thread, or on any lap row -- not only the one of
+ * each kind the list offers, and not only the twenty rows the list reads. What
+ * a press and a redraw resolve the chosen plan by, so a newer lap in the
+ * meantime neither hides it nor swaps it. Null when it is held nowhere, or is
+ * no plan a person may pick ({@link asHeldPlan}).
+ */
+export async function heldPlanByDigest(
+  ports: Pick<DrafterPorts, "store" | "record" | "now">,
+  requestMessageId: string,
+  planDigest: string,
+): Promise<HeldPlan | null> {
+  const material = await gatherDrafterMaterial(ports, requestMessageId, null);
+  const pasted = material.templates.find(
+    (t) => t.planDigest === planDigest && t.from.kind === "message",
+  );
+  if (pasted !== undefined) {
+    return asHeldPlan(pasted);
+  }
+  for (const outcome of [
+    ...(await ports.store.readLive()),
+    ...(await ports.store.terminalIterations()),
+  ]) {
+    if (outcome.kind !== "read" || outcome.record.planDigest !== planDigest) {
+      continue;
+    }
+    const planned = readPlan(outcome.record.plan);
+    if (planned.kind !== "planned") {
+      continue;
+    }
+    return asHeldPlan({
+      planDigest,
+      plan: outcome.record.plan,
+      repository: planned.plan.repository,
+      workspaceRoot: planned.plan.workspaceRoot,
+      agentTypeDigest: outcome.record.agentTypeDigest,
+      from: { kind: "iterations", iterationIds: [outcome.record.id] },
+    });
+  }
+  return null;
 }

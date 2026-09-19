@@ -118,7 +118,7 @@ import {
   runDrafter,
 } from "./forge.js";
 import { type InboxOutcome, showInbox, type TranscriptLocation } from "./inbox.js";
-import { type HeldPlan, heldPlans } from "./model-drafter.js";
+import { type HeldPlan, heldPlanByDigest } from "./model-drafter.js";
 import { modelReadingLines } from "./model-review.js";
 import { modelReviewPorts, takeModelReading } from "./model-reviewer.js";
 import { denialLine, evidenceOf, LIST_LIMIT, READING_REMOTE, uncommittedPaths } from "./review.js";
@@ -470,8 +470,9 @@ async function heldPlanOf(
   planDigest: string,
 ): Promise<{ readonly plan: HeldPlan | null } | { readonly refusal: string }> {
   try {
-    const plans = await heldPlans({ ...ports, now: Date.now }, requestMessageId, { every: true });
-    return { plan: plans.find((plan) => plan.planDigest === planDigest) ?? null };
+    return {
+      plan: await heldPlanByDigest({ ...ports, now: Date.now }, requestMessageId, planDigest),
+    };
   } catch (error) {
     return {
       refusal: `the plans rondo holds could not be read: ${error instanceof Error ? error.message : String(error)}`,

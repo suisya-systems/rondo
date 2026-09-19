@@ -144,7 +144,7 @@ import {
 } from "./inbox.js";
 import { markdownHtml } from "./markdown.js";
 import { isModelDrafterName } from "./model-draft.js";
-import { type HeldPlan, heldPlans } from "./model-drafter.js";
+import { type HeldPlan, heldPlanByDigest, heldPlans } from "./model-drafter.js";
 import { denialLine, LIST_LIMIT } from "./review.js";
 import { heldAgentTypeLines, scopeBudgetsFromStore } from "./scope.js";
 import { type Chrome, EN, SHIPPED_SETS, setFor } from "./wording.js";
@@ -4091,6 +4091,26 @@ async function plansFor(
   }
 }
 
+/** The plan the address names, wherever rondo holds it, or null (none named, or not held). */
+async function chosenPlan(
+  ports: WebPorts,
+  view: Extract<PageView, { kind: "scope" }>,
+  nowMs: number,
+): Promise<HeldPlan | null> {
+  if (view.plan === null) {
+    return null;
+  }
+  try {
+    return await heldPlanByDigest(
+      { store: ports.store, record: ports.record, now: () => nowMs },
+      view.messageId,
+      view.plan,
+    );
+  } catch {
+    return null;
+  }
+}
+
 /** One held plan as a person reads it: where it runs, with which agent type, and where it came from. */
 function planLine(wording: Chrome, plan: HeldPlan): string {
   return wording.scopePlanLine(
@@ -4110,11 +4130,11 @@ function planChoice(
   wording: Chrome,
   view: Extract<PageView, { kind: "scope" }>,
   plans: readonly HeldPlan[],
-  chosen: HeldPlan,
-  /** Nothing is chosen yet: every plan is a link, none is marked. */
-  unchosen = false,
+  /** The chosen plan's digest, or null when nothing is chosen: every plan is then a link. */
+  chosen: string | null,
 ) {
-  if (plans.length < 2) {
+  // One plan is no choice -- unless nothing is chosen, when it is the way on.
+  if (plans.length < 2 && chosen !== null) {
     return null;
   }
   return (
@@ -4125,7 +4145,7 @@ function planChoice(
           const said = planLine(wording, plan);
           return (
             <li class="text-[12.5px] leading-5 wrap-anywhere">
-              {plan === chosen && !unchosen ? (
+              {plan.planDigest === chosen ? (
                 <span aria-current="true" class={`${PILL} font-sans ${TONE.ok}`}>
                   {said}
                 </span>
@@ -4166,8 +4186,20 @@ async function scopeForm(
   }
   // The person's pick, or the first: a plan pasted into this thread, else the
   // one the latest lap ran on (`heldPlans`' order).
-  const chosen =
-    held.plans.find((plan) => plan.planDigest === view.plan) ?? (held.plans[0] as HeldPlan);
+  // The plan named in the address, wherever rondo holds it, or the first
+  // offered. One named and no longer held is said, with the list to choose
+  // from again, and no form -- never a different plan under the same address.
+  const named = await chosenPlan(ports, view, nowMs);
+  if (view.plan !== null && named === null) {
+    return (
+      <>
+        {lead}
+        {note(wording.scopePlanGone)}
+        {planChoice(wording, view, held.plans, null)}
+      </>
+    );
+  }
+  const chosen = named ?? (held.plans[0] as HeldPlan);
   // **The plan answers for a digest the store does not hold yet**, as it did
   // when the plan was a file (rondo#233 S3): a pasted plan's agent type is
   // recorded by the press, and its own input says what it bounds before then.
@@ -4211,7 +4243,7 @@ async function scopeForm(
       <p class="note rounded-md border border-border bg-muted/60 px-3 py-2 text-[13px] leading-5">
         {wording.scopeMaybeApproved}
       </p>
-      {planChoice(wording, view, held.plans, chosen)}
+      {planChoice(wording, view, held.plans, chosen.planDigest)}
       <section class={`${CARD} space-y-1`}>
         {/* **The card says what it holds**: the plan, where it runs, and what
             its agent type is allowed. Its heading named only the last of those
@@ -4505,19 +4537,11 @@ async function scopeApproved(
   // The plan the scope was drawn over is looked up among every plan rondo
   // holds, not only the one of each kind the list offers: a newer lap of the
   // same kind since must not swap it for another without a word.
-  const drawn =
-    view.plan === null || !("plans" in plans)
-      ? undefined
-      : (
-          await heldPlans(
-            { store: ports.store, record: ports.record, now: () => nowMs },
-            view.messageId,
-            {
-              every: true,
-            },
-          )
-        ).find((plan) => plan.planDigest === view.plan && allowedBy(payload, plan));
-  const runsOn = drawn ?? (allowed.length === 1 ? (allowed[0] as HeldPlan) : null);
+  const drawn = await chosenPlan(ports, view, nowMs);
+  // A plan named in the address and no longer one this scope may run on is
+  // said, and the choice put again -- never swapped for another plan silently.
+  const gone = view.plan !== null && (drawn === null || !allowedBy(payload, drawn));
+  const runsOn = gone ? null : (drawn ?? (allowed.length === 1 ? (allowed[0] as HeldPlan) : null));
   return (
     <>
       <section class={`${CARD} space-y-1`}>
@@ -4582,7 +4606,10 @@ async function scopeApproved(
       {retired || token === null || newIterationId === null ? null : allowed.length === 0 ? (
         note("plans" in plans ? wording.scopeNoPlanForScope : plans.note)
       ) : runsOn === null ? (
-        planChoice(wording, view, allowed, allowed[0] as HeldPlan, true)
+        <>
+          {gone ? note(wording.scopePlanGone) : null}
+          {planChoice(wording, view, allowed, null)}
+        </>
       ) : (
         <form
           id="start-form"
