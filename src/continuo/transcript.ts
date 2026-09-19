@@ -227,6 +227,49 @@ export function readLapCommands(request: LapSpendRequest): LapTranscriptReading 
   return commandsOf(transcript);
 }
 
+/**
+ * What the page reads of a running lap's log: {@link readLapCommands}'s
+ * reading, the file it came from, and whether a last line was held back.
+ */
+export type LapLogReading =
+  | (Extract<LapTranscriptReading, { kind: "read" }> & {
+      /** The transcript file read, so a person can find the whole of it. */
+      readonly file: string;
+      /** A last line with no newline yet: the lap is still writing it. */
+      readonly unfinished: boolean;
+    })
+  | Extract<LapTranscriptReading, { kind: "unread" }>;
+
+/**
+ * {@link readLapCommands} for a lap that may still be running (rondo#248 item
+ * 3), at the directory `locateTranscript` named.
+ *
+ * **The same two named files, and one difference.** A running lap is mid-write,
+ * so a last line with no newline after it is the line it is writing, not a
+ * torn transcript: it is held back and said to be (`unfinished`) rather than
+ * making the whole log unread. Every other line that is not an event still
+ * makes it unread, as it does for the reviewer.
+ */
+export function readLapLog(directory: string): LapLogReading {
+  const generation = generationOf(readText(join(directory, "record.json")));
+  if (generation === null) {
+    return {
+      kind: "unread",
+      reason: "the lap's record.json could not be read or names no generation",
+    };
+  }
+  const file = join(directory, `events-${String(generation).padStart(3, "0")}.jsonl`);
+  const transcript = readText(file);
+  if (transcript === null) {
+    return { kind: "unread", reason: `the lap's transcript ${file} could not be read` };
+  }
+  const end = transcript.lastIndexOf("\n") + 1;
+  const reading = commandsOf(transcript.slice(0, end));
+  return reading.kind === "unread"
+    ? reading
+    : { ...reading, file, unfinished: transcript.slice(end).trim() !== "" };
+}
+
 /** Reduce a transcript's lines to tool calls paired with their results. */
 function commandsOf(transcript: string): LapTranscriptReading {
   const commands: {

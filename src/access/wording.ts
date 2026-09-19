@@ -297,6 +297,22 @@ export interface Chrome {
   readonly logNotYet: string;
   readonly logUnchecked: (reason: string) => string;
   readonly logNotLookedFor: string;
+  /** rondo#248 item 3: the way from a running row into its log, and the log's screen. */
+  readonly logOpen: string;
+  readonly logOpenHere: string;
+  readonly logHeading: string;
+  readonly logLead: (shown: number, total: number) => string;
+  readonly logEmpty: string;
+  readonly logWhole: string;
+  readonly logUnfinished: string;
+  readonly logUnread: (reason: string) => string;
+  readonly logGone: string;
+  readonly logOutput: string;
+  readonly logOutputFailed: string;
+  readonly logNoOutput: string;
+  readonly logCutBefore: (characters: number) => string;
+  readonly logCutAfter: (characters: number) => string;
+  readonly logFinal: string;
   readonly fenceHeading: string;
   readonly whyStopped: string;
   readonly whyNotRead: string;
@@ -1060,6 +1076,26 @@ explanation you pressed on and then answers the gate.`,
   logNotYet: "no log yet",
   logUnchecked: (reason) => `could not check for a log: ${reason}`,
   logNotLookedFor: "log not looked for yet",
+  logOpen: "Read the log",
+  logOpenHere: "Read the commands this lap has run and what they returned, on this page",
+  logHeading: "What this lap has run",
+  logLead: (shown, total) =>
+    shown === total
+      ? `${String(total)} command${total === 1 ? "" : "s"}, newest first.`
+      : `The newest ${String(shown)} of ${String(total)} commands, newest first. The ${String(total - shown)} before them are in the file below.`,
+  logEmpty: "The log has no command in it yet.",
+  logWhole: "The whole log is this file:",
+  logUnfinished: "The lap is writing its next line; it shows here once it is finished.",
+  logUnread: (reason) => `The log could not be read: ${reason}`,
+  logGone: "There is no lap by that name.",
+  logOutput: "Output",
+  logOutputFailed: "Output -- failed",
+  logNoOutput: "No output recorded",
+  logCutBefore: (characters) =>
+    `The first ${characters.toLocaleString("en")} characters are not shown here.`,
+  logCutAfter: (characters) =>
+    `The last ${characters.toLocaleString("en")} characters are not shown here.`,
+  logFinal: "The lap's final message",
   fenceHeading: "The fence:",
   whyStopped: "Why it stopped",
   whyNotRead: "The worker's own account could not be read; it is in the text below if it was.",
@@ -1735,6 +1771,26 @@ const JA: Partial<Chrome> = Object.freeze({
   logNotYet: "ログはまだありません",
   logUnchecked: (reason) => `ログを確認できませんでした: ${reason}`,
   logNotLookedFor: "ログはまだ探していません",
+  logOpen: "ログを読む",
+  logOpenHere: "この周回が実行したコマンドとその結果を、この画面で読む",
+  logHeading: "この周回が実行したコマンド",
+  logLead: (shown, total) =>
+    shown === total
+      ? `全 ${String(total)} 件。新しいものが上です。`
+      : `全 ${String(total)} 件のうち、新しい ${String(shown)} 件です。新しいものが上です。それより前の ${String(total - shown)} 件は下のファイルで読めます。`,
+  logEmpty: "ログにはまだコマンドがありません。",
+  logWhole: "ログの全体はこのファイルにあります:",
+  logUnfinished: "いま次の行を書いているところです。書き終わるとここに出ます。",
+  logUnread: (reason) => `ログを読み取れませんでした: ${reason}`,
+  logGone: "その名前の周回はありません。",
+  logOutput: "出力",
+  logOutputFailed: "出力 (失敗)",
+  logNoOutput: "出力の記録はありません",
+  logCutBefore: (characters) =>
+    `先頭の ${characters.toLocaleString("ja")} 文字はここには出していません。`,
+  logCutAfter: (characters) =>
+    `末尾の ${characters.toLocaleString("ja")} 文字はここには出していません。`,
+  logFinal: "周回の最後のメッセージ",
   fenceHeading: "実行の制限:",
   whyStopped: "止まった理由",
   whyNotRead: "作業者自身の説明は読み取れませんでした。読めていれば下のテキストにあります。",

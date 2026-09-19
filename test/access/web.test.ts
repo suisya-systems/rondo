@@ -34,6 +34,7 @@ import {
 } from "../../src/access/cli.js";
 import { reportToRequest } from "../../src/access/conductor.js";
 import { inspectLapWork } from "../../src/access/forge.js";
+import type { TranscriptLocation } from "../../src/access/inbox.js";
 import { evidenceOf, READING_REMOTE } from "../../src/access/review.js";
 import { agentTypeRecordOf, heldAgentTypeLines } from "../../src/access/scope.js";
 import {
@@ -197,6 +198,9 @@ function portsOver(
       kind: "unknown",
       reason: "no continuo in this test",
     }),
+    // Asked only on the log screen, and only after `locateTranscript` named a
+    // directory -- which it never does here unless a test says so.
+    readLog: () => ({ kind: "unread", reason: "no transcript in this test" }),
     policy: { maxOccupying: 4, maxLive: 6 },
     actorId,
     material:
@@ -5189,4 +5193,149 @@ test("the entrances carry the weight of the acts behind them, and the refusal on
   expect(screen).not.toContain('id="publish-form"');
   expect(screen).toContain('id="publish-despite"');
   expect(screen).toContain(">Publish anyway</button>");
+});
+
+/** A log as `readLapLog` reads one: `count` commands, the newest last. */
+const logOf = (count: number, unfinished = false) => ({
+  kind: "read" as const,
+  commands: Array.from({ length: count }, (_, n) => ({
+    index: n + 1,
+    command: `echo step-${String(n + 1)}`,
+    output: n + 1 === count ? `${"x".repeat(9_000)}END` : `out-${String(n + 1)}`,
+    isError: n + 1 === 2,
+  })),
+  finalMessage: null,
+  file: "/srv/state/rondo-i-0001/s1/events-000.jsonl",
+  unfinished,
+});
+
+test("a running row with a log found carries a way into it, and the other three states carry none (#248 item 3)", async () => {
+  const world = fresh();
+  await runningLap(world, "i-0001", "Fix the flaky test.");
+  const withLocation = (located: TranscriptLocation) => ({
+    ...portsOver(world),
+    locateTranscript: async () => located,
+  });
+
+  const found = await operatorPage(
+    withLocation({ kind: "named", directory: "/srv/state/rondo-i-0001/s1", sessions: 1 }),
+    "t",
+  );
+  const row = found.slice(found.indexOf('id="lap-i-0001"'));
+  // A control, and one that names the row, never a path.
+  expect(row).toContain('id="log-i-0001" href="/?log=i-0001&amp;lang=en"');
+  expect(row).toContain(">Read the log</a>");
+  expect(row).toContain("log found");
+
+  for (const [located, says] of [
+    [
+      { kind: "unknown", reason: "continuo is down" },
+      "could not check for a log: continuo is down",
+    ],
+    [{ kind: "named", directory: "/srv/x", sessions: 0 }, "no log yet"],
+  ] as const) {
+    const html = await operatorPage(withLocation(located), "t");
+    expect(html).toContain(says);
+    expect(html).not.toContain('id="log-i-0001"');
+  }
+});
+
+test("the log screen draws the newest commands first, says what it left out and where the rest is (#248 item 3)", async () => {
+  const world = fresh();
+  await runningLap(world, "i-0001", "Fix the flaky test.");
+  const asked: string[] = [];
+  const ports = {
+    ...portsOver(world),
+    locateTranscript: async () => ({
+      kind: "named" as const,
+      directory: "/srv/state/rondo-i-0001/s1",
+      sessions: 1,
+    }),
+    readLog: (directory: string) => {
+      asked.push(directory);
+      return logOf(60, true);
+    },
+  };
+  const html = await operatorPage(ports, "t", { kind: "log", iterationId: "i-0001" });
+  const screen = html.slice(html.indexOf('id="log"'));
+
+  // Read at the directory the port named, and nowhere a request could say.
+  expect(asked).toEqual(["/srv/state/rondo-i-0001/s1"]);
+  expect(screen).toContain("What this lap has run");
+  expect(screen).toContain("The newest 50 of 60 commands, newest first. The 10 before them");
+  expect(screen).toContain("/srv/state/rondo-i-0001/s1/events-000.jsonl");
+  // Newest first, and the ten oldest not drawn.
+  expect(screen.indexOf("echo step-60")).toBeLessThan(screen.indexOf("echo step-59"));
+  expect(screen).toContain("echo step-11<");
+  expect(screen).not.toContain("echo step-10<");
+  // An output past the bound keeps its end and says how much went.
+  expect(screen).toContain("END</pre>");
+  expect(screen).toContain("The first 1,003 characters are not shown here.");
+  expect(screen).toContain("The lap is writing its next line");
+  // The screen holds still: no poll on it.
+  expect(html).not.toContain('hx-trigger="every 5s"');
+
+  // Every way it cannot draw a log is said, never an empty list.
+  const unread = await operatorPage(
+    { ...ports, readLog: () => ({ kind: "unread", reason: "record.json is gone" }) },
+    "t",
+    { kind: "log", iterationId: "i-0001" },
+  );
+  expect(unread).toContain("The log could not be read: record.json is gone");
+  const gone = await operatorPage(ports, "t", { kind: "log", iterationId: "i-0404" });
+  expect(gone).toContain("There is no lap by that name.");
+});
+
+test("the log screen speaks Japanese in the Japanese set (#248 item 3)", async () => {
+  const world = fresh();
+  await runningLap(world, "i-0001", "Fix the flaky test.");
+  const ports = {
+    ...portsOver(world),
+    locateTranscript: async () => ({
+      kind: "named" as const,
+      directory: "/srv/state/rondo-i-0001/s1",
+      sessions: 1,
+    }),
+    readLog: () => logOf(3),
+  };
+  const html = await operatorPage(
+    ports,
+    "t",
+    { kind: "log", iterationId: "i-0001" },
+    chromeFor("ja"),
+  );
+  expect(html).toContain("この周回が実行したコマンド");
+  expect(html).toContain("全 3 件。新しいものが上です。");
+  expect(html).toContain('href="/?lang=ja"');
+});
+
+test("the address `?log=` is the log screen, named by the row and never by a path (#248 item 3)", async () => {
+  const world = fresh();
+  await runningLap(world, "i-0001", "Fix the flaky test.");
+  const asked: string[] = [];
+  const { base, stop, served } = await serving({
+    ...portsOver(world),
+    locateTranscript: async () => ({
+      kind: "named",
+      directory: "/srv/state/rondo-i-0001/s1",
+      sessions: 1,
+    }),
+    readLog: (directory) => {
+      asked.push(directory);
+      return logOf(2);
+    },
+  });
+  try {
+    const page = await get(base, "/?log=i-0001&lang=en");
+    expect(page.status).toBe(200);
+    expect(page.body).toContain('id="log"');
+    expect(page.body).toContain("echo step-2");
+    // A path in the address names no row: nothing is opened for it.
+    const pathed = await get(base, `/?log=${encodeURIComponent("/etc/passwd")}&lang=en`);
+    expect(pathed.body).toContain("There is no lap by that name.");
+    expect(asked).toEqual(["/srv/state/rondo-i-0001/s1"]);
+  } finally {
+    stop.abort();
+    await served;
+  }
 });

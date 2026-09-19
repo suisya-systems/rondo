@@ -1199,6 +1199,10 @@ function viewOf(query: URLSearchParams): PageView {
   if (answering !== null && answering !== "") {
     return { kind: "answer", iterationId: answering };
   }
+  const logged = query.get("log");
+  if (logged !== null && logged !== "") {
+    return { kind: "log", iterationId: logged };
+  }
   const publishing = query.get("publish");
   if (publishing !== null && publishing !== "") {
     return { kind: "publish", iterationId: publishing };
