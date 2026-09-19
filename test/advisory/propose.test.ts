@@ -582,6 +582,12 @@ test("a split reads back as plans against templates, or as holes, and nothing el
   // D-0071 rule 7.3: a drafter run that drafts nothing still writes its row.
   const neither = { plans: [], holes: [] };
   expect(readSplitPayload(neither)).toEqual({ kind: "split", payload: neither });
+  // D-0073 rule 2.3: the claim beside a plan, read as the store would write it.
+  const claimed = { plans: [{ ...plan, claim: ["src/", "README.md", "src/"] }], holes: [] };
+  expect(readSplitPayload(claimed)).toEqual({
+    kind: "split",
+    payload: { plans: [{ ...plan, claim: ["README.md", "src/"] }], holes: [] },
+  });
 
   for (const [why, document] of [
     ["proposes an identifier (rule 4.5)", { plans: [{ ...plan, run_id: "r-1" }], holes: [] }],
@@ -596,6 +602,10 @@ test("a split reads back as plans against templates, or as holes, and nothing el
       { plans: [{ ...plan, bases: [{ form: "message" }] }], holes: [] },
     ],
     ["carries an unknown key", { ...planned, recommended: 0 }],
+    ["claims no path", { plans: [{ ...plan, claim: [] }], holes: [] }],
+    ["claims a pattern", { plans: [{ ...plan, claim: ["src/*"] }], holes: [] }],
+    ["claims a non-path", { plans: [{ ...plan, claim: [1] }], holes: [] }],
+    ["claims not a list", { plans: [{ ...plan, claim: "src/" }], holes: [] }],
     ["has an empty hole", { plans: [], holes: [""] }],
   ] as const) {
     expect(readSplitPayload(document as never).kind, why).toBe("unreadable");

@@ -75,6 +75,7 @@ async function drafted() {
           agent_type_digest: typeDigest,
           prompt,
           bases: ["r1"],
+          claim: ["/"],
         })),
       }),
     }),
@@ -136,6 +137,17 @@ test(
     expect(run.plan.prompt).toBe(PROMPTS[1]);
     expect(run.plan.agentTypeInput).toEqual(AGENT_TYPE_INPUT);
     expect(run.split.prompt).toBe(PROMPTS[1]);
+    // The claim beside the plan, as the first admission asks for it (D-0073 rule 2.3):
+    // the drafter run's own, resting on the split row and the plan's words.
+    expect(run.claim).toEqual({
+      paths: ["/"],
+      authorKind: "drafter",
+      authorId: expect.stringMatching(/^rondo\/drafter\/3\//),
+      bases: [
+        { form: "proposal", proposalId: w.proposalId },
+        { form: "message", messageId: "r1" },
+      ],
+    });
     // Everything else is the template's.
     expect(run.plan.repository).toBe((w.document as JsonRecord)["repository"]);
 

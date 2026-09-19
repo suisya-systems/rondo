@@ -69,6 +69,7 @@ import { lineShape } from "../store/lanes.js";
 import {
   isDeterministicReadingDrafter,
   isModelReadingDrafter,
+  type LaneClaimAsk,
   type LaneHolder,
   type LapReadingDraft,
   latestReading,
@@ -465,6 +466,7 @@ export async function admit(
   spend: DecisionSpend | null = null,
   requestMessageId: string | null = null,
   scopeSpend: ScopeSpend | null = null,
+  claim: LaneClaimAsk | null = null,
 ): Promise<ConductorReport> {
   const attempt = () =>
     admitIteration(
@@ -476,6 +478,7 @@ export async function admit(
       spend,
       requestMessageId,
       scopeSpend,
+      claim,
     );
   let report = await attempt();
   // **A refusal by a line whose work may have landed reads that landing now**

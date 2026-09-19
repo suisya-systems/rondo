@@ -53,6 +53,7 @@ const split = (templateDigest: string, typeDigest: string): DrafterRun => ({
         agent_type_digest: typeDigest,
         prompt: "Fix the flaky test.",
         bases: ["r1"],
+        claim: ["/"],
       },
     ],
   }),

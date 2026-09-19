@@ -26,6 +26,7 @@
  * lives in an unrelated capacity message elsewhere in the tree and a tree-wide
  * grep would fail on it for no reason.
  */
+import { normalizeClaim } from "../store/lanes.js";
 import type { JsonRecord } from "../store/records.js";
 
 /**
@@ -1247,13 +1248,17 @@ export function readPayload(document: JsonRecord): PayloadReading {
  * `bases` reads {@link Basis}'s closed union, D-0061 rule 2.6's `message` form
  * included (rule 4.3).
  *
- * ponytail: residual R3 -- no drafter writes a split and no path admits one yet.
+ * `claim` is the paths the plan's line asks to hold (D-0073 rule 2.3): **beside
+ * the plan, not a field of it**, so rule 4.2's two fields stand. Normalised as
+ * the store normalises it, and absent on a split drafted before claims were,
+ * which is admitted claiming the whole repository (rule 2.5).
  */
 export interface SplitPlan {
   readonly template_plan_digest: string;
   readonly prompt: string;
   readonly agent_type_digest: string;
   readonly bases: readonly Basis[];
+  readonly claim?: readonly string[];
 }
 
 /**
@@ -1277,6 +1282,7 @@ const SPLIT_PLAN_KEYS: readonly string[] = [
   "prompt",
   "agent_type_digest",
   "bases",
+  "claim",
 ];
 const SPLIT_DIGEST = /^sha256:[0-9a-f]{64}$/;
 
@@ -1297,8 +1303,9 @@ export function readSplitPayload(document: JsonRecord): SplitPayloadReading {
     const plans = readList(row.plans, "plans").map((one, index) => {
       const what = `split plan ${String(index)}`;
       const plan = object(one, what);
-      // D-0063 rule 4.5: a key beyond the four is a proposed identifier or a
-      // field the template owns, and neither is the drafter's to fill.
+      // D-0063 rule 4.5: a key beyond the four and the claim beside them is a
+      // proposed identifier or a field the template owns, and neither is the
+      // drafter's to fill.
       refuseUnknownKeys(plan, SPLIT_PLAN_KEYS, what);
       const template = text(plan, "template_plan_digest", what);
       const agentType = text(plan, "agent_type_digest", what);
@@ -1307,7 +1314,7 @@ export function readSplitPayload(document: JsonRecord): SplitPayloadReading {
           throw new PayloadDefect(`${what} names '${digest}', which is not a sha256 digest`);
         }
       }
-      return {
+      const read: SplitPlan = {
         template_plan_digest: template,
         prompt: text(plan, "prompt", what),
         agent_type_digest: agentType,
@@ -1315,6 +1322,18 @@ export function readSplitPayload(document: JsonRecord): SplitPayloadReading {
           readBasis(basis, `${what} basis ${String(b)}`),
         ),
       };
+      if (plan.claim === undefined) {
+        return read;
+      }
+      const paths = readList(plan.claim, `${what}'s claim`);
+      if (!paths.every((path): path is string => typeof path === "string")) {
+        throw new PayloadDefect(`${what}'s claim is not a list of paths`);
+      }
+      const claim = normalizeClaim(paths);
+      if (claim.kind === "refused") {
+        throw new PayloadDefect(`${what}'s claim: ${claim.reason}`);
+      }
+      return { ...read, claim: claim.paths };
     });
     const holes = readList(row.holes, "holes").map((hole, index) => {
       if (typeof hole !== "string" || hole === "") {

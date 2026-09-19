@@ -1370,6 +1370,40 @@ test("D-0073 rule 7: a refusal by a closed line reads its landing, and only a la
   });
 });
 
+test("D-0073 rule 2.3: a drafted claim reaches reserve(), so two lines on different paths of one repository run together", async () => {
+  const h = await harness();
+  const drafted = (paths: readonly string[]) => ({
+    paths,
+    authorKind: "drafter" as const,
+    authorId: "rondo/drafter/3/claude-fixture",
+    bases: [{ form: "proposal", proposalId: "draft-1" }],
+  });
+  const first = (id: string, paths: readonly string[]) =>
+    admit(h.reporting, h.advisory, PLAN, POLICY, id, null, null, null, null, drafted(paths));
+  expect((await first("i-store", ["src/store/"])).status).toBe("awaiting_human");
+  expect((await first("i-docs", ["docs/", "README.md"])).status).toBe("awaiting_human");
+  const store = await h.store.laneLine("i-store");
+  expect(store.kind === "read" ? store.line.claim?.paths : undefined).toEqual(["src/store/"]);
+  const author = h.connection
+    .prepare("SELECT author_kind, author_id FROM lane_claim WHERE lineage_id = 'i-docs'")
+    .get();
+  expect(author).toEqual({ author_kind: "drafter", author_id: "rondo/drafter/3/claude-fixture" });
+
+  // A third that shares a path waits on the line holding it, and writes nothing.
+  const shared = await first("i-shared", ["src/store/sqlite.ts"]);
+  expect(shared.iterationId).toBeNull();
+  expect(shared.laneRefusal?.holders).toEqual([
+    { lineageId: "i-store", sharedPaths: ["src/store/sqlite.ts"] },
+  ]);
+  expect((await h.store.read("i-shared")).kind).toBe("absent");
+  // With no drafted claim a line claims the whole repository (rule 2.5), and collides with both.
+  const whole = await admit(h.reporting, h.advisory, PLAN, POLICY, "i-whole");
+  expect(whole.laneRefusal?.holders.map((holder) => holder.lineageId).sort()).toEqual([
+    "i-docs",
+    "i-store",
+  ]);
+});
+
 test("D-0073 rule 4.3: a line that ended with its release missed is released at the next refusal, with nothing read", async () => {
   const h = await harness();
   expect((await admit(h.reporting, h.advisory, PLAN, POLICY, "i-lost")).status).toBe(

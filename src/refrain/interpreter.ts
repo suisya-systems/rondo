@@ -49,6 +49,7 @@ import type {
   IterationFields,
   IterationRecord,
   IterationStatus,
+  LaneClaimAsk,
   LaneHolder,
   LapReadingDraft,
   ScopeRefusal,
@@ -189,6 +190,7 @@ export async function admit(
   spend: DecisionSpend | null = null,
   requestMessageId: string | null = null,
   scopeSpend: ScopeSpend | null = null,
+  claim: LaneClaimAsk | null = null,
 ): Promise<ConductorReport> {
   const lines: string[] = [];
   const admission = nextStep(null, policy);
@@ -267,10 +269,9 @@ export async function admit(
     spend,
     // Carried, never read, for `spend`'s reason (D-0066 rule 3.1).
     scopeSpend,
-    // ponytail: no surface drafts a claim yet (D-0073 rule 2.3), so every line
-    // claims its whole repository (rule 2.5); the split's drafted claim is
-    // carried here when the drafter writes one.
-    claim: null,
+    // Carried, never read, for `spend`'s reason (D-0073 rule 2.3): a drafted
+    // split's claim, or null for the whole repository (rule 2.5).
+    claim,
     nowMs: ports.now(),
   });
   switch (reservation.kind) {
