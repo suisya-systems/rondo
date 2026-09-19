@@ -103,6 +103,7 @@ import {
 } from "./conductor.js";
 import { asciiEscape, consoleSeams, legibleAsciiEscape, relayUpstream } from "./console.js";
 import { allowedBashIn } from "./delegation.js";
+import { drafterHost } from "./drafter-host.js";
 import {
   inspectBranchTip,
   inspectLapWork,
@@ -114,6 +115,7 @@ import {
   openPullRequest,
   type PushTargetInspection,
   pushTopicBranch,
+  runDrafter,
 } from "./forge.js";
 import { type InboxOutcome, showInbox, type TranscriptLocation } from "./inbox.js";
 import { modelReadingLines } from "./model-review.js";
@@ -135,6 +137,7 @@ import type {
 import {
   AnswerPort,
   type ClaimRefusal,
+  newDraftId,
   type Published,
   type PublishInput,
   PublishPort,
@@ -239,8 +242,8 @@ export const USAGE = `rondo - the operator surface for delegated work
                           who elevated it. --basis is required and names where
                           the observation rests: snapshot:/pointer,
                           iteration:ID, gate:ID#SEQ, run:ID,
-                          repo:PATH@COMMIT#FIRST-LAST, message:ID, or
-                          scope:ID. Write
+                          repo:PATH@COMMIT#FIRST-LAST, message:ID,
+                          scope:ID or proposal:ID. Write
                           --observation with
                           an equals sign: an observation may begin with a dash
   rondo propose --iteration-id ID --successor-id ID
@@ -1733,7 +1736,25 @@ export async function main(
             remote: parsed.remote ?? DEFAULT_REMOTE,
             allowRemoteMismatch: parsed.allowRemoteMismatch,
           };
-    return await serveOperatorPage(
+    // **The model drafter runs in this process** (D-0071 rule 3.2, with the
+    // `rondo web` process as the resident host until D-0068's patrol exists):
+    // a scan now, after every message this page writes, and on a timer so a
+    // message the command line wrote while the page runs is found too.
+    const drafter = drafterHost({
+      store,
+      record,
+      runDrafter,
+      now: Date.now,
+      mintId: newDraftId,
+      language: selected.tag,
+      log: say,
+    });
+    drafter.kick();
+    // ponytail: a fixed one-minute rescan for messages written outside this
+    // process; a changedSince watch when that minute is felt.
+    const rescan = setInterval(() => drafter.kick(), 60_000);
+    rescan.unref();
+    const served = await serveOperatorPage(
       {
         store,
         record,
@@ -1793,6 +1814,9 @@ export async function main(
                     // a send answers nothing (D-0072 rule 2).
                     ...(answerOutcome === null ? {} : { answerOutcome }),
                   });
+                  if (outcome.kind === "recorded") {
+                    drafter.kick();
+                  }
                   return outcome.kind === "recorded"
                     ? { ok: true, note: "" }
                     : {
@@ -1901,6 +1925,8 @@ export async function main(
       say,
       (line) => refuse(line),
     );
+    clearInterval(rescan);
+    return served;
   }
 
   // **`propose` and `decide` are dispatched here for `explain`'s reason.** Both
@@ -2258,6 +2284,8 @@ export function parseBasis(text: string): Basis | null {
       return { form: "message", messageId: rest };
     case "scope":
       return { form: "scope", scopeId: rest };
+    case "proposal":
+      return { form: "proposal", proposalId: rest };
     case "gate": {
       const hash = rest.lastIndexOf("#");
       const tail = rest.slice(hash + 1);
@@ -2296,7 +2324,7 @@ export function parseBasis(text: string): Basis | null {
 /** The one sentence that lists what a `--basis` may be, written once. */
 const BASIS_FORMS_LINE =
   "snapshot:/pointer, iteration:ID, gate:ID#SEQ, run:ID, repo:PATH@COMMIT#FIRST-LAST, message:ID, " +
-  "or scope:ID";
+  "scope:ID or proposal:ID";
 
 /**
  * Door nine: hand one observation to the advisory, and record that a person

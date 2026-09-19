@@ -1551,6 +1551,11 @@ export interface AgentTypeRecordDraft {
   readonly agentTypeInput: JsonValue;
   /** The digest of the plan document it was read from. */
   readonly planDigest: string;
+  /**
+   * On a drafter's scope only: the operator message whose body is that plan
+   * (D-0071 point 1 (a)). The record is then that message's author's.
+   */
+  readonly fromMessageId?: string;
 }
 
 /** One scope row read back, its digest re-derived (D-0022 rule 4). */

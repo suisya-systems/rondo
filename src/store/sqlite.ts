@@ -2176,6 +2176,24 @@ export type RecordOutcome =
   | { readonly kind: "refused"; readonly reason: string }
   | { readonly kind: "defect"; readonly reason: string };
 
+/** What one drafter run hands the store to write (D-0071 rule 7.3). */
+export interface DraftRunWrite {
+  readonly requestMessageId: string;
+  /** The latest operator message of the thread the run's document held (rule 7.2). */
+  readonly latestOperatorMessageId: string;
+  /** Null only for an unavailable run, which writes its message and nothing else (rule 1.5). */
+  readonly proposal: ProposalDraft | null;
+  readonly scope: ScopeDraft | null;
+  readonly messages: readonly ThreadMessageDraft[];
+}
+
+export type DraftWriteOutcome =
+  | RecordOutcome
+  | { readonly kind: "stale"; readonly latestOperatorMessageId: string | null };
+
+/** Thrown inside a draft's transaction to roll back what it already inserted. */
+class DraftRefusal extends Error {}
+
 /**
  * The advisory record, as D-0032 leaves it.
  *
@@ -2420,6 +2438,20 @@ export interface AdvisoryRecord {
    * 2.1.2). Each is read back through {@link heldAgentType}.
    */
   heldAgentTypeDigests(): Promise<readonly string[]>;
+  /**
+   * What one model drafter run writes, **all in one transaction or nothing**
+   * (D-0071 rule 7.3): its proposal row, the scope it drafted, and its thread
+   * messages -- or, for an unavailable run, its one message. `stale` when the
+   * request's thread gained an operator message after the run's document was
+   * assembled (rule 7.2), and then nothing is written.
+   */
+  recordDraft(write: DraftRunWrite): Promise<DraftWriteOutcome>;
+  /**
+   * Every operator message a drafter row covers (D-0071 rule 3.2): one a
+   * proposal row by a drafter named with `drafterPrefix` lists under its
+   * snapshot's `covers`, or one such a drafter's message cites by `message:`.
+   */
+  draftedMessageIds(drafterPrefix: string): Promise<ReadonlySet<string>>;
   readScopeDecision(scopeDecisionId: string): Promise<ScopeDecisionReadOutcome>;
   /**
    * The one decision on a scope row, or `absent` while nobody has answered it.
@@ -2736,6 +2768,164 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
         draft.cadenzaRevision,
         draft.elevatedFromMessageId,
         draft.elevatedByActorId,
+        draft.createdAtMs,
+      );
+    return { kind: "recorded" };
+  };
+
+  /**
+   * One scope row and the agent types it records, **with no transaction of its
+   * own**: {@link AdvisoryRecord.recordScope} takes one around it, and
+   * {@link AdvisoryRecord.recordDraft} writes it inside the draft's (D-0071
+   * rule 7.3). Every refusal is decided before any insert.
+   */
+  const insertScope = (draft: ScopeDraft): RecordOutcome => {
+    const reading = readScopePayload(draft.payload);
+    if (reading.kind === "refused") {
+      return { kind: "refused", reason: reading.reason };
+    }
+    if (draft.authorKind === "drafter" && draft.bases.length === 0) {
+      // D-0066 rule 1.5, as D-0061 rule 2.6 refuses a drafter message with
+      // none: a drafted scope is material, and material with no bases is a
+      // claim nobody can check before approving it.
+      return {
+        kind: "refused",
+        reason:
+          `the scope '${draft.scopeId}' was drafted with no bases: D-0066 rule 1.5 refuses a ` +
+          "drafter's scope that names nothing it was drafted from, because a person approving " +
+          "it would have nothing to check it against",
+      };
+    }
+    const successorOf = draft.supersedesScopeId;
+    if (successorOf === draft.scopeId) {
+      return {
+        kind: "refused",
+        reason:
+          `the scope '${draft.scopeId}' names itself as the scope it supersedes, and a ` +
+          "change to a scope is a new row under an id of its own (D-0066 rule 1.4)",
+      };
+    }
+    if (
+      successorOf !== null &&
+      connection.prepare("SELECT 1 FROM scope WHERE scope_id = ?").get(successorOf) === undefined
+    ) {
+      return {
+        kind: "refused",
+        reason:
+          `the scope '${draft.scopeId}' supersedes '${successorOf}', which is no scope in ` +
+          "this store: a successor of nothing would retire nothing while reading as a " +
+          "change (D-0066 rule 1.4, D-0049 rule 2's dangling-reference shape)",
+      };
+    }
+    // **Each request is a message that opens one** (D-0066 rule 1.2.1,
+    // D-0061 rule 1): a thread message with no `in_reply_to`, by the same
+    // test `reserve()` makes of a lap's request link. An elevation's bare
+    // id or a reply is a message, and neither is a request.
+    for (const messageId of reading.payload.requests) {
+      const standing = requestStanding(connection, messageId);
+      if (standing !== "opens") {
+        return {
+          kind: "refused",
+          reason:
+            `the scope '${draft.scopeId}' names the request '${messageId}', which ` +
+            `${standing === "absent" ? "is no message in this conversation" : "is a message that does not open a request"}: ` +
+            "a scope over a request nobody made covers nothing a reader can follow " +
+            "(D-0066 rule 1.2.1)",
+        };
+      }
+    }
+    // **D-0069 section 1: an operator's plan records its agent type with
+    // the scope.** Only an operator's row, because a drafter recording
+    // what it then selects is the hole D-0022 rule 7 refuses; only a
+    // listed digest, because a record exists only for a scope a person
+    // will be asked to approve. **Every refusal is decided before any
+    // insert**: `immediateTransaction` commits what a body returns, so a
+    // refusal after an insert would leave a record with no scope.
+    //
+    // **D-0071's answer to its first point widens "only an operator's row" by
+    // one case and keeps its reason**: a drafter's scope records an agent type
+    // only from a plan a person pasted into an operator message, copied from
+    // that message's bytes and recorded as that message's author's. The
+    // drafter selects; the bytes and the author are the person's.
+    const recordedBy = new Map<string, string>();
+    for (const recorded of draft.agentTypeRecords) {
+      if (draft.authorKind === "operator") {
+        recordedBy.set(recorded.agentTypeDigest, draft.authorId);
+      } else {
+        const from = pastedPlanRefusal(connection, draft, recorded);
+        if ("refusal" in from) {
+          return { kind: "refused", reason: from.refusal };
+        }
+        recordedBy.set(recorded.agentTypeDigest, from.authorId);
+      }
+      if (!reading.payload.agent_types.includes(recorded.agentTypeDigest)) {
+        return {
+          kind: "refused",
+          reason:
+            `the scope '${draft.scopeId}' records the agent type ` +
+            `'${recorded.agentTypeDigest}' from a plan and does not list it: a record ` +
+            "is written only for a scope a person will be asked to approve over it " +
+            "(D-0069 section 1)",
+        };
+      }
+    }
+    const recordedHere = draft.agentTypeRecords.map((recorded) => recorded.agentTypeDigest);
+    // **"A record rondo already holds" is D-0062 rule 1.2's**: the
+    // agentTypeInput of a plan on an iteration row whose agent_type_digest
+    // equals the digest, or an agent_type_record row an operator's plan
+    // wrote (D-0069 section 1). A proposal naming a digest does not count --
+    // a proposal is a draft, and a draft citing a digest is not the record
+    // the digest names.
+    for (const digest of reading.payload.agent_types) {
+      if (
+        !recordedHere.includes(digest) &&
+        connection
+          .prepare(
+            "SELECT 1 FROM iteration WHERE agent_type_digest = ? " +
+              "UNION ALL SELECT 1 FROM agent_type_record WHERE agent_type_digest = ? LIMIT 1",
+          )
+          .get(digest, digest) === undefined
+      ) {
+        return {
+          kind: "refused",
+          reason:
+            `the scope '${draft.scopeId}' lists the agent type '${digest}', which is no ` +
+            "record rondo holds: D-0066 rule 1.2.3 lists agent types rondo already holds " +
+            "(D-0062 rule 1.2, an iteration row with that agent_type_digest, or D-0069 " +
+            "section 1, one an operator's scope recorded from a plan), and a digest " +
+            "nobody can read back bounds no tier and no grant",
+        };
+      }
+    }
+    // The first record of a digest is the record (append-only).
+    for (const recorded of draft.agentTypeRecords) {
+      connection
+        .prepare(
+          "INSERT INTO agent_type_record (agent_type_digest, agent_type_input, plan_digest, " +
+            "recorded_by, recorded_at_ms) VALUES (?, ?, ?, ?, ?) " +
+            "ON CONFLICT (agent_type_digest) DO NOTHING",
+        )
+        .run(
+          recorded.agentTypeDigest,
+          canonicalJson(recorded.agentTypeInput),
+          recorded.planDigest,
+          recordedBy.get(recorded.agentTypeDigest) ?? draft.authorId,
+          draft.createdAtMs,
+        );
+    }
+    connection
+      .prepare(
+        "INSERT INTO scope (scope_id, payload, scope_digest, supersedes_scope_id, " +
+          "author_kind, author_id, bases, created_at_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      )
+      .run(
+        draft.scopeId,
+        canonicalJson(draft.payload),
+        contentDigest(draft.payload),
+        successorOf,
+        draft.authorKind,
+        draft.authorId,
+        canonicalJson(draft.bases),
         draft.createdAtMs,
       );
     return { kind: "recorded" };
@@ -3173,153 +3363,8 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
     },
 
     async recordScope(draft: ScopeDraft): Promise<RecordOutcome> {
-      const reading = readScopePayload(draft.payload);
-      if (reading.kind === "refused") {
-        return { kind: "refused", reason: reading.reason };
-      }
-      if (draft.authorKind === "drafter" && draft.bases.length === 0) {
-        // D-0066 rule 1.5, as D-0061 rule 2.6 refuses a drafter message with
-        // none: a drafted scope is material, and material with no bases is a
-        // claim nobody can check before approving it.
-        return {
-          kind: "refused",
-          reason:
-            `the scope '${draft.scopeId}' was drafted with no bases: D-0066 rule 1.5 refuses a ` +
-            "drafter's scope that names nothing it was drafted from, because a person approving " +
-            "it would have nothing to check it against",
-        };
-      }
       try {
-        return immediateTransaction<RecordOutcome>(connection, () => {
-          const successorOf = draft.supersedesScopeId;
-          if (successorOf === draft.scopeId) {
-            return {
-              kind: "refused",
-              reason:
-                `the scope '${draft.scopeId}' names itself as the scope it supersedes, and a ` +
-                "change to a scope is a new row under an id of its own (D-0066 rule 1.4)",
-            };
-          }
-          if (
-            successorOf !== null &&
-            connection.prepare("SELECT 1 FROM scope WHERE scope_id = ?").get(successorOf) ===
-              undefined
-          ) {
-            return {
-              kind: "refused",
-              reason:
-                `the scope '${draft.scopeId}' supersedes '${successorOf}', which is no scope in ` +
-                "this store: a successor of nothing would retire nothing while reading as a " +
-                "change (D-0066 rule 1.4, D-0049 rule 2's dangling-reference shape)",
-            };
-          }
-          // **Each request is a message that opens one** (D-0066 rule 1.2.1,
-          // D-0061 rule 1): a thread message with no `in_reply_to`, by the same
-          // test `reserve()` makes of a lap's request link. An elevation's bare
-          // id or a reply is a message, and neither is a request.
-          for (const messageId of reading.payload.requests) {
-            const standing = requestStanding(connection, messageId);
-            if (standing !== "opens") {
-              return {
-                kind: "refused",
-                reason:
-                  `the scope '${draft.scopeId}' names the request '${messageId}', which ` +
-                  `${standing === "absent" ? "is no message in this conversation" : "is a message that does not open a request"}: ` +
-                  "a scope over a request nobody made covers nothing a reader can follow " +
-                  "(D-0066 rule 1.2.1)",
-              };
-            }
-          }
-          // **D-0069 section 1: an operator's plan records its agent type with
-          // the scope.** Only an operator's row, because a drafter recording
-          // what it then selects is the hole D-0022 rule 7 refuses; only a
-          // listed digest, because a record exists only for a scope a person
-          // will be asked to approve. **Every refusal is decided before any
-          // insert**: `immediateTransaction` commits what a body returns, so a
-          // refusal after an insert would leave a record with no scope.
-          for (const recorded of draft.agentTypeRecords) {
-            if (draft.authorKind !== "operator") {
-              return {
-                kind: "refused",
-                reason:
-                  `the scope '${draft.scopeId}' is a drafter's and records the agent type ` +
-                  `'${recorded.agentTypeDigest}': only an operator's scope records one from a ` +
-                  "plan, and a drafter's lists only agent types already held (D-0069 section 1, " +
-                  "D-0022 rule 7)",
-              };
-            }
-            if (!reading.payload.agent_types.includes(recorded.agentTypeDigest)) {
-              return {
-                kind: "refused",
-                reason:
-                  `the scope '${draft.scopeId}' records the agent type ` +
-                  `'${recorded.agentTypeDigest}' from a plan and does not list it: a record ` +
-                  "is written only for a scope a person will be asked to approve over it " +
-                  "(D-0069 section 1)",
-              };
-            }
-          }
-          const recordedHere = draft.agentTypeRecords.map((recorded) => recorded.agentTypeDigest);
-          // **"A record rondo already holds" is D-0062 rule 1.2's**: the
-          // agentTypeInput of a plan on an iteration row whose agent_type_digest
-          // equals the digest, or an agent_type_record row an operator's plan
-          // wrote (D-0069 section 1). A proposal naming a digest does not count --
-          // a proposal is a draft, and a draft citing a digest is not the record
-          // the digest names.
-          for (const digest of reading.payload.agent_types) {
-            if (
-              !recordedHere.includes(digest) &&
-              connection
-                .prepare(
-                  "SELECT 1 FROM iteration WHERE agent_type_digest = ? " +
-                    "UNION ALL SELECT 1 FROM agent_type_record WHERE agent_type_digest = ? LIMIT 1",
-                )
-                .get(digest, digest) === undefined
-            ) {
-              return {
-                kind: "refused",
-                reason:
-                  `the scope '${draft.scopeId}' lists the agent type '${digest}', which is no ` +
-                  "record rondo holds: D-0066 rule 1.2.3 lists agent types rondo already holds " +
-                  "(D-0062 rule 1.2, an iteration row with that agent_type_digest, or D-0069 " +
-                  "section 1, one an operator's scope recorded from a plan), and a digest " +
-                  "nobody can read back bounds no tier and no grant",
-              };
-            }
-          }
-          // The first record of a digest is the record (append-only).
-          for (const recorded of draft.agentTypeRecords) {
-            connection
-              .prepare(
-                "INSERT INTO agent_type_record (agent_type_digest, agent_type_input, plan_digest, " +
-                  "recorded_by, recorded_at_ms) VALUES (?, ?, ?, ?, ?) " +
-                  "ON CONFLICT (agent_type_digest) DO NOTHING",
-              )
-              .run(
-                recorded.agentTypeDigest,
-                canonicalJson(recorded.agentTypeInput),
-                recorded.planDigest,
-                draft.authorId,
-                draft.createdAtMs,
-              );
-          }
-          connection
-            .prepare(
-              "INSERT INTO scope (scope_id, payload, scope_digest, supersedes_scope_id, " +
-                "author_kind, author_id, bases, created_at_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            )
-            .run(
-              draft.scopeId,
-              canonicalJson(draft.payload),
-              contentDigest(draft.payload),
-              successorOf,
-              draft.authorKind,
-              draft.authorId,
-              canonicalJson(draft.bases),
-              draft.createdAtMs,
-            );
-          return { kind: "recorded" };
-        });
+        return immediateTransaction<RecordOutcome>(connection, () => insertScope(draft));
       } catch (error) {
         if (isUniqueViolation(error)) {
           return {
@@ -3410,6 +3455,59 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
         }
         throw error;
       }
+    },
+
+    async recordDraft(write: DraftRunWrite): Promise<DraftWriteOutcome> {
+      try {
+        return immediateTransaction<DraftWriteOutcome>(connection, () => {
+          const latest = latestOperatorMessage(connection, write.requestMessageId);
+          if (latest !== write.latestOperatorMessageId) {
+            return { kind: "stale", latestOperatorMessageId: latest };
+          }
+          // **All or nothing**: a refusal after the first insert is thrown, so
+          // the transaction rolls back rather than committing half a draft.
+          const must = (outcome: RecordOutcome, what: string): void => {
+            if (outcome.kind !== "recorded") {
+              throw new DraftRefusal(`${what}: ${outcome.reason}`);
+            }
+          };
+          if (write.proposal !== null) {
+            must(insertProposal(write.proposal), "the proposal was refused");
+          }
+          if (write.scope !== null) {
+            must(insertScope(write.scope), "the drafted scope was refused");
+          }
+          for (const message of write.messages) {
+            const refusal = threadMessageRefusal(connection, message);
+            if (refusal !== null) {
+              throw new DraftRefusal(`a drafter message was refused: ${refusal}`);
+            }
+            must(insertMessage(message.messageId, message), "a drafter message was refused");
+          }
+          return { kind: "recorded" };
+        });
+      } catch (error) {
+        if (error instanceof DraftRefusal) {
+          return { kind: "refused", reason: error.message };
+        }
+        return { kind: "defect", reason: describe(error) };
+      }
+    },
+
+    async draftedMessageIds(drafterPrefix: string): Promise<ReadonlySet<string>> {
+      // `json_valid` first: one damaged row must not make every thread look
+      // undrafted, which would re-run the drafter over all of them.
+      const rows = connection
+        .prepare(
+          "SELECT j.value AS id FROM proposal p, json_each(p.snapshot, '$.covers') j " +
+            "WHERE substr(p.drafter, 1, length(?)) = ? AND json_valid(p.snapshot) " +
+            "UNION SELECT json_extract(j.value, '$.messageId') AS id " +
+            "FROM conversation_message m, json_each(m.bases) j " +
+            "WHERE m.author_kind = 'drafter' AND substr(m.author_id, 1, length(?)) = ? " +
+            "AND json_valid(m.bases) AND json_extract(j.value, '$.form') = 'message'",
+        )
+        .all(drafterPrefix, drafterPrefix, drafterPrefix, drafterPrefix) as SqlRow[];
+      return new Set(rows.map((row) => String(row["id"])));
     },
 
     async heldAgentTypeDigests(): Promise<readonly string[]> {
@@ -3647,7 +3745,95 @@ const BASIS_LOCATOR_FIELDS: Readonly<Record<string, Readonly<Record<string, stri
   repository: { path: "string", commit: "string", firstLine: "number", lastLine: "number" },
   message: { messageId: "string" },
   scope: { scopeId: "string" },
+  // D-0071 rule 7.3: a drafter message rests on the proposal row its run wrote.
+  proposal: { proposalId: "string" },
 };
+
+/**
+ * The latest operator message in a request's thread -- the request and every
+ * reply under it -- by the order the thread is read in, or null when there is
+ * none (D-0071 rule 7.2).
+ */
+function latestOperatorMessage(connection: DatabaseSync, requestMessageId: string): string | null {
+  const row = connection
+    .prepare(
+      "WITH RECURSIVE thread(id) AS (SELECT ? UNION " +
+        "SELECT m.message_id FROM conversation_message m JOIN thread t ON m.in_reply_to = t.id) " +
+        "SELECT m.message_id FROM conversation_message m JOIN thread t ON m.message_id = t.id " +
+        "WHERE m.author_kind = 'operator' ORDER BY m.at_ms DESC, m.rowid DESC LIMIT 1",
+    )
+    .get(requestMessageId) as SqlRow | undefined;
+  return row === undefined ? null : String(row["message_id"]);
+}
+
+/**
+ * Where a drafter's scope records an agent type from, or why it may not
+ * (D-0071 point 1 (a), section 6.2): an operator message in the thread the
+ * scope rests on, whose body is the plan the record is copied from.
+ *
+ * The store cannot rebuild the digest (D-0006), so what it checks is what it
+ * can read itself: the message is an operator's, the scope cites it, its body's
+ * `agent_type_input` is the record's byte for byte in canonical form, and its
+ * body is the plan the record names.
+ */
+function pastedPlanRefusal(
+  connection: DatabaseSync,
+  draft: ScopeDraft,
+  recorded: ScopeDraft["agentTypeRecords"][number],
+): { readonly authorId: string } | { readonly refusal: string } {
+  const where = `the drafter's scope '${draft.scopeId}' records the agent type '${recorded.agentTypeDigest}'`;
+  const messageId = recorded.fromMessageId;
+  if (messageId === undefined) {
+    return {
+      refusal:
+        `${where} from no message: a drafter's scope records one only from a plan a person ` +
+        "pasted into the thread, and a drafter's lists only agent types already held " +
+        "otherwise (D-0071 section 6.2, D-0022 rule 7)",
+    };
+  }
+  if (
+    !draft.bases.some(
+      (basis) =>
+        typeof basis === "object" &&
+        basis !== null &&
+        !Array.isArray(basis) &&
+        (basis as JsonRecord)["form"] === "message" &&
+        (basis as JsonRecord)["messageId"] === messageId,
+    )
+  ) {
+    return { refusal: `${where} from '${messageId}' and does not cite it (D-0071 point 1 (a))` };
+  }
+  const row = connection
+    .prepare("SELECT body, author_kind, author_id FROM conversation_message WHERE message_id = ?")
+    .get(messageId) as SqlRow | undefined;
+  if (row === undefined || row["author_kind"] !== "operator") {
+    return {
+      refusal: `${where} from '${messageId}', which is no operator message: the bytes must be a person's (D-0071 point 1 (a))`,
+    };
+  }
+  let plan: unknown;
+  try {
+    plan = JSON.parse(String(row["body"]));
+  } catch {
+    plan = null;
+  }
+  const input =
+    typeof plan === "object" && plan !== null && !Array.isArray(plan)
+      ? (plan as JsonRecord)["agent_type_input"]
+      : undefined;
+  if (
+    input === undefined ||
+    canonicalJson(input) !== canonicalJson(recorded.agentTypeInput) ||
+    planDigest(plan as JsonRecord) !== recorded.planDigest
+  ) {
+    return {
+      refusal:
+        `${where} from '${messageId}', whose body is not the plan the record is copied from: ` +
+        "a record is the person's bytes, never a copy that differs (D-0071 section 5.1)",
+    };
+  }
+  return { authorId: String(row["author_id"]) };
+}
 
 /**
  * Why a thread message may not be written, or null (D-0061 rules 2 and 3).
@@ -3724,6 +3910,17 @@ function threadMessageRefusal(connection: DatabaseSync, draft: ThreadMessageDraf
       return (
         `a basis of '${draft.messageId}' is scope:${String(basis["scopeId"])}, which is no scope ` +
         "row: a locator to nothing is a basis nobody can follow (D-0061 rule 2.6)"
+      );
+    }
+    if (
+      basis["form"] === "proposal" &&
+      connection
+        .prepare("SELECT 1 FROM proposal WHERE proposal_id = ?")
+        .get(basis["proposalId"] as string) === undefined
+    ) {
+      return (
+        `a basis of '${draft.messageId}' is proposal:${String(basis["proposalId"])}, which is no ` +
+        "proposal row: a locator to nothing is a basis nobody can follow (D-0061 rule 2.6)"
       );
     }
   }

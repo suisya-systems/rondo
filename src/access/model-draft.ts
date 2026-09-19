@@ -806,7 +806,13 @@ function draftedScope(
     }
   }
 
-  const cited = [material.requestMessageId, ...taken.map((n) => n.basisMessageId)];
+  // The request, each winning narrowing's words, and each pasted plan an agent
+  // type is recorded from (the store refuses a record whose message is uncited).
+  const cited = [
+    material.requestMessageId,
+    ...taken.map((n) => n.basisMessageId),
+    ...types.flatMap((t) => (t.source.kind === "recordable" ? [t.source.messageId] : [])),
+  ];
   return {
     payload: {
       requests: [material.requestMessageId],
