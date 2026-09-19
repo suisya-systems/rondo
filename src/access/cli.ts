@@ -1749,11 +1749,19 @@ export async function main(
       language: selected.tag,
       log: say,
     });
-    drafter.kick();
     // ponytail: a fixed one-minute rescan for messages written outside this
     // process; a changedSince watch when that minute is felt.
-    const rescan = setInterval(() => drafter.kick(), 60_000);
-    rescan.unref();
+    let rescan: ReturnType<typeof setInterval> | null = null;
+    // **Only once the page is listening**: a second `rondo web` that cannot
+    // bind its port reports failure, and must not have spent a draft first.
+    const listening = (line: string): void => {
+      say(line);
+      if (rescan === null) {
+        drafter.kick();
+        rescan = setInterval(() => drafter.kick(), 60_000);
+        rescan.unref();
+      }
+    };
     const served = await serveOperatorPage(
       {
         store,
@@ -1922,10 +1930,12 @@ export async function main(
         readLog: readLapLog,
       },
       parsed.port ?? DEFAULT_WEB_PORT,
-      say,
+      listening,
       (line) => refuse(line),
     );
-    clearInterval(rescan);
+    if (rescan !== null) {
+      clearInterval(rescan);
+    }
     return served;
   }
 

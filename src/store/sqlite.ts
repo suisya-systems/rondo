@@ -2181,6 +2181,8 @@ export interface DraftRunWrite {
   readonly requestMessageId: string;
   /** The latest operator message of the thread the run's document held (rule 7.2). */
   readonly latestOperatorMessageId: string;
+  /** What the drafter's rows are named under, for {@link AdvisoryRecord.draftedMessageIds}. */
+  readonly drafterPrefix: string;
   /** Null only for an unavailable run, which writes its message and nothing else (rule 1.5). */
   readonly proposal: ProposalDraft | null;
   readonly scope: ScopeDraft | null;
@@ -2189,7 +2191,9 @@ export interface DraftRunWrite {
 
 export type DraftWriteOutcome =
   | RecordOutcome
-  | { readonly kind: "stale"; readonly latestOperatorMessageId: string | null };
+  | { readonly kind: "stale"; readonly latestOperatorMessageId: string | null }
+  /** Another run already covered the thread (a second host): nothing is written twice. */
+  | { readonly kind: "covered" };
 
 /** Thrown inside a draft's transaction to roll back what it already inserted. */
 class DraftRefusal extends Error {}
@@ -3464,6 +3468,11 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
           if (latest !== write.latestOperatorMessageId) {
             return { kind: "stale", latestOperatorMessageId: latest };
           }
+          // Under the same lock: a second host that ran over the same thread
+          // finds it drafted and writes nothing (rule 3.2's coverage).
+          if (latest !== null && coveredMessageIds(connection, write.drafterPrefix).has(latest)) {
+            return { kind: "covered" };
+          }
           // **All or nothing**: a refusal after the first insert is thrown, so
           // the transaction rolls back rather than committing half a draft.
           const must = (outcome: RecordOutcome, what: string): void => {
@@ -3495,19 +3504,7 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
     },
 
     async draftedMessageIds(drafterPrefix: string): Promise<ReadonlySet<string>> {
-      // `json_valid` first: one damaged row must not make every thread look
-      // undrafted, which would re-run the drafter over all of them.
-      const rows = connection
-        .prepare(
-          "SELECT j.value AS id FROM proposal p, json_each(p.snapshot, '$.covers') j " +
-            "WHERE substr(p.drafter, 1, length(?)) = ? AND json_valid(p.snapshot) " +
-            "UNION SELECT json_extract(j.value, '$.messageId') AS id " +
-            "FROM conversation_message m, json_each(m.bases) j " +
-            "WHERE m.author_kind = 'drafter' AND substr(m.author_id, 1, length(?)) = ? " +
-            "AND json_valid(m.bases) AND json_extract(j.value, '$.form') = 'message'",
-        )
-        .all(drafterPrefix, drafterPrefix, drafterPrefix, drafterPrefix) as SqlRow[];
-      return new Set(rows.map((row) => String(row["id"])));
+      return coveredMessageIds(connection, drafterPrefix);
     },
 
     async heldAgentTypeDigests(): Promise<readonly string[]> {
@@ -3748,6 +3745,28 @@ const BASIS_LOCATOR_FIELDS: Readonly<Record<string, Readonly<Record<string, stri
   // D-0071 rule 7.3: a drafter message rests on the proposal row its run wrote.
   proposal: { proposalId: "string" },
 };
+
+/**
+ * The operator messages a drafter named with `drafterPrefix` covers (D-0071
+ * rule 3.2). One damaged row reads as covering nothing: it must not make the
+ * query fail, which would leave every thread looking undrafted.
+ */
+function coveredMessageIds(connection: DatabaseSync, drafterPrefix: string): Set<string> {
+  const rows = connection
+    .prepare(
+      // The CASE rather than a WHERE: the planner may run json_each before a
+      // filter, and a malformed document must read as empty, not raise.
+      "SELECT j.value AS id FROM proposal p, " +
+        "json_each(CASE WHEN json_valid(p.snapshot) THEN p.snapshot ELSE '{}' END, '$.covers') j " +
+        "WHERE substr(p.drafter, 1, length(?)) = ? " +
+        "UNION SELECT json_extract(j.value, '$.messageId') AS id FROM conversation_message m, " +
+        "json_each(CASE WHEN json_valid(m.bases) THEN m.bases ELSE '[]' END) j " +
+        "WHERE m.author_kind = 'drafter' AND substr(m.author_id, 1, length(?)) = ? " +
+        "AND json_type(j.value) = 'object' AND json_extract(j.value, '$.form') = 'message'",
+    )
+    .all(drafterPrefix, drafterPrefix, drafterPrefix, drafterPrefix) as SqlRow[];
+  return new Set(rows.map((row) => String(row["id"])));
+}
 
 /**
  * The latest operator message in a request's thread -- the request and every

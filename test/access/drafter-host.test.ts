@@ -11,6 +11,7 @@ import { expect, test } from "vitest";
 
 import { type DrafterHostPorts, drafterHost } from "../../src/access/drafter-host.js";
 import type { DrafterRun } from "../../src/access/model-draft.js";
+import { draftRequest } from "../../src/access/model-drafter.js";
 import { planDigest } from "../../src/store/plan.js";
 import { agentTypeDigestOf, planDocument, world } from "./fixtures/drafter.js";
 
@@ -199,4 +200,34 @@ test("a thread whose root is not an operator's request is not drafted", async ()
   host.kick();
   await host.idle();
   expect(handed).toEqual([]);
+});
+
+test("a run that throws is logged and costs only its own request; the host goes on", async () => {
+  const w = await world();
+  await w.say("r1", "First.", null, 1_000);
+  await w.say("r2", "Second.", null, 2_000);
+  const logged: string[] = [];
+  let n = 0;
+  const host = drafterHost({
+    store: w.store,
+    record: w.record,
+    now: () => 10_000,
+    language: null,
+    log: (line) => logged.push(line),
+    mintId: (kind) => {
+      n += 1;
+      return `${kind}-${String(n)}`;
+    },
+    runDrafter: async () => ({ kind: "failed", reason: "no claude" }),
+    draft: async (ports, requestMessageId, language) => {
+      if (requestMessageId === "r1") {
+        throw new Error("the disk is full");
+      }
+      return await draftRequest(ports, requestMessageId, language);
+    },
+  });
+  host.kick();
+  await host.idle();
+  expect(logged).toContain("drafter  r1: the disk is full");
+  expect((await drafterMessages(w)).map((m) => m.inReplyTo)).toEqual(["r2"]);
 });

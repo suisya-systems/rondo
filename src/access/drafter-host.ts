@@ -68,8 +68,15 @@ export function drafterHost(ports: DrafterHostPorts): DrafterHost {
         return;
       }
       for (const one of due) {
-        const result = await draft(ports, one.requestMessageId, ports.language);
-        const written = await write(ports, result);
+        // One request's failure is logged and costs only that request: a
+        // throw here would end the page's process with it.
+        let written: "written" | "stale" | "failed";
+        try {
+          written = await write(ports, await draft(ports, one.requestMessageId, ports.language));
+        } catch (error) {
+          ports.log(`drafter  ${one.requestMessageId}: ${describe(error)}`);
+          written = "failed";
+        }
         if (written === "stale") {
           again = true;
         } else if (written === "failed") {
@@ -79,15 +86,21 @@ export function drafterHost(ports: DrafterHostPorts): DrafterHost {
     }
   };
 
+  const kick = (): void => {
+    again = true;
+    if (running === null) {
+      running = loop().finally(() => {
+        running = null;
+        // A kick that landed after the loop's last look and before this
+        // reaction would otherwise wait for the next rescan.
+        if (again) {
+          kick();
+        }
+      });
+    }
+  };
   return {
-    kick() {
-      again = true;
-      if (running === null) {
-        running = loop().finally(() => {
-          running = null;
-        });
-      }
-    },
+    kick,
     async idle() {
       while (running !== null) {
         await running;
@@ -178,6 +191,7 @@ async function write(
     const outcome = await ports.record.recordDraft({
       requestMessageId: material.requestMessageId,
       latestOperatorMessageId,
+      drafterPrefix: DRAFTER_PREFIX,
       proposal: null,
       scope: null,
       messages: [
@@ -200,6 +214,9 @@ async function write(
     });
     if (outcome.kind === "stale") {
       return "stale";
+    }
+    if (outcome.kind === "covered") {
+      return "written";
     }
     if (outcome.kind !== "recorded") {
       ports.log(`drafter  ${material.requestMessageId}: nothing was written: ${outcome.reason}`);
@@ -258,6 +275,7 @@ async function write(
   const outcome = await ports.record.recordDraft({
     requestMessageId: material.requestMessageId,
     latestOperatorMessageId,
+    drafterPrefix: DRAFTER_PREFIX,
     proposal,
     scope:
       drafted.scope === null
@@ -281,6 +299,12 @@ async function write(
   });
   if (outcome.kind === "stale") {
     return "stale";
+  }
+  if (outcome.kind === "covered") {
+    ports.log(
+      `drafter  ${material.requestMessageId}: already drafted elsewhere; this run wrote nothing`,
+    );
+    return "written";
   }
   if (outcome.kind !== "recorded") {
     return await unavailable(`the draft could not be recorded: ${outcome.reason}`);

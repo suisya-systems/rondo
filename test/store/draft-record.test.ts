@@ -125,6 +125,7 @@ test("a draft is written whole: the proposal, the drafted scope, the pasted plan
   const write: DraftRunWrite = {
     requestMessageId: "r1",
     latestOperatorMessageId: "r1-plan",
+    drafterPrefix: "rondo/drafter/",
     proposal: proposal("draft-1", ["r1", "r1-plan"]),
     scope: drafterScope(typeDigest, [record], onPlan),
     messages: [drafterMessage("drafter-1", [{ form: "proposal", proposalId: "draft-1" }])],
@@ -147,6 +148,7 @@ test("a stale run writes nothing: the thread gained an operator message after th
   const outcome = await w.record.recordDraft({
     requestMessageId: "r1",
     latestOperatorMessageId: "r1-plan",
+    drafterPrefix: "rondo/drafter/",
     proposal: proposal("draft-1", ["r1", "r1-plan"]),
     scope: null,
     messages: [drafterMessage("drafter-1", [{ form: "proposal", proposalId: "draft-1" }])],
@@ -161,6 +163,7 @@ test("a refusal anywhere leaves no part of the draft behind", async () => {
   const outcome = await w.record.recordDraft({
     requestMessageId: "r1",
     latestOperatorMessageId: "r1-plan",
+    drafterPrefix: "rondo/drafter/",
     proposal: proposal("draft-1", ["r1", "r1-plan"]),
     scope: drafterScope(typeDigest, [record], onPlan),
     // Refused: a drafter message resting on a message nobody wrote.
@@ -216,6 +219,7 @@ test("an unavailable run's message covers the operator messages it cites", async
   const outcome = await w.record.recordDraft({
     requestMessageId: "r1",
     latestOperatorMessageId: "r1-plan",
+    drafterPrefix: "rondo/drafter/",
     proposal: null,
     scope: null,
     messages: [
@@ -238,4 +242,31 @@ test("a drafter message may not rest on a proposal row that does not exist", asy
   );
   expect(outcome.kind).toBe("refused");
   expect(outcome.kind === "refused" && outcome.reason).toContain("no proposal row");
+});
+
+test("a second host's run over a thread already drafted writes nothing (rule 3.2's coverage, under the lock)", async () => {
+  const { w } = await pasted();
+  const once = (id: string): DraftRunWrite => ({
+    requestMessageId: "r1",
+    latestOperatorMessageId: "r1-plan",
+    drafterPrefix: "rondo/drafter/",
+    proposal: proposal(id, ["r1", "r1-plan"]),
+    scope: null,
+    messages: [],
+  });
+  expect(await w.record.recordDraft(once("draft-1"))).toEqual({ kind: "recorded" });
+  expect(await w.record.recordDraft(once("draft-2"))).toEqual({ kind: "covered" });
+  expect((await w.record.readProposal("draft-2")).kind).not.toBe("read");
+});
+
+test("a damaged row covers nothing and does not stop the coverage read", async () => {
+  const { w } = await pasted();
+  w.connection
+    .prepare(
+      "INSERT INTO proposal (proposal_id, kind, drafter, payload, proposal_digest, snapshot, " +
+        "snapshot_digest, created_at_ms) VALUES ('p-bad', 'split', 'rondo/drafter/1/x', '{}', 'd', " +
+        "'not json', 'd', 1)",
+    )
+    .run();
+  expect(await w.record.draftedMessageIds("rondo/drafter/")).toEqual(new Set());
 });
