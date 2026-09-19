@@ -261,6 +261,12 @@ export interface WebPorts extends InboxReadPorts {
    */
   readonly publishing: PublishReading | null;
   /**
+   * Whether the host holds a release press (D-0073 rule 4.3): true exactly
+   * where the release port is not null, so no way to it is drawn where every
+   * press would be refused. Absent is false.
+   */
+  readonly releasable?: boolean;
+  /**
    * A running lap's log, read at the directory `locateTranscript` named
    * (rondo#248 item 3). A function for {@link LapMaterial}'s reason: the
    * renderer opens no file, and what it is handed reads two named files under
@@ -2043,10 +2049,12 @@ function endedView(
     readonly lines: readonly string[];
     readonly release: unknown;
   },
+  /** The group's heading; *just finished* unless the caller names another. */
+  heading: string = wording.endedHeading(ended.length),
 ) {
   return questionGroup(
     "ended",
-    wording.endedHeading(ended.length),
+    heading,
     ended.map((record) => {
       const said = facts.get(record.id)?.claim ?? null;
       const raised = facts.get(record.id)?.raised ?? null;
@@ -2128,7 +2136,10 @@ async function releaseView(
   );
   const line = ledger.find((one) => one.lapIds.includes(view.iterationId));
   if (line === undefined || line.paths.length === 0 || line.claimId === null) {
-    return framed(note(wording.releaseNothingHeld));
+    // Where a release press lands (the route redirects here), so it says so.
+    return framed(
+      note(line?.releasedBy === "person" ? wording.releasedByPerson : wording.releaseNothingHeld),
+    );
   }
   if (line.inFlight) {
     return framed(note(wording.releaseStillOpen));
@@ -5516,16 +5527,17 @@ async function planStart(
         }),
       );
       const finished = ready.holders.every(({ line }) => !line.inFlight);
+      const paths = [...new Set(ready.holders.flatMap(({ paths }) => paths))];
       return (
         <div class="space-y-1.5">
-          {line(wording.planHeld([...new Set(ready.holders.flatMap(({ paths }) => paths))]))}
+          {line(finished ? wording.planHeldFinished(paths) : wording.planHeld(paths))}
           {holders.map(({ line: holder, request }) => (
             <p class="flex flex-wrap items-baseline gap-x-2 text-[12.5px] leading-5">
               <span class="text-muted-foreground">{wording.planHeldBy}</span>
               <span class="min-w-0 truncate" lang="">
                 {request === null ? "" : firstLine(request)}
               </span>
-              {holder.inFlight || token === null ? null : (
+              {holder.inFlight || token === null || ports.releasable !== true ? null : (
                 <a
                   href={viewHref({ kind: "release", iterationId: holder.lineageId }, wording.lang)}
                   class="text-link underline-offset-2 hover:underline"
@@ -6638,6 +6650,10 @@ export async function operatorPage(
   const terminal = (await ports.store.terminalIterations()).flatMap((outcome): IterationRecord[] =>
     outcome.kind === "read" ? [outcome.record] : [],
   );
+  // **A way to the release press only where there is a port behind it**, which
+  // is narrower than the token: an approver the allowlist refuses still gets a
+  // token for the gate's press, and would get a release that refuses every time.
+  const releaseToken = ports.releasable === true ? token : null;
   // **The ledger, read once per draw** (D-0073 rule 12): what each line keeps,
   // and whether its work landed. A finished line still keeping its files is
   // listed however long ago it ended: it is the one ended thing that still
@@ -6655,11 +6671,12 @@ export async function operatorPage(
       ? line
       : null;
   };
-  const recent = endedRecently(terminal);
-  const ended = [
-    ...recent,
-    ...terminal.filter((record) => keeping(record) !== null && !recent.includes(record)),
-  ].toSorted((left, right) => right.updatedAtMs - left.updatedAtMs);
+  const ended = endedRecently(terminal);
+  // Older than *just finished* and still keeping files: its own group, so an
+  // ending from weeks ago is not said to have just happened.
+  const keptOlder = terminal
+    .filter((record) => keeping(record) !== null && !ended.includes(record))
+    .toSorted((left, right) => right.updatedAtMs - left.updatedAtMs);
   const owns = (record: IterationRecord) => {
     const line = lineOf.get(record.id);
     return line === undefined || line.paths.length === 0 ? null : wording.holds(line.paths);
@@ -6670,7 +6687,7 @@ export async function operatorPage(
       return {
         lines: [wording.holds(kept.paths), wording.notLanded],
         release:
-          token === null ? null : (
+          releaseToken === null ? null : (
             <p class="mt-2">
               <a
                 id={`release-${record.id}`}
@@ -6737,7 +6754,7 @@ export async function operatorPage(
   const threadRows = threadRead.kind === "read" ? threadRead.messages : [];
   const threads = threadsOf(
     threadRows,
-    new Set([...waiting, ...running, ...ended, ...unreadable].map((row) => row.id)),
+    new Set([...waiting, ...running, ...keptOlder, ...ended, ...unreadable].map((row) => row.id)),
     // A reader that will not answer says nothing is waiting, rather than
     // taking the page down with it.
     ports.issuesUnread === undefined
@@ -6801,7 +6818,7 @@ export async function operatorPage(
   const logging = view.kind === "log" ? await logView(ports, wording, view) : null;
   const releasing =
     view.kind === "release"
-      ? await releaseView(ports, wording, view, token, ledger, threads, nowMs)
+      ? await releaseView(ports, wording, view, releaseToken, ledger, threads, nowMs)
       : null;
   /** The way onto the publish screen, drawn on an ended lap wherever one is listed. */
   const publishTo = (record: IterationRecord) => publishLink(wording, ports, token, record);
@@ -6815,7 +6832,7 @@ export async function operatorPage(
           inboxView(ports, wording, inbox),
           betweenView(wording, host),
           ...(await Promise.all(
-            [...waiting, ...running, ...ended].map(async (record) =>
+            [...waiting, ...running, ...keptOlder, ...ended].map(async (record) =>
               explainView(
                 wording,
                 record,
@@ -7138,6 +7155,7 @@ export async function operatorPage(
                 releasing
               ) : waiting.length +
                   running.length +
+                  keptOlder.length +
                   ended.length +
                   open.length +
                   unreadable.length +
@@ -7161,6 +7179,18 @@ export async function operatorPage(
                   )}
                   {attentionView(wording, unreadable)}
                   {runningView(wording, running, transcripts, nowMs, owns)}
+                  {keptOlder.length === 0
+                    ? null
+                    : endedView(
+                        wording,
+                        keptOlder,
+                        nowMs,
+                        endedFacts,
+                        publishTo,
+                        threads,
+                        landing,
+                        wording.heldHeading(keptOlder.length),
+                      )}
                   {endedView(wording, ended, nowMs, endedFacts, publishTo, threads, landing)}
                 </>
               )}

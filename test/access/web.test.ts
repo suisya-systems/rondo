@@ -235,6 +235,7 @@ function portsOver(
     revise: null,
     publish: null,
     release: null,
+    releasable: actorId !== null,
     publishing,
   };
 }
@@ -6485,6 +6486,35 @@ test("an approved drafted scope offers each plan its own start, and says so wher
     expect(expired).toContain(wording.planOutside("expiry"));
     expect(expired).not.toContain("expiry test");
   }
+
+  // Plan 0's work finishes without being found on the default branch: plan 1
+  // is still held, said as held by finished work, and now both the start
+  // (which reads that landing first, D-0073 rule 7) and the release are drawn.
+  for (const [from, to] of [
+    ["planned", "admitting"],
+    ["admitting", "admitted"],
+    ["admitted", "performing"],
+    ["performing", "awaiting_human"],
+  ] as const) {
+    expect((await w.store.transition("lap-plan-0", from, to, {}, 4_000)).kind).toBe("transitioned");
+  }
+  expect(
+    (
+      await w.store.transition(
+        "lap-plan-0",
+        "awaiting_human",
+        "closed",
+        { gateOutcome: "approve" },
+        5_000,
+      )
+    ).kind,
+  ).toBe("transitioned");
+  const finished = (await render(ports)).replaceAll("&#39;", "'");
+  expect(finished).toContain(EN.planHeldFinished(["/"]));
+  expect(finished).not.toContain(EN.planHeld(["/"]));
+  expect(finished).toContain(EN.planHeldTry);
+  expect(starts(finished)).toBe(1);
+  expect(finished).toContain("/?release=lap-plan-0&amp;lang=en");
 });
 
 test("what rondo read of a named issue is said under the message, and the scope screen says which the worker is given (D-0078 section 4)", async () => {
@@ -6647,8 +6677,11 @@ test("each open line says what it keeps, and a finished one not yet landed says 
     const html = await operatorPage(portsOver(world), "t", { kind: "summary" }, wording);
     // The gate's row says what its line keeps, as the person's own paths.
     expect(lead(html)).toContain(wording.holds(["lanes/i-0001/"]));
-    // The finished line is on the page although five endings are newer.
+    // The finished line is on the page although five endings are newer, in a
+    // group of its own rather than under *just finished*.
     expect(lead(html)).toContain("the one still keeping its files");
+    expect(lead(html)).toContain(wording.heldHeading(1));
+    expect(lead(html)).toContain(wording.endedHeading(5));
     expect(lead(html)).toContain(wording.holds(["lanes/i-0002/"]));
     expect(lead(html)).toContain(wording.notLanded);
     expect(lead(html)).toContain(`href="/?release=i-0002&amp;lang=${wording.lang}"`);
@@ -6657,10 +6690,14 @@ test("each open line says what it keeps, and a finished one not yet landed says 
     expect(lead(html)).not.toContain("i-0002:1");
   }
 
-  // With no approver there is no press to make, so no way to one is drawn.
+  // With no approver there is no press to make, so no way to one is drawn;
+  // nor where an approver is named but no release press stands behind it.
   const html = await operatorPage(portsOver(world, null), null);
   expect(lead(html)).toContain(EN.notLanded);
   expect(lead(html)).not.toContain("?release=");
+  const refused = await operatorPage({ ...portsOver(world), releasable: false }, "t");
+  expect(lead(refused)).toContain(EN.notLanded);
+  expect(lead(refused)).not.toContain("?release=");
 });
 
 test("the release screen names the work by its request, says why rondo has not released it, and carries what it was drawn over (D-0073 rule 4.3, rondo#288)", async () => {
@@ -6708,8 +6745,9 @@ test("the release screen names the work by its request, says why rondo has not r
       })
     ).kind,
   ).toBe("released");
+  // Where the press lands: the screen says the files were released.
   const gone = await operatorPage(portsOver(world), "t", screen);
-  expect(gone).toContain(EN.releaseNothingHeld);
+  expect(gone).toContain(EN.releasedByPerson);
   expect(gone).not.toContain('action="/release');
   expect(lead(await operatorPage(portsOver(world), "t"))).toContain(EN.releasedByPerson);
 });

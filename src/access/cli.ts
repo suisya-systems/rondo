@@ -1900,6 +1900,7 @@ export async function main(
         // **The press is checked inside this port too** (D-0073 rule 4.3,
         // rondo#288), null on `revise`'s condition: a release is recorded as
         // the person's judgement, so it needs an actor the allowlist accepts.
+        releasable: sender !== null && !("refusal" in sender),
         release:
           sender === null || "refusal" in sender
             ? null

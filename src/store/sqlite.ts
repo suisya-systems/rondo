@@ -1781,6 +1781,12 @@ export function openIterationStore(databasePath: string, policy: HostPolicy): It
 export function iterationStore(connection: DatabaseSync, policy: HostPolicy): IterationStore {
   connection.exec(SCHEMA);
   migrate(connection);
+  // **The walk down a lineage is an index lookup, not a scan** (D-0073 rule
+  // 12): the page reads every line's laps on each redraw (`laneLedger`), and
+  // `lineageOf`'s downward step joins on this column.
+  connection.exec(
+    "CREATE INDEX IF NOT EXISTS iteration_by_supersedes ON iteration(supersedes_iteration_id)",
+  );
   try {
     connection.exec(CLAIM_INDEXES);
   } catch (error) {

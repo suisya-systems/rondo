@@ -2601,7 +2601,7 @@ test("(release) a person's native press releases the line it was drawn over, onc
 
   const pressed = await send(base, "/release", "POST", pressHeaders(base), releaseForm());
   expect(pressed.status).toBe(303);
-  expect(pressed.location).toBe("/?lang=en#lap-i-0002");
+  expect(pressed.location).toBe("/?release=i-0002&lang=en");
   expect(released).toEqual([
     { iterationId: "i-0002", claimId: "i-0001:1", lapIds: ["i-0001", "i-0002"] },
   ]);

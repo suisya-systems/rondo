@@ -1094,6 +1094,8 @@ export interface Chrome {
   readonly planHeld: (paths: readonly string[]) => string;
   /** The label before the request of the work that holds them. */
   readonly planHeldBy: string;
+  /** {@link planHeld} where every work holding them has finished. */
+  readonly planHeldFinished: (paths: readonly string[]) => string;
   /** Where that work has finished: starting reads whether it landed first. */
   readonly planHeldTry: string;
   /** A start refused because other work holds the files (D-0073 rule 3.1). */
@@ -1898,7 +1900,7 @@ explanation you pressed on and then answers the gate.`,
     `Published: ${branch === null ? "the branch" : `the branch ${branch}`} is pushed, and ` +
     `${runId === null ? "the run" : `the run ${runId}`} is closed.`,
   publishedPullRequest: "The pull request",
-  holds: (paths) => `Keeps to itself while open: ${filesEn(paths)}`,
+  holds: (paths) => `Files it keeps to itself: ${filesEn(paths)}`,
   heldHeading: (count) => `finished, not yet on the default branch (${String(count)})`,
   notLanded:
     "rondo has not found this change on the default branch yet, so these files stay with it " +
@@ -1954,13 +1956,16 @@ explanation you pressed on and then answers the gate.`,
   planHeld: (paths) =>
     `Not yet: other work is changing ${filesEn(paths)}. This can start once that work's change ` +
     "is on the default branch, or once its files are released.",
+  planHeldFinished: (paths) =>
+    `Not yet: work that has finished still keeps ${filesEn(paths)}, because its change has not ` +
+    "been found on the default branch. This can start once it is, or once its files are released.",
   planHeldBy: "Held by",
   planHeldTry:
     "That work has finished. Starting checks first whether its change is on the default branch.",
   startRefusedHeld:
-    "Nothing was started and nothing was spent: other work still keeps files this needs, and " +
-    "its change was not found on the default branch. The approval stands; start again once that " +
-    "work lands or its files are released.",
+    "Nothing was started and nothing was spent: other work still keeps files this needs. The " +
+    "approval stands; start again once that work's change is on the default branch or its files " +
+    "are released.",
   publishHeading: "Publish this work",
   publishLead:
     "Nothing has left this machine yet. This is what publishing would do, read just now; the " +
@@ -2825,7 +2830,7 @@ const JA: Chrome = Object.freeze({
     `公開済み: ${branch === null ? "ブランチ" : `ブランチ ${branch}`} を push し、` +
     `${runId === null ? "run" : `run ${runId}`} を閉じました。`,
   publishedPullRequest: "プルリクエスト",
-  holds: (paths) => `終わるまで押さえているファイル: ${filesJa(paths)}`,
+  holds: (paths) => `この作業が押さえているファイル: ${filesJa(paths)}`,
   heldHeading: (count) => `終わったが、まだ既定ブランチに入っていない作業 (${String(count)})`,
   notLanded:
     "この変更はまだ既定ブランチで見つかっていません。それまでファイルはこの作業が押さえたままで、" +
@@ -2882,13 +2887,16 @@ const JA: Chrome = Object.freeze({
   planHeld: (paths) =>
     `まだ始められません。別の作業が ${filesJa(paths)} を変更しています。その作業の変更が既定` +
     "ブランチに入るか、その作業のファイルが手放されれば始められます。",
+  planHeldFinished: (paths) =>
+    `まだ始められません。終わった作業が ${filesJa(paths)} を押さえたままです。その変更がまだ既定` +
+    "ブランチで見つかっていないためです。見つかるか、ファイルが手放されれば始められます。",
   planHeldBy: "押さえている作業",
   planHeldTry:
     "その作業は終わっています。開始するときに、まずその変更が既定ブランチに入っているかを確かめます。",
   startRefusedHeld:
-    "何も開始せず、何も消費していません。必要なファイルを別の作業がまだ押さえていて、その変更は" +
-    "既定ブランチで見つかりませんでした。承認はそのまま有効です。その作業が取り込まれるか、" +
-    "ファイルが手放されたら、もう一度開始してください。",
+    "何も開始せず、何も消費していません。必要なファイルを別の作業がまだ押さえています。承認は" +
+    "そのまま有効です。その作業の変更が既定ブランチに入るか、ファイルが手放されたら、もう一度" +
+    "開始してください。",
   publishHeading: "この作業を公開する",
   publishLead:
     "公開すると何が起きるかを、いまの状態から読み取って示します。下のボタンを押すまで、何も起きません。",

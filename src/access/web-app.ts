@@ -2152,11 +2152,9 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     if (!released.ok) {
       return releaseRefused(c, 409, released.why ?? "releaseRefusedNotRecorded", iterationId);
     }
-    // The summary, anchored at the line's row, which now says its files are free.
-    return c.redirect(
-      `${viewHref({ kind: "summary" }, tagOf(c))}#${encodeURIComponent(`lap-${iterationId}`)}`,
-      303,
-    );
+    // Back to the release screen, which now says the files were released: the
+    // row may no longer be on the summary once it keeps nothing.
+    return c.redirect(viewHref({ kind: "release", iterationId }, tagOf(c)), 303);
   });
 
   /**
