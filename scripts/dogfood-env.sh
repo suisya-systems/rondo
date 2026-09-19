@@ -743,11 +743,20 @@ step "Start command (the one word the person types, D-0080)"
 # to a per-shell directory under a version manager's run directory that does
 # not outlive that shell -- so every directory below is the real one, resolved
 # the way node_bin above is.
-real_dir_of() {
-  local found
+#
+# **Both directories, resolved first.** Where a program is a link into a
+# package's own files -- an npm-installed CLI is `bin/something.js` behind a
+# link named for the command -- the resolved directory holds the file and not
+# the name the host will call, so resolving alone can take the program away.
+# The directory the link itself is in is added after it, which costs one entry
+# and keeps the name findable. A per-shell directory that does not outlive the
+# shell it was made for is then a dead entry rather than the only one.
+dirs_of() {
+  local found resolved
   found=$(command -v "$1" 2>/dev/null || true)
   [ -n "$found" ] || return 0
-  found=$(readlink -f -- "$found" 2>/dev/null || printf '%s' "$found")
+  resolved=$(readlink -f -- "$found" 2>/dev/null || printf '%s' "$found")
+  (cd -- "$(dirname -- "$resolved")" && pwd -P)
   (cd -- "$(dirname -- "$found")" && pwd -P)
 }
 
@@ -763,9 +772,11 @@ add_path_dir() {
 add_path_dir "$(dirname -- "$node_bin")"
 add_path_dir "$(dirname -- "$claude_bin")"
 for program in git gh codex; do
-  program_dir=$(real_dir_of "$program")
-  if [ -n "$program_dir" ]; then
-    add_path_dir "$program_dir"
+  program_dirs=$(dirs_of "$program")
+  if [ -n "$program_dirs" ]; then
+    while IFS= read -r program_dir; do
+      add_path_dir "$program_dir"
+    done <<<"$program_dirs"
   else
     # Not fatal here. One of these missing is a page whose publish or whose
     # reviewer reports itself unavailable, which is a thing the person is told
@@ -822,12 +833,24 @@ note "$unit_path"
 # and the ones that can fail from here fail for one reason: inside a Claude
 # Code sandbox every systemctl call is refused the bus, which is the runbook's
 # "not inside a Claude Code sandbox" again (D-0080's measurement).
+#
+# **`try-restart` is the third act, and it is what makes rule 2.4 true.** When
+# a host fact moves, the repair is running setup again -- and a rewritten unit
+# is read by nothing until the process is replaced: `daemon-reload` and
+# `enable` leave a running host alone, and so does the `systemctl start` the
+# word does, because a service that is already active is already started. A
+# host would then keep running on the facts it was started with, and a changed
+# port would leave the word waiting on a page nothing serves. `try-restart`
+# replaces a running host and does not start a stopped one, which is the
+# word's to do.
 if systemctl --user daemon-reload >/dev/null 2>&1 &&
-  systemctl --user enable rondo.service >/dev/null 2>&1; then
+  systemctl --user enable rondo.service >/dev/null 2>&1 &&
+  systemctl --user try-restart rondo.service >/dev/null 2>&1; then
   note "the service is installed; the word starts it"
 else
   note "could not reach the systemd user manager from here. In a normal terminal:"
   note "  systemctl --user daemon-reload && systemctl --user enable rondo.service"
+  note "  systemctl --user try-restart rondo.service   # if a host is already running"
 fi
 # Without linger the user manager -- and the host with it -- is stopped when
 # the last session on this machine ends, so the page would die with the

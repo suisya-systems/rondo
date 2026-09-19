@@ -142,14 +142,46 @@ sh_quote() {
   printf "'%s'" "$text"
 }
 
-# `value` as a systemd-quoted word. systemd splits an `ExecStart=` or
-# `Environment=` line on whitespace and reads `\` as an escape, so the same
-# directory name needs the same care one line lower.
-sd_quote() {
+# `value` as something systemd reads back as itself, three ways, because
+# systemd rewrites a unit line three times over and each setting takes a
+# different subset of that. A directory name may legally hold every character
+# involved, and a fact that does not survive being written is a host started
+# somewhere else.
+#
+#  1. **A specifier**, `%` followed by a letter, is expanded in every setting,
+#     and an unknown one invalidates the line. `%%` is how a literal `%` is
+#     written, so every value below goes through `sd_percent` first.
+#  2. **Quoting and `\`** apply where the value is one word of several
+#     (`ExecStart=`, `Environment=`), and not to a path setting, which takes
+#     the rest of its line as it stands.
+#  3. **`$name` and `${name}` are expanded in `ExecStart=`**, inside double
+#     quotes as well, so a `$` in a path there is written `$$`. In an
+#     `Environment=` value a `$` is already literal -- the expansion happens
+#     where the variable is used -- so escaping it there would write the
+#     backslash into the value.
+sd_percent() {
   local text=$1
+  printf '%s' "${text//%/%%}"
+}
+
+sd_quote() {
+  local text
+  text=$(sd_percent "$1")
   text=${text//\\/\\\\}
   text=${text//\"/\\\"}
   printf '"%s"' "$text"
+}
+
+# One word of an `ExecStart=`, where a `$` is a variable and not a character.
+sd_exec_quote() {
+  local text=$1
+  text=${text//\$/\$\$}
+  sd_quote "$text"
+}
+
+# A path setting: no quoting, no `\` escape, and the specifier rule alone.
+sd_path() {
+  sd_percent "$1"
 }
 
 # The sentences the person reads, one whole set per language and never one
@@ -259,11 +291,11 @@ mv -f "$command_tmp" "$command_path"
   # read as a path that begins with a quote and the unit is refused outright
   # (`systemd-analyze verify`, 2026-09-20). A space in it needs no quoting
   # there for the same reason.
-  printf 'WorkingDirectory=%s\n' "$checkout"
+  printf 'WorkingDirectory=%s\n' "$(sd_path "$checkout")"
   printf 'ExecStart=%s %s web --port %s' \
-    "$(sd_quote "$node_bin")" "$(sd_quote "$checkout/bin/rondo.mjs")" "$port"
-  if [ -n "$repo" ]; then printf ' --repo %s' "$(sd_quote "$repo")"; fi
-  if [ -n "$remote" ]; then printf ' --remote %s' "$(sd_quote "$remote")"; fi
+    "$(sd_exec_quote "$node_bin")" "$(sd_exec_quote "$checkout/bin/rondo.mjs")" "$port"
+  if [ -n "$repo" ]; then printf ' --repo %s' "$(sd_exec_quote "$repo")"; fi
+  if [ -n "$remote" ]; then printf ' --remote %s' "$(sd_exec_quote "$remote")"; fi
   printf '\n'
   # The service manager's PATH holds only the system directories, where of the
   # four programs the host runs by name only `git` is found (D-0080's

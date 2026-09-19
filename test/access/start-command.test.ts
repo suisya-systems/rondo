@@ -27,6 +27,14 @@ import { fileURLToPath } from "node:url";
 
 import { expect, test } from "vitest";
 
+/**
+ * Every case here runs `bash`, reads a POSIX mode bit or asks `sh` what the
+ * program says, and the suite runs on a Windows cell as well (AGENTS.md). The
+ * writer is a program for the machine rondo is resident on, which is that
+ * machine's shell; on Windows these would be testing the runner.
+ */
+const posix = test.skipIf(process.platform === "win32");
+
 const writer = join(dirname(fileURLToPath(import.meta.url)), "../../scripts/start-command.sh");
 
 interface Written {
@@ -99,7 +107,7 @@ function says(command: string, name: string): string {
   return execFileSync("sh", ["-c", `${definitions}\n${name}`], { encoding: "utf8" });
 }
 
-test("the program is a shell program the person can run, and it parses", () => {
+posix("the program is a shell program the person can run, and it parses", () => {
   const { command, commandPath } = write([]);
 
   expect(command.startsWith("#!/bin/sh\n")).toBe(true);
@@ -108,7 +116,7 @@ test("the program is a shell program the person can run, and it parses", () => {
   execFileSync("sh", ["-n", commandPath], { stdio: "pipe" });
 });
 
-test("a path holding a space and a quote is read back as itself", () => {
+posix("a path holding a space and a quote is read back as itself", () => {
   const { command } = write([
     "--path",
     "/home/p/o'brien bin:/usr/bin",
@@ -129,7 +137,7 @@ test("a path holding a space and a quote is read back as itself", () => {
   );
 });
 
-test("the sentences for a break name no path, no unit and no variable", () => {
+posix("the sentences for a break name no path, no unit and no variable", () => {
   for (const language of ["ja", "en"]) {
     const broken = says(write(["--language", language]).command, "broken");
 
@@ -143,7 +151,7 @@ test("the sentences for a break name no path, no unit and no variable", () => {
   }
 });
 
-test("the person's language decides the sentences, and each set is whole", () => {
+posix("the person's language decides the sentences, and each set is whole", () => {
   const japanese = write(["--language", "ja-JP"]).command;
   expect(says(japanese, "broken")).toContain("開けません");
   expect(says(japanese, "opened")).toContain("開きました");
@@ -158,7 +166,7 @@ test("the person's language decides the sentences, and each set is whole", () =>
   expect(says(english, "opened")).toContain("http://127.0.0.1:7333/");
 });
 
-test("the unit carries every host fact, and the PATH setup resolved", () => {
+posix("the unit carries every host fact, and the PATH setup resolved", () => {
   const { unit } = write(["--repo", "suisya-systems/rondo", "--language", "ja", "--max-live", "3"]);
 
   expect(unit).toContain(
@@ -175,7 +183,7 @@ test("the unit carries every host fact, and the PATH setup resolved", () => {
   expect(unit).toContain("Restart=always");
 });
 
-test("a fact that was not given is not written as an empty one", () => {
+posix("a fact that was not given is not written as an empty one", () => {
   const { unit } = write([]);
 
   // An empty `--repo` would be a host that serves the page with no publish
@@ -188,6 +196,30 @@ test("a fact that was not given is not written as an empty one", () => {
   expect(unit).not.toContain("RONDO_MAX_OCCUPYING");
 });
 
-test("a port that is not a number is refused rather than written", () => {
+posix("a port that is not a number is refused rather than written", () => {
   expect(() => write(["--port", "7333; rm -rf /"])).toThrow();
+});
+
+posix("what systemd would expand is written as itself", () => {
+  // Both characters are legal in a directory name, and systemd rewrites a unit
+  // line twice: `%` followed by a letter is a specifier in every setting, and
+  // `$name` is a variable inside `ExecStart=` even between double quotes.
+  // Measured on this machine (2026-09-20): `systemctl --user show` reads
+  // `%%` back as one `%` in `Environment=` and `WorkingDirectory=`, and a unit
+  // whose `ExecStart=` holds `$$HOME` runs a program that is handed the five
+  // characters `$HOME`.
+  const { unit } = write([
+    "--checkout",
+    "/home/p/100%$HOME rondo",
+    "--path",
+    "/home/p/100% bin:/usr/bin",
+  ]);
+
+  expect(unit).toContain("WorkingDirectory=/home/p/100%%$HOME rondo");
+  expect(unit).toContain(
+    'ExecStart="/opt/node/bin/node" "/home/p/100%%$$HOME rondo/bin/rondo.mjs"',
+  );
+  // A `$` in an environment value is already literal, so escaping it there
+  // would write the escape into the value.
+  expect(unit).toContain('Environment="PATH=/home/p/100%% bin:/usr/bin"');
 });
