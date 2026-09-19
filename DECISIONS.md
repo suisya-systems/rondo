@@ -16105,7 +16105,9 @@ number.
       (`D-0022` rule 4's shape). Columns: `claim_id`; `lineage_id`, the lineage's first iteration id
       (`D-0030`); `repository`; `paths`; `supersedes_claim_id`, nullable; `author_kind` and `author_id`
       (`D-0061` rule 2.3); `bases`; `created_at_ms`. **A line's in-force claim is the row no successor
-      names.**
+      names**, and there is exactly one: **`supersedes_claim_id` is unique**, so a successor must name
+      the current head, and a second successor written from the same stale read is refused by the
+      database rather than left as a second live claim.
    2. **A path is repository-relative. One ending in `/` is a directory and covers everything under
       it; the whole repository is `/`. Two paths overlap when they are equal or one is a directory
       that covers the other.** There are no patterns: a pattern is where a match stops being an
@@ -16133,8 +16135,11 @@ number.
       capacity refusal (`D-0023` rule 14), naming the holding lineage and the shared paths. The row's
       shape is the building change's.
    2. **Every successor `lane_claim` row is tested the same way, in the transaction that writes it.**
-   3. **"Open" is `D-0067` rule 2's open lineage**: its latest lap is not terminal, or it is `closed`
-      and its work has not landed, where "landed" is rule 6's reading.
+   3. **"Open" is `D-0067` rule 2's open lineage, read over the whole lineage tree**: a lineage is a
+      tree, since a redo may continue an earlier lap (`D-0066` rule 4.4 as annotated for rondo#197).
+      It is open while **any** lap of the tree is not terminal, or any `closed` lap's work has not
+      landed, where "landed" is rule 6's reading. One branch of the tree failing does not release a
+      claim another branch still needs.
    4. **The refusal is the backstop, not the ordinary path.** The in-force claims are rows in the
       advisory's snapshot, so a split is drafted knowing them. For a plan whose claim overlaps an open
       line, the advisory drafts a `sequence` (`D-0067` rule 3): `first` the holder, `then` the plan,
@@ -16158,9 +16163,10 @@ number.
       lands or ends**, where "changed" is the set rule 6 reads. Its work on that path exists and would
       meet the other line at merge. Narrowing a path the line has not touched is how one line gives it
       to another at once (C5).
-   3. **Release**: a successor with no paths, written when the line stops being open: in the
-      transaction that writes a terminal status the surface itself writes (`abandoned`, `failed`), or
-      when rule 6 reads the line landed. **A person may also release a line**, by a press of its own
+   3. **Release**: a successor with no paths, written when the line stops being open (rule 3.3): in
+      the transaction that writes a terminal status the surface itself writes (`abandoned`,
+      `failed`), when that status leaves no other lap of the tree open, or when rule 6 reads the line
+      landed. **A person may also release a line**, by a press of its own
       that writes the row with `author_kind` `operator`: it is how a line whose work landed in a form
       rule 6 cannot recognise is closed out (rule 6.4), and how a `closed` line a fold retires gives up
       its paths (rule 9.3). `D-0023` rule 15 keeps `abandon()` off a `closed` row, so this press is not
@@ -16180,8 +16186,10 @@ number.
    write any path, and a claim drafted too narrow is corrected here, at most one lap late, which is
    `D-0067` as it stands. A claim drafted too wide costs parallelism and never a collision.
 
-6. **A line has landed when the default branch holds what it changed.** The line's changed set is the
-   paths changed between its first lap's `baseCommit` and its latest lap's `tipCommit`. **It has landed
+6. **A line has landed when the default branch holds what it changed.** Landing is read only for a
+   line whose every lap is terminal and at least one is `closed`: a lap at its gate is held by rule
+   10, whatever its diff says. The line's changed set is the union, over its `closed` laps, of the
+   paths changed between the lineage's first `baseCommit` and that lap's `tipCommit`. **It has landed
    when, for every path in that set, the tree entry at the default branch's head equals the tree entry
    at the tip (object id, mode and type), a deleted path being absent from both.** A blob alone is not
    enough: a change of mode only keeps the blob and would read as landed before it had. The reading is gathered from git at the points rule 7
@@ -16203,7 +16211,10 @@ number.
 7. **When a held act is attempted.** `D-0067` rule 4 attempts a held act when the surface writes the
    release fact. **A landing is read, not written by an act of rondo's**: the person merges on the
    forge. So **the resident host's tick (`D-0068` rule 2.2's timer) reads rule 6 for every line some
-   `sequence` waits on, writes the release, and the surface attempts the held act**, with `D-0066`
+   `sequence` waits on, writes the release, and the surface attempts the held act**. The release is
+   written only if the claim head and the lineage's laps are still the ones the reading was taken
+   over, re-tested in the transaction that writes it; a redo admitted in between makes the reading
+   stale and nothing is released. The held act is attempted with `D-0066`
    section 4's verdict computed then, unchanged. The patrol's function is not changed and still acts
    on nothing; the tick carries a second duty. Without a resident host, rule 6 is read at the next
    admission the surface attempts. This is the gate's first point.
@@ -16229,8 +16240,14 @@ number.
       onto the other change's paths (rule 4.1, held until they are free), and a redo on the same
       branch (`D-0027`) makes the other change, so one pull request carries both. **Today the redo is
       the person's `revise` press, drafted with its words (`D-0070`)**; the organisation's own `revise`
-      waits on `D-0064` rule 3.6. A fold after the line's pull request is open changes what the person
-      has already been shown, so it is P3.
+      waits on `D-0064` rule 3.6. **The fold is a redo, so it is available only while the line's gate
+      is open**: `revise` answers that gate (`D-0027` rules 1 and 6) and refuses one already answered.
+      **Once the line is `closed` or published, the fold is P3**, because it changes what the person
+      has already approved or been shown. The recommended option is to retire the line with the
+      release press (rule 4.3, after its pull request is closed) and admit a new line that claims both
+      path sets, with the retired branch named in its instruction as material; the other option is to
+      land the other change first and hold this merge, which is rule 9.1's order carried out by the
+      person.
    3. **When both lines have already changed the paths the other needs, the fold cannot wait for either
       to land**, since neither may land alone and neither may narrow a changed path (rule 4.2). **Which
       line survives is then the person's, as P3**: the drafted options name the survivor, what the
