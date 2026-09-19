@@ -16675,7 +16675,10 @@ approval it was not admitted under, and a press.
    under.** From `scopeDecisionAdmitting(lap)`, read its scope, follow `supersedes_scope_id` downward
    to the approved descendant with no approved descendant of its own, and take that approval. With no
    successor the tip is the admitting decision itself, so nothing changes for a lap that was never
-   raised.
+   raised. **A chain that already holds two approved tips** (approved before section 1.3's refusal
+   reached the chain) **has no tip**: the revise press is refused as `undecidable`, naming both, and
+   nothing is charged, since anything but `inside` takes no act (`D-0066` rule 4.1). rondo does not
+   pick one.
 2. **`D-0070` section 1.2 is amended to say "the approved tip of the approval the predecessor was
    admitted under"** in place of "the approval the predecessor was admitted under", which is how
    `D-0059`'s annotation from rondo#233 S4 reads it. The revise press compares the posted decision
