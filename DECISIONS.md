@@ -575,6 +575,16 @@ which point the rule is not wrong but is no longer sufficient.
 the test-seed line in `vitest.config.ts` — is ASCII. This does not apply to comments, Markdown,
 identifiers, or test names.
 
+> **Annotation (2026-09-20, from D-0080).** Added after this entry was accepted, and **not additive**,
+> by the answer of rondo's human gate on rondo#296 (its point 3 (a)). **One exception, as narrow as
+> one command**: the start command `D-0080` rule 2.5 has setup write is the only terminal surface
+> written for the person who asked for the work rather than for whoever installs rondo, so its few
+> sentences are composed in that person's language (`D-0079`) and are not held to ASCII or passed
+> through this entry's escape. Everything else above is unchanged, including every other string of
+> every other rondo command. The cost is this entry's own argument in reverse — someone now has to ask
+> which reader a string is for — and `D-0080` takes it in one place and measures it on the Windows
+> cell. Nothing below is edited.
+
 **Why.** CI includes a Windows cell, where the console may be cp932. A character that cannot be
 encoded there does not print badly: it raises `UnicodeEncodeError` in the writer and takes the
 process with it. The failure is invisible in a normal test run, because vitest captures stdout
@@ -10374,6 +10384,13 @@ which question, because collapsing them is what produced a legible screen with a
     page is the surface answering happens on -- asked and answered at the window on 2026-09-12 -- and
     it is the surface rondo#166 is about.
 
+    > **Annotation (2026-09-20, from D-0080).** Added after this entry was accepted, and **not
+    > additive**, by the answer of rondo's human gate on rondo#296. That decision has now been taken,
+    > for one command only: the start command of `D-0080` rule 2.5 is written for the person, in their
+    > language, and does not go through `D-0004`'s escape. This rule's reasoning is why the exception
+    > is that narrow -- the escape has no CJK substitutes, and every other terminal string, including
+    > `inboxLines` as called from the terminal, stays English. Nothing below is edited.
+
 11. **`D-0053` rule 3 is reversed by name.** Both standing sentences of the fence block -- `"This is
     the run's own declaration, not the whole fence ..."` and `SECOND_FENCE_LINES`
     (`src/access/cli.ts:2236`) -- are **prose** and go in the operator's language. `D-0050` rule 4's
@@ -16944,6 +16961,14 @@ disputes; they never open a terminal. It is unmet if a terminal is ever required
 screen has to be asked about. Below, its clauses are named **K1** (request to pull request), **K2**
 (only approvals and disputes in between), **K3** (no terminal) and **K4** (no word to ask about).
 
+> **Annotation (2026-09-20, from D-0080).** Added after this entry was accepted, and **not additive**,
+> by the answer of rondo's human gate on rondo#296 (its point 6 (a)). **K3 is read as: nothing the
+> person has to remember at a start.** A terminal that takes one word is inside the line; an argument,
+> a path, a directory to be in or a file to source after that word is not. The operator drew it again
+> on 2026-09-20, and `D-0080` is judged by the redrawn line. K3's own words above stand as written and
+> are not edited; **rondo#298** is where the definition itself is restated, so that one place holds
+> what it now says. Nothing below is edited.
+
 rondo#265 is the one open gap that plainly fails K3. Under `D-0071` point 1(a) a fresh store gets its
 first template **only** from a plan the person pastes into a request thread. A plan carries this host's
 absolute paths, so it cannot be written by hand, and the only thing that writes one is
@@ -16998,7 +17023,18 @@ number.
    setup again when one of the host's facts changes.** Each of these either creates something on this
    disk, widens what a lap may touch, or starts the process that serves the page. None of them is a
    reply to a request. **K3 has no installation exception in the operator's words**, so this list was
-   the first point put to the gate, whole, and the gate took it (its answer 1). **One repository per
+   the first point put to the gate, whole, and the gate took it (its answer 1).
+   > **Annotation (2026-09-20, from D-0080).** Added after this entry was accepted, and **not
+   > additive**, by the answer of rondo's human gate on rondo#296. **"Starting the resident host"
+   > leaves this list as a recurring act and becomes one word**: setup writes a start command into a
+   > directory the person's shell already searches, carrying every host fact, and it hands the host to
+   > a resident service. Installing that command and that service is installation, once per host.
+   > **The host facts whose change needs setup again** (this rule's fifth act, and gate answer 1 (a))
+   > **now include everything that command carries**: `node`'s real path, the directories of the
+   > programs the host runs by name, the checkout and its build, the port, the repository and remote,
+   > the approver, the language and the two bounds. The residual row "Starting the resident host
+   > without a terminal" is answered by `D-0080`; what is left of it, a person who opens no terminal
+   > at all, is `D-0080`'s own residual. Nothing below is edited. **One repository per
    store and host**: setup for another repository is given its own root, so its store, control plane
    and resident host are its own, and one store's setup rows are one repository's. This is the gate's
    answer 2 made exact; the entry as proposed did not say which store a second repository's setup
@@ -18344,13 +18380,19 @@ Each dated, and added with this entry's acceptance:
 
 ## D-0080 — Starting rondo is one word with nothing in it to remember: setup writes the command that carries every host fact, the thing the person typed is what speaks when rondo cannot start, and starting runs no setup
 
-**Status:** proposed (2026-09-20). Six points are put to the human gate; see "What is put to the human
-gate". Refs `D-0004`, `D-0019`, `D-0025`, `D-0055`, `D-0064`, `D-0071`, `D-0075`, `D-0076`, `D-0079`,
-rondo#265, rondo#296.
+**Status:** accepted (2026-09-20, rondo's human gate, on rondo#296). Six points were put to the gate
+through the window and it chose the recommended option on each; the answers are recorded in "What was
+put to the human gate, and its answer". Refs `D-0004`, `D-0019`, `D-0025`, `D-0055`, `D-0064`,
+`D-0071`, `D-0075`, `D-0076`, `D-0079`, rondo#265, rondo#296.
 
 **This entry decides and does not build.** Nothing in `src/` or `scripts/` changes with it, and under
 rule 2 nothing in `src/` needs to: the host is told what it is told today, by the same means. The
-annotations it would add to `D-0075` are listed in "Annotations this entry adds (on acceptance)".
+annotations it adds are listed in "Annotations this entry adds".
+
+**The completion definition's own entry is separate.** The gate took point 6 (a), a dated annotation
+on `D-0075`, and at the same time said that restating K1 to K4 as an entry of their own -- point 6
+(c) -- is its own task, because the definition was redrawn by hand today and three entries quote its
+words. That is rondo#298, and nothing here waits on it.
 
 **Numbering.** `D-0080` is the next number after `D-0079` on `main` at `f9676de`.
 
@@ -18465,22 +18507,32 @@ Line numbers drift; re-measure the claim, not the number.
    repository, approver or checkout changes, the command setup wrote is stale, and the repair is
    setup, not an edit to the command (section 4). A hand-edited start command is outside this entry
    and nothing depends on it.
-5. **Where the command lives** -- a program in a directory the person's shell already searches, or a
-   function in their shell's own startup -- is the gate's point 1.
+5. **The command is a program setup writes into a directory the person's shell already searches**
+   (the gate's answer 1), on this machine `~/.local/bin`, which already holds `gh` and `claude`
+   (measurement). Not a function or alias in their shell's startup: a program works in every shell and
+   from a launcher, setup does not edit a file the person owns, and removing rondo is deleting it.
+   Setup says so when that directory is not on the person's `PATH`, because then the word does nothing.
+6. **The word hands the host to a resident service and returns** (the gate's answer 2), so the
+   terminal is free, its window may be closed, and a crash restarts the host. The service is the one
+   section 3 measured, installed by setup with the `PATH` setup resolved; installing it is
+   installation (`D-0075` rule 1.1). What the word does is: make sure the host is running, wait until
+   it answers, and open the page. Running the host in the foreground stays what `rondo web` is, for
+   the second reader.
 
 ### 3. Starting with no terminal at all is a way of meeting the line, not the line
 
-1. **A resident service and a launcher remain available and are not decided here.** The measurement
-   says they work on this machine and names their two conditions: the service must be given the `PATH`
-   setup resolved, because the service manager's own has only `git`; and on WSL something on the
-   Windows side has to start the distribution, because nothing does at sign-in. If they are taken, the
-   unit and the launcher are written by setup from the same facts as the command in rule 2, and the
-   same three refusals apply (no settings file, no discovery, no configuration layer).
-2. **Whether they are taken now is the gate's point 4.** Nothing in section 1 needs them: one word in a
-   terminal meets the line as the operator drew it.
-3. **Whether the one word runs the host in the foreground**, as today, or hands it to a background
-   service so the terminal comes back, is the gate's point 2. It is the one part of section 3 the line
-   does touch: a window the person must leave open, and must not close, is a thing to remember.
+1. **The service and the launcher are two things, with two conditions the measurement names**: the
+   service must be given the `PATH` setup resolved, because the service manager's own holds only
+   `git`; and on WSL something on the Windows side has to start the distribution, because nothing does
+   at sign-in, so a service alone moves the terminal rather than removing it. Either one, when built,
+   is written by setup from the same facts as the command in rule 2, and the same three refusals apply
+   (no settings file, no discovery, no configuration layer).
+2. **The service is taken, by rule 2.6; the Windows launcher is not taken now** (the gate's answer 4).
+   Nothing in section 1 needs a launcher: one word in a terminal meets the line as the operator drew
+   it, and two of the launcher's conditions are unmeasured. Its measurements and conditions stay in
+   this entry so the change that builds it starts from them, not from a fresh survey.
+3. **What is still open without a launcher** is the person who opens no terminal at all, and a
+   bookmark to the page that says nothing when rondo is down (rule 4.5). Both are residuals.
 
 ### 4. What the person sees when rondo is not running
 
@@ -18491,15 +18543,21 @@ Line numbers drift; re-measure the claim, not the number.
    for a break only installation repairs).
 2. **It names no unit, command, path, log line or variable** (`D-0076` rule 4.2). What the host or the
    service said is kept where whoever maintains rondo can read it, and the person is not sent there.
-3. **Whose reader those lines are written for is the gate's point 3.** `D-0055` rule 10 and `D-0004`
-   keep the terminal English and ASCII, and `D-0076` rule 1.1 says the terminal's reader is whoever
-   installs rondo. Under rule 1 the person now reads this one command's output, so either it is theirs
-   (composed in their language, `D-0079`, which breaks ASCII) or it stays the terminal's.
+3. **Those lines are written for the person, in their language** (the gate's answer 3), composed as
+   `D-0079` section 1 asks and not translated from English. `D-0004` and `D-0055` rule 10 gain an
+   exception **as narrow as this one command**: its few sentences are the only terminal output rondo
+   writes for the person, so they are not held to ASCII and do not go through `D-0004`'s escape, which
+   has no CJK substitutes and would print them as `\uXXXX` (`D-0055` rule 10's measurement). Every
+   other terminal string, including every other word of this command if it ever grows one, stays
+   English and ASCII. The exception's cost is `D-0004`'s own: on a console that cannot encode them,
+   these sentences may print badly or take the process with them, which the building change measures
+   on the Windows cell before it ships them.
 4. **The command opens the page when the host answers**, so the person does not hold the address
    either; it is `D-0076` rule 1.3.1 applied to a URL.
 5. **A browser opened at the address with nothing running still shows the browser's own error**
    (measurement). Only something that is listening, or something the person opens instead of the
-   address, can say otherwise; that is section 3's launcher, and it is the gate's point 4.
+   address, can say otherwise; that is section 3's launcher, which the gate did not take now
+   (residual).
 
 ### 5. Starting runs no setup
 
@@ -18521,28 +18579,33 @@ Line numbers drift; re-measure the claim, not the number.
 |---|---|---|---|
 | **A. As today**: `cd`, source `env.sh`, `node bin/rondo.mjs web --port --repo` | **unmet**: six things the person holds | no | **Refused.** It is rondo#296 |
 | **B. Setup writes the start command; the person types one word** | met | no, and the operator does not ask for it | **Taken** (rules 1, 2) |
-| **C. B, and the word hands off to a resident service** so the terminal returns | met | at each session after the first | **Not decided**: gate point 2 |
-| **D. A service plus a Windows launcher, nothing typed** | met | yes | **Not decided**: gate point 4. Conditions measured (section 3.1) |
+| **C. B, and the word hands off to a resident service** so the terminal returns | met | at each session after the first | **Taken** (rules 2.6, 3.2): the gate's answer 2 |
+| **D. A service plus a Windows launcher, nothing typed** | met | yes | **Not now** (the gate's answer 4). Conditions measured (section 3.1); residual |
 | **E. The host reads a settings file** written by setup, so `rondo web` needs no arguments | met | no | **Refused.** It is `D-0019` rule 3's configuration layer and the shape rondo#266 removed: a file beside the store that the host re-reads and that can change under it |
 | **F. The host derives its facts** (finds `claude`, picks a workspace root, reads `git remote` for the repository) | met | no | **Refused.** `D-0075` rule 3.1 exactly |
 | **G. The page asks for what is missing** on first run | the fence roots and the repository are not approvals | no | **Refused.** `D-0075`'s option D, unchanged |
 
 ### What this gives up
 
-- **Setup writes an executable thing into the person's environment**, not only files under its own
-  root. Where it goes is point 1, and removing rondo now means removing it too.
+- **Setup writes two things into the person's environment**, not only files under its own root: a
+  program in `~/.local/bin` and a service unit. Removing rondo now means removing both.
 - **A stale start command is a silent trap** until it is run: nothing tells the person that `node` has
   moved except rondo failing to start (rule 5.3).
 - **The person has one blessed way in, and the terminal keeps the others.** A person who learns
   `--port` to run a second page is outside what this entry supports.
+- **`D-0004`'s totality.** Its own argument is that a rule needing no judgement at the point of
+  writing is cheaper than one needing it every time; rule 4.3 is the first place someone has to ask
+  which reader a string is for. It is held to one command for exactly that reason.
 - **K3 is no longer read as written.** Under rule 1 a session still begins in a terminal, and rondo's
-  completion definition, as its own words stand, is not met at each host start. Point 6 is where that
-  is settled.
+  completion definition, as its own words stand, is not met at each host start. The annotation the
+  gate took records the reading; rondo#298 is where the definition itself is restated.
 
 ### What is put to the human gate
 
-Point 5 is `D-0075`'s question re-read, as rondo#296 asks. Points 1 to 4 replace the first draft's
-points 1 and 2, which were written when a service and a launcher were the answer.
+Put through the window on 2026-09-20, each with a recommendation, and kept here as put. Point 5 is
+`D-0075`'s question re-read, as rondo#296 asks. Points 1 to 4 replace the first draft's points 1 and
+2, which were written when a service and a launcher were the answer, and the first draft's own point 2
+(launcher or address) fell away with them: what the person is given is the word, and it opens the page.
 
 1. **Where the one word lives.**
    - **(a) A program setup writes into a directory the person's shell already searches** (recommended)
@@ -18593,22 +18656,44 @@ points 1 and 2, which were written when a service and a launcher were the answer
      `D-0075`, `D-0076` and `D-0079`. *Loses:* a third entry before this one can be accepted; *gains:*
      one place where the definition lives, if the operator expects to redraw it again.
 
-### Annotations this entry adds (on acceptance)
+**The gate's answer (2026-09-20, relayed by the window):** the recommended option on all six --
+1 (a), 2 (a), 3 (a), 4 (a), 5 (a) and 6 (a). So: the word is a program setup writes where the shell
+already looks; it hands the host to a resident service and returns; its lines are the person's, in
+their language, with `D-0004` held open exactly that far; the click-only way in is not built now and
+its measured conditions stay here; setup runs again only when a host fact moves; and `D-0075` gains a
+dated annotation rather than being superseded.
 
-- **`D-0075`'s completion definition (K3) and gate answer 1 (a)**, per point 6: K3 is read as nothing
-  the person has to remember at a start; a terminal that takes one word is inside it. The residual row
-  "Starting the resident host without a terminal" is answered here, in the form rule 1 gives it.
-- **`D-0075` rule 1.1**: the recurring terminal act at each session becomes one word setup wrote, and
-  the host facts whose change needs setup again include everything that word carries (rule 5.2).
-- **`D-0004` and `D-0055` rule 10**, only if point 3 (a) is taken: the start command is the one
-  terminal surface written for the person and in their language.
+**And on point 6 (c), which was not chosen as the answer but not dropped:** restating K1 to K4 as an
+entry of their own is **its own task, rondo#298**, because the definition was redrawn by hand on the
+day this entry was written and three entries quote its words, so stacking annotations would leave no
+one place holding what it now says. This entry does not wait on it.
+
+### Annotations this entry adds
+
+Each dated, and added with this entry's acceptance:
+
+- **`D-0075`'s completion definition (K3)**, not additive (point 6 (a)): K3 is read as **nothing the
+  person has to remember at a start**, so a terminal that takes one word is inside it and an argument
+  after that word is not. K3's own words stand; rondo#298 is where the definition is restated.
+- **`D-0075` rule 1.1 and gate answer 1 (a)**: the recurring terminal act at each session becomes one
+  word setup wrote, and the host facts whose change needs setup again include everything that word
+  carries (rule 5.2). Installing the start command and the host's service is installation, once per
+  host. The residual row "Starting the resident host without a terminal" is answered here, in the form
+  rule 1 gives it, and what is left of it -- a person who opens no terminal at all -- is this entry's
+  own residual.
+- **`D-0004` and `D-0055` rule 10** (point 3 (a)): the start command's few sentences are the one
+  terminal surface written for the person, composed in their language and not held to ASCII or to
+  `D-0004`'s escape. Every other string rondo writes to a terminal is unchanged.
 
 ### What this does not do
 
-- **It does not build** the start command, setup's new step, its words, the unit or the launcher.
+- **It does not build** the start command, setup's new step, its words or the service unit.
 - **It does not change `src/`**: the host is told what it is told today (rule 2.2).
 - **It does not give rondo a settings file, a configuration layer or any discovery** (options E and F).
-- **It does not decide macOS, or a host on Windows itself.**
+- **It does not build the Windows launcher** (the gate's answer 4), and does not decide macOS or a
+  host on Windows itself.
+- **It does not restate the completion definition** (rondo#298), and does not widen `D-0004` beyond
+  the one command (rule 4.3).
 - **It does not add a check of host facts**, at start or on the page (rule 5.3).
 - **It does not give the page a way to stop, restart or upgrade the host.**
 
@@ -18616,8 +18701,10 @@ points 1 and 2, which were written when a service and a launcher were the answer
 
 | Residual | Why not here | Who decides |
 |---|---|---|
-| A person who never opens a terminal at all, and a bookmark that says nothing when rondo is down | Gate point 4 (a): not asked for now | an entry when someone other than rondo's developers runs it |
-| Whether the distribution stays up with no `wsl.exe` client, whether a shortcut's `wsl.exe` starts the user manager, whether linger can be enabled without root, whether a shortcut opens no window | Unmeasurable without closing every WSL session; conditions on point 4 (b) | the change that builds the launcher |
+| A person who never opens a terminal at all, and a bookmark that says nothing when rondo is down | The gate's answer 4: not asked for now | an entry when someone other than rondo's developers runs it |
+| Whether the distribution stays up with no `wsl.exe` client, whether a shortcut's `wsl.exe` starts the user manager, whether linger can be enabled without root, whether a shortcut opens no window | Unmeasurable without closing every WSL session; conditions on the launcher when it comes | the change that builds the launcher |
+| Whether the one command's non-ASCII sentences survive a cp932 console | `D-0004`'s own failure mode, now reachable in one place (rule 4.3) | the change that builds the command, on the Windows cell |
+| Restating the completion definition (K1 to K4) as an entry of its own | Three entries quote its words and it was redrawn by hand today | rondo#298 |
 | macOS, and a host on Windows itself | No person uses rondo there today | an entry when one does |
 | A host fact that moved still needs setup, in a terminal | `D-0075` gate answer 1 (a), kept by point 5 | `D-0075`'s falsifier, "setup re-run because a host fact moved, often enough to be felt" |
 | The setup script is still named for dogfooding and lives in a checkout | `D-0075`'s residual, unchanged | the change that packages rondo |
@@ -18630,11 +18717,16 @@ points 1 and 2, which were written when a service and a launcher were the answer
 - **A start command that has to be hand-edited** to keep working: rule 2.4 is wrong that setup is the
   repair, and the facts belong somewhere the person or an installer can change.
 - **The person reading the start command's failure sentence and asking what it means**: K4 and
-  `D-0076` rule 4.2, whichever way point 3 went.
+  `D-0076` rule 4.2.
+- **That sentence crashing a console or printing as mojibake**: `D-0004`'s failure, and rule 4.3's
+  exception is then wrong in the one place it was granted.
 - **A second page wanted on another port, or a second repository**, often enough that the one word is
   a cage: rule 1.2 needs the person to have more than one way in, or `D-0075`'s "one repository per
   store and host" comes back (its own residual).
-- **Host facts moving often enough that rule 4.1's sentence is the usual start**: point 5 (c) returns.
+- **Host facts moving often enough that rule 4.1's sentence is the usual start**: the gate's point 5
+  (c) returns.
+- **A service that will not start where a foreground `rondo web` would**, often enough to be felt: the
+  gate's answer 2 comes back as point 2 (b).
 - **A page that opens with its drafter, reviewer or publish unable to find its program** because the
   `PATH` the command carried was not what setup resolved: rule 2.1 is not what setup wrote.
 - Any measurement in "What was measured" failing to reproduce at rondo `f9676de` on this machine.
