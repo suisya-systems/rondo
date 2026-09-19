@@ -130,7 +130,7 @@ import {
   type ThreadMessageDraft,
   WAIT_SIDE,
 } from "../store/records.js";
-import type { AdvisoryRecord, IterationStore } from "../store/sqlite.js";
+import type { AdvisoryRecord, IterationStore, LedgerLine } from "../store/sqlite.js";
 import { basisLine, gather, gatherHost } from "./advisory.js";
 import { draftedStartReadiness } from "./drafted-start.js";
 import {
@@ -184,6 +184,8 @@ export interface WebPorts extends InboxReadPorts {
     | "occupancy"
     | "terminalIterations"
     | "verificationClaimsFor"
+    // D-0073 rule 12: what each line holds, and whether its work landed.
+    | "laneLedger"
   >;
   readonly record: InboxReadPorts["record"] &
     Pick<
@@ -258,6 +260,12 @@ export interface WebPorts extends InboxReadPorts {
    * (D-0020 rule 2's shape, rondo#233 S5).
    */
   readonly publishing: PublishReading | null;
+  /**
+   * Whether the host holds a release press (D-0073 rule 4.3): true exactly
+   * where the release port is not null, so no way to it is drawn where every
+   * press would be refused. Absent is false.
+   */
+  readonly releasable?: boolean;
   /**
    * A running lap's log, read at the directory `locateTranscript` named
    * (rondo#248 item 3). A function for {@link LapMaterial}'s reason: the
@@ -508,7 +516,15 @@ export type PageView =
    * Named by the row and never by a path, so the address carries nothing the
    * server would open.
    */
-  | { readonly kind: "log"; readonly iterationId: string };
+  | { readonly kind: "log"; readonly iterationId: string }
+  /**
+   * The files one finished line keeps, and the press that releases them
+   * (D-0073 rule 4.3, rondo#288). A view of its own for `publish`'s reason: the
+   * press is made from a screen that says which work holds them, what it was
+   * doing and why rondo has not released them itself, so that screen is the
+   * press's precondition and not a fold inside another.
+   */
+  | { readonly kind: "release"; readonly iterationId: string };
 
 /**
  * The most review rounds this screen will draft for.
@@ -565,7 +581,8 @@ function isLive(view: PageView): boolean {
     view.kind !== "answer" &&
     view.kind !== "scope" &&
     view.kind !== "publish" &&
-    view.kind !== "log"
+    view.kind !== "log" &&
+    view.kind !== "release"
   );
 }
 
@@ -596,6 +613,8 @@ export function viewHref(view: PageView, tag: string): string {
       return `/?publish=${encodeURIComponent(view.iterationId)}&${lang}`;
     case "log":
       return `/?log=${encodeURIComponent(view.iterationId)}&${lang}`;
+    case "release":
+      return `/?release=${encodeURIComponent(view.iterationId)}&${lang}`;
     case "requests":
       return `/?requests=open&${lang}`;
     case "thread":
@@ -1510,6 +1529,8 @@ function waitingView(
   count: number,
   /** The lap a revise would run as, minted per draw (rondo#233 S4). */
   newIterationId: MintIterationId | null,
+  /** What the row's line keeps to itself (D-0073 rule 12), or null. */
+  owns: (record: IterationRecord) => string | null,
 ) {
   const asks = threads.messages.filter((message) => threads.waiting.has(message.messageId));
   const hoisted = [
@@ -1537,6 +1558,7 @@ function waitingView(
           record.status === "awaiting_human" && record.gateId !== null
             ? null
             : unblockedBy(wording, record),
+          owns(record),
           spentLine(wording, record),
           fenceLine(wording, record),
         ],
@@ -1698,6 +1720,7 @@ function runningView(
   running: readonly IterationRecord[],
   transcripts: ReadonlyMap<string, TranscriptLocation>,
   nowMs: number,
+  owns: (record: IterationRecord) => string | null,
 ) {
   return questionGroup("running", wording.runningHeading(running.length), [
     ...running.map((record) =>
@@ -1713,6 +1736,7 @@ function runningView(
         ),
         [
           runsWhere(wording, record, transcripts.get(record.id)),
+          owns(record),
           spentLine(wording, record),
           fenceLine(wording, record),
         ],
@@ -2017,10 +2041,20 @@ function endedView(
   publishTo: (record: IterationRecord) => unknown,
   /** Where a publish that happened is read back from ({@link publishedReport}). */
   threads: Threads,
+  /**
+   * What the row's line keeps and whether its work landed (D-0073 rule 12):
+   * the lines to say, and the way to the release screen where there is one.
+   */
+  landing: (record: IterationRecord) => {
+    readonly lines: readonly string[];
+    readonly release: unknown;
+  },
+  /** The group's heading; *just finished* unless the caller names another. */
+  heading: string = wording.endedHeading(ended.length),
 ) {
   return questionGroup(
     "ended",
-    wording.endedHeading(ended.length),
+    heading,
     ended.map((record) => {
       const said = facts.get(record.id)?.claim ?? null;
       const raised = facts.get(record.id)?.raised ?? null;
@@ -2061,13 +2095,134 @@ function endedView(
           // pull request that already exists -- so re-offering it is not a
           // harmless repetition but a press that fails.
           published === null ? null : publishedLine(wording, record, published),
+          ...landing(record).lines,
         ],
         // The one thing left to do to an approved lap, where the lap is
         // (rondo#233 S5): the row's action, in its own place under the
         // metadata rather than inside it (rondo#246).
-        published === null ? publishTo(record) : null,
+        <>
+          {published === null ? publishTo(record) : null}
+          {landing(record).release}
+        </>,
       );
     }),
+  );
+}
+
+/**
+ * The release screen (D-0073 rule 4.3, rondo#288): which work keeps the files,
+ * what it was doing, why rondo has not released them, what releasing does, and
+ * the press.
+ *
+ * **The work is named by what the person knows** (D-0076 rule 3.3): their
+ * request's words and how each attempt ended, never a line or a lap id. The
+ * form carries the claim and the laps it was drawn over, so the press refuses
+ * a line that moved under the screen.
+ */
+async function releaseView(
+  ports: WebPorts,
+  wording: Chrome,
+  view: Extract<PageView, { kind: "release" }>,
+  token: string | null,
+  ledger: readonly LedgerLine[],
+  threads: Threads,
+  nowMs: number,
+): Promise<unknown> {
+  const framed = (body: unknown) => (
+    <div id="release" class="space-y-4">
+      {backHead(wording, wording.releaseHeading)}
+      {body}
+    </div>
+  );
+  const line = ledger.find((one) => one.lapIds.includes(view.iterationId));
+  if (line === undefined || line.paths.length === 0 || line.claimId === null) {
+    // Where a release press lands (the route redirects here), so it says so.
+    return framed(
+      note(line?.releasedBy === "person" ? wording.releasedByPerson : wording.releaseNothingHeld),
+    );
+  }
+  if (line.inFlight) {
+    return framed(note(wording.releaseStillOpen));
+  }
+  const records = (await Promise.all(line.lapIds.map((id) => ports.store.read(id)))).flatMap(
+    (outcome) => (outcome.kind === "read" ? [outcome.record] : []),
+  );
+  const root = records[0];
+  const tips = records.filter((record) => line.closedTips.includes(record.id));
+  return framed(
+    <>
+      <p class="text-[13px] leading-6">{wording.releaseLead}</p>
+      <section id="release-work" class={`${CARD} space-y-2`}>
+        <h3 class={CARD_HEADING}>{wording.releaseWorkHeading}</h3>
+        {root === undefined ? null : (
+          <p
+            class="text-[13.5px] leading-6 wrap-anywhere whitespace-pre-wrap"
+            lang={materialLanguage(root)}
+          >
+            {root.request}
+          </p>
+        )}
+        {(tips.length === 0 ? records.slice(-1) : tips).map((record) => {
+          const published = publishedReport(threads, record.id);
+          return (
+            <p class="text-[13px] leading-5 text-muted-foreground">
+              {endedHow(wording, record, nowMs)}
+              {published === null || published.url === null ? null : (
+                <>
+                  {" "}
+                  <a href={published.url} class="font-medium text-link hover:underline">
+                    {wording.publishedPullRequest}
+                  </a>
+                </>
+              )}
+            </p>
+          );
+        })}
+      </section>
+      <section id="release-files" class={`${CARD} space-y-1`}>
+        <h3 class={CARD_HEADING}>{wording.releaseHoldsHeading}</h3>
+        <p class="font-mono text-[12.5px] leading-5 wrap-anywhere" lang="">
+          {wording.holds(line.paths)}
+        </p>
+      </section>
+      <section id="release-why" class={`${CARD} space-y-1`}>
+        <h3 class={CARD_HEADING}>{wording.releaseWhyHeading}</h3>
+        {wording.releaseWhy.map((said) => (
+          <p class="text-[13px] leading-5">{said}</p>
+        ))}
+      </section>
+      <section id="release-effect" class={`${CARD} space-y-1`}>
+        <h3 class={CARD_HEADING}>{wording.releaseEffectHeading}</h3>
+        {wording.releaseEffect.map((said) => (
+          <p class="text-[13px] leading-5">{said}</p>
+        ))}
+      </section>
+      {/* No approver, no press: the page says at the top why (`publishView`'s rule). */}
+      {token === null ? null : (
+        <form
+          id="release-form"
+          method="post"
+          action={`/release?lang=${encodeURIComponent(wording.lang)}`}
+          class="flex flex-col gap-2"
+        >
+          <input type="hidden" name="token" value={token} />
+          <input type="hidden" name="iteration" value={view.iterationId} />
+          <input type="hidden" name="claim" value={line.claimId} />
+          <input type="hidden" name="laps" value={line.lapIds.join(" ")} />
+          <button
+            type="submit"
+            data-row=""
+            aria-describedby="release-plain"
+            class={`${PRIMARY} h-10 w-full justify-center px-6 text-sm sm:h-9 sm:w-auto sm:self-start`}
+          >
+            {wording.releaseAction}
+          </button>
+          <span id="release-plain" class="note sr-only">
+            {wording.releasePlain}
+          </span>
+        </form>
+      )}
+    </>,
   );
 }
 
@@ -5334,31 +5489,73 @@ async function planStart(
       {text}
     </p>
   );
+  const startForm = () =>
+    token === null || newIterationId === null ? null : (
+      <form
+        method="post"
+        action={`/start-plan?lang=${encodeURIComponent(wording.lang)}`}
+        class="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-end"
+      >
+        <input type="hidden" name="token" value={token} />
+        <input type="hidden" name="request" value={view.messageId} />
+        <input type="hidden" name="scope_decision" value={decisionId} />
+        <input type="hidden" name="proposal" value={proposalId} />
+        <input type="hidden" name="plan_index" value={String(plan.index)} />
+        {/* Minted at render, as every start's is: rondo names the lap. */}
+        <input type="hidden" name="iteration" value={newIterationId()} />
+        <button
+          type="submit"
+          data-row=""
+          title={wording.planStartPlain}
+          class={`${PRIMARY} h-9 w-full justify-center px-5 text-sm sm:w-auto`}
+        >
+          {wording.planStartAction}
+        </button>
+      </form>
+    );
   switch (ready.kind) {
     case "ready":
-      return token === null || newIterationId === null ? null : (
-        <form
-          method="post"
-          action={`/start-plan?lang=${encodeURIComponent(wording.lang)}`}
-          class="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-end"
-        >
-          <input type="hidden" name="token" value={token} />
-          <input type="hidden" name="request" value={view.messageId} />
-          <input type="hidden" name="scope_decision" value={decisionId} />
-          <input type="hidden" name="proposal" value={proposalId} />
-          <input type="hidden" name="plan_index" value={String(plan.index)} />
-          {/* Minted at render, as every start's is: rondo names the lap. */}
-          <input type="hidden" name="iteration" value={newIterationId()} />
-          <button
-            type="submit"
-            data-row=""
-            title={wording.planStartPlain}
-            class={`${PRIMARY} h-9 w-full justify-center px-5 text-sm sm:w-auto`}
-          >
-            {wording.planStartAction}
-          </button>
-        </form>
+      return startForm();
+    case "held": {
+      // **Who holds the files, by their request** (D-0076 rule 3.3), and the
+      // press only where every holder has finished: the attempt is where its
+      // landing is read (D-0073 rule 7), and a running holder cannot have landed.
+      const holders = await Promise.all(
+        ready.holders.map(async ({ line }) => {
+          const root = await ports.store.read(line.lineageId);
+          return { line, request: root.kind === "read" ? root.record.request : null };
+        }),
       );
+      const finished = ready.holders.every(({ line }) => !line.inFlight);
+      const paths = [...new Set(ready.holders.flatMap(({ paths }) => paths))];
+      return (
+        <div class="space-y-1.5">
+          {line(finished ? wording.planHeldFinished(paths) : wording.planHeld(paths))}
+          {holders.map(({ line: holder, request }) => (
+            <p class="flex flex-wrap items-baseline gap-x-2 text-[12.5px] leading-5">
+              <span class="text-muted-foreground">{wording.planHeldBy}</span>
+              <span class="min-w-0 truncate" lang="">
+                {request === null ? "" : firstLine(request)}
+              </span>
+              {holder.inFlight || token === null || ports.releasable !== true ? null : (
+                <a
+                  href={viewHref({ kind: "release", iterationId: holder.lineageId }, wording.lang)}
+                  class="text-link underline-offset-2 hover:underline"
+                >
+                  {wording.releaseLink}
+                </a>
+              )}
+            </p>
+          ))}
+          {finished ? (
+            <>
+              <p class="text-[12px] leading-5 text-muted-foreground">{wording.planHeldTry}</p>
+              {startForm()}
+            </>
+          ) : null}
+        </div>
+      );
+    }
     case "started":
       return (
         <p class="note flex flex-wrap items-center gap-x-2 text-[12.5px] leading-5">
@@ -6453,7 +6650,65 @@ export async function operatorPage(
   const terminal = (await ports.store.terminalIterations()).flatMap((outcome): IterationRecord[] =>
     outcome.kind === "read" ? [outcome.record] : [],
   );
+  // **A way to the release press only where there is a port behind it**, which
+  // is narrower than the token: an approver the allowlist refuses still gets a
+  // token for the gate's press, and would get a release that refuses every time.
+  const releaseToken = ports.releasable === true ? token : null;
+  // **The ledger, read once per draw** (D-0073 rule 12): what each line keeps,
+  // and whether its work landed. A finished line still keeping its files is
+  // listed however long ago it ended: it is the one ended thing that still
+  // costs other work something, so it cannot fall off *just finished*.
+  const ledger = await ports.store.laneLedger();
+  const lineOf = new Map(ledger.flatMap((line) => line.lapIds.map((id) => [id, line] as const)));
+  /** A finished line keeping its files, said on its closed tips' rows. */
+  const keeping = (record: IterationRecord) => {
+    const line = lineOf.get(record.id);
+    return line !== undefined &&
+      !line.inFlight &&
+      line.paths.length > 0 &&
+      line.claimId !== null &&
+      line.closedTips.includes(record.id)
+      ? line
+      : null;
+  };
   const ended = endedRecently(terminal);
+  // Older than *just finished* and still keeping files: its own group, so an
+  // ending from weeks ago is not said to have just happened.
+  const keptOlder = terminal
+    .filter((record) => keeping(record) !== null && !ended.includes(record))
+    .toSorted((left, right) => right.updatedAtMs - left.updatedAtMs);
+  const owns = (record: IterationRecord) => {
+    const line = lineOf.get(record.id);
+    return line === undefined || line.paths.length === 0 ? null : wording.holds(line.paths);
+  };
+  const landing = (record: IterationRecord) => {
+    const kept = keeping(record);
+    if (kept !== null) {
+      return {
+        lines: [wording.holds(kept.paths), wording.notLanded],
+        release:
+          releaseToken === null ? null : (
+            <p class="mt-2">
+              <a
+                id={`release-${record.id}`}
+                href={viewHref({ kind: "release", iterationId: record.id }, wording.lang)}
+                class="text-[13px] font-medium text-link underline-offset-2 hover:underline"
+              >
+                {wording.releaseLink}
+              </a>
+            </p>
+          ),
+      };
+    }
+    const line = lineOf.get(record.id);
+    const said =
+      line === undefined || line.releasedBy === null || !line.closedTips.includes(record.id)
+        ? null
+        : line.releasedBy === "person"
+          ? wording.releasedByPerson
+          : wording.landed;
+    return { lines: said === null ? [] : [said], release: null };
+  };
   // **Whose word it is stays with the words** (#220 S2, Codex): a claim another
   // operator recorded, on the page or with `rondo answer --verified`, is theirs
   // and never "you said"; `by` is null only when it is this page's own actor.
@@ -6463,7 +6718,8 @@ export async function operatorPage(
   // a list of failures and withdrawals costs the redraw nothing.
   const endedFacts = new Map(
     await Promise.all(
-      ended.map(async (record) => {
+      // Both groups of ended rows: an older one still keeping files keeps its facts.
+      [...keptOlder, ...ended].map(async (record) => {
         const [claims, readings] = await Promise.all([
           ports.store.verificationClaimsFor(record.id),
           approvedForPublication(record)
@@ -6499,7 +6755,7 @@ export async function operatorPage(
   const threadRows = threadRead.kind === "read" ? threadRead.messages : [];
   const threads = threadsOf(
     threadRows,
-    new Set([...waiting, ...running, ...ended, ...unreadable].map((row) => row.id)),
+    new Set([...waiting, ...running, ...keptOlder, ...ended, ...unreadable].map((row) => row.id)),
     // A reader that will not answer says nothing is waiting, rather than
     // taking the page down with it.
     ports.issuesUnread === undefined
@@ -6561,6 +6817,10 @@ export async function operatorPage(
   const publishing =
     view.kind === "publish" ? await publishView(ports, wording, view, token, threads) : null;
   const logging = view.kind === "log" ? await logView(ports, wording, view) : null;
+  const releasing =
+    view.kind === "release"
+      ? await releaseView(ports, wording, view, releaseToken, ledger, threads, nowMs)
+      : null;
   /** The way onto the publish screen, drawn on an ended lap wherever one is listed. */
   const publishTo = (record: IterationRecord) => publishLink(wording, ports, token, record);
 
@@ -6573,7 +6833,7 @@ export async function operatorPage(
           inboxView(ports, wording, inbox),
           betweenView(wording, host),
           ...(await Promise.all(
-            [...waiting, ...running, ...ended].map(async (record) =>
+            [...waiting, ...running, ...keptOlder, ...ended].map(async (record) =>
               explainView(
                 wording,
                 record,
@@ -6892,8 +7152,11 @@ export async function operatorPage(
                 publishing
               ) : view.kind === "log" ? (
                 logging
+              ) : view.kind === "release" ? (
+                releasing
               ) : waiting.length +
                   running.length +
+                  keptOlder.length +
                   ended.length +
                   open.length +
                   unreadable.length +
@@ -6913,16 +7176,30 @@ export async function operatorPage(
                     ports.actorId,
                     waitingCount,
                     newIterationId,
+                    owns,
                   )}
                   {attentionView(wording, unreadable)}
-                  {runningView(wording, running, transcripts, nowMs)}
-                  {endedView(wording, ended, nowMs, endedFacts, publishTo, threads)}
+                  {runningView(wording, running, transcripts, nowMs, owns)}
+                  {keptOlder.length === 0
+                    ? null
+                    : endedView(
+                        wording,
+                        keptOlder,
+                        nowMs,
+                        endedFacts,
+                        publishTo,
+                        threads,
+                        landing,
+                        wording.heldHeading(keptOlder.length),
+                      )}
+                  {endedView(wording, ended, nowMs, endedFacts, publishTo, threads, landing)}
                 </>
               )}
               {onThreads ||
               view.kind === "scope" ||
               view.kind === "publish" ||
-              view.kind === "log" ? null : (
+              view.kind === "log" ||
+              view.kind === "release" ? null : (
                 <p id="fold" class="border-t border-border pt-4 text-[13px]">
                   <a
                     id="fold-link"

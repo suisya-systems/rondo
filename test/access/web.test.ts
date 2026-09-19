@@ -28,6 +28,7 @@ import {
   publishingForPage,
   recordPagePress,
   recordScopeFromPage,
+  releaseFromPage,
   reviseFromPage,
   startScopedFromPage,
 } from "../../src/access/cli.js";
@@ -233,6 +234,8 @@ function portsOver(
     // the door is that file's, the screen is this one's.
     revise: null,
     publish: null,
+    release: null,
+    releasable: actorId !== null,
     publishing,
   };
 }
@@ -6435,7 +6438,10 @@ test("an approved drafted scope offers each plan its own start, and says so wher
   // The person's held-plan start is not drawn under a drafted scope.
   expect(ready).not.toContain('id="start-form"');
 
-  // A lap admitted from plan 0 exactly: plan 0 is started, plan 1 still offered.
+  // A lap admitted from plan 0 exactly: plan 0 is started, and plan 1 -- which
+  // claims the whole repository too -- is held by it (D-0073 rule 3.1): the
+  // reason and the work holding it by its request, and no press while that
+  // work is still running, since it cannot have landed.
   const run = await draftedPlanRun(w, "r1", w.proposalId, 0);
   if (run.kind !== "runnable") throw new Error(run.reason);
   const allocation = allocate("lap-plan-0", run.plan.workspaceRoot);
@@ -6458,9 +6464,14 @@ test("an approved drafted scope offers each plan its own start, and says so wher
   });
   expect(reserved.kind).toBe("reserved");
   const once = await render(ports);
-  expect(starts(once)).toBe(1);
+  expect(starts(once)).toBe(0);
   expect(once).toContain(EN.planStarted);
   expect(once).toContain(`#${encodeURIComponent("lap-lap-plan-0")}`);
+  expect(once.replaceAll("&#39;", "'")).toContain(EN.planHeld(["/"]));
+  expect(once).toContain(EN.planHeldBy);
+  expect(once).toContain("Two things, please.");
+  expect(once).not.toContain(EN.planHeldTry);
+  expect(once).not.toContain("?release=");
 
   // No room: the reason, and no button to press.
   const full = await render({ ...ports, policy: { maxOccupying: 4, maxLive: 1 } });
@@ -6475,6 +6486,35 @@ test("an approved drafted scope offers each plan its own start, and says so wher
     expect(expired).toContain(wording.planOutside("expiry"));
     expect(expired).not.toContain("expiry test");
   }
+
+  // Plan 0's work finishes without being found on the default branch: plan 1
+  // is still held, said as held by finished work, and now both the start
+  // (which reads that landing first, D-0073 rule 7) and the release are drawn.
+  for (const [from, to] of [
+    ["planned", "admitting"],
+    ["admitting", "admitted"],
+    ["admitted", "performing"],
+    ["performing", "awaiting_human"],
+  ] as const) {
+    expect((await w.store.transition("lap-plan-0", from, to, {}, 4_000)).kind).toBe("transitioned");
+  }
+  expect(
+    (
+      await w.store.transition(
+        "lap-plan-0",
+        "awaiting_human",
+        "closed",
+        { gateOutcome: "approve" },
+        5_000,
+      )
+    ).kind,
+  ).toBe("transitioned");
+  const finished = (await render(ports)).replaceAll("&#39;", "'");
+  expect(finished).toContain(EN.planHeldFinished(["/"]));
+  expect(finished).not.toContain(EN.planHeld(["/"]));
+  expect(finished).toContain(EN.planHeldTry);
+  expect(starts(finished)).toBe(1);
+  expect(finished).toContain("/?release=lap-plan-0&amp;lang=en");
 });
 
 test("what rondo read of a named issue is said under the message, and the scope screen says which the worker is given (D-0078 section 4)", async () => {
@@ -6588,4 +6628,175 @@ test("what rondo read of a named issue is said under the message, and the scope 
   );
   expect(ja).toContain(chromeFor("ja").issueNotRead("missing"));
   expect(ja).toContain(chromeFor("ja").issuePending);
+});
+
+/** Close a lap at its gate with an approval, as the gate's press would. */
+async function closeApproved(world: ReturnType<typeof fresh>, id: string): Promise<void> {
+  await openGate(world, id);
+  const closed = await world.store.transition(
+    id,
+    "awaiting_human",
+    "closed",
+    { gateOutcome: APPROVED_OUTCOME },
+    4_000,
+  );
+  expect(closed.kind).toBe("transitioned");
+}
+
+test("each open line says what it keeps, and a finished one not yet landed says so and never falls off the page (D-0073 rule 12)", async () => {
+  const world = fresh();
+  // One at its gate, and seven finished: the oldest finished one is still
+  // keeping its files, the rest have landed.
+  await reserve(world, "i-0001", "the one at its gate");
+  await openGate(world, "i-0001");
+  await reserve(world, "i-0002", "the one still keeping its files");
+  await closeApproved(world, "i-0002");
+  for (let n = 3; n <= 8; n += 1) {
+    const id = `i-000${String(n)}`;
+    await reserve(world, id, `landed work ${String(n)}`);
+    await closeApproved(world, id);
+    expect(
+      (
+        await world.store.releaseLane({
+          iterationId: id,
+          takenOver: { claimId: `${id}:1`, lapIds: [id] },
+          authorKind: "drafter",
+          authorId: "rondo/lane-ledger/1",
+          bases: [],
+          nowMs: 5_000 + n,
+        })
+      ).kind,
+    ).toBe("released");
+  }
+  await world.store.recordVerificationClaim("i-0002", "ada", "kept it", 4_500);
+  // The oldest ending of all, so *just finished*'s five would leave it out.
+  await world.connection
+    .prepare("UPDATE iteration SET updated_at_ms = 1 WHERE id = 'i-0002'")
+    .run();
+
+  for (const wording of [EN, chromeFor("ja")]) {
+    const html = await operatorPage(portsOver(world), "t", { kind: "summary" }, wording);
+    // The gate's row says what its line keeps, as the person's own paths.
+    expect(lead(html)).toContain(wording.holds(["lanes/i-0001/"]));
+    // The finished line is on the page although five endings are newer, in a
+    // group of its own rather than under *just finished*.
+    expect(lead(html)).toContain("the one still keeping its files");
+    expect(lead(html)).toContain(wording.heldHeading(1));
+    // Its row keeps what its approval said, as a recent one would.
+    expect(lead(html)).toContain(wording.checkedEcho("kept it", null));
+    expect(lead(html)).toContain(wording.endedHeading(5));
+    expect(lead(html)).toContain(wording.holds(["lanes/i-0002/"]));
+    expect(lead(html)).toContain(wording.notLanded);
+    expect(lead(html)).toContain(`href="/?release=i-0002&amp;lang=${wording.lang}"`);
+    expect(lead(html)).toContain(wording.landed);
+    // No identifier rondo made is in the text a person reads (D-0076 rule 3.1).
+    expect(lead(html)).not.toContain("i-0002:1");
+  }
+
+  // With no approver there is no press to make, so no way to one is drawn;
+  // nor where an approver is named but no release press stands behind it.
+  const html = await operatorPage(portsOver(world, null), null);
+  expect(lead(html)).toContain(EN.notLanded);
+  expect(lead(html)).not.toContain("?release=");
+  const refused = await operatorPage({ ...portsOver(world), releasable: false }, "t");
+  expect(lead(refused)).toContain(EN.notLanded);
+  expect(lead(refused)).not.toContain("?release=");
+});
+
+test("the release screen names the work by its request, says why rondo has not released it, and carries what it was drawn over (D-0073 rule 4.3, rondo#288)", async () => {
+  const world = fresh();
+  await reserve(world, "i-0001", "Rename the settings page");
+  await closeApproved(world, "i-0001");
+  const screen = { kind: "release", iterationId: "i-0001" } as const;
+
+  for (const wording of [EN, chromeFor("ja")]) {
+    const html = await operatorPage(portsOver(world), "t", screen, wording);
+    expect(html).toContain("Rename the settings page");
+    expect(html).toContain(wording.holds(["lanes/i-0001/"]));
+    for (const said of [...wording.releaseWhy, ...wording.releaseEffect]) {
+      expect(html).toContain(said);
+    }
+    expect(html).toContain('action="/release?lang=');
+    expect(html).toContain('<input type="hidden" name="iteration" value="i-0001"/>');
+    expect(html).toContain('<input type="hidden" name="claim" value="i-0001:1"/>');
+    expect(html).toContain('<input type="hidden" name="laps" value="i-0001"/>');
+    // It holds still: a press is made from it (the publish screen's rule).
+    expect(html).not.toContain('hx-trigger="every 5s"');
+  }
+  // No approver: the screen, and no press.
+  expect(await operatorPage(portsOver(world, null), null, screen)).not.toContain("/release?");
+
+  // A line still in flight keeps its files, and a released one keeps none:
+  // each screen says which, and draws no press.
+  await reserve(world, "i-0002", "still at its gate");
+  await openGate(world, "i-0002");
+  const open = await operatorPage(portsOver(world), "t", {
+    kind: "release",
+    iterationId: "i-0002",
+  });
+  expect(open).toContain(EN.releaseStillOpen);
+  expect(open).not.toContain('action="/release');
+  expect(
+    (
+      await world.store.releaseLane({
+        iterationId: "i-0001",
+        takenOver: null,
+        authorKind: "operator",
+        authorId: "ada",
+        bases: [],
+        nowMs: 9_000,
+      })
+    ).kind,
+  ).toBe("released");
+  // Where the press lands: the screen says the files were released.
+  const gone = await operatorPage(portsOver(world), "t", screen);
+  expect(gone).toContain(EN.releasedByPerson);
+  expect(gone).not.toContain('action="/release');
+  expect(lead(await operatorPage(portsOver(world), "t"))).toContain(EN.releasedByPerson);
+});
+
+test("the page's release is the approver's and only what the screen showed: a stranger, or a line that moved, releases nothing (D-0073 rule 4.3)", async () => {
+  const world = fresh();
+  await reserve(world, "i-0001", "Rename the settings page");
+  await closeApproved(world, "i-0001");
+  const claims = () =>
+    world.connection
+      .prepare("SELECT claim_id, paths, author_kind, author_id FROM lane_claim ORDER BY rowid")
+      .all();
+  const shown = { iterationId: "i-0001", claimId: "i-0001:1", lapIds: ["i-0001"] };
+
+  // Not the approver, or no approver named: refused before the store.
+  for (const environment of [{ RONDO_APPROVER: "grace" }, {}]) {
+    expect(await releaseFromPage(environment, world.store, "ada", shown)).toMatchObject({
+      ok: false,
+      why: "releaseRefusedNotRecorded",
+    });
+  }
+  // A screen drawn over other laps or another claim row: stale, nothing written.
+  const env = { RONDO_APPROVER: "ada" };
+  for (const stale of [
+    { ...shown, claimId: "i-0001:2" },
+    { ...shown, lapIds: ["i-0001", "i-0001-r2"] },
+  ]) {
+    expect(await releaseFromPage(env, world.store, "ada", stale)).toMatchObject({
+      ok: false,
+      why: "releaseRefusedChanged",
+    });
+  }
+  expect(claims()).toHaveLength(1);
+
+  // The approver, over what was shown: one row of no paths, recorded as theirs.
+  expect(await releaseFromPage(env, world.store, "ada", shown)).toEqual({ ok: true, note: "" });
+  expect(claims()).toEqual([
+    {
+      claim_id: "i-0001:1",
+      paths: '["lanes/i-0001/"]',
+      author_kind: "drafter",
+      author_id: "test/own-lane",
+    },
+    { claim_id: "i-0001:2", paths: "[]", author_kind: "operator", author_id: "ada" },
+  ]);
+  // Pressed again from the same screen: the line moved, so nothing more.
+  expect((await releaseFromPage(env, world.store, "ada", shown)).ok).toBe(false);
+  expect(claims()).toHaveLength(2);
 });

@@ -161,3 +161,32 @@ export function claimCover(path: string): string {
   const bad = segments.findIndex((segment) => claimPathRefusal(segment) !== null);
   return bad === -1 ? path : bad === 0 ? WHOLE_REPOSITORY : `${segments.slice(0, bad).join("/")}/`;
 }
+
+/**
+ * The repository a plan names, as the ledger compares it, or null when it
+ * names none: one place however it is spelled, so a trailing `/`, a `.`
+ * segment or a `\\` separator is not a second repository with a ledger of its
+ * own (D-0073 rule 3, "of one repository"). Here and not in the store because
+ * the page asks it too, of a plan not yet admitted.
+ *
+ * ponytail: lexical only. A symlink, a case-insensitive filesystem, or a second
+ * clone of one forge repository is still read as another repository; resolving
+ * those needs the filesystem, which this module does not take.
+ */
+export function repositoryKey(repository: unknown): string | null {
+  if (typeof repository !== "string" || repository === "") {
+    return null;
+  }
+  const segments: string[] = [];
+  for (const segment of repository.split(/[\\/]+/)) {
+    if (segment === "" || segment === ".") {
+      continue;
+    }
+    if (segment === "..") {
+      segments.pop();
+    } else {
+      segments.push(segment);
+    }
+  }
+  return `/${segments.join("/")}`;
+}

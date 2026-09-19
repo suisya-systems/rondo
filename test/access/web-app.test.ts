@@ -41,6 +41,8 @@ import {
   type PublishInput,
   PublishPort,
   type RaiseInput,
+  type ReleaseInput,
+  ReleasePort,
   type ReviseInput,
   RevisePort,
   SayPort,
@@ -53,6 +55,7 @@ import {
   type ServedPorts,
   serveApp,
 } from "../../src/access/web-app.js";
+import { EN } from "../../src/access/wording.js";
 import { advisoryRecord } from "../../src/store/sqlite.js";
 
 const TOKEN = "the-process-token";
@@ -1439,6 +1442,8 @@ const WRITE_TABLE = [
   "ALL /raise",
   "ALL /start-plan",
   "ALL /publish",
+  // The release press (D-0073 rule 4.3, rondo#288).
+  "ALL /release",
   "ALL /*",
   "POST /",
   "POST /request",
@@ -1451,6 +1456,7 @@ const WRITE_TABLE = [
   "POST /start",
   "POST /revise",
   "POST /publish",
+  "POST /release",
 ];
 
 test("(b) the page's writing vocabulary is enumerated off the running app", () => {
@@ -2563,4 +2569,123 @@ test("(start-plan) every other shape is refused and starts nothing (rondo#238 C2
 
   stop.abort();
   expect(await closed).toBe(0);
+});
+
+/** Ports whose release press is a spy, answering `answer` to every press it lets through. */
+function releasePorts(
+  released: ReleaseInput[],
+  answer: { ok: boolean; note: string; why?: "releaseRefusedChanged" } = { ok: true, note: "" },
+): ServedPorts {
+  return {
+    ...spyPorts([]),
+    release: new ReleasePort(async (input) => {
+      released.push(input);
+      return await Promise.resolve(answer);
+    }),
+  };
+}
+
+function releaseForm(overrides: Record<string, string> = {}): Record<string, string> {
+  return {
+    token: TOKEN,
+    iteration: "i-0002",
+    claim: "i-0001:1",
+    laps: "i-0001 i-0002",
+    ...overrides,
+  };
+}
+
+test("(release) a person's native press releases the line it was drawn over, once, with what the screen read", async () => {
+  const released: ReleaseInput[] = [];
+  const { base, stop, closed } = await served(createApp(releasePorts(released), TOKEN));
+
+  const pressed = await send(base, "/release", "POST", pressHeaders(base), releaseForm());
+  expect(pressed.status).toBe(303);
+  expect(pressed.location).toBe("/?release=i-0002&lang=en");
+  expect(released).toEqual([
+    { iterationId: "i-0002", claimId: "i-0001:1", lapIds: ["i-0001", "i-0002"] },
+  ]);
+
+  stop.abort();
+  expect(await closed).toBe(0);
+});
+
+test("(release) no press, no form, or no approver releases nothing; a line that moved is said in words", async () => {
+  const released: ReleaseInput[] = [];
+  const { base, stop, closed } = await served(createApp(releasePorts(released), TOKEN));
+  const person = pressHeaders(base);
+
+  for (const [shape, headers, form] of [
+    ["missing Sec-Fetch-User", { ...person, "sec-fetch-user": undefined }, releaseForm()],
+    [
+      "a same-origin fetch",
+      { ...person, "sec-fetch-mode": "cors", "sec-fetch-user": undefined },
+      releaseForm(),
+    ],
+    ["a wrong token", person, releaseForm({ token: "not-the-token" })],
+    ["no token", person, withoutToken(releaseForm())],
+    ["a foreign Origin", { ...person, origin: "https://evil.example" }, releaseForm()],
+  ] as const) {
+    const pressed = await send(base, "/release", "POST", headers, form);
+    expect(pressed.status, shape).toBe(403);
+    expect(pressed.body, shape).not.toBe("");
+  }
+  for (const form of [
+    releaseForm({ claim: "" }),
+    releaseForm({ laps: "" }),
+    releaseForm({ iteration: "" }),
+  ]) {
+    expect((await send(base, "/release", "POST", person, form)).status).toBe(400);
+  }
+  expect((await send(base, "/release", "GET", person)).status).toBe(404);
+  expect(released).toEqual([]);
+  stop.abort();
+  expect(await closed).toBe(0);
+
+  // No approver: no port, and the refusal says so without naming a variable.
+  const none = await served(createApp({ ...spyPorts([]), release: null }, TOKEN));
+  const refused = await send(none.base, "/release", "POST", pressHeaders(none.base), releaseForm());
+  expect(refused.status).toBe(403);
+  expect(refused.body).toContain(EN.releaseRefusedNoApprover);
+  expect(refused.body).not.toContain("RONDO_APPROVER");
+  none.stop.abort();
+  expect(await none.closed).toBe(0);
+
+  // The store refused (the line moved under the screen): 409, in words, with
+  // the way back to the screen.
+  const moved: ReleaseInput[] = [];
+  const stale = await served(
+    createApp(
+      releasePorts(moved, { ok: false, note: "stale", why: "releaseRefusedChanged" }),
+      TOKEN,
+    ),
+  );
+  const answered = await send(
+    stale.base,
+    "/release",
+    "POST",
+    pressHeaders(stale.base),
+    releaseForm(),
+  );
+  expect(answered.status).toBe(409);
+  expect(answered.body).toContain(EN.releaseRefusedChanged.slice(0, 40));
+  expect(answered.body).toContain("/?release=i-0002&amp;lang=en");
+  expect(answered.body).not.toContain("stale");
+  expect(moved).toHaveLength(1);
+  stale.stop.abort();
+  expect(await stale.closed).toBe(0);
+});
+
+test("(release) the port refuses anything but a minted, unspent press", async () => {
+  const released: ReleaseInput[] = [];
+  const port = new ReleasePort(async (input) => {
+    released.push(input);
+    return await Promise.resolve({ ok: true, note: "" });
+  });
+  const forged = Object.freeze({}) as unknown as Parameters<ReleasePort["release"]>[0];
+  expect(
+    (await port.release(forged, { iterationId: "i-0001", claimId: "i-0001:1", lapIds: ["i-0001"] }))
+      .ok,
+  ).toBe(false);
+  expect(released).toEqual([]);
 });
