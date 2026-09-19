@@ -35,8 +35,13 @@ import {
   iterationStore,
   type RecordOutcome,
 } from "../../src/store/sqlite.js";
+import { laneFor, ownLane } from "../lane-claims.js";
 
-const somePlan = (): JsonRecord => ({ run_id: "r-0001", workspace: "/srv/work/r-0001" });
+const somePlan = (): JsonRecord => ({
+  run_id: "r-0001",
+  repository: "/srv/repo",
+  workspace: "/srv/work/r-0001",
+});
 
 const fresh = () => {
   const connection = new DatabaseSync(":memory:");
@@ -54,6 +59,7 @@ const reserveOne = async (store: ReturnType<typeof fresh>["store"], id: string) 
     plan: somePlan(),
     spend: null,
     scopeSpend: null,
+    claim: ownLane(id),
     nowMs: 1_000,
     supersedesIterationId: null,
     requestMessageId: null,
@@ -156,6 +162,7 @@ test("a multi-paragraph request is quoted over its own lines rather than escaped
     plan: somePlan(),
     spend: null,
     scopeSpend: null,
+    claim: ownLane("i-0001"),
     nowMs: 1_000,
     supersedesIterationId: null,
     requestMessageId: null,
@@ -590,6 +597,7 @@ const reserveWithPlan = async (
     plan: realPlan(id, plan),
     spend: null,
     scopeSpend: null,
+    claim: laneFor(id, supersedesIterationId),
     nowMs: 1_000,
     supersedesIterationId,
     requestMessageId: null,
@@ -1116,6 +1124,7 @@ test("an agent type cadenza will not build is a refusal and not a crash", async 
     plan: malformed as JsonRecord,
     spend: null,
     scopeSpend: null,
+    claim: ownLane("iter-1"),
     nowMs: 1_000,
     supersedesIterationId: null,
     requestMessageId: null,

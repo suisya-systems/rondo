@@ -892,6 +892,137 @@ export async function inspectLapWork(request: LapWorkRequest): Promise<LapWorkIn
   };
 }
 
+/** What {@link readLanding} is asked about one line (D-0073 rule 6). */
+export interface LandingRequest {
+  /** The repository the line's workspaces were cut from: where git is asked. */
+  readonly repository: string;
+  /** The remote `publish` pushes to, whose default branch is the forge's. */
+  readonly remote: string;
+  readonly defaultBranch: string;
+  /** The lineage's first `baseCommit`. */
+  readonly baseCommit: string;
+  /** Each closed tip's `tipCommit`: what must be on the default branch. */
+  readonly tipCommits: readonly string[];
+}
+
+/**
+ * Whether a line's work is on the default branch (D-0073 rule 6).
+ *
+ * `undetermined` is its own answer and never a `notLanded`: a fetch that failed
+ * or a commit git cannot read says nothing about a merge, and the screen must
+ * not say "waiting on a merge" for it (rule 6, `D-0068` rule 2.3).
+ */
+export type LandingReading =
+  | { readonly kind: "landed"; readonly headCommit: string; readonly paths: readonly string[] }
+  | {
+      readonly kind: "notLanded";
+      readonly headCommit: string;
+      /** The changed paths whose entry on the default branch is not the tip's. */
+      readonly differing: readonly string[];
+    }
+  | { readonly kind: "undetermined"; readonly reason: string };
+
+/**
+ * Read whether the default branch holds what a line changed (D-0073 rule 6).
+ *
+ * **The forge's branch, fetched into a ref rondo owns**, not local `main` or a
+ * remote-tracking ref: a squash merge on the forge moves neither until
+ * something fetches, and rondo writing `refs/remotes/...` would move a ref the
+ * person reads. **Tree entries, not blobs**: for every path a closed tip
+ * changed since the lineage's base, the entry at the fetched head equals the
+ * entry at the tip -- mode, type and object id -- and a path the tip deleted is
+ * absent from both. A change of mode alone keeps the blob and must not read as
+ * landed. It holds under squash, where ancestry never fires, and it is sound
+ * because no other line held these paths while this one was open (rule 3).
+ */
+export async function readLanding(request: LandingRequest): Promise<LandingReading> {
+  const ref = `refs/rondo/landing/${request.remote}/${request.defaultBranch}`;
+  const git = (argv: readonly string[], timeoutMs = PREFLIGHT_TIMEOUT_MS) =>
+    runCommand("git", ["-C", request.repository, ...argv], timeoutMs);
+  // `--refmap=` (empty) is load-bearing: with an explicit refspec, a fetch
+  // from a configured remote also moves that remote's tracking ref, which is
+  // the person's and not rondo's to move.
+  const fetched = await git(
+    [
+      "fetch",
+      "--no-tags",
+      "--refmap=",
+      request.remote,
+      `+refs/heads/${request.defaultBranch}:${ref}`,
+    ],
+    FORGE_TIMEOUT_MS,
+  );
+  const fetchFailure = queryFailure(fetched);
+  if (fetchFailure !== null) {
+    return {
+      kind: "undetermined",
+      reason: `the default branch could not be fetched: ${fetchFailure}`,
+    };
+  }
+  const head = await git(["rev-parse", "--verify", "--quiet", `${ref}^{commit}`]);
+  const headCommit = head.stdout.trim();
+  if (queryFailure(head) !== null || headCommit === "") {
+    return { kind: "undetermined", reason: `git could not say what ${ref} points at` };
+  }
+  const headTree = await treeEntries(git, headCommit);
+  if (typeof headTree === "string") {
+    return { kind: "undetermined", reason: headTree };
+  }
+  const paths = new Set<string>();
+  const differing = new Set<string>();
+  for (const tip of request.tipCommits) {
+    const changed = await git([
+      "diff",
+      "--name-only",
+      "-z",
+      "--no-renames",
+      request.baseCommit,
+      tip,
+    ]);
+    const changedFailure = queryFailure(changed);
+    if (changedFailure !== null) {
+      return { kind: "undetermined", reason: changedFailure };
+    }
+    const tipTree = await treeEntries(git, tip);
+    if (typeof tipTree === "string") {
+      return { kind: "undetermined", reason: tipTree };
+    }
+    for (const path of changed.stdout.split("\0").filter((path) => path !== "")) {
+      paths.add(path);
+      if (tipTree.get(path) !== headTree.get(path)) {
+        differing.add(path);
+      }
+    }
+  }
+  return differing.size === 0
+    ? { kind: "landed", headCommit, paths: [...paths].sort() }
+    : { kind: "notLanded", headCommit, differing: [...differing].sort() };
+}
+
+/**
+ * Every entry of a commit's tree, recursively, as `mode type oid` by path, or
+ * why git would not list it. `-r` lists blobs and gitlinks and never a tree, so
+ * a path is compared as the file it is.
+ */
+async function treeEntries(
+  git: (argv: readonly string[]) => Promise<CommandOutcome>,
+  commit: string,
+): Promise<ReadonlyMap<string, string> | string> {
+  const listed = await git(["ls-tree", "-r", "-z", "--full-tree", commit]);
+  const failure = queryFailure(listed);
+  if (failure !== null) {
+    return failure;
+  }
+  const entries = new Map<string, string>();
+  for (const record of listed.stdout.split("\0")) {
+    const tab = record.indexOf("\t");
+    if (tab > 0) {
+      entries.set(record.slice(tab + 1), record.slice(0, tab));
+    }
+  }
+  return entries;
+}
+
 /**
  * What `git` handed over for a model reading (D-0065 1.2.1, 1.2.2, 1.2.6).
  *

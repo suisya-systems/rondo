@@ -48,6 +48,14 @@
  */
 import { DatabaseSync } from "node:sqlite";
 
+import {
+  type LaneLap,
+  lineShape,
+  mayBeOpen,
+  normalizeClaim,
+  sharedPaths,
+  WHOLE_REPOSITORY,
+} from "./lanes.js";
 import { canonicalJson, contentDigest, planDigest } from "./plan.js";
 import {
   type AdmissionRefusal,
@@ -68,6 +76,8 @@ import {
   isModelReadingDrafter,
   type JsonRecord,
   type JsonValue,
+  type LaneClaimAsk,
+  type LaneHolder,
   type LapReading,
   type LapReadingDraft,
   latestReading,
@@ -177,6 +187,13 @@ export interface ReserveInput {
    * defect in the caller rather than a stricter admission.
    */
   readonly scopeSpend: ScopeSpend | null;
+  /**
+   * The paths a first admission asks to hold (D-0073 rule 2.3), or null for
+   * rule 2.5's whole repository. **A redo passes null**: it continues its
+   * lineage's claim (rule 2.6), and a claim that changes is a successor row
+   * this call does not write.
+   */
+  readonly claim: LaneClaimAsk | null;
   readonly nowMs: number;
 }
 
@@ -288,6 +305,15 @@ export type ReserveOutcome =
   | ({ readonly kind: "scopeRefused" } & ScopeRefusal)
   /** The request link names no message that opens a request (D-0061 rule 4). Nothing is written. */
   | { readonly kind: "requestRefused"; readonly reason: string }
+  /**
+   * The claim would share a path with an open line (D-0073 rule 3.1). Nothing
+   * is written; `holders` names each line and the asked paths it holds.
+   */
+  | {
+      readonly kind: "laneRefused";
+      readonly paths: readonly string[];
+      readonly holders: readonly LaneHolder[];
+    }
   | { readonly kind: "defect"; readonly reason: string };
 
 /** Which of {@link HostPolicy}'s two bounds an admission was refused by. */
@@ -549,7 +575,55 @@ export interface IterationStore {
    * invariant for a convenience.
    */
   settle(id: string, reason: string, nowMs: number): Promise<SettleOutcome>;
+  /**
+   * The line `iterationId` belongs to (D-0073): its lineage id, its in-force
+   * claim, and every lap of its tree, root first. What a landing reading is
+   * taken over.
+   */
+  laneLine(iterationId: string): Promise<LaneLineReadOutcome>;
+  /**
+   * Release a line's claim with a row of no paths (D-0073 rule 4.3), for one
+   * of two causes: a landing reading (rules 6 and 7), which names the head and
+   * the laps it was taken over in `takenOver` and is refused as stale when
+   * either moved; or the person's release press, which names none.
+   *
+   * **Only a line with no lap in flight is released.** A line at its gate is
+   * ended by `abandon()` (rule 9.3), and its claim goes with it.
+   */
+  releaseLane(input: LaneReleaseInput): Promise<LaneReleaseOutcome>;
 }
+
+/** One line of the lane ledger, as {@link IterationStore.laneLine} reads it. */
+export interface LaneLine {
+  readonly lineageId: string;
+  /** The in-force claim, or null for a line from before the ledger (which holds `/` while open). */
+  readonly claim: { readonly claimId: string; readonly paths: readonly string[] } | null;
+  readonly laps: readonly IterationRecord[];
+}
+
+export type LaneLineReadOutcome =
+  | { readonly kind: "read"; readonly line: LaneLine }
+  | { readonly kind: "absent" }
+  | { readonly kind: "defect"; readonly reason: string };
+
+export interface LaneReleaseInput {
+  /** Any lap of the line. */
+  readonly iterationId: string;
+  /** The head claim and lap ids a landing reading was taken over; null for the person's press. */
+  readonly takenOver: {
+    readonly claimId: string | null;
+    readonly lapIds: readonly string[];
+  } | null;
+  readonly authorKind: "operator" | "drafter";
+  readonly authorId: string;
+  readonly bases: readonly JsonValue[];
+  readonly nowMs: number;
+}
+
+export type LaneReleaseOutcome =
+  | { readonly kind: "released"; readonly lineageId: string }
+  | { readonly kind: "refused"; readonly reason: string }
+  | { readonly kind: "defect"; readonly reason: string };
 
 /**
  * A row the store cannot read, or a write the store will not make.
@@ -782,7 +856,12 @@ CREATE TABLE IF NOT EXISTS admission_refusal (
   request               TEXT    NOT NULL,
   bound_name            TEXT    NOT NULL,
   bound                 INTEGER NOT NULL,
-  occupancy             INTEGER NOT NULL
+  occupancy             INTEGER NOT NULL,
+  -- D-0073 rule 3.1: a lane-claim refusal (bound_name 'laneClaim') names the
+  -- open lines it would have shared a path with, as canonical JSON
+  -- [{lineageId, sharedPaths}]. Its bound is 0 shared paths and its occupancy
+  -- the number the admission would have shared. Null on a capacity refusal.
+  holders               TEXT
 );
 
 -- D-0029 rule 8. One reading of what a lap produced, per row that produced one.
@@ -1292,6 +1371,32 @@ CREATE TABLE IF NOT EXISTS issue_reader_epoch (
   last_rowid                  INTEGER NOT NULL,
   started_at_ms               INTEGER NOT NULL
 );
+
+-- D-0073 rule 2.1. The lane ledger: which paths a line holds, from its
+-- admission until its work lands or it ends.
+--
+-- **Immutable and append-only, with no status column** (D-0022 rule 4's
+-- shape). A claim changes only by a successor row naming the head it
+-- replaces; a successor with paths '[]' is a release (rule 4.3). A line's
+-- in-force claim is the row no successor names, and there is exactly one:
+-- **supersedes_claim_id is UNIQUE**, so two successors written from one stale
+-- read cannot both land, and **one root per lineage** is the partial index
+-- below, so two first rows cannot either. lineage_id is the lineage's first
+-- iteration id (D-0030). paths is canonical JSON, sorted.
+CREATE TABLE IF NOT EXISTS lane_claim (
+  claim_id                    TEXT    PRIMARY KEY,
+  lineage_id                  TEXT    NOT NULL,
+  repository                  TEXT    NOT NULL,
+  paths                       TEXT    NOT NULL,
+  supersedes_claim_id         TEXT    UNIQUE,
+  author_kind                 TEXT    NOT NULL,
+  author_id                   TEXT    NOT NULL,
+  bases                       TEXT    NOT NULL,
+  created_at_ms               INTEGER NOT NULL,
+  CHECK (author_kind IN ('operator', 'drafter'))
+);
+CREATE UNIQUE INDEX IF NOT EXISTS lane_claim_one_root
+  ON lane_claim(lineage_id) WHERE supersedes_claim_id IS NULL;
 `;
 
 /**
@@ -1478,6 +1583,7 @@ function migrate(connection: DatabaseSync): void {
     }
     addMissingColumns(connection, "lap_reading", LAP_READING_ADDED_COLUMNS);
     addMissingColumns(connection, "conversation_message", CONVERSATION_ADDED_COLUMNS);
+    addMissingColumns(connection, "admission_refusal", { holders: "TEXT" });
     connection.exec("DROP INDEX IF EXISTS iteration_one_live");
     connection.exec("COMMIT");
   } catch (error) {
@@ -1678,15 +1784,34 @@ export function iterationStore(connection: DatabaseSync, policy: HostPolicy): It
    */
   const recordRefusal = (
     input: ReserveInput,
-    refusal: { readonly bound: BoundName; readonly limit: number; readonly occupancy: number },
+    refusal: {
+      readonly bound: BoundName | "laneClaim";
+      readonly limit: number;
+      readonly occupancy: number;
+      readonly holders?: readonly LaneHolder[];
+    },
   ): void => {
     try {
       connection
         .prepare(
-          "INSERT INTO admission_refusal (refused_at_ms, request, bound_name, bound, occupancy) " +
-            "VALUES (?, ?, ?, ?, ?)",
+          "INSERT INTO admission_refusal (refused_at_ms, request, bound_name, bound, occupancy, " +
+            "holders) VALUES (?, ?, ?, ?, ?, ?)",
         )
-        .run(input.nowMs, input.request, refusal.bound, refusal.limit, refusal.occupancy);
+        .run(
+          input.nowMs,
+          input.request,
+          refusal.bound,
+          refusal.limit,
+          refusal.occupancy,
+          refusal.holders === undefined
+            ? null
+            : canonicalJson(
+                refusal.holders.map((holder) => ({
+                  lineageId: holder.lineageId,
+                  sharedPaths: [...holder.sharedPaths],
+                })),
+              ),
+        );
     } catch {
       // The demand record is not the answer; the refusal above is.
     }
@@ -1820,6 +1945,17 @@ export function iterationStore(connection: DatabaseSync, policy: HostPolicy): It
           if (lineage !== null) {
             return { kind: "defect", reason: lineage };
           }
+          // **The lane claim, beside the two counts and under the same lock**
+          // (D-0073 rules 3.1 and 3.6): the counts answer how many, this
+          // answers which. Tested before the request and the spends so a
+          // refusal consumes nothing, and written after the row below, both
+          // or neither (rule 2.4).
+          const lane = laneAdmission(connection, input);
+          if (lane.kind === "defect" || lane.kind === "refused") {
+            return lane.kind === "defect"
+              ? lane
+              : { kind: "laneRefused", paths: lane.paths, holders: lane.holders };
+          }
           // **A successor's request link is its predecessor's, read here**
           // (rondo#195): a revision or a retry is the same request continued,
           // so the link is derived from the row it supersedes rather than
@@ -1892,6 +2028,9 @@ export function iterationStore(connection: DatabaseSync, policy: HostPolicy): It
               input.nowMs,
               input.nowMs,
             );
+          if (lane.kind === "write") {
+            insertClaim(connection, lane.write, input.nowMs);
+          }
           const written = readRow(input.id);
           if (written === null) {
             return {
@@ -1906,6 +2045,14 @@ export function iterationStore(connection: DatabaseSync, policy: HostPolicy): It
         }
         if (outcome.kind === "atCapacity") {
           recordRefusal(input, outcome);
+        }
+        if (outcome.kind === "laneRefused") {
+          recordRefusal(input, {
+            bound: "laneClaim",
+            limit: 0,
+            occupancy: new Set(outcome.holders.flatMap((holder) => holder.sharedPaths)).size,
+            holders: outcome.holders,
+          });
         }
         return outcome;
       } catch (error) {
@@ -1981,6 +2128,11 @@ export function iterationStore(connection: DatabaseSync, policy: HostPolicy): It
           if (reading !== null) {
             writeReading(id, nowMs, reading);
           }
+          // **A line that ends here gives up its paths here** (D-0073 rule
+          // 4.3), in the transaction that wrote the status, both or neither.
+          if (to === "abandoned" || to === "failed") {
+            releaseIfEnded(connection, id, nowMs);
+          }
           // Read back **inside** the transaction, and hand back what came out of
           // the database rather than what was constructed in memory. The two
           // differ exactly when a write did not land, which is the case worth
@@ -2021,6 +2173,114 @@ export function iterationStore(connection: DatabaseSync, policy: HostPolicy): It
     async read(id: string): Promise<ReadOutcome> {
       const row = readRow(id);
       return row === null ? { kind: "absent" } : decode(row, id);
+    },
+
+    async laneLine(iterationId: string): Promise<LaneLineReadOutcome> {
+      try {
+        const laps = lineageLaps(connection, iterationId);
+        if (laps === null) {
+          return { kind: "defect", reason: `the lineage of '${iterationId}' passes its bound` };
+        }
+        const root = laps[0];
+        if (root === undefined) {
+          return { kind: "absent" };
+        }
+        const head = claimHead(connection, root.id);
+        return {
+          kind: "read",
+          line: {
+            lineageId: root.id,
+            claim: head === null ? null : { claimId: head.claimId, paths: head.paths },
+            laps: laps.flatMap((lap) => {
+              const row = readRow(lap.id);
+              return row === null ? [] : [toRecord(row)];
+            }),
+          },
+        };
+      } catch (error) {
+        return { kind: "defect", reason: describe(error) };
+      }
+    },
+
+    async releaseLane(input: LaneReleaseInput): Promise<LaneReleaseOutcome> {
+      try {
+        return inTransaction<LaneReleaseOutcome>(() => {
+          const laps = lineageLaps(connection, input.iterationId);
+          if (laps === null) {
+            return {
+              kind: "defect",
+              reason: `the lineage of '${input.iterationId}' passes its bound`,
+            };
+          }
+          const root = laps[0];
+          if (root === undefined) {
+            return { kind: "refused", reason: `there is no iteration '${input.iterationId}'` };
+          }
+          const shape = lineShape(laps);
+          if (shape.inFlight) {
+            return {
+              kind: "refused",
+              reason:
+                "a lap of this line has not ended, so its claim is not released; a line at its " +
+                "gate gives up its paths when it is abandoned (D-0073 rule 9.3)",
+            };
+          }
+          const head = claimHead(connection, root.id);
+          if (input.takenOver !== null) {
+            const readOver = [...input.takenOver.lapIds].sort().join("\n");
+            const now = laps
+              .map((lap) => lap.id)
+              .sort()
+              .join("\n");
+            if (
+              (head === null ? null : head.claimId) !== input.takenOver.claimId ||
+              readOver !== now
+            ) {
+              return {
+                kind: "refused",
+                reason:
+                  "the line moved after its landing was read (a claim row or a lap was written), " +
+                  "so the reading is stale and nothing is released (D-0073 rule 7)",
+              };
+            }
+          }
+          if (head === null ? !mayBeOpen(shape) : head.paths.length === 0) {
+            return {
+              kind: "refused",
+              reason: "this line holds no paths, so there is nothing to release",
+            };
+          }
+          const repository =
+            head === null
+              ? (
+                  connection
+                    .prepare(
+                      "SELECT json_extract(plan, '$.repository') AS r FROM iteration WHERE id = ?",
+                    )
+                    .get(root.id) as SqlRow | undefined
+                )?.["r"]
+              : head.repository;
+          if (typeof repository !== "string") {
+            return { kind: "defect", reason: `the line '${root.id}' names no repository` };
+          }
+          insertClaim(
+            connection,
+            {
+              lineageId: root.id,
+              repository,
+              paths: [],
+              supersedesClaimId: head === null ? null : head.claimId,
+              authorKind: input.authorKind,
+              authorId: input.authorId,
+              bases: input.bases,
+            },
+            input.nowMs,
+          );
+          return { kind: "released", lineageId: root.id };
+        });
+      } catch (error) {
+        return { kind: "defect", reason: describe(error) };
+      }
     },
 
     async readLive(): Promise<readonly ReadOutcome[]> {
@@ -2161,15 +2421,26 @@ export function iterationStore(connection: DatabaseSync, policy: HostPolicy): It
         // destroying the record of a lap that really did close. The hatch exists
         // to release a row that is *holding the lock* (D-0019 rule 11), and the
         // generated column is exactly the database's own answer to "is it".
-        const changes = inTransaction(
-          () =>
-            connection
-              .prepare(
-                "UPDATE iteration SET status = 'abandoned', reason = ?, updated_at_ms = ? " +
-                  "WHERE id = ? AND live IS NOT NULL",
-              )
-              .run(reason, nowMs, id).changes,
-        );
+        const changes = inTransaction(() => {
+          const settled = connection
+            .prepare(
+              "UPDATE iteration SET status = 'abandoned', reason = ?, updated_at_ms = ? " +
+                "WHERE id = ? AND live IS NOT NULL",
+            )
+            .run(reason, nowMs, id).changes;
+          // D-0073 rule 4.3, as in `transition`: the escape hatch ends a line
+          // as surely as a transition does. **But nothing may refuse it**, so
+          // a claim it cannot read stays held -- fail closed, and the person's
+          // release press ends it -- rather than the row staying live.
+          if (Number(settled) > 0) {
+            try {
+              releaseIfEnded(connection, id, nowMs);
+            } catch {
+              // The claim stays in force; the settle stands.
+            }
+          }
+          return settled;
+        });
         // `changes` is the only thing that distinguishes "no such row" from a
         // row that was terminated, and it is the database's count rather than a
         // read this method is not allowed to make. Zero now covers two cases --
@@ -2693,6 +2964,7 @@ const CHANGE_SOURCES = Object.freeze([
     at: "recorded_at_ms",
   },
   { kind: "setup_plan", table: "setup_plan", id: "setup_id", at: "recorded_at_ms" },
+  { kind: "lane_claim", table: "lane_claim", id: "claim_id", at: "created_at_ms" },
 ] as const);
 
 /**
@@ -5015,6 +5287,332 @@ function scopeRefusal(
     );
   }
   return null;
+}
+
+/**
+ * The author id on a claim row rondo writes by rule rather than by drafting:
+ * rule 2.5's whole repository, rule 2.6's re-request and rule 4.3's release
+ * when a line ends or lands (D-0073). `drafter` is its kind, as it is for
+ * the deterministic reading drafter: a mechanical voice, not a person's.
+ */
+export const LANE_LEDGER_AUTHOR = "rondo/lane-ledger/1";
+
+/** One `lane_claim` row, decoded. */
+interface ClaimRow {
+  readonly claimId: string;
+  readonly lineageId: string;
+  readonly repository: string;
+  readonly paths: readonly string[];
+  readonly supersedesClaimId: string | null;
+}
+
+/** A claim row to write. */
+interface ClaimWrite {
+  readonly lineageId: string;
+  readonly repository: string;
+  readonly paths: readonly string[];
+  readonly supersedesClaimId: string | null;
+  readonly authorKind: "operator" | "drafter";
+  readonly authorId: string;
+  readonly bases: readonly JsonValue[];
+}
+
+const CLAIM_COLUMNS = "claim_id, lineage_id, repository, paths, supersedes_claim_id";
+
+function toClaimRow(row: SqlRow): ClaimRow {
+  const paths: unknown = JSON.parse(requireText(row, "paths", "lane_claim"));
+  if (!Array.isArray(paths) || !paths.every((path) => typeof path === "string")) {
+    throw new StoreDefect("a lane_claim row's paths are not a JSON array of strings");
+  }
+  const supersedes = row["supersedes_claim_id"];
+  return {
+    claimId: requireText(row, "claim_id", "lane_claim"),
+    lineageId: requireText(row, "lineage_id", "lane_claim"),
+    repository: requireText(row, "repository", "lane_claim"),
+    paths,
+    supersedesClaimId: supersedes === null ? null : String(supersedes),
+  };
+}
+
+/**
+ * A lineage's in-force claim: the row no successor names (D-0073 rule 2.1),
+ * or null when the lineage has never held one. Two such rows is a store the
+ * schema's two unique constraints should have made impossible, and it is
+ * reported as a defect rather than chosen between.
+ */
+function claimHead(connection: DatabaseSync, lineageId: string): ClaimRow | null {
+  const rows = connection
+    .prepare(
+      `SELECT ${CLAIM_COLUMNS} FROM lane_claim c WHERE c.lineage_id = ? AND NOT EXISTS ` +
+        "(SELECT 1 FROM lane_claim s WHERE s.supersedes_claim_id = c.claim_id)",
+    )
+    .all(lineageId) as SqlRow[];
+  if (rows.length > 1) {
+    throw new StoreDefect(`lineage '${lineageId}' has ${String(rows.length)} in-force claims`);
+  }
+  const [row] = rows;
+  return row === undefined ? null : toClaimRow(row);
+}
+
+/** Write one claim row, its id the lineage's next ordinal. Inside the caller's transaction. */
+function insertClaim(connection: DatabaseSync, write: ClaimWrite, nowMs: number): void {
+  const count = Number(
+    (
+      connection
+        .prepare("SELECT COUNT(*) AS n FROM lane_claim WHERE lineage_id = ?")
+        .get(write.lineageId) as SqlRow
+    )["n"],
+  );
+  connection
+    .prepare(
+      "INSERT INTO lane_claim (claim_id, lineage_id, repository, paths, supersedes_claim_id, " +
+        "author_kind, author_id, bases, created_at_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    )
+    .run(
+      `${write.lineageId}:${String(count + 1)}`,
+      write.lineageId,
+      write.repository,
+      canonicalJson([...write.paths]),
+      write.supersedesClaimId,
+      write.authorKind,
+      write.authorId,
+      canonicalJson([...write.bases]),
+      nowMs,
+    );
+}
+
+/** A lineage tree's laps, root first, or null when the walk passes its bound. */
+function lineageLaps(connection: DatabaseSync, anyId: string): readonly LaneLap[] | null {
+  const ids = lineageOf(connection, anyId);
+  if (ids === null) {
+    return null;
+  }
+  const read = connection.prepare(
+    "SELECT id, status, supersedes_iteration_id FROM iteration WHERE id = ?",
+  );
+  return ids.flatMap((id) => {
+    const row = read.get(id) as SqlRow | undefined;
+    return row === undefined ? [] : [toLaneLap(row)];
+  });
+}
+
+function toLaneLap(row: SqlRow): LaneLap {
+  const supersedes = row["supersedes_iteration_id"];
+  return {
+    id: String(row["id"]),
+    status: String(row["status"]),
+    supersedesIterationId: supersedes === null ? null : String(supersedes),
+  };
+}
+
+/** The repository a stored plan names, or null when the plan does not say. */
+function planRepository(plan: JsonRecord): string | null {
+  const repository = plan["repository"];
+  return typeof repository === "string" && repository !== "" ? repository : null;
+}
+
+/**
+ * Every open line of `repository` but `exceptLineage`, with the paths it holds
+ * (D-0073 rules 3.1 and 3.3). Read inside the caller's transaction.
+ *
+ * **A line with a claim holds its head's paths**, and a head that still holds
+ * paths is counted whatever its laps say: every way a line stops being open
+ * writes a release (rule 4.3), so a head holding paths is an open line or a
+ * missed release, and the second fails closed.
+ *
+ * **A line admitted before the ledger holds `/` while it is open** (the
+ * migration D-0073 left to the building change, answered at rondo#250's gate
+ * as rule 2.5's whole repository). It has no claim row at all; it is open while
+ * a lap is in flight or it has a closed tip, and it gives the path up when its
+ * landing is read or a person releases it, both of which write its first row.
+ */
+function openLines(
+  connection: DatabaseSync,
+  repository: string,
+  exceptLineage: string,
+): readonly { readonly lineageId: string; readonly paths: readonly string[] }[] {
+  const lines: { lineageId: string; paths: readonly string[] }[] = [];
+  const heads = connection
+    .prepare(
+      `SELECT ${CLAIM_COLUMNS} FROM lane_claim c WHERE c.repository = ? AND NOT EXISTS ` +
+        "(SELECT 1 FROM lane_claim s WHERE s.supersedes_claim_id = c.claim_id)",
+    )
+    .all(repository) as SqlRow[];
+  for (const head of heads.map(toClaimRow)) {
+    if (head.lineageId !== exceptLineage && head.paths.length > 0) {
+      lines.push({ lineageId: head.lineageId, paths: head.paths });
+    }
+  }
+  const claimed = new Set(
+    connection
+      .prepare("SELECT DISTINCT lineage_id FROM lane_claim")
+      .all()
+      .map((row) => String((row as SqlRow)["lineage_id"])),
+  );
+  // ponytail: every lap of the repository is read to find the pre-ledger
+  // lines; a column on the iteration row when a store holds enough laps to feel it.
+  const laps = (
+    connection
+      .prepare(
+        "SELECT id, status, supersedes_iteration_id FROM iteration " +
+          "WHERE json_valid(plan) AND json_extract(plan, '$.repository') = ?",
+      )
+      .all(repository) as SqlRow[]
+  ).map(toLaneLap);
+  const byId = new Map(laps.map((lap) => [lap.id, lap]));
+  const rootOf = (lap: LaneLap): string => {
+    let current = lap;
+    for (let depth = 0; depth < LINEAGE_BOUND; depth += 1) {
+      const parent =
+        current.supersedesIterationId === null
+          ? undefined
+          : byId.get(current.supersedesIterationId);
+      if (parent === undefined) {
+        return current.id;
+      }
+      current = parent;
+    }
+    return current.id;
+  };
+  const trees = new Map<string, LaneLap[]>();
+  for (const lap of laps) {
+    const root = rootOf(lap);
+    trees.set(root, [...(trees.get(root) ?? []), lap]);
+  }
+  for (const [root, tree] of trees) {
+    if (root !== exceptLineage && !claimed.has(root) && mayBeOpen(lineShape(tree))) {
+      lines.push({ lineageId: root, paths: [WHOLE_REPOSITORY] });
+    }
+  }
+  return lines;
+}
+
+/**
+ * The lane half of an admission, decided under `reserve()`'s write lock
+ * (D-0073 rules 2.4-2.6 and 3.1): nothing to write, a claim row to write beside
+ * the iteration row, a refusal naming the lines it would share a path with, or
+ * a defect in the caller.
+ */
+type LaneAdmission =
+  | { readonly kind: "continue" }
+  | { readonly kind: "write"; readonly write: ClaimWrite }
+  | {
+      readonly kind: "refused";
+      readonly paths: readonly string[];
+      readonly holders: readonly LaneHolder[];
+    }
+  | { readonly kind: "defect"; readonly reason: string };
+
+function laneAdmission(connection: DatabaseSync, input: ReserveInput): LaneAdmission {
+  const repository = planRepository(input.plan);
+  if (repository === null) {
+    return {
+      kind: "defect",
+      reason: `iteration '${input.id}' was reserved with a plan that names no repository to claim in`,
+    };
+  }
+  const byRule = { authorKind: "drafter", authorId: LANE_LEDGER_AUTHOR } as const;
+  const bases = [{ form: "iteration", iterationId: input.id }];
+  let write: ClaimWrite;
+  if (input.supersedesIterationId === null) {
+    let paths: readonly string[] = [WHOLE_REPOSITORY];
+    if (input.claim !== null) {
+      const asked = normalizeClaim(input.claim.paths);
+      if (asked.kind === "refused") {
+        return { kind: "defect", reason: `the claim drafted for '${input.id}': ${asked.reason}` };
+      }
+      paths = asked.paths;
+    }
+    write =
+      input.claim === null
+        ? { lineageId: input.id, repository, paths, supersedesClaimId: null, ...byRule, bases }
+        : {
+            lineageId: input.id,
+            repository,
+            paths,
+            supersedesClaimId: null,
+            authorKind: input.claim.authorKind,
+            authorId: input.claim.authorId,
+            bases: input.claim.bases,
+          };
+  } else {
+    if (input.claim !== null) {
+      return {
+        kind: "defect",
+        reason:
+          `the redo '${input.id}' was handed a claim, and a redo continues its lineage's claim ` +
+          "(D-0073 rule 2.6): a claim that changes is a successor row, not an admission's",
+      };
+    }
+    const lineageId = lineageOf(connection, input.supersedesIterationId)?.[0];
+    if (lineageId === undefined) {
+      return {
+        kind: "defect",
+        reason: `the lineage of '${input.supersedesIterationId}' is unreadable`,
+      };
+    }
+    const head = claimHead(connection, lineageId);
+    if (head !== null && head.paths.length > 0) {
+      return { kind: "continue" };
+    }
+    // A released line retried takes back what the release gave up (rule 2.6),
+    // and a line from before the ledger, or released without ever holding a
+    // claim, asks for the whole repository (rule 2.5).
+    const releasedFrom = head === null ? null : head.supersedesClaimId;
+    const given =
+      releasedFrom === null
+        ? undefined
+        : (connection
+            .prepare(`SELECT ${CLAIM_COLUMNS} FROM lane_claim WHERE claim_id = ?`)
+            .get(releasedFrom) as SqlRow | undefined);
+    write = {
+      lineageId,
+      repository,
+      paths: given === undefined ? [WHOLE_REPOSITORY] : toClaimRow(given).paths,
+      supersedesClaimId: head === null ? null : head.claimId,
+      ...byRule,
+      bases,
+    };
+  }
+  const holders = openLines(connection, repository, write.lineageId).flatMap((line) => {
+    const shared = sharedPaths(write.paths, line.paths);
+    return shared.length === 0 ? [] : [{ lineageId: line.lineageId, sharedPaths: shared }];
+  });
+  return holders.length === 0
+    ? { kind: "write", write }
+    : { kind: "refused", paths: write.paths, holders };
+}
+
+/**
+ * Release a line's claim when the status just written leaves nothing of it open
+ * (D-0073 rule 4.3): no lap in flight and no closed tip, so nothing is owed to
+ * the default branch. Inside the transaction that wrote the status, both or
+ * neither. A line that holds nothing -- released already, or from before the
+ * ledger -- writes nothing.
+ */
+function releaseIfEnded(connection: DatabaseSync, iterationId: string, nowMs: number): void {
+  const laps = lineageLaps(connection, iterationId);
+  const root = laps?.[0];
+  if (laps === null || root === undefined || mayBeOpen(lineShape(laps))) {
+    return;
+  }
+  const head = claimHead(connection, root.id);
+  if (head === null || head.paths.length === 0) {
+    return;
+  }
+  insertClaim(
+    connection,
+    {
+      lineageId: root.id,
+      repository: head.repository,
+      paths: [],
+      supersedesClaimId: head.claimId,
+      authorKind: "drafter",
+      authorId: LANE_LEDGER_AUTHOR,
+      bases: [{ form: "iteration", iterationId }],
+    },
+    nowMs,
+  );
 }
 
 /** Links a lineage walk follows before it calls the chain one that does not end. */

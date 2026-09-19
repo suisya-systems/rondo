@@ -10,8 +10,9 @@
  * the scope's verdict for exactly the act the button would take -- and writes
  * nothing.
  *
- * ponytail: D-0073's lane claims are not built, so a claim collision is not a
- * reason here yet; it is added where the ledger is.
+ * ponytail: a lane-claim collision (D-0073 rule 3.1) is not a reason here yet:
+ * `reserve()` refuses it as the backstop and the press reports it, and drawing
+ * it as a reason is the screen's half of the ledger, not built.
  */
 
 import { type RunPlan, readRunPlan } from "../refrain/plan.js";

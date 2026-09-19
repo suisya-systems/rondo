@@ -245,6 +245,13 @@ export const USAGE = `rondo - the operator surface for delegated work
                           --despite-review is how you overrule that last one
   rondo abandon --iteration-id ID --reason TEXT
                           end an iteration rondo cannot finish
+  rondo release --iteration-id ID --actor-id ID
+                          give up the paths a finished line holds, so other
+                          work in its repository may start. For a line whose
+                          work you know landed in a form rondo cannot see (a
+                          conflict resolved, an edit made on the forge), or
+                          one you are retiring. Every lap of the line must
+                          have ended; the release is recorded as yours
   rondo elevate --iteration-id ID --actor-id ID --message-id ID
                 --observation=TEXT --basis LOCATOR
                           hand one observation of yours to the advisory. The
@@ -513,6 +520,7 @@ export interface ParsedCommand {
     | "revise"
     | "publish"
     | "abandon"
+    | "release"
     | "explain"
     | "between"
     | "elevate"
@@ -606,6 +614,7 @@ const COMMANDS = [
   "revise",
   "publish",
   "abandon",
+  "release",
   "explain",
   "between",
   "elevate",
@@ -658,6 +667,7 @@ export const FLAGS_BY_COMMAND: Readonly<Record<string, readonly string[]>> = {
     "despite-review",
   ],
   abandon: ["iteration-id", "reason"],
+  release: ["iteration-id", "actor-id"],
   // **One flag, and `--iteration-id` is required rather than defaulted.** The
   // row this command most exists to explain is terminal (D-0032 rule 11's
   // enumeration is there because an abandoned iteration could not be found at
@@ -1585,6 +1595,12 @@ export async function main(
   // an accident here -- so there is nothing for it to need.
   if (parsed.command === "abandon") {
     return await commandAbandon(parsed, conductorPorts(unverifiedContinuo(), store, null));
+  }
+
+  // **`release` is dispatched here for `abandon`'s reason**: it writes one row
+  // of rondo's own and drives no continuo verb (D-0073 rule 4.3).
+  if (parsed.command === "release") {
+    return await commandRelease(parsed, store);
   }
 
   // **`explain` is dispatched before continuo is started, for `abandon`'s
@@ -7727,6 +7743,36 @@ function unverifiedContinuo(): VerifiedContinuo {
 }
 
 /** Door four, which is not a door: end an iteration rondo cannot finish. */
+/**
+ * The person's release press (D-0073 rule 4.3): a claim row of no paths,
+ * authored by the operator. It ends the claim, not the iteration, so it is not
+ * `abandon()`; whether the work landed is the person's judgement, recorded as
+ * theirs by the row's operator author.
+ */
+async function commandRelease(parsed: ParsedCommand, store: IterationStore): Promise<number> {
+  if (parsed.iterationId === null || parsed.actorId === null) {
+    return refuse("release needs --iteration-id ID and --actor-id ID.");
+  }
+  const outcome = await store.releaseLane({
+    iterationId: parsed.iterationId,
+    takenOver: null,
+    authorKind: "operator",
+    authorId: parsed.actorId,
+    bases: [{ form: "iteration", iterationId: parsed.iterationId }],
+    nowMs: Date.now(),
+  });
+  if (outcome.kind !== "released") {
+    return refuse(
+      `The line of iteration '${parsed.iterationId}' was not released: ${outcome.reason}.`,
+    );
+  }
+  say(
+    `Released the paths line ${outcome.lineageId} held. Other work in its repository may now ` +
+      "take them; this line takes them back only if it is retried.",
+  );
+  return 0;
+}
+
 async function commandAbandon(
   parsed: ParsedCommand,
   ports: ReturnType<typeof conductorPorts>,

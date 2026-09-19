@@ -454,7 +454,11 @@ test("an admission carrying no approval consumes nothing, with a spendable one i
   const { h, decisionId, approved } = await approvedChain();
   h.answers.classify = answered("allowed");
 
-  const unrelated = await admit(h.ports, h.advisory, PLAN, POLICY, "i-0009");
+  // In a repository of its own: under the lane ledger an open line of the
+  // subject's repository would hold the paths the retry below asks back
+  // (D-0073 rule 2.6), which is not what this test measures.
+  const elsewhere = { ...PLAN, repository: "/srv/elsewhere" };
+  const unrelated = await admit(h.ports, h.advisory, elsewhere, POLICY, "i-0009");
   expect(unrelated.iterationId).toBe("i-0009");
   expect(rowsIn(h.connection, "decision_consumption").length).toBe(0);
   expect((await h.advisory.record.unconsumedDecisions()).length).toBe(1);

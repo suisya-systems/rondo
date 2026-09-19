@@ -24,6 +24,7 @@ import { CONSERVATIVE_HOST_POLICY } from "../../src/refrain/policy.js";
 import { canonicalJson, contentDigest, planDigest } from "../../src/store/plan.js";
 import type { JsonRecord, LapReadingDraft } from "../../src/store/records.js";
 import { advisoryRecord, iterationStore } from "../../src/store/sqlite.js";
+import { laneFor } from "../lane-claims.js";
 
 const fresh = () => {
   const connection = new DatabaseSync(":memory:");
@@ -130,6 +131,7 @@ const reserveWithPlan = async (
     plan: realPlan(id, plan),
     spend: null,
     scopeSpend: null,
+    claim: laneFor(id, supersedesIterationId),
     nowMs: 1_000,
     supersedesIterationId,
     requestMessageId: null,

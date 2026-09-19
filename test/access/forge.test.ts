@@ -13,7 +13,12 @@ import { join } from "node:path";
 
 import { expect, test } from "vitest";
 
-import { gatherReviewMaterialFacts, inspectLapWork, runReviewer } from "../../src/access/forge.js";
+import {
+  gatherReviewMaterialFacts,
+  inspectLapWork,
+  readLanding,
+  runReviewer,
+} from "../../src/access/forge.js";
 import { evidenceOf, materialDigestOf, readingOf } from "../../src/access/review.js";
 import { contentDigest } from "../../src/store/plan.js";
 
@@ -456,3 +461,100 @@ posix(
     expect(inside.kind === "failed" && inside.reason).toContain("(error)");
   },
 );
+
+// --- readLanding (D-0073 rule 6) --------------------------------------------
+
+function gitOut(cwd: string, ...args: string[]): string {
+  return execFileSync("git", args, { cwd, stdio: "pipe" }).toString().trim();
+}
+
+/**
+ * A line's work on `topic` in `work`, cut from `main` pushed to `origin`, and a
+ * second clone, `merger`, that lands things on the forge's `main` the way a
+ * squash merge does: new commits, never the topic's own.
+ */
+function landingWorld() {
+  const root = mkdtempSync(join(tmpdir(), "rondo-landing-"));
+  const remote = join(root, "remote.git");
+  const work = join(root, "work");
+  const merger = join(root, "merger");
+  git(root, "init", "--bare", remote);
+  git(root, "init", work);
+  writeFileSync(join(work, "a.txt"), "base\n");
+  writeFileSync(join(work, "b.txt"), "doomed\n");
+  writeFileSync(join(work, "run.sh"), "echo hi\n");
+  writeFileSync(join(work, "other.txt"), "untouched\n");
+  git(work, "add", ".");
+  git(work, "commit", "-m", "base");
+  git(work, "remote", "add", "origin", remote);
+  git(work, "push", "origin", "main");
+  const baseCommit = gitOut(work, "rev-parse", "HEAD");
+  git(work, "switch", "-c", "topic");
+  writeFileSync(join(work, "a.txt"), "changed\n");
+  git(work, "rm", "-q", "b.txt");
+  writeFileSync(join(work, "c.txt"), "new\n");
+  git(work, "add", ".");
+  git(work, "commit", "-m", "the line's work");
+  const tipCommit = gitOut(work, "rev-parse", "HEAD");
+  git(root, "clone", "-q", remote, merger);
+  const landing = (tips: readonly string[] = [tipCommit], remoteName = "origin") => ({
+    repository: work,
+    remote: remoteName,
+    defaultBranch: "main",
+    baseCommit,
+    tipCommits: tips,
+  });
+  return { work, merger, landing, tipCommit };
+}
+
+test("a line whose work is not on the forge's default branch reads not landed, naming the paths", async () => {
+  const { landing } = landingWorld();
+  expect(await readLanding(landing())).toMatchObject({
+    kind: "notLanded",
+    differing: ["a.txt", "b.txt", "c.txt"],
+  });
+});
+
+test("a squash merge on the forge reads landed, fetched into rondo's own ref and nobody else's", async () => {
+  const { work, merger, landing } = landingWorld();
+  const tracking = gitOut(work, "rev-parse", "refs/remotes/origin/main");
+  // The same bytes, as a commit of the forge's own: the topic's tip is never an ancestor.
+  writeFileSync(join(merger, "a.txt"), "changed\n");
+  git(merger, "rm", "-q", "b.txt");
+  writeFileSync(join(merger, "c.txt"), "new\n");
+  // A later change to a path the line never touched does not matter.
+  writeFileSync(join(merger, "other.txt"), "moved on\n");
+  git(merger, "add", ".");
+  git(merger, "commit", "-m", "squash (#1)");
+  git(merger, "push", "-q", "origin", "main");
+
+  const reading = await readLanding(landing());
+  expect(reading).toMatchObject({ kind: "landed", paths: ["a.txt", "b.txt", "c.txt"] });
+  expect(gitOut(work, "rev-parse", "refs/rondo/landing/origin/main")).toBe(
+    gitOut(merger, "rev-parse", "HEAD"),
+  );
+  expect(gitOut(work, "rev-parse", "refs/remotes/origin/main")).toBe(tracking);
+});
+
+test("a change of mode alone is not landed: the blob matches and the entry does not", async () => {
+  const { work, merger, landing } = landingWorld();
+  git(work, "update-index", "--chmod=+x", "run.sh");
+  git(work, "commit", "-m", "make it runnable");
+  const tip = gitOut(work, "rev-parse", "HEAD");
+  writeFileSync(join(merger, "a.txt"), "changed\n");
+  git(merger, "rm", "-q", "b.txt");
+  writeFileSync(join(merger, "c.txt"), "new\n");
+  git(merger, "add", ".");
+  git(merger, "commit", "-m", "squash without the mode");
+  git(merger, "push", "-q", "origin", "main");
+  expect(await readLanding(landing([tip]))).toMatchObject({
+    kind: "notLanded",
+    differing: ["run.sh"],
+  });
+});
+
+test("a fetch that fails is undetermined, never not landed", async () => {
+  const { landing } = landingWorld();
+  const reading = await readLanding(landing(undefined, "nowhere"));
+  expect(reading.kind).toBe("undetermined");
+});

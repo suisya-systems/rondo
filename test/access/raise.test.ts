@@ -21,6 +21,7 @@ import type { RaiseInput } from "../../src/access/web-app.js";
 import { contentDigest } from "../../src/store/plan.js";
 import type { JsonRecord } from "../../src/store/records.js";
 import { advisoryRecord, iterationStore } from "../../src/store/sqlite.js";
+import { ownLane } from "../lane-claims.js";
 
 const ENV = { RONDO_APPROVER: "ada" };
 
@@ -71,6 +72,7 @@ async function world() {
     requestMessageId: null,
     spend: null,
     scopeSpend: null,
+    claim: ownLane("lap-held"),
     nowMs: 1,
   });
   expect(held.kind).toBe("reserved");
@@ -112,6 +114,7 @@ async function world() {
       requestMessageId: null,
       spend: null,
       scopeSpend: null,
+      claim: ownLane(id),
       nowMs: 3,
     });
     expect(reserved.kind).toBe("reserved");

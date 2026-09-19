@@ -49,6 +49,7 @@ import type {
   IterationFields,
   IterationRecord,
   IterationStatus,
+  LaneHolder,
   LapReadingDraft,
   ScopeRefusal,
 } from "../store/records.js";
@@ -111,6 +112,15 @@ export interface ConductorReport {
    * D-0066 rule 4.4's stop without reading `lines`. Absent on every other report.
    */
   readonly scopeRefusal?: ScopeRefusal;
+  /**
+   * The lane ledger refused (D-0073 rule 3.1): the paths asked for and the open
+   * lines holding them, as data, so the surface can read those lines' landing
+   * (rule 7) without reading `lines`. Absent on every other report.
+   */
+  readonly laneRefusal?: {
+    readonly paths: readonly string[];
+    readonly holders: readonly LaneHolder[];
+  };
 }
 
 /**
@@ -257,6 +267,10 @@ export async function admit(
     spend,
     // Carried, never read, for `spend`'s reason (D-0066 rule 3.1).
     scopeSpend,
+    // ponytail: no surface drafts a claim yet (D-0073 rule 2.3), so every line
+    // claims its whole repository (rule 2.5); the split's drafted claim is
+    // carried here when the drafter writes one.
+    claim: null,
     nowMs: ports.now(),
   });
   switch (reservation.kind) {
@@ -325,6 +339,26 @@ export async function admit(
     case "requestRefused":
       lines.push(`Refused: ${reservation.reason}`);
       return { iterationId: null, status: null, lines: Object.freeze(lines) };
+    case "laneRefused":
+      // D-0073 rule 3.1: nothing written and nothing spent, and the lines it
+      // would have shared a path with named, with the paths.
+      lines.push(
+        `Refused: this work would share paths with ${String(reservation.holders.length)} open ` +
+          `line${reservation.holders.length === 1 ? "" : "s"} of its repository, and no path is ` +
+          "held by two open lines at once.",
+        ...reservation.holders.map(
+          (holder) =>
+            `Line ${holder.lineageId} holds ${holder.sharedPaths.map((path) => `'${path}'`).join(", ")}.`,
+        ),
+        "Nothing was written and nothing was spent. The paths are free once that line's work " +
+          "lands on the default branch, or it ends.",
+      );
+      return {
+        iterationId: null,
+        status: null,
+        lines: Object.freeze(lines),
+        laneRefusal: Object.freeze({ paths: reservation.paths, holders: reservation.holders }),
+      };
     case "defect":
       lines.push(`The store could not reserve an iteration: ${reservation.reason}`);
       return { iterationId: null, status: null, lines: Object.freeze(lines) };

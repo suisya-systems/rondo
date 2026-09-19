@@ -30,6 +30,8 @@ import type {
   IterationRecord,
   IterationStatus,
   JsonRecord,
+  LaneClaimAsk,
+  LaneHolder,
   LapReadingDraft,
   ScopeRefusal,
 } from "../store/records.js";
@@ -223,6 +225,12 @@ export type ReserveOutcome =
   | ({ readonly kind: "scopeRefused" } & ScopeRefusal)
   /** The request link names no message that opens a request (D-0061 rule 4). */
   | { readonly kind: "requestRefused"; readonly reason: string }
+  /** The claim would share a path with an open line (D-0073 rule 3.1). */
+  | {
+      readonly kind: "laneRefused";
+      readonly paths: readonly string[];
+      readonly holders: readonly LaneHolder[];
+    }
   | { readonly kind: "defect"; readonly reason: string };
 
 /** Which of the host's two bounds an admission was refused by (D-0023 rule 8). */
@@ -403,6 +411,11 @@ export interface ReserveInput {
    * `spend` and this is non-null.
    */
   readonly scopeSpend: ScopeSpend | null;
+  /**
+   * The paths a first admission asks to hold, or null for the whole repository
+   * (D-0073 rules 2.3 and 2.5). Carried and never read, for `spend`'s reason.
+   */
+  readonly claim: LaneClaimAsk | null;
   readonly nowMs: number;
 }
 

@@ -24,6 +24,7 @@ import { admittedPlan, planPayload, type RunPlan } from "../../src/refrain/plan.
 import { planDigest } from "../../src/store/plan.js";
 import type { JsonRecord } from "../../src/store/records.js";
 import { advisoryRecord, iterationStore } from "../../src/store/sqlite.js";
+import { ownLane } from "../lane-claims.js";
 import { AGENT_TYPE_INPUT, agentTypeDigestOf, planDocument } from "./fixtures/drafter.js";
 
 const PROMPTS = ["Fix the scope screen's cost box.", "Title-case the approve button."];
@@ -274,6 +275,7 @@ test(
       plan: admittedPayload(run.plan, "lap-plan-0"),
       spend: null,
       scopeSpend: null,
+      claim: ownLane("lap-plan-0"),
       nowMs: 15_000,
       supersedesIterationId: null,
       requestMessageId: "r1",
@@ -294,6 +296,7 @@ test(
       plan: { ...w.document, prompt: PROMPTS[1] as string, turn_timeout_ms: 600_000 },
       spend: null,
       scopeSpend: null,
+      claim: ownLane("lap-decoy"),
       nowMs: 16_000,
       supersedesIterationId: null,
       requestMessageId: "r1",
@@ -396,6 +399,7 @@ test(
         plan: admittedPayload({ ...run.plan, prompt }, id),
         spend: null,
         scopeSpend: null,
+        claim: ownLane(id),
         nowMs: 15_000,
         supersedesIterationId: null,
         requestMessageId: "r1",

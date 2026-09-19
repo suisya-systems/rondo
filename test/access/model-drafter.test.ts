@@ -21,6 +21,7 @@ import {
 import { readRunPlan } from "../../src/refrain/plan.js";
 import { planDigest } from "../../src/store/plan.js";
 import type { JsonRecord } from "../../src/store/records.js";
+import { ownLane } from "../lane-claims.js";
 import {
   AGENT_TYPE_INPUT,
   agentTypeDigestOf,
@@ -242,6 +243,7 @@ test("an earlier lap of the request is handed over with what it was asked, so a 
     plan: planDocument(),
     spend: null,
     scopeSpend: null,
+    claim: ownLane("i-1"),
     nowMs: 1_500,
     supersedesIterationId: null,
     requestMessageId: "r1",
@@ -274,6 +276,7 @@ async function reserveLap(
     plan,
     spend: null,
     scopeSpend: null,
+    claim: ownLane(id),
     nowMs: atMs,
     supersedesIterationId: null,
     requestMessageId: null,

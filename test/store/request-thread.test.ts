@@ -18,6 +18,7 @@ import { consoleSeams } from "../../src/access/console.js";
 import { CONSERVATIVE_HOST_POLICY } from "../../src/refrain/policy.js";
 import type { AnswerOutcome, ThreadMessageDraft } from "../../src/store/records.js";
 import { advisoryRecord, iterationStore, openAdvisoryRecord } from "../../src/store/sqlite.js";
+import { laneFor } from "../lane-claims.js";
 
 /**
  * The test marked with this drives `main` over an on-disk store rather than
@@ -67,7 +68,7 @@ const reserve = (
   store.reserve({
     id,
     request: "do the thing",
-    plan: { run_id: `rondo-${id}` },
+    plan: { run_id: `rondo-${id}`, repository: "/srv/repo" },
     runId: `rondo-${id}`,
     topicBranch: `rondo/${id}`,
     workspace: `/srv/work/iter-${id}`,
@@ -75,6 +76,7 @@ const reserve = (
     requestMessageId,
     spend: null,
     scopeSpend: null,
+    claim: laneFor(id, supersedesIterationId),
     nowMs: 5_000,
   });
 

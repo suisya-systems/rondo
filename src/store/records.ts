@@ -1295,6 +1295,28 @@ export interface AdmissionRefusal {
 }
 
 /**
+ * The claim an admission asks for (D-0073 rule 2.3), drafted beside its plan.
+ *
+ * **Not a plan field**, so D-0063 rule 4.2's "two fields may differ" stands:
+ * it travels beside the plan into `reserve()`, which tests it and writes it as
+ * the line's first `lane_claim` row. Null in its place is rule 2.5: the line
+ * claims the whole repository.
+ */
+export interface LaneClaimAsk {
+  readonly paths: readonly string[];
+  readonly authorKind: "operator" | "drafter";
+  readonly authorId: string;
+  /** D-0032 rule 2 bases, stored verbatim beside the paths. */
+  readonly bases: readonly JsonValue[];
+}
+
+/** One open line an admission's claim overlaps, and the asked paths it shares (D-0073 rule 3.1). */
+export interface LaneHolder {
+  readonly lineageId: string;
+  readonly sharedPaths: readonly string[];
+}
+
+/**
  * One line of the silence (D-0032 rule 10, #41 section 5).
  *
  * *"Six were put to you, forty were not, here is the breakdown"* is one

@@ -38,6 +38,7 @@ import type {
 } from "../../src/refrain/ports.js";
 import type { LapReadingDraft } from "../../src/store/records.js";
 import { advisoryRecord, iterationStore } from "../../src/store/sqlite.js";
+import { ownLane } from "../lane-claims.js";
 
 const NOW_MS = 1_700_000_000_000;
 const SUBJECT = "i-0001";
@@ -376,9 +377,10 @@ test("a successor identity that is taken is skipped, and the next free one is mi
   await store.reserve({
     id: `${SUBJECT}-r2`,
     request: "an earlier retry, already spent",
-    plan: { run_id: "rondo-i-0001-r2" },
+    plan: { run_id: "rondo-i-0001-r2", repository: "/srv/repo" },
     spend: null,
     scopeSpend: null,
+    claim: ownLane(`${SUBJECT}-r2`),
     nowMs: NOW_MS - 1_000,
     supersedesIterationId: null,
     requestMessageId: null,

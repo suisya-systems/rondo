@@ -17,6 +17,7 @@ import { expect, test, vi } from "vitest";
 import { commandScopedRetry, commandStart, main, parseCommand } from "../../src/access/cli.js";
 import { admit, type ReportingPorts, reportToRequest, resume } from "../../src/access/conductor.js";
 import { consoleSeams } from "../../src/access/console.js";
+import type { LandingReading, LandingRequest } from "../../src/access/forge.js";
 import { admitUnderScope, type ScopeAct, type ScopeAdmitPorts } from "../../src/access/scope.js";
 import { allocate } from "../../src/refrain/allocator.js";
 import { classifyPlan } from "../../src/refrain/classification.js";
@@ -214,6 +215,12 @@ async function harness(path = ":memory:", payload: JsonRecord = PAYLOAD) {
   ).toEqual({ kind: "recorded" });
   // The scope may list only an agent type rondo already holds (D-0062 rule 1.2).
   expect((await admit(conductor, advisory, PLAN, POLICY, "i-seed")).iterationId).toBe("i-seed");
+  // Ended, so its claim on the whole repository (D-0073 rule 2.5) is released
+  // and the lines below are admitted on their own merits: the seed is only how
+  // rondo comes to hold the agent type.
+  expect((await store.transition("i-seed", "awaiting_human", "abandoned", {}, 1)).kind).toBe(
+    "transitioned",
+  );
   expect(
     await record.recordScope({
       scopeId: "s-1",
@@ -452,6 +459,11 @@ test("PLANTED (D-0069 rule 5): a stopped line is not re-run as a new lineage by 
   };
   const refused = await admitUnderScope(h.ports, "sd-1", redo);
   if (refused.kind !== "refused" || refused.stop.kind !== "written") throw new Error("no stop");
+  // The stopped line ends, so its claim on the whole repository (D-0073 rule
+  // 2.5) is not what holds the start below: the stop about it is.
+  expect((await h.store.transition("i-a", "awaiting_human", "abandoned", {}, 1)).kind).toBe(
+    "transitioned",
+  );
   h.clock.now = 2_000;
   // The bypass: the same plan, started again as a new lineage naming no proposal. Held by the
   // stop about another lineage, and nothing is admitted or spent.
@@ -1290,3 +1302,61 @@ test(
   },
   WINDOWS_HEAVY_TIMEOUT_MS,
 );
+
+// --- D-0073 rule 7: a lane refusal reads the holder's landing ----------------
+
+test("D-0073 rule 7: a refusal by a closed line reads its landing, and only a landed one is released and let through", async () => {
+  const h = await harness();
+  expect((await admit(h.reporting, h.advisory, PLAN, POLICY, "i-land")).status).toBe(
+    "awaiting_human",
+  );
+  const asked: LandingRequest[] = [];
+  let answer: LandingReading = { kind: "notLanded", headCommit: "h", differing: ["x.ts"] };
+  const ports: ReportingPorts = {
+    ...h.reporting,
+    lanes: {
+      store: h.store,
+      remote: "origin",
+      readLanding: async (request) => {
+        asked.push(request);
+        return answer;
+      },
+    },
+  };
+  // At its gate the line holds its paths whatever its diff says (rule 10): nothing is read.
+  const gated = await admit(ports, h.advisory, PLAN, POLICY, "i-next");
+  expect(gated.iterationId).toBeNull();
+  expect(gated.laneRefusal?.holders).toEqual([{ lineageId: "i-land", sharedPaths: ["/"] }]);
+  expect(asked).toEqual([]);
+
+  expect((await h.store.transition("i-land", "awaiting_human", "closed", {}, 2)).kind).toBe(
+    "transitioned",
+  );
+  const unmerged = await admit(ports, h.advisory, PLAN, POLICY, "i-next");
+  expect(unmerged.iterationId).toBeNull();
+  expect(unmerged.lines.join("\n")).toContain("'x.ts' differ");
+  expect(asked).toEqual([
+    {
+      repository: PLAN.repository,
+      remote: "origin",
+      defaultBranch: "main",
+      baseCommit: "b".repeat(40),
+      tipCommits: ["a".repeat(40)],
+    },
+  ]);
+
+  answer = { kind: "undetermined", reason: "the forge did not answer" };
+  const unknown = (await admit(ports, h.advisory, PLAN, POLICY, "i-next")).lines.join("\n");
+  expect(unknown).toContain("undetermined: the forge did not answer");
+  expect(unknown).not.toContain("not on");
+
+  answer = { kind: "landed", headCommit: "h", paths: ["x.ts"] };
+  const through = await admit(ports, h.advisory, PLAN, POLICY, "i-next");
+  expect(through.iterationId).toBe("i-next");
+  expect(through.lines[0]).toContain("so its paths were released");
+  const read = await h.store.laneLine("i-land");
+  expect(read.kind === "read" ? read.line.claim : undefined).toEqual({
+    claimId: "i-land:2",
+    paths: [],
+  });
+});
