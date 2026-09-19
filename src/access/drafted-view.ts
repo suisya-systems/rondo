@@ -141,6 +141,12 @@ async function undecided(
       return null;
     }
   }
+  // **Retired by an approved scope this request's list does not reach** -- one
+  // that replaced the draft and no longer names the request -- is still retired:
+  // its press would be refused, so its form is not offered (D-0066 rule 1.4).
+  if (await ports.record.scopeSupersededByApproved(draft.scopeId)) {
+    return null;
+  }
   return await draftedShown(ports, draft);
 }
 

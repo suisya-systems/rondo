@@ -285,3 +285,25 @@ test("a draft changed twice keeps its drafted work: the approval two changes dee
   expect(plans?.scope.scopeId).toBe(w.draft.scopeId);
   expect(plans?.plans).toHaveLength(2);
 });
+
+test("a draft retired by an approved scope that no longer names the request is not offered again", async () => {
+  const w = await drafted();
+  await w.say("r2", "Another request.", null, 1_800);
+  // An operator's change of the draft that covers only the other request, as
+  // `rondo scope --supersedes-scope-id` can write one.
+  const written = await w.record.recordScope({
+    scopeId: "scope-elsewhere",
+    payload: { ...(w.draft.payload as unknown as JsonRecord), requests: ["r2"] } as JsonRecord,
+    supersedesScopeId: w.draft.scopeId,
+    authorKind: "operator",
+    authorId: "ada",
+    bases: [{ form: "scope", scopeId: w.draft.scopeId }],
+    createdAtMs: 1_900,
+    agentTypeRecords: [],
+  });
+  if (written.kind !== "recorded") throw new Error(JSON.stringify(written));
+  const elsewhere = await w.record.readScope("scope-elsewhere");
+  if (elsewhere.kind !== "read") throw new Error("the change did not read");
+  await decide(w, elsewhere.scope, "approved");
+  expect(await draftedStanding(w, "r1")).toEqual({ kind: "none" });
+});
