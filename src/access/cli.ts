@@ -4569,6 +4569,7 @@ async function startSplit(
         note: `this host has no room for another lap (${ready.kind})`,
       };
     case "outside":
+    case "undecidable":
     case "ready": {
       const run = await draftedPlanRun(
         { record },

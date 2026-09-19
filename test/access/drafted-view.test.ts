@@ -123,16 +123,19 @@ test("a fresh draft stands as drafted: its plans, its split, and budgets recompu
   expect(shown.computed.review_rounds.value).toBe(budgets.review_rounds);
   expect(shown.computed.cost_usd.value).toBe(budgets.cost_usd);
   expect(shown.computed.cost_reserve_usd.value).toBe(budgets.cost_reserve_usd);
-  expect(shown.computed.expires_at_ms.value).toBe(budgets.expires_at_ms);
-  // The request and the pasted plan are not narrowing words.
-  expect(shown.narrowedBy).toEqual([]);
+  // Stored to the minute the form shows it at, so an untouched press matches.
+  expect(Math.floor(shown.computed.expires_at_ms.value / 60_000) * 60_000).toBe(
+    budgets.expires_at_ms,
+  );
+  expect(budgets.expires_at_ms % 60_000).toBe(0);
+  expect(shown.narrowed).toEqual([]);
 });
 
 test("a narrowed draft carries the person's words it rests on, and a value below the computed one", async () => {
   const w = await drafted(true);
   const standing = await draftedStanding(w, "r1");
   if (standing.kind !== "drafted") throw new Error(standing.kind);
-  expect(standing.drafted.narrowedBy).toEqual(["r1-cap"]);
+  expect(standing.drafted.narrowed).toEqual([{ field: "cost_usd", messageId: "r1-cap" }]);
   expect(w.draft.payload.budgets.cost_usd).toBe(3);
   expect(standing.drafted.computed.cost_usd.value).toBeGreaterThan(3);
 });
@@ -149,6 +152,7 @@ test("approved as drafted, or as the person's successor, the standing is the app
   expect(await draftedStanding(asDrafted, "r1")).toEqual({
     kind: "decided",
     scopeDecisionId: onDraft,
+    newer: null,
   });
 
   const edited = await drafted();
@@ -157,6 +161,7 @@ test("approved as drafted, or as the person's successor, the standing is the app
   expect(await draftedStanding(edited, "r1")).toEqual({
     kind: "decided",
     scopeDecisionId: onMine,
+    newer: null,
   });
 
   const declined = await drafted();
@@ -189,4 +194,61 @@ test("the drafted plans stand behind the drafter's scope and the person's succes
   const ownRead = await w.record.readScope("scope-own-1");
   if (ownRead.kind !== "read") throw new Error("own scope did not read");
   expect(await draftedPlansUnder(w, ownRead.scope)).toBeNull();
+});
+
+/** Run the drafter again over the thread, as the host does on the person's next message. */
+async function redraft(w: Drafted, narrowings: readonly unknown[] = []) {
+  let n = 100;
+  const host = drafterHost({
+    store: w.store,
+    record: w.record,
+    now: () => 2_500,
+    language: null,
+    log: () => undefined,
+    mintId: (kind) => {
+      n += 1;
+      return `${kind}-${String(n)}`;
+    },
+    runDrafter: async () => ({
+      kind: "answered",
+      costUsd: 0.05,
+      finalMessage: JSON.stringify({
+        act: "split",
+        summary: { text: "Redrafted.", bases: ["r1"] },
+        plans: PROMPTS.map((prompt) => ({
+          template_plan_digest: planDigest(planDocument()),
+          agent_type_digest: w.typeDigest,
+          prompt,
+          bases: ["r1"],
+        })),
+        narrowings,
+      }),
+    }),
+  });
+  host.kick();
+  await host.idle();
+}
+
+test("a redraft after an approval is shown beside it, never in its place: the approval and its starts stand", async () => {
+  const w = await drafted();
+  const approved = await decide(w, w.draft, "approved");
+  await w.say("r1-more", "One more thing.", "r1", 2_000);
+  await redraft(w);
+  const standing = await draftedStanding(w, "r1");
+  expect(standing.kind).toBe("decided");
+  if (standing.kind !== "decided") return;
+  expect(standing.scopeDecisionId).toBe(approved);
+  expect(standing.newer?.scope.scopeId).not.toBe(w.draft.scopeId);
+  expect(standing.newer?.plans).toHaveLength(2);
+});
+
+test("a narrowing that rests on the request itself is cited, and a stated cost is kept to the cent the form shows", async () => {
+  const w = await drafted();
+  // A second run over a newer message, narrowing on the opening request's words.
+  await w.say("r1-more", "And the budget is in the request.", "r1", 2_000);
+  await redraft(w, [{ field: "cost_usd", value: 3.337, basis: "r1" }]);
+  const standing = await draftedStanding(w, "r1");
+  if (standing.kind !== "drafted") throw new Error(standing.kind);
+  expect(standing.drafted.narrowed).toEqual([{ field: "cost_usd", messageId: "r1" }]);
+  expect(standing.drafted.scope.payload.budgets.cost_usd).toBe(3.33);
 });

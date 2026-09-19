@@ -37,8 +37,12 @@ export interface DraftedScopeShown {
   readonly plans: readonly DraftedPlanShown[];
   /** Rule 4.2 over the proposal's snapshot: what the drafted values were computed as. */
   readonly computed: ScopeBudgets;
-  /** Messages the scope rests on beyond the request and any pasted plan: the words a narrowing cites. */
-  readonly narrowedBy: readonly string[];
+  /**
+   * Each field the drafter narrowed, and the person's message the winning
+   * narrowing rests on (D-0071 rule 4.1), as its run recorded them: what the
+   * screen cites beside that field and nowhere else.
+   */
+  readonly narrowed: readonly { readonly field: string; readonly messageId: string }[];
 }
 
 export type DraftedStanding =
@@ -46,41 +50,77 @@ export type DraftedStanding =
   | { readonly kind: "none" }
   /** A drafted scope waiting on the person. */
   | { readonly kind: "drafted"; readonly drafted: DraftedScopeShown }
-  /** The drafted scope, or the person's scope that replaced it, is approved. */
-  | { readonly kind: "decided"; readonly scopeDecisionId: string };
+  /**
+   * A drafted scope, or the person's scope that replaced it, is approved and
+   * still in force. `newer` is a draft written after it -- the drafter drafts
+   * again on the person's next message (D-0071 rule 3.1) -- shown beside the
+   * approval and never in its place.
+   */
+  | {
+      readonly kind: "decided";
+      readonly scopeDecisionId: string;
+      readonly newer: DraftedScopeShown | null;
+    };
 
 type Ports = {
-  readonly record: Pick<AdvisoryRecord, "scopesFor" | "scopeDecisionOf" | "readProposal">;
+  readonly record: Pick<
+    AdvisoryRecord,
+    "scopesFor" | "scopeDecisionOf" | "readProposal" | "scopeSupersededByApproved"
+  >;
 };
 
 /**
- * Where the drafted scope for `requestMessageId` stands: the latest one a model
- * drafter wrote, unless the person already approved it -- as drafted, or as
- * their own scope replacing it -- in which case the approval is the answer.
+ * Where the drafted scope for `requestMessageId` stands:
+ *
+ * - **an approval still in force wins** -- of any draft for this request, as
+ *   drafted or as the person's scope replacing it -- so a redraft after it
+ *   never takes its screen, its starts or its "started" links away;
+ * - otherwise the latest draft, waiting on the person, unless the person
+ *   declined it, when the form is theirs.
  */
 export async function draftedStanding(
   ports: Ports,
   requestMessageId: string,
 ): Promise<DraftedStanding> {
   const scopes = await ports.record.scopesFor(requestMessageId);
-  const draft = [...scopes]
-    .reverse()
-    .find((s) => s.authorKind === "drafter" && isModelDrafterName(s.authorId));
-  if (draft === undefined) {
+  const drafts = scopes.filter((s) => s.authorKind === "drafter" && isModelDrafterName(s.authorId));
+  const latest = drafts[drafts.length - 1];
+  if (latest === undefined) {
     return { kind: "none" };
   }
-  for (const candidate of [draft, ...scopes.filter((s) => s.supersedesScopeId === draft.scopeId)]) {
-    const decided = await ports.record.scopeDecisionOf(candidate.scopeId);
-    if (decided.kind === "read" && decided.decision.outcome === "approved") {
-      return { kind: "decided", scopeDecisionId: decided.decision.scopeDecisionId };
-    }
-    if (candidate === draft && decided.kind === "read") {
-      // Declined: the person said no to the draft, so the form is theirs.
-      return { kind: "none" };
+  // Newest first, each draft with the person's scopes that replaced it.
+  for (const draft of [...drafts].reverse()) {
+    for (const candidate of [
+      draft,
+      ...scopes.filter((s) => s.supersedesScopeId === draft.scopeId),
+    ]) {
+      const decided = await ports.record.scopeDecisionOf(candidate.scopeId);
+      if (
+        decided.kind === "read" &&
+        decided.decision.outcome === "approved" &&
+        !(await ports.record.scopeSupersededByApproved(candidate.scopeId))
+      ) {
+        const newer = draft === latest ? null : await undecided(ports, latest, scopes);
+        return { kind: "decided", scopeDecisionId: decided.decision.scopeDecisionId, newer };
+      }
     }
   }
-  const shown = await draftedShown(ports, draft);
+  const shown = await undecided(ports, latest, scopes);
   return shown === null ? { kind: "none" } : { kind: "drafted", drafted: shown };
+}
+
+/** A draft still waiting on the person: no decision on it or on a scope replacing it. */
+async function undecided(
+  ports: Ports,
+  draft: StoredScope,
+  scopes: readonly StoredScope[],
+): Promise<DraftedScopeShown | null> {
+  for (const candidate of [draft, ...scopes.filter((s) => s.supersedesScopeId === draft.scopeId)]) {
+    if ((await ports.record.scopeDecisionOf(candidate.scopeId)).kind === "read") {
+      return null;
+    }
+  }
+  return await draftedShown(ports, draft);
 }
 
 /**
@@ -147,19 +187,12 @@ async function draftedShown(ports: Ports, scope: StoredScope): Promise<DraftedSc
     rows: material.rows,
     draftedAtMs: material.draftedAtMs,
   });
-  const pasted = new Set(
-    material.agentTypes.flatMap((a) =>
-      a.source.kind === "recordable" ? [a.source.messageId] : [],
-    ),
-  );
-  const narrowedBy = scope.bases.flatMap((basis) => {
-    const b = basis as Record<string, unknown>;
-    return b["form"] === "message" &&
-      typeof b["messageId"] === "string" &&
-      b["messageId"] !== material.requestMessageId &&
-      !pasted.has(b["messageId"])
-      ? [b["messageId"]]
+  const recorded = read.proposal.snapshot["narrowed"];
+  const narrowed = (Array.isArray(recorded) ? recorded : []).flatMap((one) => {
+    const n = one as Record<string, unknown>;
+    return typeof n["field"] === "string" && typeof n["message_id"] === "string"
+      ? [{ field: n["field"], messageId: n["message_id"] }]
       : [];
   });
-  return { scope, proposalId: cited.proposalId, plans, computed, narrowedBy };
+  return { scope, proposalId: cited.proposalId, plans, computed, narrowed };
 }

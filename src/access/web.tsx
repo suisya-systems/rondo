@@ -4078,12 +4078,26 @@ async function scopeView(
       : ({ kind: "none" } as const);
   const decisionId =
     view.decisionId ?? (standing.kind === "decided" ? standing.scopeDecisionId : null);
+  // A draft written after an approval that stands is shown beside it, never in
+  // its place: the approval's starts and "started" links stay where they were.
+  const newer =
+    view.decisionId === null && standing.kind === "decided" && standing.newer !== null ? (
+      <section class="space-y-4 border-t border-border pt-4">
+        {note(wording.scopeRedrafted)}
+        {await draftedForm(ports, wording, view, standing.newer, threads, token, newScopeId)}
+      </section>
+    ) : null;
   const body =
-    decisionId !== null
-      ? await scopeApproved(ports, wording, view, decisionId, token, newIterationId, nowMs)
-      : standing.kind === "drafted"
-        ? await draftedForm(ports, wording, view, standing.drafted, threads, token, newScopeId)
-        : await scopeForm(ports, wording, view, token, newScopeId, nowMs);
+    decisionId !== null ? (
+      <>
+        {await scopeApproved(ports, wording, view, decisionId, token, newIterationId, nowMs)}
+        {newer}
+      </>
+    ) : standing.kind === "drafted" ? (
+      await draftedForm(ports, wording, view, standing.drafted, threads, token, newScopeId)
+    ) : (
+      await scopeForm(ports, wording, view, token, newScopeId, nowMs)
+    );
   return (
     <div id="scope" class="space-y-4">
       {head}
@@ -4531,27 +4545,31 @@ async function draftedForm(
   }
   const payload = drafted.scope.payload;
   const computed = drafted.computed;
-  // **A value below what rule 4.2 computed says so, and on whose words**: the
-  // drafter may only narrow (rule 4.1), and a narrowing rests on the person's
-  // own message, which is linked rather than paraphrased.
-  const narrowed = (
-    field: "laps" | "review_rounds" | "cost_usd" | "expires_at_ms",
-    shown: string,
-  ) =>
-    payload.budgets[field] < computed[field].value && drafted.narrowedBy.length > 0 ? (
+  // **A narrowed value says so, and on whose words** (D-0071 rule 4.1): the
+  // winning narrowing of each field, as the drafter's run recorded it, with the
+  // person's message it rests on linked rather than paraphrased. Nothing is
+  // inferred from the numbers: a value is marked only where a narrowing won.
+  const cite = (field: string, said: string) => {
+    const by = drafted.narrowed.filter((n) => n.field === field);
+    return by.length === 0 ? null : (
       <p class="note flex flex-wrap items-center gap-1.5 text-[12px] leading-5 text-muted-foreground">
-        <span>{wording.scopeNarrowed(shown)}</span>
-        {drafted.narrowedBy.map((messageId) =>
+        <span>{said}</span>
+        {by.map((n) =>
           basisChip(
             wording,
-            { form: "message", messageId },
+            { form: "message", messageId: n.messageId },
             threads,
             view.messageId,
             ports.actorId,
           ),
         )}
       </p>
-    ) : null;
+    );
+  };
+  const narrowed = (
+    field: "laps" | "review_rounds" | "cost_usd" | "expires_at_ms",
+    shown: string,
+  ) => cite(field === "expires_at_ms" ? "expires_at" : field, wording.scopeNarrowed(shown));
   return (
     <>
       {lead}
@@ -4675,6 +4693,7 @@ async function draftedForm(
               ))}
             </select>
           </label>
+          {cite("severity_threshold", wording.scopeNarrowedStricter)}
           <fieldset class="space-y-1">
             <legend class="text-[12.5px] leading-5 font-medium text-muted-foreground">
               {wording.scopeOutwardLabel}
@@ -4698,6 +4717,7 @@ async function draftedForm(
               ? wording.scopeIrreversibleNone
               : payload.irreversible_additions.join(", ")}
           </p>
+          {cite("irreversible_additions", wording.scopeNarrowedAdded)}
         </section>
         <p class="note text-[12.5px] leading-5 text-muted-foreground">{wording.scopeCostCaveat}</p>
         <div class="sticky bottom-0 z-[1] -mx-4 flex flex-col gap-2 border-t border-border bg-card px-4 py-3 shadow-[0_-4px_10px_-8px_rgb(0_0_0/0.3)]">
@@ -4838,10 +4858,11 @@ async function planStart(
       return line(wording.planFull(ready.live, ready.limit));
     case "outside":
       return line(wording.planOutside(ready.test));
+    case "undecidable":
     case "unrunnable":
       return (
         <div class="space-y-1">
-          {line(wording.planUnrunnable)}
+          {line(ready.kind === "undecidable" ? wording.planUndecidable : wording.planUnrunnable)}
           <details class="group">
             <summary class="flex cursor-pointer list-none items-center gap-2 text-[12px] leading-5 text-muted-foreground select-none [&::-webkit-details-marker]:hidden">
               {chevron()}

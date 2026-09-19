@@ -304,6 +304,13 @@ async function write(
       document: result.document,
       material: material as unknown as ProposalDraft["snapshot"],
       cost_usd: result.costUsd,
+      // Which stated value won each narrowed field, and on whose words
+      // (D-0071 rule 4.1): what the scope screen cites beside that field.
+      narrowed: (drafted.scope?.narrowed ?? []).map((n) => ({
+        field: n.field,
+        value: n.value,
+        message_id: n.basisMessageId,
+      })),
     },
     derivation: null,
     iterationId: null,
