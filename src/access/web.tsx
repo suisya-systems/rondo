@@ -4430,11 +4430,21 @@ async function scopeView(
  */
 function scopeIssues(wording: Chrome, threads: Threads, requestMessageId: string) {
   // The latest read of each name, reckoned as the prompt's quote reckons it.
-  const reads = new Map(latestReads(threads.messages, requestMessageId).map((r) => [r.named, r]));
-  const pending = threads.messages.flatMap((m) =>
-    threads.rootOf(m.messageId) === requestMessageId
-      ? (threads.unread.get(m.messageId) ?? []).filter((ref) => !reads.has(ref.named))
-      : [],
+  // A name still to be read again is said as that, not as its older read:
+  // the new read replaces it, and nothing starts until it lands.
+  const pending = [
+    ...new Map(
+      threads.messages.flatMap((m) =>
+        threads.rootOf(m.messageId) === requestMessageId
+          ? (threads.unread.get(m.messageId) ?? []).map((ref) => [ref.named, ref] as const)
+          : [],
+      ),
+    ).values(),
+  ];
+  const reads = new Map(
+    latestReads(threads.messages, requestMessageId)
+      .filter((r) => !pending.some((ref) => ref.named === r.named))
+      .map((r) => [r.named, r]),
   );
   if (reads.size === 0 && pending.length === 0) {
     return null;

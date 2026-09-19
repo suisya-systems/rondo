@@ -6555,6 +6555,20 @@ test("what rondo read of a named issue is said under the message, and the scope 
   expect(issues).toMatch(/data-issue="not-given".*#404/s);
   expect(issues).toMatch(/data-issue="pending".*#9/s);
 
+  // #237 named again and not read yet: said as pending, not as its older read.
+  const again = await operatorPage(
+    { ...ports, issuesUnread: async () => new Map([[requestId, namedIssues("#237 #9")]]) },
+    "t",
+    { kind: "scope", messageId: requestId, rounds: null, decisionId: null, plan: null },
+    EN,
+    mint,
+    () => "x",
+    () => "y",
+  );
+  const pendingAgain = again.slice(again.indexOf("scope-issues"), again.indexOf("</section>"));
+  expect(pendingAgain).not.toContain('data-issue="given"');
+  expect(pendingAgain).toMatch(/data-issue="pending".*#237/s);
+
   const ja = await operatorPage(
     ports,
     "t",
