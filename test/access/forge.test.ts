@@ -16,6 +16,7 @@ import { expect, test } from "vitest";
 import {
   gatherReviewMaterialFacts,
   inspectLapWork,
+  readChangedPaths,
   readLanding,
   runReviewer,
 } from "../../src/access/forge.js";
@@ -563,6 +564,21 @@ test(
       kind: "notLanded",
       differing: ["run.sh"],
     });
+  },
+  REAL_GIT_TIMEOUT_MS,
+);
+
+test(
+  "D-0073 rule 5: a lap's changed paths are the landing reading's set, and a range git cannot read is undetermined",
+  async () => {
+    const { landing, tipCommit } = landingWorld();
+    const { repository, baseCommit } = landing();
+    expect(await readChangedPaths({ repository, baseCommit, tipCommit })).toEqual({
+      kind: "read",
+      paths: ["a.txt", "b.txt", "c.txt"],
+    });
+    const unread = await readChangedPaths({ repository, baseCommit, tipCommit: "f".repeat(40) });
+    expect(unread.kind).toBe("undetermined");
   },
   REAL_GIT_TIMEOUT_MS,
 );

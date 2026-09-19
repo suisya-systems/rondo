@@ -6,6 +6,7 @@
 import { expect, test } from "vitest";
 
 import {
+  claimCover,
   claimPathRefusal,
   lineShape,
   mayBeOpen,
@@ -81,4 +82,10 @@ test("a closed lap a redo continues is not a tip, whatever the redo's end; a clo
     inFlight: true,
     closedTips: [],
   });
+});
+
+test("D-0073 rule 5: a changed path a claim cannot spell is covered by the directory above it", () => {
+  expect(claimCover("src/store/sqlite.ts")).toBe("src/store/sqlite.ts");
+  expect(claimCover("src/*/x.ts")).toBe("src/");
+  expect(claimCover("a\\b/c.ts")).toBe("/");
 });

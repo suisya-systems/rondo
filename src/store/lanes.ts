@@ -139,3 +139,16 @@ export function lineShape(laps: readonly LaneLap[]): LineShape {
 export function mayBeOpen(shape: LineShape): boolean {
   return shape.inFlight || shape.closedTips.length > 0;
 }
+
+/**
+ * The claimable path covering a path a lap changed (D-0073 rule 5): the path
+ * itself, or, when a segment of it is one a claim cannot spell (a `*`, a `\\`,
+ * a control character), the directory above that segment, down to `/`. A
+ * wider claim costs parallelism and never a collision, so a path is never
+ * dropped for being unspellable.
+ */
+export function claimCover(path: string): string {
+  const segments = path.split("/");
+  const bad = segments.findIndex((segment) => claimPathRefusal(segment) !== null);
+  return bad === -1 ? path : bad === 0 ? WHOLE_REPOSITORY : `${segments.slice(0, bad).join("/")}/`;
+}

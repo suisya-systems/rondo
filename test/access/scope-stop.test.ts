@@ -17,7 +17,12 @@ import { expect, test, vi } from "vitest";
 import { commandScopedRetry, commandStart, main, parseCommand } from "../../src/access/cli.js";
 import { admit, type ReportingPorts, reportToRequest, resume } from "../../src/access/conductor.js";
 import { consoleSeams } from "../../src/access/console.js";
-import type { LandingReading, LandingRequest } from "../../src/access/forge.js";
+import type {
+  ChangedPathsReading,
+  ChangedPathsRequest,
+  LandingReading,
+  LandingRequest,
+} from "../../src/access/forge.js";
 import { admitUnderScope, type ScopeAct, type ScopeAdmitPorts } from "../../src/access/scope.js";
 import { allocate } from "../../src/refrain/allocator.js";
 import { classifyPlan } from "../../src/refrain/classification.js";
@@ -1327,6 +1332,7 @@ test("D-0073 rule 7: a refusal by a closed line reads its landing, and only a la
     lanes: {
       store: h.store,
       remote: "origin",
+      readChangedPaths: async () => ({ kind: "read", paths: [] }),
       readLanding: async (request) => {
         asked.push(request);
         return answer;
@@ -1404,6 +1410,60 @@ test("D-0073 rule 2.3: a drafted claim reaches reserve(), so two lines on differ
   ]);
 });
 
+test("D-0073 rule 5: the gate compares what a lap changed with its line's claim, and writes nothing", async () => {
+  const h = await harness();
+  const drafted = (paths: readonly string[]) => ({
+    paths,
+    authorKind: "drafter" as const,
+    authorId: "rondo/drafter/3/claude-fixture",
+    bases: [{ form: "proposal", proposalId: "draft-1" }],
+  });
+  const asked: ChangedPathsRequest[] = [];
+  let changed: ChangedPathsReading = { kind: "read", paths: [] };
+  const ports: ReportingPorts = {
+    ...h.reporting,
+    lanes: {
+      store: h.store,
+      remote: "origin",
+      readLanding: async () => ({ kind: "undetermined", reason: "not asked" }),
+      readChangedPaths: async (request) => {
+        asked.push(request);
+        return changed;
+      },
+    },
+  };
+  const first = (id: string, paths: readonly string[]) =>
+    admit(ports, h.advisory, PLAN, POLICY, id, null, null, null, null, drafted(paths));
+  expect((await first("i-store", ["src/store/"])).status).toBe("awaiting_human");
+
+  changed = { kind: "read", paths: ["docs/a.md", "src/store/sqlite.ts", "README.md", "x/*.ts"] };
+  const docs = await first("i-docs", ["docs/"]);
+  expect(docs.status).toBe("awaiting_human");
+  expect(asked.at(-1)).toEqual({
+    repository: PLAN.repository,
+    baseCommit: "b".repeat(40),
+    tipCommit: "a".repeat(40),
+  });
+  const said = docs.lines.join("\n");
+  expect(said).toContain(
+    "Lap i-docs changed 'src/store/sqlite.ts' outside line i-docs's claim, and line i-store holds it",
+  );
+  // A path a claim cannot spell is compared as the directory above it.
+  expect(said).toContain("changed 'README.md', 'x/' outside line i-docs's claim, and no other");
+  expect(said).not.toContain("'docs/a.md'");
+  // Nothing is written: the claim stays the one drafted.
+  const claims = h.connection
+    .prepare("SELECT COUNT(*) AS n FROM lane_claim WHERE lineage_id = 'i-docs'")
+    .get();
+  expect(claims).toEqual({ n: 1 });
+
+  changed = { kind: "undetermined", reason: "git would not say" };
+  const unread = await first("i-tests", ["test/"]);
+  expect(unread.lines.join("\n")).toContain(
+    "What lap i-tests changed was not compared with its line's claim: git would not say.",
+  );
+});
+
 test("D-0073 rule 4.3: a line that ended with its release missed is released at the next refusal, with nothing read", async () => {
   const h = await harness();
   expect((await admit(h.reporting, h.advisory, PLAN, POLICY, "i-lost")).status).toBe(
@@ -1417,6 +1477,7 @@ test("D-0073 rule 4.3: a line that ended with its release missed is released at 
     lanes: {
       store: h.store,
       remote: "origin",
+      readChangedPaths: async () => ({ kind: "read", paths: [] }),
       readLanding: async () => {
         read += 1;
         return { kind: "undetermined", reason: "not asked" };
