@@ -16571,18 +16571,27 @@ number.
    verb is (`D-0025` rule 4). The verb's name and flags are the building change's.
 2. **Every setup run appends one row: an id, the plan's canonical bytes, its `plan_digest`,
    `recorded_by` (the approver) and `recorded_at_ms`.** The row is the run, not the plan: the same
-   bytes recorded twice are two rows, and the newer stands. So setup that records A, then B, then A
-   again offers A, as a paste of A again does (`heldPlans`' "the latest paste wins its place"). No
-   row is edited or removed, and nothing on the page or in the drafter writes one.
-3. **It is a third source of held plans, beside a pasted message and a lap's row, and for its kind it
-   outranks the laps.** `heldPlans` offers, in order: plans pasted into this thread, newest first;
-   then the newest setup row of each kind (place and agent type); then lap plans, **only for kinds no
-   setup row holds**. A lap's plan differs from the setup row it was drafted from only in `prompt`
-   and its run, so nothing is lost, and **a lap started from an older plan does not bring that plan
-   back**: a scope or an open screen that resolves the older digest still starts it (rondo#266's rule:
-   the press runs what the person looked at), and the list keeps offering the newest setup row. The
-   drafter's template set (`D-0071` rule 2.1.3) is ordered the same way, and `heldPlanByDigest` finds
-   a setup row by digest as it finds a pasted one.
+   bytes recorded twice are two rows, and the newer one dates the plan. So setup that records A, then
+   B, then A again offers A first (rule 2.3), as a paste of A again does. No row is edited or removed,
+   and nothing on the page or in the drafter writes one.
+3. **It is a third source of held plans, beside a pasted message and a lap's row, and no source
+   outranks another.** Two held plans are the same choice when they are equal with the fields one
+   run sets put aside (`prompt`, and `parties.grantee`, which the allocator fills with the run id);
+   otherwise they are two choices, **whatever their place and agent type**. `heldPlans` offers each
+   choice once, as its newest occurrence, and orders the choices by when rondo came to hold them
+   (a message's time, a setup row's `recorded_at_ms`, a lap's creation), newest first. So:
+   1. **A repaired setup row and a stale plan are two choices**, and the repaired one is first
+      unless something newer came after it. A stale plan pasted into an old thread is still offered,
+      with where it came from, and no longer hides the repair.
+   2. **A lap plan that differs in anything but those fields** (its base branch, its criterion, its
+      paths) stays its own choice; one that does not is the same choice as its template, and a lap
+      run on an older plan dates that plan anew, as a paste of it again would.
+   3. **Nothing is ranked by source.** rondo#266's "pasted into this thread first" gives way to one
+      order by time, because a precedence between sources is what made the stale plan win.
+
+   `heldPlanByDigest` finds a setup row by digest as it finds a pasted one, and the drafter's template
+   set (`D-0071` rule 2.1.3) is grouped the same way. How two choices of one place and agent type are
+   told apart on the screen is the building change's, under rondo#259.
 4. **A drafted scope records its agent type from a setup row by the contract a pasted plan has
    (`D-0071` point 1(a)), with the row standing where the message stood.** The scope cites the row by
    a basis of its own form, **`setup`** (`{ form: "setup", setupId }`), which `D-0032` rule 2's
@@ -16746,8 +16755,9 @@ On acceptance, each dated:
   point (a). Its (b) comes back on evidence.
 - **Setup re-run because a host fact moved, often enough to be felt**, under the gate's first point
   (a). Its (b) comes back on evidence.
-- **A setup row outranking a lap plan the person meant**, seen as a person re-choosing an older plan
-  of the same kind on the scope screen. Rule 2.3's order is then wrong for that kind.
+- **Choices a person cannot tell apart on the scope screen**, two plans of one place and agent type
+  that differ only in a path, asked about rather than picked. Rule 2.3 then needs the screen to name
+  the difference, or K4 fails there.
 - **A reason to have the resident host re-read or re-derive a plan**, which would cross rule 3.1 and
   the line rondo#266 drew.
 - Any measurement in "What was measured" failing to reproduce at rondo `87099ad`.
