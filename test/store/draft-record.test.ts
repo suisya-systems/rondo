@@ -22,6 +22,8 @@ import {
   AGENT_TYPE_INPUT,
   agentTypeDigestOf,
   planDocument,
+  REPOSITORY,
+  WORKSPACE_ROOT,
   world,
 } from "../access/fixtures/drafter.js";
 
@@ -77,7 +79,7 @@ function drafterScope(
     scopeId: "drafted-scope-1",
     payload: {
       requests: ["r1"],
-      workspaces: [{ repository: "/srv/repo", workspace_root: "/srv/work" }],
+      workspaces: [{ repository: REPOSITORY, workspace_root: WORKSPACE_ROOT }],
       agent_types: [typeDigest],
       budgets: {
         laps: 3,

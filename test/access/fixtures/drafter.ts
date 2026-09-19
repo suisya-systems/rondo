@@ -2,6 +2,7 @@
  * A plan an operator would paste into a request thread, and a store to paste
  * it into, for the drafter's tests (D-0071 point 1 (a)).
  */
+import { resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
 import { agentTypeRecordOf } from "../../../src/access/scope.js";
@@ -25,21 +26,30 @@ export const AGENT_TYPE_INPUT = {
   executorPolicy: { roleName: "worker", modelTier: "standard", reportingDuties: [] },
 };
 
+/**
+ * Absolute on the machine the test runs on (`test/access/scope-stop.test.ts`'s
+ * `ABS`): cadenza classifies the plan against its catalog, and on Windows a
+ * path that is only POSIX-shaped is not the path the catalog resolves.
+ */
+const ABS = (path: string): string => resolve(path);
+export const REPOSITORY = ABS("/srv/repo");
+export const WORKSPACE_ROOT = ABS("/srv/work");
+
 export const PLAN = {
-  db: "/srv/continuo.db",
-  workspaceRoot: "/srv/work",
+  db: ABS("/srv/continuo.db"),
+  workspaceRoot: WORKSPACE_ROOT,
   baseBranch: "main",
   prompt: "do the thing",
   allowedBash: ["npm run:*"],
   materialLanguage: null,
   reviewCriterion: null,
-  repository: "/srv/repo",
-  artifactRoot: "/srv/artifacts",
-  stateRoot: "/srv/state",
-  interlockRoot: "/srv/interlock",
-  claudeOrgPath: "/srv/claude-org",
+  repository: REPOSITORY,
+  artifactRoot: ABS("/srv/artifacts"),
+  stateRoot: ABS("/srv/state"),
+  interlockRoot: ABS("/srv/interlock"),
+  claudeOrgPath: ABS("/srv/claude-org"),
   endpointRecipient: "external-notify",
-  endpointDestinationDir: "/srv/dropbox",
+  endpointDestinationDir: ABS("/srv/dropbox"),
   claudeCommand: ["/usr/bin/node", "/opt/claude/cli.js"],
   endpointDb: null,
   endpointModule: null,
@@ -54,7 +64,26 @@ export const PLAN = {
   gateDeadlineAtMs: null,
   pullRequestBaseBranch: null,
   invocationCeilingMs: 1_800_000,
-  catalogLayers: [{ layer: "git_url", origin: "o", baseDir: "/srv/catalog", data: {} }],
+  // A catalog cadenza classifies (as `test/access/scope-stop.test.ts` has it),
+  // so a scope's verdict over this plan gets past its agent-type test.
+  catalogLayers: [
+    {
+      layer: "tracked",
+      origin: `${ABS("/srv/catalog")}/projects.toml`,
+      baseDir: ABS("/srv/catalog"),
+      data: {
+        schema_version: 1,
+        catalog: { allowed_local_roots: [REPOSITORY] },
+        project: {
+          rondo: {
+            source: { kind: "local_path", path: REPOSITORY },
+            base_branch: "main",
+            aliases: [],
+          },
+        },
+      },
+    },
+  ],
   projectName: "rondo",
   agentTypeInput: AGENT_TYPE_INPUT,
   parties: { issuer: "rondo-host", grantee: "unset" },

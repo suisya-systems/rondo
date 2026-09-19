@@ -14,13 +14,21 @@ import type { DrafterRun } from "../../src/access/model-draft.js";
 import {
   type DrafterPorts,
   draftRequest,
+  gatherDrafterMaterial,
   heldPlanByDigest,
   heldPlans,
 } from "../../src/access/model-drafter.js";
 import { readRunPlan } from "../../src/refrain/plan.js";
 import { planDigest } from "../../src/store/plan.js";
 import type { JsonRecord } from "../../src/store/records.js";
-import { AGENT_TYPE_INPUT, agentTypeDigestOf, planDocument, world } from "./fixtures/drafter.js";
+import {
+  AGENT_TYPE_INPUT,
+  agentTypeDigestOf,
+  planDocument,
+  REPOSITORY,
+  WORKSPACE_ROOT,
+  world,
+} from "./fixtures/drafter.js";
 
 function portsOver(
   w: Awaited<ReturnType<typeof world>>,
@@ -109,7 +117,7 @@ test("an agent type rondo already holds is offered as held, from its record", as
     scopeId: "s-0",
     payload: {
       requests: ["r1"],
-      workspaces: [{ repository: "/srv/repo", workspace_root: "/srv/work" }],
+      workspaces: [{ repository: REPOSITORY, workspace_root: WORKSPACE_ROOT }],
       agent_types: [typeDigest],
       budgets: {
         laps: 1,
@@ -305,5 +313,22 @@ test("the plans a person picks from: one per place and agent type, newest first,
   );
   // Held, but a revise's: still not a plan for new work.
   expect(await heldPlanByDigest(ports, "r1", planDigest(revised))).toBeNull();
+  // And the drafter is not handed it as a template either (rondo#238 C2).
+  const material = await gatherDrafterMaterial(ports, "r1", null);
+  expect(material.templates.map((t) => t.planDigest)).not.toContain(planDigest(revised));
   expect(await heldPlanByDigest(ports, "r1", `sha256:${"0".repeat(64)}`)).toBeNull();
+});
+
+test("a plan pasted again is the latest paste: A, then B, then A again offers A, as the message that carries it now", async () => {
+  const w = await world();
+  await w.say("r1", "Fix it.", null, 1_000);
+  const a = { ...planDocument(), prompt: "plan A" };
+  const b = { ...planDocument(), prompt: "plan B" };
+  await w.say("paste-a", JSON.stringify(a), "r1", 2_000);
+  await w.say("paste-b", JSON.stringify(b), "r1", 3_000);
+  await w.say("paste-a-again", JSON.stringify(a), "r1", 4_000);
+  const offered = await heldPlans({ store: w.store, record: w.record, now: () => 5_000 }, "r1");
+  expect(offered.map((p) => [p.planDigest, p.from])).toEqual([
+    [planDigest(a), { kind: "message", messageId: "paste-a-again" }],
+  ]);
 });

@@ -14,10 +14,11 @@
  */
 
 import type { BudgetRow } from "../advisory/budget.js";
+import { readSplitPayload, type SplitPlan } from "../advisory/proposal.js";
 import { type AgentTypeInput, agentTypeRecord } from "../cadenza/facade.js";
 import { drafterRow } from "../continuo/roles.js";
 import { PRICED_MODEL_TIERS } from "../refrain/classification.js";
-import { readPlan, readRunPlan } from "../refrain/plan.js";
+import { type RunPlan, readPlan, readRunPlan } from "../refrain/plan.js";
 import { planDigest } from "../store/plan.js";
 import type { IterationRecord, JsonRecord, JsonValue } from "../store/records.js";
 import type { AdvisoryRecord, IterationStore } from "../store/sqlite.js";
@@ -29,6 +30,7 @@ import {
   type DraftOutcome,
   type DraftTemplate,
   draftOf,
+  isModelDrafterName,
   modelDrafterName,
   prepareDraft,
 } from "./model-draft.js";
@@ -215,7 +217,10 @@ export async function gatherDrafterMaterial(
       continue;
     }
     const planned = readPlan(record.plan);
-    if (planned.kind !== "planned") {
+    // **A revise lap's plan is no template** (rondo#238 C1's rule, drafter
+    // side): its base is the revised lap's topic branch, so work drafted on it
+    // would be cut from another request's unmerged commits.
+    if (planned.kind !== "planned" || planned.plan.pullRequestBaseBranch !== null) {
       continue;
     }
     templates.set(record.planDigest, {
@@ -275,16 +280,18 @@ export async function gatherDrafterMaterial(
       continue;
     }
     const digest = planDigest(document as JsonRecord);
-    if (!templates.has(digest)) {
-      templates.set(digest, {
-        planDigest: digest,
-        plan: document as JsonRecord,
-        repository: planned.plan.repository,
-        workspaceRoot: planned.plan.workspaceRoot,
-        agentTypeDigest: recorded.record.agentTypeDigest,
-        from: { kind: "message", messageId: message.messageId },
-      });
-    }
+    // **The latest paste wins its place and its provenance**: a plan pasted
+    // again -- to restore it after another -- moves to the end, as the message
+    // that carries it now, even when a lap once ran on the same bytes.
+    templates.delete(digest);
+    templates.set(digest, {
+      planDigest: digest,
+      plan: document as JsonRecord,
+      repository: planned.plan.repository,
+      workspaceRoot: planned.plan.workspaceRoot,
+      agentTypeDigest: recorded.record.agentTypeDigest,
+      from: { kind: "message", messageId: message.messageId },
+    });
     const typeDigest = recorded.record.agentTypeDigest;
     const facts = builtFacts(typeDigest, recorded.record.agentTypeInput);
     if (!agentTypes.has(typeDigest) && facts !== null) {
@@ -446,4 +453,100 @@ export async function heldPlanByDigest(
     });
   }
   return null;
+}
+
+/** One plan of a drafted split, as a lap would run it, or why it cannot be run. */
+export type DraftedPlanRun =
+  | {
+      readonly kind: "runnable";
+      readonly plan: RunPlan;
+      /** The split's own words for the plan (D-0063 rule 4.3): what the page shows. */
+      readonly split: SplitPlan;
+      readonly repository: string;
+      readonly workspaceRoot: string;
+    }
+  | { readonly kind: "refused"; readonly reason: string };
+
+/**
+ * The lap one plan of a drafted split would run (D-0063 rule 4, rondo#238 C2):
+ * its template's plan, byte for byte, with the drafted `prompt` and the named
+ * agent type's input in place -- the only two fields a split may differ in
+ * (rule 4.2). Run id, branch and workspace are derived at admission from the
+ * iteration id (rule 4.5), as for any plan.
+ *
+ * **Everything is read back from rows, never posted**: the proposal row (a
+ * model drafter's split, over this request), the template from its snapshot,
+ * and the agent type's input from the record rondo holds for the digest -- the
+ * one a drafted scope wrote from a pasted plan (D-0071 point 1 (a)), else the
+ * pasted input the snapshot carried. A revise lap's plan is refused as a
+ * template, as it is everywhere a plan is picked.
+ */
+export async function draftedPlanRun(
+  ports: { readonly record: Pick<AdvisoryRecord, "readProposal" | "heldAgentType"> },
+  requestMessageId: string,
+  proposalId: string,
+  planIndex: number,
+): Promise<DraftedPlanRun> {
+  const refused = (reason: string): DraftedPlanRun => ({ kind: "refused", reason });
+  const read = await ports.record.readProposal(proposalId);
+  if (read.kind !== "read") {
+    return refused(
+      read.kind === "absent"
+        ? `there is no proposal '${proposalId}'`
+        : `the proposal '${proposalId}' will not read: ${read.reason}`,
+    );
+  }
+  const proposal = read.proposal;
+  if (proposal.kind !== "split" || !isModelDrafterName(proposal.drafter)) {
+    return refused(`the proposal '${proposalId}' is not a drafted split`);
+  }
+  const material = proposal.snapshot["material"] as DrafterMaterial | undefined;
+  if (material === undefined || material.requestMessageId !== requestMessageId) {
+    return refused(`the proposal '${proposalId}' was not drafted for this request`);
+  }
+  const payload = readSplitPayload(proposal.payload);
+  if (payload.kind !== "split") {
+    return refused(`the proposal '${proposalId}' does not read as a split: ${payload.reason}`);
+  }
+  const split = payload.payload.plans[planIndex];
+  if (split === undefined) {
+    return refused(`the split '${proposalId}' has no plan ${String(planIndex)}`);
+  }
+  const template = material.templates.find((t) => t.planDigest === split.template_plan_digest);
+  if (template === undefined) {
+    return refused(`the template '${split.template_plan_digest}' is not in the draft's snapshot`);
+  }
+  const held = await ports.record.heldAgentType(split.agent_type_digest);
+  const pasted = material.agentTypes.find(
+    (a) => a.digest === split.agent_type_digest && a.source.kind === "recordable",
+  );
+  const input =
+    held.kind === "read"
+      ? held.agentTypeInput
+      : pasted?.source.kind === "recordable"
+        ? pasted.source.agentTypeInput
+        : undefined;
+  if (input === undefined || builtFacts(split.agent_type_digest, input) === null) {
+    return refused(
+      `the agent type '${split.agent_type_digest}' is not one rondo holds a record of that rebuilds to it`,
+    );
+  }
+  const planned = readRunPlan({
+    ...template.plan,
+    prompt: split.prompt,
+    agent_type_input: input,
+  });
+  if (planned.kind !== "planned") {
+    return refused(`the drafted plan does not read: ${planned.reason}`);
+  }
+  if (planned.plan.pullRequestBaseBranch !== null) {
+    return refused("the drafted plan's template is a revise lap's, which no new work starts from");
+  }
+  return {
+    kind: "runnable",
+    plan: planned.plan,
+    split,
+    repository: planned.plan.repository,
+    workspaceRoot: planned.plan.workspaceRoot,
+  };
 }

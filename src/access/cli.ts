@@ -67,6 +67,9 @@ import {
   type OperatorVerificationClaim,
   readingCoverage,
   reviewedReading,
+  type ScopeBudgets,
+  type ScopeOutwardAct,
+  type StoredScope,
   scopePayloadWithDefaults,
 } from "../store/records.js";
 import {
@@ -103,6 +106,7 @@ import {
 } from "./conductor.js";
 import { asciiEscape, consoleSeams, legibleAsciiEscape, relayUpstream } from "./console.js";
 import { allowedBashIn } from "./delegation.js";
+import { draftedStartReadiness } from "./drafted-start.js";
 import { drafterHost } from "./drafter-host.js";
 import {
   inspectBranchTip,
@@ -118,7 +122,8 @@ import {
   runDrafter,
 } from "./forge.js";
 import { type InboxOutcome, showInbox, type TranscriptLocation } from "./inbox.js";
-import { type HeldPlan, heldPlanByDigest } from "./model-drafter.js";
+import { isModelDrafterName } from "./model-draft.js";
+import { draftedPlanRun, type HeldPlan, heldPlanByDigest } from "./model-drafter.js";
 import { modelReadingLines } from "./model-review.js";
 import { modelReviewPorts, takeModelReading } from "./model-reviewer.js";
 import { denialLine, evidenceOf, LIST_LIMIT, READING_REMOTE, uncommittedPaths } from "./review.js";
@@ -4307,10 +4312,289 @@ export async function recordScopeFromPage(
       }`,
     };
   }
+  return await approveStoredScope(record, actor.actorId, stored.scope, createdAtMs);
+}
+
+/**
+ * What the drafted scope's form posts (D-0071 rule 5.3): the draft it was drawn
+ * over, by id and digest, and the values the person may change. The lists --
+ * requests, workspaces, agent types -- are never posted: they are the draft's.
+ */
+export interface DraftedScopeForm {
+  readonly draftScopeId: string;
+  /** The digest the form was drawn with, compared with the row's (D-0066 rule 2.2). */
+  readonly draftDigest: string;
+  /** Minted at draw, for the person's own scope when they changed a value. */
+  readonly scopeId: string;
+  readonly budgets: ScopeBudgets;
+  readonly severityThreshold: string;
+  readonly outwardActs: readonly ScopeOutwardAct[];
+}
+
+/**
+ * One press of the drafted scope's form (D-0071 rule 5.3), and the one place
+ * that decides which of its two acts the press is:
+ *
+ * - **the values as drafted**: a `scope_decision` on the drafter's own row;
+ * - **any value changed**: a new `operator` scope that supersedes the draft,
+ *   with a `scope:` basis to it, and the approval on that row. The values are
+ *   the person's because the person submitted them; the draft is kept, and
+ *   linked, so nothing composed is stored under the person's voice.
+ *
+ * Decided by comparing the payload the press would record with the draft's,
+ * byte for byte, so which act it was is a fact of the rows and not of a button.
+ */
+export async function recordDraftedScopeFromPage(
+  environment: Readonly<Record<string, string | undefined>>,
+  storePath: string,
+  approver: string,
+  form: DraftedScopeForm,
+): Promise<ScopeRecorded> {
+  const notTaken = (note: string): ScopeRecorded => ({
+    ok: false,
+    why: "scopeRefusedNotTaken",
+    note,
+  });
+  const actor = approvedActor(approver, environment);
+  if ("refusal" in actor) {
+    return notTaken(actor.refusal);
+  }
+  const record = openAdvisoryRecord(storePath);
+  const read = await record.readScope(form.draftScopeId);
+  if (read.kind !== "read") {
+    return notTaken(
+      read.kind === "absent"
+        ? `there is no scope '${form.draftScopeId}'`
+        : `the scope '${form.draftScopeId}' will not read: ${read.reason}`,
+    );
+  }
+  const drafted = read.scope;
+  if (drafted.authorKind !== "drafter" || !isModelDrafterName(drafted.authorId)) {
+    return notTaken(`the scope '${form.draftScopeId}' is not a drafted one`);
+  }
+  if (drafted.scopeDigest !== form.draftDigest) {
+    return { ok: false, why: "scopeRefusedPlanChanged", note: "the draft is not the one drawn" };
+  }
+  const createdAtMs = Date.now();
+  const payload = scopePayloadWithDefaults({
+    ...(drafted.payload as unknown as JsonRecord),
+    budgets: { ...form.budgets },
+    severity_threshold: form.severityThreshold,
+    outward_acts: [...form.outwardActs],
+  } as unknown as JsonRecord);
+  if (
+    canonicalJson(payload as unknown as JsonValue) ===
+    canonicalJson(drafted.payload as unknown as JsonValue)
+  ) {
+    // **A draft an approved successor retired is not approved again** (D-0066
+    // rule 1.4): the store would take the decision, and it could admit nothing
+    // -- a start under it would stop at the superseded test and write a stop
+    // over the request the person's own scope now covers.
+    if (await record.scopeSupersededByApproved(drafted.scopeId)) {
+      return {
+        ok: false,
+        why: "scopeRefusedPlanChanged",
+        note: "the draft was replaced by an approved scope",
+      };
+    }
+    return await approveStoredScope(record, actor.actorId, drafted, createdAtMs);
+  }
+  // An edited press against a draft another approved scope already replaced
+  // is refused too -- else two tabs would leave two approved successors with
+  // budgets of their own -- unless it is this form's own write, replayed.
+  if (
+    (await record.readScope(form.scopeId)).kind === "absent" &&
+    (await record.scopeSupersededByApproved(drafted.scopeId))
+  ) {
+    return {
+      ok: false,
+      why: "scopeRefusedPlanChanged",
+      note: "the draft was replaced by an approved scope",
+    };
+  }
+  const written = await record.recordScope({
+    scopeId: form.scopeId,
+    payload,
+    supersedesScopeId: drafted.scopeId,
+    authorKind: "operator",
+    authorId: actor.actorId,
+    bases: [{ form: "scope", scopeId: drafted.scopeId }],
+    createdAtMs,
+    // The agent types are the draft's, which its own write already recorded.
+    agentTypeRecords: [],
+  });
+  const stored = await record.readScope(form.scopeId);
+  // A second press of one form is the write it repeats, as `recordScopeFromPage`
+  // reads it: the id is the form's, and the payload has to be the same too.
+  const ours =
+    stored.kind === "read" &&
+    stored.scope.authorKind === "operator" &&
+    stored.scope.authorId === actor.actorId &&
+    stored.scope.supersedesScopeId === drafted.scopeId;
+  if (written.kind !== "recorded" && !ours) {
+    return notTaken(written.reason);
+  }
+  if (stored.kind !== "read") {
+    return {
+      ok: false,
+      why: "scopeRefusedNotRead",
+      note: `scope '${form.scopeId}' was recorded and will not read back`,
+    };
+  }
+  if (
+    written.kind !== "recorded" &&
+    canonicalJson(stored.scope.payload as unknown as JsonValue) !==
+      canonicalJson(payload as unknown as JsonValue)
+  ) {
+    return { ok: false, why: "scopeRefusedEdited", note: "this form was recorded as it was drawn" };
+  }
+  return await approveStoredScope(record, actor.actorId, stored.scope, createdAtMs);
+}
+
+/** One press of a drafted plan's start button: which approval, which split, which plan. */
+export interface SplitStartInput {
+  readonly iterationId: string;
+  readonly requestMessageId: string;
+  readonly scopeDecisionId: string;
+  readonly proposalId: string;
+  readonly planIndex: number;
+}
+
+/**
+ * One press of a drafted plan's start button (rondo#238 C2, D-0063 rule 4):
+ * the plan read back from the split proposal row, and admitted under the scope
+ * as a lineage start **naming that proposal** (D-0066 rule 3.3).
+ *
+ * **What the page already said is asked again, and a no is not an act**: a
+ * plan that will not run, one a lap already started from, and a host with no
+ * room are refused here, before anything is admitted, with the reason the
+ * screen gave. The scope's own tests stay `admitUnderScope`'s, which writes
+ * D-0066 rule 4.4's stop when they refuse -- a page that drew this button
+ * found them passing, so that is a page gone stale, and the stop is the
+ * durable record of the line it stops.
+ */
+export async function startSplitFromPage(
+  environment: Readonly<Record<string, string | undefined>>,
+  store: IterationStore,
+  storePath: string,
+  approver: string,
+  policy: HostPolicy,
+  input: SplitStartInput,
+): Promise<Started> {
+  const started = starting.get(input.iterationId);
+  if (started !== undefined) {
+    return await started;
+  }
+  // **One plan, one press at a time, whatever form it came from** -- two tabs
+  // mint two iteration ids -- so a second press runs after the first reserved
+  // its lap and finds it: "already started", not a second lap on one plan.
+  const planKey = `${input.requestMessageId}\u0000${input.proposalId}\u0000${String(input.planIndex)}`;
+  const ahead = startingPlan.get(planKey) ?? Promise.resolve();
+  const running = ahead
+    .catch(() => undefined)
+    .then(() => startSplit(environment, store, storePath, approver, policy, input));
+  starting.set(input.iterationId, running);
+  startingPlan.set(planKey, running);
+  try {
+    return await running;
+  } finally {
+    starting.delete(input.iterationId);
+    if (startingPlan.get(planKey) === running) {
+      startingPlan.delete(planKey);
+    }
+  }
+}
+
+/** Every drafted plan this process is starting, by request, proposal and plan. */
+const startingPlan = new Map<string, Promise<Started>>();
+
+async function startSplit(
+  environment: Readonly<Record<string, string | undefined>>,
+  store: IterationStore,
+  storePath: string,
+  approver: string,
+  policy: HostPolicy,
+  input: SplitStartInput,
+): Promise<Started> {
+  const actor = approvedActor(approver, environment);
+  if ("refusal" in actor) {
+    return { ok: false, why: "startRefusedNotAdmitted", note: actor.refusal };
+  }
+  // A second submit of one form is the lap it already started (`startScoped`).
+  const already = await store.read(input.iterationId);
+  if (already.kind === "read") {
+    return { ok: true, note: `iteration '${input.iterationId}' was already admitted` };
+  }
+  if (already.kind === "unreadable") {
+    return {
+      ok: false,
+      why: "startRefusedNotAdmitted",
+      note: `a row for iteration '${input.iterationId}' is already there and will not read: ${already.reason}`,
+    };
+  }
+  const record = openAdvisoryRecord(storePath);
+  const ready = await draftedStartReadiness(
+    { store, record, policy, nowMs: Date.now() },
+    input.requestMessageId,
+    input.scopeDecisionId,
+    input.proposalId,
+    input.planIndex,
+  );
+  switch (ready.kind) {
+    case "unrunnable":
+      return { ok: false, why: "startRefusedNoPlan", note: ready.reason };
+    case "started":
+      return {
+        ok: false,
+        why: "startRefusedNotAdmitted",
+        note: `iteration '${ready.iterationId}' already started from this plan`,
+      };
+    case "busy":
+    case "full":
+      return {
+        ok: false,
+        why: "startRefusedNotAdmitted",
+        note: `this host has no room for another lap (${ready.kind})`,
+      };
+    case "outside":
+    case "ready": {
+      const run = await draftedPlanRun(
+        { record },
+        input.requestMessageId,
+        input.proposalId,
+        input.planIndex,
+      );
+      if (run.kind !== "runnable") {
+        return { ok: false, why: "startRefusedNoPlan", note: run.reason };
+      }
+      return await admitScopedPlan(
+        environment,
+        store,
+        storePath,
+        record,
+        input,
+        run.plan,
+        input.proposalId,
+      );
+    }
+  }
+}
+
+/**
+ * Count one scope row as presented and approve it, with the digest read back
+ * off the row and never posted (D-0066 rule 2.2, D-0042 rule 3): the tail a
+ * person's own scope and a drafted one share.
+ */
+async function approveStoredScope(
+  record: AdvisoryRecord,
+  actorId: string,
+  scope: StoredScope,
+  createdAtMs: number,
+): Promise<ScopeRecorded> {
   const counted = await record.recordAttention({
     atMs: createdAtMs,
     subjectKind: "scope",
-    subjectId: draft.scopeId,
+    subjectId: scope.scopeId,
     disposition: "presented",
     ruleName: null,
   });
@@ -4318,16 +4602,16 @@ export async function recordScopeFromPage(
     return { ok: false, why: "scopeRefusedNotShown", note: counted.reason };
   }
   const decidedAtMs = Date.now();
-  const scopeDecisionId = `scope-decision-${draft.scopeId}-${String(decidedAtMs)}`;
+  const scopeDecisionId = `scope-decision-${scope.scopeId}-${String(decidedAtMs)}`;
   const decided = await record.recordScopeDecision({
     scopeDecisionId,
-    scopeId: draft.scopeId,
+    scopeId: scope.scopeId,
     // **Read back off the row, never posted.** D-0066 rule 2.2 asks that what
     // is approved is what was shown; here that is true by construction rather
     // than by a person copying a line.
-    scopeDigest: stored.scope.scopeDigest,
+    scopeDigest: scope.scopeDigest,
     outcome: "approved",
-    actorId: actor.actorId,
+    actorId: actorId,
     // `recorded_by` and `actor_id` are two facts, and this surface is not the
     // approver (D-0032's own reason for the two columns).
     recordedBy: OPERATOR_PAGE_SURFACE,
@@ -4337,7 +4621,7 @@ export async function recordScopeFromPage(
     // The writer refuses a second decision on one row (rule 2.3). When the
     // approval this press repeats is already there, the screen goes to it
     // exactly as a first press would.
-    const already = await record.scopeDecisionOf(draft.scopeId);
+    const already = await record.scopeDecisionOf(scope.scopeId);
     return already.kind === "read" && already.decision.outcome === "approved"
       ? { ok: true, note: "", scopeDecisionId: already.decision.scopeDecisionId }
       : { ok: false, why: "scopeRefusedNotApproved", note: decided.reason };
@@ -4745,6 +5029,28 @@ async function startScoped(
       note: `The plan was refused: ${planned.reason}`,
     };
   }
+  return await admitScopedPlan(environment, store, storePath, record, input, planned.plan, null);
+}
+
+/**
+ * Admit one plan under an approved scope, from the page: the tail a person-
+ * written plan (`startScoped`) and a drafted split's plan (`startSplit`)
+ * share -- continuo started, `admitUnderScope` with the plan's proposal, the
+ * report said, and the model reading taken at the gate.
+ */
+async function admitScopedPlan(
+  environment: Readonly<Record<string, string | undefined>>,
+  store: IterationStore,
+  storePath: string,
+  record: AdvisoryRecord,
+  input: {
+    readonly iterationId: string;
+    readonly requestMessageId: string;
+    readonly scopeDecisionId: string;
+  },
+  plan: RunPlan,
+  proposalId: string | null,
+): Promise<Started> {
   const startup = await startContinuo(environment);
   if (startup.kind === "refused") {
     return {
@@ -4777,8 +5083,8 @@ async function startScoped(
     {
       kind: "lineage_start",
       iterationId: input.iterationId,
-      plan: planned.plan,
-      proposalId: null,
+      plan,
+      proposalId,
       requestMessageId: input.requestMessageId,
     },
   );
