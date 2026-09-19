@@ -643,6 +643,19 @@ export interface Chrome {
   readonly scopeBasisReplyAllowance: string;
   /** A `rows` basis's lap, drawn as a link into that lap's answer view and never as an id to copy. */
   readonly scopeBasisLap: (iterationId: string) => string;
+  /**
+   * The caveat above the budgets (rondo#247): the draft assumes the request is
+   * the size of the laps it measured, and nothing recorded can say whether it is.
+   */
+  readonly scopeSampleHeading: string;
+  /** `tier` is set when the laps are other agent types' on this one's tier. */
+  readonly scopeSampleRows: (
+    laps: number,
+    tier: string | null,
+    lowest: string,
+    highest: string,
+  ) => string;
+  readonly scopeSampleColdStart: (reserve: string) => string;
   readonly scopeDefaultsHeading: string;
   readonly scopeDefaultNote: string;
   readonly scopeSeverityLabel: string;
@@ -1312,6 +1325,20 @@ explanation you pressed on and then answers the gate.`,
   scopeBasisReplyAllowance:
     "a day for your own replies, which is an allowance and not a measurement",
   scopeBasisLap: (iterationId) => `lap ${iterationId}`,
+  scopeSampleHeading: "This draft assumes your request is the size of past laps",
+  scopeSampleRows: (laps, tier, lowest, highest) =>
+    `Drafted from ${String(laps)} recorded first lap${laps === 1 ? "" : "s"} of ` +
+    `${tier === null ? "this agent type" : `other agent types on tier ${tier}, as none of this one's is recorded`}` +
+    `, which cost ${lowest === highest ? highest : `${lowest} to ${highest}`} USD; the reserve ` +
+    `is the highest. rondo records what a lap cost, not how much work it did, so it cannot tell ` +
+    `whether your request is as large as theirs. If it is larger, raise the cost here: once a ` +
+    `lap is running its budget cannot be raised, and a first lap that spends it all leaves ` +
+    `approving as the only answer at the gate.`,
+  scopeSampleColdStart: (reserve) =>
+    `No lap of this agent type or its tier is recorded, so the reserve is rondo's starting ` +
+    `figure, ${reserve} USD, which nobody measured, and nothing here knows how large your ` +
+    `request is. If it is more than a small change, raise the cost here: once a lap is running ` +
+    `its budget cannot be raised.`,
   scopeDefaultsHeading: "What rondo filled in for you",
   scopeDefaultNote: "A default, not derived from your request.",
   scopeSeverityLabel: "Findings this severe or worse end a round",
@@ -2008,6 +2035,23 @@ const JA: Partial<Chrome> = Object.freeze({
       : `レビュー回数: ${String(rounds)}（あなたが選んだ数）`,
   scopeBasisReplyAllowance: "あなたの返信のための 1 日。測った値ではなく、見込みの余裕です",
   scopeBasisLap: (iterationId) => `周回 ${iterationId}`,
+  scopeSampleHeading: "この予算は、依頼の大きさが過去の周回と同じくらいだという前提に立っています",
+  scopeSampleRows: (laps, tier, lowest, highest) =>
+    `${
+      tier === null
+        ? "このエージェント種別"
+        : `このエージェント種別の記録はまだないので、同じ tier ${tier} の別のエージェント種別`
+    }の初回周回 ${String(laps)} 件をもとに下書きしました。費用は ` +
+    `${lowest === highest ? highest : `${lowest}〜${highest}`} USD で、引当にはその最高値を` +
+    `使っています。rondo が記録しているのは周回にかかった費用だけで、どれだけの作業をしたかは` +
+    `記録していません。そのため、この依頼がそれらと同じくらいの大きさかどうかは分かりません。` +
+    `大きいと思うなら、ここで費用を上げてください。周回が始まってからは予算を上げられず、` +
+    `初回の周回で使い切ると、ゲートでは承認するしかなくなります。`,
+  scopeSampleColdStart: (reserve) =>
+    `このエージェント種別にも、その tier にも、記録された周回がありません。そのため引当は ` +
+    `rondo の初期値 ${reserve} USD で、誰かが測った値ではありません。依頼がどれだけの大きさ` +
+    `かも分かりません。小さな変更では済まないと思うなら、ここで費用を上げてください。周回が` +
+    `始まってからは予算を上げられません。`,
   scopeDefaultsHeading: "rondo が埋めたもの",
   scopeDefaultNote: "既定値で、依頼から導いたものではありません。",
   scopeSeverityLabel: "この重大度以上の指摘が出たら 1 ラウンド終了",

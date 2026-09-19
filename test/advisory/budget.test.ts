@@ -82,6 +82,8 @@ test("recorded laps of the agent type set the reserve, the redo and the duration
     expect.objectContaining({
       kind: "rows",
       level: "agent_type",
+      value: 1.04,
+      lowest: 1.032,
       iterationIds: [first2.id, first.id],
     }),
   ]);

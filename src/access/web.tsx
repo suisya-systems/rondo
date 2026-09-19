@@ -3914,6 +3914,43 @@ function budgetField(
   );
 }
 
+/**
+ * What the cost draft assumed, said above the numbers it produced (rondo#247).
+ *
+ * **Said, not scored.** The draft takes the highest first-lap cost of the laps
+ * it measured, and those laps resemble this request only if the work is the
+ * same size -- which is what made lap 10 cost $8.46 against laps 6-9's ~$1.
+ * The rows record what a lap cost and never how much it did, and the request
+ * is one sentence, so no rule here could rank the likeness without inventing a
+ * precision nobody measured. The caveat names what the sample shares with this
+ * work (the agent type, or only its tier), how far apart it is (lowest to
+ * highest), and what it cannot know (size), and says the one thing a person can
+ * do about it, because a running lap's budget cannot be raised.
+ */
+function sampleCaveat(wording: Chrome, bases: readonly BudgetBasis[]) {
+  return (
+    <section class={`rounded-md border px-3 py-2 ${TONE.wait} space-y-1`}>
+      <h3 class="text-[13px] leading-5 font-semibold">{wording.scopeSampleHeading}</h3>
+      {bases.map((basis) =>
+        basis.kind === "rows" ? (
+          <p class="text-[12.5px] leading-5 text-foreground">
+            {wording.scopeSampleRows(
+              basis.iterationIds.length,
+              basis.level === "model_tier" ? basis.modelTier : null,
+              money(basis.lowest),
+              money(basis.value),
+            )}
+          </p>
+        ) : basis.kind === "cold_start" ? (
+          <p class="text-[12.5px] leading-5 text-foreground">
+            {wording.scopeSampleColdStart(money(basis.value))}
+          </p>
+        ) : null,
+      )}
+    </section>
+  );
+}
+
 /** The class every budget box carries: one box, one number, no decoration. */
 const BOX =
   "w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-[13px] leading-5 outline-none focus-visible:ring-2 focus-visible:ring-ring";
@@ -4150,6 +4187,7 @@ async function scopeForm(
          */}
         <input type="hidden" name="plan_digest" value={drafted.planDigest} />
         <input type="hidden" name="agent_type" value={drafted.agentTypeDigest} />
+        {sampleCaveat(wording, budgets.cost_reserve_usd.bases)}
         <div class={`${CARD} grid gap-4 sm:grid-cols-2`}>
           {budgetField(
             wording,
