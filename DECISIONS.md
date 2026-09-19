@@ -113,7 +113,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0073 | Which lines may run together: a lane ledger that allocates paths to a line from its admission until its work lands, refuses an admission that would share one, and releases it by reading the default branch; `D-0067` rule 1 gives way for two authorities, approving and every judgement no row settles stay with the person, and it is not a bigger capacity number | accepted |
 | D-0074 | Raising a running lap's budget: a raise is a successor scope that changes only its budgets, the lap in flight follows its approval's approved successor, and the person presses it from the gate that refused them | accepted |
 | D-0075 | A fresh store's first plan is the last thing setup does: setup hands the plan it composed to the store and not to the person, the host reads no path and composes nothing, and naming a repository stays installation | accepted |
-| D-0076 | Who the page is written for: the person who asked for the work and judges it, who knows their own repository and not rondo; rondo's own words, identifiers and failures never reach them as themselves, and what they cannot use is not shown | proposed |
+| D-0076 | Who the page is written for: the person who asked for the work and judges it, who knows their own repository and not rondo; rondo's own words, identifiers and failures never reach them as themselves, and what they cannot use is not shown | accepted |
 
 ---
 
@@ -3296,6 +3296,14 @@ Walked on 2026-09-06 against the pinned continuo with a real `claude -p` worker
 ## D-0026 — The pull request `publish` opens is written for a person: the lap's own commit subjects are the summary, and the request is quoted input
 
 **Status:** accepted (2026-09-06, rondo's human gate)
+
+> **Annotation (2026-09-19, from D-0076), and the one that is not additive.** Added after this entry
+> was accepted, by the answer of rondo's human gate to `D-0076`'s third point. Rule 4's provenance is
+> written for the repository's reviewers, who hold no rondo store: the run, iteration and gate ids,
+> the stored gate outcome, the continuo revision and the session leave the body's prose and are kept
+> in one fold at the end of the body, labelled as rondo's record of where the change came from, which
+> the publish preview draws closed (`D-0076` sections 3 and 5). The sentence saying who opened the
+> pull request and that merging it is not rondo's stays in the prose. Nothing below is edited.
 
 The first pull request `rondo publish` opened for real (`#29`, 2026-09-06) put the lap's prompt in
 both fields. The title was the topic branch, a colon, and the prompt's first line cut off with an
@@ -10169,6 +10177,16 @@ the properties rules 2, 3, 6 and 7 assert.
 > comparing two tags, becomes **BCP 47 lookup**, so `ja-JP` renders the `ja` set (`D-0056` rule 6).
 > Every other rule is read as written, and **this entry is not superseded**.
 
+> **Annotation (2026-09-19, from D-0076), and the one that is not additive.** Added after this entry
+> was accepted, by the answers of rondo's human gate to `D-0076`'s points. **On the page, rule 2's
+> second clause makes no token**: a string the operator would match against another surface (the
+> store, `rondo show`, continuo's output) is not kept verbatim on that ground, because the page's one
+> reader uses no other surface (`D-0076` rule 1.1, `D-0075`'s K3). rondo's identifiers and status
+> names leave the page's prose (`D-0076` sections 2 and 3). The first and third clauses keep their
+> force where a string is typed or its spelling refused. **The terminal keeps rule 2 as written.**
+> The falsifier "prose that is a token to somebody else" is recorded as having fired the other way on
+> 2026-09-19 (rondo#259): tokens kept for a reader who was not there. Nothing below is edited.
+
 `D-0053` cut the page's text in two and the operator confirmed the cut on the screen it was made on:
 `awaiting_human`, `waiting 2m`, English, fine. Then the operator opened `/?reading=open` -- the fold
 `D-0041` keeps one click away so that a summary can be checked against what it rests on -- and said,
@@ -16817,6 +16835,13 @@ human gate, and its answer". Supersedes `D-0071`. Refs `D-0010`, `D-0019`,
 `D-0023`, `D-0025`, `D-0032`, `D-0041`, `D-0055`, `D-0064`, `D-0066`, `D-0069`, `D-0071`, rondo#238, rondo#259, rondo#265,
 rondo#266.
 
+> **Annotation (2026-09-19, from D-0076).** Added after this entry was accepted, and additive. The
+> two things this entry left to the building change "under rondo#259" are governed by `D-0076`: how
+> two held choices of one place and agent type are told apart (rule 2.3) is `D-0076` rule 3.3 (by
+> what the person knows, never by an id or a digest, and not asked at all when nothing the person
+> knows tells them apart); and the words of "nothing held" (rule 4.1) follow `D-0076` rule 4.3.
+> Nothing below is edited.
+
 **This entry decides and does not build.** Nothing in `src/` or `scripts/` changes with it. **It
 supersedes `D-0071` as a whole, with every other section carried**, because it changes
 what `D-0071` asserted about where a drafted scope may record an agent type from (rule 2.4); this is
@@ -17149,12 +17174,13 @@ Each dated, and added with this entry's acceptance:
 
 ## D-0076 — Who the page is written for: the person who asked for the work and judges it, who knows their own repository and not rondo; rondo's own words, identifiers and failures never reach them as themselves, and what they cannot use is not shown
 
-**Status:** proposed (2026-09-19, rondo#259). Four points are put to the human gate in section "What
-is put to the human gate"; nothing here is accepted until it answers them. Refs `D-0004`, `D-0026`,
+**Status:** accepted (2026-09-19, rondo's human gate, rondo#259). Four points were put to the gate
+and it chose the recommended option on each; the answers are recorded in section "What was put to the
+human gate, and its answer". Refs `D-0004`, `D-0026`,
 `D-0032`, `D-0041`, `D-0053`, `D-0055`, `D-0064`, `D-0075`, rondo#248, rondo#257, rondo#259.
 
-**This entry decides and does not build.** Nothing in `src/` changes with it. The annotations it would
-add on acceptance are listed in "Annotations this entry adds".
+**This entry decides and does not build.** Nothing in `src/` changes with it. The annotations it adds
+are listed in "Annotations this entry adds".
 
 rondo#248 found three leaks and all three were fixed as leaks. rondo#259 names what they were
 instances of: the operator's page carries rondo's internals (its identifiers, its implementation's
@@ -17210,8 +17236,8 @@ running page on the same date. Line numbers drift; re-measure the claim, not the
    - **whoever installs and repairs rondo on this machine** (`D-0075` rule 1.1), whose surface is the
      terminal, the host's output and this file. The terminal keeps `D-0055` rule 2 as written, and
      `D-0004`, unchanged;
-   - **the repository's reviewers**, who read the pull request on the forge (point 3 below).
-2. **What the reader is assumed to know** (the gate's point 1): their own request, in their own words;
+   - **the repository's reviewers**, who read the pull request on the forge (the gate's answer 3).
+2. **What the reader is assumed to know** (the gate's answer 1): their own request, in their own words;
    their repository and the vocabulary of working in it (a file, a branch, a commit, a test, a pull
    request, a review finding and its severity); money and time; the language they read. They know
    rondo does work for them and waits for them when it must. **Nothing else is assumed**: not how
@@ -17245,7 +17271,7 @@ running page on the same date. Line numbers drift; re-measure the claim, not the
    | lap | rondo's | one attempt by a worker at the request ("attempt", "try again") |
    | run, iteration | rondo's, and the distinction is continuo's | never shown; the person sees one attempt. The distinction stays load-bearing in the store and the terminal |
    | gate | rondo's | the attempt waiting for the person's review; its answers stay the words the person presses |
-   | scope | rondo's name for the person's own act (the gate's point 2) | what they approved: this work, up to this much money and this many attempts |
+   | scope | rondo's name for the person's own act (the gate's answer 2) | what they approved: this work, up to this much money and this many attempts |
    | basis | rondo's | a link to what a claim comes from; the `D-0064` line (every summary leads back to its material) is kept by the link, not by printing the locator |
    | digest, plan id, setup id | rondo's | never shown; the page carries them in its own forms and addresses |
    | agent type, tier, grant | rondo's | what the worker may do and on which model price, in the person's terms: which commands, which paths, how dear. Shown only where the person approves it |
@@ -17289,8 +17315,9 @@ running page on the same date. Line numbers drift; re-measure the claim, not the
    not yet know who you are, so nothing here can be sent as you".
 4. **A break in the person's own world is theirs and is shown as itself**: a test that fails, a
    conflict with their branch, the forge refusing their credentials. Those are what the person acts on.
-5. **Where rondo's reason goes is the gate's point 4.** It is kept somewhere; the question is whether
-   the page holds it at all.
+5. **rondo's own reason is kept in one closed fold beside the person's sentence** (the gate's answer
+   4), labelled as for whoever maintains rondo on this machine, holding the reason as rondo received
+   it. The person is never asked to open it. Nothing of it is inline, in a heading or in a title.
 
 ### 5. What is not shown at all
 
@@ -17316,7 +17343,7 @@ running page on the same date. Line numbers drift; re-measure the claim, not the
   assumes a reader who knows the implementation. K4 and rule 1.2 decide it, not the axis;
 - **what is not shown** (section 5): an extra line asks nothing of the person, so the axis is silent;
   what it costs is attention, and rule 5.1 is the test;
-- **who reads the pull request** (the gate's point 3): the axis is about the operator, and the body has
+- **who reads the pull request** (the gate's answer 3): the axis is about the operator, and the body has
   another reader;
 - **the order of what a failure says** (rule 4.1), which is about what the person needs to decide next.
 
@@ -17333,9 +17360,9 @@ running page on the same date. Line numbers drift; re-measure the claim, not the
   `D-0053` (material is quoted, never translated) are untouched; this entry changes what the page shows
   around them, not what is recorded.
 
-### What is put to the human gate
+### What was put to the human gate, and its answer
 
-Each point has a recommendation; the gate may take another option or write its own.
+The points are kept as put, and the answer follows them.
 
 1. **What the reader is assumed to know (rule 1.2).**
    - **(a) Their repository's work vocabulary, and nothing of rondo** (recommended). The work ends in a
@@ -17374,21 +17401,36 @@ Each point has a recommendation; the gate may take another option or write its o
      terminal to see why, which is installation's surface anyway (`D-0075` rule 1.1), but a person who
      is their own maintainer has to leave the page to learn more.
 
+**The gate's answer (2026-09-19, rondo#259):**
+
+1. **(a).** The reader knows the vocabulary of working in their own repository and knows nothing of
+   rondo (rule 1.2 as written).
+2. **(a).** No word rondo coined appears on the page; every concept is said by what it is to the
+   person (section 2 as written).
+3. **(a).** The pull request body is written for the repository's reviewers under this entry's rules.
+   rondo's identifiers leave the prose and are kept in one fold at the end of the body, labelled as
+   rondo's record of where the change came from, and the publish preview draws that fold closed.
+   `D-0026` rule 4 is amended by annotation.
+4. **(a).** rondo's own reason for a failure is kept in one closed fold beside the person's sentence,
+   labelled as for whoever maintains rondo on this machine (rule 4.5).
+
 ### Annotations this entry adds
 
-On acceptance, each dated:
+Each dated, and added with this entry's acceptance:
 
 - **`D-0055` rule 2**, not additive: on the page, the second clause (a string the operator matches
   against another surface) makes no token, because the page's reader uses no other surface (`D-0076`
   rule 1.1). The first and third clauses keep their force where a string is typed or its spelling
   refused. The terminal keeps rule 2 as written. rondo#259 is recorded as the falsifier "prose that is
   a token to somebody else" read the other way: tokens kept for a reader who is not there.
-- **`D-0075` rule 2.3's last sentence and rule 4.1**: the words and the way two held plans are told
-  apart are governed by `D-0076` rules 3.3 and 4.3.
-- **`D-0026`**, by the gate's point 3 if (a) is taken: the body's provenance section is written under
-  `D-0076`, and rondo's identifiers move into one fold.
-- **`D-0064` line 1** (bases): unchanged, and `D-0076` rule 5.3 reads it as a link the person follows,
-  not a locator they read.
+- **`D-0026` rule 4**, not additive, by the gate's answer 3: the provenance is written for the
+  repository's reviewers under `D-0076`; rondo's identifiers (run, iteration and gate ids, the stored
+  outcome, the continuo revision, the session) move into one fold at the end of the body, and the
+  publish preview draws it closed. The closing sentence about who merges stays in the prose.
+- **`D-0075` rules 2.3 and 4.1**, additive: what they left to the building change "under rondo#259"
+  is governed by `D-0076` rules 3.3 and 4.3.
+- **`D-0064` line 1** (bases): unchanged and not annotated; `D-0076` rule 5.3 reads it as a link the
+  person follows, not a locator they read.
 
 ### What this does not do
 
@@ -17404,8 +17446,9 @@ On acceptance, each dated:
 
 | Residual | Why not here | Who decides |
 |---|---|---|
-| A person who wants to see rondo's internals on the page (their own maintainer) | Rule 1.1: one reader; the terminal is theirs, and the gate's point 4 (a) gives them the reason one press down | a later entry, if being one's own maintainer is the usual case |
+| A person who wants to see rondo's internals on the page (their own maintainer) | Rule 1.1: one reader; the terminal is theirs, and the gate's answer 4 gives them the reason one press down | a later entry, if being one's own maintainer is the usual case |
 | Material a lap wrote in rondo's vocabulary (its own report naming a lap or a gate) | It is material and quoted byte for byte (`D-0053`); rondo does not rewrite it | rondo#257's answer on what a lap is asked to compose, and the ask's wording |
+| The pull request title's fallback, `rondo run <id>` (`D-0026` rule 3), which puts a rondo identifier in the one line every reviewer reads | The gate's answer 3 was put about the body; the title is not the page's | the building change for the body, by the same answer, or a later entry if it is contested |
 | Whether a completeness check (a test that no page string names a rondo identifier or variable) is wanted | A mechanism behind rules 3.1 and 4.2 rather than a sentence; the building change can price it | the building change |
 
 ### What would falsify it
@@ -17414,7 +17457,7 @@ On acceptance, each dated:
   test let it through or the table is wrong for it.
 - **A person asked to copy, type or recognise something rondo made**, which means rule 3 is not held
   where it is tested.
-- **A person leaving the page to understand a failure**, under the gate's point 4 as answered.
+- **A person leaving the page to understand a failure**, under the gate's answer 4.
 - **A decision the person could not make because something rule 5.1 removed was what they needed**,
   which means the test is drawn one thing too narrow.
 - **An operator who does read the terminal alongside the page as the ordinary case**; then rule 1.1's
