@@ -309,6 +309,7 @@ export interface Chrome {
   readonly logGone: string;
   readonly logOutput: string;
   readonly logOutputFailed: string;
+  readonly logFailed: string;
   readonly logNoOutput: string;
   readonly logCutBefore: (characters: number) => string;
   readonly logCutAfter: (characters: number) => string;
@@ -1090,6 +1091,7 @@ explanation you pressed on and then answers the gate.`,
   logGone: "There is no lap by that name.",
   logOutput: "Output",
   logOutputFailed: "Output -- failed",
+  logFailed: "failed",
   logNoOutput: "No output recorded",
   logCutBefore: (characters) =>
     `The first ${characters.toLocaleString("en")} characters are not shown here.`,
@@ -1785,6 +1787,7 @@ const JA: Partial<Chrome> = Object.freeze({
   logGone: "その名前の周回はありません。",
   logOutput: "出力",
   logOutputFailed: "出力 (失敗)",
+  logFailed: "失敗",
   logNoOutput: "出力の記録はありません",
   logCutBefore: (characters) =>
     `先頭の ${characters.toLocaleString("ja")} 文字はここには出していません。`,

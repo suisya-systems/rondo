@@ -5202,7 +5202,7 @@ const logOf = (count: number, unfinished = false) => ({
     index: n + 1,
     command: `echo step-${String(n + 1)}`,
     output: n + 1 === count ? `${"x".repeat(9_000)}END` : `out-${String(n + 1)}`,
-    isError: n + 1 === 2,
+    isError: n + 2 === count,
   })),
   finalMessage: null,
   file: "/srv/state/rondo-i-0001/s1/events-000.jsonl",
@@ -5272,6 +5272,26 @@ test("the log screen draws the newest commands first, says what it left out and 
   expect(screen).toContain("END</pre>");
   expect(screen).toContain("The first 1,003 characters are not shown here.");
   expect(screen).toContain("The lap is writing its next line");
+  // A failed command is marked, once, in the pill beside its line.
+  expect(screen).toContain(">failed</span>");
+
+  // The one fold open is the newest output there is -- and when the newest
+  // command is still running with none, it is the one before it.
+  const opened = (html: string) => html.match(/<details class="group" open=""/g)?.length ?? 0;
+  expect(opened(screen)).toBe(1);
+  const running = logOf(3);
+  const stillRunning = {
+    ...running,
+    commands: running.commands.map((c, n) => (n === 2 ? { ...c, output: "" } : c)),
+  };
+  const midCall = await operatorPage({ ...ports, readLog: () => stillRunning }, "t", {
+    kind: "log",
+    iterationId: "i-0001",
+  });
+  const two = midCall.slice(midCall.indexOf("echo step-2<"));
+  expect(opened(midCall)).toBe(1);
+  expect(two.indexOf('open=""')).toBeLessThan(two.indexOf("echo step-1<"));
+  expect(two.indexOf('open=""')).toBeGreaterThan(-1);
   // The screen holds still: no poll on it.
   expect(html).not.toContain('hx-trigger="every 5s"');
 

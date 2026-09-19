@@ -1861,6 +1861,10 @@ async function logView(
     );
   }
   const newest = log.commands.slice(-LOG_COMMANDS).reverse();
+  // The newest output is open: it is the one a person came for. The newest
+  // command may have none yet -- it is still running -- so it is the newest
+  // that has one.
+  const opened = newest.findIndex((command) => command.output !== "");
   return framed(
     <>
       {about}
@@ -1885,15 +1889,15 @@ async function logView(
               <li class="min-w-0 space-y-2 px-4 py-3">
                 <p class="flex items-center gap-2 font-mono text-[11px] leading-4 text-faint">
                   <span title={log.file}>L{String(command.index)}</span>
-                  {command.isError ? pill("fail", wording.logOutputFailed) : null}
+                  {command.isError ? pill("fail", wording.logFailed) : null}
                 </p>
                 {clipped(command.command, LOG_COMMAND_CHARS, "start", wording.logCutAfter)}
                 {command.output === "" ? (
                   <p class="text-[12px] leading-5 text-faint">{wording.logNoOutput}</p>
                 ) : (
-                  // The newest output is open: it is the one a person came for.
-                  <details class="group" {...(at === 0 ? { open: true } : {})}>
-                    <summary class="cursor-pointer text-[12px] leading-5 text-muted-foreground select-none hover:text-foreground">
+                  <details class="group" {...(at === opened ? { open: true } : {})}>
+                    <summary class="flex cursor-pointer list-none items-center gap-x-1.5 text-[12px] leading-5 text-muted-foreground select-none hover:text-foreground [&::-webkit-details-marker]:hidden">
+                      {chevron()}
                       {command.isError ? wording.logOutputFailed : wording.logOutput}
                     </summary>
                     <div class="mt-1.5 space-y-1">
