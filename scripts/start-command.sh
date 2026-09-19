@@ -229,6 +229,7 @@ unit_tmp="$unit_path.tmp.$$"
   printf '%s\n' 'export PATH'
   printf 'NODE=%s\n' "$(sh_quote "$node_bin")"
   printf 'URL=%s\n' "$(sh_quote "$url")"
+  printf 'PORT=%s\n' "$port"
   printf 'UNIT=%s\n' "$(sh_quote "$unit_name")"
   printf 'OPENER=%s\n' "$(sh_quote "$opener")"
   printf 'WAIT_SECONDS=%s\n' "$wait_seconds"
@@ -254,12 +255,34 @@ fi
 # command already carries, and one fewer program to find is one fewer way for
 # a start to fail. Any answer at all means the page is up -- it answers a
 # redirect at the root, and a redirect is an answer.
+#
+# **An answer is not enough on its own.** Something else listening on this port
+# answers exactly as well as rondo does, and a simple service is called started
+# the moment it is spawned, before it has bound anything -- measured here
+# (2026-09-20): with a stranger on the port, the service is `active` and the
+# stranger's page answers within a tenth of a second, and the word said rondo
+# was open. So the process holding the port is compared with the service's own,
+# and a page belonging to somebody else is a rondo that did not come up.
+answered_by_rondo() {
+  listener=$(ss -ltnpH "sport = :$PORT" 2>/dev/null | sed -n 's/.*pid=\([0-9]\{1,\}\).*/\1/p' | head -n 1)
+  # Where the question cannot be asked -- no `ss` on this machine -- the answer
+  # above is what there is, rather than a start that can never succeed.
+  if [ -z "$listener" ]; then
+    return 0
+  fi
+  [ "$listener" = "$(systemctl --user show -p MainPID --value "$UNIT" 2>/dev/null)" ]
+}
+
 seconds=0
 while [ "$seconds" -lt "$WAIT_SECONDS" ]; do
-  if "$NODE" -e 'fetch(process.argv[1],{signal:AbortSignal.timeout(2000)}).then(()=>{},()=>process.exit(1))' "$URL" >/dev/null 2>&1; then
+  if systemctl --user is-active --quiet "$UNIT" && answered_by_rondo &&
+    "$NODE" -e 'fetch(process.argv[1],{signal:AbortSignal.timeout(2000)}).then(()=>{},()=>process.exit(1))' "$URL" >/dev/null 2>&1; then
     opened
+    # Detached, because the word is done here: an opener that runs the browser
+    # in the foreground would hold this terminal for as long as the browser is
+    # open, which is the window rule 2.6 says may be closed.
     if [ -n "$OPENER" ]; then
-      "$OPENER" "$URL" >/dev/null 2>&1 || true
+      ("$OPENER" "$URL" </dev/null >/dev/null 2>&1 &) || true
     fi
     exit 0
   fi

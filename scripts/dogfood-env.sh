@@ -749,7 +749,14 @@ step "Start command (the one word the person types, D-0080)"
 # shell it was made for is then a dead entry rather than the only one.
 dirs_of() {
   local found resolved
-  found=$(command -v "$1" 2>/dev/null || true)
+  # A name to look up, or a path already in hand -- `claude` arrives here as
+  # the second, resolved far above for continuo's sake, and it needs the same
+  # two directories as the rest: the one holding the name, which may be a
+  # version manager's per-shell directory, and the one it really lives in.
+  case "$1" in
+    */*) found=$1 ;;
+    *) found=$(command -v "$1" 2>/dev/null || true) ;;
+  esac
   [ -n "$found" ] || return 0
   resolved=$(readlink -f -- "$found" 2>/dev/null || printf '%s' "$found")
   (cd -- "$(dirname -- "$resolved")" && pwd -P)
@@ -766,8 +773,7 @@ add_path_dir() {
 }
 
 add_path_dir "$(dirname -- "$node_bin")"
-add_path_dir "$(dirname -- "$claude_bin")"
-for program in git gh codex; do
+for program in "$claude_bin" git gh codex; do
   program_dirs=$(dirs_of "$program")
   if [ -n "$program_dirs" ]; then
     while IFS= read -r program_dir; do
