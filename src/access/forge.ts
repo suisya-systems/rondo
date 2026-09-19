@@ -471,9 +471,11 @@ export interface PullRequestRequest {
  *
  * `--repo` is explicit rather than inferred from the workspace's remote,
  * because the workspace is a worktree cut from a local path and an inferred
- * slug would be whatever that clone happened to point at. The operator names
- * the forge repository, which is the one fact about publishing that the plan
- * does not already carry.
+ * slug would be whatever that clone happened to point at. That is unchanged by
+ * `D-0081`, which moved *where a person tells rondo the slug* -- onto the plan,
+ * recorded by setup, with the host's `--repo` left as the fallback for a plan
+ * that carries none -- and refused inference a second time (rule 3.3). What
+ * reaches here is still a slug somebody wrote, never one rondo worked out.
  *
  * **There is no merge here and there will not be one.** Opening a pull request
  * puts the work in front of a reviewer; merging it is a different act under a

@@ -120,6 +120,7 @@ const PLAN: RunPlan = {
   gateOptions: ["approve", "revise"],
   gateDeadlineAtMs: null,
   pullRequestBaseBranch: null,
+  forgeRepository: null,
   invocationCeilingMs: 1_800_000,
   catalogLayers: [{ layer: "git_url", origin: "o", baseDir: "/srv/catalog", data: {} }],
   projectName: "rondo",
@@ -5108,6 +5109,32 @@ test("the publish screen offers the override as its own press, under the refusal
   expect(screen).not.toContain('id="publish-form"');
 });
 
+test("a lap that names no repository to publish to says so on its own screen (D-0081 rule 3.2)", async () => {
+  const world = fresh();
+  await approvedLap(world);
+  const html = await operatorPage(
+    portsOver(world, "ada", [], null, null, async () => ({
+      kind: "refused" as const,
+      block: { why: "noRepo" as const },
+    })),
+    "t",
+    { kind: "publish", iterationId: "i-0001" },
+  );
+  const screen = html.slice(html.indexOf('id="publish"'));
+
+  // What is missing, whose it is to set, and nothing the person is expected to
+  // do here: the repository is recorded when the place the work happens is set
+  // up, which is not an act on this page (D-0076 rule 4.1).
+  expect(screen).toContain("does not say where its pull request would be opened");
+  expect(screen).toContain("whoever installed rondo");
+  expect(screen).not.toContain("<form");
+  // Not a flag, not a field name, and not the host-wide sentence that used to
+  // stand in for this.
+  expect(screen).not.toContain("--repo");
+  expect(screen).not.toContain("forge_repository");
+  expect(screen).not.toContain("Nothing can be published from this page");
+});
+
 test("a lap that cannot be published says why on the screen, and draws no button (#233 S5, D-0060 rule 4)", async () => {
   const world = fresh();
   await approvedLap(world);
@@ -5143,9 +5170,11 @@ test("the way onto the publish screen is drawn on approved rows only, and never 
   });
   expect(summary).toContain('href="/?publish=i-0001&amp;lang=en"');
 
-  // A host that cannot publish -- no forge repository, or no person it accepts
-  // to publish as -- draws no way in, and says so on the screen itself rather
-  // than leaving a button missing for an unsaid reason.
+  // A host that cannot publish -- no person it accepts to publish as -- draws
+  // no way in, and says so on the screen itself rather than leaving a button
+  // missing for an unsaid reason. **The forge repository is no longer one of
+  // those conditions** (D-0081 rule 3.2): it is the lap's plan's, so a lap that
+  // names none is refused on its own screen, by the test below.
   const noRepo = await operatorPage(portsOver(world, "ada", []), "t", { kind: "summary" });
   expect(noRepo).not.toContain("?publish=");
   const screen = await operatorPage(portsOver(world, "ada", []), "t", {

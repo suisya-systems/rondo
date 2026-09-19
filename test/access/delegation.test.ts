@@ -104,6 +104,7 @@ function planWith(layer: CatalogLayer, allowedBash: readonly string[]): Admitted
     gateOptions: ["approve", "revise"],
     gateDeadlineAtMs: null,
     pullRequestBaseBranch: null,
+    forgeRepository: null,
     invocationCeilingMs: 1_800_000,
     catalogLayers: [layer],
     projectName: "rondo",

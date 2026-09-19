@@ -34,6 +34,7 @@ import {
   parseForgeSlug,
   publishModelReadingLines,
   publishPreflight,
+  publishRepository,
   pullRequestText,
   readingRangeOf,
   repositoryFromRemoteUrl,
@@ -1227,6 +1228,35 @@ function published(parts: Partial<IterationRecord> = {}): IterationRecord {
     ...parts,
   };
 }
+
+test("the repository a publish is about is the lap's own plan's, and the flag is the fallback (D-0081)", () => {
+  const asked = (repo: string | null) => ({ repo, remote: "origin", allowRemoteMismatch: false });
+  const withSlug = published({
+    plan: { ...somePublishedPlan(), forge_repository: "suisya-systems/rondo" },
+  });
+  const withoutSlug = published({ plan: somePublishedPlan() });
+
+  // The plan is read first, and a host flag naming somewhere else does not
+  // overrule it: under one store and one host, that flag is right for at most
+  // one of the repositories the store holds.
+  expect(publishRepository(withSlug, asked(null))).toBe("suisya-systems/rondo");
+  expect(publishRepository(withSlug, asked("somebody/else"))).toBe("suisya-systems/rondo");
+
+  // A row from a store set up before D-0081 carries no slug at all, and keeps
+  // publishing by the host's flag exactly as it did (rule 6.3).
+  expect(publishRepository(withoutSlug, asked("suisya-systems/rondo"))).toBe(
+    "suisya-systems/rondo",
+  );
+
+  // Neither: nothing names a repository, which is a fact about this lap and is
+  // answered per lap rather than by a host that offered no screen at all.
+  expect(publishRepository(withoutSlug, asked(null))).toBe(null);
+
+  // A key that is present but is not a string named nothing either, so it gets
+  // what a plan that named nothing gets rather than a slug read out of a number.
+  const odd = published({ plan: { ...somePublishedPlan(), forge_repository: 7 } });
+  expect(publishRepository(odd, asked("suisya-systems/rondo"))).toBe("suisya-systems/rondo");
+});
 
 /** What `inspectLapWork` read, with one commit and one file unless varied. */
 function worked(

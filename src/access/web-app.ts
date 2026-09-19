@@ -941,6 +941,7 @@ export type PublishRefusal =
   | "publishRefusedNotApproved"
   | "publishRefusedNoRun"
   | "publishRefusedPlanField"
+  | "publishRefusedNoRepo"
   | "publishRefusedTarget"
   | "publishRefusedUncommitted"
   | "publishRefusedNoContinuo"

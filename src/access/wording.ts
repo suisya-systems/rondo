@@ -1137,6 +1137,8 @@ export interface Chrome {
   readonly publishNotApproved: (outcome: string) => string;
   readonly publishNoRun: string;
   readonly publishPlanField: (field: string) => string;
+  /** Nowhere to open a pull request: neither the lap nor the host names one. */
+  readonly publishNoRepo: string;
   readonly publishTargetRefused: (reason: string) => string;
   readonly publishUncommitted: (paths: string) => string;
   readonly publishUncommittedElsewhere: (branch: string) => string;
@@ -1162,6 +1164,7 @@ export interface Chrome {
   readonly publishRefusedNotApproved: string;
   readonly publishRefusedNoRun: string;
   readonly publishRefusedPlanField: string;
+  readonly publishRefusedNoRepo: string;
   readonly publishRefusedTarget: (detail: string) => string;
   readonly publishRefusedUncommitted: (detail: string) => string;
   readonly publishRefusedNotRead: string;
@@ -2000,9 +2003,9 @@ explanation you pressed on and then answers the gate.`,
   publishPlain: "Pushes this branch, opens its pull request and closes the run.",
   publishBack: "Back to publishing",
   publishNotOffered:
-    "Nothing can be published from this page. Publishing needs a repository to publish to and a " +
-    "person this host accepts to publish as, and it was started without one of them. Both are " +
-    "given to rondo when the page is started.",
+    "Nothing can be published from this page. Publishing needs a person this host accepts to " +
+    "publish as, and it was started without one. That is given to rondo when the page is " +
+    "started.",
   publishNotClosed: (status) =>
     `This lap is ${status}. Publishing is for work a person has already approved at the gate.`,
   publishNotApproved: (outcome) =>
@@ -2012,6 +2015,10 @@ explanation you pressed on and then answers the gate.`,
   publishPlanField: (field) =>
     `This lap's plan records no ${field}, and publishing is built from it. It cannot be ` +
     "published as it stands.",
+  publishNoRepo:
+    "This lap does not say where its pull request would be opened, and neither does this host. " +
+    "Nothing here can set that: where work is published to is recorded when the place the work " +
+    "happens is set up, by whoever installed rondo.",
   publishTargetRefused: (reason) =>
     `The push has nowhere to go that rondo can vouch for: ${reason}`,
   publishUncommitted: (paths) =>
@@ -2062,6 +2069,9 @@ explanation you pressed on and then answers the gate.`,
   publishRefusedNoRun: "Nothing was published: this lap records no run to close.",
   publishRefusedPlanField:
     "Nothing was published: this lap's plan is missing something publishing is built from.",
+  publishRefusedNoRepo:
+    "Nothing was published: this lap does not say where its pull request would be opened, and " +
+    "neither does this host.",
   publishRefusedTarget: (detail) =>
     `Nothing was published: the push has nowhere to go that rondo can vouch for. ${detail}`,
   publishRefusedUncommitted: (detail) =>
@@ -2927,9 +2937,8 @@ const JA: Chrome = Object.freeze({
   publishPlain: "このブランチを push し、プルリクエストを作り、run を閉じます。",
   publishBack: "公開の画面に戻る",
   publishNotOffered:
-    "ここからは公開できません。公開には、公開先のリポジトリと、このホストが受け付ける" +
-    "公開者の 2 つが要りますが、そのどちらかがないまま起動されています。どちらもページを" +
-    "起動するときに rondo へ渡します。",
+    "ここからは公開できません。公開には、このホストが受け付ける公開者が要りますが、" +
+    "それがないまま起動されています。公開者はページを起動するときに rondo へ渡します。",
   publishNotClosed: (status) =>
     `周回が ${status} の状態です。公開できるのは、人がゲートで承認した作業だけです。`,
   publishNotApproved: (outcome) =>
@@ -2939,6 +2948,10 @@ const JA: Chrome = Object.freeze({
   publishPlanField: (field) =>
     `公開は周回の plan から組み立てますが、その plan に ${field} がありません。このままでは` +
     "公開できません。",
+  publishNoRepo:
+    "この周回には、プルリクエストを出す先が記録されていません。このホストにも指定が" +
+    "ありません。ここからは決められません。出す先は、作業する場所を用意するときに、" +
+    "rondo を入れた人が記録します。",
   publishTargetRefused: (reason) => `push の宛先を rondo が保証できません: ${reason}`,
   publishUncommitted: (paths) =>
     `ワークスペースにブランチへ載っていない作業が残っています: ${paths}。push はそれを` +
@@ -2988,6 +3001,9 @@ const JA: Chrome = Object.freeze({
   publishRefusedNoRun: "何も公開していません。閉じる run がありません。",
   publishRefusedPlanField:
     "何も公開していません。この周回の plan に、公開の組み立てに要るものが欠けています。",
+  publishRefusedNoRepo:
+    "何も公開していません。この周回にも、このホストにも、プルリクエストを出す先の記録が" +
+    "ありません。",
   publishRefusedTarget: (detail) =>
     `何も公開していません。push の宛先を rondo が保証できません。${detail}`,
   publishRefusedUncommitted: (detail) =>

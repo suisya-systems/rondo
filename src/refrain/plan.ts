@@ -247,6 +247,28 @@ export interface RunPlan {
    */
   readonly pullRequestBaseBranch: string | null;
   /**
+   * The forge repository this lap's pull request is opened in, as
+   * `OWNER/NAME`, or null for a plan that names none (D-0081 rule 3.2).
+   *
+   * **A repository fact, recorded where every other repository fact is**, and
+   * this reverses `D-0059` section 5a's *"the forge repository is the host's,
+   * not a field"*: one host serves several repositories, so one slug per host
+   * is right for at most one of them. Setup is told the target repository and
+   * verifies its push remote, so setup is what records this.
+   *
+   * **Null is not "infer one".** `D-0075` rule 3.1 and `src/access/forge.ts`
+   * both refuse reading a slug off the workspace's remote -- the workspace is a
+   * worktree cut from a local path, and an inferred slug would be whatever that
+   * clone happened to point at. A plan carrying none publishes against the
+   * host's `--repo`, which is what a store set up before `D-0081` has and what
+   * an installer may still type (rule 6.3); with neither, `publish` refuses.
+   *
+   * **Its only reader is `src/access/cli.ts`'s publish**, beside
+   * {@link pullRequestBaseBranch} and for the same reason: continuo is never
+   * told about it, and nothing before the pull request leg reads it.
+   */
+  readonly forgeRepository: string | null;
+  /**
    * How long rondo will wait for the whole `lap perform` invocation.
    *
    * **The caller's, because rondo cannot compute it.** The turn timer is not
@@ -534,6 +556,15 @@ export function runPlan(input: RunPlan): PlanOutcome {
         input.pullRequestBaseBranch === null
           ? null
           : requireNotOptionShaped("pullRequestBaseBranch", input.pullRequestBaseBranch),
+      // **Shape, and not `OWNER/NAME`.** What a slug has to be is the forge
+      // CLI's rule, and `publish` reads it there (`parseForgeSlug`) over the
+      // flag and the plan alike -- so a second spelling of that rule here would
+      // be a second answer to one question, drifting from the one that decides.
+      // What this refuses is the value that is not a value at all.
+      forgeRepository:
+        input.forgeRepository === null
+          ? null
+          : requireNotOptionShaped("forgeRepository", input.forgeRepository),
       invocationCeilingMs: requireCeiling(input),
       catalogLayers: requireCatalogLayers(input.catalogLayers),
       projectName: requireNonEmpty("projectName", input.projectName),
@@ -964,6 +995,7 @@ export function planPayload(plan: AdmittedPlan): JsonRecord {
     gate_options: [...plan.gateOptions],
     gate_deadline_at_ms: plan.gateDeadlineAtMs,
     pull_request_base_branch: plan.pullRequestBaseBranch,
+    forge_repository: plan.forgeRepository,
     invocation_ceiling_ms: plan.invocationCeilingMs,
     catalog_layers: plan.catalogLayers.map((layer) => ({
       layer: layer.layer,
@@ -1118,6 +1150,20 @@ const PAYLOAD_UPGRADES: readonly ((payload: JsonRecord) => JsonRecord)[] = [
    * criterion, which is true. The stored bytes are not changed by the climb.
    */
   (payload) => withReviewCriterion(payload),
+  /**
+   * v4 -> v5: the forge repository (D-0081 rule 3.2).
+   *
+   * **Absent means "this plan names no repository to publish to"**, which is
+   * null, and which is what every payload written before `D-0081` means: the
+   * slug was the host's `--repo` and there was no field to write one in. Null
+   * is therefore not a gap to be filled at publish time by inference -- it is
+   * the reading that keeps rule 6.3 true, because a store set up under the one
+   * repository rule publishes against the host's flag exactly as it did before,
+   * and does so without any row being rewritten.
+   *
+   * The stored bytes are not changed by the climb, as in every rung above it.
+   */
+  (payload) => withForgeRepository(payload),
 ];
 
 /**
@@ -1317,6 +1363,18 @@ function withReviewCriterion(payload: JsonRecord): JsonRecord {
 }
 
 /**
+ * A payload from before the forge repository was a plan's, given the slug it
+ * named: none (D-0081 rule 3.2). A present key is left as it is, including a
+ * present non-string, which {@link readNullableString} still refuses by name.
+ */
+function withForgeRepository(payload: JsonRecord): JsonRecord {
+  if (payload["forge_repository"] !== undefined) {
+    return payload;
+  }
+  return { ...payload, forge_repository: null };
+}
+
+/**
  * The caller's half of a plan, read from a document (D-0023 rule 9).
  *
  * What an operator's plan file holds: everything except the three identifiers
@@ -1362,6 +1420,7 @@ export function readRunPlan(payload: JsonRecord): PlanOutcome {
       gateOptions: readStringArray(current, "gate_options"),
       gateDeadlineAtMs: readNullableNumber(current, "gate_deadline_at_ms"),
       pullRequestBaseBranch: readNullableString(current, "pull_request_base_branch"),
+      forgeRepository: readNullableString(current, "forge_repository"),
       invocationCeilingMs: readNumber(current, "invocation_ceiling_ms"),
       catalogLayers: readCatalogLayers(current),
       projectName: readString(current, "project_name"),

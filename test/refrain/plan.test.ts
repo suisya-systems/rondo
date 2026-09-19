@@ -114,6 +114,7 @@ const VALID: RunPlan = {
   gateOptions: ["approve", "revise"],
   gateDeadlineAtMs: null,
   pullRequestBaseBranch: null,
+  forgeRepository: null,
   invocationCeilingMs: 1_800_000,
   catalogLayers: [CATALOG_LAYER],
   projectName: "rondo",
@@ -922,7 +923,7 @@ test("a v3 payload predates the criterion, and climbs to one that wrote none", (
     expect(back.plan.reviewCriterion).toBe(null);
   }
   expect(payload["review_criterion"]).toBeUndefined();
-  expect(PLAN_PAYLOAD_VERSION).toBe(4);
+  expect(PLAN_PAYLOAD_VERSION).toBe(5);
 
   // At the current version an absent key is strict, and a malformed one is
   // refused rather than read as no criterion.
@@ -938,6 +939,43 @@ test("a v3 payload predates the criterion, and climbs to one that wrote none", (
   ]) {
     expect(readPlan({ ...payloadOf(), review_criterion: bad as never }).kind).toBe("refused");
   }
+});
+
+test("a v4 payload predates the forge repository, and climbs to one that names none", () => {
+  // Every row a store set up before D-0081 holds. Climbing it has to mean "this
+  // plan names no repository to publish to" -- which is what rule 6.3 rests on:
+  // such a lap publishes against the host's own --repo, and it can only do that
+  // if reading the row does not refuse over a field that did not exist when the
+  // bytes were written.
+  const payload = { ...payloadOf() } as Record<string, unknown>;
+  delete payload["forge_repository"];
+  payload["payload_version"] = 4;
+  const back = readPlan(payload as JsonRecord);
+  expect(back.kind).toBe("planned");
+  if (back.kind === "planned") {
+    expect(back.plan.forgeRepository).toBe(null);
+  }
+  // The stored bytes are not repaired on the way in, as every rung above.
+  expect(payload["forge_repository"]).toBeUndefined();
+
+  // At the current version the key is strict again: absent is refused by name,
+  // and so is a present non-string.
+  const current = { ...payloadOf() } as Record<string, unknown>;
+  delete current["forge_repository"];
+  const strict = readPlan(current as JsonRecord);
+  expect(strict.kind === "refused" && strict.reason).toContain("forge_repository");
+  expect(readPlan({ ...payloadOf(), forge_repository: 7 as never }).kind).toBe("refused");
+});
+
+test("a slug is carried on the plan, and only a value that is not one is refused", () => {
+  const planned = runPlan(withField({ forgeRepository: "suisya-systems/rondo" }));
+  expect(planned.kind === "planned" && planned.plan.forgeRepository).toBe("suisya-systems/rondo");
+  expect(runPlan(withField({ forgeRepository: null })).kind).toBe("planned");
+  // Not `OWNER/NAME`: that is the forge's rule and publish reads it there, over
+  // the flag and the plan alike. What the plan refuses is the value that is not
+  // a value -- empty, or a word an argument parser would read as a flag.
+  expect(refusalFor({ forgeRepository: "" })).toContain("forgeRepository");
+  expect(refusalFor({ forgeRepository: "--repo" })).toContain("forgeRepository");
 });
 
 test("setting a criterion changes the plan digest", () => {

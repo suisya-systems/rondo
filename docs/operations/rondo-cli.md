@@ -28,8 +28,17 @@ To point the lap at a repository you already have, rather than at the scratch on
 otherwise create:
 
 ```sh
-scripts/dogfood-env.sh --root /abs/where/the/environment/lives --target-repo /abs/your/repo
+scripts/dogfood-env.sh --root /abs/where/the/environment/lives --target-repo /abs/your/repo \
+  --forge-repo OWNER/NAME
 ```
+
+`--forge-repo` is where that repository's pull requests are opened, and it is recorded **onto the
+plan** rather than told to the host (`D-0081` rule 3.2): one store and one host serve several
+repositories, so which repository a lap publishes to is a fact about the lap and not about the
+process serving the page. Run setup again with another `--target-repo` and another `--forge-repo` to
+add a second repository to the same host. Leave it off for a target with no forge -- the scratch
+target is one -- and publishing falls back to the host's own `--repo`, which is also what a store
+set up before `D-0081` publishes by.
 
 **That flag is the only place the target is named, and that is the point of it.** A plan has to
 say which repository this is in four places -- `repository`, `base_branch`, and `source.path` and
@@ -253,7 +262,9 @@ things follow, and they are the whole of what an operator needs to know:
   `D-0028` and every plan file anybody has typed. Two keys may be absent from a version 0 document
   and are supplied by the ladder: `pull_request_base_branch`, which reads as null and which only
   `revise` ever sets (see 5.1), and `workspace_root`, which is derived from the stored workspace's
-  parent -- and only for a document that carries a `workspace`, which a plan file may not (see
+  parent. `forge_repository` is supplied the same way and reads as null, which is what every row
+  written before `D-0081` means: the repository to publish to was the host's `--repo` and there was
+  no field to write one in (see section 8) -- and only for a document that carries a `workspace`, which a plan file may not (see
   below), so **an operator who omits `workspace_root` is still refused by name** rather than handed
   a directory they did not name.
 - **A document that declares a version is held to it.** At version 1 every field is required,
@@ -333,6 +344,7 @@ shim.
   "gate_options": ["approve", "revise"],
   "gate_deadline_at_ms": null,
   "pull_request_base_branch": null,
+  "forge_repository": "OWNER/NAME",
 
   "catalog_layers": [
     {
@@ -526,7 +538,7 @@ iteration 'cli-lap-001' is closed
   Run id: cli-lap-001; continuo revision: 38c667b...
   rondo did not close this run. Nothing was pushed, nothing was landed, and publishing this work is the operator's, not rondo's (D-0010).
 
-Next: rondo publish --iteration-id cli-lap-001 --repo OWNER/NAME --actor-id happy_ryo
+Next: rondo publish --iteration-id cli-lap-001 --actor-id happy_ryo --repo OWNER/NAME
 ```
 
 **1.3 seconds**, measured. Write `--body=` with an equals sign: an answer may legitimately begin
@@ -717,9 +729,10 @@ and refuses with exit 2 on any of them:
    the real run printed one as though it would work.
 2. **Is the topic branch there?** The plan says the lap committed on it; a workspace that no longer
    has it has nothing to push.
-3. **Do the push remote and `--repo` name the same repository?** The push goes to the workspace's
-   remote and the pull request is opened against `--repo`, so when the two are unrelated the branch
-   lands somewhere the pull request does not look. The host counts, and so does every destination:
+3. **Do the push remote and the repository name the same place?** The push goes to the workspace's
+   remote and the pull request is opened in the repository the lap's plan names (or `--repo`, for a
+   plan that names none), so when the two are unrelated the branch lands somewhere the pull request
+   does not look. The host counts, and so does every destination:
    `https://gitlab.com/OWNER/NAME` is a different repository wearing the same name as
    `OWNER/NAME` on github.com, and `remote.<name>.pushurl` may name several places at once, all of
    which receive the branch and all of which are therefore checked. A credential embedded in a
@@ -737,14 +750,20 @@ real run would fail is the same defect in a quieter form.
 **`--allow-remote-mismatch` is the named way past the third one.** Pushing to a fork and opening the
 pull request upstream is a legitimate way to work, so a mismatch is a refusal with an override
 rather than a hard equality. With the flag, the head is spelled `owner:branch` using the owner the
-push actually reaches -- a bare branch name is read as a branch of `--repo`, which is not where the
-push went. When the remote is not a forge repository at all (a local bare repository, as in the
+push actually reaches -- a bare branch name is read as a branch of the repository the pull request
+is opened in, which is not where the push went. When the remote is not a forge repository at all (a local bare repository, as in the
 dogfood environment) there is no owner to qualify with, so the head stays bare and rondo says in one
 line that the pull-request leg should be expected to fail.
 
 **What publish is, and is not.** Every value above comes from the plan the iteration already
-carries; `--repo` is the one flag, because the forge slug is the single fact about publishing that
-no `RunPlan` field holds. `--remote` defaults to `origin`.
+carries, and since `D-0081` that includes the forge repository: one store and one host serve several
+repositories, each named by the plan a lap ran on, so the slug is recorded on the plan by setup
+(`scripts/dogfood-env.sh --forge-repo OWNER/NAME`) rather than told to the host at start. `--repo`
+remains as what an installer may type and as what a plan carrying no slug publishes by -- which is
+every plan written before `D-0081` -- and a lap that names one nowhere is refused by name.
+**rondo still never works a slug out for itself**: a workspace is a worktree cut from a local path,
+and an inferred slug would be whatever that clone happened to point at (`D-0075` rule 3.1).
+`--remote` defaults to `origin`.
 
 rondo **never merges**, and nothing here runs unless a person typed `publish`: no other command in
 the tree reaches the module that can start a process, and that module is the only one granted a
@@ -792,8 +811,9 @@ yours.
 | `closed at gate outcome 'withdrawn'` on `publish` | The gate ended without a person answering it. | Nothing to publish; the work was not approved. |
 | `has no remote 'origin'` on `publish` | The workspace cannot push where the plan says. The refusal lists the remotes it does have. | Name one that is there with `--remote NAME`, or add the remote to the workspace. |
 | `has no branch '<topic>'` on `publish` | The branch the lap committed on is gone from the workspace. | There is nothing to publish from that workspace. |
-| `would not be about the same repository` on `publish` | The push remote and `--repo` are different repositories. | If that is deliberate (a fork), pass `--allow-remote-mismatch`; otherwise fix `--repo` or `--remote`. |
-| `--repo is '<x>', and it must be OWNER/NAME` | `--repo` is passed to the forge unchanged. | Spell it `owner/name`. |
+| `would not be about the same repository` on `publish` | The push remote and the repository the pull request would be opened in are different repositories. | If that is deliberate (a fork), pass `--allow-remote-mismatch`; otherwise fix the plan's slug (set up again with `--forge-repo`), `--repo`, or `--remote`. |
+| `the repository to publish to is '<x>', and it must be OWNER/NAME` | The slug is passed to the forge unchanged, whether it came from the plan or from `--repo`. | Spell it `owner/name`. |
+| `names no repository to publish to` on `publish` | Neither the lap's plan nor this host names a repository to open the pull request in. | Set the repository up with `--forge-repo OWNER/NAME`, or publish this older plan with `--repo OWNER/NAME`. |
 | `was not abandoned` (exit 2) | The row was absent, or the store refused the write. | The lock, if it was held, is still held. Read the row before trying again. |
 
 ### 7.1 Explain -- what the store holds about one iteration, and what each claim rests on
