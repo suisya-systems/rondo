@@ -118,7 +118,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0078 | What a lap knows of the issue it is sent to fix: rondo reads the issue outside the lap when the person's message names it, records what it read in the request thread, and carries it into the prompt quoted, so the lap stays closed to the forge and the person never has to copy an issue into a request | accepted |
 | D-0079 | Composed in the language, not translated into it: every wording set is a whole catalogue and none is another's diff, what a lap and its drafter write for the person is asked for as composed in the person's language, and English is written only where the repository requires it | accepted |
 | D-0080 | Starting rondo is one word with nothing in it to remember: setup writes the command that carries every host fact, the thing the person typed is what speaks when rondo cannot start, and starting runs no setup | accepted |
-| D-0081 | One store and one host, many repositories: a repository is named by the plan a request is drafted from, the forge slug stops being a host fact, and `D-0075` rule 1.1 is withdrawn | proposed |
+| D-0081 | One store and one host, many repositories: a repository is named by the plan a request is drafted from, the forge slug stops being a host fact, and `D-0075` rule 1.1 is withdrawn | accepted |
 
 ---
 
@@ -13384,6 +13384,15 @@ answer" below. Supersedes `D-0057`. Refs rondo#172, `D-0057`, `D-0054`, `D-0041`
 >   would be refused. Nothing above is edited, and rondo#233's writes are now the whole of what this
 >   page can do.
 
+> **Annotation (2026-09-20, from D-0081).** Added after the annotation above, and **not additive**, by
+> the answer of rondo's human gate on rondo#297 (its point 2). **"The forge repository is the host's,
+> not a field" no longer holds.** Under `D-0081` one host serves several repositories, so one slug can
+> be right for at most one of them; setup records the slug onto each repository's plan, and `publish`
+> reads it from the lap's own plan. What does not change: rondo never infers a slug from a workspace's
+> remote (`forge.ts`'s reason, `D-0075` rule 3.1), the push-URL preflight still compares what would be
+> pushed against the slug, and a host or lap with no slug draws the sentence rather than a button.
+> Nothing above is edited.
+
 > **Annotation (2026-09-20, from rondo#288, releasing a finished line's files from the page).**
 > Added under the same answer of rondo's human gate as the annotations above -- every write the page
 > adds beyond section 5a's table is a press, recorded as a row added to that table -- and additive.
@@ -16399,6 +16408,12 @@ number.
 
 3. **Refuse: no path is held by two open lines of one repository.** This is the one property the
    ledger protects.
+   > **Annotation (2026-09-20, from D-0081).** Added after this entry was accepted, and additive.
+   > **"Of one repository" now does work this entry did not need it to do**: under `D-0081` one store
+   > and one host serve several repositories, and this rule is what keeps their lines from being
+   > compared against each other. It was measured before `D-0081` was written and found to hold as
+   > written -- `repositoryKey`, `lane_claim.repository` and `openLines` are already keyed by the
+   > plan's repository -- so nothing here is amended, and neither is the landing reading of rule 6.
    1. **`reserve()` tests the admission's claim against the in-force claim of every other open line in
       the same repository**, inside its `BEGIN IMMEDIATE`, beside `maxLive` and `maxOccupying`
       (`D-0023` rule 10). An overlap refuses: no act, no consumption, and a refusal recorded beside the
@@ -17041,6 +17056,16 @@ number.
    and resident host are its own, and one store's setup rows are one repository's. This is the gate's
    answer 2 made exact; the entry as proposed did not say which store a second repository's setup
    uses (rondo#269's known limit).
+   > **Annotation (2026-09-20, from D-0081).** Added after this entry was accepted, and **not
+   > additive**, by the answer of rondo's human gate on rondo#297 (its point 1). **"One repository per
+   > store and host" is withdrawn**, with the store refusal rondo#271 built for it: one store and one
+   > host serve several repositories, and which repository a setup row is for is its plan's own
+   > `repository`. The gate's answer 2 of 2026-09-19 stands as the answer it was, on the material then
+   > measured; what changed is that the material was measured again (`D-0081`, "What was measured") and
+   > the control layer was found to be keyed per repository already. **Nothing else in this entry
+   > moves**: setup still composes the plan and hands it to the store (rule 2), the host still
+   > discovers nothing (rule 3), and rondo#269's limit is answered rather than carried. Nothing below
+   > is edited.
 2. **Installation ends when the store holds a plan a lap can run on.** That is the change. Today setup
    ends one step short of that: it has composed the plan, and hands it to a person instead of to
    rondo. rondo#265 is right that the paste is past installation. **The plan's content is not**: every
@@ -17992,6 +18017,14 @@ re-measure the claim, not the number.
    itself**: naming it again in a later message reads it again, as of that message. A `revise`
    successor (`D-0027`) carries its predecessor's prompt and reads nothing.
 
+> **Annotation (2026-09-20, from D-0081).** Added after this entry was accepted, and additive, by the
+> answer of rondo's human gate on rondo#297. **A bare `#N` is read in the repository of the plan the
+> request is drafted from**, not in "the forge repository this store's pull requests are opened in":
+> under `D-0081` one store serves several repositories and `D-0075` rule 1.1 is withdrawn. A request
+> whose repository is still in dispute (`D-0081` rule 2.4) is one whose issue read waits for the
+> person's answer, as it waits today for a host that named no repository. The other two forms,
+> `OWNER/NAME#N` and an address, are unchanged. Nothing above is edited.
+
 ### 3. Where it is recorded, and how it reaches the lap
 
 1. **One thread message per reference, of a new author kind `forge`**, `in_reply_to` the operator
@@ -18497,6 +18530,15 @@ Line numbers drift; re-measure the claim, not the number.
    CLI, the port, the repository and remote, `node`'s real path, the checkout it built, and a `PATH`
    holding the real directories of `git`, `gh`, `claude`, `codex` and `node` (measurement). Running it
    is exactly the three lines the runbook prints today, composed once by the step that resolved them.
+   > **Annotation (2026-09-20, from D-0081).** Added after this entry was accepted, and **not
+   > additive**, by the answer of rondo's human gate on rondo#297 (its point 2). **The repository
+   > leaves this list of host facts**; the remote stays. Under `D-0081` the forge repository is a
+   > property of the repository, recorded by setup onto the plan and read by `publish` off the lap's
+   > own plan, so the start command no longer carries it -- and `--repo` remains what an installer may
+   > type and what a store set up before `D-0081` publishes by. **Rule 1 is untouched**: starting rondo
+   > is still one word with nothing in it to remember. This entry's own falsifier, "a second page
+   > wanted on another port, or a second repository, often enough that the one word is a cage", is what
+   > fired. Nothing below is edited.
 2. **The host reads its facts as it reads them now**, from its environment and its arguments
    (measurement), and nothing in `src/` changes. **rondo gains no settings file and no configuration
    layer**: `D-0019` rule 3 and `D-0025` rule 5 are untouched, and `D-0075` rule 3.1 holds exactly --
@@ -18737,14 +18779,17 @@ Each dated, and added with this entry's acceptance:
 
 ## D-0081 — One store and one host, many repositories: a repository is named by the plan a request is drafted from, the forge slug stops being a host fact, and `D-0075` rule 1.1 is withdrawn
 
-**Status:** proposed (2026-09-20, rondo#297). **Five points are put to rondo's human gate and nothing
-here is settled without them**; they are listed with a recommendation each in "What is put to the
-human gate". Refs `D-0019`, `D-0023`, `D-0025`, `D-0059`, `D-0063`, `D-0064`, `D-0071`, `D-0073`,
+**Status:** accepted (2026-09-20, rondo's human gate, on rondo#297). Five points were put to the gate
+through the window and it chose the recommended option on each; the answers are recorded in "What was
+put to the human gate, and its answer". Supersedes nothing; `D-0075` rule 1.1 is withdrawn by
+annotation (section 5.1), and the annotations this entry adds are listed in "Annotations this entry
+adds". Refs `D-0019`, `D-0023`, `D-0025`, `D-0059`, `D-0063`, `D-0064`, `D-0071`, `D-0073`,
 `D-0075`, `D-0076`, `D-0078`, `D-0080`, rondo#265, rondo#269, rondo#271, rondo#280, rondo#286,
 rondo#292, rondo#293, rondo#297.
 
 **This entry decides and does not build.** Nothing in `src/` or `scripts/` changes with it. What the
-building change would have to do is named where it comes up, and listed in "Residuals".
+building change has to do is named where it comes up, and gathered in "What the building change owes";
+the residuals it does not settle are in "Residuals".
 
 **Numbering.** `D-0081` is the next number after `D-0080` on `main` at `f8ba67a`.
 
@@ -18765,7 +18810,8 @@ second repository, often enough that the one word is a cage"* as the condition u
 `D-0075`'s "one repository per store and host" comes back. rondo#297 is that condition, reported by
 the operator. **Nothing here contradicts `D-0080` rule 1**: starting rondo stays one word with
 nothing in it to remember. What changes is one item in the list of host facts that word carries
-(rule 2.1, "the repository and remote"), and that change is gate point 2.
+(rule 2.1, "the repository and remote"), and that change was put to the gate as point 2 and answered
+there.
 
 ### What was measured, and how
 
@@ -18854,8 +18900,9 @@ binding to one repository lives in installation and in publishing, which is wher
 4. **A request that names no repository is a dispute, not a default.** Where nothing in the request
    or its thread tells the drafter which repository the work belongs in, it asks back with a
    recommendation and rondo starts nothing until the person answers -- `D-0063`'s drafting half and
-   `D-0064`'s "a question with a recommendation" route, with no new kind of stop. This is gate point
-   3, because choosing a repository for the person is exactly the class of act `D-0064` reserves.
+   `D-0064`'s "a question with a recommendation" route, with no new kind of stop. It was put to the
+   gate as point 3 -- choosing a repository for the person is exactly the class of act `D-0064`
+   reserves -- and the gate took it.
 
 ### 3. The forge repository stops being a host fact
 
@@ -18867,8 +18914,8 @@ binding to one repository lives in installation and in publishing, which is wher
    recorded: the plan.** Setup knows it -- it is told the target repository and verifies its push
    remote (`scripts/dogfood-env.sh`) -- so it records it as it records everything else. `publish`
    then takes the slug from the lap's own plan, and its push-URL preflight compares against that.
-   This is the recommended shape and is gate point 2, because it reverses `D-0059` section 5a's
-   *"the forge repository is the host's, not a field"*.
+   It was put to the gate as point 2, because it reverses `D-0059` section 5a's *"the forge repository
+   is the host's, not a field"*, and the gate took it.
 3. **What it does not become: rondo inferring a slug.** `forge.ts`'s own reason stands -- the
    workspace is a worktree cut from a local path, and an inferred slug is whatever that clone
    happened to point at. `D-0075` rule 3.1 refuses it a second time. A slug is told to setup by a
@@ -18888,14 +18935,13 @@ binding to one repository lives in installation and in publishing, which is wher
    nothing is grouped by repository and nothing is hidden behind a choice of repository.
 2. **The repository is drawn only where the person could not otherwise tell two things apart**
    (`D-0076` rule 3.3's existing rule, applied to a set that now spans repositories), and then in
-   their own name for the place. This is gate point 4.
+   their own name for the place. It was put to the gate as point 4, and the gate took it.
 3. **No repository picker and no per-repository page.** A filter is a thing to remember (K4), and a
    second page is a second host under another name, which is what this entry exists to remove.
 
 ### 5. What `D-0075` rule 1.1 becomes, and what `D-0073` needs
 
-1. **Rule 1.1 is withdrawn on acceptance**, by a dated annotation on `D-0075` saying which entry
-   withdrew it; the store refusal rondo#271 built goes with it. **Every other rule of `D-0075`
+1. **Rule 1.1 is withdrawn**, by the dated annotation this entry adds to `D-0075`; the store refusal rondo#271 built goes with it. **Every other rule of `D-0075`
    stands**: setup still composes the plan, still hands it to the store and not to the person, and
    the host still reads no path (rules 2 and 3).
 2. **rondo#269's known limit is answered the other way round.** One store's setup rows are **this
@@ -18914,7 +18960,7 @@ binding to one repository lives in installation and in publishing, which is wher
    under one root are setup's record of what it did, and rondo reads neither again (`D-0075` rule
    2.5), so giving them per-repository names is the whole of the change there. It is the building
    change's, and it is why setup's "one repository per root" check can go.
-3. **A store whose host still carries `--repo` keeps working.** Under gate point 2 (a), a lap whose
+3. **A store whose host still carries `--repo` keeps working.** Under the gate's answer 2 (a), a lap whose
    plan carries no slug publishes against the host's `--repo` as it does today; the flag stays what
    an installer may type and what a pre-entry store uses.
 
@@ -18925,10 +18971,13 @@ binding to one repository lives in installation and in publishing, which is wher
 | **A. `D-0075` rule 1.1 as accepted**: one repository per store and host | met inside one repository | met inside one repository | **unmet** at every second repository: setup, a second port, a second page | met | **Refused.** It is rondo#297 |
 | **B. One host, several stores** (a store per repository, one page over them) | met | met | met after installation | met | **Refused.** The store is where single-flight, the capacity ledger, the lane ledger and the scope record live (`D-0023`, `D-0066`, `D-0073`); several stores are several organisations, and every question that spans repositories becomes a join nothing owns |
 | **C. The person names the repository in the request** (a field beside the words) | met | met: it is not an approval or a dispute, it is a form field | met | **unmet**: a thing the person holds and has to spell rondo's way | **Refused.** It is `--repo` moved onto the page |
-| **D. The repository is the plan's, and a request picks a plan** | met | met, with rule 2.4's dispute where nothing names one | met after installation of each repository | met: the screen names places in the person's words | **Taken** (rules 1-6), subject to the gate |
+| **D. The repository is the plan's, and a request picks a plan** | met | met, with rule 2.4's dispute where nothing names one | met after installation of each repository | met: the screen names places in the person's words | **Taken** (rules 1-6) |
 | **E. A repository picker on the page** (the person chooses a repository, then works) | met | **unmet**: choosing a repository is neither an approval nor a dispute | met | **unmet**: the picker is a thing to remember to set | **Refused.** Rule 4.3 |
 
-### What is put to the human gate, and the recommendation on each
+### What was put to the human gate, and its answer
+
+**Each point is written as it was put, with the answer under it.** The gate answered all five on
+2026-09-20, through the window, and took the recommended option on each.
 
 1. **Whether one store and one host serve several repositories at all.** This is the entry.
    - **(a) Yes** (recommended). The asymmetry the operator names is real, the measurement says the
@@ -18937,6 +18986,8 @@ binding to one repository lives in installation and in publishing, which is wher
      repository becomes a second choice on the screen rather than a refusal at setup.
    - **(b) No: keep rule 1.1**, and answer the asymmetry with several hosts and a way to move between
      their pages. *Loses:* K3 at every second repository, and "the one resident process" as a claim.
+
+   **Answered (a).** One store and one host serve several repositories, and rule 1 is the line.
 2. **Where the forge repository is named, now that one host serves several.** Also the `D-0080`
    point: whichever is taken, what setup writes into the start command changes, and rule 1 does not.
    - **(a) A field on the plan, recorded by setup; `publish` reads it from the lap's own plan**
@@ -18949,6 +19000,11 @@ binding to one repository lives in installation and in publishing, which is wher
      rather than beside the repository it describes.
    - **(c) Derived at publish time from the workspace's push URL.** *Loses:* it is the inference
      `forge.ts` and `D-0075` rule 3.1 refuse; the slug would be whatever that clone pointed at.
+
+   **Answered (a).** Setup records the slug onto the plan and `publish` reads it from the lap's own
+   plan. So the repository leaves `D-0080` rule 2.1's list of host facts and the remote stays, by the
+   annotation this entry adds there; `D-0080` rule 1 is untouched, and `--repo` remains the
+   installer's flag and what a store set up before this entry publishes by (rule 6.3).
 3. **What happens when nothing in a request tells rondo which repository.**
    - **(a) The drafter asks back with a recommendation, and nothing starts until the person answers**
      (recommended, rule 2.4). It is `D-0064`'s existing route and adds no new kind of stop.
@@ -18957,6 +19013,9 @@ binding to one repository lives in installation and in publishing, which is wher
      silently, which is the failure `D-0064` reserves to a person.
    - **(c) Refuse the request outright.** *Loses:* K2 -- a refusal is neither an approval nor a
      dispute, and the person is left to guess what to add.
+
+   **Answered (a).** The drafter asks back with a recommendation and rondo starts nothing until the
+   person answers, on `D-0064`'s existing route and with no new kind of stop.
 4. **Whether the page ever names the repository.**
    - **(a) Only where two choices are otherwise indistinguishable, in the person's own words**
      (recommended, rule 4.2). It is `D-0076` rule 3.3 unchanged. *Loses:* a person who wants to see
@@ -18964,6 +19023,9 @@ binding to one repository lives in installation and in publishing, which is wher
    - **(b) Always, on every line.** *Loses:* `D-0076`'s "what they cannot use is not shown", for a
      person who works in one repository most days.
    - **(c) Never.** *Loses:* the one case where the person genuinely cannot tell two lines apart.
+
+   **Answered (a).** The repository is drawn only where the person could not otherwise tell two things
+   apart, in their own words: `D-0076` rule 3.3 unchanged.
 5. **Whether adding a repository is setup run again under the same root.**
    - **(a) Yes: setup again with another target under the same root**, writing per-repository output
      files (recommended, rule 6.2). One way in, and it is the way that already exists. *Loses:*
@@ -18975,13 +19037,17 @@ binding to one repository lives in installation and in publishing, which is wher
      person carries between roots, and two setups can disagree about the host facts that are one
      host's.
 
+   **Answered (a).** Adding a repository is setup run again under the same root, with setup's own
+   output files named per repository (rule 6.2). Setup's "one repository per root" check goes with the
+   store's refusal.
+
 ### What this gives up
 
 - **The store's guarantee that its rows are one repository's.** It was a cheap check with a real
   effect: a setup run pointed at the wrong target was refused at once. What replaces it is the
   plan's own `repository`, which every reader already goes through, and a second choice on the
   screen where there used to be a refusal in a terminal.
-- **One slug per host as a simple fact.** Under gate 2 (a) a wrong slug is discovered at publish --
+- **One slug per host as a simple fact.** Under the gate's answer 2 (a) a wrong slug is discovered at publish --
   outward, irreversible, and the last place a person wants a surprise -- rather than when the host
   started. The preflight (`inspectPushTarget`) is what keeps that from being a bad push, and it is
   why the refusal is a refusal and not a warning.
@@ -19002,15 +19068,29 @@ binding to one repository lives in installation and in publishing, which is wher
 - **It does not allow a lap spanning two repositories** (rule 1.3).
 - **It builds nothing.**
 
-### Annotations it would add, on acceptance
+### Annotations this entry adds
 
 | Entry | What the annotation says | Additive? |
 |---|---|---|
-| `D-0075` rule 1.1 | Withdrawn, with the store refusal rondo#271 built; the rest of `D-0075` stands | **not additive** |
-| `D-0080` rule 2.1 | What the start command carries as the repository fact changes with gate point 2; rule 1 is untouched, and this entry is the falsifier it named | **not additive** |
-| `D-0059` section 5a's annotation | "The forge repository is the host's, not a field" becomes the plan's under gate 2 (a) | **not additive** |
-| `D-0078` section 2.4 | A bare `#N` is read in the repository of the plan the request is drafted from | additive |
-| `D-0073` rule 3 | Named as already holding across repositories, and unamended | additive |
+| `D-0075` rule 1.1 | Withdrawn, with the store refusal rondo#271 built; every other rule of `D-0075` stands, and rondo#269's limit is answered rather than carried | **not additive** |
+| `D-0080` rule 2.1 | The repository leaves the list of host facts the start command carries and the remote stays; rule 1 is untouched, and this entry is the falsifier it named | **not additive** |
+| `D-0059` section 5a's annotation | "The forge repository is the host's, not a field" no longer holds: the slug is the plan's, and rondo still never infers one | **not additive** |
+| `D-0078` section 2 | A bare `#N` is read in the repository of the plan the request is drafted from, not in "the one repository this store publishes to" | additive |
+| `D-0073` rule 3 | "Of one repository" now separates several repositories' lines in one store; measured as already holding, and unamended | additive |
+
+### What the building change owes
+
+Named here so that nothing in this entry is read as built. None of it is in this commit.
+
+| What | Where | Why it follows |
+|---|---|---|
+| Remove the store's setup-row refusal for another repository | `src/store/sqlite.ts`, the `setup_plan` insert | `D-0075` rule 1.1 is withdrawn (gate answer 1) |
+| Record the forge slug on the plan, and read it at `publish` from the lap's plan; keep `--repo` as the installer's flag and the fallback for a plan that carries none | `scripts/dogfood-env.sh`, `src/refrain/plan.ts`, `src/access/cli.ts`, `src/access/forge.ts` | Gate answer 2 |
+| Stop the start command carrying `--repo`, and stop setup writing it into the command | `scripts/dogfood-env.sh` (`D-0080` rule 2.1) | Gate answer 2, by the annotation on `D-0080` |
+| Read a bare `#N` in the repository of the plan the request is drafted from, and wait where the repository is in dispute | `src/access/issue-read.ts`, the `issueReader` call in `cli.ts`'s `web` arm | Rule 3.4, gate answer 2 |
+| Ask back, with a recommendation, where nothing names a repository | the drafter (`src/access/model-drafter.ts`, `drafter-host.ts`) | Gate answer 3 |
+| Say which repository a held plan is for, only where the person cannot otherwise tell two apart, in their own words | `src/access/web.tsx`, the wording sets | Gate answer 4, `D-0076` rule 3.3 |
+| Name setup's own output per repository (`plan.json`, the catalog file) and drop setup's "one repository per root" check | `scripts/dogfood-env.sh` | Gate answer 5, rule 6.2 |
 
 ### Residuals, with who decides
 
