@@ -3951,9 +3951,7 @@ test("with no lap recorded, the scope screen says in Japanese that the reserve w
     () => "MINT-SCOPE-1",
     () => "MINT-LAP-1",
   );
-  expect(html).toContain(
-    "この予算は、依頼の大きさが過去の周回と同じくらいだという前提に立っています",
-  );
+  expect(html).toContain("依頼の大きさが過去の周回と同じくらいだと見て、予算を出しています");
   expect(html).toContain("rondo の初期値 2.50 USD で、誰かが測った値ではありません");
   // A tier-level sample says it is other agent types' laps, in both languages.
   expect(EN.scopeSampleRows(3, "standard", "0.22", "1.88")).toContain(
@@ -4157,7 +4155,7 @@ test("the scope screen speaks Japanese, and every id, digest and 'rondo' token s
   expect(html).toContain("この依頼の範囲");
   expect(html).toContain("範囲を決める");
   expect(html).toContain(
-    "この範囲を書くのはあなたです。プランは rondo が持っているものから選び、数値はこのストアに記録された周回から出しています。",
+    "範囲を決めるのはあなたです。プランは rondo が持っているものから選び、数値はこのストアに記録された周回から出しています。",
   );
   expect(html).toContain("既定値で、依頼から導いたものではありません。");
   expect(html).toContain(`エージェント種別 ${agentTypeDigest}`);
@@ -6072,7 +6070,7 @@ test("the sentence that says a second start press is safe is in both catalogues 
   // fall into English in the middle of the one paragraph beside the press.
   expect(EN.startAgainSafe).not.toBe("");
   expect(chromeFor("ja").startAgainSafe).not.toBe(EN.startAgainSafe);
-  expect(chromeFor("ja").startAgainSafe).toContain("2 回目の押下は 1 回目に合流し");
+  expect(chromeFor("ja").startAgainSafe).toContain("2 回目の押下は 1 回目にまとめられ");
 });
 
 test("the entrances carry the weight of the acts behind them, and the refusal on the publish screen is untouched (#246)", async () => {

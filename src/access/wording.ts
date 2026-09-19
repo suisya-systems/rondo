@@ -1997,8 +1997,8 @@ const JA: Chrome = Object.freeze({
     `${String(seconds)}秒ごとに描き直しますが、描き直しは何も書き込みません。最後に見た印は動かず、
 提示も数えられません。書き込むのは approve ボタンだけで、押した時点の説明を記録してからゲートに
 答えます。`,
-  stillNote: `この画面は自分では更新しません。押したときに記録されるのはいま読んでいるこの内容なので、
-読んでいるあいだ動きません。読むこと自体は何も書き込みません -- 最後に見た印は動かず、提示も
+  stillNote: `押したときに記録されるのは、いま読んでいる内容そのものです。だから読んでいるあいだ、
+画面がひとりでに書き換わることはありません。読むこと自体は何も書き込みません -- 最後に見た印は動かず、提示も
 数えられません。書き込むのは approve ボタンだけで、押した時点の説明を記録してからゲートに答えます。`,
   noApproverNote:
     "RONDO_APPROVER が設定されていないので、このページが誰として答えることもできず、" +
@@ -2093,7 +2093,7 @@ const JA: Chrome = Object.freeze({
       no_repo: "この環境の rondo は、この番号がどのリポジトリのものかを知りません",
       missing: "このイシューが見つからないか、あなたのアカウントからは見えません",
       refused: "このイシューへのアクセスが、あなたのアカウントでは拒否されました",
-      too_long: "このイシューは長すぎて丸ごと渡せず、一部も渡していません",
+      too_long: "イシューが長すぎて丸ごとは渡せず、一部だけを渡すこともしていません",
       too_many: "rondo が 1 つのメッセージから読むイシューは 5 件までで、これはその先でした",
       failed: "rondo はこのイシューを読めませんでした",
     })[why] + "。そのため作業者には、ここにあなたが書いたことだけが渡されます。",
@@ -2144,7 +2144,7 @@ const JA: Chrome = Object.freeze({
     "rondo はこのメッセージを受け取りませんでした。ページを読み込み直してから、もう一度送信してください。",
   answerRefusedPress:
     "回答は「回答する」ボタンを押したときだけ受け付けます。スレッドを読み込み直して、もう一度「回答する」を押してください。",
-  replyNotAnswer: "この返信は、このスレッドで待っている質問への回答にはなりません。",
+  replyNotAnswer: "返信しただけでは、このスレッドで待っている質問に答えたことになりません。",
   sendBack: "スレッドに戻る",
   sendBackNote: "ブラウザの「戻る」で、書いた文に戻れます。",
   threadsLiveNote: (seconds) =>
@@ -2209,7 +2209,7 @@ const JA: Chrome = Object.freeze({
   workHeading: "変わったもの",
   changedAgainst: (baseRef) => `${baseRef} との比較`,
   changedUnreadable: (reason) => `作業場所を読み取れませんでした: ${reason}`,
-  changedNoRange: "この実行には比べるブランチの名前がないので、一覧にするものがありません。",
+  changedNoRange: "比べる相手のブランチが記録されていないので、変更を一覧にできません。",
   noCommits: "ブランチにコミットはありません。",
   noFiles: "変わったファイルはありません。",
   binaryFile: "バイナリ",
@@ -2224,7 +2224,8 @@ const JA: Chrome = Object.freeze({
         : verdict === "unavailable"
           ? "取れず"
           : verdict,
-  checksNone: "この作業のチェックは記録されていません。公開するときに確認を求められます。",
+  checksNone:
+    "作業をチェックした記録がありません。公開するときに、それで進めてよいかを確認します。",
   checksCounted: (commits, files) =>
     `コミット ${String(commits)} 件とファイル ${String(files)} 件を読みました。`,
   readingUnavailable: (reason) => `読み取りを取れませんでした: ${reason}`,
@@ -2234,7 +2235,7 @@ const JA: Chrome = Object.freeze({
   basisUnresolved: "どれも渡した作業と一致しませんでした",
   modelPending: "まだ届いていません。これから届くかもしれません。",
   modelOlder:
-    "これは以前のコミットについてのものです。いまのコミットの読み取りがこれから届くかもしれません。",
+    "以前のコミットを読んだ結果です。いまのコミットを読んだ結果は、これから届くかもしれません。",
   reloadPage: "読み込み直す",
   readingsNote: "どちらの読み取りも判断材料です。どちらも何も承認しません。答えるのはあなたです。",
   allAsText: "記録全文 (上に出していない項目も含む)",
@@ -2245,7 +2246,7 @@ const JA: Chrome = Object.freeze({
   claimGateUnread:
     "rondo がこのゲートを読めなかったため、確認した内容は記録していません。ゲートに戻って、もう一度試してください。",
   claimGateClosed:
-    "このゲートはすでに回答済みのため、確認した内容は記録していません。ゲートに戻ると、どう終わったかを確認できます。",
+    "ゲートがすでに回答済みだったため、確認した内容は記録していません。ゲートに戻ると、どう終わったかを確認できます。",
   claimNotRecorded:
     "rondo が確認した内容を記録できなかったため、何も回答していません。ゲートに戻って、もう一度試してください。",
   answerNotDone: "回答されませんでした",
@@ -2288,7 +2289,8 @@ const JA: Chrome = Object.freeze({
     "隣接は衝突ではありません。ひとつの base branch に対して 2 つの lap が開いているというのは、" +
     "見るべき場所であって、見つかった事実ではありません。",
   iterationHeading: (iterationId) => `iteration '${iterationId}'`,
-  explainNote: "この説明は何も拘束しません。proposal ではないので、承認することもできません。",
+  explainNote:
+    "ここにあるのは説明で、proposal ではありません。何も拘束せず、承認することもできません。",
 
   inboxFor: (actorId) => `'${actorId}' の inbox`,
   waitingOnYou: "あなたを待っているもの",
@@ -2338,7 +2340,7 @@ const JA: Chrome = Object.freeze({
     `transcript ${directory}${sessions > 1 ? `  (${String(sessions)} セッション中の最新)` : ""}`,
 
   declarationCaveat: Object.freeze([
-    "これは run 自身の declaration であって fence の全体ではありません。continuo は",
+    "ここにあるのは run 自身の declaration で、fence の全体ではありません。continuo は",
     "role のテンプレートを同じ allow リストへ展開しますが、rondo はここでそれを読みません。",
   ]),
   secondFence: Object.freeze([
@@ -2353,7 +2355,7 @@ const JA: Chrome = Object.freeze({
   scopeHeading: "この依頼の範囲",
   backToThread: "依頼に戻る",
   scopeLead:
-    "この範囲を書くのはあなたです。プランは rondo が持っているものから選び、数値はこのストアに" +
+    "範囲を決めるのはあなたです。プランは rondo が持っているものから選び、数値はこのストアに" +
     "記録された周回から出しています。読んで、変えたいところを変えてください。1 回押せば記録と" +
     "承認の両方が行われます。",
   scopeNoPlanHeld:
@@ -2363,8 +2365,7 @@ const JA: Chrome = Object.freeze({
     `rondo が持っているプランを読めなかったので、選べるものがありません: ${reason}`,
   scopePlanAsk: "作業に使うプラン",
   scopePlanGone:
-    "この画面で選んだプランは、もうこの依頼で rondo が選べるものではありません。次の中から" +
-    "選び直してください。",
+    "選んだプランは、この依頼ではもう使えなくなりました。次の中から選び直してください。",
   scopePlanFrom: (from) =>
     from === "message"
       ? "このスレッドに貼られたもの"
@@ -2398,15 +2399,15 @@ const JA: Chrome = Object.freeze({
   planStartedLink: "周回を開く",
   planBusy: (limit) =>
     limit === 1
-      ? "まだ空きがありません。このホストが一度に動かす周回は 1 件で、いまその 1 件が動いています。" +
+      ? "まだ空きがありません。同時に動かせる周回は 1 件までで、いまその 1 件が動いています。" +
         "その周回がゲートまで進むと、ここに開始ボタンが出ます。"
-      : `まだ空きがありません。このホストが一度に動かす周回は ${String(limit)} 件までで、いま` +
+      : `まだ空きがありません。同時に動かせる周回は ${String(limit)} 件までで、いま` +
         "そのすべてが動いています。どれかがゲートまで進むと、ここに開始ボタンが出ます。",
   planFull: (live, limit) =>
     `まだ空きがありません。開いている周回が ${String(live)} 件あり、このホストが許す上限` +
     `（${String(limit)} 件）です。どれかが終わると、ここに開始ボタンが出ます。`,
   planOutside: (test) => `始められません。${scopeTestJa(test)}。`,
-  planUnrunnable: "この作業はもう動かせません。依頼のスレッドに返信すると、下書きし直されます。",
+  planUnrunnable: "もう動かせなくなりました。依頼のスレッドに返信すると、下書きし直されます。",
   planUnrunnableWhy: "止めている理由",
   planUndecidable: "いま、この作業を範囲に照らして確かめられませんでした。",
   scopeNoPlanForScope:
@@ -2472,12 +2473,12 @@ const JA: Chrome = Object.freeze({
       : `レビュー回数: ${String(rounds)}（あなたが選んだ数）`,
   scopeBasisReplyAllowance: "あなたの返信のための 1 日。測った値ではなく、見込みの余裕です",
   scopeBasisLap: (iterationId) => `周回 ${iterationId}`,
-  scopeSampleHeading: "この予算は、依頼の大きさが過去の周回と同じくらいだという前提に立っています",
+  scopeSampleHeading: "依頼の大きさが過去の周回と同じくらいだと見て、予算を出しています",
   scopeSampleRows: (laps, tier, lowest, highest) =>
     `${
       tier === null
         ? "このエージェント種別"
-        : `このエージェント種別の記録はまだないので、同じ tier ${tier} の別のエージェント種別`
+        : `まだ記録のないエージェント種別なので、同じ tier ${tier} の別のエージェント種別`
     }の初回周回 ${String(laps)} 件をもとに下書きしました。費用は ` +
     `${lowest === highest ? highest : `${lowest}〜${highest}`} USD で、引当にはその最高値を` +
     `使っています。rondo が記録しているのは周回にかかった費用だけで、どれだけの作業をしたかは` +
@@ -2518,13 +2519,13 @@ const JA: Chrome = Object.freeze({
   scopePredecessorUnreadable: (reason) =>
     `置き換える範囲が何を使ったかは読めませんでした: ${reason}`,
   scopeRetired:
-    "この範囲は後から入った範囲に置き換えられたので、この承認のもとでは何も始まりません。" +
-    "始めるなら、置き換えた側の範囲になります。",
+    "後から入った範囲に置き換えられたので、ここで承認した範囲では何も始まりません。" +
+    "始めるなら、新しいほうの範囲で始めることになります。",
   startAction: "作業を始める",
   startPlain: "この承認のもとで 1 周回を始めます",
   startAgainSafe:
-    "このボタンを二度押しても周回は 1 つです。2 回目の押下は 1 回目に合流し、それ以上は" +
-    "始めません。",
+    "二度押しても、始まる周回は 1 つです。2 回目の押下は 1 回目にまとめられ、それ以上は" +
+    "始まりません。",
   startNote:
     "依頼に書いた言葉が、そのまま作業への指示になります。周回の名前は rondo が付けるので、" +
     "あなたが決める必要はありません。",
@@ -2562,13 +2563,12 @@ const JA: Chrome = Object.freeze({
     "何も開始していません。そのフォームはこのページのものではありません。読み込み直してから" +
     "押してください。",
   startRefusedNoPlan:
-    "何も開始していません。この開始のために選んだプランは、この依頼に対して rondo が持って" +
-    "いるものではありません。",
+    "何も開始していません。選んだプランが、この依頼で使えるプランのなかにありません。",
   startRefusedNoRequest:
     "何も開始していません。依頼を読み戻せなかったので、作業に頼むことがありません。",
   startRefusedNoContinuo: "何も開始していません。作業を動かす部分が起動しません。",
   startRefusedOutside: (test) =>
-    `何も開始せず、何も消費していません。この作業は承認した範囲の外で、${test} の判定で` +
+    `何も開始せず、何も消費していません。承認した範囲の外にある作業で、${test} の判定で` +
     `外れました。選択肢は依頼のスレッドに書かれたメッセージにあります。`,
   startRefusedNotAdmitted:
     "何も開始せず、何も消費していません。承認はそのまま有効なので、もう一度押しても安全です。",
@@ -2584,8 +2584,8 @@ const JA: Chrome = Object.freeze({
     "その周回と費用は、この周回が動いた承認の budget に数えられます。周回の名前は rondo が" +
     "付けるので、入力の必要はありません。",
   reviseNoScope:
-    "この周回は承認済みの範囲のもとで開始されていないため、2 周目を数える budget がありません。" +
-    "ここでは変更の依頼を出せません。",
+    "承認済みの範囲のもとで始めた周回ではないため、2 周目を数える budget がありません。" +
+    "ここから変更を依頼することはできません。",
   reviseDraftFinding: (severity, text) => `- [${severity}] ${text}`,
   reviseDraftBases: (bases) => `  場所: ${bases}`,
   reviseDraftChange: (words) => `  直すこと: ${words}`,
@@ -2612,13 +2612,13 @@ const JA: Chrome = Object.freeze({
     "押してください。",
   reviseRefusedNoWords: "何も回答していません。変更の依頼には内容が要りますが、入力欄が空でした。",
   reviseRefusedGateClosed:
-    "何も回答していません。この周回にはもう開いているゲートがありません。戻って結果を" +
+    "何も回答していません。開いているゲートがもう残っていません。戻って結果を" +
     "確認してください。",
   reviseRefusedNotItsScope:
     "何も回答していません。消費しようとしている承認は、この周回が動いた承認ではありません。" +
     "ゲートを読み込み直してから押してください。",
   reviseRefusedStillRunning:
-    "何も回答していません。このゲートはすでに別の言葉で回答中で、その処理が続いています。" +
+    "何も回答していません。ゲートには別の言葉ですでに回答していて、その処理が続いています。" +
     "終わるのを待ってから、ゲートを読み込み直して状態を確認してください。",
   reviseRefusedNotSetUp:
     "何も回答せず、ゲートにも触れていません。2 周目を用意できませんでした。詳細は rondo を" +
@@ -2680,7 +2680,7 @@ const JA: Chrome = Object.freeze({
     "その回答にはなりません。依頼のスレッドで続けるよう伝えるまで、作業は止まったままです。",
   raiseAskLink: "尋ねた内容を読む",
   raiseNotTip:
-    "この予算はすでに引き上げられているので、ここで引き上げるものはありません。戻って、今" +
+    "予算はすでに引き上げられていて、ここから引き上げるものはありません。戻って、今" +
     "有効な予算を確認してください。",
   raisePressNote:
     "1 回押すと、新しい予算があなたの名前で記録・承認され、あなたを待っている作業に戻ります。" +
@@ -2688,7 +2688,7 @@ const JA: Chrome = Object.freeze({
   raiseAction: "予算を引き上げる",
   raisePlain: "新しい予算を記録して承認します",
   raiseRefusedNotTip:
-    "何も記録していません。この予算は別のタブか別の人によってすでに引き上げられています。" +
+    "何も記録していません。別のタブか別の人が、先に予算を引き上げています。" +
     "戻って、今有効な予算を確認してください。",
   raiseRefusedForked:
     "何も記録していません。この依頼で承認した予算が別々に 2 回引き上げられていて、rondo は" +
@@ -2733,17 +2733,17 @@ const JA: Chrome = Object.freeze({
   publishPlain: "このブランチを push し、プルリクエストを作り、run を閉じます。",
   publishBack: "公開の画面に戻る",
   publishNotOffered:
-    "このページからは何も公開できません。公開には、公開先のリポジトリと、このホストが受け付ける" +
+    "ここからは公開できません。公開には、公開先のリポジトリと、このホストが受け付ける" +
     "公開者の 2 つが要りますが、そのどちらかがないまま起動されています。どちらもページを" +
     "起動するときに rondo へ渡します。",
   publishNotClosed: (status) =>
-    `この周回は ${status} です。公開は、人がゲートで承認済みの作業に対して行うものです。`,
+    `周回が ${status} の状態です。公開できるのは、人がゲートで承認した作業だけです。`,
   publishNotApproved: (outcome) =>
-    `この周回のゲートは ${outcome} で終わっており、人が回答した結果ではないため、` +
-    "公開の根拠となる承認がありません。",
-  publishNoRun: "この周回には run の記録がないため、閉じる run がありません。",
+    `ゲートが ${outcome} で終わっていて、人が回答したわけではないため、` +
+    "公開してよいという承認がありません。",
+  publishNoRun: "run の記録がないため、閉じる run がありません。",
   publishPlanField: (field) =>
-    `この周回の plan に ${field} がなく、公開はそこから組み立てられます。このままでは` +
+    `公開は周回の plan から組み立てますが、その plan に ${field} がありません。このままでは` +
     "公開できません。",
   publishTargetRefused: (reason) => `push の宛先を rondo が保証できません: ${reason}`,
   publishUncommitted: (paths) =>
@@ -2759,8 +2759,8 @@ const JA: Chrome = Object.freeze({
     "この作業を独立に読んだものがありません。「読まれていない」と「読んで何も出なかった」が" +
     "同じに見えてはいけないので、既定では公開はここで止まります。",
   publishReviewNotClear: (verdict, findings) =>
-    `この作業の読み取りは '${verdict}' です${findings === "" ? "" : `: ${findings}`}。` +
-    "これは結論でも拒否権でもなく、まだ答えられていない指摘です。",
+    `作業を読んだ結果は '${verdict}' です${findings === "" ? "" : `: ${findings}`}。` +
+    "結論でも拒否権でもなく、まだ誰も答えていない指摘です。",
   publishReviewNoEvidence:
     "読み取りは何も出なかったと言っていますが、何を読んだかの測定が記録されていないため、" +
     "照合する相手がありません。",
@@ -2780,17 +2780,18 @@ const JA: Chrome = Object.freeze({
     "何も公開していません。RONDO_APPROVER が未設定なので、このページが誰として公開するか" +
     "決まりません。",
   publishRefusedPress:
-    "何も公開していません。これは人がこのページのボタンを押して行うもので、スクリプトには" +
+    "何も公開していません。公開は人がこのページのボタンを押して行うもので、スクリプトからは" +
     "できません。",
   publishRefusedForm:
     "何も公開していません。そのフォームはこのページのものではありません。読み込み直してから" +
     "押してください。",
-  publishRefusedGone: "何も公開していません。この周回はもう読めません。一覧に戻ってください。",
-  publishRefusedNotClosed: "何も公開していません。この周回は承認済みのゲートで終わっていません。",
+  publishRefusedGone:
+    "何も公開していません。周回がもう読めなくなっています。一覧に戻ってください。",
+  publishRefusedNotClosed: "何も公開していません。周回が、承認されたゲートで終わっていません。",
   publishRefusedNotApproved:
-    "何も公開していません。この周回のゲートは人が回答しないまま終わっており、公開の根拠となる" +
-    "承認がありません。",
-  publishRefusedNoRun: "何も公開していません。この周回には閉じる run がありません。",
+    "何も公開していません。ゲートが人の回答なしに終わっていて、公開してよいという承認が" +
+    "ありません。",
+  publishRefusedNoRun: "何も公開していません。閉じる run がありません。",
   publishRefusedPlanField:
     "何も公開していません。この周回の plan に、公開の組み立てに要るものが欠けています。",
   publishRefusedTarget: (detail) =>
@@ -2804,10 +2805,10 @@ const JA: Chrome = Object.freeze({
     "何も公開していません。読み取りはこの作業を説明しているので、踏み越えるものがありません。" +
     "この画面を読み込み直して、公開を押してください。",
   publishRefusedChanged:
-    "何も公開していません。この画面が示していた内容は、いま公開したときに起きることと違います。" +
+    "何も公開していません。画面に出ていた内容と、いま公開したら起きることが食い違っています。" +
     "読み込み直し、もう一度読んでから押してください。",
   publishRefusedStillRunning:
-    "二重には公開していません。この周回は、別の内容を読んだ画面からすでに公開処理中です。" +
+    "二重には公開していません。別の内容を読んだ画面から、すでに公開の処理が進んでいます。" +
     "終わるのを待ってから読み込み直してください。",
   publishRefusedNoContinuo:
     "何も公開していません。run を閉じる部分が起動しないため、rondo は最後まで終えられない" +
