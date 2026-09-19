@@ -24,8 +24,13 @@ import { CONSERVATIVE_HOST_POLICY } from "../../src/refrain/policy.js";
 import type { IterationRecord, IterationStatus, JsonRecord } from "../../src/store/records.js";
 import { WAIT_SIDE } from "../../src/store/records.js";
 import { advisoryRecord, iterationStore } from "../../src/store/sqlite.js";
+import { ownLane } from "../lane-claims.js";
 
-const somePlan = (): JsonRecord => ({ run_id: "r-0001", workspace: "/srv/work/r-0001" });
+const somePlan = (): JsonRecord => ({
+  run_id: "r-0001",
+  repository: "/srv/repo",
+  workspace: "/srv/work/r-0001",
+});
 
 const fresh = () => {
   const connection = new DatabaseSync(":memory:");
@@ -43,6 +48,7 @@ const reserveOne = async (store: ReturnType<typeof fresh>["store"], id: string, 
     plan: somePlan(),
     spend: null,
     scopeSpend: null,
+    claim: ownLane(id),
     nowMs,
     supersedesIterationId: null,
     requestMessageId: null,

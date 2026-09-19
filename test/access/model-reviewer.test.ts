@@ -31,6 +31,7 @@ import type {
   ThreadMessageDraft,
 } from "../../src/store/records.js";
 import { advisoryRecord, iterationStore } from "../../src/store/sqlite.js";
+import { ownLane } from "../lane-claims.js";
 
 const PLAN: RunPlan = {
   db: "/srv/continuo.db",
@@ -165,6 +166,7 @@ async function world(
     ),
     spend: null,
     scopeSpend: null,
+    claim: ownLane(id),
     nowMs: 1_000,
     supersedesIterationId: null,
     requestMessageId: options.requestMessageId ?? null,
@@ -375,9 +377,10 @@ test("the gate screen keeps the deterministic reading as the review and adds the
   await store.reserve({
     id: "i-0002",
     request: "do the thing",
-    plan: { run_id: "rondo-i-0002" },
+    plan: { run_id: "rondo-i-0002", repository: "/srv/repo" },
     spend: null,
     scopeSpend: null,
+    claim: ownLane("i-0002"),
     nowMs: 1_000,
     supersedesIterationId: null,
     requestMessageId: null,

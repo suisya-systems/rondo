@@ -17,6 +17,7 @@ import { expect, test, vi } from "vitest";
 import { commandScopedRetry, commandStart, main, parseCommand } from "../../src/access/cli.js";
 import { admit, type ReportingPorts, reportToRequest, resume } from "../../src/access/conductor.js";
 import { consoleSeams } from "../../src/access/console.js";
+import type { LandingReading, LandingRequest } from "../../src/access/forge.js";
 import { admitUnderScope, type ScopeAct, type ScopeAdmitPorts } from "../../src/access/scope.js";
 import { allocate } from "../../src/refrain/allocator.js";
 import { classifyPlan } from "../../src/refrain/classification.js";
@@ -214,6 +215,12 @@ async function harness(path = ":memory:", payload: JsonRecord = PAYLOAD) {
   ).toEqual({ kind: "recorded" });
   // The scope may list only an agent type rondo already holds (D-0062 rule 1.2).
   expect((await admit(conductor, advisory, PLAN, POLICY, "i-seed")).iterationId).toBe("i-seed");
+  // Ended, so its claim on the whole repository (D-0073 rule 2.5) is released
+  // and the lines below are admitted on their own merits: the seed is only how
+  // rondo comes to hold the agent type.
+  expect((await store.transition("i-seed", "awaiting_human", "abandoned", {}, 1)).kind).toBe(
+    "transitioned",
+  );
   expect(
     await record.recordScope({
       scopeId: "s-1",
@@ -425,6 +432,11 @@ test("a redo's stop names the lineage's latest lap as an iteration basis", async
   // It holds that line, and not a split's new lineage in the same request (D-0066 rule 4.4).
   h.clock.now = 2_000;
   expect(await admitUnderScope(h.ports, "sd-1", redo)).toMatchObject({ test: "asks" });
+  // `i-a` ends, so its claim on the whole repository (D-0073 rule 2.5) is not
+  // what decides the start below; the stop over its lineage still stands.
+  expect((await h.store.transition("i-a", "awaiting_human", "abandoned", {}, 2_000)).kind).toBe(
+    "transitioned",
+  );
   expect(
     await admitUnderScope(h.ports, "sd-1", {
       kind: "lineage_start",
@@ -433,7 +445,7 @@ test("a redo's stop names the lineage's latest lap as an iteration basis", async
       proposalId: "p-split",
       requestMessageId: ROOT,
     }),
-  ).toMatchObject({ kind: "admitted" });
+  ).toMatchObject({ kind: "admitted", report: { iterationId: "i-c" } });
 });
 
 test("PLANTED (D-0069 rule 5): a stopped line is not re-run as a new lineage by an operator's scoped start", async () => {
@@ -452,6 +464,11 @@ test("PLANTED (D-0069 rule 5): a stopped line is not re-run as a new lineage by 
   };
   const refused = await admitUnderScope(h.ports, "sd-1", redo);
   if (refused.kind !== "refused" || refused.stop.kind !== "written") throw new Error("no stop");
+  // The stopped line ends, so its claim on the whole repository (D-0073 rule
+  // 2.5) is not what holds the start below: the stop about it is.
+  expect((await h.store.transition("i-a", "awaiting_human", "abandoned", {}, 1)).kind).toBe(
+    "transitioned",
+  );
   h.clock.now = 2_000;
   // The bypass: the same plan, started again as a new lineage naming no proposal. Held by the
   // stop about another lineage, and nothing is admitted or spent.
@@ -1287,6 +1304,136 @@ test(
     expect(errors.join("")).toContain("already holds this line");
     expect(h.stops()).toHaveLength(1);
     expect(h.consumptions()).toBe(0);
+  },
+  WINDOWS_HEAVY_TIMEOUT_MS,
+);
+
+// --- D-0073 rule 7: a lane refusal reads the holder's landing ----------------
+
+test("D-0073 rule 7: a refusal by a closed line reads its landing, and only a landed one is released and let through", async () => {
+  const h = await harness();
+  expect((await admit(h.reporting, h.advisory, PLAN, POLICY, "i-land")).status).toBe(
+    "awaiting_human",
+  );
+  const asked: LandingRequest[] = [];
+  let answer: LandingReading = {
+    kind: "notLanded",
+    branch: "main",
+    headCommit: "h",
+    differing: ["x.ts"],
+  };
+  const ports: ReportingPorts = {
+    ...h.reporting,
+    lanes: {
+      store: h.store,
+      remote: "origin",
+      readLanding: async (request) => {
+        asked.push(request);
+        return answer;
+      },
+    },
+  };
+  // At its gate the line holds its paths whatever its diff says (rule 10): nothing is read.
+  const gated = await admit(ports, h.advisory, PLAN, POLICY, "i-next");
+  expect(gated.iterationId).toBeNull();
+  expect(gated.laneRefusal?.holders).toEqual([{ lineageId: "i-land", sharedPaths: ["/"] }]);
+  expect(asked).toEqual([]);
+
+  expect((await h.store.transition("i-land", "awaiting_human", "closed", {}, 2)).kind).toBe(
+    "transitioned",
+  );
+  const unmerged = await admit(ports, h.advisory, PLAN, POLICY, "i-next");
+  expect(unmerged.iterationId).toBeNull();
+  expect(unmerged.lines.join("\n")).toContain("'x.ts' differ");
+  expect(asked).toEqual([
+    {
+      repository: PLAN.repository,
+      remote: "origin",
+      baseCommit: "b".repeat(40),
+      tipCommits: ["a".repeat(40)],
+    },
+  ]);
+
+  answer = { kind: "undetermined", reason: "the forge did not answer" };
+  const unknown = (await admit(ports, h.advisory, PLAN, POLICY, "i-next")).lines.join("\n");
+  expect(unknown).toContain("undetermined: the forge did not answer");
+  expect(unknown).not.toContain("not on");
+
+  answer = { kind: "landed", branch: "main", headCommit: "h", paths: ["x.ts"] };
+  const through = await admit(ports, h.advisory, PLAN, POLICY, "i-next");
+  expect(through.iterationId).toBe("i-next");
+  expect(through.lines[0]).toContain("so its paths were released");
+  const read = await h.store.laneLine("i-land");
+  expect(read.kind === "read" ? read.line.claim : undefined).toEqual({
+    claimId: "i-land:2",
+    paths: [],
+  });
+});
+
+test("D-0073 rule 4.3: a line that ended with its release missed is released at the next refusal, with nothing read", async () => {
+  const h = await harness();
+  expect((await admit(h.reporting, h.advisory, PLAN, POLICY, "i-lost")).status).toBe(
+    "awaiting_human",
+  );
+  // Ended out of band, so no release row was written: the claim is still held.
+  h.connection.prepare("UPDATE iteration SET status = 'abandoned' WHERE id = 'i-lost'").run();
+  let read = 0;
+  const ports: ReportingPorts = {
+    ...h.reporting,
+    lanes: {
+      store: h.store,
+      remote: "origin",
+      readLanding: async () => {
+        read += 1;
+        return { kind: "undetermined", reason: "not asked" };
+      },
+    },
+  };
+  const through = await admit(ports, h.advisory, PLAN, POLICY, "i-after");
+  expect(through.iterationId).toBe("i-after");
+  expect(through.lines[0]).toContain("has ended with nothing to land, so its paths were released");
+  expect(read).toBe(0);
+});
+
+test(
+  "rondo release: the person's press releases a finished line, and refuses one still at its gate",
+  async () => {
+    const dir = mkdtempSync(join(tmpdir(), "rondo-release-"));
+    const path = join(dir, "rondo.db");
+    const h = await harness(path);
+    expect((await admit(h.reporting, h.advisory, PLAN, POLICY, "i-held")).status).toBe(
+      "awaiting_human",
+    );
+    const environment = { RONDO_STORE: path, RONDO_APPROVER: "oidc|operator-1" };
+    const argv = ["release", "--iteration-id", "i-held", "--actor-id", "oidc|operator-1"];
+    // The press is the approver's, checked as every such press is.
+    const stranger = await captured(
+      ["release", "--iteration-id", "i-held", "--actor-id", "oidc|someone-else"],
+      environment,
+    );
+    expect(stranger.code).not.toBe(0);
+    expect(stranger.text).toContain("must be the same identity");
+    const atGate = await captured(argv, environment);
+    expect(atGate.code).not.toBe(0);
+    expect(atGate.text).toContain("has not ended");
+
+    expect((await h.store.transition("i-held", "awaiting_human", "closed", {}, 3)).kind).toBe(
+      "transitioned",
+    );
+    const pressed = await captured(argv, environment);
+    expect(pressed.code).toBe(0);
+    expect(pressed.text).toContain("Released the paths line i-held held");
+    expect(
+      h.connection
+        .prepare(
+          "SELECT paths, author_kind, author_id FROM lane_claim WHERE lineage_id = 'i-held' ORDER BY rowid",
+        )
+        .all(),
+    ).toEqual([
+      { paths: '["/"]', author_kind: "drafter", author_id: "rondo/lane-ledger/1" },
+      { paths: "[]", author_kind: "operator", author_id: "oidc|operator-1" },
+    ]);
+    expect((await captured(argv, environment)).code).not.toBe(0);
   },
   WINDOWS_HEAVY_TIMEOUT_MS,
 );

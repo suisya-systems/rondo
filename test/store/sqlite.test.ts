@@ -32,6 +32,7 @@ import { planDigest } from "../../src/store/plan.js";
 import type { JsonRecord } from "../../src/store/records.js";
 import { TERMINAL_STATUSES } from "../../src/store/records.js";
 import { type HostPolicy, iterationStore, openIterationStore } from "../../src/store/sqlite.js";
+import { ownLane } from "../lane-claims.js";
 
 /**
  * A plan payload of the shape `src/refrain/plan.ts` renders.
@@ -43,6 +44,7 @@ import { type HostPolicy, iterationStore, openIterationStore } from "../../src/s
  */
 const somePlan = (overrides: JsonRecord = {}): JsonRecord => ({
   run_id: "r-0001",
+  repository: "/srv/repo",
   workspace: "/srv/work/r-0001",
   topic_branch: "feat/thing",
   claude_command: ["/usr/bin/node", "/opt/claude/cli.js"],
@@ -84,6 +86,7 @@ const reserveOne = async (store: ReturnType<typeof freshStore>, id: string, nowM
     plan: somePlan(),
     spend: null,
     scopeSpend: null,
+    claim: ownLane(id),
     nowMs,
     supersedesIterationId: null,
     requestMessageId: null,
@@ -134,8 +137,18 @@ test("a reservation commits a planned row that reads back with its plan and dige
 
 test("the plan digest does not depend on the order the plan's keys were written in", async () => {
   const store = freshStore();
-  const forwards: JsonRecord = { run_id: "r-0001", workspace: "/w", turn_timeout_ms: 1 };
-  const backwards: JsonRecord = { turn_timeout_ms: 1, workspace: "/w", run_id: "r-0001" };
+  const forwards: JsonRecord = {
+    run_id: "r-0001",
+    repository: "/r",
+    workspace: "/w",
+    turn_timeout_ms: 1,
+  };
+  const backwards: JsonRecord = {
+    turn_timeout_ms: 1,
+    workspace: "/w",
+    repository: "/r",
+    run_id: "r-0001",
+  };
 
   await store.reserve({
     id: "i-0001",
@@ -143,6 +156,7 @@ test("the plan digest does not depend on the order the plan's keys were written 
     plan: forwards,
     spend: null,
     scopeSpend: null,
+    claim: ownLane("i-0001"),
     nowMs: 1,
     supersedesIterationId: null,
     requestMessageId: null,
@@ -155,6 +169,7 @@ test("the plan digest does not depend on the order the plan's keys were written 
     plan: backwards,
     spend: null,
     scopeSpend: null,
+    claim: ownLane("i-0002"),
     nowMs: 3,
     supersedesIterationId: null,
     requestMessageId: null,
@@ -567,6 +582,7 @@ test("openIterationStore opens a store by path, schema applied", async () => {
     plan: somePlan(),
     spend: null,
     scopeSpend: null,
+    claim: ownLane("iter-open"),
     nowMs: 1_000,
     supersedesIterationId: null,
     requestMessageId: null,

@@ -21,6 +21,7 @@ import { lapMaterialLines } from "../../src/access/cli.js";
 import { EN } from "../../src/access/wording.js";
 import { CONSERVATIVE_HOST_POLICY } from "../../src/refrain/policy.js";
 import { iterationStore } from "../../src/store/sqlite.js";
+import { ownLane } from "../lane-claims.js";
 
 /** A row with no range on it, so nothing here reaches git. */
 async function fenceBlock(permissionDenials: string | null): Promise<string> {
@@ -28,9 +29,10 @@ async function fenceBlock(permissionDenials: string | null): Promise<string> {
   await store.reserve({
     id: "i-0001",
     request: "do the thing",
-    plan: { run_id: "rondo-i-0001" },
+    plan: { run_id: "rondo-i-0001", repository: "/srv/repo" },
     spend: null,
     scopeSpend: null,
+    claim: ownLane("i-0001"),
     nowMs: 1_000,
     supersedesIterationId: null,
     requestMessageId: null,

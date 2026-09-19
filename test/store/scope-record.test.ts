@@ -32,6 +32,7 @@ import {
   type ReserveInput,
   type ScopeSpend,
 } from "../../src/store/sqlite.js";
+import { laneFor } from "../lane-claims.js";
 
 /** Bounds high enough that capacity never answers before the scope does. */
 const ROOMY: HostPolicy = { maxOccupying: 100, maxLive: 100 };
@@ -148,6 +149,7 @@ function reserveInput(
     requestMessageId: "m-0001",
     spend: null,
     scopeSpend,
+    claim: laneFor(id, parts.supersedesIterationId ?? null),
     nowMs: 5_000,
     ...parts,
   };
@@ -920,6 +922,16 @@ test("5. an ask over the lineage refuses a redo, at any depth, and not a split's
   connection
     .prepare("UPDATE iteration SET supersedes_iteration_id = 'i-root' WHERE id = 'i-held'")
     .run();
+  // The held line holds a claim of its own, so its redo continues it rather
+  // than asking a line from before the ledger's whole repository (D-0073 rule
+  // 2.5): the lane ledger is not what this test probes.
+  connection
+    .prepare(
+      "INSERT INTO lane_claim (claim_id, lineage_id, repository, paths, supersedes_claim_id, " +
+        "author_kind, author_id, bases, created_at_ms) " +
+        "VALUES ('i-root:1', 'i-root', ?, '[\"lanes/i-held/\"]', NULL, 'drafter', 'test', '[]', 1)",
+    )
+    .run(REPOSITORY);
   await record.recordThreadMessage(answer("m-ans", "m-ask"));
   await reserves(store, redo());
   await record.recordThreadMessage(

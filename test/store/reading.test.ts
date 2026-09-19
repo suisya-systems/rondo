@@ -30,9 +30,11 @@ import {
   severityAtOrAbove,
 } from "../../src/store/records.js";
 import { iterationStore } from "../../src/store/sqlite.js";
+import { ownLane } from "../lane-claims.js";
 
 const somePlan = (): JsonRecord => ({
   run_id: "r-0001",
+  repository: "/srv/repo",
   workspace: "/srv/work/r-0001",
   topic_branch: "feat/thing",
 });
@@ -52,6 +54,7 @@ const reserveOne = async (store: ReturnType<typeof freshStore>, id: string, nowM
     plan: somePlan(),
     spend: null,
     scopeSpend: null,
+    claim: ownLane(id),
     nowMs,
     supersedesIterationId: null,
     requestMessageId: null,

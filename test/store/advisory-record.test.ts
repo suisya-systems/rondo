@@ -29,6 +29,7 @@ import type {
   ProposalDraft,
 } from "../../src/store/records.js";
 import { advisoryRecord, iterationStore } from "../../src/store/sqlite.js";
+import { ownLane } from "../lane-claims.js";
 
 const freshConnection = () => new DatabaseSync(":memory:");
 
@@ -795,9 +796,10 @@ test("terminal iterations are enumerable, which nothing else in the store does",
     await store.reserve({
       id,
       request: "do the thing",
-      plan: { run_id: `r-${id}` },
+      plan: { run_id: `r-${id}`, repository: "/srv/repo" },
       spend: null,
       scopeSpend: null,
+      claim: ownLane(id),
       nowMs: at,
       supersedesIterationId: null,
       requestMessageId: null,
@@ -831,9 +833,10 @@ test("what changed since a mark spans the record kinds and includes the bound", 
   await store.reserve({
     id: "i-0001",
     request: "do the thing",
-    plan: { run_id: "r-1" },
+    plan: { run_id: "r-1", repository: "/srv/repo" },
     spend: null,
     scopeSpend: null,
+    claim: ownLane("i-0001"),
     nowMs: 1_000,
     supersedesIterationId: null,
     requestMessageId: null,
@@ -856,6 +859,7 @@ test("what changed since a mark spans the record kinds and includes the bound", 
   // The iteration's own row is in the same answer, by its `updated_at_ms`.
   expect((await record.changedSince(1_000)).map((change) => change.kind)).toEqual([
     "iteration",
+    "lane_claim",
     "proposal",
     "composition",
     "human_decision",

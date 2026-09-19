@@ -27,6 +27,7 @@ import { allocate } from "../../src/refrain/allocator.js";
 import { admittedPlan, planPayload, type RunPlan, runPlan } from "../../src/refrain/plan.js";
 import type { JsonRecord } from "../../src/store/records.js";
 import { advisoryRecord, iterationStore } from "../../src/store/sqlite.js";
+import { ownLane } from "../lane-claims.js";
 
 const PLAN: RunPlan = {
   db: "/srv/continuo.db",
@@ -115,6 +116,7 @@ async function reserve(
     plan: typeof plan === "string" ? planOn(id, plan) : plan,
     spend: null,
     scopeSpend: null,
+    claim: ownLane(id),
     nowMs: 1_000,
     supersedesIterationId: null,
     requestMessageId: null,
@@ -193,7 +195,11 @@ test("a lap whose persisted plan will not decode is undetermined rather than dro
   await reserve(world.store, "i-0001");
   // A row whose `plan` is a JSON object the plan reader refuses. The row itself
   // still decodes, so it is a live lap with a base branch rondo cannot name.
-  await reserve(world.store, "i-0002", { run_id: "r", workspace: "/srv/work/r" });
+  await reserve(world.store, "i-0002", {
+    run_id: "r",
+    repository: "/srv/repo",
+    workspace: "/srv/work/r",
+  });
 
   const shows = screen();
   expect((await composeBetweenLaps(portsOver(world, shows))).kind).toBe("explained");
@@ -299,6 +305,7 @@ test("the admission refusals the bound wrote are gathered and claimed", async ()
     plan: planOn("i-0002", "main"),
     spend: null,
     scopeSpend: null,
+    claim: ownLane("i-0002"),
     nowMs: 3_000,
     supersedesIterationId: null,
     requestMessageId: null,

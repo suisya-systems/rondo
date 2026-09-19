@@ -46,8 +46,13 @@ import { planDigest } from "../../src/store/plan.js";
 import type { IterationStatus, JsonRecord } from "../../src/store/records.js";
 import { SUSPENDED_STATUSES, TERMINAL_STATUSES } from "../../src/store/records.js";
 import { iterationStore } from "../../src/store/sqlite.js";
+import { laneFor, ownLane } from "../lane-claims.js";
 
-const somePlan = (): JsonRecord => ({ run_id: "r-0001", turn_timeout_ms: 900_000 });
+const somePlan = (): JsonRecord => ({
+  run_id: "r-0001",
+  repository: "/srv/repo",
+  turn_timeout_ms: 900_000,
+});
 
 /** A store over a database of its own, under bounds the test chooses. */
 const storeUnder = (policy: HostPolicy, connection = new DatabaseSync(":memory:")) => ({
@@ -73,6 +78,7 @@ const reserveOne = async (
     requestMessageId: null,
     spend: null,
     scopeSpend: null,
+    claim: laneFor(id, supersedesIterationId),
     nowMs,
   });
 
@@ -285,6 +291,7 @@ test("a terminal spent row holds its triple for ever", async () => {
     requestMessageId: null,
     spend: null,
     scopeSpend: null,
+    claim: ownLane("b"),
     nowMs: 3_000,
   });
   expect(collided.kind).toBe("defect");
@@ -314,6 +321,7 @@ test("the observed-red control: a terminal unspent row releases its triple", asy
     requestMessageId: null,
     spend: null,
     scopeSpend: null,
+    claim: ownLane("b"),
     nowMs: 3_000,
   });
   expect(inheriting.kind).toBe("reserved");
@@ -354,6 +362,7 @@ test("two live iterations may not hold one name even before either is spent", as
     requestMessageId: null,
     spend: null,
     scopeSpend: null,
+    claim: ownLane("b"),
     nowMs: 2_000,
   });
   expect(collided.kind).toBe("defect");
@@ -612,6 +621,7 @@ test("a legacy row that spent its identifiers keeps holding them after the migra
     requestMessageId: null,
     spend: null,
     scopeSpend: null,
+    claim: ownLane("new"),
     nowMs: 2_000,
   });
   expect(reissued.kind).toBe("defect");
@@ -671,6 +681,7 @@ test("a legacy row's branch and workspace are back-filled from its plan and then
     requestMessageId: null,
     spend: null,
     scopeSpend: null,
+    claim: ownLane("new"),
     nowMs: 2_000,
   });
   expect(collided.kind).toBe("defect");

@@ -7,13 +7,18 @@
  * a bare remote, a base pushed on `main`, a `topic` branch with the case applied.
  */
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { expect, test } from "vitest";
 
-import { gatherReviewMaterialFacts, inspectLapWork, runReviewer } from "../../src/access/forge.js";
+import {
+  gatherReviewMaterialFacts,
+  inspectLapWork,
+  readLanding,
+  runReviewer,
+} from "../../src/access/forge.js";
 import { evidenceOf, materialDigestOf, readingOf } from "../../src/access/review.js";
 import { contentDigest } from "../../src/store/plan.js";
 
@@ -455,4 +460,178 @@ posix(
     );
     expect(inside.kind === "failed" && inside.reason).toContain("(error)");
   },
+);
+
+// --- readLanding (D-0073 rule 6) --------------------------------------------
+//
+// Each builds a remote, a clone and a squash of its own: REAL_GIT_TIMEOUT_MS's
+// reason, measured again on the Windows cell of #280 (one ran past 10 s).
+
+function gitOut(cwd: string, ...args: string[]): string {
+  return execFileSync("git", args, { cwd, stdio: "pipe" }).toString().trim();
+}
+
+/**
+ * A line's work on `topic` in `work`, cut from `main` pushed to `origin`, and a
+ * second clone, `merger`, that lands things on the forge's `main` the way a
+ * squash merge does: new commits, never the topic's own.
+ */
+function landingWorld() {
+  const root = mkdtempSync(join(tmpdir(), "rondo-landing-"));
+  const remote = join(root, "remote.git");
+  const work = join(root, "work");
+  const merger = join(root, "merger");
+  git(root, "init", "--bare", remote);
+  git(root, "init", work);
+  writeFileSync(join(work, "a.txt"), "base\n");
+  writeFileSync(join(work, "b.txt"), "doomed\n");
+  writeFileSync(join(work, "run.sh"), "echo hi\n");
+  writeFileSync(join(work, "other.txt"), "untouched\n");
+  git(work, "add", ".");
+  git(work, "commit", "-m", "base");
+  git(work, "remote", "add", "origin", remote);
+  git(work, "push", "origin", "main");
+  const baseCommit = gitOut(work, "rev-parse", "HEAD");
+  git(work, "switch", "-c", "topic");
+  writeFileSync(join(work, "a.txt"), "changed\n");
+  git(work, "rm", "-q", "b.txt");
+  writeFileSync(join(work, "c.txt"), "new\n");
+  git(work, "add", ".");
+  git(work, "commit", "-m", "the line's work");
+  const tipCommit = gitOut(work, "rev-parse", "HEAD");
+  git(root, "clone", "-q", remote, merger);
+  const landing = (tips: readonly string[] = [tipCommit], remoteName = "origin") => ({
+    repository: work,
+    remote: remoteName,
+    baseCommit,
+    tipCommits: tips,
+  });
+  return { work, merger, landing, tipCommit };
+}
+
+test(
+  "a line whose work is not on the forge's default branch reads not landed, naming the paths",
+  async () => {
+    const { landing } = landingWorld();
+    expect(await readLanding(landing())).toMatchObject({
+      kind: "notLanded",
+      differing: ["a.txt", "b.txt", "c.txt"],
+    });
+  },
+  REAL_GIT_TIMEOUT_MS,
+);
+
+test(
+  "a squash merge on the forge reads landed, fetched into rondo's own ref and nobody else's",
+  async () => {
+    const { work, merger, landing } = landingWorld();
+    const tracking = gitOut(work, "rev-parse", "refs/remotes/origin/main");
+    // The same bytes, as a commit of the forge's own: the topic's tip is never an ancestor.
+    writeFileSync(join(merger, "a.txt"), "changed\n");
+    git(merger, "rm", "-q", "b.txt");
+    writeFileSync(join(merger, "c.txt"), "new\n");
+    // A later change to a path the line never touched does not matter.
+    writeFileSync(join(merger, "other.txt"), "moved on\n");
+    git(merger, "add", ".");
+    git(merger, "commit", "-m", "squash (#1)");
+    git(merger, "push", "-q", "origin", "main");
+
+    const reading = await readLanding(landing());
+    expect(reading).toMatchObject({ kind: "landed", paths: ["a.txt", "b.txt", "c.txt"] });
+    expect(gitOut(work, "rev-parse", "refs/rondo/landing/origin/main")).toBe(
+      gitOut(merger, "rev-parse", "HEAD"),
+    );
+    expect(gitOut(work, "rev-parse", "refs/remotes/origin/main")).toBe(tracking);
+  },
+  REAL_GIT_TIMEOUT_MS,
+);
+
+test(
+  "a change of mode alone is not landed: the blob matches and the entry does not",
+  async () => {
+    const { work, merger, landing } = landingWorld();
+    git(work, "update-index", "--chmod=+x", "run.sh");
+    git(work, "commit", "-m", "make it runnable");
+    const tip = gitOut(work, "rev-parse", "HEAD");
+    writeFileSync(join(merger, "a.txt"), "changed\n");
+    git(merger, "rm", "-q", "b.txt");
+    writeFileSync(join(merger, "c.txt"), "new\n");
+    git(merger, "add", ".");
+    git(merger, "commit", "-m", "squash without the mode");
+    git(merger, "push", "-q", "origin", "main");
+    expect(await readLanding(landing([tip]))).toMatchObject({
+      kind: "notLanded",
+      differing: ["run.sh"],
+    });
+  },
+  REAL_GIT_TIMEOUT_MS,
+);
+
+test(
+  "a fetch that fails is undetermined, never not landed",
+  async () => {
+    const { landing } = landingWorld();
+    const reading = await readLanding(landing(undefined, "nowhere"));
+    expect(reading.kind).toBe("undetermined");
+  },
+  REAL_GIT_TIMEOUT_MS,
+);
+
+test(
+  "a base that moved while the line ran is not the line's work: the set is taken from the fork point",
+  async () => {
+    const { work, merger, landing, tipCommit } = landingWorld();
+    // Another line lands a path this one never touched, and the reading is taken after a fetch.
+    writeFileSync(join(merger, "other.txt"), "someone else's\n");
+    git(merger, "commit", "-qam", "another line");
+    git(merger, "push", "-q", "origin", "main");
+    git(work, "fetch", "-q", "origin");
+    const moved = gitOut(work, "rev-parse", "refs/remotes/origin/main");
+    writeFileSync(join(merger, "a.txt"), "changed\n");
+    git(merger, "rm", "-q", "b.txt");
+    writeFileSync(join(merger, "c.txt"), "new\n");
+    git(merger, "add", ".");
+    git(merger, "commit", "-m", "squash (#2)");
+    git(merger, "push", "-q", "origin", "main");
+    expect(
+      await readLanding({ ...landing(), baseCommit: moved, tipCommits: [tipCommit] }),
+    ).toMatchObject({
+      kind: "landed",
+      paths: ["a.txt", "b.txt", "c.txt"],
+    });
+  },
+  REAL_GIT_TIMEOUT_MS,
+);
+
+test(
+  "a deleted file the default branch replaced with a directory of the same name is not landed",
+  async () => {
+    const { merger, landing } = landingWorld();
+    writeFileSync(join(merger, "a.txt"), "changed\n");
+    git(merger, "rm", "-q", "b.txt");
+    mkdirSync(join(merger, "b.txt"));
+    writeFileSync(join(merger, "b.txt", "inside"), "a directory now\n");
+    writeFileSync(join(merger, "c.txt"), "new\n");
+    git(merger, "add", ".");
+    git(merger, "commit", "-m", "squash, with b.txt a directory");
+    git(merger, "push", "-q", "origin", "main");
+    expect(await readLanding(landing())).toMatchObject({ kind: "notLanded", differing: ["b.txt"] });
+  },
+  REAL_GIT_TIMEOUT_MS,
+);
+
+test(
+  "work merged into a branch that is not the forge's default has not landed",
+  async () => {
+    const { merger, landing } = landingWorld();
+    git(merger, "switch", "-q", "-c", "develop");
+    writeFileSync(join(merger, "a.txt"), "changed\n");
+    git(merger, "rm", "-q", "b.txt");
+    writeFileSync(join(merger, "c.txt"), "new\n");
+    git(merger, "add", ".");
+    git(merger, "commit", "-m", "squash into develop");
+    git(merger, "push", "-q", "origin", "develop");
+    expect(await readLanding(landing())).toMatchObject({ kind: "notLanded", branch: "main" });
+  },
+  REAL_GIT_TIMEOUT_MS,
 );

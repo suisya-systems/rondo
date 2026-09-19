@@ -65,12 +65,19 @@ import type {
   ScopeSpend,
   StorePort,
 } from "../refrain/ports.js";
-import { isModelReadingDrafter, type LapReadingDraft, latestReading } from "../store/records.js";
-import type { AdvisoryRecord, IterationStore } from "../store/sqlite.js";
+import { lineShape } from "../store/lanes.js";
+import {
+  isDeterministicReadingDrafter,
+  isModelReadingDrafter,
+  type LaneHolder,
+  type LapReadingDraft,
+  latestReading,
+} from "../store/records.js";
+import { type AdvisoryRecord, type IterationStore, LANE_LEDGER_AUTHOR } from "../store/sqlite.js";
 
 import { DETERMINISTIC_DRAFTER, proposeAfterAbandon, type UnpromptedPorts } from "./advisory.js";
 import { discard, writeDelegationRecord } from "./delegation.js";
-import { inspectLapWork } from "./forge.js";
+import { inspectLapWork, type LandingReading, type LandingRequest, readLanding } from "./forge.js";
 import { modelReadingLines } from "./model-review.js";
 import { READING_REMOTE, readingOf } from "./review.js";
 
@@ -248,6 +255,7 @@ export function conductorPorts(
   return {
     store: port,
     thread: record === null ? null : { record, store },
+    lanes: { store, readLanding, remote: READING_REMOTE },
     now,
     classify: async (plan) => classifyPlan(plan),
     startContinuo: async () => ({ kind: "answered", value: { revision: continuo.revision } }),
@@ -458,16 +466,28 @@ export async function admit(
   requestMessageId: string | null = null,
   scopeSpend: ScopeSpend | null = null,
 ): Promise<ConductorReport> {
-  const report = await admitIteration(
-    ports,
-    plan,
-    policy,
-    id,
-    supersedesIterationId,
-    spend,
-    requestMessageId,
-    scopeSpend,
-  );
+  const attempt = () =>
+    admitIteration(
+      ports,
+      plan,
+      policy,
+      id,
+      supersedesIterationId,
+      spend,
+      requestMessageId,
+      scopeSpend,
+    );
+  let report = await attempt();
+  // **A refusal by a line whose work may have landed reads that landing now**
+  // (D-0073 rule 7): with no resident host's tick to have read it, the next
+  // admission attempt is where it is read. A release is attempted once more;
+  // the refusal wrote nothing, so the second attempt is the first's.
+  if (report.laneRefusal !== undefined && ports.lanes !== undefined && ports.lanes !== null) {
+    const read = await readHolders(ports.lanes, report.laneRefusal.holders, ports.now());
+    report = read.released
+      ? await attempt().then((again) => ({ ...again, lines: [...read.lines, ...again.lines] }))
+      : { ...report, lines: [...report.lines, ...read.lines] };
+  }
   if (report.status === "awaiting_human") {
     return await withGateReport(ports, report);
   }
@@ -475,6 +495,123 @@ export async function admit(
     return report;
   }
   return { ...report, lines: [...report.lines, await proposeLine(advisory, report.iterationId)] };
+}
+
+/**
+ * Read each holding line's landing (D-0073 rules 6 and 7) and release the ones
+ * that landed. A line is read only when every lap of it has ended and at least
+ * one is `closed`: a lap at its gate or running holds its paths whatever its
+ * diff says (rule 10). Every other outcome is a line of the report and writes
+ * nothing; `undetermined` is said as itself.
+ */
+async function readHolders(
+  lanes: LandingPorts,
+  holders: readonly LaneHolder[],
+  nowMs: number,
+): Promise<{ readonly released: boolean; readonly lines: readonly string[] }> {
+  const lines: string[] = [];
+  let released = false;
+  for (const holder of holders) {
+    const said = await readHolder(lanes, holder.lineageId, nowMs);
+    released ||= said.released;
+    lines.push(said.line);
+  }
+  return { released, lines };
+}
+
+async function readHolder(
+  lanes: LandingPorts,
+  lineageId: string,
+  nowMs: number,
+): Promise<{ readonly released: boolean; readonly line: string }> {
+  const undetermined = (reason: string) => ({
+    released: false,
+    line: `Whether line ${lineageId}'s work has landed is undetermined: ${reason}.`,
+  });
+  const read = await lanes.store.laneLine(lineageId);
+  if (read.kind !== "read") {
+    return undetermined(read.kind === "defect" ? read.reason : "the line is not in this store");
+  }
+  const { line } = read;
+  const shape = lineShape(
+    line.laps.map((lap) => ({
+      id: lap.id,
+      status: lap.status,
+      supersedesIterationId: lap.supersedesIterationId,
+    })),
+  );
+  if (shape.inFlight) {
+    return {
+      released: false,
+      line: `Line ${lineageId} has a lap that has not ended, so it holds its paths until it does.`,
+    };
+  }
+  const release = async (bases: readonly string[], said: string) => {
+    const outcome = await lanes.store.releaseLane({
+      iterationId: lineageId,
+      takenOver: { claimId: line.claim?.claimId ?? null, lapIds: line.laps.map((lap) => lap.id) },
+      authorKind: "drafter",
+      authorId: LANE_LEDGER_AUTHOR,
+      bases: bases.map((iterationId) => ({ form: "iteration", iterationId })),
+      nowMs,
+    });
+    return outcome.kind === "released"
+      ? { released: true, line: `${said}, so its paths were released.` }
+      : { released: false, line: `${said}, and its paths were not released: ${outcome.reason}.` };
+  };
+  // Every lap ended and none closed: nothing is owed to the default branch, and
+  // a claim still held here is a release rule 4.3 missed (a settle that could
+  // not write it). It is released now rather than held for a press.
+  if (shape.closedTips.length === 0) {
+    return await release(
+      line.laps.map((lap) => lap.id),
+      `Line ${lineageId} has ended with nothing to land`,
+    );
+  }
+  const root = line.laps[0];
+  const repository = root?.plan["repository"];
+  if (root === undefined || typeof repository !== "string") {
+    return undetermined("its first lap's plan names no repository");
+  }
+  // The lineage's first base is the root lap's, and only the root's: a later
+  // lap's reading is taken over its predecessor's branch, and the root's own
+  // changes would fall out of the set. Each closed tip's tip is its own.
+  const evidenceOf = async (iterationId: string) =>
+    latestReading(await lanes.store.readingsFor(iterationId), isDeterministicReadingDrafter)
+      ?.evidence ?? null;
+  const baseCommit = (await evidenceOf(root.id))?.baseCommit ?? null;
+  if (baseCommit === null) {
+    return undetermined(`its first lap ${root.id} carries no reading of the base it was cut from`);
+  }
+  const tipCommits: string[] = [];
+  for (const tip of shape.closedTips) {
+    const evidence = await evidenceOf(tip);
+    if (evidence === null) {
+      return undetermined(`its closed lap ${tip} carries no reading of its commits`);
+    }
+    tipCommits.push(evidence.tipCommit);
+  }
+  const landing = await lanes.readLanding({
+    repository,
+    remote: lanes.remote,
+    baseCommit,
+    tipCommits,
+  });
+  if (landing.kind === "undetermined") {
+    return undetermined(landing.reason);
+  }
+  if (landing.kind === "notLanded") {
+    return {
+      released: false,
+      line:
+        `Line ${lineageId}'s work is not on ${lanes.remote}/${landing.branch} yet: ` +
+        `${landing.differing.map((path) => `'${path}'`).join(", ")} differ.`,
+    };
+  }
+  return await release(
+    shape.closedTips,
+    `Line ${lineageId}'s work is on ${lanes.remote}/${landing.branch}`,
+  );
 }
 
 /**
@@ -533,6 +670,20 @@ export async function resume(ports: ReportingPorts, iterationId: string): Promis
  */
 export interface ReportingPorts extends ConductorPorts {
   readonly thread?: RequestThread | null;
+  /**
+   * What reads a holding line's landing when the lane ledger refuses an
+   * admission (D-0073 rule 7, where no resident host's tick has read it
+   * first). Absent in a fake that does not exercise it.
+   */
+  readonly lanes?: LandingPorts | null;
+}
+
+/** What {@link admit} reads and writes to release a line whose work has landed. */
+export interface LandingPorts {
+  readonly store: Pick<IterationStore, "laneLine" | "readingsFor" | "releaseLane">;
+  readonly readLanding: (request: LandingRequest) => Promise<LandingReading>;
+  /** The remote `publish` pushes to, whose default branch is read. */
+  readonly remote: string;
 }
 
 /** What a report into a request thread reads and writes. */
