@@ -129,6 +129,13 @@ import {
 } from "../store/records.js";
 import type { AdvisoryRecord, IterationStore } from "../store/sqlite.js";
 import { basisLine, gather, gatherHost } from "./advisory.js";
+import { draftedStartReadiness } from "./drafted-start.js";
+import {
+  type DraftedPlanShown,
+  type DraftedScopeShown,
+  draftedPlansUnder,
+  draftedStanding,
+} from "./drafted-view.js";
 import type { LapWorkInspection } from "./forge.js";
 import {
   ago,
@@ -179,6 +186,12 @@ export interface WebPorts extends InboxReadPorts {
       | "heldAgentType"
       // rondo#238: the plans a person picks from are the ones rondo holds.
       | "heldAgentTypeDigests"
+      // rondo#238 C2b: the drafted scope, its split, and whether a drafted
+      // plan can start -- the scope's own verdict, read and never acted on.
+      | "scopesFor"
+      | "readProposal"
+      | "openAsksIn"
+      | "lineageOf"
       | "readScope"
       | "readScopeDecision"
       | "scopeDecisionOf"
@@ -4055,11 +4068,22 @@ async function scopeView(
       </p>
     </header>
   );
-  const decisionId = view.decisionId;
+  // **A drafted scope comes first** (rondo#238 C2b): the drafter's, still
+  // waiting on the person, or the approval that already decided it. Only a
+  // request nothing was drafted for -- or whose draft the person declined --
+  // gets the person's own form over a held plan.
+  const standing =
+    view.decisionId === null
+      ? await draftedStanding(ports, view.messageId)
+      : ({ kind: "none" } as const);
+  const decisionId =
+    view.decisionId ?? (standing.kind === "decided" ? standing.scopeDecisionId : null);
   const body =
-    decisionId === null
-      ? await scopeForm(ports, wording, view, token, newScopeId, nowMs)
-      : await scopeApproved(ports, wording, view, decisionId, token, newIterationId, nowMs);
+    decisionId !== null
+      ? await scopeApproved(ports, wording, view, decisionId, token, newIterationId, nowMs)
+      : standing.kind === "drafted"
+        ? await draftedForm(ports, wording, view, standing.drafted, threads, token, newScopeId)
+        : await scopeForm(ports, wording, view, token, newScopeId, nowMs);
   return (
     <div id="scope" class="space-y-4">
       {head}
@@ -4478,6 +4502,360 @@ function allowedBy(payload: StoredScope["payload"], plan: HeldPlan): boolean {
   );
 }
 
+/**
+ * A drafted scope, waiting on the person (rondo#238 C2b, D-0071 rule 5.3): the
+ * work rondo proposes, the budgets it computed with where each came from, and
+ * one press that approves -- the draft as it stands, or, when a value was
+ * changed, the person's version in its place. Which of the two the press is,
+ * is decided by the rows (`recordDraftedScopeFromPage`), never by a button.
+ */
+async function draftedForm(
+  ports: WebPorts,
+  wording: Chrome,
+  view: Extract<PageView, { kind: "scope" }>,
+  drafted: DraftedScopeShown,
+  threads: Threads,
+  token: string | null,
+  newScopeId: MintScopeId | null,
+): Promise<unknown> {
+  const lead = <p class="text-[13px] leading-6">{wording.scopeDraftedLead}</p>;
+  const plans = await draftedPlansList(ports, wording, drafted);
+  if (token === null || newScopeId === null) {
+    return (
+      <>
+        {lead}
+        {plans}
+        {note(wording.scopeNoApprover)}
+      </>
+    );
+  }
+  const payload = drafted.scope.payload;
+  const computed = drafted.computed;
+  // **A value below what rule 4.2 computed says so, and on whose words**: the
+  // drafter may only narrow (rule 4.1), and a narrowing rests on the person's
+  // own message, which is linked rather than paraphrased.
+  const narrowed = (
+    field: "laps" | "review_rounds" | "cost_usd" | "expires_at_ms",
+    shown: string,
+  ) =>
+    payload.budgets[field] < computed[field].value && drafted.narrowedBy.length > 0 ? (
+      <p class="note flex flex-wrap items-center gap-1.5 text-[12px] leading-5 text-muted-foreground">
+        <span>{wording.scopeNarrowed(shown)}</span>
+        {drafted.narrowedBy.map((messageId) =>
+          basisChip(
+            wording,
+            { form: "message", messageId },
+            threads,
+            view.messageId,
+            ports.actorId,
+          ),
+        )}
+      </p>
+    ) : null;
+  return (
+    <>
+      {lead}
+      {plans}
+      <form
+        id="scope-draft-form"
+        method="post"
+        action={`/scope-draft?lang=${encodeURIComponent(wording.lang)}`}
+        class="space-y-4"
+      >
+        <input type="hidden" name="token" value={token} />
+        <input type="hidden" name="request" value={view.messageId} />
+        {/* The draft by id and by digest: what the press approves is what
+            this screen showed, and the store re-reads both (D-0066 rule 2.2). */}
+        <input type="hidden" name="draft_scope" value={drafted.scope.scopeId} />
+        <input type="hidden" name="draft_digest" value={drafted.scope.scopeDigest} />
+        {/* Minted at draw for the person's version, should they change a value. */}
+        <input type="hidden" name="scope_id" value={newScopeId()} />
+        {sampleCaveat(wording, computed.cost_reserve_usd.bases)}
+        <div class={`${CARD} grid gap-4 sm:grid-cols-2`}>
+          <div class="min-w-0 space-y-1">
+            {budgetField(
+              wording,
+              "laps",
+              wording.scopeLapsLabel,
+              <input
+                type="number"
+                name="laps"
+                id="laps"
+                min="0"
+                step="1"
+                value={whole(payload.budgets.laps)}
+                class={BOX}
+              />,
+              computed.laps,
+            )}
+            {narrowed("laps", whole(computed.laps.value))}
+          </div>
+          <div class="min-w-0 space-y-1">
+            {budgetField(
+              wording,
+              "review_rounds",
+              wording.scopeRoundsLabel,
+              <input
+                type="number"
+                name="review_rounds"
+                id="review_rounds"
+                min="0"
+                step="1"
+                value={whole(payload.budgets.review_rounds)}
+                class={BOX}
+              />,
+              computed.review_rounds,
+            )}
+            {narrowed("review_rounds", whole(computed.review_rounds.value))}
+          </div>
+          <div class="min-w-0 space-y-1">
+            {budgetField(
+              wording,
+              "cost_usd",
+              wording.scopeCostLabel,
+              <input
+                type="number"
+                name="cost_usd"
+                id="cost_usd"
+                min="0"
+                step="0.01"
+                value={money(payload.budgets.cost_usd)}
+                class={BOX}
+              />,
+              computed.cost_usd,
+            )}
+            {narrowed("cost_usd", money(computed.cost_usd.value))}
+          </div>
+          {budgetField(
+            wording,
+            "cost_reserve_usd",
+            wording.scopeReserveLabel,
+            <input
+              type="number"
+              name="cost_reserve_usd"
+              id="cost_reserve_usd"
+              min="0"
+              step="0.01"
+              value={money(payload.budgets.cost_reserve_usd)}
+              class={BOX}
+            />,
+            computed.cost_reserve_usd,
+          )}
+          <div class="min-w-0 space-y-1">
+            {budgetField(
+              wording,
+              "expires_at_ms",
+              wording.scopeExpiresLabel,
+              <input
+                type="datetime-local"
+                name="expires_at_ms"
+                id="expires_at_ms"
+                value={localTime(payload.budgets.expires_at_ms)}
+                class={BOX}
+              />,
+              computed.expires_at_ms,
+            )}
+            {narrowed("expires_at_ms", localTime(computed.expires_at_ms.value))}
+          </div>
+        </div>
+        <section class={`${CARD} space-y-3`}>
+          <h3 class={CARD_HEADING}>{wording.scopeDefaultsHeading}</h3>
+          <label class="flex flex-col gap-1">
+            <span class="text-[12.5px] leading-5 font-medium text-muted-foreground">
+              {wording.scopeSeverityLabel}
+            </span>
+            <select name="severity_threshold" class={BOX}>
+              {FINDING_SEVERITIES.map((severity) => (
+                <option
+                  value={severity}
+                  {...(severity === payload.severity_threshold ? { selected: true } : {})}
+                >
+                  {`${wording.severityWord(severity)} (${severity})`}
+                </option>
+              ))}
+            </select>
+          </label>
+          <fieldset class="space-y-1">
+            <legend class="text-[12.5px] leading-5 font-medium text-muted-foreground">
+              {wording.scopeOutwardLabel}
+            </legend>
+            {SCOPE_OUTWARD_ACTS.map((act) => (
+              <label class="flex items-center gap-2 text-[13px] leading-6">
+                <input
+                  type="checkbox"
+                  name="outward_acts"
+                  value={act}
+                  class="size-3.5"
+                  {...(payload.outward_acts.includes(act) ? { checked: true } : {})}
+                />
+                <span>{wording.scopeOutwardAct(act)}</span>
+                <span class="font-mono text-[12px] text-faint">{act}</span>
+              </label>
+            ))}
+          </fieldset>
+          <p class="text-[13px] leading-6">
+            {payload.irreversible_additions.length === 0
+              ? wording.scopeIrreversibleNone
+              : payload.irreversible_additions.join(", ")}
+          </p>
+        </section>
+        <p class="note text-[12.5px] leading-5 text-muted-foreground">{wording.scopeCostCaveat}</p>
+        <div class="sticky bottom-0 z-[1] -mx-4 flex flex-col gap-2 border-t border-border bg-card px-4 py-3 shadow-[0_-4px_10px_-8px_rgb(0_0_0/0.3)]">
+          <p class="note text-[12.5px] leading-5 text-muted-foreground">
+            {wording.scopeDraftedPressNote}
+          </p>
+          <button
+            type="submit"
+            data-row=""
+            aria-describedby="scope-draft-plain"
+            class={`${PRIMARY} h-10 w-full justify-center px-6 text-sm sm:h-9 sm:w-auto sm:self-end`}
+          >
+            {wording.scopeDraftedAction}
+          </button>
+          <span id="scope-draft-plain" class="note sr-only">
+            {wording.scopeDraftedPlain}
+          </span>
+        </div>
+      </form>
+    </>
+  );
+}
+
+/** The drafted plans as a person reads them: the words, where each runs, and what it may do. */
+async function draftedPlansList(
+  ports: WebPorts,
+  wording: Chrome,
+  drafted: DraftedScopeShown,
+  /** The start line under each plan, on an approved scope; absent on the draft. */
+  startOf?: (plan: DraftedPlanShown) => Promise<unknown>,
+): Promise<unknown> {
+  const cards = [];
+  for (const plan of drafted.plans) {
+    cards.push(
+      <li class="space-y-1.5 border-t border-border pt-3 first:border-t-0 first:pt-0">
+        <p class="text-[13px] leading-5 font-semibold">
+          {wording.scopeDraftedPlan(plan.index + 1)}
+        </p>
+        <p class="text-[12.5px] leading-5 text-muted-foreground wrap-anywhere">
+          {plan.repository === null || plan.workspaceRoot === null
+            ? wording.scopeDraftedTemplateGone
+            : wording.scopeWorkspace(plan.repository, plan.workspaceRoot)}
+        </p>
+        {(await heldAgentTypeLines(wording, ports.record, [plan.split.agent_type_digest])).map(
+          (line) => (
+            <p class="text-[12px] leading-5 wrap-anywhere text-muted-foreground">{line}</p>
+          ),
+        )}
+        {/* The drafter's words for the worker, as it wrote them: their
+            language is the template's, not the page's (D-0055 rule 8). */}
+        <p
+          class="rounded-md border border-border bg-muted/40 px-3 py-2 text-[13px] leading-6 wrap-anywhere whitespace-pre-wrap"
+          lang=""
+        >
+          {plan.split.prompt}
+        </p>
+        {startOf === undefined ? null : await startOf(plan)}
+      </li>,
+    );
+  }
+  return (
+    <section id="drafted-plans" class={`${CARD} space-y-3`}>
+      <h3 class={CARD_HEADING}>{wording.scopeDraftedPlansHeading}</h3>
+      <ul class="space-y-3">{cards}</ul>
+    </section>
+  );
+}
+
+/**
+ * Under an approved scope, one drafted plan's way to start, or why it cannot
+ * yet (rondo#238 C2b): a button only where C2a's readiness says the start
+ * would go through, and the reason everywhere else -- a refused scoped start
+ * writes a stop into the thread, so a button that is sure to fail is not drawn.
+ */
+async function planStart(
+  ports: WebPorts,
+  wording: Chrome,
+  view: Extract<PageView, { kind: "scope" }>,
+  decisionId: string,
+  proposalId: string,
+  plan: DraftedPlanShown,
+  token: string | null,
+  newIterationId: MintIterationId | null,
+  nowMs: number,
+): Promise<unknown> {
+  const ready = await draftedStartReadiness(
+    { store: ports.store, record: ports.record, policy: ports.policy, nowMs },
+    view.messageId,
+    decisionId,
+    proposalId,
+    plan.index,
+  );
+  const line = (text: string) => (
+    <p class="note rounded-md border border-border bg-muted/60 px-3 py-2 text-[12.5px] leading-5">
+      {text}
+    </p>
+  );
+  switch (ready.kind) {
+    case "ready":
+      return token === null || newIterationId === null ? null : (
+        <form
+          method="post"
+          action={`/start-plan?lang=${encodeURIComponent(wording.lang)}`}
+          class="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-end"
+        >
+          <input type="hidden" name="token" value={token} />
+          <input type="hidden" name="request" value={view.messageId} />
+          <input type="hidden" name="scope_decision" value={decisionId} />
+          <input type="hidden" name="proposal" value={proposalId} />
+          <input type="hidden" name="plan_index" value={String(plan.index)} />
+          {/* Minted at render, as every start's is: rondo names the lap. */}
+          <input type="hidden" name="iteration" value={newIterationId()} />
+          <button
+            type="submit"
+            data-row=""
+            title={wording.planStartPlain}
+            class={`${PRIMARY} h-9 w-full justify-center px-5 text-sm sm:w-auto`}
+          >
+            {wording.planStartAction}
+          </button>
+        </form>
+      );
+    case "started":
+      return (
+        <p class="note flex flex-wrap items-center gap-x-2 text-[12.5px] leading-5">
+          <span>{wording.planStarted}</span>
+          <a
+            href={`${viewHref({ kind: "summary" }, wording.lang)}#${encodeURIComponent(`lap-${ready.iterationId}`)}`}
+            class="text-link underline-offset-2 hover:underline"
+          >
+            {wording.planStartedLink}
+          </a>
+        </p>
+      );
+    case "busy":
+      return line(wording.planBusy(ready.limit));
+    case "full":
+      return line(wording.planFull(ready.live, ready.limit));
+    case "outside":
+      return line(wording.planOutside(ready.test));
+    case "unrunnable":
+      return (
+        <div class="space-y-1">
+          {line(wording.planUnrunnable)}
+          <details class="group">
+            <summary class="flex cursor-pointer list-none items-center gap-2 text-[12px] leading-5 text-muted-foreground select-none [&::-webkit-details-marker]:hidden">
+              {chevron()}
+              {wording.planUnrunnableWhy}
+            </summary>
+            <p class="mt-1 text-[12px] leading-5 wrap-anywhere text-muted-foreground" lang="en">
+              {ready.reason}
+            </p>
+          </details>
+        </div>
+      );
+  }
+}
+
 /** State B: the approval the press recorded, read back, and the start it allows. */
 async function scopeApproved(
   ports: WebPorts,
@@ -4521,6 +4899,28 @@ async function scopeApproved(
   // button anyway would be this screen offering a press it knows cannot work.
   const retired = await ports.record.scopeSupersededByApproved(scope.scopeId);
   const held = await heldAgentTypeLines(wording, ports.record, payload.agent_types);
+  // **A drafted scope starts its drafted plans** (rondo#238 C2b): each with
+  // its own button, or the reason it cannot start yet, and never the person's
+  // held-plan start, which runs the request's own words as the prompt.
+  const drafted = await draftedPlansUnder(ports, scope);
+  const draftedStarts =
+    drafted === null
+      ? null
+      : await draftedPlansList(ports, wording, drafted, async (plan) =>
+          retired
+            ? null
+            : await planStart(
+                ports,
+                wording,
+                view,
+                decisionId,
+                drafted.proposalId,
+                plan,
+                token,
+                newIterationId,
+                nowMs,
+              ),
+        );
   // **The plan the start runs on** (rondo#238): one rondo holds whose place and
   // agent type this scope allows -- the one the form was drawn over, carried in
   // the address, or the only one there is. A choice where there are several,
@@ -4597,7 +4997,9 @@ async function scopeApproved(
           {wording.scopeRetired}
         </p>
       ) : null}
-      {retired || token === null || newIterationId === null ? null : runsOn === null &&
+      {draftedStarts !== null ? (
+        draftedStarts
+      ) : retired || token === null || newIterationId === null ? null : runsOn === null &&
         allowed.length === 0 ? (
         <>
           {gone ? note(wording.scopePlanGone) : null}

@@ -2454,6 +2454,12 @@ export interface AdvisoryRecord {
   /** One scope row, its digest re-derived; a mismatch is `unreadable` (`verbatim`'s precedent). */
   readScope(scopeId: string): Promise<ScopeReadOutcome>;
   /**
+   * Every scope row that lists one request, oldest first (rondo#238 C2b): the
+   * scope screen's way to the scope a drafter drafted for it and to the
+   * person's own scope that replaced it. A row that will not read is skipped.
+   */
+  scopesFor(requestMessageId: string): Promise<readonly StoredScope[]>;
+  /**
    * The held record behind one agent-type digest, for the scope's screen to
    * read the tier and grants back from (D-0069 section 1): an
    * `agent_type_record` row first, else the earliest iteration row with that
@@ -3622,6 +3628,26 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
       connection
         .prepare("DELETE FROM drafter_lease WHERE request_message_id = ? AND holder = ?")
         .run(requestMessageId, holder);
+    },
+
+    async scopesFor(requestMessageId: string): Promise<readonly StoredScope[]> {
+      const ids = (
+        connection
+          .prepare(
+            "SELECT s.scope_id FROM scope s, " +
+              "json_each(CASE WHEN json_valid(s.payload) THEN s.payload ELSE '{}' END, '$.requests') j " +
+              "WHERE j.value = ? ORDER BY s.created_at_ms, s.rowid",
+          )
+          .all(requestMessageId) as SqlRow[]
+      ).map((row) => String(row["scope_id"]));
+      const scopes: StoredScope[] = [];
+      for (const id of ids) {
+        const read = await this.readScope(id);
+        if (read.kind === "read") {
+          scopes.push(read.scope);
+        }
+      }
+      return scopes;
     },
 
     async heldAgentTypeDigests(): Promise<readonly string[]> {

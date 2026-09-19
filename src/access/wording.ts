@@ -75,6 +75,72 @@ function agentTypeSourceJa(from: AgentTypeSource): string {
   }
 }
 
+function scopeTestEn(test: string): string {
+  switch (test) {
+    case "decision":
+      return "the scope has not been approved";
+    case "superseded":
+      return "a newer scope replaced this one";
+    case "request":
+      return "the scope does not cover this request";
+    case "workspace":
+      return "the scope does not cover the place this plan runs";
+    case "agent_type":
+      return "the scope does not allow this plan's agent type";
+    case "contract":
+      return "the plan asks for more than the scope allows";
+    case "irreversible":
+      return "the plan would do something the scope keeps back as irreversible";
+    case "expiry":
+      return "the scope has expired";
+    case "laps":
+      return "the scope's laps are used up";
+    case "cost":
+      return "the scope's cost budget is used up";
+    case "asks":
+      return "a question in the request's thread is waiting for your answer";
+    case "grants":
+      return "the plan would be allowed more than the lap it follows";
+    case "readings":
+      return "the scope's review rounds are used up";
+    default:
+      return `the scope's ${test} test says no`;
+  }
+}
+
+function scopeTestJa(test: string): string {
+  switch (test) {
+    case "decision":
+      return "範囲がまだ承認されていません";
+    case "superseded":
+      return "この範囲は新しい範囲に置き換えられています";
+    case "request":
+      return "この範囲はこの依頼を含んでいません";
+    case "workspace":
+      return "この作業が動く場所を、この範囲は含んでいません";
+    case "agent_type":
+      return "この作業のエージェント種別を、この範囲は許していません";
+    case "contract":
+      return "この作業は、範囲が許す以上のことを求めています";
+    case "irreversible":
+      return "この作業は、範囲が取り返しのつかない行為として止めているものを行います";
+    case "expiry":
+      return "範囲の期限が切れています";
+    case "laps":
+      return "範囲の周回数を使い切っています";
+    case "cost":
+      return "範囲の費用の予算を使い切っています";
+    case "asks":
+      return "依頼のスレッドで、あなたの回答を待っている問いがあります";
+    case "grants":
+      return "この作業は、続く元の周回より多くを許されることになります";
+    case "readings":
+      return "範囲のレビュー回数を使い切っています";
+    default:
+      return `範囲の ${test} の判定が通りません`;
+  }
+}
+
 /**
  * What a model review raised, counted, as the {@link EN} set says it.
  *
@@ -564,6 +630,28 @@ export interface Chrome {
   readonly scopePlanLine: (where: string, agentType: string, from: string) => string;
   /** A plan the address named that rondo no longer offers: said, and the choice put again. */
   readonly scopePlanGone: string;
+  /** The drafted scope's screen (rondo#238 C2b, D-0071 rule 5.3). */
+  readonly scopeDraftedLead: string;
+  readonly scopeDraftedPlansHeading: string;
+  readonly scopeDraftedPlan: (n: number) => string;
+  /** A drafted plan whose template the draft's snapshot no longer holds. */
+  readonly scopeDraftedTemplateGone: string;
+  /** A drafted value below what rule 4.2 computed: what it was computed as, before the words it rests on. */
+  readonly scopeNarrowed: (computed: string) => string;
+  readonly scopeDraftedAction: string;
+  readonly scopeDraftedPlain: string;
+  readonly scopeDraftedPressNote: string;
+  /** One drafted plan under an approved scope, and whether it can start now. */
+  readonly planStartAction: string;
+  readonly planStartPlain: string;
+  readonly planStarted: string;
+  readonly planStartedLink: string;
+  readonly planBusy: (limit: number) => string;
+  readonly planFull: (live: number, limit: number) => string;
+  /** Why the scope's own test says no, in plain words: one per test (D-0066 rule 4.2). */
+  readonly planOutside: (test: string) => string;
+  readonly planUnrunnable: string;
+  readonly planUnrunnableWhy: string;
   /** An approved scope no plan rondo holds may run under. */
   readonly scopeNoPlanForScope: string;
   readonly scopeNoApprover: string;
@@ -1301,6 +1389,38 @@ explanation you pressed on and then answers the gate.`,
   scopePlanFrom: (from) =>
     from === "message" ? "pasted into this thread" : "the plan earlier laps ran on",
   scopePlanLine: (where, agentType, from) => `${where}, agent type ${agentType} (${from})`,
+  scopeDraftedLead:
+    "rondo drafted this scope for your request: the work below, and budgets worked out from the " +
+    "laps this store has recorded. Approve it as it is, or change a value first -- your version " +
+    "is then recorded in place of rondo's draft.",
+  scopeDraftedPlansHeading: "What rondo proposes to run",
+  scopeDraftedPlan: (n) => `Plan ${String(n)}`,
+  scopeDraftedTemplateGone: "The plan this was drafted from is no longer one rondo holds.",
+  scopeNarrowed: (computed) =>
+    `rondo lowered this from ${computed} because of what you wrote here:`,
+  scopeDraftedAction: "Approve",
+  scopeDraftedPlain: "Approves this scope, or your changed version of it",
+  scopeDraftedPressNote:
+    "One press approves. If you changed a value, rondo records your version in place of its " +
+    "draft and approves that. Approving spends nothing: every lap is tested against it when it " +
+    "starts.",
+  planStartAction: "Start this plan",
+  planStartPlain: "Starts one lap on this plan, counted against the scope you approved",
+  planStarted: "Started.",
+  planStartedLink: "Open the lap",
+  planBusy: (limit) =>
+    limit === 1
+      ? "Waiting for room: this host runs one lap at a time, and one is running. It can start " +
+        "once that lap reaches its gate."
+      : `Waiting for room: this host runs ${String(limit)} laps at a time, and all of them are ` +
+        "running. It can start once one of them reaches its gate.",
+  planFull: (live, limit) =>
+    `Waiting for room: ${String(live)} laps are open, as many as this host allows ` +
+    `(${String(limit)}). It can start once one of them ends.`,
+  planOutside: (test) => `Cannot start: ${scopeTestEn(test)}.`,
+  planUnrunnable:
+    "This plan can no longer run. Reply in the request's thread to have it drafted again.",
+  planUnrunnableWhy: "What stops it",
   scopeNoPlanForScope:
     "rondo holds no plan for the place and the agent type this scope allows, so there is " +
     "nothing to start under it yet. Reply in the request's thread with a plan for them.",
@@ -2030,6 +2150,33 @@ const JA: Partial<Chrome> = Object.freeze({
   scopePlanFrom: (from) =>
     from === "message" ? "このスレッドに貼られたもの" : "以前の周回が使ったもの",
   scopePlanLine: (where, agentType, from) => `${where}、エージェント種別 ${agentType}（${from}）`,
+  scopeDraftedLead:
+    "この依頼の範囲を rondo が下書きしました。下の作業と、このストアに記録された周回から出した" +
+    "予算です。そのまま承認するか、先に値を変えてください。変えた場合は、rondo の下書きの" +
+    "代わりにあなたの版が記録されます。",
+  scopeDraftedPlansHeading: "rondo が動かそうとしている作業",
+  scopeDraftedPlan: (n) => `作業 ${String(n)}`,
+  scopeDraftedTemplateGone: "この下書きの元になったプランを、rondo はもう持っていません。",
+  scopeNarrowed: (computed) => `ここに書かれた内容に合わせて、rondo が ${computed} から下げました:`,
+  scopeDraftedAction: "承認する",
+  scopeDraftedPlain: "この範囲、または値を変えたあなたの版を承認します",
+  scopeDraftedPressNote:
+    "1 回押せば承認されます。値を変えた場合は、rondo が下書きの代わりにあなたの版を記録して" +
+    "承認します。承認しただけでは何も消費しません。周回は始まる時点で毎回この範囲に照らして" +
+    "判定されます。",
+  planStartAction: "この作業を始める",
+  planStartPlain: "この作業で周回を 1 つ始め、承認した範囲に数えます",
+  planStarted: "開始済みです。",
+  planStartedLink: "周回を開く",
+  planBusy: (limit) =>
+    `空きを待っています。このホストが同時に動かす周回は ${String(limit)} つまでで、いまその` +
+    "すべてが動いています。どれかがゲートまで進めば始められます。",
+  planFull: (live, limit) =>
+    `空きを待っています。開いている周回が ${String(live)} つあり、このホストが許す上限` +
+    `（${String(limit)}）です。どれかが終われば始められます。`,
+  planOutside: (test) => `始められません。${scopeTestJa(test)}。`,
+  planUnrunnable: "この作業はもう動かせません。依頼のスレッドに返信すると、下書きし直されます。",
+  planUnrunnableWhy: "止めている理由",
   scopeNoPlanForScope:
     "この範囲が許す場所とエージェント種別のプランを rondo はまだ持っていないので、この範囲で" +
     "開始できるものがありません。それに合うプランを依頼のスレッドに返信として貼ってください。",

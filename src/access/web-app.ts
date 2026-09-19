@@ -694,6 +694,28 @@ export interface Started {
 
 export type ScopedStartFromWeb = (input: ScopedStartInput) => Promise<Started>;
 
+/** What the drafted scope's form posts: the draft it was drawn over and the values (D-0071 rule 5.3). */
+export interface DraftedScopeFormDraft {
+  readonly draftScopeId: string;
+  readonly draftDigest: string;
+  readonly scopeId: string;
+  readonly budgets: ScopeFormDraft["budgets"];
+  readonly severityThreshold: FindingSeverity;
+  readonly outwardActs: readonly ScopeOutwardAct[];
+}
+
+/** One drafted plan's start: which approval, which split, which plan. */
+export interface PlanStartInput {
+  readonly iterationId: string;
+  readonly requestMessageId: string;
+  readonly scopeDecisionId: string;
+  readonly proposalId: string;
+  readonly planIndex: number;
+}
+
+export type RecordDraftedScopeFromWeb = (form: DraftedScopeFormDraft) => Promise<ScopeRecorded>;
+export type PlanStartFromWeb = (input: PlanStartInput) => Promise<Started>;
+
 /**
  * The third thing this surface may write (D-0059 section 5a, the two rondo#233
  * S3 rows): a scope with its approval, and a lap started under that approval.
@@ -709,10 +731,38 @@ export type ScopedStartFromWeb = (input: ScopedStartInput) => Promise<Started>;
 export class ScopePort {
   readonly #record: RecordScopeFromWeb;
   readonly #start: ScopedStartFromWeb;
+  readonly #recordDrafted: RecordDraftedScopeFromWeb | null;
+  readonly #startPlan: PlanStartFromWeb | null;
 
-  constructor(record: RecordScopeFromWeb, start: ScopedStartFromWeb) {
+  constructor(
+    record: RecordScopeFromWeb,
+    start: ScopedStartFromWeb,
+    /** The drafted scope's two presses (rondo#238 C2b); null where the host offers none. */
+    recordDrafted: RecordDraftedScopeFromWeb | null = null,
+    startPlan: PlanStartFromWeb | null = null,
+  ) {
     this.#record = record;
     this.#start = start;
+    this.#recordDrafted = recordDrafted;
+    this.#startPlan = startPlan;
+  }
+
+  /** Approve one drafted scope, as drafted or as the person changed it, on one press. */
+  async recordDrafted(press: Press, form: DraftedScopeFormDraft): Promise<ScopeRecorded> {
+    if (!minted.has(press) || this.#recordDrafted === null) {
+      return { ok: false, note: "nothing was recorded: this was not a person's press" };
+    }
+    minted.delete(press);
+    return await this.#recordDrafted(form);
+  }
+
+  /** Start one drafted plan under one approved scope, on one press. */
+  async startPlan(press: Press, input: PlanStartInput): Promise<Started> {
+    if (!minted.has(press) || this.#startPlan === null) {
+      return { ok: false, note: "nothing was started: this was not a person's press" };
+    }
+    minted.delete(press);
+    return await this.#startPlan(input);
   }
 
   /** Record one drafted scope and approve it, on one press. */
@@ -1007,6 +1057,14 @@ const SCOPE_ROUTE = "/scope";
 const START_ROUTE = "/start";
 
 /**
+ * The drafted scope's two write routes (rondo#238 C2b, D-0071 rule 5.3):
+ * approving a drafted scope -- as drafted, or as the person changed it -- and
+ * starting one drafted plan under that approval.
+ */
+const SCOPE_DRAFT_ROUTE = "/scope-draft";
+const START_PLAN_ROUTE = "/start-plan";
+
+/**
  * The route that pushes an approved lap's work and opens its pull request
  * (D-0059 section 5a as annotated from rondo#233 S5, D-0060). A press, as every
  * approval is, and pressed only from the screen that shows its dry-run.
@@ -1017,7 +1075,13 @@ const PUBLISH_ROUTE = "/publish";
  * The routes whose body is numbers and minted ids and never prose, and so take
  * {@link MAX_FORM_BYTES} rather than the send limit.
  */
-const PRESS_ROUTES: ReadonlySet<string> = new Set([SCOPE_ROUTE, START_ROUTE, PUBLISH_ROUTE]);
+const PRESS_ROUTES: ReadonlySet<string> = new Set([
+  SCOPE_ROUTE,
+  START_ROUTE,
+  SCOPE_DRAFT_ROUTE,
+  START_PLAN_ROUTE,
+  PUBLISH_ROUTE,
+]);
 
 /** A whole count of at least 0, as a form posts one, or null when it is not one. */
 function wholeNumber(value: unknown): number | null {
@@ -1072,6 +1136,23 @@ function scopeDraftOf(
   if (typeof planDigest !== "string" || typeof agentTypeDigest !== "string") {
     return null;
   }
+  const values = scopeValuesOf(form);
+  return values === null
+    ? null
+    : { scopeId, requestMessageId, planDigest, agentTypeDigest, ...values };
+}
+
+/**
+ * The values a scope form posts -- the five budgets, the threshold, the outward
+ * acts -- read as values, or null when one is not a value rondo can use. Shared
+ * by the person's own form and the drafted one (rondo#238 C2b), so a budget is
+ * read one way whichever screen posted it.
+ */
+function scopeValuesOf(form: Record<string, unknown>): {
+  readonly budgets: ScopeFormDraft["budgets"];
+  readonly severityThreshold: FindingSeverity;
+  readonly outwardActs: readonly ScopeOutwardAct[];
+} | null {
   const laps = wholeNumber(form["laps"]);
   const reviewRounds = wholeNumber(form["review_rounds"]);
   const costUsd = amount(form["cost_usd"]);
@@ -1104,10 +1185,6 @@ function scopeDraftOf(
     return null;
   }
   return {
-    scopeId,
-    requestMessageId,
-    planDigest,
-    agentTypeDigest,
     budgets: {
       laps,
       review_rounds: reviewRounds,
@@ -1592,6 +1669,112 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
         },
         tagOf(c),
       )}#scope`,
+      303,
+    );
+  });
+
+  // **The drafted scope's press** (rondo#238 C2b, D-0071 rule 5.3): the draft
+  // by id and digest, and the values; which act the press is -- the draft
+  // approved, or the person's version recorded in its place -- is the port's to
+  // decide from the rows.
+  app.post(SCOPE_DRAFT_ROUTE, async (c) => {
+    if (scope === null) {
+      return scopeRefused(c, 403, "scopeRefusedNoApprover", null);
+    }
+    const form = await c.req.parseBody({ all: true });
+    const request = typeof form["request"] === "string" ? form["request"] : "";
+    const minting = mintPress(c, form["token"]);
+    if (!("press" in minting)) {
+      return scopeRefused(c, minting.status, "scopeRefusedPress", request);
+    }
+    const scopeId = form["scope_id"];
+    const draftScopeId = form["draft_scope"];
+    const draftDigest = form["draft_digest"];
+    if (
+      typeof scopeId !== "string" ||
+      !PAGE_SCOPE_ID.test(scopeId) ||
+      typeof draftScopeId !== "string" ||
+      draftScopeId === "" ||
+      typeof draftDigest !== "string" ||
+      draftDigest === "" ||
+      request === ""
+    ) {
+      return scopeRefused(c, 400, "scopeRefusedForm", request);
+    }
+    const values = scopeValuesOf(form);
+    if (values === null) {
+      return scopeRefused(c, 400, "scopeRefusedFields", request);
+    }
+    const recorded = await scope.recordDrafted(minting.press, {
+      draftScopeId,
+      draftDigest,
+      scopeId,
+      ...values,
+    });
+    if (!recorded.ok || recorded.scopeDecisionId === undefined) {
+      return scopeRefused(c, 409, recorded.why ?? "scopeRefusedNotTaken", request);
+    }
+    return c.redirect(
+      `${viewHref(
+        {
+          kind: "scope",
+          messageId: request,
+          rounds: null,
+          decisionId: recorded.scopeDecisionId,
+          plan: null,
+        },
+        tagOf(c),
+      )}#scope`,
+      303,
+    );
+  });
+
+  // **One drafted plan's start** (rondo#238 C2b): the plan named by its split
+  // and its place in it, read back in the port -- never posted whole.
+  app.post(START_PLAN_ROUTE, async (c) => {
+    if (scope === null) {
+      return startRefused(c, 403, "startRefusedNoApprover", null, null);
+    }
+    const form = await c.req.parseBody();
+    const request = typeof form["request"] === "string" ? form["request"] : "";
+    const decision = typeof form["scope_decision"] === "string" ? form["scope_decision"] : "";
+    const minting = mintPress(c, form["token"]);
+    if (!("press" in minting)) {
+      return startRefused(c, minting.status, "startRefusedPress", request, decision);
+    }
+    const iterationId = form["iteration"];
+    const proposal = form["proposal"];
+    const planIndex = wholeNumber(form["plan_index"]);
+    if (
+      typeof iterationId !== "string" ||
+      !PAGE_ITERATION_ID.test(iterationId) ||
+      typeof proposal !== "string" ||
+      proposal === "" ||
+      planIndex === null ||
+      request === "" ||
+      decision === ""
+    ) {
+      return startRefused(c, 400, "startRefusedForm", request, decision);
+    }
+    const started = await scope.startPlan(minting.press, {
+      iterationId,
+      requestMessageId: request,
+      scopeDecisionId: decision,
+      proposalId: proposal,
+      planIndex,
+    });
+    if (!started.ok) {
+      return startRefused(
+        c,
+        409,
+        started.why ?? "startRefusedNotAdmitted",
+        request,
+        decision,
+        started.test ?? null,
+      );
+    }
+    return c.redirect(
+      `${viewHref({ kind: "summary" }, tagOf(c))}#${encodeURIComponent(`lap-${iterationId}`)}`,
       303,
     );
   });

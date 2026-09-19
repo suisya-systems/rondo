@@ -14243,6 +14243,15 @@ predecessor's); those are part of the text accepted.
   Section 1.2.3's single field no longer bounds both.
 - Any measurement in "What was measured" failing to reproduce at rondo `f2edf3f`.
 
+> **Annotation (2026-09-19, from rondo#238's stage 2 build: rondo#267).** Added after this entry was
+> accepted, and additive. **Rule 1.4 is read as "a scope is replaced once"**: the store refuses to
+> approve a scope when another scope replacing the same predecessor is already approved, decided in
+> the decision's own transaction. Rule 1.4 says approving a successor retires its predecessor, and
+> says nothing of two successors of one scope; left open, two changes to one scope -- two tabs, or
+> two hosts over one store -- would each be approved, each a grant with a budget of its own, and
+> neither would retire the other. A person who wants a different scope after that writes a successor
+> of the approved one. Nothing above is edited.
+
 ---
 
 ## D-0067 — The secretary's running half has no new owner: the advisory reads lines against each other and drafts an order, the surface attempts acts in that order, the store keeps the person's standing policies, and review extensions and merges still reach the person
