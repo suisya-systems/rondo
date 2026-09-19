@@ -208,6 +208,24 @@ test(
 );
 
 test(
+  "two raises of one approval pressed together leave one successor and nothing of the other (D-0074 rules 1.3, 4.4)",
+  async () => {
+    const w = await world();
+    const outcomes = await Promise.all([
+      w.raise({ scopeId: "scope-tab-1" }),
+      w.raise({ scopeId: "scope-tab-2" }),
+    ]);
+    expect(outcomes.filter((o) => o.ok)).toHaveLength(1);
+    expect(outcomes.filter((o) => !o.ok)).toMatchObject([{ why: "raiseRefusedNotTip" }]);
+    expect(w.count("SELECT count(*) AS n FROM scope")).toBe(2);
+    expect(
+      w.count("SELECT count(*) AS n FROM operator_attention WHERE subject_kind = 'scope'"),
+    ).toBe(1);
+  },
+  WINDOWS_HEAVY_TIMEOUT_MS,
+);
+
+test(
   "a raise that cannot be taken says why and writes nothing (D-0074 rule 4.4)",
   async () => {
     const w = await world();

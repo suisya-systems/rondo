@@ -4559,8 +4559,39 @@ export async function recordDraftedScopeFromPage(
  * has two tips. The store refuses the second approved successor itself (rule
  * 1.3), so two raises drawn over one approval and pressed together leave one.
  * A second press of one form is the write it repeats, as the scope forms' are.
+ *
+ * **One raise of an approval at a time** (Codex round 1), for
+ * `startSplitFromPage`'s reason: two presses over one approval would both pass
+ * the tip test before either approved, and the store's refusal of the second
+ * approval would come after its scope row was written -- a refusal that wrote
+ * something. Run after the first, the second finds the tip moved and writes
+ * nothing.
  */
 export async function raiseScopeFromPage(
+  environment: Readonly<Record<string, string | undefined>>,
+  store: IterationStore,
+  storePath: string,
+  approver: string,
+  input: RaiseInput,
+): Promise<ScopeRecorded> {
+  const ahead = raising.get(input.scopeDecisionId) ?? Promise.resolve();
+  const running = ahead
+    .catch(() => undefined)
+    .then(() => raiseScope(environment, store, storePath, approver, input));
+  raising.set(input.scopeDecisionId, running);
+  try {
+    return await running;
+  } finally {
+    if (raising.get(input.scopeDecisionId) === running) {
+      raising.delete(input.scopeDecisionId);
+    }
+  }
+}
+
+/** Every raise this process is recording, by the approval it raises. */
+const raising = new Map<string, Promise<ScopeRecorded>>();
+
+async function raiseScope(
   environment: Readonly<Record<string, string | undefined>>,
   store: IterationStore,
   storePath: string,
