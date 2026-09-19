@@ -116,7 +116,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0076 | Who the page is written for: the person who asked for the work and judges it, who knows their own repository and not rondo; rondo's own words, identifiers and failures never reach them as themselves, and what they cannot use is not shown | accepted |
 | D-0077 | The organisation drafts the revise instruction: the model drafter runs once a model reading with findings lands, its draft quotes every finding because rondo renders the quotes from the reading and only the drafter's words are the model's, and an unavailable draft leaves the person an empty box and a sentence, never a deterministic fallback | accepted |
 | D-0078 | What a lap knows of the issue it is sent to fix: rondo reads the issue outside the lap when the person's message names it, records what it read in the request thread, and carries it into the prompt quoted, so the lap stays closed to the forge and the person never has to copy an issue into a request | accepted |
-| D-0079 | Composed in the language, not translated into it: every wording set is a whole catalogue and none is another's diff, what a lap and its drafter write for the person is asked for as composed in the person's language, and English is written only where the repository requires it | proposed |
+| D-0079 | Composed in the language, not translated into it: every wording set is a whole catalogue and none is another's diff, what a lap and its drafter write for the person is asked for as composed in the person's language, and English is written only where the repository requires it | accepted |
 
 ---
 
@@ -9597,6 +9597,11 @@ At rondo `42148b5` on **2026-09-12**, by reading the tree.
 > the other half of. **This entry is not superseded**, and the second residual below -- *rondo's own
 > vocabulary in the operator's language* -- is the subject `D-0055` takes up.
 
+> **Annotation (2026-09-20, from D-0079).** Added after this entry was accepted, and additive:
+> nothing below is removed or rewritten. **Rule 7's sentence now asks the worker to think and write in
+> the asked language from the start, and not to compose in English and translate** (`D-0079` section
+> 2.1). It still names the tag and nothing else and is still ASCII.
+
 The first real look at the operator page reported back: *"maybe it is hard to read because it is
 English"*. That is a legibility finding and not a preference -- the page's whole job is that one
 person can answer in one look -- and it narrowed on the same day to something much smaller than
@@ -10189,6 +10194,15 @@ the properties rules 2, 3, 6 and 7 assert.
 > force where a string is typed or its spelling refused. **The terminal keeps rule 2 as written.**
 > The falsifier "prose that is a token to somebody else" is recorded as having fired the other way on
 > 2026-09-19 (rondo#259): tokens kept for a reader who was not there. Nothing below is edited.
+
+> **Annotation (2026-09-20, from D-0079), and not additive.** Added after this entry was accepted, by
+> the answer of rondo's human gate to `D-0079`'s seventh point. **Rule 9 is withdrawn**: every set is a
+> whole `Chrome` and none is merged over English, so a string missing from a set is a type error and
+> never the English one (`D-0079` section 1). English stays the floor for a tag no set is written for
+> (`D-0056` rule 2). Rule 9's cost sentence stands and grows: a third language is now a whole set.
+> Every other rule is read as written, and **this entry is not superseded**. Nothing below is edited.
+> The line drawn here between an annotation and a supersession follows the precedents of `D-0076`,
+> `D-0074` and `D-0073` rather than the letter of `AGENTS.md`, a difference tracked on rondo#273.
 
 `D-0053` cut the page's text in two and the operator confirmed the cut on the screen it was made on:
 `awaiting_human`, `waiting 2m`, English, fine. Then the operator opened `/?reading=open` -- the fold
@@ -12637,6 +12651,10 @@ follows them.
 acceptance, as that entry's third gate answer requires. Two points were put to the gate and it chose
 the recommended option on both; see "What was put to the human gate, and its answer". Refs `D-0009`, `D-0019`, `D-0020`, `D-0022`,
 `D-0029`, `D-0032`, `D-0034`, `D-0036`, `D-0061`, `D-0062`, `D-0064`.
+
+> **Annotation (2026-09-20, from D-0079).** Added after this entry was accepted, and additive:
+> nothing below is removed or rewritten. **Rule 4.2**: with an operator language set, the prompt of a
+> drafted plan is written in that language rather than its template's (`D-0079` section 2.2).
 
 **This entry decides and does not build.** Nothing in `src/` changes with it.
 
@@ -15648,6 +15666,11 @@ The points are kept as put, and the answer follows them.
 > answers and the 2026-09-19 annotation from rondo#238's stage 2 build are not retired with it**: they
 > are carried as written and are still cited as `D-0071` section N. Nothing below is edited.
 
+> **Annotation (2026-09-20, from D-0079).** Added after this entry was accepted, and additive:
+> nothing below is removed or rewritten. With an operator language set, the drafter writes the summary,
+> the question and each prompt in it, and is asked to compose in it rather than translate (`D-0079`
+> section 2.2); with none set, a prompt stays in its template's language.
+
 Three points were put to the gate and it chose the recommended option on each; the answers are
 recorded at the end of "What was put to the human gate, and its answer" directly below. Refs
 `D-0009`, `D-0010`,
@@ -18101,9 +18124,9 @@ Each dated and additive, and added with this entry's acceptance:
 
 ## D-0079 — Composed in the language, not translated into it: every wording set is a whole catalogue and none is another's diff, what a lap and its drafter write for the person is asked for as composed in the person's language, and English is written only where the repository requires it
 
-**Status:** proposed (2026-09-20). Six design points were put to rondo's human gate through the window
-on rondo#257 and each was answered with the recommended option; the answers are recorded in "What was
-put to the human gate, and its answer". The entry's own text awaits acceptance. Refs `D-0053`,
+**Status:** accepted (2026-09-20, rondo's human gate, on rondo#257). Seven points were put to the gate
+through the window and it chose the recommended option on each; the answers are recorded in "What was
+put to the human gate, and its answer". Refs `D-0053`,
 `D-0055`, `D-0056`, `D-0063`, `D-0071`, `D-0076`, rondo#257, rondo#159.
 
 **This entry decides and builds.** The building change is the pull request that carries it:
@@ -18247,13 +18270,17 @@ is withdrawn and this entry records the withdrawal; the file split is a later mo
 sentence, the drafter's prompts and the 39 rewrites are built with this entry; section 4 is decided
 here and built in a separate issue.
 
-**Still open for the gate, with a recommendation:**
-
 7. **How the withdrawal is recorded on `D-0055`.** It changes what rule 9 asserted, which the
    append-only rules make a supersession. Superseding all of `D-0055` would retire rules 1 to 8 and 10
-   to 12, which stand. Recommended: **a dated annotation on `D-0055` that says it is not additive**,
-   as `D-0076` did for `D-0055` and `D-0063`, withdrawing rule 9 alone and pointing here; added on
-   this entry's acceptance.
+   to 12, which stand. Recommended: **(a) a dated annotation on `D-0055` that says it is not
+   additive**, as `D-0076` did for `D-0055` and `D-0063`, withdrawing rule 9 alone and pointing here.
+   *Loses:* the letter of the append-only rule, which reads such a change as a supersession.
+   **(b) Supersede `D-0055`.** *Loses:* eleven rules that stand would be marked as no longer true.
+
+**The gate's answer to point 7 (2026-09-20, relayed by the window):** (a). The annotation is added with
+this entry's acceptance, and `D-0055` is not superseded. The line this draws between an annotation and
+a supersession follows the precedents of `D-0076`, `D-0074` and `D-0073` rather than the letter of
+`AGENTS.md`; the difference is tracked on rondo#273.
 
 ### What this does not do
 
@@ -18274,15 +18301,15 @@ here and built in a separate issue.
 
 ### Annotations this entry adds
 
-Added with this entry's acceptance, dated:
+Each dated, and added with this entry's acceptance:
 
-- **`D-0055` rule 9**, not additive (point 7): withdrawn by `D-0079` section 1; a set is a whole
+- **`D-0055` rule 9**, not additive (point 7 (a)): withdrawn by `D-0079` section 1; a set is a whole
   `Chrome`, and a missing string is a type error rather than the English one. Rule 9's cost sentence
   ("a third language is now a rondo diff") stands and grows: a third language is a whole set.
 - **`D-0053` rule 7**: the sentence now asks for composing in the language (`D-0079` section 2.1); it
   still names the tag and nothing else and is still ASCII.
-- **`D-0063` rule 4.2 / `D-0071`**: with an operator language set, the drafter writes each prompt in
-  it (`D-0079` section 2.2).
+- **`D-0063` rule 4.2** and **`D-0071`**: with an operator language set, the drafter writes each
+  prompt in it (`D-0079` section 2.2).
 
 ### What would falsify it
 
