@@ -5813,7 +5813,10 @@ test("a narrowed drafted value says what it was computed as, and links the perso
   );
   expect(page).toContain('value="3.00"');
   expect(page).toContain(EN.scopeNarrowed(computed));
-  expect(page).toContain('href="#r1-cap"');
+  // To the thread view at that message: the scope screen draws no messages,
+  // so a bare anchor would lead nowhere.
+  expect(page).toContain('href="/?thread=r1-cap&amp;lang=en#r1-cap"');
+  expect(page).not.toContain('href="#r1-cap"');
 });
 
 test("an approved drafted scope offers each plan its own start, and says so where one cannot start (rondo#238 C2b)", async () => {

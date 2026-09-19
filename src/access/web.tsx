@@ -4555,11 +4555,13 @@ async function draftedForm(
       <p class="note flex flex-wrap items-center gap-1.5 text-[12px] leading-5 text-muted-foreground">
         <span>{said}</span>
         {by.map((n) =>
+          // No thread is on this screen, so the chip leads to the thread view
+          // at that message rather than to an anchor this page does not draw.
           basisChip(
             wording,
             { form: "message", messageId: n.messageId },
             threads,
-            view.messageId,
+            null,
             ports.actorId,
           ),
         )}
