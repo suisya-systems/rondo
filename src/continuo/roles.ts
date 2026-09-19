@@ -291,6 +291,26 @@ export function reviewerRow(): ReviewerRow {
 }
 
 /**
+ * The model drafter's executable, model and family (D-0071 rule 1.2).
+ *
+ * **Not an agent type, not a tier and not a lap** (rule 1.1), for the
+ * reviewer's reasons: it runs no tools and is spawned by rondo outside a lap.
+ * It takes the same rule as the other two tables: **a changed row is a new
+ * decision entry**. The first row is the gate's answer to D-0071 point 3.
+ */
+export type DrafterRow = ReviewerRow;
+
+const DRAFTER_TABLE: readonly DrafterRow[] = Object.freeze([
+  Object.freeze({ model: "claude-opus-5", family: "claude", executable: "claude" }),
+]);
+
+/** The drafter row in force. */
+export function drafterRow(): DrafterRow {
+  // A frozen literal with one row, as REVIEWER_TABLE is.
+  return DRAFTER_TABLE[0] as DrafterRow;
+}
+
+/**
  * The family rondo files a model id under, looked up in rondo's own tables --
  * the tier rows and the reviewer rows -- or null for an id neither table holds.
  *

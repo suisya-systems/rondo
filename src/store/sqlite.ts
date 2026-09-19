@@ -2414,6 +2414,12 @@ export interface AdvisoryRecord {
    * `agent_type_digest`.
    */
   heldAgentType(agentTypeDigest: string): Promise<HeldAgentTypeOutcome>;
+  /**
+   * Every digest an `agent_type_record` row holds, oldest first: the half of
+   * the held agent types the iteration rows do not already name (D-0071 rule
+   * 2.1.2). Each is read back through {@link heldAgentType}.
+   */
+  heldAgentTypeDigests(): Promise<readonly string[]>;
   readScopeDecision(scopeDecisionId: string): Promise<ScopeDecisionReadOutcome>;
   /**
    * The one decision on a scope row, or `absent` while nobody has answered it.
@@ -3404,6 +3410,16 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
         }
         throw error;
       }
+    },
+
+    async heldAgentTypeDigests(): Promise<readonly string[]> {
+      return (
+        connection
+          .prepare(
+            "SELECT agent_type_digest FROM agent_type_record ORDER BY recorded_at_ms, agent_type_digest",
+          )
+          .all() as SqlRow[]
+      ).map((row) => String(row["agent_type_digest"]));
     },
 
     async heldAgentType(agentTypeDigest: string): Promise<HeldAgentTypeOutcome> {
