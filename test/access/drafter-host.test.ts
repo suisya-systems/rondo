@@ -371,3 +371,39 @@ test("starting a host on a store with history spends nothing on the past; a repl
   // Said once per host.
   expect(logged.filter((line) => line.includes("predate"))).toHaveLength(1);
 });
+
+test("a run whose material could not be read is tried again on the next scan, not given up", async () => {
+  const w = await world();
+  await w.say("r1", "Fix it.", null, 1_000);
+  let unreadable = true;
+  const handed: string[] = [];
+  const host = drafterHost({
+    store: w.store,
+    record: w.record,
+    now: () => 10_000,
+    language: null,
+    log: () => undefined,
+    mintId: (kind) => `${kind}-x`,
+    runDrafter: async (_row, document) => {
+      handed.push(document);
+      return { kind: "failed", reason: "no claude" };
+    },
+    draft: async (ports, requestMessageId, language) =>
+      unreadable
+        ? {
+            drafter: "rondo/drafter/1/claude-opus-5",
+            material: null,
+            document: null,
+            costUsd: null,
+            outcome: { kind: "unavailable", reason: "the thread will not read" },
+          }
+        : await draftRequest(ports, requestMessageId, language),
+  });
+  host.kick();
+  await host.idle();
+  expect(handed).toEqual([]);
+  unreadable = false;
+  host.kick();
+  await host.idle();
+  expect(handed).toHaveLength(1);
+});

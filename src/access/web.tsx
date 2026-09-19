@@ -123,7 +123,6 @@ import {
   readingCoverage,
   reviewedReading,
   SCOPE_OUTWARD_ACTS,
-  type ScopeWorkspace,
   type StoredScope,
   type ThreadMessageDraft,
   WAIT_SIDE,
@@ -144,6 +143,8 @@ import {
   whereItRuns,
 } from "./inbox.js";
 import { markdownHtml } from "./markdown.js";
+import { isModelDrafterName } from "./model-draft.js";
+import { type HeldPlan, heldPlanByDigest, heldPlans } from "./model-drafter.js";
 import { denialLine, LIST_LIMIT } from "./review.js";
 import { heldAgentTypeLines, scopeBudgetsFromStore } from "./scope.js";
 import { type Chrome, EN, SHIPPED_SETS, setFor } from "./wording.js";
@@ -176,6 +177,8 @@ export interface WebPorts extends InboxReadPorts {
       // the approval the press wrote and what a predecessor of it spent
       // (D-0066 rules 1.4 and 3.4).
       | "heldAgentType"
+      // rondo#238: the plans a person picks from are the ones rondo holds.
+      | "heldAgentTypeDigests"
       | "readScope"
       | "readScopeDecision"
       | "scopeDecisionOf"
@@ -219,11 +222,6 @@ export interface WebPorts extends InboxReadPorts {
    */
   readonly material: LapMaterial | null;
   /**
-   * The plan `RONDO_PLAN` names, or null when the host named none: no plan, no
-   * scope form, and the screen says which (D-0020 rule 2's shape).
-   */
-  readonly plan: ScopeDrafting | null;
-  /**
    * What publishing one lap would do, or null when the host named no forge
    * repository: no repository, no publish screen, and the page says which
    * (D-0020 rule 2's shape, rondo#233 S5).
@@ -237,32 +235,6 @@ export interface WebPorts extends InboxReadPorts {
    */
   readonly readLog: (directory: string) => LapLogReading;
 }
-
-/**
- * What one host's plan says, for a scope form to start from (D-0069 section 1).
- *
- * A function and not a value, for {@link LapMaterial}'s reason turned the same
- * way round: the plan is a file, and a renderer that could read one would hold
- * a capability nothing on this surface should hold. The caller reads it and
- * this module renders it. A refusal is words, never a throw and never a
- * D-number.
- *
- * **The set is an argument**, for {@link LapMaterial}'s other reason: the held
- * agent-type lines are prose, and a port that composed them at boot rendered
- * the host's language inside a document declaring another.
- */
-export type ScopeDrafting = (wording: Chrome) => Promise<ScopeDrafted>;
-
-export type ScopeDrafted =
-  | {
-      readonly kind: "drafted";
-      readonly agentTypeDigest: string;
-      readonly planDigest: string;
-      readonly workspaces: readonly ScopeWorkspace[];
-      /** `heldAgentTypeLines`' one line per digest: tier and granted keys, no probe. */
-      readonly heldLines: readonly string[];
-    }
-  | { readonly kind: "refused"; readonly reason: string };
 
 /**
  * The lines `rondo answer` prints about the work itself, for one iteration, in
@@ -470,6 +442,8 @@ export type PageView =
       readonly rounds: number | null;
       /** The approval this screen is showing, or null while there is none. */
       readonly decisionId: string | null;
+      /** The held plan the person chose, by digest, or null for the screen's own pick. */
+      readonly plan: string | null;
     }
   /**
    * One ended lap's publish (rondo#233 S5, D-0060): the dry-run, and the press
@@ -588,6 +562,7 @@ export function viewHref(view: PageView, tag: string): string {
         `/?scope=${encodeURIComponent(view.messageId)}` +
         (view.decisionId === null ? "" : `&decision=${encodeURIComponent(view.decisionId)}`) +
         (view.rounds === null ? "" : `&rounds=${String(view.rounds)}`) +
+        (view.plan === null ? "" : `&plan=${encodeURIComponent(view.plan)}`) +
         `&${lang}`
       );
     default:
@@ -3267,8 +3242,15 @@ function firstLine(body: string): string {
 
 /** Who wrote a message, as a person reads it: their own messages are "you". */
 function whoWrote(wording: Chrome, message: ThreadMessageDraft, actorId: string | null): string {
-  return message.authorKind === "operator" && message.authorId === actorId
-    ? wording.you
+  if (message.authorKind === "operator" && message.authorId === actorId) {
+    return wording.you;
+  }
+  // **A model drafter signs as rondo** (rondo#238, #259): its row name --
+  // `rondo/drafter/1/<model-id>` -- is a version and a model a person would
+  // have to ask about. The row keeps it; the voice badge beside this says it
+  // is the drafter.
+  return message.authorKind === "drafter" && isModelDrafterName(message.authorId)
+    ? "rondo"
     : message.authorId;
 }
 
@@ -3351,6 +3333,20 @@ function basisChip(
  * drawn on hover or focus where a pointer can hover (`page/app.css`), and always
  * with script off or on touch.
  */
+/**
+ * Whether a message is a model drafter run that drafted nothing (D-0071 rule
+ * 1.5): the drafter's voice, a model drafter's name, and no `proposal:` basis --
+ * every run that wrote a draft rests its messages on the proposal row it wrote
+ * (rule 7.3), so the absence is structural and not read off the words.
+ */
+function noDraft(message: ThreadMessageDraft): boolean {
+  return (
+    message.authorKind === "drafter" &&
+    isModelDrafterName(message.authorId) &&
+    !message.bases.some((basis) => basis["form"] === "proposal")
+  );
+}
+
 function messageView(
   wording: Chrome,
   threads: Threads,
@@ -3480,13 +3476,46 @@ function messageView(
             </span>
           </a>
         ) : null}
-        {/* The words as written: no trim, no reflow (D-0061 rule 2.2). Their language is unknown (D-0055 rule 8). */}
-        <p
-          class="body px-4 pt-1 pb-3 text-[14px] leading-6 wrap-anywhere whitespace-pre-wrap"
-          lang=""
-        >
-          {message.body}
-        </p>
+        {noDraft(message) ? (
+          // **A drafter run that drafted nothing, said as what happened**
+          // (rondo#238): the row's words are rondo's own about its tools, so
+          // they are kept, folded, and what is shown first is what the person
+          // can do -- set the scope themselves, one press away.
+          <div class="space-y-2 px-4 pt-1 pb-3">
+            <p class="text-[14px] leading-6">{wording.drafterNoDraft}</p>
+            {forms ? (
+              <a
+                href={viewHref(
+                  { kind: "scope", messageId: root, rounds: null, decisionId: null, plan: null },
+                  wording.lang,
+                )}
+                class={`${PRIMARY} h-7 px-3 text-[13px]`}
+              >
+                {wording.scopeAction}
+              </a>
+            ) : null}
+            <details class="group">
+              <summary class="flex cursor-pointer list-none items-center gap-2 text-[12.5px] leading-5 text-muted-foreground select-none [&::-webkit-details-marker]:hidden">
+                {chevron()}
+                {wording.drafterNoDraftWhy}
+              </summary>
+              <p
+                class="body mt-1 text-[12.5px] leading-5 wrap-anywhere whitespace-pre-wrap text-muted-foreground"
+                lang="en"
+              >
+                {message.body}
+              </p>
+            </details>
+          </div>
+        ) : (
+          // The words as written: no trim, no reflow (D-0061 rule 2.2). Their language is unknown (D-0055 rule 8).
+          <p
+            class="body px-4 pt-1 pb-3 text-[14px] leading-6 wrap-anywhere whitespace-pre-wrap"
+            lang=""
+          >
+            {message.body}
+          </p>
+        )}
         {message.bases.length === 0 ? null : (
           <div class="bases flex flex-wrap items-center gap-1.5 border-t border-border/60 px-4 py-2">
             <span class="text-[11px] font-medium text-faint">{wording.basesLabel}</span>
@@ -4039,7 +4068,104 @@ async function scopeView(
   );
 }
 
-/** State A: what rondo drafted, and the one press that records it and approves it. */
+/**
+ * The plans rondo holds for this request (rondo#238), or the words for why
+ * there are none to offer. The same plans the drafter is handed.
+ */
+async function plansFor(
+  ports: WebPorts,
+  wording: Chrome,
+  messageId: string,
+  nowMs: number,
+): Promise<{ readonly plans: readonly HeldPlan[] } | { readonly note: string }> {
+  try {
+    const plans = await heldPlans(
+      { store: ports.store, record: ports.record, now: () => nowMs },
+      messageId,
+    );
+    return plans.length === 0 ? { note: wording.scopeNoPlanHeld } : { plans };
+  } catch (error) {
+    return {
+      note: wording.scopePlansUnread(error instanceof Error ? error.message : String(error)),
+    };
+  }
+}
+
+/** The plan the address names, wherever rondo holds it, or null (none named, or not held). */
+async function chosenPlan(
+  ports: WebPorts,
+  view: Extract<PageView, { kind: "scope" }>,
+  nowMs: number,
+): Promise<HeldPlan | null> {
+  if (view.plan === null) {
+    return null;
+  }
+  try {
+    return await heldPlanByDigest(
+      { store: ports.store, record: ports.record, now: () => nowMs },
+      view.messageId,
+      view.plan,
+    );
+  } catch {
+    return null;
+  }
+}
+
+/** One held plan as a person reads it: where it runs, with which agent type, and where it came from. */
+function planLine(wording: Chrome, plan: HeldPlan): string {
+  return wording.scopePlanLine(
+    wording.scopeWorkspace(plan.repository, plan.workspaceRoot),
+    plan.agentTypeDigest.slice("sha256:".length, "sha256:".length + 12),
+    wording.scopePlanFrom(plan.from.kind),
+  );
+}
+
+/**
+ * The choice of plan, as links in the rounds' shape and for their reason (no
+ * form to fight, and the address holds the state): one line per plan saying
+ * where it runs and where it came from, the chosen one marked. Drawn only when
+ * there is more than one to choose from.
+ */
+function planChoice(
+  wording: Chrome,
+  view: Extract<PageView, { kind: "scope" }>,
+  plans: readonly HeldPlan[],
+  /** The chosen plan's digest, or null when nothing is chosen: every plan is then a link. */
+  chosen: string | null,
+) {
+  // One plan is no choice -- unless nothing is chosen, when it is the way on.
+  if (plans.length < 2 && chosen !== null) {
+    return null;
+  }
+  return (
+    <section id="plans" class="space-y-1">
+      <p class="text-[13px] leading-6 font-medium">{wording.scopePlanAsk}</p>
+      <ul class="space-y-1">
+        {plans.map((plan) => {
+          const said = planLine(wording, plan);
+          return (
+            <li class="text-[12.5px] leading-5 wrap-anywhere">
+              {plan.planDigest === chosen ? (
+                <span aria-current="true" class={`${PILL} font-sans ${TONE.ok}`}>
+                  {said}
+                </span>
+              ) : (
+                <a
+                  href={viewHref({ ...view, plan: plan.planDigest }, wording.lang)}
+                  class="rounded-md px-1.5 text-link underline-offset-2 hover:underline"
+                >
+                  {said}
+                </a>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
+
+/** State A: the scope the person writes, and the one press that records it and approves it. */
 async function scopeForm(
   ports: WebPorts,
   wording: Chrome,
@@ -4049,23 +4175,39 @@ async function scopeForm(
   nowMs: number,
 ): Promise<unknown> {
   const lead = <p class="text-[13px] leading-6">{wording.scopeLead}</p>;
-  if (ports.plan === null) {
+  // The plan named in the address, wherever rondo holds it -- resolved first,
+  // so one chosen earlier stays usable when the list of recent plans no
+  // longer shows it -- else the first offered: pasted into this thread, else
+  // the one the latest lap ran on (`heldPlans`' order). One named and no
+  // longer held is said, with the list to choose from again, and no form:
+  // never a different plan under the same address.
+  const named = await chosenPlan(ports, view, nowMs);
+  const held = await plansFor(ports, wording, view.messageId, nowMs);
+  const offered = "plans" in held ? held.plans : [];
+  if (named === null && (view.plan !== null || "note" in held)) {
     return (
       <>
         {lead}
-        {note(wording.scopeNoPlan)}
+        {view.plan !== null ? note(wording.scopePlanGone) : null}
+        {"note" in held ? note(held.note) : planChoice(wording, view, offered, null)}
       </>
     );
   }
-  const drafted = await ports.plan(wording);
-  if (drafted.kind === "refused") {
-    return (
-      <>
-        {lead}
-        {note(wording.scopePlanRefused(drafted.reason))}
-      </>
-    );
-  }
+  const chosen = named ?? (offered[0] as HeldPlan);
+  // **The plan answers for a digest the store does not hold yet**, as it did
+  // when the plan was a file (rondo#233 S3): a pasted plan's agent type is
+  // recorded by the press, and its own input says what it bounds before then.
+  const drafted = {
+    agentTypeDigest: chosen.agentTypeDigest,
+    planDigest: chosen.planDigest,
+    workspaces: [{ repository: chosen.repository, workspace_root: chosen.workspaceRoot }],
+    heldLines: await heldAgentTypeLines(
+      wording,
+      ports.record,
+      [chosen.agentTypeDigest],
+      new Map([[chosen.agentTypeDigest, chosen.agentTypeInput]]),
+    ),
+  };
   if (token === null || newScopeId === null) {
     return (
       <>
@@ -4079,8 +4221,8 @@ async function scopeForm(
     { store: ports.store, record: ports.record },
     {
       agentTypes: [drafted.agentTypeDigest],
-      // One plan, because `RONDO_PLAN` names one (rondo#233 S3): a scope over
-      // several plans is a screen with a plan picker, which is another screen.
+      // One plan: the person picks one, and a scope over several is a drafted
+      // split's (D-0071 section 4), which this form is not.
       plans: 1,
       ...(rounds === null ? {} : { reviewRounds: rounds }),
       draftedAtMs: nowMs,
@@ -4095,6 +4237,7 @@ async function scopeForm(
       <p class="note rounded-md border border-border bg-muted/60 px-3 py-2 text-[13px] leading-5">
         {wording.scopeMaybeApproved}
       </p>
+      {planChoice(wording, view, offered, chosen.planDigest)}
       <section class={`${CARD} space-y-1`}>
         {/* **The card says what it holds**: the plan, where it runs, and what
             its agent type is allowed. Its heading named only the last of those
@@ -4325,6 +4468,16 @@ async function scopeForm(
   );
 }
 
+/** Whether a scope allows a plan: its agent type is listed and its place is one of the scope's. */
+function allowedBy(payload: StoredScope["payload"], plan: HeldPlan): boolean {
+  return (
+    payload.agent_types.includes(plan.agentTypeDigest) &&
+    payload.workspaces.some(
+      (w) => w.repository === plan.repository && w.workspace_root === plan.workspaceRoot,
+    )
+  );
+}
+
 /** State B: the approval the press recorded, read back, and the start it allows. */
 async function scopeApproved(
   ports: WebPorts,
@@ -4368,6 +4521,21 @@ async function scopeApproved(
   // button anyway would be this screen offering a press it knows cannot work.
   const retired = await ports.record.scopeSupersededByApproved(scope.scopeId);
   const held = await heldAgentTypeLines(wording, ports.record, payload.agent_types);
+  // **The plan the start runs on** (rondo#238): one rondo holds whose place and
+  // agent type this scope allows -- the one the form was drawn over, carried in
+  // the address, or the only one there is. A choice where there are several,
+  // and a sentence where there are none, rather than a button that would be
+  // refused at the scope's own tests.
+  const plans = await plansFor(ports, wording, view.messageId, nowMs);
+  const allowed = "plans" in plans ? plans.plans.filter((plan) => allowedBy(payload, plan)) : [];
+  // The plan the scope was drawn over is looked up among every plan rondo
+  // holds, not only the one of each kind the list offers: a newer lap of the
+  // same kind since must not swap it for another without a word.
+  const drawn = await chosenPlan(ports, view, nowMs);
+  // A plan named in the address and no longer one this scope may run on is
+  // said, and the choice put again -- never swapped for another plan silently.
+  const gone = view.plan !== null && (drawn === null || !allowedBy(payload, drawn));
+  const runsOn = gone ? null : (drawn ?? (allowed.length === 1 ? (allowed[0] as HeldPlan) : null));
   return (
     <>
       <section class={`${CARD} space-y-1`}>
@@ -4429,7 +4597,18 @@ async function scopeApproved(
           {wording.scopeRetired}
         </p>
       ) : null}
-      {token === null || newIterationId === null || retired ? null : (
+      {retired || token === null || newIterationId === null ? null : runsOn === null &&
+        allowed.length === 0 ? (
+        <>
+          {gone ? note(wording.scopePlanGone) : null}
+          {note("plans" in plans ? wording.scopeNoPlanForScope : plans.note)}
+        </>
+      ) : runsOn === null ? (
+        <>
+          {gone ? note(wording.scopePlanGone) : null}
+          {planChoice(wording, view, allowed, null)}
+        </>
+      ) : (
         <form
           id="start-form"
           method="post"
@@ -4439,6 +4618,10 @@ async function scopeApproved(
           <input type="hidden" name="token" value={token} />
           <input type="hidden" name="request" value={view.messageId} />
           <input type="hidden" name="scope_decision" value={decisionId} />
+          <input type="hidden" name="plan" value={runsOn.planDigest} />
+          <p class="text-[12.5px] leading-5 wrap-anywhere text-muted-foreground">
+            {`${wording.scopePlanAsk}: ${planLine(wording, runsOn)}`}
+          </p>
           {/* Minted at render, as the scope id is, and for its reason: rondo
               names the lap (D-0023) and a double press is one lap. */}
           <input type="hidden" name="iteration" value={newIterationId()} />
@@ -4492,9 +4675,9 @@ async function predecessorLine(
 /**
  * The way to the scope screen, drawn on a request and nowhere else.
  *
- * Two conditions, each a different way of having no scope to draft: no plan to
- * draft one from, and no approver to approve it as. A link drawn anyway would
- * lead to a screen with no form on it.
+ * Drawn wherever there is an approver to approve a scope as. **Not hidden for
+ * want of a plan** (rondo#238): the screen itself says how a plan comes to be
+ * held, which a link that was never drawn could not.
  *
  * **As plain as the act behind it** (rondo#246), in {@link answerLink}'s shape:
  * the row's one action, under the metadata rather than a faint link inside it.
@@ -4503,15 +4686,18 @@ async function predecessorLine(
  * round -- what protects a person from a mis-press is reading what the press
  * will do, and that reading is the screen this leads to.
  */
-function scopeLink(wording: Chrome, ports: WebPorts, token: string | null, messageId: string) {
-  if (ports.plan === null || token === null) {
+function scopeLink(wording: Chrome, token: string | null, messageId: string) {
+  if (token === null) {
     return null;
   }
   return (
     <p class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
       <a
         id={`scope-${messageId}`}
-        href={viewHref({ kind: "scope", messageId, rounds: null, decisionId: null }, wording.lang)}
+        href={viewHref(
+          { kind: "scope", messageId, rounds: null, decisionId: null, plan: null },
+          wording.lang,
+        )}
         data-open=""
         class={`${PRIMARY} h-7 px-3 text-[13px]`}
         title={wording.scopeHere}
@@ -5403,7 +5589,7 @@ export async function operatorPage(
       ? await scopeView(ports, wording, view, threads, token, newScopeId, newIterationId, nowMs)
       : null;
   /** The link onto the scope screen, drawn on a request wherever one is listed. */
-  const scopeTo = (messageId: string) => scopeLink(wording, ports, token, messageId);
+  const scopeTo = (messageId: string) => scopeLink(wording, token, messageId);
   // **Which request each lap is under** (rondo#244), off the rows already
   // read: a lap names the request it was started from, so the requests list
   // can say what became of one instead of going on offering the entrance.

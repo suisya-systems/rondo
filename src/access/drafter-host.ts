@@ -20,11 +20,11 @@
 
 import type { ProposalDraft, ThreadMessageDraft } from "../store/records.js";
 import type { AdvisoryRecord } from "../store/sqlite.js";
+import { MODEL_DRAFTER_PREFIX } from "./model-draft.js";
 import type { DrafterPorts, DrafterRunResult } from "./model-drafter.js";
 import { draftRequest } from "./model-drafter.js";
 
-/** What every row a model drafter writes is named under (D-0071 rule 1.4). */
-const DRAFTER_PREFIX = "rondo/drafter/";
+const DRAFTER_PREFIX = MODEL_DRAFTER_PREFIX;
 
 /**
  * How long a thread's lease is held (rule 3.3): past the drafter's own timeout
@@ -225,13 +225,16 @@ async function scan(
 async function write(
   ports: DrafterHostPorts,
   result: DrafterRunResult,
-): Promise<"written" | "stale" | "failed"> {
+): Promise<"written" | "stale" | "failed" | "held"> {
   const material = result.material;
   if (material === null) {
+    // **Nothing was read, so nothing was spent or written**: a store that would
+    // not read is a fault of the moment, and the request stays due for the next
+    // scan rather than being given up on (Codex round 4 on rondo#264).
     ports.log(
-      `drafter  nothing was written: ${result.outcome.kind === "unavailable" ? result.outcome.reason : "no material"}`,
+      `drafter  nothing was written: ${result.outcome.kind === "unavailable" ? result.outcome.reason : "no material"}; tried again on the next scan`,
     );
-    return "failed";
+    return "held";
   }
   const operatorIds = material.thread
     .filter((m) => m.authorKind === "operator")
@@ -240,7 +243,7 @@ async function write(
   const nowMs = ports.now();
   const cost = result.costUsd === null ? "cost not reported" : `$${result.costUsd.toFixed(4)}`;
 
-  const unavailable = async (reason: string): Promise<"written" | "stale" | "failed"> => {
+  const unavailable = async (reason: string): Promise<"written" | "stale" | "failed" | "held"> => {
     const covered = await ports.record.draftedMessageIds(DRAFTER_PREFIX);
     const cites = operatorIds.filter((id) => !covered.has(id));
     const outcome = await ports.record.recordDraft({

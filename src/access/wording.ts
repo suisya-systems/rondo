@@ -205,6 +205,13 @@ export interface Chrome {
   readonly you: string;
   readonly operatorVoice: string;
   readonly drafterVoice: string;
+  /**
+   * A drafter run that drafted nothing, said as what happened and what the
+   * person can do (rondo#238): the reason itself is folded under
+   * {@link drafterNoDraftWhy}, because it is rondo's own words about its tools.
+   */
+  readonly drafterNoDraft: string;
+  readonly drafterNoDraftWhy: string;
   /** The summary's row for an ask: the request it was asked in. */
   readonly askedIn: (request: string) => string;
   readonly inReplyTo: (who: string, words: string) => string;
@@ -543,9 +550,22 @@ export interface Chrome {
   readonly scopeHeading: string;
   readonly backToThread: string;
   readonly scopeLead: string;
-  /** No plan, no form: the screen says which of the two reasons it is (D-0020 rule 2's shape). */
-  readonly scopeNoPlan: string;
-  readonly scopePlanRefused: (reason: string) => string;
+  /**
+   * No plan rondo holds, no form: the screen says how one comes to be held,
+   * on the page (D-0071 rule 6.2's recommendation, rondo#238).
+   */
+  readonly scopeNoPlanHeld: string;
+  readonly scopePlansUnread: (reason: string) => string;
+  /** The plan choice, above the list of plans rondo holds. */
+  readonly scopePlanAsk: string;
+  /** Where a held plan came from: pasted into this thread, or run by earlier laps. */
+  readonly scopePlanFrom: (from: "message" | "iterations") => string;
+  /** One held plan as a line: where, the agent type's short digest, and where it came from. */
+  readonly scopePlanLine: (where: string, agentType: string, from: string) => string;
+  /** A plan the address named that rondo no longer offers: said, and the choice put again. */
+  readonly scopePlanGone: string;
+  /** An approved scope no plan rondo holds may run under. */
+  readonly scopeNoPlanForScope: string;
   readonly scopeNoApprover: string;
   /** What the plan says, quiet, above the numbers it drafted them from. */
   readonly scopeWorkspace: (repository: string, root: string) => string;
@@ -1023,6 +1043,10 @@ explanation you pressed on and then answers the gate.`,
   you: "you",
   operatorVoice: "operator",
   drafterVoice: "drafter",
+  drafterNoDraft:
+    "rondo could not draft this request, so nothing has been proposed. You can set the scope " +
+    "yourself.",
+  drafterNoDraftWhy: "What stopped it",
   askedIn: (request) => `asked in: ${request}`,
   inReplyTo: (who, words) => `in reply to ${who}: ${words}`,
   basesLabel: "rests on",
@@ -1261,10 +1285,25 @@ explanation you pressed on and then answers the gate.`,
   scopeHeading: "The scope for this request",
   backToThread: "Back to the request",
   scopeLead:
-    "rondo drafted this from your plan and from the laps this store has recorded. Read it, " +
-    "change what you want to change, and one press records it and approves it.",
-  scopeNoPlan: "RONDO_PLAN is not set, so there is no plan to draft a scope from.",
-  scopePlanRefused: (reason) => `The plan could not be read, so nothing was drafted: ${reason}`,
+    "You write this scope. The plan is one rondo holds, and the numbers were worked out from " +
+    "the laps this store has recorded. Read it, change what you want to change, and one press " +
+    "records it and approves it.",
+  scopeNoPlanHeld:
+    "rondo has no plan to run this on yet. Reply in this request's thread with the plan your " +
+    "environment's setup wrote -- the JSON document alone, nothing else in the reply -- and it " +
+    "is offered here.",
+  scopePlansUnread: (reason) =>
+    `The plans rondo holds could not be read, so there is nothing to choose from: ${reason}`,
+  scopePlanAsk: "Which plan the work runs on",
+  scopePlanGone:
+    "The plan chosen on this screen is no longer one rondo offers for this request. Choose one " +
+    "of these instead.",
+  scopePlanFrom: (from) =>
+    from === "message" ? "pasted into this thread" : "the plan earlier laps ran on",
+  scopePlanLine: (where, agentType, from) => `${where}, agent type ${agentType} (${from})`,
+  scopeNoPlanForScope:
+    "rondo holds no plan for the place and the agent type this scope allows, so there is " +
+    "nothing to start under it yet. Reply in the request's thread with a plan for them.",
   scopeNoApprover:
     "RONDO_APPROVER is not set, so there is nobody this page could approve a scope as.",
   scopeWorkspace: (repository, root) => `${repository} at ${root}`,
@@ -1391,9 +1430,8 @@ explanation you pressed on and then answers the gate.`,
     "and press again.",
   scopeRefusedNotTaken: "Nothing was recorded: the store would not take this scope.",
   scopeRefusedPlanChanged:
-    "Nothing was recorded: the plan changed while you were reading it, so the workspace and the " +
-    "agent type on that screen are not the ones rondo would have recorded. Reload to see the " +
-    "plan as it is now.",
+    "Nothing was recorded: the plan on that screen is no longer one rondo offers for this " +
+    "request. Reload and choose again.",
   scopeRefusedEdited:
     "Nothing was recorded this time: that form had already been recorded and approved, and what " +
     "you just changed is not what is stored. Reload to draft a new scope.",
@@ -1410,7 +1448,8 @@ explanation you pressed on and then answers the gate.`,
     "cannot.",
   startRefusedForm:
     "Nothing was started: that form did not come from this page. Reload it and press again.",
-  startRefusedNoPlan: "Nothing was started: the plan this host names could not be read.",
+  startRefusedNoPlan:
+    "Nothing was started: the plan chosen for this start is not one rondo holds for this request.",
   startRefusedNoRequest:
     "Nothing was started: your request could not be read back, so there is nothing to ask the " +
     "work to do.",
@@ -1723,6 +1762,10 @@ const JA: Partial<Chrome> = Object.freeze({
   you: "あなた",
   operatorVoice: "オペレーター",
   drafterVoice: "下書き役",
+  drafterNoDraft:
+    "rondo はこの依頼の下書きを作れなかったので、まだ何も提案されていません。範囲はご自身で" +
+    "決められます。",
+  drafterNoDraftWhy: "止まった理由",
   askedIn: (request) => `依頼: ${request}`,
   inReplyTo: (who, words) => `${who} への返信: ${words}`,
   basesLabel: "根拠",
@@ -1971,10 +2014,25 @@ const JA: Partial<Chrome> = Object.freeze({
   scopeHeading: "この依頼の範囲",
   backToThread: "依頼に戻る",
   scopeLead:
-    "rondo がプランとこのストアに記録された周回から下書きしました。読んで、変えたいところを" +
-    "変えてください。1 回押せば記録と承認の両方が行われます。",
-  scopeNoPlan: "RONDO_PLAN が設定されていないので、範囲を下書きできるプランがありません。",
-  scopePlanRefused: (reason) => `プランを読めなかったので、何も下書きしていません: ${reason}`,
+    "この範囲を書くのはあなたです。プランは rondo が持っているものから選び、数値はこのストアに" +
+    "記録された周回から出しています。読んで、変えたいところを変えてください。1 回押せば記録と" +
+    "承認の両方が行われます。",
+  scopeNoPlanHeld:
+    "この作業に使えるプランを rondo はまだ持っていません。環境の準備で書き出されたプランの" +
+    "JSON 文書だけを、ほかの文を付けずに、この依頼のスレッドに返信として貼ってください。" +
+    "ここで選べるようになります。",
+  scopePlansUnread: (reason) =>
+    `rondo が持っているプランを読めなかったので、選べるものがありません: ${reason}`,
+  scopePlanAsk: "作業に使うプラン",
+  scopePlanGone:
+    "この画面で選んだプランは、もうこの依頼で rondo が選べるものではありません。次の中から" +
+    "選び直してください。",
+  scopePlanFrom: (from) =>
+    from === "message" ? "このスレッドに貼られたもの" : "以前の周回が使ったもの",
+  scopePlanLine: (where, agentType, from) => `${where}、エージェント種別 ${agentType}（${from}）`,
+  scopeNoPlanForScope:
+    "この範囲が許す場所とエージェント種別のプランを rondo はまだ持っていないので、この範囲で" +
+    "開始できるものがありません。それに合うプランを依頼のスレッドに返信として貼ってください。",
   scopeNoApprover:
     "RONDO_APPROVER が設定されていないので、このページが誰として範囲を承認することもできません。",
   scopeWorkspace: (repository, root) => `${repository}（${root}）`,
@@ -2105,9 +2163,8 @@ const JA: Partial<Chrome> = Object.freeze({
     "押してください。",
   scopeRefusedNotTaken: "何も記録していません。ストアがこの範囲を受け付けませんでした。",
   scopeRefusedPlanChanged:
-    "何も記録していません。読んでいる間にプランが変わったので、あの画面に出ていた作業場所と" +
-    "エージェント種別は、rondo が記録することになる内容とは違います。読み込み直して、今の" +
-    "プランを確かめてください。",
+    "何も記録していません。あの画面のプランは、もうこの依頼で rondo が選べるものではありません。" +
+    "読み込み直して、選び直してください。",
   scopeRefusedEdited:
     "今回は何も記録していません。そのフォームはすでに記録・承認済みで、いま変えた内容は" +
     "保存されている内容とは違います。読み込み直して、新しい範囲を下書きしてください。",
@@ -2125,7 +2182,9 @@ const JA: Partial<Chrome> = Object.freeze({
   startRefusedForm:
     "何も開始していません。そのフォームはこのページのものではありません。読み込み直してから" +
     "押してください。",
-  startRefusedNoPlan: "何も開始していません。このホストが指しているプランを読めませんでした。",
+  startRefusedNoPlan:
+    "何も開始していません。この開始のために選んだプランは、この依頼に対して rondo が持って" +
+    "いるものではありません。",
   startRefusedNoRequest:
     "何も開始していません。依頼を読み戻せなかったので、作業に頼むことがありません。",
   startRefusedNoContinuo: "何も開始していません。作業を動かす部分が起動しません。",

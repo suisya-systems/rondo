@@ -5,7 +5,7 @@
  *
  * **It calls the real command.** The last thing this script does is
  * `main(["web", "--port", "7334"], env)` out of `dist/access/cli.js`, so what a
- * browser gets is rondo's own wiring -- `RONDO_PLAN`, the ports, the press
+ * browser gets is rondo's own wiring -- the held plans, the ports, the press
  * checks and all -- and not a second composition root that could drift from the
  * one under test. Everything above that only writes rows, and it writes them
  * through the store's own verbs and never with raw SQL.
@@ -36,6 +36,7 @@ try {
     plan: await import(dist("refrain/plan.js")),
     allocator: await import(dist("refrain/allocator.js")),
     cli: await import(dist("access/cli.js")),
+    scope: await import(dist("access/scope.js")),
     forge: await import(dist("access/forge.js")),
     review: await import(dist("access/review.js")),
     wording: await import(dist("access/wording.js")),
@@ -120,7 +121,7 @@ const refuse = (line) => {
   process.exit(1);
 };
 
-/** The plan document the page reads through RONDO_PLAN, admitted under one id. */
+/** The plan the seeded laps ran on, admitted under one id: what the scope screen offers. */
 function planDocument(id) {
   const planned = modules.plan.runPlan(PLAN);
   if (planned.kind !== "planned") {
@@ -143,9 +144,18 @@ const record = modules.sqlite.openAdvisoryRecord(storePath);
 writeFileSync(planPath, `${JSON.stringify(planDocument("lap-preview-0001"), null, 2)}\n`, "utf8");
 
 // The agent type the plan records, so the seeded laps carry the digest the
-// scope form drafts its budgets from: without it every basis is a cold start,
-// which is the one thing seeding laps at all is meant to avoid.
-const drafted = await modules.cli.scopeDraftingFromPlan(planPath, record, modules.wording.EN);
+// scope form draws its budgets from: without it every basis is a cold start,
+// which is the one thing seeding laps at all is meant to avoid. The laps are
+// also what makes the plan one rondo holds, so the scope screen offers it.
+const planned = modules.plan.readRunPlan(planDocument("lap-preview-0001"));
+const recordedType =
+  planned.kind === "planned"
+    ? modules.scope.agentTypeRecordOf(planned.plan, planDocument("lap-preview-0001"))
+    : { refusal: planned.reason };
+const drafted =
+  "refusal" in recordedType
+    ? { kind: "refused", reason: recordedType.refusal }
+    : { kind: "drafted", agentTypeDigest: recordedType.record.agentTypeDigest };
 
 const requestMessageId = "request-preview-0001";
 const now = Date.now();
@@ -227,6 +237,30 @@ await say({
   inReplyTo: requestMessageId,
   atMs: now - 60 * 60 * 1000,
   bases: [{ form: "message", messageId: requestMessageId }],
+  asks: false,
+});
+
+// A second request the model drafter could not draft (rondo#238): the thread
+// says so in plain words and offers the scope screen, with the drafter's own
+// reason folded. Written before the host first runs, so it drafts nothing new.
+await say({
+  messageId: "request-preview-0002",
+  body: "Make the inbox show newer items first.",
+  authorKind: "operator",
+  authorId: "ada",
+  inReplyTo: null,
+  atMs: now - 30 * 60 * 1000,
+  bases: [],
+  asks: false,
+});
+await say({
+  messageId: "drafter-preview-0002",
+  body: "rondo's drafter wrote no draft for this: claude -p exited 1",
+  authorKind: "drafter",
+  authorId: "rondo/drafter/1/claude-opus-5",
+  inReplyTo: "request-preview-0002",
+  atMs: now - 29 * 60 * 1000,
+  bases: [{ form: "message", messageId: "request-preview-0002" }],
   asks: false,
 });
 
@@ -546,7 +580,7 @@ const base = "http://127.0.0.1:7334";
 process.stdout.write(
   [
     `store:   ${storePath}`,
-    `plan:    ${planPath}`,
+    `plan:    ${planPath} (paste it into a thread to offer it there)`,
     drafted.kind === "drafted"
       ? `agent:   ${drafted.agentTypeDigest}`
       : `agent:   the plan was refused: ${drafted.reason}`,
@@ -580,6 +614,15 @@ process.stdout.write(
     "Pressing publish under this preview refuses in words at the push: the remote is",
     "a repository that does not exist, on purpose.",
     "",
+    "A request the model drafter could not draft: the thread says so plainly and",
+    "offers the scope screen, whose plan is the one the seeded laps ran on (rondo#238):",
+    `also:    ${base}/?thread=request-preview-0002&lang=en`,
+    `also:    ${base}/?scope=request-preview-0002&lang=ja`,
+    "",
+    "The drafter runs in this process too: a message sent from the page is drafted",
+    "by a real claude, if one is installed here. The seeded rows predate it and are",
+    "left alone.",
+    "",
     "The scoped start press refuses in words under this preview, because there is no",
     "continuo here to run a lap. That refusal screen is one of the screens worth",
     "photographing.",
@@ -591,7 +634,6 @@ process.exitCode = await modules.cli.main(["web", "--port", "7334", "--repo", PR
   ...process.env,
   RONDO_STORE: storePath,
   RONDO_APPROVER: "ada",
-  RONDO_PLAN: planPath,
   RONDO_MAX_LIVE: "6",
   RONDO_MAX_OCCUPYING: "4",
 });
