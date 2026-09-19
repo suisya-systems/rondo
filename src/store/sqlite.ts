@@ -70,6 +70,7 @@ import {
   type JsonValue,
   type LapReading,
   type LapReadingDraft,
+  latestReading,
   MODEL_READING_DRAFTER_PREFIX,
   type Occupancy,
   type OpenAsk,
@@ -79,6 +80,7 @@ import {
   type ProposalDraft,
   type ReadingEvidence,
   type RecordChange,
+  readingContent,
   readScopePayload,
   type ScopeDecisionDraft,
   type ScopeDraft,
@@ -1757,15 +1759,7 @@ export function iterationStore(connection: DatabaseSync, policy: HostPolicy): It
   };
 
   const readingRows = (iterationId: string): readonly LapReading[] =>
-    connection
-      .prepare(
-        "SELECT iteration_id, read_at_ms, drafter, verdict, findings, base_ref, base_commit, " +
-          "tip_commit, material_digest, commit_count, file_count, unavailable_reason, " +
-          "graded, delivered_digest " +
-          "FROM lap_reading WHERE iteration_id = ? ORDER BY read_at_ms, rowid",
-      )
-      .all(iterationId)
-      .map((row) => toReading(row as SqlRow));
+    readingsOf(connection, iterationId);
 
   return {
     async reserve(input: ReserveInput): Promise<ReserveOutcome> {
@@ -2237,6 +2231,15 @@ export type DraftWriteOutcome =
 /** Thrown inside a draft's transaction to roll back what it already inserted. */
 class DraftRefusal extends Error {}
 
+/** One revise draft as a reader needs it (D-0077 rule 5.1): whose it is and what it holds. */
+export interface StoredReviseDraft {
+  readonly proposalId: string;
+  readonly drafter: string;
+  /** `{kind: "drafted", lead, changes}` or `{kind: "unavailable", reason}`, as written. */
+  readonly payload: JsonRecord;
+  readonly createdAtMs: number;
+}
+
 /**
  * The advisory record, as D-0032 leaves it.
  *
@@ -2522,6 +2525,21 @@ export interface AdvisoryRecord {
   ): Promise<boolean>;
   /** Give a thread's run back; a lease another holder took since is left alone. */
   releaseDraft(requestMessageId: string, holder: string): Promise<void>;
+  /**
+   * What one run of the revise drafter writes (D-0077 rules 2.3 and 5.1): its
+   * one `revise_draft` proposal row, **or nothing**. Under one lock with the
+   * write: `stale` when the lap is no longer waiting at `gateId`, or its latest
+   * model reading is no longer the one the snapshot holds under `reading`;
+   * `covered` when a revise draft already holds that reading, so a second host
+   * writes nothing twice.
+   */
+  recordReviseDraft(proposal: ProposalDraft, gateId: string): Promise<DraftWriteOutcome>;
+  /**
+   * The newest revise draft of `iterationId` whose snapshot holds `reading`,
+   * compared by content (D-0077 rule 2.2, D-0051), or null when none does:
+   * that reading has not been drafted.
+   */
+  reviseDraftFor(iterationId: string, reading: LapReading): Promise<StoredReviseDraft | null>;
   /**
    * The operator messages written before a model drafter host first ran on
    * this store, recording that moment on the first call. A host never drafts a
@@ -3653,6 +3671,52 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
       return new Set(rows.map((row) => String(row["message_id"])));
     },
 
+    async recordReviseDraft(proposal: ProposalDraft, gateId: string): Promise<DraftWriteOutcome> {
+      if (proposal.kind !== "revise_draft" || proposal.iterationId === null) {
+        return {
+          kind: "defect",
+          reason: `a revise draft is a 'revise_draft' proposal naming its lap, and '${proposal.proposalId}' is not`,
+        };
+      }
+      const iterationId = proposal.iterationId;
+      try {
+        return immediateTransaction<DraftWriteOutcome>(connection, () => {
+          const lap = connection
+            .prepare("SELECT status, gate_id FROM iteration WHERE id = ?")
+            .get(iterationId) as SqlRow | undefined;
+          if (
+            lap === undefined ||
+            lap["status"] !== "awaiting_human" ||
+            lap["gate_id"] !== gateId
+          ) {
+            return { kind: "stale" };
+          }
+          const latest = latestReading(readingsOf(connection, iterationId), isModelReadingDrafter);
+          const held = proposal.snapshot["reading"];
+          if (
+            latest === null ||
+            held === undefined ||
+            canonicalJson(readingContent(latest)) !== canonicalJson(held)
+          ) {
+            return { kind: "stale" };
+          }
+          if (reviseDraftHolding(connection, iterationId, latest) !== null) {
+            return { kind: "covered" };
+          }
+          return insertProposal(proposal);
+        });
+      } catch (error) {
+        return { kind: "defect", reason: describe(error) };
+      }
+    },
+
+    async reviseDraftFor(
+      iterationId: string,
+      reading: LapReading,
+    ): Promise<StoredReviseDraft | null> {
+      return reviseDraftHolding(connection, iterationId, reading);
+    },
+
     async releaseDraft(requestMessageId: string, holder: string): Promise<void> {
       connection
         .prepare("DELETE FROM drafter_lease WHERE request_message_id = ? AND holder = ?")
@@ -3990,6 +4054,61 @@ const BASIS_LOCATOR_FIELDS: Readonly<Record<string, Readonly<Record<string, stri
  * rule 3.2). One damaged row reads as covering nothing: it must not make the
  * query fail, which would leave every thread looking undrafted.
  */
+/** A lap's readings, oldest first, in `readingsFor`'s order. */
+function readingsOf(connection: DatabaseSync, iterationId: string): readonly LapReading[] {
+  return connection
+    .prepare(
+      "SELECT iteration_id, read_at_ms, drafter, verdict, findings, base_ref, base_commit, " +
+        "tip_commit, material_digest, commit_count, file_count, unavailable_reason, " +
+        "graded, delivered_digest " +
+        "FROM lap_reading WHERE iteration_id = ? ORDER BY read_at_ms, rowid",
+    )
+    .all(iterationId)
+    .map((row) => toReading(row as SqlRow));
+}
+
+/**
+ * The newest `revise_draft` row of a lap whose snapshot holds `reading` by
+ * content (D-0077 rule 2.2). A row whose bytes will not parse holds nothing.
+ */
+function reviseDraftHolding(
+  connection: DatabaseSync,
+  iterationId: string,
+  reading: LapReading,
+): StoredReviseDraft | null {
+  const key = canonicalJson(readingContent(reading));
+  const rows = connection
+    .prepare(
+      "SELECT proposal_id, drafter, payload, snapshot, created_at_ms FROM proposal " +
+        "WHERE kind = 'revise_draft' AND iteration_id = ? ORDER BY created_at_ms DESC, rowid DESC",
+    )
+    .all(iterationId) as SqlRow[];
+  for (const row of rows) {
+    try {
+      const snapshot = JSON.parse(String(row["snapshot"])) as JsonRecord;
+      const held = snapshot["reading"];
+      const payload = JSON.parse(String(row["payload"])) as unknown;
+      if (
+        held !== undefined &&
+        canonicalJson(held) === key &&
+        typeof payload === "object" &&
+        payload !== null &&
+        !Array.isArray(payload)
+      ) {
+        return {
+          proposalId: String(row["proposal_id"]),
+          drafter: String(row["drafter"]),
+          payload: payload as JsonRecord,
+          createdAtMs: Number(row["created_at_ms"]),
+        };
+      }
+    } catch {
+      // Unreadable bytes hold no reading; the next row may.
+    }
+  }
+  return null;
+}
+
 function coveredMessageIds(connection: DatabaseSync, drafterPrefix: string): Set<string> {
   const rows = connection
     .prepare(

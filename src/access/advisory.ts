@@ -1790,6 +1790,9 @@ const FORECLOSES: Record<ProposalKind, readonly string[]> = {
   // approvable set and `foreclosureLines` never reaches this entry -- the
   // store refuses a decision naming one. Empty, for `explanation`'s reason.
   split: [],
+  // D-0077 rule 5.1: a revise draft is never approved either; the person's
+  // press is a gate answer. Empty, for the same reason.
+  revise_draft: [],
 };
 
 /**

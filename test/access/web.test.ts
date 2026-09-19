@@ -38,6 +38,7 @@ import { inspectLapWork } from "../../src/access/forge.js";
 import type { TranscriptLocation } from "../../src/access/inbox.js";
 import { draftedPlanRun } from "../../src/access/model-drafter.js";
 import { evidenceOf, READING_REMOTE } from "../../src/access/review.js";
+import { reviseDrafterHost } from "../../src/access/revise-drafter.js";
 import { agentTypeRecordOf, heldAgentTypeLines } from "../../src/access/scope.js";
 import {
   type LanguageAsked,
@@ -2641,10 +2642,269 @@ async function modelFindings(world: ReturnType<typeof fresh>): Promise<void> {
   expect(appended.kind).toBe("appended");
 }
 
+let reviseIds = 0;
+
+/**
+ * One run of the revise drafter over the lap at the gate (D-0077), with the
+ * model's answer given: what the resident host writes for the view to read.
+ */
+async function draftRevise(
+  world: ReturnType<typeof fresh>,
+  answer: unknown,
+  opts: {
+    readonly admitted?: string | null;
+    readonly during?: () => Promise<void>;
+    /** Stands in for the store's write, to fail it. */
+    readonly write?: (
+      real: ReturnType<typeof fresh>["record"]["recordReviseDraft"],
+    ) => ReturnType<typeof fresh>["record"]["recordReviseDraft"];
+    /** Kicks before the host is let go: one host, several scans. */
+    readonly scans?: number;
+  } = {},
+): Promise<string[]> {
+  const documents: string[] = [];
+  const admitted = opts.admitted === undefined ? "decision-1" : opts.admitted;
+  const host = reviseDrafterHost({
+    store: world.store,
+    record: {
+      ...world.record,
+      scopeDecisionAdmitting: async () => admitted,
+      recordReviseDraft:
+        opts.write?.(world.record.recordReviseDraft.bind(world.record)) ??
+        world.record.recordReviseDraft.bind(world.record),
+    },
+    runDrafter: async (_row, document) => {
+      documents.push(document);
+      await opts.during?.();
+      return answer === null
+        ? { kind: "failed", reason: "claude exited 1" }
+        : {
+            kind: "answered",
+            costUsd: 0.01,
+            finalMessage: typeof answer === "string" ? answer : JSON.stringify(answer),
+          };
+    },
+    now: () => 4_500,
+    // One counter across hosts: two hosts over one store mint distinct ids.
+    mintId: (kind) => {
+      reviseIds += 1;
+      return `${kind}-${String(reviseIds)}`;
+    },
+    language: null,
+    log: () => undefined,
+  });
+  for (let scan = 0; scan < (opts.scans ?? 1); scan += 1) {
+    host.kick();
+    await host.idle();
+  }
+  return documents;
+}
+
+/** The revise drafts written for a lap, as the store holds them. */
+const reviseRows = (world: ReturnType<typeof fresh>) =>
+  world.connection
+    .prepare(
+      "SELECT drafter, payload, snapshot FROM proposal WHERE kind = 'revise_draft' ORDER BY rowid",
+    )
+    .all()
+    .map((row) => ({
+      drafter: String(row["drafter"]),
+      payload: JSON.parse(String(row["payload"])) as JsonRecord,
+      snapshot: JSON.parse(String(row["snapshot"])) as JsonRecord,
+    }));
+
+/** A second model reading of the lap at the gate, with one finding. */
+async function newerModelReading(world: ReturnType<typeof fresh>, finding: string, atMs: number) {
+  const appended = await world.store.appendReading(
+    "i-0001",
+    {
+      drafter: "rondo/model/1/gpt-6-astra",
+      verdict: "concerns",
+      findings: [finding],
+      graded: [{ severity: "major", bases: [], basisResolved: false }],
+      evidence: EVIDENCE,
+      unavailableReason: null,
+    },
+    atMs,
+  );
+  expect(appended.kind).toBe("appended");
+}
+
+test("the revise drafter writes one row per reading, under its own name, and is not run twice over one (D-0077 rules 1.2, 2.2, 5.1)", async () => {
+  const world = fresh();
+  await gateWithChecks(world);
+  await modelFindings(world);
+  const documents = await draftRevise(world, REVISE_ANSWER);
+  expect(documents).toHaveLength(1);
+  // The document holds every finding, numbered, and what the drafter must not do.
+  const doc = documents[0] as string;
+  expect(doc).toContain(
+    "--- finding 1 (blocker)\nthe loop never stops\n  where: src/notifier.ts:41",
+  );
+  expect(doc).toContain("--- finding 2 (major)\nthe backoff is not capped");
+  expect(doc).toContain('"findings" holds exactly 2 entries');
+  expect(doc).toContain("BEGIN THE ATTEMPT'S PROMPT\ndo the thing\n");
+  const [row, ...more] = reviseRows(world);
+  expect(more).toHaveLength(0);
+  expect(row?.drafter).toMatch(/^rondo\/revise-drafter\/1\//);
+  expect(row?.payload).toEqual({
+    kind: "drafted",
+    lead: "Keep the retry budget, but make it end.",
+    changes: [
+      "Stop after the budget's last try.\nSay so in the log.",
+      "Cap the backoff at 30 seconds.",
+    ],
+  });
+  expect((row?.snapshot["reading"] as JsonRecord | undefined)?.["findings"]).toEqual([
+    "the loop never stops",
+    "the backoff is not capped",
+  ]);
+  // A proposal nobody approves: the store refuses a decision naming it.
+  const id = String(
+    world.connection
+      .prepare("SELECT proposal_id FROM proposal WHERE kind = 'revise_draft'")
+      .get()?.["proposal_id"],
+  );
+  const decided = await world.record.recordDecision({
+    decisionId: "d-1",
+    proposalId: id,
+    outcome: "approved",
+    approved: null,
+    predecessor: null,
+    actorId: "ada",
+    recordedBy: "rondo-web",
+    gateId: null,
+    gateTransitionSeq: null,
+    decidedAtMs: 5_000,
+  });
+  expect(decided.kind).toBe("refused");
+
+  // Drafted, so a second scan spends nothing.
+  expect(await draftRevise(world, REVISE_ANSWER)).toHaveLength(0);
+  expect(reviseRows(world)).toHaveLength(1);
+});
+
+test("an unavailable run writes its reason and is not retried; the next reading is drafted as its own (D-0077 rules 2.2, 4.2)", async () => {
+  const world = fresh();
+  await gateWithChecks(world);
+  await modelFindings(world);
+  expect(await draftRevise(world, null)).toHaveLength(1);
+  expect(reviseRows(world).map((r) => r.payload)).toEqual([
+    { kind: "unavailable", reason: "claude exited 1" },
+  ]);
+  expect(await draftRevise(world, REVISE_ANSWER)).toHaveLength(0);
+
+  await newerModelReading(world, "the log is too loud", 6_000);
+  expect(
+    await draftRevise(world, { lead: null, findings: [{ finding: 1, change: "Quieter." }] }),
+  ).toHaveLength(1);
+  const html = await operatorPage(
+    { ...portsOver(world, "ada", [], null, "decision-1"), material: structured },
+    "t",
+    { kind: "answer", iterationId: "i-0001" },
+    EN,
+    null,
+    null,
+    () => "lap-00000000-0000-4000-8000-000000000007",
+  );
+  expect(html).toContain("- [major] the log is too loud\n  to change: Quieter.");
+  expect(html).not.toContain("rondo could not draft what to change");
+});
+
+test("a store fault at the write keeps the draft and writes it on the next scan, without running again (D-0077 rules 2.2, 4.2)", async () => {
+  const world = fresh();
+  await gateWithChecks(world);
+  await modelFindings(world);
+  let faults = 1;
+  const documents = await draftRevise(world, REVISE_ANSWER, {
+    scans: 2,
+    write: (real) => async (proposal, gateId) => {
+      if (faults > 0) {
+        faults -= 1;
+        return { kind: "defect", reason: "database is locked" };
+      }
+      return await real(proposal, gateId);
+    },
+  });
+  // One model call; the first scan's write met the lock, and the second wrote
+  // the same draft -- not an unavailable row about the lock.
+  expect(documents).toHaveLength(1);
+  expect(reviseRows(world).map((r) => r.payload["kind"])).toEqual(["drafted"]);
+});
+
+test("a reading that lands while the draft is written makes that draft stale: nothing is written for it (D-0077 rule 2.3)", async () => {
+  const world = fresh();
+  await gateWithChecks(world);
+  await modelFindings(world);
+  let landed = false;
+  const documents = await draftRevise(
+    world,
+    { lead: null, findings: [{ finding: 1, change: "Fix it." }] },
+    {
+      during: async () => {
+        if (!landed) {
+          landed = true;
+          await newerModelReading(world, "the log is too loud", 6_000);
+        }
+      },
+    },
+  );
+  // The first run was over two findings and is discarded at the write; the
+  // rescan drafts the newer reading, whose one finding the answer addresses.
+  expect(documents).toHaveLength(2);
+  const written = reviseRows(world);
+  expect(written).toHaveLength(1);
+  expect((written[0]?.snapshot["reading"] as JsonRecord | undefined)?.["findings"]).toEqual([
+    "the log is too loud",
+  ]);
+});
+
+test("the revise drafter drafts only where the gate view draws a revise form (D-0077 rule 2.1)", async () => {
+  // No approval: the view says a change is not offered, so nothing is spent.
+  const unapproved = fresh();
+  await gateWithChecks(unapproved);
+  await modelFindings(unapproved);
+  expect(await draftRevise(unapproved, REVISE_ANSWER, { admitted: null })).toHaveLength(0);
+
+  // A clear reading has nothing to quote.
+  const clear = fresh();
+  await gateWithChecks(clear);
+  const appended = await clear.store.appendReading(
+    "i-0001",
+    {
+      drafter: "rondo/model/1/gpt-6-astra",
+      verdict: "clear",
+      findings: [],
+      graded: [],
+      evidence: EVIDENCE,
+      unavailableReason: null,
+    },
+    4_000,
+  );
+  expect(appended.kind).toBe("appended");
+  expect(await draftRevise(clear, REVISE_ANSWER)).toHaveLength(0);
+
+  // Only the deterministic reading: there is nothing the drafter may read yet.
+  const early = fresh();
+  await gateWithChecks(early);
+  expect(await draftRevise(early, REVISE_ANSWER)).toHaveLength(0);
+  expect(reviseRows(early)).toHaveLength(0);
+});
+
+/** A draft that addresses both of {@link modelFindings}' findings, with a lead. */
+const REVISE_ANSWER = {
+  lead: "Keep the retry budget, but make it end.",
+  findings: [
+    { finding: 2, change: "Cap the backoff at 30 seconds." },
+    { finding: 1, change: "Stop after the budget's last try.\nSay so in the log." },
+  ],
+};
+
 test("the gate offers a change beside approve, drafted from the findings and editable (#233 S4)", async () => {
   const world = fresh();
   await gateWithChecks(world);
   await modelFindings(world);
+  await draftRevise(world, REVISE_ANSWER);
   const html = await operatorPage(
     { ...portsOver(world, "ada", [], null, "decision-1"), material: structured },
     "t",
@@ -2668,17 +2928,30 @@ test("the gate offers a change beside approve, drafted from the findings and edi
   expect(bar).toContain(
     '<input type="hidden" name="successor" value="lap-00000000-0000-4000-8000-000000000001"/>',
   );
-  // **rondo's draft is the field's content, and it quotes the findings with
-  // their severities and bases** (D-0065 rule 5.3): a placeholder is not sent,
-  // and the words are the reviewer's own.
+  // **The drafter's draft is the field's content, and rondo quotes every
+  // finding in it with its severity and bases** (D-0077 rule 3.4): the lead and
+  // each finding's words are the drafter's, the quotes are the reading's, in
+  // the reading's order whatever order the answer named them in.
   const opened = bar.indexOf('<textarea name="body"');
   const box = bar.slice(opened, bar.indexOf("</textarea>", opened));
-  expect(box).toContain("Please fix what the model review raised:");
-  expect(box).toContain("- [blocker] the loop never stops");
-  expect(box).toContain("where: src/notifier.ts:41");
-  expect(box).toContain("- [major] the backoff is not capped");
-  expect(box).toContain("where: rule AGENTS.md:12");
+  expect(box).toContain(
+    ">Keep the retry budget, but make it end.\n\n" +
+      "- [blocker] the loop never stops\n  where: src/notifier.ts:41\n" +
+      "  to change: Stop after the budget's last try.\n    Say so in the log.\n\n" +
+      "- [major] the backoff is not capped\n  where: rule AGENTS.md:12\n" +
+      "  to change: Cap the backoff at 30 seconds.",
+  );
   expect(box).toContain('data-draft="revise:i-0001:gate-i-0001"');
+  // **No deterministic draft anywhere** (D-0077 rule 4.2): the stand-in's lead is gone.
+  expect(html).not.toContain("Please fix what the model review raised");
+  expect(bar).toMatch(
+    /<p id="revise-draft-state" data-draft-state="revise:i-0001:gate-i-0001"[^>]*>rondo drafted this from what the review found\./,
+  );
+  // The note for a draft that lands over the person's own words is drawn
+  // hidden, for the composer script to show (rule 4.4).
+  expect(bar).toMatch(
+    /<p id="revise-draft-arrived" data-draft-arrived="revise:i-0001:gate-i-0001" hidden/,
+  );
   expect(box).not.toContain("maxlength");
   // The change is offered, and approve is not refused by it: the same form
   // posting to the same address, whatever the model raised (D-0065 as
@@ -2767,6 +3040,13 @@ async function spentGate(world: ReturnType<typeof fresh>): Promise<void> {
     )
     .run();
 }
+
+test("no draft is paid for where a spent budget draws the way to raise it instead of the form (D-0077 rule 2.1)", async () => {
+  const world = fresh();
+  await spentGate(world);
+  expect(await draftRevise(world, REVISE_ANSWER, { admitted: "sd-1" })).toHaveLength(0);
+  expect(reviseRows(world)).toHaveLength(0);
+});
 
 test("a gate whose approval is spent says which budget and offers to raise it, instead of a change it would refuse (D-0074 rule 4.1)", async () => {
   const world = fresh();
@@ -2960,10 +3240,77 @@ test("the change is offered in the page's language, and the findings stay the re
   const bar = html.slice(html.indexOf('id="answer-bar"'));
   expect(bar).toContain("承認せずに変更を依頼する");
   expect(bar).toContain(">変更を依頼する</button>");
-  expect(bar).toContain("モデルレビューが挙げた点を直してください:");
+  // Before a draft lands, the box is empty and the view says one is coming,
+  // in the page's language (D-0077 rule 4.3).
+  expect(bar).toMatch(/<textarea name="body"[^>]*><\/textarea>/);
+  expect(bar).toContain("変更内容の下書きを作成中です");
+
+  await draftRevise(world, REVISE_ANSWER);
+  const drafted = await operatorPage(
+    { ...portsOver(world, "ada", [], null, "decision-1"), material: structured },
+    "t",
+    { kind: "answer", iterationId: "i-0001" },
+    chromeFor("ja"),
+    null,
+    null,
+    () => "lap-00000000-0000-4000-8000-000000000004",
+  );
+  const box = drafted.slice(drafted.indexOf('id="answer-bar"'));
   // Quoted, not translated (D-0055 rule 4): the finding and its basis as given.
-  expect(bar).toContain("- [blocker] the loop never stops");
-  expect(bar).toContain("場所: src/notifier.ts:41");
+  expect(box).toContain("- [blocker] the loop never stops");
+  expect(box).toContain("場所: src/notifier.ts:41");
+  expect(box).toContain("直すこと: Cap the backoff at 30 seconds.");
+  expect(box).not.toContain("モデルレビューが挙げた点を直してください");
+});
+
+test("a draft is being written: an empty box, a sentence, and the press not held back (D-0077 rule 4.3)", async () => {
+  const world = fresh();
+  await gateWithChecks(world);
+  await modelFindings(world);
+  const html = await operatorPage(
+    { ...portsOver(world, "ada", [], null, "decision-1"), material: structured },
+    "t",
+    { kind: "answer", iterationId: "i-0001" },
+    EN,
+    null,
+    null,
+    () => "lap-00000000-0000-4000-8000-000000000005",
+  );
+  const bar = html.slice(html.indexOf('id="answer-bar"'));
+  expect(bar).toMatch(/<textarea name="body"[^>]*><\/textarea>/);
+  expect(bar).toContain("A draft of what to change is being written");
+  expect(bar).toContain(">Ask for a change</button>");
+  // No finding is put in the box by anyone but the drafter.
+  expect(bar).not.toContain("- [blocker] the loop never stops");
+});
+
+test("a draft that misses a finding is not shown and not repaired: an empty box and why, in a closed fold (D-0077 rule 4.1)", async () => {
+  const world = fresh();
+  await gateWithChecks(world);
+  await modelFindings(world);
+  // Addresses finding 1 only.
+  await draftRevise(world, { lead: null, findings: [{ finding: 1, change: "Stop it." }] });
+  const html = await operatorPage(
+    { ...portsOver(world, "ada", [], null, "decision-1"), material: structured },
+    "t",
+    { kind: "answer", iterationId: "i-0001" },
+    EN,
+    null,
+    null,
+    () => "lap-00000000-0000-4000-8000-000000000006",
+  );
+  const bar = html.slice(html.indexOf('id="answer-bar"'));
+  expect(bar).toMatch(/<textarea name="body"[^>]*><\/textarea>/);
+  expect(bar).not.toContain("Stop it.");
+  expect(bar).toContain("rondo could not draft what to change this time");
+  // rondo's own reason is in the one closed fold, never inline (D-0076 rule 4.5).
+  expect(bar).toMatch(
+    /<details id="revise-why" class="group"><summary[^>]*>[\s\S]*?For whoever maintains rondo on this machine<\/summary><p[^>]*>the draft was refused \(D-0077 rule 4\.1\): finding 2 is not addressed<\/p><\/details>/,
+  );
+  expect(bar.replace(/<details id="revise-why"[\s\S]*?<\/details>/, "")).not.toContain(
+    "finding 2 is not addressed",
+  );
+  expect(bar).not.toContain('id="revise-draft-arrived"');
 });
 
 test("a model reading not yet taken is said as pending, beside the checks and by the button (#220 S2)", async () => {

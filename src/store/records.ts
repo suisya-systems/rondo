@@ -795,6 +795,16 @@ export function isModelReadingDrafter(drafter: string): boolean {
 }
 
 /**
+ * A reading as plain JSON, every field it holds and none it lacks: what a
+ * revise draft's snapshot keeps (D-0077 rule 5.1), and what two readings are
+ * compared by. A reading has no id, so it is identified by what it says
+ * (D-0051): two are the same reading when their canonical JSON is.
+ */
+export function readingContent(reading: LapReading): JsonRecord {
+  return JSON.parse(JSON.stringify(reading)) as JsonRecord;
+}
+
+/**
  * The newest reading whose drafter `which` admits, or null.
  *
  * Newest by the store's order (oldest first, `read_at_ms` then insertion), so
@@ -917,6 +927,11 @@ export const PROPOSAL_KINDS = Object.freeze([
   // a kind here and deliberately absent from APPROVABLE_PROPOSAL_KINDS below,
   // which is what makes recordDecision refuse a human_decision naming one.
   "split",
+  // D-0077 rule 5.1. One row per finished run of the revise drafter: the
+  // instruction it drafted for a lap's gate, or why it drafted none. **Never
+  // approved**: the person's press is a gate answer and not a human_decision
+  // (D-0032 rule 5), so it is absent from APPROVABLE_PROPOSAL_KINDS below.
+  "revise_draft",
 ] as const);
 
 export type ProposalKind = (typeof PROPOSAL_KINDS)[number];

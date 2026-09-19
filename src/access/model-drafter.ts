@@ -161,7 +161,7 @@ const priced = (tier: string | null): boolean =>
   tier !== null && (PRICED_MODEL_TIERS as readonly string[]).includes(tier);
 
 /** The request and every reply under it. */
-function threadOf(
+export function threadOf(
   messages: readonly { readonly messageId: string; readonly inReplyTo: string | null }[],
   requestMessageId: string,
 ): Set<string> {

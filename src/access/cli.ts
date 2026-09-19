@@ -127,6 +127,7 @@ import { draftedPlanRun, type HeldPlan, heldPlanByDigest } from "./model-drafter
 import { modelReadingLines } from "./model-review.js";
 import { modelReviewPorts, takeModelReading } from "./model-reviewer.js";
 import { denialLine, evidenceOf, LIST_LIMIT, READING_REMOTE, uncommittedPaths } from "./review.js";
+import { reviseDrafterHost } from "./revise-drafter.js";
 import {
   admitUnderScope,
   agentTypeRecordOf,
@@ -1677,8 +1678,19 @@ export async function main(
       language: selected.tag,
       log: say,
     });
-    // ponytail: a fixed one-minute rescan for messages written outside this
-    // process; a changedSince watch when that minute is felt.
+    // **And the revise drafter beside it** (D-0077 rule 2.2): a model reading
+    // lands from whichever process ran the lap, so the same rescan finds it.
+    const reviser = reviseDrafterHost({
+      store,
+      record,
+      runDrafter,
+      now: Date.now,
+      mintId: newDraftId,
+      language: selected.tag,
+      log: say,
+    });
+    // ponytail: a fixed one-minute rescan for messages and readings written
+    // outside this process; a changedSince watch when that minute is felt.
     let rescan: ReturnType<typeof setInterval> | null = null;
     // **Only once the page is listening**: a second `rondo web` that cannot
     // bind its port reports failure, and must not have spent a draft first.
@@ -1686,7 +1698,11 @@ export async function main(
       say(line);
       if (rescan === null) {
         drafter.kick();
-        rescan = setInterval(() => drafter.kick(), 60_000);
+        reviser.kick();
+        rescan = setInterval(() => {
+          drafter.kick();
+          reviser.kick();
+        }, 60_000);
         rescan.unref();
       }
     };
