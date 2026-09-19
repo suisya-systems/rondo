@@ -160,6 +160,17 @@ test("pressed as drafted, the approval is the drafter's own row; changed, it is 
   const onMine = await w2.record.scopeDecisionOf("scope-mine-1");
   expect(onMine.kind === "read" && onMine.decision.outcome).toBe("approved");
 
+  // The draft the person's own scope retired is not approved again, by a stale
+  // tab or the back button (D-0066 rule 1.4).
+  const again = await recordDraftedScopeFromPage(ENV, w2.storePath, "ada", {
+    ...form,
+    draftScopeId: w2.draft.scopeId,
+    draftDigest: w2.draft.scopeDigest,
+    scopeId: "scope-mine-2",
+  });
+  expect(again).toMatchObject({ ok: false, why: "scopeRefusedPlanChanged" });
+  expect((await w2.record.scopeDecisionOf(w2.draft.scopeId)).kind).toBe("absent");
+
   // A form drawn over another digest records nothing.
   const w3 = await drafted();
   const stale = await recordDraftedScopeFromPage(ENV, w3.storePath, "ada", {

@@ -4386,6 +4386,17 @@ export async function recordDraftedScopeFromPage(
     canonicalJson(payload as unknown as JsonValue) ===
     canonicalJson(drafted.payload as unknown as JsonValue)
   ) {
+    // **A draft an approved successor retired is not approved again** (D-0066
+    // rule 1.4): the store would take the decision, and it could admit nothing
+    // -- a start under it would stop at the superseded test and write a stop
+    // over the request the person's own scope now covers.
+    if (await record.scopeSupersededByApproved(drafted.scopeId)) {
+      return {
+        ok: false,
+        why: "scopeRefusedPlanChanged",
+        note: "the draft was replaced by an approved scope",
+      };
+    }
     return await approveStoredScope(record, actor.actorId, drafted, createdAtMs);
   }
   const written = await record.recordScope({
@@ -4461,14 +4472,28 @@ export async function startSplitFromPage(
   if (started !== undefined) {
     return await started;
   }
-  const running = startSplit(environment, store, storePath, approver, policy, input);
+  // **One plan, one press at a time, whatever form it came from** -- two tabs
+  // mint two iteration ids -- so a second press runs after the first reserved
+  // its lap and finds it: "already started", not a second lap on one plan.
+  const planKey = `${input.requestMessageId}\u0000${input.proposalId}\u0000${String(input.planIndex)}`;
+  const ahead = startingPlan.get(planKey) ?? Promise.resolve();
+  const running = ahead
+    .catch(() => undefined)
+    .then(() => startSplit(environment, store, storePath, approver, policy, input));
   starting.set(input.iterationId, running);
+  startingPlan.set(planKey, running);
   try {
     return await running;
   } finally {
     starting.delete(input.iterationId);
+    if (startingPlan.get(planKey) === running) {
+      startingPlan.delete(planKey);
+    }
   }
 }
+
+/** Every drafted plan this process is starting, by request, proposal and plan. */
+const startingPlan = new Map<string, Promise<Started>>();
 
 async function startSplit(
   environment: Readonly<Record<string, string | undefined>>,
