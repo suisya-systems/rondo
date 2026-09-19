@@ -237,16 +237,21 @@ export const USAGE = `rondo - the operator surface for delegated work
                           --scope-decision-id spends an approved scope on the
                           second lap: the gate is still your answer, and it is
                           not touched unless every test of the scope passes
-  rondo publish --repo OWNER/NAME --actor-id ID --iteration-id ID
+  rondo publish --actor-id ID --iteration-id ID [--repo OWNER/NAME]
                 [--remote NAME] [--dry-run] [--allow-remote-mismatch]
                 [--despite-review]
                           push the branch, open the pull request, close the run.
-                          Refuses before it prints when the workspace cannot
-                          push where the plan says, when the push remote and
-                          --repo name different repositories, or when the
-                          independent reading of the work raised something, was
-                          never taken, or was taken over other commits.
-                          --despite-review is how you overrule that last one
+                          The repository it opens the pull request in is the
+                          lap's own plan's, recorded there when its repository
+                          was set up; --repo names one for a plan that carries
+                          none, which is every plan written before one store
+                          served several repositories. Refuses before it prints
+                          when the lap names no repository either way, when the
+                          workspace cannot push where the plan says, when the
+                          push remote and the repository are different ones, or
+                          when the independent reading of the work raised
+                          something, was never taken, or was taken over other
+                          commits. --despite-review overrules that last one
   rondo abandon --iteration-id ID --reason TEXT
                           end an iteration rondo cannot finish
   rondo release --iteration-id ID --actor-id ID
@@ -358,11 +363,12 @@ export const USAGE = `rondo - the operator surface for delegated work
                           beside each open gate: it answers that gate 'approve'
                           as RONDO_APPROVER, by the same path rondo answer
                           takes, and is drawn only when that is set. --repo
-                          names the forge repository the page may publish an
-                          approved lap to, with the same meaning the three
-                          flags have on rondo publish; without it the page
-                          serves without a publish screen. There is no
-                          authentication
+                          names the forge repository to publish a lap whose own
+                          plan carries none to, with the same meaning it has on
+                          rondo publish; one host serves several repositories,
+                          each named by the plan a lap ran on, so without it the
+                          page still publishes every lap whose plan names one.
+                          There is no authentication
                           because there is no route in from anywhere but this
                           machine
   rondo explain --iteration-id ID
@@ -382,7 +388,7 @@ environment:
                       bounds how many questions may wait on a person at once
   RONDO_MAX_OCCUPYING how many may be executing at once. Default 1, and raising
                       it needs continuo to allow a second concurrent lap first
-  GH_HOST             the forge host --repo is on. Default: github.com
+  GH_HOST             the forge host the repository is on. Default: github.com
 
 rondo never merges a pull request, and nothing here runs unless you typed it.
 `;
@@ -1680,19 +1686,21 @@ export async function main(
     // allowlist refuses, is no say port, and so no forms.
     const sender =
       approver === undefined || approver === "" ? null : approvedActor(approver, environment);
-    // **What a publish would need that no plan carries** (rondo#233 S5): the
-    // forge repository, and the remote to push to. `--repo` is the same flag
-    // `publish` takes, read once here, so a host serving the page either may
-    // publish or says it may not -- there is no third state where a button is
-    // drawn over a repository nobody named.
-    const asked: PublishAsked | null =
-      parsed.repo === null
-        ? null
-        : {
-            repo: parsed.repo,
-            remote: parsed.remote ?? DEFAULT_REMOTE,
-            allowRemoteMismatch: parsed.allowRemoteMismatch,
-          };
+    // **What a publish would need that the lap's row does not carry**
+    // (rondo#233 S5): the remote to push to, and the repository for a plan that
+    // names none. `--repo` is the same flag `publish` takes, read once here.
+    //
+    // **It no longer decides whether this host may publish at all** (D-0081
+    // rule 3.2). The repository is the plan's, so whether a lap can be
+    // published is a fact about that lap and not about the host: a host told no
+    // `--repo` publishes every lap whose plan carries a slug, and says per lap
+    // where neither does. Gating the port on the flag would draw nothing over
+    // laps that are perfectly publishable.
+    const asked: PublishAsked = {
+      repo: parsed.repo,
+      remote: parsed.remote ?? DEFAULT_REMOTE,
+      allowRemoteMismatch: parsed.allowRemoteMismatch,
+    };
     // **The model drafter runs in this process** (D-0071 rule 3.2, with the
     // `rondo web` process as the resident host until D-0068's patrol exists):
     // a scan now, after every message this page writes, and on a timer so a
@@ -1869,13 +1877,15 @@ export async function main(
                   await reviseFromPage(environment, store, opened.path, sender.actorId, input),
               ),
         // **The press is checked inside this port too** (rondo#233 S5), and it
-        // is null on one condition of its own beside `revise`'s: the forge
-        // repository is the one fact no plan carries, so `rondo web --repo
-        // OWNER/NAME` is what decides whether this host may publish at all. A
-        // host that named none draws the screen's sentence saying so, and not a
-        // button that would be refused.
+        // is now null on exactly `revise`'s own condition: an approver the
+        // allowlist accepts. The forge repository used to be a second condition
+        // -- it was the one fact no plan carried -- and under `D-0081` rule 3.2
+        // it is the plan's, so it is a fact about the lap the screen is about
+        // and not about the host. A lap that names no repository anywhere is
+        // refused on its own screen, by the dry-run below, which is where every
+        // other per-lap refusal is already said.
         publish:
-          sender === null || "refusal" in sender || asked === null
+          sender === null || "refusal" in sender
             ? null
             : new PublishPort(
                 async (input) =>
@@ -1908,7 +1918,7 @@ export async function main(
                 async (input) => await releaseFromPage(environment, store, sender.actorId, input),
               ),
         publishing:
-          sender === null || "refusal" in sender || asked === null
+          sender === null || "refusal" in sender
             ? null
             : async (row) => await publishingForPage(environment, store, asked, row),
         // Read for the same reason and on the same condition: the material is
@@ -3979,9 +3989,11 @@ async function commandAnswer(
     // The id is spelled out because closing the iteration is what stops it
     // being the live one, so `publish` can no longer find it on its own. A
     // hint the operator cannot paste is not a hint.
-    say(
-      `Next: rondo publish --iteration-id ${record.id} --repo OWNER/NAME --actor-id ${actor.actorId}`,
-    );
+    // **And `--repo` only where this lap needs one** (D-0081 rule 3.2): a plan
+    // that records the repository is published without it, and printing it
+    // anyway would teach a flag that is now the exception rather than the way.
+    const named = planField(record, "forge_repository") === "" ? " --repo OWNER/NAME" : "";
+    say(`Next: rondo publish --iteration-id ${record.id} --actor-id ${actor.actorId}${named}`);
   }
   return 0;
 }
@@ -6165,11 +6177,20 @@ export type PreflightOutcome =
 
 /** What preflight decides over. Every field is already known before git is asked. */
 export interface PreflightInput {
+  /**
+   * The repository to publish to, as `OWNER/NAME`.
+   *
+   * **Where it was named is not this function's business** (D-0081 rule 3.2).
+   * It is the lap's own plan when the plan carries one and the host's `--repo`
+   * when it does not, and the rules below are the same rules either way -- so
+   * the sentences here name the repository rather than the flag, which is only
+   * one of the two places it can now come from.
+   */
   readonly repo: string;
   readonly remote: string;
   readonly workspace: string;
   readonly topicBranch: string;
-  /** The host `--repo` is on: what `forgeHost` read, not an assumption. */
+  /** The host the repository is on: what `forgeHost` read, not an assumption. */
   readonly forgeHost: string;
   readonly allowRemoteMismatch: boolean;
   readonly inspection: PushTargetInspection;
@@ -6216,8 +6237,8 @@ export function publishPreflight(input: PreflightInput): PreflightOutcome {
     return {
       kind: "refused",
       reason:
-        `--repo is '${input.repo}', and it must be OWNER/NAME -- the repository as gh names ` +
-        "one. rondo passes it to `gh pr create --repo` unchanged.",
+        `the repository to publish to is '${input.repo}', and it must be OWNER/NAME -- the ` +
+        "repository as gh names one. rondo passes it to `gh pr create --repo` unchanged.",
     };
   }
   if (input.inspection.kind === "unreadable") {
@@ -6285,10 +6306,10 @@ export function publishPreflight(input: PreflightInput): PreflightOutcome {
     return {
       kind: "refused",
       reason:
-        "The push and the pull request would not be about the same repository. --repo is " +
-        `${wantedShown}, and ${scope}. The push goes to the workspace's remote and the pull ` +
-        "request is opened against --repo, so publishing this way puts the branch somewhere the " +
-        "pull request does not look. If that is deliberate -- pushing to a fork and opening the " +
+        "The push and the pull request would not be about the same repository. The pull " +
+        `request would be opened in ${wantedShown}, and ${scope}. The push goes to the ` +
+        "workspace's remote, so publishing this way puts the branch somewhere the pull request " +
+        "does not look. If that is deliberate -- pushing to a fork and opening the " +
         "pull request upstream is the usual reason -- pass --allow-remote-mismatch.",
     };
   }
@@ -6332,10 +6353,42 @@ export function publishPreflight(input: PreflightInput): PreflightOutcome {
   };
 }
 
+/**
+ * The repository this lap's pull request is opened in, or null for a lap that
+ * names none anywhere (D-0081 rule 3.2).
+ *
+ * **The plan first, and the host's flag only where the plan is silent.** The
+ * repository is a fact about the repository the work happened in, so the lap's
+ * own plan is where it is now recorded -- one host serves several of them, and
+ * one slug per host is right for at most one. `--repo` is what is left: the
+ * installer's flag, and what a store set up before `D-0081` publishes by, whose
+ * rows carry no slug at all (rule 6.3). Reading them the other way round would
+ * let a host's flag overrule the plan of a lap in another repository, which is
+ * the failure the whole entry is about.
+ *
+ * **An empty string is not a slug.** `planField` answers `""` both for a plan
+ * that carries no such key and for one whose value is not a string; either way
+ * the plan named nothing, and the fallback is what a plan that named nothing
+ * gets.
+ */
+export function publishRepository(record: IterationRecord, asked: PublishAsked): string | null {
+  const named = planField(record, "forge_repository");
+  return named === "" ? asked.repo : named;
+}
+
 /** What a publish needs to know that the lap's own row does not carry. */
 export interface PublishAsked {
-  /** `OWNER/NAME` on the forge: the one fact the plan does not hold. */
-  readonly repo: string;
+  /**
+   * `OWNER/NAME` on the forge as the *host* was told it (`--repo`), or null
+   * for a host that was told none.
+   *
+   * **The fallback and not the answer** (D-0081 rule 3.2, rule 6.3). The
+   * repository is the lap's plan's, so this is read only where that plan
+   * carries no slug -- which is every plan written before `D-0081` and every
+   * plan an operator hand-wrote without one. A host with neither publishes
+   * nothing, and says so per lap rather than per host.
+   */
+  readonly repo: string | null;
   readonly remote: string;
   readonly allowRemoteMismatch: boolean;
 }
@@ -6514,13 +6567,30 @@ export async function publishPlanFor(
   // where the real thing would fail is the failure it was meant to prevent
   // (see `publishPreflight`).
   const host = forgeHost(environment);
+  // **The repository is the lap's own plan's, and the host's flag is what a
+  // plan without one falls back to** (D-0081 rule 3.2, rule 6.3). The plan is
+  // read first because that is where the fact now lives; `--repo` answers for a
+  // store set up before `D-0081`, whose rows carry no slug and which must keep
+  // publishing exactly as it did. A lap with neither is refused here, per lap,
+  // rather than by a host that drew no button at all.
+  const repo = publishRepository(record, asked);
+  if (repo === null) {
+    return {
+      kind: "refused",
+      block: { why: "noRepo" },
+      reason:
+        `iteration '${record.id}' names no repository to publish to: its plan carries none, and ` +
+        "this rondo was given no --repo OWNER/NAME either. Setup records the repository onto the " +
+        "plans it composes; --repo publishes a plan written before it did.",
+    };
+  }
   // **Kept rather than discarded**: the preflight answers whether this may run,
   // and the destinations it answered over are what the plan is about. They are
   // carried into {@link PublishPlan.pushUrls} so that where the work goes is
   // part of what a person confirmed (Codex round 1).
   const inspection = await inspectPushTarget({ workspace, remote: asked.remote, topicBranch });
   const preflight = publishPreflight({
-    repo: asked.repo,
+    repo,
     remote: asked.remote,
     workspace,
     topicBranch,
@@ -6555,7 +6625,7 @@ export async function publishPlanFor(
   // preflight that agreed about one host and a command that then reached
   // another would be two answers to one question. `HOST/OWNER/NAME` is a
   // spelling the CLI already accepts, and it makes the two the same answer.
-  const forgeRepo = `${host}/${asked.repo}`;
+  const forgeRepo = `${host}/${repo}`;
 
   // **Read before the text is composed, for the same reason the preflight is.**
   // The title and the body are what the operator is being asked to approve, so
@@ -6746,6 +6816,8 @@ function publishBlockRefusal(block: PublishBlock): PublishRefusal {
       return "publishRefusedNoRun";
     case "planField":
       return "publishRefusedPlanField";
+    case "noRepo":
+      return "publishRefusedNoRepo";
     case "target":
       return "publishRefusedTarget";
     default:
@@ -7001,12 +7073,11 @@ async function commandPublish(
   continuo: VerifiedContinuo,
   ports: ReportingPorts,
 ): Promise<number> {
-  if (parsed.repo === null) {
-    return refuse(
-      "publish needs --repo OWNER/NAME. It is the forge repository, which is the one fact " +
-        "about publishing that the plan does not carry.",
-    );
-  }
+  // **No `--repo` check here any more** (D-0081 rule 3.2). The repository is
+  // the lap's plan's, and whether one was named at all is answered against that
+  // plan in `publishPlanFor` -- so a flag missing where the plan carries a slug
+  // is no longer a refusal, and a flag missing where it does not is refused
+  // there, naming the iteration it is about.
   const actor = approvedActor(parsed.actorId, environment);
   if ("refusal" in actor) {
     return refuse(actor.refusal);

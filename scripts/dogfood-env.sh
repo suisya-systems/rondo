@@ -26,6 +26,7 @@ usage() {
   cat <<'USAGE'
 usage: scripts/dogfood-env.sh [--root DIR] [--iteration-id ID]
                               [--target-repo DIR] [--target-base-branch NAME]
+                              [--forge-repo OWNER/NAME]
                               [--review-criterion FILE] [--port N]
                               [--remote NAME]
                               [--force-continuo-rebuild]
@@ -61,6 +62,18 @@ options:
       need a second plan file -- `rondo start` takes --iteration-id and
       --prompt as flags. It must be a lowercase letter followed by up to 63
       more of [a-z0-9_-].
+  --forge-repo OWNER/NAME
+      the repository on the forge that this target's pull requests are opened
+      in, written into the plan as `forge_repository` (D-0081 rule 3.2). It is
+      a fact about the repository and not about the host: one host serves
+      several repositories, and `publish` reads this from the plan of the lap
+      it is publishing. Omit it for a target with no forge -- the scratch
+      target is one, since its push remote is a bare repository on this disk --
+      and the pull-request leg is then refused unless the host itself was given
+      a --repo to fall back on.
+      rondo never works this out from the target's remotes: a workspace is a
+      worktree cut from a local path, and an inferred slug would be whatever
+      that clone happened to point at (D-0075 rule 3.1).
   --review-criterion FILE
       a JSON file written into the plan as `review_criterion`:
       {"severities": {"blocker", "major", "minor", "nit"}, "rule_files": [...]}.
@@ -116,6 +129,7 @@ port=7333
 remote=
 target_repo=
 target_base_branch=
+forge_repo=
 review_criterion=${RONDO_DOGFOOD_REVIEW_CRITERION:-"$repo_root/scripts/dogfood-review-criterion.json"}
 
 while [ $# -gt 0 ]; do
@@ -125,6 +139,7 @@ while [ $# -gt 0 ]; do
     --target-repo) [ $# -ge 2 ] || die "--target-repo needs a value"; target_repo=$2; shift 2 ;;
     --target-base-branch)
       [ $# -ge 2 ] || die "--target-base-branch needs a value"; target_base_branch=$2; shift 2 ;;
+    --forge-repo) [ $# -ge 2 ] || die "--forge-repo needs a value"; forge_repo=$2; shift 2 ;;
     --review-criterion)
       [ $# -ge 2 ] || die "--review-criterion needs a value"; review_criterion=$2; shift 2 ;;
     --port) [ $# -ge 2 ] || die "--port needs a value"; port=$2; shift 2 ;;
@@ -142,6 +157,20 @@ mkdir -p -- "$env_root"
 env_root=$(cd -- "$env_root" && pwd -P)
 [ -f "$review_criterion" ] ||
   die "review criterion '$review_criterion' is not a file; pass --review-criterion FILE"
+
+# **Checked here rather than at publish**, which is the last place a person
+# wants a surprise about where their work is going: publishing is outward and
+# irreversible, and setup is the one moment a person is already being asked for
+# facts about this repository. The shape is the forge CLI's own -- two segments,
+# and rondo passes them on unchanged -- so anything with another number of
+# slashes is not a repository the pull-request leg can be about.
+if [ -n "$forge_repo" ]; then
+  case "$forge_repo" in
+    */*/* | /* | */) die "--forge-repo '$forge_repo' must be OWNER/NAME, the repository as the forge names one" ;;
+    */*) : ;;
+    *) die "--forge-repo '$forge_repo' must be OWNER/NAME, the repository as the forge names one" ;;
+  esac
+fi
 
 # The check the default alone cannot make: --root and $RONDO_DOGFOOD_ROOT can
 # still name a directory inside an installed checkout. A workspace there
@@ -522,7 +551,7 @@ fi
 node -e '
   const [out, envRoot, runId, controlPlane, target, catalogOrigin, interlockRoot,
          claudeOrgPath, claudeBin, nodeBin, prompt, baseBranch,
-         projectName, reviewCriterionFile] = process.argv.slice(1);
+         projectName, reviewCriterionFile, forgeRepository] = process.argv.slice(1);
 
   // The three budgets are stated rather than inherited. `invocation_ceiling_ms`
   // must be strictly greater than their sum; rondo refuses a ceiling that
@@ -668,6 +697,19 @@ node -e '
     // reads as null, which is what keeps plans written before the field valid.
     pull_request_base_branch: null,
 
+    // **Where this target publishes to** (D-0081 rule 3.2). The forge
+    // repository is a fact about the repository and not about the host, so it
+    // is recorded here beside every other repository fact, and publish reads it
+    // from the plan of the lap it is publishing rather than from the command
+    // that started the page. Empty is null -- a target with no forge, which the
+    // scratch target is -- and a lap whose plan carries null publishes against
+    // the host own --repo where one was given, which is what a store set up
+    // before D-0081 has (rule 6.3).
+    //
+    // No apostrophes in this comment: the whole program is a single-quoted
+    // shell argument, so one would end the string.
+    forge_repository: forgeRepository === "" ? null : forgeRepository,
+
     catalog_layers: [
       {
         layer: "tracked",
@@ -707,8 +749,13 @@ node -e '
   require("node:fs").writeFileSync(out, `${JSON.stringify(plan, null, 2)}\n`);
 ' "$plan" "$env_root" "$run_id" "$control_plane" "$target" "$catalog_origin" \
   "$interlock_root" "$claude_org_path" "$claude_bin" "$node_bin" "$prompt" \
-  "$target_base_branch" "$project_name" "$review_criterion"
+  "$target_base_branch" "$project_name" "$review_criterion" "$forge_repo"
 note "$plan"
+if [ -n "$forge_repo" ]; then
+  note "pull requests for this target are opened in $forge_repo"
+else
+  note "this target names no repository to open pull requests in (--forge-repo OWNER/NAME)"
+fi
 
 step "Environment"
 env_file="$env_root/env.sh"

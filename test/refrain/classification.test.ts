@@ -73,6 +73,7 @@ function planWith(overrides: {
   readonly catalogPath?: string;
   readonly catalogBaseBranch?: string;
   readonly pullRequestBaseBranch?: string | null;
+  readonly forgeRepository?: string | null;
   readonly projectName?: string;
   /** The plan's declaration (`continuo D-1110`); one subject by default. */
   readonly allowedBash?: readonly string[];
@@ -109,6 +110,7 @@ function planWith(overrides: {
     gateOptions: ["approve", "revise"],
     gateDeadlineAtMs: null,
     pullRequestBaseBranch: overrides.pullRequestBaseBranch ?? null,
+    forgeRepository: overrides.forgeRepository ?? null,
     invocationCeilingMs: 1_800_000,
     catalogLayers: [
       layerFor(overrides.catalogPath ?? REPOSITORY, overrides.catalogBaseBranch ?? "main"),

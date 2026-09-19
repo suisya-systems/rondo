@@ -340,6 +340,17 @@ export type PublishBlock =
   | { readonly why: "notApproved"; readonly outcome: string | null }
   | { readonly why: "noRun" }
   | { readonly why: "planField"; readonly field: string }
+  /**
+   * No repository to publish to: the plan names none and the host was told
+   * none either (D-0081 rule 3.2).
+   *
+   * **A fact about this lap, which is why it is a block and not a missing
+   * screen.** Before `D-0081` the repository was the host's and a host without
+   * one offered no publish screen at all ({@link Chrome.publishNotOffered}).
+   * Now one host serves several repositories, so the question is answered per
+   * lap -- and the lap that cannot be published is the one that says so.
+   */
+  | { readonly why: "noRepo" }
   | { readonly why: "target"; readonly reason: string }
   | {
       readonly why: "uncommitted";
@@ -6183,6 +6194,8 @@ function publishBlockLines(wording: Chrome, block: PublishBlock): readonly strin
       return [wording.publishNoRun];
     case "planField":
       return [wording.publishPlanField(block.field)];
+    case "noRepo":
+      return [wording.publishNoRepo];
     case "target":
       return [wording.publishTargetRefused(block.reason)];
     default:
