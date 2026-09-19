@@ -49,6 +49,7 @@
 import { DatabaseSync } from "node:sqlite";
 
 import {
+  claimCovers,
   type LaneLap,
   lineShape,
   mayBeOpen,
@@ -2312,7 +2313,7 @@ export function iterationStore(connection: DatabaseSync, policy: HostPolicy): It
         if (head === null) {
           return { kind: "compared", lineageId: root, unheld: [], held: [] };
         }
-        const outside = input.paths.filter((path) => sharedPaths([path], head.paths).length === 0);
+        const outside = input.paths.filter((path) => !claimCovers(head.paths, path));
         const held = openLines(connection, head.repository, root).flatMap((line) => {
           const shared = sharedPaths(outside, line.paths);
           return shared.length === 0 ? [] : [{ lineageId: line.lineageId, sharedPaths: shared }];

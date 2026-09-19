@@ -90,6 +90,15 @@ export function pathsOverlap(a: string, b: string): boolean {
   return covers(a, b) || covers(b, a);
 }
 
+/**
+ * Whether some path of `claim` covers `path` (D-0073 rule 5). Containment, not
+ * overlap: a changed path's cover (`src/`) that merely overlaps a narrower
+ * claim (`src/a.ts`) is outside it.
+ */
+export function claimCovers(claim: readonly string[], path: string): boolean {
+  return claim.some((held) => covers(held, path));
+}
+
 /** The paths of `asked` that overlap some path of `held`, in `asked`'s order. */
 export function sharedPaths(asked: readonly string[], held: readonly string[]): readonly string[] {
   return asked.filter((path) => held.some((other) => pathsOverlap(path, other)));
