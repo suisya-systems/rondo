@@ -54,6 +54,7 @@ import {
   lineShape,
   mayBeOpen,
   normalizeClaim,
+  repositoryKey,
   sharedPaths,
   WHOLE_REPOSITORY,
 } from "./lanes.js";
@@ -600,6 +601,36 @@ export interface IterationStore {
    * answer at rondo#283's gate), so rule 5's widening is not written here.
    */
   compareLane(input: LaneCompareInput): Promise<LaneCompareOutcome>;
+  /**
+   * Every line the ledger has an answer about, holding or released (D-0073
+   * rule 12): what the page says a line owns, what waits on it and whether its
+   * work landed. Writes nothing.
+   */
+  laneLedger(): Promise<readonly LedgerLine[]>;
+}
+
+/** One line as the page is told about it ({@link IterationStore.laneLedger}). */
+export interface LedgerLine {
+  /** The line's first lap id (D-0030). */
+  readonly lineageId: string;
+  /** As the ledger compares it ({@link repositoryKey}). */
+  readonly repository: string;
+  /** The in-force claim row, or null for a line from before the ledger. */
+  readonly claimId: string | null;
+  /** What it holds now; empty once released. */
+  readonly paths: readonly string[];
+  /** Every lap of the line, root first. */
+  readonly lapIds: readonly string[];
+  /** Some lap has not ended: it holds its paths whatever its diff says (rule 10). */
+  readonly inFlight: boolean;
+  /** The closed laps no other lap continues (rule 6): what a landing is owed by. */
+  readonly closedTips: readonly string[];
+  /**
+   * Who released it, or null while it holds: `person` is the release press
+   * (rule 4.3); `rondo` is a landing read or a line that ended with nothing to
+   * land, which `closedTips` tells apart.
+   */
+  readonly releasedBy: "person" | "rondo" | null;
 }
 
 export interface LaneCompareInput {
@@ -2328,6 +2359,10 @@ export function iterationStore(connection: DatabaseSync, policy: HostPolicy): It
       } catch (error) {
         return { kind: "defect", reason: describe(error) };
       }
+    },
+
+    async laneLedger(): Promise<readonly LedgerLine[]> {
+      return ledgerLines(connection);
     },
 
     async readLive(): Promise<readonly ReadOutcome[]> {
@@ -5452,37 +5487,9 @@ function toLaneLap(row: SqlRow): LaneLap {
   };
 }
 
-/**
- * The repository a stored plan names, as the ledger compares it, or null when
- * the plan does not say: one place however it is spelled, so a trailing `/`, a
- * `.` segment or a `\\` separator is not a second repository with a ledger of
- * its own (D-0073 rule 3, "of one repository").
- *
- * ponytail: lexical only. A symlink, a case-insensitive filesystem, or a second
- * clone of one forge repository is still read as another repository; resolving
- * those needs the filesystem, which this module does not take.
- */
+/** The repository a stored plan names, as the ledger compares it ({@link repositoryKey}). */
 function planRepository(plan: JsonRecord): string | null {
   return repositoryKey(plan["repository"]);
-}
-
-/** {@link planRepository} over a value read out of a stored plan. */
-function repositoryKey(repository: unknown): string | null {
-  if (typeof repository !== "string" || repository === "") {
-    return null;
-  }
-  const segments: string[] = [];
-  for (const segment of repository.split(/[\\/]+/)) {
-    if (segment === "" || segment === ".") {
-      continue;
-    }
-    if (segment === "..") {
-      segments.pop();
-    } else {
-      segments.push(segment);
-    }
-  }
-  return `/${segments.join("/")}`;
 }
 
 /**
@@ -5521,6 +5528,23 @@ function openLines(
       lines.push({ lineageId: head.lineageId, paths: head.paths });
     }
   }
+  for (const [root, tree] of unclaimedTrees(connection, repository)) {
+    if (root !== exceptLineage && lineShape(tree.laps).inFlight) {
+      lines.push({ lineageId: root, paths: [WHOLE_REPOSITORY] });
+    }
+  }
+  return lines;
+}
+
+/**
+ * The lineage trees that have never held a claim row, by root: the lines
+ * admitted before the ledger, of `repository` or of every repository when it
+ * is null. What {@link openLines} counts as holding `/` while in flight.
+ */
+function unclaimedTrees(
+  connection: DatabaseSync,
+  repository: string | null,
+): ReadonlyMap<string, { readonly repository: string; readonly laps: readonly LaneLap[] }> {
   const claimed = new Set(
     connection
       .prepare("SELECT DISTINCT lineage_id FROM lane_claim")
@@ -5537,10 +5561,13 @@ function openLines(
           "FROM iteration WHERE json_valid(plan)",
       )
       .all() as SqlRow[]
-  )
-    .filter((row) => repositoryKey(row["r"]) === repository)
-    .map(toLaneLap);
-  const byId = new Map(laps.map((lap) => [lap.id, lap]));
+  ).flatMap((row) => {
+    const key = repositoryKey(row["r"]);
+    return key === null || (repository !== null && key !== repository)
+      ? []
+      : [{ lap: toLaneLap(row), repository: key }];
+  });
+  const byId = new Map(laps.map((one) => [one.lap.id, one.lap]));
   const rootOf = (lap: LaneLap): string => {
     let current = lap;
     for (let depth = 0; depth < LINEAGE_BOUND; depth += 1) {
@@ -5555,14 +5582,63 @@ function openLines(
     }
     return current.id;
   };
-  const trees = new Map<string, LaneLap[]>();
-  for (const lap of laps) {
-    const root = rootOf(lap);
-    trees.set(root, [...(trees.get(root) ?? []), lap]);
+  const trees = new Map<string, { repository: string; laps: LaneLap[] }>();
+  for (const one of laps) {
+    const root = rootOf(one.lap);
+    if (claimed.has(root)) {
+      continue;
+    }
+    const tree = trees.get(root) ?? { repository: one.repository, laps: [] };
+    tree.laps.push(one.lap);
+    trees.set(root, tree);
   }
-  for (const [root, tree] of trees) {
-    if (root !== exceptLineage && !claimed.has(root) && lineShape(tree).inFlight) {
-      lines.push({ lineageId: root, paths: [WHOLE_REPOSITORY] });
+  return trees;
+}
+
+/**
+ * Every line the ledger has an answer about (D-0073 rule 12): each lineage with
+ * a claim row, holding its head's paths or released, and each pre-ledger line
+ * in flight, holding `/` as {@link openLines} counts it. Read only; what the
+ * page draws ownership, waiting and landing from.
+ */
+function ledgerLines(connection: DatabaseSync): readonly LedgerLine[] {
+  const lines: LedgerLine[] = [];
+  const heads = connection
+    .prepare(
+      `SELECT ${CLAIM_COLUMNS}, author_kind FROM lane_claim c WHERE NOT EXISTS ` +
+        "(SELECT 1 FROM lane_claim s WHERE s.supersedes_claim_id = c.claim_id) " +
+        "ORDER BY created_at_ms, claim_id",
+    )
+    .all() as SqlRow[];
+  for (const row of heads) {
+    const head = toClaimRow(row);
+    const laps = lineageLaps(connection, head.lineageId) ?? [];
+    const shape = lineShape(laps);
+    lines.push({
+      lineageId: head.lineageId,
+      repository: head.repository,
+      claimId: head.claimId,
+      paths: head.paths,
+      lapIds: laps.map((lap) => lap.id),
+      inFlight: shape.inFlight,
+      closedTips: shape.closedTips,
+      releasedBy:
+        head.paths.length > 0 ? null : row["author_kind"] === "operator" ? "person" : "rondo",
+    });
+  }
+  for (const [root, tree] of unclaimedTrees(connection, null)) {
+    const shape = lineShape(tree.laps);
+    if (shape.inFlight) {
+      lines.push({
+        lineageId: root,
+        repository: tree.repository,
+        claimId: null,
+        paths: [WHOLE_REPOSITORY],
+        lapIds: tree.laps.map((lap) => lap.id),
+        inFlight: true,
+        closedTips: shape.closedTips,
+        releasedBy: null,
+      });
     }
   }
   return lines;

@@ -154,6 +154,19 @@ function scopeTestJa(test: string): string {
  * open. The counts are never both zero at a call site: neither sentence is
  * composed when nothing was raised.
  */
+/**
+ * The files one piece of work holds, as the person knows them: their own
+ * repository's paths, shown as themselves (D-0076 rule 2.3), or the whole
+ * repository where that is what is held.
+ */
+function filesEn(paths: readonly string[]): string {
+  return paths.includes("/") ? "the whole repository" : paths.join(", ");
+}
+
+function filesJa(paths: readonly string[]): string {
+  return paths.includes("/") ? "リポジトリ全体" : paths.join("、");
+}
+
 function raisedEn(blockers: number, majors: number): string {
   return [
     blockers === 0 ? "" : `${String(blockers)} blocker${blockers === 1 ? "" : "s"}`,
@@ -1039,6 +1052,52 @@ export interface Chrome {
    */
   readonly published: (branch: string | null, runId: string | null) => string;
   readonly publishedPullRequest: string;
+  /**
+   * What one piece of work holds while it is open, so nothing else changes the
+   * same files (D-0073 rule 12). `paths` are the person's own; `/` is the whole
+   * repository.
+   */
+  readonly holds: (paths: readonly string[]) => string;
+  /** The group of finished work whose change has not been found on the default branch. */
+  readonly heldHeading: (count: number) => string;
+  /** Why a finished row still holds its files, and what that costs other work. */
+  readonly notLanded: string;
+  /** A finished row whose change rondo found on the default branch. */
+  readonly landed: string;
+  /** A finished row whose files a person released. */
+  readonly releasedByPerson: string;
+  /** The way from a row to the screen that releases its files. */
+  readonly releaseLink: string;
+  readonly releaseHeading: string;
+  readonly releaseLead: string;
+  readonly releaseWorkHeading: string;
+  readonly releaseHoldsHeading: string;
+  readonly releaseWhyHeading: string;
+  /** Why rondo has not let go of the files by itself (D-0073 rules 6 and 6.4). */
+  readonly releaseWhy: readonly string[];
+  readonly releaseEffectHeading: string;
+  /** What the press does, and what it leaves alone. */
+  readonly releaseEffect: readonly string[];
+  readonly releaseAction: string;
+  readonly releasePlain: string;
+  readonly releaseBack: string;
+  /** The screen, where the work holds nothing now. */
+  readonly releaseNothingHeld: string;
+  /** The screen, where a part of the work is still running or waiting at review. */
+  readonly releaseStillOpen: string;
+  readonly releaseRefusedNoApprover: string;
+  readonly releaseRefusedPress: string;
+  readonly releaseRefusedForm: string;
+  readonly releaseRefusedChanged: string;
+  readonly releaseRefusedNotRecorded: string;
+  /** A drafted plan that other work's files hold back (D-0073 rule 3.1). */
+  readonly planHeld: (paths: readonly string[]) => string;
+  /** The label before the request of the work that holds them. */
+  readonly planHeldBy: string;
+  /** Where that work has finished: starting reads whether it landed first. */
+  readonly planHeldTry: string;
+  /** A start refused because other work holds the files (D-0073 rule 3.1). */
+  readonly startRefusedHeld: string;
   readonly publishHeading: string;
   readonly publishLead: string;
   /** The lead where there is no press: the same fact, without the button's half. */
@@ -1839,6 +1898,69 @@ explanation you pressed on and then answers the gate.`,
     `Published: ${branch === null ? "the branch" : `the branch ${branch}`} is pushed, and ` +
     `${runId === null ? "the run" : `the run ${runId}`} is closed.`,
   publishedPullRequest: "The pull request",
+  holds: (paths) => `Keeps to itself while open: ${filesEn(paths)}`,
+  heldHeading: (count) => `finished, not yet on the default branch (${String(count)})`,
+  notLanded:
+    "rondo has not found this change on the default branch yet, so these files stay with it " +
+    "and other work that needs them waits.",
+  landed: "Its change is on the default branch, and its files are free for other work.",
+  releasedByPerson: "A person released its files, so other work may use them.",
+  releaseLink: "Release its files",
+  releaseHeading: "Release the files this work keeps",
+  releaseLead:
+    "This work has finished, and it still keeps its files to itself. Nothing else that needs " +
+    "them can start until you release them or its change is found on the default branch.",
+  releaseWorkHeading: "The work",
+  releaseHoldsHeading: "The files it keeps",
+  releaseWhyHeading: "Why rondo has not released them itself",
+  releaseWhy: [
+    "rondo lets go of these files once it finds this change on the default branch: every file " +
+      "the work changed has to be there exactly as the work left it. It looks when other work " +
+      "asks for the same files.",
+    "It has not found it. That happens when the change is not merged yet, when it was edited or " +
+      "had a conflict resolved on its way in, when it went to another remote, or when the default " +
+      "branch could not be read.",
+    "Whether the work is done is your call. If it is merged in a form rondo cannot recognise, or " +
+      "you will not merge it, release the files.",
+  ],
+  releaseEffectHeading: "What releasing does",
+  releaseEffect: [
+    "Other work may use these files straight away.",
+    "The branch, the pull request and the work itself stay as they are; nothing is deleted or " +
+      "closed.",
+    "It is recorded as your decision. If this work is tried again, it takes the files back.",
+  ],
+  releaseAction: "Release the files",
+  releasePlain: "Lets other work use these files; records that you decided this work is done",
+  releaseBack: "Back to the files this work keeps",
+  releaseNothingHeld: "This work keeps no files now, so there is nothing to release.",
+  releaseStillOpen:
+    "Part of this work is still running or waiting for your review, so it keeps its files until " +
+    "that ends.",
+  releaseRefusedNoApprover:
+    "Nothing was released: rondo on this machine does not yet know who you are, so nothing " +
+    "here can be decided as you.",
+  releaseRefusedPress:
+    "Nothing was released: this is done by a person pressing this page's button, and a script " +
+    "cannot.",
+  releaseRefusedForm:
+    "Nothing was released: that form did not come from this page. Reload it and press again.",
+  releaseRefusedChanged:
+    "Nothing was released: this work changed after the screen was drawn (its files were " +
+    "released, or it was tried again). Go back to see where it stands now.",
+  releaseRefusedNotRecorded:
+    "Nothing was released: rondo could not record your decision. The files stay with this work; " +
+    "pressing again is safe.",
+  planHeld: (paths) =>
+    `Not yet: other work is changing ${filesEn(paths)}. This can start once that work's change ` +
+    "is on the default branch, or once its files are released.",
+  planHeldBy: "Held by",
+  planHeldTry:
+    "That work has finished. Starting checks first whether its change is on the default branch.",
+  startRefusedHeld:
+    "Nothing was started and nothing was spent: other work still keeps files this needs, and " +
+    "its change was not found on the default branch. The approval stands; start again once that " +
+    "work lands or its files are released.",
   publishHeading: "Publish this work",
   publishLead:
     "Nothing has left this machine yet. This is what publishing would do, read just now; the " +
@@ -2703,6 +2825,70 @@ const JA: Chrome = Object.freeze({
     `公開済み: ${branch === null ? "ブランチ" : `ブランチ ${branch}`} を push し、` +
     `${runId === null ? "run" : `run ${runId}`} を閉じました。`,
   publishedPullRequest: "プルリクエスト",
+  holds: (paths) => `終わるまで押さえているファイル: ${filesJa(paths)}`,
+  heldHeading: (count) => `終わったが、まだ既定ブランチに入っていない作業 (${String(count)})`,
+  notLanded:
+    "この変更はまだ既定ブランチで見つかっていません。それまでファイルはこの作業が押さえたままで、" +
+    "同じファイルを使う別の作業は待つことになります。",
+  landed: "変更は既定ブランチに入りました。ファイルは別の作業に使えます。",
+  releasedByPerson: "人の判断でファイルが手放されたので、別の作業に使えます。",
+  releaseLink: "ファイルを手放す",
+  releaseHeading: "この作業が押さえているファイルを手放す",
+  releaseLead:
+    "この作業は終わっていますが、ファイルを押さえたままです。あなたが手放すか、変更が既定" +
+    "ブランチで見つかるまで、同じファイルを使う作業は始められません。",
+  releaseWorkHeading: "作業",
+  releaseHoldsHeading: "押さえているファイル",
+  releaseWhyHeading: "rondo が自分で手放していない理由",
+  releaseWhy: [
+    "rondo は、この変更が既定ブランチに入ったと確かめられた時点でファイルを手放します。" +
+      "作業が変えたファイルがすべて、作業が残したとおりの中身で既定ブランチにあることが条件です。" +
+      "確かめるのは、別の作業が同じファイルを求めたときです。",
+    "まだ確かめられていません。まだマージされていない、取り込むときに手が入った" +
+      "（コンフリクトの解消を含む）、別のリモートに送られた、既定ブランチを読めなかった、" +
+      "のどれかです。",
+    "作業が済んだかどうかを決めるのはあなたです。rondo が見分けられない形でマージ済みのとき、" +
+      "またはマージしないと決めたときは、ファイルを手放してください。",
+  ],
+  releaseEffectHeading: "手放すと起きること",
+  releaseEffect: [
+    "別の作業がすぐにこのファイルを使えるようになります。",
+    "ブランチ、プルリクエスト、作業そのものはそのまま残ります。何も消さず、何も閉じません。",
+    "あなたの判断として記録されます。この作業をやり直すと、ファイルはまたこの作業のものになります。",
+  ],
+  releaseAction: "ファイルを手放す",
+  releasePlain:
+    "別の作業がこのファイルを使えるようにし、この作業は済んだというあなたの判断を記録します",
+  releaseBack: "押さえているファイルの画面に戻る",
+  releaseNothingHeld: "この作業はいまファイルを押さえていないので、手放すものはありません。",
+  releaseStillOpen:
+    "この作業の一部がまだ動いているか、あなたのレビューを待っているので、それが終わるまで" +
+    "ファイルは押さえたままです。",
+  releaseRefusedNoApprover:
+    "何も手放していません。この端末の rondo はまだあなたが誰かを知らないので、ここでは" +
+    "あなたとして何も決められません。",
+  releaseRefusedPress:
+    "何も手放していません。これは人がこのページのボタンを押して行うもので、スクリプトからは" +
+    "できません。",
+  releaseRefusedForm:
+    "何も手放していません。そのフォームはこのページのものではありません。読み込み直してから" +
+    "押してください。",
+  releaseRefusedChanged:
+    "何も手放していません。画面を表示したあとで、この作業の状態が変わりました（ファイルが" +
+    "手放された、またはやり直された）。戻っていまの状態を確かめてください。",
+  releaseRefusedNotRecorded:
+    "何も手放していません。rondo があなたの判断を記録できませんでした。ファイルはこの作業が" +
+    "押さえたままです。もう一度押しても安全です。",
+  planHeld: (paths) =>
+    `まだ始められません。別の作業が ${filesJa(paths)} を変更しています。その作業の変更が既定` +
+    "ブランチに入るか、その作業のファイルが手放されれば始められます。",
+  planHeldBy: "押さえている作業",
+  planHeldTry:
+    "その作業は終わっています。開始するときに、まずその変更が既定ブランチに入っているかを確かめます。",
+  startRefusedHeld:
+    "何も開始せず、何も消費していません。必要なファイルを別の作業がまだ押さえていて、その変更は" +
+    "既定ブランチで見つかりませんでした。承認はそのまま有効です。その作業が取り込まれるか、" +
+    "ファイルが手放されたら、もう一度開始してください。",
   publishHeading: "この作業を公開する",
   publishLead:
     "公開すると何が起きるかを、いまの状態から読み取って示します。下のボタンを押すまで、何も起きません。",

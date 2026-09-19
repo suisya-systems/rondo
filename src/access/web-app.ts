@@ -693,6 +693,7 @@ export type StartRefusal =
   | "startRefusedNoPlan"
   | "startRefusedNoContinuo"
   | "startRefusedOutside"
+  | "startRefusedHeld"
   | "startRefusedNotAdmitted";
 
 /** What one scoped start came to; `test` is the `ScopeTest` that refused, on `startRefusedOutside`. */
@@ -995,7 +996,57 @@ export class PublishPort {
   }
 }
 
-/** The ports the server is handed: the reading half, and the five writers. */
+/**
+ * What one release press names (D-0073 rule 4.3): a lap of the line, and the
+ * claim and laps the screen was drawn over, so a press over a line that moved
+ * since -- released, retried, or taken back -- releases nothing. The person
+ * typed none of it.
+ */
+export interface ReleaseInput {
+  readonly iterationId: string;
+  readonly claimId: string;
+  readonly lapIds: readonly string[];
+}
+
+/** Why a release press released nothing, as the wording key the page says it in. */
+export type ReleaseRefusal = "releaseRefusedChanged" | "releaseRefusedNotRecorded";
+
+export interface Released {
+  readonly ok: boolean;
+  readonly note: string;
+  readonly why?: ReleaseRefusal;
+}
+
+/** Release one line's files, as the person's judgement that its work is done. */
+export type ReleaseFromWeb = (input: ReleaseInput) => Promise<Released>;
+
+/**
+ * The sixth thing this surface may write (D-0073 rule 4.3, rondo#288): a
+ * line's files released by a person, which the ledger records as theirs.
+ *
+ * **The check is inside this capability**, as it is in every port above: whoever
+ * holds this object releases nothing without a press {@link mintPress} minted
+ * and nobody has spent. Its own class, because ending a claim is not answering
+ * a gate or publishing, and a holder of those must not be able to do it.
+ */
+export class ReleasePort {
+  readonly #release: ReleaseFromWeb;
+
+  constructor(release: ReleaseFromWeb) {
+    this.#release = release;
+  }
+
+  /** Release one line's files, on one press. */
+  async release(press: Press, input: ReleaseInput): Promise<Released> {
+    if (!minted.has(press)) {
+      return { ok: false, note: "nothing was released: this was not a person's press" };
+    }
+    minted.delete(press);
+    return await this.#release(input);
+  }
+}
+
+/** The ports the server is handed: the reading half, and the six writers. */
 export interface ServedPorts extends WebPorts {
   /**
    * Null when `RONDO_APPROVER` is unset, which is also when no button is drawn
@@ -1023,6 +1074,11 @@ export interface ServedPorts extends WebPorts {
    * carries, so a host that named none draws no publish screen (rondo#233 S5).
    */
   readonly publish: PublishPort | null;
+  /**
+   * Null on {@link revise}'s condition: a release is recorded as the person's
+   * judgement, so it needs an actor the allowlist accepts (D-0073 rule 4.3).
+   */
+  readonly release: ReleasePort | null;
 }
 
 /**
@@ -1118,6 +1174,13 @@ const START_PLAN_ROUTE = "/start-plan";
 const PUBLISH_ROUTE = "/publish";
 
 /**
+ * The route that releases the files a finished line holds (D-0073 rule 4.3,
+ * rondo#288). A press, as every approval is, and pressed only from the screen
+ * that says which work holds them and why rondo has not let go of them.
+ */
+const RELEASE_ROUTE = "/release";
+
+/**
  * The routes whose body is numbers and minted ids and never prose, and so take
  * {@link MAX_FORM_BYTES} rather than the send limit.
  */
@@ -1128,6 +1191,7 @@ const PRESS_ROUTES: ReadonlySet<string> = new Set([
   RAISE_ROUTE,
   START_PLAN_ROUTE,
   PUBLISH_ROUTE,
+  RELEASE_ROUTE,
 ]);
 
 /** A whole count of at least 0, as a form posts one, or null when it is not one. */
@@ -1359,6 +1423,10 @@ function viewOf(query: URLSearchParams): PageView {
   if (publishing !== null && publishing !== "") {
     return { kind: "publish", iterationId: publishing };
   }
+  const releasing = query.get("release");
+  if (releasing !== null && releasing !== "") {
+    return { kind: "release", iterationId: releasing };
+  }
   return query.get("reading") === "open" ? { kind: "reading" } : { kind: "summary" };
 }
 
@@ -1386,14 +1454,15 @@ function said(c: Context<PageEnv>, status: 400 | 403 | 404 | 409 | 413 | 421 | 5
  * `POST /`, the lap-end `approve` press, the two sends, `POST /request`
  * and `POST /reply`, the question's answer on a press, `POST /answer-ask`, the
  * scope screen's two presses, `POST /scope` and `POST /start`, the gate's
- * other answer, `POST /revise`, and the one write that leaves this machine,
- * `POST /publish`. `test/access/web-app.test.ts` enumerates `app.routes` and
+ * other answer, `POST /revise`, the one write that leaves this machine,
+ * `POST /publish`, and the release of a finished line's files, `POST /release`.
+ * `test/access/web-app.test.ts` enumerates `app.routes` and
  * fails on any other non-`GET` entry.
  */
 export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
   // The writer is taken off before anything reading is handed the rest, so
   // the renderer does not hold it at runtime either (D-0041 rule 4).
-  const { answer, say, scope, revise, publish, ...reading } = ports;
+  const { answer, say, scope, revise, publish, release, ...reading } = ports;
   const app = new Hono<PageEnv>();
   tokens.set(app, token);
 
@@ -2050,6 +2119,46 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     );
   });
 
+  // **The release press** (D-0073 rule 4.3, rondo#288): the files a finished
+  // line holds, given up on the person's judgement that its work is done. The
+  // claim and laps the screen was drawn over are carried, so a line that moved
+  // under the screen releases nothing (the store's own staleness test).
+  app.post(RELEASE_ROUTE, async (c) => {
+    if (release === null) {
+      return releaseRefused(c, 403, "releaseRefusedNoApprover", null);
+    }
+    const form = await c.req.parseBody();
+    const iterationId = typeof form["iteration"] === "string" ? form["iteration"] : "";
+    const minting = mintPress(c, form["token"]);
+    if (!("press" in minting)) {
+      return releaseRefused(c, minting.status, "releaseRefusedPress", iterationId);
+    }
+    const claimId = form["claim"];
+    const laps = form["laps"];
+    if (
+      iterationId === "" ||
+      typeof claimId !== "string" ||
+      claimId === "" ||
+      typeof laps !== "string" ||
+      laps === ""
+    ) {
+      return releaseRefused(c, 400, "releaseRefusedForm", iterationId);
+    }
+    const released = await release.release(minting.press, {
+      iterationId,
+      claimId,
+      lapIds: laps.split(" "),
+    });
+    if (!released.ok) {
+      return releaseRefused(c, 409, released.why ?? "releaseRefusedNotRecorded", iterationId);
+    }
+    // The summary, anchored at the line's row, which now says its files are free.
+    return c.redirect(
+      `${viewHref({ kind: "summary" }, tagOf(c))}#${encodeURIComponent(`lap-${iterationId}`)}`,
+      303,
+    );
+  });
+
   /**
    * Whether the thread already holds exactly this operator message.
    *
@@ -2277,6 +2386,28 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
         wording.lang,
       ),
       wording.publishBack,
+    );
+  }
+
+  function releaseRefused(
+    c: Context<PageEnv>,
+    status: 400 | 403 | 409,
+    why: "releaseRefusedNoApprover" | "releaseRefusedPress" | "releaseRefusedForm" | ReleaseRefusal,
+    iterationId: string | null,
+  ) {
+    const wording = wordingOf(c);
+    return pressRefused(
+      c,
+      status,
+      wording.releaseAction,
+      wording[why],
+      viewHref(
+        iterationId === null || iterationId === ""
+          ? { kind: "summary" }
+          : { kind: "release", iterationId },
+        wording.lang,
+      ),
+      wording.releaseBack,
     );
   }
 

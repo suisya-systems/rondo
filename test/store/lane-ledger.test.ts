@@ -357,3 +357,76 @@ test("one repository spelled two ways is one ledger: a trailing '/' or a '.' seg
   }
   expect(claims().map((row) => row["repository"])).toEqual(["/srv/repo"]);
 });
+
+test("the ledger as the page reads it: what each line holds, whether it is in flight, and who released it (rule 12)", async () => {
+  const { connection, store } = fresh();
+  // Holding and in flight; holding and finished; landed (released by a
+  // reading); released by a person; ended with nothing to land.
+  await reserved(store, input("run", { claim: asking(["src/run/"]) }));
+  await reserved(store, input("kept", { claim: asking(["src/kept/"]) }));
+  await walk(store, "kept", "closed");
+  await reserved(store, input("landed", { claim: asking(["src/landed/"]) }));
+  await walk(store, "landed", "closed");
+  expect(
+    await store.releaseLane({
+      iterationId: "landed",
+      takenOver: { claimId: "landed:1", lapIds: ["landed"] },
+      authorKind: "drafter",
+      authorId: LANE_LEDGER_AUTHOR,
+      bases: [],
+      nowMs: 9,
+    }),
+  ).toEqual({ kind: "released", lineageId: "landed" });
+  await reserved(store, input("pressed", { claim: asking(["src/pressed/"]) }));
+  await walk(store, "pressed", "closed");
+  expect((await store.releaseLane(press("pressed"))).kind).toBe("released");
+  await reserved(store, input("gone", { claim: asking(["src/gone/"]) }));
+  expect((await store.transition("gone", "planned", "abandoned", { reason: "x" }, 5)).kind).toBe(
+    "transitioned",
+  );
+  // A line from before the ledger, in flight, holds the whole repository of
+  // its own; another repository's, so nothing above is refused over it.
+  connection
+    .prepare(
+      "INSERT INTO iteration (id, status, request, plan, plan_digest, attempts, identifiers_spent, " +
+        "supersedes_iteration_id, created_at_ms, updated_at_ms) VALUES (?, ?, 'r', ?, 'x', 1, 1, NULL, 1, 1)",
+    )
+    .run("old", "awaiting_human", JSON.stringify({ repository: "/srv/other/." }));
+
+  const byLine = new Map((await store.laneLedger()).map((line) => [line.lineageId, line]));
+  expect(byLine.get("run")).toEqual({
+    lineageId: "run",
+    repository: REPOSITORY,
+    claimId: "run:1",
+    paths: ["src/run/"],
+    lapIds: ["run"],
+    inFlight: true,
+    closedTips: [],
+    releasedBy: null,
+  });
+  expect(byLine.get("kept")).toMatchObject({
+    paths: ["src/kept/"],
+    inFlight: false,
+    closedTips: ["kept"],
+    releasedBy: null,
+  });
+  expect(byLine.get("landed")).toMatchObject({
+    claimId: "landed:2",
+    paths: [],
+    closedTips: ["landed"],
+    releasedBy: "rondo",
+  });
+  expect(byLine.get("pressed")).toMatchObject({ paths: [], releasedBy: "person" });
+  expect(byLine.get("gone")).toMatchObject({ paths: [], closedTips: [], releasedBy: "rondo" });
+  expect(byLine.get("old")).toEqual({
+    lineageId: "old",
+    repository: "/srv/other",
+    claimId: null,
+    paths: ["/"],
+    lapIds: ["old"],
+    inFlight: true,
+    closedTips: [],
+    releasedBy: null,
+  });
+  expect(byLine.size).toBe(6);
+});

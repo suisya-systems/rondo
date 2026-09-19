@@ -13365,6 +13365,23 @@ answer" below. Supersedes `D-0057`. Refs rondo#172, `D-0057`, `D-0054`, `D-0041`
 >   would be refused. Nothing above is edited, and rondo#233's writes are now the whole of what this
 >   page can do.
 
+> **Annotation (2026-09-20, from rondo#288, releasing a finished line's files from the page).**
+> Added under the same answer of rondo's human gate as the annotations above -- every write the page
+> adds beyond section 5a's table is a press, recorded as a row added to that table -- and additive.
+> - **Section 5a's table gains a row: releasing the files a finished line keeps, on one press**
+>   (`POST /release`). `D-0073` rule 4.3 already decided that this press exists, that it writes a
+>   claim row of no paths authored by the person (`author_kind` `operator`), and that the actor is
+>   the approver; this row decides only that it is also on the page. Its own port and its own brand
+>   check (`ReleasePort`): ending a claim is not answering a gate or publishing, and a holder of those
+>   ports must not be able to do it.
+> - **The screen is the press's precondition**, as for `publish`: it names the work by its request,
+>   says how each attempt ended, what files it keeps, why rondo has not released them itself and what
+>   releasing does and does not do. The form carries the in-force claim and the laps it was drawn
+>   over, and the store refuses a release whose line moved since (released already, or retried and
+>   holding again), so a stale screen releases nothing.
+> - **Only a line with no lap in flight is offered it**, which is the store's own refusal: a line at
+>   its gate keeps its files until it ends (`D-0073` rule 10). Nothing above is edited.
+
 `D-0057` priced four frameworks by **the lines they take over** (96 of 1,233) and by **whether the
 served bytes can still be checked without a build**, and kept the page hand-written. It never asked
 whether the screen an operator looks at reaches the level engineers now hold a developer tool to.

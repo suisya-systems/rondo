@@ -154,6 +154,9 @@ import {
   PublishPort,
   type PublishRefusal,
   type RaiseInput,
+  type Released,
+  type ReleaseInput,
+  ReleasePort,
   type Revised,
   type ReviseInput,
   RevisePort,
@@ -1894,6 +1897,15 @@ export async function main(
         // free from their minted ids (`newScopeId`, `newIterationId`), which
         // are null exactly when their ports are; publish mints nothing, so the
         // condition is written out here instead.
+        // **The press is checked inside this port too** (D-0073 rule 4.3,
+        // rondo#288), null on `revise`'s condition: a release is recorded as
+        // the person's judgement, so it needs an actor the allowlist accepts.
+        release:
+          sender === null || "refusal" in sender
+            ? null
+            : new ReleasePort(
+                async (input) => await releaseFromPage(environment, store, sender.actorId, input),
+              ),
         publishing:
           sender === null || "refusal" in sender || asked === null
             ? null
@@ -4876,6 +4888,9 @@ async function startSplit(
       };
     case "outside":
     case "undecidable":
+    // Held files are attempted too: the attempt is where a holding line's
+    // landing is read (D-0073 rule 7), and `reserve()` refuses what still holds.
+    case "held":
     case "ready": {
       const run = await draftedPlanRun(
         { record },
@@ -5514,7 +5529,9 @@ async function admitScopedPlan(
   if (outcome.report.iterationId === null) {
     return {
       ok: false,
-      why: "startRefusedNotAdmitted",
+      // Refused by files another line holds (D-0073 rule 3.1), said as that.
+      why:
+        outcome.report.laneRefusal === undefined ? "startRefusedNotAdmitted" : "startRefusedHeld",
       note: outcome.report.lines.join("\n"),
     };
   }
@@ -7795,6 +7812,45 @@ async function commandRelease(
       "take them; this line takes them back only if it is retried.",
   );
   return 0;
+}
+
+/**
+ * One press of the page's *release* button: {@link commandRelease} over the
+ * claim and laps the screen was drawn over (D-0073 rule 4.3, rondo#288).
+ *
+ * **What was shown is what is released.** The store refuses when the line's
+ * in-force claim or its laps moved since the screen read them -- released
+ * already, retried and holding again -- so a stale screen releases nothing
+ * rather than a claim the person never saw. The actor is checked against the
+ * approver as every press is, and the row is theirs (`operator`).
+ */
+export async function releaseFromPage(
+  environment: Readonly<Record<string, string | undefined>>,
+  store: IterationStore,
+  approver: string,
+  input: ReleaseInput,
+): Promise<Released> {
+  const actor = approvedActor(approver, environment);
+  if ("refusal" in actor) {
+    return { ok: false, why: "releaseRefusedNotRecorded", note: actor.refusal };
+  }
+  const outcome = await store.releaseLane({
+    iterationId: input.iterationId,
+    takenOver: { claimId: input.claimId, lapIds: input.lapIds },
+    authorKind: "operator",
+    authorId: actor.actorId,
+    bases: [{ form: "iteration", iterationId: input.iterationId }],
+    nowMs: Date.now(),
+  });
+  switch (outcome.kind) {
+    case "released":
+      say(`Released the paths line ${outcome.lineageId} held, on a press from the page.`);
+      return { ok: true, note: "" };
+    case "refused":
+      return { ok: false, why: "releaseRefusedChanged", note: outcome.reason };
+    default:
+      return { ok: false, why: "releaseRefusedNotRecorded", note: outcome.reason };
+  }
 }
 
 async function commandAbandon(

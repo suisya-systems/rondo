@@ -10,15 +10,18 @@
  * the scope's verdict for exactly the act the button would take -- and writes
  * nothing.
  *
- * ponytail: a lane-claim collision (D-0073 rule 3.1) is not a reason here yet:
- * `reserve()` refuses it as the backstop and the press reports it, and drawing
- * it as a reason is the screen's half of the ledger, not built.
+ * **Files another line holds are a reason and not a verdict** (D-0073 rules 3.1
+ * and 7): `held` names each holding line, and a line with no lap in flight may
+ * have landed unread -- its landing is read when a start is attempted -- so the
+ * page still draws the press there, beside the reason. `reserve()` stays the
+ * backstop either way.
  */
 
 import { type RunPlan, readRunPlan } from "../refrain/plan.js";
 import type { HostPolicy } from "../refrain/policy.js";
+import { repositoryKey, sharedPaths, WHOLE_REPOSITORY } from "../store/lanes.js";
 import { canonicalJson } from "../store/plan.js";
-import type { AdvisoryRecord, IterationStore } from "../store/sqlite.js";
+import type { AdvisoryRecord, IterationStore, LedgerLine } from "../store/sqlite.js";
 import { ISSUES_QUOTE_OPENING } from "./issue-read.js";
 import { type DraftedPlanRun, draftedPlanRun } from "./model-drafter.js";
 import { gatherScopeSnapshot, type ScopeReadPorts, scopeVerdict } from "./scope.js";
@@ -37,6 +40,15 @@ export type DraftedStartReadiness =
   | { readonly kind: "busy"; readonly occupying: number; readonly limit: number }
   /** As many laps are open as this host allows (D-0023). */
   | { readonly kind: "full"; readonly live: number; readonly limit: number }
+  /**
+   * Open lines of the same repository hold files this plan would claim
+   * (D-0073 rule 3.1): each line, and the asked paths it holds.
+   */
+  | {
+      readonly kind: "held";
+      readonly run: Extract<DraftedPlanRun, { kind: "runnable" }>;
+      readonly holders: readonly { readonly line: LedgerLine; readonly paths: readonly string[] }[];
+    }
   /** The scope's own verdict for this start: which test, and its reason. */
   | { readonly kind: "outside"; readonly test: string; readonly reason: string }
   /**
@@ -51,7 +63,7 @@ export type DraftedStartReadiness =
 export interface DraftedStartPorts {
   readonly store: Pick<
     IterationStore,
-    "read" | "readingsFor" | "readLive" | "terminalIterations" | "occupancy"
+    "read" | "readingsFor" | "readLive" | "terminalIterations" | "occupancy" | "laneLedger"
   >;
   readonly record: ScopeReadPorts["record"] &
     Pick<AdvisoryRecord, "readProposal" | "heldAgentType">;
@@ -111,9 +123,24 @@ export async function draftedStartReadiness(
     },
     gathered.snapshot,
   );
-  return verdict.kind === "inside"
-    ? { kind: "ready", run }
-    : { kind: verdict.kind, test: verdict.test, reason: verdict.reason };
+  if (verdict.kind !== "inside") {
+    return { kind: verdict.kind, test: verdict.test, reason: verdict.reason };
+  }
+  const holders = heldBy(await ports.store.laneLedger(), run);
+  return holders.length === 0 ? { kind: "ready", run } : { kind: "held", run, holders };
+}
+
+/** The open lines of the plan's repository holding a path its claim asks for. */
+function heldBy(
+  ledger: readonly LedgerLine[],
+  run: Extract<DraftedPlanRun, { kind: "runnable" }>,
+): readonly { readonly line: LedgerLine; readonly paths: readonly string[] }[] {
+  const repository = repositoryKey(run.repository);
+  const asked = run.claim?.paths ?? [WHOLE_REPOSITORY];
+  return ledger.flatMap((line) => {
+    const paths = line.repository === repository ? sharedPaths(asked, line.paths) : [];
+    return paths.length === 0 ? [] : [{ line, paths }];
+  });
 }
 
 /**
