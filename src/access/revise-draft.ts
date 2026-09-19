@@ -111,6 +111,8 @@ const INSTRUCTIONS = [
 function carried(material: ReviseMaterial): string[] {
   return [
     ...material.reading.findings,
+    // Bases are the reviewer's strings too, rendered into FINDINGS.
+    ...(material.reading.graded ?? []).flatMap((g) => g.bases.map(findingBasisText)),
     material.prompt ?? "",
     ...material.earlier.flatMap((lap) => [
       lap.prompt ?? "",

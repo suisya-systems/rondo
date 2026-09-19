@@ -104,7 +104,14 @@ document.addEventListener("input", (event) => {
   if (event.target instanceof HTMLTextAreaElement && event.target.dataset.draft !== undefined) {
     const emptied = event.target.value === "";
     store.set(draftKey(event.target), emptied ? null : event.target.value);
-    store.set(drewKey(event.target), emptied ? null : event.target.defaultValue);
+    // What was drawn when the person began, kept until they empty the box:
+    // editing words put back over a later draft must not make that draft
+    // look like the one they began from.
+    if (emptied) {
+      store.set(drewKey(event.target), null);
+    } else if (store.get(drewKey(event.target)) === null) {
+      store.set(drewKey(event.target), event.target.defaultValue);
+    }
   }
 });
 
