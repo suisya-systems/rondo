@@ -2290,14 +2290,17 @@ test("the operator's language is read off the host, and a tag that is not one is
   }
 });
 
-test("a wording set is merged over English, so a missing string is the English one", () => {
-  // Rule 9, which is what makes a partial translation shippable: the set is
-  // complete because the fallback completes it, and a screen added with `en`
-  // wording only renders English inside an otherwise Japanese page rather than
-  // blocking on somebody finishing the translation.
+test("a wording set is whole in its own language, and no string is the English one", () => {
+  // D-0079, which withdrew D-0055 rule 9: a set is a whole `Chrome` rather than
+  // overrides merged over English, so a missing key is a type error. What the
+  // type cannot see is an English string pasted into the Japanese set to make
+  // it compile, and that is what this catches.
   const ja = chromeFor("ja");
   for (const key of Object.keys(EN) as (keyof Chrome)[]) {
     expect(ja[key], `the ja set has no value for '${key}'`).toBeDefined();
+    if (typeof EN[key] === "string" && key !== "lang") {
+      expect(ja[key], `the ja set's '${key}' is the English string`).not.toBe(EN[key]);
+    }
   }
   // And the tokens the entry names stay ASCII inside the Japanese sentences
   // that frame them (rule 3).

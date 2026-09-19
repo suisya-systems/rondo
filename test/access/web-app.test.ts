@@ -1343,7 +1343,7 @@ test("(claim) a claim refused past the port is said in the press's language, nev
   const { base, stop, closed } = await served(createApp(ports, TOKEN));
   for (const [lang, words] of [
     ["en", "This gate was already answered"],
-    ["ja", "このゲートはすでに回答済み"],
+    ["ja", "ゲートがすでに回答済み"],
   ] as const) {
     const refused = await send(base, `/?lang=${lang}`, "POST", pressHeaders(base), {
       ...FORM,

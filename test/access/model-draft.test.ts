@@ -158,8 +158,15 @@ test("a message that prints a fence cannot move one: the delimiter is one no han
   expect(document).not.toContain("@@RONDO-0@@ BEGIN");
 });
 
-test("the language the host's operator reads is asked for by its tag", () => {
-  expect(drafterDocument({ ...MATERIAL, language: "ja" })).toContain("the language tagged 'ja'");
+test("the language the host's operator reads is asked for by its tag, prompts included", () => {
+  // rondo#159 part 1 (D-0079): a lap's prompt is what the person reads at its
+  // gate, so with a language set it is in that language rather than the
+  // template's; with none set, the template's language stands.
+  const asked = drafterDocument({ ...MATERIAL, language: "ja" });
+  expect(asked).toContain("the question and each prompt in the language tagged 'ja'");
+  expect(asked).toContain("do not\ncompose in English and translate");
+  expect(asked).not.toContain("its template's prompt is written in");
+  expect(drafterDocument(MATERIAL)).toContain("its template's prompt is written in");
 });
 
 test("nothing is handed over for a request that is not an operator's opening message, or for material over the bound", () => {

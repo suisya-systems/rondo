@@ -116,6 +116,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0076 | Who the page is written for: the person who asked for the work and judges it, who knows their own repository and not rondo; rondo's own words, identifiers and failures never reach them as themselves, and what they cannot use is not shown | accepted |
 | D-0077 | The organisation drafts the revise instruction: the model drafter runs once a model reading with findings lands, its draft quotes every finding because rondo renders the quotes from the reading and only the drafter's words are the model's, and an unavailable draft leaves the person an empty box and a sentence, never a deterministic fallback | accepted |
 | D-0078 | What a lap knows of the issue it is sent to fix: rondo reads the issue outside the lap when the person's message names it, records what it read in the request thread, and carries it into the prompt quoted, so the lap stays closed to the forge and the person never has to copy an issue into a request | accepted |
+| D-0079 | Composed in the language, not translated into it: every wording set is a whole catalogue and none is another's diff, what a lap and its drafter write for the person is asked for as composed in the person's language, and English is written only where the repository requires it | accepted |
 
 ---
 
@@ -9596,6 +9597,11 @@ At rondo `42148b5` on **2026-09-12**, by reading the tree.
 > the other half of. **This entry is not superseded**, and the second residual below -- *rondo's own
 > vocabulary in the operator's language* -- is the subject `D-0055` takes up.
 
+> **Annotation (2026-09-20, from D-0079).** Added after this entry was accepted, and additive:
+> nothing below is removed or rewritten. **Rule 7's sentence now asks the worker to think and write in
+> the asked language from the start, and not to compose in English and translate** (`D-0079` section
+> 2.1). It still names the tag and nothing else and is still ASCII.
+
 The first real look at the operator page reported back: *"maybe it is hard to read because it is
 English"*. That is a legibility finding and not a preference -- the page's whole job is that one
 person can answer in one look -- and it narrowed on the same day to something much smaller than
@@ -10188,6 +10194,15 @@ the properties rules 2, 3, 6 and 7 assert.
 > force where a string is typed or its spelling refused. **The terminal keeps rule 2 as written.**
 > The falsifier "prose that is a token to somebody else" is recorded as having fired the other way on
 > 2026-09-19 (rondo#259): tokens kept for a reader who was not there. Nothing below is edited.
+
+> **Annotation (2026-09-20, from D-0079), and not additive.** Added after this entry was accepted, by
+> the answer of rondo's human gate to `D-0079`'s seventh point. **Rule 9 is withdrawn**: every set is a
+> whole `Chrome` and none is merged over English, so a string missing from a set is a type error and
+> never the English one (`D-0079` section 1). English stays the floor for a tag no set is written for
+> (`D-0056` rule 2). Rule 9's cost sentence stands and grows: a third language is now a whole set.
+> Every other rule is read as written, and **this entry is not superseded**. Nothing below is edited.
+> The line drawn here between an annotation and a supersession follows the precedents of `D-0076`,
+> `D-0074` and `D-0073` rather than the letter of `AGENTS.md`, a difference tracked on rondo#273.
 
 `D-0053` cut the page's text in two and the operator confirmed the cut on the screen it was made on:
 `awaiting_human`, `waiting 2m`, English, fine. Then the operator opened `/?reading=open` -- the fold
@@ -12636,6 +12651,10 @@ follows them.
 acceptance, as that entry's third gate answer requires. Two points were put to the gate and it chose
 the recommended option on both; see "What was put to the human gate, and its answer". Refs `D-0009`, `D-0019`, `D-0020`, `D-0022`,
 `D-0029`, `D-0032`, `D-0034`, `D-0036`, `D-0061`, `D-0062`, `D-0064`.
+
+> **Annotation (2026-09-20, from D-0079).** Added after this entry was accepted, and additive:
+> nothing below is removed or rewritten. **Rule 4.2**: with an operator language set, the prompt of a
+> drafted plan is written in that language rather than its template's (`D-0079` section 2.2).
 
 **This entry decides and does not build.** Nothing in `src/` changes with it.
 
@@ -15647,6 +15666,11 @@ The points are kept as put, and the answer follows them.
 > answers and the 2026-09-19 annotation from rondo#238's stage 2 build are not retired with it**: they
 > are carried as written and are still cited as `D-0071` section N. Nothing below is edited.
 
+> **Annotation (2026-09-20, from D-0079).** Added after this entry was accepted, and additive:
+> nothing below is removed or rewritten. With an operator language set, the drafter writes the summary,
+> the question and each prompt in it, and is asked to compose in it rather than translate (`D-0079`
+> section 2.2); with none set, a prompt stays in its template's language.
+
 Three points were put to the gate and it chose the recommended option on each; the answers are
 recorded at the end of "What was put to the human gate, and its answer" directly below. Refs
 `D-0009`, `D-0010`,
@@ -18097,3 +18121,206 @@ Each dated and additive, and added with this entry's acceptance:
 - **continuo's worker fence at the pin allowing a forge read**, which would make section 1.2's "the
   lap stays closed" untrue as measured.
 - Any measurement in "What was measured" failing to reproduce at rondo `207c8be`.
+
+## D-0079 — Composed in the language, not translated into it: every wording set is a whole catalogue and none is another's diff, what a lap and its drafter write for the person is asked for as composed in the person's language, and English is written only where the repository requires it
+
+**Status:** accepted (2026-09-20, rondo's human gate, on rondo#257). Seven points were put to the gate
+through the window and it chose the recommended option on each; the answers are recorded in "What was
+put to the human gate, and its answer". Refs `D-0053`,
+`D-0055`, `D-0056`, `D-0063`, `D-0071`, `D-0076`, rondo#257, rondo#159.
+
+**This entry decides and builds.** The building change is the pull request that carries it:
+`src/access/wording.ts`, `src/access/model-draft.ts` and `src/continuo/invoker.ts`, with their tests.
+The rule on where English is written (section 4) is decided here and built elsewhere.
+
+**Numbering.** `D-0079` is the next number after `D-0078` on `main` at `6722974`.
+
+**Why an entry is needed at all.** rondo#257: when a language is asked for, rondo and everyone working
+inside it think in English and translate at the end, and a translation made at the end is English
+wearing the asked language's words -- the clause order, the rhetorical moves and the subject slot
+survive the substitution. The issue measured it on the publish screen's Japanese, which an operator
+read on 2026-09-19. The order is also fixed in the code: `D-0055` rule 9 made every set but English a
+`Partial<Chrome>` merged over `en`, so **English is the original and every other language its diff**,
+and a writer filling in the Japanese set is looking at an English line and producing a counterpart to
+it. Rule 9 is an accepted rule, so reversing it is an entry and not a refactor.
+
+### What was measured, and how
+
+At rondo `6722974` on **2026-09-20**, by reading and by a script over `src/access/wording.ts`. Line
+numbers drift; re-measure the claim, not the number.
+
+- **The Japanese set was already whole.** `Chrome` declares 462 members; `EN` defines 462 and `JA`
+  defines 462. So `D-0055` rule 9's fallback supplied nothing on the day it was withdrawn. What it
+  still did was structural: a key added to `Chrome` could ship with `en` wording only, and the
+  `Partial` type made writing the English first and the Japanese after it the path that compiles.
+- **One Japanese string was the English bytes**: the inbox's new mark, `"  NEW"`. It is now `"  新着"`.
+- **The subject-slot marker.** Sentence-initial 「これは」/「この〜は」 -- the residue of an English
+  `This X is ...` -- occurred **39 times in 12,146 CJK characters of the `ja` set, 32.1 per 10k**,
+  against the tolerance of 6 and the same-genre reference of 2.4 that rondo#257 cites. After this
+  entry's rewrite it is **1 in 12,086, 0.8 per 10k**, and the one hit is 「このままでは」, a Japanese
+  idiom and not a carried subject. The seven strings rondo#257 quotes had already been rewritten on
+  2026-09-19 and were not present at `6722974`.
+- **The lap's prompt was in the template's language.** The drafter's document said "Write each prompt
+  in the language its template's prompt is written in" whatever the operator's language
+  (`src/access/model-draft.ts`), so with templates written in English, the largest block on the gate
+  screen reached a Japanese reader in English (rondo#159 part 1).
+- **The worker's ask named writing back, not composing.** `materialLanguageSentence` asked the worker
+  to "write everything you write back for them in that language" (`src/continuo/invoker.ts`), which
+  names the output and leaves the composing language open.
+
+### 1. Every set is a whole catalogue
+
+1.1. **Each shipped set is a complete `Chrome`**, typed as `Chrome` and not `Partial<Chrome>`. The
+     selection returns the set itself; nothing is merged over English. A key added to `Chrome` is a
+     type error in every set until each set says it.
+
+1.2. **No set's string is another set's bytes** unless it is a token (`D-0055` rule 3), and the
+     suite checks the one case the type cannot see: a Japanese string that is the English string,
+     pasted in to make the set compile.
+
+1.3. **A Japanese string is written from what the key is for, not from its English line.** Where a
+     sentence that carries meaning in English has no Japanese counterpart worth writing, the Japanese
+     set says what the reader needs instead, or nothing (rondo#257's `that is still yours`).
+
+1.4. **`en` stays the floor of the resolution** (`D-0056` rule 2): a well-formed tag no set is written
+     for still yields `en`, and `lang` still names what was selected (`D-0055` rule 7). What is
+     withdrawn is English as the base of *other* sets, not English as the answer for a tag nobody
+     wrote a set for.
+
+### 2. The asks say to compose in the language
+
+2.1. **The worker's sentence asks it to think and write in the asked language from the start, and
+     not to compose in English and translate.** It still names the reader and not a field (rondo#159
+     part 2), still names the tag and nothing else, and is still ASCII (`D-0053` rule 7). Whether a
+     worker composed rather than translated is **not checkable from the bytes**; the sentence is the
+     ask, as `D-0053` rule 8 says of the record.
+
+2.2. **With an operator language set, the drafter writes the summary, the question and every lap
+     prompt in it**, and is told to compose in it rather than translate. A lap's prompt is the largest
+     block the person reads at the gate, so it is written for the person; the worker reads it too,
+     and reads the asked language. **With none set, a prompt stays in its template's language**, as
+     before: nobody named the reader's language, and the request's language decides the summary and
+     the question.
+
+### 3. What is unchanged
+
+3.1. **Recorded words stay English** (`D-0055` rule 4): claim labels and values a press writes to the
+     ledger are not chrome and are not in any set.
+
+3.2. **The terminal stays English** (`D-0055` rule 10, `D-0004`).
+
+3.3. **Material is still quoted byte for byte** (`D-0053`): rondo never translates what a lap wrote.
+
+### 4. English is written only where the repository requires it
+
+4.1. **Where English is required, it is written there and nowhere earlier**: a pull request's title
+     and body and a GitHub issue, in repositories whose policy is English (rondo's is). Everything the
+     person reads on the page or at a gate is composed in their language.
+
+4.2. **The English at that boundary is its own composition from the meaning**, written once for that
+     reader, and not a sentence-by-sentence translation of the person-facing text.
+
+4.3. **This section is decided here and not built.** How `publish` composes a pull request's body when
+     the lap wrote its report in another language is a separate change (see residuals).
+
+### The options, and the clauses each meets
+
+| Option | 1.1 whole sets | 1.3 written from meaning | Diff now |
+|---|---|---|---|
+| (A) Type each set as `Chrome`, drop the merge | yes | the writer still sees the English set above in the same file | small |
+| (B) (A), plus one file per language | yes | the writer reads the key's description, not English | ~1,700 moved lines, conflicts with a lane in flight |
+| (C) (B), plus every key described by what the reader must learn | yes | yes | 462 descriptions |
+| (D) Keep `Partial` and review translations harder | no | no | none; rondo#257 says fixing one string at a time does not converge |
+
+(A) is built. (B) is a move-only follow-up after the lane touching `src/access/wording.ts` lands, and
+(C) applies to new keys as they are written.
+
+### What this gives up
+
+- **A screen cannot ship until every shipped language says it.** `D-0055` rule 9's reason -- that the
+  prose grows with every screen -- still holds, and is now paid at the time of writing instead of by
+  the reader of a half-English page.
+- **A third language is a whole set**, 462 strings today, before it can be selected at all, instead of
+  a partial set that falls back.
+- **A drafted prompt in a template's language is lost when a language is set**: the drafter composes
+  the prompt in the operator's language from a template written in another, which is the one place
+  this entry itself asks for a translation, because the template is material and not rondo's prose.
+
+### What was put to the human gate, and its answer
+
+Put through the window on 2026-09-20, each with a recommendation.
+
+1. **Withdraw `D-0055` rule 9 (a missing string is the English one)?** Recommended: yes. *Loses:* the
+   two costs in "What this gives up".
+2. **Split the catalogue into one file per language now?** Recommended: not now; a move-only change
+   after the lane in flight on `src/access/wording.ts` lands. *Loses:* until then, (A)'s writer still
+   has the English set above the Japanese one.
+3. **Change the worker's sentence from "write back in" to "think and write in, do not translate"?**
+   Recommended: yes. *Loses:* nothing checkable; it is a sentence.
+4. **With a language set, does the drafter write lap prompts in it (rondo#159 part 1)?** Recommended:
+   yes. *Loses:* the template's language in the prompt, and the worker reads instructions in the
+   asked language.
+5. **Where English is written.** Recommended: decide the rule here (section 4) and build it in a
+   separate issue.
+6. **Rewrite the existing Japanese that carries the English subject slot now?** Recommended: yes, all
+   39.
+
+**The gate's answer (2026-09-20, relayed by the window):** the recommended option on all six. Rule 9
+is withdrawn and this entry records the withdrawal; the file split is a later move-only task; the
+sentence, the drafter's prompts and the 39 rewrites are built with this entry; section 4 is decided
+here and built in a separate issue.
+
+7. **How the withdrawal is recorded on `D-0055`.** It changes what rule 9 asserted, which the
+   append-only rules make a supersession. Superseding all of `D-0055` would retire rules 1 to 8 and 10
+   to 12, which stand. Recommended: **(a) a dated annotation on `D-0055` that says it is not
+   additive**, as `D-0076` did for `D-0055` and `D-0063`, withdrawing rule 9 alone and pointing here.
+   *Loses:* the letter of the append-only rule, which reads such a change as a supersession.
+   **(b) Supersede `D-0055`.** *Loses:* eleven rules that stand would be marked as no longer true.
+
+**The gate's answer to point 7 (2026-09-20, relayed by the window):** (a). The annotation is added with
+this entry's acceptance, and `D-0055` is not superseded. The line this draws between an annotation and
+a supersession follows the precedents of `D-0076`, `D-0074` and `D-0073` rather than the letter of
+`AGENTS.md`; the difference is tracked on rondo#273.
+
+### What this does not do
+
+- **It does not split `src/access/wording.ts`** into per-language files (point 2).
+- **It does not build section 4**: `publish` composing an English pull request body from a report in
+  another language.
+- **It does not translate anything**, and does not check what language a lap's bytes are in
+  (`D-0053`, rondo#159's own scope).
+- **It does not touch the terminal or the ledger's recorded words** (section 3).
+
+### Residuals, with who decides
+
+| Residual | Why not here | Who decides |
+|---|---|---|
+| One file per language, and each key described by its meaning | A lane in flight touches the same file | a move-only follow-up after that lane lands |
+| An English pull request body from a report written in the operator's language | `publish` composes the body today from the lap's words as written | a separate issue building section 4 |
+| Whether workers compose rather than translate when asked | Not checkable from bytes | re-measure the subject-slot marker on laps run with `ja` |
+
+### Annotations this entry adds
+
+Each dated, and added with this entry's acceptance:
+
+- **`D-0055` rule 9**, not additive (point 7 (a)): withdrawn by `D-0079` section 1; a set is a whole
+  `Chrome`, and a missing string is a type error rather than the English one. Rule 9's cost sentence
+  ("a third language is now a rondo diff") stands and grows: a third language is a whole set.
+- **`D-0053` rule 7**: the sentence now asks for composing in the language (`D-0079` section 2.1); it
+  still names the tag and nothing else and is still ASCII.
+- **`D-0063` rule 4.2** and **`D-0071`**: with an operator language set, the drafter writes each
+  prompt in it (`D-0079` section 2.2).
+
+### What would falsify it
+
+- **Japanese that still reads as translation** with whole sets in place: the subject-slot marker back
+  above the tolerance of 6 per 10k on the `ja` set. Option (C) is then due for every key, not only new
+  ones.
+- **A screen held back for a missing translation** often enough that the person waits for wording and
+  not for work: rule 9's argument was right, and the cost in "What this gives up" is too high.
+- **Workers whose prompts in the asked language do worse work** than on English prompts, measured on
+  laps: section 2.2 then moves the prompt back to the template's language and keeps a summary for the
+  person.
+- **Laps asked for `ja` that still write back English, or Japanese carrying the English subject
+  slot**: section 2.1's sentence is not enough, and the ask needs a different shape.
+- Any measurement in "What was measured" failing to reproduce at rondo `6722974`.
