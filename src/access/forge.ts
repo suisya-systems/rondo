@@ -971,13 +971,17 @@ export async function readLanding(request: LandingRequest): Promise<LandingReadi
   const paths = new Set<string>();
   const differing = new Set<string>();
   for (const tip of request.tipCommits) {
+    // Three dots: from where the tip forked off the base, so a base that moved
+    // while the line ran (another line landed, a fetch) is not this line's
+    // work. `--ignore-submodules=none` so a gitlink bump is never hidden by
+    // `.gitmodules` or the person's config.
     const changed = await git([
       "diff",
       "--name-only",
       "-z",
       "--no-renames",
-      request.baseCommit,
-      tip,
+      "--ignore-submodules=none",
+      `${request.baseCommit}...${tip}`,
     ]);
     const changedFailure = queryFailure(changed);
     if (changedFailure !== null) {

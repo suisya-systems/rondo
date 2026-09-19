@@ -596,7 +596,7 @@ export interface IterationStore {
 /** One line of the lane ledger, as {@link IterationStore.laneLine} reads it. */
 export interface LaneLine {
   readonly lineageId: string;
-  /** The in-force claim, or null for a line from before the ledger (which holds `/` while open). */
+  /** The in-force claim, or null for a line from before the ledger (which holds `/` while a lap is in flight). */
   readonly claim: { readonly claimId: string; readonly paths: readonly string[] } | null;
   readonly laps: readonly IterationRecord[];
 }
@@ -2244,32 +2244,22 @@ export function iterationStore(connection: DatabaseSync, policy: HostPolicy): It
               };
             }
           }
-          if (head === null ? !mayBeOpen(shape) : head.paths.length === 0) {
+          // A line from before the ledger holds `/` only while a lap is in
+          // flight (`openLines`), which this press refuses above: past that it
+          // holds nothing, like a line already released.
+          if (head === null || head.paths.length === 0) {
             return {
               kind: "refused",
               reason: "this line holds no paths, so there is nothing to release",
             };
           }
-          const repository =
-            head === null
-              ? (
-                  connection
-                    .prepare(
-                      "SELECT json_extract(plan, '$.repository') AS r FROM iteration WHERE id = ?",
-                    )
-                    .get(root.id) as SqlRow | undefined
-                )?.["r"]
-              : head.repository;
-          if (typeof repository !== "string") {
-            return { kind: "defect", reason: `the line '${root.id}' names no repository` };
-          }
           insertClaim(
             connection,
             {
               lineageId: root.id,
-              repository,
+              repository: head.repository,
               paths: [],
-              supersedesClaimId: head === null ? null : head.claimId,
+              supersedesClaimId: head.claimId,
               authorKind: input.authorKind,
               authorId: input.authorId,
               bases: input.bases,
@@ -5405,10 +5395,37 @@ function toLaneLap(row: SqlRow): LaneLap {
   };
 }
 
-/** The repository a stored plan names, or null when the plan does not say. */
+/**
+ * The repository a stored plan names, as the ledger compares it, or null when
+ * the plan does not say: one place however it is spelled, so a trailing `/`, a
+ * `.` segment or a `\\` separator is not a second repository with a ledger of
+ * its own (D-0073 rule 3, "of one repository").
+ *
+ * ponytail: lexical only. A symlink, a case-insensitive filesystem, or a second
+ * clone of one forge repository is still read as another repository; resolving
+ * those needs the filesystem, which this module does not take.
+ */
 function planRepository(plan: JsonRecord): string | null {
-  const repository = plan["repository"];
-  return typeof repository === "string" && repository !== "" ? repository : null;
+  return repositoryKey(plan["repository"]);
+}
+
+/** {@link planRepository} over a value read out of a stored plan. */
+function repositoryKey(repository: unknown): string | null {
+  if (typeof repository !== "string" || repository === "") {
+    return null;
+  }
+  const segments: string[] = [];
+  for (const segment of repository.split(/[\\/]+/)) {
+    if (segment === "" || segment === ".") {
+      continue;
+    }
+    if (segment === "..") {
+      segments.pop();
+    } else {
+      segments.push(segment);
+    }
+  }
+  return `/${segments.join("/")}`;
 }
 
 /**
@@ -5420,11 +5437,15 @@ function planRepository(plan: JsonRecord): string | null {
  * writes a release (rule 4.3), so a head holding paths is an open line or a
  * missed release, and the second fails closed.
  *
- * **A line admitted before the ledger holds `/` while it is open** (the
- * migration D-0073 left to the building change, answered at rondo#250's gate
- * as rule 2.5's whole repository). It has no claim row at all; it is open while
- * a lap is in flight or it has a closed tip, and it gives the path up when its
- * landing is read or a person releases it, both of which write its first row.
+ * **A line admitted before the ledger holds `/` while a lap of it has not
+ * ended** (the migration D-0073 left to the building change, answered at
+ * rondo#250's gate: rule 2.5's whole repository, for a line in flight or at its
+ * gate only). It has no claim row at all. A pre-ledger line whose laps have all
+ * ended is not open to the ledger, closed tips included: a squash merge hides
+ * whether its work landed, rule 6 cannot read it over the lines that changed
+ * the same files since, and holding it would refuse every admission of a
+ * repository with history. What that gives up: a pre-ledger line closed and not
+ * yet merged can have its paths taken, and the collision is met at merge.
  */
 function openLines(
   connection: DatabaseSync,
@@ -5449,16 +5470,19 @@ function openLines(
       .all()
       .map((row) => String((row as SqlRow)["lineage_id"])),
   );
-  // ponytail: every lap of the repository is read to find the pre-ledger
-  // lines; a column on the iteration row when a store holds enough laps to feel it.
+  // ponytail: every lap in the store is read to find the pre-ledger lines of
+  // this repository; a column on the iteration row when a store holds enough
+  // laps to feel it.
   const laps = (
     connection
       .prepare(
-        "SELECT id, status, supersedes_iteration_id FROM iteration " +
-          "WHERE json_valid(plan) AND json_extract(plan, '$.repository') = ?",
+        "SELECT id, status, supersedes_iteration_id, json_extract(plan, '$.repository') AS r " +
+          "FROM iteration WHERE json_valid(plan)",
       )
-      .all(repository) as SqlRow[]
-  ).map(toLaneLap);
+      .all() as SqlRow[]
+  )
+    .filter((row) => repositoryKey(row["r"]) === repository)
+    .map(toLaneLap);
   const byId = new Map(laps.map((lap) => [lap.id, lap]));
   const rootOf = (lap: LaneLap): string => {
     let current = lap;
@@ -5480,7 +5504,7 @@ function openLines(
     trees.set(root, [...(trees.get(root) ?? []), lap]);
   }
   for (const [root, tree] of trees) {
-    if (root !== exceptLineage && !claimed.has(root) && mayBeOpen(lineShape(tree))) {
+    if (root !== exceptLineage && !claimed.has(root) && lineShape(tree).inFlight) {
       lines.push({ lineageId: root, paths: [WHOLE_REPOSITORY] });
     }
   }

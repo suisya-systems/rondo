@@ -540,11 +540,33 @@ async function readHolder(
       supersedesIterationId: lap.supersedesIterationId,
     })),
   );
-  if (shape.inFlight || shape.closedTips.length === 0) {
+  if (shape.inFlight) {
     return {
       released: false,
       line: `Line ${lineageId} has a lap that has not ended, so it holds its paths until it does.`,
     };
+  }
+  const release = async (bases: readonly string[], said: string) => {
+    const outcome = await lanes.store.releaseLane({
+      iterationId: lineageId,
+      takenOver: { claimId: line.claim?.claimId ?? null, lapIds: line.laps.map((lap) => lap.id) },
+      authorKind: "drafter",
+      authorId: LANE_LEDGER_AUTHOR,
+      bases: bases.map((iterationId) => ({ form: "iteration", iterationId })),
+      nowMs,
+    });
+    return outcome.kind === "released"
+      ? { released: true, line: `${said}, so its paths were released.` }
+      : { released: false, line: `${said}, and its paths were not released: ${outcome.reason}.` };
+  };
+  // Every lap ended and none closed: nothing is owed to the default branch, and
+  // a claim still held here is a release rule 4.3 missed (a settle that could
+  // not write it). It is released now rather than held for a press.
+  if (shape.closedTips.length === 0) {
+    return await release(
+      line.laps.map((lap) => lap.id),
+      `Line ${lineageId} has ended with nothing to land`,
+    );
   }
   const root = line.laps[0];
   const repository = root?.plan["repository"];
@@ -552,26 +574,23 @@ async function readHolder(
   if (root === undefined || typeof repository !== "string" || typeof branch !== "string") {
     return undetermined("its first lap's plan names no repository and base branch");
   }
-  // The lineage's first base, and each closed tip's tip, as the laps' own
-  // readings recorded them: root first, so the first reading with evidence is
-  // the base the line was cut from.
-  let baseCommit: string | null = null;
-  const tipCommits: string[] = [];
-  for (const lap of line.laps) {
-    const evidence = latestReading(
-      await lanes.store.readingsFor(lap.id),
-      isDeterministicReadingDrafter,
-    )?.evidence;
-    baseCommit ??= evidence?.baseCommit ?? null;
-    if (shape.closedTips.includes(lap.id)) {
-      if (evidence === null || evidence === undefined) {
-        return undetermined(`its closed lap ${lap.id} carries no reading of its commits`);
-      }
-      tipCommits.push(evidence.tipCommit);
-    }
-  }
+  // The lineage's first base is the root lap's, and only the root's: a later
+  // lap's reading is taken over its predecessor's branch, and the root's own
+  // changes would fall out of the set. Each closed tip's tip is its own.
+  const evidenceOf = async (iterationId: string) =>
+    latestReading(await lanes.store.readingsFor(iterationId), isDeterministicReadingDrafter)
+      ?.evidence ?? null;
+  const baseCommit = (await evidenceOf(root.id))?.baseCommit ?? null;
   if (baseCommit === null) {
-    return undetermined("no lap of it carries a reading of its base");
+    return undetermined(`its first lap ${root.id} carries no reading of the base it was cut from`);
+  }
+  const tipCommits: string[] = [];
+  for (const tip of shape.closedTips) {
+    const evidence = await evidenceOf(tip);
+    if (evidence === null) {
+      return undetermined(`its closed lap ${tip} carries no reading of its commits`);
+    }
+    tipCommits.push(evidence.tipCommit);
   }
   const landing = await lanes.readLanding({
     repository,
@@ -591,23 +610,10 @@ async function readHolder(
         `${landing.differing.map((path) => `'${path}'`).join(", ")} differ.`,
     };
   }
-  const outcome = await lanes.store.releaseLane({
-    iterationId: root.id,
-    takenOver: { claimId: line.claim?.claimId ?? null, lapIds: line.laps.map((lap) => lap.id) },
-    authorKind: "drafter",
-    authorId: LANE_LEDGER_AUTHOR,
-    bases: shape.closedTips.map((iterationId) => ({ form: "iteration", iterationId })),
-    nowMs,
-  });
-  return outcome.kind === "released"
-    ? {
-        released: true,
-        line: `Line ${lineageId}'s work is on ${lanes.remote}/${branch}, so its paths were released.`,
-      }
-    : {
-        released: false,
-        line: `Line ${lineageId}'s work is on ${lanes.remote}/${branch}, and was not released: ${outcome.reason}.`,
-      };
+  return await release(
+    shape.closedTips,
+    `Line ${lineageId}'s work is on ${lanes.remote}/${branch}`,
+  );
 }
 
 /**

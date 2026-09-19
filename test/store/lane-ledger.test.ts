@@ -244,7 +244,7 @@ test("a released line retried asks back what it gave up, and is tested as a firs
   });
 });
 
-test("a line from before the ledger holds '/' while it is open, and gives it up by a release row of its own", async () => {
+test("a line from before the ledger holds '/' only while a lap of it has not ended (the migration, rondo#250)", async () => {
   const { connection, store, claims } = fresh();
   const legacy = (id: string, status: string, supersedes: string | null = null) =>
     connection
@@ -253,28 +253,32 @@ test("a line from before the ledger holds '/' while it is open, and gives it up 
           "supersedes_iteration_id, created_at_ms, updated_at_ms) VALUES (?, ?, 'r', ?, 'x', 1, 1, ?, 1, 1)",
       )
       .run(id, status, JSON.stringify({ repository: REPOSITORY }), supersedes);
+  // Finished before the ledger, closed tips included: not open to it (a squash
+  // merge hides whether a closed one landed, so holding it would hold for ever).
   legacy("old-done", "abandoned");
-  legacy("old", "closed");
-  expect(await store.reserve(input("new", { claim: asking(["docs/"]) }))).toMatchObject({
+  legacy("old-closed", "closed");
+  legacy("old-gated", "awaiting_human");
+  expect(await store.reserve(input("new", { claim: asking(["docs/"]) }))).toEqual({
     kind: "laneRefused",
-    holders: [{ lineageId: "old", sharedPaths: ["docs/"] }],
+    paths: ["docs/"],
+    holders: [{ lineageId: "old-gated", sharedPaths: ["docs/"] }],
   });
   // A line in flight holds its paths and is not released by a press.
-  legacy("running", "performing");
-  expect((await store.releaseLane(press("running"))).kind).toBe("refused");
+  expect((await store.releaseLane(press("old-gated"))).kind).toBe("refused");
+  // Nor is a finished one, which holds nothing.
+  expect((await store.releaseLane(press("old-closed"))).kind).toBe("refused");
   // Its row predates the ledger and does not decode (no digest), so the hatch ends it.
-  expect((await store.settle("running", "gone", 3)).kind).toBe("settled");
+  expect((await store.settle("old-gated", "gone", 3)).kind).toBe("settled");
   expect(claims()).toEqual([]);
-
-  expect(await store.releaseLane(press("old"))).toEqual({ kind: "released", lineageId: "old" });
-  expect(claims()).toMatchObject([
-    { lineage_id: "old", paths: "[]", supersedes_claim_id: null, author_kind: "operator" },
-  ]);
   await reserved(store, input("new", { claim: asking(["docs/"]) }));
-  // Retrying the released line asks back rule 2.5's whole repository, and `new` holds docs/.
-  expect((await store.reserve(input("old-r2", { supersedesIterationId: "old" }))).kind).toBe(
-    "laneRefused",
-  );
+  // A redo of a pre-ledger line is an allocation of rule 2.5's whole
+  // repository (D-0073 rule 2.5), tested like a first admission.
+  expect(
+    await store.reserve(input("old-r2", { supersedesIterationId: "old-closed" })),
+  ).toMatchObject({
+    kind: "laneRefused",
+    paths: ["/"],
+  });
 });
 
 const press = (iterationId: string) => ({
@@ -341,4 +345,15 @@ test("the capacity ledger still answers its own question beside the claim (rule 
   const store = iterationStore(connection, CONSERVATIVE_HOST_POLICY);
   await reserved(store, input("a", { claim: asking(["a/"]) }));
   expect((await store.reserve(input("b", { claim: asking(["b/"]) }))).kind).toBe("atCapacity");
+});
+
+test("one repository spelled two ways is one ledger: a trailing '/' or a '.' segment is no second repository", async () => {
+  const { store, claims } = fresh();
+  await reserved(store, input("a"));
+  for (const spelling of ["/srv/repo/", "/srv/./repo", "/srv//repo", "/srv/x/../repo"]) {
+    expect((await store.reserve(input(`b-${spelling}`, { repository: spelling }))).kind).toBe(
+      "laneRefused",
+    );
+  }
+  expect(claims().map((row) => row["repository"])).toEqual(["/srv/repo"]);
 });

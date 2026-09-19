@@ -395,8 +395,16 @@ test("an admission that fails after the approval is spent leaves it unspent", as
     throw new Error("the chain did not resolve");
   }
   h.answers.classify = answered("allowed");
-  // Somebody else takes the identity first, by the ordinary door.
-  const taken = await admit(h.ports, h.advisory, PLAN, POLICY, SUCCESSOR);
+  // Somebody else takes the identity first, by the ordinary door -- in a
+  // repository of its own, so the lane ledger does not refuse the retry before
+  // it reaches the spend (D-0073 rule 2.6 asks the released line's paths back).
+  const taken = await admit(
+    h.ports,
+    h.advisory,
+    { ...PLAN, repository: "/srv/elsewhere" },
+    POLICY,
+    SUCCESSOR,
+  );
   expect(taken.iterationId).toBe(SUCCESSOR);
 
   const report = await admit(h.ports, h.advisory, resolved.retry.plan, POLICY, SUCCESSOR, SUBJECT, {
@@ -404,6 +412,8 @@ test("an admission that fails after the approval is spent leaves it unspent", as
     contractDigest: approved,
   });
   expect(report.iterationId).toBeNull();
+  // Refused by the insert, after the spend: the path this test measures.
+  expect(report.lines.join("\n")).toContain("already held by another iteration");
   expect(rowsIn(h.connection, "decision_consumption").length).toBe(0);
   expect((await h.advisory.record.unconsumedDecisions()).map((row) => row.decisionId)).toEqual([
     decisionId,

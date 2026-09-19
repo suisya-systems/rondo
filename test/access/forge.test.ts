@@ -558,3 +558,25 @@ test("a fetch that fails is undetermined, never not landed", async () => {
   const reading = await readLanding(landing(undefined, "nowhere"));
   expect(reading.kind).toBe("undetermined");
 });
+
+test("a base that moved while the line ran is not the line's work: the set is taken from the fork point", async () => {
+  const { work, merger, landing, tipCommit } = landingWorld();
+  // Another line lands a path this one never touched, and the reading is taken after a fetch.
+  writeFileSync(join(merger, "other.txt"), "someone else's\n");
+  git(merger, "commit", "-qam", "another line");
+  git(merger, "push", "-q", "origin", "main");
+  git(work, "fetch", "-q", "origin");
+  const moved = gitOut(work, "rev-parse", "refs/remotes/origin/main");
+  writeFileSync(join(merger, "a.txt"), "changed\n");
+  git(merger, "rm", "-q", "b.txt");
+  writeFileSync(join(merger, "c.txt"), "new\n");
+  git(merger, "add", ".");
+  git(merger, "commit", "-m", "squash (#2)");
+  git(merger, "push", "-q", "origin", "main");
+  expect(
+    await readLanding({ ...landing(), baseCommit: moved, tipCommits: [tipCommit] }),
+  ).toMatchObject({
+    kind: "landed",
+    paths: ["a.txt", "b.txt", "c.txt"],
+  });
+});
