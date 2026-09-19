@@ -598,6 +598,89 @@ test("an approved grandchild retires a scope; drafted and declined successors do
   expect(await record.scopeSupersededByApproved("s-grandchild")).toBe(false);
 });
 
+test("a lap's approval walks to the approved tip of its chain, and a chain with two tips has none (D-0074 rule 2.1)", async () => {
+  const { connection, record } = await approved();
+  // Nothing below it: the approval is its own tip.
+  expect(await record.scopeTip("sd-0001")).toEqual({ kind: "tip", scopeDecisionId: "sd-0001" });
+  expect(await record.scopeTip("sd-none")).toEqual({ kind: "absent" });
+  // A drafted successor moves nothing; approved, it is the tip.
+  await record.recordScope(scope({ scopeId: "s-raise", supersedesScopeId: "s-0001" }));
+  expect(await record.scopeTip("sd-0001")).toEqual({ kind: "tip", scopeDecisionId: "sd-0001" });
+  await record.recordScopeDecision(
+    scopeDecision({ scopeDecisionId: "sd-raise", scopeId: "s-raise" }),
+  );
+  expect(await record.scopeTip("sd-0001")).toEqual({ kind: "tip", scopeDecisionId: "sd-raise" });
+  // Through a declined link to an approved grandchild: the grandchild.
+  await record.recordScope(scope({ scopeId: "s-no", supersedesScopeId: "s-raise" }));
+  await record.recordScopeDecision(
+    scopeDecision({ scopeDecisionId: "sd-no", scopeId: "s-no", outcome: "declined" }),
+  );
+  await record.recordScope(scope({ scopeId: "s-again", supersedesScopeId: "s-no" }));
+  await record.recordScopeDecision(
+    scopeDecision({ scopeDecisionId: "sd-again", scopeId: "s-again" }),
+  );
+  expect(await record.scopeTip("sd-0001")).toEqual({ kind: "tip", scopeDecisionId: "sd-again" });
+  expect(await record.scopeTip("sd-raise")).toEqual({ kind: "tip", scopeDecisionId: "sd-again" });
+  // Two approved tips, written past the writer as a store from before D-0074
+  // could hold them: no tip, and both named.
+  connection
+    .prepare(
+      "INSERT INTO scope (scope_id, payload, scope_digest, supersedes_scope_id, author_kind, " +
+        "author_id, bases, created_at_ms) SELECT 's-fork', payload, scope_digest, 's-0001', " +
+        "author_kind, author_id, bases, created_at_ms FROM scope WHERE scope_id = 's-0001'",
+    )
+    .run();
+  connection
+    .prepare(
+      "INSERT INTO scope_decision (scope_decision_id, scope_id, scope_digest, outcome, actor_id, " +
+        "recorded_by, decided_at_ms) SELECT 'sd-fork', 's-fork', scope_digest, 'approved', " +
+        "actor_id, recorded_by, decided_at_ms FROM scope_decision WHERE scope_decision_id = 'sd-0001'",
+    )
+    .run();
+  const forked = await record.scopeTip("sd-0001");
+  expect(forked.kind).toBe("forked");
+  expect(forked.kind === "forked" ? [...forked.scopeDecisionIds].sort() : []).toEqual([
+    "sd-again",
+    "sd-fork",
+  ]);
+  // Each branch on its own still has one tip.
+  expect(await record.scopeTip("sd-fork")).toEqual({ kind: "tip", scopeDecisionId: "sd-fork" });
+});
+
+test("one approved line per chain: a second branch of an approved scope is refused, at any depth (D-0074 rule 1.3)", async () => {
+  const { record } = await approved();
+  const approve = (scopeId: string) =>
+    record.recordScopeDecision(scopeDecision({ scopeDecisionId: `sd-${scopeId}`, scopeId }));
+  // The control: raising, then raising the raise, records.
+  await record.recordScope(scope({ scopeId: "s-a", supersedesScopeId: "s-0001" }));
+  expect(await approve("s-a")).toEqual({ kind: "recorded" });
+  await record.recordScope(scope({ scopeId: "s-a2", supersedesScopeId: "s-a" }));
+  expect(await approve("s-a2")).toEqual({ kind: "recorded" });
+  // A stale raise of the first approval: its line was already replaced.
+  await record.recordScope(scope({ scopeId: "s-b", supersedesScopeId: "s-0001" }));
+  const stale = await approve("s-b");
+  expect(stale.kind).toBe("refused");
+  expect(stale.kind === "refused" ? stale.reason : "").toMatch(/'s-a2?'/);
+  // Two drafted branches under one approved scope: the one below a drafted
+  // link is refused too, because the approved scope above it already has an
+  // approved descendant.
+  await record.recordScope(scope({ scopeId: "s-draft", supersedesScopeId: "s-a" }));
+  await record.recordScope(scope({ scopeId: "s-c", supersedesScopeId: "s-draft" }));
+  expect((await approve("s-c")).kind).toBe("refused");
+  // A decline is not an approval and forks nothing.
+  expect(
+    await record.recordScopeDecision(
+      scopeDecision({ scopeDecisionId: "sd-no", scopeId: "s-c", outcome: "declined" }),
+    ),
+  ).toEqual({ kind: "recorded" });
+  // Approving a scope whose own successor is already approved is no second line.
+  await record.recordScope(scope({ scopeId: "s-mid", supersedesScopeId: "s-a2" }));
+  await record.recordScope(scope({ scopeId: "s-low", supersedesScopeId: "s-mid" }));
+  expect(await approve("s-low")).toEqual({ kind: "recorded" });
+  expect(await approve("s-mid")).toEqual({ kind: "recorded" });
+  expect(await record.scopeTip("sd-0001")).toEqual({ kind: "tip", scopeDecisionId: "sd-s-low" });
+});
+
 test("spent is counted from rows: empty, an unread lap, then its read cost", async () => {
   const { connection, record } = await approved();
   expect(await record.scopeSpent("sd-0001")).toEqual({

@@ -52,7 +52,7 @@ import {
   type StoredScope,
   type StoredScopeDecision,
 } from "../store/records.js";
-import type { AdvisoryRecord, IterationStore } from "../store/sqlite.js";
+import type { AdvisoryRecord, IterationStore, ScopeTip } from "../store/sqlite.js";
 import { DETERMINISTIC_DRAFTER } from "./advisory.js";
 import {
   type ReviewScope,
@@ -283,26 +283,9 @@ export function scopeVerdict(act: ScopeAct, snapshot: ScopeSnapshot): ScopeVerdi
     );
   }
   // 9. The budgets an admission spends, with the store's own arithmetic (rule 3.4).
-  if (snapshot.nowMs >= budgets.expires_at_ms) {
-    return outside(
-      "expiry",
-      `the scope expired at ${String(budgets.expires_at_ms)} (D-0066 rule 1.2.4)`,
-    );
-  }
-  if (snapshot.spent.admissions >= budgets.laps) {
-    return outside(
-      "laps",
-      `${String(snapshot.spent.admissions)} of ${String(budgets.laps)} laps are spent (D-0066 rule 3.4.1)`,
-    );
-  }
-  const committed =
-    snapshot.spent.readCostUsd + (snapshot.spent.unreadLaps + 1) * budgets.cost_reserve_usd;
-  if (committed > budgets.cost_usd) {
-    return outside(
-      "cost",
-      `${String(committed)} USD read and reserved would pass the budget of ` +
-        `${String(budgets.cost_usd)} USD (D-0066 rule 3.4.2)`,
-    );
+  const spent = budgetRefusal(budgets, snapshot.spent, snapshot.nowMs);
+  if (spent !== null) {
+    return spent;
   }
   if (act.kind === "lineage_start") {
     // Rule 4.2: a lineage start has no reading to test and none is required.
@@ -352,6 +335,69 @@ export function scopeVerdict(act: ScopeAct, snapshot: ScopeSnapshot): ScopeVerdi
     policy: reviewPolicyOf(reviewScopeOf(payload)),
   });
   return round.kind === "stop" ? outside("readings", round.reason) : { kind: "inside" };
+}
+
+/**
+ * The verdict's budget tests alone (its step 9): whether one more admission
+ * would pass the expiry, the laps or the cost. Exported so the gate view can say
+ * *before* a press that a budget closes the change path (D-0074 rule 4.1), with
+ * the verdict's own arithmetic rather than a second copy of it.
+ */
+export function budgetRefusal(
+  budgets: ScopePayload["budgets"],
+  spent: ScopeSpent,
+  nowMs: number,
+): Extract<ScopeVerdict, { kind: "outside" }> | null {
+  if (nowMs >= budgets.expires_at_ms) {
+    return {
+      kind: "outside",
+      test: "expiry",
+      reason: `the scope expired at ${String(budgets.expires_at_ms)} (D-0066 rule 1.2.4)`,
+    };
+  }
+  if (spent.admissions >= budgets.laps) {
+    return {
+      kind: "outside",
+      test: "laps",
+      reason: `${String(spent.admissions)} of ${String(budgets.laps)} laps are spent (D-0066 rule 3.4.1)`,
+    };
+  }
+  const committed = spent.readCostUsd + (spent.unreadLaps + 1) * budgets.cost_reserve_usd;
+  if (committed > budgets.cost_usd) {
+    return {
+      kind: "outside",
+      test: "cost",
+      reason:
+        `${String(committed)} USD read and reserved would pass the budget of ` +
+        `${String(budgets.cost_usd)} USD (D-0066 rule 3.4.2)`,
+    };
+  }
+  return null;
+}
+
+/** The approval a lap's next act spends: none, its chain's tip, or two tips and so none (D-0074 section 2). */
+export type LapApproval =
+  | { readonly kind: "none" }
+  | Exclude<ScopeTip, { readonly kind: "absent" }>;
+
+/**
+ * The approved tip of the chain that starts at the approval `iterationId` was
+ * admitted under (D-0074 rule 2.1): what a revise at its gate spends, and what
+ * the gate view draws. One read for the page and the press, so the two cannot
+ * disagree about which approval is meant.
+ */
+export async function approvalTip(
+  record: Pick<AdvisoryRecord, "scopeDecisionAdmitting" | "scopeTip">,
+  iterationId: string,
+): Promise<LapApproval> {
+  const admitted = await record.scopeDecisionAdmitting(iterationId);
+  if (admitted === null) {
+    return { kind: "none" };
+  }
+  const tip = await record.scopeTip(admitted);
+  // A decision the store does not hold has no chain below it to walk: it is its
+  // own tip, and the verdict says what is wrong with it at the press.
+  return tip.kind === "absent" ? { kind: "tip", scopeDecisionId: admitted } : tip;
 }
 
 /**

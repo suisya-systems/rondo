@@ -350,20 +350,20 @@ on. Reading it moves no last-look mark and counts no presentation.
     second approval to say so. Changing your mind is just pressing **Carry on** afterwards.
 - Leaving the question unanswered holds the line too, and does no harm. The difference is the record:
   an unanswered question says nobody has been back to it, and a **Stop this line** says you have.
-- **If the cause was the budget, the page cannot mend it, and this is worth knowing before you go
-  looking.** A scope recorded here never supersedes another one -- S3 draws no screen for that, and
-  `recordScopeFromPage` records `supersedes` as nothing at all. So pressing **Set the scope** again
-  on the same request does not replace the spent approval, does not retire it, and shows nothing of
-  what it spent; the screen says as much, in the line about rondo not being able to tell whether you
-  have already approved one. What you get is a *second* approval, standing beside the first.
-  - That second approval is enough to **start fresh work**: its own **Start the work** button sits on
-    its own screen and carries its own approval.
-  - It is not enough to **continue the lap you already have**. **Ask for a change** always spends the
-    approval that lap was admitted under, which is the exhausted one, so it will be refused again
-    however many scopes you record. Answering the stop question, either way, does not change that.
-  - The way through, from the page alone, is to send the remaining work as a new request and start it
-    under the new approval. Write it down if you hit this -- it is the second hole in "the page is the
-    whole walk", and a bigger one than the abandon below.
+- **If the cause was the budget, raise it from the gate** (`D-0074`). When the lap waiting for you
+  has used up the laps, the cost or the time its approval allowed, the gate says which, says nothing
+  was spent, and draws **Raise this approval's budget** where **Ask for a change** would be. It opens
+  the scope screen with the old approval's budgets and what they spent, and boxes redrawn from the
+  laps recorded so far (the one that used the budget up among them). **Raise the budget** records a
+  new approval that differs from the old one only in its budgets and returns you to the gate, where
+  **Ask for a change** now spends the new one.
+  - The new budgets count **from here on**: what the old approval spent stays counted under it, so
+    raising the cost to $15 lets another $15 be spent, not $15 in total.
+  - The old approval starts nothing new afterwards, for every request it covered.
+  - Raising does not answer a stop question. If the refusal already wrote one, the line stays held
+    until you press **Carry on** in the request's thread; the raise screen says so and links to it.
+  - **Set the scope** again on the same request is still not the way: it records a second approval
+    beside the first, which can start fresh work but is not what the lap you have spends.
 - A lap that never comes back is the one thing with no press. Take its id off the summary's
   **Show the full reading** (`iteration '<id>'`), stop the page with ctrl-c, and run
   `node bin/rondo.mjs abandon --iteration-id lap-<the UUID> --reason "..."` in the same terminal,

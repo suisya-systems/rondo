@@ -931,6 +931,49 @@ export interface Chrome {
    */
   readonly reviseRefusedAfterGate: string;
   readonly reviseRefusedNotStarted: string;
+  /**
+   * The lap's approval was raised twice, separately, so its line has two tips
+   * and neither is spent (D-0074 rule 2.1). Said where the form would be, and
+   * as the press's refusal for a page drawn before the second raise.
+   */
+  readonly reviseForked: string;
+  readonly reviseRefusedForked: string;
+
+  /**
+   * Raising a running lap's budget (D-0074 section 4). **Written for the
+   * person who asked for the work** (D-0076): no id, and none of rondo's own
+   * words -- an attempt, what you approved, the work waiting for you.
+   *
+   * {@link raiseNeeded} is the gate view's sentence when a budget closes the
+   * change path, in D-0076 rule 4.1's order (what cannot happen, that nothing
+   * was spent, what they can do), with `why` one of the three `raiseWhy*`.
+   */
+  readonly raiseNeeded: (why: string) => string;
+  readonly raiseWhyLaps: (laps: number) => string;
+  readonly raiseWhyCost: (spent: string, reserve: string, cost: string) => string;
+  readonly raiseWhyExpiry: (at: string) => string;
+  /** The way from the gate view to the raise screen. */
+  readonly raiseLink: string;
+  readonly raiseLead: string;
+  readonly raiseWasHeading: string;
+  readonly raiseWas: (laps: number, cost: string, until: string) => string;
+  readonly raiseUsed: (attempts: number, usd: string, unread: number) => string;
+  /** D-0074 rule 1.2: the new budgets are from here on, not totals. */
+  readonly raiseFromHere: string;
+  /** D-0074 rule 2.4: the earlier approval admits nothing new, for any request. */
+  readonly raiseRetires: string;
+  /** D-0074 rule 3.4: a stop the refusal wrote is not lifted by raising. */
+  readonly raiseAskStands: string;
+  readonly raiseAskLink: string;
+  /** The raise screen, drawn for an approval that is no longer the line's tip. */
+  readonly raiseNotTip: string;
+  readonly raisePressNote: string;
+  readonly raiseAction: string;
+  readonly raisePlain: string;
+  /** Why a raise press recorded nothing (D-0074 rule 4.4). */
+  readonly raiseRefusedNotTip: string;
+  readonly raiseRefusedForked: string;
+  readonly raiseRefusedNotAtGate: string;
 
   /**
    * The publish screen (rondo#233 S5, D-0059 section 5a's row for it): the
@@ -1508,14 +1551,13 @@ explanation you pressed on and then answers the gate.`,
     `${tier === null ? "this agent type" : `other agent types on tier ${tier}, as none of this one's is recorded`}` +
     `, which cost ${lowest === highest ? highest : `${lowest} to ${highest}`} USD; the reserve ` +
     `is the highest. rondo records what a lap cost, not how much work it did, so it cannot tell ` +
-    `whether your request is as large as theirs. If it is larger, raise the cost here: once a ` +
-    `lap is running its budget cannot be raised, and a first lap that spends it all leaves ` +
-    `approving as the only answer at the gate.`,
+    `whether your request is as large as theirs. If it is larger, raise the cost here; if the ` +
+    `first attempt uses it all, you can still raise it when the work comes back to you.`,
   scopeSampleColdStart: (reserve) =>
     `No lap of this agent type or its tier is recorded, so the reserve is rondo's starting ` +
     `figure, ${reserve} USD, which nobody measured, and nothing here knows how large your ` +
-    `request is. If it is more than a small change, raise the cost here: once a lap is running ` +
-    `its budget cannot be raised.`,
+    `request is. If it is more than a small change, raise the cost here, or raise it later when ` +
+    `the work comes back to you.`,
   scopeDefaultsHeading: "What rondo filled in for you",
   scopeDefaultNote: "A default, not derived from your request.",
   scopeSeverityLabel: "Findings this severe or worse end a round",
@@ -1656,6 +1698,63 @@ explanation you pressed on and then answers the gate.`,
     "the choices are.",
   reviseRefusedNotStarted:
     "No second lap started. The terminal running rondo has what it said; nothing here is lost.",
+  reviseForked:
+    "Asking for a change is not offered here: what you approved for this request was raised " +
+    "twice, separately, and rondo will not choose which of the two to spend. Nothing has been " +
+    "spent. Approving the work as it is still works.",
+  reviseRefusedForked:
+    "Nothing was answered and nothing was spent: what you approved for this request was raised " +
+    "twice, separately, and rondo will not choose which of the two to spend.",
+
+  raiseNeeded: (why) =>
+    `Asking for a change would start another attempt, and ${why}, so it is not offered. ` +
+    "Nothing has been asked or spent. Raise the budget and asking for a change opens again " +
+    "here; approving the work as it is still works.",
+  raiseWhyLaps: (laps) =>
+    `${laps === 1 ? "the one attempt" : `all ${String(laps)} attempts`} you approved ` +
+    `${laps === 1 ? "is" : "are"} used`,
+  raiseWhyCost: (spent, reserve, cost) =>
+    `another attempt holds $${reserve} until its cost is known, which with the $${spent} ` +
+    `already spent or held would pass the $${cost} you approved`,
+  raiseWhyExpiry: (at) => `what you approved ended at ${at} UTC`,
+  raiseLink: "Raise this approval's budget",
+  raiseLead:
+    "Raise the budget you approved for this request. Only the budget changes: the work, where " +
+    "it runs and what the worker may do stay exactly as you approved them.",
+  raiseWasHeading: "What you approved, and what it has used",
+  raiseWas: (laps, cost, until) =>
+    `Up to ${String(laps)} attempt${laps === 1 ? "" : "s"} and $${cost}, until ${until} UTC.`,
+  raiseUsed: (attempts, usd, unread) =>
+    `Used so far: ${String(attempts)} attempt${attempts === 1 ? "" : "s"} and $${usd}` +
+    (unread === 0 ? "." : `, with ${String(unread)} whose cost is not known yet.`),
+  raiseFromHere:
+    "The new budget counts from now on. What was already spent stays counted against what you " +
+    "approved before and is not taken out of the new one: raising the cost to $15 lets another " +
+    "$15 be spent, not $15 in total.",
+  raiseRetires:
+    "Once you press, the earlier approval starts nothing new, for every request it covered; " +
+    "this one takes its place.",
+  raiseAskStands:
+    "rondo stopped this work earlier and asked you how to go on. Raising the budget does not " +
+    "answer that: the work stays stopped until you tell it to carry on in the request's thread.",
+  raiseAskLink: "Read what it asked",
+  raiseNotTip:
+    "This budget has already been raised, so there is nothing to raise here. Go back to see the " +
+    "budget that stands now.",
+  raisePressNote:
+    "One press records the new budget and approves it, under your name, and takes you back to " +
+    "the work waiting for you. Nothing is spent by approving it.",
+  raiseAction: "Raise the budget",
+  raisePlain: "Records the new budget and approves it",
+  raiseRefusedNotTip:
+    "Nothing was recorded: this budget has already been raised, from another tab or by someone " +
+    "else. Go back to see the one that stands now.",
+  raiseRefusedForked:
+    "Nothing was recorded: what you approved for this request was raised twice, separately, and " +
+    "rondo will not choose which of the two to raise again.",
+  raiseRefusedNotAtGate:
+    "Nothing was recorded: the work is no longer waiting for you, so there is no budget to " +
+    "raise for it. Go back to see how it ended.",
 
   publishAction: "Publish",
   publishHere: "Read what publishing would do, and publish from there",
@@ -2281,13 +2380,13 @@ const JA: Partial<Chrome> = Object.freeze({
     `${lowest === highest ? highest : `${lowest}〜${highest}`} USD で、引当にはその最高値を` +
     `使っています。rondo が記録しているのは周回にかかった費用だけで、どれだけの作業をしたかは` +
     `記録していません。そのため、この依頼がそれらと同じくらいの大きさかどうかは分かりません。` +
-    `大きいと思うなら、ここで費用を上げてください。周回が始まってからは予算を上げられず、` +
-    `初回の周回で使い切ると、ゲートでは承認するしかなくなります。`,
+    `大きいと思うなら、ここで費用を上げてください。初回の作業で使い切っても、作業があなたの` +
+    `確認に戻ってきたときに引き上げられます。`,
   scopeSampleColdStart: (reserve) =>
     `このエージェント種別にも、その tier にも、記録された周回がありません。そのため引当は ` +
     `rondo の初期値 ${reserve} USD で、誰かが測った値ではありません。依頼がどれだけの大きさ` +
-    `かも分かりません。小さな変更では済まないと思うなら、ここで費用を上げてください。周回が` +
-    `始まってからは予算を上げられません。`,
+    `かも分かりません。小さな変更では済まないと思うなら、ここで費用を上げてください。作業が` +
+    `あなたの確認に戻ってきたときに引き上げることもできます。`,
   scopeDefaultsHeading: "rondo が埋めたもの",
   scopeDefaultNote: "既定値で、依頼から導いたものではありません。",
   scopeSeverityLabel: "この重大度以上の指摘が出たら 1 ラウンド終了",
@@ -2429,6 +2528,60 @@ const JA: Partial<Chrome> = Object.freeze({
   reviseRefusedNotStarted:
     "2 周目は開始していません。詳細は rondo を動かしているターミナルに出ています。ここで" +
     "書いた内容は失われていません。",
+  reviseForked:
+    "ここでは変更を依頼できません。この依頼で承認した予算が別々に 2 回引き上げられていて、" +
+    "rondo はどちらを使うかを選びません。何も消費していません。今の作業をそのまま承認する" +
+    "ことはできます。",
+  reviseRefusedForked:
+    "何も回答せず、何も消費していません。この依頼で承認した予算が別々に 2 回引き上げられて" +
+    "いて、rondo はどちらを使うかを選びません。",
+
+  raiseNeeded: (why) =>
+    `変更を依頼すると作業をもう 1 回やり直しますが、${why}ため、ここでは依頼できません。` +
+    "何も依頼しておらず、何も消費していません。予算を引き上げると、ここからまた変更を依頼" +
+    "できます。今の作業をそのまま承認することもできます。",
+  raiseWhyLaps: (laps) => `承認した ${String(laps)} 回をすべて使っている`,
+  raiseWhyCost: (spent, reserve, cost) =>
+    `やり直しには費用が分かるまで $${reserve} を確保する必要があり、すでに使ったか確保している ` +
+    `$${spent} と合わせると承認した $${cost} を超える`,
+  raiseWhyExpiry: (at) => `承認した期限 ${at} (UTC) を過ぎている`,
+  raiseLink: "この承認の予算を引き上げる",
+  raiseLead:
+    "この依頼で承認した予算を引き上げます。変わるのは予算だけで、作業の内容、作業する場所、" +
+    "作業者に許すことは承認したときのままです。",
+  raiseWasHeading: "承認した内容と、これまでに使った分",
+  raiseWas: (laps, cost, until) => `${String(laps)} 回まで、$${cost} まで、${until} (UTC) まで。`,
+  raiseUsed: (attempts, usd, unread) =>
+    `これまでに ${String(attempts)} 回、$${usd} を使いました` +
+    (unread === 0 ? "。" : `（うち ${String(unread)} 回はまだ費用が分かっていません）。`),
+  raiseFromHere:
+    "新しい予算はこれから先の分です。これまでに使った分は前の承認に数えられたままで、新しい" +
+    "予算からは引かれません。費用を $15 に引き上げると、合計 $15 ではなく、ここからさらに " +
+    "$15 まで使えます。",
+  raiseRetires:
+    "押すと、前の承認ではこれ以降何も新しく始まりません。前の承認が対象にしていたすべての" +
+    "依頼についてです。この承認がその代わりになります。",
+  raiseAskStands:
+    "rondo はこの作業を以前止めて、どう進めるかをあなたに尋ねています。予算を引き上げても" +
+    "その回答にはなりません。依頼のスレッドで続けるよう伝えるまで、作業は止まったままです。",
+  raiseAskLink: "尋ねた内容を読む",
+  raiseNotTip:
+    "この予算はすでに引き上げられているので、ここで引き上げるものはありません。戻って、今" +
+    "有効な予算を確認してください。",
+  raisePressNote:
+    "1 回押すと、新しい予算があなたの名前で記録・承認され、あなたを待っている作業に戻ります。" +
+    "承認しただけでは何も消費しません。",
+  raiseAction: "予算を引き上げる",
+  raisePlain: "新しい予算を記録して承認します",
+  raiseRefusedNotTip:
+    "何も記録していません。この予算は別のタブか別の人によってすでに引き上げられています。" +
+    "戻って、今有効な予算を確認してください。",
+  raiseRefusedForked:
+    "何も記録していません。この依頼で承認した予算が別々に 2 回引き上げられていて、rondo は" +
+    "どちらをさらに引き上げるかを選びません。",
+  raiseRefusedNotAtGate:
+    "何も記録していません。作業はもうあなたを待っていないので、予算を引き上げる対象が" +
+    "ありません。戻って結果を確認してください。",
 
   publishAction: "公開する",
   publishHere: "公開すると何が起きるかを読み、その画面から公開する",

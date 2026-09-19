@@ -44,6 +44,7 @@ import {
   type PublishReading,
   operatorPage as renderPage,
   resolveLanguage,
+  viewHref,
 } from "../../src/access/web.js";
 import {
   AnswerPort,
@@ -61,7 +62,7 @@ import {
   readRunPlan,
   runPlan,
 } from "../../src/refrain/plan.js";
-import { planDigest } from "../../src/store/plan.js";
+import { contentDigest, planDigest } from "../../src/store/plan.js";
 import {
   APPROVED_OUTCOME,
   type JsonRecord,
@@ -2708,6 +2709,195 @@ test("a lap admitted under no approval is told so where the change would be (#23
   expect(html).toContain(">approve despite what was raised</button>");
 });
 
+/**
+ * The lap at the gate admitted under an approval of one lap, which it spent
+ * (D-0074 rule 4.1): a request, its scope and approval, and the admission row.
+ */
+async function spentGate(world: ReturnType<typeof fresh>): Promise<void> {
+  await seedScopeRequest(world, "m-req", "Fix the parser.");
+  await gateWithChecks(world);
+  await modelFindings(world);
+  world.connection
+    .prepare(
+      "UPDATE iteration SET request_message_id = 'm-req', agent_type_digest = ? WHERE id = 'i-0001'",
+    )
+    .run(`sha256:${"a".repeat(64)}`);
+  const payload = scopePayloadWithDefaults({
+    requests: ["m-req"],
+    workspaces: [{ repository: "/srv/repo", workspace_root: "/srv/work" }],
+    agent_types: [`sha256:${"a".repeat(64)}`],
+    budgets: {
+      laps: 1,
+      review_rounds: 3,
+      cost_usd: 7.5,
+      cost_reserve_usd: 2.5,
+      expires_at_ms: 4_000_000_000_000,
+    },
+    severity_threshold: "major",
+    outward_acts: [],
+    irreversible_additions: [],
+  } as JsonRecord);
+  expect(
+    await world.record.recordScope({
+      scopeId: "s-1",
+      payload,
+      supersedesScopeId: null,
+      authorKind: "operator",
+      authorId: "ada",
+      bases: [],
+      createdAtMs: 1,
+      agentTypeRecords: [],
+    }),
+  ).toEqual({ kind: "recorded" });
+  expect(
+    await world.record.recordScopeDecision({
+      scopeDecisionId: "sd-1",
+      scopeId: "s-1",
+      scopeDigest: contentDigest(payload as unknown as JsonRecord),
+      outcome: "approved",
+      actorId: "ada",
+      recordedBy: "rondo/web",
+      decidedAtMs: 2,
+    }),
+  ).toEqual({ kind: "recorded" });
+  world.connection
+    .prepare(
+      "INSERT INTO scope_consumption (scope_decision_id, act_kind, subject_id, proposal_id, " +
+        "consumed_at_ms) VALUES ('sd-1', 'admission', 'i-0001', NULL, 3)",
+    )
+    .run();
+}
+
+test("a gate whose approval is spent says which budget and offers to raise it, instead of a change it would refuse (D-0074 rule 4.1)", async () => {
+  const world = fresh();
+  await spentGate(world);
+  const gate = async () =>
+    await operatorPage(
+      { ...portsOver(world, "ada", []), material: structured },
+      "t",
+      { kind: "answer", iterationId: "i-0001" },
+      EN,
+      null,
+      null,
+      () => "lap-00000000-0000-4000-8000-000000000004",
+    );
+  const html = await gate();
+  expect(html).toContain('id="raise"');
+  expect(html).toContain("the one attempt you approved is used");
+  expect(html).toContain("Nothing has been asked or spent.");
+  expect(html).toContain(">Raise this approval's budget</a>");
+  expect(html).toContain("/?scope=m-req&amp;raise=sd-1&amp;gate=i-0001&amp;lang=en");
+  // No press that would be refused, and approving is untouched.
+  expect(html).not.toContain('id="revise-form"');
+  expect(html).toContain(">approve despite what was raised</button>");
+  // D-0076: nothing rondo made is in the sentence.
+  const opened = html.indexOf("<p", html.indexOf('id="raise"'));
+  const said = html.slice(html.indexOf(">", opened) + 1, html.indexOf("</p>", opened));
+  expect(said).not.toMatch(/sd-1|scope|\blap|\bgate/);
+
+  // Raised: the change is offered again, and spends the new approval.
+  const first = await world.record.readScope("s-1");
+  if (first.kind !== "read") throw new Error("the fixture scope did not read");
+  const payload = scopePayloadWithDefaults({
+    ...(first.scope.payload as unknown as JsonRecord),
+    budgets: { ...first.scope.payload.budgets, laps: 3 },
+  } as JsonRecord);
+  await world.record.recordScope({
+    scopeId: "s-2",
+    payload,
+    supersedesScopeId: "s-1",
+    authorKind: "operator",
+    authorId: "ada",
+    bases: [{ form: "scope", scopeId: "s-1" }],
+    createdAtMs: 5,
+    agentTypeRecords: [],
+  });
+  await world.record.recordScopeDecision({
+    scopeDecisionId: "sd-2",
+    scopeId: "s-2",
+    scopeDigest: contentDigest(payload as unknown as JsonRecord),
+    outcome: "approved",
+    actorId: "ada",
+    recordedBy: "rondo/web",
+    decidedAtMs: 6,
+  });
+  const after = await gate();
+  expect(after).not.toContain('id="raise"');
+  expect(after).toContain('<input type="hidden" name="scope_decision" value="sd-2"/>');
+});
+
+test("the raise screen shows what was approved and used, redraws the budgets, and posts only budgets (D-0074 rule 4.2)", async () => {
+  const world = fresh();
+  await spentGate(world);
+  const view = {
+    kind: "scope" as const,
+    messageId: "m-req",
+    rounds: null,
+    decisionId: null,
+    plan: null,
+    raise: { decisionId: "sd-1", iterationId: "i-0001" },
+  };
+  const html = await operatorPage(
+    portsOver(world, "ada", []),
+    "t",
+    view,
+    EN,
+    null,
+    () => "scope-00000000-0000-4000-8000-000000000001",
+    null,
+  );
+  expect(html).toContain("Only the budget changes");
+  expect(html).toContain("Up to 1 attempt and $7.50");
+  expect(html).toContain("Used so far: 1 attempt and $0.00, with 1 whose cost is not known yet.");
+  expect(html).toContain("The new budget counts from now on.");
+  expect(html).toContain("the earlier approval starts nothing new");
+  expect(html).toContain('<form id="raise-form" method="post" action="/raise?lang=en"');
+  expect(html).toContain('<input type="hidden" name="raise" value="sd-1"/>');
+  expect(html).toContain('<input type="hidden" name="iteration" value="i-0001"/>');
+  expect(html).toContain(
+    '<input type="hidden" name="scope_id" value="scope-00000000-0000-4000-8000-000000000001"/>',
+  );
+  // The five budgets, rounds editable here; nothing else the scope holds is a box.
+  for (const name of ["laps", "review_rounds", "cost_usd", "cost_reserve_usd", "expires_at_ms"]) {
+    expect(html).toContain(`name="${name}"`);
+  }
+  expect(html).not.toMatch(/name="review_rounds"[^>]*readonly/);
+  expect(html).not.toContain('name="severity_threshold"');
+  expect(html).not.toContain('name="outward_acts"');
+  expect(html).not.toContain(">Record and approve");
+  expect(html).toContain(">Raise the budget</button>");
+  // The address carries the state, so the language switch keeps it.
+  expect(viewHref(view, "ja")).toBe("/?scope=m-req&raise=sd-1&gate=i-0001&lang=ja");
+
+  // Somebody raised it already: no form, and the way back to the gate.
+  world.connection
+    .prepare(
+      "INSERT INTO scope (scope_id, payload, scope_digest, supersedes_scope_id, author_kind, " +
+        "author_id, bases, created_at_ms) SELECT 's-2', payload, scope_digest, 's-1', author_kind, " +
+        "author_id, bases, created_at_ms FROM scope WHERE scope_id = 's-1'",
+    )
+    .run();
+  world.connection
+    .prepare(
+      "INSERT INTO scope_decision (scope_decision_id, scope_id, scope_digest, outcome, actor_id, " +
+        "recorded_by, decided_at_ms) SELECT 'sd-2', 's-2', scope_digest, 'approved', actor_id, " +
+        "recorded_by, decided_at_ms FROM scope_decision WHERE scope_decision_id = 'sd-1'",
+    )
+    .run();
+  const stale = await operatorPage(
+    portsOver(world, "ada", []),
+    "t",
+    view,
+    EN,
+    null,
+    () => "scope-00000000-0000-4000-8000-000000000002",
+    null,
+  );
+  expect(stale).toContain("This budget has already been raised");
+  expect(stale).not.toContain('id="raise-form"');
+  expect(stale).toContain('href="/?answer=i-0001&amp;lang=en"');
+});
+
 test("with no minted lap id there is no change form at all (#233 S4)", async () => {
   const world = fresh();
   await gateWithChecks(world);
@@ -3354,7 +3544,7 @@ test("the scope screen drafts a form pre-filled from the request and the plan, e
   expect(html).toContain(
     "Drafted from 2 recorded first laps of this agent type, which cost 0.40 to 1.20 USD",
   );
-  expect(html).toContain("once a lap is running its budget cannot be raised");
+  expect(html).toContain("you can still raise it when the work comes back to you");
   expect(html.indexOf("This draft assumes")).toBeLessThan(html.indexOf('name="cost_usd"'));
 
   // Every budget's formula, and its bases folded but present.

@@ -2559,6 +2559,14 @@ export interface AdvisoryRecord {
    */
   scopeSupersededByApproved(scopeId: string): Promise<boolean>;
   /**
+   * The approved tip of the chain that starts at this approval (D-0074
+   * section 2.1): the approved descendant of its scope with no approved
+   * descendant of its own, or the approval itself when nothing below it is
+   * approved. **`forked` when there are two such tips**, which D-0074 rule 1.3
+   * keeps from being written and this reader does not choose between.
+   */
+  scopeTip(scopeDecisionId: string): Promise<ScopeTip>;
+  /**
    * The messages with `asks` set and no reply in the thread `requestMessageId`
    * opens, each with the iterations its bases name (D-0061 rule 2.7, D-0066
    * rule 4.2). The same query `reserve()` re-tests under the write lock.
@@ -3484,27 +3492,20 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
                 "(D-0066 rule 2.2, D-0049 rule 2)",
             };
           }
-          // **One approved successor per scope** (D-0066 rule 1.4), decided under
-          // the same lock as the insert: two changes to one scope pressed from
-          // two tabs would otherwise both be approved, each a grant with a
-          // budget of its own, and neither would retire the other.
-          if (
-            draft.outcome === "approved" &&
-            connection
-              .prepare(
-                "SELECT 1 FROM scope s JOIN scope_decision d ON d.scope_id = s.scope_id " +
-                  "WHERE d.outcome = ? AND s.scope_id <> ? AND s.supersedes_scope_id IS NOT NULL " +
-                  "AND s.supersedes_scope_id = (SELECT supersedes_scope_id FROM scope WHERE scope_id = ?) " +
-                  "LIMIT 1",
-              )
-              .get("approved", draft.scopeId, draft.scopeId) !== undefined
-          ) {
+          // **One approved line per chain** (D-0066 rule 1.4, read over the chain
+          // by D-0074 rule 1.3), decided under the same lock as the insert: two
+          // changes to one scope pressed from two tabs -- or two raises drawn
+          // over one approval -- would otherwise both be approved, each a grant
+          // with a budget of its own, and a running lap's walk to its tip would
+          // have two answers.
+          const fork = draft.outcome === "approved" ? forkedBy(connection, draft.scopeId) : null;
+          if (fork !== null) {
             return {
               kind: "refused",
               reason:
-                `the scope '${draft.scopeId}' replaces a scope another approved scope already ` +
-                "replaced, and a scope is replaced once: approving both would leave two grants " +
-                "with budgets of their own (D-0066 rule 1.4)",
+                `the scope '${draft.scopeId}' replaces a line the approved scope '${fork}' ` +
+                "already replaced, and a scope is replaced once: approving both would leave two " +
+                "grants with budgets of their own (D-0066 rule 1.4, D-0074 rule 1.3)",
             };
           }
           connection
@@ -3808,6 +3809,10 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
 
     async scopeSupersededByApproved(scopeId: string): Promise<boolean> {
       return supersededByApproved(connection, scopeId);
+    },
+
+    async scopeTip(scopeDecisionId: string): Promise<ScopeTip> {
+      return tipOf(connection, scopeDecisionId);
     },
 
     async openAsksIn(requestMessageId: string): Promise<OpenAsksReadOutcome> {
@@ -4464,6 +4469,114 @@ function supersededByApproved(connection: DatabaseSync, scopeId: string): boolea
       )
       .get(scopeId) !== undefined
   );
+}
+
+/** What {@link AdvisoryRecord.scopeTip} answers (D-0074 section 2.1). */
+export type ScopeTip =
+  | { readonly kind: "tip"; readonly scopeDecisionId: string }
+  | { readonly kind: "forked"; readonly scopeDecisionIds: readonly string[] }
+  | { readonly kind: "absent" };
+
+interface Descendant {
+  readonly scopeId: string;
+  readonly parent: string;
+  /** Its approval's id, or null when it has none. */
+  readonly approved: string | null;
+}
+
+/** Every scope below `scopeId` at any depth, `supersededByApproved`'s walk with the rows kept. */
+function descendantsOf(connection: DatabaseSync, scopeId: string): readonly Descendant[] {
+  const rows = connection
+    .prepare(
+      "WITH RECURSIVE descendant(scope_id, parent) AS (" +
+        "SELECT scope_id, supersedes_scope_id FROM scope WHERE supersedes_scope_id = ? " +
+        "UNION SELECT s.scope_id, s.supersedes_scope_id FROM scope s " +
+        "JOIN descendant d ON s.supersedes_scope_id = d.scope_id" +
+        ") SELECT d.scope_id, d.parent, sd.scope_decision_id AS approved FROM descendant d " +
+        "LEFT JOIN scope_decision sd ON sd.scope_id = d.scope_id AND sd.outcome = 'approved'",
+    )
+    .all(scopeId) as SqlRow[];
+  return rows.map((row) => ({
+    scopeId: String(row["scope_id"]),
+    parent: String(row["parent"]),
+    approved: typeof row["approved"] === "string" ? row["approved"] : null,
+  }));
+}
+
+/** Of `rows`, the approved ones with no approved row below them: the chain's tips. */
+function approvedTips(rows: readonly Descendant[]): readonly Descendant[] {
+  const parentOf = new Map(rows.map((row) => [row.scopeId, row.parent]));
+  const covered = new Set<string>();
+  for (const row of rows) {
+    if (row.approved === null) {
+      continue;
+    }
+    // Everything above an approved row has an approved descendant.
+    for (let at = parentOf.get(row.scopeId); at !== undefined && !covered.has(at); ) {
+      covered.add(at);
+      at = parentOf.get(at);
+    }
+  }
+  return rows.filter((row) => row.approved !== null && !covered.has(row.scopeId));
+}
+
+/**
+ * The approved tip of the chain below one approval (D-0074 section 2.1): with no
+ * approved descendant it is the approval itself, and with two it is `forked`,
+ * because picking one would spend a grant the person never chose for this lap.
+ */
+function tipOf(connection: DatabaseSync, scopeDecisionId: string): ScopeTip {
+  const row = connection
+    .prepare("SELECT scope_id FROM scope_decision WHERE scope_decision_id = ?")
+    .get(scopeDecisionId) as SqlRow | undefined;
+  if (row === undefined) {
+    return { kind: "absent" };
+  }
+  const tips = approvedTips(descendantsOf(connection, String(row["scope_id"])));
+  const [only] = tips;
+  if (only === undefined) {
+    return { kind: "tip", scopeDecisionId };
+  }
+  return tips.length === 1 && only.approved !== null
+    ? { kind: "tip", scopeDecisionId: only.approved }
+    : {
+        kind: "forked",
+        scopeDecisionIds: tips.flatMap((tip) => (tip.approved === null ? [] : [tip.approved])),
+      };
+}
+
+/**
+ * The approved scope that approving `scopeId` would put a second line beside,
+ * or null (D-0074 rule 1.3): the nearest approved scope above it -- or, with
+ * none, the top of its chain -- must have no approved descendant outside
+ * `scopeId`'s own subtree. A scope that replaces nothing forks nothing.
+ */
+function forkedBy(connection: DatabaseSync, scopeId: string): string | null {
+  const parentOf = connection.prepare("SELECT supersedes_scope_id FROM scope WHERE scope_id = ?");
+  const approvedAt = connection.prepare(
+    "SELECT 1 FROM scope_decision WHERE scope_id = ? AND outcome = 'approved'",
+  );
+  const up = (id: string): string | null => {
+    const found = (parentOf.get(id) as SqlRow | undefined)?.["supersedes_scope_id"];
+    return typeof found === "string" ? found : null;
+  };
+  let anchor: string | null = null;
+  const seen = new Set<string>();
+  for (let at = up(scopeId); at !== null && !seen.has(at); at = up(at)) {
+    seen.add(at);
+    anchor = at;
+    if (approvedAt.get(at) !== undefined) {
+      break;
+    }
+  }
+  if (anchor === null) {
+    return null;
+  }
+  const own = new Set(descendantsOf(connection, scopeId).map((row) => row.scopeId));
+  const other = descendantsOf(connection, anchor).find(
+    (row) => row.approved !== null && row.scopeId !== scopeId && !own.has(row.scopeId),
+  );
+  return other === undefined ? null : other.scopeId;
 }
 
 /**

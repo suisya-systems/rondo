@@ -653,7 +653,16 @@ export type ScopeRefusal =
   | "scopeRefusedEdited"
   | "scopeRefusedNotRead"
   | "scopeRefusedNotShown"
-  | "scopeRefusedNotApproved";
+  | "scopeRefusedNotApproved"
+  | RaiseRefusal;
+
+/**
+ * Why a raise press recorded nothing, beside the refusals it shares with the
+ * scope screen's two (D-0074 rule 4.4): the approval posted is no longer the
+ * line's tip (somebody raised it already), the line has two tips, or the lap
+ * it was pressed for is no longer waiting for the person.
+ */
+export type RaiseRefusal = "raiseRefusedNotTip" | "raiseRefusedForked" | "raiseRefusedNotAtGate";
 
 /** What one record-scope press came to; `why` is set only on a refusal. */
 export interface ScopeRecorded {
@@ -714,6 +723,25 @@ export interface PlanStartInput {
 }
 
 export type RecordDraftedScopeFromWeb = (form: DraftedScopeFormDraft) => Promise<ScopeRecorded>;
+
+/**
+ * What one raise press posts (D-0074 rule 4.3): the approval it replaces, the
+ * lap whose gate it was pressed from, and the budgets. **Only budgets**: every
+ * other field of the successor is copied from the stored predecessor, never
+ * from the form (D-0074 rule 1.1).
+ */
+export interface RaiseInput {
+  /** Minted at draw, for the successor scope. */
+  readonly scopeId: string;
+  readonly requestMessageId: string;
+  /** The approval being raised: the tip the gate view drew. */
+  readonly scopeDecisionId: string;
+  /** The lap waiting at the gate this press came from, and returns to. */
+  readonly iterationId: string;
+  readonly budgets: ScopeFormDraft["budgets"];
+}
+
+export type RaiseFromWeb = (input: RaiseInput) => Promise<ScopeRecorded>;
 export type PlanStartFromWeb = (input: PlanStartInput) => Promise<Started>;
 
 /**
@@ -733,6 +761,7 @@ export class ScopePort {
   readonly #start: ScopedStartFromWeb;
   readonly #recordDrafted: RecordDraftedScopeFromWeb | null;
   readonly #startPlan: PlanStartFromWeb | null;
+  readonly #raise: RaiseFromWeb | null;
 
   constructor(
     record: RecordScopeFromWeb,
@@ -740,11 +769,23 @@ export class ScopePort {
     /** The drafted scope's two presses (rondo#238 C2b); null where the host offers none. */
     recordDrafted: RecordDraftedScopeFromWeb | null = null,
     startPlan: PlanStartFromWeb | null = null,
+    /** The raise press (D-0074 section 4); null where the host offers none. */
+    raise: RaiseFromWeb | null = null,
   ) {
     this.#record = record;
     this.#start = start;
     this.#recordDrafted = recordDrafted;
     this.#startPlan = startPlan;
+    this.#raise = raise;
+  }
+
+  /** Record a budgets-only successor of one approval and approve it, on one press. */
+  async raise(press: Press, input: RaiseInput): Promise<ScopeRecorded> {
+    if (!minted.has(press) || this.#raise === null) {
+      return { ok: false, note: "nothing was recorded: this was not a person's press" };
+    }
+    minted.delete(press);
+    return await this.#raise(input);
   }
 
   /** Approve one drafted scope, as drafted or as the person changed it, on one press. */
@@ -814,7 +855,8 @@ export type ReviseRefusal =
   | "reviseRefusedWalkFailed"
   | "reviseRefusedNotSettled"
   | "reviseRefusedAfterGate"
-  | "reviseRefusedNotStarted";
+  | "reviseRefusedNotStarted"
+  | "reviseRefusedForked";
 
 /** What one revise press came to; `test` is the `ScopeTest` that refused, on `reviseRefusedOutside`. */
 export interface Revised {
@@ -1062,6 +1104,8 @@ const START_ROUTE = "/start";
  * starting one drafted plan under that approval.
  */
 const SCOPE_DRAFT_ROUTE = "/scope-draft";
+/** The raise press (D-0074 rule 4.3): a budgets-only successor, recorded and approved. */
+const RAISE_ROUTE = "/raise";
 const START_PLAN_ROUTE = "/start-plan";
 
 /**
@@ -1079,6 +1123,7 @@ const PRESS_ROUTES: ReadonlySet<string> = new Set([
   SCOPE_ROUTE,
   START_ROUTE,
   SCOPE_DRAFT_ROUTE,
+  RAISE_ROUTE,
   START_PLAN_ROUTE,
   PUBLISH_ROUTE,
 ]);
@@ -1153,18 +1198,8 @@ function scopeValuesOf(form: Record<string, unknown>): {
   readonly severityThreshold: FindingSeverity;
   readonly outwardActs: readonly ScopeOutwardAct[];
 } | null {
-  const laps = wholeNumber(form["laps"]);
-  const reviewRounds = wholeNumber(form["review_rounds"]);
-  const costUsd = amount(form["cost_usd"]);
-  const costReserveUsd = amount(form["cost_reserve_usd"]);
-  const expiresAtMs = expiryMs(form["expires_at_ms"]);
-  if (
-    laps === null ||
-    reviewRounds === null ||
-    costUsd === null ||
-    costReserveUsd === null ||
-    expiresAtMs === null
-  ) {
+  const budgets = budgetsOf(form);
+  if (budgets === null) {
     return null;
   }
   const severity = form["severity_threshold"];
@@ -1185,15 +1220,34 @@ function scopeValuesOf(form: Record<string, unknown>): {
     return null;
   }
   return {
-    budgets: {
-      laps,
-      review_rounds: reviewRounds,
-      cost_usd: costUsd,
-      cost_reserve_usd: costReserveUsd,
-      expires_at_ms: expiresAtMs,
-    },
+    budgets,
     severityThreshold: severity as FindingSeverity,
     outwardActs: acts,
+  };
+}
+
+/** The five budgets a scope form posts, or null when one is not a value rondo can use. */
+function budgetsOf(form: Record<string, unknown>): ScopeFormDraft["budgets"] | null {
+  const laps = wholeNumber(form["laps"]);
+  const reviewRounds = wholeNumber(form["review_rounds"]);
+  const costUsd = amount(form["cost_usd"]);
+  const costReserveUsd = amount(form["cost_reserve_usd"]);
+  const expiresAtMs = expiryMs(form["expires_at_ms"]);
+  if (
+    laps === null ||
+    reviewRounds === null ||
+    costUsd === null ||
+    costReserveUsd === null ||
+    expiresAtMs === null
+  ) {
+    return null;
+  }
+  return {
+    laps,
+    review_rounds: reviewRounds,
+    cost_usd: costUsd,
+    cost_reserve_usd: costReserveUsd,
+    expires_at_ms: expiresAtMs,
   };
 }
 
@@ -1271,7 +1325,12 @@ function viewOf(query: URLSearchParams): PageView {
     const rounds = asked === null ? Number.NaN : Number.parseInt(asked, 10);
     const decision = query.get("decision");
     const plan = query.get("plan");
+    const raise = query.get("raise");
+    const gate = query.get("gate");
     return {
+      ...(raise === null || raise === "" || gate === null || gate === ""
+        ? {}
+        : { raise: { decisionId: raise, iterationId: gate } }),
       kind: "scope",
       messageId: scoping,
       plan: plan === null || plan === "" ? null : plan,
@@ -1729,6 +1788,51 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     );
   });
 
+  // **The raise press** (D-0074 section 4): a successor of the approval the lap
+  // at this gate spends, differing only in its budgets, recorded and approved
+  // on one press as `/scope` records a first one. The approval and the lap are
+  // what the gate view drew; the port re-reads both and copies every other
+  // field from the stored row. It returns to the gate it was pressed from,
+  // where asking for a change now spends the new approval.
+  app.post(RAISE_ROUTE, async (c) => {
+    const form = await c.req.parseBody();
+    const iterationId = typeof form["iteration"] === "string" ? form["iteration"] : "";
+    if (scope === null) {
+      return raiseRefused(c, 403, "scopeRefusedNoApprover", iterationId);
+    }
+    const minting = mintPress(c, form["token"]);
+    if (!("press" in minting)) {
+      return raiseRefused(c, minting.status, "scopeRefusedPress", iterationId);
+    }
+    const request = typeof form["request"] === "string" ? form["request"] : "";
+    const decision = typeof form["raise"] === "string" ? form["raise"] : "";
+    const scopeId = form["scope_id"];
+    if (
+      typeof scopeId !== "string" ||
+      !PAGE_SCOPE_ID.test(scopeId) ||
+      request === "" ||
+      decision === "" ||
+      iterationId === ""
+    ) {
+      return raiseRefused(c, 400, "scopeRefusedForm", iterationId);
+    }
+    const budgets = budgetsOf(form);
+    if (budgets === null) {
+      return raiseRefused(c, 400, "scopeRefusedFields", iterationId);
+    }
+    const raised = await scope.raise(minting.press, {
+      scopeId,
+      requestMessageId: request,
+      scopeDecisionId: decision,
+      iterationId,
+      budgets,
+    });
+    if (!raised.ok) {
+      return raiseRefused(c, 409, raised.why ?? "scopeRefusedNotTaken", iterationId);
+    }
+    return c.redirect(viewHref({ kind: "answer", iterationId }, tagOf(c)), 303);
+  });
+
   // **One drafted plan's start** (rondo#238 C2b): the plan named by its split
   // and its place in it, read back in the port -- never posted whole.
   app.post(START_PLAN_ROUTE, async (c) => {
@@ -2106,6 +2210,36 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
         iterationId === null || iterationId === ""
           ? { kind: "summary" }
           : { kind: "answer", iterationId },
+        wording.lang,
+      ),
+      wording.gateBack,
+    );
+  }
+
+  /**
+   * A raise press's refusal, with the way back to the gate it was pressed from
+   * (D-0074 rule 4.4): that is where the refusal is about, and where the gate
+   * view already draws whichever approval now stands.
+   */
+  function raiseRefused(
+    c: Context<PageEnv>,
+    status: 400 | 403 | 409,
+    why:
+      | "scopeRefusedNoApprover"
+      | "scopeRefusedPress"
+      | "scopeRefusedForm"
+      | "scopeRefusedFields"
+      | ScopeRefusal,
+    iterationId: string,
+  ) {
+    const wording = wordingOf(c);
+    return pressRefused(
+      c,
+      status,
+      wording.raiseAction,
+      wording[why],
+      viewHref(
+        iterationId === "" ? { kind: "summary" } : { kind: "answer", iterationId },
         wording.lang,
       ),
       wording.gateBack,
