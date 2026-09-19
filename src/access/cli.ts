@@ -123,7 +123,13 @@ import {
   runDrafter,
 } from "./forge.js";
 import { type InboxOutcome, showInbox, type TranscriptLocation } from "./inbox.js";
-import { issueReader, issuesQuote, PROMPT_TRANSPORT_BOUND_BYTES } from "./issue-read.js";
+import {
+  issueReader,
+  issuesQuote,
+  PROMPT_TRANSPORT_BOUND_BYTES,
+  requestOf,
+  unreadIssues,
+} from "./issue-read.js";
 import { isModelDrafterName } from "./model-draft.js";
 import { draftedPlanRun, type HeldPlan, heldPlanByDigest } from "./model-drafter.js";
 import { modelReadingLines } from "./model-review.js";
@@ -5360,7 +5366,7 @@ async function startScoped(
  * said nowhere.
  */
 export async function withNamedIssues(
-  record: Pick<AdvisoryRecord, "threadMessages">,
+  record: Pick<AdvisoryRecord, "threadMessages" | "messagesBeforeIssueReader">,
   requestMessageId: string,
   plan: RunPlan,
 ): Promise<RunPlan | { readonly refusal: string }> {
@@ -5368,6 +5374,20 @@ export async function withNamedIssues(
   if (threads.kind !== "read") {
     return {
       refusal: `the request's thread will not read, so the issues it names cannot be quoted: ${threads.reason}`,
+    };
+  }
+  // **Not while a read is still to come** (section 3.3's rule, at the lap's
+  // door): an admitted prompt is never re-quoted, so a lap started before an
+  // issue's read lands would run without it for good. The scope screen says
+  // which are not read yet.
+  const waiting = [
+    ...unreadIssues(threads.messages, await record.messagesBeforeIssueReader(Date.now())),
+  ].filter(([messageId]) => requestOf(threads.messages, messageId) === requestMessageId);
+  if (waiting.length > 0) {
+    return {
+      refusal:
+        `rondo has not yet read ${waiting.flatMap(([, refs]) => refs.map((r) => r.named)).join(", ")}, ` +
+        "which this request names; nothing was admitted, and it can start once they are read",
     };
   }
   const prompt = plan.prompt + issuesQuote(threads.messages, requestMessageId);

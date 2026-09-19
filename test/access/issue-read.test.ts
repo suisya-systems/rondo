@@ -339,3 +339,23 @@ test("an issue named again is given as of its latest read, and the reads of one 
     refusal: expect.stringContaining("nothing was cut"),
   });
 });
+
+test("a lap is not admitted while an issue its request names is still to be read (section 3.3)", async () => {
+  const w = await world();
+  const { reader } = readerOver(w, fakeForge().read);
+  await reader.unread([]);
+  await w.say("r1", "Fix the button.", null, 1_000);
+  await w.say("r1-more", "And #237.", "r1", 2_000);
+  await w.say("other", "Elsewhere, #9.", null, 3_000);
+  const planned = readRunPlan({ ...planDocument(), prompt: "Fix the button." });
+  if (planned.kind !== "planned") throw new Error(planned.reason);
+  expect(await withNamedIssues(w.record, "r1", planned.plan)).toEqual({
+    refusal:
+      "rondo has not yet read #237, which this request names; nothing was admitted, and it can " +
+      "start once they are read",
+  });
+  reader.kick();
+  await reader.idle();
+  const quoted = await withNamedIssues(w.record, "r1", planned.plan);
+  expect("prompt" in quoted && quoted.prompt).toContain(ISSUE.title);
+});

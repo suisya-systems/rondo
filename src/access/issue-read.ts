@@ -412,6 +412,14 @@ function rootsOf(
   };
 }
 
+/** The request `messageId` belongs to, or undefined when its chain opens none. */
+export function requestOf(
+  messages: readonly ThreadMessageDraft[],
+  messageId: string,
+): string | undefined {
+  return rootsOf(messages)(messageId);
+}
+
 /** Every `forge` message under `requestMessageId`, read back, oldest first. */
 export function issuesRead(
   messages: readonly ThreadMessageDraft[],
