@@ -42,9 +42,17 @@ import {
  */
 const DRAFTER_INSTRUCTIONS_VERSION = 1;
 
+/** What every row a model drafter writes is named under (rule 1.4). */
+export const MODEL_DRAFTER_PREFIX = "rondo/drafter/";
+
+/** Whether an author or drafter id names a model drafter run, of any version or model. */
+export function isModelDrafterName(id: string): boolean {
+  return id.startsWith(MODEL_DRAFTER_PREFIX);
+}
+
 /** The row name a drafter run writes under: `rondo/drafter/1/<model-id>` (rule 1.4). */
 export function modelDrafterName(row: DrafterRow): string {
-  return `rondo/drafter/${String(DRAFTER_INSTRUCTIONS_VERSION)}/${row.model}`;
+  return `${MODEL_DRAFTER_PREFIX}${String(DRAFTER_INSTRUCTIONS_VERSION)}/${row.model}`;
 }
 
 /**

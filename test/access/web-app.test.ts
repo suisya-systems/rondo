@@ -265,12 +265,16 @@ function scopeForm(overrides: Record<string, string> = {}): Record<string, strin
 }
 
 /** A scoped-start form, as the page draws it: hidden ids only, no typed prompt. */
+/** The held plan a start form names (rondo#238): read again in the port, never posted whole. */
+const PLAN_DIGEST = `sha256:${"2".repeat(64)}`;
+
 function startForm(overrides: Record<string, string> = {}): Record<string, string> {
   return {
     token: TOKEN,
     request: "req-1",
     scope_decision: "decision-1",
     iteration: newIterationId(),
+    plan: PLAN_DIGEST,
     ...overrides,
   };
 }
@@ -449,7 +453,10 @@ test("(scope) a person's native press records one scope and approves it, once", 
   const form = scopeForm();
   const pressed = await send(base, "/scope", "POST", pressHeaders(base), form);
   expect(pressed.status).toBe(303);
-  expect(pressed.location).toBe("/?scope=req-1&decision=decision-1&lang=en#scope");
+  // The plan the scope was drawn over rides along, so the start is that plan's (rondo#238).
+  expect(pressed.location).toBe(
+    `/?scope=req-1&decision=decision-1&plan=${encodeURIComponent(`sha256:${"0".repeat(64)}`)}&lang=en#scope`,
+  );
   expect(scoped).toEqual([
     {
       scopeId: form["scope_id"],
@@ -623,6 +630,7 @@ test("(start) a person's native press starts one lap under the scope, once", asy
       iterationId: form["iteration"],
       requestMessageId: "req-1",
       scopeDecisionId: "decision-1",
+      planDigest: PLAN_DIGEST,
     },
   ]);
 
@@ -667,6 +675,11 @@ test("(start) every other shape of request to the scoped-start route is refused 
     expect(answered.body, shape).not.toBe("");
   }
   expect((await send(base, "/start", "GET", person)).status).toBe(404);
+  // A press that names no held plan is not this page's form (rondo#238): the
+  // plan the lap runs on is always the one the screen drew.
+  const noPlan = startForm();
+  delete noPlan["plan"];
+  expect((await send(base, "/start", "POST", person, noPlan)).status).toBe(400);
   expect(started).toEqual([]);
 
   stop.abort();
@@ -682,6 +695,7 @@ test("(start) a send minted for the scoped-start route cannot be spent there: on
     iterationId: newIterationId(),
     requestMessageId: "req-1",
     scopeDecisionId: "decision-1",
+    planDigest: PLAN_DIGEST,
   };
   app.post("/planted/send-as-start-press", async (c) => {
     const minting = mintSend(c, TOKEN);
@@ -710,6 +724,7 @@ test("(start) a scoped-start press is one write: the port spends it, and a reque
     iterationId: newIterationId(),
     requestMessageId: "req-1",
     scopeDecisionId: "decision-1",
+    planDigest: PLAN_DIGEST,
   };
   app.post("/twice-start", async (c) => {
     const form = await c.req.parseBody();
@@ -752,6 +767,7 @@ test("(scope, start) the planted writers, reached by a GET, record and start not
     iterationId: newIterationId(),
     requestMessageId: "req-1",
     scopeDecisionId: "decision-1",
+    planDigest: PLAN_DIGEST,
   };
   const plantedScope = async (c: Context<PageEnv>, name: string): Promise<void> => {
     ran.push(name);

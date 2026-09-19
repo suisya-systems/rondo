@@ -19,7 +19,7 @@ import { drafterRow } from "../continuo/roles.js";
 import { PRICED_MODEL_TIERS } from "../refrain/classification.js";
 import { readPlan, readRunPlan } from "../refrain/plan.js";
 import { planDigest } from "../store/plan.js";
-import type { IterationRecord, JsonRecord } from "../store/records.js";
+import type { IterationRecord, JsonRecord, JsonValue } from "../store/records.js";
 import type { AdvisoryRecord, IterationStore } from "../store/sqlite.js";
 import type { runDrafter } from "./forge.js";
 import {
@@ -164,7 +164,7 @@ const priced = (tier: string | null): boolean =>
  * that into an unavailable run.
  */
 export async function gatherDrafterMaterial(
-  ports: DrafterPorts,
+  ports: Pick<DrafterPorts, "store" | "record" | "now">,
   requestMessageId: string,
   language: string | null,
 ): Promise<DrafterMaterial> {
@@ -333,4 +333,65 @@ export async function gatherDrafterMaterial(
     draftedAtMs,
     language,
   };
+}
+
+/**
+ * A plan rondo holds, as a person picks it on the scope screen when there is
+ * no draft to approve (rondo#238's answer: the operator path of D-0069 section
+ * 1, on the page). The same plans the drafter is handed (D-0071 rule 2.1.3),
+ * one per place and agent type.
+ */
+export interface HeldPlan {
+  readonly planDigest: string;
+  readonly document: JsonRecord;
+  readonly repository: string;
+  readonly workspaceRoot: string;
+  readonly agentTypeDigest: string;
+  readonly agentTypeInput: JsonValue;
+  readonly from: DraftTemplate["from"];
+}
+
+/**
+ * The plans rondo holds for one request: pasted into its thread, newest first,
+ * then those recent laps ran, newest first -- **one per (repository, workspace
+ * root, agent type)**, because every lap's plan carries its own run and prompt
+ * and a list of twenty near-identical laps is not a choice a person can make.
+ * The newest of each kind stands for it. A plan whose agent type builds no
+ * record is not offered.
+ */
+export async function heldPlans(
+  ports: Pick<DrafterPorts, "store" | "record" | "now">,
+  requestMessageId: string,
+): Promise<readonly HeldPlan[]> {
+  const material = await gatherDrafterMaterial(ports, requestMessageId, null);
+  const pasted = material.templates.filter((t) => t.from.kind === "message").reverse();
+  const ran = material.templates.filter((t) => t.from.kind === "iterations");
+  const plans = new Map<string, HeldPlan>();
+  for (const template of [...pasted, ...ran]) {
+    const planned = readRunPlan(template.plan);
+    if (planned.kind !== "planned") {
+      continue;
+    }
+    const recorded = agentTypeRecordOf(planned.plan, template.plan);
+    if ("refusal" in recorded) {
+      continue;
+    }
+    const kind = JSON.stringify([
+      template.repository,
+      template.workspaceRoot,
+      recorded.record.agentTypeDigest,
+    ]);
+    if (!plans.has(kind)) {
+      plans.set(kind, {
+        planDigest: template.planDigest,
+        document: template.plan,
+        repository: template.repository,
+        workspaceRoot: template.workspaceRoot,
+        agentTypeDigest: recorded.record.agentTypeDigest,
+        agentTypeInput: recorded.record.agentTypeInput,
+        from: template.from,
+      });
+    }
+  }
+  return [...plans.values()];
 }

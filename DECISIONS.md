@@ -15830,6 +15830,27 @@ Each dated and additive unless marked, and added with this entry's acceptance:
 - **A drafter-table model that is the reviewer's family**, if a reviewer over drafts is later built.
 - Any measurement in "What was measured" failing to reproduce at rondo `765dd6e`.
 
+> **Annotation (2026-09-19, from rondo#238's stage 2 build: rondo#263, rondo#264, and the scope page
+> after them).** Added after this entry was accepted, and additive. Three readings the building change
+> took where this entry is silent; nothing above is edited.
+> - **Section 3, on a store the drafter first runs on.** A store the drafter first runs on drafts only
+>   the operator messages written after that run. An older thread is drafted from the person's next
+>   reply in it, and that run reads the whole thread, the older messages included. The moment is kept
+>   as one row (`drafter_epoch`, the conversation's last row id when a drafter host first ran), so a
+>   clock that steps back cannot move it, and the host says once how many older threads it left alone.
+>   **Why:** rule 3.1's "one run per operator message" read over a store's whole history would spend on
+>   every past request the first time a host starts, unasked, which is the spending #260 answered at
+>   the gate in another place. Rules 3.2 and 3.3 hold unchanged from that moment on.
+> - **Rule 3.3, across processes.** "At most one run per thread at a time" holds across every process
+>   serving one store through a lease row per request thread (`drafter_lease`), taken before the model
+>   is invoked, given back after the write, and lapsed after 15 minutes. It is an operating lease and
+>   not a record: nothing rests on it and nothing reads it after the run.
+> - **Rule 7.3's "a basis to the proposal row".** `D-0032` rule 2's closed union gains an eighth form,
+>   `proposal` (`{ form: "proposal", proposalId }`, typed `proposal:ID`), which the thread writer
+>   refuses when it names no proposal row, as it refuses a `scope` basis naming no scope (rondo#197's
+>   precedent). A drafter message that rests on no proposal row is the one a run that drafted nothing
+>   wrote (rule 1.5), and the page tells the two apart by that and not by the words.
+
 ## D-0072 — What a reply to a scope stop does: an answering press carries one of two words, the line opens on the absence of "carry on" rather than on the presence of a reply, and stopping becomes a row instead of a second approval
 
 **Status:** accepted (2026-09-17, rondo's human gate). One point was put to the gate with four

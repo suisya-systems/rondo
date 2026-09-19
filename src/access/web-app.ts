@@ -672,6 +672,8 @@ export interface ScopedStartInput {
   readonly iterationId: string;
   readonly requestMessageId: string;
   readonly scopeDecisionId: string;
+  /** The held plan the lap runs on, by digest (rondo#238): read again in the port, never posted whole. */
+  readonly planDigest: string;
 }
 
 /** Why a scoped start admitted nothing, as the wording key the page says it in. */
@@ -1191,9 +1193,11 @@ function viewOf(query: URLSearchParams): PageView {
     const asked = query.get("rounds");
     const rounds = asked === null ? Number.NaN : Number.parseInt(asked, 10);
     const decision = query.get("decision");
+    const plan = query.get("plan");
     return {
       kind: "scope",
       messageId: scoping,
+      plan: plan === null || plan === "" ? null : plan,
       // Total, as the rest of this function is: a typo in a query is an
       // operator who wanted the page, so an unreadable or out-of-range count is
       // the default rather than a refusal.
@@ -1575,6 +1579,8 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
           messageId: request,
           rounds: null,
           decisionId: recorded.scopeDecisionId,
+          // The plan the scope was drawn over, so the start below it is that plan's.
+          plan: draft.planDigest,
         },
         tagOf(c),
       )}#scope`,
@@ -1600,9 +1606,12 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
       return startRefused(c, minting.status, "startRefusedPress", request, decision);
     }
     const iterationId = form["iteration"];
+    const plan = form["plan"];
     if (
       typeof iterationId !== "string" ||
       !PAGE_ITERATION_ID.test(iterationId) ||
+      typeof plan !== "string" ||
+      plan === "" ||
       request === "" ||
       decision === ""
     ) {
@@ -1612,6 +1621,7 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
       iterationId,
       requestMessageId: request,
       scopeDecisionId: decision,
+      planDigest: plan,
     });
     if (!started.ok) {
       return startRefused(
@@ -1944,6 +1954,7 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     request: string | null,
     decision: string | null = null,
     rounds: number | null = null,
+    plan: string | null = null,
   ): string {
     return viewHref(
       request === null || request === ""
@@ -1953,6 +1964,7 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
             messageId: request,
             rounds,
             decisionId: decision === null || decision === "" ? null : decision,
+            plan,
           },
       wording.lang,
     );

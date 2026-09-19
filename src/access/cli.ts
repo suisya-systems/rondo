@@ -118,6 +118,7 @@ import {
   runDrafter,
 } from "./forge.js";
 import { type InboxOutcome, showInbox, type TranscriptLocation } from "./inbox.js";
+import { type HeldPlan, heldPlans } from "./model-drafter.js";
 import { modelReadingLines } from "./model-review.js";
 import { modelReviewPorts, takeModelReading } from "./model-reviewer.js";
 import { denialLine, evidenceOf, LIST_LIMIT, READING_REMOTE, uncommittedPaths } from "./review.js";
@@ -127,13 +128,7 @@ import {
   heldAgentTypeLines,
   type ScopedAdmission,
 } from "./scope.js";
-import type {
-  LapMaterialRead,
-  PublishBlock,
-  PublishShown,
-  ReviewBlock,
-  ScopeDrafted,
-} from "./web.js";
+import type { LapMaterialRead, PublishBlock, PublishShown, ReviewBlock } from "./web.js";
 import {
   AnswerPort,
   type ClaimRefusal,
@@ -349,8 +344,6 @@ environment:
   RONDO_CONTINUO_CLI  absolute path to continuo's built dist/cli.js
   RONDO_STORE         absolute path to rondo's own iteration database
   RONDO_APPROVER      the one identity allowed to answer a gate or publish
-  RONDO_PLAN          absolute path to the JSON plan the page drafts a scope
-                      from. Unset means the page draws no scope form
   RONDO_MAX_LIVE      how many iterations may be open at once. Default 3. An
                       iteration suspended at a gate holds no worker, so this
                       bounds how many questions may wait on a person at once
@@ -468,97 +461,22 @@ export function operatorLanguage(
 }
 
 /**
- * The plan this host drafts a scope from (D-0069 section 1).
- *
- * **A host fact read where the host's other facts are read**, beside
- * `RONDO_APPROVER` and `RONDO_OPERATOR_LANGUAGE`: one variable, no file of its
- * own, no precedence order, no per-request override -- which is what keeps
- * D-0019 rule 3's refusal of a configuration *layer* intact.
+ * One plan rondo holds for a request, by digest (rondo#238), or null when it is
+ * not one; a refusal only when the plans will not read.
  */
-const RONDO_PLAN_ENV = "RONDO_PLAN";
-
-/**
- * The plan file one host named, or a refusal naming this variable.
- *
- * **Absolute, refused before a socket is opened**, the treatment
- * {@link operatorLanguage} gives a mistyped tag and `commandScope` gives
- * `--plan`: a relative path names a different file from a different directory,
- * and a page that drafted a scope from the wrong plan would say nothing about
- * it.
- *
- * **Everything else about the file is read per request and said on the screen**,
- * not refused here. `web` is dispatched ahead of `startContinuo` so the screen
- * that says what is stuck stays reachable; a plan that will not parse is one
- * more stuck thing, and withholding the whole page for it would withhold the
- * screen in exactly the state it exists for.
- *
- * An empty string is `unset` and not a refusal, on {@link operatorLanguage}'s
- * reading of the same shape.
- */
-export function operatorPlan(
-  environment: Readonly<Record<string, string | undefined>>,
-): { readonly file: string | null } | { readonly refusal: string } {
-  const named = environment[RONDO_PLAN_ENV];
-  if (named === undefined || named.trim() === "") {
-    return { file: null };
-  }
-  if (!isAbsolute(named)) {
+async function heldPlanOf(
+  ports: { readonly store: IterationStore; readonly record: AdvisoryRecord },
+  requestMessageId: string,
+  planDigest: string,
+): Promise<{ readonly plan: HeldPlan | null } | { readonly refusal: string }> {
+  try {
+    const plans = await heldPlans({ ...ports, now: Date.now }, requestMessageId);
+    return { plan: plans.find((plan) => plan.planDigest === planDigest) ?? null };
+  } catch (error) {
     return {
-      refusal:
-        `${RONDO_PLAN_ENV} is '${named}', and it must be an absolute path. A relative one names ` +
-        "a different file from each directory rondo is started in, and a scope drafted from the " +
-        "wrong plan would say nothing about it.",
+      refusal: `the plans rondo holds could not be read: ${error instanceof Error ? error.message : String(error)}`,
     };
   }
-  return { file: named };
-}
-
-/**
- * The facts the scope screen draws from one plan file, or the words saying why
- * there are none (D-0069 section 1).
- *
- * Read per request rather than at boot, for {@link operatorPlan}'s reason: a
- * plan edited or broken while the page is open becomes a sentence on the
- * screen, never a page that will not load.
- */
-export async function scopeDraftingFromPlan(
-  file: string,
-  record: Pick<AdvisoryRecord, "heldAgentType">,
-  wording: Chrome,
-): Promise<ScopeDrafted> {
-  const read = readPlanDocument(file);
-  if ("refusal" in read) {
-    return { kind: "refused", reason: read.refusal };
-  }
-  const planned = readRunPlan(read.document);
-  if (planned.kind !== "planned") {
-    return { kind: "refused", reason: `The plan was refused: ${planned.reason}` };
-  }
-  const recorded = agentTypeRecordOf(planned.plan, read.document);
-  if ("refusal" in recorded) {
-    return { kind: "refused", reason: `its agent type builds no record: ${recorded.refusal}` };
-  }
-  return {
-    kind: "drafted",
-    agentTypeDigest: recorded.record.agentTypeDigest,
-    planDigest: recorded.record.planDigest,
-    workspaces: [
-      { repository: planned.plan.repository, workspace_root: planned.plan.workspaceRoot },
-    ],
-    // **The plan answers for the digest the store does not hold yet** (D-0069
-    // section 1, rondo#233 S3): a store's first scope lists an agent type no lap
-    // has run, so the held read is absent and the screen could only say rondo
-    // holds no record -- with the press still offered. That is a hash approved
-    // blind. The record is built from this very plan, so its own input says what
-    // the type bounds *before* the press writes the row, and reading it writes
-    // nothing.
-    heldLines: await heldAgentTypeLines(
-      wording,
-      record,
-      [recorded.record.agentTypeDigest],
-      new Map([[recorded.record.agentTypeDigest, recorded.record.agentTypeInput]]),
-    ),
-  };
 }
 
 /** The remote a push goes to when the operator does not name one. */
@@ -1703,15 +1621,6 @@ export async function main(
     if ("refusal" in selected) {
       return refuse(selected.refusal);
     }
-    // **The plan is read once here too, and only the one thing about it that is
-    // about the variable** (rondo#233 S3): a relative path refuses before a
-    // socket is opened, and everything else about the file becomes words on the
-    // scope screen.
-    const planned = operatorPlan(environment);
-    if ("refusal" in planned) {
-      return refuse(planned.refusal);
-    }
-    const planFile = planned.file;
     // **The approver is read once, here, and decides whether there is a write
     // port at all** (D-0041 rules 4 and 5). Building the function and letting
     // the page decide not to draw a button would leave a door with nobody's
@@ -1776,12 +1685,6 @@ export async function main(
         // the console's strings go through D-0004's escape and it has no CJK
         // substitutes (D-0055 rule 10).
         hostLanguage: selected.tag,
-        // **The plan the scope screen drafts from**, read per request through
-        // this port: no plan, no form, and the screen says which.
-        plan:
-          planFile === null
-            ? null
-            : async (pageWording) => await scopeDraftingFromPlan(planFile, record, pageWording),
         answer:
           approver === undefined || approver === ""
             ? null
@@ -1846,22 +1749,9 @@ export async function main(
             ? null
             : new ScopePort(
                 async (draft) =>
-                  await recordScopeFromPage(
-                    environment,
-                    opened.path,
-                    sender.actorId,
-                    planFile,
-                    draft,
-                  ),
+                  await recordScopeFromPage(environment, store, opened.path, sender.actorId, draft),
                 async (input) =>
-                  await startScopedFromPage(
-                    environment,
-                    store,
-                    opened.path,
-                    sender.actorId,
-                    planFile,
-                    input,
-                  ),
+                  await startScopedFromPage(environment, store, opened.path, sender.actorId, input),
               ),
         // **The press is checked inside this port too** (rondo#233 S4): a gate
         // answered with a change and the lap it starts are one act, and nothing
@@ -4321,9 +4211,9 @@ async function answerFromPage(
  */
 export async function recordScopeFromPage(
   environment: Readonly<Record<string, string | undefined>>,
+  store: IterationStore,
   storePath: string,
   approver: string,
-  planFile: string | null,
   draft: ScopeFormDraft,
 ): Promise<ScopeRecorded> {
   const notTaken = (note: string): ScopeRecorded => ({
@@ -4335,35 +4225,24 @@ export async function recordScopeFromPage(
   if ("refusal" in actor) {
     return notTaken(actor.refusal);
   }
-  if (planFile === null) {
-    return notTaken(`${RONDO_PLAN_ENV} is not set, so there is no plan to record a scope over.`);
+  const record = openAdvisoryRecord(storePath);
+  // **The plan is read again, from what rondo holds, and compared** (rondo#238,
+  // the press review rondo#233 S3 gave the file this replaced): the form carries
+  // only the two digests it was drawn with, never a plan, and a plan that is no
+  // longer held -- or holds another agent type -- is a refusal.
+  const chosen = await heldPlanOf({ store, record }, draft.requestMessageId, draft.planDigest);
+  if ("refusal" in chosen) {
+    return notTaken(chosen.refusal);
   }
-  const read = readPlanDocument(planFile);
-  if ("refusal" in read) {
-    return notTaken(read.refusal);
-  }
-  const planned = readRunPlan(read.document);
-  if (planned.kind !== "planned") {
-    return notTaken(`The plan was refused: ${planned.reason}`);
-  }
-  const recorded = agentTypeRecordOf(planned.plan, read.document);
-  if ("refusal" in recorded) {
-    return notTaken(`its agent type builds no record: ${recorded.refusal}`);
-  }
-  if (
-    recorded.record.planDigest !== draft.planDigest ||
-    recorded.record.agentTypeDigest !== draft.agentTypeDigest
-  ) {
+  if (chosen.plan === null || chosen.plan.agentTypeDigest !== draft.agentTypeDigest) {
     return { ok: false, why: "scopeRefusedPlanChanged", note: "the plan is not the one drawn" };
   }
-  const record = openAdvisoryRecord(storePath);
+  const plan = chosen.plan;
   const createdAtMs = Date.now();
   const payload = scopePayloadWithDefaults({
     requests: [draft.requestMessageId],
-    workspaces: [
-      { repository: planned.plan.repository, workspace_root: planned.plan.workspaceRoot },
-    ],
-    agent_types: [recorded.record.agentTypeDigest],
+    workspaces: [{ repository: plan.repository, workspace_root: plan.workspaceRoot }],
+    agent_types: [plan.agentTypeDigest],
     budgets: { ...draft.budgets },
     severity_threshold: draft.severityThreshold,
     outward_acts: [...draft.outwardActs],
@@ -4380,7 +4259,15 @@ export async function recordScopeFromPage(
     authorId: actor.actorId,
     bases: [],
     createdAtMs,
-    agentTypeRecords: [recorded.record],
+    // D-0069 section 1's operator path: a plan's agent type recorded with the
+    // person's scope, a no-op for a digest rondo already holds.
+    agentTypeRecords: [
+      {
+        agentTypeDigest: plan.agentTypeDigest,
+        agentTypeInput: plan.agentTypeInput,
+        planDigest: plan.planDigest,
+      },
+    ],
   });
   const stored = await record.readScope(draft.scopeId);
   // **A second press of one form is the write it repeats**, as a repeated
@@ -4473,7 +4360,6 @@ export async function startScopedFromPage(
   store: IterationStore,
   storePath: string,
   approver: string,
-  planFile: string | null,
   input: ScopedStartInput,
 ): Promise<Started> {
   // **Two presses of one form are one start, even when they overlap** (rondo#233
@@ -4493,7 +4379,7 @@ export async function startScopedFromPage(
   if (started !== undefined) {
     return await started;
   }
-  const running = startScoped(environment, store, storePath, approver, planFile, input);
+  const running = startScoped(environment, store, storePath, approver, input);
   starting.set(input.iterationId, running);
   try {
     return await running;
@@ -4793,19 +4679,11 @@ async function startScoped(
   store: IterationStore,
   storePath: string,
   approver: string,
-  planFile: string | null,
   input: ScopedStartInput,
 ): Promise<Started> {
   const actor = approvedActor(approver, environment);
   if ("refusal" in actor) {
     return { ok: false, why: "startRefusedNotAdmitted", note: actor.refusal };
-  }
-  if (planFile === null) {
-    return {
-      ok: false,
-      why: "startRefusedNoPlan",
-      note: `${RONDO_PLAN_ENV} is not set, so there is no plan to start.`,
-    };
   }
   const record = openAdvisoryRecord(storePath);
   const threads = await record.threadMessages();
@@ -4847,11 +4725,18 @@ async function startScoped(
         `${already.reason}. Nothing was admitted a second time.`,
     };
   }
-  const read = readPlanDocument(planFile);
-  if ("refusal" in read) {
-    return { ok: false, why: "startRefusedNoPlan", note: read.refusal };
+  const chosen = await heldPlanOf({ store, record }, input.requestMessageId, input.planDigest);
+  if ("refusal" in chosen || chosen.plan === null) {
+    return {
+      ok: false,
+      why: "startRefusedNoPlan",
+      note:
+        "refusal" in chosen
+          ? chosen.refusal
+          : `'${input.planDigest}' is not a plan rondo holds for this request`,
+    };
   }
-  const planned = readRunPlan({ ...read.document, prompt: asked.body });
+  const planned = readRunPlan({ ...chosen.plan.document, prompt: asked.body });
   if (planned.kind !== "planned") {
     return {
       ok: false,

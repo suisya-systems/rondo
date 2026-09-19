@@ -764,6 +764,13 @@ The lap is pointed at $target, branch $target_base_branch, as project '$project_
 That is written into all four places the plan has to say it, from the one value
 you named, so there is nothing in the plan file to hand-edit.
 
+** On the page, the plan is something you paste. ** 'rondo web' reads no plan
+file: write your request on the page, then reply in its thread with the whole
+contents of
+  $plan
+and the scope screen offers it as the plan to run on (and the drafter drafts
+from it). Once one lap has run on it, rondo holds it and nothing is pasted again.
+
   cd $q_repo_root
   . $q_env_file
 
