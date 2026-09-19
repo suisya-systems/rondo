@@ -155,7 +155,7 @@ import {
 import {
   type ForgeRead,
   issueName,
-  issuesRead,
+  latestReads,
   type NamedIssue,
   parseForgeRead,
 } from "./issue-read.js";
@@ -4429,12 +4429,8 @@ async function scopeView(
  * they approve depends on it. Nothing when the request names none.
  */
 function scopeIssues(wording: Chrome, threads: Threads, requestMessageId: string) {
-  // Latest read of each name wins, as in the prompt's quote.
-  const reads = new Map<string, ForgeRead>();
-  for (const read of issuesRead(threads.messages, requestMessageId)) {
-    reads.delete(read.named);
-    reads.set(read.named, read);
-  }
+  // The latest read of each name, reckoned as the prompt's quote reckons it.
+  const reads = new Map(latestReads(threads.messages, requestMessageId).map((r) => [r.named, r]));
   const pending = threads.messages.flatMap((m) =>
     threads.rootOf(m.messageId) === requestMessageId
       ? (threads.unread.get(m.messageId) ?? []).filter((ref) => !reads.has(ref.named))

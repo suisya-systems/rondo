@@ -123,7 +123,7 @@ import {
   runDrafter,
 } from "./forge.js";
 import { type InboxOutcome, showInbox, type TranscriptLocation } from "./inbox.js";
-import { issueReader, issuesQuote } from "./issue-read.js";
+import { issueReader, issuesQuote, PROMPT_TRANSPORT_BOUND_BYTES } from "./issue-read.js";
 import { isModelDrafterName } from "./model-draft.js";
 import { draftedPlanRun, type HeldPlan, heldPlanByDigest } from "./model-drafter.js";
 import { modelReadingLines } from "./model-review.js";
@@ -2030,18 +2030,21 @@ export async function commandStart(
   const iterationId = parsed.iterationId;
   say(`starting iteration '${iterationId}'; the lap is the step that is slow`);
 
+  // **The issues the request named, after the prompt given here** (D-0078
+  // section 3.4), on both roads below: a start that names its request is
+  // given what rondo read of it, scoped or not.
+  const record = openAdvisoryRecord(storePath);
+  const quoted =
+    parsed.messageId === null ? plan : await withNamedIssues(record, parsed.messageId, plan);
+  if ("refusal" in quoted) {
+    return refuse(quoted.refusal);
+  }
+
   // D-0069 section 2: a first admission that spends a scope, through the one
   // call site that computes a verdict. It names no proposal, so every open ask
   // in its request's thread holds it back (rule 5). `parseCommand` has already
   // refused it without `--message-id`.
   if (parsed.scopeDecisionId !== null) {
-    const record = openAdvisoryRecord(storePath);
-    // The issues the request named, after the prompt given here (D-0078 3.4).
-    const quoted =
-      parsed.messageId === null ? plan : await withNamedIssues(record, parsed.messageId, plan);
-    if ("refusal" in quoted) {
-      return refuse(quoted.refusal);
-    }
     const outcome = await admitUnderScope(
       {
         store,
@@ -2082,7 +2085,7 @@ export async function commandStart(
   const report = await admit(
     ports,
     advisory,
-    plan,
+    quoted,
     START_POLICY,
     iterationId,
     null,
@@ -5367,7 +5370,20 @@ export async function withNamedIssues(
       refusal: `the request's thread will not read, so the issues it names cannot be quoted: ${threads.reason}`,
     };
   }
-  return { ...plan, prompt: plan.prompt + issuesQuote(threads.messages, requestMessageId) };
+  const prompt = plan.prompt + issuesQuote(threads.messages, requestMessageId);
+  // **Refused whole rather than cut** (section 2.3's rule, at the lap's door):
+  // the reader already bounds what one request's reads hold together, so only
+  // a prompt that is itself most of the bound reaches this.
+  const bytes = new TextEncoder().encode(prompt).length;
+  if (bytes > PROMPT_TRANSPORT_BOUND_BYTES) {
+    return {
+      refusal:
+        `the prompt with the issues its request named holds ${String(bytes)} bytes, over the ` +
+        `${String(PROMPT_TRANSPORT_BOUND_BYTES)} one argument to continuo can carry; nothing was ` +
+        "admitted, and nothing was cut",
+    };
+  }
+  return { ...plan, prompt };
 }
 
 async function admitScopedPlan(

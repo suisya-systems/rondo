@@ -46,6 +46,25 @@ export const MAX_ISSUES_PER_MESSAGE = 5;
  */
 export const ISSUE_BOUND_BYTES = 60_000;
 
+/**
+ * The most bytes the issues one request is given may hold together, counted
+ * over the latest read of each name. A read that would take a request past it
+ * is not given, whole, as one over {@link ISSUE_BOUND_BYTES} is not.
+ *
+ * Measured, unlike the two above: continuo takes the prompt as one argument
+ * (`--prompt=` in `src/continuo/invoker.ts`), and Linux refuses one argument
+ * over 131 072 bytes (`MAX_ARG_STRLEN`). This leaves the rest of that for the
+ * request's own words and rondo's framing.
+ *
+ * ponytail: Windows caps a whole command line near 32 767 characters, so a
+ * long issue there fails at the lap's start (said, never cut). A prompt handed
+ * over by file or standard input is the upgrade, and it is continuo's to offer.
+ */
+export const REQUEST_ISSUES_BOUND_BYTES = 96_000;
+
+/** The most a lap's whole prompt may hold, from the same `MAX_ARG_STRLEN`, with room for the language line. */
+export const PROMPT_TRANSPORT_BOUND_BYTES = 128_000;
+
 /** One reference as the person wrote it, and where it points. */
 export interface NamedIssue {
   /** The text as written in the message, which is also what a read answers. */
@@ -409,6 +428,22 @@ export function issuesRead(
 }
 
 /**
+ * The latest read of each reference under `requestMessageId`, by the name the
+ * person wrote, in the order they were first read: what the worker is given
+ * and what the scope screen says it is given, from one reckoning.
+ */
+export function latestReads(
+  messages: readonly ThreadMessageDraft[],
+  requestMessageId: string,
+): readonly ForgeRead[] {
+  const latest = new Map<string, ForgeRead>();
+  for (const read of issuesRead(messages, requestMessageId)) {
+    latest.set(read.named, read);
+  }
+  return [...latest.values()];
+}
+
+/**
  * The operator messages with a reference not yet answered by a `forge` reply,
  * and which references (sections 2.4 and 3.3). `before` is what the reader does
  * not read unasked: messages written before it first ran on this store.
@@ -459,16 +494,11 @@ export function issuesQuote(
   messages: readonly ThreadMessageDraft[],
   requestMessageId: string,
 ): string {
-  const latest = new Map<string, ForgeRead>();
-  for (const read of issuesRead(messages, requestMessageId)) {
-    const key = "read" in read ? read.read.url : `not read: ${read.named}`;
-    latest.delete(key);
-    latest.set(key, read);
-  }
-  if (latest.size === 0) {
+  const latest = latestReads(messages, requestMessageId);
+  if (latest.length === 0) {
     return "";
   }
-  const blocks = [...latest.values()].map((read) => {
+  const blocks = latest.map((read) => {
     const name = issueName(read);
     if ("failed" in read) {
       return (
@@ -492,6 +522,33 @@ export function issuesQuote(
     '"--- comment by" lines. Links in it were not followed and cannot be opened from here.\n\n' +
     blocks.join("\n\n")
   );
+}
+
+/**
+ * `read`, or a `too_long` failure when it would take its request's reads past
+ * {@link REQUEST_ISSUES_BOUND_BYTES} together: counted over the latest read of
+ * each other name, since a name read again replaces its earlier read.
+ */
+function withinRequest(read: ForgeRead, already: readonly ForgeRead[]): ForgeRead {
+  if (!("read" in read)) {
+    return read;
+  }
+  const size = (one: ForgeRead): number => new TextEncoder().encode(forgeBody(one)).length;
+  const total = already
+    .filter((one) => "read" in one && one.named !== read.named)
+    .reduce((sum, one) => sum + size(one), size(read));
+  return total <= REQUEST_ISSUES_BOUND_BYTES
+    ? read
+    : {
+        named: read.named,
+        atMs: read.atMs,
+        failed: {
+          why: "too_long",
+          detail:
+            `with the issues this request was already given it would hold ${String(total)} ` +
+            `bytes, over the bound of ${String(REQUEST_ISSUES_BOUND_BYTES)}`,
+        },
+      };
 }
 
 /** What the reader reaches, as values a test can replace. */
@@ -550,7 +607,20 @@ export function issueReader(ports: IssueReaderPorts): IssueReader {
       return false;
     }
     let wrote = false;
+    const rootOf = rootsOf(thread.messages);
+    // Each request's latest read per name, kept current as this scan writes,
+    // so the bound counts what an earlier reference in this scan was given.
+    const given = new Map<string, Map<string, ForgeRead>>();
+    const givenTo = (root: string): Map<string, ForgeRead> => {
+      let reads = given.get(root);
+      if (reads === undefined) {
+        reads = new Map(latestReads(thread.messages, root).map((r) => [r.named, r]));
+        given.set(root, reads);
+      }
+      return reads;
+    };
     for (const [messageId, left] of await unread(thread.messages)) {
+      const request = givenTo(rootOf(messageId) ?? messageId);
       // Which references are past the bound is by their place in the message,
       // so it does not move with how many were read before a restart.
       const body = thread.messages.find((m) => m.messageId === messageId)?.body ?? "";
@@ -571,7 +641,9 @@ export function issueReader(ports: IssueReaderPorts): IssueReader {
                   detail: `more than ${String(MAX_ISSUES_PER_MESSAGE)} issues are named in one message`,
                 },
               }
-            : await readNamedIssue(reference, ports.forgeRepo, ports.read, atMs);
+            : withinRequest(await readNamedIssue(reference, ports.forgeRepo, ports.read, atMs), [
+                ...request.values(),
+              ]);
         const outcome = await ports.record.recordThreadMessage({
           messageId: ports.mintId(),
           body: forgeBody(read),
@@ -584,6 +656,7 @@ export function issueReader(ports: IssueReaderPorts): IssueReader {
         });
         if (outcome.kind === "recorded") {
           wrote = true;
+          request.set(read.named, read);
           ports.log(
             `issues   ${messageId}: ${reference.named} ${"read" in read ? "read" : `not read (${read.failed.why})`}`,
           );

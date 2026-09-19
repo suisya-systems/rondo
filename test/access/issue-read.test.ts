@@ -290,3 +290,52 @@ test("the prompt ends with rondo's quote of every read, byte for byte, after the
   // A request that names nothing is prompted as before.
   expect(issuesQuote(thread.messages, "no-such-request")).toBe("");
 });
+
+test("an issue named again is given as of its latest read, and the reads of one request stay under their bound together (sections 2.3, 2.4)", async () => {
+  const w = await world();
+  let fail = false;
+  const big = "y".repeat(40_000);
+  const { reader } = readerOver(
+    w,
+    fakeForge(async (request) =>
+      fail && request.number === 237
+        ? { issue: ran("", 1, "gh: Not Found (HTTP 404)"), comments: null }
+        : {
+            issue: ran(
+              JSON.stringify({ ...ISSUE, number: request.number, body: `${big}${request.number}` }),
+            ),
+            comments: ran(""),
+          },
+    ).read,
+  );
+  await reader.unread([]);
+  // Two 40 000-byte reads fit together; the third would take the request past its bound.
+  await w.say("r1", "Fix #237, #51 and #62.", null, 1_000);
+  reader.kick();
+  await reader.idle();
+  let thread = await w.record.threadMessages();
+  if (thread.kind !== "read") throw new Error(thread.reason);
+  let quote = issuesQuote(thread.messages, "r1");
+  expect(quote).toContain(`${big}237`);
+  expect(quote).toContain(`${big}51`);
+  expect(quote).not.toContain(`${big}62`);
+  expect(quote).toContain("=== #62 was named in the request and could not be read");
+
+  // Named again, and not readable now: the worker is not given the old read.
+  fail = true;
+  await w.say("r1-again", "Look at #237 again.", "r1", 2_000);
+  reader.kick();
+  await reader.idle();
+  thread = await w.record.threadMessages();
+  if (thread.kind !== "read") throw new Error(thread.reason);
+  quote = issuesQuote(thread.messages, "r1");
+  expect(quote).not.toContain(`${big}237`);
+  expect(quote).toContain("=== #237 was named in the request and could not be read");
+
+  // A prompt that cannot reach continuo whole is refused, and never cut.
+  const planned = readRunPlan({ ...planDocument(), prompt: "z".repeat(130_000) });
+  if (planned.kind !== "planned") throw new Error(planned.reason);
+  expect(await withNamedIssues(w.record, "r1", planned.plan)).toMatchObject({
+    refusal: expect.stringContaining("nothing was cut"),
+  });
+});
