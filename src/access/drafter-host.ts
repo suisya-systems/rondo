@@ -89,10 +89,14 @@ export function drafterHost(ports: DrafterHostPorts): DrafterHost {
             written = "held";
           } else {
             try {
-              written = await write(
-                ports,
-                await draft(ports, one.requestMessageId, ports.language),
+              // Still due now that it is ours: the list was read before the
+              // runs ahead of it, and another host may have drafted it since.
+              const still = (await dueRequests(ports, givenUp)).some(
+                (d) => d.requestMessageId === one.requestMessageId,
               );
+              written = still
+                ? await write(ports, await draft(ports, one.requestMessageId, ports.language))
+                : "held";
             } finally {
               await ports.record.releaseDraft(one.requestMessageId, holder);
             }

@@ -245,3 +245,37 @@ test("a thread another host is drafting is left to it: nothing runs and nothing 
   await host.idle();
   expect(handed).toHaveLength(1);
 });
+
+test("a thread drafted by another host while this one worked through its list is not run again", async () => {
+  const w = await world();
+  await w.say("r1", "First.", null, 1_000);
+  await w.say("r2", "Second.", null, 2_000);
+  const { host, handed } = hostOver(w, async (_document, run) => {
+    if (run === 1) {
+      // While r1 is out, another host drafts r2.
+      await w.record.recordDraft({
+        requestMessageId: "r2",
+        operatorMessageIds: ["r2"],
+        drafterPrefix: "rondo/drafter/",
+        proposal: null,
+        scope: null,
+        messages: [
+          {
+            messageId: "elsewhere-1",
+            body: "rondo's drafter wrote no draft for this: elsewhere",
+            authorKind: "drafter",
+            authorId: "rondo/drafter/1/claude-opus-5",
+            inReplyTo: "r2",
+            atMs: 3_000,
+            bases: [{ form: "message", messageId: "r2" }],
+            asks: false,
+          },
+        ],
+      });
+    }
+    return { kind: "failed", reason: "no claude" };
+  });
+  host.kick();
+  await host.idle();
+  expect(handed).toHaveLength(1);
+});
