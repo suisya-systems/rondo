@@ -5639,9 +5639,10 @@ that already exists.
    > unowned. This rule's text is unedited.
 
    > **Annotation (2026-09-19, from D-0073).** Added after this entry was accepted, and additive, after
-   > `D-0067`'s annotation above. A collision on a path a line **declared** in its claim is now refused
-   > before it is written (`D-0073` rule 3); one on a path it did not declare is found at the gate as
-   > before (`D-0073` rule 5). Collisions that share no path stay unowned. This rule's text is unedited.
+   > `D-0067`'s annotation above. Two lines whose **claims overlap** are no longer both admitted, so
+   > their collision is refused before it is written (`D-0073` rule 3); a collision on a path outside a
+   > line's claim is found at the gate as before (`D-0073` rule 5), since no fence stops a lap writing
+   > it. Collisions that share no path stay unowned. This rule's text is unedited.
 
 10. **Whatever is built first for #40 writes to `operator_attention` or does not
     ship.** `D-0032` rule 10 designed the table with one writer in mind and this
@@ -13257,9 +13258,10 @@ answer" below. Supersedes `D-0057`. Refs rondo#172, `D-0057`, `D-0054`, `D-0041`
 > - The write S5 adds (`publish`) is added to the table by its own annotation. Nothing above is
 >   edited.
 
-> **Annotation (2026-09-19, from D-0074).** Added after this entry was accepted, and additive, to the
-> annotation above. "The approval is the one the lap being revised was admitted under" is read as
-> **that approval's approved tip** (`D-0074` section 2, and its annotation on `D-0070` section 1.2):
+> **Annotation (2026-09-19, from D-0074), and the one that is not additive.** Added after this entry
+> was accepted, by the answer of rondo's human gate to rondo#247. In the annotation above, "The
+> approval is the one the lap being revised was admitted under" is superseded by **that approval's
+> approved tip** (`D-0074` section 2, and its annotation on `D-0070` section 1.2):
 > the press posts the tip, and the check compares against the tip. A lap whose scope was never changed
 > posts the approval it was admitted under, as before. Nothing above is edited.
 
@@ -13936,8 +13938,9 @@ number.
 > message's bytes and with `recorded_by` the message's author (`D-0071` section 6.2, superseding
 > `D-0069` section 1's operator-only clause). Nothing above is edited.
 
-> **Annotation (2026-09-19, from D-0075).** Added after this entry was accepted, and additive, to the
-> two annotations above. `D-0071` is superseded by `D-0075` with its other sections carried, so the
+> **Annotation (2026-09-19, from D-0075), and the one that is not additive.** Added after this entry
+> was accepted, by the answers of rondo's human gate to `D-0075`'s points. The "only from a plan an
+> operator pasted" of the annotation above is superseded. `D-0071` is superseded by `D-0075` with its other sections carried, so the
 > rule for recording an `agent_type_record` from a plan now lives in `D-0075` rule 2.4 and `D-0071`
 > section 6.2 as carried: a `drafter` scope may also record one from a setup row, cited by a `setup`
 > basis, with `recorded_by` the row's. Nothing above is edited.
@@ -14290,6 +14293,12 @@ predecessor's); those are part of the text accepted.
 > neither would retire the other. A person who wants a different scope after that writes a successor
 > of the approved one. Nothing above is edited.
 
+> **Annotation (2026-09-19, from D-0074).** Added after this entry was accepted, and additive, to the
+> annotation above. "A scope is replaced once" is read over the chain: approving a scope is refused
+> when the nearest approved scope above it already has an approved descendant, so two drafted
+> branches of one approved scope cannot both be approved, and a lap's approved tip (`D-0074` section
+> 2) is always one. Nothing above is edited.
+
 ---
 
 ## D-0067 — The secretary's running half has no new owner: the advisory reads lines against each other and drafts an order, the surface attempts acts in that order, the store keeps the person's standing policies, and review extensions and merges still reach the person
@@ -14498,12 +14507,15 @@ names. Line numbers drift; re-measure the claim, not the number.
 > - **Rule 1's "no new authority" is superseded by `D-0073` rule 1** for two authorities and nothing
 >   else: allocating paths to a line, and refusing an admission or a claim that would share one. "No
 >   new role" and the refusal of option A (a coordinator component) stand.
-> - **Rule 2's ancestry clause is superseded by `D-0073` rule 6**, by the gate's second answer. A
->   `closed` lap's line is open until the default branch holds, tree entry for tree entry, what its
->   closed tips changed, read off a ref fetched from the forge; "its `tipCommit` is not an ancestor of
->   the default branch" no longer decides it. Section 4's residual "a squash-merged line whose branch is
->   kept stays open to the reading" is answered by it. The rest of rule 2, the collision test on
->   changed paths included, stands, and `D-0073` rule 5 also compares those paths with the line's claim.
+> - **Rule 2's ancestry clause is superseded by `D-0073` rule 6**, by the gate's second answer, and
+>   with it the closed-lap condition it sits in: "open lineage" is read as `D-0073` rule 3.3 reads it,
+>   over the whole lineage tree, open while any lap of the tree is not terminal or any closed tip's
+>   work has not landed, where landed is the default branch holding, tree entry for tree entry, what
+>   that tip changed, read off a ref fetched from the forge. Neither "its `tipCommit` is not an
+>   ancestor of the default branch" nor whether the topic branch still exists decides it any more.
+>   Section 4's residual "a squash-merged line whose branch is kept stays open to the reading" is
+>   answered by it. The collision test on changed paths stands, and `D-0073` rule 5 also compares
+>   those paths with the line's claim.
 > - **Rule 3**: the `sequence` payload gains **`paths`**, the paths `then` asks for (`D-0073` rule
 >   4.1), so a held widening survives a restart and `paths_free` has something to test.
 > - **Rule 3.4**: `paths_free` joins the closed list of release facts beside `first_terminal`
@@ -15576,6 +15588,8 @@ The points are kept as put, and the answer follows them.
 > - **rule 2.1.3**: the templates include setup rows, grouped and ordered by `D-0075` rule 2.3;
 > - **section 6.2**: a drafted scope records an agent type from a plan pasted into the thread **or
 >   from a setup row**, the latter by `D-0075` rule 2.4's `setup` basis and check;
+> - **rule 7.1**: "recorded from a plan in this thread" also admits an agent type recorded from a
+>   setup row, by the same basis and check;
 > - **point 1(c)**: still refused as a catalog; the setup row is the one narrow exception, for the
 >   reason in `D-0075`'s "What this gives up".
 >
@@ -16539,8 +16553,9 @@ Each dated and additive unless marked, and added with this entry's acceptance:
 
 - **`D-0067` rule 1**, not additive: "no new authority" is superseded by `D-0073` rule 1 for allocating paths and
   refusing an overlap, and for nothing else.
-- **`D-0067` rule 2**, by the gate's second answer and not additive: the ancestry clause of "open lineage" is superseded by
-  `D-0073` rule 6, and section 4's squash residual is answered.
+- **`D-0067` rule 2**, by the gate's second answer and not additive: the ancestry clause of "open
+  lineage", and the closed-lap condition it sits in, are superseded by `D-0073` rules 3.3 and 6, and
+  section 4's squash residual is answered.
 - **`D-0067` rule 3**: the `sequence` payload gains `paths`, the paths `then` asks for (`D-0073`
   rule 4.1).
 - **`D-0067` rule 3.4**: `paths_free` joins the closed list of release facts.
@@ -16552,8 +16567,9 @@ Each dated and additive unless marked, and added with this entry's acceptance:
   are unchanged.
 - **`D-0068` rule 2.2**: the tick carries rule 7's duty beside the patrol; the patrol still acts on
   nothing. **Table in rule 2.1**: `held_by_bound`'s refusal row may be a claim refusal.
-- **`D-0033` rule 9**, after `D-0067`'s annotation: collisions on a path a line declared are now refused
-  before they are written, and those it did not declare are found at the gate as before.
+- **`D-0033` rule 9**, after `D-0067`'s annotation: collisions between lines whose claims overlap are now
+  refused before they are written, and those on a path outside a line's claim are found at the gate as
+  before.
 
 ### What this does not do
 
@@ -16647,8 +16663,11 @@ approval it was not admitted under, and a press.
    successor is refused, in words that name the approved successor, so a chain of approvals never
    forks. Without this, section 2's walk would have two answers and would have to pick one silently.
    Drafted or declined successors do not count; only an approved one does, as in `supersededByApproved`.
-   This is `D-0066` rule 1.4 as already read and built from rondo#267 ("a scope is replaced once"),
-   and this entry relies on it rather than adding it.
+   "Already has an approved successor" is read over descendants, as `supersededByApproved` reads
+   it: a scope is refused approval when the nearest approved scope above it already has an approved
+   descendant, so two drafted branches of one approved scope cannot both be approved. `D-0066` rule
+   1.4 as read and built from rondo#267 ("a scope is replaced once") refuses the case where both
+   successors name the same predecessor; this rule extends that refusal to the chain.
 
 ### 2. How a running lap picks up an approval it was not admitted under
 
@@ -16712,8 +16731,9 @@ approval it was not admitted under, and a press.
 - `recordScopeFromPage`: accept a `supersedes` decision id from the raise form, copy the
   predecessor's non-budget fields from the stored row (never from the form), and set
   `supersedesScopeId`.
-- The store: add a `tipOf(decision)` read beside `supersededByApproved`. The refusal of a second
-  approved successor (section 1.3) is already built (rondo#267).
+- The store: refuse approving a second approved successor (section 1.3), widening rondo#267's
+  refusal from one predecessor to the chain; add a `tipOf(decision)` read beside
+  `supersededByApproved`.
 - `reviseFromPage`: compare against `tipOf(scopeDecisionAdmitting(lap))`.
 - The gate view and the scope view: the press and the third state; wording in both catalogues.
 - The rondo#247 caveat's last clause ("once a lap is running its budget cannot be raised") changes
@@ -16748,6 +16768,12 @@ The points are kept as put, and the answer follows them.
 3. **The gate view first.** The gate is where the person is standing when the refusal reaches them;
    sending them elsewhere to fix it is the failure rondo#247 is about.
 
+### Residuals, with who decides
+
+| Residual | Why not here | Who decides |
+|---|---|---|
+| A redo refused because `review_rounds` is spent with a finding at or above the threshold (`D-0066` rule 4.2's readings test) draws no raise press | Section 4.1 draws it for `laps`, `cost` and `expiry`, as the design was answered; `review_rounds` is a budget a successor may change, and the refusal still writes rule 4.4's stop recommending a successor | a later entry |
+
 ### The two parts of rondo#247 are separable
 
 The caveat (built in rondo#260) is presentation over the draft; it reads no scope, writes nothing
@@ -16758,10 +16784,12 @@ wording, which states today's truth and changes when the raise is built (section
 
 Each dated, and added with this entry's acceptance:
 
+- **`D-0066` rule 1.4's annotation from rondo#267**: "a scope is replaced once" is read over the
+  chain (section 1.3).
 - **`D-0070` section 1.2**, not additive: the approval a `revise`'s lap spends is the approved tip of
   the chain that starts at the approval the predecessor was admitted under (`D-0074` section 2).
-- **`D-0059`'s annotation from rondo#233 S4**, "The approval is the one the lap being revised was
-  admitted under": read as that approval's approved tip, by the same answer.
+- **`D-0059`'s annotation from rondo#233 S4**, not additive: "The approval is the one the lap being
+  revised was admitted under" is superseded by that approval's approved tip, by the same answer.
 
 ### What would falsify it
 
@@ -17063,6 +17091,8 @@ Each dated, and added with this entry's acceptance:
   - **rule 2.1.3**: the templates include setup rows, ordered by `D-0075` rule 2.3;
   - **section 6.2**: a drafted scope records an agent type from a plan pasted into the thread **or
     from a setup row**, the latter by `D-0075` rule 2.4's `setup` basis and check;
+  - **rule 7.1**: the structural check's "recorded from a plan in this thread" also admits one
+    recorded from a setup row, by the same basis and check;
   - **point 1(c)**: still refused as a catalog; the setup row is the one narrow exception, for the
     reason in `D-0075`'s "What this gives up".
 - **`D-0066` rule 1.2.3's `D-0069` annotation** gains a dated note that the recording rule now lives in
