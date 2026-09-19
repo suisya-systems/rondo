@@ -542,7 +542,13 @@ test("(scope) a refused press writes nothing and leads back to the screen it was
     // carries that choice and the form posts no address, so a refusal that
     // dropped it redrew every budget at rondo's default.
     expect(refused.body, missing).toContain("Back button returns to what you wrote");
-    expect(refused.body, missing).toContain("/?scope=req-1&amp;rounds=5&amp;lang=en");
+    // And back to the plan it was drawn over, when the press still said which
+    // (rondo#238): the list would otherwise redraw on its first plan.
+    expect(refused.body, missing).toContain(
+      missing === "plan_digest"
+        ? "/?scope=req-1&amp;rounds=5&amp;lang=en"
+        : "/?scope=req-1&amp;rounds=5&amp;plan=sha256%3A",
+    );
   }
   expect(scoped).toEqual([]);
 

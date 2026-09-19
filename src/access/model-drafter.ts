@@ -362,6 +362,12 @@ export interface HeldPlan {
 export async function heldPlans(
   ports: Pick<DrafterPorts, "store" | "record" | "now">,
   requestMessageId: string,
+  /**
+   * Every plan and not one per kind: what a press looks the plan it was drawn
+   * over up in, so a newer lap of the same kind in the meantime does not make
+   * the drawn one vanish. The screen offers one per kind.
+   */
+  options: { readonly every?: boolean } = {},
 ): Promise<readonly HeldPlan[]> {
   const material = await gatherDrafterMaterial(ports, requestMessageId, null);
   const pasted = material.templates.filter((t) => t.from.kind === "message").reverse();
@@ -369,18 +375,24 @@ export async function heldPlans(
   const plans = new Map<string, HeldPlan>();
   for (const template of [...pasted, ...ran]) {
     const planned = readRunPlan(template.plan);
-    if (planned.kind !== "planned") {
+    // **A revise lap's plan is not a template for new work**: its base is the
+    // lap it revised's topic branch (`revisionPlan`), so a lap started from it
+    // would be cut from another request's unmerged work. A first lap's plan
+    // bases on the repository's own branch.
+    if (planned.kind !== "planned" || planned.plan.pullRequestBaseBranch !== null) {
       continue;
     }
     const recorded = agentTypeRecordOf(planned.plan, template.plan);
     if ("refusal" in recorded) {
       continue;
     }
-    const kind = JSON.stringify([
-      template.repository,
-      template.workspaceRoot,
-      recorded.record.agentTypeDigest,
-    ]);
+    const kind = options.every
+      ? template.planDigest
+      : JSON.stringify([
+          template.repository,
+          template.workspaceRoot,
+          recorded.record.agentTypeDigest,
+        ]);
     if (!plans.has(kind)) {
       plans.set(kind, {
         planDigest: template.planDigest,

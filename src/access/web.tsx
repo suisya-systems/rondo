@@ -4091,6 +4091,15 @@ async function plansFor(
   }
 }
 
+/** One held plan as a person reads it: where it runs, with which agent type, and where it came from. */
+function planLine(wording: Chrome, plan: HeldPlan): string {
+  return wording.scopePlanLine(
+    wording.scopeWorkspace(plan.repository, plan.workspaceRoot),
+    plan.agentTypeDigest.slice("sha256:".length, "sha256:".length + 12),
+    wording.scopePlanFrom(plan.from.kind),
+  );
+}
+
 /**
  * The choice of plan, as links in the rounds' shape and for their reason (no
  * form to fight, and the address holds the state): one line per plan saying
@@ -4113,7 +4122,7 @@ function planChoice(
       <p class="text-[13px] leading-6 font-medium">{wording.scopePlanAsk}</p>
       <ul class="space-y-1">
         {plans.map((plan) => {
-          const said = `${wording.scopeWorkspace(plan.repository, plan.workspaceRoot)} -- ${wording.scopePlanFrom(plan.from.kind)}`;
+          const said = planLine(wording, plan);
           return (
             <li class="text-[12.5px] leading-5 wrap-anywhere">
               {plan === chosen && !unchosen ? (
@@ -4433,6 +4442,16 @@ async function scopeForm(
   );
 }
 
+/** Whether a scope allows a plan: its agent type is listed and its place is one of the scope's. */
+function allowedBy(payload: StoredScope["payload"], plan: HeldPlan): boolean {
+  return (
+    payload.agent_types.includes(plan.agentTypeDigest) &&
+    payload.workspaces.some(
+      (w) => w.repository === plan.repository && w.workspace_root === plan.workspaceRoot,
+    )
+  );
+}
+
 /** State B: the approval the press recorded, read back, and the start it allows. */
 async function scopeApproved(
   ports: WebPorts,
@@ -4482,19 +4501,23 @@ async function scopeApproved(
   // and a sentence where there are none, rather than a button that would be
   // refused at the scope's own tests.
   const plans = await plansFor(ports, wording, view.messageId, nowMs);
-  const allowed =
-    "plans" in plans
-      ? plans.plans.filter(
-          (plan) =>
-            payload.agent_types.includes(plan.agentTypeDigest) &&
-            payload.workspaces.some(
-              (w) => w.repository === plan.repository && w.workspace_root === plan.workspaceRoot,
-            ),
-        )
-      : [];
-  const runsOn =
-    allowed.find((plan) => plan.planDigest === view.plan) ??
-    (allowed.length === 1 ? (allowed[0] as HeldPlan) : null);
+  const allowed = "plans" in plans ? plans.plans.filter((plan) => allowedBy(payload, plan)) : [];
+  // The plan the scope was drawn over is looked up among every plan rondo
+  // holds, not only the one of each kind the list offers: a newer lap of the
+  // same kind since must not swap it for another without a word.
+  const drawn =
+    view.plan === null || !("plans" in plans)
+      ? undefined
+      : (
+          await heldPlans(
+            { store: ports.store, record: ports.record, now: () => nowMs },
+            view.messageId,
+            {
+              every: true,
+            },
+          )
+        ).find((plan) => plan.planDigest === view.plan && allowedBy(payload, plan));
+  const runsOn = drawn ?? (allowed.length === 1 ? (allowed[0] as HeldPlan) : null);
   return (
     <>
       <section class={`${CARD} space-y-1`}>
@@ -4572,7 +4595,7 @@ async function scopeApproved(
           <input type="hidden" name="scope_decision" value={decisionId} />
           <input type="hidden" name="plan" value={runsOn.planDigest} />
           <p class="text-[12.5px] leading-5 wrap-anywhere text-muted-foreground">
-            {`${wording.scopePlanAsk}: ${wording.scopeWorkspace(runsOn.repository, runsOn.workspaceRoot)} -- ${wording.scopePlanFrom(runsOn.from.kind)}`}
+            {`${wording.scopePlanAsk}: ${planLine(wording, runsOn)}`}
           </p>
           {/* Minted at render, as the scope id is, and for its reason: rondo
               names the lap (D-0023) and a double press is one lap. */}

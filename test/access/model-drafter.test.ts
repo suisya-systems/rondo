@@ -11,8 +11,10 @@ import { expect, test } from "vitest";
 
 import { readDrafterResult } from "../../src/access/forge.js";
 import type { DrafterRun } from "../../src/access/model-draft.js";
-import { type DrafterPorts, draftRequest } from "../../src/access/model-drafter.js";
+import { type DrafterPorts, draftRequest, heldPlans } from "../../src/access/model-drafter.js";
+import { readRunPlan } from "../../src/refrain/plan.js";
 import { planDigest } from "../../src/store/plan.js";
+import type { JsonRecord } from "../../src/store/records.js";
 import { AGENT_TYPE_INPUT, agentTypeDigestOf, planDocument, world } from "./fixtures/drafter.js";
 
 function portsOver(
@@ -245,4 +247,54 @@ test("an earlier lap of the request is handed over with what it was asked, so a 
   ]);
   expect(run.document).toContain("--- lap i-1:");
   expect(run.document).toContain("  asked: do the thing");
+});
+
+async function reserveLap(
+  w: Awaited<ReturnType<typeof world>>,
+  id: string,
+  plan: JsonRecord,
+  atMs: number,
+): Promise<void> {
+  const reserved = await w.store.reserve({
+    id,
+    request: "earlier work",
+    plan,
+    spend: null,
+    scopeSpend: null,
+    nowMs: atMs,
+    supersedesIterationId: null,
+    requestMessageId: null,
+    runId: `rondo-${id}`,
+    topicBranch: `rondo/${id}`,
+    workspace: `/srv/work/${id}`,
+  });
+  if (reserved.kind !== "reserved") throw new Error(JSON.stringify(reserved));
+}
+
+test("the plans a person picks from: one per place and agent type, newest first, and never a revise lap's plan", async () => {
+  const w = await world();
+  await w.say("r1", "Fix it.", null, 1_000);
+  const older = { ...planDocument(), prompt: "the first request" };
+  const newer = { ...planDocument(), prompt: "the second request" };
+  // A revise lap's plan bases on the lap it revised's topic branch.
+  const revised = {
+    ...planDocument(),
+    prompt: "the second request, revised",
+    base_branch: "rondo/lap-2",
+    pull_request_base_branch: "main",
+  };
+  // A valid plan in every other respect, so its absence below is the rule and not a parse failure.
+  expect(readRunPlan(revised).kind).toBe("planned");
+  await reserveLap(w, "lap-1", older, 1_000);
+  await reserveLap(w, "lap-2", newer, 2_000);
+  await reserveLap(w, "lap-3", revised, 3_000);
+  const ports = { store: w.store, record: w.record, now: () => 5_000 };
+
+  const offered = await heldPlans(ports, "r1");
+  // One kind here, and its newest first lap stands for it: not the revise.
+  expect(offered.map((p) => p.planDigest)).toEqual([planDigest(newer)]);
+  // A press looks up what it was drawn over among every plan, so a newer lap
+  // of the same kind since does not make the older one vanish.
+  const every = await heldPlans(ports, "r1", { every: true });
+  expect(every.map((p) => p.planDigest)).toEqual([planDigest(newer), planDigest(older)]);
 });

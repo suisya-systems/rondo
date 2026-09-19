@@ -1554,21 +1554,29 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     // The rounds the form was drawn at, so every refusal below leads back to
     // the screen the person pressed on rather than to rondo's default draft.
     const rounds = wholeNumber(form["review_rounds"]);
+    const drawnOver = typeof form["plan_digest"] === "string" ? form["plan_digest"] : null;
     const minting = mintPress(c, form["token"]);
     if (!("press" in minting)) {
-      return scopeRefused(c, minting.status, "scopeRefusedPress", request, rounds);
+      return scopeRefused(c, minting.status, "scopeRefusedPress", request, rounds, drawnOver);
     }
     const scopeId = form["scope_id"];
     if (typeof scopeId !== "string" || !PAGE_SCOPE_ID.test(scopeId) || request === "") {
-      return scopeRefused(c, 400, "scopeRefusedForm", request, rounds);
+      return scopeRefused(c, 400, "scopeRefusedForm", request, rounds, drawnOver);
     }
     const draft = scopeDraftOf(form, scopeId, request);
     if (draft === null) {
-      return scopeRefused(c, 400, "scopeRefusedFields", request, rounds);
+      return scopeRefused(c, 400, "scopeRefusedFields", request, rounds, drawnOver);
     }
     const recorded = await scope.recordAndApprove(minting.press, draft);
     if (!recorded.ok || recorded.scopeDecisionId === undefined) {
-      return scopeRefused(c, 409, recorded.why ?? "scopeRefusedNotTaken", request, rounds);
+      return scopeRefused(
+        c,
+        409,
+        recorded.why ?? "scopeRefusedNotTaken",
+        request,
+        rounds,
+        drawnOver,
+      );
     }
     // **The same view, in its second state**, so the digest the person reads
     // after the press is the digest the press approved.
@@ -1601,12 +1609,13 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     const form = await c.req.parseBody();
     const request = typeof form["request"] === "string" ? form["request"] : "";
     const decision = typeof form["scope_decision"] === "string" ? form["scope_decision"] : "";
+    const plan = form["plan"];
+    const runsOn = typeof plan === "string" && plan !== "" ? plan : null;
     const minting = mintPress(c, form["token"]);
     if (!("press" in minting)) {
-      return startRefused(c, minting.status, "startRefusedPress", request, decision);
+      return startRefused(c, minting.status, "startRefusedPress", request, decision, null, runsOn);
     }
     const iterationId = form["iteration"];
-    const plan = form["plan"];
     if (
       typeof iterationId !== "string" ||
       !PAGE_ITERATION_ID.test(iterationId) ||
@@ -1615,7 +1624,7 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
       request === "" ||
       decision === ""
     ) {
-      return startRefused(c, 400, "startRefusedForm", request, decision);
+      return startRefused(c, 400, "startRefusedForm", request, decision, null, runsOn);
     }
     const started = await scope.start(minting.press, {
       iterationId,
@@ -1631,6 +1640,7 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
         request,
         decision,
         started.test ?? null,
+        runsOn,
       );
     }
     // The summary, anchored at the lap just started, which is where the approve
@@ -1851,6 +1861,8 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
      * one refusal that cannot know.
      */
     rounds: number | null = null,
+    /** The plan the form was drawn over, for the rounds' reason (rondo#238). */
+    plan: string | null = null,
   ) {
     const wording = wordingOf(c);
     return pressRefused(
@@ -1858,7 +1870,7 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
       status,
       wording.scopeAction,
       wording[why],
-      backToScope(wording, request, null, rounds),
+      backToScope(wording, request, null, rounds, plan),
     );
   }
 
@@ -1870,6 +1882,7 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     request: string | null,
     decision: string | null,
     test: string | null = null,
+    plan: string | null = null,
   ) {
     const wording = wordingOf(c);
     const line =
@@ -1879,7 +1892,7 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
       status,
       wording.startAction,
       line,
-      backToScope(wording, request, decision),
+      backToScope(wording, request, decision, null, plan),
     );
   }
 

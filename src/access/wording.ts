@@ -560,6 +560,8 @@ export interface Chrome {
   readonly scopePlanAsk: string;
   /** Where a held plan came from: pasted into this thread, or run by earlier laps. */
   readonly scopePlanFrom: (from: "message" | "iterations") => string;
+  /** One held plan as a line: where, the agent type's short digest, and where it came from. */
+  readonly scopePlanLine: (where: string, agentType: string, from: string) => string;
   /** An approved scope no plan rondo holds may run under. */
   readonly scopeNoPlanForScope: string;
   readonly scopeNoApprover: string;
@@ -1285,16 +1287,18 @@ explanation you pressed on and then answers the gate.`,
     "the laps this store has recorded. Read it, change what you want to change, and one press " +
     "records it and approves it.",
   scopeNoPlanHeld:
-    "rondo has no plan to run this on yet. Reply in this request's thread with a plan -- the " +
-    "JSON document your environment's setup wrote -- and it is offered here.",
+    "rondo has no plan to run this on yet. Reply in this request's thread with the plan your " +
+    "environment's setup wrote -- the JSON document alone, nothing else in the reply -- and it " +
+    "is offered here.",
   scopePlansUnread: (reason) =>
     `The plans rondo holds could not be read, so there is nothing to choose from: ${reason}`,
   scopePlanAsk: "Which plan the work runs on",
   scopePlanFrom: (from) =>
     from === "message" ? "pasted into this thread" : "the plan earlier laps ran on",
+  scopePlanLine: (where, agentType, from) => `${where}, agent type ${agentType} (${from})`,
   scopeNoPlanForScope:
-    "rondo holds no plan that runs where this scope allows, so there is nothing to start under " +
-    "it yet. Reply in the request's thread with a plan for that place.",
+    "rondo holds no plan for the place and the agent type this scope allows, so there is " +
+    "nothing to start under it yet. Reply in the request's thread with a plan for them.",
   scopeNoApprover:
     "RONDO_APPROVER is not set, so there is nobody this page could approve a scope as.",
   scopeWorkspace: (repository, root) => `${repository} at ${root}`,
@@ -1421,9 +1425,8 @@ explanation you pressed on and then answers the gate.`,
     "and press again.",
   scopeRefusedNotTaken: "Nothing was recorded: the store would not take this scope.",
   scopeRefusedPlanChanged:
-    "Nothing was recorded: the plan on that screen is no longer one rondo holds for this " +
-    "request, so the workspace and the agent type you read are not the ones it would record. " +
-    "Reload and choose again.",
+    "Nothing was recorded: the plan on that screen is no longer one rondo offers for this " +
+    "request. Reload and choose again.",
   scopeRefusedEdited:
     "Nothing was recorded this time: that form had already been recorded and approved, and what " +
     "you just changed is not what is stored. Reload to draft a new scope.",
@@ -2010,16 +2013,18 @@ const JA: Partial<Chrome> = Object.freeze({
     "記録された周回から出しています。読んで、変えたいところを変えてください。1 回押せば記録と" +
     "承認の両方が行われます。",
   scopeNoPlanHeld:
-    "この作業に使えるプランを rondo はまだ持っていません。環境の準備で書き出されたプラン" +
-    "（JSON 文書）を、この依頼のスレッドに返信として貼ってください。ここで選べるようになります。",
+    "この作業に使えるプランを rondo はまだ持っていません。環境の準備で書き出されたプランの" +
+    "JSON 文書だけを、ほかの文を付けずに、この依頼のスレッドに返信として貼ってください。" +
+    "ここで選べるようになります。",
   scopePlansUnread: (reason) =>
     `rondo が持っているプランを読めなかったので、選べるものがありません: ${reason}`,
   scopePlanAsk: "作業に使うプラン",
   scopePlanFrom: (from) =>
     from === "message" ? "このスレッドに貼られたもの" : "以前の周回が使ったもの",
+  scopePlanLine: (where, agentType, from) => `${where}、エージェント種別 ${agentType}（${from}）`,
   scopeNoPlanForScope:
-    "この範囲が許す場所で動くプランを rondo はまだ持っていないので、この範囲で開始できるものが" +
-    "ありません。その場所のプランを依頼のスレッドに返信として貼ってください。",
+    "この範囲が許す場所とエージェント種別のプランを rondo はまだ持っていないので、この範囲で" +
+    "開始できるものがありません。それに合うプランを依頼のスレッドに返信として貼ってください。",
   scopeNoApprover:
     "RONDO_APPROVER が設定されていないので、このページが誰として範囲を承認することもできません。",
   scopeWorkspace: (repository, root) => `${repository}（${root}）`,
@@ -2150,8 +2155,7 @@ const JA: Partial<Chrome> = Object.freeze({
     "押してください。",
   scopeRefusedNotTaken: "何も記録していません。ストアがこの範囲を受け付けませんでした。",
   scopeRefusedPlanChanged:
-    "何も記録していません。あの画面のプランは、もうこの依頼に対して rondo が持っているもの" +
-    "ではないので、読んだ作業場所とエージェント種別は rondo が記録する内容と違います。" +
+    "何も記録していません。あの画面のプランは、もうこの依頼で rondo が選べるものではありません。" +
     "読み込み直して、選び直してください。",
   scopeRefusedEdited:
     "今回は何も記録していません。そのフォームはすでに記録・承認済みで、いま変えた内容は" +

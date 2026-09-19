@@ -470,7 +470,7 @@ async function heldPlanOf(
   planDigest: string,
 ): Promise<{ readonly plan: HeldPlan | null } | { readonly refusal: string }> {
   try {
-    const plans = await heldPlans({ ...ports, now: Date.now }, requestMessageId);
+    const plans = await heldPlans({ ...ports, now: Date.now }, requestMessageId, { every: true });
     return { plan: plans.find((plan) => plan.planDigest === planDigest) ?? null };
   } catch (error) {
     return {
