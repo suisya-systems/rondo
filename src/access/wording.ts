@@ -40,6 +40,7 @@
 
 import { isLanguageTag } from "../refrain/plan.js";
 import { APPROVED_OUTCOME } from "../store/records.js";
+import type { IssueReadFailure } from "./issue-read.js";
 
 /**
  * Where a listed agent type's record was read from (D-0069 section 1).
@@ -278,6 +279,29 @@ export interface Chrome {
    */
   readonly drafterNoDraft: string;
   readonly drafterNoDraftWhy: string;
+  /**
+   * D-0078 section 4: what rondo read of an issue the person named, under
+   * their message. Each sentence follows the issue's own name, drawn as a link
+   * before it. The badge on the card is {@link issueVoice}.
+   */
+  readonly issueVoice: string;
+  /** A read that worked (section 4.1): nothing to press, what was read folded. */
+  readonly issueRead: (pullRequest: boolean, comments: number) => string;
+  readonly issueReadFold: string;
+  /**
+   * A read that failed (section 4.2), in D-0076 rule 4.1's order: what
+   * happened and what it means for the worker, then {@link issueNotReadTail}.
+   * rondo's reason is folded under {@link drafterNoDraftWhy}.
+   */
+  readonly issueNotRead: (why: IssueReadFailure) => string;
+  readonly issueNotReadTail: string;
+  /** Not read yet (section 4.3): it will be, while rondo runs here. */
+  readonly issuePending: string;
+  /** The scope screen's lines (section 4.4): which issues the worker is given. */
+  readonly scopeIssuesHeading: string;
+  readonly scopeIssueGiven: string;
+  readonly scopeIssueNotGiven: string;
+  readonly scopeIssuePending: string;
   /** The summary's row for an ask: the request it was asked in. */
   readonly askedIn: (request: string) => string;
   readonly inReplyTo: (who: string, words: string) => string;
@@ -1200,6 +1224,31 @@ explanation you pressed on and then answers the gate.`,
     "rondo could not draft this request, so nothing has been proposed. You can set the scope " +
     "yourself.",
   drafterNoDraftWhy: "What stopped it",
+  issueVoice: "issue",
+  issueRead: (pullRequest, comments) =>
+    `rondo read this ${pullRequest ? "pull request's conversation" : "issue"}` +
+    `${comments === 0 ? "" : ` and its ${String(comments)} ${comments === 1 ? "comment" : "comments"}`}` +
+    ". The worker will be given all of it, as written.",
+  issueReadFold: "What was read",
+  issueNotRead: (why) =>
+    ({
+      no_gh: "rondo on this machine cannot read issues yet",
+      signed_out: "rondo on this machine cannot read issues yet",
+      no_repo: "rondo on this machine does not know which repository this number is in",
+      missing: "This issue could not be found, or your account cannot see it",
+      refused: "The forge refused your account access to this issue",
+      too_long: "This issue is too long to hand over whole, and none of it was handed over",
+      too_many: "rondo reads at most five issues from one message, and this one was past them",
+      failed: "rondo could not read this issue",
+    })[why] + ", so the worker will have only what you wrote here.",
+  issueNotReadTail:
+    "Nothing was spent. If the issue says something your request does not, say it in another " +
+    "message.",
+  issuePending: "rondo has not read this yet. It reads it while rondo is running here.",
+  scopeIssuesHeading: "Issues named in this request",
+  scopeIssueGiven: "given to the worker",
+  scopeIssueNotGiven: "not given: it could not be read",
+  scopeIssuePending: "not read yet",
   askedIn: (request) => `asked in: ${request}`,
   inReplyTo: (who, words) => `in reply to ${who}: ${words}`,
   basesLabel: "rests on",
@@ -2028,6 +2077,31 @@ const JA: Partial<Chrome> = Object.freeze({
     "rondo はこの依頼の下書きを作れなかったので、まだ何も提案されていません。範囲はご自身で" +
     "決められます。",
   drafterNoDraftWhy: "止まった理由",
+  issueVoice: "イシュー",
+  issueRead: (pullRequest, comments) =>
+    `rondo がこの${pullRequest ? "プルリクエストの会話" : "イシュー"}` +
+    `${comments === 0 ? "" : `とコメント ${String(comments)} 件`}を読みました。` +
+    "作業者には書かれたとおりの全文が渡されます。",
+  issueReadFold: "読んだ内容",
+  issueNotRead: (why) =>
+    ({
+      no_gh: "この環境の rondo はまだイシューを読めません",
+      signed_out: "この環境の rondo はまだイシューを読めません",
+      no_repo: "この環境の rondo は、この番号がどのリポジトリのものかを知りません",
+      missing: "このイシューが見つからないか、あなたのアカウントからは見えません",
+      refused: "このイシューへのアクセスが、あなたのアカウントでは拒否されました",
+      too_long: "このイシューは長すぎて丸ごと渡せず、一部も渡していません",
+      too_many: "rondo が 1 つのメッセージから読むイシューは 5 件までで、これはその先でした",
+      failed: "rondo はこのイシューを読めませんでした",
+    })[why] + "。そのため作業者には、ここにあなたが書いたことだけが渡されます。",
+  issueNotReadTail:
+    "費用はかかっていません。イシューに依頼にないことが書かれていれば、別のメッセージで伝えて" +
+    "ください。",
+  issuePending: "rondo はまだこれを読んでいません。rondo がここで動いている間に読みます。",
+  scopeIssuesHeading: "この依頼が名指ししたイシュー",
+  scopeIssueGiven: "作業者に渡す",
+  scopeIssueNotGiven: "渡さない: 読めなかった",
+  scopeIssuePending: "まだ読んでいない",
   askedIn: (request) => `依頼: ${request}`,
   inReplyTo: (who, words) => `${who} への返信: ${words}`,
   basesLabel: "根拠",

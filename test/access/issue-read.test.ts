@@ -1,0 +1,292 @@
+/**
+ * D-0078: rondo reads an issue a person's message names, outside the lap,
+ * records what it read in the thread as a `forge` message, and quotes it into
+ * the prompt -- over a real store and a fake `gh`.
+ *
+ * What is held: which references a message names; a read is the forge's text
+ * byte for byte, and a failure says whose it is; over the bound is not read;
+ * the reader answers every reference once and leaves the past alone; the
+ * drafter waits for the reads; and the prompt ends with rondo's quote.
+ */
+import { expect, test } from "vitest";
+
+import { withNamedIssues } from "../../src/access/cli.js";
+import { drafterHost } from "../../src/access/drafter-host.js";
+import type { CommandOutcome } from "../../src/access/forge.js";
+import {
+  type ForgeIssueRead,
+  forgeBody,
+  ISSUE_BOUND_BYTES,
+  ISSUE_READER,
+  ISSUES_QUOTE_OPENING,
+  issueReader,
+  issuesQuote,
+  namedIssues,
+  parseForgeRead,
+  readNamedIssue,
+} from "../../src/access/issue-read.js";
+import { readRunPlan } from "../../src/refrain/plan.js";
+import { planDocument, world } from "./fixtures/drafter.js";
+
+type World = Awaited<ReturnType<typeof world>>;
+
+const ran = (stdout: string, status = 0, stderr = ""): CommandOutcome => ({
+  commandLine: "gh api",
+  status,
+  signal: null,
+  stdout,
+  stderr,
+  spawnError: null,
+});
+
+/** `gh api`'s two answers for one issue, with bytes a trim or a reflow would change. */
+const ISSUE = {
+  number: 237,
+  title: "Lap 10: the worker cannot read issues",
+  state: "open",
+  html_url: "https://github.com/suisya-systems/rondo/issues/237",
+  user: { login: "ada" },
+  created_at: "2026-09-01T00:00:00Z",
+  body: "  Item one.\r\n\nItem two -- 日本語も。\n",
+};
+const COMMENTS = [
+  { author: "bob", at: "2026-09-02T00:00:00Z", body: "Items one and two are done." },
+  { author: "cy", at: "2026-09-03T00:00:00Z", body: null },
+];
+
+function fakeForge(
+  answer: ForgeIssueRead = async () => ({
+    issue: ran(JSON.stringify(ISSUE)),
+    comments: ran(COMMENTS.map((c) => JSON.stringify(c)).join("\n")),
+  }),
+) {
+  const asked: Parameters<ForgeIssueRead>[0][] = [];
+  const read: ForgeIssueRead = async (request) => {
+    asked.push(request);
+    return await answer(request);
+  };
+  return { read, asked };
+}
+
+function readerOver(w: World, read: ForgeIssueRead, forgeRepo: string | null = "o/r") {
+  let n = 0;
+  let reads = 0;
+  const reader = issueReader({
+    record: w.record,
+    read,
+    forgeRepo,
+    now: () => 50_000,
+    mintId: () => {
+      n += 1;
+      return `forge-${String(n)}`;
+    },
+    log: () => undefined,
+    onRead: () => {
+      reads += 1;
+    },
+  });
+  return { reader, onReads: () => reads };
+}
+
+async function forgeMessages(w: World) {
+  const read = await w.record.threadMessages();
+  if (read.kind !== "read") throw new Error(read.reason);
+  return read.messages.filter((m) => m.authorKind === "forge");
+}
+
+test("the references a person writes are found, each once, and nothing that only looks like one", () => {
+  expect(
+    namedIssues(
+      "Fix #237 and o/r#12, see https://github.com/x/y/issues/5#issuecomment-1 and " +
+        "https://ghe.example/a/b/pull/9. Not abc#1, &#39;, # 4 or #0. Again #237.",
+    ),
+  ).toEqual([
+    { named: "#237", host: null, repo: null, number: 237 },
+    { named: "o/r#12", host: null, repo: "o/r", number: 12 },
+    { named: "https://github.com/x/y/issues/5", host: "github.com", repo: "x/y", number: 5 },
+    { named: "https://ghe.example/a/b/pull/9", host: "ghe.example", repo: "a/b", number: 9 },
+  ]);
+});
+
+test("a read holds the title, the state, the body and every comment byte for byte (section 2.2)", async () => {
+  const { read, asked } = fakeForge();
+  const got = await readNamedIssue(namedIssues("#237")[0]!, "o/r", read, 7);
+  expect(asked).toEqual([{ host: null, repo: "o/r", number: 237 }]);
+  if (!("read" in got)) throw new Error(JSON.stringify(got));
+  expect(got.read).toEqual({
+    url: ISSUE.html_url,
+    number: 237,
+    pullRequest: false,
+    title: ISSUE.title,
+    state: "open",
+    author: "ada",
+    openedAt: ISSUE.created_at,
+    body: ISSUE.body,
+    comments: [
+      { author: "bob", at: COMMENTS[0]!.at, body: "Items one and two are done." },
+      { author: "cy", at: COMMENTS[1]!.at, body: "" },
+    ],
+  });
+  // What the row holds reads back as exactly what was read.
+  expect(parseForgeRead(forgeBody(got))).toEqual(got);
+});
+
+test("a read that fails says whose failure it is, and over the bound is not read at all (sections 2.3, 4.2)", async () => {
+  const ref = namedIssues("#5")[0]!;
+  const failing = (outcome: CommandOutcome) =>
+    fakeForge(async () => ({ issue: outcome, comments: null })).read;
+  const why = async (outcome: CommandOutcome) => {
+    const got = await readNamedIssue(ref, "o/r", failing(outcome), 1);
+    return "failed" in got ? got.failed.why : "read";
+  };
+  expect(await why({ ...ran(""), status: null, spawnError: "spawn gh ENOENT" })).toBe("no_gh");
+  expect(await why(ran("", 4, "To get started with GitHub CLI, please run:  gh auth login"))).toBe(
+    "signed_out",
+  );
+  expect(await why(ran("", 1, "gh: Not Found (HTTP 404)"))).toBe("missing");
+  expect(await why(ran("", 1, "gh: Forbidden (HTTP 403)"))).toBe("refused");
+  expect(await why(ran("", 1, "error connecting to api.github.com"))).toBe("failed");
+  // A bare `#N` with no forge repository is read nowhere: the first residual.
+  const nowhere = await readNamedIssue(ref, null, fakeForge().read, 1);
+  expect("failed" in nowhere && nowhere.failed.why).toBe("no_repo");
+
+  const long = fakeForge(async () => ({
+    issue: ran(JSON.stringify({ ...ISSUE, body: "x".repeat(ISSUE_BOUND_BYTES) })),
+    comments: ran(""),
+  }));
+  const over = await readNamedIssue(ref, "o/r", long.read, 1);
+  expect("failed" in over && over.failed.why).toBe("too_long");
+  expect(forgeBody(over)).not.toContain("xxxx");
+});
+
+test("the reader answers every reference once, in reply to the message, and leaves the past alone (sections 2.4, 3.1)", async () => {
+  const w = await world();
+  await w.say("old", "Fix #1.", null, 500);
+  const { read, asked } = fakeForge();
+  const { reader, onReads } = readerOver(w, read);
+  // The first look fixes the reader's epoch, as a host's first scan does.
+  expect(await reader.unread([])).toEqual(new Map());
+  await w.say("r1", "Fix #237, as o/r#237 says.", null, 1_000);
+  const names = Array.from({ length: 7 }, (_, i) => `#${String(i + 10)}`).join(" ");
+  await w.say("r2", `Also ${names}.`, "r1", 2_000);
+  reader.kick();
+  await reader.idle();
+
+  const said = await forgeMessages(w);
+  expect(said.every((m) => m.authorId === ISSUE_READER && m.bases.length === 0)).toBe(true);
+  expect(said.map((m) => [m.inReplyTo, parseForgeRead(m.body)?.named])).toEqual([
+    ["r1", "#237"],
+    ["r1", "o/r#237"],
+    ...Array.from({ length: 7 }, (_, i) => ["r2", `#${String(i + 10)}`]),
+  ]);
+  // Five of r2's seven are read; the two past the bound are answered, unread.
+  expect(asked).toHaveLength(2 + 5);
+  expect(
+    said.slice(2).map((m) => {
+      const got = parseForgeRead(m.body);
+      return got !== null && "failed" in got ? got.failed.why : "read";
+    }),
+  ).toEqual(["read", "read", "read", "read", "read", "too_many", "too_many"]);
+  expect(onReads()).toBe(1);
+
+  // Nothing is left to read, and a second scan reads nothing.
+  const thread = await w.record.threadMessages();
+  if (thread.kind !== "read") throw new Error(thread.reason);
+  expect(await reader.unread(thread.messages)).toEqual(new Map());
+  reader.kick();
+  await reader.idle();
+  expect(asked).toHaveLength(7);
+});
+
+test("the store takes a read only in reply to an operator message (section 3.1)", async () => {
+  const w = await world();
+  await w.say("r1", "Fix #237.", null, 1_000);
+  const forge = (messageId: string, inReplyTo: string | null) =>
+    w.record.recordThreadMessage({
+      messageId,
+      body: "{}",
+      authorKind: "forge",
+      authorId: ISSUE_READER,
+      inReplyTo,
+      atMs: 2_000,
+      bases: [],
+      asks: false,
+    });
+  expect((await forge("f-opens", null)).kind).toBe("refused");
+  expect((await forge("f-1", "r1")).kind).toBe("recorded");
+  expect((await forge("f-on-forge", "f-1")).kind).toBe("refused");
+});
+
+test("the drafter waits until every named issue has its read, and is then handed it (section 3.3)", async () => {
+  const w = await world();
+  const { read } = fakeForge();
+  const { reader } = readerOver(w, read);
+  await reader.unread([]);
+  await w.say("r1", "Fix #237.", null, 1_000);
+  const handed: string[] = [];
+  const drafter = drafterHost({
+    store: w.store,
+    record: w.record,
+    now: () => 60_000,
+    language: null,
+    log: () => undefined,
+    mintId: (kind) => `${kind}-${String(handed.length)}-${String(Math.random()).slice(2)}`,
+    runDrafter: async (_row, document) => {
+      handed.push(document);
+      return { kind: "failed", reason: "not under test" };
+    },
+    issuesUnread: reader.unread,
+  });
+  drafter.kick();
+  await drafter.idle();
+  expect(handed).toEqual([]);
+
+  reader.kick();
+  await reader.idle();
+  drafter.kick();
+  await drafter.idle();
+  expect(handed).toHaveLength(1);
+  expect(handed[0]).toContain("by forge");
+  expect(handed[0]).toContain(JSON.stringify(ISSUE.title));
+});
+
+test("the prompt ends with rondo's quote of every read, byte for byte, after the request's own words (section 3.4)", async () => {
+  const w = await world();
+  const { reader } = readerOver(
+    w,
+    fakeForge(async (request) =>
+      request.number === 404
+        ? { issue: ran("", 1, "gh: Not Found (HTTP 404)"), comments: null }
+        : {
+            issue: ran(JSON.stringify(ISSUE)),
+            comments: ran(COMMENTS.map((c) => JSON.stringify(c)).join("\n")),
+          },
+    ).read,
+  );
+  await reader.unread([]);
+  await w.say("r1", "Fix #237 and #404.", null, 1_000);
+  reader.kick();
+  await reader.idle();
+
+  const planned = readRunPlan({ ...planDocument(), prompt: "Fix #237 and #404." });
+  if (planned.kind !== "planned") throw new Error(planned.reason);
+  const quoted = await withNamedIssues(w.record, "r1", planned.plan);
+  if ("refusal" in quoted) throw new Error(quoted.refusal);
+  expect(quoted.prompt.startsWith(`Fix #237 and #404.${ISSUES_QUOTE_OPENING}`)).toBe(true);
+  expect(quoted.prompt).toContain(
+    `Title: ${ISSUE.title}\nOpened by ada at ${ISSUE.created_at}:\n${ISSUE.body}`,
+  );
+  expect(quoted.prompt).toContain(
+    `--- comment by bob at ${COMMENTS[0]!.at}:\nItems one and two are done.`,
+  );
+  expect(quoted.prompt).toContain(
+    "=== #404 was named in the request and could not be read, so there is nothing of it here: work from the request.",
+  );
+  // Nothing else of the plan moves.
+  expect({ ...quoted, prompt: "" }).toEqual({ ...planned.plan, prompt: "" });
+
+  const thread = await w.record.threadMessages();
+  if (thread.kind !== "read") throw new Error(thread.reason);
+  // A request that names nothing is prompted as before.
+  expect(issuesQuote(thread.messages, "no-such-request")).toBe("");
+});

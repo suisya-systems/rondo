@@ -119,9 +119,11 @@ import {
   openPullRequest,
   type PushTargetInspection,
   pushTopicBranch,
+  readIssueFromForge,
   runDrafter,
 } from "./forge.js";
 import { type InboxOutcome, showInbox, type TranscriptLocation } from "./inbox.js";
+import { issueReader, issuesQuote } from "./issue-read.js";
 import { isModelDrafterName } from "./model-draft.js";
 import { draftedPlanRun, type HeldPlan, heldPlanByDigest } from "./model-drafter.js";
 import { modelReadingLines } from "./model-review.js";
@@ -1669,6 +1671,22 @@ export async function main(
     // `rondo web` process as the resident host until D-0068's patrol exists):
     // a scan now, after every message this page writes, and on a timer so a
     // message the command line wrote while the page runs is found too.
+    // **And the issue reader before it** (D-0078 section 2.4): an issue a
+    // message names is read here, outside any lap, through the operator's own
+    // `gh`, and the drafter waits for it (section 3.3). A bare `#N` is read in
+    // the repository `--repo` names, the one this host opens pull requests
+    // in; with no `--repo` it is a read that fails and says so (the first
+    // residual, left open).
+    const issues = issueReader({
+      record,
+      read: readIssueFromForge,
+      forgeRepo: parsed.repo,
+      now: Date.now,
+      mintId: () => newDraftId("forge"),
+      log: say,
+      // Called only after a scan, by which time `drafter` below exists.
+      onRead: () => drafter.kick(),
+    });
     const drafter = drafterHost({
       store,
       record,
@@ -1677,7 +1695,9 @@ export async function main(
       mintId: newDraftId,
       language: selected.tag,
       log: say,
+      issuesUnread: issues.unread,
     });
+
     // **And the revise drafter beside it** (D-0077 rule 2.2): a model reading
     // lands from whichever process ran the lap, so the same rescan finds it.
     const reviser = reviseDrafterHost({
@@ -1697,9 +1717,11 @@ export async function main(
     const listening = (line: string): void => {
       say(line);
       if (rescan === null) {
+        issues.kick();
         drafter.kick();
         reviser.kick();
         rescan = setInterval(() => {
+          issues.kick();
           drafter.kick();
           reviser.kick();
         }, 60_000);
@@ -1720,6 +1742,9 @@ export async function main(
         // the console's strings go through D-0004's escape and it has no CJK
         // substitutes (D-0055 rule 10).
         hostLanguage: selected.tag,
+        // What the page says under a message whose issue is still to be read
+        // (D-0078 section 4.3), off the reader that reads it.
+        issuesUnread: issues.unread,
         answer:
           approver === undefined || approver === ""
             ? null
@@ -1761,6 +1786,7 @@ export async function main(
                     ...(answerOutcome === null ? {} : { answerOutcome }),
                   });
                   if (outcome.kind === "recorded") {
+                    issues.kick();
                     drafter.kick();
                   }
                   return outcome.kind === "recorded"
@@ -2009,10 +2035,17 @@ export async function commandStart(
   // in its request's thread holds it back (rule 5). `parseCommand` has already
   // refused it without `--message-id`.
   if (parsed.scopeDecisionId !== null) {
+    const record = openAdvisoryRecord(storePath);
+    // The issues the request named, after the prompt given here (D-0078 3.4).
+    const quoted =
+      parsed.messageId === null ? plan : await withNamedIssues(record, parsed.messageId, plan);
+    if ("refusal" in quoted) {
+      return refuse(quoted.refusal);
+    }
     const outcome = await admitUnderScope(
       {
         store,
-        record: openAdvisoryRecord(storePath),
+        record,
         nowMs: Date.now,
         admit: (scoped, id, supersedes, requestMessageId, scopeSpend) =>
           admit(
@@ -2031,7 +2064,7 @@ export async function commandStart(
       {
         kind: "lineage_start",
         iterationId,
-        plan,
+        plan: quoted,
         proposalId: null,
         requestMessageId: parsed.messageId,
       },
@@ -5314,6 +5347,29 @@ async function startScoped(
  * share -- continuo started, `admitUnderScope` with the plan's proposal, the
  * report said, and the model reading taken at the gate.
  */
+/**
+ * `plan` with D-0078 section 3.4's quoted section after its prompt: every issue
+ * the request's thread read, rendered by rondo from the `forge` rows. The
+ * drafted or written prompt stays as it is and comes first.
+ *
+ * **A thread that will not read admits nothing**: a lap started without the
+ * issues its request named would be the thinner request N-43 warns about,
+ * said nowhere.
+ */
+export async function withNamedIssues(
+  record: Pick<AdvisoryRecord, "threadMessages">,
+  requestMessageId: string,
+  plan: RunPlan,
+): Promise<RunPlan | { readonly refusal: string }> {
+  const threads = await record.threadMessages();
+  if (threads.kind !== "read") {
+    return {
+      refusal: `the request's thread will not read, so the issues it names cannot be quoted: ${threads.reason}`,
+    };
+  }
+  return { ...plan, prompt: plan.prompt + issuesQuote(threads.messages, requestMessageId) };
+}
+
 async function admitScopedPlan(
   environment: Readonly<Record<string, string | undefined>>,
   store: IterationStore,
@@ -5324,9 +5380,13 @@ async function admitScopedPlan(
     readonly requestMessageId: string;
     readonly scopeDecisionId: string;
   },
-  plan: RunPlan,
+  unquoted: RunPlan,
   proposalId: string | null,
 ): Promise<Started> {
+  const plan = await withNamedIssues(record, input.requestMessageId, unquoted);
+  if ("refusal" in plan) {
+    return { ok: false, why: "startRefusedNotAdmitted", note: plan.refusal };
+  }
   const startup = await startContinuo(environment);
   if (startup.kind === "refused") {
     return {

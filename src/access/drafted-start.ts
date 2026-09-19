@@ -18,6 +18,7 @@ import { type RunPlan, readRunPlan } from "../refrain/plan.js";
 import type { HostPolicy } from "../refrain/policy.js";
 import { canonicalJson } from "../store/plan.js";
 import type { AdvisoryRecord, IterationStore } from "../store/sqlite.js";
+import { ISSUES_QUOTE_OPENING } from "./issue-read.js";
 import { type DraftedPlanRun, draftedPlanRun } from "./model-drafter.js";
 import { gatherScopeSnapshot, type ScopeReadPorts, scopeVerdict } from "./scope.js";
 
@@ -149,7 +150,15 @@ async function startedFrom(
       continue;
     }
     const ran = readRunPlan(lap.plan);
-    if (ran.kind === "planned" && planIdentity(ran.plan) === identity) {
+    if (ran.kind !== "planned") {
+      continue;
+    }
+    // A lap's prompt is its plan's with the issues it was given after it
+    // (D-0078 section 3.4); that section is the lap's, not the plan's.
+    const prompt = ran.plan.prompt.startsWith(run.plan.prompt + ISSUES_QUOTE_OPENING)
+      ? run.plan.prompt
+      : ran.plan.prompt;
+    if (planIdentity({ ...ran.plan, prompt }) === identity) {
       return lap.id;
     }
   }

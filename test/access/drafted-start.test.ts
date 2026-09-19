@@ -17,6 +17,7 @@ import { expect, test } from "vitest";
 import { recordDraftedScopeFromPage, startSplitFromPage } from "../../src/access/cli.js";
 import { draftedStartReadiness } from "../../src/access/drafted-start.js";
 import { drafterHost } from "../../src/access/drafter-host.js";
+import { ISSUES_QUOTE_OPENING } from "../../src/access/issue-read.js";
 import { draftedPlanRun } from "../../src/access/model-drafter.js";
 import { allocate } from "../../src/refrain/allocator.js";
 import { admittedPlan, planPayload, type RunPlan } from "../../src/refrain/plan.js";
@@ -377,6 +378,42 @@ test(
       )
       .get(w.draft.scopeId);
     expect(approved).toEqual({ n: 1 });
+  },
+  WINDOWS_HEAVY_TIMEOUT_MS,
+);
+
+test(
+  "a lap given the issues its request named is still that plan, started (D-0078 section 3.4)",
+  async () => {
+    const w = await drafted();
+    const ports = { store: w.store, record: w.record, policy: DEFAULT_HOST_POLICY, nowMs: 20_000 };
+    const run = await draftedPlanRun(w, "r1", w.proposalId, 1);
+    if (run.kind !== "runnable") throw new Error("plan 1 does not run");
+    const reserve = (id: string, prompt: string) =>
+      w.store.reserve({
+        id,
+        request: "Two things, please.",
+        plan: admittedPayload({ ...run.plan, prompt }, id),
+        spend: null,
+        scopeSpend: null,
+        nowMs: 15_000,
+        supersedesIterationId: null,
+        requestMessageId: "r1",
+        runId: `rondo-${id}`,
+        topicBranch: `rondo/${id}`,
+        workspace: `/srv/work/${id}`,
+      });
+    // Words after the plan's that are not rondo's quote are another plan.
+    expect((await reserve("lap-longer", `${run.plan.prompt} And more.`)).kind).toBe("reserved");
+    expect(
+      (await draftedStartReadiness(ports, "r1", "scope-decision-none", w.proposalId, 1)).kind,
+    ).not.toBe("started");
+    expect(
+      (await reserve("lap-quoted", `${run.plan.prompt}${ISSUES_QUOTE_OPENING} ...`)).kind,
+    ).toBe("reserved");
+    expect(
+      await draftedStartReadiness(ports, "r1", "scope-decision-none", w.proposalId, 1),
+    ).toEqual({ kind: "started", iterationId: "lap-quoted" });
   },
   WINDOWS_HEAVY_TIMEOUT_MS,
 );
