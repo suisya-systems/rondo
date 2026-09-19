@@ -62,6 +62,9 @@ export type DraftedStanding =
       readonly newer: DraftedScopeShown | null;
     };
 
+/** Changes a scope's chain is followed through before it is given up on. */
+const CHAIN_BOUND = 100;
+
 type Ports = {
   readonly record: Pick<
     AdvisoryRecord,
@@ -90,10 +93,7 @@ export async function draftedStanding(
   }
   // Newest first, each draft with the person's scopes that replaced it.
   for (const draft of [...drafts].reverse()) {
-    for (const candidate of [
-      draft,
-      ...scopes.filter((s) => s.supersedesScopeId === draft.scopeId),
-    ]) {
+    for (const candidate of [draft, ...replacing(scopes, draft.scopeId)]) {
       const decided = await ports.record.scopeDecisionOf(candidate.scopeId);
       if (
         decided.kind === "read" &&
@@ -109,13 +109,34 @@ export async function draftedStanding(
   return shown === null ? { kind: "none" } : { kind: "drafted", drafted: shown };
 }
 
+/**
+ * Every scope that replaces `scopeId`, however many changes deep -- the
+ * person's edit of a draft, and a later change of that edit (D-0066 rule 1.4).
+ */
+function replacing(scopes: readonly StoredScope[], scopeId: string): StoredScope[] {
+  const found: StoredScope[] = [];
+  const seen = new Set([scopeId]);
+  for (let at = [scopeId]; at.length > 0; ) {
+    const next = scopes.filter(
+      (s) =>
+        s.supersedesScopeId !== null && at.includes(s.supersedesScopeId) && !seen.has(s.scopeId),
+    );
+    for (const s of next) {
+      seen.add(s.scopeId);
+    }
+    found.push(...next);
+    at = next.map((s) => s.scopeId);
+  }
+  return found;
+}
+
 /** A draft still waiting on the person: no decision on it or on a scope replacing it. */
 async function undecided(
   ports: Ports,
   draft: StoredScope,
   scopes: readonly StoredScope[],
 ): Promise<DraftedScopeShown | null> {
-  for (const candidate of [draft, ...scopes.filter((s) => s.supersedesScopeId === draft.scopeId)]) {
+  for (const candidate of [draft, ...replacing(scopes, draft.scopeId)]) {
     if ((await ports.record.scopeDecisionOf(candidate.scopeId)).kind === "read") {
       return null;
     }
@@ -132,18 +153,22 @@ export async function draftedPlansUnder(
   ports: Ports & { readonly record: Pick<AdvisoryRecord, "readScope"> },
   scope: StoredScope,
 ): Promise<DraftedScopeShown | null> {
-  if (scope.authorKind === "drafter" && isModelDrafterName(scope.authorId)) {
-    return await draftedShown(ports, scope);
+  // Up the chain of changes to the draft it began from, however many deep.
+  let at: StoredScope = scope;
+  for (let hops = 0; hops < CHAIN_BOUND; hops += 1) {
+    if (at.authorKind === "drafter" && isModelDrafterName(at.authorId)) {
+      return await draftedShown(ports, at);
+    }
+    if (at.supersedesScopeId === null) {
+      return null;
+    }
+    const replaced = await ports.record.readScope(at.supersedesScopeId);
+    if (replaced.kind !== "read") {
+      return null;
+    }
+    at = replaced.scope;
   }
-  if (scope.supersedesScopeId === null) {
-    return null;
-  }
-  const replaced = await ports.record.readScope(scope.supersedesScopeId);
-  return replaced.kind === "read" &&
-    replaced.scope.authorKind === "drafter" &&
-    isModelDrafterName(replaced.scope.authorId)
-    ? await draftedShown(ports, replaced.scope)
-    : null;
+  return null;
 }
 
 async function draftedShown(ports: Ports, scope: StoredScope): Promise<DraftedScopeShown | null> {

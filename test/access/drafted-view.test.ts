@@ -252,3 +252,36 @@ test("a narrowing that rests on the request itself is cited, and a stated cost i
   expect(standing.drafted.narrowed).toEqual([{ field: "cost_usd", messageId: "r1" }]);
   expect(standing.drafted.scope.payload.budgets.cost_usd).toBe(3.33);
 });
+
+test("a draft changed twice keeps its drafted work: the approval two changes deep stands, and its plans are the draft's", async () => {
+  const w = await drafted();
+  const first = await successorOf(w, "scope-mine-1");
+  await decide(w, first, "approved");
+  // A later change of the person's version, as `rondo scope --supersedes-scope-id` writes one.
+  const written = await w.record.recordScope({
+    scopeId: "scope-mine-2",
+    payload: {
+      ...(first.payload as unknown as JsonRecord),
+      budgets: { ...first.payload.budgets, cost_usd: 1 },
+    } as JsonRecord,
+    supersedesScopeId: first.scopeId,
+    authorKind: "operator",
+    authorId: "ada",
+    bases: [{ form: "scope", scopeId: first.scopeId }],
+    createdAtMs: 2_100,
+    agentTypeRecords: [],
+  });
+  if (written.kind !== "recorded") throw new Error(JSON.stringify(written));
+  const second = await w.record.readScope("scope-mine-2");
+  if (second.kind !== "read") throw new Error("the second change did not read");
+  const approved = await decide(w, second.scope, "approved");
+
+  expect(await draftedStanding(w, "r1")).toEqual({
+    kind: "decided",
+    scopeDecisionId: approved,
+    newer: null,
+  });
+  const plans = await draftedPlansUnder(w, second.scope);
+  expect(plans?.scope.scopeId).toBe(w.draft.scopeId);
+  expect(plans?.plans).toHaveLength(2);
+});
