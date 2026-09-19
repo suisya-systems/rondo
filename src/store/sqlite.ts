@@ -3450,6 +3450,29 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
                 "(D-0066 rule 2.2, D-0049 rule 2)",
             };
           }
+          // **One approved successor per scope** (D-0066 rule 1.4), decided under
+          // the same lock as the insert: two changes to one scope pressed from
+          // two tabs would otherwise both be approved, each a grant with a
+          // budget of its own, and neither would retire the other.
+          if (
+            draft.outcome === "approved" &&
+            connection
+              .prepare(
+                "SELECT 1 FROM scope s JOIN scope_decision d ON d.scope_id = s.scope_id " +
+                  "WHERE d.outcome = ? AND s.scope_id <> ? AND s.supersedes_scope_id IS NOT NULL " +
+                  "AND s.supersedes_scope_id = (SELECT supersedes_scope_id FROM scope WHERE scope_id = ?) " +
+                  "LIMIT 1",
+              )
+              .get("approved", draft.scopeId, draft.scopeId) !== undefined
+          ) {
+            return {
+              kind: "refused",
+              reason:
+                `the scope '${draft.scopeId}' replaces a scope another approved scope already ` +
+                "replaced, and a scope is replaced once: approving both would leave two grants " +
+                "with budgets of their own (D-0066 rule 1.4)",
+            };
+          }
           connection
             .prepare(
               "INSERT INTO scope_decision (scope_decision_id, scope_id, scope_digest, outcome, " +

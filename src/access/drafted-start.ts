@@ -14,7 +14,7 @@
  * reason here yet; it is added where the ledger is.
  */
 
-import { readRunPlan } from "../refrain/plan.js";
+import { type RunPlan, readRunPlan } from "../refrain/plan.js";
 import type { HostPolicy } from "../refrain/policy.js";
 import { canonicalJson } from "../store/plan.js";
 import type { AdvisoryRecord, IterationStore } from "../store/sqlite.js";
@@ -109,6 +109,15 @@ export async function draftedStartReadiness(
 }
 
 /**
+ * A plan as the fields a lap runs on: canonical JSON with `parties.grantee`
+ * blanked, the one run field admission writes into it (`admittedPlan` sets it
+ * to the allocated run id), so a plan and the lap admitted from it compare equal.
+ */
+function planIdentity(plan: RunPlan): string {
+  return canonicalJson({ ...plan, parties: { ...plan.parties, grantee: "" } } as never);
+}
+
+/**
  * The lap of this request that already started from this plan, or null: a
  * first lap whose own plan **is this plan** -- every field a lap runs on, with
  * only the identifiers admission derives (run id, branch, workspace: D-0063
@@ -121,7 +130,7 @@ async function startedFrom(
   requestMessageId: string,
   run: Extract<DraftedPlanRun, { kind: "runnable" }>,
 ): Promise<string | null> {
-  const identity = canonicalJson(run.plan as never);
+  const identity = planIdentity(run.plan);
   for (const outcome of [
     ...(await ports.store.readLive()),
     ...(await ports.store.terminalIterations()),
@@ -134,7 +143,7 @@ async function startedFrom(
       continue;
     }
     const ran = readRunPlan(lap.plan);
-    if (ran.kind === "planned" && canonicalJson(ran.plan as never) === identity) {
+    if (ran.kind === "planned" && planIdentity(ran.plan) === identity) {
       return lap.id;
     }
   }

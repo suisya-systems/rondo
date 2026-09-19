@@ -18,6 +18,8 @@ import { recordDraftedScopeFromPage, startSplitFromPage } from "../../src/access
 import { draftedStartReadiness } from "../../src/access/drafted-start.js";
 import { drafterHost } from "../../src/access/drafter-host.js";
 import { draftedPlanRun } from "../../src/access/model-drafter.js";
+import { allocate } from "../../src/refrain/allocator.js";
+import { admittedPlan, planPayload, type RunPlan } from "../../src/refrain/plan.js";
 import { planDigest } from "../../src/store/plan.js";
 import type { JsonRecord } from "../../src/store/records.js";
 import { advisoryRecord, iterationStore } from "../../src/store/sqlite.js";
@@ -100,6 +102,15 @@ async function drafted() {
 }
 
 const ENV = { RONDO_APPROVER: "ada" };
+
+/** A plan as a real admission would persist it under `id`. */
+function admittedPayload(plan: RunPlan, id: string): JsonRecord {
+  const allocation = allocate(id, plan.workspaceRoot);
+  if (allocation.kind !== "allocated") throw new Error(allocation.reason);
+  const admitted = admittedPlan(plan, allocation.allocation);
+  if (admitted.kind !== "planned") throw new Error(admitted.reason);
+  return planPayload(admitted.plan);
+}
 /** The store's own bounds: room enough unless a test narrows it. */
 const DEFAULT_HOST_POLICY = { maxOccupying: 4, maxLive: 6 };
 
@@ -235,7 +246,9 @@ test("whether a drafted plan can start is answered before any press: the scope, 
   const reserved = await w.store.reserve({
     id: "lap-plan-0",
     request: "Two things, please.",
-    plan: { ...w.document, prompt: PROMPTS[0] as string },
+    // The plan as admission stores it: allocated identifiers and all, the
+    // grantee rewritten to the run id (`admittedPlan`).
+    plan: admittedPayload(run.plan, "lap-plan-0"),
     spend: null,
     scopeSpend: null,
     nowMs: 15_000,
@@ -302,4 +315,26 @@ test("whether a drafted plan can start is answered before any press: the scope, 
   expect(
     w.connection.prepare("SELECT count(*) AS n FROM conversation_message WHERE asks = 1").get(),
   ).toEqual({ n: 0 });
+});
+
+test("two edits of one draft pressed together from two tabs leave one approved successor, not two (D-0066 rule 1.4)", async () => {
+  const w = await drafted();
+  const edit = (scopeId: string, cost: number) =>
+    recordDraftedScopeFromPage(ENV, w.storePath, "ada", {
+      draftScopeId: w.draft.scopeId,
+      draftDigest: w.draft.scopeDigest,
+      scopeId,
+      budgets: { ...w.draft.payload.budgets, cost_usd: cost },
+      severityThreshold: w.draft.payload.severity_threshold,
+      outwardActs: w.draft.payload.outward_acts,
+    });
+  const outcomes = await Promise.all([edit("scope-tab-1", 3), edit("scope-tab-2", 2)]);
+  expect(outcomes.filter((o) => o.ok)).toHaveLength(1);
+  const approved = w.connection
+    .prepare(
+      "SELECT count(*) AS n FROM scope_decision d JOIN scope s ON s.scope_id = d.scope_id " +
+        "WHERE s.supersedes_scope_id = ? AND d.outcome = 'approved'",
+    )
+    .get(w.draft.scopeId);
+  expect(approved).toEqual({ n: 1 });
 });
