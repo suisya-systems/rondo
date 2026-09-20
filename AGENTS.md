@@ -148,14 +148,20 @@ Consequences for anyone adding code here:
   not patch. D-0001's escalation list is largely spent: three of its four
   requests were carried out at the siblings' gates on 2026-09-05, and the fourth
   was a request to un-decide something.
-- **Two modules under `src/` start a process, and no others**:
+- **Three modules under `src/` start a process, and no others**:
   `src/continuo/invoker.ts`, which drives the pinned continuo (D-0017 rule 3),
-  and `src/access/forge.ts`, which runs `git` and `gh` on the operator's behalf
-  (D-0025 rule 6). Both are granted `spawn` by module and by binding rather than
-  by layer, which is the difference that matters: a layer-wide grant would put a
-  spawn in reach of every command instead of the one an operator has to type
-  `publish` to reach. This file claimed "the one place" until rondo#324, while
-  the boundary table had granted the second site all along — which is why
+  `src/access/forge.ts`, which runs `git` and `gh` on the operator's behalf
+  (D-0025 rule 6), and `src/access/reach.ts`, which runs the one notification
+  program setup found when the person's turn has come and they are not looking
+  at the page (rondo#311). All three are granted `spawn` by module and by
+  binding rather than by layer, which is the difference that matters: a
+  layer-wide grant would put a spawn in reach of every command instead of the
+  one an operator has to type `publish` to reach. The third is narrower still
+  in a way the table cannot show: the program is the path setup wrote into the
+  unit and the argument is one of rondo's own composed sentences, so neither is
+  composed from a request, a message, a plan or a row. This file
+  claimed "the one place" until rondo#324, while the boundary table had granted
+  the second site all along — which is why
   `test/architecture/docs-claims.test.ts` now compares the two sides.
 - **The seam to continuo is `src/continuo/`** (D-0017). The decoder is pure; the
   invoker alone in that layer is granted `spawn`; the pin lives in

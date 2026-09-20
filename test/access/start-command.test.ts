@@ -185,6 +185,33 @@ posix("the unit carries every host fact, and the PATH setup resolved", () => {
   expect(unit).toContain("Restart=always");
 });
 
+posix("the notifier goes to the service and the opener goes to the word", () => {
+  // rondo#311. The two programs sit on the same shelf and are run by different
+  // things: the word runs the opener once, when the page answers, and the host
+  // runs the notifier on its own minute for as long as it is resident. A
+  // notifier written into the word would never be reached, and an opener
+  // written into the unit would open a browser on a machine nobody is at.
+  const { command, unit } = write([
+    "--opener",
+    "/mnt/c/WINDOWS/explorer.exe",
+    "--notifier",
+    "/home/p/.local/bin/wsl-notify-send.exe",
+  ]);
+
+  expect(unit).toContain('Environment="RONDO_NOTIFIER=/home/p/.local/bin/wsl-notify-send.exe"');
+  expect(unit).not.toContain("explorer.exe");
+  expect(command).toContain("OPENER='/mnt/c/WINDOWS/explorer.exe'");
+  expect(command).not.toContain("wsl-notify-send.exe");
+});
+
+posix("a machine with nothing that shows a notification still gets a whole unit", () => {
+  // Setup finding no such program is the ordinary state and not a refusal: the
+  // host starts, reaches nobody, and the page is what it always was.
+  const { unit } = write([]);
+  expect(unit).not.toContain("RONDO_NOTIFIER");
+  expect(unit).toContain("ExecStart=");
+});
+
 posix("a fact that was not given is not written as an empty one", () => {
   const { unit } = write([]);
 

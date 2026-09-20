@@ -2762,6 +2762,22 @@ export interface AdvisoryRecord {
    */
   recordAttention(row: OperatorAttention): Promise<RecordOutcome>;
   /**
+   * The subject ids already counted as `presented` under one `subjectKind`.
+   *
+   * **The read half of D-0036 rule 1's index**, for a writer that has to know
+   * whether its row was the first. `recordAttention` reports `recorded` either
+   * way -- a repeat is a no-op by design, which is right for a surface that
+   * only has to be counted once -- but a caller that *acts* on the first
+   * presentation and must not act twice needs the difference, and rondo#311's
+   * tick is the first such caller: a second toast for a thing the person has
+   * already been told about is the reminder `D-0068` section 2 rule 5 refuses.
+   *
+   * Narrowed to one kind rather than reading the whole table: the kinds are
+   * separate ledgers over separate subjects, and a caller has no business
+   * seeing another's.
+   */
+  presentedSubjects(subjectKind: string): Promise<ReadonlySet<string>>;
+  /**
    * Every proposal nobody has answered, oldest first (D-0032 rule 6).
    *
    * **A left anti-join and not a status column.** There is no `answered` flag
@@ -3725,6 +3741,18 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
           "rule_name) VALUES (?, ?, ?, ?, ?) " +
           "ON CONFLICT (subject_kind, subject_id) WHERE disposition = 'presented' DO NOTHING",
         [row.atMs, row.subjectKind, row.subjectId, row.disposition, row.ruleName],
+      );
+    },
+
+    async presentedSubjects(subjectKind: string): Promise<ReadonlySet<string>> {
+      return new Set(
+        connection
+          .prepare(
+            "SELECT subject_id FROM operator_attention " +
+              "WHERE subject_kind = ? AND disposition = 'presented' AND subject_id IS NOT NULL",
+          )
+          .all(subjectKind)
+          .map((row) => String((row as SqlRow)["subject_id"])),
       );
     },
 

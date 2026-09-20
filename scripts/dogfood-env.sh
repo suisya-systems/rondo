@@ -927,6 +927,36 @@ for candidate in xdg-open wslview explorer.exe open; do
 done
 [ -n "$opener" ] || note "nothing here opens a browser: the word will print the address instead"
 
+# What puts one line in front of the person when they are not looking at the
+# page (rondo#311). The same shelf as the opener and found the same way, and
+# the same last resort: on WSL the desktop is on the Windows side, so a
+# Windows-side notifier is a real answer and its directory stays out of the
+# host's PATH.
+#
+# **The order is what each one reaches, nearest first.** `notify-send` is the
+# desktop's own, and where there is a Linux desktop here it is the one whose
+# notification lands in it. `wsl-notify-send.exe` is the WSL case: the desktop
+# is Windows', and this is what reaches it. Measured on this machine
+# (2026-09-21): no `notify-send`, `wsl-notify-send.exe` present, and calling it
+# works.
+#
+# **What each one is called with is one argument**, which is why this list is
+# short and not a list of everything that can make a sound. Both programs take
+# the whole line as a single positional argument. `wsl-notify-send.exe` handed
+# a second one prints its usage, delivers nothing **and exits 0** (measured the
+# same day) -- so a program that needs a different call shape is not "one more
+# candidate here", it is a silent failure, and it stays out until somebody
+# writes the shape it needs.
+notifier=
+for candidate in notify-send wsl-notify-send.exe; do
+  candidate_path=$(command -v "$candidate" 2>/dev/null || true)
+  if [ -n "$candidate_path" ]; then
+    notifier=$(readlink -f -- "$candidate_path" 2>/dev/null || printf '%s' "$candidate_path")
+    break
+  fi
+done
+[ -n "$notifier" ] || note "nothing here shows a notification: rondo will wait to be looked at"
+
 start_command_args=(
   --node "$node_bin"
   --checkout "$repo_root"
@@ -938,6 +968,7 @@ start_command_args=(
 )
 if [ -n "$remote" ]; then start_command_args+=(--remote "$remote"); fi
 if [ -n "$opener" ]; then start_command_args+=(--opener "$opener"); fi
+if [ -n "$notifier" ]; then start_command_args+=(--notifier "$notifier"); fi
 if [ -n "$operator_language" ]; then
   start_command_args+=(--language "$operator_language")
 fi

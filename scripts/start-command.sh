@@ -45,6 +45,7 @@ usage: scripts/start-command.sh --node PATH --checkout DIR --port N
                                 --path VALUE [--remote NAME]
                                 [--language TAG] [--max-live N]
                                 [--max-occupying N] [--opener PATH]
+                                [--notifier PATH]
                                 [--bin-dir DIR] [--unit-dir DIR]
 
 Write the start command (the one word) and the user service it starts.
@@ -65,6 +66,10 @@ options:
   --max-live N         RONDO_MAX_LIVE
   --max-occupying N    RONDO_MAX_OCCUPYING
   --opener PATH        the program that opens a URL in the person's browser
+  --notifier PATH      the program that puts one line in front of the person
+                       when they are not looking at the page. Unlike --opener,
+                       the host runs this one, so it is given to the service
+                       and not to the word
   --bin-dir DIR        where the word goes. Default: $HOME/.local/bin, a
                        directory the shell already searches
   --unit-dir DIR       where the unit goes.
@@ -94,6 +99,7 @@ language=
 max_live=
 max_occupying=
 opener=
+notifier=
 bin_dir=$HOME/.local/bin
 unit_dir=${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user
 
@@ -111,6 +117,7 @@ while [ $# -gt 0 ]; do
     --max-live) [ $# -ge 2 ] || die "--max-live needs a value"; max_live=$2; shift 2 ;;
     --max-occupying) [ $# -ge 2 ] || die "--max-occupying needs a value"; max_occupying=$2; shift 2 ;;
     --opener) [ $# -ge 2 ] || die "--opener needs a value"; opener=$2; shift 2 ;;
+    --notifier) [ $# -ge 2 ] || die "--notifier needs a value"; notifier=$2; shift 2 ;;
     --bin-dir) [ $# -ge 2 ] || die "--bin-dir needs a value"; bin_dir=$2; shift 2 ;;
     --unit-dir) [ $# -ge 2 ] || die "--unit-dir needs a value"; unit_dir=$2; shift 2 ;;
     -h|--help) usage; exit 0 ;;
@@ -352,6 +359,16 @@ mv -f "$command_tmp" "$command_path"
   fi
   if [ -n "$max_occupying" ]; then
     printf 'Environment=%s\n' "$(sd_quote "RONDO_MAX_OCCUPYING=$max_occupying")"
+  fi
+  # **The notifier goes to the service and the opener goes to the word**, and
+  # the difference is who runs each. The opener is run once, by the word, when
+  # the page answers; the notifier is run by the host, on its own minute, for
+  # as long as it is resident -- so it is a fact the service is started with
+  # (rondo#311). A host started without it reaches nobody and says nothing
+  # about it, which is what setup finding no such program on this machine
+  # means.
+  if [ -n "$notifier" ]; then
+    printf 'Environment=%s\n' "$(sd_quote "RONDO_NOTIFIER=$notifier")"
   fi
   printf '%s\n' 'Restart=always'
   printf '%s\n' 'RestartSec=2'

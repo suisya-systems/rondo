@@ -163,6 +163,7 @@ import { isLive, type PageView, viewHref } from "./page-logic/routes.js";
 import { selectRequest, walkPosition } from "./page-logic/selection.js";
 import { lapEvents } from "./page-logic/thread-events.js";
 import { firstLine, lineOf, replyTarget, type Threads, threadsOf } from "./page-logic/threads.js";
+import { requestsWaitingOnYou } from "./page-logic/waits.js";
 import { finishedAt, stepsOf, WEEK_MS, weekFigures } from "./page-logic/week.js";
 import { denialLine, LIST_LIMIT } from "./review.js";
 import { reviseText } from "./revise-draft/judgement.js";
@@ -2241,6 +2242,24 @@ export async function operatorPage(
       ? new Map()
       : await ports.issuesUnread(threadRows).catch(() => new Map()),
   );
+  /**
+   * **Whose turn it is, read once and read here** (rondo#311).
+   *
+   * This was a local expression inside the list's `map`, which was fine while
+   * the screen was the only thing that asked. It is not any more: the host
+   * reaches a person who is not looking at the screen off the same question
+   * (`src/access/reach.ts`), and an open tab rings off it. A second reading of
+   * *is it my turn* would eventually send somebody to a screen with nothing
+   * waiting on it -- #206's failure, which is this page and the store
+   * disagreeing about an open question, with a person's attention spent on it.
+   *
+   * **Any lap of the request, not the one that speaks for it** (Codex, from
+   * when this was written here): `saysMore` would let a newer running lap hide
+   * an older one still at its gate, and the request would drop out of *your
+   * turn* -- and out of D-0083 rule 3's selection -- with an unanswered
+   * question on it. `requestsWaitingOnYou` reads every lap for that reason.
+   */
+  const waitsOnYou = requestsWaitingOnYou(threads, [...waiting, ...running]);
   // **Only the ones an answer can settle** (D-0032 rule 5). `openProposals`
   // returns every proposal nobody has decided, and an explanation is
   // undecidable by construction -- `recordDecision` refuses the non-binding
@@ -2314,18 +2333,13 @@ export async function operatorPage(
         (message) => threads.rootOf(message.messageId) === root.messageId,
       );
       const lap = lapUnder(root.messageId);
-      // **Any lap of the request, not the one that speaks for it** (Codex):
-      // `saysMore` would let a newer running lap hide an older one still at
-      // its gate, and the request would drop out of *your turn* -- and out of
-      // rule 3's selection -- with an unanswered question on it.
-      const waitsHere =
-        members.some((message) => threads.waiting.has(message.messageId)) ||
-        lapsUnder(root.messageId).some((under) => under.question === "waiting");
       return {
         messageId: root.messageId,
         title: firstLine(root.body),
         repository: repositoryOf(lap?.record ?? null),
-        state: rowStateOf(lap?.record ?? null, waitsHere, (record) => isTerminal(record.status)),
+        state: rowStateOf(lap?.record ?? null, waitsOnYou.has(root.messageId), (record) =>
+          isTerminal(record.status),
+        ),
         atMs: Math.max(...members.map((message) => message.atMs)),
       };
     });
@@ -3025,6 +3039,7 @@ export async function operatorPage(
         }
         <script src="/keys.js" defer />
         <script src="/composer.js" defer />
+        <script src="/chime.js" defer />
       </head>
       <body class="min-h-screen bg-background font-sans text-foreground antialiased">
         <header class="sticky top-0 z-10 border-b border-border bg-background/90 backdrop-blur-sm">
@@ -3102,6 +3117,30 @@ export async function operatorPage(
                   <span class="size-1.5 rounded-full bg-ok motion-safe:animate-pulse" />
                   {wording.liveLabel}
                 </span>
+                {/*
+                 * **Asking the browser for leave to ring** (rondo#311, plan
+                 * 2), and the only reason it is a button rather than a line of
+                 * script: a browser grants this from a person's own press and
+                 * from nothing else, so a tab that asked on its own would
+                 * either be refused or would put a permission box in front of
+                 * somebody who had pressed nothing.
+                 *
+                 * **Hidden until `page/chime.js` decides otherwise**, which is
+                 * `js-only`'s reason twice over: with no script it does
+                 * nothing, and with script it is drawn only while the browser
+                 * still has no answer to keep. Outside `#ledger` on purpose --
+                 * the poll swaps that subtree every five seconds, and a button
+                 * whose state this tab decided would be replaced by the
+                 * server's idea of it twice a minute.
+                 */}
+                <button
+                  type="button"
+                  id="chime-ask"
+                  hidden
+                  class={`js-only ${PILL} gap-1.5 font-sans ${TONE.muted} hover:text-foreground`}
+                >
+                  {wording.chimeAsk}
+                </button>
               </>
             ) : null}
             <span class="flex-1" />
@@ -3217,8 +3256,21 @@ export async function operatorPage(
            * `hx-select` have to agree with each other, and renaming it would
            * only churn the selector.
            */}
+          {/*
+           * **What the tab rings off** (rondo#311, plan 2), below. The same
+           * set the list's *your turn* is drawn from, as a number, on the
+           * element the five-second poll swaps -- so a tab left open behind
+           * other windows learns that the person's turn has come at the same
+           * moment the screen behind it does, off the same reading, and
+           * `page/chime.js` decides nothing about waiting on its own.
+           *
+           * The sentence rides along because it is the person's language,
+           * which this request resolved and the browser did not.
+           */}
           <div
             id="ledger"
+            data-turns={String(waitsOnYou.size)}
+            data-chime={wording.reachYourTurn}
             {...(keepsCurrent
               ? {
                   "hx-get": here,

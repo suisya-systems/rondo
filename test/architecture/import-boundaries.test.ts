@@ -364,6 +364,19 @@ const ALLOWED_EXTERNALS_BY_MODULE: Readonly<
   // that directory is `mkdtempSync` and `rmSync` under `tmpdir()`, named one by
   // one: there is still no write and no read, so the module that spawns cannot
   // also put a file where a process will find it or open one it was not handed.
+  // The one module that runs setup's notification program (rondo#311), keyed by
+  // module for `src/access/forge.ts`'s reason and granted the same one binding.
+  //
+  // **The grant is narrow in a second way that is not visible here**, and it is
+  // what makes a spawn on the host's own minute defensible: the program is not
+  // named by anything this process reads at run time. It arrives as the
+  // environment variable setup wrote into the unit, and the one argument it is
+  // handed is a sentence out of `src/access/wording.ts` -- so neither the
+  // program nor its arguments can be composed from a request, a message, a plan
+  // or a row. There is no `exec`, no shell, and nothing here reads a file.
+  "src/access/reach.ts": {
+    "node:child_process": ["spawn"],
+  },
   "src/access/forge.ts": {
     "node:child_process": ["spawn"],
     "node:fs": ["mkdtempSync", "rmSync"],

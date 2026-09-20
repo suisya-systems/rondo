@@ -522,6 +522,7 @@ test("liveness is per view: two views poll and swap, and the answer view updates
       '<script src="/htmx.min.js" defer="">',
       '<script src="/keys.js" defer="">',
       '<script src="/composer.js" defer="">',
+      '<script src="/chime.js" defer="">',
     ]);
     expect(html).not.toContain("//cdn");
     expect(scriptTagsIn(html).filter((tag) => tag.includes("://"))).toEqual([]);
@@ -531,7 +532,9 @@ test("liveness is per view: two views poll and swap, and the answer view updates
     // status groups while the page was a ledger of laps; the name is kept
     // because `hx-get` and `hx-select` have to agree with each other.
     expect(html).toContain(
-      `<div id="ledger" hx-get="${href}" hx-trigger="every 5s" hx-select="#ledger" hx-swap="outerHTML" hx-select-oob="#waiting-count">`,
+      `<div id="ledger" data-turns="1" data-chime="${EN.reachYourTurn}" ` +
+        `hx-get="${href}" hx-trigger="every 5s" hx-select="#ledger" hx-swap="outerHTML" ` +
+        'hx-select-oob="#waiting-count">',
     );
     // The boxes are inside the faces now, so each says it survives the swap
     // -- and nothing else on the page asks htmx for anything.
@@ -619,9 +622,13 @@ test("liveness is per view: two views poll and swap, and the answer view updates
     decisionId: null,
     plan: null,
   });
+  // `chime.js` is served here as the other two are, and does nothing here as
+  // they largely do: a still view has no `#ledger` and no htmx to swap it, so
+  // there is no reading for it to compare and no event to compare it on.
   expect(scriptTagsIn(still)).toEqual([
     '<script src="/keys.js" defer="">',
     '<script src="/composer.js" defer="">',
+    '<script src="/chime.js" defer="">',
   ]);
   expect(still).not.toMatch(/hx-[a-z]+=/);
   expect(still).not.toContain("htmx");
@@ -779,4 +786,34 @@ test("rondo's own script moves focus and follows the server's links, and asks fo
     "htmx:beforeRequest",
     "htmx:beforeSwap",
   ]);
+});
+
+test("the page carries the turn count and the sentence a tab rings with", async () => {
+  // rondo#311, plan 2. The tab is not allowed its own idea of *waiting*: it
+  // reads the number off the element the five-second poll swaps, written from
+  // the same reading the list's *your turn* is drawn from. What this holds
+  // down is that the two move together -- a page whose count stayed at zero
+  // while a gate opened is a tab that never rings, and one whose count is high
+  // while nothing waits is a person sent to an empty screen (#206's shape).
+  const world = fresh();
+  await reserve(world, "i-0001", "do the thing");
+  const ports = portsOver(world, "ada", []);
+
+  const quiet = await operatorPage(ports, "t", { kind: "summary" }, EN, mint);
+  expect(quiet).toContain('data-turns="0"');
+
+  await openGate(world, "i-0001");
+  const waiting = await operatorPage(ports, "t", { kind: "summary" }, EN, mint);
+  expect(waiting).toContain('data-turns="1"');
+  // And the number is the length of what the list lifted out of the time
+  // order, rather than a second count beside it.
+  expect(waiting).toContain(EN.yourTurn);
+
+  // The sentence rides with it, in the set this request resolved: a browser
+  // has no way to compose the person's language, and the host's own tick
+  // (`src/access/reach.ts`) is not the one drawing this page.
+  expect(waiting).toContain(EN.reachYourTurn);
+  const japanese = await operatorPage(ports, "t", { kind: "summary" }, chromeFor("ja"), mint);
+  expect(japanese).toContain(chromeFor("ja").reachYourTurn);
+  expect(japanese).not.toContain(EN.reachYourTurn);
 });
