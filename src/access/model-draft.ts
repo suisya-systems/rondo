@@ -37,6 +37,7 @@ import {
   type JsonValue,
   type ThreadAuthorKind,
 } from "../store/records.js";
+import { sectionFramer } from "./framing.js";
 
 /**
  * The version of the drafter's own instructions (D-0071 rule 1.4): a changed
@@ -277,14 +278,7 @@ function carried(material: DrafterMaterial): string[] {
  * material is the same document.
  */
 export function drafterDocument(material: DrafterMaterial): string {
-  const texts = carried(material);
-  let n = 0;
-  while (texts.some((text) => text.includes(`@@RONDO-${String(n)}@@`))) {
-    n += 1;
-  }
-  const mark = `@@RONDO-${String(n)}@@`;
-  const section = (name: string, body: string): string =>
-    `${mark} BEGIN ${name}\n${body === "" ? "(none)" : body}\n${mark} END ${name}`;
+  const { mark, section } = sectionFramer(carried(material));
   // **With a language set, the prompts are in it too** (D-0079, rondo#159 part
   // 1): a lap's prompt is the largest block the person reads at its gate, so a
   // prompt in the template's language made them read English to answer. With
