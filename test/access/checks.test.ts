@@ -115,9 +115,18 @@ async function hostOver(options: {
   readonly releasedBy?: "person" | "rondo" | null;
   /** The laps the ledger's one holding line covers. */
   readonly lapIds?: readonly string[];
-}): Promise<{ readonly written: readonly Recorded[]; readonly asked: number }> {
+  /** A reading for one lap, where it differs from `reading`. */
+  readonly readings?: Readonly<Record<string, ChecksReading>>;
+  /** How many ticks to run. One by default. */
+  readonly passes?: number;
+}): Promise<{
+  readonly written: readonly Recorded[];
+  readonly asked: number;
+  /** Which lap each call was about, in order. */
+  readonly askedIds: readonly string[];
+}> {
   const written: Recorded[] = [];
-  let asked = 0;
+  const askedIds: string[] = [];
   const messages = options.messageIds.map((messageId) => ({
     messageId,
     body: "",
@@ -130,19 +139,20 @@ async function hostOver(options: {
   }));
   const host = checksHost({
     store: {
-      read: async () =>
+      read: async (id) =>
         ({
           kind: "read",
-          record: { id: "lap-1", requestMessageId: "request-1", runId: "run-1", plan: "{}" },
+          record: { id, requestMessageId: "request-1", runId: "run-1", plan: "{}" },
         }) as never,
-      readingsFor: async () =>
+      // The commit is the lap's, so a fake reading can be per lap.
+      readingsFor: async (id) =>
         [
           {
             drafter: "rondo/deterministic/2",
             verdict: "clear",
             findings: [],
             readAtMs: 1,
-            evidence: { tipCommit: "c0ffee" },
+            evidence: { tipCommit: `commit-of-${id}` },
           },
         ] as never,
       laneLedger: async () =>
@@ -161,18 +171,21 @@ async function hostOver(options: {
         return { kind: "recorded" } as never;
       },
     },
-    readChecks: async () => {
-      asked += 1;
-      return options.reading;
+    readChecks: async (request) => {
+      const id = request.commit.slice("commit-of-".length);
+      askedIds.push(id);
+      return options.readings?.[id] ?? options.reading;
     },
     repository: () => "owner/name",
     host: "github.com",
     now: () => 2,
     log: () => {},
   });
-  host.kick();
-  await host.idle();
-  return { written, asked };
+  for (let tick = 0; tick < (options.passes ?? 1); tick += 1) {
+    host.kick();
+    await host.idle();
+  }
+  return { written, asked: askedIds.length, askedIds };
 }
 
 test("a published lap whose line still holds is read, and its answer is one message", async () => {
@@ -193,7 +206,7 @@ test("a lap that was never published is not asked about", async () => {
     reading: { kind: "green", counted: 1 },
     messageIds: ["request-1"],
   });
-  expect(over).toEqual({ written: [], asked: 0 });
+  expect(over).toMatchObject({ written: [], asked: 0 });
 });
 
 test("a lap with an answer already is not asked again", async () => {
@@ -201,7 +214,7 @@ test("a lap with an answer already is not asked again", async () => {
     reading: { kind: "green", counted: 1 },
     messageIds: ["request-1", "report-published-lap-1", "report-checks-lap-1-red"],
   });
-  expect(over).toEqual({ written: [], asked: 0 });
+  expect(over).toMatchObject({ written: [], asked: 0 });
 });
 
 test("a line the ledger has released is out of the window", async () => {
@@ -210,7 +223,7 @@ test("a line the ledger has released is out of the window", async () => {
     messageIds: ["request-1", "report-published-lap-1"],
     releasedBy: "rondo",
   });
-  expect(over).toEqual({ written: [], asked: 0 });
+  expect(over).toMatchObject({ written: [], asked: 0 });
 });
 
 test("a 'none' said once does not close the reading: a check registered later is still read", async () => {
@@ -245,7 +258,30 @@ test("a forge that will not answer ends the pass rather than asking it once per 
     ],
     lapIds: ["lap-1", "lap-2", "lap-3"],
   });
-  expect(over).toEqual({ written: [], asked: 1 });
+  expect(over).toMatchObject({ written: [], asked: 1 });
+});
+
+test("a lap whose own reading never determines does not starve the ones behind it", async () => {
+  // A halt is not head-of-line blocking: an `undetermined` about one lap --
+  // a repository rondo cannot read, a count that never adds up -- would
+  // otherwise end every pass at the same lap, for ever (Codex round 2, P1).
+  const over = await hostOver({
+    reading: { kind: "red", failed: ["build"] },
+    readings: { "lap-1": { kind: "undetermined", reason: "gh exited 1" } },
+    messageIds: [
+      "request-1",
+      "report-published-lap-1",
+      "report-published-lap-2",
+      "report-published-lap-3",
+    ],
+    lapIds: ["lap-1", "lap-2", "lap-3"],
+    passes: 2,
+  });
+  expect(over.askedIds).toEqual(["lap-1", "lap-2", "lap-3", "lap-1"]);
+  expect(over.written.map((one) => one.messageId)).toEqual([
+    "report-checks-lap-2-red",
+    "report-checks-lap-3-red",
+  ]);
 });
 
 test("pending writes nothing, so the next scan asks again", async () => {

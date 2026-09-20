@@ -73,6 +73,12 @@ export function checksHost(ports: ChecksHostPorts): ChecksHost {
   // said once and then left alone: it is due on every scan for ever, and a line
   // per minute in the terminal is a line nobody reads.
   const said = new Set<string>();
+  // The lap a pass stopped on, so the next one starts after it rather than at
+  // it. **Without this a halt is head-of-line blocking**: an `undetermined`
+  // that is about one lap and not about the forge -- a repository rondo cannot
+  // read, a count that never adds up -- would end every pass at the same lap
+  // and nothing behind it would ever be read (Codex round 2).
+  let stoppedAt: string | null = null;
   let running: Promise<void> | null = null;
   let again = false;
 
@@ -86,7 +92,7 @@ export function checksHost(ports: ChecksHostPorts): ChecksHost {
         ports.log(`checks   the published laps could not be scanned: ${describe(error)}`);
         return;
       }
-      for (const one of due) {
+      for (const one of after(due, stoppedAt)) {
         // One lap's failure costs that lap: a throw here would end the page's
         // process with it.
         try {
@@ -105,6 +111,7 @@ export function checksHost(ports: ChecksHostPorts): ChecksHost {
           // refusal costs one pass. Honouring the header is the upgrade if a
           // minute turns out to be too soon.
           if (answer.halt) {
+            stoppedAt = one.iterationId;
             return;
           }
         } catch (error) {
@@ -133,6 +140,19 @@ export function checksHost(ports: ChecksHostPorts): ChecksHost {
       }
     },
   };
+}
+
+/**
+ * The due laps, starting after the one the last pass stopped on.
+ *
+ * A rotation and not a filter: the lap that stopped the pass is read last
+ * rather than skipped, so a forge that has come back is noticed and a lap whose
+ * own reading never determines costs one call a tick instead of every other
+ * lap's turn.
+ */
+function after(due: readonly Due[], stoppedAt: string | null): readonly Due[] {
+  const at = due.findIndex((one) => one.iterationId === stoppedAt);
+  return at === -1 ? due : [...due.slice(at + 1), ...due.slice(0, at + 1)];
 }
 
 /** One published lap that is still being read, and what its thread already says. */
