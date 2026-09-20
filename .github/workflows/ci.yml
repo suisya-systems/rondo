@@ -92,6 +92,47 @@ jobs:
           node-version: ${{ matrix.node }}
           cache: npm
 
+      - name: Put this cell's temporary files on the runner's local disk
+        # Windows only, and ported from continuo's `D-1109` after measuring
+        # that rondo has the shape that fix addresses (`D-0088`,
+        # `docs/operations/ci-timing.md`). On the `windows-latest` image the
+        # workspace is checked out onto `D:`, the local ephemeral SSD, while
+        # `os.tmpdir()` resolves to a path on the network-attached OS disk --
+        # and every temporary directory this suite makes (SQLite stores, the
+        # workspaces the CLI and git children are pointed at) lands on the slow
+        # one. continuo measured the two drives side by side with nothing else
+        # varying: 15.60 ms against 1.14 ms for one journalled commit, and 1.6x
+        # for a plain file create-and-delete, so what the OS disk is slow at is
+        # fsync rather than file I/O.
+        #
+        # Before the install rather than immediately before the suite, which is
+        # where continuo puts it: `npm ci` and the pinned continuo's own build
+        # write into the temporary directory too, and those steps are 14 s of
+        # this cell.
+        #
+        # `runner.os` rather than `matrix.os`: a literal `windows-latest` on a
+        # line outside the matrix expression fails
+        # `test/architecture/ci-triggers.test.ts`, which reads this file as
+        # text to keep the cell off the pull-request path (`D-0087`).
+        #
+        # ubuntu is untouched because the step does not run there, not by any
+        # condition on the value. On POSIX `os.tmpdir()` falls back to TMP and
+        # TEMP after TMPDIR, so setting these unconditionally would move the
+        # Linux cells as well -- which nothing here has measured.
+        #
+        # The three paths are printed because this step's whole claim is about
+        # which drive letter the suite writes to, and a later reader who wants
+        # to re-measure should not have to assume it. `GITHUB_ENV` reaches the
+        # NEXT step and not this one, so the `os.tmpdir()` printed here is the
+        # default being moved away from: the log carries both letters.
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "TEMP=$RUNNER_TEMP" >> "$GITHUB_ENV"
+          echo "TMP=$RUNNER_TEMP" >> "$GITHUB_ENV"
+          node -e 'const {tmpdir}=require("node:os");console.log("workspace          ",process.cwd());console.log("RUNNER_TEMP (new)  ",process.env.RUNNER_TEMP);console.log("os.tmpdir() (old)  ",tmpdir())'
+
       - name: Check the vendored cadenza tarball
         # Immediately before the install, in every job that installs, and never
         # only as a test afterwards (D-0018 rule 4). npm's integrity hash is
