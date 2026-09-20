@@ -789,159 +789,15 @@ function stateHead(wording: Chrome, record: IterationRecord, tone: Tone, age: st
   );
 }
 
-/**
- * How many of a log's commands the screen draws: the newest, newest first.
- *
- * **A running lap is read to learn what it is doing now and whether it is still
- * moving**, and both are answered at the top of the log, not in its first
- * hour. So the screen is the tail, and what is past the bound is not silent:
- * the lead says how many are left out and the file holding all of them is
- * named under the list.
- */
-const LOG_COMMANDS = 50;
-/** A command past this is cut at its end: its start says what it was. */
-const LOG_COMMAND_CHARS = 2_000;
-/** An output past this is cut at its start: its end is where it stopped. */
-const LOG_OUTPUT_CHARS = 8_000;
-
-/** A block of text, cut to `max` characters at one end, and a line saying so. */
-function clipped(text: string, max: number, keep: "start" | "end", said: (n: number) => string) {
-  if (text.length <= max) {
-    return <pre class={PRE}>{text}</pre>;
-  }
-  const cut = text.length - max;
+/** A plain note in the views' muted box. */
+function note(line: string) {
   return (
-    <>
-      {keep === "end" ? <p class="text-[12px] leading-5 text-faint">{said(cut)}</p> : null}
-      <pre class={PRE}>{keep === "end" ? text.slice(cut) : text.slice(0, max)}</pre>
-      {keep === "start" ? <p class="text-[12px] leading-5 text-faint">{said(cut)}</p> : null}
-    </>
+    <p class="note rounded-md border border-border bg-muted/60 px-3 py-2 text-[13px] leading-5">
+      {line}
+    </p>
   );
 }
 
-/**
- * One running lap's log (rondo#248 item 3): the commands it ran and what they
- * returned, read by `readLapLog`'s port at the directory the row's own
- * *log found* came from -- the same `locateTranscript`, asked again here, so
- * the screen and the row cannot disagree about where the log is.
- *
- * **Commands, not the whole transcript**, because that is what the reviewer
- * is handed of the same file and the heading says so: the lap's prose between
- * commands is not drawn and nothing here claims it is.
- */
-async function logView(
-  ports: WebPorts,
-  wording: Chrome,
-  view: Extract<PageView, { kind: "log" }>,
-): Promise<unknown> {
-  const framed = (body: unknown) => (
-    <div id="log" class="space-y-4">
-      {backHead(wording, wording.logHeading)}
-      {body}
-    </div>
-  );
-  const found = await ports.store.read(view.iterationId);
-  if (found.kind !== "read") {
-    return framed(
-      note(found.kind === "absent" ? wording.logGone : wording.willNotDecode(found.reason)),
-    );
-  }
-  const record = found.record;
-  const located = await ports.locateTranscript(record);
-  const about = (
-    <div class="min-w-0 space-y-0.5">
-      <p
-        class="request truncate text-sm leading-6 font-medium"
-        title={record.request}
-        lang={materialLanguage(record)}
-      >
-        {record.request}
-      </p>
-      <p class="basis font-mono text-[11px] leading-4 wrap-anywhere text-faint">{record.id}</p>
-    </div>
-  );
-  if (located.kind === "unknown") {
-    return framed(
-      <>
-        {about}
-        {note(wording.logUnchecked(located.reason))}
-      </>,
-    );
-  }
-  if (located.sessions === 0) {
-    return framed(
-      <>
-        {about}
-        {note(wording.logNotYet)}
-      </>,
-    );
-  }
-  const log = ports.readLog(located.directory);
-  if (log.kind === "unread") {
-    return framed(
-      <>
-        {about}
-        {note(wording.logUnread(log.reason))}
-      </>,
-    );
-  }
-  const newest = log.commands.slice(-LOG_COMMANDS).reverse();
-  // The newest output is open: it is the one a person came for. The newest
-  // command may have none yet -- it is still running -- so it is the newest
-  // that has one.
-  const opened = newest.findIndex((command) => command.output !== "");
-  return framed(
-    <>
-      {about}
-      {log.finalMessage === null ? null : (
-        <section class={CARD}>
-          <h3 class={CARD_HEADING}>{wording.logFinal}</h3>
-          <p class="mt-1 text-[13px] leading-5 wrap-anywhere whitespace-pre-wrap">
-            {log.finalMessage}
-          </p>
-        </section>
-      )}
-      {log.unfinished ? note(wording.logUnfinished) : null}
-      {newest.length === 0 ? (
-        note(wording.logEmpty)
-      ) : (
-        <>
-          <p class="text-[13px] leading-5 text-muted-foreground">
-            {wording.logLead(newest.length, log.commands.length)}
-          </p>
-          <ol class="divide-y divide-border rounded-lg border border-border bg-card">
-            {newest.map((command, at) => (
-              <li class="min-w-0 space-y-2 px-4 py-3">
-                <p class="flex items-center gap-2 font-mono text-[11px] leading-4 text-faint">
-                  <span title={log.file}>L{String(command.index)}</span>
-                  {command.isError ? pill("fail", wording.logFailed) : null}
-                </p>
-                {clipped(command.command, LOG_COMMAND_CHARS, "start", wording.logCutAfter)}
-                {command.output === "" ? (
-                  <p class="text-[12px] leading-5 text-faint">{wording.logNoOutput}</p>
-                ) : (
-                  <details class="group" {...(at === opened ? { open: true } : {})}>
-                    <summary class="flex cursor-pointer list-none items-center gap-x-1.5 text-[12px] leading-5 text-muted-foreground select-none hover:text-foreground [&::-webkit-details-marker]:hidden">
-                      {chevron()}
-                      {command.isError ? wording.logOutputFailed : wording.logOutput}
-                    </summary>
-                    <div class="mt-1.5 space-y-1">
-                      {clipped(command.output, LOG_OUTPUT_CHARS, "end", wording.logCutBefore)}
-                    </div>
-                  </details>
-                )}
-              </li>
-            ))}
-          </ol>
-        </>
-      )}
-      <div class="space-y-1">
-        <p class="text-[12px] leading-5 text-faint">{wording.logWhole}</p>
-        <p class="basis font-mono text-[11px] leading-4 wrap-anywhere text-faint">{log.file}</p>
-      </div>
-    </>,
-  );
-}
 
 /** A view's head: the way back to the summary, and what the view is. */
 function backHead(wording: Chrome, heading: string) {
@@ -974,18 +830,6 @@ function backHead(wording: Chrome, heading: string) {
   );
 }
 
-/** A plain note in the views' muted box. */
-function note(line: string) {
-  return (
-    <p class="note rounded-md border border-border bg-muted/60 px-3 py-2 text-[13px] leading-5">
-      {line}
-    </p>
-  );
-}
-
-
-/** *What just finished* -- the last few endings, newest first (rondo#145). */
-
 /**
  * The release screen (D-0073 rule 4.3, rondo#288): which work keeps the files,
  * what it was doing, why rondo has not released them, what releasing does, and
@@ -996,6 +840,7 @@ function note(line: string) {
  * form carries the claim and the laps it was drawn over, so the press refuses
  * a line that moved under the screen.
  */
+
 async function releaseView(
   ports: WebPorts,
   wording: Chrome,
@@ -4782,7 +4627,6 @@ export async function operatorPage(
   const onOwnScreen =
     view.kind === "scope" ||
     view.kind === "publish" ||
-    view.kind === "log" ||
     view.kind === "release";
   const selectedMessages =
     selectedRoot === null
@@ -4917,7 +4761,6 @@ export async function operatorPage(
   // the forge's own configuration, and the tree is composed from what it read.
   const publishing =
     view.kind === "publish" ? await publishView(ports, wording, view, token, threads) : null;
-  const logging = view.kind === "log" ? await logView(ports, wording, view) : null;
   const releasing =
     view.kind === "release"
       ? await releaseView(ports, wording, view, releaseToken, ledger, threads, nowMs)
@@ -5225,9 +5068,7 @@ export async function operatorPage(
                             ? scoping
                             : view.kind === "publish"
                               ? publishing
-                              : view.kind === "log"
-                                ? logging
-                                : releasing}
+                              : releasing}
                         </div>
                       ).toString(),
                     }

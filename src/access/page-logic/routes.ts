@@ -99,7 +99,6 @@ export type PageView =
    * Named by the row and never by a path, so the address carries nothing the
    * server would open.
    */
-  | { readonly kind: "log"; readonly iterationId: string }
   /**
    * The files one finished line keeps, and the press that releases them
    * (D-0073 rule 4.3, rondo#288). A view of its own for `publish`'s reason: the
@@ -163,7 +162,6 @@ export function isLive(view: PageView): boolean {
   return (
     view.kind !== "scope" &&
     view.kind !== "publish" &&
-    view.kind !== "log" &&
     view.kind !== "release"
   );
 }
@@ -189,8 +187,6 @@ export function viewHref(view: PageView, tag: string): string {
   switch (view.kind) {
     case "publish":
       return `/?publish=${encodeURIComponent(view.iterationId)}&${lang}`;
-    case "log":
-      return `/?log=${encodeURIComponent(view.iterationId)}&${lang}`;
     case "release":
       return `/?release=${encodeURIComponent(view.iterationId)}&${lang}`;
     case "requests":
