@@ -234,7 +234,7 @@ function claimsView(claims: readonly Claim[], snapshot: object, focusable = fals
         >
           {/* One quiet line, cut with an ellipsis; the whole locator is its `title`. */}
           <p
-            class="basis order-last truncate px-3 pb-1.5 font-mono text-[10px] leading-4 text-faint/75 sm:w-[32%] sm:shrink-0 sm:py-2 sm:text-right"
+            class="basis order-last truncate px-3 pb-1.5 font-mono text-id leading-4 text-faint/75 sm:w-[32%] sm:shrink-0 sm:py-2 sm:text-right"
             title={withoutRepeat(group)}
           >
             {withoutRepeat(group)}
@@ -251,8 +251,8 @@ function claimsView(claims: readonly Claim[], snapshot: object, focusable = fals
                 <dt
                   class={
                     claim.value === UNDETERMINED
-                      ? "label text-[12px] leading-5 text-faint"
-                      : "label text-[12.5px] leading-5 text-muted-foreground"
+                      ? "label text-meta leading-5 text-faint"
+                      : "label text-meta leading-5 text-muted-foreground"
                   }
                 >
                   {claim.label}
@@ -260,8 +260,8 @@ function claimsView(claims: readonly Claim[], snapshot: object, focusable = fals
                 <dd
                   class={
                     claim.value === UNDETERMINED
-                      ? "value text-[12px] leading-5 wrap-anywhere whitespace-pre-wrap text-faint italic"
-                      : "value text-[13px] leading-5 font-medium wrap-anywhere whitespace-pre-wrap"
+                      ? "value text-body leading-5 wrap-anywhere whitespace-pre-wrap text-faint italic"
+                      : "value text-body leading-5 font-medium wrap-anywhere whitespace-pre-wrap"
                   }
                 >
                   {claim.value}
@@ -355,13 +355,13 @@ function fenceView(wording: Chrome, record: IterationRecord) {
   return (
     <section id="fence" class={`${CARD} py-2`}>
       {denials === null || denials.length === 0 ? (
-        <p class="text-[13px] leading-6">
+        <p class="text-body leading-6">
           <span class="font-semibold">{wording.fenceHeading}</span>{" "}
           <span class="text-muted-foreground">{count}</span>
         </p>
       ) : (
         <details id="fence-calls" class="group">
-          <summary class="flex cursor-pointer list-none flex-wrap items-center gap-x-2 text-[13px] leading-6 select-none [&::-webkit-details-marker]:hidden">
+          <summary class="flex cursor-pointer list-none flex-wrap items-center gap-x-2 text-body leading-6 select-none [&::-webkit-details-marker]:hidden">
             {chevron()}
             <span class="font-semibold">{wording.fenceHeading}</span>
             <span class="text-muted-foreground">{count}</span>
@@ -369,20 +369,20 @@ function fenceView(wording: Chrome, record: IterationRecord) {
           <ul class="mt-2 divide-y divide-border/70 rounded-md border border-border/70">
             {denials.slice(0, LIST_LIMIT).map((denial) =>
               typeof denial === "object" && denial !== null && !Array.isArray(denial) ? (
-                <li class="px-3 py-1.5 font-mono text-[12px] leading-5 wrap-anywhere" lang="">
+                <li class="px-3 py-1.5 font-mono text-id leading-5 wrap-anywhere" lang="">
                   {denialLine(denial)}
                 </li>
               ) : (
-                <li class="px-3 py-1.5 text-[12.5px] leading-5 text-muted-foreground">
+                <li class="px-3 py-1.5 text-body leading-5 text-muted-foreground">
                   {wording.denialUnreadable}
-                  <span class="block font-mono text-[11.5px] text-faint wrap-anywhere" lang="">
+                  <span class="block font-mono text-id text-faint wrap-anywhere" lang="">
                     {JSON.stringify(denial)}
                   </span>
                 </li>
               ),
             )}
             {denials.length > LIST_LIMIT ? (
-              <li class="px-3 py-1.5 text-[12px] text-faint">
+              <li class="px-3 py-1.5 text-meta text-faint">
                 {wording.moreRows(denials.length - LIST_LIMIT)}
               </li>
             ) : null}
@@ -416,11 +416,11 @@ const SEVERITY_TONE: Readonly<Record<FindingSeverity, Tone>> = {
 function coverageFold(id: string, wording: Chrome, drafter: string) {
   return (
     <details id={id} class="group mt-2">
-      <summary class="flex cursor-pointer list-none items-center gap-1.5 text-[12px] leading-5 text-faint select-none hover:text-foreground [&::-webkit-details-marker]:hidden">
+      <summary class="flex cursor-pointer list-none items-center gap-1.5 text-meta leading-5 text-faint select-none hover:text-foreground [&::-webkit-details-marker]:hidden">
         {chevron()}
         {wording.whatItRead}
       </summary>
-      <p class="mt-1 pl-5 text-[12px] leading-5 text-muted-foreground" lang="en">
+      <p class="mt-1 pl-5 text-meta leading-5 text-muted-foreground" lang="en">
         {readingCoverage(drafter).join(" ")}
       </p>
     </details>
@@ -436,11 +436,11 @@ function coverageFold(id: string, wording: Chrome, drafter: string) {
 function maintainerFold(id: string, wording: Chrome, reason: string) {
   return (
     <details id={id} class="group">
-      <summary class="flex cursor-pointer list-none items-center gap-1.5 text-[12px] leading-5 text-faint select-none hover:text-foreground [&::-webkit-details-marker]:hidden">
+      <summary class="flex cursor-pointer list-none items-center gap-1.5 text-meta leading-5 text-faint select-none hover:text-foreground [&::-webkit-details-marker]:hidden">
         {chevron()}
         {wording.forMaintainer}
       </summary>
-      <p class="mt-1 pl-5 text-[12px] leading-5 text-muted-foreground wrap-anywhere" lang="en">
+      <p class="mt-1 pl-5 text-meta leading-5 text-muted-foreground wrap-anywhere" lang="en">
         {reason}
       </p>
     </details>
@@ -456,41 +456,39 @@ function maintainerFold(id: string, wording: Chrome, reason: string) {
 function changedView(wording: Chrome, record: IterationRecord, work: LapWorkInspection | null) {
   const hidden = (count: number) =>
     count > LIST_LIMIT ? (
-      <li class="px-3 py-1.5 text-[12px] text-faint">{wording.moreRows(count - LIST_LIMIT)}</li>
+      <li class="px-3 py-1.5 text-meta text-faint">{wording.moreRows(count - LIST_LIMIT)}</li>
     ) : null;
   const ROWS = "divide-y divide-border/70 rounded-md border border-border/70";
   return (
     <section id="changed" class={CARD}>
       <div class="flex flex-wrap items-baseline gap-x-2">
         <h3 class={CARD_HEADING}>{wording.workHeading}</h3>
-        <span class="font-mono text-[11.5px] text-faint" title={record.workspace ?? ""}>
+        <span class="font-mono text-id text-faint" title={record.workspace ?? ""}>
           {record.topicBranch ?? ""}
         </span>
         {work?.kind === "read" ? (
-          <span class="font-mono text-[11.5px] text-faint">
-            {wording.changedAgainst(work.baseRef)}
-          </span>
+          <span class="font-mono text-id text-faint">{wording.changedAgainst(work.baseRef)}</span>
         ) : null}
       </div>
       {work === null ? (
-        <p class="mt-1 text-[13px] leading-5 text-muted-foreground">{wording.changedNoRange}</p>
+        <p class="mt-1 text-body leading-5 text-muted-foreground">{wording.changedNoRange}</p>
       ) : work.kind !== "read" ? (
         // **`wrap-anywhere`, because the reason is git's own line** and carries
         // an absolute path with no space in it: at 420 it pushed the whole
         // document sideways, which is the one thing a phone width must not do
         // (rondo#233 S4's screenshot pass).
-        <p class="mt-1 text-[13px] leading-5 wrap-anywhere text-muted-foreground">
+        <p class="mt-1 text-body leading-5 wrap-anywhere text-muted-foreground">
           {wording.changedUnreadable(work.reason)}
         </p>
       ) : (
         <div class="mt-2 space-y-2">
           {work.commits.length === 0 ? (
-            <p class="text-[13px] leading-5 text-muted-foreground">{wording.noCommits}</p>
+            <p class="text-body leading-5 text-muted-foreground">{wording.noCommits}</p>
           ) : (
             <ul class={`commits ${ROWS}`}>
               {work.commits.slice(0, LIST_LIMIT).map((commit) => (
-                <li class="flex gap-3 px-3 py-1.5 text-[13px] leading-5">
-                  <span class="shrink-0 font-mono text-[11.5px] leading-5 text-faint">
+                <li class="flex gap-3 px-3 py-1.5 text-body leading-5">
+                  <span class="shrink-0 font-mono text-id leading-5 text-faint">
                     {commit.abbreviatedSha}
                   </span>
                   <span class="min-w-0 wrap-anywhere" lang="">
@@ -502,18 +500,18 @@ function changedView(wording: Chrome, record: IterationRecord, work: LapWorkInsp
             </ul>
           )}
           {work.files.length === 0 ? (
-            <p class="text-[13px] leading-5 text-muted-foreground">{wording.noFiles}</p>
+            <p class="text-body leading-5 text-muted-foreground">{wording.noFiles}</p>
           ) : (
             <ul class={`files ${ROWS}`}>
               {work.files.slice(0, LIST_LIMIT).map((file) => (
                 <li class="flex items-baseline gap-3 px-3 py-1.5">
-                  <span class="min-w-0 flex-1 font-mono text-[12px] leading-5 wrap-anywhere">
+                  <span class="min-w-0 flex-1 font-mono text-id leading-5 wrap-anywhere">
                     {file.path}
                   </span>
                   {file.added === null || file.deleted === null ? (
-                    <span class="shrink-0 text-[11.5px] text-faint">{wording.binaryFile}</span>
+                    <span class="shrink-0 text-id text-faint">{wording.binaryFile}</span>
                   ) : (
-                    <span class="shrink-0 font-mono text-[11.5px] tabular-nums">
+                    <span class="shrink-0 font-mono text-id tabular-nums">
                       <span class="text-ok">+{String(file.added)}</span>{" "}
                       <span class="text-fail">-{String(file.deleted)}</span>
                     </span>
@@ -592,13 +590,13 @@ function modelPill(wording: Chrome, reading: LapReading) {
 function notTakenView(wording: Chrome, id: string, reason: string | null) {
   return (
     <>
-      <p class="mt-1 text-[13px] leading-5 text-muted-foreground">{wording.readingNotTaken}</p>
+      <p class="mt-1 text-body leading-5 text-muted-foreground">{wording.readingNotTaken}</p>
       <details id={id} class="group mt-1">
-        <summary class="flex cursor-pointer list-none items-center gap-1.5 text-[12px] leading-5 text-faint select-none hover:text-foreground [&::-webkit-details-marker]:hidden">
+        <summary class="flex cursor-pointer list-none items-center gap-1.5 text-meta leading-5 text-faint select-none hover:text-foreground [&::-webkit-details-marker]:hidden">
           {chevron()}
           {wording.whyNotTaken}
         </summary>
-        <p class="mt-1 pl-5 text-[12px] leading-5 wrap-anywhere text-muted-foreground">
+        <p class="mt-1 pl-5 text-meta leading-5 wrap-anywhere text-muted-foreground">
           {reason ?? wording.noReasonRecorded}
         </p>
       </details>
@@ -619,18 +617,18 @@ function checksView(wording: Chrome, reading: LapReading | null, workGone: boole
         {checksPill(wording, reading, workGone)}
       </div>
       {reading === null ? (
-        <p class="mt-1 text-[13px] leading-5 text-muted-foreground">{wording.checksNone}</p>
+        <p class="mt-1 text-body leading-5 text-muted-foreground">{wording.checksNone}</p>
       ) : reading.verdict === "unavailable" ? (
         notTakenView(wording, "checks-not-taken", reading.unavailableReason)
       ) : (
         <>
           {workGone ? (
-            <p class="mt-1 text-[13px] leading-5 text-wait-ink">{wording.checksWorkUnreadable}</p>
+            <p class="mt-1 text-body leading-5 text-wait-ink">{wording.checksWorkUnreadable}</p>
           ) : null}
           {reading.findings.length === 0 ? null : (
             <ul class="finding-rows mt-2 space-y-1.5" lang="en">
               {reading.findings.map((finding) => (
-                <li class="finding flex gap-2 text-[13px] leading-5">
+                <li class="finding flex gap-2 text-body leading-5">
                   <span aria-hidden="true" class="text-wait">
                     •
                   </span>
@@ -639,7 +637,7 @@ function checksView(wording: Chrome, reading: LapReading | null, workGone: boole
               ))}
             </ul>
           )}
-          <p class="mt-2 text-[12.5px] leading-5 text-muted-foreground">
+          <p class="mt-2 text-meta leading-5 text-muted-foreground">
             {wording.checksCounted(
               reading.evidence?.commitCount ?? 0,
               reading.evidence?.fileCount ?? 0,
@@ -682,7 +680,7 @@ function modelPendingOnPage(readings: readonly LapReading[], model: LapReading |
 
 function modelView(wording: Chrome, reading: LapReading | null, due: boolean, reload: string) {
   const later = (note: string) => (
-    <p class="mt-1 text-[13px] leading-5 text-muted-foreground">
+    <p class="mt-1 text-body leading-5 text-muted-foreground">
       {note}{" "}
       <a href={reload} class="font-medium text-link underline-offset-2 hover:underline">
         {wording.reloadPage}
@@ -703,7 +701,7 @@ function modelView(wording: Chrome, reading: LapReading | null, due: boolean, re
         <h3 class={CARD_HEADING}>{wording.modelHeading}</h3>
         {reading === null ? null : modelPill(wording, reading)}
         {reading === null ? null : (
-          <span class="ml-auto font-mono text-[11px] text-faint" title={reading.drafter}>
+          <span class="ml-auto font-mono text-id text-faint" title={reading.drafter}>
             {reading.drafter.slice(MODEL_READING_DRAFTER_PREFIX.length)}
           </span>
         )}
@@ -723,7 +721,7 @@ function modelView(wording: Chrome, reading: LapReading | null, due: boolean, re
                     const graded = reading.graded?.[index];
                     return (
                       <li class="model-finding py-2 first:pt-1 last:pb-0">
-                        <p class="flex items-start gap-2 text-[13px] leading-5">
+                        <p class="flex items-start gap-2 text-body leading-5">
                           {graded === undefined
                             ? null
                             : pill(
@@ -736,7 +734,7 @@ function modelView(wording: Chrome, reading: LapReading | null, due: boolean, re
                           </span>
                         </p>
                         {graded === undefined ? null : (
-                          <p class="mt-1 flex flex-wrap items-center gap-1 text-[11.5px] leading-4">
+                          <p class="mt-1 flex flex-wrap items-center gap-1 text-id leading-4">
                             {graded.bases.map((basis) => (
                               <code class="basis-chip rounded border border-border bg-muted/60 px-1.5 py-px font-mono text-faint wrap-anywhere">
                                 {findingBasisText(basis)}
@@ -913,10 +911,10 @@ function materialView(
           <section id="why" class={CARD}>
             <h3 class={CARD_HEADING}>{wording.whyStopped}</h3>
             {material.why === null ? (
-              <p class="text-[13px] leading-5 text-muted-foreground">{wording.whyNotRead}</p>
+              <p class="text-body leading-5 text-muted-foreground">{wording.whyNotRead}</p>
             ) : (
               <p
-                class="mt-1 text-[13.5px] leading-6 wrap-anywhere whitespace-pre-wrap"
+                class="mt-1 text-body leading-6 wrap-anywhere whitespace-pre-wrap"
                 lang={materialLanguage(record)}
               >
                 {material.why}
@@ -936,7 +934,7 @@ function materialView(
        */}
       {checksView(wording, checks, workGone)}
       {modelView(wording, model, modelDue, reload)}
-      <p class="note text-[12.5px] leading-5 text-faint">{wording.readingsNote}</p>
+      <p class="note text-meta leading-5 text-faint">{wording.readingsNote}</p>
     </div>
   );
 }
@@ -1010,7 +1008,7 @@ function approveView(
           <h3 class={CARD_HEADING}>{wording.standingHeading}</h3>
           <ul class="mt-1.5 space-y-1.5">
             {standing.map((said) => (
-              <li class="flex gap-2 text-[13px] leading-5">
+              <li class="flex gap-2 text-body leading-5">
                 <span aria-hidden="true" class="text-fail">
                   &#8226;
                 </span>
@@ -1033,13 +1031,13 @@ function approveView(
       <details id="records" class="group rounded-md border border-border">
         <summary
           data-row=""
-          class="flex cursor-pointer list-none items-center gap-2 rounded-md px-3 py-2 text-[12.5px] leading-5 text-muted-foreground outline-none select-none hover:bg-accent focus-visible:bg-accent focus-visible:shadow-[inset_3px_0_0_var(--color-ring)] [&::-webkit-details-marker]:hidden"
+          class="flex cursor-pointer list-none items-center gap-2 rounded-md px-3 py-2 text-meta leading-5 text-muted-foreground outline-none select-none hover:bg-accent focus-visible:bg-accent focus-visible:shadow-[inset_3px_0_0_var(--color-ring)] [&::-webkit-details-marker]:hidden"
         >
           {chevron()}
           {wording.recordsFold(framing.claims.length)}
         </summary>
         <div class="space-y-3 border-t border-border p-3">
-          <p class="note text-[13px] leading-5 text-muted-foreground">{wording.pressNote}</p>
+          <p class="note text-meta leading-5 text-muted-foreground">{wording.pressNote}</p>
           {/*
            * **The claims that carry a value first, the undetermined ones in one
            * fold** (the third design pass on #220). Folded is not dropped: the fold
@@ -1051,7 +1049,7 @@ function approveView(
             <details id="undetermined" class="group rounded-md border border-border">
               <summary
                 data-row=""
-                class="flex cursor-pointer list-none items-center gap-2 rounded-md px-3 py-2 text-[12.5px] leading-5 text-muted-foreground outline-none select-none hover:bg-accent focus-visible:bg-accent focus-visible:shadow-[inset_3px_0_0_var(--color-ring)] [&::-webkit-details-marker]:hidden"
+                class="flex cursor-pointer list-none items-center gap-2 rounded-md px-3 py-2 text-meta leading-5 text-muted-foreground outline-none select-none hover:bg-accent focus-visible:bg-accent focus-visible:shadow-[inset_3px_0_0_var(--color-ring)] [&::-webkit-details-marker]:hidden"
               >
                 <svg
                   aria-hidden="true"
@@ -1079,12 +1077,12 @@ function approveView(
             // readings' evidence -- and its label says so rather than promising a
             // repeat.
             <details id="material-text" class="group rounded-md border border-border">
-              <summary class="flex cursor-pointer list-none items-center gap-2 rounded-md px-3 py-2 text-[12.5px] leading-5 text-muted-foreground outline-none select-none hover:bg-accent focus-visible:bg-accent [&::-webkit-details-marker]:hidden">
+              <summary class="flex cursor-pointer list-none items-center gap-2 rounded-md px-3 py-2 text-meta leading-5 text-muted-foreground outline-none select-none hover:bg-accent focus-visible:bg-accent [&::-webkit-details-marker]:hidden">
                 {chevron()}
                 {wording.allAsText}
               </summary>
               <pre
-                class="material overflow-x-auto border-t border-border bg-muted/50 p-3 font-mono text-[12px] leading-5 wrap-anywhere whitespace-pre-wrap"
+                class="material overflow-x-auto border-t border-border bg-muted/50 p-3 font-mono text-id leading-5 wrap-anywhere whitespace-pre-wrap"
                 lang={materialLanguage(record)}
               >
                 {framing.material.lines.join("\n")}
@@ -1132,7 +1130,7 @@ function approveView(
          */}
         <p
           id="bar-readings"
-          class="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] leading-5 text-muted-foreground"
+          class="flex flex-wrap items-center gap-x-3 gap-y-1 text-meta leading-5 text-muted-foreground"
         >
           <a
             href="#checks"
@@ -1151,7 +1149,7 @@ function approveView(
           {raised === null ? null : (
             <span
               id="model-raised"
-              class="inline-flex flex-wrap items-center gap-x-1.5 text-[13px] text-fail"
+              class="inline-flex flex-wrap items-center gap-x-1.5 text-body text-fail"
             >
               {glyph("alert")}
               <span>{raised}</span>
@@ -1199,7 +1197,7 @@ function approveView(
            * where the words go, right beside the button they go with.
            */}
           <label class="flex min-w-0 flex-1 flex-col gap-1">
-            <span class="text-[12.5px] leading-5 font-medium text-muted-foreground">
+            <span class="text-meta leading-5 font-medium text-muted-foreground">
               {wording.claimLabel}
             </span>
             <textarea
@@ -1207,7 +1205,7 @@ function approveView(
               rows={1}
               data-draft={`claim:${record.id}:${record.gateId}`}
               placeholder={wording.claimPlaceholder}
-              class="max-h-32 min-h-9 w-full resize-y rounded-md border border-border bg-background px-2.5 py-1.5 text-[13px] leading-5 outline-none [field-sizing:content] placeholder:text-faint focus-visible:ring-2 focus-visible:ring-ring"
+              class="max-h-32 min-h-9 w-full resize-y rounded-md border border-border bg-background px-2.5 py-1.5 text-body leading-5 outline-none [field-sizing:content] placeholder:text-faint focus-visible:ring-2 focus-visible:ring-ring"
             />
           </label>
           {/*
@@ -1291,7 +1289,7 @@ function reviseForm(
   }
   if (framing.forked || framing.scopeDecisionId === null) {
     return (
-      <p id="revise-none" class="note text-[12.5px] leading-5 text-faint">
+      <p id="revise-none" class="note text-meta leading-5 text-faint">
         {framing.forked ? wording.reviseForked : wording.reviseNoScope}
       </p>
     );
@@ -1315,7 +1313,7 @@ function reviseForm(
           : wording.raiseWhyExpiry(localTime(budgets.expires_at_ms).replace("T", " "));
     return (
       <div id="raise" class="space-y-2">
-        <p class="note text-[12.5px] leading-5 text-muted-foreground">{wording.raiseNeeded(why)}</p>
+        <p class="note text-meta leading-5 text-muted-foreground">{wording.raiseNeeded(why)}</p>
         <a
           href={viewHref(
             {
@@ -1353,7 +1351,7 @@ function reviseForm(
             rondo names the lap (D-0023) and a double press is one lap. */}
         <input type="hidden" name="successor" value={newIterationId()} />
         <label class="flex min-w-0 flex-col gap-1">
-          <span class="text-[12.5px] leading-5 font-medium text-muted-foreground">
+          <span class="text-meta leading-5 font-medium text-muted-foreground">
             {wording.reviseLabel}
           </span>
           {/* **The draft is the field's content and not a `placeholder`**: a
@@ -1369,7 +1367,7 @@ function reviseForm(
             lang=""
             data-draft={draftKey}
             placeholder={wording.revisePlaceholder}
-            class="max-h-64 min-h-20 w-full resize-y rounded-md border border-border bg-background px-2.5 py-1.5 font-mono text-[12.5px] leading-5 outline-none placeholder:text-faint focus-visible:ring-2 focus-visible:ring-ring"
+            class="max-h-64 min-h-20 w-full resize-y rounded-md border border-border bg-background px-2.5 py-1.5 font-mono text-body leading-5 outline-none placeholder:text-faint focus-visible:ring-2 focus-visible:ring-ring"
           >
             {box.kind === "drafted" ? box.text : ""}
           </textarea>
@@ -1378,7 +1376,7 @@ function reviseForm(
           <p
             id="revise-draft-state"
             data-draft-state={draftKey}
-            class="note text-[12.5px] leading-5 text-muted-foreground"
+            class="note text-meta leading-5 text-muted-foreground"
           >
             {box.kind === "drafted"
               ? wording.reviseDrafted
@@ -1396,13 +1394,13 @@ function reviseForm(
             id="revise-draft-arrived"
             data-draft-arrived={draftKey}
             hidden
-            class="note text-[12.5px] leading-5 text-muted-foreground"
+            class="note text-meta leading-5 text-muted-foreground"
           >
             {wording.reviseDraftArrived}
           </p>
         ) : null}
         {box.kind === "unavailable" ? maintainerFold("revise-why", wording, box.reason) : null}
-        <p class="note text-[12.5px] leading-5 text-muted-foreground">{wording.reviseNote}</p>
+        <p class="note text-meta leading-5 text-muted-foreground">{wording.reviseNote}</p>
         <button
           type="submit"
           data-row=""
@@ -1562,16 +1560,16 @@ function forgeView(wording: Chrome, message: ThreadMessageDraft) {
   if ("failed" in read) {
     return (
       <div class="issue-read space-y-2" data-issue="not-read">
-        <p class="text-[14px] leading-6">
+        <p class="text-body leading-6">
           {issueNameLink(read)} {wording.issueNotRead(read.failed.why)} {wording.issueNotReadTail}
         </p>
         <details class="group">
-          <summary class="flex cursor-pointer list-none items-center gap-2 text-[12.5px] leading-5 text-muted-foreground select-none [&::-webkit-details-marker]:hidden">
+          <summary class="flex cursor-pointer list-none items-center gap-2 text-meta leading-5 text-muted-foreground select-none [&::-webkit-details-marker]:hidden">
             {chevron()}
             {wording.drafterNoDraftWhy}
           </summary>
           <p
-            class="mt-1 text-[12.5px] leading-5 wrap-anywhere whitespace-pre-wrap text-muted-foreground"
+            class="mt-1 text-meta leading-5 wrap-anywhere whitespace-pre-wrap text-muted-foreground"
             lang="en"
           >
             {read.failed.detail}
@@ -1583,22 +1581,22 @@ function forgeView(wording: Chrome, message: ThreadMessageDraft) {
   const issue = read.read;
   return (
     <div class="issue-read space-y-2" data-issue="read">
-      <p class="text-[14px] leading-6">
+      <p class="text-body leading-6">
         {issueNameLink(read)}{" "}
         <span class="font-medium" lang="">
           {issue.title}
         </span>
       </p>
-      <p class="text-[13px] leading-5 text-muted-foreground">
+      <p class="text-meta leading-5 text-muted-foreground">
         {wording.issueRead(issue.pullRequest, issue.comments.length)}
       </p>
       <details class="group">
-        <summary class="flex cursor-pointer list-none items-center gap-2 text-[12.5px] leading-5 text-muted-foreground select-none [&::-webkit-details-marker]:hidden">
+        <summary class="flex cursor-pointer list-none items-center gap-2 text-meta leading-5 text-muted-foreground select-none [&::-webkit-details-marker]:hidden">
           {chevron()}
           {wording.issueReadFold}
         </summary>
         {/* The forge's words as it returned them: no trim, no reflow (D-0022 rule 4). */}
-        <div class="mt-1 space-y-2 text-[13px] leading-5" lang="">
+        <div class="mt-1 space-y-2 text-meta leading-5" lang="">
           <p class="text-faint">
             {issue.author} · {issue.openedAt} · {issue.state}
           </p>
@@ -1640,25 +1638,25 @@ function noDraft(message: ThreadMessageDraft): boolean {
 function noDraftView(wording: Chrome, message: ThreadMessageDraft, root: string, forms: boolean) {
   return (
     <div class="space-y-2">
-      <p class="text-[14px] leading-6">{wording.drafterNoDraft}</p>
+      <p class="text-body leading-6">{wording.drafterNoDraft}</p>
       {forms ? (
         <a
           href={viewHref(
             { kind: "scope", messageId: root, rounds: null, decisionId: null, plan: null },
             wording.lang,
           )}
-          class={`${SECONDARY} h-7 px-3 text-[13px]`}
+          class={`${SECONDARY} h-7 px-3 text-meta`}
         >
           {wording.scopeAction}
         </a>
       ) : null}
       <details class="group">
-        <summary class="flex cursor-pointer list-none items-center gap-2 text-[12.5px] leading-5 text-muted-foreground select-none [&::-webkit-details-marker]:hidden">
+        <summary class="flex cursor-pointer list-none items-center gap-2 text-meta leading-5 text-muted-foreground select-none [&::-webkit-details-marker]:hidden">
           {chevron()}
           {wording.drafterNoDraftWhy}
         </summary>
         <p
-          class="body mt-1 text-[12.5px] leading-5 wrap-anywhere whitespace-pre-wrap text-muted-foreground"
+          class="body mt-1 text-meta leading-5 wrap-anywhere whitespace-pre-wrap text-muted-foreground"
           lang="en"
         >
           {message.body}
@@ -1723,7 +1721,7 @@ function threadActs(
         // these lead to is a screen with its own press on it, and drawn filled
         // they outweighed the box further down that a person is actually being
         // waited on by.
-        class={`${SECONDARY} h-7 px-3 text-[13px]`}
+        class={`${SECONDARY} h-7 px-3 text-meta`}
       >
         {wording.scopeAction}
       </a>
@@ -1732,7 +1730,7 @@ function threadActs(
           id={`publish-${lap.record.id}`}
           href={viewHref({ kind: "publish", iterationId: lap.record.id }, wording.lang)}
           data-open=""
-          class={`${SECONDARY} h-7 px-3 text-[13px]`}
+          class={`${SECONDARY} h-7 px-3 text-meta`}
         >
           {/* Which try, where there is more than one to tell apart: three
               buttons reading *publish* are three a person cannot choose
@@ -1789,7 +1787,7 @@ function composerView(
   }
   if (token === null || newId === null) {
     return (
-      <p class="note rounded-md border border-border bg-muted/60 px-3 py-2 text-[13px] leading-5">
+      <p class="note rounded-md border border-border bg-muted/60 px-3 py-2 text-body leading-5">
         {wording.composerNoApprover}
       </p>
     );
@@ -1845,7 +1843,7 @@ function composerView(
             <div class="mx-4 mt-2.5 flex min-w-0 items-center gap-1">
               <a
                 href={`#${encodeURIComponent(replying.target.messageId)}`}
-                class="replying flex min-w-0 items-center gap-1.5 text-[12px] leading-5 text-muted-foreground hover:text-foreground"
+                class="replying flex min-w-0 items-center gap-1.5 text-meta leading-5 text-muted-foreground hover:text-foreground"
               >
                 <svg
                   aria-hidden="true"
@@ -1902,7 +1900,7 @@ function composerView(
              * reach the question (see `replyTarget`).
              */}
             {replying.asksWaiting && !answers ? (
-              <p class="not-answer mx-4 mt-0.5 text-[12px] leading-5 text-faint">
+              <p class="not-answer mx-4 mt-0.5 text-meta leading-5 text-faint">
                 {wording.replyNotAnswer}
               </p>
             ) : null}
@@ -1913,7 +1911,7 @@ function composerView(
           id="composer-note"
           role="status"
           data-refused={wording.notSent(wording.sendRefusedUnknown)}
-          class="px-4 pt-2 text-[12.5px] leading-5 text-fail empty:hidden"
+          class="px-4 pt-2 text-body leading-5 text-fail empty:hidden"
         />
       </div>
       <label for="composer-body" class="sr-only">
@@ -1934,10 +1932,10 @@ function composerView(
         // **The box grows with the words** (the S1 design pass): at a fixed
         // two rows a three-line draft scrolled its first line out of sight
         // under the line above it. Capped, then it scrolls.
-        class="block max-h-[40vh] min-h-[4.5rem] w-full resize-y bg-transparent px-4 pt-2 text-[14px] leading-6 outline-none [field-sizing:content] placeholder:text-faint"
+        class="block max-h-[40vh] min-h-[4.5rem] w-full resize-y bg-transparent px-4 pt-2 text-body leading-6 outline-none [field-sizing:content] placeholder:text-faint"
       />
       <div class="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 pt-1 pb-2.5">
-        <span class="note px-1 text-[11.5px] leading-5 text-faint">
+        <span class="note px-1 text-meta leading-5 text-faint">
           {answers ? wording.answerOutcomeNote : wording.sendNote}
         </span>
         <span class="ml-auto flex items-center gap-3">
@@ -1947,7 +1945,7 @@ function composerView(
             // button was pressed, so `page/composer.js` leaves this one form
             // alone rather than sending an answer nobody chose.
             answers ? null : (
-              <span class="js-only hidden items-center gap-1 text-[11.5px] text-faint sm:flex">
+              <span class="js-only hidden items-center gap-1 text-meta text-faint sm:flex">
                 {kbd("Ctrl/⌘")}
                 {kbd("↵")}
                 <span>{wording.keySend}</span>
@@ -2941,7 +2939,7 @@ export async function operatorPage(
       <body class="min-h-screen bg-background font-sans text-foreground antialiased">
         <header class="sticky top-0 z-10 border-b border-border bg-background/90 backdrop-blur-sm">
           <div class="mx-auto flex h-12 max-w-5xl items-center gap-3 px-4 sm:px-6">
-            <h1 class="text-[15px] font-semibold tracking-tight">
+            <h1 class="text-title font-semibold tracking-tight">
               {
                 // `data-back` is what `Esc` follows; on the summary there is
                 // nowhere further back to go, so it is absent there, and on a
@@ -2967,7 +2965,7 @@ export async function operatorPage(
             </span>
             <a
               href={viewHref({ kind: "requests" }, wording.lang)}
-              class={`inline-flex items-center gap-1.5 text-[13px] hover:text-foreground ${onThreads ? "font-medium text-foreground" : "text-muted-foreground"}`}
+              class={`inline-flex items-center gap-1.5 text-meta hover:text-foreground ${onThreads ? "font-medium text-foreground" : "text-muted-foreground"}`}
               {...(view.kind === "thread" ? { "data-back": "" } : {})}
               {...(view.kind === "requests" ? { "aria-current": "page" } : {})}
             >
@@ -2994,7 +2992,7 @@ export async function operatorPage(
                     /
                   </span>
                   <span
-                    class="hidden max-w-[16rem] truncate text-[13px] text-foreground xl:inline"
+                    class="hidden max-w-[16rem] truncate text-meta text-foreground xl:inline"
                     lang=""
                   >
                     {firstLine(threads.byId.get(threads.rootOf(view.messageId) ?? "")?.body ?? "")}
@@ -3022,10 +3020,10 @@ export async function operatorPage(
               // design pass), in place of a sentence naming the variable.
               ports.actorId === null ? null : (
                 <span
-                  class="hidden items-center gap-1.5 text-[12.5px] text-muted-foreground lg:inline-flex"
+                  class="hidden items-center gap-1.5 text-meta text-muted-foreground lg:inline-flex"
                   title={wording.signedInAs(ports.actorId)}
                 >
-                  <span class="inline-flex size-5 items-center justify-center rounded-full bg-muted text-[10.5px] font-semibold text-foreground ring-1 ring-border">
+                  <span class="inline-flex size-5 items-center justify-center rounded-full bg-muted text-id font-semibold text-foreground ring-1 ring-border">
                     {ports.actorId.slice(0, 1).toUpperCase()}
                   </span>
                   {ports.actorId}
@@ -3069,7 +3067,7 @@ export async function operatorPage(
               // links carry no class of their own; the nav styles them, so a
               // link is still exactly its address, its tag and its name.
               // Muted, so the one thing in the header in colour is the live state.
-              <nav class="switch flex shrink-0 gap-3 whitespace-nowrap text-[13px] text-muted-foreground [&>a]:hover:text-foreground [&>a]:hover:underline">
+              <nav class="switch flex shrink-0 gap-3 whitespace-nowrap text-meta text-muted-foreground [&>a]:hover:text-foreground [&>a]:hover:underline">
                 {[...SHIPPED_SETS]
                   .filter(([tag]) => tag !== wording.lang)
                   .map(([tag, endonym]) => (
@@ -3099,7 +3097,7 @@ export async function operatorPage(
             // reason rondo knows and did not say. It sits above the faces
             // because it is true of the whole page and not of one of them.
             ports.actorId === null ? (
-              <p class="note mx-auto max-w-5xl rounded-md border border-border bg-muted/60 px-3 py-2 text-[13px] leading-5">
+              <p class="note mx-auto max-w-5xl rounded-md border border-border bg-muted/60 px-3 py-2 text-body leading-5">
                 {wording.noApproverNote}
               </p>
             ) : null
@@ -3110,7 +3108,7 @@ export async function operatorPage(
             // redraw that recovers (#220 S1, Codex). Above the faces, because
             // with the threads unreadable there is no centre to put it in.
             threadRead.kind === "unreadable" ? (
-              <p class="note mx-auto max-w-5xl rounded-md border border-fail/40 px-3 py-2 text-[13px] leading-5 text-fail">
+              <p class="note mx-auto max-w-5xl rounded-md border border-fail/40 px-3 py-2 text-body leading-5 text-fail">
                 {wording.threadsUnreadable(threadRead.reason)}
               </p>
             ) : null
@@ -3183,7 +3181,7 @@ export async function operatorPage(
             // **Outside the swap**, because it is true of the document and not
             // of the faces; the header's live pill is its pair and is outside
             // too.
-            <p class="note mx-auto max-w-5xl px-4 text-[11.5px] leading-5 text-faint sm:px-6">
+            <p class="note mx-auto max-w-5xl px-4 text-meta leading-5 text-faint sm:px-6">
               <span
                 title={
                   onThreads
