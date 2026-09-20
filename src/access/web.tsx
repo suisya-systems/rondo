@@ -5284,6 +5284,15 @@ function requestFold(body: string): RequestFold | null {
  */
 function markdown(text: string) {
   return text.trim() === "" ? null : (
+    /*
+     * The rule below arrived with React's rule set when the page's rebuild
+     * installed it, and it is answered here rather than switched off for the
+     * file, so the next use has to argue for itself too: `markdownHtml` is
+     * the one module that transforms content (D-0059), and what passes is
+     * decided there -- no raw HTML, no link that runs, no image fetched. The
+     * renderer reaches micromark no other way.
+     */
+    // biome-ignore lint/security/noDangerouslySetInnerHtml: sanitised by markdownHtml, the one transforming module (D-0059)
     <div class="markdown" dangerouslySetInnerHTML={{ __html: markdownHtml(text) }} />
   );
 }

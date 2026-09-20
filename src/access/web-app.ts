@@ -1343,7 +1343,16 @@ const SERVED: ReadonlyMap<string, { readonly file: URL; readonly type: string }>
       readFileSync(new URL("../../page.manifest.json", import.meta.url), "utf8"),
     ) as Record<string, string>,
   )
-    .filter((name) => /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(name))
+    /*
+     * **A plain file name, or one under `assets/`, and nothing else.** The
+     * bundler emits its output into a directory, so the manifest now holds a
+     * name with a separator in it -- and the property this filter exists for
+     * is unchanged: no request contributes to a path. The key comes from the
+     * manifest, the value is built from the key, and the pattern still admits
+     * no `..`, no leading `/` and no second level, so a manifest entry cannot
+     * name a file outside `dist/page/`.
+     */
+    .filter((name) => /^(?:assets\/)?[A-Za-z0-9][A-Za-z0-9._-]*$/.test(name))
     .map(
       (name) =>
         [

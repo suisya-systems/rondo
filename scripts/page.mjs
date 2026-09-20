@@ -100,6 +100,25 @@ if (command === "build") {
     { stdio: ["ignore", "inherit", "pipe"] },
   );
   for (const [name, from] of Object.entries(COPIES)) copyFileSync(from, join(dir, name));
+  /*
+   * The browser bundle, after the CSS and the copies so that a failure here
+   * leaves the rest built rather than half-built. Vite is resolved the way
+   * Tailwind is, and for the same reason: `node_modules/.bin` holds `.cmd`
+   * shims on Windows that `execFileSync` cannot start.
+   *
+   * **`emptyOutDir` is off in `vite.config.mjs`**, because Tailwind's output
+   * and the copies are already in this directory and are not Vite's to
+   * remove.
+   */
+  const viteCli = join(dirname(require.resolve("vite/package.json")), "bin/vite.js");
+  // `--outDir` is passed rather than left to the config, because this script
+  // takes the directory as an argument and building the bundle somewhere else
+  // would leave `build <dir>` producing an incomplete directory -- which is
+  // exactly what the two-clean-builds reproducibility check reads.
+  execFileSync(process.execPath, [viteCli, "build", "--logLevel", "warn", "--outDir", dir], {
+    cwd: root,
+    stdio: ["ignore", "inherit", "pipe"],
+  });
 } else if (command === "record") {
   writeFileSync(manifestPath, `${JSON.stringify(digests(), null, 2)}\n`);
 } else if (command === "check") {

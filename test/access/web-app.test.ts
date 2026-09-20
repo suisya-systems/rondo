@@ -1714,6 +1714,20 @@ test("it serves the manifest's files as the bytes the manifest names, and no oth
     "/page.manifest.json",
     "/page/app.css",
     "/%2e%2e/package.json",
+    // The bundle lives under `assets/`, so the map holds a name with a
+    // separator. These say the widening bought exactly one level and nothing
+    // else: no escaping it while still spelled as a path, no second level, no
+    // bare directory.
+    //
+    // Spellings that *resolve* to a mapped address -- `/assets/../app.css`,
+    // and `/assets/%2e%2e/app.css` once the router decodes it -- are
+    // deliberately not cases. Both become `/app.css`, which is a mapped
+    // address, and answering it is correct. The property that matters is the
+    // one below: an address the map does not hold is a 404, and the file URL
+    // is built from the manifest key rather than from the request, so no
+    // spelling reaches a file outside `dist/page/`.
+    "/assets/",
+    "/assets/sub/main.js",
   ]) {
     expect((await fetch(`${base}${path}`)).status, path).toBe(404);
   }

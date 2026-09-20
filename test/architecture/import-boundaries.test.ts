@@ -373,6 +373,18 @@ const ALLOWED_EXTERNALS_BY_MODULE: Readonly<
   // **A `.tsx` since the views became server JSX** (D-0059 rule 2). The JSX
   // runtime `tsc` emits an import of is not written in the source and so is
   // not an import this sweep sees; what the module names is still one parser.
+  // **React, per file and per binding, which is the tax this foundation
+  // carries** (D-0083's rebuild). The page's views are React from here on,
+  // and every one of them has to be named here with the bindings it uses --
+  // there is no layer-wide grant and no wildcard, so adding a hook to a
+  // component is a line in this table. That is the cost of keeping externals
+  // granted per module, and it is paid deliberately rather than by widening
+  // the rule.
+  //
+  // The JSX runtime itself is not listed because it is not an import this
+  // sweep sees: `tsc` emits it from the per-file `@jsxImportSource` pragma
+  // and it is not written in the source.
+  "src/access/page/faces.tsx": { react: ["ReactNode"] },
   // **The renderer names no external at all now.** `hono/utils/accept` moved
   // with the language resolution it was imported for, to the module below:
   // the page's rebuild lifted that resolution out of the view layer, and the
