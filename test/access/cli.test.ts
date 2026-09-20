@@ -25,11 +25,9 @@ import {
   claimThenWalk,
   type GateVerbs,
   operatorLanguage,
-  type PullRequestTextInput,
   parseBasis,
   publishModelReadingLines,
   publishRepository,
-  pullRequestText,
   readingRangeOf,
   reviewGate,
   reviewLines,
@@ -51,6 +49,7 @@ import {
   publishPreflight,
   repositoryFromRemoteUrl,
 } from "../../src/access/forge-preflight.js";
+import { type PullRequestTextInput, pullRequestText } from "../../src/access/pull-request.js";
 import { evidenceOf } from "../../src/access/review.js";
 import { type Chrome, chromeFor, EN } from "../../src/access/wording.js";
 import { BASIS_FORMS } from "../../src/advisory/proposal.js";

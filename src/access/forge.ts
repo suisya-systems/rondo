@@ -574,11 +574,26 @@ export interface LapFile {
 }
 
 /**
+ * One file's line counts, or the fact that it has none.
+ *
+ * **Beside the shape it reads** (rondo#341), because both screens that list a
+ * lap's files render a count this way: the terminal's own summary in
+ * `./cli.ts`, and the pull-request body in `./pull-request.ts`. Two spellings
+ * of "(binary)" would be the two of them describing the same file differently.
+ */
+export function fileCounts(file: LapFile): string {
+  if (file.added === null || file.deleted === null) {
+    return "(binary)";
+  }
+  return `(+${String(file.added)} -${String(file.deleted)})`;
+}
+
+/**
  * What the lap actually did to the workspace, as `git` reports it.
  *
  * Facts again, and for the same reason `PushTargetInspection` is: what a pull
  * request's title and body are made of is a rule about pull requests, and it
- * lives in `./cli.ts` as a pure function over this value.
+ * lives in `./pull-request.ts` as a pure function over this value.
  *
  * `unreadable` is a first-class answer rather than an empty read. A publish
  * whose history could not be read still has to be publishable -- the diff is

@@ -33,8 +33,8 @@ interface RequestFold {
 }
 
 /**
- * The request fold `requestBlock` (cli.ts) writes into a pull request body, or
- * null where the body carries none (rondo#248).
+ * The request fold `requestBlock` (pull-request.ts) writes into a pull request
+ * body, or null where the body carries none (rondo#248).
  *
  * **The fence is what makes the edge unambiguous.** `requestBlock` sizes it one
  * longer than the longest run of backticks in what it quotes, so no line of the
