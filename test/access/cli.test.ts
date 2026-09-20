@@ -23,12 +23,10 @@ import { expect, test } from "vitest";
 import {
   approvedActor,
   claimThenWalk,
-  FLAGS_BY_COMMAND,
   type GateVerbs,
   operatorLanguage,
   type PullRequestTextInput,
   parseBasis,
-  parseCommand,
   publishModelReadingLines,
   publishRepository,
   pullRequestText,
@@ -43,6 +41,7 @@ import {
   walkGate,
   workLines,
 } from "../../src/access/cli.js";
+import { FLAGS_BY_COMMAND, parseCommand } from "../../src/access/cli-parse.js";
 import { consoleSeams } from "../../src/access/console.js";
 import type { LapWorkInspection, PushTargetInspection } from "../../src/access/forge.js";
 import {

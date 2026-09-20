@@ -14,7 +14,8 @@ import { join, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { expect, test, vi } from "vitest";
 
-import { commandScopedRetry, commandStart, main, parseCommand } from "../../src/access/cli.js";
+import { commandScopedRetry, commandStart, main } from "../../src/access/cli.js";
+import { parseCommand } from "../../src/access/cli-parse.js";
 import { admit, type ReportingPorts, reportToRequest, resume } from "../../src/access/conductor.js";
 import { consoleSeams } from "../../src/access/console.js";
 import type {

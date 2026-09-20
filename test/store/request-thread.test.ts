@@ -13,7 +13,8 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { expect, test } from "vitest";
 
-import { main, parseBasis, parseCommand } from "../../src/access/cli.js";
+import { main, parseBasis } from "../../src/access/cli.js";
+import { parseCommand } from "../../src/access/cli-parse.js";
 import { consoleSeams } from "../../src/access/console.js";
 import { CONSERVATIVE_HOST_POLICY } from "../../src/refrain/policy.js";
 import type { AnswerOutcome, ThreadMessageDraft } from "../../src/store/records.js";
