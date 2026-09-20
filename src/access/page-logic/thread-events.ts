@@ -48,12 +48,24 @@ export function lapEvents(
   readings: readonly ReadingLine[],
   isTerminal: (status: string) => boolean,
   at: (atMs: number) => string,
+  /**
+   * Which try of the request this lap is, or null where it is the only one.
+   *
+   * **Said because otherwise the record is unreadable** (D-0076 rule 3.3, and
+   * the mock's own lines). A request with four laps draws four *work started*
+   * and four *finished*, and a person cannot tell which ending belongs to
+   * which attempt -- so the line says the try, which is a thing a person has
+   * (rule 6 counts tries too) and not an identifier of rondo's. With one lap
+   * there is nothing to tell apart and the number would be noise.
+   */
+  tryAt: number | null = null,
 ): readonly ThreadEvent[] {
+  const said = (line: string) => (tryAt === null ? line : wording.evOfTry(tryAt, line));
   const events: ThreadEvent[] = [
     {
       id: `${record.id}:started`,
       kind: "other",
-      said: wording.evStarted,
+      said: said(wording.evStarted),
       at: at(record.createdAtMs),
       atMs: record.createdAtMs,
     },
@@ -64,7 +76,7 @@ export function lapEvents(
       events.push({
         id,
         kind: "other",
-        said: wording.evReadingUnavailable,
+        said: said(wording.evReadingUnavailable),
         at: at(reading.atMs),
         atMs: reading.atMs,
       });
@@ -76,13 +88,15 @@ export function lapEvents(
       // Green for passed and red for failed, which is the whole of what the
       // dot says (D-0082 rule 2).
       kind: clear ? "passed" : "failed",
-      said: isChecks(reading.drafter)
-        ? clear
-          ? wording.evChecksPassed
-          : wording.evChecksFailed
-        : clear
-          ? wording.evReadingClear
-          : wording.evReadingRaised(reading.findings.length),
+      said: said(
+        isChecks(reading.drafter)
+          ? clear
+            ? wording.evChecksPassed
+            : wording.evChecksFailed
+          : clear
+            ? wording.evReadingClear
+            : wording.evReadingRaised(reading.findings.length),
+      ),
       at: at(reading.atMs),
       atMs: reading.atMs,
     });
@@ -92,7 +106,7 @@ export function lapEvents(
     events.push({
       id: `${record.id}:ended`,
       kind: closed ? "passed" : "other",
-      said: closed ? wording.evFinished : wording.evStopped,
+      said: said(closed ? wording.evFinished : wording.evStopped),
       at: at(record.updatedAtMs),
       atMs: record.updatedAtMs,
     });

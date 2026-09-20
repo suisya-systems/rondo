@@ -3854,6 +3854,7 @@ function threadActs(
   ports: WebPorts,
   token: string | null,
   requestMessageId: string,
+  /** Oldest first, so the index is the try (`lapEvents`'s `tryAt`). */
   laps: readonly LapUnderRequest[],
   threads: Threads,
 ) {
@@ -3899,7 +3900,12 @@ function threadActs(
           data-open=""
           class={`${PRIMARY} h-7 px-3 text-[13px]`}
         >
-          {wording.publishAction}
+          {/* Which try, where there is more than one to tell apart: three
+              buttons reading *publish* are three a person cannot choose
+              between (D-0076 rule 3.3, as the event lines do it). */}
+          {laps.length > 1
+            ? wording.evOfTry(laps.indexOf(lap) + 1, wording.publishAction)
+            : wording.publishAction}
         </a>
       ))}
     </p>
@@ -4895,7 +4901,14 @@ export async function operatorPage(
    * superseded out of the record. Read here, once, for the one request the
    * centre is drawing.
    */
-  const selectedLaps = selectedRoot === null ? [] : lapsUnder(selectedRoot);
+  // Oldest first, so *try 1* is the first attempt and the walk down the
+  // thread and the count agree.
+  const selectedLaps =
+    selectedRoot === null
+      ? []
+      : lapsUnder(selectedRoot).toSorted(
+          (left, right) => left.record.createdAtMs - right.record.createdAtMs,
+        );
   const readingsByLap = new Map(
     await Promise.all(
       selectedLaps.map(
@@ -5033,7 +5046,7 @@ export async function operatorPage(
         },
       };
     }),
-    ...selectedLaps.flatMap((lap) =>
+    ...selectedLaps.flatMap((lap, tryAt) =>
       lapEvents(
         wording,
         lap.record,
@@ -5045,6 +5058,8 @@ export async function operatorPage(
         })),
         (status) => isTerminal(status as IterationRecord["status"]),
         (atMs) => wording.age(ago(atMs, nowMs)),
+        // Said only where there is more than one to tell apart.
+        selectedLaps.length > 1 ? tryAt + 1 : null,
       ).map((event): ThreadItem => ({ kind: "event", event })),
     ),
   ]

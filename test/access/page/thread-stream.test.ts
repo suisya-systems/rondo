@@ -58,6 +58,26 @@ test("every lap of the request is in the record, and the record runs in time ord
     to: null,
   });
   expect([...html.matchAll(/Work started\./g)]).toHaveLength(2);
+  // **And each line says which try it belongs to** (D-0076 rule 3.3): four
+  // laps otherwise draw four *work started* and four *finished* with nothing
+  // saying which ending belongs to which attempt. A try is a thing a person
+  // has -- rule 6's line counts them -- and not an identifier of rondo's.
+  expect(html).toContain("Try 1: Work started.");
+  expect(html).toContain("Try 2: Work started.");
+});
+
+test("with one lap there is nothing to tell apart, so no try is said", async () => {
+  const world = fresh();
+  await openRequest(world, "req-one", "count the laps", 1_000);
+  await reserve(world, "i-only", "count the laps", null, "req-one");
+  await openGate(world, "i-only");
+  const html = await operatorPage(portsOver(world, "ada", []), "t", {
+    kind: "thread",
+    messageId: "req-one",
+    to: null,
+  });
+  expect(html).toContain("Work started.");
+  expect(html).not.toContain("Try 1:");
 });
 
 test("a message written while the work ran sits between the events around it", async () => {

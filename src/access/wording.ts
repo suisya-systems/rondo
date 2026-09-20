@@ -318,6 +318,14 @@ export interface Chrome extends PageWords {
    * carry, so that five items are not read as six.
    */
   /** Rule 3's walk: where this request stands among the ones waiting, and the way on. */
+  /**
+   * One event line, said of a particular try (D-0083 rule 7).
+   *
+   * Drawn only where the request has more than one lap: with one there is
+   * nothing to tell apart. A try is a thing a person has -- rule 6's line
+   * counts them -- and not an identifier of rondo's (D-0076).
+   */
+  readonly evOfTry: (at: number, said: string) => string;
   readonly walkAt: (at: number, of: number) => string;
   readonly walkNext: string;
   readonly govSpent: (spent: string, approved: string) => string;
@@ -1236,6 +1244,7 @@ explanation you pressed on and then answers the gate.`,
   keySend: "send",
   composerNoApprover:
     "RONDO_APPROVER is not set, so there is nobody this page could send as: the threads can be read, not written to.",
+  evOfTry: (at, said) => `Try ${String(at)}: ${said}`,
   walkAt: (at, of) => `your turn ${String(at)} / ${String(of)}`,
   walkNext: "next",
   govSpent: (spent, approved) => `$${spent} of $${approved}`,
@@ -2085,6 +2094,7 @@ const JA: Chrome = Object.freeze({
   keySend: "送信",
   composerNoApprover:
     "RONDO_APPROVER が設定されていないため、このページが誰として送るのかが決まりません。スレッドは読めますが、書き込めません。",
+  evOfTry: (at, said) => `${String(at)} 回目: ${said}`,
   walkAt: (at, of) => `あなたの番 ${String(at)} ／ ${String(of)}`,
   walkNext: "次へ",
   govSpent: (spent, approved) => `$${spent} ／ $${approved}`,
