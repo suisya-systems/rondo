@@ -3,9 +3,9 @@
  * over one model reading, what its answer may say, and the text of the box
  * rondo assembles from it.
  *
- * **Pure, and it owns no capability**, on `./model-draft.ts`'s division: the
- * `claude` process is `./forge.ts`'s, the store reads and the write are
- * `./revise-drafter.ts`'s, and this file is a total function over what they
+ * **Pure, and it owns no capability**, on `../model-draft/judgement.ts`'s division: the
+ * `claude` process is `../forge.ts`'s, the store reads and the write are
+ * `./host.ts`'s, and this file is a total function over what they
  * returned.
  *
  * **The model writes words per finding, never a finding** (D-0077 section 3,
@@ -18,10 +18,14 @@
  * and no empty words (section 4.1).
  */
 
-import type { DrafterRow } from "../continuo/roles.js";
-import { findingBasisText, type JsonRecord, type LapReading } from "../store/records.js";
-import { sectionFramer } from "./framing.js";
-import { answerJson, DRAFTER_INPUT_BOUND_BYTES, type DrafterRun } from "./model-draft.js";
+import type { DrafterRow } from "../../continuo/roles.js";
+import { findingBasisText, type JsonRecord, type LapReading } from "../../store/records.js";
+import { sectionFramer } from "../framing.js";
+import {
+  answerJson,
+  DRAFTER_INPUT_BOUND_BYTES,
+  type DrafterRun,
+} from "../model-draft/judgement.js";
 
 /**
  * The version of the revise drafter's own instructions (D-0077 rule 1.2, as

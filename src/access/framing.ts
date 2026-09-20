@@ -1,6 +1,6 @@
 /**
- * The framing shared by rondo's three model documents (`./model-review.ts`,
- * `./model-draft.ts`, `./revise-draft.ts`): the fence mark none of the carried
+ * The framing shared by rondo's three model documents (`./model-review/judgement.ts`,
+ * `./model-draft/judgement.ts`, `./revise-draft/judgement.ts`): the fence mark none of the carried
  * material holds, and the `(none)` a section renders for a body handed to it
  * as the empty string (rondo#323).
  */

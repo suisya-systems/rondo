@@ -5,7 +5,7 @@
  */
 
 import { expect, test } from "vitest";
-import { isModelDrafterName } from "../../src/access/model-draft.js";
+import { isModelDrafterName } from "../../../src/access/model-draft/judgement.js";
 import {
   prepareRevise,
   type ReviseMaterial,
@@ -13,9 +13,9 @@ import {
   reviseDrafterName,
   reviseDraftOf,
   reviseText,
-} from "../../src/access/revise-draft.js";
-import { drafterRow } from "../../src/continuo/roles.js";
-import type { LapReading } from "../../src/store/records.js";
+} from "../../../src/access/revise-draft/judgement.js";
+import { drafterRow } from "../../../src/continuo/roles.js";
+import type { LapReading } from "../../../src/store/records.js";
 
 const READING: LapReading = {
   iterationId: "i-1",

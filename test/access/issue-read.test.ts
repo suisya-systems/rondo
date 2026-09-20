@@ -27,7 +27,7 @@ import {
   parseForgeRead,
   readNamedIssue,
 } from "../../src/access/issue-read.js";
-import type { HeldPlan } from "../../src/access/model-drafter.js";
+import type { HeldPlan } from "../../src/access/model-draft/host.js";
 import { readRunPlan } from "../../src/refrain/plan.js";
 import type { StoredScope } from "../../src/store/records.js";
 import { planDocument, world } from "./fixtures/drafter.js";

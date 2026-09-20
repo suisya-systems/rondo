@@ -3,8 +3,8 @@
  * rondo hands over, runs the reviewer, and appends the row.
  *
  * **Three halves, each where it already lives.** `git` and the reviewer process
- * are `./forge.ts`'s, because only that module in this layer may start one;
- * what the document holds and what the answer means are `./model-review.ts`'s,
+ * are `../forge.ts`'s, because only that module in this layer may start one;
+ * what the document holds and what the answer means are `./judgement.ts`'s,
  * a pure function; the transcript is `src/continuo/transcript.ts`'s two-file
  * read. This file only puts them in order and writes the result, so the order
  * is the one thing here a test has to hold.
@@ -19,27 +19,31 @@
  * (D-0065's gate answer (a)).
  */
 
-import { materialLanguageSentence, showGate, type VerifiedContinuo } from "../continuo/invoker.js";
-import { reviewerFamilyCheck, reviewerRow } from "../continuo/roles.js";
-import { readLapCommands } from "../continuo/transcript.js";
-import { readPlan } from "../refrain/plan.js";
+import {
+  materialLanguageSentence,
+  showGate,
+  type VerifiedContinuo,
+} from "../../continuo/invoker.js";
+import { reviewerFamilyCheck, reviewerRow } from "../../continuo/roles.js";
+import { readLapCommands } from "../../continuo/transcript.js";
+import { readPlan } from "../../refrain/plan.js";
 import {
   type IterationRecord,
   isDeterministicReadingDrafter,
   isModelReadingDrafter,
   latestReading,
   modelReadingDrafter,
-} from "../store/records.js";
-import type { IterationStore } from "../store/sqlite.js";
-import { type RequestThread, reportToRequest } from "./conductor.js";
-import { gatherReviewMaterialFacts, runReviewer } from "./forge.js";
-import { hostFailure } from "./host-failure.js";
+} from "../../store/records.js";
+import type { IterationStore } from "../../store/sqlite.js";
+import { type RequestThread, reportToRequest } from "../conductor.js";
+import { gatherReviewMaterialFacts, runReviewer } from "../forge.js";
+import { hostFailure } from "../host-failure.js";
 import {
   modelReadingLines,
   modelReadingOf,
   prepareReview,
   type ReviewMaterial,
-} from "./model-review.js";
+} from "./judgement.js";
 
 /**
  * What taking a model reading reaches, as values a test can replace.

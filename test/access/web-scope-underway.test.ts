@@ -4,7 +4,7 @@ import { draftedStanding } from "../../src/access/drafted-view.js";
 import { drafterHost } from "../../src/access/drafter-host.js";
 import type {} from "../../src/access/inbox.js";
 import { forgeBody, ISSUE_READER, namedIssues } from "../../src/access/issue-read.js";
-import { draftedPlanRun } from "../../src/access/model-drafter.js";
+import { draftedPlanRun } from "../../src/access/model-draft/host.js";
 import type { ServedPorts } from "../../src/access/web-app.js";
 import { type Chrome, chromeFor, EN } from "../../src/access/wording.js";
 import { allocate } from "../../src/refrain/allocator.js";

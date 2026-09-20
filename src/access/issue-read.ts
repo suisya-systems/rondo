@@ -34,7 +34,7 @@ import type { ThreadMessageDraft } from "../store/records.js";
 import type { AdvisoryRecord } from "../store/sqlite.js";
 import type { CommandOutcome, IssueReadRequest } from "./forge.js";
 import { hostFailure } from "./host-failure.js";
-import type { HeldPlan } from "./model-drafter.js";
+import type { HeldPlan } from "./model-draft/host.js";
 
 /** The author id every `forge` message is written under. */
 export const ISSUE_READER = "rondo/issue-reader";

@@ -21,9 +21,9 @@
 import type { ProposalDraft, ThreadMessageDraft } from "../store/records.js";
 import type { AdvisoryRecord } from "../store/sqlite.js";
 import { hostFailure } from "./host-failure.js";
-import { MODEL_DRAFTER_PREFIX } from "./model-draft.js";
-import type { DrafterPorts, DrafterRunResult } from "./model-drafter.js";
-import { draftRequest } from "./model-drafter.js";
+import type { DrafterPorts, DrafterRunResult } from "./model-draft/host.js";
+import { draftRequest } from "./model-draft/host.js";
+import { MODEL_DRAFTER_PREFIX } from "./model-draft/judgement.js";
 
 const DRAFTER_PREFIX = MODEL_DRAFTER_PREFIX;
 

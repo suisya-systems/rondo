@@ -88,7 +88,7 @@ import {
   readLanding,
 } from "./forge.js";
 import { hostFailure } from "./host-failure.js";
-import { modelReadingLines } from "./model-review.js";
+import { modelReadingLines } from "./model-review/judgement.js";
 import { READING_REMOTE, readingOf } from "./review.js";
 
 export type { ConductorReport };

@@ -10,29 +10,29 @@
 import { DatabaseSync } from "node:sqlite";
 import { expect, test } from "vitest";
 
-import { lapMaterialLines } from "../../src/access/cli.js";
-import type { ReviewMaterialFacts } from "../../src/access/forge.js";
-import type { ReviewerRun } from "../../src/access/model-review.js";
-import { type ModelReviewPorts, takeModelReading } from "../../src/access/model-reviewer.js";
-import { EN } from "../../src/access/wording.js";
-import { allocate } from "../../src/refrain/allocator.js";
+import { lapMaterialLines } from "../../../src/access/cli.js";
+import type { ReviewMaterialFacts } from "../../../src/access/forge.js";
+import { type ModelReviewPorts, takeModelReading } from "../../../src/access/model-review/host.js";
+import type { ReviewerRun } from "../../../src/access/model-review/judgement.js";
+import { EN } from "../../../src/access/wording.js";
+import { allocate } from "../../../src/refrain/allocator.js";
 import {
   admittedPlan,
   planPayload,
   type ReviewCriterion,
   type RunPlan,
   runPlan,
-} from "../../src/refrain/plan.js";
-import { contentDigest } from "../../src/store/plan.js";
+} from "../../../src/refrain/plan.js";
+import { contentDigest } from "../../../src/store/plan.js";
 import type {
   JsonRecord,
   LapReadingDraft,
   ReadingEvidence,
   ThreadMessageDraft,
-} from "../../src/store/records.js";
-import { advisoryRecord } from "../../src/store/sqlite.js";
-import { ownLane } from "../lane-claims.js";
-import { REQUEST, storeWithRequest } from "../request-fixture.js";
+} from "../../../src/store/records.js";
+import { advisoryRecord } from "../../../src/store/sqlite.js";
+import { ownLane } from "../../lane-claims.js";
+import { REQUEST, storeWithRequest } from "../../request-fixture.js";
 
 const PLAN: RunPlan = {
   db: "/srv/continuo.db",

@@ -9,7 +9,7 @@
  * have gone red.
  */
 import { expect, test } from "vitest";
-import type { JsonRecord } from "../../src/store/records.js";
+import type { JsonRecord } from "../../../src/store/records.js";
 import {
   draftRevise,
   fresh,
@@ -18,7 +18,7 @@ import {
   newerModelReading,
   REVISE_ANSWER,
   reviseRows,
-} from "./page-world.js";
+} from "../page-world.js";
 
 test("the revise drafter writes one row per reading, under its own name, and is not run twice over one (D-0077 rules 1.2, 2.2, 5.1)", async () => {
   const world = fresh();

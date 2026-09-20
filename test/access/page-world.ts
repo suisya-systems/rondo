@@ -2,7 +2,7 @@
  * A world the page's suites are built over: a store, a lap at its gate, the
  * ports the renderer is handed, and the revise drafter (DECISIONS.md D-0077).
  *
- * **Its own module since the page's rebuild.** `src/access/revise-drafter.ts`'s
+ * **Its own module since the page's rebuild.** `src/access/revise-draft/host.ts`'s
  * coverage used to live inside `test/access/web.test.ts`, so replacing the view
  * layer would have deleted the cases that say the drafter writes one row per
  * reading, keeps a draft across a store fault, and discards a draft a newer
@@ -20,7 +20,7 @@ import { request as httpRequest } from "node:http";
 import { DatabaseSync } from "node:sqlite";
 import { expect } from "vitest";
 import type { PublishReading } from "../../src/access/page/contract.js";
-import { reviseDrafterHost } from "../../src/access/revise-drafter.js";
+import { reviseDrafterHost } from "../../src/access/revise-draft/host.js";
 import { operatorPage as renderPage } from "../../src/access/web.js";
 import { AnswerPort, type ServedPorts, serveOperatorPage } from "../../src/access/web-app.js";
 import { allocate } from "../../src/refrain/allocator.js";

@@ -1623,7 +1623,7 @@ const PLANTED: ReadonlyArray<
     // The composition that takes a model reading must not spawn for itself:
     // its processes are the forge's, where every command line is spelled out.
     "the-model-reviewer-composition-cannot-spawn",
-    "src/access/model-reviewer.ts",
+    "src/access/model-review/host.ts",
     'import { spawn } from "node:child_process";\nexport const x = spawn;\n',
     "which it is not granted",
   ],

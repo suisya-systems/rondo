@@ -19,7 +19,7 @@ import {
 import { readSplitPayload, type SplitPlan } from "../advisory/proposal.js";
 import type { StoredScope } from "../store/records.js";
 import type { AdvisoryRecord } from "../store/sqlite.js";
-import { type DrafterMaterial, isModelDrafterName } from "./model-draft.js";
+import { type DrafterMaterial, isModelDrafterName } from "./model-draft/judgement.js";
 
 /** One drafted plan as the screen shows it: its words, where it runs, and its agent type. */
 export interface DraftedPlanShown {

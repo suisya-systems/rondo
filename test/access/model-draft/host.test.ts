@@ -9,20 +9,20 @@
  */
 import { expect, test } from "vitest";
 
-import { readDrafterResult } from "../../src/access/forge.js";
-import type { DrafterRun } from "../../src/access/model-draft.js";
+import { readDrafterResult } from "../../../src/access/forge.js";
 import {
   type DrafterPorts,
   draftRequest,
   gatherDrafterMaterial,
   heldPlanByDigest,
   heldPlans,
-} from "../../src/access/model-drafter.js";
-import { readRunPlan } from "../../src/refrain/plan.js";
-import { planDigest } from "../../src/store/plan.js";
-import type { JsonRecord } from "../../src/store/records.js";
-import { ownLane } from "../lane-claims.js";
-import { openRequest, REQUEST } from "../request-fixture.js";
+} from "../../../src/access/model-draft/host.js";
+import type { DrafterRun } from "../../../src/access/model-draft/judgement.js";
+import { readRunPlan } from "../../../src/refrain/plan.js";
+import { planDigest } from "../../../src/store/plan.js";
+import type { JsonRecord } from "../../../src/store/records.js";
+import { ownLane } from "../../lane-claims.js";
+import { openRequest, REQUEST } from "../../request-fixture.js";
 import {
   AGENT_TYPE_INPUT,
   agentTypeDigestOf,
@@ -30,7 +30,7 @@ import {
   REPOSITORY,
   WORKSPACE_ROOT,
   world,
-} from "./fixtures/drafter.js";
+} from "../fixtures/drafter.js";
 
 function portsOver(
   w: Awaited<ReturnType<typeof world>>,

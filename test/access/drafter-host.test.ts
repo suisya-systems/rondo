@@ -11,8 +11,8 @@ import { DatabaseSync } from "node:sqlite";
 import { expect, test } from "vitest";
 
 import { type DrafterHostPorts, drafterHost } from "../../src/access/drafter-host.js";
-import type { DrafterRun } from "../../src/access/model-draft.js";
-import { draftRequest } from "../../src/access/model-drafter.js";
+import { draftRequest } from "../../src/access/model-draft/host.js";
+import type { DrafterRun } from "../../src/access/model-draft/judgement.js";
 import { planDigest } from "../../src/store/plan.js";
 import { advisoryRecord, iterationStore } from "../../src/store/sqlite.js";
 import { agentTypeDigestOf, planDocument, world } from "./fixtures/drafter.js";

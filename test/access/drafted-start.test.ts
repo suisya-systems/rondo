@@ -18,7 +18,7 @@ import { recordDraftedScopeFromPage, startSplitFromPage } from "../../src/access
 import { draftedStartReadiness } from "../../src/access/drafted-start.js";
 import { drafterHost } from "../../src/access/drafter-host.js";
 import { ISSUES_QUOTE_OPENING } from "../../src/access/issue-read.js";
-import { draftedPlanRun } from "../../src/access/model-drafter.js";
+import { draftedPlanRun } from "../../src/access/model-draft/host.js";
 import { allocate } from "../../src/refrain/allocator.js";
 import { admittedPlan, planPayload, type RunPlan } from "../../src/refrain/plan.js";
 import { planDigest } from "../../src/store/plan.js";

@@ -60,7 +60,7 @@ import {
   reviewPolicyOf,
   reviewRoundDecision,
   reviewRoundsAlong,
-} from "./model-review.js";
+} from "./model-review/judgement.js";
 import type { AgentTypeSource, Chrome } from "./wording.js";
 
 /**
@@ -130,7 +130,7 @@ export interface ScopeSnapshot {
   } | null;
 }
 
-/** The scope's two review fields in `model-review.ts`'s view: the D-0065 seam, wired. */
+/** The scope's two review fields in `model-review/judgement.ts`'s view: the D-0065 seam, wired. */
 export function reviewScopeOf(payload: ScopePayload): ReviewScope {
   return Object.freeze({
     budgets: Object.freeze({ reviewRounds: payload.budgets.review_rounds }),
