@@ -1159,7 +1159,7 @@ function approveView(
             {raised === null ? wording.approvePlain : wording.approveDespitePlain}
           </span>
         </form>
-        {reviseForm(wording, record, token, framing, newIterationId)}
+        {reviseForm(wording, record, token, framing, newIterationId, raised !== null)}
       </div>
     </div>
   );
@@ -1171,11 +1171,21 @@ function approveView(
  * and one press that carries it to the gate and runs the second lap under the
  * approval this lap ran under.
  *
- * **Folded, and never in the way of approving.** D-0065's gate answer keeps
- * approve unrefused whatever the model raised, so the change is an equal second
- * answer a person opens rather than a step in front of the first. The fold is
- * in the document either way (D-0042's rule about folds), and with script off
- * `page/app.css` draws it open.
+ * **Drawn open, and never in the way of approving** (rondo#351). It was a
+ * `<details>`: the recommendation was folded and the press that overrides a
+ * finding was the only button on the screen, which is D-0082 rule 7 backwards
+ * -- a fold holds evidence, never the thing the press needs, and what this
+ * press sends *is* the draft inside it. D-0083 rule 9.3 asks for two choices,
+ * the recommendation and the despite press; both are presses now, in the same
+ * bar, each above the field it carries. D-0065's gate answer still keeps
+ * approve unrefused whatever the model raised.
+ *
+ * **Which one is recommended is said by the fill** (D-0083 rule 10): ink where
+ * a finding stands, because then asking for a change is the recommendation and
+ * approving is the press made against a reading. With nothing raised the
+ * filled press is approve and this one is outlined. Never amber -- the bar's
+ * rule and the despite press already spend the page's one claim that a person
+ * must act (D-0082 rule 2, rondo#343).
  *
  * **No press without an approval to count the lap against.** D-0070 counts the
  * second lap as an `admission` through the `redo` arm, and a lap admitted under
@@ -1188,6 +1198,8 @@ function reviseForm(
   token: string,
   framing: Shown,
   newIterationId: MintIterationId | null,
+  /** Whether a reading raised something, which is what makes this the recommended answer. */
+  recommended: boolean,
 ) {
   if (newIterationId === null) {
     return null;
@@ -1241,19 +1253,12 @@ function reviseForm(
   const box = framing.revise;
   const draftKey = `revise:${record.id}:${record.gateId ?? ""}`;
   return (
-    <details id="revise" class="group">
-      <summary
-        data-row=""
-        class="flex cursor-pointer list-none items-center gap-2 rounded-md py-1 text-[12.5px] leading-5 font-medium text-link outline-none select-none hover:underline focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden"
-      >
-        {chevron()}
-        {wording.reviseFold}
-      </summary>
+    <div id="revise">
       <form
         id="revise-form"
         method="post"
         action={`/revise?lang=${encodeURIComponent(wording.lang)}`}
-        class="mt-2 flex flex-col gap-2"
+        class="flex flex-col gap-2"
       >
         <input type="hidden" name="token" value={token} />
         <input type="hidden" name="iteration" value={record.id} />
@@ -1317,7 +1322,7 @@ function reviseForm(
           type="submit"
           data-row=""
           aria-describedby="revise-plain"
-          class={`${SECONDARY} h-10 w-full justify-center px-6 text-sm sm:h-9 sm:w-auto sm:self-end`}
+          class={`${recommended ? PRIMARY : SECONDARY} h-10 w-full justify-center px-6 text-sm sm:h-9 sm:w-auto sm:self-end`}
         >
           {wording.reviseAction}
         </button>
@@ -1325,7 +1330,7 @@ function reviseForm(
           {wording.revisePlain}
         </span>
       </form>
-    </details>
+    </div>
   );
 }
 

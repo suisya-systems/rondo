@@ -850,7 +850,6 @@ export interface Chrome extends PageWords {
    * approving, with rondo's draft of what to change already in the box.
    */
   readonly reviseAction: string;
-  readonly reviseFold: string;
   readonly revisePlain: string;
   readonly reviseLabel: string;
   readonly revisePlaceholder: string;
@@ -1643,7 +1642,6 @@ explanation you pressed on and then answers the gate.`,
   scopeBack: "Back to the scope",
 
   reviseAction: "Ask for a change",
-  reviseFold: "Ask for a change instead",
   revisePlain:
     "Sends what you wrote to this gate, and runs a second lap with it under the same approval.",
   reviseLabel: "What to change",
@@ -2510,7 +2508,6 @@ const JA: Chrome = Object.freeze({
   scopeBack: "範囲に戻る",
 
   reviseAction: "変更を依頼する",
-  reviseFold: "承認せずに変更を依頼する",
   revisePlain: "書かれた内容をこのゲートに送り、同じ承認のもとで 2 周目をその内容で動かします。",
   reviseLabel: "変更してほしいこと",
   revisePlaceholder: "例: パーサーの変更はそのまま、コマンドラインには手を入れないでほしい",
