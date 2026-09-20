@@ -308,14 +308,19 @@ const ALLOWED_EXTERNALS_BY_MODULE: Readonly<
       "resolveProject",
     ],
   },
-  // The operator's command line (D-0025 rule 9). Two builtins: the argv parser
-  // and the one reader of the plan file. What matters here is what is *absent*:
-  // there is no `node:child_process`, so the module that reads argv, reads the
-  // plan and drives every continuo verb literally cannot start a process. That
-  // is what makes "rondo does not publish on its own" a property this test
-  // checks rather than a promise the prose makes (D-0010).
+  // The argv parser, lifted out of the command line (rondo#341 step 2). One
+  // binding, and it is the whole grant: the parser reads no file, joins no
+  // path and opens no store, which is what made it liftable at all -- and
+  // lifting it is what let `src/access/cli.ts` below give `node:util` up.
+  "src/access/cli-parse.ts": { "node:util": ["parseArgs"] },
+  // The operator's command line (D-0025 rule 9). Two builtins: the reader of
+  // the plan file and one path predicate -- `parseArgs` left with the parser
+  // above. What matters here is what is *absent*: there is no
+  // `node:child_process`, so the module that reads the plan and drives every
+  // continuo verb literally cannot start a process. That is what makes "rondo
+  // does not publish on its own" a property this test checks rather than a
+  // promise the prose makes (D-0010).
   "src/access/cli.ts": {
-    "node:util": ["parseArgs"],
     // `existsSync` joined `readFileSync` with `revise` (D-0027 rule 6): continuo
     // creates the second lap's worktree and requires the path not to exist, and
     // it discovers that after `run admit` -- which for a revision is after the
