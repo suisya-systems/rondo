@@ -41,7 +41,6 @@ import { forgeBody, ISSUE_READER, namedIssues } from "../../src/access/issue-rea
 import { draftedPlanRun } from "../../src/access/model-drafter.js";
 import { viewHref } from "../../src/access/page-logic/routes.js";
 import { evidenceOf, READING_REMOTE } from "../../src/access/review.js";
-import { reviseDrafterHost } from "../../src/access/revise-drafter.js";
 import { agentTypeRecordOf, heldAgentTypeLines } from "../../src/access/scope.js";
 import { type PublishReading, operatorPage as renderPage } from "../../src/access/web.js";
 import {
@@ -74,6 +73,20 @@ import {
   agentTypeDigestOf as drafterTypeOf,
   world as drafterWorld,
 } from "./fixtures/drafter.js";
+import {
+  draftRevise,
+  EVIDENCE,
+  fresh,
+  gateWithChecks,
+  modelFindings,
+  newerModelReading,
+  openGate,
+  PLAN,
+  planFor,
+  REVISE_ANSWER,
+  reserve,
+  reviseRows,
+} from "./revise-drafter-world.js";
 
 /**
  * The tests marked with this build a real git repository or write an on-disk
@@ -87,62 +100,6 @@ import {
  */
 const WINDOWS_HEAVY_TIMEOUT_MS = 60_000;
 
-const PLAN: RunPlan = {
-  db: "/srv/continuo.db",
-  workspaceRoot: "/srv/work",
-  baseBranch: "main",
-  prompt: "do the thing",
-  allowedBash: ["npm run:*"],
-  materialLanguage: null,
-  reviewCriterion: null,
-  repository: "/srv/repo",
-  artifactRoot: "/srv/artifacts",
-  stateRoot: "/srv/state",
-  interlockRoot: "/srv/interlock",
-  claudeOrgPath: "/srv/claude-org",
-  endpointRecipient: "external-notify",
-  endpointDestinationDir: "/srv/dropbox",
-  claudeCommand: ["/usr/bin/node", "/opt/claude/cli.js"],
-  endpointDb: null,
-  endpointModule: null,
-  node: null,
-  hookScript: null,
-  python: null,
-  pollIntervalMs: null,
-  turnTimeoutMs: 900_000,
-  gitTimeoutMs: 60_000,
-  identityReadbackTimeoutMs: 30_000,
-  gateOptions: ["approve", "revise"],
-  gateDeadlineAtMs: null,
-  pullRequestBaseBranch: null,
-  forgeRepository: null,
-  invocationCeilingMs: 1_800_000,
-  catalogLayers: [{ layer: "git_url", origin: "o", baseDir: "/srv/catalog", data: {} }],
-  projectName: "rondo",
-  agentTypeInput: {} as RunPlan["agentTypeInput"],
-  parties: {
-    grantor: "rondo",
-    grantee: "unset",
-  } as unknown as RunPlan["parties"],
-  intendedAction: {} as RunPlan["intendedAction"],
-};
-
-function planFor(id: string, materialLanguage: string | null = null): JsonRecord {
-  const validated = runPlan({ ...PLAN, materialLanguage });
-  if (validated.kind !== "planned") {
-    throw new Error(`the fixture plan is not valid: ${validated.reason}`);
-  }
-  const allocation = allocate(id, PLAN.workspaceRoot);
-  if (allocation.kind !== "allocated") {
-    throw new Error(`the fixture id '${id}' does not allocate: ${allocation.reason}`);
-  }
-  const admitted = admittedPlan(validated.plan, allocation.allocation);
-  if (admitted.kind !== "planned") {
-    throw new Error(`the fixture allocation is not valid: ${admitted.reason}`);
-  }
-  return planPayload(admitted.plan);
-}
-
 /**
  * The page as a person's browser reads its text.
  *
@@ -155,15 +112,6 @@ function planFor(id: string, materialLanguage: string | null = null): JsonRecord
  */
 const operatorPage = async (...args: Parameters<typeof renderPage>): Promise<string> =>
   (await renderPage(...args)).replaceAll("&#39;", "'");
-
-const fresh = () => {
-  const connection = new DatabaseSync(":memory:");
-  return {
-    connection,
-    store: iterationStore(connection, { maxOccupying: 4, maxLive: 6 }),
-    record: advisoryRecord(connection),
-  };
-};
 
 /** Material that is only its text: no gate question read and no range named. */
 const asText = (...lines: string[]) => ({ lines, why: null, work: null });
@@ -234,27 +182,6 @@ function portsOver(
     releasable: actorId !== null,
     publishing,
   };
-}
-
-/** Put one reserved row at the gate, which is the only state with a button. */
-async function openGate(world: ReturnType<typeof fresh>, id: string): Promise<void> {
-  for (const [from, to] of [
-    ["planned", "admitting"],
-    ["admitting", "admitted"],
-    ["admitted", "performing"],
-    ["performing", "awaiting_human"],
-  ] as const) {
-    const outcome = await world.store.transition(
-      id,
-      from,
-      to,
-      to === "awaiting_human" ? { gateId: `gate-${id}` } : {},
-      2_000,
-    );
-    if (outcome.kind !== "transitioned") {
-      throw new Error(`the fixture did not reach '${to}': ${JSON.stringify(outcome)}`);
-    }
-  }
 }
 
 /**
@@ -344,31 +271,6 @@ function tokenIn(html: string): string {
   const found = /name="token" value="([^"]+)"/.exec(html)?.[1];
   expect(found).toBeDefined();
   return found ?? "";
-}
-
-async function reserve(
-  world: ReturnType<typeof fresh>,
-  id: string,
-  request: string,
-  materialLanguage: string | null = null,
-): Promise<void> {
-  const outcome = await world.store.reserve({
-    id,
-    request,
-    plan: planFor(id, materialLanguage),
-    spend: null,
-    scopeSpend: null,
-    claim: ownLane(id),
-    nowMs: 1_000,
-    supersedesIterationId: null,
-    requestMessageId: null,
-    runId: `rondo-${id}`,
-    topicBranch: `rondo/${id}`,
-    workspace: `/srv/work/${id}`,
-  });
-  if (outcome.kind !== "reserved") {
-    throw new Error(`the fixture did not reserve: ${JSON.stringify(outcome)}`);
-  }
 }
 
 const rows = (connection: DatabaseSync, table: string): number =>
@@ -2339,36 +2241,6 @@ test("the composer script keeps a draft and the open folds, and makes no request
 
 // -- The gate reading (#220 S2) --
 
-const EVIDENCE = {
-  baseRef: "origin/main",
-  baseCommit: "a".repeat(40),
-  tipCommit: "b".repeat(40),
-  materialDigest: "sha256:x",
-  commitCount: 2,
-  fileCount: 1,
-};
-
-/** A lap at its gate with the deterministic reading carried by its transition. */
-async function gateWithChecks(world: ReturnType<typeof fresh>): Promise<void> {
-  await reserve(world, "i-0001", "add a retry budget");
-  await openGate(world, "i-0001");
-  const carried = await world.store.transition(
-    "i-0001",
-    "awaiting_human",
-    "awaiting_human",
-    { permissionDenials: '[{"tool_name":"Bash","tool_input":{"command":"rm -rf /srv"}}]' },
-    3_000,
-    {
-      drafter: "rondo/deterministic/2",
-      verdict: "concerns",
-      findings: ["a binary file was not read"],
-      evidence: EVIDENCE,
-      unavailableReason: null,
-    },
-  );
-  expect(carried.kind).toBe("transitioned");
-}
-
 const structured = async () =>
   await Promise.resolve({
     lines: ["work    rondo/i-0001", "fence   the whole text"],
@@ -2463,176 +2335,6 @@ test("the answer view draws both readings side by side from the rows, with the w
   expect(html).toMatch(/<details id="material-text"[\s\S]*fence {3}the whole text/);
 });
 
-/** The model reading the S4 tests draft from: one blocker and one major, with bases. */
-async function modelFindings(world: ReturnType<typeof fresh>): Promise<void> {
-  const appended = await world.store.appendReading(
-    "i-0001",
-    {
-      drafter: "rondo/model/1/gpt-6-astra",
-      verdict: "concerns",
-      findings: ["the loop never stops", "the backoff is not capped"],
-      graded: [
-        {
-          severity: "blocker",
-          bases: [{ kind: "file", path: "src/notifier.ts", line: 41 }],
-          basisResolved: true,
-        },
-        {
-          severity: "major",
-          bases: [{ kind: "rule", path: "AGENTS.md", line: 12 }],
-          basisResolved: true,
-        },
-      ],
-      evidence: EVIDENCE,
-      unavailableReason: null,
-    },
-    4_000,
-  );
-  expect(appended.kind).toBe("appended");
-}
-
-let reviseIds = 0;
-
-/**
- * One run of the revise drafter over the lap at the gate (D-0077), with the
- * model's answer given: what the resident host writes for the view to read.
- */
-async function draftRevise(
-  world: ReturnType<typeof fresh>,
-  answer: unknown,
-  opts: {
-    readonly admitted?: string | null;
-    readonly during?: () => Promise<void>;
-    /** Stands in for the store's write, to fail it. */
-    readonly write?: (
-      real: ReturnType<typeof fresh>["record"]["recordReviseDraft"],
-    ) => ReturnType<typeof fresh>["record"]["recordReviseDraft"];
-    /** Kicks before the host is let go: one host, several scans. */
-    readonly scans?: number;
-  } = {},
-): Promise<string[]> {
-  const documents: string[] = [];
-  const admitted = opts.admitted === undefined ? "decision-1" : opts.admitted;
-  const host = reviseDrafterHost({
-    store: world.store,
-    record: {
-      ...world.record,
-      scopeDecisionAdmitting: async () => admitted,
-      recordReviseDraft:
-        opts.write?.(world.record.recordReviseDraft.bind(world.record)) ??
-        world.record.recordReviseDraft.bind(world.record),
-    },
-    runDrafter: async (_row, document) => {
-      documents.push(document);
-      await opts.during?.();
-      return answer === null
-        ? { kind: "failed", reason: "claude exited 1" }
-        : {
-            kind: "answered",
-            costUsd: 0.01,
-            finalMessage: typeof answer === "string" ? answer : JSON.stringify(answer),
-          };
-    },
-    now: () => 4_500,
-    // One counter across hosts: two hosts over one store mint distinct ids.
-    mintId: (kind) => {
-      reviseIds += 1;
-      return `${kind}-${String(reviseIds)}`;
-    },
-    language: null,
-    log: () => undefined,
-  });
-  for (let scan = 0; scan < (opts.scans ?? 1); scan += 1) {
-    host.kick();
-    await host.idle();
-  }
-  return documents;
-}
-
-/** The revise drafts written for a lap, as the store holds them. */
-const reviseRows = (world: ReturnType<typeof fresh>) =>
-  world.connection
-    .prepare(
-      "SELECT drafter, payload, snapshot FROM proposal WHERE kind = 'revise_draft' ORDER BY rowid",
-    )
-    .all()
-    .map((row) => ({
-      drafter: String(row["drafter"]),
-      payload: JSON.parse(String(row["payload"])) as JsonRecord,
-      snapshot: JSON.parse(String(row["snapshot"])) as JsonRecord,
-    }));
-
-/** A second model reading of the lap at the gate, with one finding. */
-async function newerModelReading(world: ReturnType<typeof fresh>, finding: string, atMs: number) {
-  const appended = await world.store.appendReading(
-    "i-0001",
-    {
-      drafter: "rondo/model/1/gpt-6-astra",
-      verdict: "concerns",
-      findings: [finding],
-      graded: [{ severity: "major", bases: [], basisResolved: false }],
-      evidence: EVIDENCE,
-      unavailableReason: null,
-    },
-    atMs,
-  );
-  expect(appended.kind).toBe("appended");
-}
-
-test("the revise drafter writes one row per reading, under its own name, and is not run twice over one (D-0077 rules 1.2, 2.2, 5.1)", async () => {
-  const world = fresh();
-  await gateWithChecks(world);
-  await modelFindings(world);
-  const documents = await draftRevise(world, REVISE_ANSWER);
-  expect(documents).toHaveLength(1);
-  // The document holds every finding, numbered, and what the drafter must not do.
-  const doc = documents[0] as string;
-  expect(doc).toContain(
-    "--- finding 1 (blocker)\nthe loop never stops\n  where: src/notifier.ts:41",
-  );
-  expect(doc).toContain("--- finding 2 (major)\nthe backoff is not capped");
-  expect(doc).toContain('"findings" holds exactly 2 entries');
-  expect(doc).toContain("BEGIN THE ATTEMPT'S PROMPT\ndo the thing\n");
-  const [row, ...more] = reviseRows(world);
-  expect(more).toHaveLength(0);
-  expect(row?.drafter).toMatch(/^rondo\/revise-drafter\/1\//);
-  expect(row?.payload).toEqual({
-    kind: "drafted",
-    lead: "Keep the retry budget, but make it end.",
-    changes: [
-      "Stop after the budget's last try.\nSay so in the log.",
-      "Cap the backoff at 30 seconds.",
-    ],
-  });
-  expect((row?.snapshot["reading"] as JsonRecord | undefined)?.["findings"]).toEqual([
-    "the loop never stops",
-    "the backoff is not capped",
-  ]);
-  // A proposal nobody approves: the store refuses a decision naming it.
-  const id = String(
-    world.connection
-      .prepare("SELECT proposal_id FROM proposal WHERE kind = 'revise_draft'")
-      .get()?.["proposal_id"],
-  );
-  const decided = await world.record.recordDecision({
-    decisionId: "d-1",
-    proposalId: id,
-    outcome: "approved",
-    approved: null,
-    predecessor: null,
-    actorId: "ada",
-    recordedBy: "rondo-web",
-    gateId: null,
-    gateTransitionSeq: null,
-    decidedAtMs: 5_000,
-  });
-  expect(decided.kind).toBe("refused");
-
-  // Drafted, so a second scan spends nothing.
-  expect(await draftRevise(world, REVISE_ANSWER)).toHaveLength(0);
-  expect(reviseRows(world)).toHaveLength(1);
-});
-
 test("an unavailable run writes its reason and is not retried; the next reading is drafted as its own (D-0077 rules 2.2, 4.2)", async () => {
   const world = fresh();
   await gateWithChecks(world);
@@ -2658,54 +2360,6 @@ test("an unavailable run writes its reason and is not retried; the next reading 
   );
   expect(html).toContain("- [major] the log is too loud\n  to change: Quieter.");
   expect(html).not.toContain("rondo could not draft what to change");
-});
-
-test("a store fault at the write keeps the draft and writes it on the next scan, without running again (D-0077 rules 2.2, 4.2)", async () => {
-  const world = fresh();
-  await gateWithChecks(world);
-  await modelFindings(world);
-  let faults = 1;
-  const documents = await draftRevise(world, REVISE_ANSWER, {
-    scans: 2,
-    write: (real) => async (proposal, gateId) => {
-      if (faults > 0) {
-        faults -= 1;
-        return { kind: "defect", reason: "database is locked" };
-      }
-      return await real(proposal, gateId);
-    },
-  });
-  // One model call; the first scan's write met the lock, and the second wrote
-  // the same draft -- not an unavailable row about the lock.
-  expect(documents).toHaveLength(1);
-  expect(reviseRows(world).map((r) => r.payload["kind"])).toEqual(["drafted"]);
-});
-
-test("a reading that lands while the draft is written makes that draft stale: nothing is written for it (D-0077 rule 2.3)", async () => {
-  const world = fresh();
-  await gateWithChecks(world);
-  await modelFindings(world);
-  let landed = false;
-  const documents = await draftRevise(
-    world,
-    { lead: null, findings: [{ finding: 1, change: "Fix it." }] },
-    {
-      during: async () => {
-        if (!landed) {
-          landed = true;
-          await newerModelReading(world, "the log is too loud", 6_000);
-        }
-      },
-    },
-  );
-  // The first run was over two findings and is discarded at the write; the
-  // rescan drafts the newer reading, whose one finding the answer addresses.
-  expect(documents).toHaveLength(2);
-  const written = reviseRows(world);
-  expect(written).toHaveLength(1);
-  expect((written[0]?.snapshot["reading"] as JsonRecord | undefined)?.["findings"]).toEqual([
-    "the log is too loud",
-  ]);
 });
 
 test("the revise drafter drafts only where the gate view draws a revise form (D-0077 rule 2.1)", async () => {
@@ -2739,15 +2393,6 @@ test("the revise drafter drafts only where the gate view draws a revise form (D-
   expect(await draftRevise(early, REVISE_ANSWER)).toHaveLength(0);
   expect(reviseRows(early)).toHaveLength(0);
 });
-
-/** A draft that addresses both of {@link modelFindings}' findings, with a lead. */
-const REVISE_ANSWER = {
-  lead: "Keep the retry budget, but make it end.",
-  findings: [
-    { finding: 2, change: "Cap the backoff at 30 seconds." },
-    { finding: 1, change: "Stop after the budget's last try.\nSay so in the log." },
-  ],
-};
 
 test("the gate offers a change beside approve, drafted from the findings and editable (#233 S4)", async () => {
   const world = fresh();
