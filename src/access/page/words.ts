@@ -69,6 +69,19 @@ export interface PageWords extends DayWords {
   readonly evReadingClear: string;
   readonly evReadingRaised: (findings: number) => string;
   readonly evReadingUnavailable: string;
+  /**
+   * The line a folded run of event lines is drawn as (rule 7's fold,
+   * rondo#332).
+   *
+   * `foldTry` says a settled attempt by the one thing worth reading about it,
+   * with how many lines are shut behind it. `foldSeen` says a stretch the
+   * person has already read, which has nothing worth naming in it -- that is
+   * the whole claim -- so it says only how much.
+   */
+  readonly foldTry: (said: string, lines: number) => string;
+  readonly foldSeen: (lines: number) => string;
+  /** What the fold offers, on the line itself: the same word open or shut. */
+  readonly foldOpen: string;
   /** What a person wrote, and what rondo said, as the name on a message. */
   readonly saidByYou: string;
   readonly saidByRondo: string;
@@ -107,6 +120,10 @@ export const PAGE_EN: PageWords = Object.freeze({
       ? "Another model read the change and raised one thing."
       : `Another model read the change and raised ${String(findings)} things.`,
   evReadingUnavailable: "Another model could not read the change.",
+  foldTry: (said, lines) => `${said} (${String(lines)} lines)`,
+  foldSeen: (lines) =>
+    lines === 1 ? "1 line you had already read" : `${String(lines)} lines you had already read`,
+  foldOpen: "show",
   saidByYou: "You",
   saidByRondo: "rondo",
   emptyAsk: "What would you like to ask for?",
@@ -141,6 +158,9 @@ export const PAGE_JA: PageWords = Object.freeze({
   evReadingRaised: (findings) =>
     `別の AI が変更を読み直し、指摘を ${String(findings)} 件出しました。`,
   evReadingUnavailable: "別の AI は変更を読めませんでした。",
+  foldTry: (said, lines) => `${said}（${String(lines)} 行）`,
+  foldSeen: (lines) => `ここまでに読んだぶん ${String(lines)} 行`,
+  foldOpen: "ひらく",
   saidByYou: "あなた",
   saidByRondo: "rondo",
   emptyAsk: "何を頼みますか",

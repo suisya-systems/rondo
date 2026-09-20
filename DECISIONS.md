@@ -19524,7 +19524,7 @@ and once in the thread**, and no row carries a *new* mark of its own.
 | Width | Faces | What folds |
 |---|---|---|
 | 2560 | 440 / 1,040 / 720 | nothing; cards on the right sit two across |
-| 1600 | 340 / rest / 440 | the right face's cards go one across; **event lines above the last-looked line fold into one line**, and the page scrolls to the answering box on arrival, so the confirmation is on the first screen |
+| 1600 | 340 / rest / 440 | the right face's cards go one across; **event lines above the last-looked line fold into one line** (widened to every width by `D-0086` rule 3), and the page scrolls to the answering box on arrival, so the confirmation is on the first screen |
 | 1280 | 300 / rest | the right face drops under the thread, two across; rule 6's line keeps governance on the first screen |
 
 What drops below the thread at 1280 is evidence only. `D-0082` rule 7 holds at every width: what a
@@ -19591,7 +19591,6 @@ Held by the gate's answer (b) above. None of these blocks the building task's fi
 | Open | Who |
 |---|---|
 | Where the release press lives (`D-0073` rule 4.3, rondo#295). Assumed: the request rises into *your turn* and the press is a box in its thread. Not drawn | the building task, against `D-0082` rule 1 |
-| How event lines fold past twenty. The only rule now is *above the last-looked line* | its own change, once a real request has twenty |
 | Dark, and the keyboard (`j` / `k` / enter). Not drawn; the tokens are `D-0082`'s, so dark should follow mechanically, and that is unmeasured | the building task |
 | A request split into many plans: one thread, or a thread with branches | `D-0061` step 5.4's successor |
 | A phone | out of scope; its own entry |
@@ -19609,7 +19608,9 @@ Held by the gate's answer (b) above. None of these blocks the building task's fi
   belonged in the box, and rule 8's claim that only evidence drops is false.
 - **An element of today's gate found missing from the built box with no decision naming it**: rule 9
   is not enforceable by statement and needs a test.
-- **Event lines past twenty making the thread unreadable** before their fold is designed.
+- **Event lines past twenty making the thread unreadable** before their fold is designed. **This
+  happened** (rondo#332): a request tried seven times drew twenty-one lines on the built page, and
+  the fold is `D-0086`.
 - **A person taking the empty lower third for a page that has not finished loading**: rule 4's calm
   reads as broken, and the gate's answer (a) returns.
 - Any capture in "What was measured" failing to reproduce.
@@ -19833,3 +19834,135 @@ because a reader trusts it.
   null returning.
 - **A store people care about that will not read.** Rule 4 is chosen on the premise that old stores
   are discarded; a person losing work to it is the measurement that says the premise was wrong.
+
+---
+
+## D-0086 — Event lines fold twice and by no number: every try but the newest is one line, what the person has already read is one line over the top, and a decision rondo made without asking is never inside either
+
+**Status:** accepted (2026-09-21, rondo's human gate, on rondo#332, as part of `D-0083`'s building
+task). **Adds to `D-0083` rule 7** (additive: rule 7's *one line per thing that happened* is
+unchanged, and this says what happens to those lines when there are too many of them). **Answers
+and removes** `D-0083`'s unresolved *how event lines fold past twenty*. Refs `D-0061`, `D-0064`,
+`D-0076`, `D-0082`, `D-0083`, rondo#319, rondo#332.
+
+**Numbering.** `D-0086` is the next number after `D-0085` on `main` at `d876aa1`, and no entry on
+`main` carries it.
+
+**Why an entry is needed.** `D-0083` listed this and said the only rule so far was *above the
+last-looked line*, at 1600 (rule 8). Then the first slice was built and photographed, and **an
+ordinary request that had been tried seven times drew twenty-one event lines**. The thread stopped
+being a record and became a log: the person's own words were pushed to about 780px, and everything
+above them was *work started* and *the checks passed* about attempts nobody was being asked about.
+The unresolved item was written as a thing that might happen; it had already happened.
+
+### What was measured, and how
+
+On **2026-09-21**, at rondo `31e5f35`, over `scripts/page-preview.mjs`'s seeded store, by screenshot
+at **2560x1440, 1600x1440 and 1280x1440** with the Windows Chrome on the machine, in both shipped
+languages. Two candidates were built and both were photographed, because `D-0083`'s own method for
+this screen was to measure rather than argue.
+
+**The fixture had to be repaired first, and the repair is part of the measurement.** Every seeded
+lap's steps were stamped at the script's own `now`, so the thread drew seven *work started* lines at
+staggered ages and then eleven checks and endings at one instant -- **an order no run has ever
+produced**. A fold is designed against the order lines are read in, so a fixture whose order is an
+artefact of its seeding is a fixture a fold cannot be designed against. The laps are now stamped at
+the times they would have happened, the request's own message was moved ahead of the laps it set
+off, and a last-looked mark is seeded, without which there is no line for anything to fold above.
+
+| Drawn | Event lines | What the first screen holds at 2560 |
+|---|---|---|
+| Rule 7 alone | **21** | the person's words at about 780px, under eighteen lines about other attempts |
+| Every try but the newest, one line | **9** | words, rondo's reading, six folded tries, the line, the newest try, the box |
+| Everything already read, one line | **4** | the same, and both of the right face's evidence cards |
+
+**The line counts are the same at all three widths**, because neither fold is measured in pixels.
+
+### The decision
+
+**1. Two folds, one inside the other.** The thread folds by try, and then what the person has
+already read folds over the top of that.
+
+**2. By try: every try but the newest is one line.** The line is said by the one thing worth reading
+about that attempt -- **what went wrong outranks what went right**, so a try that failed its checks
+and then ended reads as the try that failed -- with how many lines are shut behind it. The newest
+try is never folded, because it is the one the question is about. **This happens for everybody**,
+which is the whole reason it was chosen over the alternative: a person arriving from a notification
+for the first time still reads *seven tries, two of which failed their checks* off the thread.
+
+**3. Over the top: everything above the last-looked line is one more line.** This is rule 8's 1600
+fold, and it is taken to **every width** rather than kept at one: what it folds is *what the person
+is not being asked about*, which is a fact about the reader and not about the window. It happens
+only where there is a line to fold above, so a person who has never looked loses nothing. Opening it
+gives back the folded tries, not the raw lines.
+
+**4. No threshold, and that is a claim and not an omission.** Neither fold counts lines. A request
+tried once has no settled try; a person who has read nothing has nothing already-read. **The unit
+each fold is measured in already says when there is nothing to do**, so there is no number here to
+defend in both directions -- which is exactly what *past twenty* would have been, and it is why this
+entry does not carry the number `D-0083` wrote the problem down with.
+
+**5. A decision rondo made without asking is never inside a fold.** Rule 7 puts it on the time axis
+at the moment it was made, and rule 6 counts the same things on the right face. A fold that
+swallowed one would leave the count pointing at a number inside a fold rather than at the axis, so
+neither fold takes the `decided` kind: a run is cut around it, and it is drawn as its own line
+whatever is folded around it.
+
+**The adopted mock-up does the opposite, and it is not followed.** In `?s=approve` its fold hides
+five lines, one of them *rondo decided: the wording goes in one place in `locales/ja.json`*, and
+says *rondo decided 1 thing* in its own summary instead. **A mock-up is the material a decision was
+made from and not the decision** -- `D-0083` says of itself that it *decides and does not build*, and
+the mock-ups it was chosen from are not in the tree -- so where the two disagree, the rule wins and
+the mock-up is where the rule was not yet written down.
+
+**6. A fold is a `<details>`, and nothing else.** The lines are in the page, shut, and opening one is
+the browser's own act: no script, no state of the page's, and no address of its own. An address per
+fold was the alternative and is refused: it would put a reading position into the URL that the
+language switch and every redraw would then have to carry (`D-0056` rule 11), and `PageView` is the
+whole of this surface's state.
+
+**7. The try the person stopped reading in the middle of is left whole**, beside the newest. The
+last-looked line is drawn above the first thing that arrived after the mark, and that is not always
+in the newest try: somebody who looked during try 2 and came back during try 4 has their line inside
+try 2. Folding that try away takes the line's anchor with it, so rule 7's *one line in the thread*
+would simply not be drawn and the lines they have not read would be grouped with the ones they have.
+It reads as the rule it is: an attempt you were part-way through is not one you have finished with.
+
+**8. A fold never crosses a message, and one line is never folded into one line.** A report, a
+question, and the person's own words are not event lines, so a fold stops at them; and a fold
+holding a single line hides a line and adds a line, which is a loss both ways.
+
+### Why by-try rather than by-what-was-read alone
+
+The second candidate is quieter -- four lines against nine -- and it was not taken. **What it costs
+is the thing the thread is for.** *Seven tries, two of which failed their checks* is the largest fact
+about this request, and under that candidate it becomes the number 18 in the phrase *18 lines you
+had already read*. It also does nothing at all for the reader who has no mark: a person opening the
+page from a notification for the first time, or one who has read to the end, would meet the same
+twenty-one lines the entry exists to answer. Taking both, with by-try underneath, buys the quiet for
+the returning reader without spending the record on the arriving one.
+
+### What this does to `D-0083`
+
+| `D-0083` | What happens to it | |
+|---|---|---|
+| Rule 7, one 28px line per thing that happened, dot / sentence / time, colours from `D-0082` rule 2 | Unchanged, and is what this folds | kept |
+| Rule 7, a decision made without asking is on the axis at the moment it was made, and the right face's count names the same things | Unchanged, and is the constraint rule 5 here enforces | kept |
+| Rule 8, at 1600: *event lines above the last-looked line fold into one line* | Now true at every width (rule 3 here), so the 1600 row no longer names a fold of its own. The rest of rule 8's 1600 row -- the cards going one across, the scroll to the answering box -- is untouched | **widened** |
+| Unresolved, *how event lines fold past twenty* | Answered and removed from the list | **closed** |
+
+### What would falsify it
+
+- **A person opening the already-read fold every time they arrive.** Then it is not folding what
+  they are not being asked about, and rule 3 is folding the wrong thing.
+- **A person who cannot tell which try the question is about**, because the newest try's lines read
+  the same as a folded one's summary.
+- **A request whose tries are not what a person counts by** -- work that retries for a reason that
+  is not an attempt at the same thing -- which would make the unit in rule 2 wrong rather than the
+  fold.
+- **A fold that has to be opened to answer the question at all**, which would mean the material
+  belonged outside it and rule 7's *nothing is thrown away* was doing work `D-0083` rule 5's right
+  face should have done.
+- **The repeated summary.** Six folded tries here say *finished, and the work was taken in* four
+  times over. The repetition is smaller than it was and it has not gone, and a person who finds the
+  folded lines as unreadable as the unfolded ones is measuring the same complaint one level up.

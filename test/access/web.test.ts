@@ -94,13 +94,15 @@ import {
 
 /**
  * The tests marked with this build a real git repository or write an on-disk
- * store, and are the heaviest thing in this file on a Windows runner: on the
- * two Windows cells of main's green run 35089584019 they measured 2.4 s to
- * 8.3 s against the 10 s default, against 0.3 s to 0.7 s on the Ubuntu cells.
- * At that headroom the shuffle decides which of them runs beside another heavy
- * file and loses (rondo#222); two of them have already timed out in CI. The
- * number is the one #191 gave the real-git review-material tests -- a floor
- * under Windows process and filesystem variance, not a budget.
+ * store, and are the heaviest thing in this file on a Windows runner
+ * (rondo#222, #191). A floor under Windows process and filesystem variance,
+ * not a budget.
+ *
+ * **What this file costs per cell, healthy and when it goes wrong, is recorded
+ * in `docs/operations/ci-timing.md` with the run ids.** Read that before
+ * changing this number: it was deliberately not raised on rondo#332, because
+ * the overruns seen there are twenty-fold against a limit that already had
+ * twenty-fold headroom, which is not what a limit set too low looks like.
  */
 const WINDOWS_HEAVY_TIMEOUT_MS = 60_000;
 

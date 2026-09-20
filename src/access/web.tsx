@@ -135,6 +135,7 @@ import { RequestsFace } from "./page/list.js";
 import { facesMarkup } from "./page/render.js";
 import { Raw } from "./page/shell.js";
 import { ThreadFace, type ThreadItem, type ThreadLink } from "./page/thread.js";
+import { folds } from "./page-logic/event-fold.js";
 import { governanceOf } from "./page-logic/governance.js";
 import {
   decodedDenials,
@@ -3101,7 +3102,8 @@ export async function operatorPage(
                     governance: selectedGovernance,
                     askedSaid: wording.age(ago(selectedGovernance.askedAtMs, nowMs)),
                   }),
-            items: threadItems,
+            items: folds(wording, threadItems, lastLookedAbove),
+            foldOpen: wording.foldOpen,
             lastLookedAbove,
             lastLookedSaid:
               lastLookedMs === null

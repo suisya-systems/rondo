@@ -20,6 +20,7 @@
  * they are the same things, counted in one place and placed in the other.
  */
 import type { ReactNode } from "react";
+import type { FoldLine } from "../page-logic/event-fold.js";
 
 /** What kind of thing happened, which is the whole of what the dot says. */
 export type EventKind = "person" | "passed" | "failed" | "decided" | "other";
@@ -38,6 +39,13 @@ export interface ThreadEvent {
    * the mark, and the placing is the caller's: only it has read the mark.
    */
   readonly atMs: number;
+  /**
+   * Which try of the request this line belongs to, or null where the request
+   * has only one (`lapEvents`). The line itself does not draw it -- the
+   * sentence already says it -- and it is here so that a fold can group by the
+   * attempt without parsing the words back (`page-logic/event-fold.ts`).
+   */
+  readonly tryAt?: number | null;
   /** Where the evidence for this line is, when there is somewhere to go. */
   readonly href?: string;
   /** What that link says; required where `href` is given. */
@@ -72,6 +80,43 @@ export function EventLine({ event }: { readonly event: ThreadEvent }) {
  */
 export function LastLookedLine({ said }: { readonly said: string }) {
   return <p className="thread-since">{said}</p>;
+}
+
+/**
+ * A folded run of event lines: one line, with the lines kept inside it.
+ *
+ * **`<details>` and nothing else.** The lines are in the page, shut, and
+ * opening one is the browser's own act -- no script, no state of the page's,
+ * and no address of its own, so a fold a person opens survives nothing and
+ * needs to survive nothing. The alternative was an address per fold, which
+ * would put a reading position into the URL that the language switch and every
+ * redraw would then have to carry (`D-0056` rule 11).
+ *
+ * The marker is the dot's column, so a shut fold reads as one more line in the
+ * record rather than as a control beside it.
+ *
+ * **A fold may hold folds.** `D-0086` puts what the person has already read
+ * over the top of what was already folded by try, so opening the outer one
+ * gives back six folded tries rather than eighteen raw lines. A message is
+ * never inside one, so this draws only the two kinds that can be.
+ */
+export function FoldedLine({ fold, open }: { readonly fold: FoldLine; readonly open: string }) {
+  return (
+    <details className="ev-fold">
+      <summary>
+        <span className="ev-fold-said">{fold.said}</span>
+        <span className="ev-fold-open">{open}</span>
+        <time>{fold.at}</time>
+      </summary>
+      {fold.inside.map((item) =>
+        item.kind === "fold" ? (
+          <FoldedLine key={item.id} fold={item} open={open} />
+        ) : item.kind === "event" ? (
+          <EventLine key={item.event.id} event={item.event} />
+        ) : null,
+      )}
+    </details>
+  );
 }
 
 /**

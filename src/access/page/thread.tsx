@@ -18,7 +18,8 @@
  * it; it does not compose it.
  */
 import type { ReactNode } from "react";
-import { EventLine, LastLookedLine, type ThreadEvent } from "./events.js";
+import type { FoldedItem } from "../page-logic/event-fold.js";
+import { EventLine, FoldedLine, LastLookedLine, type ThreadEvent } from "./events.js";
 
 /** A word that leads somewhere, or -- with no address for it -- just the word. */
 export interface ThreadLink {
@@ -109,7 +110,9 @@ export interface ThreadProps {
    * then the events would put the record of the work after the report it
    * produced, which is not how it happened.
    */
-  readonly items: readonly ThreadItem[];
+  readonly items: readonly FoldedItem[];
+  /** What a fold offers on its own line, in the person's language. */
+  readonly foldOpen: string;
   /** Where the reading stopped, among the items (rule 7). */
   readonly lastLookedAbove: string | null;
   readonly lastLookedSaid: string;
@@ -141,8 +144,8 @@ export type ThreadItem =
   | { readonly kind: "event"; readonly event: ThreadEvent };
 
 /** What identifies an item, for the last-looked line and for a stable redraw. */
-function idOf(item: ThreadItem): string {
-  return item.kind === "message" ? item.message.id : item.event.id;
+function idOf(item: FoldedItem): string {
+  return item.kind === "message" ? item.message.id : item.kind === "fold" ? item.id : item.event.id;
 }
 
 function Word({ link, className }: { readonly link: ThreadLink; readonly className: string }) {
@@ -222,6 +225,7 @@ export function ThreadFace({
   governance,
   walk,
   items,
+  foldOpen,
   lastLookedAbove,
   lastLookedSaid,
   answering,
@@ -255,6 +259,8 @@ export function ThreadFace({
           {idOf(item) === lastLookedAbove ? <LastLookedLine said={lastLookedSaid} /> : null}
           {item.kind === "message" ? (
             <Message message={item.message} />
+          ) : item.kind === "fold" ? (
+            <FoldedLine fold={item} open={foldOpen} />
           ) : (
             <EventLine event={item.event} />
           )}
