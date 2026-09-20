@@ -22,23 +22,25 @@
  * D-0054 added a script and D-0059 a library, and neither adds client state or
  * a router.
  *
- * `summary` answers the three questions and nothing else. `reading` adds
- * rondo's own compositions -- the inbox, what spans the live laps, every row's
- * claims under their own pointers. `answer` is one row's whole framing beside
- * its button, and it exists because **the press is the presentation** (D-0042):
- * what a press records is `explainIteration`'s entire claim set, counted as
- * shown, so the page that carries the button has to be the page that carried
- * every one of those claims. A summary with a button would record a
- * presentation that did not happen.
+ * `summary` is the page a person arrives on: the three faces, with the
+ * request rule 3 selects in the centre.
  *
- * Queries on `/` rather than three paths, because the router refuses every path
- * but `/` and a second URL is a second one to get wrong. All three are `GET`s
- * and all three write nothing (D-0041).
+ * **`reading` and `answer` are gone with D-0083.** `answer` was one row's
+ * whole framing beside its button, because **the press is the presentation**
+ * (D-0042) -- and that is unchanged; what changed is where the framing is
+ * drawn. Rule 3 says there is no separate decision screen, so the framing and
+ * the button are in the thread, and the page that carries the button is still
+ * the page that carried every claim. `reading` held rondo's own compositions
+ * (`inbox`, `between`, `explain`); rule 4 puts the inbox in the empty centre
+ * and rule 5 puts the material on the right face, and `between` has no place
+ * on the new page and is read from the terminal.
+ *
+ * Queries on `/` rather than paths, because the router refuses every path but
+ * `/` and a second URL is a second one to get wrong. All of them are `GET`s
+ * and all of them write nothing (D-0041).
  */
 export type PageView =
   | { readonly kind: "summary" }
-  | { readonly kind: "reading" }
-  | { readonly kind: "answer"; readonly iterationId: string }
   /**
    * The request threads (D-0061 rule 4, #220 S1): `requests` lists them and
    * carries the composer for a new one; `thread` is one of them, named by any
@@ -97,7 +99,6 @@ export type PageView =
    * Named by the row and never by a path, so the address carries nothing the
    * server would open.
    */
-  | { readonly kind: "log"; readonly iterationId: string }
   /**
    * The files one finished line keeps, and the press that releases them
    * (D-0073 rule 4.3, rondo#288). A view of its own for `publish`'s reason: the
@@ -158,13 +159,7 @@ export const REVIEW_ROUND_CHOICES: readonly number[] = [0, 1, 2, 3, 4, 5, 6];
  * again, and the page's foot already says the view holds still.
  */
 export function isLive(view: PageView): boolean {
-  return (
-    view.kind !== "answer" &&
-    view.kind !== "scope" &&
-    view.kind !== "publish" &&
-    view.kind !== "log" &&
-    view.kind !== "release"
-  );
+  return view.kind !== "scope" && view.kind !== "publish" && view.kind !== "release";
 }
 
 /**
@@ -186,14 +181,8 @@ export function isLive(view: PageView): boolean {
 export function viewHref(view: PageView, tag: string): string {
   const lang = `lang=${encodeURIComponent(tag)}`;
   switch (view.kind) {
-    case "reading":
-      return `/?reading=open&${lang}`;
-    case "answer":
-      return `/?answer=${encodeURIComponent(view.iterationId)}&${lang}`;
     case "publish":
       return `/?publish=${encodeURIComponent(view.iterationId)}&${lang}`;
-    case "log":
-      return `/?log=${encodeURIComponent(view.iterationId)}&${lang}`;
     case "release":
       return `/?release=${encodeURIComponent(view.iterationId)}&${lang}`;
     case "requests":

@@ -26,8 +26,9 @@ import { composeBetweenLaps, type HostPorts } from "../../src/access/advisory.js
 import { allocate } from "../../src/refrain/allocator.js";
 import { admittedPlan, planPayload, type RunPlan, runPlan } from "../../src/refrain/plan.js";
 import type { JsonRecord } from "../../src/store/records.js";
-import { advisoryRecord, iterationStore } from "../../src/store/sqlite.js";
+import { advisoryRecord } from "../../src/store/sqlite.js";
 import { ownLane } from "../lane-claims.js";
+import { REQUEST, storeWithRequest } from "../request-fixture.js";
 
 const PLAN: RunPlan = {
   db: "/srv/continuo.db",
@@ -95,7 +96,7 @@ const fresh = () => {
   const connection = new DatabaseSync(":memory:");
   return {
     connection,
-    store: iterationStore(connection, { maxOccupying: 4, maxLive: 6 }),
+    store: storeWithRequest(connection, { maxOccupying: 4, maxLive: 6 }),
     record: advisoryRecord(connection),
   };
 };
@@ -120,7 +121,7 @@ async function reserve(
     claim: ownLane(id),
     nowMs: 1_000,
     supersedesIterationId: null,
-    requestMessageId: null,
+    requestMessageId: REQUEST,
     runId: `rondo-${id}`,
     topicBranch: `rondo/${id}`,
     workspace: `/srv/work/${id}`,
@@ -294,7 +295,7 @@ test("the admission refusals the bound wrote are gathered and claimed", async ()
   const connection = new DatabaseSync(":memory:");
   const world = {
     connection,
-    store: iterationStore(connection, { maxOccupying: 1, maxLive: 1 }),
+    store: storeWithRequest(connection, { maxOccupying: 1, maxLive: 1 }),
     record: advisoryRecord(connection),
   };
   await reserve(world.store, "i-0001");
@@ -309,7 +310,7 @@ test("the admission refusals the bound wrote are gathered and claimed", async ()
     claim: ownLane("i-0002"),
     nowMs: 3_000,
     supersedesIterationId: null,
-    requestMessageId: null,
+    requestMessageId: REQUEST,
     runId: "rondo-i-0002",
     topicBranch: "rondo/i-0002",
     workspace: "/srv/work/i-0002",

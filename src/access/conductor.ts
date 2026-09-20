@@ -472,7 +472,7 @@ export async function admit(
   id: string,
   supersedesIterationId: string | null = null,
   spend: DecisionSpend | null = null,
-  requestMessageId: string | null = null,
+  requestMessageId: string,
   scopeSpend: ScopeSpend | null = null,
   claim: LaneClaimAsk | null = null,
 ): Promise<ConductorReport> {
@@ -847,9 +847,6 @@ export async function reportToRequest(
   }
   const row = found.record;
   const request = row.requestMessageId;
-  if (request === null) {
-    return null;
-  }
   let body: string;
   let messageId: string;
   if (event.kind === "gate") {

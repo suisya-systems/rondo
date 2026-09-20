@@ -204,12 +204,6 @@ export interface Chrome extends PageWords {
   readonly stillNote: string;
   readonly noApproverNote: string;
 
-  // -- The three questions the lead answers --
-  readonly waitingHeading: (count: number) => string;
-  readonly runningHeading: (count: number) => string;
-  readonly endedHeading: (count: number) => string;
-  readonly waitingHead: (status: string, waited: string) => string;
-  readonly runningHead: (status: string, ran: string) => string;
   readonly endedHead: (status: string, since: string, why: string) => string;
   readonly gateAnswered: (outcome: string) => string;
   /**
@@ -219,27 +213,15 @@ export interface Chrome extends PageWords {
    */
   readonly statePill: (status: string, gateOutcome: string | null) => string;
   /** The age beside an ended row's pill. */
-  readonly endedAgo: (since: string) => string;
   readonly noReasonRecorded: string;
-  readonly proposalBasis: (proposalId: string) => string;
-  readonly proposalHead: (kind: string, waited: string) => string;
   readonly aboutIteration: (iterationId: string | null) => string;
   readonly willNotDecode: (reason: string) => string;
 
   // -- What a lap spent, and what its fence refused --
   readonly spent: (cost: string, turns: string, took: string) => string;
-  readonly costRead: (usd: string) => string;
-  readonly costNotRead: string;
-  readonly turnsRead: (turns: number) => string;
-  readonly turnsNotRead: string;
-  readonly durationNotRead: string;
   readonly fenceUnknown: string;
   readonly fenceRefusedNothing: string;
   readonly fenceRefused: (denials: string) => string;
-
-  // -- An idle ledger --
-  readonly nothingAtAll: string;
-  readonly nothingBasis: string;
 
   // -- The button, and the way to it --
   readonly pressNote: string;
@@ -260,21 +242,11 @@ export interface Chrome extends PageWords {
   readonly approveDespitePlain: string;
   /** The fold that holds the claims rondo could not determine. */
   readonly undeterminedFold: (count: number) => string;
-  readonly answerHere: string;
-  /**
-   * The short label on the filled button that leads to the press (D-0059
-   * section 2: a short primary call to action). `answerHere` stays beside it as
-   * the sentence that says what the second address adds.
-   */
-  readonly answerAction: string;
 
   // -- Request threads (D-0061 rule 4, D-0059 section 5a's send) --
   /** The header's way into the requests, on every view. */
   readonly requestsNav: string;
-  readonly requestsHeading: (count: number) => string;
-  readonly noRequests: string;
   /** How many messages a request's thread holds, and when it last moved. */
-  readonly threadSize: (count: number, since: string) => string;
   /** The pill on a request, or on a message, that waits for the person's reply. */
   readonly asksWaiting: (count: number) => string;
   readonly askWaitingPill: string;
@@ -287,8 +259,6 @@ export interface Chrome extends PageWords {
   readonly answerCarriedOnPill: string;
   /** The operator's own messages are "you"; the voice badge says which voice spoke (rule 2.3). */
   readonly you: string;
-  readonly operatorVoice: string;
-  readonly drafterVoice: string;
   /**
    * A drafter run that drafted nothing, said as what happened and what the
    * person can do (rondo#238): the reason itself is folded under
@@ -296,12 +266,6 @@ export interface Chrome extends PageWords {
    */
   readonly drafterNoDraft: string;
   readonly drafterNoDraftWhy: string;
-  /**
-   * D-0078 section 4: what rondo read of an issue the person named, under
-   * their message. Each sentence follows the issue's own name, drawn as a link
-   * before it. The badge on the card is {@link issueVoice}.
-   */
-  readonly issueVoice: string;
   /** A read that worked (section 4.1): nothing to press, what was read folded. */
   readonly issueRead: (pullRequest: boolean, comments: number) => string;
   readonly issueReadFold: string;
@@ -320,11 +284,9 @@ export interface Chrome extends PageWords {
   readonly scopeIssueNotGiven: string;
   readonly scopeIssuePending: string;
   /** The summary's row for an ask: the request it was asked in. */
-  readonly askedIn: (request: string) => string;
   readonly inReplyTo: (who: string, words: string) => string;
   readonly basesLabel: string;
   readonly replyAction: string;
-  readonly openThread: string;
   /** The reply box's target, on one short line: who wrote it and how long ago. */
   readonly replyingTo: (who: string, since: string) => string;
   /** The same line when the target is a question waiting on the person, answered by a press. */
@@ -347,6 +309,31 @@ export interface Chrome extends PageWords {
   readonly sendNote: string;
   readonly keySend: string;
   readonly composerNoApprover: string;
+  /**
+   * The governance line, under every thread's title (D-0083 rule 6).
+   *
+   * `govSpent` pairs the two figures rule 6 refuses to separate; where no
+   * approval reads, `weekNoAllowance` stands for the pair instead.
+   * `govDecidedNotRead` names the one item of rule 6's six this line does not
+   * carry, so that five items are not read as six.
+   */
+  /** Rule 3's walk: where this request stands among the ones waiting, and the way on. */
+  /**
+   * One event line, said of a particular try (D-0083 rule 7).
+   *
+   * Drawn only where the request has more than one lap: with one there is
+   * nothing to tell apart. A try is a thing a person has -- rule 6's line
+   * counts them -- and not an identifier of rondo's (D-0076).
+   */
+  readonly evOfTry: (at: number, said: string) => string;
+  readonly walkAt: (at: number, of: number) => string;
+  readonly walkNext: string;
+  readonly govSpent: (spent: string, approved: string) => string;
+  readonly govTries: (at: number, of: number) => string;
+  readonly chainAnswer: string;
+  readonly chainProposal: string;
+  readonly chainMerge: string;
+  readonly govDecidedNotRead: string;
   readonly noSuchThread: string;
   readonly threadsUnreadable: (reason: string) => string;
   /** The line a refused send shows under the draft, which is kept. */
@@ -372,7 +359,6 @@ export interface Chrome extends PageWords {
   readonly sendBack: string;
   readonly sendBackNote: string;
   /** With script off a view with a composer does not reload itself, so a draft survives. */
-  readonly threadNoReload: string;
   /** The threads' account of themselves: the redraw writes nothing, and Send is what writes here. */
   readonly threadsLiveNote: (seconds: number) => string;
   /**
@@ -386,18 +372,10 @@ export interface Chrome extends PageWords {
   /** The header pill: how many questions wait on the person. */
   readonly waitingCount: (count: number) => string;
   readonly signedInAs: (actorId: string) => string;
-  readonly backToRequests: string;
-  readonly reloadThread: string;
-  readonly threadStarted: (since: string) => string;
   /** Lets go of a reply target chosen by hand. */
   readonly replyDefault: string;
   /** A live row that will not decode, as a person reads it. */
-  readonly attentionHeading: (count: number) => string;
-  readonly unreadableTitle: string;
-  readonly unreadableAction: (iterationId: string) => string;
-  readonly unreadableDetail: string;
   /** The link from an unreadable row to its section of the reading. */
-  readonly unreadableRead: string;
 
   // -- The gate reading on the answer view, page only (#220 S2). The console's
   // entries above stay as they are; these say the same facts in plain words,
@@ -407,27 +385,7 @@ export interface Chrome extends PageWords {
   readonly blockedNothing: string;
   readonly blockedUnknown: string;
   /** A running row whose transcript rondo could not name; the reason is the `title`. */
-  readonly logFound: string;
-  readonly logNotYet: string;
-  readonly logUnchecked: (reason: string) => string;
-  readonly logNotLookedFor: string;
   /** rondo#248 item 3: the way from a running row into its log, and the log's screen. */
-  readonly logOpen: string;
-  readonly logOpenHere: string;
-  readonly logHeading: string;
-  readonly logLead: (shown: number, total: number) => string;
-  readonly logEmpty: string;
-  readonly logWhole: string;
-  readonly logUnfinished: string;
-  readonly logUnread: (reason: string) => string;
-  readonly logGone: string;
-  readonly logOutput: string;
-  readonly logOutputFailed: string;
-  readonly logFailed: string;
-  readonly logNoOutput: string;
-  readonly logCutBefore: (characters: number) => string;
-  readonly logCutAfter: (characters: number) => string;
-  readonly logFinal: string;
   readonly fenceHeading: string;
   readonly whyStopped: string;
   readonly whyNotRead: string;
@@ -445,8 +403,6 @@ export interface Chrome extends PageWords {
   readonly verdictPill: (verdict: string, count: number) => string;
   readonly checksNone: string;
   readonly checksCounted: (commits: number, files: number) => string;
-  readonly readingUnavailable: (reason: string) => string;
-  readonly readBy: (drafter: string) => string;
   readonly whatItRead: string;
   readonly basisNone: string;
   readonly basisUnresolved: string;
@@ -472,15 +428,6 @@ export interface Chrome extends PageWords {
   readonly gateBack: string;
   /** The line by the button when the model review raised a blocker or a major. */
   readonly modelRaised: (blockers: number, majors: number) => string;
-  /**
-   * An ended row's line when its gate was approved with a blocker or a major
-   * open in the model review (rondo#237).
-   *
-   * The same two counts the gate's own warning carried, said on the summary:
-   * a finished lap reads as finished, and which of the two approvals ended it
-   * was otherwise only findable by opening the lap.
-   */
-  readonly approvedOverRaised: (blockers: number, majors: number) => string;
   /** A model finding's severity (`blocker`, `major`, `minor`, `nit`) as a word, and counted. */
   readonly severityWord: (severity: string) => string;
   readonly severityCount: (severity: string, count: number) => string;
@@ -508,9 +455,7 @@ export interface Chrome extends PageWords {
   /** A refused call whose shape rondo cannot read, on the fence card. */
   readonly denialUnreadable: string;
   /** The plain sentence above an unreadable row's reason in the reading. */
-  readonly unreadableLead: string;
   /** An ended row's echo of the verification claim its press carried. */
-  readonly checkedEcho: (claim: string, by: string | null) => string;
   readonly modelRaisedLink: string;
   readonly modelMayArrive: string;
 
@@ -522,16 +467,7 @@ export interface Chrome extends PageWords {
   readonly keyBack: string;
   readonly keyWrite: string;
 
-  // -- The fold, and the sections inside it --
-  readonly openReading: string;
-  readonly hideReading: string;
-  readonly inboxHeading: string;
   readonly inboxNote: string;
-  readonly inboxNoApprover: string;
-  readonly betweenHeading: string;
-  readonly betweenNote: string;
-  readonly iterationHeading: (iterationId: string) => string;
-  readonly explainNote: string;
 
   // -- The inbox's own lines (src/access/inbox.ts), page and terminal alike --
   readonly inboxFor: (actorId: string) => string;
@@ -567,7 +503,6 @@ export interface Chrome extends PageWords {
   readonly nothingChanged: string;
   readonly censusEntry: (kind: string, count: number) => string;
   readonly changeLine: (kind: string, id: string | null, since: string) => string;
-  readonly noId: string;
   readonly silenceHeading: string;
   readonly countedLine: (what: string, presented: number, withheld: number) => string;
   readonly overAllTime: string;
@@ -653,7 +588,6 @@ export interface Chrome extends PageWords {
    * {@link answerAction} and {@link answerHere} already have.
    */
   readonly scopeAction: string;
-  readonly scopeHere: string;
   readonly scopeHeading: string;
   readonly backToThread: string;
   readonly scopeLead: string;
@@ -1040,7 +974,6 @@ export interface Chrome extends PageWords {
    * drawn above it.
    */
   readonly publishAction: string;
-  readonly publishHere: string;
   /**
    * What a publish of this lap came to, on the row it was pressed from
    * (rondo#245).
@@ -1060,7 +993,6 @@ export interface Chrome extends PageWords {
    */
   readonly holds: (paths: readonly string[]) => string;
   /** The group of finished work whose change has not been found on the default branch. */
-  readonly heldHeading: (count: number) => string;
   /** Why a finished row still holds its files, and what that costs other work. */
   readonly notLanded: string;
   /** A finished row whose change rondo found on the default branch. */
@@ -1211,11 +1143,6 @@ explanation you pressed on and then answers the gate.`,
     "RONDO_APPROVER is not set, so there is nobody this page could answer as, and no inbox of " +
     "theirs to draw.",
 
-  waitingHeading: (count) => `waiting for your answer (${String(count)})`,
-  runningHeading: (count) => `running now (${String(count)})`,
-  endedHeading: (count) => `just finished (${String(count)})`,
-  waitingHead: (status, waited) => `${status} -- waiting ${waited}`,
-  runningHead: (status, ran) => `${status} -- running ${ran}`,
   endedHead: (status, since, why) => `${status} ${since} ago -- ${why}`,
   gateAnswered: (outcome) =>
     outcome === APPROVED_OUTCOME ? "approved at the gate" : `gate answered '${outcome}'`,
@@ -1242,29 +1169,15 @@ explanation you pressed on and then answers the gate.`,
         failed: "Failed",
       }) as Record<string, string | undefined>
     )[status] ?? status,
-  endedAgo: (since) => `${since} ago`,
   noReasonRecorded: "no reason recorded",
-  proposalBasis: (proposalId) =>
-    `read it back with its options and what each rests on: rondo show --proposal-id ${proposalId}`,
-  proposalHead: (kind, waited) => `${kind} -- waiting ${waited}`,
   aboutIteration: (iterationId) =>
     iterationId === null ? "about no iteration" : `about '${iterationId}'`,
   willNotDecode: (reason) => `will not decode: ${reason}`,
 
   spent: (cost, turns, took) => `${cost}, ${turns}, ${took}`,
-  costRead: (usd) => `cost $${usd}`,
-  costNotRead: "cost not read",
-  turnsRead: (turns) => `${String(turns)} turns`,
-  turnsNotRead: "turns not read",
-  durationNotRead: "duration not read",
   fenceUnknown: "the fence: continuo could not tell what it refused",
   fenceRefusedNothing: "the fence refused nothing",
   fenceRefused: (denials) => `the fence refused ${denials}`,
-
-  nothingAtAll: "Nothing is waiting on you, nothing is running, and nothing has finished.",
-  nothingBasis:
-    "every live row and every ended row in this ledger; the reading below cites what each read " +
-    "found",
 
   pressNote: "What pressing approve records as shown, and what it would be over:",
   approveNote: (gateId, word) =>
@@ -1275,14 +1188,8 @@ explanation you pressed on and then answers the gate.`,
     "Accept this work as it is, with what the model review raised left unanswered.",
   undeterminedFold: (count) =>
     `${String(count)} ${count === 1 ? "field" : "fields"} rondo could not determine`,
-  answerHere: "read what a press would record, and answer there",
-  answerAction: "Review and answer",
 
   requestsNav: "Requests",
-  requestsHeading: (count) => `requests (${String(count)})`,
-  noRequests: "No request has been written yet. Write one below, in your own words.",
-  threadSize: (count, since) =>
-    `${String(count)} ${count === 1 ? "message" : "messages"}, last ${since} ago`,
   asksWaiting: (count) =>
     `${String(count)} ${count === 1 ? "question" : "questions"} waiting on you`,
   askWaitingPill: "Waiting on you",
@@ -1290,13 +1197,10 @@ explanation you pressed on and then answers the gate.`,
   answerStoppedPill: "Stopped this line",
   answerCarriedOnPill: "Carried on",
   you: "you",
-  operatorVoice: "operator",
-  drafterVoice: "drafter",
   drafterNoDraft:
     "rondo could not draft this request, so nothing has been proposed. You can set the scope " +
     "yourself.",
   drafterNoDraftWhy: "What stopped it",
-  issueVoice: "issue",
   issueRead: (pullRequest, comments) =>
     `rondo read this ${pullRequest ? "pull request's conversation" : "issue"}` +
     `${comments === 0 ? "" : ` and its ${String(comments)} ${comments === 1 ? "comment" : "comments"}`}` +
@@ -1321,11 +1225,9 @@ explanation you pressed on and then answers the gate.`,
   scopeIssueGiven: "given to the worker",
   scopeIssueNotGiven: "not given: it could not be read",
   scopeIssuePending: "not read yet",
-  askedIn: (request) => `asked in: ${request}`,
   inReplyTo: (who, words) => `in reply to ${who}: ${words}`,
   basesLabel: "rests on",
   replyAction: "Reply",
-  openThread: "Open the thread",
   replyingTo: (who, since) => `Replying to ${who}, ${since} ago`,
   answeringTo: (who, since) => `Answering ${who}'s question, ${since} ago`,
   answerAskAction: "Answer",
@@ -1342,6 +1244,15 @@ explanation you pressed on and then answers the gate.`,
   keySend: "send",
   composerNoApprover:
     "RONDO_APPROVER is not set, so there is nobody this page could send as: the threads can be read, not written to.",
+  evOfTry: (at, said) => `Try ${String(at)}: ${said}`,
+  walkAt: (at, of) => `your turn ${String(at)} / ${String(of)}`,
+  walkNext: "next",
+  govSpent: (spent, approved) => `$${spent} of $${approved}`,
+  govTries: (at, of) => `try ${String(at)} of ${String(of)}`,
+  chainAnswer: "your answer",
+  chainProposal: "proposal",
+  chainMerge: "merge",
+  govDecidedNotRead: "what rondo decided without asking is not counted here yet",
   noSuchThread: "No request thread holds that message.",
   threadsUnreadable: (reason) => `The request threads could not be read: ${reason}`,
   notSent: (line) => `Not sent, and your words are kept: ${line}`,
@@ -1364,51 +1275,15 @@ explanation you pressed on and then answers the gate.`,
   threadsLiveNote: (seconds) =>
     `Redraws every ${String(seconds)}s, and a redraw writes nothing. What writes here is Send: ` +
     "your words, recorded exactly as written into the thread, under RONDO_APPROVER's name. A message approves nothing.",
-  threadNoReload:
-    "With scripting off this view does not reload itself, so nothing you are writing is thrown away: reload it to see new messages.",
   liveShort: (seconds) => `Live, updates every ${String(seconds)}s`,
   stillShort: "Holds still while you read",
   age: (ago) => ago,
   waitingCount: (count) => `${String(count)} waiting`,
   signedInAs: (actorId) => `You send and answer as ${actorId}`,
-  backToRequests: "Back to requests",
-  reloadThread: "Reload for new messages",
-  threadStarted: (since) => `started ${since} ago`,
   replyDefault: "Reply to the latest message instead",
-  attentionHeading: (count) => `needs attention (${String(count)})`,
-  unreadableTitle: "A run's record cannot be read",
-  unreadableAction: (iterationId) =>
-    `The record of ${iterationId} will not read, so it cannot be shown or answered here, and it still takes a run slot. Read what went wrong; the slot frees once the record is repaired or the run is withdrawn.`,
-  unreadableDetail: "What rondo could not read",
-  unreadableRead: "Read what went wrong",
   blockedCount: (count) => `blocked ${String(count)} command${count === 1 ? "" : "s"}`,
   blockedNothing: "blocked nothing",
   blockedUnknown: "not known what was blocked",
-  logFound: "log found",
-  logNotYet: "no log yet",
-  logUnchecked: (reason) => `could not check for a log: ${reason}`,
-  logNotLookedFor: "log not looked for yet",
-  logOpen: "Read the log",
-  logOpenHere: "Read the commands this lap has run and what they returned, on this page",
-  logHeading: "What this lap has run",
-  logLead: (shown, total) =>
-    shown === total
-      ? `${String(total)} command${total === 1 ? "" : "s"}, newest first.`
-      : `The newest ${String(shown)} of ${String(total)} commands, newest first. The ${String(total - shown)} before them are in the file below.`,
-  logEmpty: "The log has no command in it yet.",
-  logWhole: "The whole log is this file:",
-  logUnfinished: "The lap is writing its next line; it shows here once it is finished.",
-  logUnread: (reason) => `The log could not be read: ${reason}`,
-  logGone: "There is no lap by that name.",
-  logOutput: "Output",
-  logOutputFailed: "Output -- failed",
-  logFailed: "failed",
-  logNoOutput: "No output recorded",
-  logCutBefore: (characters) =>
-    `The first ${characters.toLocaleString("en")} characters are not shown here.`,
-  logCutAfter: (characters) =>
-    `The last ${characters.toLocaleString("en")} characters are not shown here.`,
-  logFinal: "The lap's final message",
   fenceHeading: "The fence:",
   whyStopped: "Why it stopped",
   whyNotRead: "The worker's own account could not be read; it is in the text below if it was.",
@@ -1433,8 +1308,6 @@ explanation you pressed on and then answers the gate.`,
   checksNone: "No check of this work was recorded. Publishing will ask you to confirm that.",
   checksCounted: (commits, files) =>
     `Read ${String(commits)} commit${commits === 1 ? "" : "s"} and ${String(files)} file${files === 1 ? "" : "s"}.`,
-  readingUnavailable: (reason) => `No reading could be taken: ${reason}`,
-  readBy: (drafter) => `read by ${drafter}`,
   whatItRead: "What it read, and what it did not",
   basisNone: "no basis given",
   basisUnresolved: "none of these matched the delivered work",
@@ -1457,8 +1330,6 @@ explanation you pressed on and then answers the gate.`,
   answerNotDone: "Nothing was answered",
   gateBack: "Back to the gate",
   modelRaised: (blockers, majors) => `The model review raised ${raisedEn(blockers, majors)}.`,
-  approvedOverRaised: (blockers, majors) =>
-    `approved with ${raisedEn(blockers, majors)} open in the model review`,
   modelRaisedLink: "Read it",
   severityWord: (severity) => severity,
   severityCount: (severity, count) => `${String(count)} ${severity}`,
@@ -1471,10 +1342,6 @@ explanation you pressed on and then answers the gate.`,
   neitherReadingTaken: "Neither the checks nor the model review could read this work.",
   recordsFold: (count) => `What approve records (${String(count)} fields), and the full text`,
   denialUnreadable: "rondo could not record which command this was.",
-  unreadableLead:
-    "rondo could not read this run's record, so it cannot be shown or answered. What rondo found:",
-  checkedEcho: (claim, by) =>
-    by === null ? `you said you checked: ${claim}` : `${by} said they checked: ${claim}`,
   modelMayArrive: "The model review may still arrive.",
   liveLabel: "live",
   keyMove: "move",
@@ -1482,17 +1349,7 @@ explanation you pressed on and then answers the gate.`,
   keyBack: "back",
   keyWrite: "write",
 
-  openReading: "Show the full reading: every claim with its basis",
-  hideReading: "hide the reading",
-  inboxHeading: "the inbox",
   inboxNote: "Reading this does not move your last-look mark: that is what rondo inbox does.",
-  inboxNoApprover: "RONDO_APPROVER is not set, so there is no identity whose inbox this would be.",
-  betweenHeading: "what spans the live laps",
-  betweenNote:
-    "An adjacency is not a collision: two laps open against one base branch is where to look, " +
-    "not what was found.",
-  iterationHeading: (iterationId) => `iteration '${iterationId}'`,
-  explainNote: "This explanation binds nothing: it is not a proposal and cannot be approved.",
 
   inboxFor: (actorId) => `inbox for '${actorId}'`,
   waitingOnYou: "waiting on you",
@@ -1518,7 +1375,6 @@ explanation you pressed on and then answers the gate.`,
   nothingChanged: "  nothing",
   censusEntry: (kind, count) => `${kind} ${String(count)}`,
   changeLine: (kind, id, since) => `    ${kind}  ${id ?? "(no id)"}  ${since} ago`,
-  noId: "(no id)",
   silenceHeading: "what was put to you and what was not",
   countedLine: (what, presented, withheld) =>
     `${what}: presented ${String(presented)}, withheld ${String(withheld)}`,
@@ -1555,7 +1411,6 @@ explanation you pressed on and then answers the gate.`,
   ]),
 
   scopeAction: "Set the scope",
-  scopeHere: "Draft what this request is allowed to spend, and approve it",
   scopeHeading: "The scope for this request",
   backToThread: "Back to the request",
   scopeLead:
@@ -1903,13 +1758,11 @@ explanation you pressed on and then answers the gate.`,
     "raise for it. Go back to see how it ended.",
 
   publishAction: "Publish",
-  publishHere: "Read what publishing would do, and publish from there",
   published: (branch, runId) =>
     `Published: ${branch === null ? "the branch" : `the branch ${branch}`} is pushed, and ` +
     `${runId === null ? "the run" : `the run ${runId}`} is closed.`,
   publishedPullRequest: "The pull request",
   holds: (paths) => `Files it keeps to itself: ${filesEn(paths)}`,
-  heldHeading: (count) => `finished, not yet on the default branch (${String(count)})`,
   notLanded:
     "rondo has not found this change on the default branch yet, so these files stay with it " +
     "and other work that needs them waits.",
@@ -2147,11 +2000,6 @@ const JA: Chrome = Object.freeze({
     "RONDO_APPROVER が設定されていないので、このページが誰として答えることもできず、" +
     "その人の inbox も描けません。",
 
-  waitingHeading: (count) => `あなたの答えを待っているもの (${String(count)})`,
-  runningHeading: (count) => `いま動いているもの (${String(count)})`,
-  endedHeading: (count) => `ちょうど終わったもの (${String(count)})`,
-  waitingHead: (status, waited) => `${status} -- ${waited} 待機中`,
-  runningHead: (status, ran) => `${status} -- ${ran} 実行中`,
   endedHead: (status, since, why) => `${status} ${since}前 -- ${why}`,
   gateAnswered: (outcome) =>
     outcome === APPROVED_OUTCOME ? "ゲートで承認された" : `ゲートに '${outcome}' と答えた`,
@@ -2178,52 +2026,31 @@ const JA: Chrome = Object.freeze({
         failed: "失敗",
       }) as Record<string, string | undefined>
     )[status] ?? status,
-  endedAgo: (since) => `${since}前`,
   noReasonRecorded: "理由は記録されていない",
-  proposalBasis: (proposalId) =>
-    `選択肢と各々の根拠つきで読み直す: rondo show --proposal-id ${proposalId}`,
-  proposalHead: (kind, waited) => `${kind} -- ${waited} 待機中`,
   aboutIteration: (iterationId) =>
     iterationId === null ? "どの iteration についてでもない" : `'${iterationId}' について`,
   willNotDecode: (reason) => `読み取れません: ${reason}`,
 
   spent: (cost, turns, took) => `${cost}、${turns}、${took}`,
-  costRead: (usd) => `費用 $${usd}`,
-  costNotRead: "費用は読めていない",
-  turnsRead: (turns) => `${String(turns)} ターン`,
-  turnsNotRead: "ターン数は読めていない",
-  durationNotRead: "所要時間は読めていない",
   fenceUnknown: "fence: continuo は何を拒否したか答えられませんでした",
   fenceRefusedNothing: "fence は何も拒否しませんでした",
   fenceRefused: (denials) => `fence が拒否したもの: ${denials}`,
 
-  nothingAtAll: "あなたを待っているものも、動いているものも、終わったものもありません。",
-  nothingBasis:
-    "この台帳の live な行と終了した行のすべて。下の読み下しが、それぞれの読み取りで何が見つかったかを示します",
-
   pressNote: "approve を押すと「提示された」として記録される内容と、その対象:",
   approveNote: (gateId, word) =>
     `ゲート ${gateId} に '${word}' と答えます。rondo answer と同じ動作です`,
-  answerHere: "押したときに何が記録されるかを読み、そこで答える",
-  answerAction: "確認して答える",
 
   requestsNav: "依頼",
-  requestsHeading: (count) => `依頼 (${String(count)})`,
-  noRequests: "まだ依頼はありません。下の欄に、自分の言葉で書いてください。",
-  threadSize: (count, since) => `メッセージ ${String(count)} 件、最後は ${since}前`,
   asksWaiting: (count) => `あなたへの質問 ${String(count)}`,
   askWaitingPill: "あなたの回答待ち",
   askStoppedPill: "あなたが止めた線",
   answerStoppedPill: "この線を止めた",
   answerCarriedOnPill: "続けた",
   you: "あなた",
-  operatorVoice: "オペレーター",
-  drafterVoice: "下書き役",
   drafterNoDraft:
     "rondo はこの依頼の下書きを作れなかったので、まだ何も提案されていません。範囲はご自身で" +
     "決められます。",
   drafterNoDraftWhy: "止まった理由",
-  issueVoice: "イシュー",
   issueRead: (pullRequest, comments) =>
     `rondo がこの${pullRequest ? "プルリクエストの会話" : "イシュー"}` +
     `${comments === 0 ? "" : `とコメント ${String(comments)} 件`}を読みました。` +
@@ -2248,11 +2075,9 @@ const JA: Chrome = Object.freeze({
   scopeIssueGiven: "作業者に渡す",
   scopeIssueNotGiven: "渡さない: 読めなかった",
   scopeIssuePending: "まだ読んでいない",
-  askedIn: (request) => `依頼: ${request}`,
   inReplyTo: (who, words) => `${who} への返信: ${words}`,
   basesLabel: "根拠",
   replyAction: "返信する",
-  openThread: "スレッドを開く",
   replyingTo: (who, since) => `${who} に返信 · ${since}前`,
   answeringTo: (who, since) => `${who} の質問に回答 · ${since}前`,
   answerAskAction: "回答する",
@@ -2269,6 +2094,15 @@ const JA: Chrome = Object.freeze({
   keySend: "送信",
   composerNoApprover:
     "RONDO_APPROVER が設定されていないため、このページが誰として送るのかが決まりません。スレッドは読めますが、書き込めません。",
+  evOfTry: (at, said) => `${String(at)} 回目: ${said}`,
+  walkAt: (at, of) => `あなたの番 ${String(at)} ／ ${String(of)}`,
+  walkNext: "次へ",
+  govSpent: (spent, approved) => `$${spent} ／ $${approved}`,
+  govTries: (at, of) => `${String(at)} 回目 ／ ${String(of)} 回まで`,
+  chainAnswer: "あなたの答え",
+  chainProposal: "提案",
+  chainMerge: "マージ",
+  govDecidedNotRead: "rondo が聞かずに決めた数はまだここに出ていません",
   noSuchThread: "そのメッセージを含む依頼スレッドはありません。",
   threadsUnreadable: (reason) => `依頼スレッドを読めませんでした: ${reason}`,
   notSent: (line) => `送信されませんでした。書いた文は残しています: ${line}`,
@@ -2293,8 +2127,6 @@ const JA: Chrome = Object.freeze({
   threadsLiveNote: (seconds) =>
     `${String(seconds)}秒ごとに描き直しますが、描き直しは何も書き込みません。ここで書き込むのは送信だけで、` +
     "書いた文をそのまま RONDO_APPROVER の名前でスレッドに記録します。メッセージは何も承認しません。",
-  threadNoReload:
-    "スクリプトが無効なとき、この画面は自動で読み込み直しません。書きかけの文が消えないためです。新しいメッセージは読み込み直して確認してください。",
   approvePlain: "この作業をこのまま受け入れます。",
   approveDespite: "指摘を残したまま承認する",
   approveDespitePlain: "モデルレビューが挙げた点に答えないまま、この作業をこのまま受け入れます。",
@@ -2308,44 +2140,10 @@ const JA: Chrome = Object.freeze({
   },
   waitingCount: (count) => `${String(count)} 件待ち`,
   signedInAs: (actorId) => `${actorId} として送信・回答します`,
-  backToRequests: "依頼の一覧に戻る",
-  reloadThread: "読み込み直して新着を見る",
-  threadStarted: (since) => `${since}前に開始`,
   replyDefault: "最新のメッセージへの返信に戻す",
-  attentionHeading: (count) => `確認が必要なもの (${String(count)})`,
-  unreadableTitle: "実行の記録を読み取れません",
-  unreadableAction: (iterationId) =>
-    `${iterationId} の記録が読み取れないため、ここでは表示も回答もできません。実行枠はまだ使っています。何が起きたかを読んでください。記録が直るか実行が取り下げられると枠は空きます。`,
-  unreadableDetail: "rondo が読み取れなかった内容",
-  unreadableRead: "何が起きたかを読む",
   blockedCount: (count) => `${String(count)} 件のコマンドを止めた`,
   blockedNothing: "止めたコマンドなし",
   blockedUnknown: "止めたコマンドは不明",
-  logFound: "ログあり",
-  logNotYet: "ログはまだありません",
-  logUnchecked: (reason) => `ログを確認できませんでした: ${reason}`,
-  logNotLookedFor: "ログはまだ探していません",
-  logOpen: "ログを読む",
-  logOpenHere: "この周回が実行したコマンドとその結果を、この画面で読む",
-  logHeading: "この周回が実行したコマンド",
-  logLead: (shown, total) =>
-    shown === total
-      ? `全 ${String(total)} 件。新しいものが上です。`
-      : `全 ${String(total)} 件のうち、新しい ${String(shown)} 件です。新しいものが上です。それより前の ${String(total - shown)} 件は下のファイルで読めます。`,
-  logEmpty: "ログにはまだコマンドがありません。",
-  logWhole: "ログの全体はこのファイルにあります:",
-  logUnfinished: "いま次の行を書いているところです。書き終わるとここに出ます。",
-  logUnread: (reason) => `ログを読み取れませんでした: ${reason}`,
-  logGone: "その名前の周回はありません。",
-  logOutput: "出力",
-  logOutputFailed: "出力 (失敗)",
-  logFailed: "失敗",
-  logNoOutput: "出力の記録はありません",
-  logCutBefore: (characters) =>
-    `先頭の ${characters.toLocaleString("ja")} 文字はここには出していません。`,
-  logCutAfter: (characters) =>
-    `末尾の ${characters.toLocaleString("ja")} 文字はここには出していません。`,
-  logFinal: "周回の最後のメッセージ",
   fenceHeading: "実行の制限:",
   whyStopped: "止まった理由",
   whyNotRead: "作業者自身の説明は読み取れませんでした。読めていれば下のテキストにあります。",
@@ -2371,8 +2169,6 @@ const JA: Chrome = Object.freeze({
     "作業をチェックした記録がありません。公開するときに、それで進めてよいかを確認します。",
   checksCounted: (commits, files) =>
     `コミット ${String(commits)} 件とファイル ${String(files)} 件を読みました。`,
-  readingUnavailable: (reason) => `読み取りを取れませんでした: ${reason}`,
-  readBy: (drafter) => `読んだもの: ${drafter}`,
   whatItRead: "読んだものと読んでいないもの",
   basisNone: "根拠の指定なし",
   basisUnresolved: "どれも渡した作業と一致しませんでした",
@@ -2395,8 +2191,6 @@ const JA: Chrome = Object.freeze({
   answerNotDone: "回答されませんでした",
   gateBack: "ゲートに戻る",
   modelRaised: (blockers, majors) => `モデルレビューの指摘: ${raisedJa(blockers, majors)}。`,
-  approvedOverRaised: (blockers, majors) =>
-    `モデルレビューの指摘 (${raisedJa(blockers, majors)}) を残したまま承認`,
   modelRaisedLink: "読む",
   severityWord: (severity) =>
     ({ blocker: "阻害", major: "重大", minor: "軽微", nit: "細部" })[severity] ?? severity,
@@ -2411,10 +2205,6 @@ const JA: Chrome = Object.freeze({
   neitherReadingTaken: "チェックもモデルレビューも、この作業を読めませんでした。",
   recordsFold: (count) => `approve で記録される内容 (${String(count)} 項目) と記録全文`,
   denialUnreadable: "どのコマンドだったかを rondo は記録できませんでした。",
-  unreadableLead:
-    "この実行の記録を rondo が読み取れないため、表示も回答もできません。rondo が見つけた内容:",
-  checkedEcho: (claim, by) =>
-    by === null ? `確認したこと: ${claim}` : `${by} が確認したこと: ${claim}`,
   modelMayArrive: "モデルレビューはこれから届くかもしれません。",
   liveLabel: "ライブ",
   keyMove: "移動",
@@ -2422,18 +2212,7 @@ const JA: Chrome = Object.freeze({
   keyBack: "戻る",
   keyWrite: "書く",
 
-  openReading: "読み下しをすべて表示: 根拠つきのすべての主張",
-  hideReading: "読み下しを閉じる",
-  inboxHeading: "inbox",
   inboxNote: "ここを読んでも最後に見た印は動きません。印を動かすのは rondo inbox です。",
-  inboxNoApprover: "RONDO_APPROVER が設定されていないので、誰の inbox かを決められません。",
-  betweenHeading: "live な lap にまたがっているもの",
-  betweenNote:
-    "隣接は衝突ではありません。ひとつの base branch に対して 2 つの lap が開いているというのは、" +
-    "見るべき場所であって、見つかった事実ではありません。",
-  iterationHeading: (iterationId) => `iteration '${iterationId}'`,
-  explainNote:
-    "ここにあるのは説明で、proposal ではありません。何も拘束せず、承認することもできません。",
 
   inboxFor: (actorId) => `'${actorId}' の inbox`,
   waitingOnYou: "あなたを待っているもの",
@@ -2457,7 +2236,6 @@ const JA: Chrome = Object.freeze({
   nothingChanged: "  なし",
   censusEntry: (kind, count) => `${kind} ${String(count)}`,
   changeLine: (kind, id, since) => `    ${kind}  ${id ?? "(id なし)"}  ${since}前`,
-  noId: "(id なし)",
   silenceHeading: "あなたに示されたものと、示されなかったもの",
   countedLine: (what, presented, withheld) =>
     `${what}: 提示 ${String(presented)}、留保 ${String(withheld)}`,
@@ -2494,7 +2272,6 @@ const JA: Chrome = Object.freeze({
   ]),
 
   scopeAction: "範囲を決める",
-  scopeHere: "この依頼に使ってよい範囲を下書きして承認する",
   scopeHeading: "この依頼の範囲",
   backToThread: "依頼に戻る",
   scopeLead:
@@ -2841,13 +2618,11 @@ const JA: Chrome = Object.freeze({
     "ありません。戻って結果を確認してください。",
 
   publishAction: "公開する",
-  publishHere: "公開すると何が起きるかを読み、その画面から公開する",
   published: (branch, runId) =>
     `公開済み: ${branch === null ? "ブランチ" : `ブランチ ${branch}`} を push し、` +
     `${runId === null ? "run" : `run ${runId}`} を閉じました。`,
   publishedPullRequest: "プルリクエスト",
   holds: (paths) => `この作業が押さえているファイル: ${filesJa(paths)}`,
-  heldHeading: (count) => `終わったが、まだ既定ブランチに入っていない作業 (${String(count)})`,
   notLanded:
     "この変更はまだ既定ブランチで見つかっていません。それまでファイルはこの作業が押さえたままで、" +
     "同じファイルを使う別の作業は待つことになります。",

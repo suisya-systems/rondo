@@ -76,8 +76,8 @@ export type ScopeAct =
       readonly plan: RunPlan;
       /** The split proposal the plan came from (rule 3.3). */
       readonly proposalId: string | null;
-      /** The message that opened the request the plan answers, or null (D-0061 rule 4). */
-      readonly requestMessageId: string | null;
+      /** The message that opened the request the plan answers (D-0061 rule 4). */
+      readonly requestMessageId: string;
     }
   | {
       readonly kind: "redo";
@@ -85,7 +85,7 @@ export type ScopeAct =
       readonly plan: RunPlan;
       readonly predecessorId: string;
       /** The predecessor row's own `requestMessageId`, inherited (D-0061 rule 4). */
-      readonly requestMessageId: string | null;
+      readonly requestMessageId: string;
     };
 
 export type ScopeVerdict =
@@ -104,9 +104,9 @@ export interface ScopeSnapshot {
   readonly supersededByApproved: boolean;
   readonly spent: ScopeSpent;
   readonly nowMs: number;
-  /** The act's request link (the plan's or the predecessor row's), or null when it names none. */
-  readonly requestMessageId: string | null;
-  /** Open `asks` in the request's thread; empty when the act names no request. */
+  /** The act's request link: the plan's, or the predecessor row's. */
+  readonly requestMessageId: string;
+  /** Open `asks` in the request's thread. */
   readonly openAsks: Read<{ readonly asks: readonly OpenAsk[] }>;
   /** Every lap in the act's lineage, sharing the predecessor's root: empty for a lineage start (rule 4.4). */
   readonly lineageIterationIds: Read<{ readonly ids: readonly string[] }>;
@@ -185,13 +185,8 @@ export function scopeVerdict(act: ScopeAct, snapshot: ScopeSnapshot): ScopeVerdi
       `a successor of scope '${scope.scopeId}' is approved, and it retires this approval (D-0066 rule 1.4)`,
     );
   }
-  // 3. The request (rule 1.2.1).
-  if (snapshot.requestMessageId === null) {
-    return outside(
-      "request",
-      "the act names no request, so it cannot be one the scope lists (D-0066 rule 1.2.1)",
-    );
-  }
+  // 3. The request (rule 1.2.1). Every act names one since D-0083 tightened
+  // the column, so the only question left is whether the scope lists it.
   if (!payload.requests.includes(snapshot.requestMessageId)) {
     return outside(
       "request",
@@ -476,10 +471,7 @@ export async function gatherScopeSnapshot(
       spent: await ports.record.scopeSpent(scopeDecisionId),
       nowMs,
       requestMessageId: act.requestMessageId,
-      openAsks:
-        act.requestMessageId === null
-          ? { kind: "read" as const, asks: [] }
-          : await ports.record.openAsksIn(act.requestMessageId),
+      openAsks: await ports.record.openAsksIn(act.requestMessageId),
       lineageIterationIds:
         lineage === null
           ? { kind: "read" as const, ids: [] }
@@ -627,8 +619,6 @@ export type ScopedAdmission =
  * - `written`: one drafter message with `asks` set, in the request's thread.
  * - `held`: an unanswered question already stands over the line, whatever test
  *   refused, so none is written; `messageId` is that question.
- * - `noThread`: the act names no request, so there is no thread to write into.
- *   **The one refusal that leaves no durable stop.**
  * - `failed`: the write itself failed, or the thread would not read to say
  *   whether a stop already holds the line, so none was written; the surface
  *   says so loudly.
@@ -636,7 +626,6 @@ export type ScopedAdmission =
 export type ScopeStop =
   | { readonly kind: "written"; readonly messageId: string }
   | { readonly kind: "held"; readonly messageId: string }
-  | { readonly kind: "noThread" }
   | { readonly kind: "failed"; readonly messageId: string; readonly reason: string };
 
 /** What the one call site needs: the reads, a clock, the stop's writer, and `admit` bound to its ports. */
@@ -655,7 +644,7 @@ export interface ScopeAdmitPorts extends ScopeReadPorts {
     plan: RunPlan,
     iterationId: string,
     supersedesIterationId: string | null,
-    requestMessageId: string | null,
+    requestMessageId: string,
     scopeSpend: ScopeSpend,
   ) => Promise<ConductorReport>;
 }
@@ -769,9 +758,6 @@ async function stopTheLine(
   nowMs: number,
 ): Promise<ScopeStop> {
   const request = act.requestMessageId;
-  if (request === null) {
-    return { kind: "noThread" };
-  }
   const messageId = `scope-stop-${act.iterationId}-${String(nowMs)}`;
   const holder = await holdingAsk(ports, act, request);
   if (holder.kind === "unreadable") {

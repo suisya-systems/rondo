@@ -23,8 +23,9 @@ import { EN } from "../../src/access/wording.js";
 import { CONSERVATIVE_HOST_POLICY } from "../../src/refrain/policy.js";
 import type { IterationRecord, IterationStatus, JsonRecord } from "../../src/store/records.js";
 import { WAIT_SIDE } from "../../src/store/records.js";
-import { advisoryRecord, iterationStore } from "../../src/store/sqlite.js";
+import { advisoryRecord } from "../../src/store/sqlite.js";
 import { ownLane } from "../lane-claims.js";
+import { REQUEST, storeWithRequest } from "../request-fixture.js";
 
 const somePlan = (): JsonRecord => ({
   run_id: "r-0001",
@@ -36,7 +37,7 @@ const fresh = () => {
   const connection = new DatabaseSync(":memory:");
   return {
     connection,
-    store: iterationStore(connection, CONSERVATIVE_HOST_POLICY),
+    store: storeWithRequest(connection, CONSERVATIVE_HOST_POLICY),
     record: advisoryRecord(connection),
   };
 };
@@ -51,7 +52,7 @@ const reserveOne = async (store: ReturnType<typeof fresh>["store"], id: string, 
     claim: ownLane(id),
     nowMs,
     supersedesIterationId: null,
-    requestMessageId: null,
+    requestMessageId: REQUEST,
     runId: `rondo-${id}`,
     topicBranch: `rondo/${id}`,
     workspace: `/srv/work/iter-${id}`,

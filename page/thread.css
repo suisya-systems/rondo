@@ -89,3 +89,265 @@
   flex: 1;
   border-top: 1px solid var(--color-border);
 }
+
+/*
+ * The thread itself (rule 5). The centre face does not grow with the window --
+ * width buys faces, never line length (rule 1) -- so the measure lives here
+ * and not on the grid.
+ */
+.thread {
+  padding: 20px 28px 40px;
+}
+
+.thread-head {
+  padding-bottom: 10px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.thread-head h1 {
+  font-size: 19px;
+  font-weight: 700;
+  line-height: 1.4;
+  max-width: 45em;
+}
+
+.msg {
+  display: flex;
+  gap: 14px;
+  padding: 8px 0;
+  max-width: 780px;
+}
+
+.msg-body {
+  min-width: 0;
+}
+
+.msg h5 {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.msg h5 time {
+  margin-left: 8px;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--color-muted-foreground);
+}
+
+/* Rule 1: prose at 45 to 90 characters, whatever the window does. */
+.msg p {
+  margin-top: 4px;
+  max-width: 45em;
+  font-size: 16px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.msg-back {
+  display: inline-block;
+  margin-top: 6px;
+  font-size: 13px;
+}
+
+/*
+ * The message's own header (D-0061 rules 2.3, 2.6 and 2.7): who wrote it, the
+ * marks that say where it stands, the age as its link to itself, and the way
+ * to point the box at it. The id is never printed as prose -- it is an anchor
+ * and an attribute (D-0071 rule 4.2).
+ */
+.msg h5 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.msg-at {
+  color: var(--color-muted-foreground);
+  font-weight: 400;
+}
+
+.msg-reply {
+  margin-left: auto;
+  font-weight: 500;
+  color: var(--color-link);
+}
+
+/* The mark that a question waits on the person. Amber is D-0082 rule 2's. */
+.msg-wait {
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--color-wait-ink);
+  background: var(--color-wait-wash);
+}
+
+.msg-answered {
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--color-muted-foreground);
+  background: var(--color-muted);
+}
+
+/* A waiting question is the one thing in the thread drawn at the waiting weight. */
+.msg[data-waiting] .msg-body {
+  border-left: 3px solid var(--color-wait);
+  padding-left: 11px;
+}
+
+.msg-bases {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--color-muted-foreground);
+}
+
+.msg-bases-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--color-faint);
+}
+
+.msg-bases .basis {
+  max-width: 26em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.msg-bases a.basis {
+  color: var(--color-link);
+}
+
+/* A name rondo has been given and has not read yet (D-0078 section 4.3). */
+.msg-pending {
+  margin-top: 6px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--color-muted-foreground);
+}
+
+/*
+ * The governance line (D-0083 rule 6): one line under the title, at every
+ * width, permanent. It is not a card and not a fold -- a person answering a
+ * question should not have to go looking for what was agreed.
+ */
+.gov {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 14px;
+  margin-top: 6px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--color-muted-foreground);
+}
+
+.gov-repo {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+
+.gov-chain {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+/* The arrow is drawn, not typed: the chain's order is not a character. */
+.gov-step + .gov-step::before {
+  content: "→";
+  margin-right: 6px;
+  color: var(--color-faint);
+}
+
+.gov-done {
+  color: var(--color-foreground);
+  text-decoration: line-through;
+  text-decoration-color: var(--color-border);
+}
+
+/* The one step the work is stopped on. Amber is D-0082 rule 2's, and it is
+   the same amber the question itself carries. */
+.gov-waiting {
+  font-weight: 600;
+  color: var(--color-wait-ink);
+}
+
+/* rondo will not do this step, whatever else is true (D-0064 rule 3.4). */
+.gov-yours {
+  font-style: italic;
+}
+
+.gov-missing {
+  color: var(--color-faint);
+}
+
+/*
+ * Rule 3's walk: where this request stands among the ones waiting, and the
+ * way on. Right-aligned under the governance line, because it is navigation
+ * and not a fact about the request.
+ */
+.thread-walk {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 2px;
+  font-size: 12.5px;
+  color: var(--color-muted-foreground);
+}
+
+.thread-walk a {
+  color: var(--color-link);
+  font-weight: 500;
+}
+
+/*
+ * The centre with nothing waiting (D-0083 rule 4). The question is the
+ * heading, because a blank is what a person reads as "not finished loading" --
+ * which is the entry's own falsifier for this state.
+ */
+.empty-centre {
+  padding: 28px 28px 40px;
+}
+
+.empty-centre h1 {
+  font-size: 27px;
+  font-weight: 700;
+  line-height: 1.3;
+  /* Rule 1: prose at 45 to 90 characters, whatever the window does. */
+  max-width: 24em;
+}
+
+.empty-lead {
+  margin-top: 10px;
+  max-width: 45em;
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--color-muted-foreground);
+}
+
+.empty-centre form {
+  margin-top: 22px;
+}
+
+/*
+ * Where this request can be taken next (D-0083 rule 6's chain, as addresses).
+ * Under the record and above the box a person answers in: what has happened,
+ * then what can happen, then the press.
+ */
+.thread-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+}

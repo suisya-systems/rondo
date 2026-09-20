@@ -62,7 +62,7 @@ const count = (connection: DatabaseSync): unknown =>
 const reserve = (
   store: ReturnType<typeof iterationStore>,
   id: string,
-  requestMessageId: string | null,
+  requestMessageId: string,
   supersedesIterationId: string | null = null,
 ) =>
   store.reserve({
@@ -355,11 +355,16 @@ test("a lap reserved under the message that opened a request records it, and two
 
   const first = await reserve(store, "a", "m-request");
   const second = await reserve(store, "b", "m-request");
-  const unlinked = await reserve(store, "c", null);
 
+  // Many-to-one: that is what a split is recorded as.
   expect(first.kind === "reserved" && first.record.requestMessageId).toBe("m-request");
   expect(second.kind === "reserved" && second.record.requestMessageId).toBe("m-request");
-  expect(unlinked.kind === "reserved" && unlinked.record.requestMessageId).toBeNull();
+  // **And there is no third case.** A lap with no request used to be one, and
+  // `null` was the record of it; D-0083 rule 2 made a request's thread the
+  // unit of the page, so a lap with no request has nowhere to be drawn and
+  // `start` requires `--message-id`. The type is what refuses it now, which is
+  // why the case that used to be here is not written as a refusal: it does not
+  // compile.
 });
 
 test("a revision or retry of a linked lap stays linked, and of an unlinked lap stays unlinked (rondo#195)", async () => {
@@ -368,27 +373,28 @@ test("a revision or retry of a linked lap stays linked, and of an unlinked lap s
   const store = iterationStore(connection, { maxOccupying: 5, maxLive: 5 });
   await record.recordThreadMessage(operator());
 
+  await record.recordThreadMessage(operator({ messageId: "m-other", atMs: 2_000 }));
   await reserve(store, "a", "m-request");
-  await reserve(store, "b", null);
-  // `revise` and `retry --proposal-id` name no request: the successor's link is
-  // the predecessor row's, derived under the write lock.
-  const linked = await reserve(store, "a2", null, "a");
-  const unlinked = await reserve(store, "b2", null, "b");
+  // **The successor's link is the predecessor row's, whatever is passed**
+  // (rondo#195), read under the write lock. `revise` and `retry` pass the
+  // predecessor's own link because the type asks for one; the test passes a
+  // *different* request, so what is asserted is the derivation rather than
+  // the argument coming back.
+  const linked = await reserve(store, "a2", "m-other", "a");
   // Two links deep, with the caller naming the inherited link itself, as the
   // in-scope retry does.
   const deeper = await reserve(store, "a3", "m-request", "a2");
 
   expect(linked.kind === "reserved" && linked.record.requestMessageId).toBe("m-request");
-  expect(unlinked.kind === "reserved" && unlinked.record.requestMessageId).toBeNull();
   expect(deeper.kind === "reserved" && deeper.record.requestMessageId).toBe("m-request");
   expect(
     connection
-      .prepare("SELECT id, request_message_id FROM iteration WHERE id IN ('a2', 'b2') ORDER BY id")
+      .prepare("SELECT id, request_message_id FROM iteration WHERE id IN ('a2', 'a3') ORDER BY id")
       .all()
       .map((row) => ({ ...row })),
   ).toEqual([
     { id: "a2", request_message_id: "m-request" },
-    { id: "b2", request_message_id: null },
+    { id: "a3", request_message_id: "m-request" },
   ]);
 });
 

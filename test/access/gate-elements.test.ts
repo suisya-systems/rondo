@@ -36,14 +36,27 @@ import {
   structured,
 } from "./page-world.js";
 
-/** The gate as a person meets it, with a model finding standing over it. */
+/**
+ * The page a person meets, with a question standing over the selected request.
+ *
+ * **The entry point moved and the assertions did not.** The gate used to be a
+ * screen of its own (`?answer=`); since D-0083 rule 3 there is no separate
+ * decision screen, so the box is met by opening the request's thread. What
+ * this file checks about the box is unchanged -- only where it is found.
+ *
+ * The lap names the request it came from, which is what a lap looks like once
+ * `start` requires `--message-id` (the same rebuild's change). A lap that
+ * names none has no thread to be answered in; that case is open and is not
+ * what this file is about.
+ */
 async function gateWithFinding(): Promise<string> {
   const world = fresh();
   await gateWithChecks(world);
   await modelFindings(world);
   return await operatorPage({ ...portsOver(world, "ada", []), material: structured }, "t", {
-    kind: "answer",
-    iterationId: "i-0001",
+    kind: "thread",
+    messageId: "req-1",
+    to: null,
   });
 }
 
@@ -65,8 +78,9 @@ async function gateWithNoFinding(): Promise<string> {
   );
   expect(appended.kind).toBe("appended");
   return await operatorPage({ ...portsOver(world, "ada", []), material: structured }, "t", {
-    kind: "answer",
-    iterationId: "i-0001",
+    kind: "thread",
+    messageId: "req-1",
+    to: null,
   });
 }
 

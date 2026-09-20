@@ -388,8 +388,8 @@ export interface ReserveInput {
    * would be an assertion rather than a record.
    */
   readonly supersedesIterationId: string | null;
-  /** The message that opened this lap's request, or null (D-0061 rule 4). Carried, never read. */
-  readonly requestMessageId: string | null;
+  /** The message that opened this lap's request (D-0061 rule 4). Carried, never read. */
+  readonly requestMessageId: string;
   /**
    * The approval this admission spends, or null when nobody approved anything.
    *

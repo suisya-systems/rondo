@@ -45,8 +45,9 @@ import type { HostPolicy } from "../../src/refrain/policy.js";
 import { planDigest } from "../../src/store/plan.js";
 import type { IterationStatus, JsonRecord } from "../../src/store/records.js";
 import { SUSPENDED_STATUSES, TERMINAL_STATUSES } from "../../src/store/records.js";
-import { iterationStore } from "../../src/store/sqlite.js";
+import {} from "../../src/store/sqlite.js";
 import { laneFor, ownLane } from "../lane-claims.js";
+import { REQUEST, storeWithRequest } from "../request-fixture.js";
 
 const somePlan = (): JsonRecord => ({
   run_id: "r-0001",
@@ -56,7 +57,7 @@ const somePlan = (): JsonRecord => ({
 
 /** A store over a database of its own, under bounds the test chooses. */
 const storeUnder = (policy: HostPolicy, connection = new DatabaseSync(":memory:")) => ({
-  store: iterationStore(connection, policy),
+  store: storeWithRequest(connection, policy),
   connection,
 });
 
@@ -75,7 +76,7 @@ const reserveOne = async (
     topicBranch: `rondo/${id}`,
     workspace: `/srv/work/iter-${id}`,
     supersedesIterationId,
-    requestMessageId: null,
+    requestMessageId: REQUEST,
     spend: null,
     scopeSpend: null,
     claim: laneFor(id, supersedesIterationId),
@@ -288,7 +289,7 @@ test("a terminal spent row holds its triple for ever", async () => {
     topicBranch: "rondo/b",
     workspace: "/srv/work/iter-b",
     supersedesIterationId: null,
-    requestMessageId: null,
+    requestMessageId: REQUEST,
     spend: null,
     scopeSpend: null,
     claim: ownLane("b"),
@@ -318,7 +319,7 @@ test("the observed-red control: a terminal unspent row releases its triple", asy
     topicBranch: "rondo/a",
     workspace: "/srv/work/iter-a",
     supersedesIterationId: null,
-    requestMessageId: null,
+    requestMessageId: REQUEST,
     spend: null,
     scopeSpend: null,
     claim: ownLane("b"),
@@ -359,7 +360,7 @@ test("two live iterations may not hold one name even before either is spent", as
     topicBranch: "rondo/a",
     workspace: "/srv/work/iter-b",
     supersedesIterationId: null,
-    requestMessageId: null,
+    requestMessageId: REQUEST,
     spend: null,
     scopeSpend: null,
     claim: ownLane("b"),
@@ -392,7 +393,8 @@ test("a database created before D-0023 gains the columns and loses the old index
   connection.exec(`
     CREATE TABLE iteration (
       id TEXT PRIMARY KEY, status TEXT NOT NULL, request TEXT NOT NULL, plan TEXT NOT NULL,
-      plan_digest TEXT NOT NULL, attempts INTEGER NOT NULL, run_id TEXT, continuo_revision TEXT,
+      plan_digest TEXT NOT NULL, attempts INTEGER NOT NULL, run_id TEXT,
+      request_message_id TEXT, continuo_revision TEXT,
       agent_type_digest TEXT, config_digest TEXT, contract_digest TEXT, classification TEXT,
       classification_reason TEXT, neutral_role_name TEXT, continuo_role TEXT, model_tier TEXT,
       model TEXT, gate_id TEXT, gate_stage TEXT, gate_outcome TEXT, session_id TEXT,
@@ -405,8 +407,8 @@ test("a database created before D-0023 gains the columns and loses the old index
   `);
   connection
     .prepare(
-      "INSERT INTO iteration (id, status, request, plan, plan_digest, attempts, created_at_ms, " +
-        `updated_at_ms) VALUES ('old', 'awaiting_human', 'ask', '{}', '${planDigest({})}', 1, 1, 1)`,
+      "INSERT INTO iteration (id, status, request, plan, plan_digest, attempts, request_message_id, created_at_ms, " +
+        `updated_at_ms) VALUES ('old', 'awaiting_human', 'ask', '{}', '${planDigest({})}', 1, 'req-fixture', 1, 1)`,
     )
     .run();
 
@@ -458,7 +460,7 @@ test("opening twice is idempotent: the migration re-runs against its own output"
   // A second `iterationStore` over the same connection is what a second command
   // in the same process would do. Re-adding a generated column throws
   // `duplicate column name`, so this is the case the xinfo diff exists for.
-  const again = iterationStore(connection, { maxOccupying: 1, maxLive: 3 });
+  const again = storeWithRequest(connection, { maxOccupying: 1, maxLive: 3 });
   expect((await again.read("a")).kind).toBe("read");
 });
 
@@ -493,8 +495,8 @@ test("what the counted bound gives up: an out-of-band insert is not refused", as
 
   connection
     .prepare(
-      "INSERT INTO iteration (id, status, request, plan, plan_digest, attempts, created_at_ms, " +
-        `updated_at_ms) VALUES ('smuggled', 'performing', 'ask', '{}', '${planDigest({})}', 1, 1, 1)`,
+      "INSERT INTO iteration (id, status, request, plan, plan_digest, attempts, request_message_id, created_at_ms, " +
+        `updated_at_ms) VALUES ('smuggled', 'performing', 'ask', '{}', '${planDigest({})}', 1, 'req-fixture', 1, 1)`,
     )
     .run();
 
@@ -584,7 +586,8 @@ test("a legacy row that spent its identifiers keeps holding them after the migra
   connection.exec(`
     CREATE TABLE iteration (
       id TEXT PRIMARY KEY, status TEXT NOT NULL, request TEXT NOT NULL, plan TEXT NOT NULL,
-      plan_digest TEXT NOT NULL, attempts INTEGER NOT NULL, run_id TEXT, continuo_revision TEXT,
+      plan_digest TEXT NOT NULL, attempts INTEGER NOT NULL, run_id TEXT,
+      request_message_id TEXT, continuo_revision TEXT,
       agent_type_digest TEXT, config_digest TEXT, contract_digest TEXT, classification TEXT,
       classification_reason TEXT, neutral_role_name TEXT, continuo_role TEXT, model_tier TEXT,
       model TEXT, gate_id TEXT, gate_stage TEXT, gate_outcome TEXT, session_id TEXT,
@@ -595,8 +598,8 @@ test("a legacy row that spent its identifiers keeps holding them after the migra
     );
   `);
   const insert = connection.prepare(
-    "INSERT INTO iteration (id, status, request, plan, plan_digest, attempts, run_id, " +
-      `created_at_ms, updated_at_ms) VALUES (?, ?, 'ask', '{}', '${planDigest({})}', 1, ?, 1, 1)`,
+    "INSERT INTO iteration (id, status, request, plan, plan_digest, attempts, request_message_id, run_id, " +
+      `created_at_ms, updated_at_ms) VALUES (?, ?, 'ask', '{}', '${planDigest({})}', 1, 'req-fixture', ?, 1, 1)`,
   );
   // One that really was admitted, and one that never got that far.
   insert.run("spent", "closed", "rondo-legacy");
@@ -618,7 +621,7 @@ test("a legacy row that spent its identifiers keeps holding them after the migra
     topicBranch: "rondo/new",
     workspace: "/srv/work/iter-new",
     supersedesIterationId: null,
-    requestMessageId: null,
+    requestMessageId: REQUEST,
     spend: null,
     scopeSpend: null,
     claim: ownLane("new"),
@@ -638,7 +641,8 @@ test("a legacy row's branch and workspace are back-filled from its plan and then
   connection.exec(`
     CREATE TABLE iteration (
       id TEXT PRIMARY KEY, status TEXT NOT NULL, request TEXT NOT NULL, plan TEXT NOT NULL,
-      plan_digest TEXT NOT NULL, attempts INTEGER NOT NULL, run_id TEXT, continuo_revision TEXT,
+      plan_digest TEXT NOT NULL, attempts INTEGER NOT NULL, run_id TEXT,
+      request_message_id TEXT, continuo_revision TEXT,
       agent_type_digest TEXT, config_digest TEXT, contract_digest TEXT, classification TEXT,
       classification_reason TEXT, neutral_role_name TEXT, continuo_role TEXT, model_tier TEXT,
       model TEXT, gate_id TEXT, gate_stage TEXT, gate_outcome TEXT, session_id TEXT,
@@ -656,9 +660,9 @@ test("a legacy row's branch and workspace are back-filled from its plan and then
   };
   connection
     .prepare(
-      "INSERT INTO iteration (id, status, request, plan, plan_digest, attempts, run_id, " +
+      "INSERT INTO iteration (id, status, request, plan, plan_digest, attempts, request_message_id, run_id, " +
         "created_at_ms, updated_at_ms) VALUES ('old', 'awaiting_human', 'ask', ?, ?, 1, " +
-        "'legacy-run', 1, 1)",
+        "'req-fixture', 'legacy-run', 1, 1)",
     )
     .run(JSON.stringify(legacyPlan), planDigest(legacyPlan));
 
@@ -678,7 +682,7 @@ test("a legacy row's branch and workspace are back-filled from its plan and then
     topicBranch: "dogfood/legacy",
     workspace: "/srv/work/iter-new",
     supersedesIterationId: null,
-    requestMessageId: null,
+    requestMessageId: REQUEST,
     spend: null,
     scopeSpend: null,
     claim: ownLane("new"),
@@ -698,7 +702,8 @@ test("an interrupted upgrade leaves nothing behind: the migration is one transac
   connection.exec(`
     CREATE TABLE iteration (
       id TEXT PRIMARY KEY, status TEXT NOT NULL, request TEXT NOT NULL, plan TEXT NOT NULL,
-      plan_digest TEXT NOT NULL, attempts INTEGER NOT NULL, run_id TEXT, continuo_revision TEXT,
+      plan_digest TEXT NOT NULL, attempts INTEGER NOT NULL, run_id TEXT,
+      request_message_id TEXT, continuo_revision TEXT,
       agent_type_digest TEXT, config_digest TEXT, contract_digest TEXT, classification TEXT,
       classification_reason TEXT, neutral_role_name TEXT, continuo_role TEXT, model_tier TEXT,
       model TEXT, gate_id TEXT, gate_stage TEXT, gate_outcome TEXT, session_id TEXT,
@@ -714,9 +719,9 @@ test("an interrupted upgrade leaves nothing behind: the migration is one transac
   // below -- so the failure has to be injected some other way.
   connection
     .prepare(
-      "INSERT INTO iteration (id, status, request, plan, plan_digest, attempts, run_id, " +
+      "INSERT INTO iteration (id, status, request, plan, plan_digest, attempts, request_message_id, run_id, " +
         `created_at_ms, updated_at_ms) VALUES ('old', 'closed', 'ask', '{}', '${planDigest({})}', ` +
-        "1, 'legacy-run', 1, 1)",
+        "1, 'req-fixture', 'legacy-run', 1, 1)",
     )
     .run();
   connection.exec(
@@ -750,7 +755,8 @@ test("a legacy row whose plan is not JSON does not stop the store opening", asyn
   connection.exec(`
     CREATE TABLE iteration (
       id TEXT PRIMARY KEY, status TEXT NOT NULL, request TEXT NOT NULL, plan TEXT NOT NULL,
-      plan_digest TEXT NOT NULL, attempts INTEGER NOT NULL, run_id TEXT, continuo_revision TEXT,
+      plan_digest TEXT NOT NULL, attempts INTEGER NOT NULL, run_id TEXT,
+      request_message_id TEXT, continuo_revision TEXT,
       agent_type_digest TEXT, config_digest TEXT, contract_digest TEXT, classification TEXT,
       classification_reason TEXT, neutral_role_name TEXT, continuo_role TEXT, model_tier TEXT,
       model TEXT, gate_id TEXT, gate_stage TEXT, gate_outcome TEXT, session_id TEXT,
@@ -762,8 +768,8 @@ test("a legacy row whose plan is not JSON does not stop the store opening", asyn
   `);
   connection
     .prepare(
-      "INSERT INTO iteration (id, status, request, plan, plan_digest, attempts, created_at_ms, " +
-        "updated_at_ms) VALUES ('broken', 'awaiting_human', 'ask', '{not json', 'sha256:x', 1, 1, 1)",
+      "INSERT INTO iteration (id, status, request, plan, plan_digest, attempts, request_message_id, created_at_ms, " +
+        "updated_at_ms) VALUES ('broken', 'awaiting_human', 'ask', '{not json', 'sha256:x', 1, 'req-fixture', 1, 1)",
     )
     .run();
 
@@ -832,7 +838,8 @@ test("a database created before D-0030 gains the lineage column, and its rows re
     CREATE TABLE iteration (
       id TEXT PRIMARY KEY, status TEXT NOT NULL, request TEXT NOT NULL, plan TEXT NOT NULL,
       plan_digest TEXT NOT NULL, attempts INTEGER NOT NULL, run_id TEXT, topic_branch TEXT,
-      workspace TEXT, identifiers_spent INTEGER NOT NULL DEFAULT 0, continuo_revision TEXT,
+      workspace TEXT, identifiers_spent INTEGER NOT NULL DEFAULT 0,
+      request_message_id TEXT, continuo_revision TEXT,
       agent_type_digest TEXT, config_digest TEXT, contract_digest TEXT, classification TEXT,
       classification_reason TEXT, neutral_role_name TEXT, continuo_role TEXT, model_tier TEXT,
       model TEXT, gate_id TEXT, gate_stage TEXT, gate_outcome TEXT, session_id TEXT,
@@ -844,8 +851,8 @@ test("a database created before D-0030 gains the lineage column, and its rows re
   `);
   connection
     .prepare(
-      "INSERT INTO iteration (id, status, request, plan, plan_digest, attempts, created_at_ms, " +
-        `updated_at_ms) VALUES ('old', 'closed', 'ask', '{}', '${planDigest({})}', 1, 1, 1)`,
+      "INSERT INTO iteration (id, status, request, plan, plan_digest, attempts, request_message_id, created_at_ms, " +
+        `updated_at_ms) VALUES ('old', 'closed', 'ask', '{}', '${planDigest({})}', 1, 'req-fixture', 1, 1)`,
     )
     .run();
 

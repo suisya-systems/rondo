@@ -1417,14 +1417,6 @@ function viewOf(query: URLSearchParams): PageView {
   if (query.get("requests") === "open") {
     return { kind: "requests" };
   }
-  const answering = query.get("answer");
-  if (answering !== null && answering !== "") {
-    return { kind: "answer", iterationId: answering };
-  }
-  const logged = query.get("log");
-  if (logged !== null && logged !== "") {
-    return { kind: "log", iterationId: logged };
-  }
   const publishing = query.get("publish");
   if (publishing !== null && publishing !== "") {
     return { kind: "publish", iterationId: publishing };
@@ -1433,7 +1425,10 @@ function viewOf(query: URLSearchParams): PageView {
   if (releasing !== null && releasing !== "") {
     return { kind: "release", iterationId: releasing };
   }
-  return query.get("reading") === "open" ? { kind: "reading" } : { kind: "summary" };
+  // `?answer=` and `?reading=open` are not read and have no redirect: D-0083
+  // rules 3 and 4 replaced both screens, and an address that once meant one
+  // of them is the page a person arrives on.
+  return { kind: "summary" };
 }
 
 /** Text made safe to place in HTML, as element content or a quoted attribute. */
@@ -1632,18 +1627,24 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     if (verified !== undefined && typeof verified !== "string") {
       return said(c, 400, "what that form said you verified was not text");
     }
+    // The thread the press was made in, which the form carries (D-0083 rule
+    // 3): the refusal goes back to it, and so does the `303`.
+    const request = typeof form["request"] === "string" ? form["request"] : "";
     const answered = await answer.answer(minting.press, iterationId, verified ?? null);
     if (!answered.ok) {
       return answered.why === undefined
         ? said(c, 409, answered.note)
-        : claimRefused(c, answered.why, iterationId);
+        : claimRefused(c, answered.why, request);
     }
     // **The tag the press was made under, for the `303`** (D-0056 rule 11),
     // read back off the form's own `action`; the press writes no cookie.
-    // Anchored at the lap's row (the S2 design pass on #220), which now sits in
-    // *just finished* and says back the claim the press carried.
+    // Back into the thread the press was made in, where the event line for
+    // what it did is now the last thing on the time axis (D-0083 rules 3, 7).
     return c.redirect(
-      `${viewHref({ kind: "summary" }, tagOf(c))}#${encodeURIComponent(`lap-${iterationId}`)}`,
+      viewHref(
+        request === "" ? { kind: "summary" } : { kind: "thread", messageId: request, to: null },
+        tagOf(c),
+      ),
       303,
     );
   });
@@ -1874,14 +1875,17 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
   app.post(RAISE_ROUTE, async (c) => {
     const form = await c.req.parseBody();
     const iterationId = typeof form["iteration"] === "string" ? form["iteration"] : "";
+    // The thread the gate is in, which is where every refusal below goes back
+    // to (D-0083 rule 3); the form has carried it since the raise screen was
+    // drawn, because the port needs it too.
+    const request = typeof form["request"] === "string" ? form["request"] : "";
     if (scope === null) {
-      return raiseRefused(c, 403, "scopeRefusedNoApprover", iterationId);
+      return raiseRefused(c, 403, "scopeRefusedNoApprover", request);
     }
     const minting = mintPress(c, form["token"]);
     if (!("press" in minting)) {
-      return raiseRefused(c, minting.status, "scopeRefusedPress", iterationId);
+      return raiseRefused(c, minting.status, "scopeRefusedPress", request);
     }
-    const request = typeof form["request"] === "string" ? form["request"] : "";
     const decision = typeof form["raise"] === "string" ? form["raise"] : "";
     const scopeId = form["scope_id"];
     if (
@@ -1891,11 +1895,11 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
       decision === "" ||
       iterationId === ""
     ) {
-      return raiseRefused(c, 400, "scopeRefusedForm", iterationId);
+      return raiseRefused(c, 400, "scopeRefusedForm", request);
     }
     const budgets = budgetsOf(form);
     if (budgets === null) {
-      return raiseRefused(c, 400, "scopeRefusedFields", iterationId);
+      return raiseRefused(c, 400, "scopeRefusedFields", request);
     }
     const raised = await scope.raise(minting.press, {
       scopeId,
@@ -1905,9 +1909,11 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
       budgets,
     });
     if (!raised.ok) {
-      return raiseRefused(c, 409, raised.why ?? "scopeRefusedNotTaken", iterationId);
+      return raiseRefused(c, 409, raised.why ?? "scopeRefusedNotTaken", request);
     }
-    return c.redirect(viewHref({ kind: "answer", iterationId }, tagOf(c)), 303);
+    // Back to where the question is standing, which since D-0083 rule 3 is
+    // the request's own thread rather than a screen named by the lap.
+    return c.redirect(viewHref({ kind: "thread", messageId: request, to: null }, tagOf(c)), 303);
   });
 
   // **One drafted plan's start** (rondo#238 C2b): the plan named by its split
@@ -2030,9 +2036,12 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     }
     const form = await c.req.parseBody();
     const iterationId = typeof form["iteration"] === "string" ? form["iteration"] : "";
+    // The thread the gate is in (D-0083 rule 3), carried by the form: every
+    // refusal below goes back to where the words were typed.
+    const request = typeof form["request"] === "string" ? form["request"] : "";
     const minting = mintPress(c, form["token"]);
     if (!("press" in minting)) {
-      return reviseRefused(c, minting.status, "reviseRefusedPress", iterationId);
+      return reviseRefused(c, minting.status, "reviseRefusedPress", request);
     }
     const successorId = form["successor"];
     const decision = typeof form["scope_decision"] === "string" ? form["scope_decision"] : "";
@@ -2042,11 +2051,11 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
       iterationId === "" ||
       decision === ""
     ) {
-      return reviseRefused(c, 400, "reviseRefusedForm", iterationId);
+      return reviseRefused(c, 400, "reviseRefusedForm", request);
     }
     const body = form["body"];
     if (typeof body !== "string") {
-      return reviseRefused(c, 400, "reviseRefusedForm", iterationId);
+      return reviseRefused(c, 400, "reviseRefusedForm", request);
     }
     const revised = await revise.revise(minting.press, {
       iterationId,
@@ -2059,14 +2068,17 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
         c,
         revised.why === "reviseRefusedNoWords" ? 400 : 409,
         revised.why ?? "reviseRefusedNotStarted",
-        iterationId,
+        request,
         revised.test ?? null,
       );
     }
-    // The summary, anchored at the lap this press started, which is where the
-    // approve press and the scoped start both already land.
+    // The thread the press was made in, where the new lap's event lines now
+    // run under the words that asked for the change (D-0083 rules 3 and 7).
     return c.redirect(
-      `${viewHref({ kind: "summary" }, tagOf(c))}#${encodeURIComponent(`lap-${successorId}`)}`,
+      viewHref(
+        request === "" ? { kind: "summary" } : { kind: "thread", messageId: request, to: null },
+        tagOf(c),
+      ),
       303,
     );
   });
@@ -2310,7 +2322,7 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     c: Context<PageEnv>,
     status: 400 | 403 | 409,
     why: "reviseRefusedNoApprover" | "reviseRefusedPress" | "reviseRefusedForm" | ReviseRefusal,
-    iterationId: string | null,
+    requestMessageId: string | null,
     test: string | null = null,
   ) {
     const wording = wordingOf(c);
@@ -2322,9 +2334,9 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
       wording.reviseAction,
       line,
       viewHref(
-        iterationId === null || iterationId === ""
+        requestMessageId === null || requestMessageId === ""
           ? { kind: "summary" }
-          : { kind: "answer", iterationId },
+          : { kind: "thread", messageId: requestMessageId, to: null },
         wording.lang,
       ),
       wording.gateBack,
@@ -2345,7 +2357,7 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
       | "scopeRefusedForm"
       | "scopeRefusedFields"
       | ScopeRefusal,
-    iterationId: string,
+    requestMessageId: string,
   ) {
     const wording = wordingOf(c);
     return pressRefused(
@@ -2354,7 +2366,9 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
       wording.raiseAction,
       wording[why],
       viewHref(
-        iterationId === "" ? { kind: "summary" } : { kind: "answer", iterationId },
+        requestMessageId === ""
+          ? { kind: "summary" }
+          : { kind: "thread", messageId: requestMessageId, to: null },
         wording.lang,
       ),
       wording.gateBack,
@@ -2467,10 +2481,17 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
    * the gate (rondo#220 S2 review). Only a native submit carries a claim, so
    * there is no htmx fragment; the draft is kept by the gate's own composer.
    */
-  function claimRefused(c: Context<PageEnv>, why: ClaimRefusal, iterationId: string) {
+  function claimRefused(c: Context<PageEnv>, why: ClaimRefusal, requestMessageId: string) {
     const wording = wordingOf(c);
     const line = why === "claimTooLong" ? wording.claimTooLong(MAX_CLAIM_CHARS) : wording[why];
-    const href = escapeHtml(viewHref({ kind: "answer", iterationId }, wording.lang));
+    const href = escapeHtml(
+      viewHref(
+        requestMessageId === ""
+          ? { kind: "summary" }
+          : { kind: "thread", messageId: requestMessageId, to: null },
+        wording.lang,
+      ),
+    );
     return c.html(
       `<!doctype html><html lang="${escapeHtml(wording.lang)}"><head><meta charset="utf-8">` +
         `<meta name="viewport" content="width=device-width, initial-scale=1">` +

@@ -100,9 +100,7 @@ import {
   BASIS_FORMS,
   type Basis,
   type Claim,
-  type HostSnapshot,
   propose,
-  proposeHost,
   UNDETERMINED,
 } from "../advisory/proposal.js";
 import type { LapLogReading } from "../continuo/transcript.js";
@@ -120,7 +118,6 @@ import {
   latestReading,
   MODEL_READING_DRAFTER_PREFIX,
   type NonTerminalStatus,
-  type OpenProposal,
   readingCoverage,
   reviewedReading,
   SCOPE_OUTWARD_ACTS,
@@ -131,7 +128,7 @@ import {
   WAIT_SIDE,
 } from "../store/records.js";
 import type { AdvisoryRecord, IterationStore, LedgerLine } from "../store/sqlite.js";
-import { basisLine, gather, gatherHost } from "./advisory.js";
+import { basisLine, gather } from "./advisory.js";
 import { draftedStartReadiness } from "./drafted-start.js";
 import {
   type DraftedPlanShown,
@@ -140,20 +137,10 @@ import {
   draftedStanding,
 } from "./drafted-view.js";
 import type { LapWorkInspection } from "./forge.js";
-import {
-  ago,
-  gatherInbox,
-  type InboxReadPorts,
-  type InboxSnapshot,
-  inboxLines,
-  type LiveRow,
-  locateRunning,
-  type TranscriptLocation,
-  unblockedBy,
-  whereItRuns,
-} from "./inbox.js";
+import { ago, gatherInbox, type InboxReadPorts, type LiveRow } from "./inbox.js";
 import {
   type ForgeRead,
+  type IssueComment,
   issueName,
   latestReads,
   type NamedIssue,
@@ -162,21 +149,25 @@ import {
 import { markdownHtml } from "./markdown.js";
 import { isModelDrafterName } from "./model-draft.js";
 import { type HeldPlan, heldPlanByDigest, heldPlans } from "./model-drafter.js";
+import { EmptyCentre } from "./page/empty.js";
+import { GovernanceLine } from "./page/governance.js";
 import { RequestsFace } from "./page/list.js";
 import { facesMarkup } from "./page/render.js";
+import { Raw } from "./page/shell.js";
+import { ThreadFace, type ThreadItem, type ThreadLink } from "./page/thread.js";
+import { governanceOf } from "./page-logic/governance.js";
 import {
   decodedDenials,
   endedHow,
   endedRecently,
-  endedWhy,
   type LapUnderRequest,
   materialLanguage,
-  type Question,
   saysMore,
-  spentLine,
 } from "./page-logic/laps.js";
 import { repositoryOf, requestList, rowStateOf } from "./page-logic/list.js";
 import { isLive, type PageView, REVIEW_ROUND_CHOICES, viewHref } from "./page-logic/routes.js";
+import { selectRequest, walkPosition } from "./page-logic/selection.js";
+import { lapEvents } from "./page-logic/thread-events.js";
 import { firstLine, lineOf, replyTarget, type Threads, threadsOf } from "./page-logic/threads.js";
 import { denialLine, LIST_LIMIT } from "./review.js";
 import { reviseText } from "./revise-draft.js";
@@ -503,44 +494,6 @@ const PRIMARY =
 const SECONDARY =
   "inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-border bg-background font-semibold text-foreground shadow-xs outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card";
 
-/**
- * A row a person can move to with `j`/`k` (D-0059 rule 5): focusable by script
- * and not by Tab, so the tab order is still the links and the one button.
- *
- * **Focus is a tint and a left bar, and never a box** (the third design pass on
- * #220): a ring drawn inside the waiting card's amber rule gave the row two left
- * edges, so the focused row's bar covers the rule instead of sitting beside it.
- */
-const ROW =
-  "grid grid-cols-[1rem_minmax(0,1fr)] gap-x-3 px-4 py-2.5 outline-none first:rounded-t-lg last:rounded-b-lg focus-visible:bg-accent focus-visible:shadow-[inset_3px_0_0_var(--color-ring)] sm:grid-cols-[1rem_minmax(0,1fr)_auto]";
-
-/** The muted, right-aligned column of identifiers (section 1, GitHub's run list): a locator, so a step below the metadata. */
-const META =
-  "col-start-2 flex gap-x-2 font-mono text-id leading-6 whitespace-nowrap text-faint tabular-nums max-sm:hidden sm:col-start-auto sm:justify-end";
-
-/**
- * The metadata line under a row's title: its sentences run on one line, parted
- * by a middle dot the stylesheet draws, so the separator is not a character in
- * the document and a reader without CSS still gets the sentences as they were.
- *
- * **Every sentence carries its dot, and the dot that would lead a line is cut
- * off** (the S1 design pass on #220): the line sits a dot's width to the left
- * inside a box that clips ({@link metaLine}), so a sentence that wraps to a new
- * line starts clean instead of with a stray `·`. Direct children must be plain
- * spans: a pill goes inside one.
- */
-const META_LINE =
-  "meta -ml-3 flex flex-wrap items-center gap-y-0.5 text-body leading-5 text-muted-foreground [&>span]:relative [&>span]:pl-3 [&>span]:before:absolute [&>span]:before:left-[0.3rem] [&>span]:before:text-faint [&>span]:before:content-['·']";
-
-/** {@link META_LINE} inside the box that clips its leading dots. */
-function metaLine(children: unknown, extra = "") {
-  return (
-    <div class="mt-0.5 overflow-hidden">
-      <p class={`${META_LINE} ${extra}`}>{children}</p>
-    </div>
-  );
-}
-
 /** A row focusable by `j`/`k` that is not a list item: the answer view's claim groups. */
 const FOCUS_ROW =
   "outline-none focus-visible:bg-accent focus-visible:shadow-[inset_3px_0_0_var(--color-ring)]";
@@ -612,28 +565,7 @@ function glyph(tone: Tone | "alert" | "message") {
   );
 }
 
-/**
- * The tone of an ended lap: a failure is red, a gate sent back is an amber loop,
- * and everything else that finished is quiet -- so the outcome shows without
- * reading the head sentence that says it (the third design pass on #220).
- */
-function endedTone(record: IterationRecord): Tone {
-  if (record.status === "failed") {
-    return "fail";
-  }
-  if (record.gateOutcome === "revise") {
-    return "revise";
-  }
-  return record.status === "closed" ? "ok" : "muted";
-}
-
 /** The tone of any lap by its status: the reading's folds use it for their glyph. */
-function statusTone(record: IterationRecord): Tone {
-  if (isTerminal(record.status)) {
-    return endedTone(record);
-  }
-  return WAIT_SIDE[record.status as NonTerminalStatus] === "waitingOnYou" ? "wait" : "run";
-}
 
 /**
  * Claims under the basis they rest on, each basis written once (rondo#91).
@@ -857,623 +789,12 @@ function stateHead(wording: Chrome, record: IterationRecord, tone: Tone, age: st
   );
 }
 
-/**
- * One lap as one row, with the row it rests on cited once beside it (D-0032,
- * rondo#91).
- *
- * **The shape is section 1's bar**: a status glyph in the leading column; the
- * request as the row's title; the state as a pill; the basis and the age in a
- * muted right-aligned column of tabular figures; and every line the lead used
- * to stack -- the head sentence, what releases it, what it spent, what its
- * fence refused, where it runs -- as one muted metadata line under the title.
- * Nothing that was on the page left it: the same strings, in fewer lines.
- *
- * **Waiting reads from across the room and finished recedes** (section 2's
- * shared gap): a waiting row's request is set larger, whole and with its
- * paragraphs (rondo#90), because it is what a person came to answer; a running
- * row's request is one line; an ended one is one line in secondary ink.
- *
- * {@link basisLine} is called rather than the string being spelled here,
- * because a second spelling of a basis is a second thing an operator has to
- * learn to trust. The `iteration` form reads no snapshot, so it is handed none.
- *
- * **The `id` is what keeps a person's place across the in-place refresh**
- * (D-0054 rule 2, D-0059 R2). htmx swaps the ledger and puts focus back on the
- * element whose `id` held it, and `j`/`k` focus is on these rows -- so a row
- * with no id, or one whose id moved to another lap, would drop the reader's
- * place every five seconds. The row id is already unique per document and
- * already the thing every line here is read off.
- */
-function lapRow(
-  question: Question,
-  record: IterationRecord,
-  head: unknown,
-  lines: readonly unknown[],
-  tail: unknown = null,
-  below: unknown = null,
-) {
-  const tone: Tone =
-    question === "waiting" ? "wait" : question === "running" ? "run" : endedTone(record);
+/** A plain note in the views' muted box. */
+function note(line: string) {
   return (
-    <li id={`lap-${record.id}`} data-row="" tabindex={-1} class={ROW}>
-      {glyph(tone)}
-      <div class="min-w-0">
-        {/*
-         * **A running lap says it is running above its request, not under it**
-         * (rondo#244). A running row's request is drawn whole with its
-         * paragraphs, so *running / 10 min* -- the one fact a person watching
-         * a lap came for -- sat last and smallest under a wall of the words
-         * they themselves wrote. It is the same head, in the same line; only
-         * its place moved, and every other question keeps its own order.
-         */}
-        {question === "running" ? metaLine(head) : null}
-        <p
-          class={
-            question === "waiting"
-              ? "request text-title leading-6 font-semibold wrap-anywhere whitespace-pre-wrap"
-              : question === "running"
-                ? "request text-title leading-6 font-medium wrap-anywhere whitespace-pre-wrap"
-                : "request truncate text-title leading-6 font-medium text-muted-foreground"
-          }
-          // **Only an ended row is cut to one line** (rondo#90): a waiting or
-          // running request is shown whole with its paragraphs, and an ended
-          // one keeps its whole text in `title` for the pointer that asks.
-          {...(question === "ended" ? { title: record.request } : {})}
-          lang={materialLanguage(record)}
-        >
-          {record.request}
-        </p>
-        {/*
-         * **The state is said once, by the head** (the design pass on #220):
-         * the head sentence already names the status and the age, and the
-         * glyph carries it for the eye, so a pill and an age column repeating
-         * both were the same fact three times over.
-         */}
-        {/*
-         * Under `sm` a running or ended row's metadata stops at three lines: a
-         * transcript path wrapped to four there, and the whole of it is in the
-         * reading. A waiting row's is never cut -- it says what releases it.
-         *
-         * **The cap is three lines and not sixty pixels** (D-0082, Codex on
-         * rondo#314). It was `max-h-15`, which is three lines only while a line
-         * is twenty pixels: rule 5 gives Japanese a taller line and the same
-         * sixty pixels then cut the third one through the middle. `lh` is the
-         * element's own line, so the cap is three lines in either language and
-         * stays three if the scale moves again.
-         */}
-        {metaLine(
-          <>
-            {question === "running" ? null : head}
-            {lines
-              .filter((line) => line !== null)
-              .map((line) =>
-                typeof line === "string" ? (
-                  <span class="line min-w-0 wrap-anywhere whitespace-pre-wrap">{line}</span>
-                ) : (
-                  line
-                ),
-              )}
-          </>,
-          question === "waiting" ? "" : "max-sm:max-h-[3lh] max-sm:overflow-hidden",
-        )}
-        {tail}
-      </div>
-      {/* The id alone; the basis it abbreviates is the column's `title`. */}
-      <div class={META} title={basisLine({ form: "iteration", iterationId: record.id }, {})}>
-        <p class="basis">{record.id}</p>
-      </div>
-      {below === null ? null : <div class="col-span-full">{below}</div>}
-    </li>
-  );
-}
-
-/**
- * One of the three questions: a group label that carries its count, and its
- * rows (section 1, Vercel's hierarchy of group, row and metadata).
- *
- * `data-question` is a marker and not a style hook (D-0082 rule 9). It said
- * here for a while that the visual weight rested on it; nothing in
- * `page/app.css` has ever matched the attribute, and the weight is in the class
- * strings {@link lapRow} picks per question. The attribute is what a test and a
- * reader find a group by. *waiting*, *running* and *ended* are the same shape
- * and the same words, and what differs is how much each is allowed to shout. No group is drawn on the strength of it and none is hidden
- * by it, so a browser that loads no CSS still gets every claim in the same
- * order. An empty group is its label alone, which is how *running now (0)* is
- * said once.
- */
-function questionGroup(question: Question, heading: string, rows: readonly unknown[]) {
-  return (
-    <section data-question={question} class="space-y-2">
-      {/*
-       * One heading style for the three (the design pass on #220): they are
-       * the same level, so the rows below and not the heading carry which of
-       * them shouts.
-       */}
-      {/*
-       * Above the rows in weight as well as in order (the third design pass):
-       * foreground ink, and the first letter raised by the stylesheet so the
-       * catalogue's sentence reads as a heading without changing its bytes.
-       */}
-      <h2 class="text-sm leading-6 font-semibold text-foreground first-letter:uppercase">
-        {heading}
-      </h2>
-      {rows.length === 0 ? null : (
-        <ul
-          class={
-            question === "waiting"
-              ? "divide-y divide-wait/20 rounded-lg border border-wait/35 bg-card shadow-[inset_3px_0_0_var(--color-wait)]"
-              : question === "attention"
-                ? "divide-y divide-fail/20 rounded-lg border border-fail/35 bg-card"
-                : question === "running"
-                  ? "divide-y divide-border rounded-lg border border-border bg-card"
-                  : "divide-y divide-border/70 rounded-lg border border-border/70"
-          }
-        >
-          {rows}
-        </ul>
-      )}
-    </section>
-  );
-}
-
-/**
- * *What needs me* -- the laps stopped at a question, and the proposals open.
- *
- * First because it is the only part of the page an operator can act on, which
- * is `inbox`'s own argument for the same order. The button and the material it
- * would be pressed over are **here** rather than in the reading below, because
- * D-0042 makes the press this surface's presentation: what a person is shown
- * before they write has to be beside the thing they press.
- *
- * **The row being answered is hoisted to the top of its group** (D-0059 section
- * 2, second round): it opens in place into the framing, the material and the
- * press, so the one thing the view is about is the first thing on it.
- */
-function waitingView(
-  wording: Chrome,
-  waiting: readonly IterationRecord[],
-  open: readonly OpenProposal[],
-  nowMs: number,
-  token: string | null,
-  shown: ReadonlyMap<string, Shown>,
-  threads: Threads,
-  actorId: string | null,
-  count: number,
-  /** The lap a revise would run as, minted per draw (rondo#233 S4). */
-  newIterationId: MintIterationId | null,
-  /** What the row's line keeps to itself (D-0073 rule 12), or null. */
-  owns: (record: IterationRecord) => string | null,
-) {
-  const asks = threads.messages.filter((message) => threads.waiting.has(message.messageId));
-  const hoisted = [
-    ...waiting.filter((record) => shown.has(record.id)),
-    ...waiting.filter((record) => !shown.has(record.id)),
-  ];
-  return questionGroup("waiting", wording.waitingHeading(count), [
-    ...hoisted.map((record) => {
-      const framing = shown.get(record.id);
-      return lapRow(
-        "waiting",
-        record,
-        stateHead(
-          wording,
-          record,
-          "wait",
-          wording.age(ago(record.updatedAtMs, nowMs)),
-          `${wording.waitingHead(record.status, wording.age(ago(record.updatedAtMs, nowMs)))}\n${unblockedBy(wording, record)}`,
-        ),
-        [
-          // **"answer gate gate-..." is not drawn where the button says it**
-          // (#220 S2): an open gate with an id is released by the answer this
-          // row leads to, and the id is the head's `title`. A stalled row, or a
-          // gate with no id, keeps the sentence: there it says something else.
-          record.status === "awaiting_human" && record.gateId !== null
-            ? null
-            : unblockedBy(wording, record),
-          owns(record),
-          spentLine(wording, record),
-          fenceLine(wording, record),
-        ],
-        framing === undefined ? answerLink(wording, record, token) : null,
-        framing === undefined ? null : approveView(wording, record, token, framing, newIterationId),
-      );
-    }),
-    // **An ask in a request thread waits on the person too** (D-0061 rule 2.7,
-    // #220 S1): its words, the request it was asked in, and the way to reply --
-    // which lands on the thread with the reply box already pointed at it.
-    ...asks.map((ask) => {
-      const root = threads.rootOf(ask.messageId);
-      const request = root === null ? undefined : threads.byId.get(root);
-      return (
-        <li id={`ask-${ask.messageId}`} data-row="" tabindex={-1} class={ROW}>
-          {glyph("wait")}
-          <div class="min-w-0">
-            <p
-              class="request line-clamp-2 text-title leading-6 font-semibold wrap-anywhere"
-              title={ask.body}
-              lang=""
-            >
-              {firstLine(ask.body)}
-            </p>
-            {metaLine(
-              <>
-                <span class="head inline-flex items-center gap-2 whitespace-nowrap">
-                  <span
-                    class={`inline-flex shrink-0 items-center rounded-full border px-2 py-px text-meta font-medium leading-4 whitespace-nowrap ${TONE.wait}`}
-                  >
-                    {threads.stopped.has(ask.messageId)
-                      ? wording.askStoppedPill
-                      : wording.askWaitingPill}
-                  </span>
-                  <span class="tabular-nums">{wording.age(ago(ask.atMs, nowMs))}</span>
-                </span>
-                <span>{whoWrote(wording, ask, actorId)}</span>
-                {request === undefined ? null : (
-                  <span class="line min-w-0 truncate" lang="">
-                    {wording.askedIn(firstLine(request.body))}
-                  </span>
-                )}
-              </>,
-            )}
-            <p class="mt-2">
-              <a
-                id={`reply-to-${ask.messageId}`}
-                href={`${viewHref(
-                  { kind: "thread", messageId: root ?? ask.messageId, to: ask.messageId },
-                  wording.lang,
-                )}#${encodeURIComponent(ask.messageId)}`}
-                data-open=""
-                class={`${PRIMARY} h-7 px-3 text-[13px]`}
-              >
-                {wording.openThread}
-              </a>
-            </p>
-          </div>
-        </li>
-      );
-    }),
-    ...open.map((proposal) => (
-      <li id={`proposal-${proposal.proposalId}`} data-row="" tabindex={-1} class={ROW}>
-        {glyph("wait")}
-        <div class="min-w-0">
-          <p class="head text-title leading-6 font-semibold wrap-anywhere">
-            {wording.proposalHead(proposal.kind, wording.age(ago(proposal.createdAtMs, nowMs)))}
-          </p>
-          {metaLine(
-            <>
-              <span class="line wrap-anywhere">{wording.aboutIteration(proposal.iterationId)}</span>
-              <span class="basis font-mono text-[11.5px] wrap-anywhere text-faint">
-                {wording.proposalBasis(proposal.proposalId)}
-              </span>
-            </>,
-          )}
-        </div>
-        <div class={META}>
-          <p>{proposal.proposalId}</p>
-        </div>
-      </li>
-    )),
-  ]);
-}
-
-/**
- * *What needs attention* -- a live row rondo cannot read (the S1 design pass on
- * #220).
- *
- * **Its own group, with a sentence a person can act on.** Under *running* it was
- * the loudest thing on the page -- a raw decode error in red mono under an id
- * for a title -- and said nothing a reader could do. It still holds a slot, so it
- * is still on the screen: a human title, one line saying what broke and what to
- * do, and the reason itself byte for byte inside a fold (and in the reading's own
- * section for the row).
- */
-function attentionView(wording: Chrome, unreadable: readonly LiveRow[]) {
-  const rows = unreadable.flatMap((row) => (row.kind === "unreadable" ? [row] : []));
-  if (rows.length === 0) {
-    return null;
-  }
-  return questionGroup(
-    "attention",
-    wording.attentionHeading(rows.length),
-    rows.map((row) => (
-      <li id={`unreadable-${row.id}`} data-row="" tabindex={-1} class={ROW}>
-        {glyph("alert")}
-        <div class="min-w-0">
-          <p class="head text-sm leading-6 font-semibold">{wording.unreadableTitle}</p>
-          <p class="line text-[12.5px] leading-5 text-muted-foreground">
-            {wording.unreadableAction(row.id)}
-          </p>
-          {/*
-           * **An action on the page, not a command for a terminal** (#220 S2):
-           * the reading already holds this row's section with the reason in
-           * it, so the way to it is a link. The target is inside the section's
-           * fold, which the browser opens on arrival.
-           */}
-          <p class="mt-1.5">
-            <a
-              href={`${viewHref({ kind: "reading" }, wording.lang)}#${encodeURIComponent(`read-${row.id}-reason`)}`}
-              data-open=""
-              class="text-[13px] font-medium text-link underline-offset-2 hover:underline"
-            >
-              {wording.unreadableRead}
-            </a>
-          </p>
-          <details id={`unreadable-reason-${row.id}`} class="group mt-1">
-            <summary class="cursor-pointer text-[12px] leading-5 text-faint select-none hover:text-foreground">
-              {wording.unreadableDetail}
-            </summary>
-            <p class="basis mt-1 font-mono text-[11px] leading-4 wrap-anywhere text-faint">
-              {wording.willNotDecode(row.reason)}
-            </p>
-          </details>
-        </div>
-        <div class={META}>
-          <p>{row.id}</p>
-        </div>
-      </li>
-    )),
-  );
-}
-
-/**
- * *What is running* -- every live lap that is not waiting on anybody.
- *
- * The line under each is {@link whereItRuns}: the transcript directory continuo
- * is writing into and the workspace to `ls`. That is what rondo holds about a
- * lap in flight -- it names a place and claims no liveness (D-0048 rule 3) --
- * and it is what an operator asking *is this progressing* can actually open.
- *
- * A live row that will not decode is not here but in {@link attentionView},
- * above: it is on the page rather than missing, and it is the one row nobody can
- * read, so it is not counted among the laps that are running.
- */
-function runningView(
-  wording: Chrome,
-  running: readonly IterationRecord[],
-  transcripts: ReadonlyMap<string, TranscriptLocation>,
-  nowMs: number,
-  owns: (record: IterationRecord) => string | null,
-) {
-  return questionGroup("running", wording.runningHeading(running.length), [
-    ...running.map((record) =>
-      lapRow(
-        "running",
-        record,
-        stateHead(
-          wording,
-          record,
-          "run",
-          wording.age(ago(record.updatedAtMs, nowMs)),
-          wording.runningHead(record.status, wording.age(ago(record.updatedAtMs, nowMs))),
-        ),
-        [
-          runsWhere(wording, record, transcripts.get(record.id)),
-          owns(record),
-          spentLine(wording, record),
-          fenceLine(wording, record),
-        ],
-        logLink(wording, record, transcripts.get(record.id)),
-      ),
-    ),
-  ]);
-}
-
-/**
- * {@link whereItRuns} in plain words (#220 S2), in the four states the
- * console's sentence has, and never merging them: a log found, none yet in a
- * named directory, rondo not able to ask (with continuo's reason, visible --
- * a continuo that will not answer is not a run with nothing to answer about,
- * D-0048 rule 8), and not looked for. The workspace stays visible beside it;
- * the console's whole sentence is the `title`.
- */
-function runsWhere(
-  wording: Chrome,
-  record: IterationRecord,
-  located: TranscriptLocation | undefined,
-) {
-  const said =
-    located === undefined
-      ? wording.logNotLookedFor
-      : located.kind === "unknown"
-        ? wording.logUnchecked(located.reason)
-        : located.sessions === 0
-          ? wording.logNotYet
-          : wording.logFound;
-  return (
-    <span class="line min-w-0 wrap-anywhere" title={whereItRuns(wording, record, located)}>
-      {said}
-      {record.workspace === null ? null : (
-        <span class="font-mono text-faint"> {record.workspace}</span>
-      )}
-    </span>
-  );
-}
-
-/**
- * The way into a running row's log (rondo#248 item 3), drawn only where
- * {@link runsWhere} says *log found* -- the one state with something to read.
- * *No log yet*, *could not check* and *not looked for* get no control, so the
- * three stay told apart by their words as they were, and nothing is offered
- * into a screen that would only say there is nothing.
- *
- * **Outlined, and a control rather than a link in the metadata**: the row's
- * filled button is kept for a press, and reading the log is not one, but a way
- * in drawn as faint text is a way in a reader has to hunt for.
- */
-function logLink(
-  wording: Chrome,
-  record: IterationRecord,
-  located: TranscriptLocation | undefined,
-) {
-  if (located?.kind !== "named" || located.sessions === 0) {
-    return null;
-  }
-  return (
-    <p class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
-      <a
-        id={`log-${record.id}`}
-        href={viewHref({ kind: "log", iterationId: record.id }, wording.lang)}
-        data-open=""
-        class={`${SECONDARY} h-7 px-3 text-[13px]`}
-        title={wording.logOpenHere}
-      >
-        {wording.logOpen}
-      </a>
+    <p class="note rounded-md border border-border bg-muted/60 px-3 py-2 text-[13px] leading-5">
+      {line}
     </p>
-  );
-}
-
-/**
- * How many of a log's commands the screen draws: the newest, newest first.
- *
- * **A running lap is read to learn what it is doing now and whether it is still
- * moving**, and both are answered at the top of the log, not in its first
- * hour. So the screen is the tail, and what is past the bound is not silent:
- * the lead says how many are left out and the file holding all of them is
- * named under the list.
- */
-const LOG_COMMANDS = 50;
-/** A command past this is cut at its end: its start says what it was. */
-const LOG_COMMAND_CHARS = 2_000;
-/** An output past this is cut at its start: its end is where it stopped. */
-const LOG_OUTPUT_CHARS = 8_000;
-
-/** A block of text, cut to `max` characters at one end, and a line saying so. */
-function clipped(text: string, max: number, keep: "start" | "end", said: (n: number) => string) {
-  if (text.length <= max) {
-    return <pre class={PRE}>{text}</pre>;
-  }
-  const cut = text.length - max;
-  return (
-    <>
-      {keep === "end" ? <p class="text-[12px] leading-5 text-faint">{said(cut)}</p> : null}
-      <pre class={PRE}>{keep === "end" ? text.slice(cut) : text.slice(0, max)}</pre>
-      {keep === "start" ? <p class="text-[12px] leading-5 text-faint">{said(cut)}</p> : null}
-    </>
-  );
-}
-
-/**
- * One running lap's log (rondo#248 item 3): the commands it ran and what they
- * returned, read by `readLapLog`'s port at the directory the row's own
- * *log found* came from -- the same `locateTranscript`, asked again here, so
- * the screen and the row cannot disagree about where the log is.
- *
- * **Commands, not the whole transcript**, because that is what the reviewer
- * is handed of the same file and the heading says so: the lap's prose between
- * commands is not drawn and nothing here claims it is.
- */
-async function logView(
-  ports: WebPorts,
-  wording: Chrome,
-  view: Extract<PageView, { kind: "log" }>,
-): Promise<unknown> {
-  const framed = (body: unknown) => (
-    <div id="log" class="space-y-4">
-      {backHead(wording, wording.logHeading)}
-      {body}
-    </div>
-  );
-  const found = await ports.store.read(view.iterationId);
-  if (found.kind !== "read") {
-    return framed(
-      note(found.kind === "absent" ? wording.logGone : wording.willNotDecode(found.reason)),
-    );
-  }
-  const record = found.record;
-  const located = await ports.locateTranscript(record);
-  const about = (
-    <div class="min-w-0 space-y-0.5">
-      <p
-        class="request truncate text-sm leading-6 font-medium"
-        title={record.request}
-        lang={materialLanguage(record)}
-      >
-        {record.request}
-      </p>
-      <p class="basis font-mono text-[11px] leading-4 wrap-anywhere text-faint">{record.id}</p>
-    </div>
-  );
-  if (located.kind === "unknown") {
-    return framed(
-      <>
-        {about}
-        {note(wording.logUnchecked(located.reason))}
-      </>,
-    );
-  }
-  if (located.sessions === 0) {
-    return framed(
-      <>
-        {about}
-        {note(wording.logNotYet)}
-      </>,
-    );
-  }
-  const log = ports.readLog(located.directory);
-  if (log.kind === "unread") {
-    return framed(
-      <>
-        {about}
-        {note(wording.logUnread(log.reason))}
-      </>,
-    );
-  }
-  const newest = log.commands.slice(-LOG_COMMANDS).reverse();
-  // The newest output is open: it is the one a person came for. The newest
-  // command may have none yet -- it is still running -- so it is the newest
-  // that has one.
-  const opened = newest.findIndex((command) => command.output !== "");
-  return framed(
-    <>
-      {about}
-      {log.finalMessage === null ? null : (
-        <section class={CARD}>
-          <h3 class={CARD_HEADING}>{wording.logFinal}</h3>
-          <p class="mt-1 text-[13px] leading-5 wrap-anywhere whitespace-pre-wrap">
-            {log.finalMessage}
-          </p>
-        </section>
-      )}
-      {log.unfinished ? note(wording.logUnfinished) : null}
-      {newest.length === 0 ? (
-        note(wording.logEmpty)
-      ) : (
-        <>
-          <p class="text-[13px] leading-5 text-muted-foreground">
-            {wording.logLead(newest.length, log.commands.length)}
-          </p>
-          <ol class="divide-y divide-border rounded-lg border border-border bg-card">
-            {newest.map((command, at) => (
-              <li class="min-w-0 space-y-2 px-4 py-3">
-                <p class="flex items-center gap-2 font-mono text-[11px] leading-4 text-faint">
-                  <span title={log.file}>L{String(command.index)}</span>
-                  {command.isError ? pill("fail", wording.logFailed) : null}
-                </p>
-                {clipped(command.command, LOG_COMMAND_CHARS, "start", wording.logCutAfter)}
-                {command.output === "" ? (
-                  <p class="text-[12px] leading-5 text-faint">{wording.logNoOutput}</p>
-                ) : (
-                  <details class="group" {...(at === opened ? { open: true } : {})}>
-                    <summary class="flex cursor-pointer list-none items-center gap-x-1.5 text-[12px] leading-5 text-muted-foreground select-none hover:text-foreground [&::-webkit-details-marker]:hidden">
-                      {chevron()}
-                      {command.isError ? wording.logOutputFailed : wording.logOutput}
-                    </summary>
-                    <div class="mt-1.5 space-y-1">
-                      {clipped(command.output, LOG_OUTPUT_CHARS, "end", wording.logCutBefore)}
-                    </div>
-                  </details>
-                )}
-              </li>
-            ))}
-          </ol>
-        </>
-      )}
-      <div class="space-y-1">
-        <p class="text-[12px] leading-5 text-faint">{wording.logWhole}</p>
-        <p class="basis font-mono text-[11px] leading-4 wrap-anywhere text-faint">{log.file}</p>
-      </div>
-    </>,
   );
 }
 
@@ -1508,134 +829,6 @@ function backHead(wording: Chrome, heading: string) {
   );
 }
 
-/** A plain note in the views' muted box. */
-function note(line: string) {
-  return (
-    <p class="note rounded-md border border-border bg-muted/60 px-3 py-2 text-[13px] leading-5">
-      {line}
-    </p>
-  );
-}
-
-/**
- * What an ended row says beyond its own record, read per row in
- * {@link operatorPage} because both halves live in other tables.
- */
-interface EndedFacts {
-  /** The latest verification claim its press carried (D-0045), or null where it carried none. */
-  readonly claim: { readonly claim: string; readonly by: string | null } | null;
-  /**
-   * What the model review had open when the gate was approved (rondo#237), or
-   * null where it had nothing that heavy -- and null on every row nobody
-   * approved, which is where the question does not arise.
-   */
-  readonly raised: RaisedCounts | null;
-}
-
-/** *What just finished* -- the last few endings, newest first (rondo#145). */
-/**
- * **The claim is echoed on the row** (the S2 design pass on #220): an approve
- * press lands on this list, and the row it moved says back what the person
- * said they checked.
- *
- * **And so is what the approval was given over** (rondo#237). A lap approved
- * with a blocker or a major open is finished like any other and its pill says
- * so; which of the two approvals ended it was only findable by opening the lap
- * again. Both facts were already recorded -- the claim, and the reading -- so
- * this is the summary drawing what the store holds, not the store holding more.
- */
-function endedView(
-  wording: Chrome,
-  ended: readonly IterationRecord[],
-  nowMs: number,
-  facts: ReadonlyMap<string, EndedFacts>,
-  /** The way onto the publish screen, drawn only on rows that could publish. */
-  publishTo: (record: IterationRecord) => unknown,
-  /** Where a publish that happened is read back from ({@link publishedReport}). */
-  threads: Threads,
-  /**
-   * What the row's line keeps and whether its work landed (D-0073 rule 12):
-   * the lines to say, and the way to the release screen where there is one.
-   */
-  landing: (record: IterationRecord) => {
-    readonly lines: readonly string[];
-    readonly release: unknown;
-  },
-  /** The group's heading; *just finished* unless the caller names another. */
-  heading: string = wording.endedHeading(ended.length),
-) {
-  return questionGroup(
-    "ended",
-    heading,
-    ended.map((record) => {
-      const said = facts.get(record.id)?.claim ?? null;
-      const raised = facts.get(record.id)?.raised ?? null;
-      const published = publishedReport(threads, record.id);
-      const landed = landing(record);
-      /**
-       * **Weight follows who is blocked, not which group the row is in**
-       * (D-0082 rule 1). A finished line still keeping its files carries the
-       * one press nothing but a person can clear (D-0073 rule 4.3, rondo#295),
-       * and it was drawn at the quietest weight the page has: truncated to a
-       * line, in muted ink, under a glyph that says the work is over. The row
-       * that a person came to the page for was the least visible thing on it.
-       *
-       * **Only the weight moves, and never a word.** The row keeps the group it
-       * is in and the sentences {@link endedHow} and {@link endedWhy} write for
-       * a lap that has finished: #314 decides how the screen looks, and what it
-       * says stays D-0076's.
-       */
-      const weight = landed.release === null ? "ended" : "waiting";
-      return lapRow(
-        weight,
-        record,
-        stateHead(
-          wording,
-          record,
-          weight === "waiting" ? "wait" : endedTone(record),
-          wording.endedAgo(wording.age(ago(record.updatedAtMs, nowMs))),
-          endedHow(wording, record, nowMs),
-        ),
-        [
-          // The pill already says a closed lap's answer; anything else it ended on is a line.
-          record.status === "closed" && record.gateOutcome !== null
-            ? null
-            : endedWhy(wording, record),
-          spentLine(wording, record),
-          fenceLine(wording, record),
-          // In the gate's own ink, on a row whose glyph is otherwise quiet: an
-          // override is not the quiet ending the rest of the row reads as.
-          raised === null ? null : (
-            <span class="line over-raised min-w-0 wrap-anywhere text-fail">
-              {wording.approvedOverRaised(raised.blockers, raised.majors)}
-            </span>
-          ),
-          said === null ? null : (
-            <span class="line min-w-0 wrap-anywhere whitespace-pre-wrap" lang="">
-              {wording.checkedEcho(said.claim, said.by)}
-            </span>
-          ),
-          // **What the publish came to, on the row it was pressed from**
-          // (rondo#245). The three legs all succeeded or this report was never
-          // written, so the row says so and the way in is gone: unlike *Start
-          // the work*, a second press cannot join the first -- `gh` refuses a
-          // pull request that already exists -- so re-offering it is not a
-          // harmless repetition but a press that fails.
-          published === null ? null : publishedLine(wording, record, published),
-          ...landed.lines,
-        ],
-        // The one thing left to do to an approved lap, where the lap is
-        // (rondo#233 S5): the row's action, in its own place under the
-        // metadata rather than inside it (rondo#246).
-        <>
-          {published === null ? publishTo(record) : null}
-          {landed.release}
-        </>,
-      );
-    }),
-  );
-}
-
 /**
  * The release screen (D-0073 rule 4.3, rondo#288): which work keeps the files,
  * what it was doing, why rondo has not released them, what releasing does, and
@@ -1646,6 +839,7 @@ function endedView(
  * form carries the claim and the laps it was drawn over, so the press refuses
  * a line that moved under the screen.
  */
+
 async function releaseView(
   ports: WebPorts,
   wording: Chrome,
@@ -1781,136 +975,14 @@ function publishedReport(threads: Threads, iterationId: string): { url: string |
 }
 
 /** The publish's three legs in the past tense, the pull request as a link. */
-function publishedLine(
-  wording: Chrome,
-  record: IterationRecord,
-  published: { readonly url: string | null },
-) {
-  return (
-    <span class="line published min-w-0 wrap-anywhere">
-      {wording.published(record.topicBranch, record.runId)}
-      {published.url === null ? null : (
-        <>
-          {" "}
-          <a
-            id={`published-${record.id}`}
-            href={published.url}
-            class="font-medium text-link hover:underline"
-            title={published.url}
-          >
-            {wording.publishedPullRequest}
-          </a>
-        </>
-      )}
-    </span>
-  );
-}
-
-/**
- * The one line an idle store gets, in place of nine ways of saying zero
- * (rondo#145).
- *
- * **Its basis is the reading below, and the reading is on this page.** The
- * three questions are answered off two reads -- every live row and every ended
- * row -- and the locators for what those reads found (`snapshot /laps`,
- * `snapshot /refusals`, and the rest) are in the fold, cited there exactly as
- * they were before. So nothing is asserted here without a basis; what changed
- * is that the basis is cited once for the three claims instead of once per
- * phrasing of zero.
- */
-function nothingView(wording: Chrome) {
-  return (
-    <section
-      data-question="idle"
-      class="flex gap-3 rounded-lg border border-dashed border-border px-5 py-6"
-    >
-      {glyph("ok")}
-      <div class="space-y-1">
-        <p class="nothing text-base leading-6 font-medium">{wording.nothingAtAll}</p>
-        <p class="basis font-mono text-[11.5px] leading-5 text-faint">{wording.nothingBasis}</p>
-      </div>
-    </section>
-  );
-}
-
-/**
- * One section of the reading: a heading, the note that says what reading it
- * does not do, and its body.
- *
- * **One fold per section, one line when shut** (the third design pass on #220):
- * eleven claim tables drawn open made an 11,000-pixel page nobody could scan.
- * The server always renders the fold shut (D-0059 section 5a) and the whole
- * body is still in the document; the key script re-opens what a person opened
- * after each in-place swap, and with script off `page/app.css` draws every fold
- * open, because the `<noscript>` refresh would shut one within five seconds.
- * The `<summary>` is the `j`/`k` stop, and `Enter` on it is the browser's own
- * toggle. `lead` is what the shut line shows beside the heading.
- */
-function readingSection(
-  heading: string,
-  note: string,
-  body: unknown,
-  id: string,
-  lead: unknown = null,
-) {
-  return (
-    <details id={id} class="group rounded-lg border border-border bg-card">
-      <summary
-        id={`${id}-summary`}
-        data-row=""
-        class="flex cursor-pointer list-none items-center gap-3 rounded-lg px-4 py-2.5 outline-none select-none hover:bg-accent focus-visible:bg-accent focus-visible:shadow-[inset_3px_0_0_var(--color-ring)] sm:px-5 [&::-webkit-details-marker]:hidden"
-      >
-        <svg
-          aria-hidden="true"
-          viewBox="0 0 16 16"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.6"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          class="size-3.5 shrink-0 text-faint transition-transform group-open:rotate-90"
-        >
-          <path d="m6 3.5 4.5 4.5L6 12.5" />
-        </svg>
-        <h2 class="shrink-0 text-sm leading-6 font-semibold">{heading}</h2>
-        {lead}
-      </summary>
-      <div class="space-y-3 border-t border-border px-4 py-4 sm:px-5">
-        {note === "" ? null : (
-          <p class="note text-[13px] leading-5 text-muted-foreground">{note}</p>
-        )}
-        {body}
-      </div>
-    </details>
-  );
-}
 
 /** A block of lines read as columns, which may scroll sideways rather than rewrap. */
 const PRE =
   "overflow-x-auto rounded-md border border-border bg-muted/50 p-3 font-mono text-[12px] leading-5 whitespace-pre";
 
 /** The inbox section: the same lines `rondo inbox` prints, and no mark moved. */
-function inboxView(ports: WebPorts, wording: Chrome, snapshot: InboxSnapshot | null) {
-  if (snapshot === null || ports.actorId === null) {
-    return readingSection(wording.inboxHeading, wording.inboxNoApprover, null, "reading-inbox");
-  }
-  return readingSection(
-    wording.inboxHeading,
-    wording.inboxNote,
-    <pre class={PRE}>{inboxLines(wording, ports.actorId, snapshot).join("\n")}</pre>,
-    "reading-inbox",
-  );
-}
 
 /** The between-laps section: `rondo between`'s composition, unrecorded. */
-function betweenView(wording: Chrome, snapshot: HostSnapshot) {
-  return readingSection(
-    wording.betweenHeading,
-    wording.betweenNote,
-    claimsView(proposeHost(snapshot).payload.claims, snapshot),
-    "reading-between",
-  );
-}
 
 /** A card on the answer view: one section of what a press is made over. */
 const CARD = "min-w-0 rounded-lg border border-border bg-card px-4 py-3";
@@ -2436,8 +1508,19 @@ function approveView(
   // pinned line are the same verdict about the same work.
   const work = framing.material?.work ?? null;
   const workGone = work !== null && work.kind !== "read";
-  const reload = viewHref({ kind: "answer", iterationId: record.id }, wording.lang);
+  // The thread the box is in, which is what a reload of this screen is now
+  // (D-0083 rule 3).
+  const reload = viewHref(
+    { kind: "thread", messageId: record.requestMessageId, to: null },
+    wording.lang,
+  );
   return (
+    // **The poll replaces this box and `page/composer.js` puts the words
+    // back.** The gate is inside the thread since D-0083 rule 9, so the
+    // five-second swap reaches it; the draft is kept by the script that
+    // already keeps the send box's, off the `data-draft` key on the field.
+    // `hx-preserve` would have been the other answer and is the wrong one
+    // here: the send's own out-of-band swap of `#composer` has to land.
     <div id="answering" class="mt-3 space-y-3">
       {framing.material === null ? null : (
         <>
@@ -2623,6 +1706,11 @@ function approveView(
         >
           <input type="hidden" name="token" value={token} />
           <input type="hidden" name="iteration" value={record.id} />
+          {/* The request this lap is for, so a refusal and the `303` both
+              land back in the thread the press was made in (D-0083 rule 3).
+              Carried by the form rather than read again, for the reason the
+              lap id is: it is what the page drew. */}
+          <input type="hidden" name="request" value={record.requestMessageId} />
           {/*
            * **What the person says they checked, carried by this press** (D-0045
            * as annotated from #220): optional, their words byte for byte, and no
@@ -2773,6 +1861,7 @@ function reviseForm(
       >
         <input type="hidden" name="token" value={token} />
         <input type="hidden" name="iteration" value={record.id} />
+        <input type="hidden" name="request" value={record.requestMessageId} />
         <input type="hidden" name="scope_decision" value={framing.scopeDecisionId} />
         {/* Minted at render, as the scoped start's is, and for its reason:
             rondo names the lap (D-0023) and a double press is one lap. */}
@@ -2844,58 +1933,7 @@ function reviseForm(
   );
 }
 
-/**
- * The way to the button, drawn on exactly the rows that would have one.
- *
- * The conditions are {@link approveView}'s, so a link is never offered into a
- * view that would refuse to draw a button. **A short filled call to action with
- * the longer sentence beside it** (section 2's shared gap): the button says what
- * to do and the sentence says what the second address adds, because *answer* on
- * its own would read as though the press were here. `data-open` is what `Enter`
- * follows from a focused row.
- */
-function answerLink(wording: Chrome, record: IterationRecord, token: string | null) {
-  if (!answerable(record, token)) {
-    return null;
-  }
-  return (
-    <p class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
-      {/* An `id` because a keyboard reader tabbed here keeps focus across the
-          refresh only through one: htmx restores focus by the old element's id. */}
-      <a
-        id={`answer-${record.id}`}
-        href={viewHref({ kind: "answer", iterationId: record.id }, wording.lang)}
-        data-open=""
-        class={`${PRIMARY} h-7 px-3 text-[13px]`}
-        // **One verb per card, no helper prose beside it** (the S1 design
-        // pass): every waiting row is title, one meta line, one action, and
-        // what the second address adds is the pointer's `title`.
-        title={wording.answerHere}
-      >
-        {wording.answerAction}
-      </a>
-    </p>
-  );
-}
-
 /** One iteration, explained the way `rondo explain` explains it. */
-function explainView(wording: Chrome, record: IterationRecord, snapshot: AdvisorySnapshot) {
-  return readingSection(
-    wording.iterationHeading(record.id),
-    wording.explainNote,
-    claimsView(propose(snapshot).payload.claims, snapshot),
-    `read-${record.id}`,
-    <>
-      {glyph(statusTone(record))}
-      <span
-        class="min-w-0 truncate text-[13px] leading-6 text-muted-foreground"
-        lang={materialLanguage(record)}
-      >
-        {record.request}
-      </span>
-    </>,
-  );
-}
 
 /** What a press on one row would be recorded as having shown, composed for that row. */
 interface Shown {
@@ -2977,14 +2015,27 @@ async function shownBeforePress(
   wording: Chrome,
   waiting: readonly IterationRecord[],
   token: string | null,
-  view: PageView,
+  /**
+   * The lap the centre face is about to draw an answering box for, where the
+   * selected request has one at its gate (D-0083 rules 3 and 9).
+   *
+   * **The gate's material is composed for one row and only where it is being
+   * answered.** That was `view.kind === "answer"` while the gate was a screen
+   * of its own; since the box lives in the thread, it is *the request the
+   * centre is showing*. The cost is the same -- one row's readings, its
+   * material and its approval tip -- and the reason is unchanged: a page that
+   * redraws every five seconds must not shell out to `git` for a row nobody
+   * is answering.
+   */
+  answeringLapId: string | null = null,
 ): Promise<ReadonlyMap<string, Shown>> {
   const shown = new Map<string, Shown>();
-  if (view.kind !== "answer") {
+  const wanted = answeringLapId;
+  if (wanted === null) {
     return shown;
   }
   for (const record of waiting) {
-    if (record.id !== view.iterationId || !answerable(record, token)) {
+    if (record.id !== wanted || !answerable(record, token)) {
       continue;
     }
     const readings = await ports.store.readingsFor(record.id);
@@ -3034,17 +2085,14 @@ function forgeView(wording: Chrome, message: ThreadMessageDraft) {
   const read = parseForgeRead(message.body);
   if (read === null) {
     return (
-      <p
-        class="body px-4 pt-1 pb-3 text-[14px] leading-6 wrap-anywhere whitespace-pre-wrap"
-        lang=""
-      >
+      <p class="body wrap-anywhere whitespace-pre-wrap" lang="">
         {message.body}
       </p>
     );
   }
   if ("failed" in read) {
     return (
-      <div class="issue-read space-y-2 px-4 pt-1 pb-3" data-issue="not-read">
+      <div class="issue-read space-y-2" data-issue="not-read">
         <p class="text-[14px] leading-6">
           {issueNameLink(read)} {wording.issueNotRead(read.failed.why)} {wording.issueNotReadTail}
         </p>
@@ -3065,7 +2113,7 @@ function forgeView(wording: Chrome, message: ThreadMessageDraft) {
   }
   const issue = read.read;
   return (
-    <div class="issue-read space-y-2 px-4 pt-1 pb-3" data-issue="read">
+    <div class="issue-read space-y-2" data-issue="read">
       <p class="text-[14px] leading-6">
         {issueNameLink(read)}{" "}
         <span class="font-medium" lang="">
@@ -3086,7 +2134,7 @@ function forgeView(wording: Chrome, message: ThreadMessageDraft) {
             {issue.author} · {issue.openedAt} · {issue.state}
           </p>
           <p class="wrap-anywhere whitespace-pre-wrap">{issue.body}</p>
-          {issue.comments.map((c) => (
+          {issue.comments.map((c: IssueComment) => (
             <div class="border-t border-border/60 pt-2">
               <p class="text-faint">
                 {c.author} · {c.at}
@@ -3095,6 +2143,57 @@ function forgeView(wording: Chrome, message: ThreadMessageDraft) {
             </div>
           ))}
         </div>
+      </details>
+    </div>
+  );
+}
+
+/**
+ * Whether a message is a model drafter run that drafted nothing (D-0071 rule
+ * 1.5): the drafter's voice, a model drafter's name, and no `proposal:` basis --
+ * every run that wrote a draft rests its messages on the proposal row it wrote
+ * (rule 7.3), so the absence is structural and not read off the words.
+ */
+function noDraft(message: ThreadMessageDraft): boolean {
+  return (
+    message.authorKind === "drafter" &&
+    isModelDrafterName(message.authorId) &&
+    !message.bases.some((basis) => basis["form"] === "proposal")
+  );
+}
+
+/**
+ * **A drafter run that drafted nothing, said as what happened** (rondo#238):
+ * the row's words are rondo's own about its tools, so they are kept, folded,
+ * and what is shown first is what the person can do -- set the scope
+ * themselves, one press away.
+ */
+function noDraftView(wording: Chrome, message: ThreadMessageDraft, root: string, forms: boolean) {
+  return (
+    <div class="space-y-2">
+      <p class="text-[14px] leading-6">{wording.drafterNoDraft}</p>
+      {forms ? (
+        <a
+          href={viewHref(
+            { kind: "scope", messageId: root, rounds: null, decisionId: null, plan: null },
+            wording.lang,
+          )}
+          class={`${PRIMARY} h-7 px-3 text-[13px]`}
+        >
+          {wording.scopeAction}
+        </a>
+      ) : null}
+      <details class="group">
+        <summary class="flex cursor-pointer list-none items-center gap-2 text-[12.5px] leading-5 text-muted-foreground select-none [&::-webkit-details-marker]:hidden">
+          {chevron()}
+          {wording.drafterNoDraftWhy}
+        </summary>
+        <p
+          class="body mt-1 text-[12.5px] leading-5 wrap-anywhere whitespace-pre-wrap text-muted-foreground"
+          lang="en"
+        >
+          {message.body}
+        </p>
       </details>
     </div>
   );
@@ -3131,19 +2230,23 @@ const CHIP =
  * than one that says so by not being blue. A basis that is not a locator is
  * shown as its JSON rather than dropped, so nothing the drafter cited is lost.
  */
-function basisChip(
+/**
+ * One basis as a word that leads where it points: the cited message by its
+ * words and an anchor, everything else named and not linked.
+ */
+function basisWord(
   wording: Chrome,
   basis: Readonly<Record<string, unknown>>,
   threads: Threads,
   root: string | null,
   actorId: string | null,
-) {
+): ThreadLink {
   const form = basis["form"];
-  let label: string;
+  let said: string;
   let href: string | null = null;
   if (form === "message" && typeof basis["messageId"] === "string") {
     const cited = threads.byId.get(basis["messageId"]);
-    label =
+    said =
       cited === undefined
         ? basisLine({ form: "message", messageId: basis["messageId"] }, {})
         : `${whoWrote(wording, cited, actorId)}: ${lineOf(cited)}`;
@@ -3154,482 +2257,46 @@ function basisChip(
           : `${viewHref({ kind: "thread", messageId: cited.messageId, to: null }, wording.lang)}#${encodeURIComponent(cited.messageId)}`;
     }
   } else if (form === "iteration" && typeof basis["iterationId"] === "string") {
-    label = basisLine({ form: "iteration", iterationId: basis["iterationId"] }, {});
-    if (threads.inReading.has(basis["iterationId"])) {
-      href = `${viewHref({ kind: "reading" }, wording.lang)}#read-${encodeURIComponent(basis["iterationId"])}`;
-    }
+    // A lap used to point at its section in the reading fold; with the fold
+    // gone (D-0083) there is no page-wide place a lap id leads to, so the
+    // basis is named and not linked.
+    said = basisLine({ form: "iteration", iterationId: basis["iterationId"] }, {});
   } else if (form === "snapshot") {
-    label = `snapshot ${String(basis["pointer"])}`;
+    said = `snapshot ${String(basis["pointer"])}`;
   } else if ((BASIS_FORMS as readonly unknown[]).includes(form)) {
-    label = basisLine(basis as unknown as Basis, {});
+    said = basisLine(basis as unknown as Basis, {});
   } else {
-    label = JSON.stringify(basis);
+    said = JSON.stringify(basis);
   }
+  return { said, href, title: said };
+}
+
+/** {@link basisWord} as this renderer's own chip, for the screens still drawn here. */
+function basisChip(
+  wording: Chrome,
+  basis: Readonly<Record<string, unknown>>,
+  threads: Threads,
+  root: string | null,
+  actorId: string | null,
+) {
+  const word = basisWord(wording, basis, threads, root, actorId);
   const text = (
-    <span class={form === "message" ? "max-w-[26rem] truncate" : "truncate font-mono"}>
-      {label}
+    <span class={basis["form"] === "message" ? "max-w-[26rem] truncate" : "truncate font-mono"}>
+      {word.said}
     </span>
   );
-  return href === null ? (
-    <span class={`basis ${CHIP}`} title={label}>
+  return word.href === null ? (
+    <span class={`basis ${CHIP}`} title={word.said}>
       {text}
     </span>
   ) : (
-    <a href={href} class={`basis ${CHIP} hover:border-ring/60 hover:text-foreground`} title={label}>
+    <a
+      href={word.href}
+      class={`basis ${CHIP} hover:border-ring/60 hover:text-foreground`}
+      title={word.said}
+    >
       {text}
     </a>
-  );
-}
-
-/**
- * One message in a thread (D-0061 rule 2): who wrote it and in which voice, how
- * long ago, the words byte for byte with their paragraphs (rondo#90), what it
- * rests on, and -- where it asks and no answer has carried it on (D-0072 rule
- * 3) -- the one mark that it waits on the person.
- *
- * **The voices are told apart three ways, none of them alone**: an initial in a
- * round mark (blue for the drafter), a badge that names the drafter's voice, and
- * a blue wash on its card. **Every card starts at the same left edge** (the S1
- * design pass on #220): leaning the voices to opposite sides made the column
- * zig-zag by 40px with nothing saying why. The id is never printed: the age is
- * the message's link to itself, and `Reply` is how a person points at it --
- * drawn on hover or focus where a pointer can hover (`page/app.css`), and always
- * with script off or on touch.
- */
-/**
- * Whether a message is a model drafter run that drafted nothing (D-0071 rule
- * 1.5): the drafter's voice, a model drafter's name, and no `proposal:` basis --
- * every run that wrote a draft rests its messages on the proposal row it wrote
- * (rule 7.3), so the absence is structural and not read off the words.
- */
-function noDraft(message: ThreadMessageDraft): boolean {
-  return (
-    message.authorKind === "drafter" &&
-    isModelDrafterName(message.authorId) &&
-    !message.bases.some((basis) => basis["form"] === "proposal")
-  );
-}
-
-function messageView(
-  wording: Chrome,
-  threads: Threads,
-  message: ThreadMessageDraft,
-  previous: ThreadMessageDraft | undefined,
-  root: string,
-  nowMs: number,
-  actorId: string | null,
-  forms: boolean,
-) {
-  const waiting = threads.waiting.has(message.messageId);
-  const parent = message.inReplyTo === null ? undefined : threads.byId.get(message.inReplyTo);
-  const drafter = message.authorKind === "drafter";
-  // **The way to point the reply box here**, a navigation `GET` that writes
-  // nothing, quiet in the header. On an ask still waiting it is labelled as
-  // answering, because the box it points then answers on a press.
-  const replyLink = (
-    <a
-      id={`reply-${message.messageId}`}
-      href={viewHref({ kind: "thread", messageId: root, to: message.messageId }, wording.lang)}
-      data-open=""
-      class="reply-link rounded px-1 font-medium text-link hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-    >
-      {waiting ? wording.answerAskAction : wording.replyAction}
-    </a>
-  );
-  return (
-    <li
-      id={message.messageId}
-      data-row=""
-      tabindex={-1}
-      data-voice={message.authorKind}
-      {...(waiting ? { "data-waiting": "" } : {})}
-      class="message grid scroll-mt-28 scroll-mb-40 grid-cols-1 gap-x-3 sm:grid-cols-[1.75rem_minmax(0,1fr)] rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-4 focus-visible:ring-offset-background"
-    >
-      <span
-        aria-hidden="true"
-        class={
-          drafter
-            ? "mt-2 hidden size-7 sm:inline-flex items-center justify-center rounded-full bg-run-wash text-[12px] font-semibold text-run-ink ring-1 ring-run/30"
-            : "mt-2 hidden size-7 sm:inline-flex items-center justify-center rounded-full bg-muted text-[12px] font-semibold text-foreground ring-1 ring-border"
-        }
-      >
-        {whoWrote(wording, message, actorId).slice(0, 1).toUpperCase()}
-      </span>
-      <article
-        class={
-          waiting
-            ? "rounded-lg border border-wait/45 bg-card shadow-[inset_3px_0_0_var(--color-wait)]"
-            : drafter
-              ? "rounded-lg border border-run/25 bg-run-wash/40"
-              : "rounded-lg border border-border bg-card"
-        }
-      >
-        <header class="flex flex-wrap items-center gap-x-2 gap-y-1 px-4 pt-2.5 text-[12.5px] leading-5">
-          <span class="author font-semibold text-foreground">
-            {whoWrote(wording, message, actorId)}
-          </span>
-          {drafter ? (
-            <span class={`voice ${PILL} font-sans ${TONE.run}`}>{wording.drafterVoice}</span>
-          ) : message.authorKind === "forge" ? (
-            <span class={`voice ${PILL} font-sans ${TONE.muted}`}>{wording.issueVoice}</span>
-          ) : message.authorId === actorId ? null : (
-            <span class={`voice ${PILL} font-sans ${TONE.muted}`}>{wording.operatorVoice}</span>
-          )}
-          {waiting ? (
-            // **Which of the two reasons it is still waiting** (D-0072 rule 3):
-            // nobody has been back to it, or the person has and said to stop.
-            // The hold is the same; saying "waiting on you" for the second would
-            // tell a person who wrote "stop this line" that they had not answered.
-            <span class={`${PILL} font-sans ${TONE.wait}`}>
-              {threads.stopped.has(message.messageId)
-                ? wording.askStoppedPill
-                : wording.askWaitingPill}
-            </span>
-          ) : null}
-          {
-            // **What this message answered, where it was said** (D-0072 rule 1):
-            // the words are kept byte for byte either way, so with no mark here
-            // two answers that read alike and did opposite things would be one
-            // entry in the thread.
-            message.answerOutcome === undefined ? null : (
-              <span
-                class={`${PILL} font-sans ${
-                  message.answerOutcome === "stop" ? TONE.wait : TONE.muted
-                }`}
-              >
-                {message.answerOutcome === "stop"
-                  ? wording.answerStoppedPill
-                  : wording.answerCarriedOnPill}
-              </span>
-            )
-          }
-          <a
-            href={`#${encodeURIComponent(message.messageId)}`}
-            class="text-faint tabular-nums hover:text-foreground"
-            title={new Date(message.atMs).toISOString()}
-          >
-            {wording.age(ago(message.atMs, nowMs))}
-          </a>
-          <span class="flex-1" />
-          {forms ? replyLink : null}
-        </header>
-        {/*
-         * Said only where the reply is to neither the message above it nor the
-         * request itself, which is what every reply is read as by default.
-         */}
-        {parent !== undefined &&
-        parent.messageId !== previous?.messageId &&
-        parent.messageId !== root ? (
-          <a
-            href={`#${encodeURIComponent(parent.messageId)}`}
-            class="mx-4 mt-1 flex min-w-0 items-center gap-1.5 text-[12px] leading-5 text-muted-foreground hover:text-foreground"
-          >
-            <svg
-              aria-hidden="true"
-              viewBox="0 0 16 16"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.6"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              class="size-3.5 shrink-0 text-faint"
-            >
-              <path d="M3.5 2.5v5a3 3 0 0 0 3 3h6m-3-3 3 3-3 3" />
-            </svg>
-            <span class="truncate">
-              {wording.inReplyTo(whoWrote(wording, parent, actorId), lineOf(parent))}
-            </span>
-          </a>
-        ) : null}
-        {message.authorKind === "forge" ? (
-          forgeView(wording, message)
-        ) : noDraft(message) ? (
-          // **A drafter run that drafted nothing, said as what happened**
-          // (rondo#238): the row's words are rondo's own about its tools, so
-          // they are kept, folded, and what is shown first is what the person
-          // can do -- set the scope themselves, one press away.
-          <div class="space-y-2 px-4 pt-1 pb-3">
-            <p class="text-[14px] leading-6">{wording.drafterNoDraft}</p>
-            {forms ? (
-              <a
-                href={viewHref(
-                  { kind: "scope", messageId: root, rounds: null, decisionId: null, plan: null },
-                  wording.lang,
-                )}
-                class={`${PRIMARY} h-7 px-3 text-[13px]`}
-              >
-                {wording.scopeAction}
-              </a>
-            ) : null}
-            <details class="group">
-              <summary class="flex cursor-pointer list-none items-center gap-2 text-[12.5px] leading-5 text-muted-foreground select-none [&::-webkit-details-marker]:hidden">
-                {chevron()}
-                {wording.drafterNoDraftWhy}
-              </summary>
-              <p
-                class="body mt-1 text-[12.5px] leading-5 wrap-anywhere whitespace-pre-wrap text-muted-foreground"
-                lang="en"
-              >
-                {message.body}
-              </p>
-            </details>
-          </div>
-        ) : (
-          // The words as written: no trim, no reflow (D-0061 rule 2.2). Their language is unknown (D-0055 rule 8).
-          <p
-            class="body px-4 pt-1 pb-3 text-[14px] leading-6 wrap-anywhere whitespace-pre-wrap"
-            lang=""
-          >
-            {message.body}
-          </p>
-        )}
-        {
-          // **Named and not read yet** (D-0078 section 4.3): said until the
-          // host's read lands as its own message under this one.
-          (threads.unread.get(message.messageId) ?? []).map((ref) => (
-            <p class="issue-pending px-4 pb-3 text-[12.5px] leading-5 text-muted-foreground">
-              <span class="font-medium">{ref.named}</span> {wording.issuePending}
-            </p>
-          ))
-        }
-        {message.bases.length === 0 ? null : (
-          <div class="bases flex flex-wrap items-center gap-1.5 border-t border-border/60 px-4 py-2">
-            <span class="text-[11px] font-medium text-faint">{wording.basesLabel}</span>
-            {message.bases.map((basis) => basisChip(wording, basis, threads, root, actorId))}
-          </div>
-        )}
-      </article>
-    </li>
-  );
-}
-
-/** Every message of the thread `messageId` belongs to, oldest first, or a line saying there is none. */
-function threadView(
-  wording: Chrome,
-  threads: Threads,
-  view: { readonly messageId: string },
-  nowMs: number,
-  actorId: string | null,
-  forms: boolean,
-  /** The way to this request's scope screen, or null where there is none (rondo#233 S3). */
-  scopeTo: (messageId: string) => unknown,
-) {
-  const root = threads.rootOf(view.messageId);
-  if (root === null) {
-    return (
-      <p class="note rounded-lg border border-dashed border-border px-5 py-6 text-[13px]">
-        {wording.noSuchThread}
-      </p>
-    );
-  }
-  const members = threads.messages.filter((message) => threads.rootOf(message.messageId) === root);
-  // **An open ask is pinned above the reports** (rondo#199, pin-only): a stop
-  // still waiting on a person is what the thread is for right now, so it
-  // comes straight after the request; the sort is stable, so each part keeps
-  // the store's order.
-  const rank = (message: ThreadMessageDraft): number =>
-    message.messageId === root ? 0 : threads.waiting.has(message.messageId) ? 1 : 2;
-  const shown = [...members].sort((a, b) => rank(a) - rank(b));
-  const request = threads.byId.get(root);
-  const waitingHere = members.filter((message) => threads.waiting.has(message.messageId)).length;
-  return (
-    <div class="space-y-4">
-      {/*
-       * **The thread names itself** (the S1 design pass on #220): the request's
-       * first words as its title, one state line, and a way back drawn at every
-       * width -- `Esc` is a key hint, and there is none at a phone's width or
-       * with script off. Sticky under the page's bar, so the title stays in
-       * view down a long thread. With script off the thread does not reload
-       * itself (a draft would be lost), so the header says how to see new
-       * messages, where a reader looks for it.
-       */}
-      <header class="thread-head sticky top-12 z-[4] border-b border-border bg-background/95 py-2.5 backdrop-blur-sm">
-        <div class="flex min-w-0 items-center gap-2">
-          <a
-            href={viewHref({ kind: "requests" }, wording.lang)}
-            class="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-            title={wording.backToRequests}
-          >
-            <svg
-              aria-hidden="true"
-              viewBox="0 0 16 16"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.8"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              class="size-4"
-            >
-              <path d="M13 8H3m4-4-4 4 4 4" />
-            </svg>
-            <span class="sr-only">{wording.backToRequests}</span>
-          </a>
-          <h2
-            class="request min-w-0 flex-1 truncate text-[15px] leading-6 font-semibold"
-            title={request?.body}
-            lang=""
-          >
-            {request === undefined ? null : firstLine(request.body)}
-          </h2>
-          {scopeTo(root)}
-          {forms ? (
-            <noscript>
-              <a
-                href={viewHref({ kind: "thread", messageId: root, to: null }, wording.lang)}
-                class="shrink-0 text-[12.5px] font-medium text-link hover:underline"
-                title={wording.threadNoReload}
-              >
-                {wording.reloadThread}
-              </a>
-            </noscript>
-          ) : null}
-        </div>
-        <div class="ml-9 overflow-hidden">
-          <p class={META_LINE}>
-            {waitingHere === 0 ? null : (
-              <span>
-                <span class={`${PILL} font-sans ${TONE.wait}`}>{wording.askWaitingPill}</span>
-              </span>
-            )}
-            <span>
-              {wording.threadSize(
-                members.length,
-                wording.age(ago(Math.max(...members.map((message) => message.atMs)), nowMs)),
-              )}
-            </span>
-            {request === undefined ? null : (
-              <span>{wording.threadStarted(wording.age(ago(request.atMs, nowMs)))}</span>
-            )}
-          </p>
-        </div>
-      </header>
-      <ol data-thread={root} class="space-y-4">
-        {shown.map((message, at) =>
-          messageView(wording, threads, message, shown[at - 1], root, nowMs, actorId, forms),
-        )}
-      </ol>
-    </div>
-  );
-}
-
-/**
- * Every request, the ones with an ask waiting first and then by when they last
- * moved (#220 S1). One row each: the request's first words, whose it is, how
- * big and how recent its thread is, and a pill counting what waits on the
- * person. The row's words are the link into the thread, so opening one is a
- * click or `Enter`, never an id.
- */
-function requestsView(
-  wording: Chrome,
-  threads: Threads,
-  nowMs: number,
-  actorId: string | null,
-  scopeTo: (messageId: string) => unknown,
-  /** The lap that is under a request, newest first, or null where none is. */
-  lapUnder: (messageId: string) => LapUnderRequest | null,
-) {
-  const rows = threads.messages
-    .filter((message) => message.inReplyTo === null)
-    .map((root) => {
-      const members = threads.messages.filter(
-        (message) => threads.rootOf(message.messageId) === root.messageId,
-      );
-      return {
-        root,
-        size: members.length,
-        lastMs: Math.max(...members.map((message) => message.atMs)),
-        waiting: members.filter((message) => threads.waiting.has(message.messageId)).length,
-      };
-    })
-    .sort(
-      (left, right) =>
-        Number(right.waiting > 0) - Number(left.waiting > 0) || right.lastMs - left.lastMs,
-    );
-  return (
-    <section data-question="requests" class="space-y-2">
-      <h2 class="text-sm leading-6 font-semibold text-foreground first-letter:uppercase">
-        {wording.requestsHeading(rows.length)}
-      </h2>
-      {rows.length === 0 ? (
-        <p class="note rounded-lg border border-dashed border-border px-5 py-6 text-[13px] text-muted-foreground">
-          {wording.noRequests}
-        </p>
-      ) : (
-        <ul class="divide-y divide-border rounded-lg border border-border bg-card">
-          {rows.map((row) => {
-            const lap = lapUnder(row.root.messageId);
-            return (
-              <li id={`request-${row.root.messageId}`} data-row="" tabindex={-1} class={ROW}>
-                {glyph(row.waiting > 0 ? "wait" : "message")}
-                <div class="min-w-0">
-                  <a
-                    id={`open-${row.root.messageId}`}
-                    href={viewHref(
-                      { kind: "thread", messageId: row.root.messageId, to: null },
-                      wording.lang,
-                    )}
-                    data-open=""
-                    class="request line-clamp-2 text-sm leading-6 font-medium wrap-anywhere hover:underline"
-                    title={row.root.body}
-                    lang=""
-                  >
-                    {firstLine(row.root.body)}
-                  </a>
-                  {metaLine(
-                    <>
-                      {row.waiting > 0 ? (
-                        <span>
-                          <span class={`${PILL} font-sans ${TONE.wait}`}>
-                            {wording.asksWaiting(row.waiting)}
-                          </span>
-                        </span>
-                      ) : null}
-                      <span>{whoWrote(wording, row.root, actorId)}</span>
-                      <span>
-                        {wording.threadSize(row.size, wording.age(ago(row.lastMs, nowMs)))}
-                      </span>
-                      {/*
-                       * **A request with a lap under it says the lap's state**
-                       * (rondo#244). This list went on offering *Set the scope*
-                       * through a whole lap, which is the one screen a person
-                       * watching a run is most likely to be looking at and the
-                       * one place it said nothing.
-                       *
-                       * **The entrance goes only while the lap is live.** Asking
-                       * for more work on a request whose lap has ended is a real
-                       * act and keeps its way in; starting a second scope beside
-                       * a lap that is still running is the confusion.
-                       */}
-                      {lap === null ? null : (
-                        <span>
-                          {pill(
-                            lap.question === "waiting"
-                              ? "wait"
-                              : lap.question === "running"
-                                ? "run"
-                                : endedTone(lap.record),
-                            wording.statePill(lap.record.status, lap.record.gateOutcome),
-                          )}
-                        </span>
-                      )}
-                      {lap === null ? null : (
-                        <span class="tabular-nums">
-                          {wording.age(ago(lap.record.updatedAtMs, nowMs))}
-                        </span>
-                      )}
-                    </>,
-                  )}
-                  {/* The row's one action, under the metadata and not inside
-                      it (rondo#246). It goes while the lap under this request
-                      is live, for rondo#244's reason. */}
-                  {lap !== null && lap.question !== "ended" ? null : scopeTo(row.root.messageId)}
-                </div>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </section>
   );
 }
 
@@ -3717,14 +2384,15 @@ function basisRow(wording: Chrome, basis: BudgetBasis) {
   return (
     <p class="basis flex flex-wrap items-baseline gap-x-2 gap-y-1 text-[12px] leading-5 text-muted-foreground">
       <span>{basisSaid(wording, basis)}</span>
+      {/*
+       * **A lap is named and not linked.** It used to point at that lap's
+       * gate screen; D-0083 rule 3 took the screen away, and a lap's thread
+       * is its request's rather than its own, which this basis does not know.
+       * Naming it is what rule 4.2 asked for that survives.
+       */}
       {basis.kind === "rows"
         ? basis.iterationIds.map((iterationId) => (
-            <a
-              href={viewHref({ kind: "answer", iterationId }, wording.lang)}
-              class="font-mono text-[11.5px] text-link underline-offset-2 hover:underline"
-            >
-              {wording.scopeBasisLap(iterationId)}
-            </a>
+            <span class="font-mono text-[11.5px]">{wording.scopeBasisLap(iterationId)}</span>
           ))
         : null}
     </p>
@@ -4427,7 +3095,9 @@ async function raiseForm(
   newScopeId: MintScopeId | null,
   nowMs: number,
 ): Promise<unknown> {
-  const gate = viewHref({ kind: "answer", iterationId: raise.iterationId }, wording.lang);
+  // The thread the gate is in (D-0083 rule 3); the raise screen is reached
+  // from one request's scope, so that request is the way back.
+  const gate = viewHref({ kind: "thread", messageId: view.messageId, to: null }, wording.lang);
   const decided = await ports.record.readScopeDecision(raise.decisionId);
   const stored =
     decided.kind === "read" && decided.decision.outcome === "approved"
@@ -5169,72 +3839,75 @@ async function predecessorLine(
 }
 
 /**
- * The way to the scope screen, drawn on a request and nowhere else.
+ * **Where this request can be taken next** (D-0083 rule 6's chain, as
+ * addresses): setting its scope, and publishing a lap that is ready.
  *
- * Drawn wherever there is an approver to approve a scope as. **Not hidden for
- * want of a plan** (rondo#238): the screen itself says how a plan comes to be
- * held, which a link that was never drawn could not.
- *
- * **As plain as the act behind it** (rondo#246), in {@link answerLink}'s shape:
- * the row's one action, under the metadata rather than a faint link inside it.
- * The entrances were the quiet things on this page while the execute buttons on
- * the screens they lead to were large and coloured, which is the wrong way
- * round -- what protects a person from a mis-press is reading what the press
- * will do, and that reading is the screen this leads to.
+ * **They are in the thread because the rows that carried them are gone.** The
+ * old page drew each on a lap's row; a row is now the person's own words and
+ * one sentence of state, with nothing to press (rule 5). The screens they lead
+ * to are unchanged, and so are the conditions each is drawn under -- the scope
+ * entrance needs a write port, and the publish entrance the same three things
+ * the publish screen needs before it draws a button at all.
  */
-function scopeLink(wording: Chrome, token: string | null, messageId: string) {
+function threadActs(
+  wording: Chrome,
+  ports: WebPorts,
+  token: string | null,
+  requestMessageId: string,
+  /** Oldest first, so the index is the try (`lapEvents`'s `tryAt`). */
+  laps: readonly LapUnderRequest[],
+  threads: Threads,
+) {
   if (token === null) {
     return null;
   }
+  // **Every lap that could still be published, and not the first of them**
+  // (Codex): `approvedForPublication` reads a closed row with an approved
+  // outcome and says nothing about whether it has been published, so one
+  // entrance would go on naming a lap already published while the laps beside
+  // it had none. What says it was published is the report rondo wrote into
+  // this request's thread.
+  const publishable =
+    ports.publishing === null
+      ? []
+      : laps.filter(
+          (lap) =>
+            approvedForPublication(lap.record) && publishedReport(threads, lap.record.id) === null,
+        );
   return (
-    <p class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+    <p class="thread-acts">
       <a
-        id={`scope-${messageId}`}
+        id={`scope-${requestMessageId}`}
         href={viewHref(
-          { kind: "scope", messageId, rounds: null, decisionId: null, plan: null },
+          {
+            kind: "scope",
+            messageId: requestMessageId,
+            rounds: null,
+            decisionId: null,
+            plan: null,
+          },
           wording.lang,
         )}
         data-open=""
         class={`${PRIMARY} h-7 px-3 text-[13px]`}
-        title={wording.scopeHere}
       >
         {wording.scopeAction}
       </a>
-    </p>
-  );
-}
-
-/**
- * The way onto the publish screen, drawn on exactly the rows that screen would
- * draw a button for ({@link answerLink}'s rule, rondo#233 S5).
- *
- * **As plain as the act behind it** (rondo#246), in {@link answerLink}'s shape:
- * the entrance is the row's one action, and the weight of the press belongs on
- * the screen it opens. That screen's refusal design is untouched -- a reading
- * that does not cover the work still draws no publish button at all, with the
- * override inside a fold, because unread and read-and-nothing-raised must not
- * look alike.
- */
-function publishLink(
-  wording: Chrome,
-  ports: WebPorts,
-  token: string | null,
-  record: IterationRecord,
-) {
-  if (ports.publishing === null || token === null || !approvedForPublication(record)) {
-    return null;
-  }
-  return (
-    <p class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
-      <a
-        id={`publish-${record.id}`}
-        href={viewHref({ kind: "publish", iterationId: record.id }, wording.lang)}
-        data-open=""
-        class={`${PRIMARY} h-7 px-3 text-[13px]`}
-        title={wording.publishHere}
-      >
-        {wording.publishAction}
-      </a>
+      {publishable.map((lap) => (
+        <a
+          id={`publish-${lap.record.id}`}
+          href={viewHref({ kind: "publish", iterationId: lap.record.id }, wording.lang)}
+          data-open=""
+          class={`${PRIMARY} h-7 px-3 text-[13px]`}
+        >
+          {/* Which try, where there is more than one to tell apart: three
+              buttons reading *publish* are three a person cannot choose
+              between (D-0076 rule 3.3, as the event lines do it). */}
+          {laps.length > 1
+            ? wording.evOfTry(laps.indexOf(lap) + 1, wording.publishAction)
+            : wording.publishAction}
+        </a>
+      ))}
     </p>
   );
 }
@@ -5737,12 +4410,15 @@ function composerView(
             "hx-target": "#ledger",
             "hx-select": "#ledger",
             "hx-swap": "outerHTML show:window:bottom",
-            // **The whole form and not only its fields** (#220 S1, Codex): the
-            // thread's default target after a send can be a waiting ask, and
-            // answering one is a press with its own `action` and no `hx-post`.
-            // Swapping the fields alone left the send's mode on a box aimed at
-            // an ask; `page/composer.js` puts back any words typed meanwhile.
-            "hx-select-oob": "#composer,#waiting-count",
+            // **The form is inside what the swap replaces now** (D-0083 rule
+            // 5, Codex). It used to sit outside `#ledger` and be swapped out
+            // of band, so that a send could change its mode -- the thread's
+            // default target after a send can be a waiting ask, and answering
+            // one is a press with its own `action` and no `hx-post`. The
+            // ordinary swap carries the new form now, and naming it here as
+            // well took it out of the response before the ledger landed, so
+            // the box disappeared until the next poll.
+            "hx-select-oob": "#waiting-count",
             // **One send per press, visibly** (the S1 design pass): the button
             // is disabled while its request is in flight. The store's refusal
             // of a repeated id is still what makes a double send one message.
@@ -5997,8 +4673,13 @@ export async function operatorPage(
   // drawn half (see `threadMessages`).
   const threadRead = await ports.record.threadMessages();
   const forms = token !== null && newId !== null;
-  const onThreads = view.kind === "requests" || view.kind === "thread";
-  const host = await gatherHost(ports);
+  /**
+   * **A view a person writes in.** Since D-0083 rule 3 the summary is a
+   * request's thread with the boxes in it, so it is one of these: a reload
+   * would throw a half-written draft away, which is what this decides
+   * (#220 S1).
+   */
+  const onThreads = view.kind === "requests" || view.kind === "thread" || view.kind === "summary";
   const inbox = ports.actorId === null ? null : await gatherInbox(ports, ports.actorId);
   const live: LiveRow[] = (await ports.store.readLive()).flatMap((outcome): LiveRow[] => {
     switch (outcome.kind) {
@@ -6027,10 +4708,12 @@ export async function operatorPage(
   // listed however long ago it ended: it is the one ended thing that still
   // costs other work something, so it cannot fall off *just finished*.
   const ledger = await ports.store.laneLedger();
-  const lineOf = new Map(ledger.flatMap((line) => line.lapIds.map((id) => [id, line] as const)));
+  // Named apart from `lineOf`, which is a message's first line: this is the
+  // ledger line a lap belongs to.
+  const lineFor = new Map(ledger.flatMap((line) => line.lapIds.map((id) => [id, line] as const)));
   /** A finished line keeping its files, said on its closed tips' rows. */
   const keeping = (record: IterationRecord) => {
-    const line = lineOf.get(record.id);
+    const line = lineFor.get(record.id);
     return line !== undefined &&
       !line.inFlight &&
       line.paths.length > 0 &&
@@ -6045,69 +4728,6 @@ export async function operatorPage(
   const keptOlder = terminal
     .filter((record) => keeping(record) !== null && !ended.includes(record))
     .toSorted((left, right) => right.updatedAtMs - left.updatedAtMs);
-  const owns = (record: IterationRecord) => {
-    const line = lineOf.get(record.id);
-    return line === undefined || line.paths.length === 0 ? null : wording.holds(line.paths);
-  };
-  const landing = (record: IterationRecord) => {
-    const kept = keeping(record);
-    if (kept !== null) {
-      return {
-        lines: [wording.holds(kept.paths), wording.notLanded],
-        release:
-          releaseToken === null ? null : (
-            <p class="mt-2">
-              <a
-                id={`release-${record.id}`}
-                href={viewHref({ kind: "release", iterationId: record.id }, wording.lang)}
-                class="text-[13px] font-medium text-link underline-offset-2 hover:underline"
-              >
-                {wording.releaseLink}
-              </a>
-            </p>
-          ),
-      };
-    }
-    const line = lineOf.get(record.id);
-    const said =
-      line === undefined || line.releasedBy === null || !line.closedTips.includes(record.id)
-        ? null
-        : line.releasedBy === "person"
-          ? wording.releasedByPerson
-          : wording.landed;
-    return { lines: said === null ? [] : [said], release: null };
-  };
-  // **Whose word it is stays with the words** (#220 S2, Codex): a claim another
-  // operator recorded, on the page or with `rondo answer --verified`, is theirs
-  // and never "you said"; `by` is null only when it is this page's own actor.
-  //
-  // **And what the approval was given over** (rondo#237), off the same pass:
-  // the readings are read only where an approval could have overridden one, so
-  // a list of failures and withdrawals costs the redraw nothing.
-  const endedFacts = new Map(
-    await Promise.all(
-      // Both groups of ended rows: an older one still keeping files keeps its facts.
-      [...keptOlder, ...ended].map(async (record) => {
-        const [claims, readings] = await Promise.all([
-          ports.store.verificationClaimsFor(record.id),
-          approvedForPublication(record)
-            ? ports.store.readingsFor(record.id)
-            : ([] as readonly LapReading[]),
-        ]);
-        const last = claims.at(-1);
-        return [
-          record.id,
-          {
-            claim:
-              last === undefined
-                ? null
-                : { claim: last.claim, by: last.actorId === ports.actorId ? null : last.actorId },
-            raised: raisedIn(latestReading(readings, isModelReadingDrafter)),
-          },
-        ] as const;
-      }),
-    ),
-  );
   const waiting: IterationRecord[] = [];
   const running: IterationRecord[] = [];
   for (const row of live) {
@@ -6139,9 +4759,6 @@ export async function operatorPage(
   // `inbox` splits on too; the rest are in the reading, in the inbox's own two
   // sections, where they are material rather than a queue.
   const open = (inbox?.open ?? []).filter((proposal) => isApprovableKind(proposal.kind));
-  // Reused rather than asked again when the inbox already asked: it is a
-  // continuo subprocess per running lap, and this page redraws itself.
-  const transcripts = inbox?.transcripts ?? (await locateRunning(ports, live));
   // **One count of what waits on the person** (#220 S1): the header pill and the
   // summary's *waiting for your answer* heading both say this number -- gates,
   // questions in threads, and proposals an answer can settle -- so they cannot
@@ -6153,7 +4770,6 @@ export async function operatorPage(
   // D-0059 rule 3a): the renderer is handed the reading ports and nothing that
   // could write, so whether a button is drawn is decided by the one caller that
   // does hold the writer (`src/access/web-app.ts`) and handed down as a token.
-  const shown = await shownBeforePress(ports, wording, waiting, token, view);
   // **Awaited here** and not inside the tree: the scope screen reads the plan
   // and, in its second state, the approval and what a predecessor spent.
   const scoping =
@@ -6161,12 +4777,20 @@ export async function operatorPage(
       ? await scopeView(ports, wording, view, threads, token, newScopeId, newIterationId, nowMs)
       : null;
   /** The link onto the scope screen, drawn on a request wherever one is listed. */
-  const scopeTo = (messageId: string) => scopeLink(wording, token, messageId);
   // **Which request each lap is under** (rondo#244), off the rows already
   // read: a lap names the request it was started from, so the requests list
   // can say what became of one instead of going on offering the entrance.
   // Newest wins, which is the same order every other list here is in.
   const lapsByRequest = new Map<string, LapUnderRequest>();
+  /**
+   * **Every lap of a request and not only the one that says most** (Codex).
+   * `saysMore` picks one row to speak for a request in a list, which is what a
+   * row is; the thread is the request itself, so it draws every lap's events,
+   * and the box is offered for whichever lap is at a gate -- a request with a
+   * running retry beside a lap still waiting would otherwise have no way to
+   * answer the one that waits, now that there is no per-lap address.
+   */
+  const allLapsByRequest = new Map<string, LapUnderRequest[]>();
   for (const [question, group] of [
     ["waiting", waiting],
     ["running", running],
@@ -6174,12 +4798,17 @@ export async function operatorPage(
   ] as const) {
     for (const record of group) {
       const request = record.requestMessageId;
-      if (request !== null && saysMore({ record, question }, lapsByRequest.get(request))) {
+      if (saysMore({ record, question }, lapsByRequest.get(request))) {
         lapsByRequest.set(request, { record, question });
       }
+      allLapsByRequest.set(request, [
+        ...(allLapsByRequest.get(request) ?? []),
+        { record, question },
+      ]);
     }
   }
   const lapUnder = (messageId: string) => lapsByRequest.get(messageId) ?? null;
+  const lapsUnder = (messageId: string) => allLapsByRequest.get(messageId) ?? [];
 
   /*
    * **The left face's rows** (D-0083 rules 2, 5 and 7). Every request the
@@ -6194,9 +4823,13 @@ export async function operatorPage(
         (message) => threads.rootOf(message.messageId) === root.messageId,
       );
       const lap = lapUnder(root.messageId);
+      // **Any lap of the request, not the one that speaks for it** (Codex):
+      // `saysMore` would let a newer running lap hide an older one still at
+      // its gate, and the request would drop out of *your turn* -- and out of
+      // rule 3's selection -- with an unanswered question on it.
       const waitsHere =
         members.some((message) => threads.waiting.has(message.messageId)) ||
-        lap?.question === "waiting";
+        lapsUnder(root.messageId).some((under) => under.question === "waiting");
       return {
         messageId: root.messageId,
         title: firstLine(root.body),
@@ -6206,12 +4839,394 @@ export async function operatorPage(
       };
     });
   const requestsList = requestList(listRows, inbox?.sinceMs ?? null, nowMs);
+
+  /*
+   * **Which request the centre is showing** (D-0083 rule 3). There is no
+   * separate decision screen: the address names a request or it does not, and
+   * where it does not the oldest thing waiting is selected, because the
+   * person came to answer.
+   */
+  /**
+   * **An address naming a message nobody wrote is said, not answered with
+   * another request.** Rule 3's fallback is for an address that names none;
+   * one that names a message this store does not hold is a person who
+   * followed a stale link, and showing them somebody else's thread would be
+   * rondo answering a question it was not asked.
+   */
+  const namedThread = view.kind === "thread" ? threads.rootOf(view.messageId) : null;
+  const noSuchThread = view.kind === "thread" && namedThread === null;
+  const selection = selectRequest(namedThread, requestsList);
+  /**
+   * **`requests` is the way into a new one**, so its centre is rule 4's --
+   * the question and the box -- whatever is waiting. Selecting a thread there
+   * would answer a person who came to write with somebody else's question.
+   */
+  const selectedRoot =
+    noSuchThread || view.kind === "requests" || selection.kind !== "request"
+      ? null
+      : selection.messageId;
+  const selectedLap = selectedRoot === null ? null : lapUnder(selectedRoot);
+  /*
+   * The lap whose gate the centre draws a box for, which is what the framing
+   * below is composed for -- one row, and only the one being answered.
+   */
+  // **Whichever lap of this request is at a gate**, which need not be the one
+  // the list speaks with: `saysMore` orders by what a row should say, and a
+  // gate is answered wherever it stands (Codex).
+  const answeringLap =
+    selectedRoot === null
+      ? null
+      : (lapsUnder(selectedRoot).find((lap) => lap.question === "waiting")?.record.id ?? null);
+  const shown = await shownBeforePress(ports, wording, waiting, token, answeringLap);
+
+  /*
+   * **The centre face** (D-0083 rule 5): the selected request's thread, or
+   * rule 4's empty centre when nothing waits and nothing was named.
+   *
+   * The messages and the event lines are one stream in the order they
+   * happened; the box to answer in and the box to add to the request are
+   * composed by the parts that own them and placed here.
+   */
+  /** The screens the page's rebuild does not touch, which keep their own centre. */
+  const onOwnScreen = view.kind === "scope" || view.kind === "publish" || view.kind === "release";
+  const selectedMessages =
+    selectedRoot === null
+      ? []
+      : threads.messages
+          .filter((message) => threads.rootOf(message.messageId) === selectedRoot)
+          .toSorted((left, right) => left.atMs - right.atMs);
+  /*
+   * **Every lap of the request, each with its own readings** (Codex): the
+   * thread is the request, so a retry arriving must not take the lap it
+   * superseded out of the record. Read here, once, for the one request the
+   * centre is drawing.
+   */
+  // Oldest first, so *try 1* is the first attempt and the walk down the
+  // thread and the count agree.
+  const selectedLaps =
+    selectedRoot === null
+      ? []
+      : lapsUnder(selectedRoot).toSorted(
+          (left, right) => left.record.createdAtMs - right.record.createdAtMs,
+        );
+  const readingsByLap = new Map(
+    await Promise.all(
+      selectedLaps.map(
+        async (lap) => [lap.record.id, await ports.store.readingsFor(lap.record.id)] as const,
+      ),
+    ),
+  );
+  /*
+   * **What was agreed for this request** (D-0083 rule 6), read for the one lap
+   * the centre is drawing and for no other: the approval the lap spends, and
+   * what has been spent against it. Both or neither -- rule 6 refuses a spent
+   * figure without the figure it was approved against, and `governanceOf`
+   * takes them as one argument for that reason.
+   */
+  const approvalOf = async (
+    record: IterationRecord,
+  ): Promise<{ payload: ScopePayload; spent: ScopeSpent } | null> => {
+    const tip = await approvalTip(ports.record, record.id);
+    if (tip.kind !== "tip") {
+      return null;
+    }
+    const decided = await ports.record.readScopeDecision(tip.scopeDecisionId);
+    if (decided.kind !== "read") {
+      return null;
+    }
+    const stored = await ports.record.readScope(decided.decision.scopeId);
+    if (stored.kind !== "read") {
+      return null;
+    }
+    return {
+      payload: stored.scope.payload,
+      spent: await ports.record.scopeSpent(tip.scopeDecisionId),
+    };
+  };
+  const selectedGovernance =
+    selectedLap === null || selectedRoot === null
+      ? null
+      : governanceOf(
+          selectedLap.record,
+          repositoryOf(selectedLap.record),
+          threads.byId.get(selectedRoot)?.atMs ?? nowMs,
+          await approvalOf(selectedLap.record),
+          // A proposal is done when rondo recorded one: the published report
+          // it writes into the request's thread (rondo#245).
+          publishedReport(threads, selectedLap.record.id) !== null,
+        );
+  /*
+   * **The two messages whose body is not prose**, rendered here because this
+   * renderer still owns them: what rondo read of a named issue (D-0078 section
+   * 4) and a drafter run that drafted nothing (rondo#238). They cross the seam
+   * as markup, like the boxes, and are awaited once rather than inside the
+   * synchronous map below.
+   */
+  const drawnBodies = new Map(
+    await Promise.all(
+      selectedMessages
+        .filter((message) => message.authorKind === "forge" || noDraft(message))
+        .map(
+          async (message) =>
+            [
+              message.messageId,
+              await (message.authorKind === "forge"
+                ? forgeView(wording, message)
+                : noDraftView(wording, message, selectedRoot ?? "", forms)
+              ).toString(),
+            ] as const,
+        ),
+    ),
+  );
+  /** Each message's moment, for rule 7's line: the items themselves do not carry it. */
+  const messageTimes = new Map(selectedMessages.map((m) => [m.messageId, m.atMs]));
+  const threadItems: ThreadItem[] = [
+    ...selectedMessages.map((message, at): ThreadItem => {
+      const waits = threads.waiting.has(message.messageId);
+      const parent = message.inReplyTo === null ? undefined : threads.byId.get(message.inReplyTo);
+      const previous = selectedMessages[at - 1];
+      return {
+        kind: "message",
+        message: {
+          id: message.messageId,
+          who: message.authorKind === "operator" ? "person" : "rondo",
+          voice: message.authorKind,
+          said: whoWrote(wording, message, ports.actorId),
+          body: message.body,
+          drawn: (() => {
+            const markup = drawnBodies.get(message.messageId);
+            return markup === undefined ? null : Raw({ html: markup });
+          })(),
+          at: wording.age(ago(message.atMs, nowMs)),
+          atTitle: new Date(message.atMs).toISOString(),
+          // **Which of the two reasons it still waits** (D-0072 rule 3):
+          // nobody has been back to it, or the person has and said to stop.
+          waiting: !waits
+            ? null
+            : threads.stopped.has(message.messageId)
+              ? wording.askStoppedPill
+              : wording.askWaitingPill,
+          // **What this message answered, where it was said** (D-0072 rule 1):
+          // the words are kept byte for byte either way, so with no mark here
+          // two answers that read alike and did opposite things would be one
+          // entry in the thread.
+          answered:
+            message.answerOutcome === undefined
+              ? null
+              : message.answerOutcome === "stop"
+                ? wording.answerStoppedPill
+                : wording.answerCarriedOnPill,
+          pending: (threads.unread.get(message.messageId) ?? []).map((ref) => ref.named),
+          pendingSaid: wording.issuePending,
+          bases: message.bases.map((basis) =>
+            basisWord(wording, basis, threads, selectedRoot, ports.actorId),
+          ),
+          basesLabel: wording.basesLabel,
+          // Said only where the reply is to neither the message above it nor
+          // the request itself, which is what every reply is read as.
+          inReplyTo:
+            parent === undefined ||
+            parent.messageId === previous?.messageId ||
+            parent.messageId === selectedRoot
+              ? null
+              : {
+                  said: wording.inReplyTo(whoWrote(wording, parent, ports.actorId), lineOf(parent)),
+                  href: `#${encodeURIComponent(parent.messageId)}`,
+                },
+          reply:
+            !forms || selectedRoot === null
+              ? null
+              : {
+                  href: viewHref(
+                    { kind: "thread", messageId: selectedRoot, to: message.messageId },
+                    wording.lang,
+                  ),
+                  said: waits ? wording.answerAskAction : wording.replyAction,
+                },
+        },
+      };
+    }),
+    ...selectedLaps.flatMap((lap, tryAt) =>
+      lapEvents(
+        wording,
+        lap.record,
+        (readingsByLap.get(lap.record.id) ?? []).map((reading) => ({
+          drafter: reading.drafter,
+          verdict: reading.verdict,
+          findings: reading.findings,
+          atMs: reading.readAtMs,
+        })),
+        (status) => isTerminal(status as IterationRecord["status"]),
+        (atMs) => wording.age(ago(atMs, nowMs)),
+        // Said only where there is more than one to tell apart.
+        selectedLaps.length > 1 ? tryAt + 1 : null,
+      ).map((event): ThreadItem => ({ kind: "event", event })),
+    ),
+  ]
+    /*
+     * **One stream, in the order it happened** (D-0083 rule 2, and
+     * `page/thread.tsx`'s own claim about itself). The two sources are
+     * gathered apart and have to be put back in time order here, or a lap's
+     * report is drawn before the line saying the lap started -- and rule 7's
+     * line, which is placed by walking this array, lands in the wrong place.
+     */
+    .map((item, at) => ({
+      item,
+      at,
+      atMs: item.kind === "message" ? (messageTimes.get(item.message.id) ?? 0) : item.event.atMs,
+    }))
+    // `at` breaks the tie, so two things at the same millisecond keep the
+    // order their source gave them rather than one the sort invented.
+    .toSorted((left, right) => left.atMs - right.atMs || left.at - right.at)
+    .map((sorted) => sorted.item);
+  /*
+   * **One line, once in the thread** (D-0083 rule 7, D-0061 rule 2.5). The
+   * items are already in the order they happened, so the line sits above the
+   * first one that arrived after the person last looked. There is no line
+   * where they have never looked, and none where everything is older than
+   * the mark: both mean nothing is below it, and a line with nothing under
+   * it says something false.
+   *
+   * **No row carries a *new* mark of its own** (rule 7): the list face draws
+   * the other one, and between them that is two lines on the page.
+   */
+  const lastLookedMs = inbox?.sinceMs ?? null;
+  const marks = threadItems.map((item) =>
+    item.kind === "message"
+      ? { id: item.message.id, atMs: messageTimes.get(item.message.id) ?? 0 }
+      : { id: item.event.id, atMs: item.event.atMs },
+  );
+  const firstUnseen =
+    lastLookedMs === null ? -1 : marks.findIndex((mark) => mark.atMs > lastLookedMs);
+  const lastLookedAbove = firstUnseen <= 0 ? null : (marks[firstUnseen]?.id ?? null);
   /*
    * The week's allowance is the right face's second slice; until it is read
    * from an approval, no figure is drawn -- rule 6 refuses a spent figure
    * without the one it was approved against, and that refusal is the honest
    * state rather than a zero.
    */
+  /*
+   * **The centre, as one of two things** (D-0083 rules 4 and 5): the selected
+   * request's thread, or -- with nothing waiting and nothing named -- the
+   * empty centre, which asks what the person wants rather than showing an
+   * empty thread.
+   */
+  /*
+   * The two boxes a person writes in are still this renderer's
+   * (`composerView`), so they cross the seam as markup: the request box on the
+   * empty centre, and the box to add to a request under every thread. They
+   * are composed by the part that owns them and only placed here.
+   */
+  // **Composed whether or not there is a write port**: with none, the box's
+  // own part says the threads can be read and not written to, and D-0020 rule
+  // 2 wants that where a person is looking rather than on one screen.
+  const askBox = await composerView(
+    wording,
+    { kind: "requests" },
+    threads,
+    token,
+    newId,
+    ports.actorId,
+    nowMs,
+  )?.toString();
+  const addBox =
+    selectedRoot === null
+      ? null
+      : await composerView(
+          wording,
+          // **The message the box answers is the one the address names**
+          // (`replyTarget`): a person who followed a message's own *reply*
+          // link asked for that message, and the box has to be aimed at it.
+          { kind: "thread", messageId: selectedRoot, to: view.kind === "thread" ? view.to : null },
+          threads,
+          token,
+          newId,
+          ports.actorId,
+          nowMs,
+        )?.toString();
+  /*
+   * **The box to answer in** (D-0083 rule 9): the gate, whole, inside the
+   * thread rather than on a screen of its own. `shown` holds the framing for
+   * exactly this lap, and `approveView` composes every element the gate had
+   * -- the free-text field, both despite sentences, the withheld plain
+   * approve, the finding quoted -- which
+   * `test/access/gate-elements.test.ts` is the net under.
+   */
+  const gateFraming = answeringLap === null ? undefined : shown.get(answeringLap);
+  // The lap the box is for, which is the one at the gate rather than the one
+  // the list speaks with.
+  const gatedLap =
+    answeringLap === null || selectedRoot === null
+      ? null
+      : (lapsUnder(selectedRoot).find((lap) => lap.record.id === answeringLap)?.record ?? null);
+  const answeringBox =
+    gatedLap === null || gateFraming === undefined
+      ? null
+      : ((await approveView(wording, gatedLap, token, gateFraming, newIterationId)?.toString()) ??
+        null);
+  const actsMarkup =
+    selectedRoot === null
+      ? null
+      : ((await threadActs(
+          wording,
+          ports,
+          token,
+          selectedRoot,
+          selectedLaps,
+          threads,
+        )?.toString()) ?? null);
+  const centreContent = noSuchThread
+    ? { rendered: await note(wording.noSuchThread).toString() }
+    : selectedRoot === null
+      ? {
+          react: EmptyCentre({
+            wording,
+            composer: askBox === null || askBox === undefined ? null : Raw({ html: askBox }),
+          }),
+        }
+      : {
+          react: ThreadFace({
+            title: firstLine(threads.byId.get(selectedRoot)?.body ?? ""),
+            walk: (() => {
+              // **The walk is over what waits on the person** (D-0083 rule 3),
+              // in the list's own order, so *next* is the next-oldest thing
+              // waiting rather than the next row of anything.
+              const at = walkPosition(selectedRoot, requestsList);
+              if (at === null) {
+                return null;
+              }
+              const next = requestsList.yourTurn[at.at];
+              return {
+                said: wording.walkAt(at.at, at.of),
+                nextHref:
+                  next === undefined
+                    ? null
+                    : viewHref(
+                        { kind: "thread", messageId: next.messageId, to: null },
+                        wording.lang,
+                      ),
+                nextSaid: wording.walkNext,
+              };
+            })(),
+            governance:
+              selectedGovernance === null
+                ? null
+                : GovernanceLine({
+                    wording,
+                    governance: selectedGovernance,
+                    askedSaid: wording.age(ago(selectedGovernance.askedAtMs, nowMs)),
+                  }),
+            items: threadItems,
+            lastLookedAbove,
+            lastLookedSaid:
+              lastLookedMs === null
+                ? wording.lastLookedNever
+                : wording.lastLookedHere(wording.age(ago(lastLookedMs, nowMs))),
+            acts: actsMarkup === null ? null : Raw({ html: actsMarkup }),
+            answering: answeringBox === null ? null : Raw({ html: answeringBox }),
+            adding: addBox === null || addBox === undefined ? null : Raw({ html: addBox }),
+          }),
+        };
   const listContent = {
     react: RequestsFace({
       wording,
@@ -6230,58 +5245,19 @@ export async function operatorPage(
   // the forge's own configuration, and the tree is composed from what it read.
   const publishing =
     view.kind === "publish" ? await publishView(ports, wording, view, token, threads) : null;
-  const logging = view.kind === "log" ? await logView(ports, wording, view) : null;
   const releasing =
     view.kind === "release"
       ? await releaseView(ports, wording, view, releaseToken, ledger, threads, nowMs)
       : null;
-  /** The way onto the publish screen, drawn on an ended lap wherever one is listed. */
-  const publishTo = (record: IterationRecord) => publishLink(wording, ports, token, record);
-
-  // ponytail: the thread views still gather the laps above, as the summary
-  // does, on every redraw; skip those reads for them if a redraw costs.
-  const readingSections =
-    view.kind !== "reading"
-      ? []
-      : [
-          inboxView(ports, wording, inbox),
-          betweenView(wording, host),
-          ...(await Promise.all(
-            [...waiting, ...running, ...keptOlder, ...ended].map(async (record) =>
-              explainView(
-                wording,
-                record,
-                gather(record, await ports.store.readingsFor(record.id)),
-              ),
-            ),
-          )),
-          ...unreadable.map((row) =>
-            row.kind === "unreadable"
-              ? readingSection(
-                  wording.iterationHeading(row.id),
-                  "",
-                  <>
-                    <p class="text-[13px] leading-5">{wording.unreadableLead}</p>
-                    {/*
-                     * Wrapped, and no focus ring on arrival (the S2 design pass
-                     * on #220): the summary's link lands here, and a clipped
-                     * line in a heavy outline read as an error in the page.
-                     */}
-                    <pre
-                      id={`read-${row.id}-reason`}
-                      tabindex={-1}
-                      class={`${PRE.replace(/whitespace-pre$/, "whitespace-pre-wrap")} wrap-anywhere outline-none`}
-                    >
-                      {wording.willNotDecode(row.reason)}
-                    </pre>
-                  </>,
-                  `read-${row.id}`,
-                  glyph("alert"),
-                )
-              : null,
-          ),
-        ];
-
+  /**
+   * **Whether a person may be writing on this view.** With script off a reload
+   * throws a half-written draft away, so a view with a box does not reload
+   * itself and says so (#220 S1). The box to answer a gate counts as one:
+   * since D-0083 rule 9 it holds the free-text field a press carries, and it
+   * is drawn wherever a question is standing rather than on a screen of its
+   * own that never reloaded.
+   */
+  const writingHere = onThreads && (forms || answeringBox !== null);
   const here = viewHref(view, wording.lang);
   const page = (
     // **The document declares the language rondo actually wrote it in, and
@@ -6308,7 +5284,7 @@ export async function operatorPage(
                 // **Not where a person may be writing** (#220 S1): with script
                 // off a reload would throw a half-written draft away, so a
                 // view with a composer does not reload itself and says so.
-                onThreads && forms ? null : (
+                writingHere ? null : (
                   <noscript>
                     <meta http-equiv="refresh" content={`${String(REFRESH_SECONDS)};url=${here}`} />
                   </noscript>
@@ -6458,19 +5434,14 @@ export async function operatorPage(
             }
             <span class="js-only hidden items-center gap-1.5 text-xs text-muted-foreground sm:flex">
               {
-                // Each view names only the keys that do something on it: the
-                // answer view's rows (its claim groups and the press) have no
-                // link to open, and the summary has nowhere to go back to.
+                // Each view names only the keys that do something on it,
+                // and the summary has nowhere to go back to.
                 <>
                   {kbd("j")}
                   {kbd("k")}
                   <span class="mr-2">{wording.keyMove}</span>
-                  {view.kind === "answer" ? null : (
-                    <>
-                      {kbd("↵")}
-                      <span class="mr-2">{wording.keyOpen}</span>
-                    </>
-                  )}
+                  {kbd("↵")}
+                  <span class="mr-2">{wording.keyOpen}</span>
                 </>
               }
               {view.kind === "summary" ? null : (
@@ -6520,211 +5491,125 @@ export async function operatorPage(
          * the empty state's right face is the third's (gate point 7).
          */}
         <main>
-          {raw(
-            facesMarkup({
-              list: listContent,
-              side: null,
-              thread: {
-                rendered: await (
-                  <div class="mx-auto max-w-5xl space-y-6 px-4 pt-6 pb-12 sm:px-6">
-                    {
-                      // **Said on the visible page and not only in the reading.** With no
-                      // approver there is no write port and so no button anywhere, and a
-                      // page that explained that only inside the fold would leave an
-                      // operator looking for a button that is missing for a reason rondo
-                      // knows and did not say (D-0020 rule 2).
-                      ports.actorId === null ? (
-                        <p class="note rounded-md border border-border bg-muted/60 px-3 py-2 text-[13px] leading-5">
-                          {wording.noApproverNote}
-                        </p>
-                      ) : null
+          {
+            // **Said on the visible page, whichever face a person is on**
+            // (D-0020 rule 2). With no approver there is no write port and so
+            // no button anywhere; a page that left this to one screen would
+            // have an operator looking for a button that is missing for a
+            // reason rondo knows and did not say. It sits above the faces
+            // because it is true of the whole page and not of one of them.
+            ports.actorId === null ? (
+              <p class="note mx-auto max-w-5xl rounded-md border border-border bg-muted/60 px-3 py-2 text-[13px] leading-5">
+                {wording.noApproverNote}
+              </p>
+            ) : null
+          }
+          {
+            // A thread read that fails while the page is open must be said by
+            // the redraw that shows the empty list, and must go away with the
+            // redraw that recovers (#220 S1, Codex). Above the faces, because
+            // with the threads unreadable there is no centre to put it in.
+            threadRead.kind === "unreadable" ? (
+              <p class="note mx-auto max-w-5xl rounded-md border border-fail/40 px-3 py-2 text-[13px] leading-5 text-fail">
+                {wording.threadsUnreadable(threadRead.reason)}
+              </p>
+            ) : null
+          }
+          {/*
+           * **What the refresh swaps is the faces** (D-0054 rules 1 and 2,
+           * D-0059 R3). htmx `GET`s this view's own address every five seconds
+           * and takes `#ledger` out of the document that comes back. There is
+           * no fragment endpoint -- the response is the whole page a
+           * navigating browser gets -- so there is no second rendering of
+           * anything to keep true.
+           *
+           * It wrapped the status groups while the page was a ledger of laps;
+           * since D-0083 what goes stale is the thread and the list beside it,
+           * so the wrapper moved out here. The name stayed: `hx-get` and
+           * `hx-select` have to agree with each other, and renaming it would
+           * only churn the selector.
+           */}
+          <div
+            id="ledger"
+            {...(keepsCurrent
+              ? {
+                  "hx-get": here,
+                  "hx-trigger": "every 5s",
+                  "hx-select": "#ledger",
+                  "hx-swap": "outerHTML",
+                  "hx-select-oob": "#waiting-count",
+                }
+              : {})}
+          >
+            {raw(
+              facesMarkup({
+                list: listContent,
+                side: null,
+                /*
+                 * **The screens this rebuild does not touch keep their own
+                 * centre**: the scope screen, publish, the log and release are
+                 * still this renderer's server JSX, and they are drawn in the
+                 * centre face as they were. Everything else -- the page a
+                 * person actually arrives on -- is the thread or the empty
+                 * centre.
+                 */
+                thread: onOwnScreen
+                  ? {
+                      rendered: await (
+                        <div class="mx-auto max-w-5xl space-y-6 px-4 pt-6 pb-12 sm:px-6">
+                          {view.kind === "scope"
+                            ? scoping
+                            : view.kind === "publish"
+                              ? publishing
+                              : releasing}
+                        </div>
+                      ).toString(),
                     }
-                    {view.kind === "requests"
-                      ? composerView(wording, view, threads, token, newId, ports.actorId, nowMs)
-                      : null}
-                    {
-                      // **The ledger is what the refresh swaps**, and only on a live
-                      // view: htmx `GET`s this view's own address every five seconds and
-                      // takes `#ledger` out of the document that comes back. There is no
-                      // fragment endpoint -- the response is the whole page a navigating
-                      // browser gets (D-0054 rule 2) -- so there is no second rendering
-                      // of anything to keep true.
-                      <div
-                        id="ledger"
-                        class="space-y-8"
-                        {...(keepsCurrent
-                          ? {
-                              "hx-get": here,
-                              "hx-trigger": "every 5s",
-                              "hx-select": "#ledger",
-                              "hx-swap": "outerHTML",
-                              "hx-select-oob": "#waiting-count",
-                            }
-                          : {})}
-                      >
-                        {
-                          // Inside the swap (#220 S1, Codex): a thread read that fails
-                          // while the page is open must be said by the redraw that shows
-                          // the empty list, and must go away with the redraw that recovers.
-                          threadRead.kind === "unreadable" ? (
-                            <p class="note rounded-md border border-fail/40 px-3 py-2 text-[13px] leading-5 text-fail">
-                              {wording.threadsUnreadable(threadRead.reason)}
-                            </p>
-                          ) : null
-                        }
-                        {view.kind === "requests" ? (
-                          requestsView(wording, threads, nowMs, ports.actorId, scopeTo, lapUnder)
-                        ) : view.kind === "thread" ? (
-                          threadView(wording, threads, view, nowMs, ports.actorId, forms, scopeTo)
-                        ) : view.kind === "scope" ? (
-                          scoping
-                        ) : view.kind === "publish" ? (
-                          publishing
-                        ) : view.kind === "log" ? (
-                          logging
-                        ) : view.kind === "release" ? (
-                          releasing
-                        ) : waiting.length +
-                            running.length +
-                            keptOlder.length +
-                            ended.length +
-                            open.length +
-                            unreadable.length +
-                            threads.waiting.size ===
-                          0 ? (
-                          nothingView(wording)
-                        ) : (
-                          <>
-                            {waitingView(
-                              wording,
-                              waiting,
-                              open,
-                              nowMs,
-                              token,
-                              shown,
-                              threads,
-                              ports.actorId,
-                              waitingCount,
-                              newIterationId,
-                              owns,
-                            )}
-                            {/*
-                             * **A finished line still keeping its files sits with what
-                             * waits on a person, above what waits on nobody** (D-0082
-                             * rule 1). Every row in this group carries the release press,
-                             * so the whole group is drawn at the waiting weight; it was
-                             * under *running now*, which is the one group that needs no
-                             * one.
-                             */}
-                            {keptOlder.length === 0
-                              ? null
-                              : endedView(
-                                  wording,
-                                  keptOlder,
-                                  nowMs,
-                                  endedFacts,
-                                  publishTo,
-                                  threads,
-                                  landing,
-                                  wording.heldHeading(keptOlder.length),
-                                )}
-                            {attentionView(wording, unreadable)}
-                            {runningView(wording, running, transcripts, nowMs, owns)}
-                            {endedView(
-                              wording,
-                              ended,
-                              nowMs,
-                              endedFacts,
-                              publishTo,
-                              threads,
-                              landing,
-                            )}
-                          </>
-                        )}
-                        {onThreads ||
-                        view.kind === "scope" ||
-                        view.kind === "publish" ||
-                        view.kind === "log" ||
-                        view.kind === "release" ? null : (
-                          <p id="fold" class="border-t border-border pt-4 text-[13px]">
-                            <a
-                              id="fold-link"
-                              href={viewHref(
-                                view.kind === "reading" ? { kind: "summary" } : { kind: "reading" },
-                                wording.lang,
-                              )}
-                              class="text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-                              {...(view.kind === "reading" ? { "data-back": "" } : {})}
-                            >
-                              {view.kind === "reading" ? wording.hideReading : wording.openReading}
-                            </a>
-                          </p>
-                        )}
-                        {
-                          // **The fold and the reading are inside the swap too**: on
-                          // `?reading=open` they are drawn from the same ledger, and a
-                          // reading left outside `#ledger` would stay at first load
-                          // under a note that says the view redraws.
-                          readingSections.length === 0 ? null : (
-                            <div id="reading" class="space-y-2">
-                              {readingSections}
-                            </div>
-                          )
-                        }
-                      </div>
-                    }
-                    {view.kind === "thread"
-                      ? composerView(wording, view, threads, token, newId, ports.actorId, nowMs)
-                      : null}
-                    {
-                      // **Each view says which of the two it is**, because "redraws every
-                      // 5s" on a view that does not would be the page's own copy lying
-                      // about the one property D-0054 rule 1 spends itself on. Both say
-                      // the same thing about writing, which is the fact that did not
-                      // change: a read writes nothing, whoever or whatever issued it.
-                      // At the foot rather than the head (the design pass on #220): it is
-                      // the page's account of itself, and what needs the reader leads.
-                      // **One short line, and the account in its `title`** (the S1 design
-                      // pass): the sentences are the page's account of itself for the
-                      // reader who asks, not prose every reader has to read past.
-                      <p class="note max-w-3xl text-[11.5px] leading-5 text-faint">
-                        <span
-                          title={
-                            onThreads
-                              ? wording.threadsLiveNote(REFRESH_SECONDS)
-                              : keepsCurrent
-                                ? wording.liveNote(REFRESH_SECONDS)
-                                : wording.stillNote
-                          }
-                        >
-                          {
-                            // **Script only, as the header's live pill** (#220 S1): with
-                            // script off nothing redraws in place, and a thread with a box
-                            // does not reload at all, so "live" would be false there.
-                            keepsCurrent ? (
-                              <span class="js-only">{wording.liveShort(REFRESH_SECONDS)}</span>
-                            ) : (
-                              wording.stillShort
-                            )
-                          }
-                        </span>
-                      </p>
-                    }
-                    {onThreads && forms && view.kind === "requests" ? (
-                      <noscript>
-                        <p class="note max-w-3xl text-[11.5px] leading-5 text-faint">
-                          {wording.threadNoReload}
-                        </p>
-                      </noscript>
-                    ) : null}
-                  </div>
-                ).toString(),
-              },
-            }),
-          )}
+                  : centreContent,
+              }),
+            )}
+          </div>
+          {
+            // **Each view says which of the two it is**, because "redraws
+            // every 5s" on a view that does not would be the page's own copy
+            // lying about the one property D-0054 rule 1 spends itself on.
+            // Both say the same thing about writing, which is the fact that
+            // did not change: a read writes nothing, whoever or whatever
+            // issued it. At the foot rather than the head (the design pass on
+            // #220): it is the page's account of itself, and what needs the
+            // reader leads. **One short line, and the account in its
+            // `title`** (the S1 design pass).
+            //
+            // **Outside the swap**, because it is true of the document and not
+            // of the faces; the header's live pill is its pair and is outside
+            // too.
+            <p class="note mx-auto max-w-5xl px-4 text-[11.5px] leading-5 text-faint sm:px-6">
+              <span
+                title={
+                  onThreads
+                    ? wording.threadsLiveNote(REFRESH_SECONDS)
+                    : keepsCurrent
+                      ? wording.liveNote(REFRESH_SECONDS)
+                      : wording.stillNote
+                }
+              >
+                {
+                  // **Script only, as the header's live pill** (#220 S1): with
+                  // script off nothing redraws in place, and a thread with a
+                  // box does not reload at all, so "live" would be false there.
+                  keepsCurrent ? (
+                    <span class="js-only">{wording.liveShort(REFRESH_SECONDS)}</span>
+                  ) : (
+                    wording.stillShort
+                  )
+                }
+              </span>
+            </p>
+          }
         </main>
       </body>
     </html>
   );
+
   return `<!doctype html>\n${await page.toString()}\n`;
 }

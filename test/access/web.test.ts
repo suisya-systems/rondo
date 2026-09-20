@@ -32,11 +32,10 @@ import {
   reviseFromPage,
   startScopedFromPage,
 } from "../../src/access/cli.js";
-import { reportToRequest } from "../../src/access/conductor.js";
 import { draftedStanding } from "../../src/access/drafted-view.js";
 import { drafterHost } from "../../src/access/drafter-host.js";
 import { inspectLapWork } from "../../src/access/forge.js";
-import type { TranscriptLocation } from "../../src/access/inbox.js";
+import type {} from "../../src/access/inbox.js";
 import { forgeBody, ISSUE_READER, namedIssues } from "../../src/access/issue-read.js";
 import { draftedPlanRun } from "../../src/access/model-drafter.js";
 import { viewHref } from "../../src/access/page-logic/routes.js";
@@ -67,6 +66,7 @@ import {
 } from "../../src/store/records.js";
 import { advisoryRecord, iterationStore } from "../../src/store/sqlite.js";
 import { laneFor, ownLane } from "../lane-claims.js";
+import { openRequest, REQUEST } from "../request-fixture.js";
 import {
   planDocument as drafterPlanDocument,
   agentTypeDigestOf as drafterTypeOf,
@@ -220,21 +220,19 @@ function withHost(base: string, host: string): Promise<{ status: number; body: s
   });
 }
 
-test("the page shows what inbox, between and explain show", async () => {
+test("the page draws the request it selected, and says what a redraw does", async () => {
   const world = fresh();
   await reserve(world, "i-0001", "do the thing");
 
   const html = await operatorPage(portsOver(world));
-  const opened = await operatorPage(portsOver(world), null, {
-    kind: "reading",
-  });
 
-  // The lead answers the operator's questions; the reading is where the three
-  // commands' own compositions are, whole (rondo#145).
+  // **What the page shows is a request's thread** (D-0083 rule 2), so the
+  // person's own words are on it. This used to also assert what the reading
+  // fold held -- `rondo inbox`, `between` and `explain`, drawn whole -- and
+  // that fold is gone with D-0083: rule 4 puts the inbox in the empty centre,
+  // rule 5 the material on the right face, and `between` is read from the
+  // terminal.
   expect(html).toContain("do the thing");
-  expect(opened).toContain("inbox for 'ada'");
-  expect(opened).toContain("what spans the live laps");
-  expect(opened).toContain("iteration 'i-0001'");
   // The page says out loud what a redraw does, because a screen that moves a
   // last-look mark by being left open is worse than one that says it does not.
   expect(html).toContain("a redraw writes nothing");
@@ -254,10 +252,11 @@ test("looking at the page writes nothing", async () => {
   // ports (D-0041).
   for (let draw = 0; draw < 3; draw += 1) {
     await operatorPage(portsOver(world, "ada", []), "t");
-    await operatorPage(portsOver(world, "ada", []), "t", { kind: "reading" });
+    await operatorPage(portsOver(world, "ada", []), "t", { kind: "requests" });
     await operatorPage(portsOver(world, "ada", []), "t", {
-      kind: "answer",
-      iterationId: "i-0001",
+      kind: "thread",
+      messageId: "req-i-0001",
+      to: null,
     });
   }
 
@@ -329,50 +328,43 @@ test("a press records the framing it rests on, and one that cannot be recorded a
 test("an empty store renders a page rather than an error", async () => {
   const html = await operatorPage(portsOver(fresh(), null));
 
-  expect(html).toContain("Nothing is waiting on you");
-  // No approver, no inbox -- and the page says which **where it is visible**,
-  // rather than drawing somebody else's, showing an empty one as though it were
-  // theirs, or explaining a missing button only inside the fold.
-  expect(lead(html)).toContain("RONDO_APPROVER is not set");
-  expect(await operatorPage(portsOver(fresh(), null), null, { kind: "reading" })).toContain(
-    "what spans the live laps",
-  );
+  // **Empty is the ordinary state, and its centre asks** (D-0083 rule 4). It
+  // used to be a sentence counting three zeroes; a question is what the
+  // decision put there instead.
+  expect(html).toContain("What would you like to ask for?");
+  // No approver, and the page says so **where it is visible**, rather than
+  // drawing somebody else's inbox, showing an empty one as though it were
+  // theirs, or explaining a missing button on a screen nobody arrives at.
+  expect(html).toContain("RONDO_APPROVER is not set");
 });
 
 test("a request keeps its paragraphs and its markup is text (rondo#90)", async () => {
   const world = fresh();
   await reserve(world, "i-0001", "first line\n\nsecond <b>paragraph</b>");
 
-  const html = await operatorPage(portsOver(world));
+  // The words are the request's own, so they are read in its thread: nothing
+  // is waiting here, and rule 3 selects nothing (rule 4's empty centre).
+  const html = await operatorPage(portsOver(world), null, {
+    kind: "thread",
+    messageId: "req-i-0001",
+    to: null,
+  });
 
   // The newline survives as a newline: the terminal escapes it to a `\u` form
   // (D-0004) because a cp932 console may not encode it, and a browser has no
   // such problem. `white-space: pre-wrap` is what renders it.
   expect(html).toContain("first line\n\nsecond");
   expect(html).not.toContain("\\u000a");
-  // ...and the running row that carries it is not cut to one line.
-  const request = /<p class="(request[^"]*)"[^>]*>first line/.exec(html)?.[1] ?? "";
-  expect(request).toContain("whitespace-pre-wrap");
-  expect(request).not.toContain("truncate");
+  // ...and the paragraph that carries it is not cut to one line. The words are
+  // in the thread now (D-0083 rule 5) rather than on a running row, so the
+  // measure and the wrapping are `page/thread.css`'s rather than a class list
+  // on the element.
+  expect(html).toMatch(/<p lang="">first line/);
+  expect(bytesOf("page/thread.css").toString("utf8")).toMatch(
+    /\.msg p \{[^}]*white-space: pre-wrap/,
+  );
   expect(html).toContain("&lt;b&gt;paragraph&lt;/b&gt;");
   expect(html).not.toContain("<b>paragraph</b>");
-});
-
-test("one basis is written once above the claims that rest on it (rondo#91)", async () => {
-  const world = fresh();
-  await reserve(world, "i-0001", "do the thing");
-
-  const html = await operatorPage(portsOver(world));
-  const bases = [...html.matchAll(/<p class="basis[^"]*">([^<]*)<\/p>/g)].map((match) => match[1]);
-
-  // Every group's basis differs from the one before it, which is what makes the
-  // repetition impossible rather than merely absent from this fixture.
-  expect(bases.length).toBeGreaterThan(0);
-  for (const [at, basis] of bases.entries()) {
-    if (at > 0) {
-      expect(basis).not.toBe(bases[at - 1]);
-    }
-  }
 });
 
 test("it serves the page on localhost, and only the one page", async () => {
@@ -402,16 +394,18 @@ test("it serves the page on localhost, and only the one page", async () => {
   // `approve` was refused while every hand-written request here passed.
   // Observed in headless Chromium against this page on 2026-09-14.
   expect(page.headers.get("referrer-policy")).toBe("same-origin");
-  expect(await page.text()).toContain("waiting for your answer");
+  expect(await page.text()).toContain("do the thing");
 
-  // **The reading is the same page at a second address**, and the redraw it
-  // serves points back at that address -- so the fold an operator opened is
-  // still open five seconds later, which is what makes it a fold (rondo#145).
-  const withReading = await fetch(`${base}/?reading=open`);
-  expect(withReading.status).toBe(200);
-  const readingHtml = await withReading.text();
-  expect(readingHtml).toContain("what spans the live laps");
-  expect(readingHtml).toContain('content="5;url=/?reading=open&amp;lang=en"');
+  // **A request's thread is the same page at a second address**, and the
+  // redraw it serves points back at that address -- so what an operator
+  // opened is still what is drawn five seconds later. This was the reading
+  // fold's property before D-0083 took the fold away; it is the same claim
+  // about the same mechanism, made where the page still has two addresses.
+  const withThread = await fetch(`${base}/?thread=req-i-0001`);
+  expect(withThread.status).toBe(200);
+  const threadHtml = await withThread.text();
+  expect(threadHtml).toContain("do the thing");
+  expect(threadHtml).toContain('content="5;url=/?thread=req-i-0001&amp;lang=en"');
 
   // One page and no router: a typo'd path says so rather than quietly showing
   // the only page there is.
@@ -439,47 +433,44 @@ test("the button is drawn only where there is a gate and somebody to answer it",
   const world = fresh();
   await reserve(world, "i-0001", "do the thing");
   const pressed: Pressed = [];
+  const thread = { kind: "thread", messageId: "req-i-0001", to: null } as const;
 
-  const answering = { kind: "answer", iterationId: "i-0001" } as const;
-
-  // Reserved and not yet at a gate: nothing is asking, so nothing is offered --
-  // and the view that would carry a button does not invent one either.
-  expect(await operatorPage(portsOver(world, "ada", pressed), "t")).not.toContain("<form");
-  expect(await operatorPage(portsOver(world, "ada", pressed), "t", answering)).not.toContain(
-    "<form",
-  );
+  // Reserved and not yet at a gate: nothing is asking, so **no approve button**
+  // is offered. The box to add to the request is always there (D-0083 rule 5),
+  // so what this asks is that there is no press to answer a gate with.
+  const quiet = await operatorPage(portsOver(world, "ada", pressed), "t", thread);
+  expect(quiet).not.toContain('id="answering"');
+  expect(quiet).not.toContain("gate-i-0001");
 
   await openGate(world, "i-0001");
-  // The summary is the way to the button and not the button: it names the row
-  // and points at the address that carries the framing a press records.
-  const summary = await operatorPage(portsOver(world, "ada", pressed), "t");
-  expect(summary).not.toContain("<form");
-  expect(summary).toContain('href="/?answer=i-0001&amp;lang=en"');
-
-  const offered = await operatorPage(portsOver(world, "ada", pressed), "t", answering);
+  // **The box is in the thread** (D-0083 rule 3): the screen that shows the
+  // request is the screen that carries the press, and there is no second
+  // address in between.
+  const offered = await operatorPage(portsOver(world, "ada", pressed), "t", thread);
+  expect(offered).toContain('id="answering"');
   expect(offered).toContain('method="post"');
   expect(offered).toContain("gate-i-0001");
   // **What the press would approve over, beside the press** (D-0029 rule 2).
   // The screen that is easier to reach than the terminal must not also be the
   // screen that asks for less before it writes.
   expect(offered).toContain("work    rondo/i-0001");
-  // And a row named by the query that is not at a gate gets neither: the
-  // conditions are the same ones `rondo answer` refuses on.
-  expect(
-    await operatorPage(portsOver(world, "ada", pressed), "t", {
-      kind: "answer",
-      iterationId: "i-0404",
-    }),
-  ).not.toContain("<form");
+  // And a thread whose lap is not at a gate gets neither: the conditions are
+  // the same ones `rondo answer` refuses on.
+  const other = await operatorPage(portsOver(world, "ada", pressed), "t", {
+    kind: "thread",
+    messageId: "req-i-0404",
+    to: null,
+  });
+  expect(other).not.toContain('id="answering"');
 
-  // No approver, no write port, no button -- even at the same open gate, and
-  // not on the answering view either. The page is not a second place rondo will
-  // act for an unnamed person. Asked of the server since D-0059: the renderer
-  // no longer holds the writer (rule 3a), so *whether there is one* is decided
-  // where it is held, and handed down as a token or as nothing.
+  // No approver, no write port, no button -- even at the same open gate. The
+  // page is not a second place rondo will act for an unnamed person. Asked of
+  // the server since D-0059: the renderer no longer holds the writer (rule
+  // 3a), so *whether there is one* is decided where it is held, and handed
+  // down as a token or as nothing.
   const { base, stop, served } = await serving(portsOver(world, null));
   expect(await (await fetch(`${base}/?lang=en`)).text()).not.toContain("<form");
-  expect(await (await fetch(`${base}/?answer=i-0001&lang=en`)).text()).not.toContain("<form");
+  expect(await (await fetch(`${base}/?thread=req-i-0001&lang=en`)).text()).not.toContain("<form");
   stop.abort();
   expect(await served).toBe(0);
 });
@@ -498,10 +489,11 @@ test("a person's press answers the gate and an unattended redraw cannot", async 
   }
   expect(pressed).toEqual([]);
 
-  const token = tokenIn(await (await fetch(`${base}/?answer=i-0001`)).text());
+  const token = tokenIn(await (await fetch(`${base}/?thread=req-i-0001`)).text());
   const answered = await post(base, {
     token,
     iteration: "i-0001",
+    request: "req-i-0001",
     body: "revise",
   });
 
@@ -510,9 +502,11 @@ test("a person's press answers the gate and an unattended redraw cannot", async 
   expect(pressed).toEqual([{ iterationId: "i-0001", body: "approve" }]);
   // A redirect and not a page, so a refresh re-reads rather than re-answers --
   // and it carries the tag the press was made under (D-0056 rule 11), so the
-  // page the operator lands back on does not re-resolve its language.
+  // page the operator lands back on does not re-resolve its language. It lands
+  // in the thread the press was made in (D-0083 rule 3), where the event line
+  // for what it did is now the last thing on the time axis.
   expect(answered.status).toBe(303);
-  expect(answered.location).toBe("/?lang=en#lap-i-0001");
+  expect(answered.location).toBe("/?thread=req-i-0001&lang=en");
 
   stop.abort();
   expect(await served).toBe(0);
@@ -524,7 +518,7 @@ test("a form from another page is refused, token first and origin too", async ()
   await openGate(world, "i-0001");
   const pressed: Pressed = [];
   const { base, stop, served } = await serving(portsOver(world, "ada", pressed));
-  const token = tokenIn(await (await fetch(`${base}/?answer=i-0001`)).text());
+  const token = tokenIn(await (await fetch(`${base}/?thread=req-i-0001`)).text());
 
   // **The attack the `Host` check does not reach.** A form on evil.example
   // posting to http://127.0.0.1:7333/ sends exactly the `Host` the operator's
@@ -562,7 +556,7 @@ test("a refusal from the write port is shown rather than redirected away", async
     ),
   };
   const { base, stop, served } = await serving(ports);
-  const token = tokenIn(await (await fetch(`${base}/?answer=i-0001`)).text());
+  const token = tokenIn(await (await fetch(`${base}/?thread=req-i-0001`)).text());
 
   const refused = await post(base, { token, iteration: "i-0001" });
   // 303 back to a page still showing the same open gate would be the one answer
@@ -573,87 +567,6 @@ test("a refusal from the write port is shown rather than redirected away", async
 
   stop.abort();
   expect(await served).toBe(0);
-});
-
-/** The visible page: everything a browser draws before the fold is opened. */
-function lead(html: string): string {
-  return html.slice(0, html.indexOf('<p id="fold"'));
-}
-
-/** The fold: what the second address of the page adds below the link. */
-function reading(html: string): string {
-  return html.slice(html.indexOf('<p id="fold"'));
-}
-
-test("an idle store says zero once rather than nine times (rondo#145)", async () => {
-  const html = await operatorPage(portsOver(fresh()));
-  const opened = await operatorPage(portsOver(fresh()), null, {
-    kind: "reading",
-  });
-
-  // The measurement in the issue: nine phrasings of nothing, of which this is
-  // the shape. One sentence now stands where they did, and it carries what it
-  // rests on -- which is not the same as the page having stopped saying it.
-  expect(lead(html)).toContain(
-    "Nothing is waiting on you, nothing is running, and nothing has finished.",
-  );
-  expect(lead(html)).not.toContain("proposals that bind nothing");
-  expect(lead(html)).not.toContain("an admission a bound refused");
-  expect(lead(html)).not.toContain("you have never looked");
-  // Folded and not hidden (D-0032): every one of them is still on the page,
-  // under the basis it always had.
-  expect(reading(opened)).toContain("proposals that bind nothing (0)");
-  expect(reading(opened)).toContain("an admission a bound refused");
-  expect(reading(opened)).toContain("snapshot /refusals = []");
-  // **The fold survives the redraw, because the URL holds it open and not the
-  // browser.** A `<details>` would be shut again five seconds later, and a page
-  // with no script could not reopen it -- which would make this a hiding.
-  expect(opened).toContain('content="5;url=/?reading=open&amp;lang=en"');
-  expect(html).toContain('content="5;url=/?lang=en"');
-});
-
-test("the page is ordered by the operator's three questions (rondo#145)", async () => {
-  const world = fresh();
-  await reserve(world, "i-0001", "do the thing");
-
-  const html = await operatorPage(portsOver(world));
-  const at = (heading: string) => lead(html).indexOf(heading);
-  const opened = await operatorPage(portsOver(world), null, {
-    kind: "reading",
-  });
-
-  expect(at("waiting for your answer")).toBeGreaterThan(-1);
-  expect(at("running now")).toBeGreaterThan(at("waiting for your answer"));
-  expect(at("just finished")).toBeGreaterThan(at("running now"));
-  // rondo's own vocabulary is below the questions, not in place of them.
-  expect(at("what spans the live laps")).toBe(-1);
-  expect(html).toContain('href="/?reading=open&amp;lang=en"');
-  expect(reading(opened)).toContain("what spans the live laps");
-});
-
-test("the three questions are told apart in the markup, not only in the order (rondo#153)", async () => {
-  const world = fresh();
-  await reserve(world, "i-0001", "do the thing");
-
-  const html = lead(await operatorPage(portsOver(world)));
-
-  // The order alone put the three questions in a row and gave them the same
-  // weight; `data-question` is the whole of what the markup weighs them by,
-  // and each group carries exactly one.
-  expect(html).toContain('<section data-question="waiting"');
-  expect(html).toContain('<section data-question="running"');
-  expect(html).toContain('<section data-question="ended"');
-  // Both palettes are declared rather than inherited from the user agent, so a
-  // dark reader gets rondo's contrast and not the browser's (rondo#153). Since
-  // D-0059 they are the stylesheet's source rather than an inline block.
-  const page = await operatorPage(portsOver(world));
-  expect(bytesOf("page/app.css").toString("utf8")).toContain("@media (prefers-color-scheme: dark)");
-  expect(page).toContain('<link rel="stylesheet" href="/app.css"/>');
-  // No *inline* script and no inline style, and still nothing but the one form
-  // that can write: what the page executes is files this process serves under
-  // `script-src 'self'`, each named in the served-file manifest (D-0059 R1).
-  expect(page).not.toMatch(/<script(?![^>]*\bsrc=)/);
-  expect(page).not.toContain("<style");
 });
 
 test("a lap at a gate carries its cost and its fence beside the button (rondo#145)", async () => {
@@ -669,35 +582,19 @@ test("a lap at a gate carries its cost and its fence beside the button (rondo#14
   );
   expect(settled.kind).toBe("transitioned");
 
-  const html = await operatorPage(portsOver(world, "ada", []), "t");
   const answering = await operatorPage(portsOver(world, "ada", []), "t", {
-    kind: "answer",
-    iterationId: "i-0001",
+    kind: "thread",
+    messageId: "req-i-0001",
+    to: null,
   });
 
-  // What it cost (#124), what its fence refused (#122) and what releases it,
-  // on the row a person came to act on -- and the row cited once above them
-  // rather than a basis under each (rondo#91).
-  expect(lead(html)).toContain("cost $1.42, 18 turns, duration not read");
-  // The bytes continuo wrote, as HTML text: the array is quoted in the column
-  // and the page escapes rather than re-encodes it.
-  expect(lead(html)).toContain("the fence refused [&quot;Bash(rm:*)&quot;]");
-  expect(lead(html)).toContain("answer gate gate-i-0001");
-  // The column shows the id alone and keeps the basis it abbreviates as `title`.
-  expect(lead(html)).toContain('title="iteration i-0001"><p class="basis">i-0001</p>');
-  // The state is a pill a person reads, with the status sentence as its `title`.
-  expect(lead(html)).toContain(">Waiting on you</span>");
-  expect(lead(html)).toContain('title="awaiting_human -- waiting ');
-
-  // **The button is on the page that showed what a press records** (D-0042
-  // rules 1 and 4). `recordPagePress` stores `explainIteration`'s entire claim
-  // set and counts it as presented, so every one of those claims has to have
-  // reached the browser: a summary with a button would record a presentation
-  // that did not happen, and two dozen claims per waiting row on the summary is
-  // the screen rondo#145 is about. So the summary is the way there and the
-  // answering view is the press.
-  expect(html).not.toContain("<form");
-  expect(lead(html)).toContain('href="/?answer=i-0001&amp;lang=en"');
+  // **What a press records as shown, beside the press** (D-0042 rules 1 and
+  // 4). `recordPagePress` stores `explainIteration`'s entire claim set and
+  // counts it as presented, so every one of those claims has to have reached
+  // the browser. rondo#145's complaint was that this belonged on a screen of
+  // its own rather than on every waiting row of a summary; D-0083 rule 3
+  // answered it the other way -- there is one screen, and the claims are in
+  // the box on it, drawn for the one request being answered.
   expect(answering).toContain('method="post"');
   expect(answering).toContain("What pressing approve records as shown");
   expect(answering).toContain("snapshot /iteration/lapCostUsd = 1.42");
@@ -711,96 +608,12 @@ test("a lap at a gate carries its cost and its fence beside the button (rondo#14
   // refuses a press naming a row that is not there.
   expect(answering).not.toContain('http-equiv="refresh"');
 
-  // A summary reads neither the framing nor the material: both cost a read per
-  // row, on a surface that redraws every five seconds.
-  expect(html).not.toContain("What pressing approve records as shown");
-  expect(html).not.toContain("work    rondo/i-0001");
-});
-
-test("a lap that has ended is on the page it just left (rondo#145)", async () => {
-  const world = fresh();
-  await reserve(world, "i-0001", "do the thing");
-  await openGate(world, "i-0001");
-  const closed = await world.store.transition(
-    "i-0001",
-    "awaiting_human",
-    "closed",
-    { gateOutcome: "approve" },
-    4_000,
-  );
-  expect(closed.kind).toBe("transitioned");
-
-  const html = await operatorPage(portsOver(world));
-
-  expect(lead(html)).toContain("just finished (1)");
-  // The pill says the outcome; the terminal's head sentence is its `title`.
-  expect(lead(html)).toContain(">Approved</span>");
-  expect(lead(html)).toContain("1s ago");
-  expect(lead(html)).toContain(`title="closed 1s ago -- gate answered 'approve'"`);
-  // Nothing is running and nothing is waiting, and the page says each once.
-  expect(lead(html)).toContain("waiting for your answer (0)");
-  expect(lead(html)).toContain("running now (0)");
-});
-
-test("an approved lap says so in words, not the store's outcome constant (rondo#248)", async () => {
-  for (const [chrome, pill, why] of [
-    [EN, ">Approved</span>", "approved at the gate"],
-    [chromeFor("ja"), ">承認済み</span>", "ゲートで承認された"],
-  ] as const) {
-    const world = fresh();
-    await reserve(world, "i-0001", "do the thing");
-    await openGate(world, "i-0001");
-    const closed = await world.store.transition(
-      "i-0001",
-      "awaiting_human",
-      "closed",
-      { gateOutcome: APPROVED_OUTCOME },
-      4_000,
-    );
-    expect(closed.kind).toBe("transitioned");
-
-    const html = await operatorPage(portsOver(world), "t", { kind: "summary" }, chrome);
-
-    expect(lead(html)).toContain(pill);
-    expect(lead(html)).toContain(why);
-    expect(lead(html)).not.toContain(APPROVED_OUTCOME);
-  }
-});
-
-test("an explanation nobody can answer is not a thing waiting on you (rondo#145)", async () => {
-  const world = fresh();
-  await reserve(world, "i-0001", "do the thing");
-  await openGate(world, "i-0001");
-
-  // Every press records one of these (D-0042 rule 1), and `openProposals`
-  // returns it for ever: `recordDecision` refuses the non-binding kinds, so
-  // nothing can ever settle it. Counting it as waiting would make the queue
-  // climb by one with each approval and never come back down.
-  expect(
-    await recordPagePress(
-      // Before the bound this page's clock reads: `openProposals` is asked
-      // `uptoMs`, so a proposal recorded after it would be outside the window
-      // for a reason that has nothing to do with what is under test here.
-      {
-        store: world.store,
-        record: world.record,
-        now: () => 4_000,
-        present: () => undefined,
-      },
-      "i-0001",
-    ),
-  ).toEqual({ ok: true, note: "" });
-  expect(rows(world.connection, "proposal")).toBe(1);
-
-  const html = await operatorPage(portsOver(world));
-  const opened = await operatorPage(portsOver(world), null, {
-    kind: "reading",
-  });
-
-  // One row waits: the iteration at its gate. The explanation is material, and
-  // it is in the reading where the inbox already lists it by authority.
-  expect(lead(html)).toContain("waiting for your answer (1)");
-  expect(reading(opened)).toContain("proposals that bind nothing (1)");
+  // **And the framing is read for the one request being answered**, never for
+  // every row: both cost a read per lap, on a surface that redraws every five
+  // seconds. With nothing waiting, nothing is selected and nothing is read.
+  const quiet = await operatorPage(portsOver(fresh(), "ada", []), "t");
+  expect(quiet).not.toContain("What pressing approve records as shown");
+  expect(quiet).not.toContain("work    rondo/i-0001");
 });
 
 test("the elements that quote material carry the lang the plan asked for (D-0053 rule 12)", async () => {
@@ -813,12 +626,14 @@ test("the elements that quote material carry the lang the plan asked for (D-0053
       material: async () => await Promise.resolve(asText("なぜ止まったか")),
     },
     "t",
-    { kind: "answer", iterationId: "i-0001" },
+    { kind: "thread", messageId: "req-i-0001", to: null },
   );
 
-  // The two elements rule 12 names, and nothing else: the request paragraph the
-  // lap wrote for this operator, and the block a press records as shown.
-  expect(html).toMatch(/<p class="request[^"]*" lang="ja">/);
+  // **The element rule 12 names that this page still draws**: the block a
+  // press records as shown. The other was the summary row's paragraph of the
+  // lap's own request string, and D-0083 rule 2 replaced it -- the thread is
+  // named by the person's own words, whose language rondo does not know
+  // (D-0055 rule 8, below).
   expect(html).toMatch(/<pre class="material[^"]*" lang="ja">/);
   // **The chrome is `en` because this host asked for nothing**, which is what
   // D-0055 rule 7 leaves unchanged: the document names the language rondo
@@ -842,17 +657,18 @@ test('a lap nobody asked a language of says so with `lang=""` (D-0055 rule 8)', 
     ...portsOver(world, "ada", []),
     material: async () => await Promise.resolve(asText("why it stopped")),
   };
-  const view = { kind: "answer", iterationId: "i-0001" } as const;
+  const view = { kind: "thread", messageId: "req-i-0001", to: null } as const;
   const html = await operatorPage(ports, "t", view);
 
-  expect(html).toMatch(/<p class="request[^"]*" lang="">/);
+  // The words a person wrote, and the material the press is made over.
+  expect(html).toMatch(/<p lang="">do the thing<\/p>/);
   expect(html).toMatch(/<pre class="material[^"]*" lang="">/);
   // It does not become the chrome's tag on a host that asked for one, which is
   // the whole of what the empty string is here to refuse: the two attributes
   // are true about different things and nothing reconciles them.
   const inJapanese = await operatorPage(ports, "t", view, chromeFor("ja"));
   expect(inJapanese).toContain('<html lang="ja">');
-  expect(inJapanese).toMatch(/<p class="request[^"]*" lang="">/);
+  expect(inJapanese).toMatch(/<p lang="">do the thing<\/p>/);
   expect(inJapanese).toMatch(/<pre class="material[^"]*" lang="">/);
 });
 
@@ -889,16 +705,12 @@ test("liveness is per view: two views poll and swap, and the answer view updates
   await openGate(world, "i-0001");
   const ports = portsOver(world, "ada", []);
 
-  const summary = await operatorPage(ports, "t");
-  const opened = await operatorPage(ports, "t", { kind: "reading" });
-  const answering = await operatorPage(ports, "t", {
-    kind: "answer",
-    iterationId: "i-0001",
-  });
+  const summary = await operatorPage(ports, "t", { kind: "summary" }, EN, mint);
+  const opened = await operatorPage(ports, "t", { kind: "requests" }, EN, mint);
 
   for (const [html, href] of [
     [summary, "/?lang=en"],
-    [opened, "/?reading=open&amp;lang=en"],
+    [opened, "/?requests=open&amp;lang=en"],
   ] as const) {
     // htmx, then rondo's key script, both deferred so neither runs before the
     // document, and both served by this process (D-0059 R1, R2): root-relative
@@ -913,16 +725,39 @@ test("liveness is per view: two views poll and swap, and the answer view updates
     expect(scriptTagsIn(html).filter((tag) => tag.includes("://"))).toEqual([]);
     // **The refresh is a `GET` of this view's own address**, and the one
     // element it swaps is the ledger (D-0054 rules 1 and 2, R3).
+    // **What the poll swaps is the faces** (D-0083 rule 5). It wrapped the
+    // status groups while the page was a ledger of laps; the name is kept
+    // because `hx-get` and `hx-select` have to agree with each other.
     expect(html).toContain(
-      `<div id="ledger" class="space-y-8" hx-get="${href}" hx-trigger="every 5s" hx-select="#ledger" hx-swap="outerHTML" hx-select-oob="#waiting-count">`,
+      `<div id="ledger" hx-get="${href}" hx-trigger="every 5s" hx-select="#ledger" hx-swap="outerHTML" hx-select-oob="#waiting-count">`,
     );
-    expect([...html.matchAll(/hx-[a-z-]+=/g)].map((found) => found[0])).toEqual([
+    // The boxes are inside the faces now, so each says it survives the swap
+    // -- and nothing else on the page asks htmx for anything.
+    const asked = [...html.matchAll(/hx-[a-z-]+=/g)].map((found) => found[0]);
+    expect(asked.slice(0, 5)).toEqual([
       "hx-get=",
       "hx-trigger=",
       "hx-select=",
       "hx-swap=",
       "hx-select-oob=",
     ]);
+    // **The only other thing on the page that asks htmx for anything is the
+    // send box's own swap**, and only where the box is a reply: a new request
+    // lands in its own thread, a different view, so it is a native submit.
+    expect(
+      asked
+        .slice(5)
+        .every((one) =>
+          [
+            "hx-post=",
+            "hx-target=",
+            "hx-select=",
+            "hx-swap=",
+            "hx-select-oob=",
+            "hx-disabled-elt=",
+          ].includes(one),
+        ),
+    ).toBe(true);
     // **R2's substitute is the library's configuration**, and it is on the
     // page rather than assumed from htmx's defaults.
     const config = JSON.parse(
@@ -951,41 +786,46 @@ test("liveness is per view: two views poll and swap, and the answer view updates
         },
       ],
     });
-    // The meta refresh has not been deleted -- it has moved, and it is what a
-    // browser with scripting off still runs on.
-    expect(html).toContain(`<noscript><meta http-equiv="refresh" content="5;url=${href}"/>`);
+    // **No meta refresh where a person may be writing** (#220 S1): both of
+    // these carry a box, and with script off a reload would throw a
+    // half-written draft away. The page says which of the two it is, in the
+    // sentence at its foot.
+    expect(html).not.toContain('http-equiv="refresh"');
     expect(html).toContain("Redraws every 5s, and a redraw writes nothing");
   }
-  // **What the reading view shows is inside what the refresh swaps**: `#ledger`
-  // holds the fold and the reading sections, counted by `<div>` depth from
-  // `#ledger`'s own opening tag.
-  const ledgerAt = opened.indexOf('<div id="ledger"');
+  // **The faces are inside what the refresh swaps**, and the boxes inside
+  // them say they survive it: counted by `<div>` depth from `#ledger`'s own
+  // opening tag.
+  const ledgerAt = summary.indexOf('<div id="ledger"');
   const depthAt = (marker: string): number => {
-    const at = opened.indexOf(marker);
+    const at = summary.indexOf(marker);
     expect(at, marker).toBeGreaterThan(ledgerAt);
-    const between = opened.slice(ledgerAt, at);
+    const between = summary.slice(ledgerAt, at);
     return (between.match(/<div[\s>]/g) ?? []).length - (between.match(/<\/div>/g) ?? []).length;
   };
-  expect(depthAt('<p id="fold"')).toBeGreaterThan(0);
-  expect(depthAt('<div id="reading"')).toBeGreaterThan(0);
+  expect(depthAt('<div class="page-faces"')).toBeGreaterThan(0);
+  expect(depthAt('<div id="answering"')).toBeGreaterThan(0);
+  expect(depthAt('<form id="composer"')).toBeGreaterThan(0);
 
-  // **The answer view updates by nothing at all** (D-0054 rule 1): no poll, no
-  // library, no refresh, not even inside `<noscript>` -- it has no auto-update
-  // in either mode, so there is nothing to degrade to. It carries only the key
-  // script, which moves focus and follows links and changes nothing by itself.
-  // And the composer script, whose fold keeping is what holds a fold the
-  // person opened here across the press (#220 S1); it redraws nothing.
-  expect(scriptTagsIn(answering)).toEqual([
+  // **A view a press is made from holds still** (D-0054 rule 1): the scope
+  // screen and the publish screen have no poll, no refresh and no library
+  // loaded to do either, so there is nothing to degrade to.
+  const still = await operatorPage(ports, "t", {
+    kind: "scope",
+    messageId: "req-i-0001",
+    rounds: null,
+    decisionId: null,
+    plan: null,
+  });
+  expect(scriptTagsIn(still)).toEqual([
     '<script src="/keys.js" defer="">',
     '<script src="/composer.js" defer="">',
   ]);
-  expect(answering).not.toMatch(/hx-[a-z]+=/);
-  expect(answering).not.toContain("htmx");
-  expect(answering).not.toContain('http-equiv="refresh"');
-  expect(answering).not.toContain("<noscript>");
-  expect(answering).toContain("This view does not update itself");
-  // And it is still the view with the button on it.
-  expect(answering).toContain('method="post"');
+  expect(still).not.toMatch(/hx-[a-z]+=/);
+  expect(still).not.toContain("htmx");
+  expect(still).not.toContain('http-equiv="refresh"');
+  expect(still).not.toContain("<noscript>");
+  expect(still).toContain("This view does not update itself");
 });
 
 test("every view is whole with the script gone", async () => {
@@ -998,21 +838,13 @@ test("every view is whole with the script gone", async () => {
   // browser whose scripts 404 is left holding: the same one, because nothing
   // on this page is produced by script (D-0054 rule 7).
   const summary = withoutScripts(await operatorPage(ports, "t"));
-  const opened = withoutScripts(await operatorPage(ports, "t", { kind: "reading" }));
-  const answering = withoutScripts(
-    await operatorPage(ports, "t", { kind: "answer", iterationId: "i-0001" }),
-  );
+  const answering = summary;
 
-  // What needs the operator, where to go to answer it, and the liveness a
-  // scriptless browser has.
+  // What needs the operator, and the box to answer it in -- both on the one
+  // page (D-0083 rule 3), whole without a line of script.
   expect(summary).toContain("do the thing");
-  expect(summary).toContain("waiting for your answer");
-  expect(summary).toContain('href="/?answer=i-0001&amp;lang=en"');
-  expect(summary).toContain('<meta http-equiv="refresh" content="5;url=/?lang=en"/>');
-
-  // Every claim under its own basis, unchanged.
-  expect(opened).toContain("inbox for 'ada'");
-  expect(opened).toContain("iteration 'i-0001'");
+  expect(summary).toContain("Waiting on your answer");
+  expect(summary).toContain('id="answering"');
 
   // **And the press**: the form, the gate it answers, the one word it carries
   // and the material it is answered over. A button only script renders is the
@@ -1147,56 +979,6 @@ test("rondo's own script moves focus and follows the server's links, and asks fo
   ]);
 });
 
-test("a running row says why rondo could not check for a log, not that there is none (#220 S2)", async () => {
-  const world = fresh();
-  await reserve(world, "i-0001", "not started");
-  await reserve(world, "i-0002", "performing");
-  for (const [from, to] of [
-    ["planned", "admitting"],
-    ["admitting", "admitted"],
-    ["admitted", "performing"],
-  ] as const) {
-    expect((await world.store.transition("i-0002", from, to, {}, 2_000)).kind).toBe("transitioned");
-  }
-  const html = await operatorPage(portsOver(world, "ada", []), "t");
-  expect(html).toContain("could not check for a log: no continuo in this test");
-  expect(html).toContain("log not looked for yet");
-  expect(html).not.toContain("log not found");
-});
-
-test("every repeated block in the lead carries the identity the refresh restores focus by", async () => {
-  const world = fresh();
-  await reserve(world, "i-0001", "the one at a gate");
-  await reserve(world, "i-0002", "the one still running");
-  await openGate(world, "i-0001");
-  for (const [from, to] of [
-    ["planned", "admitting"],
-    ["admitting", "admitted"],
-    ["admitted", "performing"],
-  ] as const) {
-    expect((await world.store.transition("i-0002", from, to, {}, 2_000)).kind).toBe("transitioned");
-  }
-
-  const html = await operatorPage(portsOver(world, "ada", []), "t");
-
-  // **Identity and not position** (D-0054 rule 2, D-0059 R2). htmx swaps the
-  // ledger and puts focus back on the element whose `id` held it, and `j`/`k`
-  // focus is on these rows: a row with no id would drop the reader's place on
-  // every refresh, and silently -- the page would still look right.
-  const ids = [...html.matchAll(/<li id="([^"]+)" data-row=""/g)].map((found) => found[1]);
-  expect(ids).toContain("lap-i-0001");
-  expect(ids).toContain("lap-i-0002");
-  // Unique, because an id the document repeats is an id focus cannot return to.
-  expect(new Set(ids).size).toBe(ids.length);
-  // And no row without one.
-  expect([...html.matchAll(/<li(?! id=)[^>]*data-row/g)]).toEqual([]);
-  // The same holds for every link inside the swapped ledger, which a keyboard
-  // reader reaches by Tab rather than by `j`/`k`: one with no id loses focus to
-  // the document on the next refresh.
-  const ledger = html.slice(html.indexOf('id="ledger"'));
-  expect([...ledger.matchAll(/<a(?! id=)[\s>]/g)]).toEqual([]);
-});
-
 /**
  * D-0055: rondo's chrome is prose the operator reads, and its language comes
  * from the host's one operator.
@@ -1249,7 +1031,7 @@ test("the bytes a press records do not depend on the host's language (D-0055 rul
       ...portsOver(world, "ada", []),
       material: async () => await Promise.resolve(asText("why it stopped")),
     };
-    drawn.push(await operatorPage(ports, "t", { kind: "answer", iterationId: "i-0001" }, wording));
+    drawn.push(await operatorPage(ports, "t", { kind: "summary" }, wording));
     expect(
       await recordPagePress(
         {
@@ -1284,35 +1066,31 @@ test("a ja host reads in Japanese and leaves every token in its own bytes", asyn
     material: async () => await Promise.resolve(asText("why it stopped")),
   };
   const summary = await operatorPage(ports, "t", { kind: "summary" }, ja);
-  const reading = await operatorPage(ports, "t", { kind: "reading" }, ja);
+  const requests = await operatorPage(ports, "t", { kind: "requests" }, ja);
 
-  // Prose, on the three screens the operator actually reads -- including the
-  // fold rule 3 of D-0053's falsifier fired on.
-  expect(summary).toContain("あなたの答えを待っているもの (1)");
+  // Prose, on the screens the operator actually reads.
+  expect(summary).toContain("あなたの番");
+  expect(summary).toContain("あなたの返事を待っています");
   expect(summary).toContain("描き直しは何も書き込みません");
-  expect(reading).toContain("ここを読んでも最後に見た印は動きません");
-  expect(reading).toContain("承認すると契約になる proposal (0)");
-  expect(reading).toContain("まだ一度も見ていません");
+  expect(requests).toContain("何を頼みますか");
 
   // **Tokens, verbatim and in the middle of the translated sentences** (rule 2
   // and rule 3): what the operator types, and what they match against the
   // store, `rondo show` and continuo's own output.
-  expect(reading).toContain("rondo inbox");
   expect(summary).toContain("approve");
   expect(summary).toContain("awaiting_human");
   expect(summary).toContain("gate-i-0001");
   expect(summary).toContain("i-0001");
   // Nothing is transliterated, glossed, or given a parenthesis.
-  expect(reading).not.toContain("ロンド");
+  expect(summary).not.toContain("ロンド");
   // Material is still quoted byte for byte, under the tag its plan asked for.
   expect(summary).toContain("重みが足りない");
-  expect(summary).toMatch(/<p class="request[^"]*" lang="ja">/);
+  expect(summary).toMatch(/<pre class="material[^"]*" lang="ja">/);
 
   // **What the ledger records stays English even here** (rule 4): the claim
   // labels beside the button are the bytes a press stores.
-  const answering = await operatorPage(ports, "t", { kind: "answer", iterationId: "i-0001" }, ja);
-  expect(answering).toContain("approve を押すと");
-  expect(answering).toMatch(/<dt class="label[^"]*">request<\/dt>/);
+  expect(summary).toContain("approve を押すと");
+  expect(summary).toMatch(/<dt class="label[^"]*">request<\/dt>/);
 });
 
 test("<html lang> names the set rondo wrote, and never the tag that was asked for", async () => {
@@ -1343,22 +1121,27 @@ test("every view is complete under each of the three answers to the language que
     };
     const views = [
       await operatorPage(ports, "t", { kind: "summary" }, wording),
-      await operatorPage(ports, "t", { kind: "reading" }, wording),
-      await operatorPage(ports, "t", { kind: "answer", iterationId: "i-0001" }, wording),
+      await operatorPage(ports, "t", { kind: "requests" }, wording),
+      await operatorPage(
+        ports,
+        "t",
+        { kind: "thread", messageId: "req-i-0001", to: null },
+        wording,
+      ),
     ];
     for (const html of views) {
       expect(html).toContain(`<html lang="${wording.lang}">`);
-      expect(html).toContain(wording.waitingHeading(1));
+      expect(html).toContain(wording.yourTurn);
       expect(html).toContain("</html>");
       // No key went missing on the way through a set that does not hold it.
       expect(html).not.toContain("undefined");
     }
-    // The fold still carries rondo's own accounting, and the button its note.
-    expect(views[1]).toContain(wording.inboxHeading);
-    expect(views[2]).toContain(wording.approvePlain);
-    expect(views[2]).toContain(`title="${wording.approveNote("gate-i-0001", "approve")}"`);
-    // Every undetermined claim is still in the answer view, inside its one fold.
-    expect(views[2]).toContain('<details id="undetermined"');
+    // The way into a new request, and the button with its note.
+    expect(views[1]).toContain(wording.emptyAsk);
+    expect(views[0]).toContain(wording.approvePlain);
+    expect(views[0]).toContain(`title="${wording.approveNote("gate-i-0001", "approve")}"`);
+    // Every undetermined claim is still beside the press, inside its one fold.
+    expect(views[0]).toContain('<details id="undetermined"');
   }
 });
 
@@ -1477,8 +1260,8 @@ test("the resolution is never silent: one 303 names the set, and a request namin
 
   // The view survives the canonicalisation, so a redirect never costs the
   // operator their place.
-  expect((await get(base, "/?reading=open")).location).toBe("/?reading=open&lang=ja");
-  expect((await get(base, "/?answer=i-0001")).location).toBe("/?answer=i-0001&lang=ja");
+  expect((await get(base, "/?requests=open")).location).toBe("/?requests=open&lang=ja");
+  expect((await get(base, "/?thread=req-i-0001")).location).toBe("/?thread=req-i-0001&lang=ja");
 
   // **The bytes depend on two request headers now, and a shared cache is
   // entitled to know.**
@@ -1577,15 +1360,15 @@ test("every address a ja page composes for itself carries ja (rule 11)", async (
   const { base, stop, served } = await serving(portsOver(world, "ada", pressed, "ja"));
 
   const summary = (await get(base, "/?lang=ja")).body;
-  const opened = (await get(base, "/?reading=open&lang=ja")).body;
-  const answering = (await get(base, "/?answer=i-0001&lang=ja")).body;
+  const opened = (await get(base, "/?requests=open&lang=ja")).body;
+  const answering = summary;
 
-  // The fold's link, the answer view's link, and the `<noscript>` refresh.
-  expect(summary).toContain('href="/?reading=open&amp;lang=ja"');
+  // The list's links, the way into a new request, and the poll's own address.
+  expect(summary).toContain('href="/?thread=req-i-0001&amp;lang=ja"');
+  expect(summary).toContain('href="/?requests=open&amp;lang=ja"');
   expect(opened).toContain('href="/?lang=ja"');
-  expect(summary).toContain('href="/?answer=i-0001&amp;lang=ja"');
-  expect(summary).toContain('content="5;url=/?lang=ja"');
-  expect(opened).toContain('content="5;url=/?reading=open&amp;lang=ja"');
+  expect(summary).toContain('hx-get="/?lang=ja"');
+  expect(opened).toContain('hx-get="/?requests=open&amp;lang=ja"');
   // The form's action.
   expect(answering).toContain('action="/?lang=ja"');
 
@@ -1593,9 +1376,13 @@ test("every address a ja page composes for itself carries ja (rule 11)", async (
   // lands back on: a redirect that dropped the tag would re-resolve the page
   // the moment rondo told them something was written.
   const token = tokenIn(answering);
-  const answered = await post(base, { token, iteration: "i-0001" }, { origin: base });
+  const answered = await post(
+    base,
+    { token, iteration: "i-0001", request: "req-i-0001" },
+    { origin: base },
+  );
   expect(answered.status).toBe(303);
-  expect(answered.location).toBe("/?lang=ja#lap-i-0001");
+  expect(answered.location).toBe("/?thread=req-i-0001&lang=ja");
   expect(pressed).toEqual([{ iterationId: "i-0001", body: "approve" }]);
 
   stop.abort();
@@ -1618,10 +1405,10 @@ test("the switch is a link in the chrome, one per shipped set other than the one
   expect(japanese).toContain('<a href="/?lang=en" lang="en">English</a>');
   expect(japanese).not.toContain(">日本語<");
 
-  // Beside the fold's link and on every view, because a path the operator
-  // cannot find is a safeguard present in the markup and absent in practice.
-  const opened = (await get(base, "/?reading=open&lang=en")).body;
-  expect(opened).toContain('<a href="/?reading=open&amp;lang=ja" lang="ja">日本語</a>');
+  // On every view, because a path the operator cannot find is a safeguard
+  // present in the markup and absent in practice.
+  const opened = (await get(base, "/?requests=open&lang=en")).body;
+  expect(opened).toContain('<a href="/?requests=open&amp;lang=ja" lang="ja">日本語</a>');
 
   stop.abort();
   expect(await served).toBe(0);
@@ -1773,15 +1560,15 @@ async function seedThread(world: ReturnType<typeof fresh>): Promise<void> {
 
 /** Every message body the page drew, as a browser reads it. */
 const bodiesIn = (html: string): readonly string[] =>
-  [...html.matchAll(/<p class="body [^"]*" lang="">([\s\S]*?)<\/p>/g)].map((found) =>
-    unescaped(found[1] ?? ""),
-  );
+  [...html.matchAll(/<p lang="">([\s\S]*?)<\/p>/g)].map((found) => unescaped(found[1] ?? ""));
 
-/** One message's `<li>`, by its id. */
+/** One message's `<article>`, by its id. */
 const messageIn = (html: string, id: string): string =>
-  /<li id="[^"]*"[\s\S]*?<\/li>/.exec(html.slice(html.indexOf(`<li id="${id}"`)))?.[0] ?? "";
+  /<article id="[^"]*"[\s\S]*?<\/article>/.exec(
+    html.slice(html.indexOf(`<article id="${id}"`)),
+  )?.[0] ?? "";
 
-test("an ask still open is pinned above the reports that came before it (rondo#199)", async () => {
+test("the thread runs in the order it happened, and a reply names the line it answers", async () => {
   const world = fresh();
   await reserve(world, "i-0001", "do the thing");
   const drafts = [
@@ -1811,14 +1598,15 @@ test("an ask still open is pinned above the reports that came before it (rondo#1
     mint,
   );
 
-  // The request, then the open ask, then the reports in the store's order.
-  expect(bodiesIn(html)).toEqual(["request-a", "ask-d", "report-b", "report-c"]);
-  // **The neighbour is the one drawn**: the ask now sits under the request, not
-  // under the report it answers (its neighbour in the store), so it names
-  // that report as its parent.
-  expect(messageIn(html, "ask-d")).toContain('href="#report-c"');
-  expect(messageIn(html, "ask-d")).toContain("in reply to");
-  // And a report drawn right under the one it answers needs no such line.
+  // **The axis is time** (D-0083 rule 2). rondo#199 used to lift an open ask
+  // above the reports that came before it, so a person met the question
+  // first; D-0083 replaced that with one stream in the order things happened
+  // -- the question is marked where it is, and the box to answer it is under
+  // the thread whatever the order.
+  expect(bodiesIn(html)).toEqual(["request-a", "report-b", "report-c", "ask-d"]);
+  expect(messageIn(html, "ask-d")).toContain("data-waiting");
+  // A message drawn right under the one it answers needs no line saying so.
+  expect(messageIn(html, "ask-d")).not.toContain("in reply to");
   expect(messageIn(html, "report-c")).not.toContain("in reply to");
 });
 
@@ -1838,15 +1626,18 @@ test("a request thread is drawn whole: every body byte for byte, voices apart, b
   expect(bodiesIn(html)).toEqual([ROOT_BODY, ASK_BODY, LATER_BODY]);
   expect(html).not.toContain("<b>one run");
 
-  // **Two voices, told apart by more than the prose** (rule 2.3): a badge on
-  // the drafter's, and "you" on the person's own.
+  // **Two voices, told apart by more than the prose** (rule 2.3): who wrote it
+  // by name, the voice as an attribute, and the column the thread draws it in
+  // -- the badge beside the name went with the card the old thread drew.
   const root = messageIn(html, "request-a");
   const ask = messageIn(html, "ask-b");
   const report = messageIn(html, "report-c");
   expect(root).toContain('data-voice="operator"');
+  expect(root).toContain('class="msg msg-person"');
   expect(root).toContain(">you</span>");
   expect(ask).toContain('data-voice="drafter"');
-  expect(ask).toContain(">drafter</span>");
+  expect(ask).toContain('class="msg msg-rondo"');
+  expect(ask).toContain(">rondo-drafter</span>");
 
   // **The ask that waits is marked, and only it** (rule 2.7): nothing replies to it.
   expect(ask).toContain("data-waiting");
@@ -1854,13 +1645,14 @@ test("a request thread is drawn whole: every body byte for byte, voices apart, b
   expect(root).not.toContain("data-waiting");
   expect(report).not.toContain("data-waiting");
 
-  // **Bases are chips that go where they point, never an id to copy**: the
-  // cited message by its words and an anchor, the lap by its reading section;
-  // a form this page has no view for is said and not linked.
+  // **Bases go where they point, never an id to copy**: the cited message by
+  // its words and an anchor; a form this page has no view for is said and not
+  // linked. A lap used to lead to its section of the reading fold, and with
+  // D-0083 there is no page-wide place a lap id leads to, so it is named.
   expect(ask).toContain('href="#request-a"');
   expect(ask).toContain("you: Please look at the flaky test.");
-  expect(ask).toContain('href="/?reading=open&amp;lang=en#read-i-0001"');
-  expect(ask).toMatch(/<span class="basis [^"]*" title="continuo run rondo-i-0001">/);
+  expect(ask).toMatch(/<span class="basis" title="iteration i-0001">/);
+  expect(ask).toMatch(/<span class="basis" title="continuo run rondo-i-0001">/);
   // A report replies to the request, which is how every reply reads by
   // default, so it names no parent line of its own.
   expect(report).not.toContain("in reply to");
@@ -1878,8 +1670,8 @@ test("a request thread is drawn whole: every body byte for byte, voices apart, b
   // **The box answers the waiting question by default, on a press**: a native
   // `POST` to `/answer-ask` with no `hx-post` (D-0059 section 5a's falsifier,
   // D-0069 rule 5), one button per answer, and a target line of who and when.
-  // It carries the id rondo minted -- once, hidden, never shown -- and sits
-  // outside the ledger the redraw swaps, so no redraw touches a draft.
+  // It carries the id rondo minted -- once, hidden, never shown -- and says
+  // it survives the redraw, so no redraw touches a draft.
   expect(html).toContain('<form id="composer" method="post" action="/answer-ask?lang=en" class=');
   expect(html).not.toContain("hx-post");
   expect(html).toContain('<input type="hidden" name="in_reply_to" value="ask-b"/>');
@@ -1906,10 +1698,12 @@ test("a request thread is drawn whole: every body byte for byte, voices apart, b
   // guarded in `page/composer.js` rather than left to be pressed and refused.
   expect(html).not.toContain("Ctrl/⌘");
   expect(html).not.toContain('class="not-answer');
-  const ledgerAt = html.indexOf('<div id="ledger"');
-  const composerAt = html.indexOf('<form id="composer"');
-  const between = html.slice(ledgerAt, composerAt);
-  expect((between.match(/<div[\s>]/g) ?? []).length).toBe((between.match(/<\/div>/g) ?? []).length);
+  // **The redraw does not cost the draft.** The box used to sit outside the
+  // element the poll swaps; since D-0083 rule 5 it is inside the thread, so
+  // the swap reaches it and `page/composer.js` is what puts the words back --
+  // the same mechanism that already covered a send's own swap of this form.
+  expect(composerCode()).toContain('"textarea[data-draft]"');
+  expect(html).toContain('data-draft="');
   // Every message carries its own way to be replied to, which retargets the box.
   expect(report).toContain('href="/?thread=request-a&amp;to=report-c&amp;lang=en"');
   // The thread polls, but with script off it does not reload a draft away.
@@ -1995,16 +1789,19 @@ test("D-0072: the page keeps a question waiting until an answer carries it on, a
     await operatorPage(ports, "t", { kind: "summary" }, EN, mint);
 
   // A bare reply: the store holds the line, and so does the page.
+  // **What the page draws is the request the question is in** (D-0083 rule
+  // 3): the count the two readings have to agree on is the chrome's, and the
+  // mark is on the question itself rather than on a row that stands for it.
   await answered("m-chat", {});
   expect(await openInStore()).toEqual(["ask-b"]);
-  expect(await page()).toContain("waiting for your answer (1)");
+  expect(await page()).toContain(">1 waiting</a>");
 
   // An answer that stops: still held, still drawn as waiting.
   await answered("m-stop", { answerOutcome: "stop", atMs: 5_000 });
   expect(await openInStore()).toEqual(["ask-b"]);
   const stopped = await page();
-  expect(stopped).toContain("waiting for your answer (1)");
-  expect(stopped).toContain('<li id="ask-ask-b"');
+  expect(stopped).toContain(">1 waiting</a>");
+  expect(messageIn(stopped, "ask-b")).toContain("data-waiting");
 
   // **The page says which of the two reasons a question is still held for, and
   // what the answer was** (D-0072 rules 1 and 3, Codex): the words are kept
@@ -2023,18 +1820,17 @@ test("D-0072: the page keeps a question waiting until an answer carries it on, a
   // A reply that answered nothing is marked as neither.
   expect(messageIn(thread, "m-chat")).not.toContain(">Stopped this line</span>");
   expect(messageIn(thread, "m-chat")).not.toContain(">Carried on</span>");
-  // The summary's row for the same question says it too.
+  // The page a person arrives on says it too, because it is the same thread.
   expect(stopped).toContain(">You stopped this line</span>");
 
   // The answer that carries on is the one that ends it, in both readings.
   await answered("m-go", { answerOutcome: "carry_on", body: "go on", atMs: 6_000 });
   expect(await openInStore()).toEqual([]);
   const released = await page();
-  // The ask's own row is gone from the summary, and the header's one count --
-  // the number the heading and the pill both say -- is empty rather than 1.
-  expect(released).not.toContain('<li id="ask-ask-b"');
+  // Nothing waits, so the chrome's one count is empty rather than 1, and the
+  // question carries no mark.
   expect(released).toContain('<span id="waiting-count" class="empty:hidden"></span>');
-  expect(released).not.toContain("waiting for your answer (1)");
+  expect(released).not.toContain("data-waiting");
   // And the answer that released it is marked as the one that carried on.
   const onward = await operatorPage(
     ports,
@@ -2052,25 +1848,29 @@ test("the summary counts an ask waiting on the person and leads to the reply, an
   await seedThread(world);
   const ports = portsOver(world, "ada", []);
 
+  // **The page a person arrives on is the request that waits on them**
+  // (D-0083 rule 3): no list of asks in between, and the question is marked
+  // where it stands in the thread. It used to be a summary that counted the
+  // asks and linked to each.
   const summary = await operatorPage(ports, "t", { kind: "summary" }, EN, mint);
-  expect(summary).toContain("waiting for your answer (1)");
-  expect(summary).toContain('<li id="ask-ask-b"');
-  expect(summary).toContain('href="/?thread=request-a&amp;to=ask-b&amp;lang=en#ask-b"');
-  expect(summary).toContain("asked in: Please look at the flaky test.");
+  expect(messageIn(summary, "ask-b")).toContain("data-waiting");
+  expect(summary).toContain("Please look at the flaky test.");
   // The header's way in, on every view, with the count the redraw renews.
   expect(summary).toContain('href="/?requests=open&amp;lang=en"');
-  // One count, the summary heading's own, beside it (#220 S1).
+  // One count in the chrome, and it leads to the same page (#220 S1).
   expect(summary).toMatch(
     /<span id="waiting-count" class="empty:hidden"><a href="\/\?lang=en" [^>]*>1 waiting<\/a>/,
   );
-  // The summary draws no composer.
-  expect(summary).not.toContain('id="composer"');
+  // And the box to answer it is on that page, not one address away.
+  expect(summary).toContain('id="composer"');
 
+  // **The list is the left face on every view** (D-0083 rule 5): the person's
+  // own words, one sentence of state, and when it last moved -- no count of
+  // messages and no identifier of rondo's (D-0076).
   const requests = await operatorPage(ports, "t", { kind: "requests" }, EN, mint);
-  expect(requests).toContain("requests (1)");
-  expect(requests).toContain("1 question waiting on you");
-  expect(requests).toContain('href="/?thread=request-a&amp;lang=en" data-open=""');
-  expect(requests).toContain("3 messages, last 2s ago");
+  expect(requests).toContain(EN.yourTurn);
+  expect(requests).toContain("Waiting on your answer");
+  expect(requests).toContain('href="/?thread=request-a&amp;lang=en"');
   // **A new request is a native submit**: where it lands is its own thread, a
   // different view, so it is not swapped into this one.
   expect(requests).toContain('<form id="composer" method="post" action="/request?lang=en" class=');
@@ -2089,7 +1889,8 @@ test("the threads speak Japanese where the page does, tokens and words untouched
     chromeFor("ja"),
     mint,
   );
-  expect(html).toContain(">下書き役</span>");
+  // The name each voice signs with; the badge beside it went with the card
+  // the old thread drew (D-0083 rule 5).
   expect(html).toContain(">あなた</span>");
   expect(html).toContain("あなたの回答待ち");
   expect(html).toContain("rondo-drafter の質問に回答 · ");
@@ -2113,6 +1914,21 @@ test("the composer script keeps a draft and the open folds, and makes no request
   expect(code).toContain('"textarea[data-draft]"');
   expect(code).toContain("sessionStorage");
   expect(code).toContain("HTMLDetailsElement");
+  // **Both duties run on every swap and not only on load** (Codex, on D-0083):
+  // the boxes are inside the thread now, so the five-second redraw replaces
+  // them -- a claim being typed would vanish, and a revise box a person had
+  // rewritten would come back holding rondo's draft again.
+  expect(code).toMatch(/new MutationObserver\(\(\) => \{\s*reopen\(\);\s*restore\(true\);/);
+  // **And a box a person emptied stays empty across the redraw** (Codex): the
+  // revise box arrives holding rondo's draft, so treating *emptied* as *no
+  // draft* would put those words back five seconds after they were deleted.
+  // A load reads it the other way, which is how rondo's draft comes back.
+  expect(code).toContain('kept === "" && !afterSwap');
+  // **And a send clears the box it was sent from** (Codex, on D-0083): the
+  // thread carries several drafts -- the gate's claim, what to change beside
+  // it, the reply under them -- so "the first textarea on the page" would
+  // empty a field nobody sent.
+  expect(code).toContain("textarea[data-draft=");
   // Ctrl/Cmd+Enter asks the form for the submit its own button makes.
   expect(code).toContain("requestSubmit()");
   // **And never on a form whose submit has to name an answer** (#206, D-0072
@@ -2190,8 +2006,7 @@ test("the answer view draws both readings side by side from the rows, with the w
   );
   expect(appended.kind).toBe("appended");
   const html = await operatorPage({ ...portsOver(world, "ada", []), material: structured }, "t", {
-    kind: "answer",
-    iterationId: "i-0001",
+    kind: "summary",
   });
 
   // The two cards, the checks' finding and the model's graded findings.
@@ -2256,7 +2071,7 @@ test("an unavailable run writes its reason and is not retried; the next reading 
   const html = await operatorPage(
     { ...portsOver(world, "ada", [], null, "decision-1"), material: structured },
     "t",
-    { kind: "answer", iterationId: "i-0001" },
+    { kind: "summary" },
     EN,
     null,
     null,
@@ -2306,7 +2121,7 @@ test("the gate offers a change beside approve, drafted from the findings and edi
   const html = await operatorPage(
     { ...portsOver(world, "ada", [], null, "decision-1"), material: structured },
     "t",
-    { kind: "answer", iterationId: "i-0001" },
+    { kind: "summary" },
     EN,
     null,
     null,
@@ -2367,7 +2182,7 @@ test("a lap admitted under no approval is told so where the change would be (#23
   const html = await operatorPage(
     { ...portsOver(world, "ada", []), material: structured },
     "t",
-    { kind: "answer", iterationId: "i-0001" },
+    { kind: "summary" },
     EN,
     null,
     null,
@@ -2453,7 +2268,7 @@ test("a gate whose approval is spent says which budget and offers to raise it, i
     await operatorPage(
       { ...portsOver(world, "ada", []), material: structured },
       "t",
-      { kind: "answer", iterationId: "i-0001" },
+      { kind: "summary" },
       EN,
       null,
       null,
@@ -2573,7 +2388,8 @@ test("the raise screen shows what was approved and used, redraws the budgets, an
   );
   expect(stale).toContain("This budget has already been raised");
   expect(stale).not.toContain('id="raise-form"');
-  expect(stale).toContain('href="/?answer=i-0001&amp;lang=en"');
+  // The way back to the gate, which since D-0083 rule 3 is the request's thread.
+  expect(stale).toContain('href="/?thread=m-req&amp;lang=en"');
 });
 
 test("with no minted lap id there is no change form at all (#233 S4)", async () => {
@@ -2583,7 +2399,7 @@ test("with no minted lap id there is no change form at all (#233 S4)", async () 
   const html = await operatorPage(
     { ...portsOver(world, "ada", [], null, "decision-1"), material: structured },
     "t",
-    { kind: "answer", iterationId: "i-0001" },
+    { kind: "summary" },
   );
   expect(html).not.toContain('id="revise-form"');
   expect(html).not.toContain('id="revise-none"');
@@ -2608,7 +2424,7 @@ test("a gate with no model findings drafts nothing, and still offers the change 
   const html = await operatorPage(
     { ...portsOver(world, "ada", [], null, "decision-1"), material: structured },
     "t",
-    { kind: "answer", iterationId: "i-0001" },
+    { kind: "summary" },
     EN,
     null,
     null,
@@ -2629,7 +2445,7 @@ test("the change is offered in the page's language, and the findings stay the re
   const html = await operatorPage(
     { ...portsOver(world, "ada", [], null, "decision-1"), material: structured },
     "t",
-    { kind: "answer", iterationId: "i-0001" },
+    { kind: "summary" },
     chromeFor("ja"),
     null,
     null,
@@ -2647,7 +2463,7 @@ test("the change is offered in the page's language, and the findings stay the re
   const drafted = await operatorPage(
     { ...portsOver(world, "ada", [], null, "decision-1"), material: structured },
     "t",
-    { kind: "answer", iterationId: "i-0001" },
+    { kind: "summary" },
     chromeFor("ja"),
     null,
     null,
@@ -2668,7 +2484,7 @@ test("a draft is being written: an empty box, a sentence, and the press not held
   const html = await operatorPage(
     { ...portsOver(world, "ada", [], null, "decision-1"), material: structured },
     "t",
-    { kind: "answer", iterationId: "i-0001" },
+    { kind: "summary" },
     EN,
     null,
     null,
@@ -2691,7 +2507,7 @@ test("a draft that misses a finding is not shown and not repaired: an empty box 
   const html = await operatorPage(
     { ...portsOver(world, "ada", [], null, "decision-1"), material: structured },
     "t",
-    { kind: "answer", iterationId: "i-0001" },
+    { kind: "summary" },
     EN,
     null,
     null,
@@ -2715,12 +2531,11 @@ test("a model reading not yet taken is said as pending, beside the checks and by
   const world = fresh();
   await gateWithChecks(world);
   const html = await operatorPage({ ...portsOver(world, "ada", []), material: structured }, "t", {
-    kind: "answer",
-    iterationId: "i-0001",
+    kind: "summary",
   });
   expect(html).toContain("Not here yet; it may still arrive.");
   expect(html).not.toContain("reading it first");
-  expect(html).toContain('href="/?answer=i-0001&amp;lang=en" class="font-medium text-link');
+  expect(html).toContain('href="/?thread=req-1&amp;lang=en" class="font-medium text-link');
   expect(html).toContain("The model review may still arrive.");
   expect(html).not.toContain('id="model-raised"');
 });
@@ -2741,8 +2556,7 @@ test("an unavailable model reading of these commits is its outcome, not a pendin
   );
   expect(appended.kind).toBe("appended");
   const html = await operatorPage({ ...portsOver(world, "ada", []), material: structured }, "t", {
-    kind: "answer",
-    iterationId: "i-0001",
+    kind: "summary",
   });
   expect(html).toContain("the plan names no review criterion");
   expect(html).toContain("No reading could be taken, so there is nothing from it to weigh.");
@@ -2770,30 +2584,10 @@ test("an unavailable model reading of these commits is its outcome, not a pendin
   const neither = await operatorPage(
     { ...portsOver(world, "ada", []), material: structured },
     "t",
-    { kind: "answer", iterationId: "i-0001" },
+    { kind: "summary" },
   );
   expect(neither).toContain("Neither the checks nor the model review could read this work.");
   expect(neither).not.toContain("Only the checks read this");
-});
-
-test("an approved lap's row says back the claim its press carried (#220 S2 design pass)", async () => {
-  const world = fresh();
-  await gateWithChecks(world);
-  await world.store.recordVerificationClaim("i-0001", "ada", "ran npm test", 4_000);
-  const closed = await world.store.transition(
-    "i-0001",
-    "awaiting_human",
-    "closed",
-    { gateOutcome: "approve" },
-    5_000,
-  );
-  expect(closed.kind).toBe("transitioned");
-  const html = await operatorPage(portsOver(world, "ada", []), "t", { kind: "summary" });
-  expect(html).toContain("you said you checked: ran npm test");
-  // Another operator's claim is theirs, never "you" (#220 S2, Codex).
-  const other = await operatorPage(portsOver(world, "grace", []), "t", { kind: "summary" });
-  expect(other).toContain("ada said they checked: ran npm test");
-  expect(other).not.toContain("you said you checked");
 });
 
 // -- The three residues S2 left on the gate screen (rondo#237) --
@@ -2803,7 +2597,7 @@ test("approve says which of the two approvals it is when a blocker is open (#237
   await gateWithChecks(world);
   await modelFindings(world);
   const ports = { ...portsOver(world, "ada", []), material: structured };
-  const html = await operatorPage(ports, "t", { kind: "answer", iterationId: "i-0001" });
+  const html = await operatorPage(ports, "t", { kind: "summary" });
   const bar = html.slice(html.indexOf('id="answer-bar"'));
 
   // **The face moves; the press does not.** D-0065 refuses no approval over a
@@ -2837,7 +2631,7 @@ test("approve says which of the two approvals it is when a blocker is open (#237
   const major = await operatorPage(
     { ...portsOver(majorOnly, "ada", []), material: structured },
     "t",
-    { kind: "answer", iterationId: "i-0001" },
+    { kind: "summary" },
   );
   expect(major).toContain(">approve despite what was raised</button>");
 });
@@ -2860,8 +2654,7 @@ test("with nothing that heavy raised, approve keeps its one word (#237)", async 
   );
   expect(appended.kind).toBe("appended");
   const html = await operatorPage({ ...portsOver(world, "ada", []), material: structured }, "t", {
-    kind: "answer",
-    iterationId: "i-0001",
+    kind: "summary",
   });
   const bar = html.slice(html.indexOf('id="answer-bar"'));
   expect(bar).toContain(">approve</button>");
@@ -2877,7 +2670,7 @@ test("the qualified approve is in the page's language too (#237)", async () => {
   const html = await operatorPage(
     { ...portsOver(world, "ada", []), material: structured },
     "t",
-    { kind: "answer", iterationId: "i-0001" },
+    { kind: "summary" },
     chromeFor("ja"),
   );
   const bar = html.slice(html.indexOf('id="answer-bar"'));
@@ -2885,34 +2678,6 @@ test("the qualified approve is in the page's language too (#237)", async () => {
   expect(bar).toContain("モデルレビューが挙げた点に答えないまま、この作業をこのまま受け入れます。");
   // The answer carried to the gate is a token and stays ASCII (D-0055 rule 3).
   expect(bar).toContain("'approve'");
-});
-
-test("an ended lap says on its row that it was approved over what was raised (#237)", async () => {
-  const world = fresh();
-  await gateWithChecks(world);
-  await modelFindings(world);
-  await world.store.recordVerificationClaim("i-0001", "ada", "read the diff", 4_000);
-  const closed = await world.store.transition(
-    "i-0001",
-    "awaiting_human",
-    "closed",
-    { gateOutcome: APPROVED_OUTCOME },
-    5_000,
-  );
-  expect(closed.kind).toBe("transitioned");
-  const html = await operatorPage(portsOver(world, "ada", []), "t", { kind: "summary" });
-
-  // The summary, without opening the lap: the same two counts the gate's own
-  // warning carried, beside the claim the press recorded.
-  expect(html).toContain("approved with 1 blocker and 1 major open in the model review");
-  expect(html).toContain("you said you checked: read the diff");
-  const ja = await operatorPage(
-    portsOver(world, "ada", []),
-    "t",
-    { kind: "summary" },
-    chromeFor("ja"),
-  );
-  expect(ja).toContain("モデルレビューの指摘 (阻害 1 件、重大 1 件) を残したまま承認");
 });
 
 test("a lap nobody approved says nothing about what was raised (#237)", async () => {
@@ -2988,8 +2753,7 @@ test("a recorded 'clear' is not drawn as a pass over work that cannot be read (#
       },
     });
   const html = await operatorPage({ ...portsOver(world, "ada", []), material: gone }, "t", {
-    kind: "answer",
-    iterationId: "i-0001",
+    kind: "summary",
   });
 
   // **Not in the card and not in the bar** -- the bar is the one a person
@@ -3013,8 +2777,7 @@ test("a recorded 'clear' is not drawn as a pass over work that cannot be read (#
 
   // Read, and the verdict is the verdict: nothing else about the card moved.
   const read = await operatorPage({ ...portsOver(world, "ada", []), material: structured }, "t", {
-    kind: "answer",
-    iterationId: "i-0001",
+    kind: "summary",
   });
   expect(read).toContain(">nothing raised</span>");
   expect(read).not.toContain(">not matched</span>");
@@ -3033,8 +2796,7 @@ test("a reading that raised something keeps its own word where the work is gone 
       work: { kind: "unreadable" as const, reason: "the workspace is not a git repository" },
     });
   const html = await operatorPage({ ...portsOver(world, "ada", []), material: gone }, "t", {
-    kind: "answer",
-    iterationId: "i-0001",
+    kind: "summary",
   });
   // `1 raised` is not a pass, so it is not replaced -- only its colour goes.
   expect(html).toContain(">1 raised</span>");
@@ -3044,8 +2806,7 @@ test("a reading that raised something keeps its own word where the work is gone 
   // where it is there. Neither of those was under test before.
   expect(pillTone(html, "1 raised")).toContain("text-muted-foreground");
   const read = await operatorPage({ ...portsOver(world, "ada", []), material: structured }, "t", {
-    kind: "answer",
-    iterationId: "i-0001",
+    kind: "summary",
   });
   expect(pillTone(read, "1 raised")).toContain("text-wait-ink");
   expect(pillTone(read, "1 raised")).not.toContain("text-muted-foreground");
@@ -3055,55 +2816,13 @@ test("what the fence blocked is on the gate, each call in words, not only in the
   const world = fresh();
   await gateWithChecks(world);
   const html = await operatorPage({ ...portsOver(world, "ada", []), material: structured }, "t", {
-    kind: "answer",
-    iterationId: "i-0001",
+    kind: "summary",
   });
   const card = html.slice(html.indexOf('<section id="fence"'), html.indexOf('id="material-text"'));
   expect(card).toContain("The fence:");
   expect(card).toContain("blocked 1 command");
   expect(card).toContain("Bash  &quot;rm -rf /srv&quot;");
   expect(html).toContain("The full record as text, including what is not shown above");
-});
-
-test("no approver, no claim box; the summary row says its facts plainly and keeps the raw ones (#220 S2)", async () => {
-  const world = fresh();
-  await gateWithChecks(world);
-  const bare = await operatorPage(portsOver(world, null), null, {
-    kind: "answer",
-    iterationId: "i-0001",
-  });
-  expect(bare).not.toContain('name="verified"');
-  expect(bare).not.toContain("<form");
-
-  const html = await operatorPage(portsOver(world, "ada", []), "t");
-  expect(lead(html)).toContain(">blocked 1 command</span>");
-  expect(lead(html)).not.toContain(">the fence refused");
-  expect(lead(html)).not.toContain(">answer gate gate-i-0001");
-  // The facts are still in the document, as titles.
-  expect(lead(html)).toContain('title="the fence refused [{&quot;tool_name&quot;');
-  expect(lead(html)).toContain("answer gate gate-i-0001");
-});
-
-test("an unreadable row links to its reason in the reading instead of naming a command (#220 S2)", async () => {
-  const world = fresh();
-  await reserve(world, "i-0002", "a row whose plan was corrupted");
-  world.connection
-    .prepare("UPDATE iteration SET plan = ? WHERE id = ?")
-    .run('{"not":"a plan"}', "i-0002");
-  const html = await operatorPage(portsOver(world, "ada", []), "t");
-  expect(lead(html)).not.toContain("rondo explain");
-  expect(lead(html)).toContain('href="/?reading=open&amp;lang=en#read-i-0002-reason"');
-  expect(lead(html)).toContain(">Read what went wrong</a>");
-  const read = await operatorPage(portsOver(world, "ada", []), "t", { kind: "reading" });
-  expect(read).toContain('<pre id="read-i-0002-reason"');
-
-  const ja = await operatorPage(
-    portsOver(world, "ada", []),
-    "t",
-    { kind: "summary" },
-    chromeFor("ja"),
-  );
-  expect(ja).toContain(">何が起きたかを読む</a>");
 });
 
 // -- The scope screen (rondo#233 S3, D-0066 rule 1) --
@@ -3220,6 +2939,8 @@ async function seedEndedLap(
     supersedesIterationId?: string | null;
   },
 ): Promise<void> {
+  // Every lap names a request (D-0083); the budgets are what this seeds for.
+  await openRequest(world.connection);
   const outcome = await world.store.reserve({
     id,
     request: "seeded for the scope screen's budgets",
@@ -3233,7 +2954,7 @@ async function seedEndedLap(
     claim: laneFor(id, opts.supersedesIterationId ?? null),
     nowMs: 1_000,
     supersedesIterationId: opts.supersedesIterationId ?? null,
-    requestMessageId: null,
+    requestMessageId: REQUEST,
     runId: `rondo-${id}`,
     topicBranch: `rondo/${id}`,
     workspace: `/srv/work/${id}`,
@@ -3296,11 +3017,14 @@ test("the scope screen drafts a form pre-filled from the request and the plan, e
   // Every budget's formula, and its bases folded but present.
   expect(html).toContain("how: plans x review rounds = 1 x 3");
   expect(html).toContain("where this came from");
-  // A `rows` basis's laps are links into their answer view, never bare text.
-  expect(html).toContain('href="/?answer=i-scope-1&amp;lang=en"');
-  expect(html).toContain('href="/?answer=i-scope-2&amp;lang=en"');
-  expect(html).not.toContain(">i-scope-1<");
-  expect(html).not.toContain(">i-scope-2<");
+  // **A `rows` basis names its laps and no longer links them.** They used to
+  // lead to each lap's gate screen; D-0083 rule 3 took that screen away, and a
+  // lap's thread is its request's rather than its own, which this basis does
+  // not know. D-0071 rule 4.2 asked for "a screen to link rather than anyone
+  // to copy", and naming is what survives of it here.
+  expect(html).toContain("lap i-scope-1");
+  expect(html).toContain("lap i-scope-2");
+  expect(html).not.toContain('href="/?answer=');
 
   // The deterministic defaults, marked as defaults and not derived from the
   // request (rondo#233 S3 -- `severity_threshold`, `outward_acts` and
@@ -3924,6 +3648,7 @@ test(
     const storePath = join(dir, "store.db");
     const connection = new DatabaseSync(storePath);
     const store = iterationStore(connection, { maxOccupying: 4, maxLive: 6 });
+    await openRequest(connection);
     const ended = "lap-ended";
     const reserved = await store.reserve({
       id: ended,
@@ -3934,7 +3659,7 @@ test(
       claim: ownLane(ended),
       nowMs: 1_000,
       supersedesIterationId: null,
-      requestMessageId: null,
+      requestMessageId: REQUEST,
       runId: `rondo-${ended}`,
       topicBranch: `rondo/${ended}`,
       workspace: `/srv/work/${ended}`,
@@ -3963,7 +3688,7 @@ test(
       claim: ownLane(gated),
       nowMs: 1_000,
       supersedesIterationId: null,
-      requestMessageId: null,
+      requestMessageId: REQUEST,
       runId: `rondo-${gated}`,
       topicBranch: `rondo/${gated}`,
       workspace: `/srv/work/${gated}`,
@@ -4000,7 +3725,8 @@ test(
     expect(wrongScope.why).toBe("reviseRefusedNotItsScope");
     // Nothing was recorded for either: no proposal, no attention row, no message.
     expect(rows(connection, "proposal")).toBe(0);
-    expect(rows(connection, "conversation_message")).toBe(0);
+    // The fixture's own request is in the conversation; nothing else is.
+    expect(rows(connection, "conversation_message")).toBe(1);
     expect(rows(connection, "scope_consumption")).toBe(0);
   },
   WINDOWS_HEAVY_TIMEOUT_MS,
@@ -4363,9 +4089,7 @@ test("a drafter run that drafted nothing is said as what happened, with the way 
   expect(card).toContain(EN.drafterNoDraftWhy);
   expect(card.indexOf("<details")).toBeLessThan(card.indexOf("claude exited 1"));
   // Signed as rondo: the drafter's row name is a version and a model id (#259).
-  expect(card.slice(0, card.indexOf("</header>"))).toContain(
-    '<span class="author font-semibold text-foreground">rondo</span>',
-  );
+  expect(card.slice(0, card.indexOf("</header>"))).toContain('<span class="msg-who">rondo</span>');
   expect(html).not.toContain(">rondo/drafter/1/claude-opus-5<");
   const ja = await operatorPage(
     ports,
@@ -4551,48 +4275,6 @@ test("a lap that cannot be published says why on the screen, and draws no button
   expect(screen).not.toContain("<form");
 });
 
-test("the way onto the publish screen is drawn on approved rows only, and never where a press would be refused (#233 S5)", async () => {
-  const world = fresh();
-  await approvedLap(world);
-  const publishing = async () => DRY_RUN;
-
-  const summary = await operatorPage(portsOver(world, "ada", [], null, null, publishing), "t", {
-    kind: "summary",
-  });
-  expect(summary).toContain('href="/?publish=i-0001&amp;lang=en"');
-
-  // A host that cannot publish -- no person it accepts to publish as -- draws
-  // no way in, and says so on the screen itself rather than leaving a button
-  // missing for an unsaid reason. **The forge repository is no longer one of
-  // those conditions** (D-0081 rule 3.2): it is the lap's plan's, so a lap that
-  // names none is refused on its own screen, by the test below.
-  const noRepo = await operatorPage(portsOver(world, "ada", []), "t", { kind: "summary" });
-  expect(noRepo).not.toContain("?publish=");
-  const screen = await operatorPage(portsOver(world, "ada", []), "t", {
-    kind: "publish",
-    iterationId: "i-0001",
-  });
-  expect(screen).toContain("Nothing can be published from this page");
-  expect(screen).not.toContain("<form");
-
-  // A gate that ended without a person answering it is not an approval, so the
-  // row has no way in either (`approvedForPublication`).
-  const other = fresh();
-  await gateWithChecks(other);
-  const withdrawn = await other.store.transition(
-    "i-0001",
-    "awaiting_human",
-    "closed",
-    { gateOutcome: "withdrawn" },
-    5_000,
-  );
-  expect(withdrawn.kind).toBe("transitioned");
-  const closedOther = await operatorPage(portsOver(other, "ada", [], null, null, publishing), "t", {
-    kind: "summary",
-  });
-  expect(closedOther).not.toContain("?publish=");
-});
-
 test("the publish screen draws the body as markdown with the request as a fold, and the exact body is one press away (#248)", async () => {
   // As `requestBlock` writes it: the request quotes a code block and a stray
   // `</details>` of its own, and the fence is sized past its backticks.
@@ -4761,6 +4443,7 @@ test(
     const storePath = join(dir, "store.db");
     const connection = new DatabaseSync(storePath);
     const store = iterationStore(connection, { maxOccupying: 4, maxLive: 6 });
+    await openRequest(connection);
     const asked = { repo: "suisya-systems/rondo", remote: "origin", allowRemoteMismatch: false };
     const pressing = (iterationId: string, despiteReview = false) =>
       publishFromPage({ RONDO_APPROVER: "ada" }, store, storePath, "ada", asked, {
@@ -4783,7 +4466,7 @@ test(
       claim: ownLane(live),
       nowMs: 1_000,
       supersedesIterationId: null,
-      requestMessageId: null,
+      requestMessageId: REQUEST,
       runId: `rondo-${live}`,
       topicBranch: `rondo/${live}`,
       workspace: `/srv/work/${live}`,
@@ -4866,7 +4549,9 @@ async function publishableWorld(
 }> {
   const dir = mkdtempSync(join(tmpdir(), "rondo-publish-"));
   const storePath = join(dir, "store.db");
-  const store = iterationStore(new DatabaseSync(storePath), { maxOccupying: 4, maxLive: 6 });
+  const connection = new DatabaseSync(storePath);
+  const store = iterationStore(connection, { maxOccupying: 4, maxLive: 6 });
+  await openRequest(connection);
   const iterationId = "lap-00000000-0000-4000-8000-0000000000c1";
   const workspaceRoot = join(dir, "work");
   const planned = runPlan({ ...PLAN, workspaceRoot, repository: join(dir, "repo") });
@@ -4925,7 +4610,7 @@ async function publishableWorld(
     claim: ownLane(iterationId),
     nowMs: 1_000,
     supersedesIterationId: null,
-    requestMessageId: null,
+    requestMessageId: REQUEST,
     runId: `rondo-${iterationId}`,
     topicBranch,
     workspace,
@@ -5282,99 +4967,6 @@ test(
   WINDOWS_HEAVY_TIMEOUT_MS,
 );
 
-/**
- * A published lap, as rondo records one: the report `reportToRequest` writes
- * into the request thread when all three legs are done.
- *
- * **The real writer and not a hand-built row** (rondo#245). What the page reads
- * back is a message id and a sentence composed in `src/access/conductor.ts`; a
- * fixture that spelled either of them here would keep passing after the writer
- * moved, which is exactly the coupling worth sealing.
- */
-async function publishReported(
-  world: ReturnType<typeof fresh>,
-  pullRequestUrl: string | null,
-): Promise<void> {
-  await seedScopeRequest(world, "request-publish", "Ship it when it is done, please.");
-  world.connection
-    .prepare("UPDATE iteration SET request_message_id = ? WHERE id = ?")
-    .run("request-publish", "i-0001");
-  const line = await reportToRequest(
-    { record: world.record, store: world.store },
-    "i-0001",
-    { kind: "published", pullRequestUrl },
-    6_000,
-  );
-  expect(line).toContain("Reported to the request 'request-publish'");
-}
-
-test("a published lap says what the publish came to, and is not offered the press again (#245)", async () => {
-  const world = fresh();
-  await approvedLap(world);
-  const publishing = async () => DRY_RUN;
-  const ports = portsOver(world, "ada", [], null, null, publishing);
-
-  // Before: the way in is drawn and nothing claims anything happened.
-  const before = await operatorPage(ports, "t", { kind: "summary" });
-  expect(before).toContain('href="/?publish=i-0001&amp;lang=en"');
-  expect(before).not.toContain("Published:");
-
-  await publishReported(world, "https://github.com/suisya-systems/rondo/pull/242");
-  const after = await operatorPage(ports, "t", { kind: "summary" });
-
-  // **What happened, off the row's own columns and the report's URL.**
-  expect(lead(after)).toContain(
-    "Published: the branch rondo/i-0001 is pushed, and the run rondo-i-0001 is closed.",
-  );
-  expect(lead(after)).toContain('href="https://github.com/suisya-systems/rondo/pull/242"');
-  expect(lead(after)).toContain(">The pull request</a>");
-  // **And the press is not re-offered.** Unlike a start, a second press cannot
-  // join the first: a pull request that exists cannot be opened again.
-  expect(after).not.toContain("?publish=i-0001");
-
-  // The screen the link led to says the same thing, for an address retyped.
-  const screen = await operatorPage(ports, "t", { kind: "publish", iterationId: "i-0001" });
-  expect(screen).toContain(
-    "Published: the branch rondo/i-0001 is pushed, and the run rondo-i-0001 is closed.",
-  );
-  expect(screen).not.toContain("<form");
-  expect(screen).not.toContain("Push the branch rondo/i-0001 to origin.");
-});
-
-test("a publish whose forge printed no URL still says what it came to (#245)", async () => {
-  const world = fresh();
-  await approvedLap(world);
-  await publishReported(world, null);
-  const html = await operatorPage(
-    portsOver(world, "ada", [], null, null, async () => DRY_RUN),
-    "t",
-    { kind: "summary" },
-  );
-
-  expect(lead(html)).toContain("Published: the branch rondo/i-0001 is pushed");
-  // No link where there is no URL, and no half-written one either.
-  expect(lead(html)).not.toContain(">The pull request</a>");
-  expect(html).not.toContain("?publish=i-0001");
-});
-
-test("the published row is in the page's language (#245, D-0055)", async () => {
-  const world = fresh();
-  await approvedLap(world);
-  await publishReported(world, "https://github.com/suisya-systems/rondo/pull/242");
-  const html = await operatorPage(
-    portsOver(world, "ada", [], null, null, async () => DRY_RUN),
-    "t",
-    { kind: "summary" },
-    chromeFor("ja"),
-  );
-
-  expect(lead(html)).toContain(
-    "公開済み: ブランチ rondo/i-0001 を push し、run rondo-i-0001 を閉じました。",
-  );
-  expect(lead(html)).toContain(">プルリクエスト</a>");
-  expect(lead(html)).not.toContain("Published:");
-});
-
 /** More ended laps than the summary's "what just finished" window holds. */
 const RECENT_ENDED_OVERFLOW = 6;
 
@@ -5395,30 +4987,6 @@ async function runningLap(
   }
 }
 
-test("a running lap says it is running above its request, not under a wall of it (#244)", async () => {
-  const world = fresh();
-  const request = "Please look at the flaky test.\n\nIt fails about one run in five, and\n";
-  await runningLap(world, "i-0001", request);
-  const html = await operatorPage(portsOver(world), "t");
-  const row = html.slice(html.indexOf('id="lap-i-0001"'));
-
-  // The state and the age are both still said, once, in the row's own head.
-  expect(row).toContain(">Running</span>");
-  // **Above the request and not below it**: the one fact a person watching a
-  // lap came for used to sit last, under the words they wrote themselves.
-  expect(row.indexOf(">Running</span>")).toBeLessThan(row.indexOf("Please look at the flaky test"));
-
-  // A waiting row keeps the order it had: its request is what it is about.
-  const other = fresh();
-  await reserve(other, "i-0002", "Waiting on you.");
-  await openGate(other, "i-0002");
-  const gate = await operatorPage(portsOver(other), "t");
-  const waiting = gate.slice(gate.indexOf('id="lap-i-0002"'));
-  expect(waiting.indexOf("Waiting on you.")).toBeLessThan(
-    waiting.indexOf(">Waiting on you</span>"),
-  );
-});
-
 test("a request with a lap under it says the lap's state instead of offering the scope again (#244)", async () => {
   const world = fresh();
   const requestId = "request-running";
@@ -5429,12 +4997,14 @@ test("a request with a lap under it says the lap's state instead of offering the
     .run(requestId, "i-0001");
   const ports = portsOver(world, "ada", []);
 
+  // **The list says the lap's state** (D-0083 rule 5): one sentence, no lap id
+  // and no status enum. The *Set the scope* entrance that used to sit on the
+  // row went with the old list -- D-0083's row carries the person's words, the
+  // repository and one sentence, and nothing to press.
   const live = await operatorPage(ports, "t", { kind: "requests" });
-  const row = live.slice(live.indexOf(`id="request-${requestId}"`));
-  expect(row).toContain(">Running</span>");
-  // The entrance goes while the lap is live: a second scope beside a running
-  // lap is the confusion this list was causing.
-  expect(row).not.toContain("Set the scope");
+  const row = live.slice(live.indexOf("Fix the flaky test, please."));
+  expect(row).toContain("Working on it");
+  expect(live).not.toContain("Set the scope");
 
   // **And comes back when the lap has ended**: asking for more work on an
   // answered request is a real act, and the row says what became of the first.
@@ -5447,9 +5017,8 @@ test("a request with a lap under it says the lap's state instead of offering the
   );
   expect(closed.kind).toBe("transitioned");
   const after = await operatorPage(ports, "t", { kind: "requests" });
-  const ended = after.slice(after.indexOf(`id="request-${requestId}"`));
-  expect(ended).toContain(">Approved</span>");
-  expect(ended).toContain("Set the scope");
+  const ended = after.slice(after.indexOf("Fix the flaky test, please."));
+  expect(ended).toContain("Finished");
 
   // **The summary's five-row window is the summary's** (Codex round 1). The
   // requests list is not bounded, so a lap that has dropped out of *what just
@@ -5462,8 +5031,8 @@ test("a request with a lap under it says the lap's state instead of offering the
     expect(moved.kind).toBe("transitioned");
   }
   const later = await operatorPage(ports, "t", { kind: "requests" });
-  const pushedOut = later.slice(later.indexOf(`id="request-${requestId}"`));
-  expect(pushedOut).toContain(">Approved</span>");
+  const pushedOut = later.slice(later.indexOf("Fix the flaky test, please."));
+  expect(pushedOut).toContain("Finished");
 
   // **A live lap speaks for its request over a terminal one, however new**
   // (Codex round 2). A retry can end while the lap it supersedes is still at
@@ -5477,15 +5046,15 @@ test("a request with a lap under it says the lap's state instead of offering the
   const failed = await world.store.transition("i-0001", "closed", "closed", {}, 9_000);
   expect(failed.kind).toBe("transitioned");
   const alive = await operatorPage(ports, "t", { kind: "requests" });
-  const stillLive = alive.slice(alive.indexOf(`id="request-${requestId}"`));
-  expect(stillLive).toContain(">Waiting on you</span>");
-  expect(stillLive).not.toContain("Set the scope");
+  const stillLive = alive.slice(alive.indexOf("Fix the flaky test, please."));
+  expect(stillLive).toContain("Waiting on your answer");
 
-  // A request nobody has started anything for is unchanged: the entrance only.
+  // A request nobody has started anything for says that, and not a state it
+  // does not have.
   await seedScopeRequest(world, "request-idle", "And this one too, some time.");
   const both = await operatorPage(ports, "t", { kind: "requests" });
-  const idle = both.slice(both.indexOf('id="request-request-idle"'));
-  expect(idle.slice(0, idle.indexOf("</li>"))).toContain("Set the scope");
+  const idle = both.slice(both.indexOf("And this one too, some time."));
+  expect(idle).toContain("Not started yet");
 });
 
 test("the sentence that says a second start press is safe is in both catalogues (#244)", () => {
@@ -5494,214 +5063,6 @@ test("the sentence that says a second start press is safe is in both catalogues 
   expect(EN.startAgainSafe).not.toBe("");
   expect(chromeFor("ja").startAgainSafe).not.toBe(EN.startAgainSafe);
   expect(chromeFor("ja").startAgainSafe).toContain("2 回目の押下は 1 回目にまとめられ");
-});
-
-test("the entrances carry the weight of the acts behind them, and the refusal on the publish screen is untouched (#246)", async () => {
-  const world = fresh();
-  await approvedLap(world);
-  const requestId = "request-entrances";
-  await seedScopeRequest(world, requestId, "Have a look at this, please.");
-  const ports = portsOver(world, "ada", [], null, null, async () => DRY_RUN);
-
-  // **Publish is the row's action, in the shape the answer entrance already
-  // has** -- not a faint link inside the metadata line.
-  const summary = await operatorPage(ports, "t", { kind: "summary" });
-  const entrance = summary.slice(summary.indexOf('id="publish-i-0001"'));
-  expect(entrance).toContain('class="inline-flex cursor-pointer items-center gap-1.5 rounded-md');
-  expect(entrance).toContain("h-7 px-3 text-[13px]");
-  expect(summary).not.toContain(
-    '<a id="publish-i-0001" href="/?publish=i-0001&amp;lang=en" data-open="" ' +
-      'class="text-[12.5px] font-medium text-link hover:underline"',
-  );
-
-  // The same for the way onto the scope screen.
-  const requests = await operatorPage(ports, "t", { kind: "requests" });
-  const scope = requests.slice(requests.indexOf(`id="scope-${requestId}"`));
-  expect(scope).toContain("h-7 px-3 text-[13px]");
-
-  // **The refusal design on the publish screen is not what this touches**: a
-  // reading that does not cover the work still draws no publish button at all,
-  // and the one press there is is the override, inside its fold.
-  const refused = await operatorPage(
-    {
-      ...ports,
-      publishing: async () => ({
-        ...DRY_RUN,
-        review: { why: "noReading" as const },
-      }),
-    },
-    "t",
-    { kind: "publish", iterationId: "i-0001" },
-  );
-  const screen = refused.slice(refused.indexOf('id="publish"'));
-  expect(screen).not.toContain('id="publish-form"');
-  expect(screen).toContain('id="publish-despite"');
-  expect(screen).toContain(">Publish anyway</button>");
-});
-
-/** A log as `readLapLog` reads one: `count` commands, the newest last. */
-const logOf = (count: number, unfinished = false) => ({
-  kind: "read" as const,
-  commands: Array.from({ length: count }, (_, n) => ({
-    index: n + 1,
-    command: `echo step-${String(n + 1)}`,
-    output: n + 1 === count ? `${"x".repeat(9_000)}END` : `out-${String(n + 1)}`,
-    isError: n + 2 === count,
-  })),
-  finalMessage: null,
-  file: "/srv/state/rondo-i-0001/s1/events-000.jsonl",
-  unfinished,
-});
-
-test("a running row with a log found carries a way into it, and the other three states carry none (#248 item 3)", async () => {
-  const world = fresh();
-  await runningLap(world, "i-0001", "Fix the flaky test.");
-  const withLocation = (located: TranscriptLocation) => ({
-    ...portsOver(world),
-    locateTranscript: async () => located,
-  });
-
-  const found = await operatorPage(
-    withLocation({ kind: "named", directory: "/srv/state/rondo-i-0001/s1", sessions: 1 }),
-    "t",
-  );
-  const row = found.slice(found.indexOf('id="lap-i-0001"'));
-  // A control, and one that names the row, never a path.
-  expect(row).toContain('id="log-i-0001" href="/?log=i-0001&amp;lang=en"');
-  expect(row).toContain(">Read the log</a>");
-  expect(row).toContain("log found");
-
-  for (const [located, says] of [
-    [
-      { kind: "unknown", reason: "continuo is down" },
-      "could not check for a log: continuo is down",
-    ],
-    [{ kind: "named", directory: "/srv/x", sessions: 0 }, "no log yet"],
-  ] as const) {
-    const html = await operatorPage(withLocation(located), "t");
-    expect(html).toContain(says);
-    expect(html).not.toContain('id="log-i-0001"');
-  }
-});
-
-test("the log screen draws the newest commands first, says what it left out and where the rest is (#248 item 3)", async () => {
-  const world = fresh();
-  await runningLap(world, "i-0001", "Fix the flaky test.");
-  const asked: string[] = [];
-  const ports = {
-    ...portsOver(world),
-    locateTranscript: async () => ({
-      kind: "named" as const,
-      directory: "/srv/state/rondo-i-0001/s1",
-      sessions: 1,
-    }),
-    readLog: (directory: string) => {
-      asked.push(directory);
-      return logOf(60, true);
-    },
-  };
-  const html = await operatorPage(ports, "t", { kind: "log", iterationId: "i-0001" });
-  const screen = html.slice(html.indexOf('id="log"'));
-
-  // Read at the directory the port named, and nowhere a request could say.
-  expect(asked).toEqual(["/srv/state/rondo-i-0001/s1"]);
-  expect(screen).toContain("What this lap has run");
-  expect(screen).toContain("The newest 50 of 60 commands, newest first. The 10 before them");
-  expect(screen).toContain("/srv/state/rondo-i-0001/s1/events-000.jsonl");
-  // Newest first, and the ten oldest not drawn.
-  expect(screen.indexOf("echo step-60")).toBeLessThan(screen.indexOf("echo step-59"));
-  expect(screen).toContain("echo step-11<");
-  expect(screen).not.toContain("echo step-10<");
-  // An output past the bound keeps its end and says how much went.
-  expect(screen).toContain("END</pre>");
-  expect(screen).toContain("The first 1,003 characters are not shown here.");
-  expect(screen).toContain("The lap is writing its next line");
-  // A failed command is marked, once, in the pill beside its line.
-  expect(screen).toContain(">failed</span>");
-
-  // The one fold open is the newest output there is -- and when the newest
-  // command is still running with none, it is the one before it.
-  const opened = (html: string) => html.match(/<details class="group" open=""/g)?.length ?? 0;
-  expect(opened(screen)).toBe(1);
-  const running = logOf(3);
-  const stillRunning = {
-    ...running,
-    commands: running.commands.map((c, n) => (n === 2 ? { ...c, output: "" } : c)),
-  };
-  const midCall = await operatorPage({ ...ports, readLog: () => stillRunning }, "t", {
-    kind: "log",
-    iterationId: "i-0001",
-  });
-  const two = midCall.slice(midCall.indexOf("echo step-2<"));
-  expect(opened(midCall)).toBe(1);
-  expect(two.indexOf('open=""')).toBeLessThan(two.indexOf("echo step-1<"));
-  expect(two.indexOf('open=""')).toBeGreaterThan(-1);
-  // The screen holds still: no poll on it.
-  expect(html).not.toContain('hx-trigger="every 5s"');
-
-  // Every way it cannot draw a log is said, never an empty list.
-  const unread = await operatorPage(
-    { ...ports, readLog: () => ({ kind: "unread", reason: "record.json is gone" }) },
-    "t",
-    { kind: "log", iterationId: "i-0001" },
-  );
-  expect(unread).toContain("The log could not be read: record.json is gone");
-  const gone = await operatorPage(ports, "t", { kind: "log", iterationId: "i-0404" });
-  expect(gone).toContain("There is no lap by that name.");
-});
-
-test("the log screen speaks Japanese in the Japanese set (#248 item 3)", async () => {
-  const world = fresh();
-  await runningLap(world, "i-0001", "Fix the flaky test.");
-  const ports = {
-    ...portsOver(world),
-    locateTranscript: async () => ({
-      kind: "named" as const,
-      directory: "/srv/state/rondo-i-0001/s1",
-      sessions: 1,
-    }),
-    readLog: () => logOf(3),
-  };
-  const html = await operatorPage(
-    ports,
-    "t",
-    { kind: "log", iterationId: "i-0001" },
-    chromeFor("ja"),
-  );
-  expect(html).toContain("この周回が実行したコマンド");
-  expect(html).toContain("全 3 件。新しいものが上です。");
-  expect(html).toContain('href="/?lang=ja"');
-});
-
-test("the address `?log=` is the log screen, named by the row and never by a path (#248 item 3)", async () => {
-  const world = fresh();
-  await runningLap(world, "i-0001", "Fix the flaky test.");
-  const asked: string[] = [];
-  const { base, stop, served } = await serving({
-    ...portsOver(world),
-    locateTranscript: async () => ({
-      kind: "named",
-      directory: "/srv/state/rondo-i-0001/s1",
-      sessions: 1,
-    }),
-    readLog: (directory) => {
-      asked.push(directory);
-      return logOf(2);
-    },
-  });
-  try {
-    const page = await get(base, "/?log=i-0001&lang=en");
-    expect(page.status).toBe(200);
-    expect(page.body).toContain('id="log"');
-    expect(page.body).toContain("echo step-2");
-    // A path in the address names no row: nothing is opened for it.
-    const pathed = await get(base, `/?log=${encodeURIComponent("/etc/passwd")}&lang=en`);
-    expect(pathed.body).toContain("There is no lap by that name.");
-    expect(asked).toEqual(["/srv/state/rondo-i-0001/s1"]);
-  } finally {
-    stop.abort();
-    await served;
-  }
 });
 
 const DRAFTED_PROMPTS = ["Fix the scope screen cost box.", "Title-case the approve button."];
@@ -6063,66 +5424,6 @@ async function closeApproved(world: ReturnType<typeof fresh>, id: string): Promi
   expect(closed.kind).toBe("transitioned");
 }
 
-test("each open line says what it keeps, and a finished one not yet landed says so and never falls off the page (D-0073 rule 12)", async () => {
-  const world = fresh();
-  // One at its gate, and seven finished: the oldest finished one is still
-  // keeping its files, the rest have landed.
-  await reserve(world, "i-0001", "the one at its gate");
-  await openGate(world, "i-0001");
-  await reserve(world, "i-0002", "the one still keeping its files");
-  await closeApproved(world, "i-0002");
-  for (let n = 3; n <= 8; n += 1) {
-    const id = `i-000${String(n)}`;
-    await reserve(world, id, `landed work ${String(n)}`);
-    await closeApproved(world, id);
-    expect(
-      (
-        await world.store.releaseLane({
-          iterationId: id,
-          takenOver: { claimId: `${id}:1`, lapIds: [id] },
-          authorKind: "drafter",
-          authorId: "rondo/lane-ledger/1",
-          bases: [],
-          nowMs: 5_000 + n,
-        })
-      ).kind,
-    ).toBe("released");
-  }
-  await world.store.recordVerificationClaim("i-0002", "ada", "kept it", 4_500);
-  // The oldest ending of all, so *just finished*'s five would leave it out.
-  await world.connection
-    .prepare("UPDATE iteration SET updated_at_ms = 1 WHERE id = 'i-0002'")
-    .run();
-
-  for (const wording of [EN, chromeFor("ja")]) {
-    const html = await operatorPage(portsOver(world), "t", { kind: "summary" }, wording);
-    // The gate's row says what its line keeps, as the person's own paths.
-    expect(lead(html)).toContain(wording.holds(["lanes/i-0001/"]));
-    // The finished line is on the page although five endings are newer, in a
-    // group of its own rather than under *just finished*.
-    expect(lead(html)).toContain("the one still keeping its files");
-    expect(lead(html)).toContain(wording.heldHeading(1));
-    // Its row keeps what its approval said, as a recent one would.
-    expect(lead(html)).toContain(wording.checkedEcho("kept it", null));
-    expect(lead(html)).toContain(wording.endedHeading(5));
-    expect(lead(html)).toContain(wording.holds(["lanes/i-0002/"]));
-    expect(lead(html)).toContain(wording.notLanded);
-    expect(lead(html)).toContain(`href="/?release=i-0002&amp;lang=${wording.lang}"`);
-    expect(lead(html)).toContain(wording.landed);
-    // No identifier rondo made is in the text a person reads (D-0076 rule 3.1).
-    expect(lead(html)).not.toContain("i-0002:1");
-  }
-
-  // With no approver there is no press to make, so no way to one is drawn;
-  // nor where an approver is named but no release press stands behind it.
-  const html = await operatorPage(portsOver(world, null), null);
-  expect(lead(html)).toContain(EN.notLanded);
-  expect(lead(html)).not.toContain("?release=");
-  const refused = await operatorPage({ ...portsOver(world), releasable: false }, "t");
-  expect(lead(refused)).toContain(EN.notLanded);
-  expect(lead(refused)).not.toContain("?release=");
-});
-
 test("the release screen names the work by its request, says why rondo has not released it, and carries what it was drawn over (D-0073 rule 4.3, rondo#288)", async () => {
   const world = fresh();
   await reserve(world, "i-0001", "Rename the settings page");
@@ -6172,7 +5473,6 @@ test("the release screen names the work by its request, says why rondo has not r
   const gone = await operatorPage(portsOver(world), "t", screen);
   expect(gone).toContain(EN.releasedByPerson);
   expect(gone).not.toContain('action="/release');
-  expect(lead(await operatorPage(portsOver(world), "t"))).toContain(EN.releasedByPerson);
 });
 
 test("the page's release is the approver's and only what the screen showed: a stranger, or a line that moved, releases nothing (D-0073 rule 4.3)", async () => {
@@ -6219,64 +5519,4 @@ test("the page's release is the approver's and only what the screen showed: a st
   // Pressed again from the same screen: the line moved, so nothing more.
   expect((await releaseFromPage(env, world.store, "ada", shown)).ok).toBe(false);
   expect(claims()).toHaveLength(2);
-});
-
-test("a finished line still keeping its files is drawn at the waiting weight, and one that landed is not (D-0082 rule 1)", async () => {
-  const world = fresh();
-  // Two finished laps: the first still keeps its files, the second landed.
-  await reserve(world, "i-0001", "the one still keeping its files");
-  await closeApproved(world, "i-0001");
-  await reserve(world, "i-0002", "the one that landed");
-  await closeApproved(world, "i-0002");
-  expect(
-    (
-      await world.store.releaseLane({
-        iterationId: "i-0002",
-        takenOver: { claimId: "i-0002:1", lapIds: ["i-0002"] },
-        authorKind: "drafter",
-        authorId: "rondo/lane-ledger/1",
-        bases: [],
-        nowMs: 5_000,
-      })
-    ).kind,
-  ).toBe("released");
-
-  const html = lead(await operatorPage(portsOver(world), "t", { kind: "summary" }, EN));
-  const rowOf = (id: string) => {
-    const from = html.slice(html.indexOf(`id="lap-${id}"`));
-    return from.slice(0, from.indexOf("</li>"));
-  };
-  const keeping = rowOf("i-0001");
-  const landed = rowOf("i-0002");
-
-  // The press is on the keeping row and on no other, which is what promotes it.
-  expect(keeping).toContain('id="release-i-0001"');
-  expect(landed).not.toContain('id="release-');
-  // Promoted: the request is whole and heavy rather than cut and recessive, and
-  // the glyph is the amber one, as every row a person must act on is. Both
-  // rows' requests are one size (D-0082 rule 4 puts every request on
-  // `text-title`), so weight, ink and the cut are the whole of the difference.
-  expect(keeping).toContain("text-title");
-  expect(landed).toContain("text-title");
-  expect(keeping).toContain("font-semibold");
-  expect(keeping).not.toContain("truncate");
-  expect(keeping).toContain("text-wait");
-  // The landed row keeps the quiet ending weight it had.
-  expect(landed).toContain("truncate");
-  expect(landed).toContain("text-muted-foreground");
-  expect(landed).not.toContain("text-wait");
-
-  // **Only the weight moved, and the group did not.** Both laps ended moments
-  // ago, so both are under *just finished* -- and the keeping one wears the
-  // waiting weight inside it. That is the whole of rule 1: the weight follows
-  // the press a person must make, not the group the work belongs to, so nothing
-  // here had to be said differently for it to stop being the quietest row.
-  expect(html).toContain(EN.endedHeading(2));
-  expect(keeping).toContain("the one still keeping its files");
-  expect(keeping).toContain(EN.notLanded);
-  // A waiting row's metadata is never cut: it says what releases it. The cap on
-  // the rows that are cut is three lines, not a pixel height that only holds
-  // three while a line is 20px (D-0082 rule 5 gives Japanese a taller one).
-  expect(keeping).not.toContain("max-h-");
-  expect(landed).toContain("max-sm:max-h-[3lh]");
 });

@@ -22,6 +22,7 @@ import { readRunPlan } from "../../src/refrain/plan.js";
 import { planDigest } from "../../src/store/plan.js";
 import type { JsonRecord } from "../../src/store/records.js";
 import { ownLane } from "../lane-claims.js";
+import { openRequest, REQUEST } from "../request-fixture.js";
 import {
   AGENT_TYPE_INPUT,
   agentTypeDigestOf,
@@ -271,6 +272,9 @@ async function reserveLap(
   plan: JsonRecord,
   atMs: number,
 ): Promise<void> {
+  // Every lap names a request (D-0083); this suite is about the plans the laps
+  // carry, so one fixture request stands for all of them.
+  await openRequest(w.connection);
   const reserved = await w.store.reserve({
     id,
     request: "earlier work",
@@ -280,7 +284,7 @@ async function reserveLap(
     claim: ownLane(id),
     nowMs: atMs,
     supersedesIterationId: null,
-    requestMessageId: null,
+    requestMessageId: REQUEST,
     runId: `rondo-${id}`,
     topicBranch: `rondo/${id}`,
     workspace: `/srv/work/${id}`,

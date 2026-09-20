@@ -246,7 +246,10 @@ function send(
   });
 }
 
-const FORM = { token: TOKEN, iteration: "i-0001" };
+// The gate's form as the page draws it since D-0083 rule 3: it carries the
+// request the lap is for, because that thread is where the press was made and
+// where its `303` and its refusals go back to.
+const FORM = { token: TOKEN, iteration: "i-0001", request: "req-1" };
 
 /**
  * A record-scope form, as the page draws it: the hidden ids it minted and the
@@ -296,6 +299,7 @@ function reviseForm(overrides: Record<string, string> = {}): Record<string, stri
   return {
     token: TOKEN,
     iteration: "i-0001",
+    request: "req-1",
     successor: newIterationId(),
     scope_decision: "decision-1",
     body: "  fix the parser, and leave the command line alone  ",
@@ -347,7 +351,7 @@ test("(a) a person's native press is minted, and it writes the one word once", a
     body: "revise",
   });
   expect(pressed.status).toBe(303);
-  expect(pressed.location).toBe("/?lang=en#lap-i-0001");
+  expect(pressed.location).toBe("/?thread=req-1&lang=en");
   // The form's `body` is not read: the port's word is the page's one word.
   expect(written).toEqual([{ iterationId: "i-0001", body: "approve" }]);
 
@@ -846,7 +850,7 @@ test("(revise) a person's native press answers the gate with a change, once", as
   const form = reviseForm();
   const pressed = await send(base, "/revise", "POST", pressHeaders(base), form);
   expect(pressed.status).toBe(303);
-  expect(pressed.location).toBe(`/?lang=en#${encodeURIComponent(`lap-${form["successor"]}`)}`);
+  expect(pressed.location).toBe("/?thread=req-1&lang=en");
   expect(revised).toEqual([
     {
       iterationId: "i-0001",
@@ -1319,7 +1323,7 @@ test("(claim) a press carries what the person verified, trimmed; blank is none, 
   expect(tooLong.body).toContain(String(MAX_CLAIM_CHARS));
   expect(tooLong.body).toContain('<html lang="ja">');
   expect(tooLong.body).toContain("ゲートに戻る");
-  expect(tooLong.body).toContain('href="/?answer=i-0001&amp;lang=ja"');
+  expect(tooLong.body).toContain('href="/?thread=req-1&amp;lang=ja"');
   expect(written).toEqual([
     { iterationId: "i-0001", body: "approve", claim: said.trim() },
     { iterationId: "i-0001", body: "approve" },
@@ -1354,7 +1358,7 @@ test("(claim) a claim refused past the port is said in the press's language, nev
     });
     expect(refused.status).toBe(409);
     expect(refused.body).toContain(words);
-    expect(refused.body).toContain(`href="/?answer=i-0001&amp;lang=${lang}"`);
+    expect(refused.body).toContain(`href="/?thread=req-1&amp;lang=${lang}"`);
     expect(refused.body).not.toContain("terminal");
   }
   stop.abort();
@@ -2549,7 +2553,7 @@ test("(raise) a person's press records the budgets it was drawn with and returns
   const form = raiseForm();
   const pressed = await send(base, "/raise", "POST", pressHeaders(base), form);
   expect(pressed.status).toBe(303);
-  expect(pressed.location).toBe("/?answer=lap-at-gate&lang=en");
+  expect(pressed.location).toBe("/?thread=req-1&lang=en");
   expect(raised).toEqual([
     {
       scopeId: form["scope_id"],
@@ -2595,7 +2599,7 @@ test("(raise) every other shape is refused, and a refusal leads back to the gate
   const refused = await send(base, "/raise", "POST", person, raiseForm());
   expect(refused.status).toBe(409);
   expect(refused.body).toContain("already been raised");
-  expect(refused.body).toContain("/?answer=lap-at-gate&amp;lang=en");
+  expect(refused.body).toContain("/?thread=req-1&amp;lang=en");
   expect(raised).toHaveLength(1);
   expect((await send(base, "/raise", "GET", person)).status).toBe(404);
 

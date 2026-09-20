@@ -34,7 +34,8 @@ import type {
 } from "../../src/refrain/ports.js";
 import { canonicalJson, planDigest } from "../../src/store/plan.js";
 import type { IterationStatus, JsonRecord } from "../../src/store/records.js";
-import { iterationStore } from "../../src/store/sqlite.js";
+import {} from "../../src/store/sqlite.js";
+import { REQUEST, storeWithRequest } from "../request-fixture.js";
 
 const START_POLICY: LoopPolicy = { autonomy: "ask_before_landing", maxIterations: 1 };
 
@@ -101,7 +102,7 @@ const admittedFor = (id: string): AdmittedPlan => {
  */
 const portsOver = (policy: HostPolicy) => {
   const connection = new DatabaseSync(":memory:");
-  const store = iterationStore(connection, policy);
+  const store = storeWithRequest(connection, policy);
   let clock = 1_000;
   const ports: ConductorPorts = {
     store,
@@ -144,10 +145,10 @@ const putAt = (connection: DatabaseSync, id: string, status: IterationStatus): v
 
 test("a second admission while one is executing is refused, and says which bound", async () => {
   const { ports, connection } = portsOver({ maxOccupying: 1, maxLive: 3 });
-  await admit(ports, PLAN, START_POLICY, "iter-a");
+  await admit(ports, PLAN, START_POLICY, "iter-a", null, null, REQUEST);
   putAt(connection, "iter-a", "performing");
 
-  const second = await admit(ports, PLAN, START_POLICY, "iter-b");
+  const second = await admit(ports, PLAN, START_POLICY, "iter-b", null, null, REQUEST);
   expect(second.iterationId).toBeNull();
   expect(second.status).toBeNull();
   expect(second.lines.join("\n")).toContain("1 of a permitted 1");
@@ -156,30 +157,30 @@ test("a second admission while one is executing is refused, and says which bound
 
 test("the observed-red control: the same admission at a bound of two is accepted", async () => {
   const { ports, connection } = portsOver({ maxOccupying: 2, maxLive: 3 });
-  await admit(ports, PLAN, START_POLICY, "iter-a");
+  await admit(ports, PLAN, START_POLICY, "iter-a", null, null, REQUEST);
   putAt(connection, "iter-a", "performing");
 
-  const second = await admit(ports, PLAN, START_POLICY, "iter-b");
+  const second = await admit(ports, PLAN, START_POLICY, "iter-b", null, null, REQUEST);
   expect(second.iterationId).toBe("iter-b");
 });
 
 test("a refused admission writes no row, so the id stays free", async () => {
   const { ports, store, connection } = portsOver({ maxOccupying: 1, maxLive: 3 });
-  await admit(ports, PLAN, START_POLICY, "iter-a");
+  await admit(ports, PLAN, START_POLICY, "iter-a", null, null, REQUEST);
   putAt(connection, "iter-a", "performing");
-  await admit(ports, PLAN, START_POLICY, "iter-b");
+  await admit(ports, PLAN, START_POLICY, "iter-b", null, null, REQUEST);
 
   expect((await store.read("iter-b")).kind).toBe("absent");
   // And the identifiers it would have claimed are unclaimed, so the same
   // request may be admitted under the same id once capacity frees.
   putAt(connection, "iter-a", "closed");
-  const retried = await admit(ports, PLAN, START_POLICY, "iter-b");
+  const retried = await admit(ports, PLAN, START_POLICY, "iter-b", null, null, REQUEST);
   expect(retried.iterationId).toBe("iter-b");
 });
 
 test("an iteration id that is not a rondo identifier is refused before any row", async () => {
   const { ports, connection } = portsOver({ maxOccupying: 1, maxLive: 3 });
-  const refused = await admit(ports, PLAN, START_POLICY, "../other");
+  const refused = await admit(ports, PLAN, START_POLICY, "../other", null, null, REQUEST);
 
   expect(refused.iterationId).toBeNull();
   expect(refused.lines.join("\n")).toContain("lowercase letter");
@@ -201,10 +202,10 @@ test("two iterations are live at once when one of them is suspended", async () =
   // asked to see: one iteration suspended in front of a person, another
   // executing, both non-terminal, with no continuo change of any kind.
   const { ports, store, connection } = portsOver({ maxOccupying: 1, maxLive: 3 });
-  await admit(ports, PLAN, START_POLICY, "iter-a");
+  await admit(ports, PLAN, START_POLICY, "iter-a", null, null, REQUEST);
   putAt(connection, "iter-a", "awaiting_human");
 
-  const second = await admit(ports, PLAN, START_POLICY, "iter-b");
+  const second = await admit(ports, PLAN, START_POLICY, "iter-b", null, null, REQUEST);
   expect(second.iterationId).toBe("iter-b");
   putAt(connection, "iter-b", "performing");
 
@@ -213,16 +214,16 @@ test("two iterations are live at once when one of them is suspended", async () =
     live.map((outcome) => (outcome.kind === "read" ? outcome.record.id : outcome.kind)),
   ).toEqual(["iter-a", "iter-b"]);
   // One lap at a time, several questions open at once.
-  const third = await admit(ports, PLAN, START_POLICY, "iter-c");
+  const third = await admit(ports, PLAN, START_POLICY, "iter-c", null, null, REQUEST);
   expect(third.iterationId).toBeNull();
   expect(third.lines.join("\n")).toContain("already executing");
 });
 
 test("each live iteration keeps its own identifiers, and they do not collide", async () => {
   const { ports, store, connection } = portsOver({ maxOccupying: 1, maxLive: 3 });
-  await admit(ports, PLAN, START_POLICY, "iter-a");
+  await admit(ports, PLAN, START_POLICY, "iter-a", null, null, REQUEST);
   putAt(connection, "iter-a", "awaiting_human");
-  await admit(ports, PLAN, START_POLICY, "iter-b");
+  await admit(ports, PLAN, START_POLICY, "iter-b", null, null, REQUEST);
 
   const a = await store.read("iter-a");
   const b = await store.read("iter-b");
@@ -238,13 +239,13 @@ test("acting on one iteration writes nothing to another", async () => {
   // that two transactions do not interleave -- but it is worth pinning, because
   // a surface that resolved "the live iteration" would fail it.
   const { ports, store, connection } = portsOver({ maxOccupying: 1, maxLive: 3 });
-  await admit(ports, PLAN, START_POLICY, "iter-a");
+  await admit(ports, PLAN, START_POLICY, "iter-a", null, null, REQUEST);
   putAt(connection, "iter-a", "awaiting_human");
-  await admit(ports, PLAN, START_POLICY, "iter-b");
+  await admit(ports, PLAN, START_POLICY, "iter-b", null, null, REQUEST);
   putAt(connection, "iter-b", "performing");
 
   const before = await store.read("iter-b");
-  await admit(ports, PLAN, START_POLICY, "iter-c");
+  await admit(ports, PLAN, START_POLICY, "iter-c", null, null, REQUEST);
   const after = await store.read("iter-b");
   expect(after).toEqual(before);
 });
@@ -260,8 +261,8 @@ test("two admissions racing at the bound produce exactly one row and one refusal
   const { ports, store, connection } = portsOver({ maxOccupying: 1, maxLive: 1 });
 
   const [first, second] = await Promise.all([
-    admit(ports, PLAN, START_POLICY, "iter-a"),
-    admit(ports, PLAN, START_POLICY, "iter-b"),
+    admit(ports, PLAN, START_POLICY, "iter-a", null, null, REQUEST),
+    admit(ports, PLAN, START_POLICY, "iter-b", null, null, REQUEST),
   ]);
 
   const reserved = [first, second].filter((report) => report.iterationId !== null);
@@ -284,17 +285,21 @@ test("no ordering is promised, and starvation is possible", async () => {
   // decision here rather than a gap, and a future queue will fail this test,
   // which is the point.
   const { ports, connection } = portsOver({ maxOccupying: 1, maxLive: 1 });
-  await admit(ports, PLAN, START_POLICY, "iter-a");
+  await admit(ports, PLAN, START_POLICY, "iter-a", null, null, REQUEST);
   putAt(connection, "iter-a", "performing");
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
-    expect((await admit(ports, PLAN, START_POLICY, "iter-b")).iterationId).toBeNull();
+    expect(
+      (await admit(ports, PLAN, START_POLICY, "iter-b", null, null, REQUEST)).iterationId,
+    ).toBeNull();
   }
   putAt(connection, "iter-a", "closed");
 
   // `iter-c` arrives last and is admitted anyway: being refused three times
   // bought `iter-b` no priority whatsoever.
-  expect((await admit(ports, PLAN, START_POLICY, "iter-c")).iterationId).toBe("iter-c");
+  expect((await admit(ports, PLAN, START_POLICY, "iter-c", null, null, REQUEST)).iterationId).toBe(
+    "iter-c",
+  );
 
   // The demand rows are the only record that anyone was ever refused, which is
   // exactly what rule 14 is for.
@@ -323,13 +328,13 @@ test("a stored payload written before the version key still reads, through the r
   delete legacy["pull_request_base_branch"];
 
   const connection = new DatabaseSync(":memory:");
-  const store = iterationStore(connection, { maxOccupying: 1, maxLive: 3 });
+  const store = storeWithRequest(connection, { maxOccupying: 1, maxLive: 3 });
   const bytes = canonicalJson(legacy as JsonRecord);
   connection
     .prepare(
-      "INSERT INTO iteration (id, status, request, plan, plan_digest, attempts, run_id, " +
+      "INSERT INTO iteration (id, status, request, plan, plan_digest, attempts, request_message_id, run_id, " +
         "topic_branch, workspace, identifiers_spent, created_at_ms, updated_at_ms) " +
-        "VALUES ('iter-a', 'awaiting_human', 'do the thing', ?, ?, 1, ?, ?, ?, 1, 1, 1)",
+        "VALUES ('iter-a', 'awaiting_human', 'do the thing', ?, ?, 1, 'req-fixture', ?, ?, ?, 1, 1, 1)",
     )
     .run(
       bytes,
@@ -396,17 +401,17 @@ test("the refusal prose admit() produces is one line per entry, with no control 
   // Asserted over the class rather than over the one string that was wrong:
   // every line this path produces must survive the escape unchanged.
   const { ports, connection } = portsOver({ maxOccupying: 1, maxLive: 3 });
-  await admit(ports, PLAN, START_POLICY, "iter-a");
+  await admit(ports, PLAN, START_POLICY, "iter-a", null, null, REQUEST);
   putAt(connection, "iter-a", "performing");
 
-  const executing = await admit(ports, PLAN, START_POLICY, "iter-b");
-  const badId = await admit(ports, PLAN, START_POLICY, "../other");
+  const executing = await admit(ports, PLAN, START_POLICY, "iter-b", null, null, REQUEST);
+  const badId = await admit(ports, PLAN, START_POLICY, "../other", null, null, REQUEST);
   putAt(connection, "iter-a", "awaiting_human");
-  await admit(ports, PLAN, START_POLICY, "iter-c");
+  await admit(ports, PLAN, START_POLICY, "iter-c", null, null, REQUEST);
   putAt(connection, "iter-c", "awaiting_human");
-  await admit(ports, PLAN, START_POLICY, "iter-d");
+  await admit(ports, PLAN, START_POLICY, "iter-d", null, null, REQUEST);
   putAt(connection, "iter-d", "awaiting_human");
-  const open = await admit(ports, PLAN, START_POLICY, "iter-e");
+  const open = await admit(ports, PLAN, START_POLICY, "iter-e", null, null, REQUEST);
 
   for (const report of [executing, badId, open]) {
     expect(report.lines.length).toBeGreaterThan(0);
@@ -431,9 +436,9 @@ test("an unreadable live row still counts toward which iteration is meant", asyn
   // selection rests on: both rows come back from `readLive()`, and the
   // unreadable one is reported rather than dropped.
   const { ports, store, connection } = portsOver({ maxOccupying: 1, maxLive: 3 });
-  await admit(ports, PLAN, START_POLICY, "iter-a");
+  await admit(ports, PLAN, START_POLICY, "iter-a", null, null, REQUEST);
   putAt(connection, "iter-a", "awaiting_human");
-  await admit(ports, PLAN, START_POLICY, "iter-b");
+  await admit(ports, PLAN, START_POLICY, "iter-b", null, null, REQUEST);
   putAt(connection, "iter-b", "awaiting_human");
 
   // A status rondo's union does not recognise is the ordinary way a row stops

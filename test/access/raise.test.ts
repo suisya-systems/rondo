@@ -20,8 +20,9 @@ import { approvalTip } from "../../src/access/scope.js";
 import type { RaiseInput } from "../../src/access/web-app.js";
 import { contentDigest } from "../../src/store/plan.js";
 import type { JsonRecord } from "../../src/store/records.js";
-import { advisoryRecord, iterationStore } from "../../src/store/sqlite.js";
+import { advisoryRecord } from "../../src/store/sqlite.js";
 import { ownLane } from "../lane-claims.js";
+import { REQUEST, storeWithRequest } from "../request-fixture.js";
 
 const ENV = { RONDO_APPROVER: "ada" };
 
@@ -47,7 +48,7 @@ const RAISED = {
 async function world() {
   const storePath = join(mkdtempSync(join(tmpdir(), "rondo-raise-")), "store.db");
   const connection = new DatabaseSync(storePath);
-  const store = iterationStore(connection, { maxOccupying: 4, maxLive: 6 });
+  const store = storeWithRequest(connection, { maxOccupying: 4, maxLive: 6 });
   const record = advisoryRecord(connection);
   const said = await record.recordThreadMessage({
     messageId: "m-req",
@@ -69,7 +70,7 @@ async function world() {
     topicBranch: "rondo/lap-held",
     workspace: "/srv/work/lap-held",
     supersedesIterationId: null,
-    requestMessageId: null,
+    requestMessageId: REQUEST,
     spend: null,
     scopeSpend: null,
     claim: ownLane("lap-held"),
@@ -111,7 +112,7 @@ async function world() {
       topicBranch: `rondo/${id}`,
       workspace: `/srv/work/${id}`,
       supersedesIterationId: null,
-      requestMessageId: null,
+      requestMessageId: REQUEST,
       spend: null,
       scopeSpend: null,
       claim: ownLane(id),

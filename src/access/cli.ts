@@ -862,20 +862,20 @@ export function parseCommand(argv: readonly string[]): ParseOutcome {
     };
   }
 
-  // **Refused here, before any verdict** (D-0069 section 2): the verdict refuses
-  // an act that names no request, and a refusal with no request has no thread to
-  // write its stop into, so a scoped first admission would leave nothing durable.
-  if (
-    command === "start" &&
-    values["scope-decision-id"] !== undefined &&
-    values["message-id"] === undefined
-  ) {
+  // **Every lap names the request it came from** (D-0061 rule 4, D-0083 rule
+  // 2). It was required only of a scoped start, for D-0069 section 2's reason
+  // -- a refusal with no request has no thread to write its stop into. D-0083
+  // makes the request's thread the unit of the page, so a lap with no request
+  // is a lap the screen has nowhere to draw, and the requirement is the whole
+  // command's. Refused here, before any verdict and before any row.
+  if (command === "start" && values["message-id"] === undefined) {
     return {
       kind: "refused",
       reason:
-        "start --scope-decision-id needs --message-id ID, the message that opened the request: " +
-        "a scope covers only the requests it lists, and a refusal is written into that " +
-        "request's thread so it keeps the line stopped.",
+        "start needs --message-id ID, the message that opened the request this lap is for: " +
+        "the page draws a lap inside its request's thread, a scope covers only the requests " +
+        "it lists, and a refusal is written into that request's thread so it keeps the line " +
+        "stopped.",
     };
   }
 
@@ -2095,8 +2095,11 @@ export async function commandStart(
   // section 3.4), on both roads below: a start that names its request is
   // given what rondo read of it, scoped or not.
   const record = openAdvisoryRecord(storePath);
-  const quoted =
-    parsed.messageId === null ? plan : await withNamedIssues(record, parsed.messageId, plan);
+  // `parseCommand` has refused a `start` with no `--message-id`, so the
+  // narrowing here is the compiler reading that refusal rather than a second
+  // check.
+  const messageId = parsed.messageId ?? "";
+  const quoted = await withNamedIssues(record, messageId, plan);
   if ("refusal" in quoted) {
     return refuse(quoted.refusal);
   }
@@ -2130,7 +2133,7 @@ export async function commandStart(
         iterationId,
         plan: quoted,
         proposalId: null,
-        requestMessageId: parsed.messageId,
+        requestMessageId: messageId,
       },
     );
     return await finishScopedAdmission(
@@ -2151,7 +2154,7 @@ export async function commandStart(
     iterationId,
     null,
     null,
-    parsed.messageId,
+    messageId,
   );
   sayReport(report);
   if (report.status === "awaiting_human") {
@@ -2824,6 +2827,15 @@ async function commandRetry(
   );
   say(`retrying '${retry.subjectId}' as iteration '${retry.successorId}'`);
   say("the lap is the step that is slow");
+  // **The request is read from the row being retried, and the store reads it
+  // again** (rondo#195): `reserve()` derives a successor's link from the row it
+  // supersedes whatever is passed, so this is the argument the type asks for
+  // and not a second opinion. A subject that will not read is `approvedRetry`'s
+  // to have refused.
+  const subject = await store.read(retry.subjectId);
+  if (subject.kind !== "read") {
+    return refuse(`The iteration '${retry.subjectId}' being retried did not read.`);
+  }
   const report = await admit(
     ports,
     advisory,
@@ -2836,6 +2848,7 @@ async function commandRetry(
     // record or neither.
     retry.subjectId,
     { decisionId: retry.decisionId, contractDigest: retry.contractDigest },
+    subject.record.requestMessageId,
   );
   sayReport(report);
   if (report.status === "awaiting_human") {
@@ -3243,11 +3256,6 @@ async function finishScopedAdmission(
         return refuse(
           `No new message was written: message '${stop.messageId}' ` +
             "already holds this line, and a reply to it is what lets the line carry on.",
-        );
-      case "noThread":
-        return refuse(
-          `The ${act} names no request, so there is no thread to write the stop into: this ` +
-            "refusal is printed only, and nothing durable keeps the line stopped.",
         );
       case "failed":
         refuse(
@@ -6041,7 +6049,18 @@ async function commandRevise(
   // the succession survived only as `base_branch` equalling the predecessor's
   // `topic_branch` -- a value a reader could guess a relationship from, which
   // is what `D-0027` rule 9 deferred and rondo#33 asked for.
-  const second = await admit(ports, advisory, successor.plan, START_POLICY, successorId, record.id);
+  const second = await admit(
+    ports,
+    advisory,
+    successor.plan,
+    START_POLICY,
+    successorId,
+    record.id,
+    null,
+    // Inherited by `reserve()` from the row above whatever is passed; this is
+    // the same value, read here so the type can say a lap always has one.
+    record.requestMessageId,
+  );
   sayReport(second);
   if (second.status === "awaiting_human") {
     await sayGateOpen(() =>

@@ -188,7 +188,7 @@ export async function admit(
   id: string,
   supersedesIterationId: string | null = null,
   spend: DecisionSpend | null = null,
-  requestMessageId: string | null = null,
+  requestMessageId: string,
   scopeSpend: ScopeSpend | null = null,
   claim: LaneClaimAsk | null = null,
 ): Promise<ConductorReport> {
@@ -379,11 +379,9 @@ export async function admit(
             "row records that rather than leaving it to be inferred from the branch names.",
         );
       }
-      if (reservation.record.requestMessageId !== null) {
-        lines.push(
-          `It came from the request opened by message ${reservation.record.requestMessageId}.`,
-        );
-      }
+      lines.push(
+        `It came from the request opened by message ${reservation.record.requestMessageId}.`,
+      );
       return drive(ports, reservation.record, lines);
   }
 }

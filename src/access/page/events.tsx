@@ -32,6 +32,12 @@ export interface ThreadEvent {
   readonly said: string;
   /** The time, at the right edge, as a person reads it. */
   readonly at: string;
+  /**
+   * The same moment as milliseconds, which the line itself does not draw.
+   * Rule 7's *you last looked down to here* is placed by comparing it with
+   * the mark, and the placing is the caller's: only it has read the mark.
+   */
+  readonly atMs: number;
   /** Where the evidence for this line is, when there is somewhere to go. */
   readonly href?: string;
   /** What that link says; required where `href` is given. */

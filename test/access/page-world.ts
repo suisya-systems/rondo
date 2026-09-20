@@ -55,12 +55,48 @@ export async function openGate(world: ReturnType<typeof fresh>, id: string): Pro
   }
 }
 
+/** One request, opened by a person, for a lap to belong to. */
+export async function openRequest(
+  world: ReturnType<typeof fresh>,
+  messageId: string,
+  body: string,
+  atMs = 500,
+): Promise<void> {
+  const outcome = await world.record.recordThreadMessage({
+    messageId,
+    body,
+    authorKind: "operator",
+    authorId: "ada",
+    inReplyTo: null,
+    atMs,
+    bases: [],
+    asks: false,
+  });
+  if (outcome.kind !== "recorded") {
+    throw new Error(`the fixture did not record the request: ${JSON.stringify(outcome)}`);
+  }
+}
+
 export async function reserve(
   world: ReturnType<typeof fresh>,
   id: string,
   request: string,
   materialLanguage: string | null = null,
+  /**
+   * The message that opened the request this lap came from (D-0061 rule 4).
+   *
+   * **Left out, this helper opens one.** Every lap names a request since
+   * `start` requires `--message-id`, and the page draws a lap only through
+   * the thread it belongs to (D-0083 rule 2), so a fixture with no request
+   * is a fixture with no page. Given, the caller has already written that
+   * message and this helper leaves the conversation alone.
+   */
+  requestMessageId?: string,
 ): Promise<void> {
+  if (requestMessageId === undefined) {
+    requestMessageId = `req-${id}`;
+    await openRequest(world, requestMessageId, request);
+  }
   const outcome = await world.store.reserve({
     id,
     request,
@@ -70,7 +106,7 @@ export async function reserve(
     claim: ownLane(id),
     nowMs: 1_000,
     supersedesIterationId: null,
-    requestMessageId: null,
+    requestMessageId,
     runId: `rondo-${id}`,
     topicBranch: `rondo/${id}`,
     workspace: `/srv/work/${id}`,
@@ -147,7 +183,8 @@ export const EVIDENCE = {
 
 /** A lap at its gate with the deterministic reading carried by its transition. */
 export async function gateWithChecks(world: ReturnType<typeof fresh>): Promise<void> {
-  await reserve(world, "i-0001", "add a retry budget");
+  await openRequest(world, "req-1", "add a retry budget");
+  await reserve(world, "i-0001", "add a retry budget", null, "req-1");
   await openGate(world, "i-0001");
   const carried = await world.store.transition(
     "i-0001",

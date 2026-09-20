@@ -29,8 +29,9 @@ import {
   readingCoverage,
   severityAtOrAbove,
 } from "../../src/store/records.js";
-import { iterationStore } from "../../src/store/sqlite.js";
+import {} from "../../src/store/sqlite.js";
 import { ownLane } from "../lane-claims.js";
+import { REQUEST, storeWithRequest } from "../request-fixture.js";
 
 const somePlan = (): JsonRecord => ({
   run_id: "r-0001",
@@ -39,7 +40,7 @@ const somePlan = (): JsonRecord => ({
   topic_branch: "feat/thing",
 });
 
-const freshStore = () => iterationStore(new DatabaseSync(":memory:"), CONSERVATIVE_HOST_POLICY);
+const freshStore = () => storeWithRequest(new DatabaseSync(":memory:"), CONSERVATIVE_HOST_POLICY);
 
 const tripleFor = (id: string) => ({
   runId: `rondo-${id}`,
@@ -57,7 +58,7 @@ const reserveOne = async (store: ReturnType<typeof freshStore>, id: string, nowM
     claim: ownLane(id),
     nowMs,
     supersedesIterationId: null,
-    requestMessageId: null,
+    requestMessageId: REQUEST,
     ...tripleFor(id),
   });
 
@@ -267,7 +268,7 @@ test("an unrecognised stored verdict reads as unavailable rather than as a pass"
   // all. The one answer that must never be produced by a decoder is `clear`,
   // because that is the only verdict `publish` does not refuse on.
   const connection = new DatabaseSync(":memory:");
-  const store = iterationStore(connection, CONSERVATIVE_HOST_POLICY);
+  const store = storeWithRequest(connection, CONSERVATIVE_HOST_POLICY);
   await reserveOne(store, "i-0001");
   connection
     .prepare(
@@ -284,7 +285,7 @@ test("an unrecognised stored verdict reads as unavailable rather than as a pass"
 
 test("stored findings that are not a list of strings read as one finding saying so", async () => {
   const connection = new DatabaseSync(":memory:");
-  const store = iterationStore(connection, CONSERVATIVE_HOST_POLICY);
+  const store = storeWithRequest(connection, CONSERVATIVE_HOST_POLICY);
   await reserveOne(store, "i-0001");
   connection
     .prepare(
@@ -317,7 +318,7 @@ test("the reading table arrives on a database that predates it", async () => {
       "THEN NULL ELSE 1 END) VIRTUAL)",
   );
 
-  const store = iterationStore(connection, CONSERVATIVE_HOST_POLICY);
+  const store = storeWithRequest(connection, CONSERVATIVE_HOST_POLICY);
   await reserveOne(store, "i-0001");
   await store.transition("i-0001", "planned", "closed", {}, 2_000, clear());
 
@@ -420,7 +421,7 @@ test("a deterministic reading reads back with no graded and no delivered digest 
 
 test("a graded column that does not decode is omitted and the findings stay", async () => {
   const connection = new DatabaseSync(":memory:");
-  const store = iterationStore(connection, CONSERVATIVE_HOST_POLICY);
+  const store = storeWithRequest(connection, CONSERVATIVE_HOST_POLICY);
   await reserveOne(store, "i-0001");
   const insert = connection.prepare(
     "INSERT INTO lap_reading (iteration_id, read_at_ms, drafter, verdict, findings, graded) " +
@@ -571,8 +572,8 @@ test("a lap_reading table without the D-0065 columns gains them on open", async 
     )
     .run("i-0001", 1_500, DETERMINISTIC_READING_DRAFTER, "concerns", '["old"]');
 
-  const store = iterationStore(connection, CONSERVATIVE_HOST_POLICY);
-  iterationStore(connection, CONSERVATIVE_HOST_POLICY); // idempotent re-open
+  const store = storeWithRequest(connection, CONSERVATIVE_HOST_POLICY);
+  storeWithRequest(connection, CONSERVATIVE_HOST_POLICY); // idempotent re-open
   await reserveOne(store, "i-0001");
   await store.appendReading("i-0001", graded(), 5_000);
 

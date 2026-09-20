@@ -35,7 +35,8 @@ import type {
 } from "../../src/refrain/ports.js";
 import { canonicalJson, planDigest } from "../../src/store/plan.js";
 import type { JsonRecord, LapReadingDraft } from "../../src/store/records.js";
-import { advisoryRecord, iterationStore } from "../../src/store/sqlite.js";
+import { advisoryRecord } from "../../src/store/sqlite.js";
+import { REQUEST, storeWithRequest } from "../request-fixture.js";
 
 const NOW_MS = 1_700_000_000_000;
 const SUBJECT = "i-0001";
@@ -155,7 +156,7 @@ interface Harness {
  */
 function harness(classify: EffectOutcome<ClassificationRecord>): Harness {
   const connection = new DatabaseSync(":memory:");
-  const store = iterationStore(connection, CONSERVATIVE_HOST_POLICY);
+  const store = storeWithRequest(connection, CONSERVATIVE_HOST_POLICY);
   const answers = { classify };
   const lapFor = (plan: AdmittedPlan): EffectOutcome<LapPerformance> => ({
     kind: "answered",
@@ -237,7 +238,7 @@ async function approvedChain(): Promise<{
   readonly approved: string;
 }> {
   const h = harness(answered("needs_approval"));
-  const stopped = await admit(h.ports, h.advisory, PLAN, POLICY, SUBJECT);
+  const stopped = await admit(h.ports, h.advisory, PLAN, POLICY, SUBJECT, null, null, REQUEST);
   expect(stopped.status).toBe("abandoned");
   const digests = composed(h.connection);
   expect(digests.length).toBe(2);
@@ -275,10 +276,19 @@ test("approving, then retrying, consumes the decision exactly once and admits un
   expect(resolved.retry.plan.agentTypeInput.askable).not.toContain("branch.push");
 
   h.answers.classify = answered("allowed");
-  const report = await admit(h.ports, h.advisory, resolved.retry.plan, POLICY, SUCCESSOR, SUBJECT, {
-    decisionId,
-    contractDigest: approved,
-  });
+  const report = await admit(
+    h.ports,
+    h.advisory,
+    resolved.retry.plan,
+    POLICY,
+    SUCCESSOR,
+    SUBJECT,
+    {
+      decisionId,
+      contractDigest: approved,
+    },
+    REQUEST,
+  );
   expect(report.iterationId).toBe(SUCCESSOR);
   expect(report.status).toBe("awaiting_human");
 
@@ -316,6 +326,7 @@ test("a second admission on a spent decision is refused, and admits nothing", as
     SUCCESSOR,
     SUBJECT,
     spend,
+    REQUEST,
   );
   expect(first.iterationId).toBe(SUCCESSOR);
 
@@ -329,6 +340,7 @@ test("a second admission on a spent decision is refused, and admits nothing", as
     `${SUBJECT}-r3`,
     SUBJECT,
     spend,
+    REQUEST,
   );
   expect(second.iterationId).toBeNull();
   expect(second.lines.join("\n")).toContain("has already been spent");
@@ -357,6 +369,7 @@ test("a digest that is not the approved one stops the admission and spends nothi
     SUCCESSOR,
     SUBJECT,
     { decisionId, contractDigest: otherOption },
+    REQUEST,
   );
 
   expect(refused.iterationId).toBeNull();
@@ -377,6 +390,7 @@ test("a digest that is not the approved one stops the admission and spends nothi
     SUCCESSOR,
     SUBJECT,
     { decisionId, contractDigest: approved },
+    REQUEST,
   );
   expect(admitted.iterationId).toBe(SUCCESSOR);
   expect(rowsIn(h.connection, "decision_consumption").length).toBe(1);
@@ -405,13 +419,25 @@ test("an admission that fails after the approval is spent leaves it unspent", as
     { ...PLAN, repository: "/srv/elsewhere" },
     POLICY,
     SUCCESSOR,
+    null,
+    null,
+    REQUEST,
   );
   expect(taken.iterationId).toBe(SUCCESSOR);
 
-  const report = await admit(h.ports, h.advisory, resolved.retry.plan, POLICY, SUCCESSOR, SUBJECT, {
-    decisionId,
-    contractDigest: approved,
-  });
+  const report = await admit(
+    h.ports,
+    h.advisory,
+    resolved.retry.plan,
+    POLICY,
+    SUCCESSOR,
+    SUBJECT,
+    {
+      decisionId,
+      contractDigest: approved,
+    },
+    REQUEST,
+  );
   expect(report.iterationId).toBeNull();
   // Refused by the insert, after the spend: the path this test measures.
   expect(report.lines.join("\n")).toContain("already held by another iteration");
@@ -469,7 +495,16 @@ test("an admission carrying no approval consumes nothing, with a spendable one i
   // subject's repository would hold the paths the retry below asks back
   // (D-0073 rule 2.6), which is not what this test measures.
   const elsewhere = { ...PLAN, repository: "/srv/elsewhere" };
-  const unrelated = await admit(h.ports, h.advisory, elsewhere, POLICY, "i-0009");
+  const unrelated = await admit(
+    h.ports,
+    h.advisory,
+    elsewhere,
+    POLICY,
+    "i-0009",
+    null,
+    null,
+    REQUEST,
+  );
   expect(unrelated.iterationId).toBe("i-0009");
   expect(rowsIn(h.connection, "decision_consumption").length).toBe(0);
   expect((await h.advisory.record.unconsumedDecisions()).length).toBe(1);
@@ -478,10 +513,19 @@ test("an admission carrying no approval consumes nothing, with a spendable one i
   if (resolved.kind !== "resolved") {
     throw new Error("the chain did not resolve");
   }
-  const spent = await admit(h.ports, h.advisory, resolved.retry.plan, POLICY, SUCCESSOR, SUBJECT, {
-    decisionId,
-    contractDigest: approved,
-  });
+  const spent = await admit(
+    h.ports,
+    h.advisory,
+    resolved.retry.plan,
+    POLICY,
+    SUCCESSOR,
+    SUBJECT,
+    {
+      decisionId,
+      contractDigest: approved,
+    },
+    REQUEST,
+  );
   expect(spent.iterationId).toBe(SUCCESSOR);
   expect(rowsIn(h.connection, "decision_consumption").length).toBe(1);
 });
@@ -490,7 +534,7 @@ test("a declined proposal resolves to nothing, and an unanswered one to nothing 
   // D-0032 rule 6: a refusal is a row, and it authorises nothing. Both halves
   // are measured on the same proposal, before and after an answer exists.
   const h = harness(answered("needs_approval"));
-  await admit(h.ports, h.advisory, PLAN, POLICY, SUBJECT);
+  await admit(h.ports, h.advisory, PLAN, POLICY, SUBJECT, null, null, REQUEST);
 
   const unanswered = await approvedRetry(h.advisory, PROPOSAL_ID);
   expect(unanswered.kind).toBe("refused");
@@ -512,7 +556,7 @@ test("a digest from another proposal's option set is refused at the answer, on t
   // the typed digest is malformed -- it is simply an answer to a question this
   // proposal never asked.
   const h = harness(answered("needs_approval"));
-  await admit(h.ports, h.advisory, PLAN, POLICY, "i-0000");
+  await admit(h.ports, h.advisory, PLAN, POLICY, "i-0000", null, null, REQUEST);
   const first = composed(h.connection);
   await admit(
     h.ports,
@@ -521,6 +565,8 @@ test("a digest from another proposal's option set is refused at the answer, on t
     POLICY,
     "i-0001",
     "i-0000",
+    null,
+    REQUEST,
   );
   const second = composed(h.connection).filter((digest) => !first.includes(digest));
   // The premise, asserted rather than assumed: the two proposals put different
@@ -573,7 +619,7 @@ test("an approval whose digest two options share is refused rather than resolved
   // `human_decision.approved` names a digest and nothing else. Taking the first
   // match would be rondo deciding which set of instructions a person meant.
   const h = harness(answered("needs_approval"));
-  await admit(h.ports, h.advisory, PLAN, POLICY, "i-0000");
+  await admit(h.ports, h.advisory, PLAN, POLICY, "i-0000", null, null, REQUEST);
   await admit(
     h.ports,
     h.advisory,
@@ -581,6 +627,8 @@ test("an approval whose digest two options share is refused rather than resolved
     POLICY,
     "i-0001",
     "i-0000",
+    null,
+    REQUEST,
   );
 
   const shown: string[] = [];

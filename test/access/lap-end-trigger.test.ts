@@ -37,8 +37,9 @@ import type {
   RunAdmission,
 } from "../../src/refrain/ports.js";
 import type { LapReadingDraft } from "../../src/store/records.js";
-import { advisoryRecord, iterationStore } from "../../src/store/sqlite.js";
+import { advisoryRecord } from "../../src/store/sqlite.js";
 import { ownLane } from "../lane-claims.js";
+import { REQUEST, storeWithRequest } from "../request-fixture.js";
 
 const NOW_MS = 1_700_000_000_000;
 const SUBJECT = "i-0001";
@@ -196,7 +197,7 @@ interface Harness {
  */
 function harness(classify: EffectOutcome<ClassificationRecord> = ALLOWED): Harness {
   const connection = new DatabaseSync(":memory:");
-  const store = iterationStore(connection, CONSERVATIVE_HOST_POLICY);
+  const store = storeWithRequest(connection, CONSERVATIVE_HOST_POLICY);
   const answers: Answers = {
     classify,
     showGate: { kind: "answered", value: { gateId: "gate-1", stage: "received", outcome: null } },
@@ -254,7 +255,7 @@ test("a needs_approval leaves a contract_keys proposal, its compositions, and no
   // rondo minted, recorded with nobody having been shown anything.
   const h = harness(NEEDS_APPROVAL);
 
-  const report = await admit(h.ports, h.advisory, PLAN, POLICY, SUBJECT);
+  const report = await admit(h.ports, h.advisory, PLAN, POLICY, SUBJECT, null, null, REQUEST);
   expect(report.status).toBe("abandoned");
 
   const proposals = rowsIn(h.connection, "proposal");
@@ -287,7 +288,7 @@ test("cadenza refusing the action fires the same trigger", async () => {
     },
   });
 
-  const report = await admit(h.ports, h.advisory, PLAN, POLICY, SUBJECT);
+  const report = await admit(h.ports, h.advisory, PLAN, POLICY, SUBJECT, null, null, REQUEST);
   expect(report.status).toBe("abandoned");
   expect(rowsIn(h.connection, "proposal").length).toBe(1);
 });
@@ -298,7 +299,7 @@ test("a classification refused before any classification fires it too", async ()
   // to be worth an option set.
   const h = harness({ kind: "refused", message: "ProjectNotFoundError: no 'rondo'" });
 
-  const report = await admit(h.ports, h.advisory, PLAN, POLICY, SUBJECT);
+  const report = await admit(h.ports, h.advisory, PLAN, POLICY, SUBJECT, null, null, REQUEST);
   expect(report.status).toBe("abandoned");
   expect(rowsIn(h.connection, "proposal").length).toBe(1);
 });
@@ -308,7 +309,7 @@ test("a failed lap proposes nothing", async () => {
   // and an option set of contracts answers none of it.
   const h = harness({ kind: "defect", reason: "the continuo build could not be verified" });
 
-  const report = await admit(h.ports, h.advisory, PLAN, POLICY, SUBJECT);
+  const report = await admit(h.ports, h.advisory, PLAN, POLICY, SUBJECT, null, null, REQUEST);
   expect(report.status).toBe("failed");
   expect(rowsIn(h.connection, "proposal").length).toBe(0);
   expect(rowsIn(h.connection, "composition").length).toBe(0);
@@ -320,7 +321,7 @@ test("an open gate proposes nothing, and neither does the closing of it", async 
   // an ending `resume()` writes -- and `resume()` has no trigger at all.
   const h = harness();
 
-  const first = await admit(h.ports, h.advisory, PLAN, POLICY, SUBJECT);
+  const first = await admit(h.ports, h.advisory, PLAN, POLICY, SUBJECT, null, null, REQUEST);
   expect(first.status).toBe("awaiting_human");
   expect(rowsIn(h.connection, "proposal").length).toBe(0);
 
@@ -340,7 +341,7 @@ test("a person abandoning a lap themselves proposes nothing", async () => {
   // keyboard can type `rondo propose`.
   const h = harness();
 
-  await admit(h.ports, h.advisory, PLAN, POLICY, SUBJECT);
+  await admit(h.ports, h.advisory, PLAN, POLICY, SUBJECT, null, null, REQUEST);
   expect(rowsIn(h.connection, "proposal").length).toBe(0);
   const report = await abandon(h.ports, SUBJECT, "I am taking this one by hand");
 
@@ -363,7 +364,16 @@ test("an agent type with nothing askable is recorded as nothing, and says so", a
   // -- and an option set of one is not a choice.
   const h = harness(NEEDS_APPROVAL);
 
-  const report = await admit(h.ports, h.advisory, PLAN_WITH_NOTHING_ASKABLE, POLICY, SUBJECT);
+  const report = await admit(
+    h.ports,
+    h.advisory,
+    PLAN_WITH_NOTHING_ASKABLE,
+    POLICY,
+    SUBJECT,
+    null,
+    null,
+    REQUEST,
+  );
   expect(report.status).toBe("abandoned");
   expect(rowsIn(h.connection, "proposal").length).toBe(0);
   expect(report.lines.join("\n")).toContain("declares no askable key");
@@ -374,7 +384,7 @@ test("a successor identity that is taken is skipped, and the next free one is mi
   // one minted: a taken `-r2` is not a refusal, and it is not a collision
   // either, because nothing has been admitted under it here.
   const h = harness(NEEDS_APPROVAL);
-  const store = iterationStore(h.connection, CONSERVATIVE_HOST_POLICY);
+  const store = storeWithRequest(h.connection, CONSERVATIVE_HOST_POLICY);
   await store.reserve({
     id: `${SUBJECT}-r2`,
     request: "an earlier retry, already spent",
@@ -384,14 +394,14 @@ test("a successor identity that is taken is skipped, and the next free one is mi
     claim: ownLane(`${SUBJECT}-r2`),
     nowMs: NOW_MS - 1_000,
     supersedesIterationId: null,
-    requestMessageId: null,
+    requestMessageId: REQUEST,
     runId: `rondo-${SUBJECT}-r2`,
     topicBranch: `rondo/${SUBJECT}-r2`,
     workspace: `/srv/rondo/work/iter-${SUBJECT}-r2`,
   });
   await store.settle(`${SUBJECT}-r2`, "it was taken by hand", NOW_MS - 500);
 
-  const report = await admit(h.ports, h.advisory, PLAN, POLICY, SUBJECT);
+  const report = await admit(h.ports, h.advisory, PLAN, POLICY, SUBJECT, null, null, REQUEST);
 
   expect(rowsIn(h.connection, "proposal").length).toBe(1);
   expect(report.lines.join("\n")).toContain(`successor '${SUBJECT}-r3'`);
@@ -404,8 +414,8 @@ test("two subjects that would mint one successor each get their own proposal", a
   // them collide with the second on the primary key, and the second lap would
   // have ended with nothing recorded and nobody told why.
   const h = harness(NEEDS_APPROVAL);
-  await admit(h.ports, h.advisory, PLAN, POLICY, SUBJECT);
-  await admit(h.ports, h.advisory, PLAN, POLICY, `${SUBJECT}-r1`);
+  await admit(h.ports, h.advisory, PLAN, POLICY, SUBJECT, null, null, REQUEST);
+  await admit(h.ports, h.advisory, PLAN, POLICY, `${SUBJECT}-r1`, null, null, REQUEST);
 
   const proposals = rowsIn(h.connection, "proposal");
   expect(proposals.length).toBe(2);
@@ -425,6 +435,9 @@ test("the pin the trigger needs being unreadable does not refuse the lap", async
     PLAN,
     POLICY,
     SUBJECT,
+    null,
+    null,
+    REQUEST,
   );
 
   expect(report.status).toBe("abandoned");
@@ -448,7 +461,7 @@ test("an advisory that throws leaves the ending exactly where the arc put it", a
     },
   };
 
-  const report = await admit(h.ports, raising, PLAN, POLICY, SUBJECT);
+  const report = await admit(h.ports, raising, PLAN, POLICY, SUBJECT, null, null, REQUEST);
 
   expect(report.status).toBe("abandoned");
   expect(rowsIn(h.connection, "proposal").length).toBe(0);
@@ -461,7 +474,7 @@ test("the same subject proposed twice writes one row, and the store is what refu
   // door needs. Driven directly, because `admit()` cannot be re-entered on an
   // iteration id the store already holds.
   const h = harness(NEEDS_APPROVAL);
-  await admit(h.ports, h.advisory, PLAN, POLICY, SUBJECT);
+  await admit(h.ports, h.advisory, PLAN, POLICY, SUBJECT, null, null, REQUEST);
   expect(rowsIn(h.connection, "proposal").length).toBe(1);
 
   const second = await proposeAfterAbandon(h.advisory, SUBJECT);
@@ -476,14 +489,14 @@ test("ports the trigger cannot even open come back as a value, not as a throw", 
   // so before the admission that would have been wrapped. A directory is not a
   // database, so this is the real failure rather than a stubbed one.
   const h = harness(NEEDS_APPROVAL);
-  const store = iterationStore(h.connection, CONSERVATIVE_HOST_POLICY);
+  const store = storeWithRequest(h.connection, CONSERVATIVE_HOST_POLICY);
 
   const ports = unpromptedPorts(store, resolve("/"));
 
   expect("unavailable" in ports ? ports.unavailable : "opened").toContain(
     "the advisory's own connection to the store could not be opened",
   );
-  const report = await admit(h.ports, ports, PLAN, POLICY, SUBJECT);
+  const report = await admit(h.ports, ports, PLAN, POLICY, SUBJECT, null, null, REQUEST);
   expect(report.status).toBe("abandoned");
   expect(rowsIn(h.connection, "proposal").length).toBe(0);
 });

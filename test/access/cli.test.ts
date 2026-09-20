@@ -63,6 +63,7 @@ import {
   modelReadingDue,
   reviewedReading,
 } from "../../src/store/records.js";
+import { REQUEST as FIXTURE_REQUEST } from "../request-fixture.js";
 
 /** A handle no test reaches past: every verb below is a fake. */
 const continuo: VerifiedContinuo = {
@@ -290,6 +291,8 @@ test("each command's flags land on the parsed record", () => {
     "/tmp/plan.json",
     "--iteration-id",
     "iter-9",
+    "--message-id",
+    "m-0001",
     "--prompt",
     "do the thing",
   ]);
@@ -316,6 +319,8 @@ test("--prompt-file lands on the parsed record", () => {
     "/tmp/plan.json",
     "--iteration-id",
     "iter-9",
+    "--message-id",
+    "m-0001",
     "--prompt-file",
     "/tmp/request.txt",
   ]);
@@ -654,8 +659,19 @@ test("each command still accepts every flag it does read", () => {
   // The other half of the check: a table that refused too much would be a
   // worse defect than the one it fixed, and would not show up above.
   for (const argv of [
-    ["start", "--plan", "/tmp/p.json", "--prompt", "p", "--iteration-id", "i"],
-    ["start", "--plan", "/tmp/p.json", "--prompt-file", "/tmp/request.txt", "--iteration-id", "i"],
+    ["start", "--plan", "/tmp/p.json", "--prompt", "p", "--iteration-id", "i", "--message-id", "m"],
+    // prettier-ignore
+    [
+      "start",
+      "--plan",
+      "/tmp/p.json",
+      "--prompt-file",
+      "/tmp/request.txt",
+      "--iteration-id",
+      "i",
+      "--message-id",
+      "m",
+    ],
     ["answer", "--actor-id", "me", "--body=approve"],
     ["answer", "--actor-id", "me", "--body=approve", "--iteration-id", "i"],
     [
@@ -1202,7 +1218,7 @@ function published(parts: Partial<IterationRecord> = {}): IterationRecord {
     workspace: "/srv/rondo/workspace-dogfood-001",
     identifiersSpent: 1,
     supersedesIterationId: null,
-    requestMessageId: null,
+    requestMessageId: FIXTURE_REQUEST,
     continuoRevision: "603843b",
     agentTypeDigest: null,
     configDigest: null,
@@ -2328,7 +2344,10 @@ test("a wording set is whole in its own language, and no string is the English o
   const ja = chromeFor("ja");
   for (const key of Object.keys(EN) as (keyof Chrome)[]) {
     expect(ja[key], `the ja set has no value for '${key}'`).toBeDefined();
-    if (typeof EN[key] === "string" && key !== "lang") {
+    // `saidByRondo` is rondo's own name, which is ASCII in the Japanese set
+    // for the same reason the entries rule 3 names are (`rondo inbox`): a name
+    // is not translated. Identical is correct here, not a paste.
+    if (typeof EN[key] === "string" && key !== "lang" && key !== "saidByRondo") {
       expect(ja[key], `the ja set's '${key}' is the English string`).not.toBe(EN[key]);
     }
   }

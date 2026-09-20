@@ -23,14 +23,15 @@ import { admittedPlan, planPayload, type RunPlan, runPlan } from "../../src/refr
 import { CONSERVATIVE_HOST_POLICY } from "../../src/refrain/policy.js";
 import { canonicalJson, contentDigest, planDigest } from "../../src/store/plan.js";
 import type { JsonRecord, LapReadingDraft } from "../../src/store/records.js";
-import { advisoryRecord, iterationStore } from "../../src/store/sqlite.js";
+import { advisoryRecord } from "../../src/store/sqlite.js";
 import { laneFor } from "../lane-claims.js";
+import { REQUEST, storeWithRequest } from "../request-fixture.js";
 
 const fresh = () => {
   const connection = new DatabaseSync(":memory:");
   return {
     connection,
-    store: iterationStore(connection, CONSERVATIVE_HOST_POLICY),
+    store: storeWithRequest(connection, CONSERVATIVE_HOST_POLICY),
     record: advisoryRecord(connection),
   };
 };
@@ -135,7 +136,7 @@ const reserveWithPlan = async (
     claim: laneFor(id, supersedesIterationId),
     nowMs: 1_000,
     supersedesIterationId,
-    requestMessageId: null,
+    requestMessageId: REQUEST,
     runId: `rondo-${id}`,
     topicBranch: `rondo/${id}`,
     workspace: `/srv/work/${id}`,
