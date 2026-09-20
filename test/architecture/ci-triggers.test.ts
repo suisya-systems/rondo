@@ -149,9 +149,16 @@ describe("a red nightly becomes an object in the repository (D-0087 rule 7)", ()
     const block = jobBlock("nightly-red-is-an-issue").join(" ").replace(/\s+/g, " ");
     expect(block).toContain("github.event_name == 'schedule'");
     expect(block).toContain("github.event_name == 'workflow_dispatch'");
-    // `failure`, not `!= 'success'`: a cancelled or superseded run is not a red
-    // to file, and filing one is how a receptacle becomes noise nobody reads.
+    // `failure`, not `!= 'success'`: a result nobody thought about is not
+    // automatically a red worth waking someone for.
     expect(block).toContain("needs.gate.result == 'failure'");
+    // And `!cancelled()`, not `always()`. `gate` runs under `always()` and its
+    // allowlist makes a CANCELLED upstream exit 1, so a run somebody stopped
+    // arrives here as `needs.gate.result == 'failure'` and would be filed as a
+    // red. This is the one guard that tells a stopped run from a broken one,
+    // and losing it is how the receptacle becomes noise nobody reads.
+    expect(block).toContain("!cancelled()");
+    expect(block).not.toContain("always()");
   });
 
   test("the token that can write issues belongs to that job and to nothing else", () => {

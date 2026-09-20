@@ -20084,8 +20084,12 @@ the returning reader without spending the record on the arriving one.
    level stays `contents: read`, so the jobs that plant violations and mutate source never inherit a
    token that can write. It matches on the exact title of an open issue through the plain listing
    rather than through `--search`, because the search index lags writes by minutes and a lagging
-   index is how a nightly files the same issue twice. `failure` and not "anything but success", so
-   a cancelled or superseded run files nothing.
+   index is how a nightly files the same issue twice. The condition is `!cancelled()` and not
+   `always()`, which is the subtle half: `gate` runs under `always()` and its allowlist treats a
+   *cancelled* upstream as a red, so a run somebody stopped arrives at this job as
+   `needs.gate.result == 'failure'` and `always()` would file it. `!cancelled()` is what tells a
+   stopped run from a broken one, and it is asserted in the test above rather than left to a
+   comment.
 
 ### Why
 

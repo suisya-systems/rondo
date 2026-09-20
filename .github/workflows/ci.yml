@@ -476,11 +476,25 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     needs: [gate]
-    # `failure`, and deliberately not `!= 'success'`: a run somebody cancelled,
-    # or one a newer run superseded, is not a red to file. `gate` itself runs
-    # under `always()`, so a failure anywhere upstream reaches here as one.
+    # Three conditions, and the first is the one that is easy to get wrong.
+    #
+    # `!cancelled()` rather than `always()`: a cancelled run does NOT reach here
+    # as a clean skip. `gate` runs under `always()`, so a cancellation still
+    # runs it, and its allowlist -- any result other than `success`, cancelled
+    # included -- makes it exit 1. `needs.gate.result == 'failure'` is therefore
+    # true for a run somebody stopped, and `always()` here would file an issue
+    # for it. `!cancelled()` is the only thing that tells the two apart, and it
+    # also replaces the default `success()` guard, so a failed `gate` still
+    # reaches this job.
+    #
+    # `== 'failure'` rather than `!= 'success'` for the same reason read from
+    # the other side: a result this workflow has not thought about is not
+    # automatically a red worth waking someone for.
+    #
+    # `!cancelled()` is written inside a folded scalar because a plain YAML
+    # value starting with `!` is a tag, not a string.
     if: >-
-      always()
+      !cancelled()
       && needs.gate.result == 'failure'
       && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
     # Scoped to this job rather than raised at the top of the file: every other
