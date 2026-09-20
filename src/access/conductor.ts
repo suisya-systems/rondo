@@ -631,7 +631,11 @@ async function readHolder(
  * (D-0073 rule 5): its reading's `base...tip`, the range the landing reading
  * takes, against the in-force claim. A path outside the claim that another open
  * line holds is `D-0067` rule 2's collision; one nobody holds is said as
- * outside the claim. **Both are lines of the report and write nothing.** Rule
+ * outside the claim. **Both are lines of the report and write nothing.** The
+ * report is printed by the command line and by nothing else, so the page reads
+ * the comparison for itself where the press is ({@link compareClaim}, and
+ * `pageMaterial` in `src/access/cli.ts`): rondo#294, because a person who only
+ * reads the page met a collision at merge time instead. Rule
  * 5's widening onto an unheld path is not written: the person answered at
  * rondo#283's gate that the ledger does not widen a claim by itself, and
  * whether to widen it is theirs. The collision's finding and its `sequence`
@@ -645,14 +649,48 @@ async function withClaimComparison(
   if (ports.lanes === undefined || ports.lanes === null || report.iterationId === null) {
     return report;
   }
-  const lines = await compareClaim(ports.lanes, report.iterationId);
+  const lines = claimComparisonLines(
+    report.iterationId,
+    await compareClaim(ports.lanes, report.iterationId),
+  );
   return lines.length === 0 ? report : { ...report, lines: [...report.lines, ...lines] };
 }
 
-async function compareClaim(lanes: LandingPorts, iterationId: string): Promise<readonly string[]> {
-  const uncompared = (reason: string) => [
-    `What lap ${iterationId} changed was not compared with its line's claim: ${reason}.`,
-  ];
+/**
+ * What the gate's comparison found, as facts rather than as sentences.
+ *
+ * **Structured because the terminal is not the only place it is said**
+ * (rondo#294). The report's lines are composed from this by
+ * {@link claimComparisonLines} and are unchanged; the page composes the same
+ * facts in the person's own words, out of their own repository's paths, and
+ * writes nothing either.
+ */
+export type ClaimComparison =
+  /** Nothing to compare, or nothing outside the claim: there is no finding here. */
+  | { readonly kind: "inside" }
+  /** The comparison could not be taken; `reason` is rondo's own and in English. */
+  | { readonly kind: "uncompared"; readonly reason: string }
+  | {
+      readonly kind: "outside";
+      readonly lineageId: string;
+      /** Outside the claim and held by another open line: the collision. */
+      readonly held: readonly LaneHolder[];
+      /** Outside the claim and held by nobody. */
+      readonly unheld: readonly string[];
+    };
+
+/** What {@link compareClaim} reads: {@link LandingPorts} minus the landing's half. */
+export interface ClaimPorts {
+  readonly store: Pick<IterationStore, "laneLine" | "readingsFor" | "compareLane">;
+  readonly readChangedPaths: (request: ChangedPathsRequest) => Promise<ChangedPathsReading>;
+}
+
+export async function compareClaim(
+  lanes: ClaimPorts,
+  iterationId: string,
+): Promise<ClaimComparison> {
+  const uncompared = (reason: string): ClaimComparison => ({ kind: "uncompared", reason });
+  const inside: ClaimComparison = { kind: "inside" };
   const lap = await lanes.store.laneLine(iterationId);
   if (lap.kind !== "read") {
     return uncompared(lap.kind === "defect" ? lap.reason : "the lap is not in this store");
@@ -661,7 +699,7 @@ async function compareClaim(lanes: LandingPorts, iterationId: string): Promise<r
   // A claim on the whole repository, or a line from before the ledger (which
   // holds `/` while a lap is in flight), has nothing outside it.
   if (claim === null || claim.paths.includes(WHOLE_REPOSITORY)) {
-    return [];
+    return inside;
   }
   const repository = lap.line.laps.find((each) => each.id === iterationId)?.plan["repository"];
   const evidence = latestReading(
@@ -680,7 +718,7 @@ async function compareClaim(lanes: LandingPorts, iterationId: string): Promise<r
     return uncompared(changed.reason);
   }
   if (changed.paths.length === 0) {
-    return [];
+    return inside;
   }
   const compared = await lanes.store.compareLane({
     iterationId,
@@ -691,19 +729,39 @@ async function compareClaim(lanes: LandingPorts, iterationId: string): Promise<r
       compared.kind === "defect" ? compared.reason : "the lap is not in this store",
     );
   }
+  return compared.held.length === 0 && compared.unheld.length === 0
+    ? inside
+    : {
+        kind: "outside",
+        lineageId: compared.lineageId,
+        held: compared.held,
+        unheld: compared.unheld,
+      };
+}
+
+/** The report's lines, unchanged: what the terminal has printed since rondo#293. */
+function claimComparisonLines(iterationId: string, comparison: ClaimComparison): readonly string[] {
+  if (comparison.kind === "inside") {
+    return [];
+  }
+  if (comparison.kind === "uncompared") {
+    return [
+      `What lap ${iterationId} changed was not compared with its line's claim: ${comparison.reason}.`,
+    ];
+  }
   const quoted = (paths: readonly string[]) => paths.map((path) => `'${path}'`).join(", ");
   return [
-    ...compared.held.map(
+    ...comparison.held.map(
       (holder) =>
         `Lap ${iterationId} changed ${quoted(holder.sharedPaths)} outside line ` +
-        `${compared.lineageId}'s claim, and line ${holder.lineageId} holds it: the two lines ` +
+        `${comparison.lineageId}'s claim, and line ${holder.lineageId} holds it: the two lines ` +
         "collide there.",
     ),
-    ...(compared.unheld.length === 0
+    ...(comparison.unheld.length === 0
       ? []
       : [
-          `Lap ${iterationId} changed ${quoted(compared.unheld)} outside line ` +
-            `${compared.lineageId}'s claim, and no other open line holds it; the claim is ` +
+          `Lap ${iterationId} changed ${quoted(comparison.unheld)} outside line ` +
+            `${comparison.lineageId}'s claim, and no other open line holds it; the claim is ` +
             "left as it is.",
         ]),
   ];

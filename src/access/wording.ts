@@ -396,6 +396,22 @@ export interface Chrome extends PageWords {
   readonly noFiles: string;
   readonly binaryFile: string;
   readonly moreRows: (count: number) => string;
+  /**
+   * **What the work changed outside the files it keeps to itself** (D-0073
+   * rule 5, rondo#294): the heading, and one sentence for each of the two
+   * things the comparison can find.
+   *
+   * The collision is the one this screen exists for: another piece of work is
+   * changing the same files, and a person who only reads the page used to
+   * learn that when the two changes met. `paths` are the person's own and are
+   * shown as themselves; no other work is named, because naming it here would
+   * mean an identifier.
+   */
+  readonly reachHeading: string;
+  readonly reachCollided: (paths: readonly string[]) => string;
+  readonly reachUnheld: (paths: readonly string[]) => string;
+  /** The comparison did not happen; rondo's own reason is in the fold beside it. */
+  readonly reachUnread: string;
   readonly checksHeading: string;
   readonly modelHeading: string;
   /** A reading's verdict as a pill: `clear`, `concerns` or `unavailable`. */
@@ -1299,6 +1315,18 @@ explanation you pressed on and then answers the gate.`,
   noFiles: "No files changed.",
   binaryFile: "binary",
   moreRows: (count) => `and ${String(count)} more`,
+  reachHeading: "Beyond the files this work keeps",
+  reachCollided: (paths) =>
+    `This work changed ${filesEn(paths)}, which other work is keeping to itself. Both are ` +
+    "changing the same files, so the two changes will clash when they are merged. Look at the " +
+    "other work before you approve this one.",
+  reachUnheld: (paths) =>
+    `This work changed ${filesEn(paths)}, which is outside the files it said it would keep. ` +
+    "Nothing else is keeping them, so nothing is blocked; the files it keeps were left as they " +
+    "were, because widening that is yours to decide.",
+  reachUnread:
+    "rondo could not compare what this work changed with the files it keeps, so it cannot say " +
+    "whether anything here also belongs to other work.",
   checksHeading: "Checks",
   modelHeading: "Model review",
   verdictPill: (verdict, count) =>
@@ -2161,6 +2189,18 @@ const JA: Chrome = Object.freeze({
   noFiles: "変わったファイルはありません。",
   binaryFile: "バイナリ",
   moreRows: (count) => `ほか ${String(count)} 件`,
+  reachHeading: "押さえているファイルの外に出たもの",
+  reachCollided: (paths) =>
+    `この作業は ${filesJa(paths)} を変更しましたが、これは別の作業が押さえているファイルです。` +
+    "同じファイルを二つの作業が書き換えているので、取り込むときにぶつかります。" +
+    "承認する前に、もう一方の作業を見てください。",
+  reachUnheld: (paths) =>
+    `この作業は ${filesJa(paths)} を変更しましたが、これは自分で押さえると言ったファイルの外です。` +
+    "ほかに押さえている作業はないので、止まるものはありません。押さえる範囲は広げていません。" +
+    "広げるかどうかを決めるのはあなたです。",
+  reachUnread:
+    "この作業が変更したものと、押さえているファイルとを突き合わせられませんでした。" +
+    "ここに別の作業のファイルが混じっているかどうかは、rondo には言えません。",
   checksHeading: "チェック",
   modelHeading: "モデルレビュー",
   verdictPill: (verdict, count) =>

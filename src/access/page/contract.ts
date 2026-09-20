@@ -171,7 +171,38 @@ export interface LapMaterialRead {
   readonly why: string | null;
   /** What `git` reported about the lap's work; null when the row names no range. */
   readonly work: LapWorkInspection | null;
+  /**
+   * Whether the work reached past the files it keeps to itself (D-0073 rule
+   * 5), or absent where the caller has nothing that compares them -- and then
+   * the screen says nothing about it rather than saying it found nothing.
+   */
+  readonly reach?: ClaimReach;
 }
+
+/**
+ * The gate's comparison of what the work changed against the files it keeps,
+ * in the terms this screen may draw (rondo#294).
+ *
+ * **Flat, and with no line named.** The comparison's own result carries the
+ * lines it found by their identifiers, and an identifier is the one thing this
+ * page never puts in front of a person (`D-0076` sections 2 and 3). What the
+ * person can act on is the paths -- theirs, and shown as themselves -- and
+ * whether something else is changing them too, so that is what crosses.
+ *
+ * `reason` on `unread` is rondo's own and in English: the screen says the
+ * comparison did not happen in the person's words and keeps the reason in the
+ * fold for whoever maintains rondo (`D-0076` rule 4.5).
+ */
+export type ClaimReach =
+  | { readonly kind: "inside" }
+  | { readonly kind: "unread"; readonly reason: string }
+  | {
+      readonly kind: "outside";
+      /** Changed here and kept by other work: the two will clash at merge. */
+      readonly collided: readonly string[];
+      /** Changed here, outside what this work keeps, and kept by nobody. */
+      readonly unheld: readonly string[];
+    };
 
 /**
  * What a publish would do, read at render and again inside the press
