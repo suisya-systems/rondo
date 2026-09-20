@@ -22,7 +22,7 @@
  * whether that is true per request yet.
  */
 import type { IterationRecord, ScopePayload, ScopeSpent } from "../../store/records.js";
-import { isTerminal, SCOPE_OUTWARD_ACTS } from "../../store/records.js";
+import { SCOPE_OUTWARD_ACTS } from "../../store/records.js";
 
 /**
  * **Why the count of what rondo decided without asking is not in this line.**
@@ -90,7 +90,11 @@ export interface Governance {
  *   an outcome, and `ahead` before it reaches one.
  * - *proposal* is `yours` where the approval does not permit
  *   `open_pull_request` -- rondo may not open one, so somebody has to -- `done`
- *   where the lap has ended having been permitted it, and `ahead` otherwise.
+ *   only where a proposal was **recorded as made**, and `ahead` otherwise.
+ *   Permission plus an ended lap is not evidence: a lap can end failed,
+ *   abandoned, or closed and still waiting for the separate publish press, and
+ *   a chain that marked those *done* would say a pull request exists when none
+ *   does.
  * - *merge* is always `yours`. `merge_default_branch` is not a member of
  *   {@link SCOPE_OUTWARD_ACTS} and the writer refuses it by name, so no scope
  *   can put rondo on this step. Drawing it as *ahead* would suggest rondo were
@@ -101,6 +105,12 @@ export function governanceOf(
   repository: string | null,
   askedAtMs: number,
   approval: { readonly payload: ScopePayload; readonly spent: ScopeSpent } | null,
+  /**
+   * Whether a proposal was recorded as made for this lap -- the published
+   * report rondo writes into the request's thread. Read by the caller, because
+   * it is a row in the conversation and this module reads none.
+   */
+  proposed: boolean,
 ): Governance {
   const answered = record.gateOutcome !== null;
   const atGate = record.status === "awaiting_human";
@@ -127,10 +137,7 @@ export function governanceOf(
         : { at: approval.spent.admissions, of: approval.payload.budgets.laps },
     chain: [
       { step: "answer", state: answered ? "done" : atGate ? "waiting" : "ahead" },
-      {
-        step: "proposal",
-        state: !mayPropose ? "yours" : isTerminal(record.status) ? "done" : "ahead",
-      },
+      { step: "proposal", state: proposed ? "done" : mayPropose ? "ahead" : "yours" },
       { step: "merge", state: "yours" },
     ],
   };

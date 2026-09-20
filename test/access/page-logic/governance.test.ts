@@ -41,7 +41,7 @@ test("with no approval to read, neither figure is drawn", () => {
   // Rule 6's last sentence, as the one state that hides both: a lap admitted
   // under no approval has spent money nobody agreed to, and a spend printed
   // alone would read as though somebody had.
-  const bare = governanceOf(lap({}), "o/r", 1_000, null);
+  const bare = governanceOf(lap({}), "o/r", 1_000, null, false);
   expect(bare.allowance).toBeNull();
   expect(bare.tries).toBeNull();
   // And what it does know is still said.
@@ -54,12 +54,12 @@ test("the spend counts the reserve every unread lap still holds", () => {
   // makes it hold the reserve until it is. The figure on the line is the one
   // the store measures the budget against, or the page would say there was
   // room the press is about to refuse.
-  const { allowance } = governanceOf(lap({}), null, 1, approval({}, { unreadLaps: 2 }));
+  const { allowance } = governanceOf(lap({}), null, 1, approval({}, { unreadLaps: 2 }), false);
   expect(allowance).toEqual({ spentUsd: 5 + 2 * 2, approvedUsd: 20 });
 });
 
 test("the chain reads the lap's status, and its last step is never rondo's", () => {
-  const atGate = governanceOf(lap({ status: "awaiting_human" }), null, 1, approval());
+  const atGate = governanceOf(lap({ status: "awaiting_human" }), null, 1, approval(), false);
   expect(atGate.chain).toEqual([
     { step: "answer", state: "waiting" },
     // The approval permits no outward act, so nobody but a person opens one.
@@ -75,6 +75,7 @@ test("the chain reads the lap's status, and its last step is never rondo's", () 
     null,
     1,
     approval({ outward_acts: ["push_branch", "open_pull_request"] }),
+    true,
   );
   expect(permissive.chain).toEqual([
     { step: "answer", state: "done" },
@@ -82,8 +83,21 @@ test("the chain reads the lap's status, and its last step is never rondo's", () 
     { step: "merge", state: "yours" },
   ]);
 
+  // **Permission and an ended lap are not evidence a proposal was made**
+  // (Codex): a lap can end failed, abandoned, or closed and still waiting for
+  // the publish press, and a chain that marked those done would say a pull
+  // request exists when none does.
+  const ended = governanceOf(
+    lap({ status: "closed", gateOutcome: "approve" }),
+    null,
+    1,
+    approval({ outward_acts: ["open_pull_request"] }),
+    false,
+  );
+  expect(ended.chain[1]).toEqual({ step: "proposal", state: "ahead" });
+
   // Before a gate, the answer is ahead rather than waiting: nothing is asking.
-  expect(governanceOf(lap({ status: "planned" }), null, 1, approval()).chain[0]).toEqual({
+  expect(governanceOf(lap({ status: "planned" }), null, 1, approval(), false).chain[0]).toEqual({
     step: "answer",
     state: "ahead",
   });

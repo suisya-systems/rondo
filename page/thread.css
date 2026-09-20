@@ -339,3 +339,15 @@
 .empty-centre form {
   margin-top: 22px;
 }
+
+/*
+ * Where this request can be taken next (D-0083 rule 6's chain, as addresses).
+ * Under the record and above the box a person answers in: what has happened,
+ * then what can happen, then the press.
+ */
+.thread-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+}

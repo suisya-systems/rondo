@@ -109,3 +109,21 @@ test("the walk says where this request stands among the ones waiting, and leads 
   // One waiting request, so there is nowhere to walk on to and no link is drawn.
   expect(head).not.toContain(">next<");
 });
+
+test("the thread leads to the screens the request can be taken to next", async () => {
+  // **The rows that carried these entrances are gone** (D-0083 rule 5), and
+  // the screens are not. A screen rondo still has and no page leads to is a
+  // screen only a typed address reaches, which is how a workflow disappears
+  // without a decision saying it did.
+  const world = fresh();
+  await gateWithChecks(world);
+  const html = await operatorPage(portsOver(world, "ada", []), "t", { kind: "summary" });
+  expect(html).toContain('href="/?scope=req-1&amp;lang=en"');
+  // No forge is configured in this world, so the publish entrance is not drawn
+  // -- the same condition the publish screen itself draws a button under.
+  expect(html).not.toContain('href="/?publish=');
+
+  // With no write port there is nothing to press and no entrance either.
+  const read = await operatorPage(portsOver(world, null), null, { kind: "summary" });
+  expect(read).not.toContain('href="/?scope=');
+});

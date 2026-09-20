@@ -122,6 +122,17 @@ export interface ThreadProps {
    */
   readonly answering: ReactNode;
   readonly adding: ReactNode;
+  /**
+   * The screens this request can be taken to next -- setting its scope,
+   * publishing a lap that is ready (`D-0083` rule 6's chain, as addresses).
+   *
+   * **They are here because the rows that carried them are gone.** The old
+   * page put each on the lap's row; the row's replacement is a list entry that
+   * carries the person's own words and one sentence of state, and nothing to
+   * press. A screen rondo still has and no page leads to is a screen only a
+   * typed address reaches.
+   */
+  readonly acts: ReactNode;
 }
 
 /** One thing in the thread: something said, or something that happened. */
@@ -215,6 +226,7 @@ export function ThreadFace({
   lastLookedSaid,
   answering,
   adding,
+  acts,
 }: ThreadProps) {
   return (
     <div className="thread">
@@ -248,6 +260,7 @@ export function ThreadFace({
           )}
         </div>
       ))}
+      {acts}
       {answering}
       {adding}
     </div>

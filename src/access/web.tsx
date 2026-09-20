@@ -106,6 +106,7 @@ import {
 import type { LapLogReading } from "../continuo/transcript.js";
 import type { HostPolicy } from "../refrain/policy.js";
 import {
+  approvedForPublication,
   FINDING_SEVERITIES,
   type FindingSeverity,
   findingBasisText,
@@ -3837,6 +3838,63 @@ async function predecessorLine(
   );
 }
 
+/**
+ * **Where this request can be taken next** (D-0083 rule 6's chain, as
+ * addresses): setting its scope, and publishing a lap that is ready.
+ *
+ * **They are in the thread because the rows that carried them are gone.** The
+ * old page drew each on a lap's row; a row is now the person's own words and
+ * one sentence of state, with nothing to press (rule 5). The screens they lead
+ * to are unchanged, and so are the conditions each is drawn under -- the scope
+ * entrance needs a write port, and the publish entrance the same three things
+ * the publish screen needs before it draws a button at all.
+ */
+function threadActs(
+  wording: Chrome,
+  ports: WebPorts,
+  token: string | null,
+  requestMessageId: string,
+  laps: readonly LapUnderRequest[],
+) {
+  if (token === null) {
+    return null;
+  }
+  const publishable = laps.find(
+    (lap) => ports.publishing !== null && approvedForPublication(lap.record),
+  );
+  return (
+    <p class="thread-acts">
+      <a
+        id={`scope-${requestMessageId}`}
+        href={viewHref(
+          {
+            kind: "scope",
+            messageId: requestMessageId,
+            rounds: null,
+            decisionId: null,
+            plan: null,
+          },
+          wording.lang,
+        )}
+        data-open=""
+        class={`${PRIMARY} h-7 px-3 text-[13px]`}
+      >
+        {wording.scopeAction}
+      </a>
+      {publishable === undefined ? null : (
+        <a
+          id={`publish-${publishable.record.id}`}
+          href={viewHref({ kind: "publish", iterationId: publishable.record.id }, wording.lang)}
+          data-open=""
+          class={`${PRIMARY} h-7 px-3 text-[13px]`}
+        >
+          {wording.publishAction}
+        </a>
+      )}
+    </p>
+  );
+}
+
 /** A pull request body split around the request fold it carries. */
 interface RequestFold {
   readonly before: string;
@@ -4704,6 +4762,15 @@ export async function operatorPage(
   // can say what became of one instead of going on offering the entrance.
   // Newest wins, which is the same order every other list here is in.
   const lapsByRequest = new Map<string, LapUnderRequest>();
+  /**
+   * **Every lap of a request and not only the one that says most** (Codex).
+   * `saysMore` picks one row to speak for a request in a list, which is what a
+   * row is; the thread is the request itself, so it draws every lap's events,
+   * and the box is offered for whichever lap is at a gate -- a request with a
+   * running retry beside a lap still waiting would otherwise have no way to
+   * answer the one that waits, now that there is no per-lap address.
+   */
+  const allLapsByRequest = new Map<string, LapUnderRequest[]>();
   for (const [question, group] of [
     ["waiting", waiting],
     ["running", running],
@@ -4711,12 +4778,17 @@ export async function operatorPage(
   ] as const) {
     for (const record of group) {
       const request = record.requestMessageId;
-      if (request !== null && saysMore({ record, question }, lapsByRequest.get(request))) {
+      if (saysMore({ record, question }, lapsByRequest.get(request))) {
         lapsByRequest.set(request, { record, question });
       }
+      allLapsByRequest.set(request, [
+        ...(allLapsByRequest.get(request) ?? []),
+        { record, question },
+      ]);
     }
   }
   const lapUnder = (messageId: string) => lapsByRequest.get(messageId) ?? null;
+  const lapsUnder = (messageId: string) => allLapsByRequest.get(messageId) ?? [];
 
   /*
    * **The left face's rows** (D-0083 rules 2, 5 and 7). Every request the
@@ -4774,8 +4846,13 @@ export async function operatorPage(
    * The lap whose gate the centre draws a box for, which is what the framing
    * below is composed for -- one row, and only the one being answered.
    */
+  // **Whichever lap of this request is at a gate**, which need not be the one
+  // the list speaks with: `saysMore` orders by what a row should say, and a
+  // gate is answered wherever it stands (Codex).
   const answeringLap =
-    selectedLap !== null && selectedLap.question === "waiting" ? selectedLap.record.id : null;
+    selectedRoot === null
+      ? null
+      : (lapsUnder(selectedRoot).find((lap) => lap.question === "waiting")?.record.id ?? null);
   const shown = await shownBeforePress(ports, wording, waiting, token, answeringLap);
 
   /*
@@ -4794,8 +4871,20 @@ export async function operatorPage(
       : threads.messages
           .filter((message) => threads.rootOf(message.messageId) === selectedRoot)
           .toSorted((left, right) => left.atMs - right.atMs);
-  const selectedReadings =
-    selectedLap === null ? [] : await ports.store.readingsFor(selectedLap.record.id);
+  /*
+   * **Every lap of the request, each with its own readings** (Codex): the
+   * thread is the request, so a retry arriving must not take the lap it
+   * superseded out of the record. Read here, once, for the one request the
+   * centre is drawing.
+   */
+  const selectedLaps = selectedRoot === null ? [] : lapsUnder(selectedRoot);
+  const readingsByLap = new Map(
+    await Promise.all(
+      selectedLaps.map(
+        async (lap) => [lap.record.id, await ports.store.readingsFor(lap.record.id)] as const,
+      ),
+    ),
+  );
   /*
    * **What was agreed for this request** (D-0083 rule 6), read for the one lap
    * the centre is drawing and for no other: the approval the lap spends, and
@@ -4831,6 +4920,9 @@ export async function operatorPage(
           repositoryOf(selectedLap.record),
           threads.byId.get(selectedRoot)?.atMs ?? nowMs,
           await approvalOf(selectedLap.record),
+          // A proposal is done when rondo recorded one: the published report
+          // it writes into the request's thread (rondo#245).
+          publishedReport(threads, selectedLap.record.id) !== null,
         );
   /*
    * **The two messages whose body is not prose**, rendered here because this
@@ -4923,21 +5015,37 @@ export async function operatorPage(
         },
       };
     }),
-    ...(selectedLap === null
-      ? []
-      : lapEvents(
-          wording,
-          selectedLap.record,
-          selectedReadings.map((reading) => ({
-            drafter: reading.drafter,
-            verdict: reading.verdict,
-            findings: reading.findings,
-            atMs: reading.readAtMs,
-          })),
-          (status) => isTerminal(status as IterationRecord["status"]),
-          (atMs) => wording.age(ago(atMs, nowMs)),
-        ).map((event): ThreadItem => ({ kind: "event", event }))),
-  ];
+    ...selectedLaps.flatMap((lap) =>
+      lapEvents(
+        wording,
+        lap.record,
+        (readingsByLap.get(lap.record.id) ?? []).map((reading) => ({
+          drafter: reading.drafter,
+          verdict: reading.verdict,
+          findings: reading.findings,
+          atMs: reading.readAtMs,
+        })),
+        (status) => isTerminal(status as IterationRecord["status"]),
+        (atMs) => wording.age(ago(atMs, nowMs)),
+      ).map((event): ThreadItem => ({ kind: "event", event })),
+    ),
+  ]
+    /*
+     * **One stream, in the order it happened** (D-0083 rule 2, and
+     * `page/thread.tsx`'s own claim about itself). The two sources are
+     * gathered apart and have to be put back in time order here, or a lap's
+     * report is drawn before the line saying the lap started -- and rule 7's
+     * line, which is placed by walking this array, lands in the wrong place.
+     */
+    .map((item, at) => ({
+      item,
+      at,
+      atMs: item.kind === "message" ? (messageTimes.get(item.message.id) ?? 0) : item.event.atMs,
+    }))
+    // `at` breaks the tie, so two things at the same millisecond keep the
+    // order their source gave them rather than one the sort invented.
+    .toSorted((left, right) => left.atMs - right.atMs || left.at - right.at)
+    .map((sorted) => sorted.item);
   /*
    * **One line, once in the thread** (D-0083 rule 7, D-0061 rule 2.5). The
    * items are already in the order they happened, so the line sits above the
@@ -5012,16 +5120,21 @@ export async function operatorPage(
    * `test/access/gate-elements.test.ts` is the net under.
    */
   const gateFraming = answeringLap === null ? undefined : shown.get(answeringLap);
-  const answeringBox =
-    selectedLap === null || gateFraming === undefined
+  // The lap the box is for, which is the one at the gate rather than the one
+  // the list speaks with.
+  const gatedLap =
+    answeringLap === null || selectedRoot === null
       ? null
-      : ((await approveView(
-          wording,
-          selectedLap.record,
-          token,
-          gateFraming,
-          newIterationId,
-        )?.toString()) ?? null);
+      : (lapsUnder(selectedRoot).find((lap) => lap.record.id === answeringLap)?.record ?? null);
+  const answeringBox =
+    gatedLap === null || gateFraming === undefined
+      ? null
+      : ((await approveView(wording, gatedLap, token, gateFraming, newIterationId)?.toString()) ??
+        null);
+  const actsMarkup =
+    selectedRoot === null
+      ? null
+      : ((await threadActs(wording, ports, token, selectedRoot, selectedLaps)?.toString()) ?? null);
   const centreContent = noSuchThread
     ? { rendered: await note(wording.noSuchThread).toString() }
     : selectedRoot === null
@@ -5069,6 +5182,7 @@ export async function operatorPage(
               lastLookedMs === null
                 ? wording.lastLookedNever
                 : wording.lastLookedHere(wording.age(ago(lastLookedMs, nowMs))),
+            acts: actsMarkup === null ? null : Raw({ html: actsMarkup }),
             answering: answeringBox === null ? null : Raw({ html: answeringBox }),
             adding: addBox === null || addBox === undefined ? null : Raw({ html: addBox }),
           }),

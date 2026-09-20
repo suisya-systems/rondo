@@ -1914,6 +1914,11 @@ test("the composer script keeps a draft and the open folds, and makes no request
   expect(code).toContain('"textarea[data-draft]"');
   expect(code).toContain("sessionStorage");
   expect(code).toContain("HTMLDetailsElement");
+  // **Both duties run on every swap and not only on load** (Codex, on D-0083):
+  // the boxes are inside the thread now, so the five-second redraw replaces
+  // them -- a claim being typed would vanish, and a revise box a person had
+  // rewritten would come back holding rondo's draft again.
+  expect(code).toMatch(/new MutationObserver\(\(\) => \{\s*reopen\(\);\s*restore\(\);/);
   // Ctrl/Cmd+Enter asks the form for the submit its own button makes.
   expect(code).toContain("requestSubmit()");
   // **And never on a form whose submit has to name an answer** (#206, D-0072

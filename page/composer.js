@@ -2,9 +2,11 @@
 //
 // 1. **Keep the unsent draft.** What a person types into the composer
 //    (`textarea[data-draft]`, keyed by that attribute: a new request, or one
-//    thread's reply) is kept in `sessionStorage` and put back when the page
-//    loads, so a navigation -- a press, `Reply` on another message, a language
-//    switch -- does not throw it away. It is cleared after a successful send
+//    thread's reply) is kept in `sessionStorage` and put back whenever the
+//    boxes are drawn again -- on load, so a navigation (a press, `Reply` on
+//    another message, a language switch) does not throw it away, and after an
+//    in-place redraw, because since D-0083 the boxes are inside the thread and
+//    the five-second swap reaches them. It is cleared after a successful send
 //    and never before: on htmx's own report that the send succeeded, or, for a
 //    native submit, when the page the `303` landed on is anchored at the id
 //    that submit carried (the anchor exists only after the send was recorded).
@@ -80,9 +82,18 @@ if (sentFrom !== null) {
 // it in place of the line saying the box holds the draft -- their words stay,
 // and the note says how to see the draft.
 const drewKey = (box) => `rondo:drew:${box.dataset.draft}`;
-for (const opening of document.querySelectorAll("textarea[data-draft]")) {
-  const kept = store.get(draftKey(opening));
-  if (kept !== null && kept !== "") {
+// **Run on every swap and not only on load** (D-0083): the boxes are inside
+// the thread now, so the five-second redraw replaces them and hands back what
+// the server drew. Restoring only at load meant a claim being typed vanished
+// on the next poll, and a revise box a person had rewritten came back holding
+// rondo's draft again. A box whose value already matches is left alone, so
+// restoring does not move a caret.
+const restore = () => {
+  for (const opening of document.querySelectorAll("textarea[data-draft]")) {
+    const kept = store.get(draftKey(opening));
+    if (kept === null || kept === "" || opening.value === kept) {
+      continue;
+    }
     const drawn = opening.defaultValue;
     if (drawn !== "" && drawn !== kept && drawn !== (store.get(drewKey(opening)) ?? "")) {
       for (const note of document.querySelectorAll("[data-draft-arrived]")) {
@@ -98,7 +109,8 @@ for (const opening of document.querySelectorAll("textarea[data-draft]")) {
     }
     opening.value = kept;
   }
-}
+};
+restore();
 
 document.addEventListener("input", (event) => {
   if (event.target instanceof HTMLTextAreaElement && event.target.dataset.draft !== undefined) {
@@ -226,4 +238,10 @@ document.addEventListener(
   true,
 );
 reopen();
-new MutationObserver(reopen).observe(document.body, { childList: true, subtree: true });
+// Both duties run on every swap: the folds a person opened, and the words they
+// typed. A swap that replaced either would be the redraw taking something back
+// that nobody sent.
+new MutationObserver(() => {
+  reopen();
+  restore();
+}).observe(document.body, { childList: true, subtree: true });
