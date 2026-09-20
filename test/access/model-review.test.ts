@@ -491,8 +491,7 @@ test("the input bound is in UTF-8 bytes: at the bound is ready, one byte over is
   // A 1-byte prompt, not an empty one: an empty PROMPT section reads "(none)" (the
   // shared framing's empty-section guard), which is not the zero-byte body this
   // measurement needs.
-  const onePromptByte = new TextEncoder().encode(reviewDocument(material({ prompt: "x" })))
-    .length;
+  const onePromptByte = new TextEncoder().encode(reviewDocument(material({ prompt: "x" }))).length;
   const room = MODEL_REVIEW_INPUT_BOUND_BYTES - onePromptByte + 1;
   // Two bytes, one UTF-16 unit: the prompt is about half the bound in characters.
   const prompt = (bytes: number): string => "x".repeat(bytes % 2) + "\u00e9".repeat(bytes >> 1);
