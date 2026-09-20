@@ -57,17 +57,33 @@ const COPIES = {
 const [command, dirArgument] = process.argv.slice(2);
 const dir = resolve(root, dirArgument ?? "dist/page");
 
-/** Every file in the built directory, by name, to its sha256. Sorted, so the manifest diffs cleanly. */
+/**
+ * Every served file, by the path the browser asks for, in sorted order.
+ *
+ * **The walk is recursive, because a bundler emits directories.** Tailwind's
+ * output and the copied files are flat, so this used to read one directory;
+ * a build that emits `assets/` made `readFileSync` throw `EISDIR` on the
+ * directory entry, which reads as a broken script rather than as a missing
+ * feature. The names are the served paths -- `assets/app-XXXX.js`, not
+ * `app-XXXX.js` -- with `/` on every platform, so the manifest says what a
+ * request would ask for.
+ */
+const walk = (at, prefix = "") =>
+  readdirSync(at, { withFileTypes: true })
+    .sort((left, right) => (left.name < right.name ? -1 : 1))
+    .flatMap((entry) =>
+      entry.isDirectory()
+        ? walk(join(at, entry.name), `${prefix}${entry.name}/`)
+        : [[`${prefix}${entry.name}`, join(at, entry.name)]],
+    );
+
+/** Every file in the built directory, by served path, to its sha256. Sorted, so the manifest diffs cleanly. */
 const digests = () =>
   Object.fromEntries(
-    readdirSync(dir)
-      .sort()
-      .map((name) => [
-        name,
-        createHash("sha256")
-          .update(readFileSync(join(dir, name)))
-          .digest("hex"),
-      ]),
+    walk(dir).map(([served, path]) => [
+      served,
+      createHash("sha256").update(readFileSync(path)).digest("hex"),
+    ]),
   );
 
 if (command === "build") {
