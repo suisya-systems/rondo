@@ -12,6 +12,7 @@ import { threadsOf } from "../../../src/access/page-logic/threads.js";
 import {
   lapsPastTheirCeiling,
   requestsWaitingOnYou,
+  waitsOnYou,
 } from "../../../src/access/page-logic/waits.js";
 import type { IterationRecord, ThreadMessageDraft } from "../../../src/store/records.js";
 
@@ -146,4 +147,38 @@ test("the episode is the lap and the status it is late at", () => {
   expect(lapsPastTheirCeiling([lap({ id: "a", status: "performing", plan })], 10_000)).toEqual([
     "a:performing",
   ]);
+});
+
+test("each wait is its own episode, so a request's later waits are not its first again", () => {
+  // Codex, round 1. Two questions in one thread are one row on the screen and
+  // two things to be told about, and the gate a lap reaches afterwards is a
+  // third: keying by the request made everything after the first invisible.
+  const conversation = threads([
+    message({ messageId: "req-a" }),
+    message({ messageId: "one", inReplyTo: "req-a", authorKind: "drafter", asks: true }),
+    message({ messageId: "two", inReplyTo: "req-a", authorKind: "drafter", asks: true }),
+  ]);
+  const laps = [lap({ id: "a", status: "awaiting_human", requestMessageId: "req-a" })];
+  const waits = waitsOnYou(conversation, laps);
+
+  expect(waits.map((wait) => wait.root)).toEqual(["req-a", "req-a", "req-a"]);
+  expect(waits.map((wait) => wait.episode)).toEqual([
+    "ask:one",
+    "ask:two",
+    "gate:a:awaiting_human",
+  ]);
+  // **Three episodes and one row, off the one pass.** This is the pair that
+  // has to hold together: the screen lifts one request out of the time order
+  // while the host has three separate things it may have to say.
+  expect([...requestsWaitingOnYou(conversation, laps)]).toEqual(["req-a"]);
+});
+
+test("a lap's gate is keyed by the status it stopped at", () => {
+  // The same episode D-0068 rule 3.1 uses, resting on its claim: a lap walks
+  // its statuses forward and never re-enters one, so a revise is a successor
+  // lap with an id of its own rather than this key coming round again.
+  const waits = waitsOnYou(threads([message({ messageId: "req-a" })]), [
+    lap({ id: "a", status: "withdrawal_requested", requestMessageId: "req-a" }),
+  ]);
+  expect(waits.map((wait) => wait.episode)).toEqual(["gate:a:withdrawal_requested"]);
 });

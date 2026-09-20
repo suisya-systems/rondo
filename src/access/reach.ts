@@ -11,7 +11,8 @@
  * a line in front of them.
  *
  * **The same reading as the screen, and not a second one of its own.** Both
- * sides come from {@link requestsWaitingOnYou}. A notification derived from
+ * sides come from one pass of `src/access/page-logic/waits.ts`, which the
+ * screen reads as requests and this reads as waits. A notification derived from
  * its own idea of waiting would eventually send somebody to a screen showing
  * nothing waiting, which is #206's failure -- the page and the store
  * disagreeing about an open question -- with a person's attention spent on it.
@@ -50,7 +51,7 @@ import { spawn } from "node:child_process";
 import type { IterationRecord } from "../store/records.js";
 import type { AdvisoryRecord, IterationStore } from "../store/sqlite.js";
 import { threadsOf } from "./page-logic/threads.js";
-import { lapsPastTheirCeiling, requestsWaitingOnYou } from "./page-logic/waits.js";
+import { lapsPastTheirCeiling, waitsOnYou } from "./page-logic/waits.js";
 import type { Chrome } from "./wording.js";
 
 /**
@@ -142,7 +143,12 @@ export async function reachThePerson(ports: ReachPorts): Promise<void> {
   // host whose minute tick throws, and the screen reports the unreadable rows
   // itself.
   const threads = threadsOf(read.kind === "read" ? read.messages : [], new Set(), new Map());
-  const turns = [...requestsWaitingOnYou(threads, laps)].map((root) => `turn:${root}`);
+  // **Keyed by the wait and not by the request** (Codex, round 1). A request
+  // outlives any one of its questions: keyed by the request, a thread's second
+  // question -- and the gate a lap reaches once the first one is answered --
+  // would be filtered out for ever as a repeat of a wait that had in fact been
+  // settled, which is a person never told about the rest of their own request.
+  const turns = waitsOnYou(threads, laps).map((wait) => wait.episode);
   const late = lapsPastTheirCeiling(laps, atMs).map((episode) => `late:${episode}`);
 
   const told = await ports.record.presentedSubjects(REACH_SUBJECT);

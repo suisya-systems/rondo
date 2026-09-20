@@ -80,7 +80,7 @@ test("a lap at its gate is one line, in the person's own words", async () => {
   const tick = tickOver(world);
   await tick.run();
   expect(tick.sent).toEqual([EN.reachYourTurn]);
-  expect(claimed(world)).toEqual(["turn:req-a"]);
+  expect(claimed(world)).toEqual(["gate:a:awaiting_human"]);
 });
 
 test("the sentence is the set this host resolved, and not the English one", async () => {
@@ -114,7 +114,7 @@ test("the same gate on the next minute reaches nobody a second time", async () =
   await tick.run();
   await tick.run();
   expect(tick.sent).toEqual([EN.reachYourTurn]);
-  expect(claimed(world)).toEqual(["turn:req-a"]);
+  expect(claimed(world)).toEqual(["gate:a:awaiting_human"]);
 });
 
 test("a host that restarts does not repeat the morning", async () => {
@@ -146,7 +146,7 @@ test("a question standing in a thread is a turn too", async () => {
   const tick = tickOver(world);
   await tick.run();
   expect(tick.sent).toEqual([EN.reachYourTurn]);
-  expect(claimed(world)).toEqual(["turn:req-only"]);
+  expect(claimed(world)).toEqual(["ask:ask"]);
 });
 
 test("an ordinary ending is not a notification", async () => {
@@ -186,7 +186,7 @@ test("everything new in one minute is still one line", async () => {
   await tick.run();
   expect(tick.sent).toEqual([EN.reachYourTurn]);
   // Both are claimed, so neither is sent again on its own next minute.
-  expect(claimed(world).toSorted()).toEqual(["turn:req-a", "turn:req-b"]);
+  expect(claimed(world).toSorted()).toEqual(["gate:a:awaiting_human", "gate:b:awaiting_human"]);
 });
 
 test("a turn is carried in front of a late lap when both are new", async () => {
@@ -277,4 +277,49 @@ test("a program that is no longer where setup found it is a failure", async () =
 test("no program at all is no port at all", () => {
   expect(notifierAt(null)).toBeNull();
   expect(notifierAt("")).toBeNull();
+});
+
+test("a request's second turn is sent, and is not taken for a repeat of its first", async () => {
+  // Codex, round 1: the claim used to be keyed by the request, so everything
+  // after a request's first question went out to nobody -- which is most of
+  // what a request is. A request outlives any one of its waits, and this is
+  // the case that says so: a question, answered, and then a gate.
+  const world = fresh();
+  await openRequest(world, "req-a", "have a look at this");
+  const asked = await world.record.recordThreadMessage({
+    messageId: "ask",
+    body: "which of these did you mean?",
+    authorKind: "drafter",
+    authorId: "the drafter",
+    inReplyTo: "req-a",
+    atMs: 600,
+    bases: [{ form: "message", messageId: "req-a" }],
+    asks: true,
+  });
+  expect(asked.kind).toBe("recorded");
+
+  const tick = tickOver(world);
+  await tick.run();
+  expect(tick.sent).toEqual([EN.reachYourTurn]);
+
+  // The person answers it, and a lap started from the request reaches a gate.
+  const carried = await world.record.recordThreadMessage({
+    messageId: "reply",
+    body: "the first one",
+    authorKind: "operator",
+    authorId: "ada",
+    inReplyTo: "ask",
+    atMs: 700,
+    bases: [],
+    asks: false,
+    answerOutcome: "carry_on",
+  });
+  expect(carried.kind).toBe("recorded");
+  await reserve(world, "a", "do the thing", null, "req-a");
+  await openGate(world, "a");
+
+  const after = tickOver(world);
+  await after.run();
+  expect(after.sent).toEqual([EN.reachYourTurn]);
+  expect(claimed(world).toSorted()).toEqual(["ask:ask", "gate:a:awaiting_human"]);
 });

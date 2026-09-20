@@ -18,10 +18,13 @@
  * subset: a lap can wait at a gate with nothing asked in its thread, and a
  * question can stand over a request no lap has been started for.
  *
- * **The unit is the request and not the wait.** Both callers ask *whose turn
- * is it*, and the answer a person acts on is a request to open: two questions
- * standing in one thread are one row in the list and one thing to be told
- * about, not two.
+ * **The scan is one and it is read two ways.** What a person acts on is a
+ * request -- two questions standing in one thread are one row in the list and
+ * one thing to go and look at -- so the screen reads
+ * {@link requestsWaitingOnYou}. What has already been sent to somebody has to
+ * be counted per *wait*, because a request outlives any one of its questions,
+ * so the host reads {@link waitsOnYou} and its {@link Wait.episode}. Both come
+ * off the same pass, so they cannot disagree about what is waiting.
  */
 import {
   type IterationRecord,
@@ -32,8 +35,35 @@ import {
 import type { Threads } from "./threads.js";
 
 /**
- * The requests whose next move is the person's, by the message that opened
- * each one.
+ * One thing waiting on the person: the request to open, and the wait itself.
+ *
+ * **Two fields because two questions are being asked of one scan.** *Whose
+ * turn is it* is answered by the request, which is what a person opens and
+ * what the list draws a row for. *Is this a wait I have already been told
+ * about* is answered by {@link episode}, and the difference is the whole of
+ * rondo#311 round 2 (Codex): keyed by the request, a thread's second question
+ * -- and the gate a lap reaches after the first one is answered -- would be
+ * filtered out for ever as a repeat of a wait that had in fact been settled.
+ */
+export interface Wait {
+  /** The message that opened the request, which is the way into its thread. */
+  readonly root: string;
+  /**
+   * A key that is new exactly when the wait is.
+   *
+   * An ask is its own id: it is settled by an answer carrying it on and never
+   * re-opened, so a later question in the same thread is a different row and a
+   * different key. A lap is its id and the status it stopped at, which is
+   * `D-0068` rule 3.1's episode and rests on its claim -- a lap walks its
+   * statuses forward and never re-enters one (`nextStep`,
+   * `src/refrain/loop.ts`: from `awaiting_human` the only edge is
+   * `observe_gate`, and a revise is a successor lap and not this one again).
+   */
+  readonly episode: string;
+}
+
+/**
+ * Everything whose next move is the person's, one entry per wait.
  *
  * `laps` is every lap the store holds that this reading should consider --
  * `readLive()`'s rows for a page that draws the live ones. A terminal row is
@@ -44,26 +74,35 @@ import type { Threads } from "./threads.js";
  * wait with nowhere to send the person, and naming it would be an entry in the
  * list that opens nothing.
  */
-export function requestsWaitingOnYou(
-  threads: Threads,
-  laps: readonly IterationRecord[],
-): ReadonlySet<string> {
-  const roots = new Set<string>();
+export function waitsOnYou(threads: Threads, laps: readonly IterationRecord[]): readonly Wait[] {
+  const waits: Wait[] = [];
   for (const message of threads.messages) {
     if (!threads.waiting.has(message.messageId)) {
       continue;
     }
     const root = threads.rootOf(message.messageId);
     if (root !== null) {
-      roots.add(root);
+      waits.push({ root, episode: `ask:${message.messageId}` });
     }
   }
   for (const lap of laps) {
     if (!isTerminal(lap.status) && WAIT_SIDE[lap.status as NonTerminalStatus] === "waitingOnYou") {
-      roots.add(lap.requestMessageId);
+      waits.push({ root: lap.requestMessageId, episode: `gate:${lap.id}:${lap.status}` });
     }
   }
-  return roots;
+  return waits;
+}
+
+/**
+ * The requests whose next move is the person's, by the message that opened
+ * each one -- {@link waitsOnYou} read as the list and the page read it, where
+ * two questions standing in one thread are one row and one thing to open.
+ */
+export function requestsWaitingOnYou(
+  threads: Threads,
+  laps: readonly IterationRecord[],
+): ReadonlySet<string> {
+  return new Set(waitsOnYou(threads, laps).map((wait) => wait.root));
 }
 
 /**
