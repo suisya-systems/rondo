@@ -6829,3 +6829,58 @@ test("the page's release is the approver's and only what the screen showed: a st
   expect((await releaseFromPage(env, world.store, "ada", shown)).ok).toBe(false);
   expect(claims()).toHaveLength(2);
 });
+
+test("a finished line still keeping its files is drawn at the waiting weight, and one that landed is not (D-0082 rule 1)", async () => {
+  const world = fresh();
+  // Two finished laps: the first still keeps its files, the second landed.
+  await reserve(world, "i-0001", "the one still keeping its files");
+  await closeApproved(world, "i-0001");
+  await reserve(world, "i-0002", "the one that landed");
+  await closeApproved(world, "i-0002");
+  expect(
+    (
+      await world.store.releaseLane({
+        iterationId: "i-0002",
+        takenOver: { claimId: "i-0002:1", lapIds: ["i-0002"] },
+        authorKind: "drafter",
+        authorId: "rondo/lane-ledger/1",
+        bases: [],
+        nowMs: 5_000,
+      })
+    ).kind,
+  ).toBe("released");
+
+  const html = lead(await operatorPage(portsOver(world), "t", { kind: "summary" }, EN));
+  const rowOf = (id: string) => {
+    const from = html.slice(html.indexOf(`id="lap-${id}"`));
+    return from.slice(0, from.indexOf("</li>"));
+  };
+  const keeping = rowOf("i-0001");
+  const landed = rowOf("i-0002");
+
+  // The press is on the keeping row and on no other, which is what promotes it.
+  expect(keeping).toContain('id="release-i-0001"');
+  expect(landed).not.toContain('id="release-');
+  // Promoted: the request is whole and heavy rather than cut and recessive, and
+  // the glyph is the amber one, as every row a person must act on is.
+  expect(keeping).toContain("text-[15px]");
+  expect(keeping).toContain("font-semibold");
+  expect(keeping).not.toContain("truncate");
+  expect(keeping).toContain("text-wait");
+  // The landed row keeps the quiet ending weight it had.
+  expect(landed).toContain("truncate");
+  expect(landed).toContain("text-muted-foreground");
+  expect(landed).not.toContain("text-wait");
+
+  // **Only the weight moved, and the group did not.** Both laps ended moments
+  // ago, so both are under *just finished* -- and the keeping one wears the
+  // waiting weight inside it. That is the whole of rule 1: the weight follows
+  // the press a person must make, not the group the work belongs to, so nothing
+  // here had to be said differently for it to stop being the quietest row.
+  expect(html).toContain(EN.endedHeading(2));
+  expect(keeping).toContain("the one still keeping its files");
+  expect(keeping).toContain(EN.notLanded);
+  // A waiting row's metadata is never cut: it says what releases it.
+  expect(keeping).not.toContain("max-h-15");
+  expect(landed).toContain("max-h-15");
+});

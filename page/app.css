@@ -43,6 +43,13 @@
  * text a person reads, so it clears 4.5:1 on the page ground and on a card in both modes; recessive
  * is a step down in weight and never below legible. `--wait` is the one filled button's ground, so
  * its ink clears 4.5:1 on it at the button's size.
+ *
+ * **Blue means "you can touch this" and never "this is running"** (D-0082 rule 3). `--ring` and `--run`
+ * were one colour, hex for hex, in both modes, so focus and a running lap were drawn alike, and `--link`
+ * was a third member of the family. `--run` is the neutral family now -- running is the state that needs
+ * nobody, so it is the one that can afford to go quiet -- and it keeps its turning glyph, which is what
+ * still says it moves. Measured against the floors above: light ink 7.96:1 on its wash and glyph 6.61:1
+ * on the ground, dark ink 8.08:1 and glyph 8.27:1.
  */
 :root {
   color-scheme: light dark;
@@ -60,9 +67,9 @@
   --wait-foreground: #ffffff;
   --wait-ink: #8a4500;
   --wait-wash: #fff4e5;
-  --run: #2f6fdb;
-  --run-ink: #1d50a8;
-  --run-wash: #edf3ff;
+  --run: #525a66;
+  --run-ink: #414956;
+  --run-wash: #eef0f3;
   --ok: #1a7f47;
   --fail: #c0332b;
 }
@@ -82,9 +89,9 @@
     --wait-foreground: #1a1206;
     --wait-ink: #e9a854;
     --wait-wash: #241a0c;
-    --run: #5b9bff;
-    --run-ink: #8cb8ff;
-    --run-wash: #111b2b;
+    --run: #a3abb5;
+    --run-ink: #aeb6c0;
+    --run-wash: #1b1f24;
     --ok: #46c081;
     --fail: #f2716a;
   }

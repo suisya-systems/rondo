@@ -1472,10 +1472,12 @@ function lapRow(
  * One of the three questions: a group label that carries its count, and its
  * rows (section 1, Vercel's hierarchy of group, row and metadata).
  *
- * `data-question` is the whole of what the visual weight rests on, as the
- * section's class was before (rondo#153): *waiting*, *running* and *ended* are
- * the same shape and the same words, and what differs is how much each is
- * allowed to shout. No group is drawn on the strength of it and none is hidden
+ * `data-question` is a marker and not a style hook (D-0082 rule 9). It said
+ * here for a while that the visual weight rested on it; nothing in
+ * `page/app.css` has ever matched the attribute, and the weight is in the class
+ * strings {@link lapRow} picks per question. The attribute is what a test and a
+ * reader find a group by. *waiting*, *running* and *ended* are the same shape
+ * and the same words, and what differs is how much each is allowed to shout. No group is drawn on the strength of it and none is hidden
  * by it, so a browser that loads no CSS still gets every claim in the same
  * order. An empty group is its label alone, which is how *running now (0)* is
  * said once.
@@ -2070,13 +2072,28 @@ function endedView(
       const said = facts.get(record.id)?.claim ?? null;
       const raised = facts.get(record.id)?.raised ?? null;
       const published = publishedReport(threads, record.id);
+      const landed = landing(record);
+      /**
+       * **Weight follows who is blocked, not which group the row is in**
+       * (D-0082 rule 1). A finished line still keeping its files carries the
+       * one press nothing but a person can clear (D-0073 rule 4.3, rondo#295),
+       * and it was drawn at the quietest weight the page has: truncated to a
+       * line, in muted ink, under a glyph that says the work is over. The row
+       * that a person came to the page for was the least visible thing on it.
+       *
+       * **Only the weight moves, and never a word.** The row keeps the group it
+       * is in and the sentences {@link endedHow} and {@link endedWhy} write for
+       * a lap that has finished: #314 decides how the screen looks, and what it
+       * says stays D-0076's.
+       */
+      const weight = landed.release === null ? "ended" : "waiting";
       return lapRow(
-        "ended",
+        weight,
         record,
         stateHead(
           wording,
           record,
-          endedTone(record),
+          weight === "waiting" ? "wait" : endedTone(record),
           wording.endedAgo(wording.age(ago(record.updatedAtMs, nowMs))),
           endedHow(wording, record, nowMs),
         ),
@@ -2106,14 +2123,14 @@ function endedView(
           // pull request that already exists -- so re-offering it is not a
           // harmless repetition but a press that fails.
           published === null ? null : publishedLine(wording, record, published),
-          ...landing(record).lines,
+          ...landed.lines,
         ],
         // The one thing left to do to an approved lap, where the lap is
         // (rondo#233 S5): the row's action, in its own place under the
         // metadata rather than inside it (rondo#246).
         <>
           {published === null ? publishTo(record) : null}
-          {landing(record).release}
+          {landed.release}
         </>,
       );
     }),
@@ -7191,8 +7208,14 @@ export async function operatorPage(
                     newIterationId,
                     owns,
                   )}
-                  {attentionView(wording, unreadable)}
-                  {runningView(wording, running, transcripts, nowMs, owns)}
+                  {/*
+                   * **A finished line still keeping its files sits with what
+                   * waits on a person, above what waits on nobody** (D-0082
+                   * rule 1). Every row in this group carries the release press,
+                   * so the whole group is drawn at the waiting weight; it was
+                   * under *running now*, which is the one group that needs no
+                   * one.
+                   */}
                   {keptOlder.length === 0
                     ? null
                     : endedView(
@@ -7205,6 +7228,8 @@ export async function operatorPage(
                         landing,
                         wording.heldHeading(keptOlder.length),
                       )}
+                  {attentionView(wording, unreadable)}
+                  {runningView(wording, running, transcripts, nowMs, owns)}
                   {endedView(wording, ended, nowMs, endedFacts, publishTo, threads, landing)}
                 </>
               )}
