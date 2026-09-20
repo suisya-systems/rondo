@@ -463,9 +463,32 @@ export const TONE = {
 
 export type Tone = keyof typeof TONE;
 
-/** The one filled button shape, at two sizes: the way to a press, and the press. */
+/**
+ * The one filled button shape, at two sizes: the press.
+ *
+ * **Ink and not amber** (D-0083 rule 10, which says it in those words). It was
+ * amber-filled, and amber is the page's one claim that *a person must act*
+ * (D-0082 rule 2) -- so every way to another screen was drawn in the colour
+ * that was supposed to be rare, and the thread carried four of them above the
+ * one press that was actually waiting. The weight a press has is its fill;
+ * which colour that fill is is what says whether anything is stopped.
+ */
 export const PRIMARY =
-  "inline-flex cursor-pointer items-center gap-1.5 rounded-md bg-wait font-semibold text-wait-foreground shadow-xs outline-none hover:bg-wait/90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card";
+  "inline-flex cursor-pointer items-center gap-1.5 rounded-md bg-foreground font-semibold text-background shadow-xs outline-none hover:bg-foreground/90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card";
+
+/**
+ * The press made against a finding: the same shape, outlined in amber
+ * (D-0083 rule 10).
+ *
+ * **Outlined rather than filled, and amber rather than ink**, because the two
+ * things it has to say at once are *this is the press* and *you are acting
+ * over something that was raised*. A filled amber press said the second by
+ * spending the page's scarcest colour on its largest area; the outline says it
+ * without making the bar the loudest thing on a screen whose loudest thing
+ * should be the question.
+ */
+export const DESPITE =
+  "inline-flex cursor-pointer items-center gap-1.5 rounded-md border-2 border-wait bg-wait-wash font-semibold text-wait-ink shadow-xs outline-none hover:bg-wait/15 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card";
 
 /**
  * The same shape, outlined: the gate's second answer beside its first
@@ -1175,7 +1198,15 @@ function modelView(wording: Chrome, reading: LapReading | null, due: boolean, re
     </p>
   );
   return (
-    <section id="model-review" class={`${CARD} scroll-mt-16`}>
+    // **A card holding something that was raised is edged in red** (D-0082
+    // rule 2's *red means broken*, spent here and nowhere else on the card):
+    // *why it stopped*, *what changed*, the checks and this one were four
+    // cards of one weight, and the person had to read all four to find which
+    // of them was the reason they had been called.
+    <section
+      id="model-review"
+      class={`${CARD} scroll-mt-16 ${raisedIn(reading) === null ? "" : "border-l-2 border-l-fail"}`}
+    >
       <div class="flex flex-wrap items-center gap-2">
         <h3 class={CARD_HEADING}>{wording.modelHeading}</h3>
         {reading === null ? null : modelPill(wording, reading)}
@@ -1505,7 +1536,13 @@ function approveView(
         // ceiling covered the readings it sits under at a phone width. Past
         // that it scrolls inside itself, so the gate is still readable behind
         // it and nothing in the bar is out of reach.
-        class="sticky bottom-0 z-[1] -mx-4 mt-5 flex max-h-[75svh] flex-col gap-2 overflow-y-auto border-t border-border bg-card px-4 py-3 shadow-[0_-4px_10px_-8px_rgb(0_0_0/0.3)]"
+        // **Its rule is amber and two pixels, and every other card's is one
+        // pixel of border** (D-0082 rule 1): this bar is the one thing on the
+        // screen that nothing but the person can clear, and it was drawn with
+        // the same edge as the evidence stacked above it. The colour is the
+        // page's one claim that a person must act, spent on the one element
+        // that makes it (rule 2).
+        class="sticky bottom-0 z-[1] -mx-4 mt-5 flex max-h-[75svh] flex-col gap-2 overflow-y-auto border-t-2 border-wait bg-card px-4 py-3 shadow-[0_-4px_10px_-8px_rgb(0_0_0/0.3)]"
       >
         {/*
          * **Both readings' verdicts pinned in the bar** (the S2 design pass on
@@ -1615,7 +1652,11 @@ function approveView(
             type="submit"
             data-row=""
             aria-describedby={`approve-plain-${record.id}`}
-            class={`${PRIMARY} h-10 w-full justify-center px-6 text-sm sm:h-9 sm:w-auto`}
+            // **The press changes shape with what it is answering over**
+            // (D-0083 rule 10): ink where the readings raised nothing, and
+            // amber-outlined where one of them did, which is the same
+            // condition the label already turns on.
+            class={`${raised === null ? PRIMARY : DESPITE} h-10 w-full justify-center px-6 text-sm sm:h-9 sm:w-auto`}
           >
             {raised === null ? APPROVE_BODY : wording.approveDespite}
           </button>
@@ -2042,7 +2083,7 @@ function noDraftView(wording: Chrome, message: ThreadMessageDraft, root: string,
             { kind: "scope", messageId: root, rounds: null, decisionId: null, plan: null },
             wording.lang,
           )}
-          class={`${PRIMARY} h-7 px-3 text-[13px]`}
+          class={`${SECONDARY} h-7 px-3 text-[13px]`}
         >
           {wording.scopeAction}
         </a>
@@ -2205,7 +2246,11 @@ function threadActs(
           wording.lang,
         )}
         data-open=""
-        class={`${PRIMARY} h-7 px-3 text-[13px]`}
+        // **A way to another screen, and not a press** (D-0082 rule 1): what
+        // these lead to is a screen with its own press on it, and drawn filled
+        // they outweighed the box further down that a person is actually being
+        // waited on by.
+        class={`${SECONDARY} h-7 px-3 text-[13px]`}
       >
         {wording.scopeAction}
       </a>
@@ -2214,7 +2259,7 @@ function threadActs(
           id={`publish-${lap.record.id}`}
           href={viewHref({ kind: "publish", iterationId: lap.record.id }, wording.lang)}
           data-open=""
-          class={`${PRIMARY} h-7 px-3 text-[13px]`}
+          class={`${SECONDARY} h-7 px-3 text-[13px]`}
         >
           {/* Which try, where there is more than one to tell apart: three
               buttons reading *publish* are three a person cannot choose

@@ -59,6 +59,17 @@
 }
 
 /*
+ * A line that says something did not pass is read, not skimmed (rondo#314).
+ * The dot carried the whole of the difference, so *the checks all passed* and
+ * *a model read the change and raised 2 things* were the same sentence in the
+ * same ink with a different speck beside it. The words are in full ink here
+ * for the reason the decided-without-asking line's are: it is a thing to read.
+ */
+.ev-failed p {
+  color: var(--color-foreground);
+}
+
+/*
  * Hollow: rondo decided this without asking. It is drawn as an outline
  * because it is an act with nobody in it -- the shape of the others, with the
  * middle missing.
@@ -105,10 +116,18 @@
   border-bottom: 1px solid var(--color-border);
 }
 
+/*
+ * The request's own words, at the scale's top step (D-0082 rule 4's
+ * `--text-page`, which until now carried nothing).
+ *
+ * **The subject of the screen was drawn a step under the heading of a card on
+ * it** (rondo#314): 19px here against 16px on *what changed*, which is not a
+ * difference a person reads as *this is what all of this is about*.
+ */
 .thread-head h1 {
-  font-size: 19px;
+  font-size: var(--text-page);
   font-weight: 700;
-  line-height: 1.4;
+  line-height: 1.3;
   max-width: 45em;
 }
 
@@ -321,7 +340,9 @@
 }
 
 .empty-centre h1 {
-  font-size: 27px;
+  /* The same step the thread's title takes, and one the scale has: it was
+     27px, which is not on it (D-0082 rule 4). */
+  font-size: var(--text-page);
   font-weight: 700;
   line-height: 1.3;
   /* Rule 1: prose at 45 to 90 characters, whatever the window does. */
