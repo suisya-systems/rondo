@@ -15,6 +15,7 @@ import { inspectLapWork } from "../../src/access/forge.js";
 import type {} from "../../src/access/inbox.js";
 import { evidenceOf, READING_REMOTE } from "../../src/access/review.js";
 import { chromeFor, EN } from "../../src/access/wording.js";
+import { CLI_PATH_ENV } from "../../src/continuo/invoker.js";
 import { allocate } from "../../src/refrain/allocator.js";
 import { admittedPlan, planPayload, runPlan } from "../../src/refrain/plan.js";
 import { APPROVED_OUTCOME } from "../../src/store/records.js";
@@ -985,3 +986,119 @@ test("the page's release is the approver's and only what the screen showed: a st
   expect((await releaseFromPage(env, world.store, "ada", shown)).ok).toBe(false);
   expect(claims()).toHaveLength(2);
 });
+
+// -- The one leg of a publish that can be driven for real here (rondo#239) --
+
+/**
+ * `#239`'s S5, as far as it goes: the branch really is pushed.
+ *
+ * The publish press has three legs -- the push, the pull request and the run
+ * close -- and #239 asks for a test that drives each and asserts the recorded
+ * outcome. **Only the first can be driven here, and it is driven for real.**
+ * `pushTopicBranch` runs `git push`, and a bare repository on disk is a real
+ * remote, so the push is not stood in for: the assertion is that the remote's
+ * ref moved to the workspace's tip.
+ *
+ * **What the other two need, and why they are not here.** The pull request leg
+ * shells out to the forge CLI, which needs a real forge, a repository to open a
+ * pull request against and a credential to do it with; a stubbed forge CLI
+ * would make this test green over nothing, which is the one thing #239 says not
+ * to build. So the press refuses at the second leg,
+ * `publishRefusedPullRequestFailed`, and that refusal is asserted here as what
+ * it is -- the boundary of what this machine can reach -- rather than papered
+ * over. The third leg, the run close, is continuo's and would work; it is
+ * simply never reached, because the second fails first and the press stops
+ * there on purpose (a push that cannot be taken back must not be followed by a
+ * close that claims a pull request exists).
+ *
+ * **The second leg fails the same way everywhere, and offline** (Codex round
+ * 1). Left alone, the failure would be whatever the machine happened to
+ * produce: no forge CLI at all on a runner, a 404 over the network on a laptop
+ * that has one logged in -- and that second shape can stall for the command's
+ * own five-minute bound, which is longer than any timeout this file would
+ * otherwise give a case. So the credential is taken away for the duration: an
+ * empty configuration directory and no token, which the forge CLI refuses on
+ * before it opens a connection. The push above is untouched by that -- it is
+ * `git` to a path -- so what stays real stays real, and what cannot be reached
+ * is refused for one stated reason instead of three incidental ones.
+ *
+ * Reaching the second leg at all still requires a verified continuo, because
+ * the press starts one **before** it pushes -- so this case carries the same
+ * capability gate as `test/access/press-path.test.ts`.
+ */
+const publishCli = process.env[CLI_PATH_ENV];
+const canPublish = publishCli !== undefined && publishCli.trim() !== "";
+
+test.skipIf(!canPublish)(
+  "the publish press really pushes the branch, and stops at the leg that needs a forge (#233 S5, rondo#239)" +
+    (canPublish ? "" : ` [skipped: ${CLI_PATH_ENV} is unset]`),
+  async () => {
+    // A bare repository is a real remote: what is pushed is pushed.
+    const forge = mkdtempSync(join(tmpdir(), "rondo-publish-forge-"));
+    const bare = join(forge, "throwaway.git");
+    execFileSync("git", ["init", "--quiet", "--bare", "--initial-branch", "main", bare]);
+
+    const world = await publishableWorld("clear", 1, bare);
+    // The remote is a path and `asked.repo` is a forge name, so they cannot
+    // agree; the mismatch is overruled here rather than hidden, which is the
+    // flag's own purpose.
+    const asked = { ...world.asked, allowRemoteMismatch: true };
+    const environment = { RONDO_APPROVER: "ada", [CLI_PATH_ENV]: publishCli ?? "" };
+    const row = await world.store.read(world.iterationId);
+    if (row.kind !== "read") {
+      throw new Error("the fixture row would not read");
+    }
+    const shown = await publishingForPage(environment, world.store, asked, row.record);
+    if (shown.kind !== "ready") {
+      throw new Error(`the fixture would not plan: ${JSON.stringify(shown)}`);
+    }
+
+    // The forge leg, made to fail on the credential rather than on the network.
+    // The forge CLI reads these from the environment it inherits, so they are
+    // set on this process and put back afterwards.
+    const held = {
+      GH_CONFIG_DIR: process.env["GH_CONFIG_DIR"],
+      GH_TOKEN: process.env["GH_TOKEN"],
+      GITHUB_TOKEN: process.env["GITHUB_TOKEN"],
+    };
+    process.env["GH_CONFIG_DIR"] = mkdtempSync(join(tmpdir(), "rondo-publish-nocreds-"));
+    process.env["GH_TOKEN"] = "";
+    process.env["GITHUB_TOKEN"] = "";
+    let pressed: Awaited<ReturnType<typeof publishFromPage>>;
+    try {
+      pressed = await publishFromPage(environment, world.store, world.storePath, "ada", asked, {
+        iterationId: world.iterationId,
+        shown: shown.shown,
+        despiteReview: false,
+      });
+    } finally {
+      for (const [name, value] of Object.entries(held)) {
+        if (value === undefined) {
+          delete process.env[name];
+        } else {
+          process.env[name] = value;
+        }
+      }
+    }
+
+    // **The push happened.** The remote holds the topic branch, at the tip the
+    // workspace is on -- which no refusal path could have produced.
+    const tip = execFileSync("git", ["-C", world.workspace, "rev-parse", "HEAD"], {
+      encoding: "utf8",
+    }).trim();
+    const pushed = execFileSync(
+      "git",
+      ["-C", bare, "rev-parse", `refs/heads/${row.record.topicBranch ?? ""}`],
+      { encoding: "utf8" },
+    ).trim();
+    expect(pushed).toBe(tip);
+
+    // **And the press stopped where the forge begins.** Not a pass dressed as
+    // one: the pull request leg needs a forge this machine does not have, and
+    // the press says so in the words the screen shows.
+    expect(pressed.ok).toBe(false);
+    expect(pressed.why).toBe("publishRefusedPullRequestFailed");
+    expect(pressed.note).toContain("the branch is pushed");
+  },
+  WINDOWS_HEAVY_TIMEOUT_MS,
+);
