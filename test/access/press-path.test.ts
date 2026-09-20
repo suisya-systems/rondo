@@ -42,20 +42,23 @@
  * green gate mean nothing about the seam it claims to cover. Locally the skip
  * says exactly what to set.
  *
- * ## The one thing on PATH
+ ## No model is ever spawned, and not by luck
  *
  * A lap that stops at `awaiting_human` takes a model reading (D-0065), and the
- * reviewer is `codex`, spawned by name through `PATH`. That reading is not what
- * this file is about, and an unavailable one is a real recorded outcome
- * (D-0065 2.4) rather than a hole -- but on a developer machine with `codex`
- * logged in, leaving it alone would spend a real review inside `npm test`. So a
- * `codex` that exits non-zero is put first on `PATH` for this file, and the
- * reading it produces is asserted as `unavailable` rather than ignored.
+ * reviewer is a real `codex`. Nothing here spawns one, because the plan these
+ * presses run on **names no review criterion**, and D-0029 rule 13 refuses the
+ * reading before a process exists: there is nothing to grade against. That is a
+ * property of the fixture rather than of the machine, so it holds on a
+ * developer's laptop with `codex` logged in exactly as it holds on a runner
+ * with no `codex` at all -- and an attempt recorded as `unavailable` is D-0065
+ * 2.4's own outcome rather than a hole, so the row is asserted rather than
+ * ignored. A defusing trick on `PATH` was tried first and dropped: it could not
+ * be written for Windows, where a native `codex.exe` would have run for real.
  */
 import { execFileSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { delimiter, dirname, join } from "node:path";
+import { dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { expect, test } from "vitest";
 
@@ -126,18 +129,9 @@ const skipNote = available
 const REPORTED = "I stopped before the push. May I go on?";
 
 if (available) {
+  // The one switch continuo's fake worker is told anything through: it is
+  // spawned by continuo with a copy of this process's environment.
   process.env["FAKE_RESULT_TEXT"] = REPORTED;
-  // The reviewer, defused. Written for POSIX only: on Windows `spawn` without a
-  // shell would not resolve this script anyway, and `codex` is not installed on
-  // that runner, so the outcome there is the same spawn failure by another
-  // route.
-  if (process.platform !== "win32") {
-    const shims = mkdtempSync(join(tmpdir(), "rondo-press-shims-"));
-    const codex = join(shims, "codex");
-    writeFileSync(codex, "#!/bin/sh\nexit 1\n", "utf8");
-    chmodSync(codex, 0o755);
-    process.env["PATH"] = `${shims}${delimiter}${process.env["PATH"] ?? ""}`;
-  }
 }
 
 /** A real, cadenza-valid agent type, as `test/access/web-scope.test.ts` holds one. */
@@ -455,14 +449,15 @@ test.skipIf(!available)(
     expect(existsSync(read.record.workspace ?? "")).toBe(true);
 
     // **And the reading that a scoped start takes at the gate is there**, as
-    // `unavailable`: the reviewer is defused for this file, and D-0065 2.4 says
-    // an attempt that was stopped is recorded rather than skipped -- so its
-    // absence here would mean the press skipped a step, not that a model was
-    // missing.
+    // `unavailable`: D-0065 2.4 says an attempt that was stopped is recorded
+    // rather than skipped, so its absence here would mean the press skipped a
+    // step. Its reason is asserted too, because that reason is what says no
+    // model was spawned on any machine (see the header).
     const readings = await world.store.readingsFor(iterationId);
     const model = readings.filter((reading) => reading.drafter.startsWith("rondo/model/"));
     expect(model).toHaveLength(1);
     expect(model[0]?.verdict).toBe("unavailable");
+    expect(model[0]?.unavailableReason).toContain("review criterion");
   },
   PRESS_TIMEOUT_MS,
 );

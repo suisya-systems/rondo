@@ -1011,6 +1011,17 @@ test("the page's release is the approver's and only what the screen showed: a st
  * there on purpose (a push that cannot be taken back must not be followed by a
  * close that claims a pull request exists).
  *
+ * **The second leg fails the same way everywhere, and offline** (Codex round
+ * 1). Left alone, the failure would be whatever the machine happened to
+ * produce: no forge CLI at all on a runner, a 404 over the network on a laptop
+ * that has one logged in -- and that second shape can stall for the command's
+ * own five-minute bound, which is longer than any timeout this file would
+ * otherwise give a case. So the credential is taken away for the duration: an
+ * empty configuration directory and no token, which the forge CLI refuses on
+ * before it opens a connection. The push above is untouched by that -- it is
+ * `git` to a path -- so what stays real stays real, and what cannot be reached
+ * is refused for one stated reason instead of three incidental ones.
+ *
  * Reaching the second leg at all still requires a verified continuo, because
  * the press starts one **before** it pushes -- so this case carries the same
  * capability gate as `test/access/press-path.test.ts`.
@@ -1042,11 +1053,33 @@ test.skipIf(!canPublish)(
       throw new Error(`the fixture would not plan: ${JSON.stringify(shown)}`);
     }
 
-    const pressed = await publishFromPage(environment, world.store, world.storePath, "ada", asked, {
-      iterationId: world.iterationId,
-      shown: shown.shown,
-      despiteReview: false,
-    });
+    // The forge leg, made to fail on the credential rather than on the network.
+    // The forge CLI reads these from the environment it inherits, so they are
+    // set on this process and put back afterwards.
+    const held = {
+      GH_CONFIG_DIR: process.env["GH_CONFIG_DIR"],
+      GH_TOKEN: process.env["GH_TOKEN"],
+      GITHUB_TOKEN: process.env["GITHUB_TOKEN"],
+    };
+    process.env["GH_CONFIG_DIR"] = mkdtempSync(join(tmpdir(), "rondo-publish-nocreds-"));
+    process.env["GH_TOKEN"] = "";
+    process.env["GITHUB_TOKEN"] = "";
+    let pressed: Awaited<ReturnType<typeof publishFromPage>>;
+    try {
+      pressed = await publishFromPage(environment, world.store, world.storePath, "ada", asked, {
+        iterationId: world.iterationId,
+        shown: shown.shown,
+        despiteReview: false,
+      });
+    } finally {
+      for (const [name, value] of Object.entries(held)) {
+        if (value === undefined) {
+          delete process.env[name];
+        } else {
+          process.env[name] = value;
+        }
+      }
+    }
 
     // **The push happened.** The remote holds the topic branch, at the tip the
     // workspace is on -- which no refusal path could have produced.
