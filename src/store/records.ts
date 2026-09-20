@@ -69,6 +69,19 @@ export interface JsonRecord {
  * admitted, whether a lap is still walking, or whether anything was ever sent.
  * `admitting`, `admitted` and `performing` each answer that question.
  */
+/**
+ * Whose failure ended an iteration at `failed` (rondo#348).
+ *
+ * Two values and not three: `noAnswer` never reaches a terminal status at all
+ * (it holds the single-flight lock and stalls), so the only failures that
+ * become a row are the two a person reads differently.
+ */
+export type FailureKind =
+  /** Something upstream said no. The person has a next move, and it is theirs. */
+  | "refusal"
+  /** rondo broke. The person can do nothing about it and should not be made to read it. */
+  | "defect";
+
 export type IterationStatus =
   /** Reserved, with the plan and its digest committed and nothing sent. */
   | "planned"
@@ -434,6 +447,26 @@ export interface IterationRecord {
    * it is.
    */
   readonly reason: string | null;
+  /**
+   * Whose failure `failed` was, where rondo knew (rondo#348).
+   *
+   * **The axis `failed` was missing.** The interpreter has held the difference
+   * since the ports were written -- `EffectOutcome` separates a `refused`,
+   * which is something upstream saying no, from a `defect`, which is rondo
+   * broken -- and it dropped it here, at the one place it is persisted. Both
+   * arms wrote `failed` and their words went into {@link reason}, so the page
+   * could not choose between D-0076 rule 4.4's sentence (a break in the
+   * person's own world, shown as itself, with a next move) and rule 4.5's (a
+   * reason of rondo's, in one closed fold marked for whoever maintains it).
+   *
+   * **Null is "rondo does not know", and it is the honest value for every row
+   * written before this column.** Nothing on such a row recovers the kind, so
+   * there is no back-fill; a null displays exactly as `failed` displayed
+   * before, which is what makes the column additive on the screen as well as
+   * in the schema. It is also null on every status but `failed`: the question
+   * is only asked about a failure.
+   */
+  readonly failureKind: FailureKind | null;
   readonly createdAtMs: number;
   readonly updatedAtMs: number;
 }

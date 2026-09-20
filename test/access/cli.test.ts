@@ -1239,6 +1239,7 @@ function published(parts: Partial<IterationRecord> = {}): IterationRecord {
     lapTurns: null,
     lapDurationMs: null,
     reason: null,
+    failureKind: null,
     createdAtMs: 0,
     updatedAtMs: 0,
     ...parts,

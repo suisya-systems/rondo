@@ -66,6 +66,7 @@ import {
   type AttentionInterval,
   askStandsOver,
   type CompositionDraft,
+  type FailureKind,
   FINDING_SEVERITIES,
   type FindingBasis,
   type FindingSeverity,
@@ -766,6 +767,7 @@ const COLUMN_BY_FIELD = {
   lapTurns: "lap_turns",
   lapDurationMs: "lap_duration_ms",
   reason: "reason",
+  failureKind: "failure_kind",
 } as const satisfies Record<keyof IterationFields, string>;
 
 /** What a bound parameter may be. The store persists no blobs and no bigints. */
@@ -904,6 +906,10 @@ CREATE TABLE IF NOT EXISTS iteration (
   lap_turns             INTEGER,
   lap_duration_ms       INTEGER,
   reason                TEXT,
+  -- Whose failure a terminal 'failed' was (rondo#348). Nullable, and null on
+  -- every row written before it: nothing on such a row recovers the kind, so
+  -- there is no back-fill and a null displays as the status always displayed.
+  failure_kind          TEXT,
   created_at_ms         INTEGER NOT NULL,
   updated_at_ms         INTEGER NOT NULL,
   live                  ${GENERATED_COLUMNS.live},
@@ -1548,6 +1554,11 @@ const ADDED_COLUMNS = Object.freeze({
   lap_cost_usd: "REAL",
   lap_turns: "INTEGER",
   lap_duration_ms: "INTEGER",
+  // rondo#348, and the fourth entry to add a column to this table: nullable,
+  // no back-fill, for D-0046's reason exactly -- the interpreter dropped the
+  // kind before it wrote the row, so an existing row's null is the truth about
+  // it rather than a gap something could fill.
+  failure_kind: "TEXT",
   occupying: GENERATED_COLUMNS.occupying,
   holds_identifiers: GENERATED_COLUMNS.holds_identifiers,
 });
@@ -1754,6 +1765,7 @@ const SELECT_COLUMNS = [
   "lap_turns",
   "lap_duration_ms",
   "reason",
+  "failure_kind",
   "created_at_ms",
   "updated_at_ms",
 ].join(", ");
@@ -6168,6 +6180,7 @@ function toRecord(row: SqlRow): IterationRecord {
     lapTurns: optionalNumber(row, "lap_turns"),
     lapDurationMs: optionalNumber(row, "lap_duration_ms"),
     reason: optionalText(row, "reason"),
+    failureKind: optionalFailureKind(row),
     createdAtMs: requireInteger(row, "created_at_ms"),
     updatedAtMs: requireInteger(row, "updated_at_ms"),
   };
@@ -6526,6 +6539,24 @@ function optionalText(row: SqlRow, column: string, subject = "iteration"): strin
     return null;
   }
   return requireText(row, column, subject);
+}
+
+/**
+ * The failure-kind column, or null where rondo does not know (rondo#348).
+ *
+ * **A value this rondo does not know reads as null rather than as a refusal to
+ * read the row.** The column is written in one place, from a two-armed union,
+ * so an unknown string can only be a database somebody edited -- and the whole
+ * of what this column does is choose which sentence a screen writes about a
+ * failure. Refusing the row would take a person's record away from them over a
+ * word rondo uses to pick between two ways of saying the same failure; null is
+ * *rondo does not know which*, which is a state the screen already draws.
+ * {@link requireStatus} refuses an unknown status for the opposite reason: a
+ * status decides whether a lock is held.
+ */
+function optionalFailureKind(row: SqlRow): FailureKind | null {
+  const value = optionalText(row, "failure_kind");
+  return value === "refusal" || value === "defect" ? value : null;
 }
 
 /**

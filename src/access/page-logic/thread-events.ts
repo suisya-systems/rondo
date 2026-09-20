@@ -36,6 +36,48 @@ function isChecks(drafter: string): boolean {
 }
 
 /**
+ * How an ended lap's last line reads, and what is shut under it (rondo#348).
+ *
+ * **The whole of what the new column is for.** `failed` used to be one
+ * sentence over two failures that mean opposite things to a person, because
+ * the kind was dropped where the row was written. Now:
+ *
+ * - **an upstream refusal is the person's to act on**, so what was said is
+ *   relayed into the line itself (D-0076 rule 4.4, `D-0015` rule 7);
+ * - **a defect is rondo's**, so the line says that in rondo's stead and the
+ *   reason goes into one shut fold marked for whoever maintains rondo (rule
+ *   4.5). Nothing of it is inline;
+ * - **a row that does not say which** -- every row written before the column,
+ *   and every other terminal status -- reads exactly as it read before.
+ *
+ * A refusal with no reason on the row falls back to the same line too: a
+ * relaying sentence with nothing to relay would promise the person words that
+ * are not there.
+ */
+function endedLine(
+  wording: Chrome,
+  record: IterationRecord,
+): { readonly said: string; readonly aside?: ThreadEvent["aside"] } {
+  if (record.status === "closed") {
+    return { said: wording.evFinished };
+  }
+  if (record.status !== "failed" || record.reason === null) {
+    return { said: wording.evStopped };
+  }
+  switch (record.failureKind) {
+    case "refusal":
+      return { said: wording.evRefused(record.reason) };
+    case "defect":
+      return {
+        said: wording.evBroke,
+        aside: { said: wording.evBrokeReason, text: record.reason },
+      };
+    default:
+      return { said: wording.evStopped };
+  }
+}
+
+/**
  * The lines one lap contributes, oldest first.
  *
  * `isTerminal` is handed in rather than imported so this stays a function of
@@ -105,14 +147,17 @@ export function lapEvents(
     });
   }
   if (isTerminal(record.status)) {
-    const closed = record.status === "closed";
+    const ended = endedLine(wording, record);
     events.push({
       id: `${record.id}:ended`,
-      kind: closed ? "passed" : "other",
-      said: said(closed ? wording.evFinished : wording.evStopped),
+      kind: record.status === "closed" ? "passed" : "other",
+      said: said(ended.said),
       at: at(record.updatedAtMs),
       atMs: record.updatedAtMs,
       tryAt,
+      // Spread rather than set, so a line with nothing shut under it is the
+      // same object it has always been.
+      ...(ended.aside === undefined ? {} : { aside: ended.aside }),
     });
   }
   return events;

@@ -42,6 +42,19 @@ And `nextStep` is total and pure — effects live in `interpreter.ts` and arrive
 as parameters. A change that puts an effect in the planner is a change that
 needs a decision, not a review comment.
 
+**One rule for the failure types themselves** (rondo#348). **A refusal whose
+next move differs gets its own arm, and the facts a person acts on travel as
+fields.** The default when something can go wrong is `reason: string`, and it is
+the wrong default twice over: two refusals a person answers differently end up
+as one arm the caller cannot branch on, and the facts they need — what the bound
+was, who is holding the line — end up buried in a sentence somebody has to
+parse back out. `ReserveOutcome`'s `atCapacity{bound,limit,occupancy}` and
+`laneRefused{paths,holders}` are what the rule looks like applied; this is
+`D-0015` rule 7 (a relayed message is relayed, never parsed) turned on rondo's
+own refusals. It is a rule for arms being **written or touched** — the 80
+existing string-only arms are not a migration, and splitting an arm no screen
+branches on is the same mistake in the other direction (`D-0076` rule 5.1).
+
 So the thing to check before starting is not "does this fit the architecture" —
 it is **"has the decision this depends on been taken?"** Most of rondo's design
 was proposed in cadenza's `docs/design/conductor.md` section 11 as decision rows

@@ -430,3 +430,35 @@
   padding-left: 13px;
   margin-left: 1px;
 }
+
+/*
+ * rondo's own reason for a failure, shut (D-0076 rule 4.5, rondo#348).
+ *
+ * **Under the line, not beside it, and never inline.** It hangs at the
+ * sentence's own column -- 28px of dot plus the 14px gap -- so a shut fold
+ * reads as a footnote to the line above rather than as a second event; the
+ * person is never asked to open it, so it is drawn at the size of a note and
+ * in the muted ink. Opened, the reason keeps the newlines rondo received it
+ * with and wraps rather than widening the thread.
+ */
+.ev-aside {
+  margin: 0 0 6px 42px;
+  max-width: 738px;
+  font-size: 12px;
+  color: var(--color-muted-foreground);
+}
+
+.ev-aside > summary {
+  cursor: pointer;
+  list-style-position: inside;
+}
+
+.ev-aside > p {
+  margin-top: 4px;
+  padding-left: 13px;
+  border-left: 1px solid var(--color-border);
+  font-family: var(--font-mono);
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

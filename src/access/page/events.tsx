@@ -50,24 +50,52 @@ export interface ThreadEvent {
   readonly href?: string;
   /** What that link says; required where `href` is given. */
   readonly linkSaid?: string;
+  /**
+   * rondo's own reason for what happened, shut (D-0076 rule 4.5, rondo#348).
+   *
+   * **One closed fold, labelled for whoever maintains rondo on this machine,
+   * and nothing of it inline.** It is drawn only where the row says the
+   * failure was rondo's own: an upstream refusal is the person's to act on and
+   * is said in the line itself (rule 4.4). The person is never asked to open
+   * this, and what is in it is the reason as rondo received it.
+   */
+  readonly aside?: {
+    readonly said: string;
+    readonly text: string;
+  };
 }
 
-/** One line: a dot, a sentence, the time. */
+/** One line: a dot, a sentence, the time -- and, where there is one, rondo's own reason under it. */
 export function EventLine({ event }: { readonly event: ThreadEvent }) {
   return (
-    <div className={`ev ev-${event.kind}`}>
-      <i className="ev-dot" aria-hidden="true" />
-      <p>
-        {event.said}
-        {event.href === undefined ? null : (
-          <>
-            {" "}
-            <a href={event.href}>{event.linkSaid}</a>
-          </>
-        )}
-      </p>
-      <time>{event.at}</time>
-    </div>
+    <>
+      <div className={`ev ev-${event.kind}`}>
+        <i className="ev-dot" aria-hidden="true" />
+        <p>
+          {event.said}
+          {event.href === undefined ? null : (
+            <>
+              {" "}
+              <a href={event.href}>{event.linkSaid}</a>
+            </>
+          )}
+        </p>
+        <time>{event.at}</time>
+      </div>
+      {event.aside === undefined ? null : (
+        /*
+         * Shut, and a `<details>` for `FoldedLine`'s reason: opening it is the
+         * browser's own act, so a reason nobody opens costs the page no state
+         * and no address. `lang=""` because the reason is rondo's own words as
+         * it received them and rondo does not know what language they are in
+         * (D-0055 rule 8) -- it is quoted here, never translated.
+         */
+        <details className="ev-aside">
+          <summary>{event.aside.said}</summary>
+          <p lang="">{event.aside.text}</p>
+        </details>
+      )}
+    </>
   );
 }
 
