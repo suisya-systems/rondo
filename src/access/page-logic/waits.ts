@@ -18,13 +18,15 @@
  * subset: a lap can wait at a gate with nothing asked in its thread, and a
  * question can stand over a request no lap has been started for.
  *
- * **The scan is one and it is read two ways.** What a person acts on is a
- * request -- two questions standing in one thread are one row in the list and
- * one thing to go and look at -- so the screen reads
- * {@link requestsWaitingOnYou}. What has already been sent to somebody has to
- * be counted per *wait*, because a request outlives any one of its questions,
- * so the host reads {@link waitsOnYou} and its {@link Wait.episode}. Both come
- * off the same pass, so they cannot disagree about what is waiting.
+ * **One pass, and every reader takes what it needs from it.** What a person
+ * acts on is a request -- two questions standing in one thread are one row in
+ * the list and one thing to go and look at -- so the list groups
+ * {@link Wait.root}. What has already been sent to somebody has to be counted
+ * per *wait*, because a request outlives any one of its questions, so the host
+ * and the open tab both key on {@link Wait.episode}. Deriving them here rather
+ * than letting each caller decide what "waiting" is is the whole point: the
+ * screen, the host's tick and the tab cannot disagree about what is waiting,
+ * because there is one answer and they read it.
  */
 import {
   type IterationRecord,
@@ -91,18 +93,6 @@ export function waitsOnYou(threads: Threads, laps: readonly IterationRecord[]): 
     }
   }
   return waits;
-}
-
-/**
- * The requests whose next move is the person's, by the message that opened
- * each one -- {@link waitsOnYou} read as the list and the page read it, where
- * two questions standing in one thread are one row and one thing to open.
- */
-export function requestsWaitingOnYou(
-  threads: Threads,
-  laps: readonly IterationRecord[],
-): ReadonlySet<string> {
-  return new Set(waitsOnYou(threads, laps).map((wait) => wait.root));
 }
 
 /**

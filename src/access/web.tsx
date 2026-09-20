@@ -163,7 +163,7 @@ import { isLive, type PageView, viewHref } from "./page-logic/routes.js";
 import { selectRequest, walkPosition } from "./page-logic/selection.js";
 import { lapEvents } from "./page-logic/thread-events.js";
 import { firstLine, lineOf, replyTarget, type Threads, threadsOf } from "./page-logic/threads.js";
-import { requestsWaitingOnYou } from "./page-logic/waits.js";
+import { waitsOnYou } from "./page-logic/waits.js";
 import { finishedAt, stepsOf, WEEK_MS, weekFigures } from "./page-logic/week.js";
 import { denialLine, LIST_LIMIT } from "./review.js";
 import { reviseText } from "./revise-draft/judgement.js";
@@ -2257,9 +2257,11 @@ export async function operatorPage(
    * when this was written here): `saysMore` would let a newer running lap hide
    * an older one still at its gate, and the request would drop out of *your
    * turn* -- and out of D-0083 rule 3's selection -- with an unanswered
-   * question on it. `requestsWaitingOnYou` reads every lap for that reason.
+   * question on it. `waitsOnYou` reads every lap for that reason.
    */
-  const waitsOnYou = requestsWaitingOnYou(threads, [...waiting, ...running]);
+  const waits = waitsOnYou(threads, [...waiting, ...running]);
+  /** The requests of those, which is the row the list draws and the person opens. */
+  const turnsHere = new Set(waits.map((wait) => wait.root));
   // **Only the ones an answer can settle** (D-0032 rule 5). `openProposals`
   // returns every proposal nobody has decided, and an explanation is
   // undecidable by construction -- `recordDecision` refuses the non-binding
@@ -2337,7 +2339,7 @@ export async function operatorPage(
         messageId: root.messageId,
         title: firstLine(root.body),
         repository: repositoryOf(lap?.record ?? null),
-        state: rowStateOf(lap?.record ?? null, waitsOnYou.has(root.messageId), (record) =>
+        state: rowStateOf(lap?.record ?? null, turnsHere.has(root.messageId), (record) =>
           isTerminal(record.status),
         ),
         atMs: Math.max(...members.map((message) => message.atMs)),
@@ -3257,19 +3259,22 @@ export async function operatorPage(
            * only churn the selector.
            */}
           {/*
-           * **What the tab rings off** (rondo#311, plan 2), below. The same
-           * set the list's *your turn* is drawn from, as a number, on the
-           * element the five-second poll swaps -- so a tab left open behind
-           * other windows learns that the person's turn has come at the same
-           * moment the screen behind it does, off the same reading, and
-           * `page/chime.js` decides nothing about waiting on its own.
+           * **What the tab rings off** (rondo#311, plan 2), below. The waits
+           * themselves and not a count of them (Codex, round 3): a second
+           * question arriving in a request that was already waiting, or one
+           * request settling as another opens, leaves a count where it was
+           * and would have left the tab silent. Each wait carries a key that
+           * is new exactly when the wait is, so the tab rings on a key it has
+           * not seen -- the same test the host's own tick makes, off the same
+           * pass, so the screen, the notification and the chime cannot
+           * disagree about what is waiting.
            *
            * The sentence rides along because it is the person's language,
            * which this request resolved and the browser did not.
            */}
           <div
             id="ledger"
-            data-turns={String(waitsOnYou.size)}
+            data-waits={JSON.stringify(waits.map((wait) => wait.episode))}
             data-chime={wording.reachYourTurn}
             {...(keepsCurrent
               ? {

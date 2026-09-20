@@ -13,6 +13,7 @@ import {
   keysCode,
   mint,
   openGate,
+  openRequest,
   operatorPage,
   type Pressed,
   portsOver,
@@ -532,7 +533,8 @@ test("liveness is per view: two views poll and swap, and the answer view updates
     // status groups while the page was a ledger of laps; the name is kept
     // because `hx-get` and `hx-select` have to agree with each other.
     expect(html).toContain(
-      `<div id="ledger" data-turns="1" data-chime="${EN.reachYourTurn}" ` +
+      '<div id="ledger" data-waits="[&quot;gate:i-0001:awaiting_human&quot;]" ' +
+        `data-chime="${EN.reachYourTurn}" ` +
         `hx-get="${href}" hx-trigger="every 5s" hx-select="#ledger" hx-swap="outerHTML" ` +
         'hx-select-oob="#waiting-count">',
     );
@@ -788,7 +790,7 @@ test("rondo's own script moves focus and follows the server's links, and asks fo
   ]);
 });
 
-test("the page carries the turn count and the sentence a tab rings with", async () => {
+test("the page carries the waits and the sentence a tab rings with", async () => {
   // rondo#311, plan 2. The tab is not allowed its own idea of *waiting*: it
   // reads the number off the element the five-second poll swaps, written from
   // the same reading the list's *your turn* is drawn from. What this holds
@@ -800,13 +802,17 @@ test("the page carries the turn count and the sentence a tab rings with", async 
   const ports = portsOver(world, "ada", []);
 
   const quiet = await operatorPage(ports, "t", { kind: "summary" }, EN, mint);
-  expect(quiet).toContain('data-turns="0"');
+  expect(quiet).toContain('data-waits="[]"');
 
   await openGate(world, "i-0001");
   const waiting = await operatorPage(ports, "t", { kind: "summary" }, EN, mint);
-  expect(waiting).toContain('data-turns="1"');
-  // And the number is the length of what the list lifted out of the time
-  // order, rather than a second count beside it.
+  // **The waits themselves and not a count of them** (Codex, round 3): a
+  // second question in a request that was already waiting leaves a count
+  // where it was, and on a machine with no notification program the tab is
+  // the only way anybody hears. Each key is new exactly when its wait is.
+  expect(waiting).toContain('data-waits="[&quot;gate:i-0001:awaiting_human&quot;]"');
+  // And what the list lifted out of the time order is the same pass read as
+  // requests, rather than a second reading beside it.
   expect(waiting).toContain(EN.yourTurn);
 
   // The sentence rides with it, in the set this request resolved: a browser
@@ -816,4 +822,37 @@ test("the page carries the turn count and the sentence a tab rings with", async 
   const japanese = await operatorPage(ports, "t", { kind: "summary" }, chromeFor("ja"), mint);
   expect(japanese).toContain(chromeFor("ja").reachYourTurn);
   expect(japanese).not.toContain(EN.reachYourTurn);
+});
+
+test("a second wait in an already-waiting request changes what the tab compares", async () => {
+  // Codex, round 3, and the case a count cannot see: the request was already
+  // waiting and is still one row, so a number would sit still while something
+  // new arrived for the person. On a machine with no notification program the
+  // tab is the only way they hear at all.
+  const world = fresh();
+  await openRequest(world, "req-a", "have a look at this");
+  const asked = await world.record.recordThreadMessage({
+    messageId: "ask",
+    body: "which of these did you mean?",
+    authorKind: "drafter",
+    authorId: "the drafter",
+    inReplyTo: "req-a",
+    atMs: 600,
+    bases: [{ form: "message", messageId: "req-a" }],
+    asks: true,
+  });
+  expect(asked.kind).toBe("recorded");
+  const ports = portsOver(world, "ada", []);
+
+  const first = await operatorPage(ports, "t", { kind: "summary" }, EN, mint);
+  expect(first).toContain('data-waits="[&quot;ask:ask&quot;]"');
+
+  // A lap of the same request reaches its gate. One row on the screen still,
+  // and one more thing waiting on the person.
+  await reserve(world, "i-0001", "do the thing", null, "req-a");
+  await openGate(world, "i-0001");
+  const second = await operatorPage(ports, "t", { kind: "summary" }, EN, mint);
+  expect(second).toContain(
+    'data-waits="[&quot;ask:ask&quot;,&quot;gate:i-0001:awaiting_human&quot;]"',
+  );
 });

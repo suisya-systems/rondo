@@ -9,11 +9,7 @@
  */
 import { expect, test } from "vitest";
 import { threadsOf } from "../../../src/access/page-logic/threads.js";
-import {
-  lapsPastTheirCeiling,
-  requestsWaitingOnYou,
-  waitsOnYou,
-} from "../../../src/access/page-logic/waits.js";
+import { lapsPastTheirCeiling, waitsOnYou } from "../../../src/access/page-logic/waits.js";
 import type { IterationRecord, ThreadMessageDraft } from "../../../src/store/records.js";
 
 const message = (
@@ -41,15 +37,21 @@ const lap = (over: Partial<IterationRecord> & { id: string }): IterationRecord =
 const threads = (messages: readonly ThreadMessageDraft[]) =>
   threadsOf(messages, new Set(), new Map());
 
+/** The requests of what is waiting, which is how the list reads the same pass. */
+const rootsOf = (
+  conversation: ReturnType<typeof threads>,
+  laps: readonly IterationRecord[],
+): ReadonlySet<string> => new Set(waitsOnYou(conversation, laps).map((wait) => wait.root));
+
 test("a lap at its gate puts its request on the person", () => {
-  const waits = requestsWaitingOnYou(threads([message({ messageId: "req-a" })]), [
+  const waits = rootsOf(threads([message({ messageId: "req-a" })]), [
     lap({ id: "a", status: "awaiting_human", requestMessageId: "req-a" }),
   ]);
   expect([...waits]).toEqual(["req-a"]);
 });
 
 test("a lap in flight does not", () => {
-  const waits = requestsWaitingOnYou(threads([message({ messageId: "req-a" })]), [
+  const waits = rootsOf(threads([message({ messageId: "req-a" })]), [
     lap({ id: "a", status: "performing", requestMessageId: "req-a" }),
   ]);
   expect([...waits]).toEqual([]);
@@ -57,7 +59,7 @@ test("a lap in flight does not", () => {
 
 test("a lap that ended does not, whichever way it ended", () => {
   for (const status of ["closed", "abandoned"] as const) {
-    const waits = requestsWaitingOnYou(threads([message({ messageId: "req-a" })]), [
+    const waits = rootsOf(threads([message({ messageId: "req-a" })]), [
       lap({ id: "a", status, requestMessageId: "req-a" }),
     ]);
     expect([...waits], `a '${status}' lap is nobody's turn`).toEqual([]);
@@ -67,7 +69,7 @@ test("a lap that ended does not, whichever way it ended", () => {
 test("a question with no lap behind it still puts its request on the person", () => {
   // The other source, and the one a reading built only from laps would miss:
   // nothing has been started here at all.
-  const waits = requestsWaitingOnYou(
+  const waits = rootsOf(
     threads([
       message({ messageId: "req-a" }),
       message({ messageId: "ask", inReplyTo: "req-a", authorKind: "drafter", asks: true }),
@@ -78,7 +80,7 @@ test("a question with no lap behind it still puts its request on the person", ()
 });
 
 test("a question the person carried on is settled", () => {
-  const waits = requestsWaitingOnYou(
+  const waits = rootsOf(
     threads([
       message({ messageId: "req-a" }),
       message({ messageId: "ask", inReplyTo: "req-a", authorKind: "drafter", asks: true }),
@@ -90,7 +92,7 @@ test("a question the person carried on is settled", () => {
 });
 
 test("two questions in one thread are one request to go and look", () => {
-  const waits = requestsWaitingOnYou(
+  const waits = rootsOf(
     threads([
       message({ messageId: "req-a" }),
       message({ messageId: "one", inReplyTo: "req-a", authorKind: "drafter", asks: true }),
@@ -170,7 +172,7 @@ test("each wait is its own episode, so a request's later waits are not its first
   // **Three episodes and one row, off the one pass.** This is the pair that
   // has to hold together: the screen lifts one request out of the time order
   // while the host has three separate things it may have to say.
-  expect([...requestsWaitingOnYou(conversation, laps)]).toEqual(["req-a"]);
+  expect([...rootsOf(conversation, laps)]).toEqual(["req-a"]);
 });
 
 test("a lap's gate is keyed by the status it stopped at", () => {
