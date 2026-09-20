@@ -19246,6 +19246,13 @@ unknown. The cost is named in the residuals.
 What the step costs is on the Japanese side alone and was measured: the row grows 66px to 74px,
 which is 11.1 rows on a 900px screen rather than 12.4. Latin rows do not move.
 
+**A taller line is what caught the one fixed height that was a line count in disguise.** The
+metadata cap under `sm` was `max-h-15` -- sixty pixels, which is three lines only while a line is
+twenty. At 1.7 the third line was cut through the middle. It is `3lh` now, the element's own line
+counted three times, so it is three lines in either language and stays three if the scale moves
+again. The clamp measured for point 3's "two steps up" was this same box; the difference is that
+there it would have been broken in both languages at once, and here only in one.
+
 **6. Spacing is Tailwind's 4px scale, and arbitrary spacing values are not written.** This ratifies
 what the tree already does; it is stated so a new screen has something to be wrong against.
 

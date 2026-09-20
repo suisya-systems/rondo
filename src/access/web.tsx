@@ -1438,9 +1438,16 @@ function lapRow(
          * both were the same fact three times over.
          */}
         {/*
-         * Under `sm` a running or ended row's metadata stops at two lines: a
+         * Under `sm` a running or ended row's metadata stops at three lines: a
          * transcript path wrapped to four there, and the whole of it is in the
          * reading. A waiting row's is never cut -- it says what releases it.
+         *
+         * **The cap is three lines and not sixty pixels** (D-0082, Codex on
+         * rondo#314). It was `max-h-15`, which is three lines only while a line
+         * is twenty pixels: rule 5 gives Japanese a taller line and the same
+         * sixty pixels then cut the third one through the middle. `lh` is the
+         * element's own line, so the cap is three lines in either language and
+         * stays three if the scale moves again.
          */}
         {metaLine(
           <>
@@ -1455,7 +1462,7 @@ function lapRow(
                 ),
               )}
           </>,
-          question === "waiting" ? "" : "max-sm:max-h-15 max-sm:overflow-hidden",
+          question === "waiting" ? "" : "max-sm:max-h-[3lh] max-sm:overflow-hidden",
         )}
         {tail}
       </div>

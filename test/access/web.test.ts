@@ -6883,7 +6883,9 @@ test("a finished line still keeping its files is drawn at the waiting weight, an
   expect(html).toContain(EN.endedHeading(2));
   expect(keeping).toContain("the one still keeping its files");
   expect(keeping).toContain(EN.notLanded);
-  // A waiting row's metadata is never cut: it says what releases it.
-  expect(keeping).not.toContain("max-h-15");
-  expect(landed).toContain("max-h-15");
+  // A waiting row's metadata is never cut: it says what releases it. The cap on
+  // the rows that are cut is three lines, not a pixel height that only holds
+  // three while a line is 20px (D-0082 rule 5 gives Japanese a taller one).
+  expect(keeping).not.toContain("max-h-");
+  expect(landed).toContain("max-sm:max-h-[3lh]");
 });
