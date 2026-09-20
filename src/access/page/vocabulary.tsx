@@ -178,7 +178,7 @@ export function glyph(tone: Tone | "alert" | "message") {
 /** A plain note in the views' muted box. */
 export function note(line: string) {
   return (
-    <p class="note rounded-md border border-border bg-muted/60 px-3 py-2 text-[13px] leading-5">
+    <p class="note rounded-md border border-border bg-muted/60 px-3 py-2 text-body leading-5">
       {line}
     </p>
   );
@@ -209,7 +209,7 @@ export function backHead(wording: Chrome, heading: string) {
           </svg>
           <span class="sr-only">{wording.keyBack}</span>
         </a>
-        <h2 class="min-w-0 flex-1 truncate text-[15px] leading-6 font-semibold">{heading}</h2>
+        <h2 class="min-w-0 flex-1 truncate text-title leading-6 font-semibold">{heading}</h2>
       </div>
     </header>
   );
@@ -259,7 +259,7 @@ function stateHead(wording: Chrome, record: IterationRecord, tone: Tone, age: st
   return (
     <span class="head inline-flex items-center gap-2 whitespace-nowrap" title={raw}>
       <span
-        class={`inline-flex shrink-0 items-center rounded-full border px-2 py-px text-[11.5px] font-medium leading-4 whitespace-nowrap ${TONE[tone]}`}
+        class={`inline-flex shrink-0 items-center rounded-full border px-2 py-px text-meta font-medium leading-4 whitespace-nowrap ${TONE[tone]}`}
       >
         {wording.statePill(record.status, record.gateOutcome)}
       </span>
@@ -272,7 +272,7 @@ function stateHead(wording: Chrome, record: IterationRecord, tone: Tone, age: st
 export function pill(tone: Tone, text: string, extra = "") {
   return (
     <span
-      class={`inline-flex shrink-0 items-center rounded-full border px-2 py-px text-[11.5px] font-medium leading-4 whitespace-nowrap ${TONE[tone]} ${extra}`}
+      class={`inline-flex shrink-0 items-center rounded-full border px-2 py-px text-meta font-medium leading-4 whitespace-nowrap ${TONE[tone]} ${extra}`}
     >
       {text}
     </span>

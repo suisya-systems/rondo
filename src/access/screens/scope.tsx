@@ -38,7 +38,7 @@ import type { Chrome } from "../wording.js";
 
 /** A locator drawn as a chip: quiet, one line, the whole of it in `title`. */
 const CHIP =
-  "inline-flex max-w-full min-w-0 items-center gap-1 rounded-md border border-border bg-muted/60 px-1.5 py-0.5 text-[11px] leading-4 text-muted-foreground";
+  "inline-flex max-w-full min-w-0 items-center gap-1 rounded-md border border-border bg-muted/60 px-1.5 py-0.5 text-id leading-4 text-muted-foreground";
 
 /** {@link basisWord} as this renderer's own chip, for the screens still drawn here. */
 function basisChip(
@@ -129,7 +129,7 @@ function formulaSaid(wording: Chrome, formula: BudgetFormula): string {
  */
 function basisRow(wording: Chrome, basis: BudgetBasis) {
   return (
-    <p class="basis flex flex-wrap items-baseline gap-x-2 gap-y-1 text-[12px] leading-5 text-muted-foreground">
+    <p class="basis flex flex-wrap items-baseline gap-x-2 gap-y-1 text-meta leading-5 text-muted-foreground">
       <span>{basisSaid(wording, basis)}</span>
       {/*
        * **A lap is named and not linked.** It used to point at that lap's
@@ -139,7 +139,7 @@ function basisRow(wording: Chrome, basis: BudgetBasis) {
        */}
       {basis.kind === "rows"
         ? basis.iterationIds.map((iterationId) => (
-            <span class="font-mono text-[11.5px]">{wording.scopeBasisLap(iterationId)}</span>
+            <span class="font-mono text-id">{wording.scopeBasisLap(iterationId)}</span>
           ))
         : null}
     </p>
@@ -167,15 +167,15 @@ function budgetField(
   return (
     <div class="min-w-0 space-y-1">
       <label for={name} class="flex flex-col gap-1">
-        <span class="text-[12.5px] leading-5 font-medium text-muted-foreground">{label}</span>
+        <span class="text-meta leading-5 font-medium text-muted-foreground">{label}</span>
         {control}
       </label>
-      <p class="note text-[12px] leading-5 text-faint">
+      <p class="note text-meta leading-5 text-faint">
         {wording.scopeFormula(formulaSaid(wording, value.formula))}
       </p>
       {value.bases.length === 0 ? null : (
         <details class="group rounded-md border border-border">
-          <summary class="flex cursor-pointer list-none items-center gap-2 rounded-md px-3 py-1.5 text-[12px] leading-5 text-muted-foreground outline-none select-none hover:bg-accent focus-visible:bg-accent [&::-webkit-details-marker]:hidden">
+          <summary class="flex cursor-pointer list-none items-center gap-2 rounded-md px-3 py-1.5 text-meta leading-5 text-muted-foreground outline-none select-none hover:bg-accent focus-visible:bg-accent [&::-webkit-details-marker]:hidden">
             {chevron()}
             {wording.scopeBasesFold(value.bases.length)}
           </summary>
@@ -205,10 +205,10 @@ function budgetField(
 function sampleCaveat(wording: Chrome, bases: readonly BudgetBasis[]) {
   return (
     <section class={`rounded-md border px-3 py-2 ${TONE.wait} space-y-1`}>
-      <h3 class="text-[13px] leading-5 font-semibold">{wording.scopeSampleHeading}</h3>
+      <h3 class="text-body leading-5 font-semibold">{wording.scopeSampleHeading}</h3>
       {bases.map((basis) =>
         basis.kind === "rows" ? (
-          <p class="text-[12.5px] leading-5 text-foreground">
+          <p class="text-body leading-5 text-foreground">
             {wording.scopeSampleRows(
               basis.iterationIds.length,
               basis.level === "model_tier" ? basis.modelTier : null,
@@ -217,7 +217,7 @@ function sampleCaveat(wording: Chrome, bases: readonly BudgetBasis[]) {
             )}
           </p>
         ) : basis.kind === "cold_start" ? (
-          <p class="text-[12.5px] leading-5 text-foreground">
+          <p class="text-body leading-5 text-foreground">
             {wording.scopeSampleColdStart(money(basis.value))}
           </p>
         ) : null,
@@ -228,7 +228,7 @@ function sampleCaveat(wording: Chrome, bases: readonly BudgetBasis[]) {
 
 /** The class every budget box carries: one box, one number, no decoration. */
 const BOX =
-  "w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-[13px] leading-5 outline-none focus-visible:ring-2 focus-visible:ring-ring";
+  "w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-body leading-5 outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
 /**
  * The scope screen (rondo#233 S3, D-0066 rule 1): the form rondo drafted, or
@@ -258,7 +258,7 @@ export async function scopeView(
   const request = threads.byId.get(view.messageId);
   if (request === undefined) {
     return (
-      <p class="note rounded-lg border border-dashed border-border px-5 py-6 text-[13px]">
+      <p class="note rounded-lg border border-dashed border-border px-5 py-6 text-body">
         {wording.noSuchThread}
       </p>
     );
@@ -286,14 +286,14 @@ export async function scopeView(
           </svg>
           <span class="sr-only">{wording.backToThread}</span>
         </a>
-        <h2 class="min-w-0 flex-1 truncate text-[15px] leading-6 font-semibold">
+        <h2 class="min-w-0 flex-1 truncate text-title leading-6 font-semibold">
           {wording.scopeHeading}
         </h2>
       </div>
       {/* The words the scope is about, as they were written (D-0061 rule 2.2):
           a person drafting a budget is reading what they asked for. */}
       <p
-        class="request ml-9 text-[13.5px] leading-6 wrap-anywhere whitespace-pre-wrap"
+        class="request ml-9 text-title leading-6 wrap-anywhere whitespace-pre-wrap"
         title={request.body}
         lang=""
       >
@@ -377,8 +377,8 @@ function scopeIssues(wording: Chrome, threads: Threads, requestMessageId: string
     return null;
   }
   return (
-    <section class="scope-issues ml-9 space-y-1 text-[13px] leading-5">
-      <h3 class="text-[12.5px] font-medium text-muted-foreground">{wording.scopeIssuesHeading}</h3>
+    <section class="scope-issues ml-9 space-y-1 text-body leading-5">
+      <h3 class="text-meta font-medium text-muted-foreground">{wording.scopeIssuesHeading}</h3>
       <ul class="space-y-1">
         {[...reads.values()].map((read) => (
           <li data-issue={"read" in read ? "given" : "not-given"}>
@@ -474,7 +474,7 @@ function planChoice(
   }
   return (
     <section id="plans" class="space-y-1">
-      <p class="text-[13px] leading-6 font-medium">{wording.scopePlanAsk}</p>
+      <p class="text-body leading-6 font-medium">{wording.scopePlanAsk}</p>
       <ul class="space-y-1">
         {plans.map((plan) => {
           // **Two choices that read alike say when rondo came to hold each**
@@ -487,7 +487,7 @@ function planChoice(
             ? wording.scopePlanHeldAt(line, localTime(plan.heldAtMs).replace("T", " "))
             : line;
           return (
-            <li class="text-[12.5px] leading-5 wrap-anywhere">
+            <li class="text-body leading-5 wrap-anywhere">
               {plan.planDigest === chosen ? (
                 <span aria-current="true" class={`${PILL} font-sans ${TONE.ok}`}>
                   {said}
@@ -517,7 +517,7 @@ async function scopeForm(
   newScopeId: MintScopeId | null,
   nowMs: number,
 ): Promise<unknown> {
-  const lead = <p class="text-[13px] leading-6">{wording.scopeLead}</p>;
+  const lead = <p class="text-body leading-6">{wording.scopeLead}</p>;
   // The plan named in the address, wherever rondo holds it -- resolved first,
   // so one chosen earlier stays usable when the list of recent plans no
   // longer shows it -- else the first offered: pasted into this thread, else
@@ -577,7 +577,7 @@ async function scopeForm(
       {/* What this screen cannot check, said rather than left to be discovered
           (rondo#233 S3 screen review): there is no listing of a request's
           scopes to look in, so a blank draft is not evidence there is none. */}
-      <p class="note rounded-md border border-border bg-muted/60 px-3 py-2 text-[13px] leading-5">
+      <p class="note rounded-md border border-border bg-muted/60 px-3 py-2 text-body leading-5">
         {wording.scopeMaybeApproved}
       </p>
       {planChoice(wording, view, offered, chosen.planDigest)}
@@ -588,15 +588,15 @@ async function scopeForm(
             the one thing the card never said out loud. */}
         <h3 class={CARD_HEADING}>{wording.scopePlanHeading}</h3>
         {drafted.workspaces.map((workspace) => (
-          <p class="text-[12.5px] leading-5 text-muted-foreground">
+          <p class="text-body leading-5 text-muted-foreground">
             {wording.scopeWorkspace(workspace.repository, workspace.workspace_root)}
           </p>
         ))}
-        <p class="text-[12.5px] leading-5 font-medium text-muted-foreground">
+        <p class="text-meta leading-5 font-medium text-muted-foreground">
           {wording.scopeAgentTypeBounds}
         </p>
         {drafted.heldLines.map((line) => (
-          <p class="text-[12px] leading-5 wrap-anywhere text-muted-foreground">{line}</p>
+          <p class="text-meta leading-5 wrap-anywhere text-muted-foreground">{line}</p>
         ))}
         {/* **Folded, because there is nothing to do with a hash.** Three
             71-character digests as plain text were a third of the first
@@ -604,15 +604,15 @@ async function scopeForm(
             still on the screen, because what rondo records is what rondo
             shows. */}
         <details class="group rounded-md border border-border">
-          <summary class="flex cursor-pointer list-none items-center gap-2 rounded-md px-3 py-1.5 text-[12px] leading-5 text-muted-foreground outline-none select-none hover:bg-accent focus-visible:bg-accent [&::-webkit-details-marker]:hidden">
+          <summary class="flex cursor-pointer list-none items-center gap-2 rounded-md px-3 py-1.5 text-meta leading-5 text-muted-foreground outline-none select-none hover:bg-accent focus-visible:bg-accent [&::-webkit-details-marker]:hidden">
             {chevron()}
             {wording.scopeDigestsFold}
           </summary>
           <div class="space-y-1 border-t border-border px-3 py-2">
-            <p class="font-mono text-[11.5px] leading-5 wrap-anywhere text-faint">
+            <p class="font-mono text-id leading-5 wrap-anywhere text-faint">
               {wording.scopePlanDigest(drafted.planDigest)}
             </p>
-            <p class="font-mono text-[11.5px] leading-5 wrap-anywhere text-faint">
+            <p class="font-mono text-id leading-5 wrap-anywhere text-faint">
               {wording.scopeAgentType(drafted.agentTypeDigest)}
             </p>
           </div>
@@ -627,7 +627,7 @@ async function scopeForm(
        * writes. The residual -- choosing a number redraws the boxes from the
        * plan -- is said on the screen rather than discovered.
        */}
-      <p id="rounds" class="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-[13px] leading-6">
+      <p id="rounds" class="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-body leading-6">
         <span class="font-medium">{wording.scopeRoundsAsk}</span>
         {REVIEW_ROUND_CHOICES.map((n) =>
           n === (rounds ?? DEFAULT_REVIEW_ROUNDS) ? (
@@ -643,9 +643,7 @@ async function scopeForm(
             </a>
           ),
         )}
-        <span class="note w-full text-[12px] leading-5 text-faint">
-          {wording.scopeRoundsRedraw}
-        </span>
+        <span class="note w-full text-meta leading-5 text-faint">{wording.scopeRoundsRedraw}</span>
       </p>
       <form
         id="scope-form"
@@ -678,7 +676,7 @@ async function scopeForm(
         <section class={`${CARD} space-y-3`}>
           <h3 class={CARD_HEADING}>{wording.scopeDefaultsHeading}</h3>
           <label class="flex flex-col gap-1">
-            <span class="text-[12.5px] leading-5 font-medium text-muted-foreground">
+            <span class="text-meta leading-5 font-medium text-muted-foreground">
               {wording.scopeSeverityLabel}
             </span>
             {/* The word, with the enum value it records beside it: the value is
@@ -693,14 +691,14 @@ async function scopeForm(
             </select>
           </label>
           <fieldset class="space-y-1">
-            <legend class="text-[12.5px] leading-5 font-medium text-muted-foreground">
+            <legend class="text-meta leading-5 font-medium text-muted-foreground">
               {wording.scopeOutwardLabel}
             </legend>
             {SCOPE_OUTWARD_ACTS.map((act) => (
-              <label class="flex items-center gap-2 text-[13px] leading-6">
+              <label class="flex items-center gap-2 text-body leading-6">
                 <input type="checkbox" name="outward_acts" value={act} class="size-3.5" />
                 <span>{wording.scopeOutwardAct(act)}</span>
-                <span class="font-mono text-[12px] text-faint">{act}</span>
+                <span class="font-mono text-id text-faint">{act}</span>
               </label>
             ))}
           </fieldset>
@@ -710,13 +708,13 @@ async function scopeForm(
            * counts as irreversible by typo is exactly what the screen's own
            * axis forbids. Always empty, and said so rather than hidden.
            */}
-          <p class="text-[13px] leading-6">{wording.scopeIrreversibleNone}</p>
-          <p class="note text-[12px] leading-5 text-faint">{wording.scopeDefaultNote}</p>
+          <p class="text-body leading-6">{wording.scopeIrreversibleNone}</p>
+          <p class="note text-meta leading-5 text-faint">{wording.scopeDefaultNote}</p>
         </section>
         {/* D-0066's first gate answer, on the screen and not only in a terminal. */}
-        <p class="note text-[12.5px] leading-5 text-muted-foreground">{wording.scopeCostCaveat}</p>
+        <p class="note text-meta leading-5 text-muted-foreground">{wording.scopeCostCaveat}</p>
         <div class="sticky bottom-0 z-[1] -mx-4 flex flex-col gap-2 border-t border-border bg-card px-4 py-3 shadow-[0_-4px_10px_-8px_rgb(0_0_0/0.3)]">
-          <p class="note text-[12.5px] leading-5 text-muted-foreground">{wording.scopePressNote}</p>
+          <p class="note text-meta leading-5 text-muted-foreground">{wording.scopePressNote}</p>
           <button
             type="submit"
             data-row=""
@@ -865,7 +863,7 @@ async function raiseForm(
     return (
       <>
         {note(tip.kind === "forked" ? wording.raiseRefusedForked : wording.raiseNotTip)}
-        <a href={gate} class="text-[13px] text-link underline-offset-2 hover:underline">
+        <a href={gate} class="text-body text-link underline-offset-2 hover:underline">
           {wording.gateBack}
         </a>
       </>
@@ -893,22 +891,22 @@ async function raiseForm(
   );
   return (
     <>
-      <p class="text-[13px] leading-6">{wording.raiseLead}</p>
+      <p class="text-body leading-6">{wording.raiseLead}</p>
       <section class={`${CARD} space-y-1`}>
         <h3 class={CARD_HEADING}>{wording.raiseWasHeading}</h3>
-        <p class="text-[13px] leading-6">
+        <p class="text-body leading-6">
           {wording.raiseWas(
             was.laps,
             money(was.cost_usd),
             localTime(was.expires_at_ms).replace("T", " "),
           )}
         </p>
-        <p class="text-[13px] leading-6">
+        <p class="text-body leading-6">
           {wording.raiseUsed(spent.admissions, money(spent.readCostUsd), spent.unreadLaps)}
         </p>
       </section>
       {asks.map((ask) => (
-        <p class="note rounded-md border border-border bg-muted/60 px-3 py-2 text-[13px] leading-5">
+        <p class="note rounded-md border border-border bg-muted/60 px-3 py-2 text-body leading-5">
           {wording.raiseAskStands}{" "}
           <a
             href={viewHref({ kind: "thread", messageId: ask.messageId, to: null }, wording.lang)}
@@ -933,11 +931,11 @@ async function raiseForm(
         <input type="hidden" name="scope_id" value={newScopeId()} />
         {sampleCaveat(wording, budgets.cost_reserve_usd.bases)}
         {budgetBoxes(wording, budgets, false)}
-        <p class="note text-[12.5px] leading-5 text-muted-foreground">{wording.raiseFromHere}</p>
-        <p class="note text-[12.5px] leading-5 text-muted-foreground">{wording.raiseRetires}</p>
-        <p class="note text-[12.5px] leading-5 text-muted-foreground">{wording.scopeCostCaveat}</p>
+        <p class="note text-meta leading-5 text-muted-foreground">{wording.raiseFromHere}</p>
+        <p class="note text-meta leading-5 text-muted-foreground">{wording.raiseRetires}</p>
+        <p class="note text-meta leading-5 text-muted-foreground">{wording.scopeCostCaveat}</p>
         <div class="sticky bottom-0 z-[1] -mx-4 flex flex-col gap-2 border-t border-border bg-card px-4 py-3 shadow-[0_-4px_10px_-8px_rgb(0_0_0/0.3)]">
-          <p class="note text-[12.5px] leading-5 text-muted-foreground">{wording.raisePressNote}</p>
+          <p class="note text-meta leading-5 text-muted-foreground">{wording.raisePressNote}</p>
           <button
             type="submit"
             data-row=""
@@ -981,7 +979,7 @@ async function draftedForm(
   token: string | null,
   newScopeId: MintScopeId | null,
 ): Promise<unknown> {
-  const lead = <p class="text-[13px] leading-6">{wording.scopeDraftedLead}</p>;
+  const lead = <p class="text-body leading-6">{wording.scopeDraftedLead}</p>;
   const plans = await draftedPlansList(ports, wording, drafted);
   if (token === null || newScopeId === null) {
     return (
@@ -1001,7 +999,7 @@ async function draftedForm(
   const cite = (field: string, said: string) => {
     const by = drafted.narrowed.filter((n) => n.field === field);
     return by.length === 0 ? null : (
-      <p class="note flex flex-wrap items-center gap-1.5 text-[12px] leading-5 text-muted-foreground">
+      <p class="note flex flex-wrap items-center gap-1.5 text-meta leading-5 text-muted-foreground">
         <span>{said}</span>
         {by.map((n) =>
           // No thread is on this screen, so the chip leads to the thread view
@@ -1130,7 +1128,7 @@ async function draftedForm(
         <section class={`${CARD} space-y-3`}>
           <h3 class={CARD_HEADING}>{wording.scopeDefaultsHeading}</h3>
           <label class="flex flex-col gap-1">
-            <span class="text-[12.5px] leading-5 font-medium text-muted-foreground">
+            <span class="text-meta leading-5 font-medium text-muted-foreground">
               {wording.scopeSeverityLabel}
             </span>
             <select name="severity_threshold" class={BOX}>
@@ -1146,11 +1144,11 @@ async function draftedForm(
           </label>
           {cite("severity_threshold", wording.scopeNarrowedStricter)}
           <fieldset class="space-y-1">
-            <legend class="text-[12.5px] leading-5 font-medium text-muted-foreground">
+            <legend class="text-meta leading-5 font-medium text-muted-foreground">
               {wording.scopeOutwardLabel}
             </legend>
             {SCOPE_OUTWARD_ACTS.map((act) => (
-              <label class="flex items-center gap-2 text-[13px] leading-6">
+              <label class="flex items-center gap-2 text-body leading-6">
                 <input
                   type="checkbox"
                   name="outward_acts"
@@ -1159,20 +1157,20 @@ async function draftedForm(
                   {...(payload.outward_acts.includes(act) ? { checked: true } : {})}
                 />
                 <span>{wording.scopeOutwardAct(act)}</span>
-                <span class="font-mono text-[12px] text-faint">{act}</span>
+                <span class="font-mono text-id text-faint">{act}</span>
               </label>
             ))}
           </fieldset>
-          <p class="text-[13px] leading-6">
+          <p class="text-body leading-6">
             {payload.irreversible_additions.length === 0
               ? wording.scopeIrreversibleNone
               : payload.irreversible_additions.join(", ")}
           </p>
           {cite("irreversible_additions", wording.scopeNarrowedAdded)}
         </section>
-        <p class="note text-[12.5px] leading-5 text-muted-foreground">{wording.scopeCostCaveat}</p>
+        <p class="note text-meta leading-5 text-muted-foreground">{wording.scopeCostCaveat}</p>
         <div class="sticky bottom-0 z-[1] -mx-4 flex flex-col gap-2 border-t border-border bg-card px-4 py-3 shadow-[0_-4px_10px_-8px_rgb(0_0_0/0.3)]">
-          <p class="note text-[12.5px] leading-5 text-muted-foreground">
+          <p class="note text-meta leading-5 text-muted-foreground">
             {wording.scopeDraftedPressNote}
           </p>
           <button
@@ -1204,23 +1202,21 @@ async function draftedPlansList(
   for (const plan of drafted.plans) {
     cards.push(
       <li class="space-y-1.5 border-t border-border pt-3 first:border-t-0 first:pt-0">
-        <p class="text-[13px] leading-5 font-semibold">
-          {wording.scopeDraftedPlan(plan.index + 1)}
-        </p>
-        <p class="text-[12.5px] leading-5 text-muted-foreground wrap-anywhere">
+        <p class="text-body leading-5 font-semibold">{wording.scopeDraftedPlan(plan.index + 1)}</p>
+        <p class="text-body leading-5 text-muted-foreground wrap-anywhere">
           {plan.repository === null || plan.workspaceRoot === null
             ? wording.scopeDraftedTemplateGone
             : wording.scopeWorkspace(plan.repository, plan.workspaceRoot)}
         </p>
         {(await heldAgentTypeLines(wording, ports.record, [plan.split.agent_type_digest])).map(
           (line) => (
-            <p class="text-[12px] leading-5 wrap-anywhere text-muted-foreground">{line}</p>
+            <p class="text-meta leading-5 wrap-anywhere text-muted-foreground">{line}</p>
           ),
         )}
         {/* The drafter's words for the worker, as it wrote them: their
             language is the template's, not the page's (D-0055 rule 8). */}
         <p
-          class="rounded-md border border-border bg-muted/40 px-3 py-2 text-[13px] leading-6 wrap-anywhere whitespace-pre-wrap"
+          class="rounded-md border border-border bg-muted/40 px-3 py-2 text-body leading-6 wrap-anywhere whitespace-pre-wrap"
           lang=""
         >
           {plan.split.prompt}
@@ -1262,7 +1258,7 @@ async function planStart(
     plan.index,
   );
   const line = (text: string) => (
-    <p class="note rounded-md border border-border bg-muted/60 px-3 py-2 text-[12.5px] leading-5">
+    <p class="note rounded-md border border-border bg-muted/60 px-3 py-2 text-body leading-5">
       {text}
     </p>
   );
@@ -1309,7 +1305,7 @@ async function planStart(
         <div class="space-y-1.5">
           {line(finished ? wording.planHeldFinished(paths) : wording.planHeld(paths))}
           {holders.map(({ line: holder, request }) => (
-            <p class="flex flex-wrap items-baseline gap-x-2 text-[12.5px] leading-5">
+            <p class="flex flex-wrap items-baseline gap-x-2 text-body leading-5">
               <span class="text-muted-foreground">{wording.planHeldBy}</span>
               <span class="min-w-0 truncate" lang="">
                 {request === null ? "" : firstLine(request)}
@@ -1326,7 +1322,7 @@ async function planStart(
           ))}
           {finished ? (
             <>
-              <p class="text-[12px] leading-5 text-muted-foreground">{wording.planHeldTry}</p>
+              <p class="text-meta leading-5 text-muted-foreground">{wording.planHeldTry}</p>
               {startForm()}
             </>
           ) : null}
@@ -1335,7 +1331,7 @@ async function planStart(
     }
     case "started":
       return (
-        <p class="note flex flex-wrap items-center gap-x-2 text-[12.5px] leading-5">
+        <p class="note flex flex-wrap items-center gap-x-2 text-body leading-5">
           <span>{wording.planStarted}</span>
           <a
             href={`${viewHref({ kind: "summary" }, wording.lang)}#${encodeURIComponent(`lap-${ready.iterationId}`)}`}
@@ -1357,11 +1353,11 @@ async function planStart(
         <div class="space-y-1">
           {line(ready.kind === "undecidable" ? wording.planUndecidable : wording.planUnrunnable)}
           <details class="group">
-            <summary class="flex cursor-pointer list-none items-center gap-2 text-[12px] leading-5 text-muted-foreground select-none [&::-webkit-details-marker]:hidden">
+            <summary class="flex cursor-pointer list-none items-center gap-2 text-meta leading-5 text-muted-foreground select-none [&::-webkit-details-marker]:hidden">
               {chevron()}
               {wording.planUnrunnableWhy}
             </summary>
-            <p class="mt-1 text-[12px] leading-5 wrap-anywhere text-muted-foreground" lang="en">
+            <p class="mt-1 text-meta leading-5 wrap-anywhere text-muted-foreground" lang="en">
               {ready.reason}
             </p>
           </details>
@@ -1382,7 +1378,7 @@ async function scopeApproved(
   nowMs: number,
 ): Promise<unknown> {
   const notThis = (
-    <p class="note rounded-md border border-border bg-muted/60 px-3 py-2 text-[13px] leading-5">
+    <p class="note rounded-md border border-border bg-muted/60 px-3 py-2 text-body leading-5">
       {wording.scopeNotThisRequest}
     </p>
   );
@@ -1456,20 +1452,20 @@ async function scopeApproved(
         <h3 class={CARD_HEADING}>
           {wording.scopeApproved(wording.age(ago(decided.decision.decidedAtMs, nowMs)))}
         </h3>
-        <p class="font-mono text-[11.5px] leading-5 wrap-anywhere text-faint">
+        <p class="font-mono text-id leading-5 wrap-anywhere text-faint">
           {wording.scopeDigest(scope.scopeDigest)}
         </p>
       </section>
       <section class={`${CARD} space-y-2`}>
         {payload.workspaces.map((workspace) => (
-          <p class="text-[12.5px] leading-5 text-muted-foreground">
+          <p class="text-body leading-5 text-muted-foreground">
             {wording.scopeWorkspace(workspace.repository, workspace.workspace_root)}
           </p>
         ))}
         {held.map((line) => (
-          <p class="text-[12px] leading-5 wrap-anywhere text-muted-foreground">{line}</p>
+          <p class="text-meta leading-5 wrap-anywhere text-muted-foreground">{line}</p>
         ))}
-        <dl class="grid gap-x-4 gap-y-1 text-[13px] leading-6 sm:grid-cols-2">
+        <dl class="grid gap-x-4 gap-y-1 text-body leading-6 sm:grid-cols-2">
           {(
             [
               [wording.scopeLapsLabel, whole(payload.budgets.laps)],
@@ -1487,12 +1483,12 @@ async function scopeApproved(
             ] as const
           ).map(([label, value]) => (
             <div class="flex min-w-0 items-baseline justify-between gap-3 border-b border-border/60 py-0.5">
-              <dt class="text-[12.5px] text-muted-foreground">{label}</dt>
-              <dd class="font-mono text-[12.5px]">{value}</dd>
+              <dt class="text-meta text-muted-foreground">{label}</dt>
+              <dd class="font-mono text-meta">{value}</dd>
             </div>
           ))}
         </dl>
-        <p class="text-[13px] leading-6">
+        <p class="text-body leading-6">
           {payload.irreversible_additions.length === 0
             ? wording.scopeIrreversibleNone
             : payload.irreversible_additions.join(", ")}
@@ -1501,13 +1497,13 @@ async function scopeApproved(
       {/* Rule 1.4: approving a successor retires the predecessor's approval, so
           what that approval already spent is part of what was decided. */}
       {scope.supersedesScopeId === null ? null : (
-        <p class="note text-[12.5px] leading-5 text-muted-foreground">
+        <p class="note text-meta leading-5 text-muted-foreground">
           {await predecessorLine(ports, wording, scope)}
         </p>
       )}
-      <p class="note text-[12.5px] leading-5 text-muted-foreground">{wording.scopeCostCaveat}</p>
+      <p class="note text-meta leading-5 text-muted-foreground">{wording.scopeCostCaveat}</p>
       {retired ? (
-        <p class="note rounded-md border border-border bg-muted/60 px-3 py-2 text-[13px] leading-5">
+        <p class="note rounded-md border border-border bg-muted/60 px-3 py-2 text-body leading-5">
           {wording.scopeRetired}
         </p>
       ) : null}
@@ -1535,17 +1531,17 @@ async function scopeApproved(
           <input type="hidden" name="request" value={view.messageId} />
           <input type="hidden" name="scope_decision" value={decisionId} />
           <input type="hidden" name="plan" value={runsOn.planDigest} />
-          <p class="text-[12.5px] leading-5 wrap-anywhere text-muted-foreground">
+          <p class="text-body leading-5 wrap-anywhere text-muted-foreground">
             {`${wording.scopePlanAsk}: ${planLine(wording, runsOn)}`}
           </p>
           {/* Minted at render, as the scope id is, and for its reason: rondo
               names the lap (D-0023) and a double press is one lap. */}
           <input type="hidden" name="iteration" value={newIterationId()} />
-          <p class="note text-[12.5px] leading-5 text-muted-foreground">{wording.startNote}</p>
+          <p class="note text-meta leading-5 text-muted-foreground">{wording.startNote}</p>
           {/* **The one press that spends money, saying what the refusals
               already say** (rondo#244): the join is real, and a guarantee
               nobody is told about is paid for in suspicion. */}
-          <p class="note text-[12.5px] leading-5 text-muted-foreground">{wording.startAgainSafe}</p>
+          <p class="note text-meta leading-5 text-muted-foreground">{wording.startAgainSafe}</p>
           <button
             type="submit"
             data-row=""

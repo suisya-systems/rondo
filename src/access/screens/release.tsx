@@ -56,12 +56,12 @@ export async function releaseView(
   const tips = records.filter((record) => line.closedTips.includes(record.id));
   return framed(
     <>
-      <p class="text-[13px] leading-6">{wording.releaseLead}</p>
+      <p class="text-body leading-6">{wording.releaseLead}</p>
       <section id="release-work" class={`${CARD} space-y-2`}>
         <h3 class={CARD_HEADING}>{wording.releaseWorkHeading}</h3>
         {root === undefined ? null : (
           <p
-            class="text-[13.5px] leading-6 wrap-anywhere whitespace-pre-wrap"
+            class="text-title leading-6 wrap-anywhere whitespace-pre-wrap"
             lang={materialLanguage(root)}
           >
             {root.request}
@@ -70,7 +70,7 @@ export async function releaseView(
         {(tips.length === 0 ? records.slice(-1) : tips).map((record) => {
           const published = publishedReport(threads, record.id);
           return (
-            <p class="text-[13px] leading-5 text-muted-foreground">
+            <p class="text-body leading-5 text-muted-foreground">
               {endedHow(wording, record, nowMs)}
               {published === null || published.url === null ? null : (
                 <>
@@ -86,20 +86,20 @@ export async function releaseView(
       </section>
       <section id="release-files" class={`${CARD} space-y-1`}>
         <h3 class={CARD_HEADING}>{wording.releaseHoldsHeading}</h3>
-        <p class="font-mono text-[12.5px] leading-5 wrap-anywhere" lang="">
+        <p class="font-mono text-meta leading-5 wrap-anywhere" lang="">
           {wording.holds(line.paths)}
         </p>
       </section>
       <section id="release-why" class={`${CARD} space-y-1`}>
         <h3 class={CARD_HEADING}>{wording.releaseWhyHeading}</h3>
         {wording.releaseWhy.map((said) => (
-          <p class="text-[13px] leading-5">{said}</p>
+          <p class="text-body leading-5">{said}</p>
         ))}
       </section>
       <section id="release-effect" class={`${CARD} space-y-1`}>
         <h3 class={CARD_HEADING}>{wording.releaseEffectHeading}</h3>
         {wording.releaseEffect.map((said) => (
-          <p class="text-[13px] leading-5">{said}</p>
+          <p class="text-body leading-5">{said}</p>
         ))}
       </section>
       {/* No approver, no press: the page says at the top why (`publishView`'s rule). */}
