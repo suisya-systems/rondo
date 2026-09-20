@@ -57,7 +57,7 @@ function isChecks(drafter: string): boolean {
 function endedLine(
   wording: Chrome,
   record: IterationRecord,
-): { readonly said: string; readonly aside?: ThreadEvent["aside"] } {
+): { readonly said: string; readonly aside?: ThreadEvent["aside"]; readonly yours?: true } {
   if (record.status === "closed") {
     return { said: wording.evFinished };
   }
@@ -66,7 +66,11 @@ function endedLine(
   }
   switch (record.failureKind) {
     case "refusal":
-      return { said: wording.evRefused(record.reason) };
+      // The person's to act on, so the fold leaves it on the axis (D-0082
+      // rule 7): this is the only place that still knows the failure was a
+      // refusal rather than a stop, and the fold will not read the sentence
+      // back to find out (rondo#317).
+      return { said: wording.evRefused(record.reason), yours: true };
     case "defect":
       return {
         said: wording.evBroke,
@@ -155,9 +159,11 @@ export function lapEvents(
       at: at(record.updatedAtMs),
       atMs: record.updatedAtMs,
       tryAt,
-      // Spread rather than set, so a line with nothing shut under it is the
-      // same object it has always been.
+      // Spread rather than set, so a line with nothing shut under it -- and
+      // nothing for the person to do about it -- is the same object it has
+      // always been.
       ...(ended.aside === undefined ? {} : { aside: ended.aside }),
+      ...(ended.yours === undefined ? {} : { yours: ended.yours }),
     });
   }
   return events;
