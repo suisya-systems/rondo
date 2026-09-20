@@ -120,6 +120,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0080 | Starting rondo is one word with nothing in it to remember: setup writes the command that carries every host fact, the thing the person typed is what speaks when rondo cannot start, and starting runs no setup | accepted |
 | D-0081 | One store and one host, many repositories: a repository is named by the plan a request is drafted from, the forge slug stops being a host fact, and `D-0075` rule 1.1 is withdrawn | accepted |
 | D-0082 | The screen's visual system, written down: weight follows who is blocked rather than which group a row is in, one type scale a step larger than it was proposed, amber and red spent only on meaning, and blue returned to what a person can touch | accepted |
+| D-0083 | The screen's information architecture: the landing holds the person's two jobs and nothing else, a request is the only thing with a place of its own, and rondo's ledger becomes a line of counts behind one link | proposed |
 
 ---
 
@@ -19350,3 +19351,245 @@ slice 2 is a mechanical replacement that reviews badly beside a design change.
 - **A fold found to hold something a press depends on** after slice 3: rule 7 was already being
   broken while it was being written.
 - Any measurement in "What was measured" failing to reproduce at rondo `0e75d39`.
+
+## D-0083 — The screen's information architecture: the landing holds the person's two jobs and nothing else, a request is the only thing with a place of its own, and rondo's ledger becomes a line of counts behind one link
+
+**Status:** proposed (2026-09-20, rondo#319). Six points are put to rondo's human gate, each with a
+recommendation and a drawn alternative; they are in "What is put to the human gate". Supersedes
+nothing. Amends `D-0082` where the structure it was written over stops existing, which is named in
+rule 7. Refs `D-0054`, `D-0059`, `D-0061`, `D-0063`, `D-0064`, `D-0071`, `D-0073`, `D-0074`,
+`D-0076`, `D-0079`, `D-0081`, `D-0082`, rondo#314, rondo#318, rondo#319.
+
+**This entry decides and does not build.** Nothing in `src/` or `page/` changes with it. Rebuilding
+the screen is its own later change, and rondo#316, rondo#317 and rondo#305 sit after this decision
+and are untouched by it.
+
+**Numbering.** `D-0083` is the next number after `D-0082` on `main` at `b3f12c6`.
+
+**Why an entry is needed.** rondo#318 photographed the screen beside three tools a developer already
+has open and judged it on seven points of *look*: density, whitespace, borders, colour, type, corners
+and the shape of a row. `D-0082` answered that judgment and answered it well. The window then read
+the same screen and said something the seven points cannot reach:
+
+> It is a vertical pile. You cannot tell where anything is, or which part is the main thing. This is
+> a list of features, not a product.
+
+That is not a complaint about weight or hue. It says **the screen has no subject**. `D-0076` decided
+the reader is the person who asked for the work and judges it; `D-0064` decided that person has
+exactly two jobs, **writing a request** and **answering a point in dispute**, and that everything
+between the two is the organisation's. The landing is neither of those. It is rondo's own ledger --
+laps, grouped by the states a lap can be in -- and the two jobs are, respectively, behind a word in
+the chrome and behind a press on a row. Nothing on the landing is the person's work; everything on it
+is rondo's bookkeeping, sorted.
+
+`D-0082` could not have found this. It was written to record the visual system that existed, and it
+says so; it settles which row is loud, on a page whose rows are the wrong objects.
+
+### What was measured, and how
+
+On **2026-09-20**, at rondo `b3f12c6`, by serving the page over rondo#318's seeded store (five states
+on one screen: waiting, running, just finished, finished holding files, and one that could not be
+checked) and reading the bytes it returns, and by photographing it at 1280x900 -- one screen, light,
+no scrolling -- beside the same fold of each drawn alternative. The shots are listed in "What was
+drawn". Numbers drift; re-measure the claim, not the number.
+
+- **The landing has no place to write a request.** `<textarea>` occurs **0 times** in the landing's
+  HTML and **1 time** at `?requests=open`. The only route to it is the word *Requests* in the
+  chrome: 13px, in the breadcrumb, beside the host's name, carrying no affordance that separates it
+  from *rondo /*.
+- **The landing's visible text is 2,385 characters, and rondo's identifiers are 26 of its runs.**
+  `lap-preview-00NN` appears **18 times** as text a person reads, and `area-lap-preview-00NN/`
+  **8 times** -- one per row, in the phrase *Files it keeps to itself*. `D-0076` rule 1.3.2 says a
+  screen may never require the person to recognise a name rondo made; the landing prints 26.
+- **Nine of the landing's rows carry the same title.** The string `teach rondo to count` occurs
+  **9 times** in that 2,385 characters. A row's heading is the plan's name, which every lap under one
+  request shares, so the column a reader's eye lands on first distinguishes nothing. What would
+  distinguish the rows -- the state, the cost, the age, the identifier -- is below it, in 13px grey,
+  or in the right gutter.
+- **All four group headings name a state of rondo's ledger.** *waiting for your answer (2)*,
+  *finished, not yet on the default branch (1)*, *running now (1)*, *just finished (5)*. Three of the
+  four are rondo's bookkeeping; the fourth is the person's job, and it is first only because waiting
+  sorts first.
+- **The question the person is there to answer is not on the landing.** Both waiting rows say
+  *Review and answer* and nothing else: neither the point in dispute, nor the recommendation
+  `D-0064` rule 4.1 requires every one of them to carry. The person presses through to read what is
+  being asked.
+- **Money has no total.** *cost $N* appears **6 times**, once per ended row. Nothing on the screen
+  says what the day cost, and nothing says what is being spent right now.
+- **One row prints a host-configuration failure verbatim**, at full length, inside the running
+  group: `continuo is not usable here: RONDO_CONTINUO_CLI is not set. It must be the absolute path of
+  a built continuo dist/cli.js at revision fcf86eb...`, followed by a `/tmp` path. `D-0076` rule
+  1.3.5 -- never sent outside the page to finish or to understand -- is broken by a sentence that can
+  only be acted on in a terminal.
+- **The screen that does hold job 1 exists and is good.** `?requests=open` draws the composer
+  (*What do you want done? Write it the way you would say it*), then the requests, each titled in the
+  person's own words, with the message count and the age. It is one press away and nothing on the
+  landing points at it.
+
+### What was drawn
+
+Three shapes were drawn as HTML and photographed at the same width, fold and palette as the running
+screen, so the choice is made on pictures and not on prose. They are not repository files: the
+shots go to the gate with rondo#319's report, and the HTML they were drawn from was written and
+photographed on this task's branch and is cited here by name only.
+
+| | Shot | What the landing is | Where job 1 is | Where job 2 is | What happens to the ledger |
+|---|---|---|---|---|---|
+| **now** | `now-home-fold.png`, `now-home-full.png`, `now-requests.png` | rondo's laps, grouped by state | a word in the chrome | a press on a row | it *is* the landing |
+| **A, the desk** | `mock-a.png` | one box to write in, then only what needs you | the top of the landing, always | items under it, question and recommendation inline | one line of counts, one link |
+| **B, the request is the thing** | `mock-b.png` | every request, newest first, with a rail | a bar above the list | the top items, expanded in place | a tab of its own, plus the rail's counts |
+| **C, one at a time** | `mock-c.png`, `mock-c-empty.png` | one decision, whole screen, *1 of 2* | the composer when nothing waits; a button otherwise | the screen itself | one line of counts, one link |
+
+The three differ on one axis -- how much of rondo is on screen when the person is not being asked
+anything -- and each answers the six questions rondo#319 asks in a way that can be pointed at.
+
+### The decision
+
+The rules below are what this entry recommends. Points 1 to 6 of the gate can change rules 1, 2, 3,
+4, 5 and 6 respectively; the rest stand however the gate answers.
+
+**1. The landing holds the person's two jobs, in `D-0064`'s order, and nothing else at full weight.**
+Writing a request is first and is always there, whether or not anything is waiting: it is the job the
+person came to do, and a box that appears only when the screen is otherwise empty makes the product's
+subject conditional on rondo's state. Under it, and only under it, are the things that need the
+person. Nothing else on the landing is drawn at a weight that competes with these two.
+
+**2. A request is the only thing with a place of its own. A lap has none.** A request is what the
+person wrote, paid for and will judge, and it survives every lap under it; a lap is how the
+organisation chose to do the work, which `D-0064` rule 2 put on the organisation's side of the line.
+So: the landing lists requests, the second screen is a request, and everything rondo holds -- the
+laps, what changed, the checks, the model's reading, the pull request, the files a finished line
+still holds -- is reached from the request it belongs to. Nothing is reached by knowing an identifier,
+which is `D-0076` rule 1.3.2 made structural rather than said again per string.
+
+**3. A row's title is the person's own words.** The title of anything on the landing is the request
+text the person wrote, never the plan's name and never a lap's. The measured nine-identical-titles is
+not a wording defect; it is this rule missing.
+
+**4. What is visible without scrolling, and at what weight.** Four facts, in three weights:
+   1. **what needs you** -- as items, in full, at the page's loudest weight, each carrying its
+      question and its one recommendation (`D-0064` rule 4.1) and the press that answers it;
+   2. **what is running, what finished, what it cost today** -- as three counts on one line, in the
+      quiet weight. Running needs nobody (`D-0082` rule 3), and a finished thing needs nobody until
+      it holds something back;
+   3. **what rondo could not check** -- on the same line and in the failure ink, because it is the
+      only one of the four that can sit there silently and stay wrong. It is a count and a link, not
+      a printed reason (the measured `RONDO_CONTINUO_CLI` sentence is `D-0076`'s to rewrite, not this
+      entry's to re-site).
+
+**5. A question is answered where it is asked.** An item that needs the person carries, on the
+landing: what is being asked, the recommendation, the two or three presses that answer it, and the
+cost so far. The material behind it -- what changed, what the checks read, what the model read -- is
+one press away (`D-0076` rule 1.3.3), and pressing it is never a prerequisite for answering.
+
+**6. The list stops being the form for anything but what needs you.** rondo#319 asks whether a list
+is right at all. It is right for a small set of things that each need a decision, and wrong for a
+ledger of work nobody is waiting on. So the landing's only list is *what needs you*, and it is short
+by construction; everything rondo has done is a page of its own, reached by one link, and its form is
+that page's problem and not the landing's.
+
+**7. What this does to `D-0082`.** `D-0082` stands, with one part of it left without a subject:
+rule 1 (*a row carrying a press only a person can clear is drawn at the waiting weight, and the group
+it is in does not move*) was written for a landing whose groups are lap states. Under rule 1 above,
+those groups are not on the landing at all, so `D-0082` rule 1's mechanism has nothing to promote
+*into*. The **principle** it states -- weight follows who is blocked -- is what rules 1 and 4 here
+are built from and is kept. When the screen is rebuilt, `D-0082` takes a dated annotation saying its
+rule 1 was absorbed, not withdrawn; the type scale, the colour rules, the Japanese line and the folds
+are untouched by this entry.
+
+**8. What the words stay under.** Every string drawn in the mocks is written under `D-0076`'s test --
+a word is the person's when it names something they do, decide, pay for or receive -- and under
+`D-0079`: each wording set is composed whole in its language, so nothing here may be built as a
+translation of the English in the shots.
+
+### What is put to the human gate
+
+Each point names what is being chosen, what the alternatives cost, and one recommendation. The shot
+to look at is named for each.
+
+**1. Which shape is the landing.**
+   - (a) **A, the desk** (`mock-a.png`): a box to write in, then what needs you, then one line of
+     counts. The smallest change that answers the verdict; nothing is hidden behind a nav; the screen
+     is quiet when nothing is waiting but never empty.
+   - (b) **B, the request is the thing** (`mock-b.png`): every request as a card, newest first, with
+     a rail of counts and a three-way nav. The most product-shaped of the three, and the only one
+     that shows *how work is going* without a press. It brings back a scrolling list as the landing,
+     which is what the verdict was about, and it buys a nav for a screen a person is on alone.
+   - (c) **C, one at a time** (`mock-c.png`, `mock-c-empty.png`): one decision fills the screen,
+     *1 of 2*, next below. The strongest for job 2 and the clearest product statement. It cannot be
+     scanned, hides how much is waiting until the person is inside it, and demotes job 1 to a button.
+   - **Recommended: (a)**, and C is not lost by it: A's item, pressed, opens exactly C's screen. What
+     A gives up against B is the sense of work in flight, which rule 4.2's line of counts buys back
+     in one line instead of a column.
+
+**2. Does a lap stop having a place of its own (rule 2)?**
+   - (a) **Yes.** Only requests are listed and linked; a lap is reached from its request and never
+     addressed directly.
+   - (b) **No**: keep the lap addressable, as today, for the person who wants to see one piece of
+     work on its own.
+   - **Recommended: (a).** A lap is the organisation's unit, and `D-0064` put the organisation's
+     units on the organisation's side. Keeping (b) is what produced 26 identifiers on one screen.
+
+**3. Does the ledger leave the landing entirely (rules 4.2 and 6)?**
+   - (a) **Yes**: *running*, *just finished* and *finished but holding files* become three counts on
+     one line, and a page of their own behind one link.
+   - (b) **Partly**: keep *running* on the landing as rows, because it is the only group that is
+     changing while the person watches.
+   - **Recommended: (a).** Rule 4.2's ground is that running needs nobody; a person who wants to
+     watch presses the link. If (b) is chosen, the *finished but holding files* group must still go,
+     since a held file is a press and belongs under *what needs you* by rule 4.1.
+
+**4. Does the question come to the landing (rule 5)?**
+   - (a) **Yes**: the point in dispute, its recommendation and the answering presses are on the
+     landing item, as drawn in all three mocks.
+   - (b) **No**: the landing item stays a title and a press, as today, and the question lives one
+     screen in.
+   - **Recommended: (a).** It is the whole difference between a screen that asks the person something
+     and a screen that tells them they have been asked something. The cost is a taller item, which
+     rule 6 pays for by keeping the list short.
+
+**5. Is the composer always on the landing (rule 1)?**
+   - (a) **Always**, at the top, whatever else is on the screen (`mock-a.png`).
+   - (b) **Only when nothing is waiting** (`mock-c-empty.png`), and a button otherwise.
+   - **Recommended: (a).** Under (b) the product's subject is decided by rondo's state, and the
+     person who wants to ask for something while two things wait is asked to find a button first.
+
+**6. What "could not be checked" is, on the landing (rule 4.3).**
+   - (a) **A count in the failure ink on the counts line**, linking to a page that says what rondo
+     could not do in the person's words.
+   - (b) **An item under *what needs you***, at the loudest weight, since it is genuinely stuck.
+   - **Recommended: (a)** until the wording is rewritten under `D-0076`. Promoting it to (b) puts the
+     measured `RONDO_CONTINUO_CLI` sentence at the top of the screen, and what that sentence asks for
+     cannot be done on the page at all.
+
+### What this does not do
+
+- **It does not draw a screen rondo will ship.** The mocks are choices made visible; the strings in
+  them are placeholders under `D-0079` and are composed, not translated, when the screen is built.
+- **It does not decide the form of the page behind *everything rondo has done*.** Rule 6 moves the
+  ledger off the landing and says nothing about how it reads once it is there.
+- **It does not touch the gate's own screen** -- the checks, the model's reading, the approve box --
+  except to say which screen it is reached from. rondo#316 and rondo#317 are after this.
+- **It does not change any wording rule.** `D-0076` and `D-0079` decide the words; this entry decides
+  where things are.
+- **It does not settle what the screen does for a person who is not in front of it** (rondo#311),
+  which `D-0082` also left open.
+
+### What would falsify it
+
+- **The window looking at `mock-a.png` and saying the verdict still stands**: the problem was not
+  which objects the landing holds, and the entry has answered the wrong question.
+- **A person, on the rebuilt screen, still unable to say what rondo is for in one sentence** after
+  reading one fold: rule 1's claim that the two jobs are the subject is not carried by putting them
+  first.
+- **The *what needs you* list growing long enough to scroll** in ordinary use: rule 6's "short by
+  construction" is wrong, and the landing needs an order inside it or a form that is not a list.
+- **A person pressing through to the material before answering, most of the time**, on the rebuilt
+  screen: rule 5 is wrong that the question can be answered where it is asked, and what the item
+  carries is not enough.
+- **A person asking where a particular lap went** after rule 2 ships: the lap was load-bearing for
+  them and `D-0064` rule 2's line is in the wrong place for this screen.
+- **Money going unnoticed** with the day's cost on the counts line: rule 4.2 is wrong to put cost in
+  the quiet weight, and spending is a third job rather than a fact.
+- **Anything measured in "What was measured" failing to reproduce at rondo `b3f12c6`** over
+  rondo#318's seeded store.
