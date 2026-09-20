@@ -2860,10 +2860,11 @@ export interface AdvisoryRecord {
    */
   heldAgentTypeDigests(): Promise<readonly string[]>;
   /**
-   * Append one setup row -- **or refuse it** (D-0075 rule 2.2). Refused when
-   * its plan names another `repository` than a setup row this store already
-   * holds: one store's setup rows are one repository's, and setup for another
-   * repository is given its own root (rule 1.1).
+   * Append one setup row (D-0075 rule 2.2). A row whose plan names another
+   * `repository` than the rows already here is admitted: one store's setup
+   * rows are **this host's repositories'**, and setup run again under the same
+   * root is how a repository is added (D-0081 rule 5, withdrawing D-0075 rule
+   * 1.1). Refused only for a `setup_id` this store already holds.
    */
   recordSetupPlan(draft: SetupPlanDraft): Promise<RecordOutcome>;
   /** Every setup row, oldest first. A row whose bytes will not parse is skipped. */
@@ -4111,21 +4112,11 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
     async recordSetupPlan(draft: SetupPlanDraft): Promise<RecordOutcome> {
       const plan = canonicalJson(draft.plan);
       return immediateTransaction(connection, () => {
-        const repository = draft.plan["repository"];
-        const other = connection
-          .prepare(
-            "SELECT setup_id FROM setup_plan WHERE json_extract(plan, '$.repository') IS NOT ? LIMIT 1",
-          )
-          .get(typeof repository === "string" ? repository : null) as SqlRow | undefined;
-        if (other !== undefined) {
-          return {
-            kind: "refused",
-            reason:
-              `this store already holds setup '${String(other["setup_id"])}' for another ` +
-              `repository than '${String(repository)}': one store and host serve one ` +
-              "repository, and setup for another is given its own root (D-0075 rule 1.1)",
-          };
-        }
+        // A row for another repository than the rows already here is admitted:
+        // one store and one host serve several repositories, and which
+        // repository a row is for is the plan's own `repository` (D-0081 rule
+        // 5, withdrawing D-0075 rule 1.1). Nothing migrates -- the table is
+        // append-only and a store nobody adds a repository to is unchanged.
         if (
           connection.prepare("SELECT 1 FROM setup_plan WHERE setup_id = ?").get(draft.setupId) !==
           undefined

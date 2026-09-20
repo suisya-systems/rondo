@@ -67,11 +67,18 @@ the repository that reason is satisfied too, and this one as well.
 
 It builds rondo, clones and builds the pinned continuo, creates the control plane, creates a scratch
 target repository with a `main` branch to run laps against and a bare repository beside it as that
-target's `origin`, writes a complete `plan.json` and an `env.sh` holding section 2's three exports,
+target's `origin`, writes a complete `plan-PROJECT.json` and an `env.sh` holding section 2's three exports,
 records that plan into rondo's store with `rondo setup-plan` so the page offers it with nothing
 pasted (D-0075), writes the one word that starts rondo and the service it hands the host to
 (D-0080, below) -- and then prints the commands below with the real paths filled in. It **never runs a lap**:
 everything it does is free, and `start` is the line that is not.
+
+**A second repository is this script again, same `--root`, another `--target-repo`** (D-0081 rule
+6.2). One store and one host serve all of them, so nothing is installed twice: the plan and the
+catalog layer are named for the repository (`plan-PROJECT.json`, `catalog/PROJECT.toml`), the earlier
+repository's pair is left where it is, and the store keeps every plan it has been handed -- so the
+page offers each of them as a plan to run on, newest first. Two targets whose directory names agree
+derive one project name; the script refuses that rather than overwriting the first one's pair.
 
 **It cannot demonstrate `publish` to the end, and it says so.** The bare `origin` makes the push leg
 real -- it is an ordinary push to an ordinary repository. The pull-request leg is not reachable from
@@ -349,7 +356,7 @@ shim.
   "catalog_layers": [
     {
       "layer": "tracked",
-      "origin": "/abs/catalog/projects.toml",
+      "origin": "/abs/catalog/dogfood-target.toml",
       "base_dir": "/abs/catalog",
       "data": {
         "schema_version": 1,
