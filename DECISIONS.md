@@ -121,6 +121,8 @@ C-NN`, so the spaces can never be read as one.
 | D-0081 | One store and one host, many repositories: a repository is named by the plan a request is drafted from, the forge slug stops being a host fact, and `D-0075` rule 1.1 is withdrawn | accepted |
 | D-0082 | The screen's visual system, written down: weight follows who is blocked rather than which group a row is in, one type scale a step larger than it was proposed, amber and red spent only on meaning, and blue returned to what a person can touch | accepted |
 | D-0083 | The page's shape: the unit is a request's thread and the axis is time, the summary and the gate are one screen of three faces, empty is the ordinary state and its centre asks what the person wants, and the answering box inherits everything the gate had | accepted |
+| D-0084 | The page's foundation moves from Hono server JSX with htmx to React on Vite, and what held it up is rebuilt on the door rather than on the library: a press is a real form, and no RPC or meta-framework comes with it | accepted |
+| D-0085 | A lap without a request stops being a state rondo has: `D-0061` rule 4's nullable link is tightened to required, `start` takes the message it came from, and what makes that safe is the type rather than the column | accepted |
 
 ---
 
@@ -9917,6 +9919,29 @@ lap, plus one escape reproduced directly.
 > a rondo-owned key script for row focus, and a composer script keeping an unsent draft and opened
 > folds. **Rules 1, 2 and 7 stand**; rule 8 is `D-0064`'s to move. Nothing below is edited.
 
+> **Annotation (2026-09-20, from D-0084, on rondo#319).** Added after this entry was accepted, and
+> **not additive**: it removes a requirement rather than qualifying one.
+> **Rule 7's "with the script absent, blocked, or broken" is withdrawn as a requirement.** The page's
+> foundation is React rendered on the server (`D-0084`), and the faces hydrate: a browser with
+> scripting off gets the server's markup and no hydration, which is a page that reads but whose
+> folds and focus keys do not run. Keeping rule 7 whole would have meant either a second rendering
+> of every face or refusing hydration outright, and `D-0083`'s screen is what the gate chose.
+> - **What is kept, and is the part that was load-bearing**: *nothing the operator must read or
+>   press may be produced by script*. Every view is still a whole document rendered by the server,
+>   content and button included; the press is still a native `<form method="post">` (`D-0084` rule
+>   3(a)), so a browser that runs no script can still read the page and answer a gate.
+> - **What is lost**: the stronger claim that the page is *complete and correct* with no script --
+>   the folds, the key navigation and the in-place redraw are script's, and with it gone a person
+>   gets a static page that does not update rather than one that updates by meta refresh on every
+>   view. **Rule 1's per-view decision stands**, and the meta refresh is still what a scriptless
+>   browser runs on where a view has one; what changed is that it is no longer promised for the
+>   whole screen.
+> - **And the script-off screenshot leaves the capture set** that `D-0059` rule 1 required, by that
+>   entry's own annotation below. A set that photographs a state rondo no longer promises would be
+>   asking the gate to approve a claim nothing holds up.
+> - **Rules 2, 3, 4 and 6 stand as their annotations leave them**; rule 5 is `D-0059` R2's and
+>   `D-0084` rule 5 re-states it; rule 8 is `D-0064`'s. Nothing below is edited.
+
 > **Annotation (2026-09-13, from D-0057).** Added after this entry was accepted, and additive:
 > nothing below is removed or rewritten, and **nothing this entry decided is changed**. Rule 3's
 > supporting sentence -- *"an unattended redraw writes nothing because the code path a `GET` reaches
@@ -11821,6 +11846,13 @@ the gate function and the push were exercised directly, which is where the outco
 **Status:** accepted (2026-09-13, rondo's human gate). The gate also answered the question this
 entry put to it; the answer is recorded in section "What was put to the human gate, and its answer".
 
+> **Annotation (2026-09-20, from D-0085, on rondo#319).** Added after this entry was accepted, and
+> **not additive**. **Rule 4's column is no longer nullable in the types**: every lap names the
+> request it came from, `start` requires `--message-id`, and a lap with no request is not a state
+> rondo has. What the link *means* is unchanged -- one message, written once at reservation, many
+> laps to one request, refused when it names no message that opens a request -- and the column
+> itself stays nullable in `SCHEMA` for the reason `D-0085` rule 3 gives. Nothing below is edited.
+
 > **Annotation (2026-09-13, from D-0064).** Added after this entry was accepted, and additive. **Step
 > 5.4's split is decided inside a scope** (`D-0064` O1), bounded by the scope's request predicate and
 > lap budget, and not per request. **Rule 6's mid-lap question becomes a P3 with no home**, the first
@@ -13679,6 +13711,19 @@ reads. **With script off neither survives**: the draft is lost on a press, and a
 refresh reloads the whole page, so an opened fold closes within 5 s. That is a loss accepted under
 `D-0054` rule 7, which asks for a page that is complete and pressable without script, not one that
 keeps a reader's local state.
+
+> **Annotation (2026-09-20, from D-0084, on rondo#319).** Added after this entry was accepted.
+> **Q1 and rules 2 and 3 are superseded by `D-0084`**: the foundation is React 19 rendered on the
+> server and built by Vite, over the same Hono routes and middleware. R1 is re-stated there over a
+> second build tool; **R2, R3, R4, section 5, section 5a, rule 4 and rule 5 stand**, and `D-0084`
+> rule 3's two conditions -- a press is a real `<form method="post">`, and no RPC or
+> meta-framework -- exist to keep section 5's substitute true after the stack moved.
+>
+> **And rule 1's capture set loses one of its four.** *A light, dark, narrow and script-off
+> screenshot set* becomes **light, dark and narrow**: `D-0084` hydrates the faces, so script-off is
+> no longer a state rondo promises to be complete and correct in (`D-0054` rule 7's annotation, of
+> the same date). The other three are unchanged, and so is rule 1's requirement that a set be
+> attached for the human gate. Nothing below is edited.
 
 ### Decision
 
@@ -19550,6 +19595,7 @@ Held by the gate's answer (b) above. None of these blocks the building task's fi
 | Dark, and the keyboard (`j` / `k` / enter). Not drawn; the tokens are `D-0082`'s, so dark should follow mechanically, and that is unmeasured | the building task |
 | A request split into many plans: one thread, or a thread with branches | `D-0061` step 5.4's successor |
 | A phone | out of scope; its own entry |
+| **Seeing what spans several live laps at once.** The page had it as `rondo between` inside the reading fold; this entry replaces the fold's other two (the inbox by rule 4's centre, the material by rule 5's right face) and **does not place this one**. The building task dropped it from the screen rather than inventing a home for it; `rondo between` still prints it in the terminal, so this is a screen losing a view and not rondo losing a reading | the second slice, against rule 5's right face, or its own entry |
 
 ### What would falsify it
 
@@ -19567,3 +19613,223 @@ Held by the gate's answer (b) above. None of these blocks the building task's fi
 - **A person taking the empty lower third for a page that has not finished loading**: rule 4's calm
   reads as broken, and the gate's answer (a) returns.
 - Any capture in "What was measured" failing to reproduce.
+
+---
+
+## D-0084 — The page's foundation moves from Hono server JSX with htmx to React on Vite, and what held it up is rebuilt on the door rather than on the library: a press is a real form, and no RPC or meta-framework comes with it
+
+**Status:** accepted (2026-09-20, rondo's human gate, on rondo#319). **Supersedes `D-0059` Q1 and
+rules 2 and 3**, and re-states R1 and R2/R3 over the new stack; everything else `D-0059` decides --
+section 5's substitute, section 5a's table of which writes need a press, rule 4's language
+negotiation staying rondo's, rule 5's list of what is rondo's own code -- **is unchanged and is what
+this entry rests on**. Refs `D-0002`, `D-0007`, `D-0041`, `D-0054`, `D-0056`, `D-0059`, `D-0064`,
+`D-0083`, rondo#172, rondo#318, rondo#319.
+
+**Numbering.** `D-0084` is the next number after `D-0083` on `main` at `9ba2d56`, and no entry on
+`main` carries it.
+
+**Why an entry is needed.** `D-0059` chose its stack against a screen that `D-0083` has since
+replaced. That is not a reason on its own -- a stack is not a screen -- but the rebuilt screen is
+three faces with state inside them, and `D-0059` rule 2's server JSX plus htmx puts every piece of
+that state in the address or in a swapped fragment. The building task hit it at the first face and
+the choice had to be made before the second, so it is recorded here rather than left as a commit
+message.
+
+### What was measured, and how
+
+On **2026-09-19 and 2026-09-20**, at rondo `060f15c` and after, by building both stacks end to end in
+the tree and reading the output, and by driving a real Chromium at the running page.
+
+- **`Sec-Fetch-User`, against a real browser.** The header `D-0059` section 5 rests its whole
+  substitute on was re-measured under React's own idioms, because React's idiomatic write is not a
+  navigation:
+
+  | What made the request | `Sec-Fetch-User` |
+  |---|---|
+  | A person clicking a native `<button type="submit">` in a `<form method="post">` | `?1` |
+  | `form.submit()` from a script | absent |
+  | `button.click()` from a script | absent |
+  | `fetch("/", { method: "POST" })` from a script | absent |
+  | **React 19's `<form action={fn}>`**, a person clicking the button | **absent** |
+
+  The last row is the one that matters. React 19 submits an `action={fn}` form by `fetch`, so a page
+  rewritten into the idiom **still draws, still responds, and mints no press** -- and nothing on the
+  screen says so. It is not a browser difference and not a bug: the function form is a client
+  action, and a client action is a `fetch`.
+
+- **The trust base, twice.** A full React stack as the ecosystem ships it -- router, form library,
+  server framework -- measured **21 production dependencies against today's 8**. What this entry
+  actually adds is **`react` and `react-dom` and nothing else: 8 -> 10**, and the lockfile goes from
+  **261 to 316 packages** (the difference is build-time: Vite and its own tree). The gap between 21
+  and 10 is the whole of rule 3 below.
+
+- **Two JSX runtimes in one tree, confirmed in the emitted output.** `tsconfig.json` points the tree
+  at `hono/jsx`; a per-file `@jsxImportSource react` pragma overrides it, and `tsc` emits
+  `react/jsx-runtime` for those files and `hono/jsx/jsx-runtime` for the rest. Compiling is not
+  running, so `test/access/page/faces.test.ts` renders a face through `react-dom/server` and reads
+  the markup back.
+
+- **The build is reproducible, bundle included.** Two clean builds compared byte for byte, all
+  files equal. The check found nothing until `--outDir` was threaded through, because without it the
+  bundle was written outside the compared directory -- a reproducibility check that was passing
+  vacuously, which is the reason the number is stated with its method.
+
+- **The boundary holds per file.** `test/architecture/import-boundaries.test.ts` grants externals by
+  module name, so `react` is allowed to the faces and to nothing else; a server-JSX module importing
+  React fails there rather than in review.
+
+### The decision
+
+1. **The page's foundation is React 19 rendered on the server, built by Vite, over the same Hono
+   server.** `D-0059` rule 2's *server JSX compiled by rondo's existing `tsc`* and *htmx for the
+   in-place refresh* are superseded. Hono keeps the routes, the middleware, the security headers and
+   the body limits; htmx keeps the five-second poll until the faces carry their own updating, and is
+   not a second way to write (R2 below is re-stated, not withdrawn).
+
+2. **The reason is state inside a face, and it is the only one.** `D-0083`'s screen has a list, a
+   thread and a material face that are read and folded independently; server JSX plus a fragment
+   swap puts each of those in the address or in a `hx-select`, and the building task measured that
+   cost at the first face. **The screens still tie** -- this is not a claim that React draws better
+   -- and the stack's four measured reasons in `D-0059` rule 3 are answered one by one in rule 3
+   here rather than abandoned.
+
+3. **What `D-0059` rule 3 measured is preserved by two conditions, and the conditions are the
+   entry.** They are not advice; each is enforced by a test named beside it.
+
+   **(a) A write that needs a press is a real `<form method="post">` with a native submit button,
+   and never `fetch`, `hx-post`, `action={fn}`, `useActionState` or a form library.** This is what
+   keeps `D-0059` section 5's substitute true after the stack moved: the substitute is *only a
+   person's navigation can write*, and the measurement above says React's idiom does not navigate.
+   Held by `test/access/web-app.test.ts`'s route enumeration -- every `POST` route is in the press
+   table or the send table, and every press route refuses a `POST` carrying no gesture -- which was
+   checked by mutation: dropping the `?1` requirement from `mintPress` reddens it, and adding an
+   unclassified route reddens it.
+
+   **(b) No RPC and no meta-framework.** No `use server`, no server action, no framework that ships
+   a client which can call a server function by importing it. `D-0059` rule 3(b) is the measurement
+   this protects: *no client code can call the writer*, where the audited alternative shipped an RPC
+   client and wrote through it with no click. React and `react-dom` are libraries; the composition
+   root stays `createApp(ports)`, a function of rondo's ports, so the read routes are still handed a
+   type without the writer (`D-0059` rule 3(a), `D-0041` rule 4).
+
+4. **R1 is re-stated over a second build tool, with one loss added.** `D-0059` R1's substitute is
+   unchanged in kind -- the lockfile's integrity under `npm ci --ignore-scripts`, a reproducible
+   build, and a checked-in sha256 manifest of every served file, checked in CI after a clean build.
+   What changes: the manifest now covers a hashed bundle under `assets/`, so the served-file map
+   admits one level of directory (the file URL is still built from the manifest key and never from
+   the request), and the build-time trust base grows by Vite and esbuild beside `tsc` and Tailwind's
+   native binaries. **Reproducibility is still measured on one machine only.**
+
+5. **R2 and R3 stand as `D-0059` wrote them**, and this entry narrows neither. htmx is still
+   configured `selfRequestsOnly`, `allowEval: false`, `allowScriptTags: false`,
+   `historyEnabled: false`; the door is still what makes *the script cannot write* true; the client
+   bundle hydrates server-rendered islands and posts nothing.
+
+6. **`D-0059` rules 4 and 5 are untouched.** The language negotiation stays rondo's own code for the
+   reason rule 4 measured, and the list of what is rondo's own -- the payload a press records, the
+   write handlers, the catalogue, the claims, keyboard row navigation -- is unchanged by the
+   rendering library.
+
+### What was put to the human gate, and its answer
+
+- **Q1.** Move the page's foundation to React on Vite, on the reason in rule 2? *Recommended: yes.*
+- **Q2.** Accept the two conditions in rule 3 as binding -- a press is a real form, and no RPC or
+  meta-framework? *Recommended: yes.*
+- **Q3.** Accept the trust base at 8 -> 10 production dependencies and a lockfile at 261 -> 316?
+  *Recommended: yes.*
+
+**The gate's answer (2026-09-20): as recommended**, taken through the direction it chose for
+`D-0083`: the screen was chosen first and the foundation follows it.
+
+### Annotations and supersession this entry adds
+
+- **`D-0059`** gains a dated annotation: Q1 and rules 2 and 3 are superseded by this entry; R1 is
+  re-stated by rule 4; R2, R3, rule 4 and rule 5 stand; section 5 and section 5a are unchanged and
+  are what rule 3 here protects.
+
+### What this entry does not do
+
+- **It does not revisit the screen.** `D-0083` decides what is drawn; this decides what draws it.
+- **It does not adopt a router, a form library or a state library.** Rule 3(b) is the reason, and
+  the 21-against-10 measurement is the cost that would come with them.
+- **It does not withdraw htmx.** The poll is still htmx's, and a face that takes over its own
+  updating retires it a piece at a time.
+
+### What would falsify it
+
+- **A press minted from something that is not a person's navigation.** The whole substitute rests on
+  `Sec-Fetch-User: ?1`, and the table above says React's idiomatic write does not carry it; if a
+  route is ever reached with a write and no gesture, rule 3(a)'s test has been weakened or the
+  header's meaning has changed.
+- **A production dependency added for rendering that is not `react` or `react-dom`.** The reason for
+  the move was state inside a face, and 8 -> 10 is what that cost; a router or a form library
+  arriving means the reason was actually the ecosystem.
+- **CI emitting different bundle bytes than a developer's machine.** Reproducibility is measured on
+  one machine, and Vite's esbuild is per platform, exactly as R1 already says of Tailwind's.
+- **A face needing `use server` to do its job.** Rule 3(b) would then be costing more than it buys,
+  and the entry has to choose between it and the feature.
+
+---
+
+## D-0085 — A lap without a request stops being a state rondo has: `D-0061` rule 4's nullable link is tightened to required, `start` takes the message it came from, and what makes that safe is the type rather than the column
+
+**Status:** accepted (2026-09-20, rondo's human gate, on rondo#319, as part of `D-0083`'s building
+task). **Amends `D-0061` rule 4** (**not additive**: it removes a case the rule allowed). Refs
+`D-0032`, `D-0061`, `D-0069`, `D-0076`, `D-0083`, rondo#195, rondo#319.
+
+**Numbering.** `D-0085` is the next number after `D-0084`, which this task also writes.
+
+**Why an entry is needed.** `src/store/records.ts` documented the column's null as a *designed*
+meaning -- *"null is 'no request'"*, a lap `start` had been run without one, not a fact rondo failed
+to record. That is a claim about what rondo is, and `D-0083` makes it false: rule 2 puts a request's
+thread at the centre of the page, so a lap naming no request is a lap with nowhere to be drawn. A
+field whose documented meaning has been overtaken is worse than one that was never documented,
+because a reader trusts it.
+
+### The decision
+
+1. **Every lap names the request it came from.** `IterationRecord.requestMessageId` is `string`, not
+   `string | null`, and so are `ReserveInput`, `admit()`'s parameter and the `ScopeAct` variants.
+   The null branches under them are gone: `src/access/scope.ts`'s *the act names no request* verdict
+   and the `noThread` stop it produced, and `src/access/conductor.ts`'s silent skip of the report
+   that rule 5's third step owes.
+
+2. **`start` requires `--message-id`.** It was required only of a scoped start, for `D-0069` section
+   2's reason -- a refusal with no request has no thread to write its stop into. That reason still
+   holds and is joined by `D-0083` rule 2's, so the requirement is the whole command's and the
+   refusal says both.
+
+3. **What makes this safe is the type and the call paths, and explicitly not the column.**
+   `request_message_id` stays nullable in `SCHEMA`. A `NOT NULL` there would add no safety the type
+   does not already give, and it would make the migration that adds this column to a store written
+   before it impossible: `ALTER TABLE ADD COLUMN ... NOT NULL` has no value for the rows already
+   there. The constraint that matters is `reserve()`'s, which already refuses an id that opens no
+   request (`D-0061` rule 4), and that is unchanged.
+
+4. **A store written before the column does not read.** `rowToRecord` requires the column now, so a
+   row with a null in it is unreadable rather than a record whose request is `null`. This is a real
+   loss and it is chosen: the alternative is the type lying about rows it can be handed. The human
+   gate's premise is that such stores are discarded rather than migrated, and the migration is left
+   in place for the columns it was written for.
+
+5. **A successor's link is still its predecessor's, read under the write lock** (rondo#195). The
+   caller passes one because the type asks for one; `reserve()` derives the value from the row being
+   superseded whatever is passed, so a revision or a retry cannot be moved onto another request by
+   an argument.
+
+### What this entry does not do
+
+- **It does not change what the link means.** One message, the one that opened the request, written
+  once at reservation; many laps may name one request, and that many-to-one link is still what a
+  split is recorded as (`D-0061` rule 4).
+- **It does not make the column authoritative over the thread.** The page reads the thread and the
+  link separately, as it always did.
+
+### What would falsify it
+
+- **A lap that legitimately comes from no request.** `D-0061` rule 4 allowed one and nothing in the
+  tree needed it; if a caller appears -- a maintenance lap, a lap rondo starts for itself -- this
+  entry is what has to be reopened, and the honest form would be a second kind of row rather than a
+  null returning.
+- **A store people care about that will not read.** Rule 4 is chosen on the premise that old stores
+  are discarded; a person losing work to it is the measurement that says the premise was wrong.
