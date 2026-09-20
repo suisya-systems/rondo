@@ -429,6 +429,10 @@ test("a database created before D-0023 gains the columns and loses the old index
     "topic_branch",
     "workspace",
     "identifiers_spent",
+    // rondo#348: the kind a `failed` row now carries. Added by the same diff,
+    // so a database from before it opens rather than failing every read on a
+    // column the select list names.
+    "failure_kind",
     "occupying",
     "holds_identifiers",
   ]) {
@@ -447,6 +451,10 @@ test("a database created before D-0023 gains the columns and loses the old index
   // The pre-existing row survived and is read correctly under the new columns.
   const old = await store.read("old");
   expect(old.kind === "read" && old.record.identifiersSpent).toBe(0);
+  // And it says nothing about whose failure it was, which is the honest value:
+  // nothing on such a row recovers the kind, so there is no back-fill and the
+  // page draws it exactly as it drew it before the column (rondo#348).
+  expect(old.kind === "read" && old.record.failureKind).toBeNull();
 
   // And the point of the whole migration: the suspended row no longer blocks a
   // second admission, which the old index would have refused unconditionally.

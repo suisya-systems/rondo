@@ -46,6 +46,7 @@
  * meaning.
  */
 import type {
+  FailureKind,
   IterationFields,
   IterationRecord,
   IterationStatus,
@@ -904,7 +905,7 @@ async function classifyStep(
         record,
         lines,
         "failed",
-        { reason: outcome.reason },
+        { reason: outcome.reason, failureKind: "defect" },
         `Classification hit a rondo defect and nothing was sent to continuo: ${outcome.reason}`,
       );
     case "noAnswer":
@@ -1040,7 +1041,7 @@ async function admitStep(
         record,
         lines,
         "failed",
-        { reason: messageOf(started) },
+        { reason: messageOf(started), failureKind: failureKindOf(started) },
         `The continuo build could not be verified, and no run was admitted: ${messageOf(started)}`,
       );
     case "noAnswer":
@@ -1122,7 +1123,7 @@ async function admitStep(
         admitting.record,
         lines,
         "failed",
-        { reason: messageOf(admitted) },
+        { reason: messageOf(admitted), failureKind: failureKindOf(admitted) },
         `continuo did not admit the run: ${messageOf(admitted)}`,
       );
     case "noAnswer":
@@ -1419,7 +1420,11 @@ async function performStep(
         // The identity is written beside the reason, into the column that has
         // always been there for it, and only when continuo named one: a failed
         // lap whose session is unknown keeps a null rather than a guess.
-        { reason: messageOf(walked), ...(session === undefined ? {} : { sessionId: session }) },
+        {
+          reason: messageOf(walked),
+          failureKind: failureKindOf(walked),
+          ...(session === undefined ? {} : { sessionId: session }),
+        },
         `The lap did not complete: ${messageOf(walked)}`,
         // The lock is released on both spellings, because an answer means the
         // CLI is over -- D-0019 rule 11, unchanged. What the second spelling
@@ -1947,6 +1952,30 @@ function appendedReason(record: IterationRecord, addition: string): IterationFie
  */
 function refusedSessionId(outcome: EffectOutcome<unknown>): string | undefined {
   return outcome.kind === "refused" ? outcome.sessionId : undefined;
+}
+
+/**
+ * Whose failure this outcome is, for the row's own column (rondo#348).
+ *
+ * **The one place the distinction is turned into a value.** `EffectOutcome`
+ * has carried it since the ports were written and every `failed` transition
+ * threw it away at the write; this hands it to the row instead, so the page
+ * can choose between D-0076 rule 4.4's sentence and rule 4.5's without mining
+ * {@link messageOf}'s words for the answer.
+ *
+ * `answered` and `noAnswer` never reach a `failed` row -- the first is not a
+ * failure and the second stalls, holding the lock -- so they answer null,
+ * which is the column's own "rondo does not know".
+ */
+function failureKindOf(outcome: EffectOutcome<unknown>): FailureKind | null {
+  switch (outcome.kind) {
+    case "refused":
+      return "refusal";
+    case "defect":
+      return "defect";
+    default:
+      return null;
+  }
 }
 
 /** continuo's or cadenza's own words, whichever kind of non-answer this is. */

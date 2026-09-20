@@ -64,6 +64,21 @@ export interface PageWords extends DayWords {
   readonly evStarted: string;
   readonly evFinished: string;
   readonly evStopped: string;
+  /**
+   * The two ways an attempt can fail, which are not one line (rondo#348).
+   *
+   * **The row now says whose failure it was, so the page may stop saying both
+   * the same way.** `evRefused` is D-0076 rule 4.4: something outside said no,
+   * the person has a next move, and what was said is relayed as itself rather
+   * than reworded (`D-0015` rule 7). `evBroke` is rule 4.5: rondo's own fault,
+   * said in one sentence that asks nothing of the person, with rondo's reason
+   * shut in the fold `evBrokeReason` labels for whoever maintains rondo. A row
+   * that does not carry the kind -- every row written before the column -- goes
+   * on saying `evStopped`.
+   */
+  readonly evRefused: (said: string) => string;
+  readonly evBroke: string;
+  readonly evBrokeReason: string;
   readonly evChecksPassed: string;
   readonly evChecksFailed: string;
   readonly evReadingClear: string;
@@ -151,6 +166,9 @@ export const PAGE_EN: PageWords = Object.freeze({
   evStarted: "Work started.",
   evFinished: "Finished, and the work was taken in.",
   evStopped: "Stopped.",
+  evRefused: (said) => `Stopped, because this was turned down: ${said}`,
+  evBroke: "Stopped by a fault in rondo itself. Nothing you asked for was wrong.",
+  evBrokeReason: "What rondo recorded, for whoever looks after it",
   evChecksPassed: "The automatic checks all passed.",
   evChecksFailed: "The automatic checks did not pass.",
   evReadingClear: "Another model read the change and raised nothing.",
@@ -212,6 +230,9 @@ export const PAGE_JA: PageWords = Object.freeze({
   evStarted: "作業を始めました。",
   evFinished: "終わりました。変更は取り込み済みです。",
   evStopped: "取りやめました。",
+  evRefused: (said) => `断られたため、ここで止まりました: ${said}`,
+  evBroke: "rondo 自身の不具合で止まりました。依頼のしかたに問題があったわけではありません。",
+  evBrokeReason: "rondo が記録した内容（rondo を保守する人向け）",
   evChecksPassed: "自動チェックはすべて通りました。",
   evChecksFailed: "自動チェックが通りませんでした。",
   evReadingClear: "別の AI が変更を読み直し、指摘はありませんでした。",

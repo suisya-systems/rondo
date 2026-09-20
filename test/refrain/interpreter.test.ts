@@ -321,6 +321,7 @@ function blankRecord(id: string, status: IterationStatus): IterationRecord {
     lapTurns: null,
     lapDurationMs: null,
     reason: null,
+    failureKind: null,
     createdAtMs: NOW_MS,
     updatedAtMs: NOW_MS,
   };
@@ -989,6 +990,61 @@ test("a lap that answered a refusal ends at failed and releases the lock", async
   // An answer means the child is over, so the conductor is free again.
   const second = await admitOnce(h, "i-0002");
   expect(second.iterationId).toBe("i-0002");
+});
+
+test.each([
+  [
+    "classify",
+    { classify: { kind: "defect", reason: "the catalog and the lap disagree" } },
+    "defect",
+  ],
+  [
+    "startContinuo",
+    { startContinuo: { kind: "refused", message: "revision mismatch" } },
+    "refusal",
+  ],
+  [
+    "startContinuo",
+    { startContinuo: { kind: "defect", reason: "the pin file will not parse" } },
+    "defect",
+  ],
+  ["admitRun", { admitRun: { kind: "refused", message: "run id already admitted" } }, "refusal"],
+  ["admitRun", { admitRun: { kind: "defect", reason: "the answer named another run" } }, "defect"],
+  [
+    "performLap",
+    { performLap: { kind: "refused", message: "LeaseHeld: outbox-delivery" } },
+    "refusal",
+  ],
+  [
+    "performLap",
+    { performLap: { kind: "defect", reason: "the events file would not decode" } },
+    "defect",
+  ],
+] as const)(
+  "a %s that failed writes whose failure it was onto the row (rondo#348)",
+  async (_port, overrides, kind) => {
+    // **The distinction was held all the way here and dropped at the write.**
+    // `EffectOutcome` separates an upstream refusal from a defect of rondo's
+    // own, both ended at `failed`, and the row carried one `reason` column for
+    // the two -- so the page had nothing to choose its sentence by (D-0076
+    // rules 4.4 and 4.5). Every arm that reaches `failed` is here, because a
+    // column written on three of four sites is a column the page cannot trust.
+    const h = harness(overrides);
+    const report = await admitOnce(h);
+
+    expect(report.status).toBe("failed");
+    expect((await readRow(h.store, "i-0001"))?.failureKind).toBe(kind);
+  },
+);
+
+test("a stall writes no failure kind: nothing failed, and rondo knows nothing yet", async () => {
+  // `noAnswer` is the arm that is neither, and it does not reach a terminal
+  // status at all -- it keeps the single-flight lock. A kind written here
+  // would be rondo claiming to know whose failure a silence was.
+  const h = harness({ performLap: { kind: "noAnswer", reason: "the ceiling fired" } });
+  await admitOnce(h);
+
+  expect((await readRow(h.store, "i-0001"))?.failureKind).toBeNull();
 });
 
 test("a refusal that names its session writes the id to the row it failed", async () => {
