@@ -29,7 +29,7 @@
  * when there is nothing to do, so there is no number here to defend in both
  * directions -- which is what *past twenty* would have been.
  *
- * **Two things this must not do**, both of them rule 7's:
+ * **Three things this must not do**, all of them rule 7's:
  *
  * 1. **A decision rondo made without asking stays on the time axis at the
  *    moment it was made.** Rule 7 puts it there and rule 6 counts the same
@@ -45,6 +45,15 @@
  *    order, and a message -- a report, the question, the person's own words --
  *    is not an event line. A run is a maximal stretch of foldable lines with
  *    nothing else in it.
+ * 3. **A line the person has a next move on stays out of the fold**
+ *    (`ThreadEvent.yours`, rondo#317). Rule 7's line is that a fold holds
+ *    evidence and never the thing the press needs, and an upstream refusal is
+ *    the one event line that is not evidence: `D-0076` rule 4.4 relays what
+ *    was said because the person can act on it. A try whose checks failed
+ *    *and* which was then turned down would otherwise be summed up by the
+ *    checks -- {@link notable} prefers a failure over an ending -- leaving the
+ *    move readable only by opening the fold. The run is cut around it, as it
+ *    is around `decided`.
  *
  * **Nothing is thrown away.** A fold is a `<details>` (`page/events.tsx`): the
  * lines are in the page, shut, and opening one is the browser's own act with
@@ -80,9 +89,12 @@ export type FoldedItem = ThreadItem | FoldLine;
 /** Nothing is gained by drawing one line as one line. */
 const SHORTEST_FOLD = 2;
 
-/** Rule 7's one exception: a decision made without asking is never folded away. */
+/** Rule 7's exceptions: a decision made without asking, and a line the person must act on. */
 function foldable(item: FoldedItem): boolean {
-  return item.kind === "fold" || (item.kind === "event" && item.event.kind !== "decided");
+  return (
+    item.kind === "fold" ||
+    (item.kind === "event" && item.event.kind !== "decided" && item.event.yours !== true)
+  );
 }
 
 /** What identifies an item, for the last-looked line and for a stable redraw. */
@@ -104,9 +116,9 @@ function atOf(item: FoldedItem): string {
  * The stream cut into stretches: a run of foldable lines, or anything else
  * left as it is.
  *
- * A message, and a *rondo decided this without asking* line, both end a run:
- * the first because a fold never crosses what was said, the second because
- * rule 7 keeps it on the axis.
+ * A message, a *rondo decided this without asking* line, and a line the person
+ * has a next move on all end a run: the first because a fold never crosses
+ * what was said, the other two because rule 7 keeps them on the axis.
  */
 function runs(items: readonly FoldedItem[]): (readonly FoldedItem[])[] {
   const out: FoldedItem[][] = [];
@@ -155,6 +167,11 @@ function fold(
  * scanning seven of them is looking for, and the adopted mock-up's own line
  * says it the same way. With nothing failed, the last line of the run is the
  * ending, and the ending is what the try was.
+ *
+ * **This is why an upstream refusal is not in the run at all** ({@link
+ * foldable}): preferring the failure over the ending is right for a try that
+ * failed its checks and then stopped, and wrong for one the person still has a
+ * move on, so that line is kept out rather than argued about here.
  */
 function notable(inside: readonly FoldedItem[]): ThreadEvent | undefined {
   const events = inside.flatMap((item) => (item.kind === "event" ? [item.event] : []));

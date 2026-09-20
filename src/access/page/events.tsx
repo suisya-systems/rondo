@@ -46,6 +46,23 @@ export interface ThreadEvent {
    * attempt without parsing the words back (`page-logic/event-fold.ts`).
    */
   readonly tryAt?: number | null;
+  /**
+   * That this line is the person's to act on, and so is never folded away
+   * (D-0082 rule 7, rondo#317).
+   *
+   * **A fold holds evidence, never the thing the press needs**, and the one
+   * line on the thread that is not evidence is the one an upstream refusal is
+   * relayed into: rule 4.4 gives the person a next move, and a fold summary
+   * said by the checks that failed before it would leave that move readable
+   * only by opening the fold. The exception is the one `decided` already has
+   * (`page-logic/event-fold.ts`), for the same reason: it belongs on the time
+   * axis at the moment it happened.
+   *
+   * Set where the line is composed, because that is where the row still says
+   * which kind of failure it was (`page-logic/thread-events.ts`); the fold
+   * cannot tell a refusal from an ordinary stop by reading the sentence back.
+   */
+  readonly yours?: boolean;
   /** Where the evidence for this line is, when there is somewhere to go. */
   readonly href?: string;
   /** What that link says; required where `href` is given. */

@@ -12,6 +12,9 @@
  * which reads exactly as every row read before the column.
  */
 import { expect, test } from "vitest";
+import { lapEvents } from "../../../src/access/page-logic/thread-events.js";
+import { EN } from "../../../src/access/wording.js";
+import type { IterationRecord } from "../../../src/store/records.js";
 import { fresh, openRequest, operatorPage, portsOver, reserve } from "../page-world.js";
 
 /** One lap of a request, walked to terminal `failed` with the kind the caller names. */
@@ -82,4 +85,35 @@ test("a row that does not say which kind reads exactly as it read before", async
   expect(html).toContain("Stopped.");
   expect(html).not.toContain("ev-aside");
   expect(html).not.toContain("continuo answered a document that would not decode");
+});
+
+test("a refusal's line is marked the person's to act on, so the fold leaves it out", () => {
+  // The other half of rule 4.4, added by rondo#317: relaying what was said is
+  // worth nothing if a later try's fold can draw over it. `failureKind` is the
+  // only place this is still known -- the fold will not read the sentence back
+  // -- so the line carries it out (D-0082 rule 7, `page-logic/event-fold.ts`).
+  const lap = (failureKind: "refusal" | "defect" | null) =>
+    lapEvents(
+      EN,
+      {
+        id: "i-fail",
+        status: "failed",
+        reason: "that branch already has an open run",
+        failureKind,
+        createdAtMs: 1_000,
+        updatedAtMs: 3_000,
+      } as unknown as IterationRecord,
+      [],
+      (status) => status === "failed",
+      () => "1h",
+      1,
+    );
+  const ended = (failureKind: "refusal" | "defect" | null) =>
+    lap(failureKind).find((event) => event.id === "i-fail:ended");
+
+  expect(ended("refusal")?.yours).toBe(true);
+  // And nothing else is: a defect asks nothing of the person (rule 4.5), and a
+  // row with no kind is the line it has always been.
+  expect(ended("defect")?.yours).toBeUndefined();
+  expect(ended(null)?.yours).toBeUndefined();
 });

@@ -1,11 +1,12 @@
 /**
  * How event lines fold (DECISIONS.md D-0086, adding to D-0083 rule 7).
  *
- * **What these cases hold down is the two things a fold must not do**, both of
- * them rule 7's own: a decision rondo made without asking stays on the time
- * axis at the moment it was made, and a fold never swallows what was said.
- * The first is the one the adopted mock-up got wrong, so it is the one with
- * the most cases under it.
+ * **What these cases hold down is the three things a fold must not do**, all
+ * of them rule 7's own: a decision rondo made without asking stays on the time
+ * axis at the moment it was made, a fold never swallows what was said, and a
+ * line the person has a next move on is never folded away (rondo#317). The
+ * first is the one the adopted mock-up got wrong, so it is the one with the
+ * most cases under it.
  *
  * The rest is arithmetic about how many lines are left, which is what the two
  * folds were chosen on: twenty-one becomes nine for somebody who has never
@@ -174,6 +175,44 @@ test("neither fold ever swallows a decision rondo made without asking (rule 7)",
         item.kind === "fold" ? inside(item.inside) : item.kind === "event" ? [item.event.kind] : [],
       );
     expect(inside(foldsIn(out)), String(mark)).not.toContain("decided");
+  }
+});
+
+test("neither fold ever swallows a line the person has a next move on (rule 7)", () => {
+  // The shape rondo#317 names: a try whose checks failed *and* which was then
+  // turned down upstream. `notable` prefers the failure, so folding the run
+  // whole would sum the try up as its checks and leave what the person can act
+  // on -- D-0076 rule 4.4's relayed sentence -- readable only by opening it.
+  const refused: readonly ThreadItem[] = [
+    message("request"),
+    ...oneTry(1, "failed"),
+    {
+      kind: "event",
+      event: {
+        id: "lap-1:refused",
+        kind: "other",
+        said: "Try 1: Stopped, because this was turned down: that branch already has an open run",
+        at: "1h",
+        atMs: 1,
+        tryAt: 1,
+        yours: true,
+      },
+    },
+    ...oneTry(2, "passed"),
+  ];
+  for (const mark of [null, "lap-2:started"]) {
+    const out = drawn(refused, mark);
+    expect(
+      out.some((item) => item.kind === "event" && item.event.id === "lap-1:refused"),
+      String(mark),
+    ).toBe(true);
+    // And not inside one at any depth either: the fold around try 1 is cut in
+    // two around it rather than drawn over it.
+    const inside = (items: readonly FoldedItem[]): readonly string[] =>
+      items.flatMap((item) =>
+        item.kind === "fold" ? inside(item.inside) : item.kind === "event" ? [item.event.id] : [],
+      );
+    expect(inside(foldsIn(out)), String(mark)).not.toContain("lap-1:refused");
   }
 });
 
