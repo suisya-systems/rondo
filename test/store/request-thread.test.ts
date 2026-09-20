@@ -22,12 +22,16 @@ import { laneFor } from "../lane-claims.js";
 
 /**
  * The test marked with this drives `main` over an on-disk store rather than
- * `:memory:`, and is the only test in this file that Windows slows down: on
- * the two Windows cells of main's green run 35089584019 it measured 2.0 s to
- * 2.8 s against the 10 s default, and it has already timed out in CI at that
- * headroom (rondo#222). The number is the one #191 gave the real-git
- * review-material tests -- a floor under Windows process and filesystem
- * variance, not a budget.
+ * `:memory:`, and is the only test in this file that Windows slows down
+ * (rondo#222, #191). A floor under Windows process and filesystem variance,
+ * not a budget.
+ *
+ * **What this file costs per cell, healthy and when it goes wrong, is recorded
+ * in `docs/operations/ci-timing.md` with the run ids.** Read that before
+ * changing this number. This file is the one the measurement turns on: all
+ * eighteen of its tests together take 3.0-3.2 s on a healthy Windows cell, and
+ * the single test below has exceeded 60 s on an unhealthy one -- which is what
+ * ruled out raising the limit on rondo#332.
  */
 const WINDOWS_HEAVY_TIMEOUT_MS = 60_000;
 
