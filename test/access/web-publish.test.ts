@@ -89,6 +89,11 @@ test("the publish screen shows the dry-run and one press, and nothing has left t
   // The text a reviewer will read, on the screen that publishes it.
   expect(screen).toContain("feat: a retry budget");
   expect(screen).toContain("## What changed");
+  // **And drawn open, never behind a fold** (D-0082 rule 7, rondo#317): what
+  // this press sends is what the press needs, so it is read before the press
+  // and not one open away. It was a `<details>` the page always rendered shut.
+  expect(screen).toContain('<div id="publish-body">');
+  expect(screen).not.toContain('<details id="publish-body"');
   // One press, carrying the digest of exactly this dry-run and nothing typed.
   expect(screen).toContain('<form id="publish-form" method="post" action="/publish?lang=en"');
   expect(screen).toContain('<input type="hidden" name="iteration" value="i-0001"/>');
