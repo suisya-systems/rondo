@@ -68,6 +68,23 @@ const osExpression = (): string => {
   return collected.join(" ").replace(/\s+/g, " ").trim();
 };
 
+/**
+ * The lines of one job's block, by the job's key.
+ *
+ * A job's block runs from its key at two spaces of indentation to the next key
+ * at that same depth.
+ */
+const jobBlock = (key: string): string[] => {
+  const start = LINES.findIndex((line) => line === `  ${key}:`);
+  expect(start, `the workflow has no \`${key}\` job`).toBeGreaterThanOrEqual(0);
+  const block: string[] = [];
+  for (const line of LINES.slice(start + 1)) {
+    if (/^ {2}[\w-]+:/.test(line)) break;
+    block.push(line);
+  }
+  return block;
+};
+
 describe("the Windows cells run nightly and on demand, and not on a pull request (D-0087)", () => {
   test("the workflow still runs on pull requests, and now also on a schedule and on demand", () => {
     expect(CODE).toMatch(/^\s*pull_request:/m);
@@ -124,5 +141,32 @@ describe("the Windows cells run nightly and on demand, and not on a pull request
     // with nothing red to say so.
     const group = LINES.find((line) => /^\s*group:/.test(line)) ?? "";
     expect(group).toContain("github.event_name");
+  });
+});
+
+describe("a red nightly becomes an object in the repository (D-0087 rule 7)", () => {
+  test("the job fires on the scheduled and manual runs, and on no other", () => {
+    const block = jobBlock("nightly-red-is-an-issue").join(" ").replace(/\s+/g, " ");
+    expect(block).toContain("github.event_name == 'schedule'");
+    expect(block).toContain("github.event_name == 'workflow_dispatch'");
+    // `failure`, not `!= 'success'`: a cancelled or superseded run is not a red
+    // to file, and filing one is how a receptacle becomes noise nobody reads.
+    expect(block).toContain("needs.gate.result == 'failure'");
+  });
+
+  test("the token that can write issues belongs to that job and to nothing else", () => {
+    // The workflow-level grant is what every job inherits, and every other job
+    // here only reads. A write raised to the top of the file would hand it to
+    // the jobs that run arbitrary plants and mutations, which is the whole
+    // reason the grant is job-scoped.
+    const start = LINES.findIndex((line) => /^permissions:/.test(line));
+    expect(start).toBeGreaterThanOrEqual(0);
+    const top: string[] = [];
+    for (const line of LINES.slice(start + 1)) {
+      if (/^\S/.test(line)) break;
+      if (line.trim() !== "") top.push(line.trim());
+    }
+    expect(top).toEqual(["contents: read"]);
+    expect(jobBlock("nightly-red-is-an-issue")).toContain("      issues: write");
   });
 });

@@ -20078,6 +20078,14 @@ the returning reader without spending the record on the arriving one.
    that it appears only inside the trigger-conditional expression (restoring a literal
    `os: [ubuntu-latest, windows-latest]` puts the cell back in front of every merge). Both mistakes
    are edits to a file no compiler and no other test reads, and neither goes red on its own.
+7. **A red on the scheduled or manual path opens an issue, or comments on the one already open.**
+   `nightly-red-is-an-issue` runs when `gate` finished as `failure` and the trigger was `schedule`
+   or `workflow_dispatch`, and it holds `issues: write` as a **job-scoped** grant -- the workflow
+   level stays `contents: read`, so the jobs that plant violations and mutate source never inherit a
+   token that can write. It matches on the exact title of an open issue through the plain listing
+   rather than through `--search`, because the search index lags writes by minutes and a lagging
+   index is how a nightly files the same issue twice. `failure` and not "anything but success", so
+   a cancelled or superseded run files nothing.
 
 ### Why
 
@@ -20121,9 +20129,21 @@ is hypothetical:
   native binaries emitting different CSS bytes). `D-0002`'s `@types/node` hole keeps its pre-merge
   half, since the Node 22 cell is what catches it.
 
-**Who notices a red nightly, and how, is not settled inside this workflow.** The workflow's job is to
-produce the signal; routing it to a person is an operational decision and is recorded where operations
-are recorded rather than invented here.
+### Who notices a red nightly
+
+Taken by rondo's human gate on 2026-09-21, because the workflow can produce a signal and cannot
+decide who is owed it. **A red nightly becomes an object in the repository** (rule 7), which is not
+the same thing as a notification and is not pretending to be: rondo#311 is the entry-shaped version
+of *nothing reaches someone who is not on the page*, and when that layer exists the route moves to it
+and rule 7's job is what it replaces. Until then an issue is the cheapest thing that survives nobody
+looking: a mail from GitHub goes to whoever last edited the workflow file, which is an owner assigned
+by `git blame` rather than on purpose, and the Actions tab is the thing this entry has just made it
+possible to stop watching.
+
+The rejected alternative was to add nothing and rely on that mail. It was rejected for the reason
+above and for one more: **the falsifier this entry cares most about is "a nightly red that nobody
+acts on"**, and an issue is a thing whose age can be read. A mail nobody opened leaves no trace to
+measure.
 
 ### What would falsify it
 
