@@ -20,8 +20,9 @@
  * **Told once, and never told again** (`D-0068` section 2, rules 3.1 and 5).
  * Whether a thing has been sent is the `operator_attention` row and its
  * partial unique index, the table rondo already dedupes presentations with: no
- * table is added, nothing is held in memory, and a host that restarts does not
- * start the morning by repeating itself. A reminder is an attention policy the
+ * table is added, nothing is held in memory, a host that restarts does not
+ * start the morning by repeating itself, and two hosts over one store send one
+ * line between them rather than one each. A reminder is an attention policy the
  * operator writes (`D-0033` rule 7), and rondo does not write one for them.
  *
  * **What is worth a person's attention, and what is not.** Two things: a
@@ -75,7 +76,7 @@ export type NotifyOutcome =
 /** Everything the tick reads, and the one thing it does. */
 export interface ReachPorts {
   readonly store: Pick<IterationStore, "readLive">;
-  readonly record: Pick<AdvisoryRecord, "threadMessages" | "presentedSubjects" | "recordAttention">;
+  readonly record: Pick<AdvisoryRecord, "threadMessages" | "claimAttention">;
   readonly now: () => number;
   /**
    * The person's own words, as the page resolved them for this host
@@ -151,14 +152,18 @@ export async function reachThePerson(ports: ReachPorts): Promise<void> {
   const turns = waitsOnYou(threads, laps).map((wait) => wait.episode);
   const late = lapsPastTheirCeiling(laps, atMs).map((episode) => `late:${episode}`);
 
-  const told = await ports.record.presentedSubjects(REACH_SUBJECT);
-  const newTurns = turns.filter((subject) => !told.has(subject));
-  const newLate = late.filter((subject) => !told.has(subject));
-  if (newTurns.length === 0 && newLate.length === 0) {
-    return;
-  }
-  for (const subject of [...newTurns, ...newLate]) {
-    const claimed = await ports.record.recordAttention({
+  // **The claim is the test, and there is no reading before it** (Codex,
+  // round 2). Asking whether an episode has been sent and then writing that it
+  // has would be two statements with a window between them, and two hosts over
+  // one store -- which two `rondo web` processes on two ports are -- would
+  // both find it unsent and both send. `claimAttention` is one statement, and
+  // what it answers is *were you the writer who inserted*: the unique index
+  // deduplicates rows, and being the one whose insert landed is what
+  // deduplicates deliveries.
+  let claimedTurn = false;
+  let claimedLate = false;
+  for (const subject of [...turns, ...late]) {
+    const claim = await ports.record.claimAttention({
       atMs,
       subjectKind: REACH_SUBJECT,
       subjectId: subject,
@@ -169,19 +174,29 @@ export async function reachThePerson(ports: ReachPorts): Promise<void> {
       // of the things this surface is about.
       ruleName: null,
     });
-    if (claimed.kind !== "recorded") {
+    if (claim.kind === "defect") {
       // A claim that did not land would be sent again next minute, so the
       // whole tick stops here: one unsent notification beats an unbounded
       // repeat of one that cannot be written down.
-      ports.say(`rondo could not record that it reached you about '${subject}': ${claimed.reason}`);
+      ports.say(`rondo could not record that it reached you about '${subject}': ${claim.reason}`);
       return;
     }
+    if (claim.kind === "claimed") {
+      if (turns.includes(subject)) {
+        claimedTurn = true;
+      } else {
+        claimedLate = true;
+      }
+    }
+  }
+  if (!claimedTurn && !claimedLate) {
+    return;
   }
   // **Whichever of the two is more the person's to act on.** A turn is
   // theirs to take; a lap past its ceiling is rondo saying it does not know.
   // Both in one minute is still one line, and the one that can be acted on is
   // the one worth carrying.
-  const sentence = newTurns.length > 0 ? ports.words.reachYourTurn : ports.words.reachLate;
+  const sentence = claimedTurn ? ports.words.reachYourTurn : ports.words.reachLate;
   const outcome = await ports.notify(sentence);
   if (outcome.kind === "failed") {
     ports.say(

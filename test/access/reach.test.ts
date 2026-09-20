@@ -323,3 +323,47 @@ test("a request's second turn is sent, and is not taken for a repeat of its firs
   expect(after.sent).toEqual([EN.reachYourTurn]);
   expect(claimed(world).toSorted()).toEqual(["ask:ask", "gate:a:awaiting_human"]);
 });
+
+test("two hosts over one store send one line between them, not one each", async () => {
+  // Codex, round 2. Nothing stops two `rondo web` processes from opening the
+  // same store on two ports, and a tick that asked *has this been sent* and
+  // then wrote *it has* would leave a window in which both answered no. The
+  // claim is one statement, and the writer whose insert landed is the one that
+  // sends: the unique index deduplicates rows, and this deduplicates
+  // deliveries.
+  const world = fresh();
+  await reserve(world, "a", "do the thing");
+  await openGate(world, "a");
+
+  const one = tickOver(world);
+  const two = tickOver(world);
+  await Promise.all([one.run(), two.run()]);
+
+  expect([...one.sent, ...two.sent]).toEqual([EN.reachYourTurn]);
+  expect(claimed(world)).toEqual(["gate:a:awaiting_human"]);
+});
+
+test("a store that will not take the claim is said, and nothing is sent on it", async () => {
+  const world = fresh();
+  await reserve(world, "a", "do the thing");
+  await openGate(world, "a");
+  const tick = tickOver(world);
+  const said: string[] = [];
+  const sent: string[] = [];
+  await reachThePerson({
+    ...tick.ports,
+    record: {
+      ...world.record,
+      claimAttention: async () => ({ kind: "defect", reason: "the database is locked" }),
+    },
+    notify: async (sentence) => {
+      sent.push(sentence);
+      return { kind: "reached" };
+    },
+    say: (line) => {
+      said.push(line);
+    },
+  });
+  expect(sent).toEqual([]);
+  expect(said.join("\n")).toContain("the database is locked");
+});

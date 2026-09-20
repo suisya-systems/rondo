@@ -1275,6 +1275,21 @@ export interface OperatorAttention {
 }
 
 /**
+ * What one `presented` write did (D-0036 rule 1), for a caller that acts on
+ * the first presentation of a subject and must not act twice.
+ *
+ * **`alreadyCounted` is a success and not a refusal.** The invariant -- every
+ * presented subject has a row -- holds either way; what differs is whether
+ * *this* writer is the one who may now do whatever being first entitles it to
+ * do. rondo#311's tick is the caller this exists for, and what it does with
+ * `claimed` is put one line in front of a person.
+ */
+export type AttentionClaim =
+  | { readonly kind: "claimed" }
+  | { readonly kind: "alreadyCounted" }
+  | { readonly kind: "defect"; readonly reason: string };
+
+/**
  * An approval that was never spent (D-0022 rule 19's acceptance criterion).
  *
  * Under D-0022 rule 17 an approved plan that is never admitted leaves no trace
