@@ -3884,6 +3884,15 @@ waiting, not the working.
     > rule's "an operator's plan file is deliberately not given the same latitude" true now that
     > the ladder runs at both entry points.
 
+**7. What folds first, and what a fold may cost (rule 2.4).**
+   - (a) **The outer band folds first and lands under the central band, whole.** The two jobs never
+     move; a zone is re-placed and never truncated; what W3's material costs on the way down is
+     accepted as the price of what it buys at full width.
+   - (b) **Let each screen fold as suits it**, and accept that a narrow window may reorder the page.
+   - **Recommended: (a).** It is what makes the answer to point 1 mean the same thing on a laptop as
+     on the display it was chosen on. If the window would rather the material never go below a
+     scroll, that is an argument against W3 at point 1 and not against this rule.
+
 ### What this does not do
 
 - It does not make two laps run at once. `maxOccupying` stays at one until `continuo D-1104`
@@ -19354,7 +19363,7 @@ slice 2 is a mechanical replacement that reviews badly beside a design change.
 
 ## D-0083 — The screen's information architecture, measured at 2560x1440: the landing holds the person's two jobs, the width is spent on zones rather than on line length, a request is the only thing with a place of its own, and rondo's ledger stops being the landing
 
-**Status:** proposed (2026-09-20, rondo#319). Six points are put to rondo's human gate, each with a
+**Status:** proposed (2026-09-20, rondo#319). Seven points are put to rondo's human gate, each with a
 recommendation and a drawn alternative; they are in "What is put to the human gate". Supersedes
 nothing. Amends `D-0082` where the structure it was written over stops existing, which is named in
 rule 8. Refs `D-0054`, `D-0059`, `D-0061`, `D-0063`, `D-0064`, `D-0071`, `D-0073`, `D-0074`,
@@ -19379,9 +19388,12 @@ The intermediate width **1920x1200** is shot as well (`now-1920.png`), because a
 filling a WQHD display usually lands near it. Nothing below is decided on the 1920 shot; it exists so
 the next reader can see where the claims start to bend.
 
-**Nothing here is a claim about small screens.** `D-0082`'s `max-sm` clamps and the narrow-width
-observation in rondo#318 are untouched, and a layout that answers this entry still has to survive a
-phone. What the width buys is decided here; what a narrow screen drops is not.
+**What a narrower window does is decided here too, and measured.** Every shape below was drawn with
+its folding rules and shot at three widths, because a zone layout that has not been folded is half a
+design: the question *which zone goes first when the width runs out* is the same question as *which
+zone is the subject*, asked again. `D-0082`'s `max-sm` clamps and rondo#318's narrow-width
+observation are untouched, and a phone is still out of scope -- the three widths shot are
+**2560, 1600 and 1280**, which is a filled WQHD display, a half-width window on one, and a laptop.
 
 **Why an entry is needed.** rondo#318 photographed the screen beside three tools a developer already
 has open and judged it on seven points of *look*. `D-0082` answered that judgment and answered it
@@ -19482,10 +19494,29 @@ drawing of a landing with nothing waiting, which no WQHD shape changes.
 | **W2, the board** | `mock-w2.png` | 3: needs you \| working and stuck \| done today | the whole state of the work in one screen, no scroll, no press | three headings compete; the loudest column is loud only by size and position |
 | **W3, the stage** | `mock-w3.png` | 3: queue rail (320px) \| the decision \| its material | **the material sits beside the question instead of behind a press** -- what changed, what the tests said, what the reviewer read, all readable while deciding | the composer drops to a button in the rail, and the landing is one item rather than a list |
 
+### What each shape does when the width runs out
+
+Each mock carries its own folding rules and was shot at **2560, 1600 and 1280**
+(`mock-w1-2560.png` and its `-1600` / `-1280` siblings, and the same for `w2` and `w3`). The
+breakpoints drawn are 1700 and 1100, so 1280 sits in the middle band.
+
+| | 2560 | 1600 | 1280 | Is the subject still first? | What is lost on the way down |
+|---|---|---|---|---|---|
+| **W1** | 2 zones: desk \| room | 1 column: desk, then the room's four panels 2-up | same, tighter | **yes, at every width** | nothing but adjacency; the room moves under the desk and stays whole |
+| **W2** | 3 zones: needs you \| working and stuck \| done today | 2 columns; *needs you* keeps a column of its own across both rows | 1 column, *needs you* first | yes | **the premise.** One column is the vertical pile again -- the thing the board existed to avoid |
+| **W3** | 3 zones: rail \| decision \| material | rail \| decision, with the material moved under the decision, 2-up | same | yes | **the thing the width bought.** The material goes back below a scroll, which is where it was at 1280 before this entry |
+
+**Each shape loses exactly its own selling point on the way down, except W1.** W2's is that every
+state is visible at once, and one column ends that; W3's is that the material sits beside the
+question, and the first fold puts it back underneath. W1's is that the person's two jobs are the top
+of the screen, and no width changes that -- it is the only one of the three whose claim is
+fold-invariant. This is evidence for rule 2.4 and it is why the recommendation at point 1 is what it
+is.
+
 ### The decision
 
-The rules below are what this entry recommends. Points 1 to 6 of the gate can change rules 1, 2, 3,
-5, 6 and 7 respectively; the rest stand however the gate answers.
+The rules below are what this entry recommends. Gate points 1 to 7 can change rules 1, 2.1-2.3, 3,
+5, 6, 7 and 2.4 respectively; the rest stand however the gate answers.
 
 **1. The landing holds the person's two jobs, in `D-0064`'s order, and nothing else at full weight.**
 Writing a request is first and is always there, whether or not anything is waiting: it is the job the
@@ -19503,6 +19534,12 @@ central band.** Three parts, each measured above:
       where the eye lands.** The outer band carries what is glanced at -- counts, state, money --
       and never the thing being decided. A screen the person is *reading* (a decision, its material)
       may use the whole width, because the eye is already moving.
+   4. **A zone that cannot be folded is not a zone.** Every zone says, for a narrower window, where
+      it goes and in what order. The order is fixed by rules 1 and 5 and not by the layout's
+      convenience: **the two jobs are never what moves**, the outer band folds first and lands under
+      the central band, and no zone loses information when it folds -- it is re-placed, not
+      truncated. What a zone becomes when it folds is drawn, not described (the three widths in
+      "What was drawn").
 
 **3. A request is the only thing with a place of its own. A lap has none.** A request is what the
 person wrote, paid for and will judge, and it survives every lap under it; a lap is how the
@@ -19572,8 +19609,9 @@ to look at is named for each.
      person needs in order to answer is no longer behind a press. It demotes job 1 to a button and
      shows one item at a time.
    - **Recommended: (a) as the landing, with (c) as the screen an item opens into.** W1 keeps the
-     subject unambiguous and buys back what the ledger was for; W3 is where the width pays best, and
-     it pays there precisely because the person has already chosen what to read. (b) is the option to
+     subject unambiguous and buys back what the ledger was for, and it is the only one of the three
+     whose claim survives folding ("What each shape does when the width runs out"); W3 is where the
+     width pays best, and it pays there precisely because the person has already chosen what to read. (b) is the option to
      take if the window judges that seeing all work at once matters more than there being one main
      thing -- it is the only shape that shows the running work as work rather than as a count.
 
@@ -19620,9 +19658,9 @@ to look at is named for each.
 - **It does not draw a screen rondo will ship.** The mocks are choices made visible; the strings in
   them are placeholders under `D-0079` and are composed, not translated, when the screen is built.
 - **It does not decide the form of the page behind *everything rondo has done*.**
-- **It does not decide what happens below 2560.** Rule 2 is written as a relation between zones and
-  the window, not as three fixed columns, but which zone folds away first at 1280 or on a phone is
-  the building change's to decide and to measure.
+- **It does not decide what happens on a phone.** Rule 2.4 and the fold table settle 2560 down to
+  1280. Below that the zones are gone and the question is a different one, which `D-0082`'s `max-sm`
+  clamps and the building change own.
 - **It does not touch the gate's own screen** except to say which screen it is reached from, and that
   under rule 6 its material may sit beside it. rondo#316 and rondo#317 are after this.
 - **It does not change any wording rule.** `D-0076` and `D-0079` decide the words.
@@ -19645,6 +19683,9 @@ to look at is named for each.
   that the question can be answered where it is asked.
 - **A person asking where a particular lap went** after rule 3 ships: `D-0064` rule 2's line is in the
   wrong place for this screen.
+- **A person on a 1280 window finding the rebuilt screen worse than today's**: the fold table's
+  claim that every shape keeps its subject at every width is drawn rather than used, and rule 2.4 is
+  not enough to make one design serve both widths.
 - **The rebuilt screen reading as empty rather than as calm** at 2560x1440 with two things waiting:
   the vertical surplus measured above is a problem and not a property, and the entry has treated it
   as a property.
