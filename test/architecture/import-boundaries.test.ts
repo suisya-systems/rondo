@@ -373,7 +373,14 @@ const ALLOWED_EXTERNALS_BY_MODULE: Readonly<
   // **A `.tsx` since the views became server JSX** (D-0059 rule 2). The JSX
   // runtime `tsc` emits an import of is not written in the source and so is
   // not an import this sweep sees; what the module names is still one parser.
-  "src/access/web.tsx": {
+  // **The renderer names no external at all now.** `hono/utils/accept` moved
+  // with the language resolution it was imported for, to the module below:
+  // the page's rebuild lifted that resolution out of the view layer, and the
+  // grant follows the import rather than the directory.
+  //
+  // The tokenizer splits `Accept-Language` (D-0059 rule 4); the weight is
+  // still read by rondo, for the reason that entry records.
+  "src/access/page-logic/language.ts": {
     "hono/utils/accept": ["parseAccept"],
   },
   // The pull request body drawn as markdown on the publish screen (rondo#248):

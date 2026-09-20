@@ -64,17 +64,19 @@ import {
 import type { ThreadMessagesReadOutcome } from "../store/sqlite.js";
 import {
   APPROVE_BODY,
+  MAX_REVIEW_ROUNDS,
+  operatorPage,
+  type PageView,
+  viewHref,
+  type WebPorts,
+} from "./web.js";
+import {
   isSwitch,
   LANG_COOKIE,
   LANG_COOKIE_SECONDS,
   type LanguageAsked,
-  MAX_REVIEW_ROUNDS,
-  operatorPage,
-  type PageView,
   resolveLanguage,
-  viewHref,
-  type WebPorts,
-} from "./web.js";
+} from "./page-logic/language.js";
 import type { Chrome } from "./wording.js";
 
 /**
