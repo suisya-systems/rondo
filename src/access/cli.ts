@@ -619,7 +619,7 @@ const FLAGS = {
   "despite-review": { type: "boolean" },
 } as const;
 
-const COMMANDS = [
+export const COMMANDS = [
   "start",
   "answer",
   "revise",
