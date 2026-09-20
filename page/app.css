@@ -43,6 +43,13 @@
  * text a person reads, so it clears 4.5:1 on the page ground and on a card in both modes; recessive
  * is a step down in weight and never below legible. `--wait` is the one filled button's ground, so
  * its ink clears 4.5:1 on it at the button's size.
+ *
+ * **Blue means "you can touch this" and never "this is running"** (D-0082 rule 3). `--ring` and `--run`
+ * were one colour, hex for hex, in both modes, so focus and a running lap were drawn alike, and `--link`
+ * was a third member of the family. `--run` is the neutral family now -- running is the state that needs
+ * nobody, so it is the one that can afford to go quiet -- and it keeps its turning glyph, which is what
+ * still says it moves. Measured against the floors above: light ink 7.96:1 on its wash and glyph 6.61:1
+ * on the ground, dark ink 8.08:1 and glyph 8.27:1.
  */
 :root {
   color-scheme: light dark;
@@ -60,9 +67,9 @@
   --wait-foreground: #ffffff;
   --wait-ink: #8a4500;
   --wait-wash: #fff4e5;
-  --run: #2f6fdb;
-  --run-ink: #1d50a8;
-  --run-wash: #edf3ff;
+  --run: #525a66;
+  --run-ink: #414956;
+  --run-wash: #eef0f3;
   --ok: #1a7f47;
   --fail: #c0332b;
 }
@@ -82,15 +89,40 @@
     --wait-foreground: #1a1206;
     --wait-ink: #e9a854;
     --wait-wash: #241a0c;
-    --run: #5b9bff;
-    --run-ink: #8cb8ff;
-    --run-wash: #111b2b;
+    --run: #a3abb5;
+    --run-ink: #aeb6c0;
+    --run-wash: #1b1f24;
     --ok: #46c081;
     --fail: #f2716a;
   }
 }
 
+/*
+ * The type scale (D-0082 rule 4): six steps, named by the role they carry rather than by their size,
+ * so a view asks for `text-body` and never for a number. It replaces ten ad-hoc sizes -- 10, 10.5,
+ * 11, 11.5, 12, 12.5, 13, 13.5, 14 and 15px -- four pairs of which differed from a neighbour by half
+ * a pixel, which is not a distinction anything on this screen was making.
+ *
+ * **A step larger than it was first proposed**, at the human gate's answer on 2026-09-20. The first
+ * proposal put the body at 13px and the floor at 11px; the gate read the sentence that says what a
+ * person is waiting on -- the most-read text on the page -- and asked for more. The step up is free
+ * on the Latin side and was measured so: 14px inside the existing `leading-5` (20px) is a ratio of
+ * 1.43 and 16px inside `leading-6` (24px) is 1.50, which are Tailwind's own `text-sm` and
+ * `text-base` defaults, so no row grew, no fixed-height box moved, and the count of rows on a 900px
+ * screen is what it was (12.4). Two steps up would have forced the leadings, cost 1.3 rows a screen
+ * and shrunk the narrow-screen clamp from three lines to two.
+ *
+ * **`--text-id` is a floor and not a default**: identifiers and ages in the metadata column, and
+ * nothing a person reads as prose. `--text-section` and `--text-page` are the scale's top and carry
+ * nothing yet; Tailwind emits no bytes for a step no view asks for.
+ */
 @theme inline {
+  --text-id: 12px;
+  --text-meta: 13px;
+  --text-body: 14px;
+  --text-title: 16px;
+  --text-section: 19px;
+  --text-page: 25px;
   --font-sans:
     "Inter Variable", ui-sans-serif, system-ui, "Hiragino Sans", "Noto Sans JP", "Noto Sans CJK JP",
     "Yu Gothic UI", sans-serif;
@@ -284,4 +316,19 @@ html:not(.js) details > summary svg {
   .markdown th {
     font-weight: 600;
   }
+}
+
+/*
+ * Japanese differs by the line and by nothing else (D-0082 rule 5). One scale serves both languages;
+ * kana and kanji want more room between lines than Latin at the same size, and the scale's own
+ * smallest step is 12px, so the floor the rule first carried is not needed and is not written.
+ *
+ * Keyed on the root's language, which is what rondo wrote the chrome in (D-0055): the prose elements
+ * carry `lang=""` where the words are the person's own and their language is not rondo's to declare,
+ * and `:lang(ja)` would not match those. Unlayered, so it wins over the `leading-*` utility on the
+ * same element -- which is the whole point of it -- and scoped to the three prose carriers, so no
+ * button, pill or fixed-height box has its line changed underneath it.
+ */
+:root:lang(ja) :is(.request, .meta, .markdown) {
+  line-height: 1.7;
 }
