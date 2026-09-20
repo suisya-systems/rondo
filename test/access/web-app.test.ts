@@ -1459,6 +1459,79 @@ const WRITE_TABLE = [
   "POST /release",
 ];
 
+/**
+ * Which write kinds need a press, and which are sends (D-0059 section 5a's
+ * table, as D-0064 P1-P4 fills it).
+ *
+ * **A press is minted only from a person's navigation** -- `POST`, same
+ * origin, `Sec-Fetch-Mode: navigate`, `Sec-Fetch-User: ?1`, this process's
+ * token -- and the measurement behind that is in D-0059 section 5: a script's
+ * `requestSubmit()`, a synthetic `click()` and a `fetch` all arrive without
+ * `?1`, whether or not a person clicked something else first.
+ *
+ * **This table exists so that the check cannot be skipped for a new route.**
+ * The case below asserts that these two lists are exactly the app's own `POST`
+ * routes, so a route added without being classified fails here, and then
+ * drives the no-gesture request at every press route. Approving is the write
+ * this protects: a handler quietly changed to answer a `fetch` would still
+ * draw, still respond, and mint no press -- and nothing else would notice.
+ */
+const PRESS_ROUTES = [
+  // The lap-end `approve` press (D-0064 O6).
+  "/",
+  // Answering a waiting question by option (D-0064 P2, P3; gate Q5c).
+  "/answer-ask",
+  // Approving a scope, and widening one (D-0064 P1; gate Q5b).
+  "/scope",
+  "/scope-draft",
+  "/raise",
+  // The scoped starts (rondo#233 S3).
+  "/start",
+  "/start-plan",
+  // The gate's other answer (rondo#233 S4, D-0070).
+  "/revise",
+  // The two acts that leave this machine (D-0060, D-0073 rule 4.3).
+  "/publish",
+  "/release",
+];
+
+/**
+ * The writes that need a *send* and not a press: a message into a request
+ * thread (D-0061 rule 4). D-0059 section 5a states what this gives up -- a
+ * same-origin script can post a message no person typed -- and why the
+ * residual is bounded: a message is append-only and answers no gate.
+ */
+const SEND_ROUTES = ["/request", "/reply"];
+
+test("every POST route is either a press or a send, and none is unclassified", () => {
+  const app = createApp(spyPorts([]), TOKEN);
+  const posted = app.routes.filter((route) => route.method === "POST").map((route) => route.path);
+  expect([...posted].sort()).toEqual([...PRESS_ROUTES, ...SEND_ROUTES].sort());
+});
+
+test("a press route writes nothing for a POST carrying no gesture (D-0059 section 5)", async () => {
+  const written: Written = [];
+  const { base, stop, closed } = await served(createApp(spyPorts(written), TOKEN));
+  const person = pressHeaders(base);
+  // The three shapes D-0059 measured as arriving without `?1`, and the one a
+  // React page would reach for if a handler were rewritten to `fetch`.
+  const noGesture: [string, Record<string, string | undefined>][] = [
+    ["a script's submit, no gesture", { ...person, "sec-fetch-user": undefined }],
+    ["a same-origin fetch", { ...person, "sec-fetch-mode": "cors", "sec-fetch-user": undefined }],
+  ];
+  for (const route of PRESS_ROUTES) {
+    for (const [shape, headers] of noGesture) {
+      const answered = await send(base, route, "POST", headers, { ...FORM, request: "m-1" });
+      expect(answered.status, `${route} <- ${shape}`).not.toBe(200);
+      expect(answered.status, `${route} <- ${shape}`).not.toBe(303);
+    }
+  }
+  // Nothing reached the one port the spy watches.
+  expect(written).toEqual([]);
+  stop.abort();
+  expect(await closed).toBe(0);
+});
+
 test("(b) the page's writing vocabulary is enumerated off the running app", () => {
   const app = createApp(spyPorts([]), TOKEN);
   expect(nonReads(app)).toEqual(WRITE_TABLE);
