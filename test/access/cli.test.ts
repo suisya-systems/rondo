@@ -24,20 +24,15 @@ import {
   approvedActor,
   claimThenWalk,
   FLAGS_BY_COMMAND,
-  forgeHost,
   type GateVerbs,
   operatorLanguage,
-  type PreflightInput,
   type PullRequestTextInput,
   parseBasis,
   parseCommand,
-  parseForgeSlug,
   publishModelReadingLines,
-  publishPreflight,
   publishRepository,
   pullRequestText,
   readingRangeOf,
-  repositoryFromRemoteUrl,
   reviewGate,
   reviewLines,
   revisionBlocker,
@@ -50,6 +45,13 @@ import {
 } from "../../src/access/cli.js";
 import { consoleSeams } from "../../src/access/console.js";
 import type { LapWorkInspection, PushTargetInspection } from "../../src/access/forge.js";
+import {
+  forgeHost,
+  type PreflightInput,
+  parseForgeSlug,
+  publishPreflight,
+  repositoryFromRemoteUrl,
+} from "../../src/access/forge-preflight.js";
 import { evidenceOf } from "../../src/access/review.js";
 import { type Chrome, chromeFor, EN } from "../../src/access/wording.js";
 import { BASIS_FORMS } from "../../src/advisory/proposal.js";
