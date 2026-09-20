@@ -1052,6 +1052,17 @@ function approveView(
   const work = framing.material?.work ?? null;
   const workGone = work !== null && work.kind !== "read";
   const standing = standingFindings(checks, model);
+  // **The collision is quoted in the box too, and for the findings' own
+  // reason** (`D-0082` rule 7, Codex round 1 on rondo#294): the card it comes
+  // from is the right face's, the right face drops below the thread at 1280,
+  // and a sentence telling a person to look at other work before approving is
+  // worth nothing under the button. The path nobody holds stays on the card:
+  // it blocks nothing and is not a thing to answer over.
+  const reach = framing.material?.reach;
+  const collision =
+    reach !== undefined && reach.kind === "outside" && reach.collided.length > 0
+      ? wording.reachCollided(reach.collided)
+      : null;
   return (
     // **The poll replaces this box and `page/composer.js` puts the words
     // back.** The gate is inside the thread since D-0083 rule 9, so the
@@ -1069,10 +1080,23 @@ function approveView(
        * each, and nothing else of the cards: the severities, the bases and
        * the evidence are material and stay where the material is.
        */}
-      {standing.length === 0 ? null : (
+      {standing.length === 0 && collision === null ? null : (
         <section id="standing" class={CARD}>
           <h3 class={CARD_HEADING}>{wording.standingHeading}</h3>
           <ul class="mt-1.5 space-y-1.5">
+            {/*
+             * First, and in the set's own language rather than `lang=""`: the
+             * findings below are a reading's own words and this sentence is
+             * the page's.
+             */}
+            {collision === null ? null : (
+              <li class="flex gap-2 text-body leading-5">
+                <span aria-hidden="true" class="text-fail">
+                  &#8226;
+                </span>
+                <span class="min-w-0 wrap-anywhere">{collision}</span>
+              </li>
+            )}
             {standing.map((said) => (
               <li class="flex gap-2 text-body leading-5">
                 <span aria-hidden="true" class="text-fail">

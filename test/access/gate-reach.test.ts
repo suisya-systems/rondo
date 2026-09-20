@@ -151,3 +151,15 @@ test("the two cases with nothing to draw cross as themselves", () => {
     reason: "git would not say",
   });
 });
+
+test("the collision is quoted in the answering box, where the press is", async () => {
+  const html = await gatePage(COLLIDED);
+  // The box keeps what a press is answered over, because the card it came from
+  // drops below the thread at 1280 (D-0082 rule 7). The section is the one the
+  // standing findings are quoted in.
+  const standing = /<section id="standing"[\s\S]*?<\/section>/.exec(html)?.[0] ?? "";
+  expect(standing).toContain(EN.reachCollided(["src/store/sqlite.ts"]));
+  // The path nobody keeps blocks nothing, so it is not something to answer
+  // over and stays on the card.
+  expect(standing).not.toContain(EN.reachUnheld(["README.md"]));
+});
