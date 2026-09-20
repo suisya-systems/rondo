@@ -1,9 +1,16 @@
 import type { LedgerLine } from "../../store/sqlite.js";
+import type { WebPorts } from "../page/contract.js";
+import {
+  backHead,
+  CARD,
+  CARD_HEADING,
+  note,
+  PRIMARY,
+  publishedReport,
+} from "../page/vocabulary.js";
 import { endedHow, materialLanguage } from "../page-logic/laps.js";
 import type { PageView } from "../page-logic/routes.js";
 import type { Threads } from "../page-logic/threads.js";
-import type { WebPorts } from "../web.js";
-import { backHead, CARD, CARD_HEADING, note, PRIMARY, publishedReport } from "../web.js";
 import type { Chrome } from "../wording.js";
 
 /**

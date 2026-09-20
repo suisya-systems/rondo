@@ -62,6 +62,7 @@ import {
   type ScopeOutwardAct,
 } from "../store/records.js";
 import type { ThreadMessagesReadOutcome } from "../store/sqlite.js";
+import type { WebPorts } from "./page/contract.js";
 import {
   isSwitch,
   LANG_COOKIE,
@@ -70,7 +71,7 @@ import {
   resolveLanguage,
 } from "./page-logic/language.js";
 import { MAX_REVIEW_ROUNDS, type PageView, viewHref } from "./page-logic/routes.js";
-import { APPROVE_BODY, operatorPage, type WebPorts } from "./web.js";
+import { APPROVE_BODY, operatorPage } from "./web.js";
 import type { Chrome } from "./wording.js";
 
 /**
