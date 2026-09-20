@@ -99,6 +99,8 @@ import { type ParsedCommand, parseCommand } from "./cli-parse.js";
 import {
   abandon,
   admit,
+  type ClaimComparison,
+  compareClaim,
   conductorPorts,
   type ReportingPorts,
   type RequestThread,
@@ -119,6 +121,7 @@ import {
   type LapWorkRequest,
   openPullRequest,
   pushTopicBranch,
+  readChangedPaths,
   readIssueFromForge,
   runDrafter,
 } from "./forge.js";
@@ -137,7 +140,13 @@ import { draftedPlanRun, type HeldPlan, heldPlanByDigest, heldPlans } from "./mo
 import { isModelDrafterName } from "./model-draft/judgement.js";
 import { modelReviewPorts, takeModelReading } from "./model-review/host.js";
 import { modelReadingLines } from "./model-review/judgement.js";
-import type { LapMaterialRead, PublishBlock, PublishShown, ReviewBlock } from "./page/contract.js";
+import type {
+  ClaimReach,
+  LapMaterialRead,
+  PublishBlock,
+  PublishShown,
+  ReviewBlock,
+} from "./page/contract.js";
 import { type PullRequestText, pullRequestText } from "./pull-request.js";
 import { denialLine, evidenceOf, LIST_LIMIT, READING_REMOTE, uncommittedPaths } from "./review.js";
 import { reviseDrafterHost } from "./revise-draft/host.js";
@@ -3643,7 +3652,42 @@ async function pageMaterial(
     record,
     startup.kind === "refused" ? null : startup.continuo,
   );
-  return { lines: [...lines, ...material.lines], why, work: material.work };
+  return {
+    lines: [...lines, ...material.lines],
+    why,
+    work: material.work,
+    // **The gate's comparison, on the screen the press is on** (rondo#294).
+    // It is the same read the conductor takes when the lap reaches its gate,
+    // taken again here rather than carried from there: the report's lines are
+    // printed and gone, and a person who never opened a terminal has to be
+    // able to see what the comparison found before they approve. It writes
+    // nothing, here as there.
+    reach: pageReach(await compareClaim({ store, readChangedPaths }, record.id)),
+  };
+}
+
+/**
+ * The comparison as the screen may draw it: the paths, and no line named
+ * ({@link ClaimReach}).
+ *
+ * The holders are flattened into one list of paths. Which other work keeps
+ * them is a thing to say and is said by its request rather than by its
+ * identifier, which this screen has no reader for; rondo#285 is where the page
+ * learns to name it.
+ */
+export function pageReach(comparison: ClaimComparison): ClaimReach {
+  if (comparison.kind !== "outside") {
+    return comparison.kind === "inside"
+      ? { kind: "inside" }
+      : { kind: "unread", reason: comparison.reason };
+  }
+  return {
+    kind: "outside",
+    // Deduplicated: one path may be kept by two other works, and a person
+    // reading the list would be told twice about one file.
+    collided: [...new Set(comparison.held.flatMap((holder) => holder.sharedPaths))],
+    unheld: comparison.unheld,
+  };
 }
 
 /**

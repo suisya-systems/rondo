@@ -114,6 +114,7 @@ import { ago, gatherInbox, type LiveRow } from "./inbox.js";
 import { type IssueComment, parseForgeRead } from "./issue-read.js";
 import { isModelDrafterName } from "./model-draft/judgement.js";
 import type {
+  ClaimReach,
   LapMaterialRead,
   MintIterationId,
   MintMessageId,
@@ -540,6 +541,58 @@ function changedView(wording: Chrome, record: IterationRecord, work: LapWorkInsp
 }
 
 /**
+ * *Beyond the files this work keeps* -- what the gate found when it compared
+ * the paths this lap changed with the files its work keeps to itself (D-0073
+ * rule 5, rondo#294).
+ *
+ * **It is here because it was only ever in the terminal.** The comparison has
+ * been part of the conductor's report since rondo#293, and a report is printed
+ * by the command line and by nothing else: a person who starts work from this
+ * page and answers it from this page never saw a collision the comparison
+ * found, and met it when the two changes were merged instead -- which is the
+ * thing the comparison is for.
+ *
+ * **Nothing is drawn where there is nothing to say.** *Inside* is the ordinary
+ * case and a card announcing it would be one more thing to read at the one
+ * place on this page where reading matters. The two findings are drawn
+ * together where both stand: they are different facts, and the collision is
+ * not softened by the other.
+ *
+ * **The collision is marked and the other is not** (`D-0076` rule 4.1's
+ * severities): one is work about to clash with work, the other is a note that
+ * the files kept were left as they were.
+ */
+function reachView(wording: Chrome, reach: ClaimReach | undefined) {
+  if (reach === undefined || reach.kind === "inside") {
+    return null;
+  }
+  return (
+    <section id="reach" class={CARD}>
+      <h3 class={CARD_HEADING}>{wording.reachHeading}</h3>
+      {reach.kind === "unread" ? (
+        <>
+          <p class="mt-1 text-body leading-5 text-muted-foreground">{wording.reachUnread}</p>
+          {maintainerFold("reach-reason", wording, reach.reason)}
+        </>
+      ) : (
+        <>
+          {reach.collided.length === 0 ? null : (
+            <p class="mt-1 text-body leading-5 wrap-anywhere text-fail">
+              {wording.reachCollided(reach.collided)}
+            </p>
+          )}
+          {reach.unheld.length === 0 ? null : (
+            <p class="mt-1 text-body leading-5 wrap-anywhere text-muted-foreground">
+              {wording.reachUnheld(reach.unheld)}
+            </p>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
+/**
  * *Checks* -- the deterministic reading, the one `publish` refuses on (D-0065
  * 5.5): its verdict, its findings as rows, what it counted and what it covered.
  */
@@ -934,6 +987,7 @@ function materialView(
             )}
           </section>
           {changedView(wording, record, material.work)}
+          {reachView(wording, material.reach)}
           {fenceView(wording, record)}
         </>
       )}
@@ -998,6 +1052,17 @@ function approveView(
   const work = framing.material?.work ?? null;
   const workGone = work !== null && work.kind !== "read";
   const standing = standingFindings(checks, model);
+  // **The collision is quoted in the box too, and for the findings' own
+  // reason** (`D-0082` rule 7, Codex round 1 on rondo#294): the card it comes
+  // from is the right face's, the right face drops below the thread at 1280,
+  // and a sentence telling a person to look at other work before approving is
+  // worth nothing under the button. The path nobody holds stays on the card:
+  // it blocks nothing and is not a thing to answer over.
+  const reach = framing.material?.reach;
+  const collision =
+    reach !== undefined && reach.kind === "outside" && reach.collided.length > 0
+      ? wording.reachCollided(reach.collided)
+      : null;
   return (
     // **The poll replaces this box and `page/composer.js` puts the words
     // back.** The gate is inside the thread since D-0083 rule 9, so the
@@ -1015,10 +1080,23 @@ function approveView(
        * each, and nothing else of the cards: the severities, the bases and
        * the evidence are material and stay where the material is.
        */}
-      {standing.length === 0 ? null : (
+      {standing.length === 0 && collision === null ? null : (
         <section id="standing" class={CARD}>
           <h3 class={CARD_HEADING}>{wording.standingHeading}</h3>
           <ul class="mt-1.5 space-y-1.5">
+            {/*
+             * First, and in the set's own language rather than `lang=""`: the
+             * findings below are a reading's own words and this sentence is
+             * the page's.
+             */}
+            {collision === null ? null : (
+              <li class="flex gap-2 text-body leading-5">
+                <span aria-hidden="true" class="text-fail">
+                  &#8226;
+                </span>
+                <span class="min-w-0 wrap-anywhere">{collision}</span>
+              </li>
+            )}
             {standing.map((said) => (
               <li class="flex gap-2 text-body leading-5">
                 <span aria-hidden="true" class="text-fail">
