@@ -470,6 +470,24 @@ export function approvedForPublication(record: IterationRecord): boolean {
 }
 
 /**
+ * One field out of the plan the row carries.
+ *
+ * The row's `plan` is `planPayload`'s JSON, which `readPlan` validated before
+ * the row existed -- so a field missing here is not an operator's mistake but a
+ * row edited out of band, and the empty string it yields makes a caller refuse
+ * on an absolute-path check rather than act on a guess.
+ *
+ * **Beside the record and not in one of its readers** (rondo#341): `publish`
+ * reads the plan from the command line and from the pull-request body it
+ * composes, and those are two modules now. A second spelling of this in the
+ * second one would be the two of them disagreeing about what the row says.
+ */
+export function planField(record: IterationRecord, key: string): string {
+  const value = record.plan[key];
+  return typeof value === "string" ? value : "";
+}
+
+/**
  * The fields a transition may write beside the new status.
  *
  * A partial of the record minus the identity, the status and the timestamps:
