@@ -1918,7 +1918,12 @@ test("the composer script keeps a draft and the open folds, and makes no request
   // the boxes are inside the thread now, so the five-second redraw replaces
   // them -- a claim being typed would vanish, and a revise box a person had
   // rewritten would come back holding rondo's draft again.
-  expect(code).toMatch(/new MutationObserver\(\(\) => \{\s*reopen\(\);\s*restore\(\);/);
+  expect(code).toMatch(/new MutationObserver\(\(\) => \{\s*reopen\(\);\s*restore\(true\);/);
+  // **And a box a person emptied stays empty across the redraw** (Codex): the
+  // revise box arrives holding rondo's draft, so treating *emptied* as *no
+  // draft* would put those words back five seconds after they were deleted.
+  // A load reads it the other way, which is how rondo's draft comes back.
+  expect(code).toContain('kept === "" && !afterSwap');
   // **And a send clears the box it was sent from** (Codex, on D-0083): the
   // thread carries several drafts -- the gate's claim, what to change beside
   // it, the reply under them -- so "the first textarea on the page" would

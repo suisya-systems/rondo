@@ -77,9 +77,10 @@ if (sentFrom !== null) {
 // edited into the other on the way back from a refused press. A kept draft wins
 // over what the server drew, which matters for exactly one of them: the revise
 // box arrives holding rondo's own draft, and a person who rewrote it gets their
-// own words back rather than the draft again. Emptying the box clears the store
-// (the `input` listener below), so clearing it and reloading is how rondo's
-// draft comes back.
+// own words back rather than the draft again. Emptying the box is kept as an
+// empty draft (the `input` listener below), so a redraw does not put rondo's
+// words back under a person who deleted them -- and a load reads that as no
+// draft, which is how clearing the box and reloading brings the draft back.
 //
 // **A draft that landed after the person began is said, not put in** (D-0077
 // rule 4.4): what the server drew when they began is kept beside their words,
@@ -93,10 +94,18 @@ const drewKey = (box) => `rondo:drew:${box.dataset.draft}`;
 // on the next poll, and a revise box a person had rewritten came back holding
 // rondo's draft again. A box whose value already matches is left alone, so
 // restoring does not move a caret.
-const restore = () => {
+const restore = (afterSwap) => {
   for (const opening of document.querySelectorAll("textarea[data-draft]")) {
     const kept = store.get(draftKey(opening));
-    if (kept === null || kept === "" || opening.value === kept) {
+    // **An empty string is a person who cleared the box** (Codex), and the two
+    // callers read it differently on purpose. After a swap it is restored: the
+    // revise box arrives holding rondo's draft, and a redraw that treated
+    // *emptied* as *no draft* would put those words back five seconds after
+    // they were deleted. On a load it is not, which is what keeps clearing the
+    // box and reloading the way rondo's own draft comes back. `null` is the
+    // absence either way -- nothing typed, or a send that cleared it -- and
+    // then the server's own value stands.
+    if (kept === null || opening.value === kept || (kept === "" && !afterSwap)) {
       continue;
     }
     const drawn = opening.defaultValue;
@@ -115,12 +124,15 @@ const restore = () => {
     opening.value = kept;
   }
 };
-restore();
+restore(false);
 
 document.addEventListener("input", (event) => {
   if (event.target instanceof HTMLTextAreaElement && event.target.dataset.draft !== undefined) {
     const emptied = event.target.value === "";
-    store.set(draftKey(event.target), emptied ? null : event.target.value);
+    // Emptied is kept as the empty string and not as an absence: `restore`
+    // above puts it back after a redraw and not on a load, which is what lets
+    // clearing the box and reloading bring rondo's own draft back.
+    store.set(draftKey(event.target), event.target.value);
     // What was drawn when the person began, kept until they empty the box:
     // editing words put back over a later draft must not make that draft
     // look like the one they began from.
@@ -248,5 +260,5 @@ reopen();
 // that nobody sent.
 new MutationObserver(() => {
   reopen();
-  restore();
+  restore(true);
 }).observe(document.body, { childList: true, subtree: true });

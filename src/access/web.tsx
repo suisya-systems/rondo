@@ -3855,13 +3855,24 @@ function threadActs(
   token: string | null,
   requestMessageId: string,
   laps: readonly LapUnderRequest[],
+  threads: Threads,
 ) {
   if (token === null) {
     return null;
   }
-  const publishable = laps.find(
-    (lap) => ports.publishing !== null && approvedForPublication(lap.record),
-  );
+  // **Every lap that could still be published, and not the first of them**
+  // (Codex): `approvedForPublication` reads a closed row with an approved
+  // outcome and says nothing about whether it has been published, so one
+  // entrance would go on naming a lap already published while the laps beside
+  // it had none. What says it was published is the report rondo wrote into
+  // this request's thread.
+  const publishable =
+    ports.publishing === null
+      ? []
+      : laps.filter(
+          (lap) =>
+            approvedForPublication(lap.record) && publishedReport(threads, lap.record.id) === null,
+        );
   return (
     <p class="thread-acts">
       <a
@@ -3881,16 +3892,16 @@ function threadActs(
       >
         {wording.scopeAction}
       </a>
-      {publishable === undefined ? null : (
+      {publishable.map((lap) => (
         <a
-          id={`publish-${publishable.record.id}`}
-          href={viewHref({ kind: "publish", iterationId: publishable.record.id }, wording.lang)}
+          id={`publish-${lap.record.id}`}
+          href={viewHref({ kind: "publish", iterationId: lap.record.id }, wording.lang)}
           data-open=""
           class={`${PRIMARY} h-7 px-3 text-[13px]`}
         >
           {wording.publishAction}
         </a>
-      )}
+      ))}
     </p>
   );
 }
@@ -5141,7 +5152,14 @@ export async function operatorPage(
   const actsMarkup =
     selectedRoot === null
       ? null
-      : ((await threadActs(wording, ports, token, selectedRoot, selectedLaps)?.toString()) ?? null);
+      : ((await threadActs(
+          wording,
+          ports,
+          token,
+          selectedRoot,
+          selectedLaps,
+          threads,
+        )?.toString()) ?? null);
   const centreContent = noSuchThread
     ? { rendered: await note(wording.noSuchThread).toString() }
     : selectedRoot === null
