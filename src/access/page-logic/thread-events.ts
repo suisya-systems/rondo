@@ -68,6 +68,7 @@ export function lapEvents(
       said: said(wording.evStarted),
       at: at(record.createdAtMs),
       atMs: record.createdAtMs,
+      tryAt,
     },
   ];
   for (const [index, reading] of readings.entries()) {
@@ -79,6 +80,7 @@ export function lapEvents(
         said: said(wording.evReadingUnavailable),
         at: at(reading.atMs),
         atMs: reading.atMs,
+        tryAt,
       });
       continue;
     }
@@ -99,6 +101,7 @@ export function lapEvents(
       ),
       at: at(reading.atMs),
       atMs: reading.atMs,
+      tryAt,
     });
   }
   if (isTerminal(record.status)) {
@@ -109,6 +112,7 @@ export function lapEvents(
       said: said(closed ? wording.evFinished : wording.evStopped),
       at: at(record.updatedAtMs),
       atMs: record.updatedAtMs,
+      tryAt,
     });
   }
   return events;

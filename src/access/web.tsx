@@ -135,6 +135,7 @@ import { RequestsFace } from "./page/list.js";
 import { facesMarkup } from "./page/render.js";
 import { Raw } from "./page/shell.js";
 import { ThreadFace, type ThreadItem, type ThreadLink } from "./page/thread.js";
+import { type FoldMode, folds } from "./page-logic/event-fold.js";
 import { governanceOf } from "./page-logic/governance.js";
 import {
   decodedDenials,
@@ -155,6 +156,28 @@ import { publishView } from "./screens/publish.js";
 import { releaseView } from "./screens/release.js";
 import { scopeView } from "./screens/scope.js";
 import { type Chrome, EN, SHIPPED_SETS } from "./wording.js";
+
+/**
+ * Which of rondo#332's two folds the thread is drawn with, **while the gate is
+ * choosing between them** (`page-logic/event-fold.ts`).
+ *
+ * **This is a switch for taking two photographs with, and it leaves with the
+ * losing mode.** rondo#332 asks the gate to pick a fold, and D-0083's own
+ * method for this screen was to measure rather than argue -- so both are built
+ * and both are shot at 2560, 1600 and 1280, and the one that is not chosen is
+ * deleted together with this constant. It is read from the environment and not
+ * from the address on purpose: an address a person can type would be a surface
+ * to keep, and `PageView` is the page's whole state (`page-logic/routes.ts`).
+ *
+ * ponytail: a temporary switch, and it has a date on it -- whichever way the
+ * gate answers, one of the two modes and this constant go in the same commit.
+ */
+const FOLD_MODE: FoldMode =
+  process.env["RONDO_FOLD"] === "seen"
+    ? "seen"
+    : process.env["RONDO_FOLD"] === "none"
+      ? "none"
+      : "tries";
 
 /**
  * Everything the page is handed: the reading half of the two ports, the host's
@@ -3101,7 +3124,8 @@ export async function operatorPage(
                     governance: selectedGovernance,
                     askedSaid: wording.age(ago(selectedGovernance.askedAtMs, nowMs)),
                   }),
-            items: threadItems,
+            items: folds(wording, threadItems, FOLD_MODE, lastLookedAbove),
+            foldOpen: wording.foldOpen,
             lastLookedAbove,
             lastLookedSaid:
               lastLookedMs === null

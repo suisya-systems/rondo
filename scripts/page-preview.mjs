@@ -192,15 +192,27 @@ async function say(draft) {
   }
 }
 
-/** One ended lap carrying a cost and a duration, for the budgets to read. */
-async function endedLap(id, costUsd, durationMs, supersedesIterationId) {
+/**
+ * One ended lap carrying a cost and a duration, for the budgets to read.
+ *
+ * **Its steps are stamped at the times they would have happened** (rondo#332).
+ * They used to all land on the script's own `now`, which left the seeded laps
+ * with one start apiece at staggered ages and every check and ending at the
+ * same instant -- so the thread drew seven *work started* lines in a row and
+ * then eleven endings, in an order no run ever produced. Rule 7's lines are
+ * read in time order, and a fold of them is designed against that order, so a
+ * fixture whose order is an artefact of the seeding would be designed against
+ * nothing. `startedMsAgo` places the lap and `durationMs` closes it.
+ */
+async function endedLap(id, costUsd, durationMs, supersedesIterationId, startedMsAgo, reading) {
+  const startedAt = now - startedMsAgo;
   const reserved = await store.reserve({
     id,
     request: "teach rondo to count",
     plan: planDocument(id),
     spend: null,
     scopeSpend: null,
-    nowMs: now - durationMs,
+    nowMs: startedAt,
     supersedesIterationId,
     claim: laneFor(id, supersedesIterationId),
     // Every lap names the request it came from (`D-0085`), and the preview's
@@ -213,9 +225,12 @@ async function endedLap(id, costUsd, durationMs, supersedesIterationId) {
   if (reserved.kind !== "reserved") {
     refuse(`the preview lap did not reserve: ${JSON.stringify(reserved)}`);
   }
+  // The lap's own clock: admitted at once, read near the end, closed after
+  // `durationMs`. The reading is taken on the step that takes one.
+  const readAt = startedAt + Math.round(durationMs * 0.8);
   const steps = [
-    ["planned", "admitting", {}],
-    ["admitting", "admitted", {}],
+    ["planned", "admitting", {}, startedAt, undefined],
+    ["admitting", "admitted", {}, startedAt, undefined],
     [
       "admitted",
       "performing",
@@ -223,21 +238,44 @@ async function endedLap(id, costUsd, durationMs, supersedesIterationId) {
         agentTypeDigest: drafted.kind === "drafted" ? drafted.agentTypeDigest : null,
         modelTier: "standard",
       },
+      startedAt,
+      undefined,
     ],
-    ["performing", "awaiting_human", { gateId: `gate-${id}` }],
+    ["performing", "awaiting_human", { gateId: `gate-${id}` }, readAt, reading],
     [
       "awaiting_human",
       "closed",
       { gateOutcome: "approve", lapCostUsd: costUsd, lapDurationMs: durationMs },
+      startedAt + durationMs,
+      undefined,
     ],
   ];
-  for (const [from, to, fields] of steps) {
-    const moved = await store.transition(id, from, to, fields, now);
+  for (const [from, to, fields, at, taken] of steps) {
+    const moved = await store.transition(id, from, to, fields, at, taken);
     if (moved.kind !== "transitioned") {
       refuse(`the preview lap did not reach '${to}': ${JSON.stringify(moved)}`);
     }
   }
 }
+
+const MINUTE = 60 * 1000;
+const HOUR = 60 * MINUTE;
+
+/** The deterministic checks, as one lap's reading: clear, or with things raised. */
+const checksOf = (findings) => ({
+  drafter: modules.records.DETERMINISTIC_READING_DRAFTER,
+  verdict: findings.length === 0 ? "clear" : "concerns",
+  findings,
+  evidence: {
+    baseRef: "refs/remotes/origin/main",
+    baseCommit: "b".repeat(40),
+    tipCommit: "a".repeat(40),
+    materialDigest: `sha256:${"c".repeat(64)}`,
+    commitCount: 2,
+    fileCount: 3,
+  },
+  unavailableReason: null,
+});
 
 await say({
   messageId: requestMessageId,
@@ -250,7 +288,7 @@ await say({
   authorKind: "operator",
   authorId: "ada",
   inReplyTo: null,
-  atMs: now - 90 * 60 * 1000,
+  atMs: now - 32 * HOUR,
   bases: [],
   asks: false,
 });
@@ -263,7 +301,7 @@ await say({
   authorKind: "drafter",
   authorId: "rondo/deterministic",
   inReplyTo: requestMessageId,
-  atMs: now - 60 * 60 * 1000,
+  atMs: now - 31 * HOUR,
   bases: [{ form: "message", messageId: requestMessageId }],
   asks: false,
 });
@@ -294,9 +332,28 @@ await say({
 
 // Three ended laps, one of them a redo, so `first_lap_cost`, `redo_cost` and
 // `lap_duration` each find rows rather than three cold starts.
-await endedLap("lap-preview-0001", 1.42, 22 * 60 * 1000, null);
-await endedLap("lap-preview-0002", 0.86, 14 * 60 * 1000, null);
-await endedLap("lap-preview-0003", 2.15, 31 * 60 * 1000, "lap-preview-0001");
+//
+// **Laid out as the first three tries of one request** (rondo#332): this
+// request is the one the fold is designed against, and a request that was
+// tried once does not show the problem the fold exists for. The first two fail
+// their checks and the third passes, which is what a retry actually looks like.
+await endedLap(
+  "lap-preview-0001",
+  1.42,
+  22 * MINUTE,
+  null,
+  30 * HOUR,
+  checksOf(["the count line reads the iteration table directly"]),
+);
+await endedLap(
+  "lap-preview-0003",
+  2.15,
+  31 * MINUTE,
+  "lap-preview-0001",
+  28 * HOUR,
+  checksOf(["a redo's cost is added in before its own cost is read"]),
+);
+await endedLap("lap-preview-0002", 0.86, 14 * MINUTE, null, 26 * HOUR, checksOf([]));
 
 // An approved scope over the same request, recorded through the store's own
 // verbs in the order `recordScopeFromPage` uses (rondo#233 S4): record the
@@ -371,7 +428,7 @@ const waitingReserved = await store.reserve({
     proposalId: null,
     agentTypeDigest: drafted.kind === "drafted" ? drafted.agentTypeDigest : "",
   },
-  nowMs: now - 8 * 60 * 1000,
+  nowMs: now - 40 * MINUTE,
   supersedesIterationId: null,
   claim: laneFor(waitingLapId, null),
   requestMessageId,
@@ -394,7 +451,7 @@ for (const [from, to, fields] of [
     },
   ],
 ]) {
-  const moved = await store.transition(waitingLapId, from, to, fields, now);
+  const moved = await store.transition(waitingLapId, from, to, fields, now - 40 * MINUTE);
   if (moved.kind !== "transitioned") {
     refuse(`the preview waiting lap did not reach '${to}': ${JSON.stringify(moved)}`);
   }
@@ -418,7 +475,7 @@ const finalTransition = await store.transition(
   "performing",
   "awaiting_human",
   { gateId: waitingGateId },
-  now,
+  now - 18 * MINUTE,
   checksReading,
 );
 if (finalTransition.kind !== "transitioned") {
@@ -456,7 +513,7 @@ const modelReading = {
   },
   unavailableReason: null,
 };
-const appended = await store.appendReading(waitingLapId, modelReading, now);
+const appended = await store.appendReading(waitingLapId, modelReading, now - 11 * MINUTE);
 if (appended.kind !== "appended") {
   refuse(`the preview model reading did not append: ${JSON.stringify(appended)}`);
 }
@@ -526,7 +583,12 @@ function workOn(workspace, topicBranch, leaveUncommitted) {
  * screen shows the publish rather than the reading's refusal -- except on the
  * lap that is meant to refuse, where the paths left behind are the point.
  */
-async function publishableLap(id, leaveUncommitted, staleReading = false) {
+async function publishableLap(
+  id,
+  leaveUncommitted,
+  staleReading = false,
+  startedMsAgo = 40 * MINUTE,
+) {
   const payload = planDocument(id);
   const workspace = payload.workspace;
   const topicBranch = payload.topic_branch;
@@ -537,7 +599,7 @@ async function publishableLap(id, leaveUncommitted, staleReading = false) {
     plan: payload,
     spend: null,
     scopeSpend: null,
-    nowMs: now - 40 * 60 * 1000,
+    nowMs: now - startedMsAgo,
     supersedesIterationId: null,
     claim: laneFor(id, null),
     requestMessageId,
@@ -570,9 +632,14 @@ async function publishableLap(id, leaveUncommitted, staleReading = false) {
     evidence: staleReading ? { ...measured, tipCommit: "9".repeat(40) } : measured,
     unavailableReason: null,
   };
-  for (const [from, to, fields, taken] of [
-    ["planned", "admitting", {}, undefined],
-    ["admitting", "admitted", {}, undefined],
+  // Stamped at the times they would have happened, for the reason `endedLap`
+  // gives (rondo#332): this lap is one of the request's tries and its lines
+  // are read in time order with the rest.
+  const startedAt = now - startedMsAgo;
+  const lapMs = 18 * MINUTE;
+  for (const [from, to, fields, taken, at] of [
+    ["planned", "admitting", {}, undefined, startedAt],
+    ["admitting", "admitted", {}, undefined, startedAt],
     [
       "admitted",
       "performing",
@@ -581,16 +648,24 @@ async function publishableLap(id, leaveUncommitted, staleReading = false) {
         modelTier: "standard",
       },
       undefined,
+      startedAt,
     ],
-    ["performing", "awaiting_human", { gateId: `gate-${id}` }, reading],
+    [
+      "performing",
+      "awaiting_human",
+      { gateId: `gate-${id}` },
+      reading,
+      startedAt + Math.round(lapMs * 0.8),
+    ],
     [
       "awaiting_human",
       "closed",
-      { gateOutcome: "answered_and_forwarded", lapCostUsd: 1.1, lapDurationMs: 18 * 60 * 1000 },
+      { gateOutcome: "answered_and_forwarded", lapCostUsd: 1.1, lapDurationMs: lapMs },
       undefined,
+      startedAt + lapMs,
     ],
   ]) {
-    const moved = await store.transition(id, from, to, fields, now, taken);
+    const moved = await store.transition(id, from, to, fields, at, taken);
     if (moved.kind !== "transitioned") {
       refuse(`the preview publishable lap did not reach '${to}': ${JSON.stringify(moved)}`);
     }
@@ -600,11 +675,20 @@ async function publishableLap(id, leaveUncommitted, staleReading = false) {
 
 // The two publish screens worth photographing: one that would publish, and one
 // that refuses on D-0060 rule 4 because the workspace still holds work.
-const publishableLapId = await publishableLap("lap-preview-0005", false);
-const refusingLapId = await publishableLap("lap-preview-0006", true);
+// **Where this person's reading stopped** (D-0083 rule 7, D-0061 rule 2.5).
+// Seeded two hours back, so the thread has tries above the line and tries
+// below it: without a mark there is no line at all, and rule 8's fold -- and
+// anything rondo#332 designs beside it -- has nothing to be measured against.
+const viewed = await record.recordView("ada", now - 2 * HOUR);
+if (viewed.kind !== "recorded") {
+  refuse(`the preview view mark did not record: ${JSON.stringify(viewed)}`);
+}
+
+const publishableLapId = await publishableLap("lap-preview-0005", false, false, 24 * HOUR);
+const refusingLapId = await publishableLap("lap-preview-0006", true, false, 5 * HOUR);
 // The third publish screen: the work is publishable, and the reading no longer
 // describes it, so the only press offered is the one that overrules it.
-const staleLapId = await publishableLap("lap-preview-0007", false, true);
+const staleLapId = await publishableLap("lap-preview-0007", false, true, 3 * HOUR);
 
 // Two requests the model drafter drafted (rondo#238 C2b), written the way a
 // run writes them -- a real host over this store, with a fixed answer standing

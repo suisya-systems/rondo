@@ -351,3 +351,61 @@
   gap: 10px;
   margin-top: 18px;
 }
+
+/*
+ * A folded run of event lines (D-0083 rule 7's fold, rondo#332).
+ *
+ * **A `<details>`, so the lines are in the page and opening one is the
+ * browser's own act**: no script, and no state of the page's to keep. Shut, it
+ * takes the event line's own grid so it reads as one more line in the record
+ * rather than as a control beside it; the disclosure triangle stands in the
+ * dot's column, which is where the kind would otherwise be said, because what
+ * a fold is is not a kind of thing that happened.
+ */
+.ev-fold > summary {
+  display: grid;
+  grid-template-columns: 28px 1fr auto auto;
+  gap: 14px;
+  align-items: start;
+  padding: 3px 0;
+  min-height: 28px;
+  max-width: 780px;
+  cursor: pointer;
+  list-style-position: inside;
+  color: var(--color-muted-foreground);
+}
+
+.ev-fold > summary::marker {
+  color: var(--color-muted-foreground);
+  font-size: 12px;
+}
+
+.ev-fold-said {
+  grid-column: 2;
+  font-size: 14px;
+  line-height: 1.7;
+  max-width: 48em;
+}
+
+.ev-fold-open {
+  grid-column: 3;
+  padding-top: 2px;
+  font-size: 12px;
+  color: var(--color-link);
+  white-space: nowrap;
+}
+
+.ev-fold > summary > time {
+  grid-column: 4;
+  padding-top: 2px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+/* Opened, the lines inside sit under the summary, indented to the dot's column. */
+.ev-fold[open] {
+  margin-bottom: 6px;
+  border-left: 1px solid var(--color-border);
+  padding-left: 13px;
+  margin-left: 1px;
+}
