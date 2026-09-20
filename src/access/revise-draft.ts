@@ -20,6 +20,7 @@
 
 import type { DrafterRow } from "../continuo/roles.js";
 import { findingBasisText, type JsonRecord, type LapReading } from "../store/records.js";
+import { sectionFramer } from "./framing.js";
 import { answerJson, DRAFTER_INPUT_BOUND_BYTES, type DrafterRun } from "./model-draft.js";
 
 /**
@@ -127,14 +128,7 @@ function carried(material: ReviseMaterial): string[] {
  * 3.1). Deterministic: the same material is the same document.
  */
 export function reviseDocument(material: ReviseMaterial): string {
-  const texts = carried(material);
-  let n = 0;
-  while (texts.some((text) => text.includes(`@@RONDO-${String(n)}@@`))) {
-    n += 1;
-  }
-  const mark = `@@RONDO-${String(n)}@@`;
-  const section = (name: string, body: string): string =>
-    `${mark} BEGIN ${name}\n${body === "" ? "(none)" : body}\n${mark} END ${name}`;
+  const { mark, section } = sectionFramer(carried(material));
   const { reading } = material;
   const count = reading.findings.length;
   return [

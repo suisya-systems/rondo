@@ -35,6 +35,7 @@ import {
   readingCoverage,
   severityAtOrAbove,
 } from "../store/records.js";
+import { sectionFramer } from "./framing.js";
 
 /** A scope's review-round budget when it names none (D-0066 1.2.4, `budgets.review_rounds`). */
 export const DEFAULT_REVIEW_ROUND_BUDGET = 3;
@@ -256,14 +257,7 @@ const INSTRUCTIONS = [
  * the same document, and so the same delivered digest.
  */
 export function reviewDocument(material: ReviewMaterial): string {
-  const carriedText = carried(material);
-  let n = 0;
-  while (carriedText.some((text) => text.includes(`@@RONDO-${String(n)}@@`))) {
-    n += 1;
-  }
-  const mark = `@@RONDO-${String(n)}@@`;
-  const section = (name: string, body: string): string =>
-    `${mark} BEGIN ${name}\n${body}\n${mark} END ${name}`;
+  const { mark, section } = sectionFramer(carried(material));
 
   const { severities } = material.criterion;
   const transcript =
@@ -304,9 +298,7 @@ export function reviewDocument(material: ReviewMaterial): string {
     section("RATIONALE (a claim to check)", material.rationale ?? "(none given)"),
     section(
       "DETERMINISTIC FINDINGS",
-      material.deterministicFindings.length === 0
-        ? "(none)"
-        : material.deterministicFindings.map((f) => `- ${f}`).join("\n"),
+      material.deterministicFindings.map((f) => `- ${f}`).join("\n"),
     ),
     section(
       "RULES",

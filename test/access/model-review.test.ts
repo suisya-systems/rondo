@@ -488,8 +488,11 @@ test("a commit prefix two delivered commits share resolves to neither", () => {
 });
 
 test("the input bound is in UTF-8 bytes: at the bound is ready, one byte over is refused", () => {
-  const empty = new TextEncoder().encode(reviewDocument(material({ prompt: "" }))).length;
-  const room = MODEL_REVIEW_INPUT_BOUND_BYTES - empty;
+  // A 1-byte prompt, not an empty one: an empty PROMPT section reads "(none)" (the
+  // shared framing's empty-section guard), which is not the zero-byte body this
+  // measurement needs.
+  const onePromptByte = new TextEncoder().encode(reviewDocument(material({ prompt: "x" }))).length;
+  const room = MODEL_REVIEW_INPUT_BOUND_BYTES - onePromptByte + 1;
   // Two bytes, one UTF-16 unit: the prompt is about half the bound in characters.
   const prompt = (bytes: number): string => "x".repeat(bytes % 2) + "\u00e9".repeat(bytes >> 1);
   const prepare = (bytes: number): ReviewPreparation =>
@@ -536,6 +539,20 @@ test("an unread transcript is refused after the material check and before the bo
   });
   expect(noCriterion.kind === "refused" && noCriterion.draft.unavailableReason).toContain(
     "D-0029 rule 13",
+  );
+});
+
+test("empty sections read '(none)': no rule files, no deterministic findings, no rationale", () => {
+  const doc = reviewDocument(
+    material({ ruleFiles: [], deterministicFindings: [], rationale: null }),
+  );
+  expect(doc).toMatch(/@@RONDO-\d+@@ BEGIN RULES\n\(none\)\n@@RONDO-\d+@@ END RULES/);
+  expect(doc).toMatch(
+    /@@RONDO-\d+@@ BEGIN DETERMINISTIC FINDINGS\n\(none\)\n@@RONDO-\d+@@ END DETERMINISTIC FINDINGS/,
+  );
+  // The rationale keeps its own wording for "none": it is optional material, not a list.
+  expect(doc).toMatch(
+    /@@RONDO-\d+@@ BEGIN RATIONALE \(a claim to check\)\n\(none given\)\n@@RONDO-\d+@@ END RATIONALE \(a claim to check\)/,
   );
 });
 
