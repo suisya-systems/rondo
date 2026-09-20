@@ -449,6 +449,17 @@ test("a bare #N is read in the repository of the plan its request is drafted fro
     await bareIssueRepository(rowsHolding([heldIn("/srv/a", null), b], []), "r1", NAMED_AT),
   ).toEqual({ disputed: true });
 
+  // **Setup run again for a repository it already recorded is one answer.** An
+  // older plan of that repository naming no slug says nothing about it, which
+  // is how a store set up before D-0081 comes to name its slug (rule 6.2).
+  expect(
+    await bareIssueRepository(rowsHolding([heldIn("/srv/a", null), a], []), "r1", NAMED_AT),
+  ).toEqual({ repo: "o/a" });
+  // Two slugs recorded for one repository is a conflict, not a record of it.
+  expect(
+    await bareIssueRepository(rowsHolding([a, heldIn("/srv/a", "o/other")], []), "r1", NAMED_AT),
+  ).toEqual({ disputed: true });
+
   // **A scope older than the message that named the issue settles nothing.**
   // A person replying in this thread with work in another repository is
   // answered on the reader's own pass, before any draft over that reply can

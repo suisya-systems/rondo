@@ -329,11 +329,27 @@ export async function bareIssueRepository(
   // re-test of a scope compares them (D-0066 rule 1.2.2).
   const scoped = new Set(inForce?.payload.workspaces.map((workspace) => workspace.repository));
   const inPlay = scoped.size === 0 ? held : held.filter((plan) => scoped.has(plan.repository));
-  // **A plan carrying no slug is the host's `--repo`, plan by plan** (rule
-  // 6.3), and where the host names none it is a candidate whose repository is
-  // simply not known -- kept in the count as itself, so that it standing
-  // beside a second repository's plan is two answers and not agreement.
-  const candidates = new Set(inPlay.map((plan) => plan.forgeRepository ?? ports.hostRepo));
+  // **The answer is per repository, not per plan.** Setup may be run again for
+  // a repository it already recorded -- which is how a store set up before
+  // D-0081 comes to name its slug at all (rule 6.2) -- so one repository can
+  // hold both a plan that names its slug and an older one that names none.
+  // Within a repository, the plan that names one is that repository's record
+  // of it and the one that names none says nothing about it; a repository no
+  // plan of which names one is the host's `--repo` (rule 6.3), and where the
+  // host names none too, its repository is simply not known and counts as
+  // itself -- so standing beside a second repository's it is two answers and
+  // not agreement.
+  const named = new Map<string, Set<string>>();
+  for (const plan of inPlay) {
+    const slugs = named.get(plan.repository) ?? new Set<string>();
+    named.set(plan.repository, slugs);
+    if (plan.forgeRepository !== null) {
+      slugs.add(plan.forgeRepository);
+    }
+  }
+  const candidates = new Set<string | null>(
+    [...named.values()].flatMap((slugs) => (slugs.size === 0 ? [ports.hostRepo] : [...slugs])),
+  );
   return candidates.size > 1 ? { disputed: true } : { repo: [...candidates][0] ?? ports.hostRepo };
 }
 
