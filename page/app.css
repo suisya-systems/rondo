@@ -18,6 +18,7 @@
  */
 @import "./faces.css";
 @import "./list.css";
+@import "./thread.css";
 @source "../src/access/**/*.tsx";
 
 /*

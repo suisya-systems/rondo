@@ -1,0 +1,91 @@
+/*
+ * The centre face: the thread (DECISIONS.md D-0083 rules 5 and 7).
+ *
+ * The event line is rule 7's: one line, 28px, a dot, a sentence, the time at
+ * the right edge. The dot's colour is the kind and follows D-0082 rule 2 --
+ * and there is no amber here on purpose. Amber means *a person must act*, and
+ * an event line is something that already happened; what waits on a person is
+ * the question box.
+ */
+
+.ev {
+  display: grid;
+  grid-template-columns: 28px 1fr auto;
+  gap: 14px;
+  align-items: start;
+  padding: 3px 0;
+  min-height: 28px;
+  max-width: 780px;
+}
+
+.ev p {
+  grid-column: 2;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--color-muted-foreground);
+  /* Rule 1: prose stays at 45 to 90 characters at every width. */
+  max-width: 48em;
+}
+
+.ev time {
+  grid-column: 3;
+  padding-top: 2px;
+  font-size: 12px;
+  color: var(--color-muted-foreground);
+  white-space: nowrap;
+}
+
+.ev-dot {
+  grid-column: 1;
+  justify-self: center;
+  width: 7px;
+  height: 7px;
+  margin-top: 9px;
+  border-radius: 50%;
+  background: var(--color-border);
+}
+
+/* The person's own act: ink, because it is theirs. */
+.ev-person .ev-dot {
+  background: var(--color-foreground);
+}
+
+.ev-passed .ev-dot {
+  background: var(--color-ok);
+}
+
+.ev-failed .ev-dot {
+  background: var(--color-fail);
+}
+
+/*
+ * Hollow: rondo decided this without asking. It is drawn as an outline
+ * because it is an act with nobody in it -- the shape of the others, with the
+ * middle missing.
+ */
+.ev-decided .ev-dot {
+  background: none;
+  border: 2px solid var(--color-muted-foreground);
+}
+
+/* A decision taken without asking is not muted: it is a thing to read. */
+.ev-decided p {
+  color: var(--color-foreground);
+}
+
+/* The line where the person's reading stopped: one in the thread (rule 7). */
+.thread-since {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 12px 0;
+  font-size: 12px;
+  color: var(--color-muted-foreground);
+}
+
+.thread-since::before,
+.thread-since::after {
+  content: "";
+  flex: 1;
+  border-top: 1px solid var(--color-border);
+}
