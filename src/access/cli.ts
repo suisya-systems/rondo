@@ -3866,8 +3866,15 @@ export async function claimThenWalk(
  * reachable when continuo is one of the stuck things. A press is the first
  * moment this surface actually needs a continuo, and a start that fails is a
  * refusal on the page instead of a page that never appeared.
+ *
+ * Exported so a test can drive it, as the other three presses
+ * ({@link startScopedFromPage}, {@link reviseFromPage},
+ * {@link publishFromPage}) already are: the success path of this one is only
+ * reachable over a real continuo holding a real open gate, and a test that
+ * composed `claimThenWalk` and `resume` itself would be the second
+ * implementation this function exists to not have (rondo#239).
  */
-async function answerFromPage(
+export async function answerFromPage(
   environment: Readonly<Record<string, string | undefined>>,
   store: IterationStore,
   storePath: string,
