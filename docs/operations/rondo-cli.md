@@ -80,7 +80,8 @@ It builds rondo, clones and builds the pinned continuo, creates the control plan
 target repository with a `main` branch to run laps against and a bare repository beside it as that
 target's `origin`, writes a complete `plan-PROJECT.json` and an `env.sh` holding section 2's three exports,
 records that plan into rondo's store with `rondo setup-plan` so the page offers it with nothing
-pasted (D-0075), writes the one word that starts rondo and the service it hands the host to
+pasted (D-0075), **asks once which language you read** and remembers the answer (rondo#352, below),
+writes the one word that starts rondo and the service it hands the host to
 (D-0080, below) -- and then prints the commands below with the real paths filled in. It **never runs a lap**:
 everything it does is free, and `start` is the line that is not.
 
@@ -204,8 +205,42 @@ export RONDO_OPERATOR_LANGUAGE=ja   # an IETF language tag; unset means English
 ```
 
 It is a **host** fact, beside `RONDO_APPROVER`, because the host has one operator and their language
-is a property of the host in the same way the store's path is. There is no file, no per-lap override
-and no plan field; and it is recorded nowhere.
+is a property of the host in the same way the store's path is. There is no per-lap override and no
+plan field, and the host reads this one variable and nothing else.
+
+**Setup asks you this once, so it is not a variable you have to know about** (rondo#352, the shape
+D-0080 gave starting the host). The question is two lines, each language named in itself, and it
+comes before anything is built:
+
+```
+   Which language do you read? rondo writes its own prose to you in it.
+   rondo の画面はあなたが読む言葉で書かれます。どちらを読みますか。
+
+     1) English
+     2) 日本語
+
+   [1/2]
+```
+
+The answer goes into `<root>/operator-language`, **a plain file you can open and change**, and from
+there into the service the word starts and into `env.sh` -- so the page is in your language whether
+the host was started by the word, by the service manager at login, or by hand in a sourced shell,
+and a fresh shell or a second machine's setup does not ask you to remember anything. It asks again
+only when you ask it to:
+
+```sh
+scripts/dogfood-env.sh --language ask      # put the question again
+scripts/dogfood-env.sh --language zh-Hant  # or name the tag outright
+```
+
+Editing that file and running setup again does the same thing, and **emptying it is how you say
+English**: a record that is there and names no tag is an answer, not a question waiting to be asked
+again. Nothing is guessed from this
+machine's locale: an unanswered question is English, which is where the resolution below already
+ends. A setup with nobody at the terminal -- a script, a CI job -- is not asked and records nothing.
+The variable is still the whole of what the host reads: this file is setup's memory of your answer,
+in the same standing as the store's path and the approver's name, which setup also resolves and
+writes into the service rather than leaving for the host to discover.
 
 **It is one of five steps, and the first answer wins** (`D-0056`). The page's language is resolved
 per request, in this order:
