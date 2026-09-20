@@ -32,10 +32,20 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 
+/**
+ * Read with line endings normalised, because this file's own cell is a Windows
+ * cell.
+ *
+ * `.gitattributes` pins the page's sources to LF and nothing else, so Git for
+ * Windows' `core.autocrlf` gives the Windows checkout a CRLF `ci.yml` -- and
+ * every assertion below that spans a newline would fail there on a workflow
+ * that is perfectly correct. That failure would arrive in the nightly, be red
+ * in exactly the cell this file is about, and say nothing true about it.
+ */
 const WORKFLOW = readFileSync(
   join(import.meta.dirname, "..", "..", ".github", "workflows", "ci.yml"),
   "utf8",
-);
+).replace(/\r\n/g, "\n");
 const LINES = WORKFLOW.split("\n").filter((line) => !/^\s*#/.test(line));
 const CODE = LINES.join("\n");
 
