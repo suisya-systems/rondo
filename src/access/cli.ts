@@ -125,6 +125,7 @@ import {
 } from "./forge.js";
 import { type InboxOutcome, showInbox, type TranscriptLocation } from "./inbox.js";
 import {
+  bareIssueRepository,
   issueReader,
   issuesQuote,
   PROMPT_TRANSPORT_BOUND_BYTES,
@@ -132,7 +133,7 @@ import {
   unreadIssues,
 } from "./issue-read.js";
 import { isModelDrafterName } from "./model-draft.js";
-import { draftedPlanRun, type HeldPlan, heldPlanByDigest } from "./model-drafter.js";
+import { draftedPlanRun, type HeldPlan, heldPlanByDigest, heldPlans } from "./model-drafter.js";
 import { modelReadingLines } from "./model-review.js";
 import { modelReviewPorts, takeModelReading } from "./model-reviewer.js";
 import { denialLine, evidenceOf, LIST_LIMIT, READING_REMOTE, uncommittedPaths } from "./review.js";
@@ -1707,14 +1708,28 @@ export async function main(
     // message the command line wrote while the page runs is found too.
     // **And the issue reader before it** (D-0078 section 2.4): an issue a
     // message names is read here, outside any lap, through the operator's own
-    // `gh`, and the drafter waits for it (section 3.3). A bare `#N` is read in
-    // the repository `--repo` names, the one this host opens pull requests
-    // in; with no `--repo` it is a read that fails and says so (the first
-    // residual, left open).
+    // `gh`, and the drafter waits for it (section 3.3).
+    //
+    // **A bare `#N` is read in the repository of the plan its request is
+    // drafted from** (D-0081 rule 3.4), which `bareIssueRepository` reads off
+    // the rows this store holds; `--repo` is what answers for a store whose
+    // plans name none, as it is what such a store publishes by (rule 6.3).
+    // Where more than one repository is still in play the read waits for the
+    // person, so the drafter is handed `unreadUnderway` and not `unread`: its
+    // ask is what that read is waiting for.
     const issues = issueReader({
       record,
       read: readIssueFromForge,
-      forgeRepo: parsed.repo,
+      bareRepository: async (requestMessageId, namedAtMs) =>
+        await bareIssueRepository(
+          {
+            record,
+            held: async (id) => await heldPlans({ store, record, now: Date.now }, id),
+            hostRepo: parsed.repo,
+          },
+          requestMessageId,
+          namedAtMs,
+        ),
       now: Date.now,
       mintId: () => newDraftId("forge"),
       log: say,
@@ -1729,7 +1744,7 @@ export async function main(
       mintId: newDraftId,
       language: selected.tag,
       log: say,
-      issuesUnread: issues.unread,
+      issuesUnread: issues.unreadUnderway,
     });
 
     // **And the revise drafter beside it** (D-0077 rule 2.2): a model reading
