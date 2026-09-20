@@ -18,7 +18,7 @@ import {
   newerModelReading,
   REVISE_ANSWER,
   reviseRows,
-} from "./revise-drafter-world.js";
+} from "./page-world.js";
 
 test("the revise drafter writes one row per reading, under its own name, and is not run twice over one (D-0077 rules 1.2, 2.2, 5.1)", async () => {
   const world = fresh();

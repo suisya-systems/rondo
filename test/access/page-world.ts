@@ -1,7 +1,6 @@
 /**
- * A world for the revise drafter (DECISIONS.md D-0077), shared by the cases
- * that are about the drafter and the ones that are about the page drawing its
- * result.
+ * A world the page's suites are built over: a store, a lap at its gate, the
+ * ports the renderer is handed, and the revise drafter (DECISIONS.md D-0077).
  *
  * **Its own module since the page's rebuild.** `src/access/revise-drafter.ts`'s
  * coverage used to live inside `test/access/web.test.ts`, so replacing the view
@@ -18,6 +17,8 @@
 import { DatabaseSync } from "node:sqlite";
 import { expect } from "vitest";
 import { reviseDrafterHost } from "../../src/access/revise-drafter.js";
+import { type PublishReading, operatorPage as renderPage } from "../../src/access/web.js";
+import { AnswerPort, type ServedPorts } from "../../src/access/web-app.js";
 import { allocate } from "../../src/refrain/allocator.js";
 import { admittedPlan, planPayload, type RunPlan, runPlan } from "../../src/refrain/plan.js";
 import type { JsonRecord } from "../../src/store/records.js";
@@ -293,3 +294,103 @@ export const REVISE_ANSWER = {
     { finding: 1, change: "Stop after the budget's last try.\nSay so in the log." },
   ],
 };
+
+/**
+ * The page as a person's browser reads its text.
+ *
+ * **One spelling normalised, and only one.** `hono/jsx` escapes `'` as `&#39;`
+ * where the hand-written renderer left it alone (D-0059 rule 2), which is the
+ * same character to every browser. The catalogue's sentences quote tokens in
+ * `'...'`, so the content assertions below are made against the character and
+ * not against which of two correct spellings the escaper chose. Every other
+ * escape -- `&lt;`, `&quot;`, `&amp;` -- is still asserted as written.
+ */
+export const operatorPage = async (...args: Parameters<typeof renderPage>): Promise<string> =>
+  (await renderPage(...args)).replaceAll("&#39;", "'");
+
+/** Material that is only its text: no gate question read and no range named. */
+export const asText = (...lines: string[]) => ({ lines, why: null, work: null });
+
+/** Every press this surface let through, in order. */
+export type Pressed = { iterationId: string; body: string }[];
+
+export function portsOver(
+  world: ReturnType<typeof fresh>,
+  actorId: string | null = "ada",
+  pressed: Pressed | null = null,
+  // **The host's statement as a tag, and one step of five** (D-0056 rule 3).
+  // The set a page is rendered in is the fourth argument to `operatorPage`
+  // rather than a member of the ports, because five steps decide it per
+  // request; `null` is a host that said nothing.
+  hostLanguage: string | null = null,
+  // **The approval the lap at the gate was admitted under** (rondo#233 S4), or
+  // null for a lap admitted under none -- which is the real reader's answer for
+  // every row these tests reserve, and the state the gate says *no change from
+  // here* in. The row itself is `test/store/scope-record.test.ts`'s.
+  scopeDecision: string | null = null,
+  // **The dry-run the publish screen is drawn from** (rondo#233 S5), or null
+  // for a host that named no forge repository -- which is every other test
+  // here, and the state the summary draws no publish link in.
+  publishing: PublishReading | null = null,
+): ServedPorts {
+  return {
+    store: world.store,
+    record:
+      scopeDecision === null
+        ? world.record
+        : { ...world.record, scopeDecisionAdmitting: async () => scopeDecision },
+    hostLanguage,
+    now: () => 5_000,
+    // The page draws `inbox`'s lines, so it carries `inbox`'s one outward
+    // port; nothing in these tests runs a lap, so it is never asked (D-0048
+    // rule 6 asks only of `performing` rows).
+    locateTranscript: async () => ({
+      kind: "unknown",
+      reason: "no continuo in this test",
+    }),
+    // Asked only on the log screen, and only after `locateTranscript` named a
+    // directory -- which it never does here unless a test says so.
+    readLog: () => ({ kind: "unread", reason: "no transcript in this test" }),
+    policy: { maxOccupying: 4, maxLive: 6 },
+    actorId,
+    material:
+      pressed === null ? null : async (_wording, record) => asText(`work    rondo/${record.id}`),
+    answer:
+      pressed === null
+        ? null
+        : new AnswerPort(async (iterationId, body) => {
+            pressed.push({ iterationId, body });
+            return await Promise.resolve({ ok: true, note: "answered" });
+          }),
+    // The thread's sends are `test/access/web-app.test.ts`'s door; this page
+    // test draws no send form.
+    say: null,
+    // The scope screen's own door is `test/access/web-app.test.ts`'s too.
+    scope: null,
+    // The revise press's own door is `test/access/web-app.test.ts`'s, as the
+    // approve press's is; what this file tests is the form the page draws for
+    // it (rondo#233 S4). The publish press is the same split (rondo#233 S5):
+    // the door is that file's, the screen is this one's.
+    revise: null,
+    publish: null,
+    release: null,
+    releasable: actorId !== null,
+    publishing,
+  };
+}
+
+export const structured = async () =>
+  await Promise.resolve({
+    lines: ["work    rondo/i-0001", "fence   the whole text"],
+    why: "I could not run the suite.",
+    work: {
+      kind: "read" as const,
+      baseRef: "origin/main",
+      baseCommit: "a".repeat(40),
+      tipCommit: "b".repeat(40),
+      commits: [{ abbreviatedSha: "3f2a1c9", subject: "feat: retry budget" }],
+      files: [{ path: "src/notifier.ts", added: 64, deleted: 12 }],
+      uncommitted: [],
+      checkedOut: "rondo/i-0001",
+    },
+  });
