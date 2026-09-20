@@ -82,15 +82,29 @@ record="$root/operator-language"
 # the unit is a host that refuses to start (`operatorLanguage` in
 # src/access/cli.ts), which is a setup that reported success and left a page
 # nobody can open.
+#
+# **The whole value, and not a line of it.** `grep` matches a line, so a value
+# holding a newline -- `ja` and then something else -- would pass on its first
+# line and be written into the unit whole, where the host refuses it. bash's
+# own `=~` anchors on the string, which is the thing being checked.
 valid() {
-  printf '%s' "$1" | grep -qE '^[A-Za-z]{2,8}(-[A-Za-z0-9]{1,8})*$'
+  [[ $1 =~ ^[A-Za-z]{2,8}(-[A-Za-z0-9]{1,8})*$ ]]
 }
 
 # The remembered tag, or empty. Comments and blank lines are skipped because
 # the file is written with a header explaining itself: the operator is meant to
 # be able to open it and know what they are looking at.
+#
+# **A record that is there and says nothing is an answer**, and the answer is
+# English -- which is what the file's own header tells the operator emptying it
+# will happen. So its existence is tracked apart from its content: falling back
+# from an emptied record to the environment would let a variable left in a
+# sourced `env.sh` put back the language they just removed, and writing it
+# there would undo the edit as well.
 remembered=
+answered=0
 if [ -f "$record" ]; then
+  answered=1
   remembered=$(sed -e 's/#.*//' -e 's/[[:space:]]//g' -- "$record" | grep -v '^$' | head -n 1 || true)
   if [ -n "$remembered" ] && ! valid "$remembered"; then
     die "'$record' holds '$remembered', which is not an IETF language tag. A tag is a primary subtag and optional hyphenated subtags -- 'ja', 'zh-Hant'. Fix it, or empty the file for English."
@@ -134,14 +148,14 @@ case "$given" in
     ;;
   '')
     tag=$remembered
-    if [ -z "$tag" ]; then
+    if [ -z "$tag" ] && [ "$answered" -eq 0 ]; then
       tag=$from_environment
-    fi
-    # Asked only where there is somebody to ask. A setup run from a script, a
-    # CI job or a sandbox is nobody saying anything, which is what English is
-    # the floor for.
-    if [ -z "$tag" ] && [ -t 0 ]; then
-      tag=$(ask)
+      # Asked only where there is somebody to ask, and only where nobody has
+      # answered yet. A setup run from a script, a CI job or a sandbox is
+      # nobody saying anything, which is what English is the floor for.
+      if [ -z "$tag" ] && [ -t 0 ]; then
+        tag=$(ask)
+      fi
     fi
     ;;
   *)

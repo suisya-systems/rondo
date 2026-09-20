@@ -233,7 +233,9 @@ scripts/dogfood-env.sh --language ask      # put the question again
 scripts/dogfood-env.sh --language zh-Hant  # or name the tag outright
 ```
 
-Editing that file and running setup again does the same thing. Nothing is guessed from this
+Editing that file and running setup again does the same thing, and **emptying it is how you say
+English**: a record that is there and names no tag is an answer, not a question waiting to be asked
+again. Nothing is guessed from this
 machine's locale: an unanswered question is English, which is where the resolution below already
 ends. A setup with nobody at the terminal -- a script, a CI job -- is not asked and records nothing.
 The variable is still the whole of what the host reads: this file is setup's memory of your answer,

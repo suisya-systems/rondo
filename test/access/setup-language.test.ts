@@ -132,12 +132,31 @@ posix("the host's variable seeds a first run and never overwrites an answer", ()
   expect(recorded(second)).toBe("en");
 });
 
+posix("a record emptied on purpose is an answer, and the answer is English", () => {
+  const where = root();
+  ask(where, ["--language", "ask"], "2\n");
+
+  // What the file's own header tells them emptying it does. A variable left
+  // in a sourced env.sh from the last setup must not put back the language
+  // they just removed -- nor be written into the file, undoing the edit.
+  writeFileSync(join(where, "operator-language"), "# I read English now\n");
+
+  expect(ask(where, ["--from-environment", "ja"])).toBe("");
+  expect(recorded(where)).toBe(null);
+});
+
 posix("a tag no host would start on is refused rather than recorded", () => {
   const where = root();
 
   // `ja_JP` is a locale and not a tag, which is the mistake the runbook's
   // refusal table already names.
   expect(() => ask(where, ["--language", "ja_JP"])).toThrow();
+  expect(recorded(where)).toBe(null);
+
+  // A value whose *first line* is a tag is not a tag: what would be written
+  // into the unit is the whole of it, and the host refuses the whole of it.
+  expect(() => ask(where, ["--language", "ja\nnot a tag"])).toThrow();
+  expect(() => ask(where, ["--from-environment", "ja\nnot a tag"])).toThrow();
   expect(recorded(where)).toBe(null);
 
   // The same refusal on the way back out, so a record edited into nonsense is
