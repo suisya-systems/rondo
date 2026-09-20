@@ -150,7 +150,7 @@ import { isLive, type PageView, viewHref } from "./page-logic/routes.js";
 import { selectRequest, walkPosition } from "./page-logic/selection.js";
 import { lapEvents } from "./page-logic/thread-events.js";
 import { firstLine, lineOf, replyTarget, type Threads, threadsOf } from "./page-logic/threads.js";
-import { stepsOf, WEEK_MS, weekFigures } from "./page-logic/week.js";
+import { finishedAt, stepsOf, WEEK_MS, weekFigures } from "./page-logic/week.js";
 import { denialLine, LIST_LIMIT } from "./review.js";
 import { reviseText } from "./revise-draft.js";
 import { approvalTip, budgetRefusal } from "./scope.js";
@@ -3203,24 +3203,20 @@ export async function operatorPage(
                 .filter((message) => message.inReplyTo === null)
                 .map((message) => message.atMs),
               /*
-               * **A request and not a lap** (rule 2's unit): a request tried
-               * three times and taken in once has finished once, and counting
-               * its closed laps would say three beside an *asked* that counted
-               * the request as one.
+               * **A request and not a lap, and only one that has stopped**
+               * (`page-logic/week.ts`): the laps are grouped by their request,
+               * and a request with anything still running under it has not
+               * finished however many of its laps have closed.
                */
-              finishedAtMs: [
-                ...terminal
-                  .filter((record) => record.status === "closed")
-                  .reduce(
-                    (byRequest, record) =>
-                      byRequest.set(
-                        record.requestMessageId,
-                        Math.max(byRequest.get(record.requestMessageId) ?? 0, record.updatedAtMs),
-                      ),
-                    new Map<string, number>(),
-                  )
-                  .values(),
-              ],
+              finishedAtMs: finishedAt(
+                [...allLapsByRequest.values()].map((laps) =>
+                  laps.map((lap) => ({
+                    status: lap.record.status,
+                    updatedAtMs: lap.record.updatedAtMs,
+                  })),
+                ),
+                (status) => isTerminal(status as IterationRecord["status"]),
+              ),
               answeredAtMs: [
                 ...weekChanges
                   .filter(

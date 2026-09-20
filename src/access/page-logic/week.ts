@@ -120,6 +120,39 @@ export function weekFigures(reads: WeekReads, nowMs: number): WeekFigures {
   };
 }
 
+/** One lap, narrowed to what *finished* is read from. */
+export interface FinishedLap {
+  readonly status: string;
+  readonly updatedAtMs: number;
+}
+
+/**
+ * When each **request** finished, given every lap under each of them.
+ *
+ * **A request and not a lap** (rule 2's unit): a request tried three times and
+ * taken in once has finished once, so the laps are grouped by their request
+ * and the newest closing is the moment.
+ *
+ * **And only where nothing under it is still going.** A closed lap with a
+ * running revision beside it is a request still being worked on: counting it
+ * would put the same request under *finished* and under *work under way* at
+ * once, and count it again the week the next revision closes.
+ *
+ * `isTerminal` is handed in rather than imported for `lapEvents`'s reason: the
+ * store owns which statuses are terminal, and this owns what is counted.
+ */
+export function finishedAt(
+  requests: readonly (readonly FinishedLap[])[],
+  isTerminal: (status: string) => boolean,
+): number[] {
+  return requests.flatMap((laps) => {
+    const closed = laps.filter((lap) => lap.status === "closed");
+    return closed.length === 0 || !laps.every((lap) => isTerminal(lap.status))
+      ? []
+      : [Math.max(...closed.map((lap) => lap.updatedAtMs))];
+  });
+}
+
 /** The five steps rule 4 puts under a running request, in the order they happen. */
 export type StepName = "work" | "checks" | "reading" | "approval" | "landing";
 

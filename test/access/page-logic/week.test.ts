@@ -10,6 +10,7 @@
  */
 import { expect, test } from "vitest";
 import {
+  finishedAt,
   GATE_ANSWERS_NOT_DATED,
   stepsOf,
   WEEK_MS,
@@ -157,4 +158,40 @@ test("the one answer this figure cannot date is named rather than guessed at", (
   // which is what `WITHHELD_NOT_READ` does for the governance line.
   expect(GATE_ANSWERS_NOT_DATED).toContain("gate");
   expect(GATE_ANSWERS_NOT_DATED).toContain("dated");
+});
+
+const TERMINAL = (status: string) => ["closed", "failed", "abandoned"].includes(status);
+
+test("a request finishes once, at its newest closing", () => {
+  // Rule 2's unit is the request: three tries and one taking-in is one
+  // finish, dated by the try that was taken in.
+  expect(
+    finishedAt(
+      [
+        [
+          { status: "closed", updatedAtMs: 10 },
+          { status: "failed", updatedAtMs: 20 },
+        ],
+      ],
+      TERMINAL,
+    ),
+  ).toEqual([10]);
+});
+
+test("a request with work still under way has not finished", () => {
+  // Otherwise the same request is under *finished* and under *work under way*
+  // at once, and is counted again the week its next revision closes.
+  expect(
+    finishedAt(
+      [
+        [
+          { status: "closed", updatedAtMs: 10 },
+          { status: "performing", updatedAtMs: 30 },
+        ],
+      ],
+      TERMINAL,
+    ),
+  ).toEqual([]);
+  // And a request that only ever stopped has not finished either.
+  expect(finishedAt([[{ status: "abandoned", updatedAtMs: 10 }]], TERMINAL)).toEqual([]);
 });
