@@ -61,8 +61,10 @@ export const ITERATION_ID_PATTERN = /^[a-z][a-z0-9_-]{0,63}$/;
 /**
  * The prefix every derived workspace component carries (D-0023 rule 28).
  *
- * **Windows, not tidiness.** `windows-latest` is a required cell of the
- * double-green matrix, and Windows reserves `con`, `nul`, `aux`, `prn`,
+ * **Windows, not tidiness.** `windows-latest` is a cell of the double-green
+ * matrix -- nightly and on demand since `D-0087`, so a break here is found by
+ * the next nightly rather than before merge -- and Windows reserves `con`,
+ * `nul`, `aux`, `prn`,
  * `com1`..`com9` and `lpt1`..`lpt9` as device names in *any* path component.
  * Every one of them matches {@link ITERATION_ID_PATTERN}, so a bare component
  * would let an admissible iteration id produce a directory `git worktree add`

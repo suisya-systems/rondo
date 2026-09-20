@@ -102,6 +102,14 @@ On 2026-09-21, on rondo#332 / PR #334, with `double-green (windows-latest, node
 - **Splitting `test/access/web.test.ts` was raised as its own task.** It is the
   only large lever on the wall time, and it thins the number of heavy tests
   landing in one worker, so it bears on both the speed and the episodes.
+- **The cell was moved off the pull-request path**, on 2026-09-21, by `D-0087`
+  and rondo#336 — after these numbers, and not by them alone. What they
+  contribute is the negative half: the ceiling is not the problem and no
+  arrangement of the suite's files fixes it, so what remained was *when* the
+  cell runs rather than *how long it takes*. The operator's own reasoning is
+  recorded on the issue and goes further than anything measured here: even at
+  continuo's post-fix Windows speed of 7–9 minutes, seven minutes in front of a
+  merge is still seven minutes every pull request waits on.
 - **What causes the episodes is not settled here.** Contention between
   process-spawning files is consistent with every number above, but so is a
   noisy neighbour or an antivirus scan on the runner. Telling those apart needs
