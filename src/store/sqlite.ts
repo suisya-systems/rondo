@@ -3829,8 +3829,14 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
           // One statement and no interpolation, like every other read here.
           // `rule_name` cannot be null on a withheld row: the table's CHECK
           // refuses one, so the grouping is over a value that is always there.
+          // **The kind is part of the identity** (Codex): a subject is a
+          // `(subjectKind, subjectId)` pair, and the table admits iterations
+          // and readings beside proposals -- so matching the id alone would
+          // attribute a withholding about another kind of subject to this
+          // request the moment two id spaces met.
           "SELECT rule_name, count(*) AS n FROM operator_attention " +
-            "WHERE disposition = 'withheld' AND subject_id IS NOT NULL AND subject_id IN (" +
+            "WHERE disposition = 'withheld' AND subject_kind = 'proposal' " +
+            "AND subject_id IS NOT NULL AND subject_id IN (" +
             "SELECT proposal_id FROM proposal WHERE elevated_from_message_id = ? OR " +
             "iteration_id IN (SELECT id FROM iteration WHERE request_message_id = ?)) " +
             "GROUP BY rule_name ORDER BY rule_name",

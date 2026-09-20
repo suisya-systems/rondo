@@ -186,10 +186,21 @@ export interface StepReading {
  * the same two sources `lapEvents` draws the thread's lines from, so the face
  * and the thread cannot disagree about what has happened.
  *
- * **The last step is the person's whatever else is true.** rondo does not
- * merge: `merge_default_branch` is no member of the acts a scope may permit
- * (`page-logic/governance.ts`), so drawing *taking it in* as *ahead* would
- * suggest rondo were going to do it.
+ * **The last step is the person's whatever else is true, and it never reads
+ * as done.** rondo does not merge: `merge_default_branch` is no member of the
+ * acts a scope may permit (`page-logic/governance.ts`), so drawing *taking it
+ * in* as *ahead* would suggest rondo were going to do it -- and marking it
+ * *done* because the lap closed would claim something rondo never watched.
+ *
+ * **That claim used to be made, and rondo#350 is where it showed.** A lap
+ * closes the moment its gate reaches a terminal outcome, with no publish and
+ * no merge between; while these steps were drawn only under *running* work
+ * (rule 4) no closed lap ever reached them, so `closed` standing for *taken
+ * in* was invisible. Rule 6 draws the same five steps under a request being
+ * answered, where a closed lap is the ordinary case, and the face would have
+ * said the work had landed for every request whose gate was answered. Rule
+ * 6's own chain has always said *merge* is the person's and never done
+ * (`page-logic/governance.ts`); this now says the same thing.
  *
  * **Exactly one step is `waiting`, and at a gate it is the person's.** A lap
  * standing at a gate has done its work whatever its readings say, so marking
@@ -220,6 +231,6 @@ export function stepsOf(
         state: done[name] ? "done" : name === waitingAt ? "waiting" : "ahead",
       }),
     ),
-    { name: "landing", state: closed ? "done" : "yours" },
+    { name: "landing", state: "yours" },
   ];
 }

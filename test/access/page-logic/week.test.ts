@@ -124,16 +124,23 @@ test("at a gate the step the work is on is the person's, whatever its readings s
   expect(checked.map((step) => step.state)).toEqual(["done", "done", "done", "waiting", "yours"]);
 });
 
-test("taking the work in is never rondo's, and is done only where the work closed", () => {
+test("taking the work in is never rondo's, and a closed lap is not evidence it happened", () => {
   // `merge_default_branch` is no member of the acts a scope may permit, so no
   // approval can put rondo on this step (page-logic/governance.ts).
   expect(stepsOf(lap({ gateOutcome: "approved" }), []).at(-1)).toEqual({
     name: "landing",
     state: "yours",
   });
+  // **And a closed lap does not make it done** (rondo#350, Codex). A lap
+  // closes the moment its gate reaches a terminal outcome, with no publish and
+  // no merge between, so marking the step done there claims something rondo
+  // never watched -- which rule 6's chain has always refused to claim for
+  // *merge*. It was invisible while these steps were drawn only under running
+  // work; rule 6 draws them under a request being answered, where a closed lap
+  // is the ordinary case.
   expect(stepsOf(lap({ status: "closed" }), []).at(-1)).toEqual({
     name: "landing",
-    state: "done",
+    state: "yours",
   });
 });
 
