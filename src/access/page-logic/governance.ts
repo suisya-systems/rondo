@@ -100,6 +100,29 @@ export interface Governance {
  *   can put rondo on this step. Drawing it as *ahead* would suggest rondo were
  *   going to do it.
  */
+/**
+ * What one approval has spent and what it allows, as the pair rule 6 never
+ * separates.
+ *
+ * **The spend is the figure the store measures a budget against**: what was
+ * read, plus the reserve every lap whose cost is not read yet still holds
+ * (`D-0046`, `D-0066` rule 3.4.2). It is here rather than inside
+ * {@link governanceOf} because the right face sums the same pair over a week
+ * (`page-logic/week.ts`), and two places computing a spend differently would
+ * be two answers to what has been spent.
+ */
+export function allowanceOf(approval: {
+  readonly payload: ScopePayload;
+  readonly spent: ScopeSpent;
+}): { readonly spentUsd: number; readonly approvedUsd: number } {
+  return {
+    spentUsd:
+      approval.spent.readCostUsd +
+      approval.spent.unreadLaps * approval.payload.budgets.cost_reserve_usd,
+    approvedUsd: approval.payload.budgets.cost_usd,
+  };
+}
+
 export function governanceOf(
   record: IterationRecord,
   repository: string | null,
@@ -119,18 +142,7 @@ export function governanceOf(
   return {
     repository,
     askedAtMs,
-    allowance:
-      approval === null
-        ? null
-        : {
-            // The figure the store measures a budget against: what was read,
-            // plus the reserve every lap whose cost is not read yet still holds
-            // (`D-0046`, `D-0066` rule 3.4.2).
-            spentUsd:
-              approval.spent.readCostUsd +
-              approval.spent.unreadLaps * approval.payload.budgets.cost_reserve_usd,
-            approvedUsd: approval.payload.budgets.cost_usd,
-          },
+    allowance: approval === null ? null : allowanceOf(approval),
     tries:
       approval === null
         ? null

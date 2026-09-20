@@ -88,6 +88,45 @@ export interface PageWords extends DayWords {
   /** The empty centre, where nothing waits (rule 4). */
   readonly emptyAsk: string;
   readonly emptyLead: string;
+  /**
+   * The empty state's right face (rule 4): the last seven days, and what is
+   * running.
+   *
+   * The labels name the noun, so the figure beside one is bare in English and
+   * carries its counter in Japanese -- which is why `weekThings` and
+   * `weekTimes` are two words rather than one with a unit appended.
+   */
+  readonly sevenDays: string;
+  readonly weekAsked: string;
+  readonly weekFinished: string;
+  readonly weekAnswered: string;
+  readonly weekDecided: string;
+  readonly weekSpentFigure: string;
+  readonly weekLeft: string;
+  readonly weekThings: (count: number) => string;
+  readonly weekTimes: (count: number) => string;
+  /** What is running, under the week (rule 4), and the sentence under it. */
+  readonly runningHeading: string;
+  readonly runningNone: string;
+  /**
+   * The line under the running work: none of it needs the person.
+   *
+   * **The claim the whole face rests on** (rule 4, `D-0064`): a person is
+   * called rarely by design, so a face full of work that nobody is being asked
+   * about has to say that it is not a queue.
+   */
+  readonly runningNote: string;
+  /** The five steps to a request's end (rule 4), and what each one is. */
+  readonly stepWork: string;
+  readonly stepChecks: string;
+  readonly stepReading: string;
+  readonly stepApproval: string;
+  readonly stepLanding: string;
+  /** Where a step stands: done, the one it is on now, not yet, or the person's. */
+  readonly stepDone: string;
+  readonly stepNow: string;
+  readonly stepAhead: string;
+  readonly stepYours: string;
 }
 
 export const PAGE_EN: PageWords = Object.freeze({
@@ -128,6 +167,27 @@ export const PAGE_EN: PageWords = Object.freeze({
   saidByRondo: "rondo",
   emptyAsk: "What would you like to ask for?",
   emptyLead: "Write it in your own words. If anything is unclear, rondo asks before it starts.",
+  sevenDays: "The last seven days",
+  weekAsked: "Asked",
+  weekFinished: "Finished",
+  weekAnswered: "You answered",
+  weekDecided: "rondo decided without asking",
+  weekSpentFigure: "Spent",
+  weekLeft: "Left of what was approved",
+  weekThings: (count) => String(count),
+  weekTimes: (count) => String(count),
+  runningHeading: "Work under way",
+  runningNone: "Nothing is being worked on.",
+  runningNote: "All of this carries on without you. rondo asks only when it has to.",
+  stepWork: "Work",
+  stepChecks: "Automatic checks",
+  stepReading: "Read again",
+  stepApproval: "Your approval",
+  stepLanding: "Taken in",
+  stepDone: "done",
+  stepNow: "under way",
+  stepAhead: "not yet",
+  stepYours: "yours",
 } satisfies PageWords);
 
 export const PAGE_JA: PageWords = Object.freeze({
@@ -165,4 +225,25 @@ export const PAGE_JA: PageWords = Object.freeze({
   saidByRondo: "rondo",
   emptyAsk: "何を頼みますか",
   emptyLead: "ふだんの言葉で書いてください。はっきりしないところがあれば、始める前に聞き返します。",
+  sevenDays: "この 7 日間",
+  weekAsked: "頼んだ",
+  weekFinished: "終わった",
+  weekAnswered: "あなたが答えた",
+  weekDecided: "rondo が聞かずに決めた",
+  weekSpentFigure: "使った費用",
+  weekLeft: "承認した枠の残り",
+  weekThings: (count) => `${String(count)} 件`,
+  weekTimes: (count) => `${String(count)} 回`,
+  runningHeading: "進んでいる仕事",
+  runningNone: "いま進んでいる仕事はありません。",
+  runningNote: "どれも、あなたの返事がなくても進みます。必要になったときだけお知らせします。",
+  stepWork: "作業",
+  stepChecks: "自動チェック",
+  stepReading: "読み直し",
+  stepApproval: "あなたの承認",
+  stepLanding: "取り込み",
+  stepDone: "済み",
+  stepNow: "進行中",
+  stepAhead: "まだ",
+  stepYours: "あなた",
 } satisfies PageWords);
