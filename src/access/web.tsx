@@ -2729,16 +2729,30 @@ export async function operatorPage(
    * readings alone -- and nothing at all where no reading has been taken,
    * because two cards saying *not yet* are not a thing anybody came to read.
    */
+  /*
+   * **The lap this face is about is the one being answered** (Codex). A gate
+   * is answered wherever it stands, so the lap at the gate need not be the one
+   * the list speaks with: `saysMore` can put a newer running lap forward while
+   * an older one waits. The material, the steps and the box all have to
+   * describe the same lap, or the face would say *work, under way* beside a
+   * confirmation that is waiting on the person. With nothing being asked there
+   * is no gated lap and the selected one is the subject.
+   */
+  const sideLap = gatedLap ?? selectedLap?.record ?? null;
   const sideAsking = gatedLap !== null && gateFraming !== undefined;
-  const sideReadings = selectedLap === null ? [] : (readingsByLap.get(selectedLap.record.id) ?? []);
+  const sideReadings =
+    gateFraming?.readings ??
+    (selectedLap === null ? [] : (readingsByLap.get(selectedLap.record.id) ?? []));
   const sideMaterial =
-    sideAsking && gatedLap !== null && gateFraming !== undefined
-      ? await materialView(wording, gatedLap, gateFraming.material, gateFraming.readings).toString()
-      : selectedLap !== null && sideReadings.length > 0
-        ? await materialView(wording, selectedLap.record, null, sideReadings).toString()
-        : null;
+    sideLap === null
+      ? null
+      : sideAsking && gateFraming !== undefined
+        ? await materialView(wording, sideLap, gateFraming.material, sideReadings).toString()
+        : sideReadings.length > 0
+          ? await materialView(wording, sideLap, null, sideReadings).toString()
+          : null;
   const threadSide =
-    selectedGovernance === null || selectedLap === null
+    selectedGovernance === null || sideLap === null
       ? null
       : {
           react: ThreadSide({
@@ -2747,7 +2761,7 @@ export async function operatorPage(
             // **What remains before this ends** (rule 6), as the five steps
             // rule 4 draws under a running request: one reading of where the
             // work stands, drawn in two places by one component.
-            steps: stepsOf(selectedLap.record, sideReadings),
+            steps: stepsOf(sideLap, sideReadings),
             material: sideMaterial === null ? null : Raw({ html: sideMaterial }),
             asking: sideAsking,
           }),
