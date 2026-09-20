@@ -3884,15 +3884,6 @@ waiting, not the working.
     > rule's "an operator's plan file is deliberately not given the same latitude" true now that
     > the ladder runs at both entry points.
 
-**7. What folds first, and what a fold may cost (rule 2.4).**
-   - (a) **The outer band folds first and lands under the central band, whole.** The two jobs never
-     move; a zone is re-placed and never truncated; what W3's material costs on the way down is
-     accepted as the price of what it buys at full width.
-   - (b) **Let each screen fold as suits it**, and accept that a narrow window may reorder the page.
-   - **Recommended: (a).** It is what makes the answer to point 1 mean the same thing on a laptop as
-     on the display it was chosen on. If the window would rather the material never go below a
-     scroll, that is an argument against W3 at point 1 and not against this rule.
-
 ### What this does not do
 
 - It does not make two laps run at once. `maxOccupying` stays at one until `continuo D-1104`
@@ -19652,6 +19643,15 @@ to look at is named for each.
    - **Recommended: (a).** Under (b) the product's subject is decided by rondo's state, and the person
      who wants to ask for something while two things wait must find a button first. Note that
      answering point 1 with (c) forces (b) here.
+
+**7. What folds first, and what a fold may cost (rule 2.4).**
+   - (a) **The outer band folds first and lands under the central band, whole.** The two jobs never
+     move; a zone is re-placed and never truncated; what W3's material costs on the way down is
+     accepted as the price of what it buys at full width.
+   - (b) **Let each screen fold as suits it**, and accept that a narrow window may reorder the page.
+   - **Recommended: (a).** It is what makes the answer to point 1 mean the same thing on a laptop as
+     on the display it was chosen on. If the window would rather the material never go below a
+     scroll, that is an argument against W3 at point 1 and not against this rule.
 
 ### What this does not do
 
