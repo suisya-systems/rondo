@@ -98,9 +98,12 @@ export const DESPITE =
  * (rondo#233 S4).
  *
  * **Outlined and not filled, and not because it matters less.** Two filled
- * buttons in one bar read as a choice with a default, and D-0065's gate has no
- * recommendation; one filled and one outlined reads as the common answer and
- * the other one, which is what the two are.
+ * buttons in one bar read as a choice with no answer at all; one filled and
+ * one outlined reads as the recommendation and the other one. Which press
+ * wears which is decided by what the readings raised, not by which answer it
+ * is (rondo#351): with a finding standing, the filled one is *ask for a
+ * change* and approve is {@link DESPITE}; with nothing raised, approve is
+ * filled and this is the other one.
  */
 export const SECONDARY =
   "inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-border bg-background font-semibold text-foreground shadow-xs outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card";

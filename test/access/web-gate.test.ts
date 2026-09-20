@@ -184,8 +184,19 @@ test("the gate offers a change beside approve, drafted from the findings and edi
   // address as it always did, the change posts to its own route.
   expect(bar).toContain('<form id="approve-form" method="post" action="/?lang=en"');
   expect(bar).toContain('<form id="revise-form" method="post" action="/revise?lang=en"');
-  expect(bar).toContain("Ask for a change instead");
+  // **Both answers are presses, and neither is inside a fold** (rondo#351,
+  // D-0082 rule 7): the change used to be a `<details>` summary and only the
+  // despite press was a button, so the screen drew the exception and folded
+  // the recommendation.
   expect(bar).toContain(">Ask for a change</button>");
+  expect(bar).toContain('<div id="revise">');
+  expect(bar.slice(bar.indexOf('id="revise"'))).not.toContain("<details");
+  // **And with a finding standing, the recommendation is the filled one**
+  // (D-0083 rules 9.3 and 10): ink, never amber -- the bar's rule and the
+  // despite press already carry the page's one claim that a person must act.
+  expect(bar).toMatch(
+    /<button type="submit"[^>]*class="[^"]*bg-foreground[^"]*">Ask for a change</,
+  );
   // Every id the press carries is rondo's, and none of them is typed.
   expect(bar).toContain('<input type="hidden" name="iteration" value="i-0001"/>');
   expect(bar).toContain('<input type="hidden" name="scope_decision" value="decision-1"/>');
@@ -496,6 +507,13 @@ test("a gate with no model findings drafts nothing, and still offers the change 
   expect(bar).toMatch(/<textarea name="body"[^>]*><\/textarea>/);
   expect(bar).not.toContain("Please fix what the model review raised:");
   expect(bar).toContain("keep the change to the parser");
+  // **It is a press here too, and it is the outlined one** (rondo#351): with
+  // nothing raised, approve is the recommendation, so the filled press is
+  // approve and the change is the other answer beside it.
+  expect(bar).toMatch(
+    /<button type="submit"[^>]*class="[^"]*bg-background[^"]*">Ask for a change</,
+  );
+  expect(bar).toMatch(/<button type="submit"[^>]*class="[^"]*bg-foreground[^"]*">approve</);
 });
 
 test("the change is offered in the page's language, and the findings stay the reviewer's words (#233 S4)", async () => {
@@ -512,8 +530,9 @@ test("the change is offered in the page's language, and the findings stay the re
     () => "lap-00000000-0000-4000-8000-000000000004",
   );
   const bar = html.slice(html.indexOf('id="answer-bar"'));
-  expect(bar).toContain("承認せずに変更を依頼する");
+  // The change is a press in Japanese too, and not a fold (rondo#351).
   expect(bar).toContain(">変更を依頼する</button>");
+  expect(bar.slice(bar.indexOf('id="revise"'))).not.toContain("<details");
   // Before a draft lands, the box is empty and the view says one is coming,
   // in the page's language (D-0077 rule 4.3).
   expect(bar).toMatch(/<textarea name="body"[^>]*><\/textarea>/);
