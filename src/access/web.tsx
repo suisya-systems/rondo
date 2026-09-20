@@ -410,20 +410,32 @@ const SEVERITY_TONE: Readonly<Record<FindingSeverity, Tone>> = {
 };
 
 /**
- * What a reader looked at and what it did not, in a quiet fold (rondo#69): the
- * store's own sentences, which are English in every set, so the fold says so.
+ * What a reader looked at and what it did not, beside what it found (rondo#69):
+ * the store's own sentences, which are English in every set, so the block says
+ * so.
+ *
+ * **Drawn open, and not a fold** (`D-0082` rule 7, rondo#317). It was a quiet
+ * `<details>`, which put the one sentence that bounds a verdict behind an open.
+ * rondo#69 exists because *read and nothing raised* was printed over a worker's
+ * own account of not having been able to run the verification at all, and what
+ * a person takes from a clean pill is that a check happened; `readingCoverage`
+ * is what says which check did not. That is needed to press honestly rather
+ * than to look at afterwards, which is the line rule 7 draws. `rondo answer`'s
+ * report already prints these lines beside the verdict
+ * (`src/refrain/interpreter.ts`) -- the same statement about the same drafter,
+ * which is what the function was factored out for -- and the page was where it
+ * was still shut.
+ *
+ * The label the summary carried stays, as the line above the sentences.
  */
-function coverageFold(id: string, wording: Chrome, drafter: string) {
+function coverageLine(id: string, wording: Chrome, drafter: string) {
   return (
-    <details id={id} class="group mt-2">
-      <summary class="flex cursor-pointer list-none items-center gap-1.5 text-meta leading-5 text-faint select-none hover:text-foreground [&::-webkit-details-marker]:hidden">
-        {chevron()}
-        {wording.whatItRead}
-      </summary>
-      <p class="mt-1 pl-5 text-meta leading-5 text-muted-foreground" lang="en">
+    <div id={id} class="mt-2">
+      <p class="text-meta leading-5 text-faint">{wording.whatItRead}</p>
+      <p class="mt-1 text-meta leading-5 text-muted-foreground" lang="en">
         {readingCoverage(drafter).join(" ")}
       </p>
-    </details>
+    </div>
   );
 }
 
@@ -643,7 +655,7 @@ function checksView(wording: Chrome, reading: LapReading | null, workGone: boole
               reading.evidence?.fileCount ?? 0,
             )}
           </p>
-          {coverageFold("checks-coverage", wording, reading.drafter)}
+          {coverageLine("checks-coverage", wording, reading.drafter)}
         </>
       )}
     </section>
@@ -752,7 +764,7 @@ function modelView(wording: Chrome, reading: LapReading | null, due: boolean, re
                   })}
                 </ul>
               )}
-              {coverageFold("model-coverage", wording, reading.drafter)}
+              {coverageLine("model-coverage", wording, reading.drafter)}
             </>
           )}
         </>

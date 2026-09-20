@@ -26,11 +26,12 @@ import {
  * The answer bar and everything after it **inside the centre face**.
  *
  * **Bounded at the right face since rondo#350.** Rule 5's material moved out
- * of the answering box, so the document now carries the fence's calls and the
- * readings' coverage folds *after* the bar rather than before it -- and a
- * slice that ran to the end of the page would answer "is there a `<details>`
- * below the bar" with the right face's folds. What these cases are about is
- * the box that holds the press, so the slice stops where that box does.
+ * of the answering box, so the document now carries the fence's calls *after*
+ * the bar rather than before it -- and a slice that ran to the end of the page
+ * would answer "is there a `<details>` below the bar" with the right face's
+ * fold. What these cases are about is the box that holds the press, so the
+ * slice stops where that box does. (The readings' coverage was a second such
+ * fold until rondo#317 drew it open, under `D-0082` rule 7.)
  */
 const barOf = (html: string): string =>
   html.slice(html.indexOf('id="answer-bar"'), html.indexOf('class="face face-side"'));
@@ -926,4 +927,31 @@ test("what the fence blocked is on the gate, each call in words, not only in the
   expect(card).toContain("blocked 1 command");
   expect(card).toContain("Bash  &quot;rm -rf /srv&quot;");
   expect(html).toContain("The full record as text, including what is not shown above");
+});
+
+test("what a reading did not look at is beside its verdict and not behind a fold (D-0082 rule 7)", async () => {
+  // **The shape rondo#317 names**: a pill saying *1 raised* is read as "a check
+  // happened", and the sentence saying which check cannot happen at all -- the
+  // one rondo#69 was opened for -- was in a shut `<details>` on both cards. It
+  // is what a person needs in order to press honestly, so rule 7 keeps it out
+  // of the fold; `rondo answer`'s report has printed it beside the verdict all
+  // along (`src/refrain/interpreter.ts`).
+  const world = fresh();
+  await gateWithChecks(world);
+  await modelFindings(world);
+  const html = await operatorPage({ ...portsOver(world, "ada", []), material: structured }, "t", {
+    kind: "summary",
+  });
+  const checks = html.slice(html.indexOf('id="checks"'), html.indexOf('id="model-review"'));
+  const model = html.slice(html.indexOf('id="model-review"'), html.indexOf(EN.readingsNote));
+  // The label the summary carried is still there, and the sentences under it
+  // are readable where the verdict is: neither card holds a fold at all now.
+  for (const card of [checks, model]) {
+    expect(card).toContain(EN.whatItRead);
+    expect(card).not.toContain("<details");
+  }
+  expect(checks).toContain("It built nothing, ran nothing and tested nothing");
+  expect(checks).toContain("neither checked nor claimed here");
+  expect(model).toContain("ran nothing itself");
+  expect(model).toContain("that it was understood is not provable");
 });
