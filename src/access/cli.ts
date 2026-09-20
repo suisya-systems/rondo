@@ -95,6 +95,7 @@ import {
   showProposal,
   type UnpromptedPorts,
 } from "./advisory.js";
+import { checksHost } from "./checks-host.js";
 import { type ParsedCommand, parseCommand } from "./cli-parse.js";
 import {
   abandon,
@@ -1335,6 +1336,21 @@ export async function main(
       language: selected.tag,
       log: say,
     });
+    // **And what the forge says about a pull request this host published**
+    // (rondo#310), on the same rescan: the window it reads is the publish
+    // report in a thread until the ledger releases the line, so it asks
+    // nothing about a lap that was never published and nothing twice about one
+    // that has an answer. It writes one line into the request's thread and
+    // wakes nobody: whether a person who is not on the page is told is
+    // rondo#311's, and lives in rondo#311's mechanism.
+    const checks = checksHost({
+      store,
+      record,
+      repository: (row) => publishRepository(row, asked),
+      host: forgeHost(environment),
+      now: Date.now,
+      log: say,
+    });
     // ponytail: a fixed one-minute rescan for messages and readings written
     // outside this process; a changedSince watch when that minute is felt.
     let rescan: ReturnType<typeof setInterval> | null = null;
@@ -1346,10 +1362,12 @@ export async function main(
         issues.kick();
         drafter.kick();
         reviser.kick();
+        checks.kick();
         rescan = setInterval(() => {
           issues.kick();
           drafter.kick();
           reviser.kick();
+          checks.kick();
         }, 60_000);
         rescan.unref();
       }

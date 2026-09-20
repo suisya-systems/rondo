@@ -81,6 +81,7 @@ import { discard, writeDelegationRecord } from "./delegation.js";
 import {
   type ChangedPathsReading,
   type ChangedPathsRequest,
+  type ChecksReading,
   inspectLapWork,
   type LandingReading,
   type LandingRequest,
@@ -89,7 +90,7 @@ import {
 } from "./forge.js";
 import { hostFailure } from "./host-failure.js";
 import { modelReadingLines } from "./model-review/judgement.js";
-import { READING_REMOTE, readingOf } from "./review.js";
+import { LIST_LIMIT, READING_REMOTE, readingOf } from "./review.js";
 
 export type { ConductorReport };
 
@@ -853,7 +854,20 @@ export type LapEvent =
   /** The model reading landed, after the gate opened (D-0065 2.6, rondo#218). */
   | { readonly kind: "modelReading" }
   /** `pullRequestUrl`: what the forge printed for the opened pull request, or null. */
-  | { readonly kind: "published"; readonly pullRequestUrl: string | null };
+  | { readonly kind: "published"; readonly pullRequestUrl: string | null }
+  /**
+   * What the forge said about the published commit's checks (rondo#310).
+   *
+   * **Only the three answers that end the reading.** A `pending` or an
+   * `undetermined` is read again on the next tick and writes nothing, so a
+   * thread never carries a line rondo is about to contradict -- and the three
+   * kinds here are exactly the ones `checksHost` stops on.
+   */
+  | {
+      readonly kind: "checks";
+      readonly commit: string;
+      readonly reading: Extract<ChecksReading, { kind: "green" | "red" | "none" }>;
+    };
 
 async function gateIdOf(ports: ConductorPorts, iterationId: string): Promise<string | null> {
   const after = await ports.store.read(iterationId);
@@ -940,12 +954,19 @@ export async function reportToRequest(
     body =
       `Lap '${iterationId}' has a model reading at gate '${row.gateId ?? "(none recorded)"}':\n` +
       modelReadingLines(reading).join("\n");
-  } else {
+  } else if (event.kind === "published") {
     messageId = `report-published-${iterationId}`;
     body =
       `Lap '${iterationId}' was published: its branch was pushed, pull request ` +
       `${event.pullRequestUrl ?? "(no URL printed)"} was opened, ` +
       `and run '${row.runId ?? "(none recorded)"}' was closed completed.`;
+  } else {
+    // **One message per answer, and the answer is in the id**, so a reading
+    // taken again over the same commit writes nothing (the store's
+    // `alreadyRecorded`) and a pull request that goes from red to green leaves
+    // both lines in the thread rather than one overwriting the other.
+    messageId = `report-checks-${iterationId}-${event.reading.kind}`;
+    body = checksBody(iterationId, event.commit, event.reading);
   }
   const outcome = await thread.record.recordThreadMessage({
     messageId,
@@ -963,6 +984,61 @@ export async function reportToRequest(
   return outcome.kind === "recorded"
     ? `Reported to the request '${request}' as message '${messageId}'.`
     : `No report was written to the request '${request}': ${outcome.reason}`;
+}
+
+/**
+ * What the thread says a published lap's checks came to (rondo#310).
+ *
+ * **Every line says what rondo did *not* do.** Reading the checks is a `GET`
+ * and the only act rondo takes over a pull request it opened; merging is on
+ * `D-0064` rule 3.4's irreversible list and a comment on the forge is no act a
+ * scope can include (`SCOPE_OUTWARD_ACTS`). A red line that did not say so
+ * would leave a reader waiting for a fix nothing is going to make.
+ *
+ * **The names are bounded and counted**, by `LIST_LIMIT` as every other list
+ * rondo writes for a person is: a repository with two hundred checks must not
+ * write a message nobody can read, and a hidden entry is said to be hidden.
+ */
+function checksBody(
+  iterationId: string,
+  commit: string,
+  reading: Extract<ChecksReading, { kind: "green" | "red" | "none" }>,
+): string {
+  const on = `on commit '${commit}'`;
+  const nothingElse =
+    "rondo read this and did nothing else with the pull request: it does not merge, comment on or " +
+    "retry one.";
+  if (reading.kind === "green") {
+    return (
+      `Lap '${iterationId}' is green: the forge reported ${String(reading.counted)} check(s) ` +
+      `${on}, and every one of them passed. ${nothingElse}`
+    );
+  }
+  if (reading.kind === "red") {
+    return (
+      `Lap '${iterationId}' is not green: ${on} the forge reports ` +
+      `${named(reading.failed)} as failed. ${nothingElse}`
+    );
+  }
+  // **Said rather than left as a silence**, and said as what it is: the forge
+  // offers nothing that tells a repository with no checks apart from one whose
+  // first check has not started, so neither is claimed -- and because neither
+  // is claimed, this line is not the end of the reading.
+  return (
+    `The forge reported no check of any kind ${on}, which lap '${iterationId}' was published at. ` +
+    "rondo cannot say whether this work is green. If a check reports later, it says so here."
+  );
+}
+
+/** A bounded list of names, saying how many it did not name. */
+function named(names: readonly string[]): string {
+  const hidden = names.length - LIST_LIMIT;
+  return (
+    names
+      .slice(0, LIST_LIMIT)
+      .map((name) => `'${name}'`)
+      .join(", ") + (hidden > 0 ? ` (and ${String(hidden)} more)` : "")
+  );
 }
 
 /**
