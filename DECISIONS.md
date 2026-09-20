@@ -10301,6 +10301,24 @@ the properties rules 2, 3, 6 and 7 assert.
 > The line drawn here between an annotation and a supersession follows the precedents of `D-0076`,
 > `D-0074` and `D-0073` rather than the letter of `AGENTS.md`, a difference tracked on rondo#273.
 
+> **Annotation (2026-09-21, from rondo#352), and additive.** Added after this entry was accepted, and
+> nothing below is edited. **The falsifier "`RONDO_OPERATOR_LANGUAGE` acquiring a file, a default
+> file, or a precedence order" is recorded as fired on 2026-09-21**, by rondo#352 -- and it fired on
+> **setup's** side of the line rather than on the host's. Setup asks its one operator which language
+> they read, once, and records the answer in `<root>/operator-language`, a file the operator opens
+> and edits; it spells that answer into the unit it writes as this variable, beside the store's path
+> and the approver's name, and it reads the record **above** the variable it was handed, which is the
+> precedence order the falsifier names. **The host is unchanged**: it reads
+> `RONDO_OPERATOR_LANGUAGE` and nothing else, no code under `src/` opens that file, and `D-0056` rule
+> 2's five steps are untouched -- so that entry takes no annotation from this one. **Rule 5's
+> *recorded nowhere* is therefore true of the host and false of setup**, and that is the whole of
+> what fired. The reason it was allowed to fire is `D-0080`'s: the one operator was carrying the
+> knowledge that this variable exists, and a page in the wrong language was what that cost. **`D-0019`
+> rule 3 is unamended** -- its refusal is of a configuration layer *rondo* gains, and the conductor
+> still receives a complete `RunPlan` and invents no field; a setup script's memory of an answer it
+> was given is not one. Rule 5 is **not withdrawn, not narrowed and not superseded**, every other
+> rule is read as written, and **this entry is not superseded**.
+
 `D-0053` cut the page's text in two and the operator confirmed the cut on the screen it was made on:
 `awaiting_human`, `waiting 2m`, English, fine. Then the operator opened `/?reading=open` -- the fold
 `D-0041` keeps one click away so that a summary can be checked against what it rests on -- and said,
