@@ -19,7 +19,7 @@ import type { Chrome } from "../wording.js";
 
 /** A block of lines read as columns, which may scroll sideways rather than rewrap. */
 const PRE =
-  "overflow-x-auto rounded-md border border-border bg-muted/50 p-3 font-mono text-[12px] leading-5 whitespace-pre";
+  "overflow-x-auto rounded-md border border-border bg-muted/50 p-3 font-mono text-id leading-5 whitespace-pre";
 
 /** A pull request body split around the request fold it carries. */
 interface RequestFold {
@@ -99,7 +99,7 @@ function markdown(text: string) {
 function publishBody(wording: Chrome, body: string) {
   const fold = requestFold(body);
   const tab =
-    "-mb-px cursor-pointer border-b-2 border-transparent px-3 py-2 text-[14px] leading-5 font-medium text-muted-foreground select-none hover:border-border hover:text-foreground has-checked:border-link has-checked:font-semibold has-checked:text-foreground has-focus-visible:rounded-t-md has-focus-visible:ring-2 has-focus-visible:ring-ring";
+    "-mb-px cursor-pointer border-b-2 border-transparent px-3 py-2 text-body leading-5 font-medium text-muted-foreground select-none hover:border-border hover:text-foreground has-checked:border-link has-checked:font-semibold has-checked:text-foreground has-focus-visible:rounded-t-md has-focus-visible:ring-2 has-focus-visible:ring-ring";
   return (
     <div class="group/body mt-2 space-y-3">
       <div class="flex flex-wrap items-end gap-x-4 border-b border-border">
@@ -120,7 +120,7 @@ function publishBody(wording: Chrome, body: string) {
             {wording.publishBodyRaw}
           </label>
         </fieldset>
-        <p class="hidden py-2 text-[13px] leading-5 text-muted-foreground group-has-[#publish-body-raw:checked]/body:block">
+        <p class="hidden py-2 text-meta leading-5 text-muted-foreground group-has-[#publish-body-raw:checked]/body:block">
           {wording.publishBodyRawNote}
         </p>
       </div>
@@ -135,7 +135,7 @@ function publishBody(wording: Chrome, body: string) {
           <>
             {markdown(fold.before)}
             <details id="publish-body-request" class="group/request my-4">
-              <summary class="flex cursor-pointer list-none items-center gap-2 rounded-md py-1 text-[14px] leading-6 outline-none select-none hover:text-link focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+              <summary class="flex cursor-pointer list-none items-center gap-2 rounded-md py-1 text-body leading-6 outline-none select-none hover:text-link focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
                 {chevron("group-open/request:rotate-90")}
                 {fold.summary}
               </summary>
@@ -145,9 +145,12 @@ function publishBody(wording: Chrome, body: string) {
           </>
         )}
       </div>
+      {/* The same bytes as the preview beside it, so they are read at the same
+          size: `--text-body` is what `.markdown` sets, and `PRE`'s `--text-id`
+          is the floor a block of columns is drawn at (D-0082 rule 4). */}
       <pre
         id="publish-body-exact"
-        class={`${PRE.replace(/whitespace-pre$/, "whitespace-pre-wrap").replace("text-[12px]", "text-[13px]")} hidden wrap-anywhere group-has-[#publish-body-raw:checked]/body:block`}
+        class={`${PRE.replace(/whitespace-pre$/, "whitespace-pre-wrap").replace("text-id", "text-body")} hidden wrap-anywhere group-has-[#publish-body-raw:checked]/body:block`}
         lang=""
       >
         {body}
@@ -212,11 +215,11 @@ export async function publishView(
       <>
         {/* Not `publishLead`: that sentence ends in the button below it, and
             there is no button here (rondo#233 S5 screen pass). */}
-        <p class="text-[13px] leading-6">{wording.publishNotYetLead}</p>
+        <p class="text-body leading-6">{wording.publishNotYetLead}</p>
         <section id="publish-not-yet" class={`${CARD} space-y-1`}>
           <h3 class={CARD_HEADING}>{wording.publishNotYetHeading}</h3>
           {publishBlockLines(wording, shown.block).map((line) => (
-            <p class="text-[13px] leading-5 wrap-anywhere">{line}</p>
+            <p class="text-body leading-5 wrap-anywhere">{line}</p>
           ))}
         </section>
       </>,
@@ -227,26 +230,26 @@ export async function publishView(
     <>
       {/* The lead says which screen this is, because the two differ in what a
           person may do here and not only in what they are told. */}
-      <p class="text-[13px] leading-6">
+      <p class="text-body leading-6">
         {review === null ? wording.publishLead : wording.publishReviewLead}
       </p>
       <section id="publish-target" class={`${CARD} space-y-1`}>
         <h3 class={CARD_HEADING}>{wording.publishTargetHeading}</h3>
-        <p class="text-[13px] leading-5">
+        <p class="text-body leading-5">
           {wording.publishPushes(shown.target.headRef, shown.target.remote)}
         </p>
-        <p class="text-[13px] leading-5">
+        <p class="text-body leading-5">
           {wording.publishOpens(shown.target.repo, shown.target.baseBranch)}
         </p>
-        <p class="text-[13px] leading-5">{wording.publishCloses(shown.target.runId)}</p>
+        <p class="text-body leading-5">{wording.publishCloses(shown.target.runId)}</p>
         {/* Where the push actually goes, quietly, beside the name it goes by:
             the press refuses when this moves, so this is what moved. */}
         {shown.target.pushUrls.map((url) => (
-          <p class="text-[12.5px] leading-5 wrap-anywhere text-muted-foreground" lang="">
+          <p class="text-meta leading-5 wrap-anywhere text-muted-foreground" lang="">
             {wording.publishPushUrl(url)}
           </p>
         ))}
-        <p class="text-[12.5px] leading-5 text-muted-foreground" lang="">
+        <p class="text-meta leading-5 text-muted-foreground" lang="">
           {wording.publishWorkspace(shown.target.workspace)}
         </p>
       </section>
@@ -254,7 +257,7 @@ export async function publishView(
         <section id="publish-noticed" class={`${CARD} space-y-1`}>
           <h3 class={CARD_HEADING}>{wording.publishNoticedHeading}</h3>
           {shown.warnings.map((warning) => (
-            <p class="text-[13px] leading-5 wrap-anywhere">{warning}</p>
+            <p class="text-body leading-5 wrap-anywhere">{warning}</p>
           ))}
         </section>
       )}
@@ -265,16 +268,16 @@ export async function publishView(
           words are the pull request's own, so the block states no language. */}
       <section id="publish-request" class={`${CARD} space-y-2`}>
         <h3 class={CARD_HEADING}>{wording.publishRequestHeading}</h3>
-        <p class="text-[12.5px] leading-5 font-medium text-muted-foreground">
+        <p class="text-meta leading-5 font-medium text-muted-foreground">
           {wording.publishTitleLabel}
         </p>
-        <p id="publish-title" class="text-[13.5px] leading-6 wrap-anywhere" lang="">
+        <p id="publish-title" class="text-title leading-6 wrap-anywhere" lang="">
           {shown.title}
         </p>
         <details id="publish-body" class="group">
           <summary
             data-row=""
-            class="flex cursor-pointer list-none items-center gap-2 rounded-md py-1 text-[12.5px] leading-5 font-medium text-link outline-none select-none hover:underline focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden"
+            class="flex cursor-pointer list-none items-center gap-2 rounded-md py-1 text-meta leading-5 font-medium text-link outline-none select-none hover:underline focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden"
           >
             {chevron()}
             {wording.publishBodyLabel}
@@ -291,9 +294,7 @@ export async function publishView(
           >
             {shown.modelReading.join("\n")}
           </pre>
-          <p class="note text-[12.5px] leading-5 text-muted-foreground">
-            {wording.publishModelNote}
-          </p>
+          <p class="note text-meta leading-5 text-muted-foreground">{wording.publishModelNote}</p>
         </section>
       )}
       {review === null ? null : (
@@ -302,7 +303,7 @@ export async function publishView(
           class="min-w-0 space-y-1 rounded-lg border border-warn/40 bg-card px-4 py-3"
         >
           <h3 class={CARD_HEADING}>{wording.publishReviewHeading}</h3>
-          <p class="text-[13px] leading-5 wrap-anywhere">{reviewBlockLine(wording, review)}</p>
+          <p class="text-body leading-5 wrap-anywhere">{reviewBlockLine(wording, review)}</p>
         </section>
       )}
       {/* **No approver, no press, and no sentence here either**: nothing was
@@ -315,7 +316,7 @@ export async function publishView(
         : review === null
           ? publishForm(wording, record, token, shown.shown)
           : despiteForm(wording, record, token, shown.shown)}
-      <p class="note text-[12.5px] leading-5 text-muted-foreground">{wording.publishNote}</p>
+      <p class="note text-meta leading-5 text-muted-foreground">{wording.publishNote}</p>
     </>,
   );
 }
@@ -415,7 +416,7 @@ function despiteForm(wording: Chrome, record: IterationRecord, token: string, sh
     <details id="publish-despite" class="group">
       <summary
         data-row=""
-        class="flex cursor-pointer list-none items-center gap-2 rounded-md py-1 text-[12.5px] leading-5 font-medium text-link outline-none select-none hover:underline focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden"
+        class="flex cursor-pointer list-none items-center gap-2 rounded-md py-1 text-meta leading-5 font-medium text-link outline-none select-none hover:underline focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden"
       >
         {chevron()}
         {wording.publishDespiteFold}
@@ -432,9 +433,7 @@ function despiteForm(wording: Chrome, record: IterationRecord, token: string, sh
         {/* The one field that says which of the two presses this is, and the
             port refuses it when the refusal it names is not there. */}
         <input type="hidden" name="despite_review" value="yes" />
-        <p class="note text-[12.5px] leading-5 text-muted-foreground">
-          {wording.publishDespiteNote}
-        </p>
+        <p class="note text-meta leading-5 text-muted-foreground">{wording.publishDespiteNote}</p>
         <button
           type="submit"
           data-row=""
