@@ -63,7 +63,7 @@ import {
   modelReadingDue,
   reviewedReading,
 } from "../../src/store/records.js";
-import { openRequest, REQUEST as FIXTURE_REQUEST } from "../request-fixture.js";
+import { REQUEST as FIXTURE_REQUEST } from "../request-fixture.js";
 
 /** A handle no test reaches past: every verb below is a fake. */
 const continuo: VerifiedContinuo = {
@@ -661,7 +661,17 @@ test("each command still accepts every flag it does read", () => {
   for (const argv of [
     ["start", "--plan", "/tmp/p.json", "--prompt", "p", "--iteration-id", "i", "--message-id", "m"],
     // prettier-ignore
-    ["start", "--plan", "/tmp/p.json", "--prompt-file", "/tmp/request.txt", "--iteration-id", "i", "--message-id", "m"],
+    [
+      "start",
+      "--plan",
+      "/tmp/p.json",
+      "--prompt-file",
+      "/tmp/request.txt",
+      "--iteration-id",
+      "i",
+      "--message-id",
+      "m",
+    ],
     ["answer", "--actor-id", "me", "--body=approve"],
     ["answer", "--actor-id", "me", "--body=approve", "--iteration-id", "i"],
     [

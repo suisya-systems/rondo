@@ -23,9 +23,9 @@ import { EN } from "../../src/access/wording.js";
 import { CONSERVATIVE_HOST_POLICY } from "../../src/refrain/policy.js";
 import type { IterationRecord, IterationStatus, JsonRecord } from "../../src/store/records.js";
 import { WAIT_SIDE } from "../../src/store/records.js";
-import { advisoryRecord, iterationStore } from "../../src/store/sqlite.js";
+import { advisoryRecord } from "../../src/store/sqlite.js";
 import { ownLane } from "../lane-claims.js";
-import { REQUEST, openRequest, storeWithRequest } from "../request-fixture.js";
+import { REQUEST, storeWithRequest } from "../request-fixture.js";
 
 const somePlan = (): JsonRecord => ({
   run_id: "r-0001",

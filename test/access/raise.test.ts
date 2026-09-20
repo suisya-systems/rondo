@@ -20,9 +20,9 @@ import { approvalTip } from "../../src/access/scope.js";
 import type { RaiseInput } from "../../src/access/web-app.js";
 import { contentDigest } from "../../src/store/plan.js";
 import type { JsonRecord } from "../../src/store/records.js";
-import { advisoryRecord, iterationStore } from "../../src/store/sqlite.js";
+import { advisoryRecord } from "../../src/store/sqlite.js";
 import { ownLane } from "../lane-claims.js";
-import { REQUEST, openRequest, storeWithRequest } from "../request-fixture.js";
+import { REQUEST, storeWithRequest } from "../request-fixture.js";
 
 const ENV = { RONDO_APPROVER: "ada" };
 

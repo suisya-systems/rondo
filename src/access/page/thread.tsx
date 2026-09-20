@@ -20,18 +20,64 @@
 import type { ReactNode } from "react";
 import { EventLine, LastLookedLine, type ThreadEvent } from "./events.js";
 
+/** A word that leads somewhere, or -- with no address for it -- just the word. */
+export interface ThreadLink {
+  readonly said: string;
+  readonly href: string | null;
+  /** What a pointer shows: the locator itself, never printed as prose. */
+  readonly title?: string;
+}
+
 /** One thing said in the thread, by a person or by rondo. */
 export interface ThreadMessage {
   readonly id: string;
   /** Who spoke, which is a column and never a property of the prose (D-0061 rule 2.3). */
   readonly who: "person" | "rondo";
+  /** The voice as the store records it, for a reader that is not a person. */
+  readonly voice: string;
   /** The name to put on it, already said by the caller. */
   readonly said: string;
   /** The words, as written: never trimmed, reflowed or paraphrased. */
   readonly body: string;
+  /**
+   * What is drawn in place of the words, where the words are not prose a
+   * person wrote: what rondo read of a named issue (D-0078 section 4), or a
+   * drafter run that drafted nothing (rondo#238). Null is the ordinary case,
+   * and then {@link body} is drawn.
+   */
+  readonly drawn: ReactNode | null;
   readonly at: string;
-  /** Where rondo's reading points back to the words it read (D-0061 rule 2.6). */
-  readonly wayBack?: { readonly href: string; readonly said: string };
+  /** The exact moment, for the pointer: the age is what is read. */
+  readonly atTitle: string;
+  /**
+   * The mark that this question still waits on the person (D-0072 rule 3), in
+   * the words that say *which* of the two reasons it waits for. Null on
+   * everything else, which is what makes it a mark.
+   */
+  readonly waiting: string | null;
+  /** What this message answered, where it was said (D-0072 rule 1). */
+  readonly answered: string | null;
+  /**
+   * What the message rests on, each leading where it points (D-0061 rule 2.6)
+   * -- **never an id to copy**. Rule 5 names this as rondo's way back to the
+   * words it read.
+   */
+  readonly bases: readonly ThreadLink[];
+  readonly basesLabel: string;
+  /**
+   * The issues this message named that rondo has not read yet (D-0078 section
+   * 4.3): said until the host's read lands as its own message under it, so a
+   * name that never gets read is visibly waiting rather than silently absent.
+   */
+  readonly pending: readonly string[];
+  readonly pendingSaid: string;
+  /**
+   * The line it answers, said only where that is neither the message above it
+   * nor the request itself -- which is how every reply reads by default.
+   */
+  readonly inReplyTo: ThreadLink | null;
+  /** The way to point the box at this message; null with no write port. */
+  readonly reply: { readonly href: string; readonly said: string } | null;
 }
 
 export interface ThreadProps {
@@ -73,24 +119,72 @@ function idOf(item: ThreadItem): string {
   return item.kind === "message" ? item.message.id : item.event.id;
 }
 
+function Word({ link, className }: { readonly link: ThreadLink; readonly className: string }) {
+  return link.href === null ? (
+    <span className={className} title={link.title}>
+      {link.said}
+    </span>
+  ) : (
+    <a className={className} href={link.href} title={link.title}>
+      {link.said}
+    </a>
+  );
+}
+
 function Message({ message }: { readonly message: ThreadMessage }) {
   return (
-    <article className={`msg msg-${message.who}`}>
+    <article
+      id={message.id}
+      className={`msg msg-${message.who}`}
+      data-voice={message.voice}
+      {...(message.waiting === null ? {} : { "data-waiting": "" })}
+    >
       <div className="msg-body">
         <h5>
-          {message.said} <time>{message.at}</time>
+          <span className="msg-who">{message.said}</span>
+          {message.waiting === null ? null : <span className="msg-wait">{message.waiting}</span>}
+          {message.answered === null ? null : (
+            <span className="msg-answered">{message.answered}</span>
+          )}
+          {/*
+           * **The age is the message's link to itself** and the id is never
+           * printed: an id is for a screen to link by, not for anyone to
+           * copy (D-0071 rule 4.2).
+           */}
+          <a className="msg-at" href={`#${encodeURIComponent(message.id)}`} title={message.atTitle}>
+            <time>{message.at}</time>
+          </a>
+          {message.reply === null ? null : (
+            <a
+              className="msg-reply"
+              id={`reply-${message.id}`}
+              href={message.reply.href}
+              data-open=""
+            >
+              {message.reply.said}
+            </a>
+          )}
         </h5>
+        {message.inReplyTo === null ? null : <Word link={message.inReplyTo} className="msg-back" />}
         {/*
          * `lang=""` is HTML's own way of saying *the language here is
          * unknown* (D-0055 rule 8): rondo does not read the words to find
          * out what language they are in, and an absent attribute would
          * inherit the chrome's, which is a guess.
          */}
-        <p lang="">{message.body}</p>
-        {message.wayBack === undefined ? null : (
-          <a className="msg-back" href={message.wayBack.href}>
-            {message.wayBack.said}
-          </a>
+        {message.drawn ?? <p lang="">{message.body}</p>}
+        {message.pending.map((named) => (
+          <p className="msg-pending" key={named}>
+            <b>{named}</b> {message.pendingSaid}
+          </p>
+        ))}
+        {message.bases.length === 0 ? null : (
+          <p className="msg-bases">
+            <span className="msg-bases-label">{message.basesLabel}</span>
+            {message.bases.map((basis) => (
+              <Word key={basis.said} link={basis} className="basis" />
+            ))}
+          </p>
         )}
       </div>
     </article>

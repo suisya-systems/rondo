@@ -34,8 +34,8 @@ import type {
 } from "../../src/refrain/ports.js";
 import { canonicalJson, planDigest } from "../../src/store/plan.js";
 import type { IterationStatus, JsonRecord } from "../../src/store/records.js";
-import { iterationStore } from "../../src/store/sqlite.js";
-import { REQUEST, openRequest, storeWithRequest } from "../request-fixture.js";
+import {} from "../../src/store/sqlite.js";
+import { REQUEST, storeWithRequest } from "../request-fixture.js";
 
 const START_POLICY: LoopPolicy = { autonomy: "ask_before_landing", maxIterations: 1 };
 
@@ -289,13 +289,17 @@ test("no ordering is promised, and starvation is possible", async () => {
   putAt(connection, "iter-a", "performing");
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
-    expect((await admit(ports, PLAN, START_POLICY, "iter-b", null, null, REQUEST)).iterationId).toBeNull();
+    expect(
+      (await admit(ports, PLAN, START_POLICY, "iter-b", null, null, REQUEST)).iterationId,
+    ).toBeNull();
   }
   putAt(connection, "iter-a", "closed");
 
   // `iter-c` arrives last and is admitted anyway: being refused three times
   // bought `iter-b` no priority whatsoever.
-  expect((await admit(ports, PLAN, START_POLICY, "iter-c", null, null, REQUEST)).iterationId).toBe("iter-c");
+  expect((await admit(ports, PLAN, START_POLICY, "iter-c", null, null, REQUEST)).iterationId).toBe(
+    "iter-c",
+  );
 
   // The demand rows are the only record that anyone was ever refused, which is
   // exactly what rule 14 is for.

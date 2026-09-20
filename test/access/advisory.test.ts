@@ -29,14 +29,9 @@ import { allocate } from "../../src/refrain/allocator.js";
 import { admittedPlan, planPayload, type RunPlan, runPlan } from "../../src/refrain/plan.js";
 import { CONSERVATIVE_HOST_POLICY } from "../../src/refrain/policy.js";
 import type { JsonRecord, ProposalDraft } from "../../src/store/records.js";
-import {
-  type AdvisoryRecord,
-  advisoryRecord,
-  iterationStore,
-  type RecordOutcome,
-} from "../../src/store/sqlite.js";
+import { type AdvisoryRecord, advisoryRecord, type RecordOutcome } from "../../src/store/sqlite.js";
 import { laneFor, ownLane } from "../lane-claims.js";
-import { REQUEST, openRequest, storeWithRequest } from "../request-fixture.js";
+import { REQUEST, storeWithRequest } from "../request-fixture.js";
 
 const somePlan = (): JsonRecord => ({
   run_id: "r-0001",

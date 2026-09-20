@@ -9,7 +9,7 @@
  * dies with the view layer; what stayed behind is the part that picks a colour
  * or emits an element.
  *
- * `D-0046`'s distinction is the one to hold while reading {@link spentLine}:
+ * `D-0046`'s distinction is the one to hold while reading these:
  * an unread cost is not a zero, and the three columns say so separately.
  */
 import type { IterationRecord } from "../../store/records.js";
@@ -62,35 +62,6 @@ export const RECENT_ENDED = 5;
 export function materialLanguage(record: IterationRecord): string {
   const asked = record.plan["material_language"];
   return typeof asked === "string" ? asked : "";
-}
-
-/**
- * What the lap spent, or nothing at all when rondo read none of it (`D-0046`).
- *
- * **Absent from the lead is not absent from the page.** All three columns are
- * null until the lap suspends, and a running lap carrying three `undetermined`s
- * is three lines that say nothing -- which is the failure rondo#145 measured.
- * The reading below still prints each of the three under its own pointer, so
- * the distinction between *rondo did not read this* and *this cost nothing*
- * survives where it is checkable. Where any one of them **was** read the line
- * is drawn and the other two say so by name.
- */
-export function spentLine(wording: Chrome, record: IterationRecord): string | null {
-  if (record.lapCostUsd === null && record.lapTurns === null && record.lapDurationMs === null) {
-    return null;
-  }
-  const cost =
-    record.lapCostUsd === null
-      ? wording.costNotRead
-      : wording.costRead(record.lapCostUsd.toFixed(2));
-  const turns =
-    record.lapTurns === null ? wording.turnsNotRead : wording.turnsRead(record.lapTurns);
-  // `ago` over a duration rather than over a clock: the same reading of the
-  // same number of milliseconds, which is what keeps `7m` on this page the
-  // same `7m` the inbox prints.
-  const took =
-    record.lapDurationMs === null ? wording.durationNotRead : ago(0, record.lapDurationMs);
-  return wording.spent(cost, turns, took);
 }
 
 /** The fence column decoded, or `null` where it is not a list (`"null"`, or bytes that will not parse). */

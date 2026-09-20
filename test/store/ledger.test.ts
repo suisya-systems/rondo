@@ -45,9 +45,9 @@ import type { HostPolicy } from "../../src/refrain/policy.js";
 import { planDigest } from "../../src/store/plan.js";
 import type { IterationStatus, JsonRecord } from "../../src/store/records.js";
 import { SUSPENDED_STATUSES, TERMINAL_STATUSES } from "../../src/store/records.js";
-import { iterationStore } from "../../src/store/sqlite.js";
+import {} from "../../src/store/sqlite.js";
 import { laneFor, ownLane } from "../lane-claims.js";
-import { REQUEST, openRequest, storeWithRequest } from "../request-fixture.js";
+import { REQUEST, storeWithRequest } from "../request-fixture.js";
 
 const somePlan = (): JsonRecord => ({
   run_id: "r-0001",

@@ -110,8 +110,7 @@ export const PAGE_EN: PageWords = Object.freeze({
   saidByYou: "You",
   saidByRondo: "rondo",
   emptyAsk: "What would you like to ask for?",
-  emptyLead:
-    "Write it in your own words. If anything is unclear, rondo asks before it starts.",
+  emptyLead: "Write it in your own words. If anything is unclear, rondo asks before it starts.",
 } satisfies PageWords);
 
 export const PAGE_JA: PageWords = Object.freeze({
@@ -139,7 +138,8 @@ export const PAGE_JA: PageWords = Object.freeze({
   evChecksPassed: "自動チェックはすべて通りました。",
   evChecksFailed: "自動チェックが通りませんでした。",
   evReadingClear: "別の AI が変更を読み直し、指摘はありませんでした。",
-  evReadingRaised: (findings) => `別の AI が変更を読み直し、指摘を ${String(findings)} 件出しました。`,
+  evReadingRaised: (findings) =>
+    `別の AI が変更を読み直し、指摘を ${String(findings)} 件出しました。`,
   evReadingUnavailable: "別の AI は変更を読めませんでした。",
   saidByYou: "あなた",
   saidByRondo: "rondo",

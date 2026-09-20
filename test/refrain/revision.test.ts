@@ -44,7 +44,7 @@ import {
 } from "../../src/refrain/plan.js";
 import { revisionPlan } from "../../src/refrain/revision.js";
 import type { IterationRecord, JsonRecord } from "../../src/store/records.js";
-import { openRequest, REQUEST } from "../request-fixture.js";
+import { REQUEST } from "../request-fixture.js";
 
 const CATALOG_LAYER: CatalogLayer = {
   layer: "repo",

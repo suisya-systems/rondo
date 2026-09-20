@@ -26,14 +26,9 @@ import {
   scopePayloadWithDefaults,
   type ThreadMessageDraft,
 } from "../../src/store/records.js";
-import {
-  advisoryRecord,
-  iterationStore,
-  type ReserveInput,
-  type ScopeSpend,
-} from "../../src/store/sqlite.js";
+import { advisoryRecord, type ReserveInput, type ScopeSpend } from "../../src/store/sqlite.js";
 import { laneFor } from "../lane-claims.js";
-import { REQUEST, openRequest, storeWithRequest } from "../request-fixture.js";
+import { REQUEST, storeWithRequest } from "../request-fixture.js";
 
 /** Bounds high enough that capacity never answers before the scope does. */
 const ROOMY: HostPolicy = { maxOccupying: 100, maxLive: 100 };
@@ -1101,7 +1096,10 @@ test("PLANTED (rondo#197): a scope:ID basis is recorded when it names a scope ro
   expect(incomplete.kind === "refused" && incomplete.reason).toContain("not a complete locator");
   // Two written here; the third is the fixture's own request (D-0083).
   expect(
-    count(connection, `SELECT COUNT(*) AS n FROM conversation_message WHERE message_id != '${REQUEST}'`),
+    count(
+      connection,
+      `SELECT COUNT(*) AS n FROM conversation_message WHERE message_id != '${REQUEST}'`,
+    ),
   ).toBe(2);
 });
 

@@ -7,7 +7,12 @@
  * id, so it lives here rather than being rewritten in each file.
  */
 import type { DatabaseSync } from "node:sqlite";
-import { advisoryRecord, type HostPolicy, type IterationStore, iterationStore } from "../src/store/sqlite.js";
+import {
+  advisoryRecord,
+  type HostPolicy,
+  type IterationStore,
+  iterationStore,
+} from "../src/store/sqlite.js";
 
 /** The id the fixtures name, so a suite that needs no second request says nothing. */
 export const REQUEST = "req-fixture";

@@ -22,6 +22,7 @@ import { readRunPlan } from "../../src/refrain/plan.js";
 import { planDigest } from "../../src/store/plan.js";
 import type { JsonRecord } from "../../src/store/records.js";
 import { ownLane } from "../lane-claims.js";
+import { openRequest, REQUEST } from "../request-fixture.js";
 import {
   AGENT_TYPE_INPUT,
   agentTypeDigestOf,
@@ -30,7 +31,6 @@ import {
   WORKSPACE_ROOT,
   world,
 } from "./fixtures/drafter.js";
-import { openRequest, REQUEST } from "../request-fixture.js";
 
 function portsOver(
   w: Awaited<ReturnType<typeof world>>,

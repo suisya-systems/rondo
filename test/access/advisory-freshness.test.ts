@@ -23,9 +23,9 @@ import { admittedPlan, planPayload, type RunPlan, runPlan } from "../../src/refr
 import { CONSERVATIVE_HOST_POLICY } from "../../src/refrain/policy.js";
 import { canonicalJson, contentDigest, planDigest } from "../../src/store/plan.js";
 import type { JsonRecord, LapReadingDraft } from "../../src/store/records.js";
-import { advisoryRecord, iterationStore } from "../../src/store/sqlite.js";
+import { advisoryRecord } from "../../src/store/sqlite.js";
 import { laneFor } from "../lane-claims.js";
-import { REQUEST, openRequest, storeWithRequest } from "../request-fixture.js";
+import { REQUEST, storeWithRequest } from "../request-fixture.js";
 
 const fresh = () => {
   const connection = new DatabaseSync(":memory:");

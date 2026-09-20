@@ -38,7 +38,9 @@ export function selectRequest(named: string | null, list: RequestList): Selectio
   // `yourTurn` is already oldest-first (`requestList`), so the first is the
   // one to answer.
   const oldest = list.yourTurn[0];
-  return oldest === undefined ? { kind: "empty" } : { kind: "request", messageId: oldest.messageId };
+  return oldest === undefined
+    ? { kind: "empty" }
+    : { kind: "request", messageId: oldest.messageId };
 }
 
 /**

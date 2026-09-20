@@ -76,7 +76,7 @@ import type {
   NonTerminalStatus,
 } from "../../src/store/records.js";
 import { isTerminal, RELEASED_BY } from "../../src/store/records.js";
-import { openRequest, REQUEST } from "../request-fixture.js";
+import { REQUEST } from "../request-fixture.js";
 
 /** Autonomy and a ceiling that both permit one admission. */
 const PERMISSIVE: LoopPolicy = { autonomy: "ask_before_landing", maxIterations: 1 };
@@ -1767,7 +1767,11 @@ test("a caller-supplied grantee is overwritten with the allocated run id, not re
     h.ports,
     { ...PLAN, parties: { issuer: "rondo-host", grantee: "delegate-1" } },
     PERMISSIVE,
-    "i-0001", null, null, REQUEST);
+    "i-0001",
+    null,
+    null,
+    REQUEST,
+  );
   expect(report.iterationId).toBe("i-0001");
   expect(report.status).toBe("awaiting_human");
 });
@@ -1784,7 +1788,11 @@ test("an invalid plan is refused before a row exists, so it takes no lock", asyn
     h.ports,
     { ...PLAN, workspaceRoot: "relative/path" },
     PERMISSIVE,
-    "i-0001", null, null, REQUEST);
+    "i-0001",
+    null,
+    null,
+    REQUEST,
+  );
   expect(report.iterationId).toBeNull();
   expect(report.lines.join(" ")).toContain("before an iteration was reserved");
   expect(h.calls).toEqual([]);

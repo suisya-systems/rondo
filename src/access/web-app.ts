@@ -1913,10 +1913,7 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     }
     // Back to where the question is standing, which since D-0083 rule 3 is
     // the request's own thread rather than a screen named by the lap.
-    return c.redirect(
-      viewHref({ kind: "thread", messageId: request, to: null }, tagOf(c)),
-      303,
-    );
+    return c.redirect(viewHref({ kind: "thread", messageId: request, to: null }, tagOf(c)), 303);
   });
 
   // **One drafted plan's start** (rondo#238 C2b): the plan named by its split

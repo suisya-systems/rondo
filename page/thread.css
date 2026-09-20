@@ -150,3 +150,88 @@
   margin-top: 6px;
   font-size: 13px;
 }
+
+/*
+ * The message's own header (D-0061 rules 2.3, 2.6 and 2.7): who wrote it, the
+ * marks that say where it stands, the age as its link to itself, and the way
+ * to point the box at it. The id is never printed as prose -- it is an anchor
+ * and an attribute (D-0071 rule 4.2).
+ */
+.msg h5 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.msg-at {
+  color: var(--color-muted-foreground);
+  font-weight: 400;
+}
+
+.msg-reply {
+  margin-left: auto;
+  font-weight: 500;
+  color: var(--color-link);
+}
+
+/* The mark that a question waits on the person. Amber is D-0082 rule 2's. */
+.msg-wait {
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--color-wait-ink);
+  background: var(--color-wait-wash);
+}
+
+.msg-answered {
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--color-muted-foreground);
+  background: var(--color-muted);
+}
+
+/* A waiting question is the one thing in the thread drawn at the waiting weight. */
+.msg[data-waiting] .msg-body {
+  border-left: 3px solid var(--color-wait);
+  padding-left: 11px;
+}
+
+.msg-bases {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--color-muted-foreground);
+}
+
+.msg-bases-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--color-faint);
+}
+
+.msg-bases .basis {
+  max-width: 26em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.msg-bases a.basis {
+  color: var(--color-link);
+}
+
+/* A name rondo has been given and has not read yet (D-0078 section 4.3). */
+.msg-pending {
+  margin-top: 6px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--color-muted-foreground);
+}

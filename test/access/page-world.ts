@@ -181,7 +181,6 @@ export const EVIDENCE = {
   fileCount: 1,
 };
 
-
 /** A lap at its gate with the deterministic reading carried by its transition. */
 export async function gateWithChecks(world: ReturnType<typeof fresh>): Promise<void> {
   await openRequest(world, "req-1", "add a retry budget");

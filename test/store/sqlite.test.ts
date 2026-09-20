@@ -24,19 +24,19 @@
  * `abandon()` -- could end. `unreadable` plus `settle` is that path, and the
  * assertion that carries it is the reservation *after* the settle.
  */
+
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { expect, test } from "vitest";
-
 import { CONSERVATIVE_HOST_POLICY } from "../../src/refrain/policy.js";
 import { planDigest } from "../../src/store/plan.js";
 import type { JsonRecord } from "../../src/store/records.js";
 import { TERMINAL_STATUSES } from "../../src/store/records.js";
-import { type HostPolicy, iterationStore, openIterationStore } from "../../src/store/sqlite.js";
+import { type HostPolicy, openIterationStore } from "../../src/store/sqlite.js";
 import { ownLane } from "../lane-claims.js";
-import { REQUEST, openRequest, storeWithRequest } from "../request-fixture.js";
-import { mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { openRequest, REQUEST, storeWithRequest } from "../request-fixture.js";
 
 /**
  * A plan payload of the shape `src/refrain/plan.ts` renders.

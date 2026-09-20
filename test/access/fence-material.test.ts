@@ -20,9 +20,9 @@ import { expect, test } from "vitest";
 import { lapMaterialLines } from "../../src/access/cli.js";
 import { EN } from "../../src/access/wording.js";
 import { CONSERVATIVE_HOST_POLICY } from "../../src/refrain/policy.js";
-import { iterationStore } from "../../src/store/sqlite.js";
+import {} from "../../src/store/sqlite.js";
 import { ownLane } from "../lane-claims.js";
-import { REQUEST, openRequest, storeWithRequest } from "../request-fixture.js";
+import { REQUEST, storeWithRequest } from "../request-fixture.js";
 
 /** A row with no range on it, so nothing here reaches git. */
 async function fenceBlock(permissionDenials: string | null): Promise<string> {

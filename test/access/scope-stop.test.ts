@@ -37,8 +37,8 @@ import type { LoopPolicy } from "../../src/refrain/policy.js";
 import type { ConductorPorts, EffectOutcome, LapPerformance } from "../../src/refrain/ports.js";
 import { canonicalJson, contentDigest } from "../../src/store/plan.js";
 import { type JsonRecord, type LapReading, modelReadingDrafter } from "../../src/store/records.js";
-import { advisoryRecord, iterationStore } from "../../src/store/sqlite.js";
-import { REQUEST, openRequest, storeWithRequest } from "../request-fixture.js";
+import { advisoryRecord } from "../../src/store/sqlite.js";
+import { REQUEST, storeWithRequest } from "../request-fixture.js";
 
 /**
  * The tests marked with this drive the CLI over an on-disk store rather than
@@ -221,7 +221,9 @@ async function harness(path = ":memory:", payload: JsonRecord = PAYLOAD) {
     }),
   ).toEqual({ kind: "recorded" });
   // The scope may list only an agent type rondo already holds (D-0062 rule 1.2).
-  expect((await admit(conductor, advisory, PLAN, POLICY, "i-seed", null, null, REQUEST)).iterationId).toBe("i-seed");
+  expect(
+    (await admit(conductor, advisory, PLAN, POLICY, "i-seed", null, null, REQUEST)).iterationId,
+  ).toBe("i-seed");
   // Ended, so its claim on the whole repository (D-0073 rule 2.5) is released
   // and the lines below are admitted on their own merits: the seed is only how
   // rondo comes to hold the agent type.
@@ -1321,9 +1323,9 @@ test(
 
 test("D-0073 rule 7: a refusal by a closed line reads its landing, and only a landed one is released and let through", async () => {
   const h = await harness();
-  expect((await admit(h.reporting, h.advisory, PLAN, POLICY, "i-land", null, null, REQUEST)).status).toBe(
-    "awaiting_human",
-  );
+  expect(
+    (await admit(h.reporting, h.advisory, PLAN, POLICY, "i-land", null, null, REQUEST)).status,
+  ).toBe("awaiting_human");
   const asked: LandingRequest[] = [];
   let answer: LandingReading = {
     kind: "notLanded",
@@ -1365,7 +1367,9 @@ test("D-0073 rule 7: a refusal by a closed line reads its landing, and only a la
   ]);
 
   answer = { kind: "undetermined", reason: "the forge did not answer" };
-  const unknown = (await admit(ports, h.advisory, PLAN, POLICY, "i-next", null, null, REQUEST)).lines.join("\n");
+  const unknown = (
+    await admit(ports, h.advisory, PLAN, POLICY, "i-next", null, null, REQUEST)
+  ).lines.join("\n");
   expect(unknown).toContain("undetermined: the forge did not answer");
   expect(unknown).not.toContain("not on");
 
@@ -1470,9 +1474,9 @@ test("D-0073 rule 5: the gate compares what a lap changed with its line's claim,
 
 test("D-0073 rule 4.3: a line that ended with its release missed is released at the next refusal, with nothing read", async () => {
   const h = await harness();
-  expect((await admit(h.reporting, h.advisory, PLAN, POLICY, "i-lost", null, null, REQUEST)).status).toBe(
-    "awaiting_human",
-  );
+  expect(
+    (await admit(h.reporting, h.advisory, PLAN, POLICY, "i-lost", null, null, REQUEST)).status,
+  ).toBe("awaiting_human");
   // Ended out of band, so no release row was written: the claim is still held.
   h.connection.prepare("UPDATE iteration SET status = 'abandoned' WHERE id = 'i-lost'").run();
   let read = 0;
@@ -1500,9 +1504,9 @@ test(
     const dir = mkdtempSync(join(tmpdir(), "rondo-release-"));
     const path = join(dir, "rondo.db");
     const h = await harness(path);
-    expect((await admit(h.reporting, h.advisory, PLAN, POLICY, "i-held", null, null, REQUEST)).status).toBe(
-      "awaiting_human",
-    );
+    expect(
+      (await admit(h.reporting, h.advisory, PLAN, POLICY, "i-held", null, null, REQUEST)).status,
+    ).toBe("awaiting_human");
     const environment = { RONDO_STORE: path, RONDO_APPROVER: "oidc|operator-1" };
     const argv = ["release", "--iteration-id", "i-held", "--actor-id", "oidc|operator-1"];
     // The press is the approver's, checked as every such press is.

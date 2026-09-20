@@ -30,9 +30,9 @@ import type {
   ReadingEvidence,
   ThreadMessageDraft,
 } from "../../src/store/records.js";
-import { advisoryRecord, iterationStore } from "../../src/store/sqlite.js";
+import { advisoryRecord } from "../../src/store/sqlite.js";
 import { ownLane } from "../lane-claims.js";
-import { REQUEST, openRequest, storeWithRequest } from "../request-fixture.js";
+import { REQUEST, storeWithRequest } from "../request-fixture.js";
 
 const PLAN: RunPlan = {
   db: "/srv/continuo.db",

@@ -33,7 +33,7 @@ import {
   type ScopePayload,
   type StoredScope,
 } from "../../src/store/records.js";
-import { openRequest, REQUEST } from "../request-fixture.js";
+import { REQUEST } from "../request-fixture.js";
 
 const DIGEST = (c: string) => `sha256:${c.repeat(64)}`;
 const AGENT = DIGEST("a");
@@ -255,7 +255,10 @@ test("the first failing test decides the name", () => {
   expect(
     scopeVerdict(
       REDO,
-      snapshot({ requestMessageId: REQUEST, spent: { admissions: 9, readCostUsd: 0, unreadLaps: 0 } }),
+      snapshot({
+        requestMessageId: REQUEST,
+        spent: { admissions: 9, readCostUsd: 0, unreadLaps: 0 },
+      }),
     ),
   ).toMatchObject({ kind: "outside", test: "request" });
 });

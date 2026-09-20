@@ -136,24 +136,23 @@ import {
   draftedStanding,
 } from "./drafted-view.js";
 import type { LapWorkInspection } from "./forge.js";
-import {
-  ago,
-  gatherInbox,
-  type InboxReadPorts,
-  type LiveRow,
-} from "./inbox.js";
+import { ago, gatherInbox, type InboxReadPorts, type LiveRow } from "./inbox.js";
 import {
   type ForgeRead,
+  type IssueComment,
   issueName,
   latestReads,
   type NamedIssue,
+  parseForgeRead,
 } from "./issue-read.js";
 import { markdownHtml } from "./markdown.js";
 import { isModelDrafterName } from "./model-draft.js";
 import { type HeldPlan, heldPlanByDigest, heldPlans } from "./model-drafter.js";
+import { EmptyCentre } from "./page/empty.js";
 import { RequestsFace } from "./page/list.js";
 import { facesMarkup } from "./page/render.js";
 import { Raw } from "./page/shell.js";
+import { ThreadFace, type ThreadItem, type ThreadLink } from "./page/thread.js";
 import {
   decodedDenials,
   endedHow,
@@ -163,11 +162,9 @@ import {
   saysMore,
 } from "./page-logic/laps.js";
 import { repositoryOf, requestList, rowStateOf } from "./page-logic/list.js";
+import { isLive, type PageView, REVIEW_ROUND_CHOICES, viewHref } from "./page-logic/routes.js";
 import { selectRequest } from "./page-logic/selection.js";
 import { lapEvents } from "./page-logic/thread-events.js";
-import { EmptyCentre } from "./page/empty.js";
-import { ThreadFace, type ThreadItem } from "./page/thread.js";
-import { isLive, type PageView, REVIEW_ROUND_CHOICES, viewHref } from "./page-logic/routes.js";
 import { firstLine, lineOf, replyTarget, type Threads, threadsOf } from "./page-logic/threads.js";
 import { denialLine, LIST_LIMIT } from "./review.js";
 import { reviseText } from "./revise-draft.js";
@@ -797,7 +794,6 @@ function note(line: string) {
     </p>
   );
 }
-
 
 /** A view's head: the way back to the summary, and what the view is. */
 function backHead(wording: Chrome, heading: string) {
@@ -1516,6 +1512,12 @@ function approveView(
     wording.lang,
   );
   return (
+    // **The poll replaces this box and `page/composer.js` puts the words
+    // back.** The gate is inside the thread since D-0083 rule 9, so the
+    // five-second swap reaches it; the draft is kept by the script that
+    // already keeps the send box's, off the `data-draft` key on the field.
+    // `hx-preserve` would have been the other answer and is the wrong one
+    // here: the send's own out-of-band swap of `#composer` has to land.
     <div id="answering" class="mt-3 space-y-3">
       {framing.material === null ? null : (
         <>
@@ -2071,6 +2073,128 @@ function issueNameLink(read: ForgeRead) {
   );
 }
 
+/**
+ * What rondo read of one issue (D-0078 sections 4.1 and 4.2): the name as a
+ * link, one line, and the words in a fold -- the forge's text as it came, or
+ * rondo's own reason, closed (D-0076 rule 4.5). Nothing to press.
+ */
+function forgeView(wording: Chrome, message: ThreadMessageDraft) {
+  const read = parseForgeRead(message.body);
+  if (read === null) {
+    return (
+      <p class="body wrap-anywhere whitespace-pre-wrap" lang="">
+        {message.body}
+      </p>
+    );
+  }
+  if ("failed" in read) {
+    return (
+      <div class="issue-read space-y-2" data-issue="not-read">
+        <p class="text-[14px] leading-6">
+          {issueNameLink(read)} {wording.issueNotRead(read.failed.why)} {wording.issueNotReadTail}
+        </p>
+        <details class="group">
+          <summary class="flex cursor-pointer list-none items-center gap-2 text-[12.5px] leading-5 text-muted-foreground select-none [&::-webkit-details-marker]:hidden">
+            {chevron()}
+            {wording.drafterNoDraftWhy}
+          </summary>
+          <p
+            class="mt-1 text-[12.5px] leading-5 wrap-anywhere whitespace-pre-wrap text-muted-foreground"
+            lang="en"
+          >
+            {read.failed.detail}
+          </p>
+        </details>
+      </div>
+    );
+  }
+  const issue = read.read;
+  return (
+    <div class="issue-read space-y-2" data-issue="read">
+      <p class="text-[14px] leading-6">
+        {issueNameLink(read)}{" "}
+        <span class="font-medium" lang="">
+          {issue.title}
+        </span>
+      </p>
+      <p class="text-[13px] leading-5 text-muted-foreground">
+        {wording.issueRead(issue.pullRequest, issue.comments.length)}
+      </p>
+      <details class="group">
+        <summary class="flex cursor-pointer list-none items-center gap-2 text-[12.5px] leading-5 text-muted-foreground select-none [&::-webkit-details-marker]:hidden">
+          {chevron()}
+          {wording.issueReadFold}
+        </summary>
+        {/* The forge's words as it returned them: no trim, no reflow (D-0022 rule 4). */}
+        <div class="mt-1 space-y-2 text-[13px] leading-5" lang="">
+          <p class="text-faint">
+            {issue.author} · {issue.openedAt} · {issue.state}
+          </p>
+          <p class="wrap-anywhere whitespace-pre-wrap">{issue.body}</p>
+          {issue.comments.map((c: IssueComment) => (
+            <div class="border-t border-border/60 pt-2">
+              <p class="text-faint">
+                {c.author} · {c.at}
+              </p>
+              <p class="wrap-anywhere whitespace-pre-wrap">{c.body}</p>
+            </div>
+          ))}
+        </div>
+      </details>
+    </div>
+  );
+}
+
+/**
+ * Whether a message is a model drafter run that drafted nothing (D-0071 rule
+ * 1.5): the drafter's voice, a model drafter's name, and no `proposal:` basis --
+ * every run that wrote a draft rests its messages on the proposal row it wrote
+ * (rule 7.3), so the absence is structural and not read off the words.
+ */
+function noDraft(message: ThreadMessageDraft): boolean {
+  return (
+    message.authorKind === "drafter" &&
+    isModelDrafterName(message.authorId) &&
+    !message.bases.some((basis) => basis["form"] === "proposal")
+  );
+}
+
+/**
+ * **A drafter run that drafted nothing, said as what happened** (rondo#238):
+ * the row's words are rondo's own about its tools, so they are kept, folded,
+ * and what is shown first is what the person can do -- set the scope
+ * themselves, one press away.
+ */
+function noDraftView(wording: Chrome, message: ThreadMessageDraft, root: string, forms: boolean) {
+  return (
+    <div class="space-y-2">
+      <p class="text-[14px] leading-6">{wording.drafterNoDraft}</p>
+      {forms ? (
+        <a
+          href={viewHref(
+            { kind: "scope", messageId: root, rounds: null, decisionId: null, plan: null },
+            wording.lang,
+          )}
+          class={`${PRIMARY} h-7 px-3 text-[13px]`}
+        >
+          {wording.scopeAction}
+        </a>
+      ) : null}
+      <details class="group">
+        <summary class="flex cursor-pointer list-none items-center gap-2 text-[12.5px] leading-5 text-muted-foreground select-none [&::-webkit-details-marker]:hidden">
+          {chevron()}
+          {wording.drafterNoDraftWhy}
+        </summary>
+        <p
+          class="body mt-1 text-[12.5px] leading-5 wrap-anywhere whitespace-pre-wrap text-muted-foreground"
+          lang="en"
+        >
+          {message.body}
+        </p>
+      </details>
+    </div>
+  );
+}
 
 /** Who wrote a message, as a person reads it: their own messages are "you". */
 function whoWrote(wording: Chrome, message: ThreadMessageDraft, actorId: string | null): string {
@@ -2103,19 +2227,23 @@ const CHIP =
  * than one that says so by not being blue. A basis that is not a locator is
  * shown as its JSON rather than dropped, so nothing the drafter cited is lost.
  */
-function basisChip(
+/**
+ * One basis as a word that leads where it points: the cited message by its
+ * words and an anchor, everything else named and not linked.
+ */
+function basisWord(
   wording: Chrome,
   basis: Readonly<Record<string, unknown>>,
   threads: Threads,
   root: string | null,
   actorId: string | null,
-) {
+): ThreadLink {
   const form = basis["form"];
-  let label: string;
+  let said: string;
   let href: string | null = null;
   if (form === "message" && typeof basis["messageId"] === "string") {
     const cited = threads.byId.get(basis["messageId"]);
-    label =
+    said =
       cited === undefined
         ? basisLine({ form: "message", messageId: basis["messageId"] }, {})
         : `${whoWrote(wording, cited, actorId)}: ${lineOf(cited)}`;
@@ -2126,36 +2254,48 @@ function basisChip(
           : `${viewHref({ kind: "thread", messageId: cited.messageId, to: null }, wording.lang)}#${encodeURIComponent(cited.messageId)}`;
     }
   } else if (form === "iteration" && typeof basis["iterationId"] === "string") {
-    label = basisLine({ form: "iteration", iterationId: basis["iterationId"] }, {});
     // A lap used to point at its section in the reading fold; with the fold
     // gone (D-0083) there is no page-wide place a lap id leads to, so the
     // basis is named and not linked.
+    said = basisLine({ form: "iteration", iterationId: basis["iterationId"] }, {});
   } else if (form === "snapshot") {
-    label = `snapshot ${String(basis["pointer"])}`;
+    said = `snapshot ${String(basis["pointer"])}`;
   } else if ((BASIS_FORMS as readonly unknown[]).includes(form)) {
-    label = basisLine(basis as unknown as Basis, {});
+    said = basisLine(basis as unknown as Basis, {});
   } else {
-    label = JSON.stringify(basis);
+    said = JSON.stringify(basis);
   }
+  return { said, href, title: said };
+}
+
+/** {@link basisWord} as this renderer's own chip, for the screens still drawn here. */
+function basisChip(
+  wording: Chrome,
+  basis: Readonly<Record<string, unknown>>,
+  threads: Threads,
+  root: string | null,
+  actorId: string | null,
+) {
+  const word = basisWord(wording, basis, threads, root, actorId);
   const text = (
-    <span class={form === "message" ? "max-w-[26rem] truncate" : "truncate font-mono"}>
-      {label}
+    <span class={basis["form"] === "message" ? "max-w-[26rem] truncate" : "truncate font-mono"}>
+      {word.said}
     </span>
   );
-  return href === null ? (
-    <span class={`basis ${CHIP}`} title={label}>
+  return word.href === null ? (
+    <span class={`basis ${CHIP}`} title={word.said}>
       {text}
     </span>
   ) : (
-    <a href={href} class={`basis ${CHIP} hover:border-ring/60 hover:text-foreground`} title={label}>
+    <a
+      href={word.href}
+      class={`basis ${CHIP} hover:border-ring/60 hover:text-foreground`}
+      title={word.said}
+    >
       {text}
     </a>
   );
 }
-
-
-
-
 
 /** A scope id minted for one form (`newScopeId` in `src/access/web-app.ts`). */
 export type MintScopeId = () => string;
@@ -3695,7 +3835,6 @@ async function predecessorLine(
   );
 }
 
-
 /** A pull request body split around the request fold it carries. */
 interface RequestFold {
   readonly before: string;
@@ -4454,7 +4593,13 @@ export async function operatorPage(
   // drawn half (see `threadMessages`).
   const threadRead = await ports.record.threadMessages();
   const forms = token !== null && newId !== null;
-  const onThreads = view.kind === "requests" || view.kind === "thread";
+  /**
+   * **A view a person writes in.** Since D-0083 rule 3 the summary is a
+   * request's thread with the boxes in it, so it is one of these: a reload
+   * would throw a half-written draft away, which is what this decides
+   * (#220 S1).
+   */
+  const onThreads = view.kind === "requests" || view.kind === "thread" || view.kind === "summary";
   const inbox = ports.actorId === null ? null : await gatherInbox(ports, ports.actorId);
   const live: LiveRow[] = (await ports.store.readLive()).flatMap((outcome): LiveRow[] => {
     switch (outcome.kind) {
@@ -4483,10 +4628,12 @@ export async function operatorPage(
   // listed however long ago it ended: it is the one ended thing that still
   // costs other work something, so it cannot fall off *just finished*.
   const ledger = await ports.store.laneLedger();
-  const lineOf = new Map(ledger.flatMap((line) => line.lapIds.map((id) => [id, line] as const)));
+  // Named apart from `lineOf`, which is a message's first line: this is the
+  // ledger line a lap belongs to.
+  const lineFor = new Map(ledger.flatMap((line) => line.lapIds.map((id) => [id, line] as const)));
   /** A finished line keeping its files, said on its closed tips' rows. */
   const keeping = (record: IterationRecord) => {
-    const line = lineOf.get(record.id);
+    const line = lineFor.get(record.id);
     return line !== undefined &&
       !line.inFlight &&
       line.paths.length > 0 &&
@@ -4601,11 +4748,25 @@ export async function operatorPage(
    * where it does not the oldest thing waiting is selected, because the
    * person came to answer.
    */
-  const selection = selectRequest(
-    view.kind === "thread" ? threads.rootOf(view.messageId) : null,
-    requestsList,
-  );
-  const selectedRoot = selection.kind === "request" ? selection.messageId : null;
+  /**
+   * **An address naming a message nobody wrote is said, not answered with
+   * another request.** Rule 3's fallback is for an address that names none;
+   * one that names a message this store does not hold is a person who
+   * followed a stale link, and showing them somebody else's thread would be
+   * rondo answering a question it was not asked.
+   */
+  const namedThread = view.kind === "thread" ? threads.rootOf(view.messageId) : null;
+  const noSuchThread = view.kind === "thread" && namedThread === null;
+  const selection = selectRequest(namedThread, requestsList);
+  /**
+   * **`requests` is the way into a new one**, so its centre is rule 4's --
+   * the question and the box -- whatever is waiting. Selecting a thread there
+   * would answer a person who came to write with somebody else's question.
+   */
+  const selectedRoot =
+    noSuchThread || view.kind === "requests" || selection.kind !== "request"
+      ? null
+      : selection.messageId;
   const selectedLap = selectedRoot === null ? null : lapUnder(selectedRoot);
   /*
    * The lap whose gate the centre draws a box for, which is what the framing
@@ -4624,10 +4785,7 @@ export async function operatorPage(
    * composed by the parts that own them and placed here.
    */
   /** The screens the page's rebuild does not touch, which keep their own centre. */
-  const onOwnScreen =
-    view.kind === "scope" ||
-    view.kind === "publish" ||
-    view.kind === "release";
+  const onOwnScreen = view.kind === "scope" || view.kind === "publish" || view.kind === "release";
   const selectedMessages =
     selectedRoot === null
       ? []
@@ -4636,19 +4794,95 @@ export async function operatorPage(
           .toSorted((left, right) => left.atMs - right.atMs);
   const selectedReadings =
     selectedLap === null ? [] : await ports.store.readingsFor(selectedLap.record.id);
+  /*
+   * **The two messages whose body is not prose**, rendered here because this
+   * renderer still owns them: what rondo read of a named issue (D-0078 section
+   * 4) and a drafter run that drafted nothing (rondo#238). They cross the seam
+   * as markup, like the boxes, and are awaited once rather than inside the
+   * synchronous map below.
+   */
+  const drawnBodies = new Map(
+    await Promise.all(
+      selectedMessages
+        .filter((message) => message.authorKind === "forge" || noDraft(message))
+        .map(
+          async (message) =>
+            [
+              message.messageId,
+              await (message.authorKind === "forge"
+                ? forgeView(wording, message)
+                : noDraftView(wording, message, selectedRoot ?? "", forms)
+              ).toString(),
+            ] as const,
+        ),
+    ),
+  );
   const threadItems: ThreadItem[] = [
-    ...selectedMessages.map(
-      (message): ThreadItem => ({
+    ...selectedMessages.map((message, at): ThreadItem => {
+      const waits = threads.waiting.has(message.messageId);
+      const parent = message.inReplyTo === null ? undefined : threads.byId.get(message.inReplyTo);
+      const previous = selectedMessages[at - 1];
+      return {
         kind: "message",
         message: {
           id: message.messageId,
           who: message.authorKind === "operator" ? "person" : "rondo",
-          said: message.authorKind === "operator" ? wording.saidByYou : wording.saidByRondo,
+          voice: message.authorKind,
+          said: whoWrote(wording, message, ports.actorId),
           body: message.body,
+          drawn: (() => {
+            const markup = drawnBodies.get(message.messageId);
+            return markup === undefined ? null : Raw({ html: markup });
+          })(),
           at: wording.age(ago(message.atMs, nowMs)),
+          atTitle: new Date(message.atMs).toISOString(),
+          // **Which of the two reasons it still waits** (D-0072 rule 3):
+          // nobody has been back to it, or the person has and said to stop.
+          waiting: !waits
+            ? null
+            : threads.stopped.has(message.messageId)
+              ? wording.askStoppedPill
+              : wording.askWaitingPill,
+          // **What this message answered, where it was said** (D-0072 rule 1):
+          // the words are kept byte for byte either way, so with no mark here
+          // two answers that read alike and did opposite things would be one
+          // entry in the thread.
+          answered:
+            message.answerOutcome === undefined
+              ? null
+              : message.answerOutcome === "stop"
+                ? wording.answerStoppedPill
+                : wording.answerCarriedOnPill,
+          pending: (threads.unread.get(message.messageId) ?? []).map((ref) => ref.named),
+          pendingSaid: wording.issuePending,
+          bases: message.bases.map((basis) =>
+            basisWord(wording, basis, threads, selectedRoot, ports.actorId),
+          ),
+          basesLabel: wording.basesLabel,
+          // Said only where the reply is to neither the message above it nor
+          // the request itself, which is what every reply is read as.
+          inReplyTo:
+            parent === undefined ||
+            parent.messageId === previous?.messageId ||
+            parent.messageId === selectedRoot
+              ? null
+              : {
+                  said: wording.inReplyTo(whoWrote(wording, parent, ports.actorId), lineOf(parent)),
+                  href: `#${encodeURIComponent(parent.messageId)}`,
+                },
+          reply:
+            !forms || selectedRoot === null
+              ? null
+              : {
+                  href: viewHref(
+                    { kind: "thread", messageId: selectedRoot, to: message.messageId },
+                    wording.lang,
+                  ),
+                  said: waits ? wording.answerAskAction : wording.replyAction,
+                },
         },
-      }),
-    ),
+      };
+    }),
     ...(selectedLap === null
       ? []
       : lapEvents(
@@ -4682,29 +4916,33 @@ export async function operatorPage(
    * empty centre, and the box to add to a request under every thread. They
    * are composed by the part that owns them and only placed here.
    */
-  const askBox = forms
-    ? await composerView(
-        wording,
-        { kind: "requests" },
-        threads,
-        token,
-        newId,
-        ports.actorId,
-        nowMs,
-      )?.toString()
-    : null;
+  // **Composed whether or not there is a write port**: with none, the box's
+  // own part says the threads can be read and not written to, and D-0020 rule
+  // 2 wants that where a person is looking rather than on one screen.
+  const askBox = await composerView(
+    wording,
+    { kind: "requests" },
+    threads,
+    token,
+    newId,
+    ports.actorId,
+    nowMs,
+  )?.toString();
   const addBox =
-    forms && selectedRoot !== null
-      ? await composerView(
+    selectedRoot === null
+      ? null
+      : await composerView(
           wording,
-          { kind: "thread", messageId: selectedRoot, to: null },
+          // **The message the box answers is the one the address names**
+          // (`replyTarget`): a person who followed a message's own *reply*
+          // link asked for that message, and the box has to be aimed at it.
+          { kind: "thread", messageId: selectedRoot, to: view.kind === "thread" ? view.to : null },
           threads,
           token,
           newId,
           ports.actorId,
           nowMs,
-        )?.toString()
-      : null;
+        )?.toString();
   /*
    * **The box to answer in** (D-0083 rule 9): the gate, whole, inside the
    * thread rather than on a screen of its own. `shown` holds the framing for
@@ -4724,8 +4962,9 @@ export async function operatorPage(
           gateFraming,
           newIterationId,
         )?.toString()) ?? null);
-  const centreContent =
-    selectedRoot === null
+  const centreContent = noSuchThread
+    ? { rendered: await note(wording.noSuchThread).toString() }
+    : selectedRoot === null
       ? {
           react: EmptyCentre({
             wording,
@@ -4765,6 +5004,15 @@ export async function operatorPage(
     view.kind === "release"
       ? await releaseView(ports, wording, view, releaseToken, ledger, threads, nowMs)
       : null;
+  /**
+   * **Whether a person may be writing on this view.** With script off a reload
+   * throws a half-written draft away, so a view with a box does not reload
+   * itself and says so (#220 S1). The box to answer a gate counts as one:
+   * since D-0083 rule 9 it holds the free-text field a press carries, and it
+   * is drawn wherever a question is standing rather than on a screen of its
+   * own that never reloaded.
+   */
+  const writingHere = onThreads && (forms || answeringBox !== null);
   const here = viewHref(view, wording.lang);
   const page = (
     // **The document declares the language rondo actually wrote it in, and
@@ -4791,7 +5039,7 @@ export async function operatorPage(
                 // **Not where a person may be writing** (#220 S1): with script
                 // off a reload would throw a half-written draft away, so a
                 // view with a composer does not reload itself and says so.
-                onThreads && forms ? null : (
+                writingHere ? null : (
                   <noscript>
                     <meta http-equiv="refresh" content={`${String(REFRESH_SECONDS)};url=${here}`} />
                   </noscript>

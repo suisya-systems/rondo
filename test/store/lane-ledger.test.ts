@@ -13,8 +13,8 @@ import { expect, test } from "vitest";
 
 import { CONSERVATIVE_HOST_POLICY } from "../../src/refrain/policy.js";
 import type { LaneClaimAsk } from "../../src/store/records.js";
-import { iterationStore, LANE_LEDGER_AUTHOR, type ReserveInput } from "../../src/store/sqlite.js";
-import { REQUEST, openRequest, storeWithRequest } from "../request-fixture.js";
+import { LANE_LEDGER_AUTHOR, type ReserveInput } from "../../src/store/sqlite.js";
+import { REQUEST, storeWithRequest } from "../request-fixture.js";
 
 const REPOSITORY = "/srv/repo";
 

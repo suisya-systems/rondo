@@ -37,9 +37,9 @@ import type {
   RunAdmission,
 } from "../../src/refrain/ports.js";
 import type { LapReadingDraft } from "../../src/store/records.js";
-import { advisoryRecord, iterationStore } from "../../src/store/sqlite.js";
+import { advisoryRecord } from "../../src/store/sqlite.js";
 import { ownLane } from "../lane-claims.js";
-import { REQUEST, openRequest, storeWithRequest } from "../request-fixture.js";
+import { REQUEST, storeWithRequest } from "../request-fixture.js";
 
 const NOW_MS = 1_700_000_000_000;
 const SUBJECT = "i-0001";
@@ -364,7 +364,16 @@ test("an agent type with nothing askable is recorded as nothing, and says so", a
   // -- and an option set of one is not a choice.
   const h = harness(NEEDS_APPROVAL);
 
-  const report = await admit(h.ports, h.advisory, PLAN_WITH_NOTHING_ASKABLE, POLICY, SUBJECT, null, null, REQUEST);
+  const report = await admit(
+    h.ports,
+    h.advisory,
+    PLAN_WITH_NOTHING_ASKABLE,
+    POLICY,
+    SUBJECT,
+    null,
+    null,
+    REQUEST,
+  );
   expect(report.status).toBe("abandoned");
   expect(rowsIn(h.connection, "proposal").length).toBe(0);
   expect(report.lines.join("\n")).toContain("declares no askable key");
@@ -425,7 +434,11 @@ test("the pin the trigger needs being unreadable does not refuse the lap", async
     { unavailable: "cadenza.pin.json could not be read: ENOENT" },
     PLAN,
     POLICY,
-    SUBJECT, null, null, REQUEST);
+    SUBJECT,
+    null,
+    null,
+    REQUEST,
+  );
 
   expect(report.status).toBe("abandoned");
   expect(rowsIn(h.connection, "proposal").length).toBe(0);

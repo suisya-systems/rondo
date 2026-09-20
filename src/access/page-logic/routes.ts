@@ -159,11 +159,7 @@ export const REVIEW_ROUND_CHOICES: readonly number[] = [0, 1, 2, 3, 4, 5, 6];
  * again, and the page's foot already says the view holds still.
  */
 export function isLive(view: PageView): boolean {
-  return (
-    view.kind !== "scope" &&
-    view.kind !== "publish" &&
-    view.kind !== "release"
-  );
+  return view.kind !== "scope" && view.kind !== "publish" && view.kind !== "release";
 }
 
 /**
