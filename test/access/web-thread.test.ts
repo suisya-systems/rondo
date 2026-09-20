@@ -199,8 +199,11 @@ test("a request thread is drawn whole: every body byte for byte, voices apart, b
   // refuses a press naming neither, so a form with one unnamed button would
   // answer nothing. `name`/`value` on the button is what a native submit sends,
   // so this works with script off.
+  // **Filled in ink and not in amber** (D-0083 rule 10, rondo#314): the press
+  // is the filled one of the two, and amber is kept for the claim that a
+  // person must act rather than spent on every press that exists.
   expect(html).toMatch(
-    /<button type="submit" name="outcome" value="carry_on" class="[^"]*bg-wait[^"]*">Carry on<\/button>/,
+    /<button type="submit" name="outcome" value="carry_on" class="[^"]*bg-foreground[^"]*">Carry on<\/button>/,
   );
   expect(html).toMatch(
     /<button type="submit" name="outcome" value="stop" class="[^"]*">Stop this line<\/button>/,

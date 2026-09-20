@@ -57,6 +57,12 @@ test("the answer view draws both readings side by side from the rows, with the w
   // The two cards, the checks' finding and the model's graded findings.
   expect(html).toContain('id="checks"');
   expect(html).toContain('id="model-review"');
+  // **The weight of the one card that was raised on** (rondo#314, D-0082 rule
+  // 2's *red means broken*): four cards of one weight left the person to read
+  // all four to find the reason they were called, so this one is edged in red
+  // and the others are not.
+  expect(html).toMatch(/<section\s+id="model-review"\s+class="[^"]*border-l-fail/);
+  expect(html.match(/border-l-fail/g)).toHaveLength(1);
   expect(html).toMatch(/class="grid items-start gap-3 lg:grid-cols-2"><section id="checks"/);
   expect(html).toContain("a binary file was not read");
   expect(html).toMatch(/severity[^"]*">blocker<\/span><span[^>]*>the loop never stops/);
@@ -218,6 +224,15 @@ test("the gate offers a change beside approve, drafted from the findings and edi
   expect(bar).toContain(">approve despite what was raised</button>");
   expect(bar).toContain("title=\"answers gate gate-i-0001 as 'approve'");
   expect(bar).not.toContain('id="revise-none"');
+  // **The press against a finding is outlined in amber, and never filled in
+  // it** (D-0083 rule 10, rondo#314): the fill is what says *this is the
+  // press*, and amber is what says *a person must act* -- the bar's own rule
+  // carries that, so the colour is not also spent on the button's whole area.
+  expect(bar).toMatch(
+    /<button type="submit"[^>]*class="[^"]*border-wait[^"]*">approve despite what was raised</,
+  );
+  expect(bar).not.toMatch(/<button type="submit"[^>]*class="[^"]*bg-wait /);
+  expect(bar.slice(0, bar.indexOf(">"))).toContain("border-t-2 border-wait");
 });
 
 test("a lap admitted under no approval is told so where the change would be (#233 S4)", async () => {
@@ -706,6 +721,11 @@ test("with nothing that heavy raised, approve keeps its one word (#237)", async 
   expect(bar).toContain("Accept this work as it is.");
   expect(bar).not.toContain("despite");
   expect(html).not.toContain('id="model-raised"');
+  // **With nothing raised the press is ink, and it is the filled one**
+  // (D-0083 rule 10, rondo#314).
+  expect(bar).toMatch(/<button type="submit"[^>]*class="[^"]*bg-foreground[^"]*">approve</);
+  // Nothing was raised, so no card is edged in red (D-0082 rule 2).
+  expect(html).not.toContain("border-l-fail");
 });
 
 test("the qualified approve is in the page's language too (#237)", async () => {
