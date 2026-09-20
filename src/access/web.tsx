@@ -850,7 +850,7 @@ export function isSwitch(asked: LanguageAsked, resolved: Chrome): boolean {
  * Tailwind utility, so it names the element and styles nothing.
  */
 const PILL =
-  "inline-flex shrink-0 items-center rounded-full border px-2 py-px font-mono text-xs font-medium leading-4 whitespace-nowrap";
+  "inline-flex shrink-0 items-center rounded-full border px-2 py-px font-mono text-meta font-medium leading-4 whitespace-nowrap";
 
 /** One tone per state, which is the whole of what a pill says (section 1, Vercel's row). */
 const TONE = {
@@ -893,7 +893,7 @@ const ROW =
 
 /** The muted, right-aligned column of identifiers (section 1, GitHub's run list): a locator, so a step below the metadata. */
 const META =
-  "col-start-2 flex gap-x-2 font-mono text-[11px] leading-6 whitespace-nowrap text-faint tabular-nums max-sm:hidden sm:col-start-auto sm:justify-end";
+  "col-start-2 flex gap-x-2 font-mono text-id leading-6 whitespace-nowrap text-faint tabular-nums max-sm:hidden sm:col-start-auto sm:justify-end";
 
 /**
  * The metadata line under a row's title: its sentences run on one line, parted
@@ -907,7 +907,7 @@ const META =
  * spans: a pill goes inside one.
  */
 const META_LINE =
-  "-ml-3 flex flex-wrap items-center gap-y-0.5 text-[12.5px] leading-5 text-muted-foreground [&>span]:relative [&>span]:pl-3 [&>span]:before:absolute [&>span]:before:left-[0.3rem] [&>span]:before:text-faint [&>span]:before:content-['·']";
+  "meta -ml-3 flex flex-wrap items-center gap-y-0.5 text-body leading-5 text-muted-foreground [&>span]:relative [&>span]:pl-3 [&>span]:before:absolute [&>span]:before:left-[0.3rem] [&>span]:before:text-faint [&>span]:before:content-['·']";
 
 /** {@link META_LINE} inside the box that clips its leading dots. */
 function metaLine(children: unknown, extra = "") {
@@ -1418,10 +1418,10 @@ function lapRow(
         <p
           class={
             question === "waiting"
-              ? "request text-[15px] leading-6 font-semibold wrap-anywhere whitespace-pre-wrap"
+              ? "request text-title leading-6 font-semibold wrap-anywhere whitespace-pre-wrap"
               : question === "running"
-                ? "request text-sm leading-6 font-medium wrap-anywhere whitespace-pre-wrap"
-                : "request truncate text-sm leading-6 font-medium text-muted-foreground"
+                ? "request text-title leading-6 font-medium wrap-anywhere whitespace-pre-wrap"
+                : "request truncate text-title leading-6 font-medium text-muted-foreground"
           }
           // **Only an ended row is cut to one line** (rondo#90): a waiting or
           // running request is shown whole with its paragraphs, and an ended
@@ -1590,7 +1590,7 @@ function waitingView(
           {glyph("wait")}
           <div class="min-w-0">
             <p
-              class="request line-clamp-2 text-[15px] leading-6 font-semibold wrap-anywhere"
+              class="request line-clamp-2 text-title leading-6 font-semibold wrap-anywhere"
               title={ask.body}
               lang=""
             >
@@ -1600,7 +1600,7 @@ function waitingView(
               <>
                 <span class="head inline-flex items-center gap-2 whitespace-nowrap">
                   <span
-                    class={`inline-flex shrink-0 items-center rounded-full border px-2 py-px text-[11.5px] font-medium leading-4 whitespace-nowrap ${TONE.wait}`}
+                    class={`inline-flex shrink-0 items-center rounded-full border px-2 py-px text-meta font-medium leading-4 whitespace-nowrap ${TONE.wait}`}
                   >
                     {threads.stopped.has(ask.messageId)
                       ? wording.askStoppedPill
@@ -1637,7 +1637,7 @@ function waitingView(
       <li id={`proposal-${proposal.proposalId}`} data-row="" tabindex={-1} class={ROW}>
         {glyph("wait")}
         <div class="min-w-0">
-          <p class="head text-[15px] leading-6 font-semibold wrap-anywhere">
+          <p class="head text-title leading-6 font-semibold wrap-anywhere">
             {wording.proposalHead(proposal.kind, wording.age(ago(proposal.createdAtMs, nowMs)))}
           </p>
           {metaLine(
@@ -2416,7 +2416,7 @@ function betweenView(wording: Chrome, snapshot: HostSnapshot) {
 /** A card on the answer view: one section of what a press is made over. */
 const CARD = "min-w-0 rounded-lg border border-border bg-card px-4 py-3";
 
-const CARD_HEADING = "text-[13px] leading-6 font-semibold";
+const CARD_HEADING = "text-body leading-6 font-semibold";
 
 /** A pill in the row's sans face, as {@link stateHead} draws one. */
 function pill(tone: Tone, text: string, extra = "") {

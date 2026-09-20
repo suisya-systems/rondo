@@ -6862,8 +6862,11 @@ test("a finished line still keeping its files is drawn at the waiting weight, an
   expect(keeping).toContain('id="release-i-0001"');
   expect(landed).not.toContain('id="release-');
   // Promoted: the request is whole and heavy rather than cut and recessive, and
-  // the glyph is the amber one, as every row a person must act on is.
-  expect(keeping).toContain("text-[15px]");
+  // the glyph is the amber one, as every row a person must act on is. Both
+  // rows' requests are one size (D-0082 rule 4 puts every request on
+  // `text-title`), so weight, ink and the cut are the whole of the difference.
+  expect(keeping).toContain("text-title");
+  expect(landed).toContain("text-title");
   expect(keeping).toContain("font-semibold");
   expect(keeping).not.toContain("truncate");
   expect(keeping).toContain("text-wait");
