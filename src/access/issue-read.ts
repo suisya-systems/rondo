@@ -296,10 +296,15 @@ export interface BareRepositoryPorts {
  * left, nothing has said which and **the answer is the person's**: the drafter
  * asks back and rondo starts nothing until it is answered (rule 2.4), and this
  * says `disputed` so the read waits for the same answer instead of guessing.
+ *
+ * `namedAtMs` is when the message naming the reference was written. A scope
+ * older than it was written without knowing of that message, so it does not
+ * settle it: see below.
  */
 export async function bareIssueRepository(
   ports: BareRepositoryPorts,
   requestMessageId: string,
+  namedAtMs: number,
 ): Promise<BareIssueRepository> {
   const held = await ports.held(requestMessageId);
   // **The scope in force, not every scope this request ever had.** A scope the
@@ -308,21 +313,28 @@ export async function bareIssueRepository(
   // reading of the request would have run; counting either would leave a
   // repository in play that nothing still names, and the read waiting for
   // ever. The newest scope no other scope replaces is what stands.
+  //
+  // **And only if it is newer than the message that named the issue.** A
+  // person who replies in a thread with work in another repository is
+  // answered, on the reader's own pass, before any draft over that reply can
+  // exist -- so an older scope would settle the new reference on the old
+  // repository and record the wrong issue as read for good. Older, it settles
+  // nothing, and the reference waits for the draft over the reply.
   const scopes = await ports.record.scopesFor(requestMessageId);
   const replaced = new Set(scopes.flatMap((scope) => scope.supersedesScopeId ?? []));
-  const inForce = scopes.filter((scope) => !replaced.has(scope.scopeId)).at(-1);
+  const inForce = scopes
+    .filter((scope) => !replaced.has(scope.scopeId) && scope.createdAtMs >= namedAtMs)
+    .at(-1);
   // Byte for byte against the plan's own `repository`, as the store's own
   // re-test of a scope compares them (D-0066 rule 1.2.2).
   const scoped = new Set(inForce?.payload.workspaces.map((workspace) => workspace.repository));
   const inPlay = scoped.size === 0 ? held : held.filter((plan) => scoped.has(plan.repository));
   // **A plan carrying no slug is the host's `--repo`, plan by plan** (rule
-  // 6.3), and so is a candidate like any other: reckoning it after the count
-  // would let one such plan beside a second repository's look like agreement
-  // and read a bare `#N` in the wrong repository.
-  const slugs = [
-    ...new Set(inPlay.flatMap((plan) => plan.forgeRepository ?? ports.hostRepo ?? [])),
-  ];
-  return slugs.length > 1 ? { disputed: true } : { repo: slugs[0] ?? ports.hostRepo };
+  // 6.3), and where the host names none it is a candidate whose repository is
+  // simply not known -- kept in the count as itself, so that it standing
+  // beside a second repository's plan is two answers and not agreement.
+  const candidates = new Set(inPlay.map((plan) => plan.forgeRepository ?? ports.hostRepo));
+  return candidates.size > 1 ? { disputed: true } : { repo: [...candidates][0] ?? ports.hostRepo };
 }
 
 /**
@@ -648,10 +660,14 @@ export interface IssueReaderPorts {
   >;
   readonly read: ForgeIssueRead;
   /**
-   * Where a bare `#N` in one request is read, by request (D-0081 rule 3.4):
-   * {@link bareIssueRepository} over the store's rows.
+   * Where a bare `#N` in one request is read (D-0081 rule 3.4):
+   * {@link bareIssueRepository} over the store's rows, asked by the request
+   * and by when the message naming the reference was written.
    */
-  readonly bareRepository: (requestMessageId: string) => Promise<BareIssueRepository>;
+  readonly bareRepository: (
+    requestMessageId: string,
+    namedAtMs: number,
+  ) => Promise<BareIssueRepository>;
   readonly now: () => number;
   /** A fresh message id. */
   readonly mintId: () => string;
@@ -722,14 +738,23 @@ export function issueReader(ports: IssueReaderPorts): IssueReader {
   ): Promise<ReadonlyMap<string, readonly NamedIssue[]>> =>
     unreadIssues(messages, await ports.record.messagesBeforeIssueReader(ports.now()));
 
-  /** {@link IssueReaderPorts.bareRepository}, asked once per request in one pass. */
-  const whereBareReads = (): ((requestMessageId: string) => Promise<BareIssueRepository>) => {
+  /**
+   * {@link IssueReaderPorts.bareRepository}, asked once per (request, message)
+   * in one pass: the answer turns on when the naming message was written, so
+   * two messages of one request are two questions.
+   */
+  const whereBareReads = (): ((
+    requestMessageId: string,
+    messageId: string,
+    namedAtMs: number,
+  ) => Promise<BareIssueRepository>) => {
     const asked = new Map<string, Promise<BareIssueRepository>>();
-    return (requestMessageId) => {
-      let answer = asked.get(requestMessageId);
+    return (requestMessageId, messageId, namedAtMs) => {
+      const key = `${requestMessageId}\u0000${messageId}`;
+      let answer = asked.get(key);
       if (answer === undefined) {
-        answer = ports.bareRepository(requestMessageId);
-        asked.set(requestMessageId, answer);
+        answer = ports.bareRepository(requestMessageId, namedAtMs);
+        asked.set(key, answer);
       }
       return answer;
     };
@@ -741,8 +766,10 @@ export function issueReader(ports: IssueReaderPorts): IssueReader {
     const where = whereBareReads();
     const underway = new Map<string, readonly NamedIssue[]>();
     for (const [messageId, references] of await unread(messages)) {
+      const namedAtMs = messages.find((m) => m.messageId === messageId)?.atMs ?? 0;
       const left = references.some((reference) => reference.repo === null)
-        ? "disputed" in (await where(requestOf(messages, messageId) ?? messageId))
+        ? "disputed" in
+          (await where(requestOf(messages, messageId) ?? messageId, messageId, namedAtMs))
           ? references.filter((reference) => reference.repo !== null)
           : references
         : references;
@@ -778,7 +805,8 @@ export function issueReader(ports: IssueReaderPorts): IssueReader {
       const request = givenTo(root);
       // Which references are past the bound is by their place in the message,
       // so it does not move with how many were read before a restart.
-      const body = thread.messages.find((m) => m.messageId === messageId)?.body ?? "";
+      const named = thread.messages.find((m) => m.messageId === messageId);
+      const body = named?.body ?? "";
       const place = namedIssues(body).map((ref) => ref.named);
       for (const reference of left) {
         const key = `${messageId}\u0000${reference.named}`;
@@ -803,7 +831,9 @@ export function issueReader(ports: IssueReaderPorts): IssueReader {
           // asks which work is meant, and the next scan after the answer reads
           // it. An explicit `OWNER/NAME#N` or address asks nothing of this.
           const reads: BareIssueRepository =
-            reference.repo === null ? await where(root) : { repo: reference.repo };
+            reference.repo === null
+              ? await where(root, messageId, named?.atMs ?? 0)
+              : { repo: reference.repo };
           if ("disputed" in reads) {
             const key = `${messageId}\u0000${reference.named}`;
             if (!saidWaiting.has(key)) {

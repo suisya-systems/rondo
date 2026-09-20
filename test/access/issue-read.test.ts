@@ -380,11 +380,12 @@ const rowsHolding = (
   hostRepo: string | null = null,
 ) => ({
   record: {
-    // One scope per group, each replacing the one before it, oldest first.
+    // One scope per group, each replacing and outliving the one before it.
     scopesFor: async () =>
       scoped.map((repositories, index) => ({
         scopeId: `s${String(index)}`,
         supersedesScopeId: index === 0 ? null : `s${String(index - 1)}`,
+        createdAtMs: 100 + index,
         payload: { workspaces: repositories.map((repository) => ({ repository })) },
       })) as unknown as readonly StoredScope[],
   },
@@ -392,45 +393,70 @@ const rowsHolding = (
   hostRepo,
 });
 
+/** The reference was named before any scope above, which is the usual order. */
+const NAMED_AT = 50;
+
 test("a bare #N is read in the repository of the plan its request is drafted from (D-0081 rule 3.4)", async () => {
   const a = heldIn("/srv/a", "o/a");
   const b = heldIn("/srv/b", "o/b");
 
   // One repository in play: read there, whatever this host was started with.
-  expect(await bareIssueRepository(rowsHolding([a], [], "o/host"), "r1")).toEqual({ repo: "o/a" });
+  expect(await bareIssueRepository(rowsHolding([a], [], "o/host"), "r1", NAMED_AT)).toEqual({
+    repo: "o/a",
+  });
   // Two, and nothing has said which: the read waits for the person (rule 2.4).
-  expect(await bareIssueRepository(rowsHolding([a, b], [], "o/host"), "r1")).toEqual({
+  expect(await bareIssueRepository(rowsHolding([a, b], [], "o/host"), "r1", NAMED_AT)).toEqual({
     disputed: true,
   });
   // A scope for the request -- the drafter's split, or the person's own -- has
   // said which workspaces the work runs in, so the other plan is out of play.
-  expect(await bareIssueRepository(rowsHolding([a, b], [["/srv/b"]]), "r1")).toEqual({
+  expect(await bareIssueRepository(rowsHolding([a, b], [["/srv/b"]]), "r1", NAMED_AT)).toEqual({
     repo: "o/b",
   });
   // **Only the scope in force**: one the person narrowed afterwards is what
   // stands, and the wider one it replaced does not keep the read waiting.
   expect(
-    await bareIssueRepository(rowsHolding([a, b], [["/srv/a", "/srv/b"], ["/srv/b"]]), "r1"),
+    await bareIssueRepository(
+      rowsHolding([a, b], [["/srv/a", "/srv/b"], ["/srv/b"]]),
+      "r1",
+      NAMED_AT,
+    ),
   ).toEqual({ repo: "o/b" });
   // Two plans of one repository are one answer, not a dispute.
-  expect(await bareIssueRepository(rowsHolding([a, heldIn("/srv/a2", "o/a")], []), "r1")).toEqual({
+  expect(
+    await bareIssueRepository(rowsHolding([a, heldIn("/srv/a2", "o/a")], []), "r1", NAMED_AT),
+  ).toEqual({
     repo: "o/a",
   });
   // No plan in play names a slug: the host's `--repo` answers, as it does for
   // every store set up before the slug moved onto the plan (rule 6.3).
   expect(
-    await bareIssueRepository(rowsHolding([heldIn("/srv/a", null)], [], "o/host"), "r1"),
+    await bareIssueRepository(rowsHolding([heldIn("/srv/a", null)], [], "o/host"), "r1", NAMED_AT),
   ).toEqual({ repo: "o/host" });
-  expect(await bareIssueRepository(rowsHolding([], []), "r1")).toEqual({ repo: null });
+  expect(await bareIssueRepository(rowsHolding([], []), "r1", NAMED_AT)).toEqual({ repo: null });
   // **A plan carrying no slug is the host's `--repo`, and is counted as one**:
   // beside a second repository's plan that is two answers, not agreement.
   expect(
-    await bareIssueRepository(rowsHolding([heldIn("/srv/a", null), b], [], "o/a"), "r1"),
+    await bareIssueRepository(rowsHolding([heldIn("/srv/a", null), b], [], "o/a"), "r1", NAMED_AT),
   ).toEqual({ disputed: true });
   // The same plan beside one naming what the host names is still one answer.
   expect(
-    await bareIssueRepository(rowsHolding([heldIn("/srv/a", null), a], [], "o/a"), "r1"),
+    await bareIssueRepository(rowsHolding([heldIn("/srv/a", null), a], [], "o/a"), "r1", NAMED_AT),
   ).toEqual({ repo: "o/a" });
+  // **With no `--repo` either, such a plan's repository is simply not known**,
+  // and standing beside one that is known that is two answers, not agreement.
+  expect(
+    await bareIssueRepository(rowsHolding([heldIn("/srv/a", null), b], []), "r1", NAMED_AT),
+  ).toEqual({ disputed: true });
+
+  // **A scope older than the message that named the issue settles nothing.**
+  // A person replying in this thread with work in another repository is
+  // answered on the reader's own pass, before any draft over that reply can
+  // exist, so the old scope would have the new reference read in the old
+  // repository and recorded as read for good.
+  expect(await bareIssueRepository(rowsHolding([a, b], [["/srv/a"]]), "r1", 1_000)).toEqual({
+    disputed: true,
+  });
 });
 
 test("a bare #N still in dispute waits for the person: it holds the lap's door and not the drafter (D-0081 rules 2.4, 3.4)", async () => {

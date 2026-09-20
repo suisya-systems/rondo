@@ -1720,7 +1720,7 @@ export async function main(
     const issues = issueReader({
       record,
       read: readIssueFromForge,
-      bareRepository: async (requestMessageId) =>
+      bareRepository: async (requestMessageId, namedAtMs) =>
         await bareIssueRepository(
           {
             record,
@@ -1728,6 +1728,7 @@ export async function main(
             hostRepo: parsed.repo,
           },
           requestMessageId,
+          namedAtMs,
         ),
       now: Date.now,
       mintId: () => newDraftId("forge"),
