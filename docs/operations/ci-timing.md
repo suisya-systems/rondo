@@ -9,7 +9,11 @@ expired. So the measuring got redone. It does not need to be.
 
 **Read this first, then the numbers.** The judgement is in
 [What these numbers decided](#what-these-numbers-decided); the tables are the
-evidence for it.
+evidence for it. Then read
+[The drive the temporary directory is on](#the-drive-the-temporary-directory-is-on-rondo337-2026-09-21),
+which is the section that made the cell faster rather than only describing it --
+every figure above it was taken before that change and is a fact about the old
+arrangement.
 
 ## The three columns
 
@@ -116,6 +120,110 @@ On 2026-09-21, on rondo#332 / PR #334, with `double-green (windows-latest, node
   CPU-wait measured *on the runner*, which nothing here does. **Do not record a
   cause in this file that the numbers do not carry.**
 
+## The drive the temporary directory is on (rondo#337, 2026-09-21)
+
+**This section is the one that changed a number rather than only recording it.**
+Everything above was measured with the suite's temporary files on the runner's
+`C:`; everything after `D-0088` has them on `D:`.
+
+### The question, and how it was decided
+
+continuo found that its Windows cost was the drive its test databases landed on
+and fixed it (`continuo D-1109`, 21-33 minutes to 7-9). cadenza measured the
+same proposal and **did not** port it: its Windows excess was checkout,
+`setup-node` and `npm ci`, and its suite ran at macOS speed (`cadenza D-0039`
+§4). Two repositories, one fix, opposite answers -- so the first thing to
+establish was which shape rondo has. It is a step-level question and the logs
+already held it.
+
+Medians over **21 pull-request runs** (2026-09-19 to 2026-09-20): 42 ubuntu
+cells and 39 Windows cells, every step of `double-green`, before `D-0088`.
+
+| | ubuntu | windows | excess |
+|---|---|---|---|
+| **cell, end to end** | **44 s** | **173 s** | **+129 s** |
+| the two seeded suite runs | 28 s | 130 s | **+102 s (79 %)** |
+| `checkout` + `setup-node` + `npm ci` | 8 s | 23 s | +15 s |
+| provisioning the pinned continuo | 6 s | 11 s | +5 s |
+
+**rondo is continuo-shaped.** Four fifths of what Windows costs is test work, and
+the fixed job cost cadenza's answer turned on is 15 s of a 129 s gap. That is the
+opposite reading to cadenza's table, taken the same way, and it is what made the
+port worth doing rather than worth assuming.
+
+### The mechanism, printed on rondo's own runner
+
+Not inferred from continuo's. The step added by `D-0088` prints the three paths
+before it changes anything (run `35525794846`, job `106117596940`):
+
+```
+workspace           D:\a\rondo\rondo
+RUNNER_TEMP (new)   D:\a\_temp
+os.tmpdir() (old)   C:\Users\RUNNER~1\AppData\Local\Temp
+```
+
+The checkout is on the local SSD and every temporary directory the suite makes
+was on the network-attached OS disk. Every one of them: the suite's temporary
+directories are all `mkdtempSync(join(tmpdir(), ...))` -- the SQLite stores, and
+the workspaces the CLI and git children are pointed at -- which is why the files
+that blow up are the ones that spawn processes and write there.
+
+### Before and after, same cell, matched pair
+
+`windows-latest, node 24`, run `35509782288` (before) against run `35525794846`
+(after). Per green, both seeds:
+
+| | before | after | ratio |
+|---|---|---|---|
+| **cell, end to end** | **203 s** | **94 s** | **2.2x** |
+| vitest wall | 77.8 / 75.8 s | 29.8 / 24.7 s | 2.6-3.1x |
+| vitest test work | 184.7 / 150.6 s | 50.9 / 44.1 s | 3.4-3.6x |
+| `test/access/scope-stop.test.ts` | 31385 / 17002 ms | 883 / 884 ms | **19-36x** |
+| `test/store/request-thread.test.ts` | 2977 / 3218 ms | 119 / 108 ms | **25-30x** |
+| `test/access/web.test.ts` | 61411 / 48593 ms | 17350 / 16260 ms | 2.8-3.5x |
+| `test/access/forge.test.ts` | 25416 / 30284 ms | 20027 / 15970 ms | 1.3-1.9x |
+| `test/continuo/smoke.test.ts` | 5161 / 6164 ms | 3850 / 3423 ms | 1.3-1.8x |
+
+**The two files that moved by 20-36x are the two the first table said were
+pathological**, and `request-thread.test.ts` is the file that took 81 s inside a
+single job in the bad run. `web.test.ts` is still the tail -- 17 s of a 30 s
+wall -- so splitting it remains the only large lever left, and is still its own
+task.
+
+### And across four cells, because one pair is one pair
+
+Two `workflow_dispatch` runs of the branch (`35525794846`, `35525989807`), four
+Windows cells, against the 39-cell medians above.
+
+| | before (n=39) | after (n=4) |
+|---|---|---|
+| cell, end to end | 173 s (146-306) | **114 s (94-161)** |
+| the two seeded suite runs | 130 s (105-223) | **70 s (57-81)** |
+
+The spread is the reason both tables are here. The slowest after cell (161 s) is
+a runner whose *fixed* steps were also heavy -- 9 s of checkout, 20 s of
+`setup-node` -- and it is still inside the before range, so no single cell
+settles this. The matched pair is the clean measurement; this table is what says
+the pair was not a lucky draw.
+
+**ubuntu did not move**, which is the check that the scoping is real rather than
+stated: 44 s before, 50 s after, inside the before range of 28-78 s. The step
+does not run there. It matters because on POSIX `os.tmpdir()` falls back to TMP
+and TEMP after TMPDIR, so a version of this change without the condition would
+have moved the Linux cells too and nothing here has measured that.
+
+### What is not claimed
+
+- **Nothing about the episodes.** `D-0088` was adopted on the speed number
+  alone. continuo's section 5a reports the same `C:` disagreeing with itself by
+  5.3x between two runs and suggests the drive may be what makes Windows cells
+  *red* as well as slow -- plausible here for the same reason, and unmeasured
+  here as there. The way to answer it is to count red Windows nightlies from
+  `D-0088` onward, not to re-run anything.
+- **Nothing about a developer's own Windows machine.** This is a fact about the
+  `windows-latest` image's two drives. A laptop with one disk gets nothing from
+  it, and rondo#322 is where whose machine rondo runs on is decided.
+
 ## Where each figure comes from
 
 CI logs expire, so the run ids are recorded with the figures rather than only in
@@ -129,6 +237,9 @@ a commit message.
 | CI Windows node 24, bad | run **35519135051**, job **106100055324** (PR #334) — `Green 2 of 2`, seed 2010399653 |
 | main red, same cell, different tests | run **35509994229**, job **106076115474**, commit `d876aa1` |
 | The 4–12× figure rondo#222 closed on | run **35089584019**, quoted in the code comments this file replaces |
+| Step-level medians, before `D-0088` | 21 pull-request runs, 2026-09-19 to 2026-09-20, `GET /actions/runs/{id}/jobs` -- 42 ubuntu cells and 39 Windows cells, each step's own `started_at`/`completed_at` |
+| Windows node 24, after `D-0088` | run **35525794846**, job **106117596940** (`workflow_dispatch` on `feat/rondo-windows-fast-drive-measure`) |
+| Windows node 22, after `D-0088` | run **35525794846**, job **106117596979**; second run **35525989807**, jobs **106118106839** (node 24) and **106118106856** (node 22) |
 
 ## The runner and the settings, as configured
 

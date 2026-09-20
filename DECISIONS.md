@@ -125,6 +125,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0085 | A lap without a request stops being a state rondo has: `D-0061` rule 4's nullable link is tightened to required, `start` takes the message it came from, and what makes that safe is the type rather than the column | accepted |
 | D-0086 | Event lines fold twice and by no number: every try but the newest is one line, what the person has already read is one line over the top, and a decision rondo made without asking is never inside either | accepted |
 | D-0087 | The Windows cells leave the pull-request path for the nightly schedule and `workflow_dispatch`: the matrix becomes an expression over the trigger, the double-green rule is untouched, and every guarantee only Windows carries is now carried a night later | accepted |
+| D-0088 | The Windows cell's temporary files move to the runner's local disk: `continuo D-1109` is ported because rondo measured continuo-shaped and not cadenza-shaped, and the cell halves without a test, a timeout or a durability claim changing | accepted |
 
 ---
 
@@ -20163,8 +20164,107 @@ measure.
   becoming both fast and steady. That would not restore the pull-request cell by itself -- rule 2 of
   the reasoning above stands on the seven-minute figure, not on the flakiness -- but it would make
   the question worth re-asking with numbers instead of with this entry's.
+
+  > **Annotation (2026-09-21, from D-0088).** Added after this entry was accepted, and additive.
+  > Half of this falsifier has now fired and half has not. The drive **is** rondo's Windows cost:
+  > porting `continuo D-1109` took the cell from a 173 s median to 114 s and the two seeded suite
+  > runs from 130 s to 70 s (`docs/operations/ci-timing.md`). Whether it is also what makes the
+  > cell *red* is still unmeasured, here as in continuo, and the way to answer it is to count red
+  > nightlies from `D-0088` onward. Nothing in this entry is withdrawn: the cell was moved off the
+  > pull-request path on the argument that seven minutes in front of a merge is seven minutes, and
+  > a faster cell does not reach that argument.
 - **Somebody needing the Windows answer on most pull requests.** If `workflow_dispatch` becomes the
   ordinary path rather than the exception, the trigger split is fighting how rondo is actually
   changed, and the cheaper arrangement is the one this entry moved away from.
 - **rondo#322 answering that rondo does not run on Windows**, which would retire the cell entirely
   and fire `D-0004`'s falsifier for real -- a product decision, and a new entry.
+
+## D-0088 — The Windows cell's temporary files move to the runner's local disk: `continuo D-1109` is ported because rondo measured continuo-shaped and not cadenza-shaped, and the cell halves without a test, a timeout or a durability claim changing
+
+**Status:** accepted (2026-09-21, rondo's human gate). Closes rondo#337. Ports `continuo D-1109`;
+the measurement is `docs/operations/ci-timing.md`, section "The drive the temporary directory is
+on".
+
+### Decision
+
+1. **On the Windows cell only, `TEMP` and `TMP` are set to `RUNNER_TEMP` before anything installs.**
+   On the `windows-latest` image the checkout is on `D:`, the local ephemeral SSD, and
+   `os.tmpdir()` is `C:\Users\RUNNER~1\AppData\Local\Temp` on the network-attached OS disk.
+   The suite's temporary directories are all `mkdtempSync(join(tmpdir(), ...))` -- the SQLite
+   stores, and the workspaces the CLI and git children are pointed at -- so every one of them was
+   on the slow drive while the tree they were about was on the fast one.
+2. **The step is guarded by `runner.os`, not by `matrix.os`.**
+   `test/architecture/ci-triggers.test.ts` reads `ci.yml` as text and requires every non-comment
+   line naming `windows-latest` to be inside the trigger-conditional `fromJSON` expression
+   (`D-0087` rule 6). A literal here would have gone red for a correct workflow, and weakening that
+   test to accommodate this step would have retired `D-0087`'s guard to save a word.
+3. **It runs before the install rather than immediately before the suite**, which is where continuo
+   puts it. `npm ci` and the pinned continuo's own clone-install-build write into the temporary
+   directory too, and those steps are 14 s of the Windows cell.
+4. **ubuntu is untouched by the step not running there, and by nothing else.** On POSIX
+   `os.tmpdir()` falls back to TMP and TEMP after TMPDIR, so setting the two names unconditionally
+   would have moved the Linux cells as well. The measurement confirms it from the outside: ubuntu
+   is 44 s before and 50 s after, inside its own 28-78 s before range.
+5. **No test, timeout, journal mode or durability claim changes.** That is the whole reason this
+   candidate was preferred in continuo and the reason it transfers: it moves a directory. `D-0003`
+   is untouched, and so is every `WINDOWS_HEAVY_TIMEOUT_MS` the suite carries -- the headroom that
+   was 20x is now larger, and shrinking it is a separate decision with its own numbers.
+6. **The three paths are printed in the step.** The claim is about which drive letter the suite
+   writes to, and a later reader re-measuring should not have to assume it. `GITHUB_ENV` reaches
+   the next step and not the current one, so the log carries both the old `os.tmpdir()` and the new
+   `RUNNER_TEMP`.
+
+### Why
+
+**Because rondo measured continuo-shaped, and that was not a foregone conclusion.** The same port
+was proposed in cadenza and **rejected there on its own numbers**: cadenza's Windows excess is
+checkout, `setup-node` and `npm ci`, and its suite runs at macOS speed, so there was no gap for the
+step to close (`cadenza D-0039` §4). rondo's step-level medians over 21 pull-request runs -- 42
+ubuntu cells, 39 Windows cells -- say the opposite: of a 129 s excess, **102 s is the two seeded
+suite runs** and 15 s is checkout, `setup-node` and `npm ci` together. Four fifths of what Windows
+costs rondo is test work, and this fix addresses test work.
+
+**The mechanism was then confirmed on rondo's own runner rather than inherited.** The step prints
+the drives, and they are the drives continuo found. The files that move are the files
+`docs/operations/ci-timing.md` already singled out as pathological: `scope-stop.test.ts` 31385 ms
+to 883 ms, `request-thread.test.ts` 2977 ms to 119 ms -- the file that took 81 s inside one job in
+the bad run of 2026-09-20. On the matched pair (`windows-latest, node 24`, run `35509782288`
+against run `35525794846`) the cell goes **203 s to 94 s** and vitest's test work **184.7 s to
+50.9 s**.
+
+**It is worth doing even though no pull request waits for this cell any more.** `D-0087` moved the
+Windows cells to the nightly and `workflow_dispatch`, so the minute saved is not a minute off a
+merge. Two things still make it worth the eleven lines: `workflow_dispatch` is the path somebody
+uses when they want the Windows answer *now*, and 94 s is a different thing to wait for than 203 s;
+and the 15-minute `timeout-minutes` cap cancels a cell that outgrows it, which is a red `gate` that
+no log explains. Headroom against that cap is the durable half.
+
+### What this costs, stated plainly
+
+- **One more step in the file `D-0087` just made the most load-bearing in the repository**, and a
+  Windows-only one, so a mistake in it shows up a night later. It is eleven lines of bash that
+  write two environment variables and print three paths.
+- **Everything a test leaves in the temporary directory now lands on `D:`**, which the runner also
+  uses for the workspace and for `RUNNER_TEMP`'s own contents -- including the pinned continuo
+  checkout this workflow builds. The suite's temporary directories are small and are removed, but
+  nothing here measured either drive's free space, so "`D:` is large enough" is an assumption this
+  entry is making rather than a number it has.
+- **The numbers above were taken on four Windows cells across two `workflow_dispatch` runs**, and
+  runner-to-runner variance on this image is large (the before range is 146-306 s for one cell).
+  The matched pair is the clean comparison; the four-cell table is what says it was not a lucky
+  draw. Neither is a long-run average.
+
+### What would falsify it
+
+- **The Windows cell drifting back toward its old wall clock with the step still in place.** That
+  would mean the cost has moved somewhere the drive does not reach -- the likeliest candidate is
+  `test/access/web.test.ts`, still 17 s of a 30 s wall and still the only large lever -- and the
+  answer is to re-measure per file, not to re-argue this entry.
+- **`RUNNER_TEMP` ceasing to be on a local disk**, or the image dropping the two-drive arrangement.
+  The step would then be a no-op with a comment claiming otherwise. The printed paths in the log
+  are what makes that visible, and they are printed for this reason.
+- **A test depending on the temporary directory's drive**, which none does today and none should.
+  A red that goes away when the step is removed is that, and it is a bug in the test.
+- **Red Windows nightlies not falling.** This entry claims nothing about flakiness -- continuo left
+  the same claim unmeasured deliberately -- so a flat failure rate does not falsify it. It is
+  recorded here so that a later reader counting nightlies knows the count was never the argument.
