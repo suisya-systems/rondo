@@ -412,11 +412,15 @@ test("from 'received' the walk is six verbs, in continuo's order", () => {
  * A store that holds only claims, and writes each into the verbs' call log, so
  * the log says whether the claim came before the walk's first write.
  */
-function claimStore(calls: string[], fails = false) {
+function claimStore(calls: string[], fails: boolean | string = false) {
   return {
     recordVerificationClaim: async (iterationId: string, actorId: string, claim: string) => {
-      if (fails) {
-        throw new Error("disk I/O error");
+      if (fails !== false) {
+        // A string stands for an errno: the store is there and this process may
+        // not write it, which is a break only installation repairs (rondo#349).
+        throw typeof fails === "string"
+          ? Object.assign(new Error("EROFS: read-only file system"), { code: fails })
+          : new Error("disk I/O error");
       }
       calls.push(`claim:${iterationId}:${actorId}:${claim}`);
       return await Promise.resolve();
@@ -476,6 +480,28 @@ test("a claim that cannot be written answers nothing, and says so", async () => 
     expect(outcome.note).toContain("nothing was answered");
     expect(outcome.note).toContain("disk I/O error");
     expect(outcome.why).toBe("claimNotRecorded");
+  }
+  expect(calls).toEqual(["show:g1"]);
+});
+
+test("a claim the machine itself refused is told apart from one rondo simply could not write", async () => {
+  // Same press, same catch, different sentence: `claimNotRecorded` tells the
+  // presser to go back and try again, which is wrong advice for a store this
+  // process may not write. The reason itself still travels in `note`, where the
+  // page keeps it out of the person's own sentence (D-0076 rules 4.3 and 4.5).
+  const { verbs, calls } = fakeVerbs("presented");
+  const outcome = await claimThenWalk(
+    claimStore(calls, "EROFS"),
+    continuo,
+    walkRequest,
+    "i-0001",
+    "npm run verify, green",
+    verbs,
+  );
+  expect(outcome.kind).toBe("refused");
+  if (outcome.kind === "refused") {
+    expect(outcome.why).toBe("claimHostSetup");
+    expect(outcome.note).toContain("read-only file system");
   }
   expect(calls).toEqual(["show:g1"]);
 });

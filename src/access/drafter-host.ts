@@ -20,6 +20,7 @@
 
 import type { ProposalDraft, ThreadMessageDraft } from "../store/records.js";
 import type { AdvisoryRecord } from "../store/sqlite.js";
+import { hostFailure } from "./host-failure.js";
 import { MODEL_DRAFTER_PREFIX } from "./model-draft.js";
 import type { DrafterPorts, DrafterRunResult } from "./model-drafter.js";
 import { draftRequest } from "./model-drafter.js";
@@ -400,5 +401,5 @@ async function write(
 }
 
 function describe(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+  return hostFailure(error).text;
 }

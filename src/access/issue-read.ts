@@ -33,6 +33,7 @@
 import type { ThreadMessageDraft } from "../store/records.js";
 import type { AdvisoryRecord } from "../store/sqlite.js";
 import type { CommandOutcome, IssueReadRequest } from "./forge.js";
+import { hostFailure } from "./host-failure.js";
 import type { HeldPlan } from "./model-drafter.js";
 
 /** The author id every `forge` message is written under. */
@@ -384,7 +385,7 @@ export async function readNamedIssue(
   try {
     answered = await read({ host: reference.host, repo, number: reference.number });
   } catch (error) {
-    return failed("failed", error instanceof Error ? error.message : String(error));
+    return failed("failed", hostFailure(error).text);
   }
   const issueFailure = commandFailure(answered.issue);
   if (issueFailure !== null) {
@@ -898,9 +899,7 @@ export function issueReader(ports: IssueReaderPorts): IssueReader {
           ports.onRead();
         }
       } catch (error) {
-        ports.log(
-          `issues   the scan stopped: ${error instanceof Error ? error.message : String(error)}`,
-        );
+        ports.log(`issues   the scan stopped: ${hostFailure(error).text}`);
       }
     }
   };

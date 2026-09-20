@@ -13,6 +13,7 @@ import {
   draftedPlansUnder,
   draftedStanding,
 } from "../drafted-view.js";
+import { hostFailure } from "../host-failure.js";
 import { ago } from "../inbox.js";
 import { latestReads } from "../issue-read.js";
 import { type HeldPlan, heldPlanByDigest, heldPlans } from "../model-drafter.js";
@@ -416,9 +417,12 @@ async function plansFor(
     );
     return plans.length === 0 ? { note: wording.scopeNoPlanHeld } : { plans };
   } catch (error) {
-    return {
-      note: wording.scopePlansUnread(error instanceof Error ? error.message : String(error)),
-    };
+    // **No fork here, deliberately** (rondo#349). An errno on this read never
+    // reaches this catch: `operatorPage` reads the same rows before it draws
+    // this screen and does not catch, so a store this process cannot read has
+    // already failed the whole page. What arrives here is a decode this screen
+    // can say as it always did.
+    return { note: wording.scopePlansUnread(hostFailure(error).text) };
   }
 }
 

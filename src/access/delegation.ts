@@ -56,6 +56,7 @@ import {
   resolveProject,
 } from "../cadenza/facade.js";
 import type { AdmittedPlan } from "../refrain/plan.js";
+import { hostFailure } from "./host-failure.js";
 
 /**
  * The name of the format this module writes, which is rondo's because the
@@ -147,7 +148,7 @@ export function writeDelegationRecord(plan: AdmittedPlan): DelegationRecordOutco
       kind: "defect",
       reason:
         "rondo could not compose the delegation record for run " +
-        `'${plan.runId}': ${error instanceof Error ? error.message : String(error)}. ` +
+        `'${plan.runId}': ${hostFailure(error).text}. ` +
         "Nothing was spawned and no run was admitted. The same plan classified, so this is " +
         "rondo's fault rather than the plan's.",
     };
@@ -169,7 +170,7 @@ export function writeDelegationRecord(plan: AdmittedPlan): DelegationRecordOutco
       kind: "defect",
       reason:
         "rondo could not write the delegation record for run " +
-        `'${plan.runId}': ${error instanceof Error ? error.message : String(error)}. ` +
+        `'${plan.runId}': ${hostFailure(error).text}. ` +
         "Nothing was spawned and no run was admitted; continuo requires the record and rondo " +
         "does not admit a run without one.",
     };

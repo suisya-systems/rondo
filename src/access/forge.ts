@@ -40,7 +40,7 @@ import { join } from "node:path";
 import type { DrafterRow, ReviewerRow } from "../continuo/roles.js";
 import { contentDigest } from "../store/plan.js";
 import type { ReadingEvidence } from "../store/records.js";
-
+import { hostFailure } from "./host-failure.js";
 import type { DrafterRun } from "./model-draft.js";
 import type { ReviewerRun } from "./model-review.js";
 
@@ -1411,7 +1411,7 @@ export async function runReviewer(
   } catch (error) {
     return {
       kind: "failed",
-      reason: `no empty directory for the reviewer: ${error instanceof Error ? error.message : String(error)}`,
+      reason: `no empty directory for the reviewer: ${hostFailure(error).text}`,
     };
   }
   try {
@@ -1547,7 +1547,7 @@ export async function runDrafter(
   } catch (error) {
     return {
       kind: "failed",
-      reason: `no empty directory for the drafter: ${error instanceof Error ? error.message : String(error)}`,
+      reason: `no empty directory for the drafter: ${hostFailure(error).text}`,
     };
   }
   try {

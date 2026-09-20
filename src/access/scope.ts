@@ -54,6 +54,7 @@ import {
 } from "../store/records.js";
 import type { AdvisoryRecord, IterationStore, ScopeTip } from "../store/sqlite.js";
 import { DETERMINISTIC_DRAFTER } from "./advisory.js";
+import { hostFailure } from "./host-failure.js";
 import {
   type ReviewScope,
   reviewPolicyOf,
@@ -907,7 +908,7 @@ export function agentTypeRecordOf(
       },
     };
   } catch (error) {
-    return { refusal: error instanceof Error ? error.message : String(error) };
+    return { refusal: hostFailure(error).text };
   }
 }
 
@@ -965,13 +966,7 @@ export async function heldAgentTypeLines(
           : wording.scopeHeldRebuilds(digest, built.agentTypeDigest, from),
       );
     } catch (error) {
-      lines.push(
-        wording.scopeHeldNoBuild(
-          digest,
-          from,
-          error instanceof Error ? error.message : String(error),
-        ),
-      );
+      lines.push(wording.scopeHeldNoBuild(digest, from, hostFailure(error).text));
     }
   }
   return lines;
