@@ -51,7 +51,12 @@ const store = {
 // -- 1. The draft --
 
 const draftKey = (box) => `rondo:draft:${box.dataset.draft}`;
-const box = () => document.querySelector("textarea[data-draft]");
+// **The box with this draft's own key, and never the first one on the page**
+// (Codex, on D-0083): the thread carries several -- the gate's claim, what to
+// change beside it, and the reply box under them -- so the first is whichever
+// the layout puts first, and clearing it after a send would empty a field
+// nobody sent.
+const boxFor = (key) => document.querySelector(`textarea[data-draft="${CSS.escape(key)}"]`) ?? null;
 
 // A fragment that is not valid percent-encoding is not a landing, and must not
 // stop the rest of this script (#220 S1, Codex).
@@ -171,7 +176,7 @@ document.addEventListener("htmx:afterRequest", (event) => {
       sending !== null && now.startsWith(sending) ? now.slice(sending.length).trimStart() : now;
     const unsent = rest === "" ? null : rest;
     store.set(draftKey(draft), unsent);
-    const current = box();
+    const current = boxFor(draft.dataset.draft);
     if (current !== null) {
       current.value = unsent ?? "";
     }

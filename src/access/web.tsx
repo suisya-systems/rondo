@@ -4393,12 +4393,15 @@ function composerView(
             "hx-target": "#ledger",
             "hx-select": "#ledger",
             "hx-swap": "outerHTML show:window:bottom",
-            // **The whole form and not only its fields** (#220 S1, Codex): the
-            // thread's default target after a send can be a waiting ask, and
-            // answering one is a press with its own `action` and no `hx-post`.
-            // Swapping the fields alone left the send's mode on a box aimed at
-            // an ask; `page/composer.js` puts back any words typed meanwhile.
-            "hx-select-oob": "#composer,#waiting-count",
+            // **The form is inside what the swap replaces now** (D-0083 rule
+            // 5, Codex). It used to sit outside `#ledger` and be swapped out
+            // of band, so that a send could change its mode -- the thread's
+            // default target after a send can be a waiting ask, and answering
+            // one is a press with its own `action` and no `hx-post`. The
+            // ordinary swap carries the new form now, and naming it here as
+            // well took it out of the response before the ledger landed, so
+            // the box disappeared until the next poll.
+            "hx-select-oob": "#waiting-count",
             // **One send per press, visibly** (the S1 design pass): the button
             // is disabled while its request is in flight. The store's refusal
             // of a repeated id is still what makes a double send one message.
@@ -4803,9 +4806,13 @@ export async function operatorPage(
         (message) => threads.rootOf(message.messageId) === root.messageId,
       );
       const lap = lapUnder(root.messageId);
+      // **Any lap of the request, not the one that speaks for it** (Codex):
+      // `saysMore` would let a newer running lap hide an older one still at
+      // its gate, and the request would drop out of *your turn* -- and out of
+      // rule 3's selection -- with an unanswered question on it.
       const waitsHere =
         members.some((message) => threads.waiting.has(message.messageId)) ||
-        lap?.question === "waiting";
+        lapsUnder(root.messageId).some((under) => under.question === "waiting");
       return {
         messageId: root.messageId,
         title: firstLine(root.body),

@@ -1919,6 +1919,11 @@ test("the composer script keeps a draft and the open folds, and makes no request
   // them -- a claim being typed would vanish, and a revise box a person had
   // rewritten would come back holding rondo's draft again.
   expect(code).toMatch(/new MutationObserver\(\(\) => \{\s*reopen\(\);\s*restore\(\);/);
+  // **And a send clears the box it was sent from** (Codex, on D-0083): the
+  // thread carries several drafts -- the gate's claim, what to change beside
+  // it, the reply under them -- so "the first textarea on the page" would
+  // empty a field nobody sent.
+  expect(code).toContain("textarea[data-draft=");
   // Ctrl/Cmd+Enter asks the form for the submit its own button makes.
   expect(code).toContain("requestSubmit()");
   // **And never on a form whose submit has to name an answer** (#206, D-0072

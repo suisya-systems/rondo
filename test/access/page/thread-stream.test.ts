@@ -90,3 +90,18 @@ test("a message written while the work ran sits between the events around it", a
   expect(positions.every((at) => at > -1)).toBe(true);
   expect(positions).toEqual([...positions].toSorted((left, right) => left - right));
 });
+
+test("a request waits on the person while any of its laps does", async () => {
+  // **The list and the selection read the same thing the box does** (Codex).
+  // `saysMore` lets a newer running lap speak for a request; if *waiting* were
+  // read off that one lap, a request with an unanswered gate would drop out of
+  // *your turn* and out of rule 3's selection -- the page would neither lift
+  // it nor open it, while its box was drawable all along.
+  const world = await twoLaps();
+  const html = await operatorPage(portsOver(world, "ada", []), "t", { kind: "summary" });
+  expect(html).toContain("Waiting on your answer");
+  expect(html).toContain(">1 waiting</a>");
+  // And rule 3 selects it, so the page a person arrives on is the one with
+  // the question on it.
+  expect(html).toContain('id="answering"');
+});
