@@ -463,11 +463,11 @@ const REFRESH_SECONDS = 5;
  * by it** (`request`, `basis`, `line`, `label`, `value`, `material`). None is a
  * Tailwind utility, so it names the element and styles nothing.
  */
-const PILL =
+export const PILL =
   "inline-flex shrink-0 items-center rounded-full border px-2 py-px font-mono text-meta font-medium leading-4 whitespace-nowrap";
 
 /** One tone per state, which is the whole of what a pill says (section 1, Vercel's row). */
-const TONE = {
+export const TONE = {
   wait: "border-wait/40 bg-wait-wash text-wait-ink",
   run: "border-run/35 bg-run-wash text-run-ink",
   ok: "border-border text-ok",
@@ -476,10 +476,10 @@ const TONE = {
   revise: "border-wait/40 text-wait-ink",
 } as const;
 
-type Tone = keyof typeof TONE;
+export type Tone = keyof typeof TONE;
 
 /** The one filled button shape, at two sizes: the way to a press, and the press. */
-const PRIMARY =
+export const PRIMARY =
   "inline-flex cursor-pointer items-center gap-1.5 rounded-md bg-wait font-semibold text-wait-foreground shadow-xs outline-none hover:bg-wait/90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card";
 
 /**
@@ -491,7 +491,7 @@ const PRIMARY =
  * recommendation; one filled and one outlined reads as the common answer and
  * the other one, which is what the two are.
  */
-const SECONDARY =
+export const SECONDARY =
   "inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-border bg-background font-semibold text-foreground shadow-xs outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card";
 
 /** A row focusable by `j`/`k` that is not a list item: the answer view's claim groups. */
@@ -790,7 +790,7 @@ function stateHead(wording: Chrome, record: IterationRecord, tone: Tone, age: st
 }
 
 /** A plain note in the views' muted box. */
-function note(line: string) {
+export function note(line: string) {
   return (
     <p class="note rounded-md border border-border bg-muted/60 px-3 py-2 text-[13px] leading-5">
       {line}
@@ -799,7 +799,7 @@ function note(line: string) {
 }
 
 /** A view's head: the way back to the summary, and what the view is. */
-function backHead(wording: Chrome, heading: string) {
+export function backHead(wording: Chrome, heading: string) {
   return (
     <header class="space-y-2">
       <div class="flex min-w-0 items-center gap-2">
@@ -966,7 +966,7 @@ async function releaseView(
  * The id is the one `reportToRequest` mints (`src/access/conductor.ts`), and
  * the URL is read off the sentence it composed rather than stored twice.
  */
-function publishedReport(threads: Threads, iterationId: string): { url: string | null } | null {
+export function publishedReport(threads: Threads, iterationId: string): { url: string | null } | null {
   const report = threads.byId.get(`report-published-${iterationId}`);
   if (report === undefined) {
     return null;
@@ -985,9 +985,9 @@ const PRE =
 /** The between-laps section: `rondo between`'s composition, unrecorded. */
 
 /** A card on the answer view: one section of what a press is made over. */
-const CARD = "min-w-0 rounded-lg border border-border bg-card px-4 py-3";
+export const CARD = "min-w-0 rounded-lg border border-border bg-card px-4 py-3";
 
-const CARD_HEADING = "text-body leading-6 font-semibold";
+export const CARD_HEADING = "text-body leading-6 font-semibold";
 
 /** A pill in the row's sans face, as {@link stateHead} draws one. */
 function pill(tone: Tone, text: string, extra = "") {
@@ -1001,7 +1001,7 @@ function pill(tone: Tone, text: string, extra = "") {
 }
 
 /** `open` names the fold that turns it, where one fold sits inside another. */
-function chevron(open = "group-open:rotate-90") {
+export function chevron(open = "group-open:rotate-90") {
   return (
     <svg
       aria-hidden="true"
@@ -2060,12 +2060,12 @@ async function shownBeforePress(
 }
 
 /** Where an issue's name links to (D-0076 rule 3.4): its address, when rondo knows it. */
-function issueHref(read: ForgeRead): string | null {
+export function issueHref(read: ForgeRead): string | null {
   return "read" in read ? read.read.url : /^https?:\/\//.test(read.named) ? read.named : null;
 }
 
 /** An issue's own name, as a link where there is an address for it. */
-function issueNameLink(read: ForgeRead) {
+export function issueNameLink(read: ForgeRead) {
   const href = issueHref(read);
   return href === null ? (
     <span class="font-medium">{issueName(read)}</span>
@@ -2234,7 +2234,7 @@ const CHIP =
  * One basis as a word that leads where it points: the cited message by its
  * words and an anchor, everything else named and not linked.
  */
-function basisWord(
+export function basisWord(
   wording: Chrome,
   basis: Readonly<Record<string, unknown>>,
   threads: Threads,
@@ -2308,7 +2308,7 @@ export type MintIterationId = () => string;
 
 /** A budget number in a box: whole for a count, two decimals for money. */
 const whole = (value: number) => String(Math.trunc(value));
-const money = (value: number) => value.toFixed(2);
+export const money = (value: number) => value.toFixed(2);
 
 /**
  * An expiry as a native `datetime-local` reads and writes it, **in UTC**.
@@ -2320,7 +2320,7 @@ const money = (value: number) => value.toFixed(2);
  * browser degrades to a text box of that shape, which the route reads
  * identically.
  */
-function localTime(atMs: number): string {
+export function localTime(atMs: number): string {
   return new Date(atMs).toISOString().slice(0, 16);
 }
 
