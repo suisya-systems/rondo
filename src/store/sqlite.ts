@@ -161,7 +161,7 @@ export interface ReserveInput {
    * inherits its predecessor row's link, read under the write lock, whatever
    * is passed here.
    */
-  readonly requestMessageId: string | null;
+  readonly requestMessageId: string;
   /**
    * The approval this admission spends, or null when nobody approved anything
    * (D-0022 rule 9).
@@ -874,6 +874,12 @@ CREATE TABLE IF NOT EXISTS iteration (
   workspace             TEXT,
   identifiers_spent     INTEGER NOT NULL DEFAULT 0,
   supersedes_iteration_id TEXT,
+  -- TEXT and not NOT NULL, deliberately (D-0083). Every lap names a request
+  -- now, and what makes that so is the record type and start requiring
+  -- --message-id: the type and the call paths. A constraint here would add no
+  -- safety the type does not already give, and it would make the migration
+  -- that adds this column to a store written before it impossible -- ALTER
+  -- TABLE ADD COLUMN NOT NULL has no value to give the rows already there.
   request_message_id    TEXT,
   continuo_revision     TEXT,
   agent_type_digest     TEXT,
@@ -5167,10 +5173,7 @@ function requestStanding(
 }
 
 /** Why `messageId` cannot be a lap's request link, or null when it can (D-0061 rule 4). */
-function requestRefusal(connection: DatabaseSync, messageId: string | null): string | null {
-  if (messageId === null) {
-    return null;
-  }
+function requestRefusal(connection: DatabaseSync, messageId: string): string | null {
   const standing = requestStanding(connection, messageId);
   if (standing === "opens") {
     return null;
@@ -5273,10 +5276,10 @@ function scopeRefusal(
   // refused, earlier in `reserve()`, an id that opens no request, so this asks
   // only whether the scope covers it (D-0066 rule 1.2.1).
   const request = input.requestMessageId;
-  if (request === null || !payload.requests.includes(request)) {
+  if (!payload.requests.includes(request)) {
     return outside(
       "request",
-      `${request === null ? "the admission names no request" : `the request '${request}' is not one scope '${scopeId}' lists`}, ` +
+      `the request '${request}' is not one scope '${scopeId}' lists, ` +
         "and a scope covers only the requests it lists (D-0066 rule 1.2.1)",
     );
   }
@@ -5979,14 +5982,17 @@ function lineageDefect(connection: DatabaseSync, input: ReserveInput): string | 
  * `lineageDefect` has already found: a revision or a retry continues that
  * request, and the request's report must not lose track of it.
  */
-function inheritedRequest(connection: DatabaseSync, input: ReserveInput): string | null {
+function inheritedRequest(connection: DatabaseSync, input: ReserveInput): string {
   if (input.supersedesIterationId === null) {
     return input.requestMessageId;
   }
   const row = connection
     .prepare("SELECT request_message_id FROM iteration WHERE id = ?")
     .get(input.supersedesIterationId) as SqlRow | undefined;
-  return row === undefined ? null : optionalText(row, "request_message_id");
+  // A predecessor that is not there is `lineageDefect`'s to answer, and it has
+  // already been asked; the caller's own link is what this falls back to
+  // rather than a null the type no longer admits.
+  return row === undefined ? input.requestMessageId : requireText(row, "request_message_id");
 }
 
 /**
@@ -6141,7 +6147,7 @@ function toRecord(row: SqlRow): IterationRecord {
     workspace: optionalText(row, "workspace"),
     identifiersSpent: requireInteger(row, "identifiers_spent"),
     supersedesIterationId: optionalText(row, "supersedes_iteration_id"),
-    requestMessageId: optionalText(row, "request_message_id"),
+    requestMessageId: requireText(row, "request_message_id"),
     continuoRevision: optionalText(row, "continuo_revision"),
     agentTypeDigest: optionalText(row, "agent_type_digest"),
     configDigest: optionalText(row, "config_digest"),

@@ -76,6 +76,7 @@ import type {
   NonTerminalStatus,
 } from "../../src/store/records.js";
 import { isTerminal, RELEASED_BY } from "../../src/store/records.js";
+import { openRequest, REQUEST } from "../request-fixture.js";
 
 /** Autonomy and a ceiling that both permit one admission. */
 const PERMISSIVE: LoopPolicy = { autonomy: "ask_before_landing", maxIterations: 1 };
@@ -299,7 +300,7 @@ function blankRecord(id: string, status: IterationStatus): IterationRecord {
     workspace: null,
     identifiersSpent: 0,
     supersedesIterationId: null,
-    requestMessageId: null,
+    requestMessageId: REQUEST,
     continuoRevision: null,
     agentTypeDigest: null,
     configDigest: null,
@@ -594,7 +595,7 @@ const ADMITTED_PLAN: AdmittedPlan = (() => {
 
 /** One admission, with the fixture plan and a policy that permits it. */
 function admitOnce(h: Harness, id = "i-0001"): Promise<ConductorReport> {
-  return admit(h.ports, PLAN, PERMISSIVE, id);
+  return admit(h.ports, PLAN, PERMISSIVE, id, null, null, REQUEST);
 }
 
 /**
@@ -1582,7 +1583,7 @@ test("a lineage handed to admit reaches the row, and is said where it is written
   // reports what the row came back holding -- the store is where a predecessor
   // that is not there is refused, and `test/store/ledger.test.ts` is where that
   // is asserted against a real database.
-  const report = await admit(h.ports, PLAN, PERMISSIVE, "i-0001", "i-0000");
+  const report = await admit(h.ports, PLAN, PERMISSIVE, "i-0001", "i-0000", null, REQUEST);
 
   expect((await readRow(h.store, "i-0001"))?.supersedesIterationId).toBe("i-0000");
   expect(says(report, "It is a revision of iteration i-0000")).toBe(true);
@@ -1614,7 +1615,7 @@ test("a request link handed to admit reaches the row, and is said where it is wr
 
 test("a policy stop takes no lock and writes no row", async () => {
   const h = harness();
-  const report = await admit(h.ports, PLAN, CONSERVATIVE_POLICY, "i-0001");
+  const report = await admit(h.ports, PLAN, CONSERVATIVE_POLICY, "i-0001", null, null, REQUEST);
 
   expect(report.iterationId).toBeNull();
   expect(report.status).toBeNull();
@@ -1766,8 +1767,7 @@ test("a caller-supplied grantee is overwritten with the allocated run id, not re
     h.ports,
     { ...PLAN, parties: { issuer: "rondo-host", grantee: "delegate-1" } },
     PERMISSIVE,
-    "i-0001",
-  );
+    "i-0001", null, null, REQUEST);
   expect(report.iterationId).toBe("i-0001");
   expect(report.status).toBe("awaiting_human");
 });
@@ -1784,8 +1784,7 @@ test("an invalid plan is refused before a row exists, so it takes no lock", asyn
     h.ports,
     { ...PLAN, workspaceRoot: "relative/path" },
     PERMISSIVE,
-    "i-0001",
-  );
+    "i-0001", null, null, REQUEST);
   expect(report.iterationId).toBeNull();
   expect(report.lines.join(" ")).toContain("before an iteration was reserved");
   expect(h.calls).toEqual([]);

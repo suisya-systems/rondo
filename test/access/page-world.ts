@@ -55,6 +55,28 @@ export async function openGate(world: ReturnType<typeof fresh>, id: string): Pro
   }
 }
 
+/** One request, opened by a person, for a lap to belong to. */
+export async function openRequest(
+  world: ReturnType<typeof fresh>,
+  messageId: string,
+  body: string,
+  atMs = 500,
+): Promise<void> {
+  const outcome = await world.record.recordThreadMessage({
+    messageId,
+    body,
+    authorKind: "operator",
+    authorId: "ada",
+    inReplyTo: null,
+    atMs,
+    bases: [],
+    asks: false,
+  });
+  if (outcome.kind !== "recorded") {
+    throw new Error(`the fixture did not record the request: ${JSON.stringify(outcome)}`);
+  }
+}
+
 export async function reserve(
   world: ReturnType<typeof fresh>,
   id: string,
@@ -63,13 +85,18 @@ export async function reserve(
   /**
    * The message that opened the request this lap came from (D-0061 rule 4).
    *
-   * Optional and null by default, so every existing fixture is unchanged. A
-   * lap that names one is what a lap looks like once `start` requires
-   * `--message-id`; a suite that needs the lap to have a thread -- the
-   * answering box lives in one (D-0083 rule 9) -- passes it.
+   * **Left out, this helper opens one.** Every lap names a request since
+   * `start` requires `--message-id`, and the page draws a lap only through
+   * the thread it belongs to (D-0083 rule 2), so a fixture with no request
+   * is a fixture with no page. Given, the caller has already written that
+   * message and this helper leaves the conversation alone.
    */
-  requestMessageId: string | null = null,
+  requestMessageId?: string,
 ): Promise<void> {
+  if (requestMessageId === undefined) {
+    requestMessageId = `req-${id}`;
+    await openRequest(world, requestMessageId, request);
+  }
   const outcome = await world.store.reserve({
     id,
     request,
@@ -154,27 +181,6 @@ export const EVIDENCE = {
   fileCount: 1,
 };
 
-/** One request, opened by a person, for a lap to belong to. */
-export async function openRequest(
-  world: ReturnType<typeof fresh>,
-  messageId: string,
-  body: string,
-  atMs = 500,
-): Promise<void> {
-  const outcome = await world.record.recordThreadMessage({
-    messageId,
-    body,
-    authorKind: "operator",
-    authorId: "ada",
-    inReplyTo: null,
-    atMs,
-    bases: [],
-    asks: false,
-  });
-  if (outcome.kind !== "recorded") {
-    throw new Error(`the fixture did not record the request: ${JSON.stringify(outcome)}`);
-  }
-}
 
 /** A lap at its gate with the deterministic reading carried by its transition. */
 export async function gateWithChecks(world: ReturnType<typeof fresh>): Promise<void> {

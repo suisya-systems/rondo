@@ -30,6 +30,7 @@ import {
   WORKSPACE_ROOT,
   world,
 } from "./fixtures/drafter.js";
+import { openRequest, REQUEST } from "../request-fixture.js";
 
 function portsOver(
   w: Awaited<ReturnType<typeof world>>,
@@ -271,6 +272,9 @@ async function reserveLap(
   plan: JsonRecord,
   atMs: number,
 ): Promise<void> {
+  // Every lap names a request (D-0083); this suite is about the plans the laps
+  // carry, so one fixture request stands for all of them.
+  await openRequest(w.connection);
   const reserved = await w.store.reserve({
     id,
     request: "earlier work",
@@ -280,7 +284,7 @@ async function reserveLap(
     claim: ownLane(id),
     nowMs: atMs,
     supersedesIterationId: null,
-    requestMessageId: null,
+    requestMessageId: REQUEST,
     runId: `rondo-${id}`,
     topicBranch: `rondo/${id}`,
     workspace: `/srv/work/${id}`,

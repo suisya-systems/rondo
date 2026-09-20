@@ -33,6 +33,10 @@ import type { JsonRecord } from "../../src/store/records.js";
 import { TERMINAL_STATUSES } from "../../src/store/records.js";
 import { type HostPolicy, iterationStore, openIterationStore } from "../../src/store/sqlite.js";
 import { ownLane } from "../lane-claims.js";
+import { REQUEST, openRequest, storeWithRequest } from "../request-fixture.js";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 /**
  * A plan payload of the shape `src/refrain/plan.ts` renders.
@@ -64,7 +68,7 @@ const somePlan = (overrides: JsonRecord = {}): JsonRecord => ({
  * `CONSERVATIVE_HOST_POLICY`, the same default `iterationStore` documents.
  */
 const freshStore = (policy: HostPolicy = CONSERVATIVE_HOST_POLICY) =>
-  iterationStore(new DatabaseSync(":memory:"), policy);
+  storeWithRequest(new DatabaseSync(":memory:"), policy);
 
 /**
  * The triple the allocator would have derived for this id (`src/refrain/allocator.ts`).
@@ -89,7 +93,7 @@ const reserveOne = async (store: ReturnType<typeof freshStore>, id: string, nowM
     claim: ownLane(id),
     nowMs,
     supersedesIterationId: null,
-    requestMessageId: null,
+    requestMessageId: REQUEST,
     ...tripleFor(id),
   });
 
@@ -159,7 +163,7 @@ test("the plan digest does not depend on the order the plan's keys were written 
     claim: ownLane("i-0001"),
     nowMs: 1,
     supersedesIterationId: null,
-    requestMessageId: null,
+    requestMessageId: REQUEST,
     ...tripleFor("i-0001"),
   });
   await store.transition("i-0001", "planned", "closed", {}, 2);
@@ -172,7 +176,7 @@ test("the plan digest does not depend on the order the plan's keys were written 
     claim: ownLane("i-0002"),
     nowMs: 3,
     supersedesIterationId: null,
-    requestMessageId: null,
+    requestMessageId: REQUEST,
     ...tripleFor("i-0002"),
   });
 
@@ -387,7 +391,7 @@ test("a transition hands back the row as the database holds it", async () => {
 
 test("a plan edited without its digest is unreadable, digest mismatch and all", async () => {
   const connection = new DatabaseSync(":memory:");
-  const store = iterationStore(connection, CONSERVATIVE_HOST_POLICY);
+  const store = storeWithRequest(connection, CONSERVATIVE_HOST_POLICY);
   await reserveOne(store, "i-0001");
 
   // The dangerous edit is not the malformed one -- it is the *valid* one. A
@@ -408,7 +412,7 @@ test("a plan edited without its digest is unreadable, digest mismatch and all", 
 
 test("settle releases a live row and refuses to overwrite a finished one", async () => {
   const connection = new DatabaseSync(":memory:");
-  const store = iterationStore(connection, CONSERVATIVE_HOST_POLICY);
+  const store = storeWithRequest(connection, CONSERVATIVE_HOST_POLICY);
   await reserveOne(store, "i-0001");
   await store.transition("i-0001", "planned", "closed", { gateOutcome: "approved" }, 2_000);
 
@@ -431,7 +435,7 @@ test("settle releases a live row and refuses to overwrite a finished one", async
 
 test("a status edited out of band is unreadable rather than a coercion", async () => {
   const connection = new DatabaseSync(":memory:");
-  const store = iterationStore(connection, CONSERVATIVE_HOST_POLICY);
+  const store = storeWithRequest(connection, CONSERVATIVE_HOST_POLICY);
   await reserveOne(store, "i-0001");
 
   // A person with sqlite3 is one edit away from any string at all, so this is
@@ -455,7 +459,7 @@ test("a status edited out of band is unreadable rather than a coercion", async (
 
 test("a plan column that is not JSON is unreadable through both reads", async () => {
   const connection = new DatabaseSync(":memory:");
-  const store = iterationStore(connection, CONSERVATIVE_HOST_POLICY);
+  const store = storeWithRequest(connection, CONSERVATIVE_HOST_POLICY);
   await reserveOne(store, "i-0001");
 
   connection.prepare("UPDATE iteration SET plan = ? WHERE id = ?").run("{not json", "i-0001");
@@ -468,7 +472,7 @@ test("a plan column that is not JSON is unreadable through both reads", async ()
 
 test("settle ends a row that will not decode, and the lock is then free", async () => {
   const connection = new DatabaseSync(":memory:");
-  const store = iterationStore(connection, CONSERVATIVE_HOST_POLICY);
+  const store = storeWithRequest(connection, CONSERVATIVE_HOST_POLICY);
   await reserveOne(store, "i-0001");
   connection.prepare("UPDATE iteration SET status = ? WHERE id = ?").run("gremlin", "i-0001");
 
@@ -568,13 +572,16 @@ test("reserving the same iteration id twice is a defect, not an occupied conduct
  * The one behaviour the operator's command line rests on that `iterationStore`
  * cannot demonstrate: that a *path* -- not a connection somebody else opened --
  * becomes a usable store, schema and all, without a provisioning step. It is
- * written against `:memory:` rather than a temporary file because what is under
- * test is the value import and the `exec(SCHEMA)` behind it, and neither is a
- * property of the filesystem; a file would add a cleanup path and test Node's
- * `open(2)` rather than rondo's.
+ * written against a temporary file rather than `:memory:` because a lap names
+ * the request it came from (D-0083), and a second handle on `:memory:` is a
+ * second database: the request has to be written through a handle this store
+ * can see. What is under test is still the value import and the `exec(SCHEMA)`
+ * behind it.
  */
 test("openIterationStore opens a store by path, schema applied", async () => {
-  const store = openIterationStore(":memory:", CONSERVATIVE_HOST_POLICY);
+  const path = join(mkdtempSync(join(tmpdir(), "rondo-open-")), "store.sqlite");
+  const store = openIterationStore(path, CONSERVATIVE_HOST_POLICY);
+  await openRequest(new DatabaseSync(path));
 
   const reserved = await store.reserve({
     id: "iter-open",
@@ -585,7 +592,7 @@ test("openIterationStore opens a store by path, schema applied", async () => {
     claim: ownLane("iter-open"),
     nowMs: 1_000,
     supersedesIterationId: null,
-    requestMessageId: null,
+    requestMessageId: REQUEST,
     ...tripleFor("iter-open"),
   });
   expect(reserved.kind).toBe("reserved");

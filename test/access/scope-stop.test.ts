@@ -38,6 +38,7 @@ import type { ConductorPorts, EffectOutcome, LapPerformance } from "../../src/re
 import { canonicalJson, contentDigest } from "../../src/store/plan.js";
 import { type JsonRecord, type LapReading, modelReadingDrafter } from "../../src/store/records.js";
 import { advisoryRecord, iterationStore } from "../../src/store/sqlite.js";
+import { REQUEST, openRequest, storeWithRequest } from "../request-fixture.js";
 
 /**
  * The tests marked with this drive the CLI over an on-disk store rather than
@@ -153,7 +154,7 @@ const PAYLOAD: JsonRecord = {
 /** A store with the request, an approved scope, and a clock the test moves. */
 async function harness(path = ":memory:", payload: JsonRecord = PAYLOAD) {
   const connection = new DatabaseSync(path);
-  const store = iterationStore(connection, { maxOccupying: 100, maxLive: 100 });
+  const store = storeWithRequest(connection, { maxOccupying: 100, maxLive: 100 });
   const record = advisoryRecord(connection);
   const clock = { now: 1_000 };
   const lap = (p: AdmittedPlan): EffectOutcome<LapPerformance> => ({
@@ -220,7 +221,7 @@ async function harness(path = ":memory:", payload: JsonRecord = PAYLOAD) {
     }),
   ).toEqual({ kind: "recorded" });
   // The scope may list only an agent type rondo already holds (D-0062 rule 1.2).
-  expect((await admit(conductor, advisory, PLAN, POLICY, "i-seed")).iterationId).toBe("i-seed");
+  expect((await admit(conductor, advisory, PLAN, POLICY, "i-seed", null, null, REQUEST)).iterationId).toBe("i-seed");
   // Ended, so its claim on the whole repository (D-0073 rule 2.5) is released
   // and the lines below are admitted on their own merits: the seed is only how
   // rondo comes to hold the agent type.
@@ -594,14 +595,16 @@ test("a store refusal under the write lock reaches the stop as data, and writes 
   expect(String(stops[0]?.["body"])).toContain("superseded test");
 });
 
-test("no request, no thread: the refusal is the one with no durable stop", async () => {
+test("a request the scope does not list is refused, and the stop is written into that request", async () => {
+  // **There is no "no request" case any more** (D-0083): every act names one,
+  // so the `noThread` refusal -- a refusal with nowhere durable to write its
+  // stop -- is unreachable. What is left is the request test itself.
   const h = await harness();
   const refused = await admitUnderScope(h.ports, "sd-1", {
     ...start("i-a"),
-    requestMessageId: null,
+    requestMessageId: REQUEST,
   });
-  expect(refused).toMatchObject({ kind: "refused", test: "request", stop: { kind: "noThread" } });
-  expect(h.stops()).toHaveLength(0);
+  expect(refused).toMatchObject({ kind: "refused", test: "request", stop: { kind: "written" } });
 });
 
 test("an undecidable refusal recommends stopping, and a failed write is reported as failed", async () => {
@@ -1088,9 +1091,9 @@ test("D-0061 5.3: a report never answers a stop, and a lap naming no request rep
   const asks = await h.record.openAsksIn(ROOT);
   expect(asks).toMatchObject({ kind: "read", asks: [{ messageId: stopped.stop.messageId }] });
 
-  const quiet = await harness();
-  await admit(quiet.reporting, quiet.advisory, PLAN, POLICY, "i-n");
-  expect(quiet.stops()).toHaveLength(0);
+  // The second half of this case was "a lap naming no request reports
+  // nothing". Since D-0083 no lap names none, so what it asserted cannot
+  // happen and is not written here as a refusal it would fail to reach.
 });
 
 // --- D-0069: a scope before the first lap, and `start` spending it -------------
@@ -1139,7 +1142,7 @@ test(
     const path = join(dir, "rondo.sqlite3");
     const connection = new DatabaseSync(path);
     const record = advisoryRecord(connection);
-    iterationStore(connection, { maxOccupying: 100, maxLive: 100 });
+    storeWithRequest(connection, { maxOccupying: 100, maxLive: 100 });
     expect(
       await record.recordThreadMessage({
         messageId: ROOT,
@@ -1318,7 +1321,7 @@ test(
 
 test("D-0073 rule 7: a refusal by a closed line reads its landing, and only a landed one is released and let through", async () => {
   const h = await harness();
-  expect((await admit(h.reporting, h.advisory, PLAN, POLICY, "i-land")).status).toBe(
+  expect((await admit(h.reporting, h.advisory, PLAN, POLICY, "i-land", null, null, REQUEST)).status).toBe(
     "awaiting_human",
   );
   const asked: LandingRequest[] = [];
@@ -1341,7 +1344,7 @@ test("D-0073 rule 7: a refusal by a closed line reads its landing, and only a la
     },
   };
   // At its gate the line holds its paths whatever its diff says (rule 10): nothing is read.
-  const gated = await admit(ports, h.advisory, PLAN, POLICY, "i-next");
+  const gated = await admit(ports, h.advisory, PLAN, POLICY, "i-next", null, null, REQUEST);
   expect(gated.iterationId).toBeNull();
   expect(gated.laneRefusal?.holders).toEqual([{ lineageId: "i-land", sharedPaths: ["/"] }]);
   expect(asked).toEqual([]);
@@ -1349,7 +1352,7 @@ test("D-0073 rule 7: a refusal by a closed line reads its landing, and only a la
   expect((await h.store.transition("i-land", "awaiting_human", "closed", {}, 2)).kind).toBe(
     "transitioned",
   );
-  const unmerged = await admit(ports, h.advisory, PLAN, POLICY, "i-next");
+  const unmerged = await admit(ports, h.advisory, PLAN, POLICY, "i-next", null, null, REQUEST);
   expect(unmerged.iterationId).toBeNull();
   expect(unmerged.lines.join("\n")).toContain("'x.ts' differ");
   expect(asked).toEqual([
@@ -1362,12 +1365,12 @@ test("D-0073 rule 7: a refusal by a closed line reads its landing, and only a la
   ]);
 
   answer = { kind: "undetermined", reason: "the forge did not answer" };
-  const unknown = (await admit(ports, h.advisory, PLAN, POLICY, "i-next")).lines.join("\n");
+  const unknown = (await admit(ports, h.advisory, PLAN, POLICY, "i-next", null, null, REQUEST)).lines.join("\n");
   expect(unknown).toContain("undetermined: the forge did not answer");
   expect(unknown).not.toContain("not on");
 
   answer = { kind: "landed", branch: "main", headCommit: "h", paths: ["x.ts"] };
-  const through = await admit(ports, h.advisory, PLAN, POLICY, "i-next");
+  const through = await admit(ports, h.advisory, PLAN, POLICY, "i-next", null, null, REQUEST);
   expect(through.iterationId).toBe("i-next");
   expect(through.lines[0]).toContain("so its paths were released");
   const read = await h.store.laneLine("i-land");
@@ -1386,7 +1389,7 @@ test("D-0073 rule 2.3: a drafted claim reaches reserve(), so two lines on differ
     bases: [{ form: "proposal", proposalId: "draft-1" }],
   });
   const first = (id: string, paths: readonly string[]) =>
-    admit(h.reporting, h.advisory, PLAN, POLICY, id, null, null, null, null, drafted(paths));
+    admit(h.reporting, h.advisory, PLAN, POLICY, id, null, null, REQUEST, null, drafted(paths));
   expect((await first("i-store", ["src/store/"])).status).toBe("awaiting_human");
   expect((await first("i-docs", ["docs/", "README.md"])).status).toBe("awaiting_human");
   const store = await h.store.laneLine("i-store");
@@ -1404,7 +1407,7 @@ test("D-0073 rule 2.3: a drafted claim reaches reserve(), so two lines on differ
   ]);
   expect((await h.store.read("i-shared")).kind).toBe("absent");
   // With no drafted claim a line claims the whole repository (rule 2.5), and collides with both.
-  const whole = await admit(h.reporting, h.advisory, PLAN, POLICY, "i-whole");
+  const whole = await admit(h.reporting, h.advisory, PLAN, POLICY, "i-whole", null, null, REQUEST);
   expect(whole.laneRefusal?.holders.map((holder) => holder.lineageId).sort()).toEqual([
     "i-docs",
     "i-store",
@@ -1434,7 +1437,7 @@ test("D-0073 rule 5: the gate compares what a lap changed with its line's claim,
     },
   };
   const first = (id: string, paths: readonly string[]) =>
-    admit(ports, h.advisory, PLAN, POLICY, id, null, null, null, null, drafted(paths));
+    admit(ports, h.advisory, PLAN, POLICY, id, null, null, REQUEST, null, drafted(paths));
   expect((await first("i-store", ["src/store/"])).status).toBe("awaiting_human");
 
   changed = { kind: "read", paths: ["docs/a.md", "src/store/sqlite.ts", "README.md", "x/*.ts"] };
@@ -1467,7 +1470,7 @@ test("D-0073 rule 5: the gate compares what a lap changed with its line's claim,
 
 test("D-0073 rule 4.3: a line that ended with its release missed is released at the next refusal, with nothing read", async () => {
   const h = await harness();
-  expect((await admit(h.reporting, h.advisory, PLAN, POLICY, "i-lost")).status).toBe(
+  expect((await admit(h.reporting, h.advisory, PLAN, POLICY, "i-lost", null, null, REQUEST)).status).toBe(
     "awaiting_human",
   );
   // Ended out of band, so no release row was written: the claim is still held.
@@ -1485,7 +1488,7 @@ test("D-0073 rule 4.3: a line that ended with its release missed is released at 
       },
     },
   };
-  const through = await admit(ports, h.advisory, PLAN, POLICY, "i-after");
+  const through = await admit(ports, h.advisory, PLAN, POLICY, "i-after", null, null, REQUEST);
   expect(through.iterationId).toBe("i-after");
   expect(through.lines[0]).toContain("has ended with nothing to land, so its paths were released");
   expect(read).toBe(0);
@@ -1497,7 +1500,7 @@ test(
     const dir = mkdtempSync(join(tmpdir(), "rondo-release-"));
     const path = join(dir, "rondo.db");
     const h = await harness(path);
-    expect((await admit(h.reporting, h.advisory, PLAN, POLICY, "i-held")).status).toBe(
+    expect((await admit(h.reporting, h.advisory, PLAN, POLICY, "i-held", null, null, REQUEST)).status).toBe(
       "awaiting_human",
     );
     const environment = { RONDO_STORE: path, RONDO_APPROVER: "oidc|operator-1" };

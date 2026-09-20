@@ -31,7 +31,6 @@ import {
   fresh,
   gateWithChecks,
   modelFindings,
-  openRequest,
   operatorPage,
   portsOver,
   structured,
@@ -52,7 +51,6 @@ import {
  */
 async function gateWithFinding(): Promise<string> {
   const world = fresh();
-  await openRequest(world, "req-1", "Add a retry budget.");
   await gateWithChecks(world);
   await modelFindings(world);
   return await operatorPage({ ...portsOver(world, "ada", []), material: structured }, "t", {
@@ -65,7 +63,6 @@ async function gateWithFinding(): Promise<string> {
 /** The gate with both readings clean, so no finding stands over it. */
 async function gateWithNoFinding(): Promise<string> {
   const world = fresh();
-  await openRequest(world, "req-1", "Add a retry budget.");
   await gateWithChecks(world);
   const appended = await world.store.appendReading(
     "i-0001",

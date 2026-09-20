@@ -14,13 +14,14 @@ import { expect, test } from "vitest";
 import { CONSERVATIVE_HOST_POLICY } from "../../src/refrain/policy.js";
 import type { LaneClaimAsk } from "../../src/store/records.js";
 import { iterationStore, LANE_LEDGER_AUTHOR, type ReserveInput } from "../../src/store/sqlite.js";
+import { REQUEST, openRequest, storeWithRequest } from "../request-fixture.js";
 
 const REPOSITORY = "/srv/repo";
 
 const fresh = () => {
   const connection = new DatabaseSync(":memory:");
   // Wide bounds: the capacity ledger is not what this file measures (rule 3.6).
-  const store = iterationStore(connection, { maxOccupying: 100, maxLive: 100 });
+  const store = storeWithRequest(connection, { maxOccupying: 100, maxLive: 100 });
   const claims = () =>
     connection
       .prepare(
@@ -53,7 +54,7 @@ const input = (
     topicBranch: `rondo/${id}`,
     workspace: `/srv/work/${id}`,
     supersedesIterationId: null,
-    requestMessageId: null,
+    requestMessageId: REQUEST,
     spend: null,
     scopeSpend: null,
     claim: null,
@@ -342,7 +343,7 @@ test("one in-force claim per line is the database's: a second successor of one h
 
 test("the capacity ledger still answers its own question beside the claim (rule 3.6)", async () => {
   const connection = new DatabaseSync(":memory:");
-  const store = iterationStore(connection, CONSERVATIVE_HOST_POLICY);
+  const store = storeWithRequest(connection, CONSERVATIVE_HOST_POLICY);
   await reserved(store, input("a", { claim: asking(["a/"]) }));
   expect((await store.reserve(input("b", { claim: asking(["b/"]) }))).kind).toBe("atCapacity");
 });

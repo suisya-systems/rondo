@@ -34,6 +34,7 @@ import { expect, test } from "vitest";
 import { nextStep } from "../../src/refrain/loop.js";
 import { CONSERVATIVE_POLICY, type LoopPolicy } from "../../src/refrain/policy.js";
 import type { IterationRecord, IterationStatus } from "../../src/store/records.js";
+import { openRequest, REQUEST } from "../request-fixture.js";
 
 /**
  * A record at one status, with everything else at a value `nextStep` may not
@@ -55,7 +56,7 @@ const recordWith = (status: IterationStatus, attempts = 1): IterationRecord => (
   workspace: null,
   identifiersSpent: 0,
   supersedesIterationId: null,
-  requestMessageId: null,
+  requestMessageId: REQUEST,
   continuoRevision: null,
   agentTypeDigest: null,
   configDigest: null,

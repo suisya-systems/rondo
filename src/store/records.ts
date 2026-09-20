@@ -317,16 +317,22 @@ export interface IterationRecord {
    */
   readonly supersedesIterationId: string | null;
   /**
-   * The message that opened the request this lap came from, or null
-   * (D-0061 rule 4).
+   * The message that opened the request this lap came from (D-0061 rule 4).
    *
    * Written once, by `reserve()`, for `supersedesIterationId`'s reason, and
    * refused there when it names no message that opens a request. Several laps
    * may name one request: that many-to-one link is what a split is recorded
-   * as. Null is "no request", which is every lap `start` ran without one and
-   * every row written before the column.
+   * as.
+   *
+   * **Every lap has one** (D-0083). It used to be nullable, and `null` was
+   * documented here as meaning *there is no request* rather than *it is not
+   * known* -- a lap `start` had been run without one. D-0083 rule 2 makes a
+   * request's thread the unit of the page, so a lap with no request is a lap
+   * with nowhere to be drawn: `start` requires `--message-id`, and the type
+   * is what closes the other ways in. What makes this safe is the type and
+   * the call paths, not the column's own constraint.
    */
-  readonly requestMessageId: string | null;
+  readonly requestMessageId: string;
   /**
    * The continuo revision `startContinuo` **observed**, not the one the pin
    * expected.

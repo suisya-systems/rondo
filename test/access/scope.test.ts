@@ -33,6 +33,7 @@ import {
   type ScopePayload,
   type StoredScope,
 } from "../../src/store/records.js";
+import { openRequest, REQUEST } from "../request-fixture.js";
 
 const DIGEST = (c: string) => `sha256:${c.repeat(64)}`;
 const AGENT = DIGEST("a");
@@ -151,7 +152,7 @@ test.each<[string, ScopeSnapshot, "outside" | "undecidable", string]>([
     "decision",
   ],
   ["an approved successor", snapshot({ supersededByApproved: true }), "outside", "superseded"],
-  ["an act naming no request", snapshot({ requestMessageId: null }), "outside", "request"],
+  ["an act naming no request", snapshot({ requestMessageId: REQUEST }), "outside", "request"],
   ["a request not listed", snapshot({ requestMessageId: "m-9" }), "outside", "request"],
   [
     "a workspace root not listed",
@@ -254,7 +255,7 @@ test("the first failing test decides the name", () => {
   expect(
     scopeVerdict(
       REDO,
-      snapshot({ requestMessageId: null, spent: { admissions: 9, readCostUsd: 0, unreadLaps: 0 } }),
+      snapshot({ requestMessageId: REQUEST, spent: { admissions: 9, readCostUsd: 0, unreadLaps: 0 } }),
     ),
   ).toMatchObject({ kind: "outside", test: "request" });
 });

@@ -44,6 +44,7 @@ import {
 } from "../../src/refrain/plan.js";
 import { revisionPlan } from "../../src/refrain/revision.js";
 import type { IterationRecord, JsonRecord } from "../../src/store/records.js";
+import { openRequest, REQUEST } from "../request-fixture.js";
 
 const CATALOG_LAYER: CatalogLayer = {
   layer: "repo",
@@ -162,7 +163,7 @@ function closedRecord(id: string, plan: AdmittedPlan): IterationRecord {
     workspace: plan.workspace,
     identifiersSpent: 1,
     supersedesIterationId: null,
-    requestMessageId: null,
+    requestMessageId: REQUEST,
     continuoRevision: "38c667b",
     agentTypeDigest: null,
     configDigest: null,

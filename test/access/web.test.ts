@@ -91,6 +91,7 @@ import {
   reviseRows,
   structured,
 } from "./page-world.js";
+import { openRequest, REQUEST } from "../request-fixture.js";
 
 /**
  * The tests marked with this build a real git repository or write an on-disk
@@ -3233,7 +3234,7 @@ async function seedEndedLap(
     claim: laneFor(id, opts.supersedesIterationId ?? null),
     nowMs: 1_000,
     supersedesIterationId: opts.supersedesIterationId ?? null,
-    requestMessageId: null,
+    requestMessageId: REQUEST,
     runId: `rondo-${id}`,
     topicBranch: `rondo/${id}`,
     workspace: `/srv/work/${id}`,
@@ -3934,7 +3935,7 @@ test(
       claim: ownLane(ended),
       nowMs: 1_000,
       supersedesIterationId: null,
-      requestMessageId: null,
+      requestMessageId: REQUEST,
       runId: `rondo-${ended}`,
       topicBranch: `rondo/${ended}`,
       workspace: `/srv/work/${ended}`,
@@ -3963,7 +3964,7 @@ test(
       claim: ownLane(gated),
       nowMs: 1_000,
       supersedesIterationId: null,
-      requestMessageId: null,
+      requestMessageId: REQUEST,
       runId: `rondo-${gated}`,
       topicBranch: `rondo/${gated}`,
       workspace: `/srv/work/${gated}`,
@@ -4783,7 +4784,7 @@ test(
       claim: ownLane(live),
       nowMs: 1_000,
       supersedesIterationId: null,
-      requestMessageId: null,
+      requestMessageId: REQUEST,
       runId: `rondo-${live}`,
       topicBranch: `rondo/${live}`,
       workspace: `/srv/work/${live}`,
@@ -4925,7 +4926,7 @@ async function publishableWorld(
     claim: ownLane(iterationId),
     nowMs: 1_000,
     supersedesIterationId: null,
-    requestMessageId: null,
+    requestMessageId: REQUEST,
     runId: `rondo-${iterationId}`,
     topicBranch,
     workspace,

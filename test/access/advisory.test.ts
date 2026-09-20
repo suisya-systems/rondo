@@ -36,6 +36,7 @@ import {
   type RecordOutcome,
 } from "../../src/store/sqlite.js";
 import { laneFor, ownLane } from "../lane-claims.js";
+import { REQUEST, openRequest, storeWithRequest } from "../request-fixture.js";
 
 const somePlan = (): JsonRecord => ({
   run_id: "r-0001",
@@ -47,7 +48,7 @@ const fresh = () => {
   const connection = new DatabaseSync(":memory:");
   return {
     connection,
-    store: iterationStore(connection, CONSERVATIVE_HOST_POLICY),
+    store: storeWithRequest(connection, CONSERVATIVE_HOST_POLICY),
     record: advisoryRecord(connection),
   };
 };
@@ -62,11 +63,24 @@ const reserveOne = async (store: ReturnType<typeof fresh>["store"], id: string) 
     claim: ownLane(id),
     nowMs: 1_000,
     supersedesIterationId: null,
-    requestMessageId: null,
+    requestMessageId: REQUEST,
     runId: `rondo-${id}`,
     topicBranch: `rondo/${id}`,
     workspace: `/srv/work/iter-${id}`,
   });
+
+/**
+ * How many message ids the code under test has spent.
+ *
+ * **The fixture's own request is not one of them.** Every lap names a request
+ * (D-0083), so the store these tests are built over has one message in it
+ * before anything is elevated; counting the table whole would report it as a
+ * name the operator had lost.
+ */
+const spentMessageIds = (connection: DatabaseSync): unknown =>
+  connection
+    .prepare("SELECT count(*) AS n FROM conversation_message WHERE message_id != ?")
+    .get(REQUEST);
 
 /** The one row the proposal table holds, as the database has it. */
 /** A screen that keeps what it was shown, so a test can read it. */
@@ -165,7 +179,7 @@ test("a multi-paragraph request is quoted over its own lines rather than escaped
     claim: ownLane("i-0001"),
     nowMs: 1_000,
     supersedesIterationId: null,
-    requestMessageId: null,
+    requestMessageId: REQUEST,
     runId: "rondo-i-0001",
     topicBranch: "rondo/i-0001",
     workspace: "/srv/work/iter-i-0001",
@@ -420,9 +434,7 @@ test("an iteration that is not there costs no message id", async () => {
     anObservation(),
   );
   expect(outcome.kind).toBe("refused");
-  expect(connection.prepare("SELECT count(*) AS n FROM conversation_message").get()).toEqual({
-    n: 0,
-  });
+  expect(spentMessageIds(connection)).toEqual({ n: 0 });
 });
 
 test("a proposal that cannot be written leaves the message id unspent", async () => {
@@ -451,9 +463,7 @@ test("a proposal that cannot be written leaves the message id unspent", async ()
   expect(outcome.kind).toBe("refused");
   // The message was rolled back with the proposal: the operator can retype
   // 'm-0001' once the fault is fixed.
-  expect(connection.prepare("SELECT count(*) AS n FROM conversation_message").get()).toEqual({
-    n: 0,
-  });
+  expect(spentMessageIds(connection)).toEqual({ n: 0 });
   expect(shows.shown).toEqual([]);
 });
 
@@ -601,7 +611,7 @@ const reserveWithPlan = async (
     claim: laneFor(id, supersedesIterationId),
     nowMs: 1_000,
     supersedesIterationId,
-    requestMessageId: null,
+    requestMessageId: REQUEST,
     runId: `rondo-${id}`,
     topicBranch: `rondo/${id}`,
     workspace: `/srv/work/${id}`,
@@ -1128,7 +1138,7 @@ test("an agent type cadenza will not build is a refusal and not a crash", async 
     claim: ownLane("iter-1"),
     nowMs: 1_000,
     supersedesIterationId: null,
-    requestMessageId: null,
+    requestMessageId: REQUEST,
     runId: "rondo-iter-1",
     topicBranch: "rondo/iter-1",
     workspace: "/srv/work/iter-1",

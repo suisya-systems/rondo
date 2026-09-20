@@ -30,6 +30,7 @@ import type {
 } from "../../src/store/records.js";
 import { advisoryRecord, iterationStore } from "../../src/store/sqlite.js";
 import { ownLane } from "../lane-claims.js";
+import { REQUEST, openRequest, storeWithRequest } from "../request-fixture.js";
 
 const freshConnection = () => new DatabaseSync(":memory:");
 
@@ -784,7 +785,7 @@ test("terminal iterations are enumerable, which nothing else in the store does",
   // known and `readLive` filters terminal rows out, so the abandoned iteration
   // the advisory component exists to explain could not be found at all.
   const connection = freshConnection();
-  const store = iterationStore(connection, CONSERVATIVE_HOST_POLICY);
+  const store = storeWithRequest(connection, CONSERVATIVE_HOST_POLICY);
   // Reserved and ended one at a time, because the conservative policy's bound
   // is one live iteration -- which is the same reason `readLive` alone cannot
   // answer this question.
@@ -802,7 +803,7 @@ test("terminal iterations are enumerable, which nothing else in the store does",
       claim: ownLane(id),
       nowMs: at,
       supersedesIterationId: null,
-      requestMessageId: null,
+      requestMessageId: REQUEST,
       runId: `rondo-${id}`,
       topicBranch: `rondo/${id}`,
       workspace: `/srv/work/${id}`,
@@ -828,7 +829,7 @@ test("what changed since a mark spans the record kinds and includes the bound", 
   // that timestamp may or may not have been displayed -- and the failure this
   // shape accepts is showing it twice rather than losing it.
   const connection = freshConnection();
-  const store = iterationStore(connection, CONSERVATIVE_HOST_POLICY);
+  const store = storeWithRequest(connection, CONSERVATIVE_HOST_POLICY);
   const record = advisoryRecord(connection);
   await store.reserve({
     id: "i-0001",
@@ -839,7 +840,7 @@ test("what changed since a mark spans the record kinds and includes the bound", 
     claim: ownLane("i-0001"),
     nowMs: 1_000,
     supersedesIterationId: null,
-    requestMessageId: null,
+    requestMessageId: REQUEST,
     runId: "rondo-i-0001",
     topicBranch: "rondo/i-0001",
     workspace: "/srv/work/i-0001",
@@ -917,7 +918,7 @@ test("the advisory tables arrive on a database that predates them", async () => 
   // older database gains the seven tables without a column migration -- and
   // either port may be the one that opens it, because both apply the schema.
   const connection = freshConnection();
-  iterationStore(connection, CONSERVATIVE_HOST_POLICY);
+  storeWithRequest(connection, CONSERVATIVE_HOST_POLICY);
 
   const record = advisoryRecord(connection);
 

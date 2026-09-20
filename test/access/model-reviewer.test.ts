@@ -32,6 +32,7 @@ import type {
 } from "../../src/store/records.js";
 import { advisoryRecord, iterationStore } from "../../src/store/sqlite.js";
 import { ownLane } from "../lane-claims.js";
+import { REQUEST, openRequest, storeWithRequest } from "../request-fixture.js";
 
 const PLAN: RunPlan = {
   db: "/srv/continuo.db",
@@ -142,7 +143,7 @@ async function world(
   } = {},
 ) {
   const connection = new DatabaseSync(":memory:");
-  const store = iterationStore(connection, { maxOccupying: 4, maxLive: 6 });
+  const store = storeWithRequest(connection, { maxOccupying: 4, maxLive: 6 });
   const record = advisoryRecord(connection);
   const id = "i-0001";
   if (options.requestMessageId !== undefined && options.requestMessageId !== null) {
@@ -170,7 +171,7 @@ async function world(
     claim: ownLane(id),
     nowMs: 1_000,
     supersedesIterationId: null,
-    requestMessageId: options.requestMessageId ?? null,
+    requestMessageId: options.requestMessageId ?? REQUEST,
     runId: "rondo-i-0001",
     topicBranch: "rondo/i-0001",
     workspace: "/srv/work/iter-i-0001",
@@ -374,7 +375,7 @@ test("unreadable material and a failed run are rows, and a throw is a line", asy
 
 test("the gate screen keeps the deterministic reading as the review and adds the model's as material", async () => {
   // A row with no range, so the screen reaches no git (fence-material.test.ts).
-  const store = iterationStore(new DatabaseSync(":memory:"), { maxOccupying: 4, maxLive: 6 });
+  const store = storeWithRequest(new DatabaseSync(":memory:"), { maxOccupying: 4, maxLive: 6 });
   await store.reserve({
     id: "i-0002",
     request: "do the thing",
@@ -384,7 +385,7 @@ test("the gate screen keeps the deterministic reading as the review and adds the
     claim: ownLane("i-0002"),
     nowMs: 1_000,
     supersedesIterationId: null,
-    requestMessageId: null,
+    requestMessageId: REQUEST,
     runId: "rondo-i-0002",
     topicBranch: "rondo/i-0002",
     workspace: "/srv/work/iter-i-0002",

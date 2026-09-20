@@ -33,6 +33,7 @@ import {
   type ScopeSpend,
 } from "../../src/store/sqlite.js";
 import { laneFor } from "../lane-claims.js";
+import { REQUEST, openRequest, storeWithRequest } from "../request-fixture.js";
 
 /** Bounds high enough that capacity never answers before the scope does. */
 const ROOMY: HostPolicy = { maxOccupying: 100, maxLive: 100 };
@@ -93,7 +94,7 @@ const ask = (messageId: string, bases: JsonRecord[], inReplyTo = "m-0001"): Thre
  */
 const seeded = async (policy: HostPolicy = ROOMY) => {
   const connection = new DatabaseSync(":memory:");
-  const store = iterationStore(connection, policy);
+  const store = storeWithRequest(connection, policy);
   const record = advisoryRecord(connection);
   expect(await record.recordThreadMessage(message())).toEqual({ kind: "recorded" });
   await store.reserve(reserveInput("i-held", null));
@@ -880,9 +881,12 @@ test("10. cost across real admissions: an unread lap holds its reserve, a read c
 
 test("4. the request is the row's own link, and the scope must list it", async () => {
   const { record, store } = await approved();
+  // The fixture's own request opens one, so it is a request the scope does
+  // not list rather than no request at all: since D-0083 there is no such
+  // thing as a lap that names none.
   expect(
-    await refusalOf(store, reserveInput("i-new", spendOf(), { requestMessageId: null })),
-  ).toContain("names no request");
+    await refusalOf(store, reserveInput("i-new", spendOf(), { requestMessageId: REQUEST })),
+  ).toContain(`'${REQUEST}' is not one scope`);
   await record.recordThreadMessage(message({ messageId: "m-0002" }));
   expect(
     await refusalOf(store, reserveInput("i-new", spendOf(), { requestMessageId: "m-0002" })),
@@ -1095,7 +1099,10 @@ test("PLANTED (rondo#197): a scope:ID basis is recorded when it names a scope ro
   expect(missing.kind === "refused" && missing.reason).toContain("scope:s-never");
   const incomplete = await record.recordThreadMessage(ask("m-bare", [{ form: "scope" }]));
   expect(incomplete.kind === "refused" && incomplete.reason).toContain("not a complete locator");
-  expect(count(connection, "SELECT COUNT(*) AS n FROM conversation_message")).toBe(2);
+  // Two written here; the third is the fixture's own request (D-0083).
+  expect(
+    count(connection, `SELECT COUNT(*) AS n FROM conversation_message WHERE message_id != '${REQUEST}'`),
+  ).toBe(2);
 });
 
 test("spending a human decision and a scope at once is a defect that writes nothing", async () => {

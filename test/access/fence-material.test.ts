@@ -22,10 +22,11 @@ import { EN } from "../../src/access/wording.js";
 import { CONSERVATIVE_HOST_POLICY } from "../../src/refrain/policy.js";
 import { iterationStore } from "../../src/store/sqlite.js";
 import { ownLane } from "../lane-claims.js";
+import { REQUEST, openRequest, storeWithRequest } from "../request-fixture.js";
 
 /** A row with no range on it, so nothing here reaches git. */
 async function fenceBlock(permissionDenials: string | null): Promise<string> {
-  const store = iterationStore(new DatabaseSync(":memory:"), CONSERVATIVE_HOST_POLICY);
+  const store = storeWithRequest(new DatabaseSync(":memory:"), CONSERVATIVE_HOST_POLICY);
   await store.reserve({
     id: "i-0001",
     request: "do the thing",
@@ -35,7 +36,7 @@ async function fenceBlock(permissionDenials: string | null): Promise<string> {
     claim: ownLane("i-0001"),
     nowMs: 1_000,
     supersedesIterationId: null,
-    requestMessageId: null,
+    requestMessageId: REQUEST,
     runId: "rondo-i-0001",
     topicBranch: "rondo/i-0001",
     workspace: "/srv/work/iter-i-0001",
