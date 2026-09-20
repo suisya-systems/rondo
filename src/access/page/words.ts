@@ -55,6 +55,26 @@ export interface PageWords extends DayWords {
   readonly rowFinished: string;
   readonly rowStopped: string;
   readonly rowNotStarted: string;
+  /**
+   * The event lines a lap produces (rule 7).
+   *
+   * Each is one sentence and names no identifier of rondo's (D-0076): what a
+   * person reads is what happened, not which row it happened to.
+   */
+  readonly evStarted: string;
+  readonly evFinished: string;
+  readonly evStopped: string;
+  readonly evChecksPassed: string;
+  readonly evChecksFailed: string;
+  readonly evReadingClear: string;
+  readonly evReadingRaised: (findings: number) => string;
+  readonly evReadingUnavailable: string;
+  /** What a person wrote, and what rondo said, as the name on a message. */
+  readonly saidByYou: string;
+  readonly saidByRondo: string;
+  /** The empty centre, where nothing waits (rule 4). */
+  readonly emptyAsk: string;
+  readonly emptyLead: string;
 }
 
 export const PAGE_EN: PageWords = Object.freeze({
@@ -76,6 +96,22 @@ export const PAGE_EN: PageWords = Object.freeze({
   rowFinished: "Finished",
   rowStopped: "Stopped",
   rowNotStarted: "Not started yet",
+  evStarted: "Work started.",
+  evFinished: "Finished, and the work was taken in.",
+  evStopped: "Stopped.",
+  evChecksPassed: "The automatic checks all passed.",
+  evChecksFailed: "The automatic checks did not pass.",
+  evReadingClear: "Another model read the change and raised nothing.",
+  evReadingRaised: (findings) =>
+    findings === 1
+      ? "Another model read the change and raised one thing."
+      : `Another model read the change and raised ${String(findings)} things.`,
+  evReadingUnavailable: "Another model could not read the change.",
+  saidByYou: "You",
+  saidByRondo: "rondo",
+  emptyAsk: "What would you like to ask for?",
+  emptyLead:
+    "Write it in your own words. If anything is unclear, rondo asks before it starts.",
 } satisfies PageWords);
 
 export const PAGE_JA: PageWords = Object.freeze({
@@ -97,4 +133,16 @@ export const PAGE_JA: PageWords = Object.freeze({
   rowFinished: "終わりました",
   rowStopped: "取りやめました",
   rowNotStarted: "まだ始まっていません",
+  evStarted: "作業を始めました。",
+  evFinished: "終わりました。変更は取り込み済みです。",
+  evStopped: "取りやめました。",
+  evChecksPassed: "自動チェックはすべて通りました。",
+  evChecksFailed: "自動チェックが通りませんでした。",
+  evReadingClear: "別の AI が変更を読み直し、指摘はありませんでした。",
+  evReadingRaised: (findings) => `別の AI が変更を読み直し、指摘を ${String(findings)} 件出しました。`,
+  evReadingUnavailable: "別の AI は変更を読めませんでした。",
+  saidByYou: "あなた",
+  saidByRondo: "rondo",
+  emptyAsk: "何を頼みますか",
+  emptyLead: "ふだんの言葉で書いてください。はっきりしないところがあれば、始める前に聞き返します。",
 } satisfies PageWords);

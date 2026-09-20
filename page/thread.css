@@ -89,3 +89,64 @@
   flex: 1;
   border-top: 1px solid var(--color-border);
 }
+
+/*
+ * The thread itself (rule 5). The centre face does not grow with the window --
+ * width buys faces, never line length (rule 1) -- so the measure lives here
+ * and not on the grid.
+ */
+.thread {
+  padding: 20px 28px 40px;
+}
+
+.thread-head {
+  padding-bottom: 10px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.thread-head h1 {
+  font-size: 19px;
+  font-weight: 700;
+  line-height: 1.4;
+  max-width: 45em;
+}
+
+.msg {
+  display: flex;
+  gap: 14px;
+  padding: 8px 0;
+  max-width: 780px;
+}
+
+.msg-body {
+  min-width: 0;
+}
+
+.msg h5 {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.msg h5 time {
+  margin-left: 8px;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--color-muted-foreground);
+}
+
+/* Rule 1: prose at 45 to 90 characters, whatever the window does. */
+.msg p {
+  margin-top: 4px;
+  max-width: 45em;
+  font-size: 16px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.msg-back {
+  display: inline-block;
+  margin-top: 6px;
+  font-size: 13px;
+}

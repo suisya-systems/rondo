@@ -60,6 +60,15 @@ export async function reserve(
   id: string,
   request: string,
   materialLanguage: string | null = null,
+  /**
+   * The message that opened the request this lap came from (D-0061 rule 4).
+   *
+   * Optional and null by default, so every existing fixture is unchanged. A
+   * lap that names one is what a lap looks like once `start` requires
+   * `--message-id`; a suite that needs the lap to have a thread -- the
+   * answering box lives in one (D-0083 rule 9) -- passes it.
+   */
+  requestMessageId: string | null = null,
 ): Promise<void> {
   const outcome = await world.store.reserve({
     id,
@@ -70,7 +79,7 @@ export async function reserve(
     claim: ownLane(id),
     nowMs: 1_000,
     supersedesIterationId: null,
-    requestMessageId: null,
+    requestMessageId,
     runId: `rondo-${id}`,
     topicBranch: `rondo/${id}`,
     workspace: `/srv/work/${id}`,
@@ -145,9 +154,32 @@ export const EVIDENCE = {
   fileCount: 1,
 };
 
+/** One request, opened by a person, for a lap to belong to. */
+export async function openRequest(
+  world: ReturnType<typeof fresh>,
+  messageId: string,
+  body: string,
+  atMs = 500,
+): Promise<void> {
+  const outcome = await world.record.recordThreadMessage({
+    messageId,
+    body,
+    authorKind: "operator",
+    authorId: "ada",
+    inReplyTo: null,
+    atMs,
+    bases: [],
+    asks: false,
+  });
+  if (outcome.kind !== "recorded") {
+    throw new Error(`the fixture did not record the request: ${JSON.stringify(outcome)}`);
+  }
+}
+
 /** A lap at its gate with the deterministic reading carried by its transition. */
 export async function gateWithChecks(world: ReturnType<typeof fresh>): Promise<void> {
-  await reserve(world, "i-0001", "add a retry budget");
+  await openRequest(world, "req-1", "add a retry budget");
+  await reserve(world, "i-0001", "add a retry budget", null, "req-1");
   await openGate(world, "i-0001");
   const carried = await world.store.transition(
     "i-0001",

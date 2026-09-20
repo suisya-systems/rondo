@@ -27,7 +27,7 @@ import { Faces } from "./faces.js";
  * escaped. The transforming module (`markdown.ts`) is still the only thing
  * that decides what HTML may exist at all (D-0059).
  */
-function Raw({ html }: { readonly html: string }) {
+export function Raw({ html }: { readonly html: string }) {
   // biome-ignore lint/security/noDangerouslySetInnerHtml: the page's own already-escaped markup, crossing the server-JSX/React seam
   return <div dangerouslySetInnerHTML={{ __html: html }} />;
 }

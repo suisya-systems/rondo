@@ -2328,7 +2328,10 @@ test("a wording set is whole in its own language, and no string is the English o
   const ja = chromeFor("ja");
   for (const key of Object.keys(EN) as (keyof Chrome)[]) {
     expect(ja[key], `the ja set has no value for '${key}'`).toBeDefined();
-    if (typeof EN[key] === "string" && key !== "lang") {
+    // `saidByRondo` is rondo's own name, which is ASCII in the Japanese set
+    // for the same reason the entries rule 3 names are (`rondo inbox`): a name
+    // is not translated. Identical is correct here, not a paste.
+    if (typeof EN[key] === "string" && key !== "lang" && key !== "saidByRondo") {
       expect(ja[key], `the ja set's '${key}' is the English string`).not.toBe(EN[key]);
     }
   }

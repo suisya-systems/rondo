@@ -1,0 +1,135 @@
+/** @jsxImportSource react */
+/**
+ * The centre face: one request's thread (DECISIONS.md D-0083 rule 5).
+ *
+ * **The unit of the page is this** (rule 2). A request's own words open it,
+ * rondo's reading of them answers, and then the record of the work runs down
+ * the middle: event lines for what happened, reports for what was produced,
+ * the question when there is one, the box to answer in, and under all of it --
+ * always -- a box to add to the request.
+ *
+ * **Prose stays at 45 to 90 characters at every width** (rule 1). Width buys
+ * faces, so the centre does not grow with the window; `page/thread.css` holds
+ * the measure.
+ *
+ * **What this face does not decide.** Whether a question is being asked, and
+ * what answering it costs, are the answering box's (`D-0083` rule 9, whose
+ * elements `test/access/gate-elements.test.ts` holds down). This face places
+ * it; it does not compose it.
+ */
+import type { ReactNode } from "react";
+import { EventLine, LastLookedLine, type ThreadEvent } from "./events.js";
+
+/** One thing said in the thread, by a person or by rondo. */
+export interface ThreadMessage {
+  readonly id: string;
+  /** Who spoke, which is a column and never a property of the prose (D-0061 rule 2.3). */
+  readonly who: "person" | "rondo";
+  /** The name to put on it, already said by the caller. */
+  readonly said: string;
+  /** The words, as written: never trimmed, reflowed or paraphrased. */
+  readonly body: string;
+  readonly at: string;
+  /** Where rondo's reading points back to the words it read (D-0061 rule 2.6). */
+  readonly wayBack?: { readonly href: string; readonly said: string };
+}
+
+export interface ThreadProps {
+  /** The request's own first words, as its title. */
+  readonly title: string;
+  /** Rule 6's line, composed by the caller; null where nothing is known to say. */
+  readonly governance: ReactNode;
+  /**
+   * The thread in the order it happened, messages and event lines together.
+   *
+   * **One stream rather than two lists.** Rule 5 names the parts in the order
+   * a person meets them -- the words, rondo's reading, the event lines, the
+   * reports, the question -- and that order is time. Drawing the messages and
+   * then the events would put the record of the work after the report it
+   * produced, which is not how it happened.
+   */
+  readonly items: readonly ThreadItem[];
+  /** Where the reading stopped, among the items (rule 7). */
+  readonly lastLookedAbove: string | null;
+  readonly lastLookedSaid: string;
+  /**
+   * The box to answer in, where a question is standing (rule 9), and the box
+   * to add to the request, which is always there (rule 5).
+   *
+   * Both arrive as they are: this face decides where they sit and not what is
+   * in them.
+   */
+  readonly answering: ReactNode;
+  readonly adding: ReactNode;
+}
+
+/** One thing in the thread: something said, or something that happened. */
+export type ThreadItem =
+  | { readonly kind: "message"; readonly message: ThreadMessage }
+  | { readonly kind: "event"; readonly event: ThreadEvent };
+
+/** What identifies an item, for the last-looked line and for a stable redraw. */
+function idOf(item: ThreadItem): string {
+  return item.kind === "message" ? item.message.id : item.event.id;
+}
+
+function Message({ message }: { readonly message: ThreadMessage }) {
+  return (
+    <article className={`msg msg-${message.who}`}>
+      <div className="msg-body">
+        <h5>
+          {message.said} <time>{message.at}</time>
+        </h5>
+        {/*
+         * `lang=""` is HTML's own way of saying *the language here is
+         * unknown* (D-0055 rule 8): rondo does not read the words to find
+         * out what language they are in, and an absent attribute would
+         * inherit the chrome's, which is a guess.
+         */}
+        <p lang="">{message.body}</p>
+        {message.wayBack === undefined ? null : (
+          <a className="msg-back" href={message.wayBack.href}>
+            {message.wayBack.said}
+          </a>
+        )}
+      </div>
+    </article>
+  );
+}
+
+export function ThreadFace({
+  title,
+  governance,
+  items,
+  lastLookedAbove,
+  lastLookedSaid,
+  answering,
+  adding,
+}: ThreadProps) {
+  return (
+    <div className="thread">
+      <header className="thread-head">
+        <h1 lang="">{title}</h1>
+        {/*
+         * **Governance is permanent, in one line under the title, at every
+         * width** (rule 6). It is not a fold and not a card: a person
+         * answering a question should not have to go looking for what was
+         * agreed.
+         */}
+        {governance}
+      </header>
+      {items.map((item) => (
+        <div key={idOf(item)}>
+          {idOf(item) === lastLookedAbove ? <LastLookedLine said={lastLookedSaid} /> : null}
+          {item.kind === "message" ? (
+            <Message message={item.message} />
+          ) : (
+            <EventLine event={item.event} />
+          )}
+        </div>
+      ))}
+      {answering}
+      {adding}
+    </div>
+  );
+}
