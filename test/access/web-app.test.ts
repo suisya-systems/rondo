@@ -1,7 +1,8 @@
 /**
  * Only a person's press can write (D-0059 sections 5 and 5a, R4, rule 9).
  *
- * `test/access/web.test.ts` is the page over a real store. This file is the
+ * The `test/access/web-*.test.ts` files are the page over a real store, one
+ * per screen. This file is the
  * door, over a spy port: what is under test is **whether the answer port was
  * reached with a write**, and "the spy recorded nothing" is that claim exactly.
  * Three halves, as rule 9 lists them:
