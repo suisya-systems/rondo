@@ -42,13 +42,31 @@
   background: var(--color-accent);
 }
 
+/*
+ * *Your turn* is the one heading that is not a day, and it is the only one
+ * that says something is stopped (D-0082 rule 1). It was drawn at the weight
+ * of *today*, so the section a person came for was told apart from the ones
+ * they did not by its rows alone.
+ */
+.list-heading-mine {
+  font-weight: 700;
+  color: var(--color-foreground);
+}
+
 .list-row-body {
   min-width: 0;
 }
 
+/*
+ * **A request is `--text-title` at every weight** (D-0082 rule 4, in those
+ * words): it was 14px against the state sentence's 13px, and a pixel is not a
+ * difference anything on this face was making. What tells a waiting row from a
+ * finished one is weight, ink and the cut, which is what a reader was reading
+ * anyway.
+ */
 .list-row b {
   display: block;
-  font-size: 14px;
+  font-size: var(--text-title);
   font-weight: 400;
   line-height: 1.5;
   color: var(--color-muted-foreground);
@@ -70,7 +88,26 @@
   white-space: nowrap;
 }
 
-/* Waiting on the person: bold, in full ink, and not cut short. */
+/*
+ * Waiting on the person: bold, in full ink, not cut short -- and standing on
+ * its own ground, with the amber down its edge.
+ *
+ * **Bold and one dot was not enough weight** (rondo#314): three ordinary rows
+ * of two lines each carry more ink between them than one bold row does, so the
+ * row a person was called for did not win the face it sits at the top of. The
+ * ground and the edge are the page's one amber (D-0082 rule 2), spent on the
+ * one row that makes the claim. The edge is an inset shadow rather than a
+ * border so the grid's columns do not shift by three pixels under it.
+ */
+.list-row-mine {
+  background: var(--color-wait-wash);
+  box-shadow: inset 3px 0 0 var(--color-wait);
+}
+
+.list-row-mine:hover {
+  background: color-mix(in srgb, var(--color-wait-wash) 80%, var(--color-accent));
+}
+
 .list-row-mine b {
   font-weight: 700;
   color: var(--color-foreground);
@@ -95,13 +132,24 @@
   background: var(--color-wait);
 }
 
+/*
+ * The repository the work is in (D-0081). It keeps its one line -- a name cut
+ * in half is a different name -- and is bounded by the face rather than
+ * allowed past its edge: at 300px an untruncated waiting row and a long name
+ * put the sentence beside it through the right-hand rule.
+ */
 .list-repo {
+  display: inline-block;
+  max-width: 100%;
   margin-right: 6px;
   padding: 0 5px;
   border: 1px solid var(--color-border);
   border-radius: 4px;
   font-size: 12px;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
 }
 
 /* The line drawn once, between what arrived since and what did not (rule 7). */
