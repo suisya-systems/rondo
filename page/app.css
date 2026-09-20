@@ -17,6 +17,7 @@
  * at-rule in a stylesheet.
  */
 @import "./faces.css";
+@import "./list.css";
 @source "../src/access/**/*.tsx";
 
 /*

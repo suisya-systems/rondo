@@ -162,6 +162,7 @@ import {
 import { markdownHtml } from "./markdown.js";
 import { isModelDrafterName } from "./model-draft.js";
 import { type HeldPlan, heldPlanByDigest, heldPlans } from "./model-drafter.js";
+import { RequestsFace } from "./page/list.js";
 import { facesMarkup } from "./page/render.js";
 import {
   decodedDenials,
@@ -174,6 +175,7 @@ import {
   saysMore,
   spentLine,
 } from "./page-logic/laps.js";
+import { repositoryOf, requestList, rowStateOf } from "./page-logic/list.js";
 import { isLive, type PageView, REVIEW_ROUND_CHOICES, viewHref } from "./page-logic/routes.js";
 import { firstLine, lineOf, replyTarget, type Threads, threadsOf } from "./page-logic/threads.js";
 import { denialLine, LIST_LIMIT } from "./review.js";
@@ -6178,6 +6180,52 @@ export async function operatorPage(
     }
   }
   const lapUnder = (messageId: string) => lapsByRequest.get(messageId) ?? null;
+
+  /*
+   * **The left face's rows** (D-0083 rules 2, 5 and 7). Every request the
+   * store holds, named by the person's own words, with the repository its
+   * work is in and one sentence of state. What waits on the person is lifted
+   * out of the time order by `requestList`; everything else is cut by day.
+   */
+  const listRows = threads.messages
+    .filter((message) => message.inReplyTo === null)
+    .map((root) => {
+      const members = threads.messages.filter(
+        (message) => threads.rootOf(message.messageId) === root.messageId,
+      );
+      const lap = lapUnder(root.messageId);
+      const waitsHere =
+        members.some((message) => threads.waiting.has(message.messageId)) ||
+        lap?.question === "waiting";
+      return {
+        messageId: root.messageId,
+        title: firstLine(root.body),
+        repository: repositoryOf(lap?.record ?? null),
+        state: rowStateOf(lap?.record ?? null, waitsHere, (record) => isTerminal(record.status)),
+        atMs: Math.max(...members.map((message) => message.atMs)),
+      };
+    });
+  const requestsList = requestList(listRows, inbox?.sinceMs ?? null, nowMs);
+  /*
+   * The week's allowance is the right face's second slice; until it is read
+   * from an approval, no figure is drawn -- rule 6 refuses a spent figure
+   * without the one it was approved against, and that refusal is the honest
+   * state rather than a zero.
+   */
+  const listContent = {
+    react: RequestsFace({
+      wording,
+      list: requestsList,
+      hrefOf: (messageId) => viewHref({ kind: "thread", messageId, to: null }, wording.lang),
+      agoOf: (atMs) => wording.age(ago(atMs, nowMs)),
+      allowance: null,
+      newRequestHref: forms ? viewHref({ kind: "requests" }, wording.lang) : null,
+      lastLookedSaid:
+        inbox?.sinceMs === null || inbox?.sinceMs === undefined
+          ? wording.lastLookedNever
+          : wording.lastLookedHere(wording.age(ago(inbox.sinceMs, nowMs))),
+    }),
+  };
   // **Awaited here** for `scoping`'s reason: the dry-run reads a workspace and
   // the forge's own configuration, and the tree is composed from what it read.
   const publishing =
@@ -6474,7 +6522,7 @@ export async function operatorPage(
         <main>
           {raw(
             facesMarkup({
-              list: null,
+              list: listContent,
               side: null,
               thread: {
                 rendered: await (

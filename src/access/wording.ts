@@ -44,6 +44,7 @@
 import { isLanguageTag } from "../refrain/plan.js";
 import { APPROVED_OUTCOME } from "../store/records.js";
 import type { IssueReadFailure } from "./issue-read.js";
+import { PAGE_EN, PAGE_JA, type PageWords } from "./page/words.js";
 
 /**
  * Where a listed agent type's record was read from (D-0069 section 1).
@@ -194,7 +195,7 @@ function raisedJa(blockers: number, majors: number): string {
  * declares what it wrote and never what was asked for, so a well-formed tag
  * this file ships no set for yields the `en` set and the tag `en`.
  */
-export interface Chrome {
+export interface Chrome extends PageWords {
   /** The tag this set is written in, which is what the document declares. */
   readonly lang: string;
 
@@ -1192,6 +1193,10 @@ const EN_MEASURE: Record<string, string> = {
  * terminal is handed unconditionally (rule 10).
  */
 export const EN: Chrome = Object.freeze({
+  // The rebuilt page's half of the catalogue (D-0083), kept beside the faces
+  // that say it. Spread rather than re-declared, so `satisfies Chrome` below
+  // still fails on a word this set is missing.
+  ...PAGE_EN,
   lang: "en",
 
   liveNote: (seconds) =>
@@ -2128,6 +2133,7 @@ const JA_MEASURE: Record<string, string> = {
  * would make the two languages two layouts.
  */
 const JA: Chrome = Object.freeze({
+  ...PAGE_JA,
   lang: "ja",
 
   liveNote: (seconds) =>
