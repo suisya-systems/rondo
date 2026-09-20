@@ -27,8 +27,7 @@ const reads = {
   finishedAtMs: [],
   answeredAtMs: [],
   decidedWithoutAsking: 0,
-  spentUsd: [],
-  approvedUsd: [],
+  allowances: [],
 } as const;
 
 test("the window is seven days back from the caller's clock, inclusive of its edge", () => {
@@ -61,21 +60,29 @@ test("with no approval to read, the week draws no spend", () => {
 });
 
 test("the approvals are summed, and what is left is never a debt", () => {
-  const figures = weekFigures({ ...reads, spentUsd: [4, 1.5], approvedUsd: [20, 30] }, NOW);
+  const figures = weekFigures(
+    {
+      ...reads,
+      allowances: [
+        { spentUsd: 4, approvedUsd: 20 },
+        { spentUsd: 1.5, approvedUsd: 30 },
+      ],
+    },
+    NOW,
+  );
   expect(figures.allowance).toEqual({ spentUsd: 5.5, approvedUsd: 50, leftUsd: 44.5 });
-  const over = weekFigures({ ...reads, spentUsd: [9], approvedUsd: [5] }, NOW);
+  const over = weekFigures({ ...reads, allowances: [{ spentUsd: 9, approvedUsd: 5 }] }, NOW);
   expect(over.allowance?.leftUsd).toBe(0);
 });
 
-test("the two figures are counted over different keys, and a raise keeps both true", () => {
-  // D-0074: a raise writes a second approval, so what was spent under the
-  // first is a spend of its own while the ceiling is the tip's alone. Keyed
-  // the same way, the week would either lose the older spend or claim the sum
-  // of every ceiling the request ever had.
-  const raised = weekFigures({ ...reads, spentUsd: [3, 2], approvedUsd: [20] }, NOW);
-  expect(raised.allowance).toEqual({ spentUsd: 5, approvedUsd: 20, leftUsd: 15 });
-  // A spend with no ceiling in force draws nothing, which is rule 6 again.
-  expect(weekFigures({ ...reads, spentUsd: [3] }, NOW).allowance).toBeNull();
+test("the pair is one approval's own, so a raise is not read as a total", () => {
+  // D-0074 rule 2 and section 3.2: budgets are per approved row and the
+  // successor starts at zero. A week that added a predecessor's $4 into a
+  // successor's $10 would say "$14 approved", which is the misreading that
+  // entry exists to prevent; what the predecessor spent is the scope screen's
+  // to show.
+  const raised = weekFigures({ ...reads, allowances: [{ spentUsd: 2, approvedUsd: 10 }] }, NOW);
+  expect(raised.allowance).toEqual({ spentUsd: 2, approvedUsd: 10, leftUsd: 8 });
 });
 
 test("a request still working is on its work, and nothing later is claimed", () => {

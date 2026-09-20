@@ -3147,46 +3147,24 @@ export async function operatorPage(
     ? await ports.record.attentionBreakdown({ fromMs: weekFromMs, toMs: nowMs })
     : [];
   /*
-   * **The week's money, counted over two different keys** (`page-logic/week.ts`,
-   * D-0074). What is *spent* is counted once per approval that **admitted** a
-   * lap, because `scopeSpent` counts the admissions written under that one
-   * decision and a raise writes a new one -- keyed by the tip, everything spent
-   * before a raise would vanish from the week. What is *approved* is counted
-   * once per approval **in force**, the tip of its chain, because a raise
-   * replaces a ceiling rather than adding to it.
+   * **The week's money is the approvals in force, and a raise starts at zero**
+   * (D-0074 rule 2 and section 3.2). Budgets are per approved row, so the pair
+   * is read off the tip of each chain -- one entry per approval and not per
+   * lap, because a retried request spends the one approval it was admitted
+   * under. What a predecessor spent before a raise stays written under the
+   * predecessor and is the scope screen's to show (section 4.2); adding it in
+   * here would make a raise read as a total across the chain, which is the
+   * misreading rule 2 exists to prevent.
    */
-  const weekSpent = new Map<string, number>();
-  const weekApproved = new Map<string, number>();
+  const weekApprovals = new Map<string, { spentUsd: number; approvedUsd: number }>();
   if (centreIsEmpty) {
     const touched = [...allLapsByRequest.values()]
       .flat()
       .filter((lap) => Math.max(lap.record.createdAtMs, lap.record.updatedAtMs) >= weekFromMs);
-    const read = await Promise.all(
-      touched.map(async (lap) => ({
-        approval: await approvalOf(lap.record),
-        admitted: await ports.record.scopeDecisionAdmitting(lap.record.id),
-      })),
-    );
-    for (const { approval, admitted } of read) {
-      if (approval === null) {
-        continue;
+    for (const approval of await Promise.all(touched.map((lap) => approvalOf(lap.record)))) {
+      if (approval !== null) {
+        weekApprovals.set(approval.decisionId, allowanceOf(approval));
       }
-      weekApproved.set(approval.decisionId, approval.payload.budgets.cost_usd);
-      if (admitted === null || weekSpent.has(admitted)) {
-        continue;
-      }
-      weekSpent.set(
-        admitted,
-        allowanceOf({
-          payload: approval.payload,
-          // The tip's own spend where the lap was admitted under it, and the
-          // admitting decision's where a raise has moved the tip on.
-          spent:
-            admitted === approval.decisionId
-              ? approval.spent
-              : await ports.record.scopeSpent(admitted),
-        }).spentUsd,
-      );
     }
   }
   const sideRunning: SideWork[] = !centreIsEmpty
@@ -3260,8 +3238,7 @@ export async function operatorPage(
               decidedWithoutAsking: weekAttention
                 .filter((count) => count.disposition === "withheld")
                 .reduce((sum, count) => sum + count.count, 0),
-              spentUsd: [...weekSpent.values()],
-              approvedUsd: [...weekApproved.values()],
+              allowances: [...weekApprovals.values()],
             },
             nowMs,
           ),

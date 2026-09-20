@@ -23,14 +23,16 @@
  * together, which is rule 6's refusal to show a spend without the figure it
  * was approved against.
  *
- * **The two figures are counted over different things, and that is deliberate**
- * (`D-0074`). A spend is counted per approval that **admitted** a lap, because
- * `scopeSpent` counts the admissions written under that one decision and a
- * raise writes a new one; a ceiling is counted per approval **in force**, the
- * tip of its chain, because a raise replaces a ceiling rather than adding to
- * it. Summing either over the other's key is a wrong figure in money: by tip,
- * the week loses everything spent before a raise; by admission, a raised
- * request is approved for the sum of every ceiling it ever had.
+ * **Both figures are the approval in force, and a raise starts at zero**
+ * (`D-0074` rule 2 and section 3.2). Budgets are per approved row: a successor
+ * scope states what may be spent *from here on*, and what the predecessor
+ * spent stays written under the predecessor. So the pair is read off the tip
+ * of each chain and nothing older is added into it -- a week that summed the
+ * chain would make a raise read as "$15 in total", which is the misreading
+ * `D-0074` rule 2 exists to prevent. What a predecessor spent is not lost; it
+ * is a fact about an allowance that is no longer the one in force, and the
+ * screen that shows it is the scope screen's (`D-0074` section 4.2), not this
+ * face's.
  */
 import type { IterationRecord } from "../../store/records.js";
 import type { StepState } from "./governance.js";
@@ -83,15 +85,10 @@ export interface WeekReads {
    */
   readonly decidedWithoutAsking: number;
   /**
-   * What each approval that admitted a lap this week has spent, one per
-   * approval, already deduplicated by the caller.
+   * The approvals in force over the week's work -- one per chain, deduplicated
+   * by the caller, each with its own spend and its own ceiling.
    */
-  readonly spentUsd: readonly number[];
-  /**
-   * What each approval in force this week allows, one per chain, already
-   * deduplicated by the caller.
-   */
-  readonly approvedUsd: readonly number[];
+  readonly allowances: readonly Allowance[];
 }
 
 /** The six figures, ready to be said. */
@@ -107,15 +104,15 @@ export interface WeekFigures {
 export function weekFigures(reads: WeekReads, nowMs: number): WeekFigures {
   const fromMs = nowMs - WEEK_MS;
   const inWeek = (atMs: number) => atMs >= fromMs && atMs <= nowMs;
-  const spentUsd = reads.spentUsd.reduce((sum, one) => sum + one, 0);
-  const approvedUsd = reads.approvedUsd.reduce((sum, one) => sum + one, 0);
+  const spentUsd = reads.allowances.reduce((sum, one) => sum + one.spentUsd, 0);
+  const approvedUsd = reads.allowances.reduce((sum, one) => sum + one.approvedUsd, 0);
   return {
     asked: reads.askedAtMs.filter(inWeek).length,
     finished: reads.finishedAtMs.filter(inWeek).length,
     answered: reads.answeredAtMs.filter(inWeek).length,
     decidedWithoutAsking: reads.decidedWithoutAsking,
     allowance:
-      reads.approvedUsd.length === 0
+      reads.allowances.length === 0
         ? null
         : // Never below zero: a spend past its approval is the budget's own
           // refusal to report, and *left* is what remains and not a debt.
