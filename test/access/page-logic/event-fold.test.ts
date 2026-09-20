@@ -1,20 +1,21 @@
 /**
- * How event lines fold (DECISIONS.md D-0083 rule 7 and its unresolved list,
- * rondo#332).
+ * How event lines fold (DECISIONS.md D-0086, adding to D-0083 rule 7).
  *
  * **What these cases hold down is the two things a fold must not do**, both of
  * them rule 7's own: a decision rondo made without asking stays on the time
  * axis at the moment it was made, and a fold never swallows what was said.
- * Everything else here is arithmetic about how many lines are left.
+ * The first is the one the adopted mock-up got wrong, so it is the one with
+ * the most cases under it.
  *
- * Both modes are covered while both exist. The one the gate does not choose
- * leaves with its cases.
+ * The rest is arithmetic about how many lines are left, which is what the two
+ * folds were chosen on: twenty-one becomes nine for somebody who has never
+ * looked, and four for somebody who has.
  */
 import { expect, test } from "vitest";
 import type { EventKind, ThreadEvent } from "../../../src/access/page/events.js";
 import type { ThreadItem, ThreadMessage } from "../../../src/access/page/thread.js";
 import { PAGE_EN } from "../../../src/access/page/words.js";
-import type { FoldLine, FoldMode } from "../../../src/access/page-logic/event-fold.js";
+import type { FoldedItem, FoldLine } from "../../../src/access/page-logic/event-fold.js";
 import { folds } from "../../../src/access/page-logic/event-fold.js";
 
 const event = (
@@ -29,7 +30,7 @@ const event = (
 
 const message = (id: string): { readonly kind: "message"; readonly message: ThreadMessage } => ({
   kind: "message",
-  message: { id } as unknown as ThreadMessage,
+  message: { id, at: "1h" } as unknown as ThreadMessage,
 });
 
 /** One try's three lines: started, what the checks said, and how it ended. */
@@ -39,11 +40,13 @@ const oneTry = (at: number, checks: EventKind): readonly ThreadItem[] => [
   event(`lap-${String(at)}:ended`, "passed", at, `Try ${String(at)}: Finished.`),
 ];
 
-const drawn = (items: readonly ThreadItem[], mode: FoldMode, lastLookedAbove: string | null) =>
-  folds(PAGE_EN, items, mode, lastLookedAbove);
+const drawn = (items: readonly ThreadItem[], lastLookedAbove: string | null) =>
+  folds(PAGE_EN, items, lastLookedAbove);
 
-const foldsIn = (items: ReturnType<typeof drawn>): readonly FoldLine[] =>
+const foldsIn = (items: readonly FoldedItem[]): readonly FoldLine[] =>
   items.flatMap((item) => (item.kind === "fold" ? [item] : []));
+
+const eventsIn = (items: readonly FoldedItem[]) => items.filter((item) => item.kind === "event");
 
 /** Seven tries, the last one still at its gate: the thread rondo#332 opened on. */
 const SEVEN: readonly ThreadItem[] = [
@@ -58,29 +61,39 @@ const SEVEN: readonly ThreadItem[] = [
   ...oneTry(7, "passed"),
 ];
 
-test("seven tries draw twenty-one event lines with no fold, which is the thread that was unreadable", () => {
-  const out = drawn(SEVEN, "none", "lap-7:started");
-  expect(out).toHaveLength(SEVEN.length);
-  expect(out.filter((item) => item.kind === "event")).toHaveLength(21);
+test("the thread that was unreadable is twenty-one event lines", () => {
+  expect(SEVEN.filter((item) => item.kind === "event")).toHaveLength(21);
 });
 
-test("folding by try leaves one line for each settled try and the newest try whole", () => {
-  const out = drawn(SEVEN, "tries", "lap-7:started");
-  // Six folds, the newest try's three lines, and the two messages.
+test("a person who has never looked reads six folded tries and the newest try whole", () => {
+  const out = drawn(SEVEN, null);
   expect(foldsIn(out)).toHaveLength(6);
-  expect(out.filter((item) => item.kind === "event")).toHaveLength(3);
+  expect(eventsIn(out)).toHaveLength(3);
+  // Nine lines where there were twenty-one, and the two messages beside them.
   expect(out).toHaveLength(11);
 });
 
+test("a person who has looked reads one line over the top, with the tries inside it", () => {
+  const out = drawn(SEVEN, "lap-7:started");
+  expect(foldsIn(out)).toHaveLength(1);
+  const [seen] = foldsIn(out);
+  expect(seen?.said).toBe("18 lines you had already read");
+  // It counts event lines through the folds inside it, not the folds.
+  expect(seen?.lines).toBe(18);
+  expect(foldsIn(seen?.inside ?? [])).toHaveLength(6);
+  expect(eventsIn(out)).toHaveLength(3);
+  // Four lines where there were twenty-one, and the two messages beside them.
+  expect(out).toHaveLength(6);
+});
+
 test("a folded try is said by what went wrong in it, and says how many lines it holds", () => {
-  const [first] = foldsIn(drawn(SEVEN, "tries", null));
+  const [first] = foldsIn(drawn(SEVEN, null));
   expect(first?.said).toBe("Try 1: checks. (3 lines)");
-  expect(first?.inside).toHaveLength(3);
+  expect(first?.lines).toBe(3);
 });
 
 test("a try that failed nothing is said by how it ended", () => {
-  const folded = foldsIn(drawn(SEVEN, "tries", null));
-  expect(folded[2]?.said).toBe("Try 3: Finished. (3 lines)");
+  expect(foldsIn(drawn(SEVEN, null))[2]?.said).toBe("Try 3: Finished. (3 lines)");
 });
 
 test("a request tried once folds nothing: its lines carry no try to group by", () => {
@@ -90,21 +103,11 @@ test("a request tried once folds nothing: its lines carry no try to group by", (
     event("lap:reading", "passed", null),
     event("lap:ended", "passed", null),
   ];
-  expect(drawn(once, "tries", null)).toEqual(once);
+  expect(drawn(once, null)).toEqual(once);
 });
 
-test("folding by what was read leaves one line above the last-looked line", () => {
-  const out = drawn(SEVEN, "seen", "lap-7:started");
-  expect(foldsIn(out)).toHaveLength(1);
-  expect(foldsIn(out)[0]?.said).toBe("18 lines you had already read");
-  expect(foldsIn(out)[0]?.inside).toHaveLength(18);
-  expect(out.filter((item) => item.kind === "event")).toHaveLength(3);
-});
-
-test("with no last-looked line there is nothing already-read, and the thread is drawn whole", () => {
-  expect(drawn(SEVEN, "seen", null)).toEqual(SEVEN);
-  // Nor when the line would sit above everything: a fold of nothing is nothing.
-  expect(drawn(SEVEN, "seen", "request")).toEqual(SEVEN);
+test("with the last-looked line above everything there is nothing already-read to fold", () => {
+  expect(drawn(SEVEN, "request")).toEqual(drawn(SEVEN, null));
 });
 
 test("neither fold ever swallows a decision rondo made without asking (rule 7)", () => {
@@ -114,28 +117,27 @@ test("neither fold ever swallows a decision rondo made without asking (rule 7)",
     event("lap-1:decided", "decided", 1, "Try 1: rondo decided this without asking."),
     ...oneTry(2, "passed"),
   ];
-  for (const mode of ["tries", "seen"] as const) {
-    const out = drawn(withDecision, mode, "lap-2:started");
+  for (const mark of [null, "lap-2:started"]) {
+    const out = drawn(withDecision, mark);
     const kept = out.flatMap((item) =>
       item.kind === "event" && item.event.kind === "decided" ? [item.event.id] : [],
     );
-    expect(kept, mode).toEqual(["lap-1:decided"]);
-    // And it is not hidden inside one either: the count on the right face
-    // names the same things as the axis, so it has to be on the axis.
-    for (const fold of foldsIn(out)) {
-      expect(
-        fold.inside.map((one) => one.kind),
-        mode,
-      ).not.toContain("decided");
-    }
+    expect(kept, String(mark)).toEqual(["lap-1:decided"]);
+    // And it is not hidden inside one either, at any depth: rule 6's count on
+    // the right face names the same things, so they have to be on the axis.
+    const inside = (items: readonly FoldedItem[]): readonly string[] =>
+      items.flatMap((item) =>
+        item.kind === "fold" ? inside(item.inside) : item.kind === "event" ? [item.event.kind] : [],
+      );
+    expect(inside(foldsIn(out)), String(mark)).not.toContain("decided");
   }
 });
 
 test("a fold never crosses a message: what was said is never inside one", () => {
-  const out = drawn(SEVEN, "seen", "lap-7:started");
-  for (const fold of foldsIn(out)) {
-    expect(fold.inside.every((one) => one.id.startsWith("lap-"))).toBe(true);
-  }
+  const out = drawn(SEVEN, "lap-7:started");
+  const inside = (items: readonly FoldedItem[]): readonly FoldedItem[] =>
+    items.flatMap((item) => (item.kind === "fold" ? inside(item.inside) : [item]));
+  expect(inside(foldsIn(out)).some((item) => item.kind === "message")).toBe(false);
   expect(out.filter((item) => item.kind === "message")).toHaveLength(2);
 });
 
@@ -146,11 +148,10 @@ test("one line is never folded into one line", () => {
     message("report"),
     ...oneTry(2, "passed"),
   ];
-  const out = drawn(single, "tries", null);
-  expect(foldsIn(out)).toHaveLength(0);
+  expect(foldsIn(drawn(single, null))).toHaveLength(0);
 });
 
-test("a fold is named by the first line inside it, so a redraw keeps the reader's place", () => {
-  expect(foldsIn(drawn(SEVEN, "tries", null))[0]?.id).toBe("fold:lap-1:started");
-  expect(foldsIn(drawn(SEVEN, "seen", "lap-7:started"))[0]?.id).toBe("fold:lap-1:started");
+test("a fold is named by the first thing inside it, so a redraw keeps the reader's place", () => {
+  expect(foldsIn(drawn(SEVEN, null))[0]?.id).toBe("fold:lap-1:started");
+  expect(foldsIn(drawn(SEVEN, "lap-7:started"))[0]?.id).toBe("fold:fold:lap-1:started");
 });

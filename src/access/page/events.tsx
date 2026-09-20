@@ -20,6 +20,7 @@
  * they are the same things, counted in one place and placed in the other.
  */
 import type { ReactNode } from "react";
+import type { FoldLine } from "../page-logic/event-fold.js";
 
 /** What kind of thing happened, which is the whole of what the dot says. */
 export type EventKind = "person" | "passed" | "failed" | "decided" | "other";
@@ -93,18 +94,13 @@ export function LastLookedLine({ said }: { readonly said: string }) {
  *
  * The marker is the dot's column, so a shut fold reads as one more line in the
  * record rather than as a control beside it.
+ *
+ * **A fold may hold folds.** `D-0086` puts what the person has already read
+ * over the top of what was already folded by try, so opening the outer one
+ * gives back six folded tries rather than eighteen raw lines. A message is
+ * never inside one, so this draws only the two kinds that can be.
  */
-export function FoldedLine({
-  fold,
-  open,
-}: {
-  readonly fold: {
-    readonly said: string;
-    readonly at: string;
-    readonly inside: readonly ThreadEvent[];
-  };
-  readonly open: string;
-}) {
+export function FoldedLine({ fold, open }: { readonly fold: FoldLine; readonly open: string }) {
   return (
     <details className="ev-fold">
       <summary>
@@ -112,9 +108,13 @@ export function FoldedLine({
         <span className="ev-fold-open">{open}</span>
         <time>{fold.at}</time>
       </summary>
-      {fold.inside.map((event) => (
-        <EventLine key={event.id} event={event} />
-      ))}
+      {fold.inside.map((item) =>
+        item.kind === "fold" ? (
+          <FoldedLine key={item.id} fold={item} open={open} />
+        ) : item.kind === "event" ? (
+          <EventLine key={item.event.id} event={item.event} />
+        ) : null,
+      )}
     </details>
   );
 }
