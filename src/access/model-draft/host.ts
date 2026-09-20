@@ -2,9 +2,9 @@
  * One run of the model drafter over one request (D-0071): gather what rondo
  * hands over, run the drafter, and check what it answered.
  *
- * **Three halves, each where it already lives**, as `./model-reviewer.ts` puts
- * the reviewer's: the `claude` process is `./forge.ts`'s, what the document
- * holds and what the answer may say are `./model-draft.ts`'s pure functions,
+ * **Three halves, each where it already lives**, as `../model-review/host.ts` puts
+ * the reviewer's: the `claude` process is `../forge.ts`'s, what the document
+ * holds and what the answer may say are `./judgement.ts`'s pure functions,
  * and the store reads are here. This file puts them in order.
  *
  * **It writes nothing.** Which run is due, the staleness check and the one
@@ -13,17 +13,18 @@
  * document and the outcome for that caller to write.
  */
 
-import type { BudgetRow } from "../advisory/budget.js";
-import { readSplitPayload, type SplitPlan } from "../advisory/proposal.js";
-import { type AgentTypeInput, agentTypeRecord } from "../cadenza/facade.js";
-import { drafterRow } from "../continuo/roles.js";
-import { PRICED_MODEL_TIERS } from "../refrain/classification.js";
-import { planPayload, type RunPlan, readPlan, readRunPlan } from "../refrain/plan.js";
-import { canonicalJson, planDigest } from "../store/plan.js";
-import type { IterationRecord, JsonRecord, JsonValue, LaneClaimAsk } from "../store/records.js";
-import type { AdvisoryRecord, IterationStore } from "../store/sqlite.js";
-import type { runDrafter } from "./forge.js";
-import { hostFailure } from "./host-failure.js";
+import type { BudgetRow } from "../../advisory/budget.js";
+import { readSplitPayload, type SplitPlan } from "../../advisory/proposal.js";
+import { type AgentTypeInput, agentTypeRecord } from "../../cadenza/facade.js";
+import { drafterRow } from "../../continuo/roles.js";
+import { PRICED_MODEL_TIERS } from "../../refrain/classification.js";
+import { planPayload, type RunPlan, readPlan, readRunPlan } from "../../refrain/plan.js";
+import { canonicalJson, planDigest } from "../../store/plan.js";
+import type { IterationRecord, JsonRecord, JsonValue, LaneClaimAsk } from "../../store/records.js";
+import type { AdvisoryRecord, IterationStore } from "../../store/sqlite.js";
+import type { runDrafter } from "../forge.js";
+import { hostFailure } from "../host-failure.js";
+import { agentTypeRecordOf } from "../scope.js";
 import {
   type DraftAgentType,
   type DrafterMaterial,
@@ -34,8 +35,7 @@ import {
   isModelDrafterName,
   modelDrafterName,
   prepareDraft,
-} from "./model-draft.js";
-import { agentTypeRecordOf } from "./scope.js";
+} from "./judgement.js";
 
 /** The iteration rows a template is drawn from (D-0071 rule 2.1.3). */
 const TEMPLATE_ROWS = 20;

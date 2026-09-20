@@ -21,7 +21,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import type { ReviewMaterial } from "../../src/access/model-review.js";
+import type { ReviewMaterial } from "../../src/access/model-review/judgement.js";
 import type { TranscriptCommand } from "../../src/continuo/transcript.js";
 import type { ReviewCriterion } from "../../src/refrain/plan.js";
 import { contentDigest } from "../../src/store/plan.js";

@@ -23,7 +23,7 @@ import { repositoryKey, sharedPaths, WHOLE_REPOSITORY } from "../store/lanes.js"
 import { canonicalJson } from "../store/plan.js";
 import type { AdvisoryRecord, IterationStore, LedgerLine } from "../store/sqlite.js";
 import { ISSUES_QUOTE_OPENING } from "./issue-read.js";
-import { type DraftedPlanRun, draftedPlanRun } from "./model-drafter.js";
+import { type DraftedPlanRun, draftedPlanRun } from "./model-draft/host.js";
 import { gatherScopeSnapshot, type ScopeReadPorts, scopeVerdict } from "./scope.js";
 
 /** The id the verdict is asked about: a shape `allocate` accepts, and no row's. */

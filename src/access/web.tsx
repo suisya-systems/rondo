@@ -112,7 +112,7 @@ import { basisLine, gather } from "./advisory.js";
 import type { LapWorkInspection } from "./forge.js";
 import { ago, gatherInbox, type LiveRow } from "./inbox.js";
 import { type IssueComment, parseForgeRead } from "./issue-read.js";
-import { isModelDrafterName } from "./model-draft.js";
+import { isModelDrafterName } from "./model-draft/judgement.js";
 import type {
   LapMaterialRead,
   MintIterationId,
@@ -164,7 +164,7 @@ import { lapEvents } from "./page-logic/thread-events.js";
 import { firstLine, lineOf, replyTarget, type Threads, threadsOf } from "./page-logic/threads.js";
 import { finishedAt, stepsOf, WEEK_MS, weekFigures } from "./page-logic/week.js";
 import { denialLine, LIST_LIMIT } from "./review.js";
-import { reviseText } from "./revise-draft.js";
+import { reviseText } from "./revise-draft/judgement.js";
 import { approvalTip, budgetRefusal } from "./scope.js";
 import { publishView } from "./screens/publish.js";
 import { releaseView } from "./screens/release.js";

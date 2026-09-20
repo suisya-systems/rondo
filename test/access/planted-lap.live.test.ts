@@ -12,7 +12,11 @@
 import { expect, test } from "vitest";
 
 import { runReviewer } from "../../src/access/forge.js";
-import { modelReadingLines, modelReadingOf, prepareReview } from "../../src/access/model-review.js";
+import {
+  modelReadingLines,
+  modelReadingOf,
+  prepareReview,
+} from "../../src/access/model-review/judgement.js";
 import { reviewerRow } from "../../src/continuo/roles.js";
 import { severityAtOrAbove } from "../../src/store/records.js";
 import { CRITERION, LAP_MODEL, plantedMaterial, VARIANTS } from "./planted-lap.js";

@@ -1528,7 +1528,7 @@ export interface StoredDecision {
  * and what a person approves is that digest (rule 1.3) -- so the spelling a
  * reader sees is the spelling that was digested, with no camelCase rendering in
  * between that a second writer could render differently. The one camelCase view
- * that exists is `ReviewScope` in `src/access/model-review.ts`, and it is
+ * that exists is `ReviewScope` in `src/access/model-review/judgement.ts`, and it is
  * derived from this, never stored.
  *
  * Every field is D-0064 rule 3.1's, in a form an equality or a count can test.

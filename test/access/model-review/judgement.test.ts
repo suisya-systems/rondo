@@ -20,16 +20,16 @@ import {
   reviewPolicyOf,
   reviewRoundDecision,
   reviewRoundsAlong,
-} from "../../src/access/model-review.js";
-import { reviewerRow } from "../../src/continuo/roles.js";
-import type { ReviewCriterion } from "../../src/refrain/plan.js";
-import { contentDigest } from "../../src/store/plan.js";
+} from "../../../src/access/model-review/judgement.js";
+import { reviewerRow } from "../../../src/continuo/roles.js";
+import type { ReviewCriterion } from "../../../src/refrain/plan.js";
+import { contentDigest } from "../../../src/store/plan.js";
 import {
   DETERMINISTIC_READING_DRAFTER,
   type FindingSeverity,
   type LapReading,
   type LapReadingDraft,
-} from "../../src/store/records.js";
+} from "../../../src/store/records.js";
 
 const BASE = "b".repeat(40);
 const TIP = "a".repeat(40);

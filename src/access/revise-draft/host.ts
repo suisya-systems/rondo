@@ -20,8 +20,8 @@
  * once, and the draft lands as a row the gate view reads when it is next drawn.
  */
 
-import { drafterRow } from "../continuo/roles.js";
-import { readPlan } from "../refrain/plan.js";
+import { drafterRow } from "../../continuo/roles.js";
+import { readPlan } from "../../refrain/plan.js";
 import {
   type IterationRecord,
   isModelReadingDrafter,
@@ -30,12 +30,13 @@ import {
   latestReading,
   type ProposalDraft,
   readingContent,
-} from "../store/records.js";
-import type { AdvisoryRecord, IterationStore } from "../store/sqlite.js";
-import type { runDrafter } from "./forge.js";
-import { hostFailure } from "./host-failure.js";
-import { threadOf } from "./model-drafter.js";
-import { reviewRoundsAlong } from "./model-review.js";
+} from "../../store/records.js";
+import type { AdvisoryRecord, IterationStore } from "../../store/sqlite.js";
+import type { runDrafter } from "../forge.js";
+import { hostFailure } from "../host-failure.js";
+import { threadOf } from "../model-draft/host.js";
+import { reviewRoundsAlong } from "../model-review/judgement.js";
+import { approvalTip, budgetRefusal } from "../scope.js";
 import {
   prepareRevise,
   type ReviseLineageLap,
@@ -43,8 +44,7 @@ import {
   type ReviseOutcome,
   reviseDrafterName,
   reviseDraftOf,
-} from "./revise-draft.js";
-import { approvalTip, budgetRefusal } from "./scope.js";
+} from "./judgement.js";
 
 /** As the scope drafter's lease: past the drafter's own timeout, and freed within a quarter hour. */
 const LEASE_MS = 15 * 60 * 1000;

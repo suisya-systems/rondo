@@ -133,14 +133,14 @@ import {
   requestOf,
   unreadIssues,
 } from "./issue-read.js";
-import { isModelDrafterName } from "./model-draft.js";
-import { draftedPlanRun, type HeldPlan, heldPlanByDigest, heldPlans } from "./model-drafter.js";
-import { modelReadingLines } from "./model-review.js";
-import { modelReviewPorts, takeModelReading } from "./model-reviewer.js";
+import { draftedPlanRun, type HeldPlan, heldPlanByDigest, heldPlans } from "./model-draft/host.js";
+import { isModelDrafterName } from "./model-draft/judgement.js";
+import { modelReviewPorts, takeModelReading } from "./model-review/host.js";
+import { modelReadingLines } from "./model-review/judgement.js";
 import type { LapMaterialRead, PublishBlock, PublishShown, ReviewBlock } from "./page/contract.js";
 import { type PullRequestText, pullRequestText } from "./pull-request.js";
 import { denialLine, evidenceOf, LIST_LIMIT, READING_REMOTE, uncommittedPaths } from "./review.js";
-import { reviseDrafterHost } from "./revise-drafter.js";
+import { reviseDrafterHost } from "./revise-draft/host.js";
 import {
   admitUnderScope,
   agentTypeRecordOf,

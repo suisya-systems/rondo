@@ -41,8 +41,8 @@ import type { DrafterRow, ReviewerRow } from "../continuo/roles.js";
 import { contentDigest } from "../store/plan.js";
 import type { ReadingEvidence } from "../store/records.js";
 import { hostFailure } from "./host-failure.js";
-import type { DrafterRun } from "./model-draft.js";
-import type { ReviewerRun } from "./model-review.js";
+import type { DrafterRun } from "./model-draft/judgement.js";
+import type { ReviewerRun } from "./model-review/judgement.js";
 
 /** What one forge command did. Streams as they arrived, unparsed. */
 export interface CommandOutcome {
@@ -1100,7 +1100,7 @@ async function treeEntries(
  * What `git` handed over for a model reading (D-0065 1.2.1, 1.2.2, 1.2.6).
  *
  * Facts again, for `LapWorkInspection`'s reason: what the reviewer is handed and
- * how it is laid out is decided in `./model-review.ts`, a pure function over this.
+ * how it is laid out is decided in `./model-review/judgement.ts`, a pure function over this.
  */
 export type ReviewMaterialFacts =
   | {

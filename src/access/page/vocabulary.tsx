@@ -30,7 +30,7 @@ import { BASIS_FORMS, type Basis } from "../../advisory/proposal.js";
 import type { IterationRecord, ThreadMessageDraft } from "../../store/records.js";
 import { basisLine } from "../advisory.js";
 import { type ForgeRead, issueName } from "../issue-read.js";
-import { isModelDrafterName } from "../model-draft.js";
+import { isModelDrafterName } from "../model-draft/judgement.js";
 import { viewHref } from "../page-logic/routes.js";
 import { lineOf, type Threads } from "../page-logic/threads.js";
 import type { Chrome } from "../wording.js";

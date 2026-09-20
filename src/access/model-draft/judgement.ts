@@ -2,8 +2,8 @@
  * The model drafter's judgement half (D-0071): what rondo hands the drafter,
  * what its answer may say, and the drafted scope rondo computes around it.
  *
- * **Pure, and it owns no capability**, on `./model-review.ts`'s division: the
- * `claude` process is `./forge.ts`'s, the store reads are `./model-drafter.ts`'s,
+ * **Pure, and it owns no capability**, on `../model-review/judgement.ts`'s division: the
+ * `claude` process is `../forge.ts`'s, the store reads are `./host.ts`'s,
  * and this file is a total function over what they returned. So every outcome
  * below is a unit case with a fixed answer and no model on the machine.
  *
@@ -26,18 +26,18 @@ import {
   computeScopeBudgets,
   DEFAULT_REVIEW_ROUNDS,
   type ScopeBudgets,
-} from "../advisory/budget.js";
-import type { SplitPayload, SplitPlan } from "../advisory/proposal.js";
-import type { DrafterRow } from "../continuo/roles.js";
-import { normalizeClaim } from "../store/lanes.js";
+} from "../../advisory/budget.js";
+import type { SplitPayload, SplitPlan } from "../../advisory/proposal.js";
+import type { DrafterRow } from "../../continuo/roles.js";
+import { normalizeClaim } from "../../store/lanes.js";
 import {
   FINDING_SEVERITIES,
   type FindingSeverity,
   type JsonRecord,
   type JsonValue,
   type ThreadAuthorKind,
-} from "../store/records.js";
-import { sectionFramer } from "./framing.js";
+} from "../../store/records.js";
+import { sectionFramer } from "../framing.js";
 
 /**
  * The version of the drafter's own instructions (D-0071 rule 1.4): a changed
@@ -402,7 +402,7 @@ export function drafterDocument(material: DrafterMaterial): string {
   ].join("\n");
 }
 
-/** What running the drafter answered (`./forge.ts`'s `runDrafter`). */
+/** What running the drafter answered (`../forge.ts`'s `runDrafter`). */
 export type DrafterRun =
   | {
       readonly kind: "answered";

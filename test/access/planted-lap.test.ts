@@ -12,7 +12,7 @@ import {
   modelReadingOf,
   prepareReview,
   type ReviewMaterial,
-} from "../../src/access/model-review.js";
+} from "../../src/access/model-review/judgement.js";
 import { reviewerRow } from "../../src/continuo/roles.js";
 import { type LapReadingDraft, severityAtOrAbove } from "../../src/store/records.js";
 import {

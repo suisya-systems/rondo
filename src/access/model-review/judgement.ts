@@ -3,8 +3,8 @@
  * another model family, how its answer becomes a reading, and what a scope's
  * round budget and threshold make of that reading.
  *
- * **Pure, and it owns no capability.** The division is `./review.ts`'s: `git`
- * and the reviewer process are run elsewhere (`./forge.ts`), and this file is a
+ * **Pure, and it owns no capability.** The division is `../review.ts`'s: `git`
+ * and the reviewer process are run elsewhere (`../forge.ts`), and this file is a
  * total function over what they answered, so every verdict below is a unit case
  * with fixed reviewer answers and no model on the machine. What CI cannot prove
  * is that a real model finds anything (D-0029 `V-12`); D-0065 5.6.2's planted
@@ -13,14 +13,14 @@
  * **Material, never a decision.** D-0065's gate answer (a) keeps D-0022 rule 13,
  * D-0029 rule 6 and D-0019 rule 7's first reason as written: wherever a person
  * answers, a model reading is material. Nothing here refuses `publish`; the
- * round decision is read only by D-0066's scope verdict (`./scope.ts`), for a
+ * round decision is read only by D-0066's scope verdict (`../scope.ts`), for a
  * redo taken under a scope, and never by a gate a person answers.
  */
 
-import { type ReviewerRow, reviewerFamilyCheck } from "../continuo/roles.js";
-import type { LapTranscriptReading } from "../continuo/transcript.js";
-import type { ReviewCriterion } from "../refrain/plan.js";
-import { contentDigest } from "../store/plan.js";
+import { type ReviewerRow, reviewerFamilyCheck } from "../../continuo/roles.js";
+import type { LapTranscriptReading } from "../../continuo/transcript.js";
+import type { ReviewCriterion } from "../../refrain/plan.js";
+import { contentDigest } from "../../store/plan.js";
 import {
   FINDING_SEVERITIES,
   type FindingBasis,
@@ -34,8 +34,8 @@ import {
   type ReadingEvidence,
   readingCoverage,
   severityAtOrAbove,
-} from "../store/records.js";
-import { sectionFramer } from "./framing.js";
+} from "../../store/records.js";
+import { sectionFramer } from "../framing.js";
 
 /** A scope's review-round budget when it names none (D-0066 1.2.4, `budgets.review_rounds`). */
 export const DEFAULT_REVIEW_ROUND_BUDGET = 3;
@@ -74,7 +74,7 @@ export interface ReviewScope {
  *
  * **The insertion point, not the scope record.** The scope record is read in
  * `src/store/records.ts` and mapped to this view by `reviewScopeOf` in
- * `./scope.ts`, which is the one caller that passes a scope. A budget of 0 is a
+ * `../scope.ts`, which is the one caller that passes a scope. A budget of 0 is a
  * real budget and is kept: D-0066 rule 1.2.4 lets a scope allow no redo after a
  * finding at or above the threshold, and since `roundsTaken` counts the latest
  * reading (round 1 at least), `reviewRoundDecision` stops on the first such
@@ -589,7 +589,7 @@ export type ReviewRoundDecision =
 /**
  * The round decision over the latest model reading, where `roundsTaken` counts
  * that reading (so the first reading is round 1). Its one caller is the scope
- * verdict's redo test (D-0066 rule 4.2, `./scope.ts`).
+ * verdict's redo test (D-0066 rule 4.2, `../scope.ts`).
  *
  * A reading whose severities did not decode is a stop, not an exit: its
  * findings cannot be shown to be below the threshold, and nothing here may

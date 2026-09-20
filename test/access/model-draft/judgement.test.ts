@@ -17,13 +17,13 @@ import {
   draftOf,
   modelDrafterName,
   prepareDraft,
-} from "../../src/access/model-draft.js";
+} from "../../../src/access/model-draft/judgement.js";
 import {
   COLD_START_LAP_DURATION_MS,
   computeScopeBudgets,
   REPLY_ALLOWANCE_MS,
-} from "../../src/advisory/budget.js";
-import { drafterRow } from "../../src/continuo/roles.js";
+} from "../../../src/advisory/budget.js";
+import { drafterRow } from "../../../src/continuo/roles.js";
 
 const DIGEST = (c: string) => `sha256:${c.repeat(64)}`;
 const TEMPLATE = DIGEST("1");

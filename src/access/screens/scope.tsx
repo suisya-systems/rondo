@@ -16,7 +16,7 @@ import {
 import { hostFailure } from "../host-failure.js";
 import { ago } from "../inbox.js";
 import { latestReads } from "../issue-read.js";
-import { type HeldPlan, heldPlanByDigest, heldPlans } from "../model-drafter.js";
+import { type HeldPlan, heldPlanByDigest, heldPlans } from "../model-draft/host.js";
 import type { MintIterationId, MintScopeId, WebPorts } from "../page/contract.js";
 import {
   basisWord,
