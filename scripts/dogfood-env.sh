@@ -835,9 +835,20 @@ env_file="$env_root/env.sh"
   # shell says what the service says. The variable is still the only thing the
   # host reads (D-0056 rule 3); this line is the same recorded fact reaching
   # the other way a host is started.
+  #
+  # **An unset when nobody answered, rather than a line left out.** This file
+  # is *sourced*, on top of whatever the shell already holds -- and what it
+  # already holds is very often this file's own last version. Omitting the
+  # line would leave an operator who emptied their record and re-ran setup
+  # with the language they just removed still exported, and a `rondo web`
+  # typed in that shell still in it. The unit has the opposite shape and keeps
+  # it: it is read into a fresh process, where an absent line is absent.
+  printf '# The language rondo writes its own prose to you in.\n'
   if [ -n "$operator_language" ]; then
-    printf '# The language rondo writes its own prose to you in.\n'
     printf 'export RONDO_OPERATOR_LANGUAGE=%q\n' "$operator_language"
+  else
+    printf '# Nobody has answered, so it is English.\n'
+    printf 'unset RONDO_OPERATOR_LANGUAGE\n'
   fi
 } > "$env_file"
 note "$env_file"
