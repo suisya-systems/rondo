@@ -110,6 +110,50 @@ test("with the last-looked line above everything there is nothing already-read t
   expect(drawn(SEVEN, "request")).toEqual(drawn(SEVEN, null));
 });
 
+test("the try the person stopped reading in the middle of is left whole (Codex)", () => {
+  // Looked during try 2 and came back during try 3: the line's anchor is
+  // inside try 2, which is neither the newest try nor one they have finished.
+  const out = drawn(SEVEN, "lap-2:reading");
+  // Try 2 is drawn as its own lines, so `ThreadFace` still finds the id to
+  // draw rule 7's one line in the thread above.
+  expect(out.some((item) => item.kind === "event" && item.event.id === "lap-2:reading")).toBe(true);
+  // What is above it has been read and folds; what is below has not.
+  const [seen] = foldsIn(out);
+  expect(seen?.said).toBe("4 lines you had already read");
+  expect(eventsIn(out).map((item) => item.event.id)).toEqual([
+    "lap-2:reading",
+    "lap-2:ended",
+    "lap-7:started",
+    "lap-7:reading",
+    "lap-7:ended",
+  ]);
+  // Tries 3 to 6 are still one line each: only the one being read is spared.
+  // One fold for what was read, and four for the tries after it.
+  expect(foldsIn(out)).toHaveLength(5);
+});
+
+test("folding keeps the thread in the order it happened", () => {
+  // The try left open sits between the tries before it and the tries after,
+  // never after them: one stream, and that order is time (D-0083 rule 5).
+  const out = drawn(SEVEN, "lap-2:reading").map((item) =>
+    item.kind === "fold" ? item.id : item.kind === "event" ? item.event.id : item.message.id,
+  );
+  expect(out).toEqual([
+    "request",
+    "reading",
+    "fold:fold:lap-1:started",
+    "lap-2:reading",
+    "lap-2:ended",
+    "fold:lap-3:started",
+    "fold:lap-4:started",
+    "fold:lap-5:started",
+    "fold:lap-6:started",
+    "lap-7:started",
+    "lap-7:reading",
+    "lap-7:ended",
+  ]);
+});
+
 test("neither fold ever swallows a decision rondo made without asking (rule 7)", () => {
   const withDecision: readonly ThreadItem[] = [
     message("request"),

@@ -162,53 +162,81 @@ function notable(inside: readonly FoldedItem[]): ThreadEvent | undefined {
 }
 
 /**
- * **Every try but the newest, one line each.**
+ * **Every try but the newest, one line each -- and not the one the person
+ * stopped reading in the middle of.**
  *
  * The unit is a try, so what folds does not depend on how much the person has
  * read, on the width, or on a count of lines. A request tried once folds
  * nothing: its lines carry no try number, because with one try there is
  * nothing to tell apart (`lapEvents`), and lines with no try number are left
  * where they are.
+ *
+ * **The try holding the last-looked line is left open** (Codex). The line is
+ * drawn above the first thing that arrived after the person last looked, and
+ * that is not always in the newest try: somebody who looked in the middle of
+ * try 2 and came back during try 4 has their line inside try 2. Folding that
+ * try away takes the line's anchor with it -- `foldSeen` then cannot find it,
+ * and `ThreadFace` cannot draw it -- so **rule 7's one line in the thread
+ * disappears**, and the lines the person has not read are silently grouped
+ * with the ones they have. It reads as the rule it is, too: the attempt you
+ * were part-way through is not one you have finished with.
  */
-function foldTries(words: PageWords, items: readonly ThreadItem[]): readonly FoldedItem[] {
+function foldTries(
+  words: PageWords,
+  items: readonly ThreadItem[],
+  lastLookedAbove: string | null,
+): readonly FoldedItem[] {
   const tries = items.flatMap((item) =>
     item.kind === "event" && item.event.tryAt != null ? [item.event.tryAt] : [],
   );
   const newest = tries.length === 0 ? null : Math.max(...tries);
+  /** The try the last-looked line lands in, which is left whole beside the newest. */
+  const reading = items.find((item) => item.kind === "event" && item.event.id === lastLookedAbove);
+  const open = reading?.kind === "event" ? reading.event.tryAt : null;
+  /** A try that is not folded: the newest, the one being read, or no try at all. */
+  const kept = (at: number | null | undefined) => at == null || at === newest || at === open;
   return runs(items).flatMap((run): readonly FoldedItem[] => {
     if (!foldable(run[0] as FoldedItem)) {
       return run;
     }
-    // A run may hold more than one try, where two laps' lines sit together
-    // with nothing between them; each try folds on its own, so the line a
-    // person reads is always about one attempt.
-    const byTry = new Map<number, FoldedItem[]>();
-    const loose: FoldedItem[] = [];
+    /*
+     * **Grouped by consecutive try, so the run stays in the order it
+     * happened.** Collecting each try's lines into a map and emitting the
+     * folds first would put a try that is left open -- the one the person
+     * stopped reading in the middle of -- after tries that came later, which
+     * is the one thing the thread must never do (`D-0083` rule 5: one stream,
+     * and that order is time). Where two laps' lines interleave, a try gets a
+     * fold per stretch rather than one fold out of order; that is the honest
+     * drawing of an interleaving, and time wins over tidiness.
+     */
+    const out: FoldedItem[] = [];
+    let group: FoldedItem[] = [];
+    let key: number | null = null;
+    const flush = () => {
+      if (group.length === 0) {
+        return;
+      }
+      if (key === null) {
+        out.push(...group);
+      } else {
+        const head = notable(group);
+        out.push(
+          ...fold(group, (lines) => (head === undefined ? "" : words.foldTry(head.said, lines))),
+        );
+      }
+      group = [];
+    };
     for (const item of run) {
       const at = item.kind === "event" ? item.event.tryAt : null;
-      if (at == null || at === newest) {
-        loose.push(item);
-        continue;
+      const next = kept(at) ? null : (at as number);
+      if (next !== key) {
+        flush();
+        key = next;
       }
-      const held = byTry.get(at);
-      if (held === undefined) {
-        byTry.set(at, [item]);
-      } else {
-        held.push(item);
-      }
+      group.push(item);
     }
-    // Oldest try first, then the newest try's own lines and anything carrying
-    // no try: the run arrived in time order and this keeps it.
-    return [
-      ...[...byTry.keys()]
-        .toSorted((left, right) => left - right)
-        .flatMap((at) => {
-          const run = byTry.get(at) as readonly FoldedItem[];
-          const head = notable(run);
-          return fold(run, (lines) => (head === undefined ? "" : words.foldTry(head.said, lines)));
-        }),
-      ...loose,
-    ];
+    flush();
+    return out;
   });
 }
 
@@ -242,14 +270,13 @@ function foldSeen(
  *
  * `lastLookedAbove` is the id the last-looked line sits above, which is the
  * caller's to work out: only it has read the mark. It is an id of the
- * *unfolded* stream, and it is looked for after the folding by try -- which
- * cannot hide it, because the newest try never folds and the line, where there
- * is one, sits above something the person has not seen.
+ * *unfolded* stream, and both folds are given it -- the first so that it does
+ * not fold the line's anchor away, the second so that it knows where to stop.
  */
 export function folds(
   words: PageWords,
   items: readonly ThreadItem[],
   lastLookedAbove: string | null,
 ): readonly FoldedItem[] {
-  return foldSeen(words, foldTries(words, items), lastLookedAbove);
+  return foldSeen(words, foldTries(words, items, lastLookedAbove), lastLookedAbove);
 }

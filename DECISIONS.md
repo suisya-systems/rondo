@@ -19921,7 +19921,14 @@ fold was the alternative and is refused: it would put a reading position into th
 language switch and every redraw would then have to carry (`D-0056` rule 11), and `PageView` is the
 whole of this surface's state.
 
-**7. A fold never crosses a message, and one line is never folded into one line.** A report, a
+**7. The try the person stopped reading in the middle of is left whole**, beside the newest. The
+last-looked line is drawn above the first thing that arrived after the mark, and that is not always
+in the newest try: somebody who looked during try 2 and came back during try 4 has their line inside
+try 2. Folding that try away takes the line's anchor with it, so rule 7's *one line in the thread*
+would simply not be drawn and the lines they have not read would be grouped with the ones they have.
+It reads as the rule it is: an attempt you were part-way through is not one you have finished with.
+
+**8. A fold never crosses a message, and one line is never folded into one line.** A report, a
 question, and the person's own words are not event lines, so a fold stops at them; and a fold
 holding a single line hides a line and adds a line, which is a loss both ways.
 
