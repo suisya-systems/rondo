@@ -1,0 +1,179 @@
+/*
+ * The right face with nothing waiting (DECISIONS.md D-0083 rule 4).
+ *
+ * Its own file for `list.css`'s reason: what this face is made of should be
+ * readable without reading past the palette. **No amber is declared here** --
+ * nothing on this face waits on a person (rule 4), so the step a lap is on now
+ * is told by weight and by a word rather than by the one colour that means
+ * *a person must act* (`D-0082` rule 2).
+ */
+
+.side {
+  padding: 16px 20px 24px;
+}
+
+.side-heading {
+  margin-top: 24px;
+  margin-bottom: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-muted-foreground);
+}
+
+.side-heading:first-child {
+  margin-top: 4px;
+}
+
+/*
+ * The week's six figures: three across at 2560, where this face is 720px
+ * wide, and two across once it is 440px -- which is rule 8's *cards go one
+ * across* read as *one step narrower*, because a figure is not a card and two
+ * of these still fit.
+ *
+ * The rules between the cells are the grid's gap over the border colour,
+ * which is one declaration rather than a border per cell.
+ */
+.side-week {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  margin-bottom: 4px;
+  background: var(--color-border);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.side-week > div {
+  padding: 10px 12px;
+  background: var(--color-card);
+}
+
+.side-week-wide {
+  grid-column: 1 / -1;
+}
+
+.side-week dt {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--color-muted-foreground);
+}
+
+.side-week dd {
+  font-size: 18px;
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The sentence that stands for the pair is prose, not a figure (rule 6). */
+.side-week-wide dd {
+  font-size: 13px;
+}
+
+.side-work {
+  margin-bottom: 14px;
+  padding: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+}
+
+.side-work-title {
+  display: block;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-foreground);
+  text-decoration: none;
+}
+
+.side-work-title:hover {
+  text-decoration: underline;
+}
+
+.side-work-gov {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--color-muted-foreground);
+  font-variant-numeric: tabular-nums;
+}
+
+.side-repo {
+  padding: 0 5px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+/* The five steps, across the card: the order is the order they happen in. */
+.side-steps {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+  margin-top: 10px;
+  list-style: none;
+}
+
+.side-step {
+  padding-top: 6px;
+  border-top: 2px solid var(--color-border);
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--color-muted-foreground);
+}
+
+.side-step b {
+  display: block;
+  font-weight: 400;
+}
+
+/* What has happened is in full ink; what has not stays recessive. */
+.side-step-done {
+  border-top-color: var(--color-muted-foreground);
+  color: var(--color-foreground);
+}
+
+/* The one it is on now: weight, and the word beside it. No amber (rule 4). */
+.side-step-waiting {
+  border-top-color: var(--color-foreground);
+  color: var(--color-foreground);
+}
+
+.side-step-waiting b {
+  font-weight: 700;
+}
+
+.side-note {
+  margin-top: 10px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--color-muted-foreground);
+}
+
+/*
+ * Below 2560 the face is 440px: the week's figures go two across and the five
+ * steps stay five, which is what a person reads the card for -- a step row cut
+ * into two lines is no longer a line to read left to right.
+ */
+@media (max-width: 2000px) {
+  .side-week {
+    grid-template-columns: 1fr 1fr;
+  }
+  .side-week dd {
+    font-size: 16px;
+  }
+  .side-step {
+    font-size: 10px;
+  }
+}
+
+/* 1280: the face is under the thread and full width, so nothing is narrower. */
+@media (max-width: 1400px) {
+  .side-week {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .side-step {
+    font-size: 11px;
+  }
+}
