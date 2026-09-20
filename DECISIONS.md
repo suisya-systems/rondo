@@ -120,6 +120,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0080 | Starting rondo is one word with nothing in it to remember: setup writes the command that carries every host fact, the thing the person typed is what speaks when rondo cannot start, and starting runs no setup | accepted |
 | D-0081 | One store and one host, many repositories: a repository is named by the plan a request is drafted from, the forge slug stops being a host fact, and `D-0075` rule 1.1 is withdrawn | accepted |
 | D-0082 | The screen's visual system, written down: weight follows who is blocked rather than which group a row is in, one type scale a step larger than it was proposed, amber and red spent only on meaning, and blue returned to what a person can touch | accepted |
+| D-0083 | The page's shape: the unit is a request's thread and the axis is time, the summary and the gate are one screen of three faces, empty is the ordinary state and its centre asks what the person wants, and the answering box inherits everything the gate had | accepted |
 
 ---
 
@@ -19204,6 +19205,17 @@ above *running now*, which is the one group waiting on nobody.
 **Nothing has to be told which rows are special.** The weight is read off the press itself, so a
 press added later is drawn right without anyone remembering this rule.
 
+> **Annotation (2026-09-20, from D-0083).** Added after this entry was accepted, and **not additive**,
+> by the entry that decides the page's shape. **"The three questions -- waiting, running, ended --
+> stay the page's spine" no longer holds for the page `D-0083` decides**: its unit is a request's
+> thread and its list is cut by day, so status stops being a grouping. **What this rule is about
+> stands and is what `D-0083` rule 2 rests on**: weight follows who is blocked, a row is promoted
+> only by holding a press a person alone can clear, and the weight is read off the press. "The
+> weight moves and the group does not" was argued from a heading being a sentence that must stay
+> true of its row; `D-0083` lifts a waiting request under *your turn*, which is true of it, so the
+> argument is kept and its conclusion differs. Until that page is built, the screen is the one this
+> entry describes. Nothing above is edited.
+
 **2. Amber is spent only on "a person must act", and red only on "this is broken".** Neither may be
 used for emphasis, for a heading, for a hover, or to mark something merely recent. The difference
 between an ordinary screen and an exceptional one is made by **how rare the colour is**, not by how
@@ -19350,3 +19362,208 @@ slice 2 is a mechanical replacement that reviews badly beside a design change.
 - **A fold found to hold something a press depends on** after slice 3: rule 7 was already being
   broken while it was being written.
 - Any measurement in "What was measured" failing to reproduce at rondo `0e75d39`.
+
+---
+
+## D-0083 — The page's shape: the unit is a request's thread and the axis is time, the summary and the gate are one screen of three faces, empty is the ordinary state and its centre asks what the person wants, and the answering box inherits everything the gate had
+
+**Status:** accepted (2026-09-20, rondo's human gate, on rondo#319). The direction was chosen by the
+gate through the window from two competing mock-ups; seven points were then put to it, each with a
+recommendation, and it took all seven as recommended. It also ruled on the entry's open points: the
+empty lower third of the empty state is **permitted** and is now part of rule 4, and the rest are
+**held** under their names. The answers are recorded in "What was put to the human gate, and its
+answer". Supersedes nothing; annotates `D-0082` rule 1 (**not additive**, see "What this does to
+`D-0082`"). Refs `D-0032`, `D-0059`, `D-0061`, `D-0064`, `D-0073`, `D-0076`, `D-0079`, `D-0081`,
+`D-0082`, rondo#295, rondo#314, rondo#318, rondo#319.
+
+**This entry decides and does not build.** Nothing in `src/` or `page/` changes with it, and the
+mock-ups it was chosen from are not in the tree. The rebuilding of the screen is its own task, in the
+order the gate's answer to point 7 gives.
+
+**Numbering.** `D-0083` is the next number after `D-0082` on `main` at `b3f12c6`, and no entry on
+`main` carries it. A draft under the same number exists on `wip/rondo-page-ia-opus-lane`; it is not
+merged and this entry does not build on it.
+
+**Why an entry is needed.** `D-0082` settled how a row looks and said nothing about what the page is
+made of. rondo#318 measured the page against CI and monitoring tools and found it loose; the gate's
+reading of the result was harsher and about something else: *a column of things one after another,
+with no telling where anything is or which is the main function -- a list of features, not a
+product.* The page's spine is three questions about laps (waiting, running, ended), so its unit is a
+lap and its grouping is a status. `D-0064` says a person does two things -- asks for work, and
+answers what is in dispute -- and neither is a status of a lap. The references were wrong in kind:
+a CI list is watched, and rondo is talked to.
+
+### What was measured, and how
+
+On **2026-09-20**, at rondo `b3f12c6`, by screenshot at **2560x1440** with the Chrome already on the
+machine, and by reading. Mock-ups are static HTML; nothing here was measured on a running rondo.
+
+- **Today's page at 2560x1440** uses a 1024px column in the middle and leaves 60% of the width empty;
+  eight rows fill the height, all headed by the same request text (rondo#318 points 1, 2, 5).
+- **References retaken from products with a back-and-forth**, each captured at 2560x1440:
+  Gerrit's change list (whose turn it is, said by **bold alone** -- and, stretched to 2,500px, what
+  spending width on line length looks like), a GitHub pull request's conversation (a review and an
+  approval are **events inside the thread**, facts sit in a side column, and the whole stays near
+  1,216px however wide the window), and Zulip's recent conversations and a topic (list, thread, and
+  **a compose box that is always there**; days cut the list, not statuses). Discourse's list and a
+  Gerrit change page could not be captured.
+- **The mock-up's first pass left the lower half of 2560x1440 empty** (the thread ended near 900px).
+  The second pass opened the fold that hid the work's events and drew each as one 28px line; the
+  decision screen then fills to about 1,250px with the line length unchanged.
+- **The gate's two elements were checked against the source**: the free-text "what you checked" field
+  and `approveDespite` / `approveDespitePlain` (`src/access/wording.ts`, both sets). The other lane's
+  mock-up had dropped both once and was sent back for it.
+
+### The decision
+
+**1. The reference resolution is 2560x1440, and narrower widths are folds of it.** The page is
+designed at 2560x1440. 1600 and 1280 are defined as folds (rule 8), not as designs of their own. A
+phone is out of scope for this entry. **Width buys faces, never line length**: prose stays at 45 to
+90 characters at every width (the mock-up holds 45 at 16px for a message and 48 at 14px for an event
+line), and the three faces together stop at 2,200px and are centred.
+
+**2. The unit is a request's thread, and the axis is time.** A row in the list is a request, named by
+the person's own words, not a lap. The list is cut by day (*today / yesterday / last week / a
+month*), not by status. The one exception is `D-0082` rule 1's: requests waiting on the person are
+lifted to the top under *your turn*, drawn bold with one amber dot, untruncated. Nothing else in the
+list is amber, and a finished request's line may be cut to one line.
+
+**3. The summary and the gate are one screen.** There is no separate decision screen. Arriving from a
+notification and opening the page land on the same screen: from a notification the request it names
+is selected; opened by hand, the oldest request waiting on the person is selected; with nothing
+waiting, nothing is selected and rule 4 applies. *Your turn 1 / 3, next* walks the waiting ones in
+order.
+
+**4. Empty is the ordinary state, and then the centre asks "what do you want to ask for?".** A person
+is called rarely by design (`D-0064`), so the state drawn first is zero waiting. Its centre is the
+request box (where the work is, and the cost ceiling, chosen beside the send press), then *since you
+last looked* as sentences, then the most recent reports. Its right face is the last seven days
+(asked, finished, answered by the person, **decided by rondo without asking**, spent, left of the
+week's allowance) and each running request with its allowance and the five steps to its end. No
+amber appears on it.
+
+**The lower third of that centre is empty at 2560x1440, and it is meant to be.** After the request
+box, the digest and two reports, nothing is drawn, and nothing is to be found to draw there. This
+was first listed as unresolved because it had happened rather than been chosen; the gate permitted
+it, so it is chosen now. A screen with nothing to ask of the person is quiet, which is the same
+claim `D-0082` rule 2 makes of colour: the ordinary state is told from the exceptional one by how
+little is on it.
+
+**5. Three faces, and what each holds.**
+
+| Face | 2560 | Holds |
+|---|---|---|
+| Left | 440px | *Write a new request*; *your turn*; every request by day, each with its repository's name (`D-0081`) and one sentence of state; the *since you last looked* line; the week's allowance, spent and left |
+| Centre | up to 1,040px | The thread: the person's words, rondo's reading of them with its way back to the words (`D-0061` rule 2.6), event lines, reports, the question or confirmation, and **the box to answer in**; under it, always, a box to add to the request |
+| Right | 720px | Above, **the material for this confirmation** (what changed, the checks, the model review, each leading to its full text); below, **what was agreed for this request** (rule 6). With nothing being asked, the agreement moves to the top and *what is known so far* sits under it |
+
+**6. Governance is permanent, in one line under the title, and in full on the right.** Under every
+thread's title, at every width: repository | when it was asked | spent / approved | which try of how
+many | how many things rondo decided without asking | what remains, as a chain (*your answer ->
+proposal -> merge*). The right face carries the same in full: the approved allowance with what is
+left, tries, where it may touch; **what remains before this ends**, five steps with their state; and
+**what rondo decided without asking**, counted, the first few named, with *all of them and why each
+did not need you* (`D-0064` O8). A spent figure is never shown without the figure it was approved
+against.
+
+**7. Event lines, and the line where the person last looked.** Everything between messages that is
+not prose is one line, 28px: a dot, a sentence, the time at the right edge. The dot's colour is the
+kind and follows `D-0082` rule 2: ink for the person's own act, green for passed, red for failed,
+hollow for *rondo decided this without asking*, neutral for the rest. A decision made without asking
+is therefore on the time axis at the moment it was made, and the count on the right names the same
+things. **One line -- "you last looked down to here" (`D-0061` rule 2.5) -- is drawn once in the list
+and once in the thread**, and no row carries a *new* mark of its own.
+
+**8. The folds.**
+
+| Width | Faces | What folds |
+|---|---|---|
+| 2560 | 440 / 1,040 / 720 | nothing; cards on the right sit two across |
+| 1600 | 340 / rest / 440 | the right face's cards go one across; **event lines above the last-looked line fold into one line**, and the page scrolls to the answering box on arrival, so the confirmation is on the first screen |
+| 1280 | 300 / rest | the right face drops under the thread, two across; rule 6's line keeps governance on the first screen |
+
+What drops below the thread at 1280 is evidence only. `D-0082` rule 7 holds at every width: what a
+press needs is inside the box that holds the press.
+
+**9. The answering box inherits the gate, whole.** The box in the thread replaces the gate screen and
+carries every element it had:
+
+1. the free-text field **"what you checked (kept with your answer)"**, directly above the presses;
+2. **`approveDespite` as its own press**, in the wording set's words, with `approveDespitePlain`
+   under it and the sentence that the act cannot be undone (`D-0064`'s second line);
+3. **while a finding stands, no plain approve is drawn** -- the choices are the recommendation
+   (`D-0032` rule 1, `D-0064`) and the despite press;
+4. the finding itself quoted in the box, unfolded (`D-0082` rule 7).
+
+**An element of the gate leaves the box only by a decision that names it and says why.** A redesign
+that omits one has not decided anything; it has a bug. This is stated because both lanes' mock-ups
+dropped the first two once without anyone choosing to.
+
+**10. Tone is `D-0082`'s, unchanged.** The six-step scale, the 1.7 Japanese line, amber only for *a
+person must act*, blue only for what can be touched. The primary press is ink, not amber; the despite
+press is outlined in amber because a person is acting against a finding. No identifier of rondo's
+reaches the screen (`D-0076`), and the Japanese is composed, not translated (`D-0079`).
+
+### What this does to `D-0082`
+
+`D-0082` is not superseded and none of its tokens move. Rule by rule:
+
+| `D-0082` | What happens to it | |
+|---|---|---|
+| Rule 1, "the three questions -- waiting, running, ended -- stay the page's spine" | No longer holds for the page this entry decides: the unit is a request and the list is cut by day (rule 2), so status is not a grouping. Annotated there | **not additive** |
+| Rule 1, weight follows who is blocked, read off the press | Stands, and is what rule 2's *your turn* rests on: a request is lifted only because a person alone can clear what it holds, never because it is interesting | kept |
+| Rule 1, "the weight moves and the group does not" | The argument is kept and its conclusion differs. It held because a heading is a sentence that must stay true of its row, and *just finished* was true of a row holding the release press. *Your turn* is true of every row lifted under it, and a day heading says nothing false about a row that has left it, so here the row may move | **not additive** |
+| Rules 2 to 9 (amber and red, blue, the scale, the Japanese line, spacing, folds, dark, `data-question`) | Unchanged; rules 7 and 10 here restate them and add no token | kept |
+| Slices 2 and 3 of its building change | Still owed. Whether they are done on today's page or on the rebuilt one is the building task's to say | kept |
+
+Until the rebuilt page lands, the screen is the one `D-0082` describes and slice 1 built.
+
+### What was put to the human gate, and its answer
+
+Put through the window on **2026-09-20**, each with a recommendation. All seven were taken as
+recommended.
+
+| # | Point | Recommendation | Answer |
+|---|---|---|---|
+| 1 | Is the page's unit the request's thread, with the lap no longer a row anywhere on the first screen? | **yes**; laps appear as event lines and as *which try of how many* | **as recommended** |
+| 2 | Are *your turn* rows lifted above the time order, or left in it and marked only by weight (Gerrit's way)? | **lifted**; `D-0082` rule 1 already decided weight follows who is blocked, and a waiting request from last week must not sit below the fold | **as recommended** |
+| 3 | With something waiting, does opening the page select the oldest waiting request, or show the empty centre with the waiting ones only in the list? | **select the oldest**; the person came to answer | **as recommended** |
+| 4 | Is a plain approve withheld while a finding stands (rule 9.3), or drawn beside the despite press? | **withheld**; two presses that record different things must not look like a choice of wording | **as recommended** |
+| 5 | Does the request box carry the cost ceiling and the repository, or only the words? | **both, pre-filled**; `D-0081` asks back when the repository is unnamed, and the ceiling is the scope the person approves once | **as recommended** |
+| 6 | At 1600, do settled events fold (rule 8), or does the page scroll to the confirmation? | **both**: fold, and scroll to the box on arrival | **as recommended** |
+| 7 | How much is built first? | **the thread and the answering box, with the list**; the right face's governance second; the empty state's right face last | **as recommended** |
+
+**Two further answers, on what this entry had listed as unresolved.** (a) The empty lower third of
+the empty state's centre at 2560x1440 is **permitted**. It leaves the unresolved list and is written
+into rule 4 as a property the page is meant to have. (b) Everything else on that list is **held**,
+not decided: the gate's words were that these are to be *thought about while using it*. They stay
+below under their names so that using the page is what reopens them, and nobody has to remember to.
+
+### Unresolved, and named so they are not lost
+
+Held by the gate's answer (b) above. None of these blocks the building task's first slice.
+
+| Open | Who |
+|---|---|
+| Where the release press lives (`D-0073` rule 4.3, rondo#295). Assumed: the request rises into *your turn* and the press is a box in its thread. Not drawn | the building task, against `D-0082` rule 1 |
+| How event lines fold past twenty. The only rule now is *above the last-looked line* | its own change, once a real request has twenty |
+| Dark, and the keyboard (`j` / `k` / enter). Not drawn; the tokens are `D-0082`'s, so dark should follow mechanically, and that is unmeasured | the building task |
+| A request split into many plans: one thread, or a thread with branches | `D-0061` step 5.4's successor |
+| A phone | out of scope; its own entry |
+
+### What would falsify it
+
+- **A person with three requests waiting who cannot say which is oldest** from the list: lifting
+  *your turn* out of the time order cost more than it bought, and gate point 2 returns.
+- **A person asking where the running work is**: removing status as a grouping hid something the
+  seven-day face and the day-cut list do not give back.
+- **The one-line governance strip wrapping to three lines** on a real request at 1280: it is
+  carrying too much, and rule 6 must choose.
+- **A confirmation answered without the right face being looked at, and wrongly**: the material
+  belonged in the box, and rule 8's claim that only evidence drops is false.
+- **An element of today's gate found missing from the built box with no decision naming it**: rule 9
+  is not enforceable by statement and needs a test.
+- **Event lines past twenty making the thread unreadable** before their fold is designed.
+- **A person taking the empty lower third for a page that has not finished loading**: rule 4's calm
+  reads as broken, and the gate's answer (a) returns.
+- Any capture in "What was measured" failing to reproduce.
