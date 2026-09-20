@@ -93,6 +93,10 @@ const PLAN = {
   gateOptions: ["approve", "revise"],
   gateDeadlineAtMs: null,
   pullRequestBaseBranch: null,
+  // **Named, because `runPlan` asks for it by name** (`D-0081`): the field is
+  // nullable and the key is not, so a plan that leaves it out refuses with a
+  // message about `trim` rather than about the field.
+  forgeRepository: null,
   invocationCeilingMs: 1_800_000,
   catalogLayers: [
     {
@@ -160,6 +164,25 @@ const drafted =
     : { kind: "drafted", agentTypeDigest: recordedType.record.agentTypeDigest };
 
 const requestMessageId = "request-preview-0001";
+
+/**
+ * One line's own claim (`D-0073` rule 2.3), so the seeded laps do not refuse
+ * each other.
+ *
+ * Without it every first lap claims the whole repository by default and the
+ * second one is refused by the lane ledger -- which is correct of the ledger
+ * and wrong of a preview, whose laps are meant to stand beside each other. A
+ * redo continues its lineage's claim and asks for none.
+ */
+const laneFor = (id, supersedesIterationId) =>
+  supersedesIterationId === null
+    ? {
+        paths: [`lanes/${id}/`],
+        authorKind: "drafter",
+        authorId: "rondo/preview",
+        bases: [],
+      }
+    : null;
 const now = Date.now();
 
 async function say(draft) {
@@ -179,7 +202,10 @@ async function endedLap(id, costUsd, durationMs, supersedesIterationId) {
     scopeSpend: null,
     nowMs: now - durationMs,
     supersedesIterationId,
-    requestMessageId: null,
+    claim: laneFor(id, supersedesIterationId),
+    // Every lap names the request it came from (`D-0085`), and the preview's
+    // laps are all for the one request it seeds.
+    requestMessageId,
     runId: `rondo-${id}`,
     topicBranch: `rondo/${id}`,
     workspace: join(workspaceRoot, id),
@@ -347,6 +373,7 @@ const waitingReserved = await store.reserve({
   },
   nowMs: now - 8 * 60 * 1000,
   supersedesIterationId: null,
+  claim: laneFor(waitingLapId, null),
   requestMessageId,
   runId: `rondo-${waitingLapId}`,
   topicBranch: `rondo/${waitingLapId}`,
@@ -512,6 +539,7 @@ async function publishableLap(id, leaveUncommitted, staleReading = false) {
     scopeSpend: null,
     nowMs: now - 40 * 60 * 1000,
     supersedesIterationId: null,
+    claim: laneFor(id, null),
     requestMessageId,
     runId: `rondo-${id}`,
     topicBranch,
@@ -704,11 +732,12 @@ process.stdout.write(
       : `agent:   the plan was refused: ${drafted.reason}`,
     `gate id: ${waitingGateId}`,
     "",
-    "The gate view of the waiting lap is the S4 screen (rondo#233): its approve bar",
-    "offers revise beside approve, and the revise form's draft quotes the blocker and",
-    "major findings seeded onto it. Open this first, at 1280 and at 420 wide:",
-    `open:    ${base}/?answer=${waitingLapId}&lang=en`,
-    `also:    ${base}/?answer=${waitingLapId}&lang=ja`,
+    "The box to answer in is inside the request's thread (D-0083 rule 9), and the",
+    "page a person arrives on is the request that waits on them (rule 3) -- so the",
+    "bare address is the screen to open first, at 2560, 1600 and 1280:",
+    `open:    ${base}/?lang=en`,
+    `also:    ${base}/?lang=ja`,
+    `thread:  ${base}/?thread=${requestMessageId}&lang=en`,
     "",
     "The scope screens from S3 are still here:",
     `also:    ${base}/?scope=${requestMessageId}&lang=en`,

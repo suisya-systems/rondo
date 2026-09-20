@@ -165,7 +165,7 @@ import {
 } from "./page-logic/laps.js";
 import { repositoryOf, requestList, rowStateOf } from "./page-logic/list.js";
 import { isLive, type PageView, REVIEW_ROUND_CHOICES, viewHref } from "./page-logic/routes.js";
-import { selectRequest } from "./page-logic/selection.js";
+import { selectRequest, walkPosition } from "./page-logic/selection.js";
 import { lapEvents } from "./page-logic/thread-events.js";
 import { firstLine, lineOf, replyTarget, type Threads, threadsOf } from "./page-logic/threads.js";
 import { denialLine, LIST_LIMIT } from "./review.js";
@@ -5034,6 +5034,27 @@ export async function operatorPage(
       : {
           react: ThreadFace({
             title: firstLine(threads.byId.get(selectedRoot)?.body ?? ""),
+            walk: (() => {
+              // **The walk is over what waits on the person** (D-0083 rule 3),
+              // in the list's own order, so *next* is the next-oldest thing
+              // waiting rather than the next row of anything.
+              const at = walkPosition(selectedRoot, requestsList);
+              if (at === null) {
+                return null;
+              }
+              const next = requestsList.yourTurn[at.at];
+              return {
+                said: wording.walkAt(at.at, at.of),
+                nextHref:
+                  next === undefined
+                    ? null
+                    : viewHref(
+                        { kind: "thread", messageId: next.messageId, to: null },
+                        wording.lang,
+                      ),
+                nextSaid: wording.walkNext,
+              };
+            })(),
             governance:
               selectedGovernance === null
                 ? null

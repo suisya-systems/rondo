@@ -95,3 +95,17 @@ test("a person who has never looked gets no line, because nothing is below it", 
   const html = await operatorPage(portsOver(world, "ada", []), "t", { kind: "summary" });
   expect(html).not.toContain('class="thread-since"');
 });
+
+test("the walk says where this request stands among the ones waiting, and leads to the next", async () => {
+  // Rule 3's *your turn 1 / 3, next*, in the list's own order -- oldest first,
+  // so a person with three things waiting meets the one that has been waiting
+  // longest and can keep going without choosing each time.
+  const world = fresh();
+  await gateWithChecks(world);
+  const html = await operatorPage(portsOver(world, "ada", []), "t", { kind: "summary" });
+  const headAt = html.indexOf('class="thread-head"');
+  const head = html.slice(headAt, html.indexOf("</header>", headAt));
+  expect(head).toContain("your turn 1 / 1");
+  // One waiting request, so there is nowhere to walk on to and no link is drawn.
+  expect(head).not.toContain(">next<");
+});

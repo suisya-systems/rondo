@@ -86,6 +86,21 @@ export interface ThreadProps {
   /** Rule 6's line, composed by the caller; null where nothing is known to say. */
   readonly governance: ReactNode;
   /**
+   * Where this request stands among the ones waiting, and the way to the next
+   * (rule 3's *your turn 1 / 3, next*).
+   *
+   * **The walk goes in the same order the list does** -- oldest first -- so a
+   * person with three things waiting meets the one that has been waiting
+   * longest and can keep going without choosing each time. Null where this
+   * request is not one of them: a position among things that wait is not a
+   * thing a request that waits on nobody has.
+   */
+  readonly walk: {
+    readonly said: string;
+    readonly nextHref: string | null;
+    readonly nextSaid: string;
+  } | null;
+  /**
    * The thread in the order it happened, messages and event lines together.
    *
    * **One stream rather than two lists.** Rule 5 names the parts in the order
@@ -194,6 +209,7 @@ function Message({ message }: { readonly message: ThreadMessage }) {
 export function ThreadFace({
   title,
   governance,
+  walk,
   items,
   lastLookedAbove,
   lastLookedSaid,
@@ -211,6 +227,16 @@ export function ThreadFace({
          * agreed.
          */}
         {governance}
+        {walk === null ? null : (
+          <p className="thread-walk">
+            <span>{walk.said}</span>
+            {walk.nextHref === null ? null : (
+              <a href={walk.nextHref} data-open="">
+                {walk.nextSaid}
+              </a>
+            )}
+          </p>
+        )}
       </header>
       {items.map((item) => (
         <div key={idOf(item)}>

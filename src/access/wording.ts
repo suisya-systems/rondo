@@ -317,6 +317,9 @@ export interface Chrome extends PageWords {
    * `govDecidedNotRead` names the one item of rule 6's six this line does not
    * carry, so that five items are not read as six.
    */
+  /** Rule 3's walk: where this request stands among the ones waiting, and the way on. */
+  readonly walkAt: (at: number, of: number) => string;
+  readonly walkNext: string;
   readonly govSpent: (spent: string, approved: string) => string;
   readonly govTries: (at: number, of: number) => string;
   readonly chainAnswer: string;
@@ -1233,6 +1236,8 @@ explanation you pressed on and then answers the gate.`,
   keySend: "send",
   composerNoApprover:
     "RONDO_APPROVER is not set, so there is nobody this page could send as: the threads can be read, not written to.",
+  walkAt: (at, of) => `your turn ${String(at)} / ${String(of)}`,
+  walkNext: "next",
   govSpent: (spent, approved) => `$${spent} of $${approved}`,
   govTries: (at, of) => `try ${String(at)} of ${String(of)}`,
   chainAnswer: "your answer",
@@ -2080,6 +2085,8 @@ const JA: Chrome = Object.freeze({
   keySend: "送信",
   composerNoApprover:
     "RONDO_APPROVER が設定されていないため、このページが誰として送るのかが決まりません。スレッドは読めますが、書き込めません。",
+  walkAt: (at, of) => `あなたの番 ${String(at)} ／ ${String(of)}`,
+  walkNext: "次へ",
   govSpent: (spent, approved) => `$${spent} ／ $${approved}`,
   govTries: (at, of) => `${String(at)} 回目 ／ ${String(of)} 回まで`,
   chainAnswer: "あなたの答え",
