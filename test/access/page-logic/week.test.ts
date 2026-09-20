@@ -9,7 +9,12 @@
  * -- with the last of them never rondo's.
  */
 import { expect, test } from "vitest";
-import { stepsOf, WEEK_MS, weekFigures } from "../../../src/access/page-logic/week.js";
+import {
+  GATE_ANSWERS_NOT_DATED,
+  stepsOf,
+  WEEK_MS,
+  weekFigures,
+} from "../../../src/access/page-logic/week.js";
 import type { IterationRecord } from "../../../src/store/records.js";
 
 const NOW = 10 * WEEK_MS;
@@ -22,7 +27,8 @@ const reads = {
   finishedAtMs: [],
   answeredAtMs: [],
   decidedWithoutAsking: 0,
-  allowances: [],
+  spentUsd: [],
+  approvedUsd: [],
 } as const;
 
 test("the window is seven days back from the caller's clock, inclusive of its edge", () => {
@@ -55,19 +61,21 @@ test("with no approval to read, the week draws no spend", () => {
 });
 
 test("the approvals are summed, and what is left is never a debt", () => {
-  const figures = weekFigures(
-    {
-      ...reads,
-      allowances: [
-        { spentUsd: 4, approvedUsd: 20 },
-        { spentUsd: 1.5, approvedUsd: 30 },
-      ],
-    },
-    NOW,
-  );
+  const figures = weekFigures({ ...reads, spentUsd: [4, 1.5], approvedUsd: [20, 30] }, NOW);
   expect(figures.allowance).toEqual({ spentUsd: 5.5, approvedUsd: 50, leftUsd: 44.5 });
-  const over = weekFigures({ ...reads, allowances: [{ spentUsd: 9, approvedUsd: 5 }] }, NOW);
+  const over = weekFigures({ ...reads, spentUsd: [9], approvedUsd: [5] }, NOW);
   expect(over.allowance?.leftUsd).toBe(0);
+});
+
+test("the two figures are counted over different keys, and a raise keeps both true", () => {
+  // D-0074: a raise writes a second approval, so what was spent under the
+  // first is a spend of its own while the ceiling is the tip's alone. Keyed
+  // the same way, the week would either lose the older spend or claim the sum
+  // of every ceiling the request ever had.
+  const raised = weekFigures({ ...reads, spentUsd: [3, 2], approvedUsd: [20] }, NOW);
+  expect(raised.allowance).toEqual({ spentUsd: 5, approvedUsd: 20, leftUsd: 15 });
+  // A spend with no ceiling in force draws nothing, which is rule 6 again.
+  expect(weekFigures({ ...reads, spentUsd: [3] }, NOW).allowance).toBeNull();
 });
 
 test("a request still working is on its work, and nothing later is claimed", () => {
@@ -133,4 +141,13 @@ test("exactly one step is the one the work is on", () => {
     );
     expect(waiting.length).toBeLessThanOrEqual(1);
   }
+});
+
+test("the one answer this figure cannot date is named rather than guessed at", () => {
+  // A gate walked from the page leaves no dated row of rondo's own, and
+  // dating it by the lap's last movement would file an answer under the week
+  // a retry moved it. The module says which answer is not counted and why,
+  // which is what `WITHHELD_NOT_READ` does for the governance line.
+  expect(GATE_ANSWERS_NOT_DATED).toContain("gate");
+  expect(GATE_ANSWERS_NOT_DATED).toContain("dated");
 });
