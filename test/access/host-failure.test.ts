@@ -51,6 +51,42 @@ test("a thrown non-Error keeps String()'s answer, as the twenty-eight sites did"
   expect(hostFailure({ nope: true })).toEqual({ kind: "unknown", text: "[object Object]" });
 });
 
+test("node:sqlite's own result codes are read, because the store carries no errno", () => {
+  // The failure that reaches a person most often, and the one a first pass at
+  // this function missed: `node:sqlite` raises `ERR_SQLITE_ERROR` with the
+  // driver's `errcode` and never `EROFS`. Raised by a real database below, in
+  // `test/access/cli.test.ts`; the shapes here are the mapping itself.
+  const sqlite = (errcode: number, message: string) =>
+    Object.assign(new Error(message), { code: "ERR_SQLITE_ERROR", errcode });
+  expect(hostFailure(sqlite(8, "attempt to write a readonly database"))).toEqual({
+    kind: "hostSetup",
+    code: "EROFS",
+    text: "attempt to write a readonly database",
+  });
+  expect(hostFailure(sqlite(14, "unable to open database file"))).toEqual({
+    kind: "hostSetup",
+    code: "ENOENT",
+    text: "unable to open database file",
+  });
+  expect(hostFailure(sqlite(3, "access permission denied")).kind).toBe("hostSetup");
+});
+
+test("a store rondo's own writer is holding stays unknown, because trying again is the answer", () => {
+  // SQLITE_BUSY is contention, not a break: the arm it would divert from
+  // already says "go back and try again", which is the right thing to tell
+  // that person. Same for SQLITE_LOCKED, and for a constraint rondo violated.
+  for (const errcode of [5, 6, 19]) {
+    expect(
+      hostFailure(
+        Object.assign(new Error("database is locked"), {
+          code: "ERR_SQLITE_ERROR",
+          errcode,
+        }),
+      ).kind,
+    ).toBe("unknown");
+  }
+});
+
 test("a plain object carrying an errno is read as one, and still says what String() said", () => {
   // Not every rejection that crosses a boundary arrives as an `Error`. Refusing
   // those would put a genuine ENOENT in `unknown`, which is the failure this

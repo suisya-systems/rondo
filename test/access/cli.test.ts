@@ -17,7 +17,10 @@
  * than of this module; the runbook's real walk is what covers that, and
  * `docs/operations/rondo-cli.md` records it.
  */
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 
 import { expect, test } from "vitest";
 import {
@@ -412,15 +415,41 @@ test("from 'received' the walk is six verbs, in continuo's order", () => {
  * A store that holds only claims, and writes each into the verbs' call log, so
  * the log says whether the claim came before the walk's first write.
  */
-function claimStore(calls: string[], fails: boolean | string = false) {
+/**
+ * What `node:sqlite` actually raises when rondo's store cannot be written
+ * (rondo#349).
+ *
+ * **Raised by a real database and not written by hand.** The whole finding this
+ * guards is that a read-only store carries no errno: the driver raises
+ * `ERR_SQLITE_ERROR` with `SQLITE_READONLY` in `errcode`, and a fake shaped
+ * like an `fs` failure would have let the classifier pass while the real one
+ * failed. Opened read-only rather than `chmod`-ed, so the Windows cell reaches
+ * the same error as every other.
+ */
+function readOnlyStoreWrite(): unknown {
+  const path = join(mkdtempSync(join(tmpdir(), "rondo-claim-ro-")), "iterations.db");
+  const writable = new DatabaseSync(path);
+  writable.exec("create table claim (said text)");
+  writable.close();
+  const readOnly = new DatabaseSync(path, { readOnly: true });
+  try {
+    readOnly.prepare("insert into claim values (?)").run("anything");
+    throw new Error("a read-only database accepted a write; this test proves nothing");
+  } catch (error) {
+    return error;
+  } finally {
+    readOnly.close();
+  }
+}
+
+function claimStore(calls: string[], fails: boolean | "readOnlyStore" = false) {
   return {
     recordVerificationClaim: async (iterationId: string, actorId: string, claim: string) => {
-      if (fails !== false) {
-        // A string stands for an errno: the store is there and this process may
-        // not write it, which is a break only installation repairs (rondo#349).
-        throw typeof fails === "string"
-          ? Object.assign(new Error("EROFS: read-only file system"), { code: fails })
-          : new Error("disk I/O error");
+      if (fails === "readOnlyStore") {
+        throw readOnlyStoreWrite();
+      }
+      if (fails) {
+        throw new Error("disk I/O error");
       }
       calls.push(`claim:${iterationId}:${actorId}:${claim}`);
       return await Promise.resolve();
@@ -491,7 +520,7 @@ test("a claim the machine itself refused is told apart from one rondo simply cou
   // page keeps it out of the person's own sentence (D-0076 rules 4.3 and 4.5).
   const { verbs, calls } = fakeVerbs("presented");
   const outcome = await claimThenWalk(
-    claimStore(calls, "EROFS"),
+    claimStore(calls, "readOnlyStore"),
     continuo,
     walkRequest,
     "i-0001",
@@ -501,7 +530,7 @@ test("a claim the machine itself refused is told apart from one rondo simply cou
   expect(outcome.kind).toBe("refused");
   if (outcome.kind === "refused") {
     expect(outcome.why).toBe("claimHostSetup");
-    expect(outcome.note).toContain("read-only file system");
+    expect(outcome.note).toContain("readonly database");
   }
   expect(calls).toEqual(["show:g1"]);
 });
