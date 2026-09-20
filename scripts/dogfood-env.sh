@@ -33,7 +33,7 @@ usage: scripts/dogfood-env.sh [--root DIR] [--iteration-id ID]
                               [--target-repo DIR] [--target-base-branch NAME]
                               [--forge-repo OWNER/NAME]
                               [--review-criterion FILE] [--port N]
-                              [--remote NAME]
+                              [--remote NAME] [--language TAG|ask]
                               [--force-continuo-rebuild]
 
 Provision a working environment for the rondo operator CLI and print the
@@ -97,6 +97,15 @@ options:
       by the plan a request was drafted from (D-0081).
   --remote NAME
       the git remote publish pushes to, when it is not the default.
+  --language TAG|ask
+      the language rondo writes its own prose to the operator in, as an IETF
+      language tag. Setup asks for this once when nobody has said and there is
+      somebody to ask, and remembers the answer in <root>/operator-language --
+      a file the operator can open and change. Every later run reads it, and
+      writes it into the service the word starts, so the language survives a
+      fresh shell and whichever way the host is started. `ask` puts the
+      question again, which is how somebody who has already run setup changes
+      their answer. It is never guessed from this machine's locale.
   --force-continuo-rebuild
       rebuild the pinned continuo even when the built one already reports the
       pinned version line.
@@ -136,6 +145,7 @@ run_id=dogfood-001
 force_continuo_rebuild=0
 port=7333
 remote=
+language=
 target_repo=
 target_base_branch=
 forge_repo=
@@ -153,6 +163,7 @@ while [ $# -gt 0 ]; do
       [ $# -ge 2 ] || die "--review-criterion needs a value"; review_criterion=$2; shift 2 ;;
     --port) [ $# -ge 2 ] || die "--port needs a value"; port=$2; shift 2 ;;
     --remote) [ $# -ge 2 ] || die "--remote needs a value"; remote=$2; shift 2 ;;
+    --language) [ $# -ge 2 ] || die "--language needs a value"; language=$2; shift 2 ;;
     --force-continuo-rebuild) force_continuo_rebuild=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) usage >&2; die "unknown argument '$1'" ;;
@@ -245,6 +256,34 @@ claude_bin=$(cd -- "$(dirname -- "$claude_bin")" && pwd)/$(basename -- "$claude_
 # with a version manager is a per-shell shim directory that will not exist in
 # another shell, so resolve to the installation the shim points at.
 node_bin=$(node -e 'process.stdout.write(require("node:fs").realpathSync(process.execPath))')
+
+step "Language (the one question setup asks, rondo#352)"
+# **Asked here, before anything is built**, so the one question a person is
+# asked is not waiting behind a clone and a compile -- and so the answer is
+# already in hand when the start command and the unit are written, which is the
+# only place it is used.
+#
+# The record under --root is setup's memory and not a file the host reads
+# (D-0056 rule 3): the host still reads RONDO_OPERATOR_LANGUAGE and only that,
+# and this is the fact setup resolves and spells into the unit, beside the
+# store's path and the approver's name. Every fact on that line is one setup
+# resolved (D-0080 rule 2.1), and this one is now resolved by asking rather
+# than by hoping the person exported a variable before typing this.
+language_args=(--root "$env_root")
+if [ -n "$language" ]; then language_args+=(--language "$language"); fi
+# Only ever a seed for the first run: a variable left in a shell profile does
+# not silently rewrite an answer the operator has already given.
+if [ -n "${RONDO_OPERATOR_LANGUAGE:-}" ]; then
+  language_args+=(--from-environment "$RONDO_OPERATOR_LANGUAGE")
+fi
+operator_language=$("$repo_root/scripts/operator-language.sh" "${language_args[@]}")
+if [ -n "$operator_language" ]; then
+  note "the page and the word speak '$operator_language'"
+  note "$env_root/operator-language"
+else
+  note "nobody has said which language the page is read in, so it is English"
+  note "to choose one: scripts/dogfood-env.sh --language ask"
+fi
 
 step "Pin"
 # One read of continuo.pin.json, newline-delimited: the version line contains
@@ -792,6 +831,14 @@ env_file="$env_root/env.sh"
   printf 'export RONDO_STORE=%q\n' "$env_root/rondo-iterations.sqlite3"
   printf '# The one identity allowed to answer or publish.\n'
   printf 'export RONDO_APPROVER=%q\n' "$approver"
+  # The answer setup was given, so a `rondo web` typed by hand in a sourced
+  # shell says what the service says. The variable is still the only thing the
+  # host reads (D-0056 rule 3); this line is the same recorded fact reaching
+  # the other way a host is started.
+  if [ -n "$operator_language" ]; then
+    printf '# The language rondo writes its own prose to you in.\n'
+    printf 'export RONDO_OPERATOR_LANGUAGE=%q\n' "$operator_language"
+  fi
 } > "$env_file"
 note "$env_file"
 
@@ -880,8 +927,8 @@ start_command_args=(
 )
 if [ -n "$remote" ]; then start_command_args+=(--remote "$remote"); fi
 if [ -n "$opener" ]; then start_command_args+=(--opener "$opener"); fi
-if [ -n "${RONDO_OPERATOR_LANGUAGE:-}" ]; then
-  start_command_args+=(--language "$RONDO_OPERATOR_LANGUAGE")
+if [ -n "$operator_language" ]; then
+  start_command_args+=(--language "$operator_language")
 fi
 if [ -n "${RONDO_MAX_LIVE:-}" ]; then start_command_args+=(--max-live "$RONDO_MAX_LIVE"); fi
 if [ -n "${RONDO_MAX_OCCUPYING:-}" ]; then
