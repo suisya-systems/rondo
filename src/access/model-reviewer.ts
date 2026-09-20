@@ -33,6 +33,7 @@ import {
 import type { IterationStore } from "../store/sqlite.js";
 import { type RequestThread, reportToRequest } from "./conductor.js";
 import { gatherReviewMaterialFacts, runReviewer } from "./forge.js";
+import { hostFailure } from "./host-failure.js";
 import {
   modelReadingLines,
   modelReadingOf,
@@ -104,9 +105,7 @@ export async function takeModelReading(
   try {
     return await take(ports, iterationId);
   } catch (error) {
-    return [
-      `model review  no model reading was taken: ${error instanceof Error ? error.message : String(error)}`,
-    ];
+    return [`model review  no model reading was taken: ${hostFailure(error).text}`];
   }
 }
 

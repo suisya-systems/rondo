@@ -23,6 +23,7 @@ import { canonicalJson, planDigest } from "../store/plan.js";
 import type { IterationRecord, JsonRecord, JsonValue, LaneClaimAsk } from "../store/records.js";
 import type { AdvisoryRecord, IterationStore } from "../store/sqlite.js";
 import type { runDrafter } from "./forge.js";
+import { hostFailure } from "./host-failure.js";
 import {
   type DraftAgentType,
   type DrafterMaterial,
@@ -86,7 +87,7 @@ export async function draftRequest(
       costUsd: null,
       outcome: {
         kind: "unavailable",
-        reason: `the drafter's material could not be gathered: ${error instanceof Error ? error.message : String(error)}`,
+        reason: `the drafter's material could not be gathered: ${hostFailure(error).text}`,
       },
     };
   }
@@ -106,7 +107,7 @@ export async function draftRequest(
   } catch (error) {
     run = {
       kind: "failed",
-      reason: `the drafter could not be run: ${error instanceof Error ? error.message : String(error)}`,
+      reason: `the drafter could not be run: ${hostFailure(error).text}`,
     };
   }
   return {
@@ -125,7 +126,7 @@ function outcomeOf(material: DrafterMaterial, run: DrafterRun): DraftOutcome {
   } catch (error) {
     return {
       kind: "unavailable",
-      reason: `the draft could not be checked: ${error instanceof Error ? error.message : String(error)}`,
+      reason: `the draft could not be checked: ${hostFailure(error).text}`,
     };
   }
 }

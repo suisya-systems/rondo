@@ -81,6 +81,7 @@ import type { AdvisoryRecord, IterationStore } from "../store/sqlite.js";
 // function exists: a value a person is meant to *read* keeps its paragraphs,
 // where a value folded into a line rondo composed may not (rondo#68, rondo#90).
 import { legibleAsciiEscape } from "./console.js";
+import { hostFailure } from "./host-failure.js";
 
 /**
  * Who drafted it (D-0022 rule 13).
@@ -842,9 +843,7 @@ function issueFor(plan: AdmittedPlan, input: AgentTypeInput, about: string): Iss
     // around `ProjectNotFoundError` would be a second vocabulary for one fault.
     return {
       kind: "refused",
-      reason:
-        `cadenza refused to issue a contract for ${about}: ` +
-        `${error instanceof Error ? error.message : String(error)}`,
+      reason: `cadenza refused to issue a contract for ${about}: ${hostFailure(error).text}`,
     };
   }
 }
@@ -1075,7 +1074,7 @@ function promotionsOf(own: AgentTypeInput, subjectId: string): InputsOutcome {
     return {
       refusal:
         `the agent type iteration '${subjectId}' ran under is not one cadenza will build, so its ` +
-        `keys cannot be offered: ${error instanceof Error ? error.message : String(error)}`,
+        `keys cannot be offered: ${hostFailure(error).text}`,
     };
   }
   return {

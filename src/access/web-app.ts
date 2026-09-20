@@ -354,7 +354,13 @@ export type ClaimRefusal =
   | "claimTooLong"
   | "claimGateUnread"
   | "claimGateClosed"
-  | "claimNotRecorded";
+  | "claimNotRecorded"
+  /**
+   * The one of these the person did not cause: the write failed on an errno,
+   * so pressing again changes nothing until this machine is repaired
+   * (rondo#349, `D-0076` rule 4.3).
+   */
+  | "claimHostSetup";
 
 /** What one answer came to; `why` is set only on a claim's own refusals. */
 export interface AnswerOutcome {

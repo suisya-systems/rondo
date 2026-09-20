@@ -15,6 +15,7 @@
  * Nothing here reads a file, opens a store or writes a line.
  */
 import { parseArgs } from "node:util";
+import { hostFailure } from "./host-failure.js";
 
 /** One command, as the parser understood it. Pure: this type holds no I/O. */
 export interface ParsedCommand {
@@ -284,7 +285,7 @@ export function parseCommand(argv: readonly string[]): ParseOutcome {
     values = parsed.values;
     positionals = parsed.positionals;
   } catch (error) {
-    return { kind: "refused", reason: error instanceof Error ? error.message : String(error) };
+    return { kind: "refused", reason: hostFailure(error).text };
   }
   const permitted = FLAGS_BY_COMMAND[command] ?? [];
   for (const given of Object.keys(values)) {

@@ -123,6 +123,7 @@ import {
   runDrafter,
 } from "./forge.js";
 import { forgeHost, publishPreflight, redactRemoteUrl } from "./forge-preflight.js";
+import { hostFailure } from "./host-failure.js";
 import { type InboxOutcome, showInbox, type TranscriptLocation } from "./inbox.js";
 import {
   bareIssueRepository,
@@ -516,7 +517,7 @@ async function heldPlanOf(
     };
   } catch (error) {
     return {
-      refusal: `the plans rondo holds could not be read: ${error instanceof Error ? error.message : String(error)}`,
+      refusal: `the plans rondo holds could not be read: ${hostFailure(error).text}`,
     };
   }
 }
@@ -856,7 +857,7 @@ function loadPlan(parsed: ParsedCommand): { plan: RunPlan } | { refusal: string 
       payload["prompt"] = readFileSync(parsed.promptFile, "utf8");
     } catch (error) {
       return {
-        refusal: `The prompt file could not be read: ${error instanceof Error ? error.message : String(error)}`,
+        refusal: `The prompt file could not be read: ${hostFailure(error).text}`,
       };
     }
   }
@@ -882,7 +883,7 @@ function readPlanDocument(file: string): { document: JsonRecord } | { refusal: s
     raw = readFileSync(file, "utf8");
   } catch (error) {
     return {
-      refusal: `The plan file could not be read: ${error instanceof Error ? error.message : String(error)}`,
+      refusal: `The plan file could not be read: ${hostFailure(error).text}`,
     };
   }
   let document: unknown;
@@ -890,7 +891,7 @@ function readPlanDocument(file: string): { document: JsonRecord } | { refusal: s
     document = JSON.parse(raw);
   } catch (error) {
     return {
-      refusal: `The plan file is not JSON: ${error instanceof Error ? error.message : String(error)}`,
+      refusal: `The plan file is not JSON: ${hostFailure(error).text}`,
     };
   }
   if (document === null || typeof document !== "object" || Array.isArray(document)) {
@@ -999,7 +1000,7 @@ function openStore(
     return { store: openIterationStore(path, bounds.policy), path };
   } catch (error) {
     return {
-      refusal: `The iteration store at ${path} could not be opened: ${error instanceof Error ? error.message : String(error)}`,
+      refusal: `The iteration store at ${path} could not be opened: ${hostFailure(error).text}`,
     };
   }
 }
@@ -1819,9 +1820,7 @@ export function unpromptedPorts(store: IterationStore, storePath: string): Unpro
     return { ...advisoryPorts(store, storePath, () => {}), cadenzaRevision: pin.revision };
   } catch (error) {
     return {
-      unavailable:
-        "the advisory's own connection to the store could not be opened: " +
-        `${error instanceof Error ? error.message : String(error)}`,
+      unavailable: `the advisory's own connection to the store could not be opened: ${hostFailure(error).text}`,
     };
   }
 }
@@ -2211,7 +2210,7 @@ function cadenzaRevision(): { revision: string } | { refusal: string } {
     return { revision };
   } catch (error) {
     return {
-      refusal: `cadenza.pin.json could not be read: ${error instanceof Error ? error.message : String(error)}`,
+      refusal: `cadenza.pin.json could not be read: ${hostFailure(error).text}`,
     };
   }
 }
@@ -2523,9 +2522,7 @@ async function commandScope(
   try {
     document = JSON.parse(readFileSync(parsed.payloadFile, "utf8"));
   } catch (error) {
-    return refuse(
-      `The scope payload could not be read as JSON: ${error instanceof Error ? error.message : String(error)}`,
-    );
+    return refuse(`The scope payload could not be read as JSON: ${hostFailure(error).text}`);
   }
   if (document === null || typeof document !== "object" || Array.isArray(document)) {
     return refuse("The scope payload file must hold a JSON object.");
@@ -3543,7 +3540,7 @@ async function commandAnswer(
     } catch (error) {
       return refuse(
         `what you said you verified was not recorded, so nothing was answered: ${
-          error instanceof Error ? error.message : String(error)
+          hostFailure(error).text
         }`,
       );
     }
@@ -3834,12 +3831,17 @@ export async function claimThenWalk(
     try {
       await store.recordVerificationClaim(iterationId, request.actorId, claim, nowMs());
     } catch (error) {
+      // The page's half of this forks and the terminal's does not (rondo#349).
+      // A write that failed on an errno is a break only installation repairs,
+      // and `claimNotRecorded` tells the presser to go back and try again --
+      // advice that is wrong for a store this process may not write. `D-0076`
+      // rule 4.3's sentence is the other arm; the reason itself still travels
+      // in `note`, which the page keeps out of the person's sentence.
+      const failure = hostFailure(error);
       return {
         kind: "refused",
-        why: "claimNotRecorded",
-        note: `What you said you verified was not recorded, so nothing was answered: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
+        why: failure.kind === "hostSetup" ? "claimHostSetup" : "claimNotRecorded",
+        note: `What you said you verified was not recorded, so nothing was answered: ${failure.text}`,
       };
     }
   }

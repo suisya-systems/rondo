@@ -33,6 +33,7 @@ import {
 } from "../store/records.js";
 import type { AdvisoryRecord, IterationStore } from "../store/sqlite.js";
 import type { runDrafter } from "./forge.js";
+import { hostFailure } from "./host-failure.js";
 import { threadOf } from "./model-drafter.js";
 import { reviewRoundsAlong } from "./model-review.js";
 import {
@@ -469,5 +470,5 @@ function proposalOf(
 }
 
 function describe(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+  return hostFailure(error).text;
 }

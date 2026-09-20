@@ -424,6 +424,13 @@ export interface Chrome extends PageWords {
   readonly claimGateUnread: string;
   readonly claimGateClosed: string;
   readonly claimNotRecorded: string;
+  /**
+   * {@link claimNotRecorded} when the write failed on an errno (rondo#349):
+   * the same press, but trying again is not the way back, so `D-0076` rule 4.3
+   * says setup here has not finished or has stopped working, and what it
+   * stops, and nothing about how.
+   */
+  readonly claimHostSetup: string;
   readonly answerNotDone: string;
   readonly gateBack: string;
   /** The line by the button when the model review raised a blocker or a major. */
@@ -1327,6 +1334,10 @@ explanation you pressed on and then answers the gate.`,
     "This gate was already answered, so what you said you checked was not recorded. Go back to the gate to see how it ended.",
   claimNotRecorded:
     "rondo could not record what you said you checked, so nothing was answered. Go back to the gate and try again.",
+  claimHostSetup:
+    "rondo on this machine cannot record what you said you checked, so nothing was answered and " +
+    "nothing was spent. Setup here has not finished, or has stopped working, so pressing approve " +
+    "again will answer nothing either; whoever set rondo up on this machine can see why.",
   answerNotDone: "Nothing was answered",
   gateBack: "Back to the gate",
   modelRaised: (blockers, majors) => `The model review raised ${raisedEn(blockers, majors)}.`,
@@ -2188,6 +2199,10 @@ const JA: Chrome = Object.freeze({
     "ゲートがすでに回答済みだったため、確認した内容は記録していません。ゲートに戻ると、どう終わったかを確認できます。",
   claimNotRecorded:
     "rondo が確認した内容を記録できなかったため、何も回答していません。ゲートに戻って、もう一度試してください。",
+  claimHostSetup:
+    "この環境の rondo は、確認した内容を記録できません。そのため何も回答しておらず、費用もかかっていません。" +
+    "この環境のセットアップが終わっていないか、動かなくなっています。" +
+    "もう一度 approve を押しても同じです。この環境の rondo を用意した人なら、理由を見られます。",
   answerNotDone: "回答されませんでした",
   gateBack: "ゲートに戻る",
   modelRaised: (blockers, majors) => `モデルレビューの指摘: ${raisedJa(blockers, majors)}。`,

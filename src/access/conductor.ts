@@ -87,6 +87,7 @@ import {
   readChangedPaths,
   readLanding,
 } from "./forge.js";
+import { hostFailure } from "./host-failure.js";
 import { modelReadingLines } from "./model-review.js";
 import { READING_REMOTE, readingOf } from "./review.js";
 
@@ -727,7 +728,7 @@ async function proposeLine(advisory: UnpromptedPorts, iterationId: string): Prom
   } catch (error) {
     return (
       `No retry was proposed for '${iterationId}': the advisory raised ` +
-      `${error instanceof Error ? error.message : String(error)}. The iteration's own outcome ` +
+      `${hostFailure(error).text}. The iteration's own outcome ` +
       "stands."
     );
   }
