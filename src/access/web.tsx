@@ -86,6 +86,8 @@
  * to action; the press in a bar that stays in reach. `page/app.css` holds both
  * palettes, and the build compiles the classes named in this file.
  */
+
+import { raw } from "hono/html";
 import {
   type BudgetBasis,
   type BudgetFormula,
@@ -160,6 +162,7 @@ import {
 import { markdownHtml } from "./markdown.js";
 import { isModelDrafterName } from "./model-draft.js";
 import { type HeldPlan, heldPlanByDigest, heldPlans } from "./model-drafter.js";
+import { facesMarkup } from "./page/render.js";
 import {
   decodedDenials,
   endedHow,
@@ -6459,189 +6462,218 @@ export async function operatorPage(
             }
           </div>
         </header>
-        <main class="mx-auto max-w-5xl space-y-6 px-4 pt-6 pb-12 sm:px-6">
-          {
-            // **Said on the visible page and not only in the reading.** With no
-            // approver there is no write port and so no button anywhere, and a
-            // page that explained that only inside the fold would leave an
-            // operator looking for a button that is missing for a reason rondo
-            // knows and did not say (D-0020 rule 2).
-            ports.actorId === null ? (
-              <p class="note rounded-md border border-border bg-muted/60 px-3 py-2 text-[13px] leading-5">
-                {wording.noApproverNote}
-              </p>
-            ) : null
-          }
-          {view.kind === "requests"
-            ? composerView(wording, view, threads, token, newId, ports.actorId, nowMs)
-            : null}
-          {
-            // **The ledger is what the refresh swaps**, and only on a live
-            // view: htmx `GET`s this view's own address every five seconds and
-            // takes `#ledger` out of the document that comes back. There is no
-            // fragment endpoint -- the response is the whole page a navigating
-            // browser gets (D-0054 rule 2) -- so there is no second rendering
-            // of anything to keep true.
-            <div
-              id="ledger"
-              class="space-y-8"
-              {...(keepsCurrent
-                ? {
-                    "hx-get": here,
-                    "hx-trigger": "every 5s",
-                    "hx-select": "#ledger",
-                    "hx-swap": "outerHTML",
-                    "hx-select-oob": "#waiting-count",
-                  }
-                : {})}
-            >
-              {
-                // Inside the swap (#220 S1, Codex): a thread read that fails
-                // while the page is open must be said by the redraw that shows
-                // the empty list, and must go away with the redraw that recovers.
-                threadRead.kind === "unreadable" ? (
-                  <p class="note rounded-md border border-fail/40 px-3 py-2 text-[13px] leading-5 text-fail">
-                    {wording.threadsUnreadable(threadRead.reason)}
-                  </p>
-                ) : null
-              }
-              {view.kind === "requests" ? (
-                requestsView(wording, threads, nowMs, ports.actorId, scopeTo, lapUnder)
-              ) : view.kind === "thread" ? (
-                threadView(wording, threads, view, nowMs, ports.actorId, forms, scopeTo)
-              ) : view.kind === "scope" ? (
-                scoping
-              ) : view.kind === "publish" ? (
-                publishing
-              ) : view.kind === "log" ? (
-                logging
-              ) : view.kind === "release" ? (
-                releasing
-              ) : waiting.length +
-                  running.length +
-                  keptOlder.length +
-                  ended.length +
-                  open.length +
-                  unreadable.length +
-                  threads.waiting.size ===
-                0 ? (
-                nothingView(wording)
-              ) : (
-                <>
-                  {waitingView(
-                    wording,
-                    waiting,
-                    open,
-                    nowMs,
-                    token,
-                    shown,
-                    threads,
-                    ports.actorId,
-                    waitingCount,
-                    newIterationId,
-                    owns,
-                  )}
-                  {/*
-                   * **A finished line still keeping its files sits with what
-                   * waits on a person, above what waits on nobody** (D-0082
-                   * rule 1). Every row in this group carries the release press,
-                   * so the whole group is drawn at the waiting weight; it was
-                   * under *running now*, which is the one group that needs no
-                   * one.
-                   */}
-                  {keptOlder.length === 0
-                    ? null
-                    : endedView(
-                        wording,
-                        keptOlder,
-                        nowMs,
-                        endedFacts,
-                        publishTo,
-                        threads,
-                        landing,
-                        wording.heldHeading(keptOlder.length),
-                      )}
-                  {attentionView(wording, unreadable)}
-                  {runningView(wording, running, transcripts, nowMs, owns)}
-                  {endedView(wording, ended, nowMs, endedFacts, publishTo, threads, landing)}
-                </>
-              )}
-              {onThreads ||
-              view.kind === "scope" ||
-              view.kind === "publish" ||
-              view.kind === "log" ||
-              view.kind === "release" ? null : (
-                <p id="fold" class="border-t border-border pt-4 text-[13px]">
-                  <a
-                    id="fold-link"
-                    href={viewHref(
-                      view.kind === "reading" ? { kind: "summary" } : { kind: "reading" },
-                      wording.lang,
-                    )}
-                    class="text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-                    {...(view.kind === "reading" ? { "data-back": "" } : {})}
-                  >
-                    {view.kind === "reading" ? wording.hideReading : wording.openReading}
-                  </a>
-                </p>
-              )}
-              {
-                // **The fold and the reading are inside the swap too**: on
-                // `?reading=open` they are drawn from the same ledger, and a
-                // reading left outside `#ledger` would stay at first load
-                // under a note that says the view redraws.
-                readingSections.length === 0 ? null : (
-                  <div id="reading" class="space-y-2">
-                    {readingSections}
+        {/*
+         * **The three faces** (D-0083 rules 1 and 5). The faces are React and
+         * the things inside them are still this renderer's server JSX, so the
+         * centre is handed over as markup (`src/access/page/shell.tsx`, which
+         * exists to be deleted as each face is rebuilt). The left and right
+         * faces are frames with nothing in them yet: the list is this slice's
+         * next change, the right face's governance is the second slice's, and
+         * the empty state's right face is the third's (gate point 7).
+         */}
+        <main>
+          {raw(
+            facesMarkup({
+              list: null,
+              side: null,
+              thread: {
+                rendered: await (
+                  <div class="mx-auto max-w-5xl space-y-6 px-4 pt-6 pb-12 sm:px-6">
+                    {
+                      // **Said on the visible page and not only in the reading.** With no
+                      // approver there is no write port and so no button anywhere, and a
+                      // page that explained that only inside the fold would leave an
+                      // operator looking for a button that is missing for a reason rondo
+                      // knows and did not say (D-0020 rule 2).
+                      ports.actorId === null ? (
+                        <p class="note rounded-md border border-border bg-muted/60 px-3 py-2 text-[13px] leading-5">
+                          {wording.noApproverNote}
+                        </p>
+                      ) : null
+                    }
+                    {view.kind === "requests"
+                      ? composerView(wording, view, threads, token, newId, ports.actorId, nowMs)
+                      : null}
+                    {
+                      // **The ledger is what the refresh swaps**, and only on a live
+                      // view: htmx `GET`s this view's own address every five seconds and
+                      // takes `#ledger` out of the document that comes back. There is no
+                      // fragment endpoint -- the response is the whole page a navigating
+                      // browser gets (D-0054 rule 2) -- so there is no second rendering
+                      // of anything to keep true.
+                      <div
+                        id="ledger"
+                        class="space-y-8"
+                        {...(keepsCurrent
+                          ? {
+                              "hx-get": here,
+                              "hx-trigger": "every 5s",
+                              "hx-select": "#ledger",
+                              "hx-swap": "outerHTML",
+                              "hx-select-oob": "#waiting-count",
+                            }
+                          : {})}
+                      >
+                        {
+                          // Inside the swap (#220 S1, Codex): a thread read that fails
+                          // while the page is open must be said by the redraw that shows
+                          // the empty list, and must go away with the redraw that recovers.
+                          threadRead.kind === "unreadable" ? (
+                            <p class="note rounded-md border border-fail/40 px-3 py-2 text-[13px] leading-5 text-fail">
+                              {wording.threadsUnreadable(threadRead.reason)}
+                            </p>
+                          ) : null
+                        }
+                        {view.kind === "requests" ? (
+                          requestsView(wording, threads, nowMs, ports.actorId, scopeTo, lapUnder)
+                        ) : view.kind === "thread" ? (
+                          threadView(wording, threads, view, nowMs, ports.actorId, forms, scopeTo)
+                        ) : view.kind === "scope" ? (
+                          scoping
+                        ) : view.kind === "publish" ? (
+                          publishing
+                        ) : view.kind === "log" ? (
+                          logging
+                        ) : view.kind === "release" ? (
+                          releasing
+                        ) : waiting.length +
+                            running.length +
+                            keptOlder.length +
+                            ended.length +
+                            open.length +
+                            unreadable.length +
+                            threads.waiting.size ===
+                          0 ? (
+                          nothingView(wording)
+                        ) : (
+                          <>
+                            {waitingView(
+                              wording,
+                              waiting,
+                              open,
+                              nowMs,
+                              token,
+                              shown,
+                              threads,
+                              ports.actorId,
+                              waitingCount,
+                              newIterationId,
+                              owns,
+                            )}
+                            {/*
+                             * **A finished line still keeping its files sits with what
+                             * waits on a person, above what waits on nobody** (D-0082
+                             * rule 1). Every row in this group carries the release press,
+                             * so the whole group is drawn at the waiting weight; it was
+                             * under *running now*, which is the one group that needs no
+                             * one.
+                             */}
+                            {keptOlder.length === 0
+                              ? null
+                              : endedView(
+                                  wording,
+                                  keptOlder,
+                                  nowMs,
+                                  endedFacts,
+                                  publishTo,
+                                  threads,
+                                  landing,
+                                  wording.heldHeading(keptOlder.length),
+                                )}
+                            {attentionView(wording, unreadable)}
+                            {runningView(wording, running, transcripts, nowMs, owns)}
+                            {endedView(
+                              wording,
+                              ended,
+                              nowMs,
+                              endedFacts,
+                              publishTo,
+                              threads,
+                              landing,
+                            )}
+                          </>
+                        )}
+                        {onThreads ||
+                        view.kind === "scope" ||
+                        view.kind === "publish" ||
+                        view.kind === "log" ||
+                        view.kind === "release" ? null : (
+                          <p id="fold" class="border-t border-border pt-4 text-[13px]">
+                            <a
+                              id="fold-link"
+                              href={viewHref(
+                                view.kind === "reading" ? { kind: "summary" } : { kind: "reading" },
+                                wording.lang,
+                              )}
+                              class="text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                              {...(view.kind === "reading" ? { "data-back": "" } : {})}
+                            >
+                              {view.kind === "reading" ? wording.hideReading : wording.openReading}
+                            </a>
+                          </p>
+                        )}
+                        {
+                          // **The fold and the reading are inside the swap too**: on
+                          // `?reading=open` they are drawn from the same ledger, and a
+                          // reading left outside `#ledger` would stay at first load
+                          // under a note that says the view redraws.
+                          readingSections.length === 0 ? null : (
+                            <div id="reading" class="space-y-2">
+                              {readingSections}
+                            </div>
+                          )
+                        }
+                      </div>
+                    }
+                    {view.kind === "thread"
+                      ? composerView(wording, view, threads, token, newId, ports.actorId, nowMs)
+                      : null}
+                    {
+                      // **Each view says which of the two it is**, because "redraws every
+                      // 5s" on a view that does not would be the page's own copy lying
+                      // about the one property D-0054 rule 1 spends itself on. Both say
+                      // the same thing about writing, which is the fact that did not
+                      // change: a read writes nothing, whoever or whatever issued it.
+                      // At the foot rather than the head (the design pass on #220): it is
+                      // the page's account of itself, and what needs the reader leads.
+                      // **One short line, and the account in its `title`** (the S1 design
+                      // pass): the sentences are the page's account of itself for the
+                      // reader who asks, not prose every reader has to read past.
+                      <p class="note max-w-3xl text-[11.5px] leading-5 text-faint">
+                        <span
+                          title={
+                            onThreads
+                              ? wording.threadsLiveNote(REFRESH_SECONDS)
+                              : keepsCurrent
+                                ? wording.liveNote(REFRESH_SECONDS)
+                                : wording.stillNote
+                          }
+                        >
+                          {
+                            // **Script only, as the header's live pill** (#220 S1): with
+                            // script off nothing redraws in place, and a thread with a box
+                            // does not reload at all, so "live" would be false there.
+                            keepsCurrent ? (
+                              <span class="js-only">{wording.liveShort(REFRESH_SECONDS)}</span>
+                            ) : (
+                              wording.stillShort
+                            )
+                          }
+                        </span>
+                      </p>
+                    }
+                    {onThreads && forms && view.kind === "requests" ? (
+                      <noscript>
+                        <p class="note max-w-3xl text-[11.5px] leading-5 text-faint">
+                          {wording.threadNoReload}
+                        </p>
+                      </noscript>
+                    ) : null}
                   </div>
-                )
-              }
-            </div>
-          }
-          {view.kind === "thread"
-            ? composerView(wording, view, threads, token, newId, ports.actorId, nowMs)
-            : null}
-          {
-            // **Each view says which of the two it is**, because "redraws every
-            // 5s" on a view that does not would be the page's own copy lying
-            // about the one property D-0054 rule 1 spends itself on. Both say
-            // the same thing about writing, which is the fact that did not
-            // change: a read writes nothing, whoever or whatever issued it.
-            // At the foot rather than the head (the design pass on #220): it is
-            // the page's account of itself, and what needs the reader leads.
-            // **One short line, and the account in its `title`** (the S1 design
-            // pass): the sentences are the page's account of itself for the
-            // reader who asks, not prose every reader has to read past.
-            <p class="note max-w-3xl text-[11.5px] leading-5 text-faint">
-              <span
-                title={
-                  onThreads
-                    ? wording.threadsLiveNote(REFRESH_SECONDS)
-                    : keepsCurrent
-                      ? wording.liveNote(REFRESH_SECONDS)
-                      : wording.stillNote
-                }
-              >
-                {
-                  // **Script only, as the header's live pill** (#220 S1): with
-                  // script off nothing redraws in place, and a thread with a box
-                  // does not reload at all, so "live" would be false there.
-                  keepsCurrent ? (
-                    <span class="js-only">{wording.liveShort(REFRESH_SECONDS)}</span>
-                  ) : (
-                    wording.stillShort
-                  )
-                }
-              </span>
-            </p>
-          }
-          {onThreads && forms && view.kind === "requests" ? (
-            <noscript>
-              <p class="note max-w-3xl text-[11.5px] leading-5 text-faint">
-                {wording.threadNoReload}
-              </p>
-            </noscript>
-          ) : null}
+                ).toString(),
+              },
+            }),
+          )}
         </main>
       </body>
     </html>

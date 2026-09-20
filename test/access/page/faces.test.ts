@@ -17,6 +17,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { expect, test } from "vitest";
 import { Faces } from "../../../src/access/page/faces.js";
+import { fresh, gateWithChecks, operatorPage, portsOver } from "../page-world.js";
 
 test("the three faces are rendered, each carrying what it was handed", () => {
   const html = renderToStaticMarkup(
@@ -48,4 +49,19 @@ test("React rendered this, and not the tree's default JSX runtime", () => {
   const element = Faces({ list: null, thread: null, side: null });
   expect(typeof element).toBe("object");
   expect(renderToStaticMarkup(element)).toContain("page-faces");
+});
+
+test("the page itself is drawn as three faces", async () => {
+  // The shell is on the live page, not only in the component above: this
+  // renders what the server would answer with and looks for the faces.
+  const world = fresh();
+  await gateWithChecks(world);
+  const html = await operatorPage(portsOver(world, "ada", []), "t", { kind: "summary" });
+  expect(html).toContain("page-faces");
+  expect(html).toContain("face-list");
+  expect(html).toContain("face-thread");
+  expect(html).toContain("face-side");
+  // And the centre still carries the page it always did, rather than an
+  // empty frame: the list and the right face are the slices still to come.
+  expect(html).toContain("<main>");
 });

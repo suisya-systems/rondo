@@ -385,6 +385,17 @@ const ALLOWED_EXTERNALS_BY_MODULE: Readonly<
   // sweep sees: `tsc` emits it from the per-file `@jsxImportSource` pragma
   // and it is not written in the source.
   "src/access/page/faces.tsx": { react: ["ReactNode"] },
+  // The one place the two JSX runtimes meet: a React face rendered to markup
+  // the server-JSX document can place. Static markup only -- hydration is the
+  // client bundle's, per island, and is not what this emits.
+  "src/access/page/render.ts": { "react-dom/server": ["renderToStaticMarkup"] },
+  // **The renderer names one external again.** `raw` marks markup this
+  // process already rendered as needing no further escaping, which is how a
+  // React face crosses into the server-JSX document without being escaped a
+  // second time (`src/access/page/shell.tsx`). It goes away with the seam.
+  "src/access/web.tsx": {
+    "hono/html": ["raw"],
+  },
   // **The renderer names no external at all now.** `hono/utils/accept` moved
   // with the language resolution it was imported for, to the module below:
   // the page's rebuild lifted that resolution out of the view layer, and the
