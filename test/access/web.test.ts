@@ -42,11 +42,7 @@ import { draftedPlanRun } from "../../src/access/model-drafter.js";
 import { evidenceOf, READING_REMOTE } from "../../src/access/review.js";
 import { reviseDrafterHost } from "../../src/access/revise-drafter.js";
 import { agentTypeRecordOf, heldAgentTypeLines } from "../../src/access/scope.js";
-import {
-  type PublishReading,
-  operatorPage as renderPage,
-  viewHref,
-} from "../../src/access/web.js";
+import { type PublishReading, operatorPage as renderPage, viewHref } from "../../src/access/web.js";
 import {
   AnswerPort,
   newScopeId,
@@ -1556,7 +1552,6 @@ test("every view is complete under each of the three answers to the language que
  * 4's reason with the query, the cookie and the header added to it (rule 13).
  */
 
-
 /** One `GET`, with headers of our choosing and the redirect left where it is. */
 async function get(
   base: string,
@@ -1603,7 +1598,6 @@ async function get(
 function declaredIn(html: string): string {
   return /<html lang="([^"]*)">/.exec(html)?.[1] ?? "";
 }
-
 
 test("a cookie that is not a tag is ignored and does not take the server down", async () => {
   // **`decodeURIComponent` throws on `lang=%`**, and `resolveLanguage` runs
