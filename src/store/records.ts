@@ -1415,6 +1415,27 @@ export interface AttentionCount {
 }
 
 /**
+ * What was kept from the operator over **one request**, by the rule that kept
+ * it (D-0032 rule 10, D-0083 rule 6's fifth item).
+ *
+ * `ruleName` is never null here: the table's own CHECK refuses a `withheld`
+ * row that does not name the rule, which is the point of the table, and this
+ * reads the withheld side alone.
+ *
+ * **What this counts, and what it cannot.** A withholding is tied to a request
+ * through the proposal it was about; {@link OperatorAttention.subjectId} is
+ * nullable exactly because the most common withholding was never composed into
+ * a proposal at all, and a row with no subject belongs to no request. So this
+ * is the *accountable silence about this request* -- the same ceiling D-0032
+ * rule 10 already states about the table as a whole, narrowed, and not a
+ * smaller claim than the week's figure makes.
+ */
+export interface WithheldByRule {
+  readonly ruleName: string;
+  readonly count: number;
+}
+
+/**
  * One record that landed at or after a mark (D-0032 rule 11's third query).
  *
  * A pointer rather than a record, for {@link UnconsumedDecision}'s opposite

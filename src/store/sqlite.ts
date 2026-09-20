@@ -110,6 +110,7 @@ import {
   TERMINAL_STATUSES,
   type ThreadMessageDraft,
   type UnconsumedDecision,
+  type WithheldByRule,
   WRITABLE_SCOPE_ACT_KINDS,
 } from "./records.js";
 
@@ -2807,6 +2808,27 @@ export interface AdvisoryRecord {
    */
   attentionBreakdown(interval?: AttentionInterval): Promise<readonly AttentionCount[]>;
   /**
+   * The same silence, narrowed to **one request** rather than to an interval
+   * (D-0083 rule 6's fifth item).
+   *
+   * **Why a second read and not an argument to the one above.** That one
+   * answers over a window and groups both dispositions, because the ratio is
+   * what an interval is asked for. This one answers "what did rondo decide
+   * without asking *about this*", which is the withheld side alone and has no
+   * denominator: a request nobody was asked about is not a request rondo was
+   * silent about six times out of ten.
+   *
+   * **The join is the proposal, and the ceiling is stated rather than
+   * hidden.** A withholding names its subject, and a subject is tied to a
+   * request by the proposal's own lap or by the message it was elevated from.
+   * A row whose `subject_id` is null -- the most common withholding, which was
+   * never composed into a proposal at all -- belongs to no request and is not
+   * counted here. That is D-0032 rule 10's own residue narrowed, and it is why
+   * the page says *decided without asking* of a request and never *decided
+   * nothing*.
+   */
+  withheldFor(requestMessageId: string): Promise<readonly WithheldByRule[]>;
+  /**
    * Every admission a bound refused, oldest first (D-0023 rule 14, D-0037
    * rule 3c).
    *
@@ -3798,6 +3820,25 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
             ruleName: ruleName === null ? null : String(ruleName),
             count: Number(record["n"]),
           } as const;
+        });
+    },
+
+    async withheldFor(requestMessageId: string): Promise<readonly WithheldByRule[]> {
+      return connection
+        .prepare(
+          // One statement and no interpolation, like every other read here.
+          // `rule_name` cannot be null on a withheld row: the table's CHECK
+          // refuses one, so the grouping is over a value that is always there.
+          "SELECT rule_name, count(*) AS n FROM operator_attention " +
+            "WHERE disposition = 'withheld' AND subject_id IS NOT NULL AND subject_id IN (" +
+            "SELECT proposal_id FROM proposal WHERE elevated_from_message_id = ? OR " +
+            "iteration_id IN (SELECT id FROM iteration WHERE request_message_id = ?)) " +
+            "GROUP BY rule_name ORDER BY rule_name",
+        )
+        .all(requestMessageId, requestMessageId)
+        .map((row) => {
+          const record = row as SqlRow;
+          return { ruleName: String(record["rule_name"]), count: Number(record["n"]) } as const;
         });
     },
 

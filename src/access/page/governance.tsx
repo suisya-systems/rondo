@@ -7,12 +7,15 @@
  * question should not have to go looking for what was agreed; rule 6 spends
  * the width on it rather than on prose.
  *
- * **Five of rule 6's six items, and the sixth said rather than dropped.** What
- * is missing is *how many things rondo decided without asking*, and the line
- * says so in its own words -- because the alternative is a line that reads as
- * complete while one of its facts is absent. It is not drawn as `0`: zero
- * would be rondo claiming it decided nothing without asking, and rondo cannot
- * read that per request yet (`page-logic/governance.ts`'s `WITHHELD_NOT_READ`).
+ * **All six of rule 6's items** (rondo#350). The one that used to be missing
+ * -- *how many things rondo decided without asking* -- is read from this
+ * request's own withheld rows now (`withheldFor`), so the line carries the
+ * count and the right face carries the same count with the rule behind each.
+ * The note that used to admit the absence is gone with the absence.
+ *
+ * **Rule 6's ban is kept**: a spend is never drawn without the figure it was
+ * approved against, so the pair travels together or one sentence stands for
+ * both.
  */
 import type { ChainLink, Governance } from "../page-logic/governance.js";
 import type { Chrome } from "../wording.js";
@@ -61,11 +64,11 @@ export function GovernanceLine({
         ))}
       </span>
       {/*
-       * The sixth item, named. It is the right face's to count and explain
-       * (rule 6), and until that is built this says which fact is not on the
-       * line rather than letting the line read as whole.
+       * The sixth item (rule 6). A count and not a sentence: the right face
+       * carries the same number with the rule behind each, and this line is
+       * the reason a person knows to look.
        */}
-      <span className="gov-missing">{wording.govDecidedNotRead}</span>
+      <span className="gov-decided">{wording.govDecided(governance.decided.count)}</span>
     </p>
   );
 }

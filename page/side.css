@@ -1,5 +1,6 @@
 /*
- * The right face with nothing waiting (DECISIONS.md D-0083 rule 4).
+ * The right face: with nothing waiting (DECISIONS.md D-0083 rule 4), and of a
+ * request being answered (rules 5 and 6).
  *
  * Its own file for `list.css`'s reason: what this face is made of should be
  * readable without reading past the palette. **No amber is declared here** --
@@ -152,6 +153,106 @@
 }
 
 /*
+ * The right face of a request (D-0083 rules 5 and 6, rondo#350).
+ *
+ * **Two tiers and one column.** Rule 5 puts the material above what was
+ * agreed, and swaps them where nothing is being asked; which is on top is the
+ * component's (`page/thread-side.tsx`) and the spacing between them is here.
+ *
+ * **The material is the renderer's own markup** and carries its own Tailwind
+ * classes, so nothing below styles the cards: what this file owns is the
+ * heading above them and the room around them.
+ */
+.side-material,
+.side-gov {
+  display: block;
+}
+
+.side-material + .side-gov,
+.side-gov + .side-material {
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid var(--color-border);
+}
+
+.side-sub,
+.side-touch h3,
+.side-decided h3 {
+  margin-top: 16px;
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-muted-foreground);
+}
+
+/*
+ * Where a lap may touch (rule 6): the places the approval names, each on its
+ * own line, and the acts under them as one sentence. A path is the record's
+ * own string, so it is monospaced and allowed to break anywhere rather than
+ * pushing the face sideways.
+ */
+.side-touch ul {
+  display: grid;
+  gap: 4px;
+  list-style: none;
+}
+
+.side-touch li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.side-root {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--color-muted-foreground);
+  overflow-wrap: anywhere;
+}
+
+.side-touch p {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--color-muted-foreground);
+}
+
+/*
+ * What rondo decided without asking (rule 6), counted and named by the rule
+ * behind each -- which is the same thing as *why it did not need you*, since
+ * a withholding whose rule cannot be named is refused where it is written.
+ */
+.side-decided-count {
+  font-size: 18px;
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums;
+}
+
+.side-decided ul {
+  margin-top: 6px;
+  display: grid;
+  gap: 4px;
+  list-style: none;
+}
+
+.side-decided li {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--color-muted-foreground);
+}
+
+.side-decided li b {
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+/*
  * Below 2560 the face is 440px: the week's figures go two across and the five
  * steps stay five, which is what a person reads the card for -- a step row cut
  * into two lines is no longer a line to read left to right.
@@ -159,6 +260,16 @@
 @media (max-width: 2000px) {
   .side-week {
     grid-template-columns: 1fr 1fr;
+  }
+  /*
+   * A row of three in a grid of two leaves one cell unfilled, and the rules
+   * between the cells are this grid's own background showing through its gap
+   * -- so an unfilled cell is not empty space, it is a grey block. The odd
+   * last figure takes the rest of its row instead. Only here: at three across
+   * the rows are full, and at 1280 the face is full width again.
+   */
+  .side-week > div:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
   }
   .side-week dd {
     font-size: 16px;

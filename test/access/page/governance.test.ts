@@ -17,7 +17,7 @@ import {
   reserve,
 } from "../page-world.js";
 
-test("the governance line is under the title, permanent, and says which of rule 6's items is missing", async () => {
+test("the governance line is under the title, permanent, and carries all six of rule 6's items", async () => {
   const world = fresh();
   await gateWithChecks(world);
   const html = await operatorPage(portsOver(world, "ada", []), "t", { kind: "summary" });
@@ -40,12 +40,35 @@ test("the governance line is under the title, permanent, and says which of rule 
   expect(head).toContain('class="gov-step gov-waiting">your answer');
   expect(head).toContain('class="gov-step gov-yours">merge');
 
-  // **Five items, and the sixth named rather than dropped.** A line that read
-  // as whole while one of rule 6's facts was absent is the failure this
-  // sentence exists against; drawing it as `0` would be worse, because zero
-  // is the claim that rondo decided nothing without asking.
-  expect(head).toContain("what rondo decided without asking is not counted here yet");
-  expect(head).not.toContain(">0<");
+  // **The sixth item, counted** (rondo#350). The note admitting the absence
+  // is gone with the absence: the count is read from this request's own
+  // withheld rows, so zero is *nothing was withheld about this request* and
+  // not a claim about every silence rondo has ever kept.
+  expect(head).toContain('class="gov-decided">decided without asking: 0');
+  expect(head).not.toContain("not counted here yet");
+});
+
+test("the right face carries the same governance in full, under the material", async () => {
+  // **Rule 6's second half**: the line is what fits on a line and the right
+  // face is the whole of it -- the allowance with what is left, the tries,
+  // where a lap may touch, the steps to the end, and what was decided without
+  // asking. Rule 5 puts the material above it while a question is standing.
+  const world = fresh();
+  await gateWithChecks(world);
+  const html = await operatorPage(portsOver(world, "ada", []), "t", { kind: "summary" });
+  const side = html.slice(html.indexOf('class="face face-side"'));
+  expect(side).toContain("What this rests on");
+  expect(side).toContain("What was agreed for this");
+  expect(side).toContain("What remains before this ends");
+  expect(side).toContain("Nothing about this was decided without asking you.");
+  // The material is above the agreement, because something is being asked.
+  expect(side.indexOf("What this rests on")).toBeLessThan(side.indexOf("What was agreed for this"));
+  // **Rule 6's ban, on the face as on the line**: these fixtures admit their
+  // laps under no approval, so no spend is drawn and no reach either.
+  const agreed = side.slice(side.indexOf("What was agreed for this"));
+  expect(agreed).toContain("No allowance approved yet");
+  expect(agreed).not.toContain("$");
+  expect(agreed).not.toContain("Where it may touch");
 });
 
 test("with no approval to read, the line says so instead of a spend nobody agreed to", async () => {

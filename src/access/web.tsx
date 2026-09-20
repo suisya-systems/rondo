@@ -127,6 +127,7 @@ import { RequestsFace } from "./page/list.js";
 import { facesMarkup } from "./page/render.js";
 import { Raw } from "./page/shell.js";
 import { ThreadFace, type ThreadItem } from "./page/thread.js";
+import { ThreadSide } from "./page/thread-side.js";
 import {
   basisWord,
   CARD,
@@ -849,6 +850,98 @@ function answerable(record: IterationRecord, token: string | null): token is str
 }
 
 /**
+ * Every finding either reading left, one line each, in the order a person
+ * meets them: the automatic checks first, then the model's.
+ *
+ * **Why all of them and not only what withheld the plain approve.** Rule 9.4
+ * asks for *the finding itself quoted in the box, unfolded*, and 9.3's *while
+ * a finding stands* is a rule about which press is drawn, not about which
+ * findings a person is answering over. A box that quoted only the blockers and
+ * majors would hide a minor finding behind a fold at 1280, where the card it
+ * came from is below the thread.
+ *
+ * A reading that could not be taken carries no findings, so it contributes
+ * nothing here rather than needing a case of its own.
+ */
+function standingFindings(checks: LapReading | null, model: LapReading | null): readonly string[] {
+  return [...(checks?.findings ?? []), ...(model?.findings ?? [])];
+}
+
+/**
+ * **The material for this confirmation** (D-0083 rule 5): why it stopped, what
+ * changed, the fence, and the two readings.
+ *
+ * **It is the right face's, and that is the whole of this function.** These
+ * cards were inside the answering box until rondo#350; rule 5 puts them on the
+ * right, and while they were in the centre the box under them was pushed off
+ * the bottom of the screen at the reference resolution. Nothing about how a
+ * card is drawn changed with the move -- they are the same four views,
+ * composed in a different place.
+ *
+ * **What a press needs did not come with them** (`D-0082` rule 7): the findings
+ * are quoted in the box as well ({@link standingFindings}), because this face
+ * drops below the thread at 1280 and a press must not be answered over
+ * something that did.
+ */
+function materialView(
+  wording: Chrome,
+  record: IterationRecord,
+  /**
+   * What `rondo answer` read of the lap, or null -- which is both *no material
+   * port* and *nothing is being asked*: the material is read where the press
+   * is (`page/contract.ts`), so with no question standing the face carries the
+   * readings alone, which is rule 5's *what is known so far*.
+   */
+  material: LapMaterialRead | null,
+  readings: readonly LapReading[],
+) {
+  const model = latestReading(readings, isModelReadingDrafter);
+  const modelDue = modelPendingOnPage(readings, model);
+  const checks = reviewedReading(readings);
+  const work = material?.work ?? null;
+  const workGone = work !== null && work.kind !== "read";
+  // The thread the material is in, which is what a reload of this screen is
+  // now (D-0083 rule 3).
+  const reload = viewHref(
+    { kind: "thread", messageId: record.requestMessageId, to: null },
+    wording.lang,
+  );
+  return (
+    <div class="space-y-3">
+      {material === null ? null : (
+        <>
+          <section id="why" class={CARD}>
+            <h3 class={CARD_HEADING}>{wording.whyStopped}</h3>
+            {material.why === null ? (
+              <p class="text-[13px] leading-5 text-muted-foreground">{wording.whyNotRead}</p>
+            ) : (
+              <p
+                class="mt-1 text-[13.5px] leading-6 wrap-anywhere whitespace-pre-wrap"
+                lang={materialLanguage(record)}
+              >
+                {material.why}
+              </p>
+            )}
+          </section>
+          {changedView(wording, record, material.work)}
+          {fenceView(wording, record)}
+        </>
+      )}
+      {/*
+       * **The two readings one under the other, and nothing between them**
+       * (D-0065 as annotated from #220): one gate, no recommendation, each
+       * reading in its own words. Two across became one the moment they moved
+       * to a 720px face, which is rule 8's *cards go one across* met early
+       * rather than a second layout.
+       */}
+      {checksView(wording, checks, workGone)}
+      {modelView(wording, model, modelDue, reload)}
+      <p class="note text-[12.5px] leading-5 text-faint">{wording.readingsNote}</p>
+    </div>
+  );
+}
+
+/**
  * The press, drawn only where there is something for it to answer.
  *
  * Three conditions, and each is a different way of not having a question in
@@ -894,12 +987,7 @@ function approveView(
   // pinned line are the same verdict about the same work.
   const work = framing.material?.work ?? null;
   const workGone = work !== null && work.kind !== "read";
-  // The thread the box is in, which is what a reload of this screen is now
-  // (D-0083 rule 3).
-  const reload = viewHref(
-    { kind: "thread", messageId: record.requestMessageId, to: null },
-    wording.lang,
-  );
+  const standing = standingFindings(checks, model);
   return (
     // **The poll replaces this box and `page/composer.js` puts the words
     // back.** The gate is inside the thread since D-0083 rule 9, so the
@@ -908,35 +996,32 @@ function approveView(
     // `hx-preserve` would have been the other answer and is the wrong one
     // here: the send's own out-of-band swap of `#composer` has to land.
     <div id="answering" class="mt-3 space-y-3">
-      {framing.material === null ? null : (
-        <>
-          <section id="why" class={CARD}>
-            <h3 class={CARD_HEADING}>{wording.whyStopped}</h3>
-            {framing.material.why === null ? (
-              <p class="text-[13px] leading-5 text-muted-foreground">{wording.whyNotRead}</p>
-            ) : (
-              <p
-                class="mt-1 text-[13.5px] leading-6 wrap-anywhere whitespace-pre-wrap"
-                lang={materialLanguage(record)}
-              >
-                {framing.material.why}
-              </p>
-            )}
-          </section>
-          {changedView(wording, record, framing.material.work)}
-          {fenceView(wording, record)}
-        </>
-      )}
       {/*
-       * **The two readings side by side, and nothing between them** (D-0065 as
-       * annotated from #220): one gate, no recommendation, each reading in its
-       * own words. Stacked under `lg`.
+       * **The findings themselves, quoted here and unfolded** (D-0083 rule
+       * 9.4, `D-0082` rule 7). The cards they come from are the right face's
+       * since rule 5's material moved there, and the right face drops below
+       * the thread at 1280 -- so what the press is answered over has to be
+       * inside the box that holds the press, whatever the width. One line
+       * each, and nothing else of the cards: the severities, the bases and
+       * the evidence are material and stay where the material is.
        */}
-      <div class="grid items-start gap-3 lg:grid-cols-2">
-        {checksView(wording, checks, workGone)}
-        {modelView(wording, model, modelDue, reload)}
-      </div>
-      <p class="note text-[12.5px] leading-5 text-faint">{wording.readingsNote}</p>
+      {standing.length === 0 ? null : (
+        <section id="standing" class={CARD}>
+          <h3 class={CARD_HEADING}>{wording.standingHeading}</h3>
+          <ul class="mt-1.5 space-y-1.5">
+            {standing.map((said) => (
+              <li class="flex gap-2 text-[13px] leading-5">
+                <span aria-hidden="true" class="text-fail">
+                  &#8226;
+                </span>
+                <span class="min-w-0 wrap-anywhere" lang="">
+                  {said}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       {/*
        * **What the press records, folded by default** (the S2 design pass on
        * #220): every claim is still in the document and still recorded as
@@ -2276,6 +2361,13 @@ export async function operatorPage(
           // A proposal is done when rondo recorded one: the published report
           // it writes into the request's thread (rondo#245).
           publishedReport(threads, selectedLap.record.id) !== null,
+          /*
+           * **Rule 6's fifth item, read for this request and for no window**
+           * (rondo#350). The week's face counts withholdings over seven days
+           * and cannot be narrowed; this is the request's own rows, so the
+           * line may carry the count and the right face may name the rules.
+           */
+          await ports.record.withheldFor(selectedRoot),
         );
   /*
    * **The two messages whose body is not prose**, rendered here because this
@@ -2622,7 +2714,45 @@ export async function operatorPage(
             };
           }),
       );
-  const sideContent = !centreIsEmpty
+  /*
+   * **The right face of a request** (D-0083 rules 5 and 6, gate point 7's
+   * second slice, rondo#350). Two tiers: the material for this confirmation,
+   * and what was agreed for this request. `page/thread-side.tsx` decides which
+   * is on top, because that is a fact about whether anything is being asked.
+   *
+   * **The material is the renderer's own markup**, crossing the seam as the
+   * boxes do -- it is the same cards that used to stand inside the answering
+   * box, moved and not redrawn.
+   *
+   * **With nothing being asked there is no material read** (`page/contract.ts`:
+   * it is read where the press is), so what is known so far is the lap's
+   * readings alone -- and nothing at all where no reading has been taken,
+   * because two cards saying *not yet* are not a thing anybody came to read.
+   */
+  const sideAsking = gatedLap !== null && gateFraming !== undefined;
+  const sideReadings = selectedLap === null ? [] : (readingsByLap.get(selectedLap.record.id) ?? []);
+  const sideMaterial =
+    sideAsking && gatedLap !== null && gateFraming !== undefined
+      ? await materialView(wording, gatedLap, gateFraming.material, gateFraming.readings).toString()
+      : selectedLap !== null && sideReadings.length > 0
+        ? await materialView(wording, selectedLap.record, null, sideReadings).toString()
+        : null;
+  const threadSide =
+    selectedGovernance === null || selectedLap === null
+      ? null
+      : {
+          react: ThreadSide({
+            wording,
+            governance: selectedGovernance,
+            // **What remains before this ends** (rule 6), as the five steps
+            // rule 4 draws under a running request: one reading of where the
+            // work stands, drawn in two places by one component.
+            steps: stepsOf(selectedLap.record, sideReadings),
+            material: sideMaterial === null ? null : Raw({ html: sideMaterial }),
+            asking: sideAsking,
+          }),
+        };
+  const emptySide = !centreIsEmpty
     ? null
     : {
         react: EmptySide({
@@ -2672,6 +2802,7 @@ export async function operatorPage(
           hrefOf: (messageId) => viewHref({ kind: "thread", messageId, to: null }, wording.lang),
         }),
       };
+  const sideContent = centreIsEmpty ? emptySide : threadSide;
   const listContent = {
     react: RequestsFace({
       wording,

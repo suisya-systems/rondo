@@ -142,6 +142,49 @@ export interface PageWords extends DayWords {
   readonly stepNow: string;
   readonly stepAhead: string;
   readonly stepYours: string;
+  /**
+   * The right face of a request (rule 5's two tiers).
+   *
+   * `sideMaterial` heads the material while a question is standing;
+   * `sideKnownSoFar` heads the same tier when nothing is being asked, which is
+   * rule 5's own second name for it. `sideAgreed` heads what was agreed.
+   */
+  readonly sideMaterial: string;
+  readonly sideKnownSoFar: string;
+  readonly sideAgreed: string;
+  /** What was agreed, in full (rule 6), as the labels on the right face. */
+  readonly govTriesLabel: string;
+  readonly govTouchLabel: string;
+  readonly govStepsLabel: string;
+  /**
+   * The outward acts an approval permits, said as acts and never as their
+   * names in the record (D-0076): `govAct` words one, `govActs` joins them,
+   * and `govActsNone` is an approval that permits nothing outward -- which is
+   * a thing to say and not an absence.
+   */
+  readonly govAct: (act: string) => string;
+  readonly govActs: (acts: readonly string[]) => string;
+  readonly govActsNone: string;
+  /**
+   * What rondo decided without asking, about **this request** (rule 6's fifth
+   * item).
+   *
+   * `govDecided` is the count on the one-line strip under the title;
+   * `govDecidedNone` is the sentence on the right face where nothing was
+   * withheld about this request. Zero is said rather than hidden: the count is
+   * now read from this request's own withheld rows, so nothing is claimed that
+   * was not recorded.
+   */
+  readonly govDecided: (count: number) => string;
+  readonly govDecidedNone: string;
+  /**
+   * The findings quoted in the answering box, unfolded (rule 9.4).
+   *
+   * The cards they come from are on the right face since rule 5's material
+   * moved there, and that face drops below the thread at 1280 -- so the box
+   * says what is being answered over, in the readers' own words.
+   */
+  readonly standingHeading: string;
 }
 
 export const PAGE_EN: PageWords = Object.freeze({
@@ -206,6 +249,19 @@ export const PAGE_EN: PageWords = Object.freeze({
   stepNow: "under way",
   stepAhead: "not yet",
   stepYours: "yours",
+  sideMaterial: "What this rests on",
+  sideKnownSoFar: "What is known so far",
+  sideAgreed: "What was agreed for this",
+  govTriesLabel: "Tries",
+  govTouchLabel: "Where it may touch",
+  govStepsLabel: "What remains before this ends",
+  govAct: (act) => (act === "open_pull_request" ? "open a proposal" : "push a branch"),
+  govActs: (acts) => `rondo may ${acts.join(", ")}`,
+  govActsNone: "rondo may put nothing outside this machine.",
+  govDecided: (count) =>
+    count === 1 ? "decided without asking: 1" : `decided without asking: ${String(count)}`,
+  govDecidedNone: "Nothing about this was decided without asking you.",
+  standingHeading: "What was raised",
 } satisfies PageWords);
 
 export const PAGE_JA: PageWords = Object.freeze({
@@ -267,4 +323,16 @@ export const PAGE_JA: PageWords = Object.freeze({
   stepNow: "進行中",
   stepAhead: "まだ",
   stepYours: "あなた",
+  sideMaterial: "この確認の材料",
+  sideKnownSoFar: "いまわかっていること",
+  sideAgreed: "この依頼の取り決め",
+  govTriesLabel: "やり直し",
+  govTouchLabel: "触れてよい範囲",
+  govStepsLabel: "終わるまでの手順",
+  govAct: (act) => (act === "open_pull_request" ? "提案を出す" : "ブランチを送る"),
+  govActs: (acts) => `rondo は${acts.join("・")}ことができます`,
+  govActsNone: "rondo はこの機械の外へ何も出しません。",
+  govDecided: (count) => `聞かずに決めたこと ${String(count)} 件`,
+  govDecidedNone: "この依頼について、聞かずに決めたことはありません。",
+  standingHeading: "挙がっている点",
 } satisfies PageWords);

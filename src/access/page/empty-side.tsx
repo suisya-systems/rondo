@@ -23,36 +23,9 @@
  * box here. The title of a running request is a link into its thread, which is
  * where anything is answered.
  */
-import type { StepName, WeekFigures, WorkStep } from "../page-logic/week.js";
+import type { WeekFigures, WorkStep } from "../page-logic/week.js";
 import type { Chrome } from "../wording.js";
-
-function stepSaid(wording: Chrome, name: StepName): string {
-  switch (name) {
-    case "work":
-      return wording.stepWork;
-    case "checks":
-      return wording.stepChecks;
-    case "reading":
-      return wording.stepReading;
-    case "approval":
-      return wording.stepApproval;
-    default:
-      return wording.stepLanding;
-  }
-}
-
-function stateSaid(wording: Chrome, step: WorkStep): string {
-  switch (step.state) {
-    case "done":
-      return wording.stepDone;
-    case "waiting":
-      return wording.stepNow;
-    case "yours":
-      return wording.stepYours;
-    default:
-      return wording.stepAhead;
-  }
-}
+import { SideSteps } from "./steps.js";
 
 /** A figure in dollars, in the shape `govSpent` writes one (`D-0082`'s scale). */
 function dollars(value: number): string {
@@ -161,16 +134,9 @@ export function EmptySide({ wording, figures, running, hrefOf }: EmptySideProps)
                 <span>{wording.govTries(work.tries.at, work.tries.of)}</span>
               )}
             </p>
-            {/* The five steps to its end (rule 4). An ordered list because it
-                is an order: what is done, what it is on, what is still ahead. */}
-            <ol className="side-steps">
-              {work.steps.map((step) => (
-                <li className={`side-step side-step-${step.state}`} key={step.name}>
-                  <span>{stepSaid(wording, step.name)}</span>
-                  <b>{stateSaid(wording, step)}</b>
-                </li>
-              ))}
-            </ol>
+            {/* The five steps to its end (rule 4), drawn by the component
+                rule 6's face draws them with. */}
+            <SideSteps wording={wording} steps={work.steps} />
           </div>
         ))
       )}
