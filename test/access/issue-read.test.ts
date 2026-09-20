@@ -76,6 +76,7 @@ function readerOver(
   w: World,
   read: ForgeIssueRead,
   bareRepository: (requestMessageId: string) => BareIssueRepository = () => ({ repo: "o/r" }),
+  now: () => number = () => 50_000,
 ) {
   let n = 0;
   let reads = 0;
@@ -83,7 +84,7 @@ function readerOver(
     record: w.record,
     read,
     bareRepository: async (requestMessageId) => bareRepository(requestMessageId),
-    now: () => 50_000,
+    now,
     mintId: () => {
       n += 1;
       return `forge-${String(n)}`;
@@ -375,14 +376,17 @@ const heldIn = (repository: string, forgeRepository: string | null): HeldPlan =>
 /** Ports over the rows: the plans rondo holds, the workspaces its scopes name. */
 const rowsHolding = (
   held: readonly HeldPlan[],
-  scoped: readonly string[],
+  scoped: readonly (readonly string[])[],
   hostRepo: string | null = null,
 ) => ({
   record: {
+    // One scope per group, each replacing the one before it, oldest first.
     scopesFor: async () =>
-      [
-        { payload: { workspaces: scoped.map((repository) => ({ repository })) } },
-      ] as unknown as readonly StoredScope[],
+      scoped.map((repositories, index) => ({
+        scopeId: `s${String(index)}`,
+        supersedesScopeId: index === 0 ? null : `s${String(index - 1)}`,
+        payload: { workspaces: repositories.map((repository) => ({ repository })) },
+      })) as unknown as readonly StoredScope[],
   },
   held: async () => held,
   hostRepo,
@@ -400,7 +404,14 @@ test("a bare #N is read in the repository of the plan its request is drafted fro
   });
   // A scope for the request -- the drafter's split, or the person's own -- has
   // said which workspaces the work runs in, so the other plan is out of play.
-  expect(await bareIssueRepository(rowsHolding([a, b], ["/srv/b"]), "r1")).toEqual({ repo: "o/b" });
+  expect(await bareIssueRepository(rowsHolding([a, b], [["/srv/b"]]), "r1")).toEqual({
+    repo: "o/b",
+  });
+  // **Only the scope in force**: one the person narrowed afterwards is what
+  // stands, and the wider one it replaced does not keep the read waiting.
+  expect(
+    await bareIssueRepository(rowsHolding([a, b], [["/srv/a", "/srv/b"], ["/srv/b"]]), "r1"),
+  ).toEqual({ repo: "o/b" });
   // Two plans of one repository are one answer, not a dispute.
   expect(await bareIssueRepository(rowsHolding([a, heldIn("/srv/a2", "o/a")], []), "r1")).toEqual({
     repo: "o/a",
@@ -411,13 +422,30 @@ test("a bare #N is read in the repository of the plan its request is drafted fro
     await bareIssueRepository(rowsHolding([heldIn("/srv/a", null)], [], "o/host"), "r1"),
   ).toEqual({ repo: "o/host" });
   expect(await bareIssueRepository(rowsHolding([], []), "r1")).toEqual({ repo: null });
+  // **A plan carrying no slug is the host's `--repo`, and is counted as one**:
+  // beside a second repository's plan that is two answers, not agreement.
+  expect(
+    await bareIssueRepository(rowsHolding([heldIn("/srv/a", null), b], [], "o/a"), "r1"),
+  ).toEqual({ disputed: true });
+  // The same plan beside one naming what the host names is still one answer.
+  expect(
+    await bareIssueRepository(rowsHolding([heldIn("/srv/a", null), a], [], "o/a"), "r1"),
+  ).toEqual({ repo: "o/a" });
 });
 
 test("a bare #N still in dispute waits for the person: it holds the lap's door and not the drafter (D-0081 rules 2.4, 3.4)", async () => {
   const w = await world();
   const { read, asked } = fakeForge();
   let disputed = true;
-  const { reader } = readerOver(w, read, () => (disputed ? { disputed: true } : { repo: "o/r" }));
+  // One clock for both, so what was written before what is what the rows say.
+  let clock = 10_000;
+  const tick = () => (clock += 1_000);
+  const { reader } = readerOver(
+    w,
+    read,
+    () => (disputed ? { disputed: true } : { repo: "o/r" }),
+    tick,
+  );
   await reader.unread([]);
   await w.say("r1", "Fix #237, like o/r#237.", null, 1_000);
   reader.kick();
@@ -440,7 +468,7 @@ test("a bare #N still in dispute waits for the person: it holds the lap's door a
   const drafter = drafterHost({
     store: w.store,
     record: w.record,
-    now: () => 60_000,
+    now: tick,
     language: null,
     log: () => undefined,
     mintId: (kind) => `${kind}-${String(handed.length)}-${String(Math.random()).slice(2)}`,
@@ -468,4 +496,14 @@ test("a bare #N still in dispute waits for the person: it holds the lap's door a
   expect(asked).toHaveLength(2);
   const quoted = await withNamedIssues(w.record, "r1", planned.plan);
   expect("prompt" in quoted && quoted.prompt).toContain(ISSUE.title);
+
+  // **The draft that let the read happen is not drafted again over it**: the
+  // store holds a thread every operator message of which a drafter row covers
+  // to be drafted, and writes nothing twice (D-0071 rule 3.2). So the issue
+  // reaches this request at the lap's door, quoted, and not in the drafted
+  // prompt -- the known limit this rule leaves, recorded here so a change to
+  // it is a red test and not a surprise.
+  drafter.kick();
+  await drafter.idle();
+  expect(handed).toHaveLength(1);
 });

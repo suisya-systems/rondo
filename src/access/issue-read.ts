@@ -302,15 +302,26 @@ export async function bareIssueRepository(
   requestMessageId: string,
 ): Promise<BareIssueRepository> {
   const held = await ports.held(requestMessageId);
-  const scoped = new Set(
-    (await ports.record.scopesFor(requestMessageId)).flatMap((scope) =>
-      scope.payload.workspaces.map((workspace) => workspace.repository),
-    ),
-  );
+  // **The scope in force, not every scope this request ever had.** A scope the
+  // person changed says where the work ran before they changed it, and a draft
+  // the drafter wrote again over (D-0071 rule 3.1) says where an earlier
+  // reading of the request would have run; counting either would leave a
+  // repository in play that nothing still names, and the read waiting for
+  // ever. The newest scope no other scope replaces is what stands.
+  const scopes = await ports.record.scopesFor(requestMessageId);
+  const replaced = new Set(scopes.flatMap((scope) => scope.supersedesScopeId ?? []));
+  const inForce = scopes.filter((scope) => !replaced.has(scope.scopeId)).at(-1);
   // Byte for byte against the plan's own `repository`, as the store's own
   // re-test of a scope compares them (D-0066 rule 1.2.2).
+  const scoped = new Set(inForce?.payload.workspaces.map((workspace) => workspace.repository));
   const inPlay = scoped.size === 0 ? held : held.filter((plan) => scoped.has(plan.repository));
-  const slugs = [...new Set(inPlay.flatMap((plan) => plan.forgeRepository ?? []))];
+  // **A plan carrying no slug is the host's `--repo`, plan by plan** (rule
+  // 6.3), and so is a candidate like any other: reckoning it after the count
+  // would let one such plan beside a second repository's look like agreement
+  // and read a bare `#N` in the wrong repository.
+  const slugs = [
+    ...new Set(inPlay.flatMap((plan) => plan.forgeRepository ?? ports.hostRepo ?? [])),
+  ];
   return slugs.length > 1 ? { disputed: true } : { repo: slugs[0] ?? ports.hostRepo };
 }
 
@@ -673,6 +684,15 @@ export interface IssueReader {
    * for it would leave the question unasked and the read waiting on it for
    * ever. The lap's door keeps waiting on the whole of {@link unread}, so the
    * drafter asking is all that happens meanwhile.
+   *
+   * ponytail: **the draft that settles the repository is composed before the
+   * read it settles**, and is not drafted again over it -- the store holds a
+   * thread whose every operator message a drafter row covers to be drafted and
+   * writes nothing twice (D-0071 rule 3.2). So in a store holding several
+   * repositories the issue reaches such a request at the lap's door, quoted
+   * (`withNamedIssues`) and on the scope screen, but not in the drafted
+   * prompt. Drafting again over a landed read is the upgrade, and it is
+   * rule 3.2's coverage to change, not this reader's.
    */
   unreadUnderway(
     messages: readonly ThreadMessageDraft[],
