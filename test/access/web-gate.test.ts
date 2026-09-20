@@ -22,7 +22,20 @@ import {
   structured,
 } from "./page-world.js";
 
-test("the answer view draws both readings side by side from the rows, with the warning by approve (#220 S2)", async () => {
+/**
+ * The answer bar and everything after it **inside the centre face**.
+ *
+ * **Bounded at the right face since rondo#350.** Rule 5's material moved out
+ * of the answering box, so the document now carries the fence's calls and the
+ * readings' coverage folds *after* the bar rather than before it -- and a
+ * slice that ran to the end of the page would answer "is there a `<details>`
+ * below the bar" with the right face's folds. What these cases are about is
+ * the box that holds the press, so the slice stops where that box does.
+ */
+const barOf = (html: string): string =>
+  html.slice(html.indexOf('id="answer-bar"'), html.indexOf('class="face face-side"'));
+
+test("both readings are drawn from the rows on the right face, with the warning by approve (#220 S2)", async () => {
   const world = fresh();
   await gateWithChecks(world);
   const appended = await world.store.appendReading(
@@ -63,7 +76,11 @@ test("the answer view draws both readings side by side from the rows, with the w
   // and the others are not.
   expect(html).toMatch(/<section\s+id="model-review"\s+class="[^"]*border-l-fail/);
   expect(html.match(/border-l-fail/g)).toHaveLength(1);
-  expect(html).toMatch(/class="grid items-start gap-3 lg:grid-cols-2"><section id="checks"/);
+  // **On the right face, one under the other** (D-0083 rule 5, rondo#350):
+  // the two readings left the centre with the rest of the material, and at
+  // 720px a card that was half a 1,040px grid is the whole width.
+  expect(html.indexOf('id="checks"')).toBeGreaterThan(html.indexOf('class="face face-side"'));
+  expect(html.indexOf('id="checks"')).toBeLessThan(html.indexOf('id="model-review"'));
   expect(html).toContain("a binary file was not read");
   expect(html).toMatch(/severity[^"]*">blocker<\/span><span[^>]*>the loop never stops/);
   expect(html).toMatch(/severity[^"]*">major<\/span>/);
@@ -83,7 +100,7 @@ test("the answer view draws both readings side by side from the rows, with the w
   // **The bar and not the form** since rondo#233 S4 put the gate's second
   // answer beside the first: two forms cannot nest, so what sticks to the
   // bottom of the window is the `div` around them.
-  const bar = html.slice(html.indexOf('id="answer-bar"'));
+  const bar = barOf(html);
   const form = html.slice(html.indexOf('<form id="approve-form"'), html.indexOf("</form>"));
   expect(bar).toContain("The model review raised 1 blocker and 1 major.");
   expect(bar.indexOf('id="model-raised"')).toBeLessThan(bar.indexOf('type="submit"'));
@@ -178,7 +195,7 @@ test("the gate offers a change beside approve, drafted from the findings and edi
     null,
     () => "lap-00000000-0000-4000-8000-000000000001",
   );
-  const bar = html.slice(html.indexOf('id="answer-bar"'));
+  const bar = barOf(html);
 
   // **Two answers in one bar, and two forms**: approve posts to the summary's
   // address as it always did, the change posts to its own route.
@@ -501,7 +518,7 @@ test("a gate with no model findings drafts nothing, and still offers the change 
     null,
     () => "lap-00000000-0000-4000-8000-000000000003",
   );
-  const bar = html.slice(html.indexOf('id="answer-bar"'));
+  const bar = barOf(html);
   expect(bar).toContain('id="revise-form"');
   // An empty box with its example, and no lead line about findings there are none of.
   expect(bar).toMatch(/<textarea name="body"[^>]*><\/textarea>/);
@@ -529,7 +546,7 @@ test("the change is offered in the page's language, and the findings stay the re
     null,
     () => "lap-00000000-0000-4000-8000-000000000004",
   );
-  const bar = html.slice(html.indexOf('id="answer-bar"'));
+  const bar = barOf(html);
   // The change is a press in Japanese too, and not a fold (rondo#351).
   expect(bar).toContain(">変更を依頼する</button>");
   expect(bar.slice(bar.indexOf('id="revise"'))).not.toContain("<details");
@@ -569,7 +586,7 @@ test("a draft is being written: an empty box, a sentence, and the press not held
     null,
     () => "lap-00000000-0000-4000-8000-000000000005",
   );
-  const bar = html.slice(html.indexOf('id="answer-bar"'));
+  const bar = barOf(html);
   expect(bar).toMatch(/<textarea name="body"[^>]*><\/textarea>/);
   expect(bar).toContain("A draft of what to change is being written");
   expect(bar).toContain(">Ask for a change</button>");
@@ -592,7 +609,7 @@ test("a draft that misses a finding is not shown and not repaired: an empty box 
     null,
     () => "lap-00000000-0000-4000-8000-000000000006",
   );
-  const bar = html.slice(html.indexOf('id="answer-bar"'));
+  const bar = barOf(html);
   expect(bar).toMatch(/<textarea name="body"[^>]*><\/textarea>/);
   expect(bar).not.toContain("Stop it.");
   expect(bar).toContain("rondo could not draft what to change this time");
@@ -677,7 +694,7 @@ test("approve says which of the two approvals it is when a blocker is open (#237
   await modelFindings(world);
   const ports = { ...portsOver(world, "ada", []), material: structured };
   const html = await operatorPage(ports, "t", { kind: "summary" });
-  const bar = html.slice(html.indexOf('id="answer-bar"'));
+  const bar = barOf(html);
 
   // **The face moves; the press does not.** D-0065 refuses no approval over a
   // model finding, so this is still one form, to the same address, answering
@@ -735,7 +752,7 @@ test("with nothing that heavy raised, approve keeps its one word (#237)", async 
   const html = await operatorPage({ ...portsOver(world, "ada", []), material: structured }, "t", {
     kind: "summary",
   });
-  const bar = html.slice(html.indexOf('id="answer-bar"'));
+  const bar = barOf(html);
   expect(bar).toContain(">approve</button>");
   expect(bar).toContain("Accept this work as it is.");
   expect(bar).not.toContain("despite");
@@ -757,7 +774,7 @@ test("the qualified approve is in the page's language too (#237)", async () => {
     { kind: "summary" },
     chromeFor("ja"),
   );
-  const bar = html.slice(html.indexOf('id="answer-bar"'));
+  const bar = barOf(html);
   expect(bar).toContain(">指摘を残したまま承認する</button>");
   expect(bar).toContain("モデルレビューが挙げた点に答えないまま、この作業をこのまま受け入れます。");
   // The answer carried to the gate is a token and stays ASCII (D-0055 rule 3).
@@ -844,7 +861,7 @@ test("a recorded 'clear' is not drawn as a pass over work that cannot be read (#
   // scanning reads, and it kept the green pill through S2.
   expect(html).not.toContain(">nothing raised</span>");
   const card = html.slice(html.indexOf('<section id="checks"'));
-  const bar = html.slice(html.indexOf('id="answer-bar"'));
+  const bar = barOf(html);
   expect(card).toContain(">not matched</span>");
   expect(bar).toContain(">not matched</span>");
   // **And the tone, beside the words** (rondo#243). A pill that said *not
@@ -902,7 +919,9 @@ test("what the fence blocked is on the gate, each call in words, not only in the
   const html = await operatorPage({ ...portsOver(world, "ada", []), material: structured }, "t", {
     kind: "summary",
   });
-  const card = html.slice(html.indexOf('<section id="fence"'), html.indexOf('id="material-text"'));
+  // The fence is on the right face since rondo#350, above the checks; what it
+  // says about each call is unchanged, and the text fold is still in the box.
+  const card = html.slice(html.indexOf('<section id="fence"'), html.indexOf('id="checks"'));
   expect(card).toContain("The fence:");
   expect(card).toContain("blocked 1 command");
   expect(card).toContain("Bash  &quot;rm -rf /srv&quot;");

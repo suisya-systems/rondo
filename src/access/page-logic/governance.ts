@@ -13,36 +13,22 @@
  * admitted under no approval has spent money that nobody agreed to, and
  * printing the spend alone would read as though somebody had.
  *
- * **Five items, and the sixth is named rather than dropped.** Rule 6 asks for
- * six: repository, when it was asked, spent / approved, which try of how many,
- * **how many things rondo decided without asking**, and what remains. The
- * fifth is not here, and {@link WITHHELD_NOT_READ} says why in one place so
- * that the page can say it too. It is not drawn as zero, because zero is a
- * claim -- *rondo decided nothing without asking* -- and rondo cannot read
- * whether that is true per request yet.
+ * **All six of rule 6's items, and the right face carries the same in full.**
+ * Repository, when it was asked, spent / approved, which try of how many, how
+ * many things rondo decided without asking, and what remains as the chain.
+ * The fifth was the one this module could not read while the only reader was
+ * `attentionBreakdown`, which answers over a time interval and not over a
+ * request; `withheldFor` is that reader, so the count is a fact about this
+ * request rather than a figure borrowed from a window.
+ *
+ * **What the right face adds to the line is not a second set of facts.** Rule
+ * 6 puts the same things in full on the right: the allowance with what is
+ * left, the tries, **where a lap may touch**, the steps to the end, and the
+ * withholdings named with the rule behind each. {@link Governance} therefore
+ * carries the whole of it and the line draws the part that fits on a line.
  */
 import type { IterationRecord, ScopePayload, ScopeSpent } from "../../store/records.js";
 import { SCOPE_OUTWARD_ACTS } from "../../store/records.js";
-
-/**
- * **Why the count of what rondo decided without asking is not in this line.**
- *
- * `attentionBreakdown` (`src/store/sqlite.ts`) counts dispositions over a time
- * interval and cannot be narrowed to one request: its query is bounded by
- * `at_ms` and nothing else, so what it answers about a request is "everything
- * in the window", which is not the same number.
- *
- * The right source is the `attention` table's own `withheld` disposition
- * (`AttentionDisposition` in `src/store/records.ts`, `D-0032` rule 10): a row
- * per decision rondo took without calling a person, which a read narrowed by
- * the request's lineage would count exactly. That read does not exist yet, and
- * writing one is the second slice's -- the right face carries the same count
- * named and explained (rule 6), so it is built once, there.
- */
-export const WITHHELD_NOT_READ =
-  "attentionBreakdown reads by time interval, not by request; the per-request count comes from " +
-  "the attention table's withheld disposition (D-0032 rule 10) and is the right face's, in the " +
-  "second slice";
 
 /** One step of rule 6's chain, and where the work stands in it. */
 export type ChainStep = "answer" | "proposal" | "merge";
@@ -74,6 +60,56 @@ export interface Governance {
   readonly tries: { readonly at: number; readonly of: number } | null;
   /** What remains, as rule 6's chain. */
   readonly chain: readonly ChainLink[];
+  /**
+   * **Where a lap may touch** (rule 6): the repositories and workspace roots
+   * the approval names, and the outward acts it permits.
+   *
+   * Null together with {@link allowance} and {@link tries}: all three are the
+   * approval's, and a request admitted under none has no agreed reach to draw.
+   * An empty `acts` is not the same as no approval -- it is an approval that
+   * permits rondo nothing outward, which is a thing to say.
+   */
+  readonly touches: {
+    readonly places: readonly { readonly repository: string; readonly root: string }[];
+    readonly acts: readonly string[];
+  } | null;
+  /**
+   * **What rondo decided without asking, about this request** (rule 6's fifth
+   * item): how many, and the rule behind each, heaviest first.
+   *
+   * Zero is drawn, and it is not the claim the old line refused to make. That
+   * refusal was about a count nothing could narrow to a request; this one is
+   * read from the withheld rows tied to this request, so zero says *no
+   * withholding about this request was recorded* -- which is what D-0032
+   * rule 10's table is for.
+   */
+  readonly decided: {
+    readonly count: number;
+    readonly byRule: readonly { readonly ruleName: string; readonly count: number }[];
+  };
+}
+
+/**
+ * What one approval has spent and what it allows, as the pair rule 6 never
+ * separates.
+ *
+ * **The spend is the figure the store measures a budget against**: what was
+ * read, plus the reserve every lap whose cost is not read yet still holds
+ * (`D-0046`, `D-0066` rule 3.4.2). It is here rather than inside
+ * {@link governanceOf} because the right face sums the same pair over a week
+ * (`page-logic/week.ts`), and two places computing a spend differently would
+ * be two answers to what has been spent.
+ */
+export function allowanceOf(approval: {
+  readonly payload: ScopePayload;
+  readonly spent: ScopeSpent;
+}): { readonly spentUsd: number; readonly approvedUsd: number } {
+  return {
+    spentUsd:
+      approval.spent.readCostUsd +
+      approval.spent.unreadLaps * approval.payload.budgets.cost_reserve_usd,
+    approvedUsd: approval.payload.budgets.cost_usd,
+  };
 }
 
 /**
@@ -100,29 +136,6 @@ export interface Governance {
  *   can put rondo on this step. Drawing it as *ahead* would suggest rondo were
  *   going to do it.
  */
-/**
- * What one approval has spent and what it allows, as the pair rule 6 never
- * separates.
- *
- * **The spend is the figure the store measures a budget against**: what was
- * read, plus the reserve every lap whose cost is not read yet still holds
- * (`D-0046`, `D-0066` rule 3.4.2). It is here rather than inside
- * {@link governanceOf} because the right face sums the same pair over a week
- * (`page-logic/week.ts`), and two places computing a spend differently would
- * be two answers to what has been spent.
- */
-export function allowanceOf(approval: {
-  readonly payload: ScopePayload;
-  readonly spent: ScopeSpent;
-}): { readonly spentUsd: number; readonly approvedUsd: number } {
-  return {
-    spentUsd:
-      approval.spent.readCostUsd +
-      approval.spent.unreadLaps * approval.payload.budgets.cost_reserve_usd,
-    approvedUsd: approval.payload.budgets.cost_usd,
-  };
-}
-
 export function governanceOf(
   record: IterationRecord,
   repository: string | null,
@@ -134,6 +147,11 @@ export function governanceOf(
    * it is a row in the conversation and this module reads none.
    */
   proposed: boolean,
+  /**
+   * The withholdings recorded about this request, by rule -- the store's own
+   * `withheldFor`, read by the caller because this module reads no rows.
+   */
+  withheld: readonly { readonly ruleName: string; readonly count: number }[],
 ): Governance {
   const answered = record.gateOutcome !== null;
   const atGate = record.status === "awaiting_human";
@@ -152,5 +170,23 @@ export function governanceOf(
       { step: "proposal", state: proposed ? "done" : mayPropose ? "ahead" : "yours" },
       { step: "merge", state: "yours" },
     ],
+    touches:
+      approval === null
+        ? null
+        : {
+            places: approval.payload.workspaces.map((place) => ({
+              repository: place.repository,
+              root: place.workspace_root,
+            })),
+            acts: [...approval.payload.outward_acts],
+          },
+    decided: {
+      count: withheld.reduce((sum, rule) => sum + rule.count, 0),
+      // Heaviest first, and by name where two weigh the same, so the order is
+      // the reader's and not the query's.
+      byRule: [...withheld].toSorted(
+        (left, right) => right.count - left.count || left.ruleName.localeCompare(right.ruleName),
+      ),
+    },
   };
 }

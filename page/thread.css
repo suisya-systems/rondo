@@ -307,7 +307,10 @@
   font-style: italic;
 }
 
-.gov-missing {
+/* Rule 6's sixth item, on the line: a count, and the right face names the
+   rules behind it. Recessive, because it is a reason to look and not a
+   figure to weigh against the allowance. */
+.gov-decided {
   color: var(--color-faint);
 }
 

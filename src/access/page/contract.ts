@@ -63,6 +63,9 @@ export interface WebPorts extends InboxReadPorts {
       | "readProposal"
       | "openAsksIn"
       | "lineageOf"
+      // D-0083 rule 6's fifth item: what rondo decided without asking about
+      // *this request*, which the week's figure cannot answer (rondo#350).
+      | "withheldFor"
       | "readScope"
       | "readScopeDecision"
       | "scopeDecisionOf"

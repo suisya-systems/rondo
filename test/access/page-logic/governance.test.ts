@@ -3,12 +3,14 @@
  *
  * The properties held here are the two rule 6 states outright: **a spent
  * figure is never shown without the figure it was approved against**, and the
- * chain's last step is never rondo's. The third is the entry's own honesty
- * requirement -- the item this line does not carry is named in the module
- * rather than drawn as a zero.
+ * chain's last step is never rondo's. Beside them are the two things the
+ * second slice adds (rondo#350): **where a lap may touch**, which is the
+ * approval's and so travels with the pair, and **what rondo decided without
+ * asking**, which is now a count of this request's own rows rather than an
+ * item the line admitted it could not carry.
  */
 import { expect, test } from "vitest";
-import { governanceOf, WITHHELD_NOT_READ } from "../../../src/access/page-logic/governance.js";
+import { governanceOf } from "../../../src/access/page-logic/governance.js";
 import type { IterationRecord, ScopePayload, ScopeSpent } from "../../../src/store/records.js";
 
 const lap = (over: Partial<IterationRecord>): IterationRecord =>
@@ -41,7 +43,7 @@ test("with no approval to read, neither figure is drawn", () => {
   // Rule 6's last sentence, as the one state that hides both: a lap admitted
   // under no approval has spent money nobody agreed to, and a spend printed
   // alone would read as though somebody had.
-  const bare = governanceOf(lap({}), "o/r", 1_000, null, false);
+  const bare = governanceOf(lap({}), "o/r", 1_000, null, false, []);
   expect(bare.allowance).toBeNull();
   expect(bare.tries).toBeNull();
   // And what it does know is still said.
@@ -54,12 +56,12 @@ test("the spend counts the reserve every unread lap still holds", () => {
   // makes it hold the reserve until it is. The figure on the line is the one
   // the store measures the budget against, or the page would say there was
   // room the press is about to refuse.
-  const { allowance } = governanceOf(lap({}), null, 1, approval({}, { unreadLaps: 2 }), false);
+  const { allowance } = governanceOf(lap({}), null, 1, approval({}, { unreadLaps: 2 }), false, []);
   expect(allowance).toEqual({ spentUsd: 5 + 2 * 2, approvedUsd: 20 });
 });
 
 test("the chain reads the lap's status, and its last step is never rondo's", () => {
-  const atGate = governanceOf(lap({ status: "awaiting_human" }), null, 1, approval(), false);
+  const atGate = governanceOf(lap({ status: "awaiting_human" }), null, 1, approval(), false, []);
   expect(atGate.chain).toEqual([
     { step: "answer", state: "waiting" },
     // The approval permits no outward act, so nobody but a person opens one.
@@ -76,6 +78,7 @@ test("the chain reads the lap's status, and its last step is never rondo's", () 
     1,
     approval({ outward_acts: ["push_branch", "open_pull_request"] }),
     true,
+    [],
   );
   expect(permissive.chain).toEqual([
     { step: "answer", state: "done" },
@@ -93,20 +96,68 @@ test("the chain reads the lap's status, and its last step is never rondo's", () 
     1,
     approval({ outward_acts: ["open_pull_request"] }),
     false,
+    [],
   );
   expect(ended.chain[1]).toEqual({ step: "proposal", state: "ahead" });
 
   // Before a gate, the answer is ahead rather than waiting: nothing is asking.
-  expect(governanceOf(lap({ status: "planned" }), null, 1, approval(), false).chain[0]).toEqual({
-    step: "answer",
-    state: "ahead",
+  expect(governanceOf(lap({ status: "planned" }), null, 1, approval(), false, []).chain[0]).toEqual(
+    {
+      step: "answer",
+      state: "ahead",
+    },
+  );
+});
+
+test("where a lap may touch is the approval's, so it is absent with the approval", () => {
+  // Rule 6 pairs the reach with the allowance: all three of the pair, the
+  // tries and the places come off one approval, and a lap admitted under none
+  // has no agreed reach to draw rather than an empty one.
+  expect(governanceOf(lap({}), null, 1, null, false, []).touches).toBeNull();
+
+  const reached = governanceOf(
+    lap({}),
+    null,
+    1,
+    approval({
+      workspaces: [{ repository: "o/r", workspace_root: "/w" }],
+      outward_acts: ["push_branch"],
+    }),
+    false,
+    [],
+  );
+  expect(reached.touches).toEqual({
+    places: [{ repository: "o/r", root: "/w" }],
+    acts: ["push_branch"],
+  });
+
+  // An approval that permits nothing outward is not the same as no approval:
+  // it is a reach with nothing in it, and the face says so.
+  expect(governanceOf(lap({}), null, 1, approval(), false, []).touches).toEqual({
+    places: [],
+    acts: [],
   });
 });
 
-test("the item this line does not carry is named, and names its right source", () => {
-  // Five of rule 6's six. The sixth is absent rather than zero, and the reason
-  // is written down where the next slice will look for it.
-  expect(WITHHELD_NOT_READ).toContain("attentionBreakdown");
-  expect(WITHHELD_NOT_READ).toContain("withheld");
-  expect(WITHHELD_NOT_READ).toContain("D-0032 rule 10");
+test("what rondo decided without asking is counted, and named heaviest first", () => {
+  // The item the line used to admit it could not carry. Zero is drawn now,
+  // because it is read from this request's own withheld rows: nothing was
+  // recorded about this request, which is a fact and not a claim about every
+  // silence rondo has ever kept.
+  const quiet = governanceOf(lap({}), null, 1, null, false, []);
+  expect(quiet.decided).toEqual({ count: 0, byRule: [] });
+
+  const decided = governanceOf(lap({}), null, 1, null, false, [
+    { ruleName: "duplicate-delivery", count: 2 },
+    { ruleName: "already-answered", count: 9 },
+    { ruleName: "below-threshold", count: 2 },
+  ]);
+  expect(decided.decided.count).toBe(13);
+  // Heaviest first, and by name where two weigh the same, so the order is the
+  // reader's and not the query's.
+  expect(decided.decided.byRule.map((rule) => rule.ruleName)).toEqual([
+    "already-answered",
+    "below-threshold",
+    "duplicate-delivery",
+  ]);
 });

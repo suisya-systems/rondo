@@ -313,9 +313,9 @@ export interface Chrome extends PageWords {
    * The governance line, under every thread's title (D-0083 rule 6).
    *
    * `govSpent` pairs the two figures rule 6 refuses to separate; where no
-   * approval reads, `weekNoAllowance` stands for the pair instead.
-   * `govDecidedNotRead` names the one item of rule 6's six this line does not
-   * carry, so that five items are not read as six.
+   * approval reads, `weekNoAllowance` stands for the pair instead. The sixth
+   * item -- what rondo decided without asking -- is `govDecided`, beside the
+   * rest of the page's own words.
    */
   /** Rule 3's walk: where this request stands among the ones waiting, and the way on. */
   /**
@@ -333,7 +333,6 @@ export interface Chrome extends PageWords {
   readonly chainAnswer: string;
   readonly chainProposal: string;
   readonly chainMerge: string;
-  readonly govDecidedNotRead: string;
   readonly noSuchThread: string;
   readonly threadsUnreadable: (reason: string) => string;
   /** The line a refused send shows under the draft, which is kept. */
@@ -1258,7 +1257,6 @@ explanation you pressed on and then answers the gate.`,
   chainAnswer: "your answer",
   chainProposal: "proposal",
   chainMerge: "merge",
-  govDecidedNotRead: "what rondo decided without asking is not counted here yet",
   noSuchThread: "No request thread holds that message.",
   threadsUnreadable: (reason) => `The request threads could not be read: ${reason}`,
   notSent: (line) => `Not sent, and your words are kept: ${line}`,
@@ -2111,7 +2109,6 @@ const JA: Chrome = Object.freeze({
   chainAnswer: "あなたの答え",
   chainProposal: "提案",
   chainMerge: "マージ",
-  govDecidedNotRead: "rondo が聞かずに決めた数はまだここに出ていません",
   noSuchThread: "そのメッセージを含む依頼スレッドはありません。",
   threadsUnreadable: (reason) => `依頼スレッドを読めませんでした: ${reason}`,
   notSent: (line) => `送信されませんでした。書いた文は残しています: ${line}`,

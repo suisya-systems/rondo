@@ -397,6 +397,7 @@ const ALLOWED_EXTERNALS_BY_MODULE: Readonly<
   "src/access/page/events.tsx": { react: ["ReactNode"] },
   "src/access/page/thread.tsx": { react: ["ReactNode"] },
   "src/access/page/empty.tsx": { react: ["ReactNode"] },
+  "src/access/page/thread-side.tsx": { react: ["ReactNode"] },
   // **The renderer names one external again.** `raw` marks markup this
   // process already rendered as needing no further escaping, which is how a
   // React face crosses into the server-JSX document without being escaped a
