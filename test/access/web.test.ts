@@ -39,10 +39,11 @@ import { inspectLapWork } from "../../src/access/forge.js";
 import type { TranscriptLocation } from "../../src/access/inbox.js";
 import { forgeBody, ISSUE_READER, namedIssues } from "../../src/access/issue-read.js";
 import { draftedPlanRun } from "../../src/access/model-drafter.js";
+import { viewHref } from "../../src/access/page-logic/routes.js";
 import { evidenceOf, READING_REMOTE } from "../../src/access/review.js";
 import { reviseDrafterHost } from "../../src/access/revise-drafter.js";
 import { agentTypeRecordOf, heldAgentTypeLines } from "../../src/access/scope.js";
-import { type PublishReading, operatorPage as renderPage, viewHref } from "../../src/access/web.js";
+import { type PublishReading, operatorPage as renderPage } from "../../src/access/web.js";
 import {
   AnswerPort,
   newScopeId,

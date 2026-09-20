@@ -69,14 +69,8 @@ import {
   type LanguageAsked,
   resolveLanguage,
 } from "./page-logic/language.js";
-import {
-  APPROVE_BODY,
-  MAX_REVIEW_ROUNDS,
-  operatorPage,
-  type PageView,
-  viewHref,
-  type WebPorts,
-} from "./web.js";
+import { MAX_REVIEW_ROUNDS, type PageView, viewHref } from "./page-logic/routes.js";
+import { APPROVE_BODY, operatorPage, type WebPorts } from "./web.js";
 import type { Chrome } from "./wording.js";
 
 /**
