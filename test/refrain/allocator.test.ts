@@ -16,9 +16,10 @@
  * The Windows cases (rule 28) are the ones a Linux-only run cannot fail, and
  * they are written as assertions about the *derivation* rather than by creating
  * a directory: `con`, `nul`, `aux` and `com1` are admissible iteration ids
- * whose bare component would be an unusable path on `windows-latest`, which is
- * a required cell of the double-green matrix. Asserting the prefix is what a
- * Linux runner can honestly check; the platform half is what the matrix runs.
+ * whose bare component would be an unusable path on `windows-latest`. Asserting
+ * the prefix is what a Linux runner can honestly check; the platform half is
+ * what the Windows cell runs -- nightly and on demand since `D-0087`, which is
+ * why the Linux half is asserted here rather than left to the matrix.
  */
 import { expect, test } from "vitest";
 

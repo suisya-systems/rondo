@@ -123,6 +123,8 @@ C-NN`, so the spaces can never be read as one.
 | D-0083 | The page's shape: the unit is a request's thread and the axis is time, the summary and the gate are one screen of three faces, empty is the ordinary state and its centre asks what the person wants, and the answering box inherits everything the gate had | accepted |
 | D-0084 | The page's foundation moves from Hono server JSX with htmx to React on Vite, and what held it up is rebuilt on the door rather than on the library: a press is a real form, and no RPC or meta-framework comes with it | accepted |
 | D-0085 | A lap without a request stops being a state rondo has: `D-0061` rule 4's nullable link is tightened to required, `start` takes the message it came from, and what makes that safe is the type rather than the column | accepted |
+| D-0086 | Event lines fold twice and by no number: every try but the newest is one line, what the person has already read is one line over the top, and a decision rondo made without asking is never inside either | accepted |
+| D-0087 | The Windows cells leave the pull-request path for the nightly schedule and `workflow_dispatch`: the matrix becomes an expression over the trigger, the double-green rule is untouched, and every guarantee only Windows carries is now carried a night later | accepted |
 
 ---
 
@@ -500,6 +502,12 @@ continuo's own gates can weigh them:
 
 **Status:** accepted (2026-09-05, rondo#1)
 
+> **Annotation (2026-09-21, from D-0087).** Added after this entry was accepted, and additive.
+> The mitigation named above -- *"the Windows and Node 22 cells run the suite"* -- keeps
+> the half that catches the `@types/node` hole and loses the half's timing. The Node 22 cell
+> still runs on every pull request, and a Node 26-only API is what it catches; the Windows cell
+> now runs nightly and on demand (`D-0087`). Nothing here is withdrawn.
+
 **Decision.** ESM (`"type": "module"`), `module` and `moduleResolution` both `NodeNext`, explicit
 `.js` suffixes on every relative import, `strict` plus `noUncheckedIndexedAccess` and
 `exactOptionalPropertyTypes`, and `noEmit: true` with no build configuration.
@@ -543,6 +551,15 @@ the oldest-runtime pin and a note in the siblings' repositories.
 
 **Status:** accepted (2026-09-05, rondo#1)
 
+> **Annotation (2026-09-21, from D-0087).** Added after this entry was accepted, and additive.
+> *Twice per matrix cell* is unchanged and is not weakened anywhere: when the Windows cells run,
+> they run both seeded suites, and the seeds are still derived from the cell coordinates so no two
+> cells share an order. What changed is **which cells a trigger produces** -- a pull request now
+> produces the two ubuntu cells and a nightly produces four (`D-0087`). The rule was never a claim
+> about the size of the matrix, and the falsifier below (*"a suite whose runtime makes two full
+> runs per cell expensive"*) is the one this bears on: it did not fire for ubuntu, and for Windows
+> the answer taken was the schedule rather than a single green.
+
 **Decision.** Test order is shuffled on both axes (file order and, within a file, test order), and
 CI runs the suite **twice per matrix cell with two distinct seeds**, both derived from the run id,
 the attempt and the cell coordinates, and both printed. An unset `RONDO_TEST_SEED` under `CI` is a
@@ -576,6 +593,17 @@ which point the rule is not wrong but is no longer sufficient.
 ## D-0004 — ASCII-only for anything rondo prints
 
 **Status:** accepted (2026-09-05, rondo#1)
+
+> **Annotation (2026-09-21, from D-0087).** Added after this entry was accepted, and additive.
+> **The falsifier below did not fire.** It names *"the Windows cell leaving the matrix"*, and the
+> cell has not left it: it runs on the nightly schedule and on `workflow_dispatch` instead of on
+> every pull request (`D-0087`). The rule above is unchanged, and so is its reason -- a cp932
+> console still takes the process with it, and operators' consoles were always the higher bar than
+> CI. What changed is **when a violation is caught**: an unencodable character in program output
+> now merges and is found by the next nightly rather than by the pull request that introduced it.
+> The mitigation is the rule's own cheapness -- *"use ASCII in program output" needs no judgement*
+> -- and, for a change that deliberately writes non-ASCII (`D-0080`'s one exception), the manual
+> `workflow_dispatch` run that entry's annotation names.
 
 **Decision.** Every string rondo writes to a terminal — `--help` text, log lines, error messages,
 the test-seed line in `vitest.config.ts` — is ASCII. This does not apply to comments, Markdown,
@@ -1902,6 +1930,13 @@ delivery.
 
 **Status:** accepted (2026-09-05, rondo's human gate)
 
+> **Annotation (2026-09-21, from D-0087).** Added after this entry was accepted, and additive.
+> **Rule 6's *"mandatory in every matrix cell"* is unchanged, and the set of cells is now the
+> trigger's** (`D-0087`). The smoke still fails rather than skips under `CI` in every cell that
+> runs, and the provisioning step is still per cell. The end-to-end drive of the pinned continuo
+> **on Windows** -- the spawn path, and the platform-spelled CLI path the step computes in Node
+> for exactly that cell -- is now first observed by the nightly.
+
 > **Annotation (2026-09-06, from D-0019).** Added under the annotation rule in "How to use this
 > file"; nothing below is removed or rewritten. **Rule 5's own falsifier — "the store schema
 > arriving and the observed revision still not being persisted" — did not fire; the deferral is
@@ -2241,6 +2276,13 @@ npx vitest run test/continuo/smoke.test.ts           (variable unset, not CI)
 ## D-0018 — cadenza becomes a library rondo consumes: a vendored tarball under cadenza's delivery bridge, one facade, and a smoke that runs in every cell
 
 **Status:** accepted (2026-09-06, rondo's human gate)
+
+> **Annotation (2026-09-21, from D-0087).** Added after this entry was accepted, and additive.
+> **Rule 6's *"both seeded runs of every matrix cell"* is unchanged, and the set of cells is now
+> the trigger's** (`D-0087`). The falsifier below that reads *"an install, an import, or a
+> `tsc --noEmit` that resolves the declarations on ubuntu and not on windows"* still fires the same
+> way and is still reported by rule 6's smoke -- a night later than it would have been. Rule 4's
+> digest check is untouched: it runs in every job that installs, on every trigger.
 
 > **Annotation (2026-09-06, from D-0019).** Added under the annotation rule in "How to use this
 > file"; nothing below is removed or rewritten. **Rule 5's trigger fired and the arrow was taken.**
@@ -3139,6 +3181,13 @@ since made the size an argument.
 **Status:** accepted (2026-09-06, rondo's human gate — the operator's approval to build the minimal
 operating loop)
 
+> **Annotation (2026-09-21, from D-0087).** Added after this entry was accepted, and additive.
+> **Rule 4's *"all four matrix cells"* is now *every cell the trigger produces*** -- two on a pull
+> request and four on the nightly and on `workflow_dispatch` (`D-0087`). The build still runs in
+> each of them and is still first in `npm run verify`, so `D-0002`'s objection stays answered on
+> every trigger. The falsifier below, *"the build ceasing to run in any matrix cell"*, is unchanged
+> and did not fire: no cell stopped building it.
+
 `D-0002` decided that rondo emits nothing, and named the condition under which that would change:
 "The day rondo ships a binary is the day that entry gains a build." This is that day. Nothing else
 in `D-0002` moves — ESM, NodeNext, the explicit `.js` suffixes and the strictness beyond `strict`
@@ -3641,6 +3690,14 @@ Four laps at roughly $0.17 each is the whole cost of the evidence in this entry.
 ## D-0023 — The identifier allocator and the capacity ledger: rondo mints the triple, `awaiting_human` stops occupying capacity, and the single-flight index becomes a counted bound
 
 **Status:** accepted (2026-09-06, rondo's human gate)
+
+> **Annotation (2026-09-21, from D-0087).** Added after this entry was accepted, and additive.
+> **Rule 25's *"which is a required double-green cell"* is the sentence this touches.** The
+> Windows cell is no longer on the pull-request path; it runs nightly and on demand (`D-0087`).
+> Rule 25 itself is unaffected, and is in fact the shape of decision this makes more valuable
+> rather than less: a prefix that removes the whole class of reserved device names is checked by
+> a Linux runner asserting the *derivation* (`test/refrain/allocator.test.ts`), so the guarantee
+> does not wait for a night. A denylist would have been the thing now verified only nightly.
 
 `D-0012` decided single-flight for lap 1 and named what a second admission waits on. Two of its
 three conditions are rondo's: **an allocator** for the `(run id, topic branch, workspace)` triple,
@@ -13265,6 +13322,13 @@ and R3/R4 after `D-0064`); the gate's answers are recorded in "What was put to t
 answer" below. Supersedes `D-0057`. Refs rondo#172, `D-0057`, `D-0054`, `D-0041`, `D-0042`, `D-0007`,
 `D-0055`, `D-0056`, `D-0002`, `D-0006`, `D-0061`, `D-0064`.
 
+> **Annotation (2026-09-21, from D-0087).** Added after this entry was accepted, and additive.
+> **The residual *"cross-platform build reproducibility"*, whose decider this entry names as
+> *"the implementing change's CI"*, is now decided a night later.** `npm run page:check` still
+> runs in every cell the trigger produces, so a Windows cell emitting different CSS bytes -- R1's
+> falsifier, and the residual observed -- is caught by the nightly rather than before a merge
+> (`D-0087`). The residual is neither closed nor widened here; only its clock changed.
+
 > **Annotation (2026-09-14, from rondo#220).** Added after this entry was accepted, and additive, by the
 > answer of rondo's human gate (relayed by the secretary on 2026-09-14) that every write the page adds
 > beyond section 5a's table is a press, recorded as a row added to that table.
@@ -18467,6 +18531,15 @@ through the window and it chose the recommended option on each; the answers are 
 put to the human gate, and its answer". Refs `D-0004`, `D-0019`, `D-0025`, `D-0055`, `D-0064`,
 `D-0071`, `D-0075`, `D-0076`, `D-0079`, rondo#265, rondo#296.
 
+> **Annotation (2026-09-21, from D-0087).** Added after this entry was accepted, and additive.
+> **Rule 2.5's exception is still measured on the Windows cell, and that cell is no longer on the
+> pull-request path** (`D-0087`). This entry is the one place rondo deliberately writes non-ASCII
+> to a terminal, so it is also the one place `D-0004`'s cp932 failure mode is reachable by
+> intention rather than by accident -- and the row above that makes *the change that builds the
+> command, on the Windows cell* its decider now names a run that has to be asked for. The way to
+> ask is `workflow_dispatch` on the branch that builds it, before merge; that is what the manual
+> trigger exists for.
+
 **This entry decides and does not build.** Nothing in `src/` or `scripts/` changes with it, and under
 rule 2 nothing in `src/` needs to: the host is told what it is told today, by the same means. The
 annotations it adds are listed in "Annotations this entry adds".
@@ -19966,3 +20039,132 @@ the returning reader without spending the record on the arriving one.
 - **The repeated summary.** Six folded tries here say *finished, and the work was taken in* four
   times over. The repetition is smaller than it was and it has not gone, and a person who finds the
   folded lines as unreadable as the unfolded ones is measuring the same complaint one level up.
+
+---
+
+## D-0087 — The Windows cells leave the pull-request path for the nightly schedule and `workflow_dispatch`: the matrix becomes an expression over the trigger, the double-green rule is untouched, and every guarantee only Windows carries is now carried a night later
+
+**Status:** accepted (2026-09-21, rondo's human gate). Closes rondo#336. Filed alongside
+`continuo#215` and `cadenza#67`, which take the same move in those repositories.
+
+### Decision
+
+1. **`double-green`'s `os` list is an expression over `github.event_name`, not a literal.** On
+   `schedule` and `workflow_dispatch` it is `["ubuntu-latest", "windows-latest"]`; on everything
+   else -- `pull_request`, and `push` to `main` -- it is `["ubuntu-latest"]`. The `node` axis is
+   `22` and `24` on every trigger, so a pull request runs two cells and a nightly runs four.
+2. **The schedule is `17 18 * * *` (UTC), and `workflow_dispatch` is the way to ask for the cells
+   early.** 18:17 UTC is 03:17 where rondo's operator is, so a red is waiting in the morning rather
+   than arriving mid-afternoon; the offset from the hour is because GitHub queues the top of every
+   hour hardest and a dropped nightly is a signal nobody gets. The manual trigger is not decoration:
+   it is what a change that touches something platform-shaped uses to get the Windows answer before
+   merging, and `D-0080`'s annotation names it as the way that entry's cp932 measurement is taken.
+3. **One workflow, not two.** The Windows cells run the steps a pull request ran, because they are
+   the same steps in the same file. A second workflow would have been a copy of the provisioning
+   sequence -- the vendored-tarball digest check, the detached clone of the pinned continuo, the
+   two seeded runs -- and a copy of a sequence whose whole point is that it is exact is a copy that
+   drifts. The cost is that a nightly also re-runs the ubuntu cells and the three ubuntu jobs; that
+   is a few runner-minutes against a duplicate of the most load-bearing steps in the repository.
+4. **`D-0003` is untouched.** When the Windows cells run, they run both seeded suites, at seeds
+   derived from the cell coordinates as before. Nothing about the suite's content changes and no
+   test is skipped on any platform.
+5. **`concurrency` is keyed by `github.event_name` as well as by the ref.** The nightly and a push
+   to `main` share `refs/heads/main`, and `cancel-in-progress` is on. Without the event in the key a
+   merge could cancel the night's only Windows run -- or be cancelled by it -- leaving the cell
+   unobserved for a day with nothing red to say so.
+6. **`test/architecture/ci-triggers.test.ts` asserts the arrangement from both sides.** It reads the
+   workflow with comments stripped and requires that `windows-latest` still appears (retiring the
+   cell is `D-0004`'s stated falsifier and a decision to record, not an edit to make in YAML) and
+   that it appears only inside the trigger-conditional expression (restoring a literal
+   `os: [ubuntu-latest, windows-latest]` puts the cell back in front of every merge). Both mistakes
+   are edits to a file no compiler and no other test reads, and neither goes red on its own.
+7. **A red on the scheduled or manual path opens an issue, or comments on the one already open.**
+   `nightly-red-is-an-issue` runs when `gate` finished as `failure` and the trigger was `schedule`
+   or `workflow_dispatch`, and it holds `issues: write` as a **job-scoped** grant -- the workflow
+   level stays `contents: read`, so the jobs that plant violations and mutate source never inherit a
+   token that can write. It matches on the exact title of an open issue through the plain listing
+   rather than through `--search`, because the search index lags writes by minutes and a lagging
+   index is how a nightly files the same issue twice. The condition is `!cancelled()` and not
+   `always()`, which is the subtle half: `gate` runs under `always()` and its allowlist treats a
+   *cancelled* upstream as a red, so a run somebody stopped arrives at this job as
+   `needs.gate.result == 'failure'` and `always()` would file it. `!cancelled()` is what tells a
+   stopped run from a broken one, and it is asserted in the test above rather than left to a
+   comment.
+
+### Why
+
+**The measurement is `docs/operations/ci-timing.md` and rondo#336, and it is not a story about a
+timeout being too low.** The Windows cell failed twice on 2026-09-20/21 for reasons unrelated to the
+change under review (runs `35509994229` on `main` and `35519135051` on rondo#334), each time costing
+a review cycle to establish that. Across 39 files the failing run's median ratio against a healthy
+one was **0.71** -- most files were *faster* -- and exactly the files that spawn child processes blew
+up, one of them from 2.3 s to 81.4 s **within a single job**. rondo#222 already closed this once by
+raising the ceiling from 10 s to 60 s; the ceiling is being cleared by 20x, which means the shape of
+the problem was never the number.
+
+**Being faster is not the same as being fast enough to sit in front of a merge**, and that is the
+operator's reasoning rather than an inference from the numbers above. continuo found a real cause for
+its own Windows cost -- databases landing on the runner's slow network-attached `C:` while the
+workspace sits on the fast local `D:` -- and its fix (`continuo D-1109`) took that cell from 21-33
+minutes to 7-9. Seven minutes is still seven minutes that every pull request waits on, in three
+repositories, at the rate this organisation merges. So the drive fix stopped being a precondition for
+this entry. It remains worth doing on its own terms, and if the drive is also what causes the
+episodic spikes, the nightly signal gets more trustworthy.
+
+**This entry does not decide whether rondo supports Windows.** That is rondo#322's question -- whose
+machine does rondo run on -- and the cell is deliberately kept rather than retired, because a dozen
+entries are argued from its existence and `D-0004` names its departure as its own falsifier. The cell
+did not leave the matrix; it moved.
+
+### What this costs, stated plainly
+
+A Windows-only break now **merges**, and is found by the next nightly. Two things follow, and neither
+is hypothetical:
+
+- **Attribution gets harder.** A red nightly is attributable to a day's worth of merges rather than
+  to one change, so the first step becomes a bisect that a pull-request cell would have skipped.
+- **The guarantees that only Windows carries are carried a night later.** They are enumerated rather
+  than left implicit, each annotated in its own entry on this date: `D-0004` (a cp932 console takes
+  the process with it), `D-0017` rule 6 (the end-to-end drive of the pinned continuo across a
+  Windows spawn), `D-0018` rule 6 (the vendored cadenza resolving on Windows), `D-0023` rule 25
+  (reserved device names as path components -- whose Linux-checkable half is asserted in
+  `test/refrain/allocator.test.ts`, which is why this one does not wait), `D-0024` rule 4 (the build
+  running there), and `D-0059`'s cross-platform reproducibility residual (Tailwind's per-platform
+  native binaries emitting different CSS bytes). `D-0002`'s `@types/node` hole keeps its pre-merge
+  half, since the Node 22 cell is what catches it.
+
+### Who notices a red nightly
+
+Taken by rondo's human gate on 2026-09-21, because the workflow can produce a signal and cannot
+decide who is owed it. **A red nightly becomes an object in the repository** (rule 7), which is not
+the same thing as a notification and is not pretending to be: rondo#311 is the entry-shaped version
+of *nothing reaches someone who is not on the page*, and when that layer exists the route moves to it
+and rule 7's job is what it replaces. Until then an issue is the cheapest thing that survives nobody
+looking: a mail from GitHub goes to whoever last edited the workflow file, which is an owner assigned
+by `git blame` rather than on purpose, and the Actions tab is the thing this entry has just made it
+possible to stop watching.
+
+The rejected alternative was to add nothing and rely on that mail. It was rejected for the reason
+above and for one more: **the falsifier this entry cares most about is "a nightly red that nobody
+acts on"**, and an issue is a thing whose age can be read. A mail nobody opened leaves no trace to
+measure.
+
+### What would falsify it
+
+- **A nightly red that nobody acts on.** The cell would then be running to produce a signal that
+  changes nothing, which is worse than not running it: it costs runner minutes and buys the
+  *appearance* of Windows coverage. The measurement is whether a nightly red is answered within a
+  day, not whether the job is green.
+- **A Windows-only break reaching a dogfood session or an operator.** The point of keeping the cell
+  is that it catches those before a person does. One that got through is evidence the nightly cadence
+  is too slow for the rate rondo changes, and the answer is a tighter cadence or a targeted
+  pre-merge cell, not a return of the whole matrix.
+- **The episodic spikes turning out to be the drive**, `continuo D-1109`'s cause, and the cell
+  becoming both fast and steady. That would not restore the pull-request cell by itself -- rule 2 of
+  the reasoning above stands on the seven-minute figure, not on the flakiness -- but it would make
+  the question worth re-asking with numbers instead of with this entry's.
+- **Somebody needing the Windows answer on most pull requests.** If `workflow_dispatch` becomes the
+  ordinary path rather than the exception, the trigger split is fighting how rondo is actually
+  changed, and the cheaper arrangement is the one this entry moved away from.
+- **rondo#322 answering that rondo does not run on Windows**, which would retire the cell entirely
+  and fire `D-0004`'s falsifier for real -- a product decision, and a new entry.

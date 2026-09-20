@@ -5,18 +5,40 @@ name: ci
 # Read `gate` at the bottom first: everything above it exists to give it
 # something to aggregate. The single stable check name is what a branch ruleset
 # should require, so that adding a matrix cell is a change to this file alone.
+#
+# The matrix is not the same on every trigger: a pull request gets the ubuntu
+# cells, and the Windows cells run nightly and on demand (D-0087). One workflow
+# rather than two, so the steps a Windows cell runs are the steps a pull request
+# ran and cannot drift away from them -- see `double-green`'s `os` line.
 
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
+  # The Windows cells' only scheduled path (D-0087). Nightly at 18:17 UTC,
+  # which is 03:17 in the operator's timezone: a red is waiting in the morning
+  # rather than arriving mid-afternoon. Offset from the hour on purpose --
+  # GitHub queues the top of every hour hardest, and a delayed or dropped
+  # nightly is a signal nobody gets.
+  #
+  # A scheduled workflow runs from the default branch's copy of this file and
+  # nowhere else, so a change to the cron below only takes effect once merged.
+  schedule:
+    - cron: "17 18 * * *"
+  # On demand, for the case the schedule exists to make rare: someone touched
+  # something platform-shaped and wants the Windows answer before merging
+  # rather than the next morning.
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  # `github.event_name` is in the key because the nightly and a push to `main`
+  # share a ref: without it a merge would cancel the night's only Windows run,
+  # or be cancelled by it, and the cell would be quietly unobserved for a day.
+  group: ci-${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: true
 
 jobs:
@@ -34,14 +56,30 @@ jobs:
       # the diagnosis, and cancelling them destroys it.
       fail-fast: false
       matrix:
-        # Issue #1 names ubuntu and windows, and windows is a required cell from
-        # day one rather than a nightly extra. Two things here are only observed
-        # there: the cp932 console, where a non-ASCII character in program
-        # output crashes the writer rather than printing badly (D-0004), and
-        # backslash path separators, where the boundary sweep's one
-        # normalisation site is the difference between a green cell and a cell
-        # in which every relative import in the tree reads as a violation.
-        os: [ubuntu-latest, windows-latest]
+        # Windows runs on the scheduled and manual triggers only (D-0087). It
+        # is not dropped: two things are observed there and nowhere else -- the
+        # cp932 console, where a non-ASCII character in program output crashes
+        # the writer rather than printing badly (D-0004), and backslash path
+        # separators, where the boundary sweep's one normalisation site is the
+        # difference between a green cell and a cell in which every relative
+        # import in the tree reads as a violation. What changed is WHEN that is
+        # checked, and the cost is stated in D-0087: a Windows-only break is
+        # now found by the next nightly rather than before the merge that
+        # caused it.
+        #
+        # The expression is the whole mechanism, so read it rather than the
+        # prose: on `schedule` and `workflow_dispatch` the list is both, on
+        # everything else it is ubuntu alone. Node stays 22 and 24 on every
+        # trigger, so a pull request runs two cells and a nightly runs four.
+        #
+        # The continuation lines below sit at the SAME indentation as the first
+        # on purpose: a `>-` scalar folds equally-indented lines into one with
+        # spaces, and keeps the newline on any line indented further. A newline
+        # inside `${{ ... }}` is not something to find out about from a runner.
+        os: >-
+          ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+          && fromJSON('["ubuntu-latest", "windows-latest"]')
+          || fromJSON('["ubuntu-latest"]') }}
         # Node 22 (Maintenance LTS) and Node 24 (Active LTS), matching the
         # `engines` range in package.json.
         node: ["22", "24"]
@@ -66,7 +104,8 @@ jobs:
         # reports a base64 hash nobody can read.
         #
         # Node rather than `sha256sum`: coreutils is absent on stock macOS and
-        # on Windows, and the cell below is a Windows cell.
+        # on Windows, and one of the cells this matrix produces is a Windows
+        # cell -- on the nightly and manual triggers (D-0087).
         run: node vendor/pin.mjs check
 
       - name: Install from the lockfile
@@ -79,9 +118,10 @@ jobs:
       - name: Build the executable
         # D-0002 objected to "a build that nothing checks"; this is the check
         # (D-0024 rule 4). It is in `double-green` rather than in `checks` so
-        # that it runs in all four cells: Windows path handling and the Node
-        # 22/24 split are what this matrix exists to observe, and the
-        # executable is the first thing rondo ships that runs outside vitest.
+        # that it runs in every cell the trigger produces: the Node 22/24 split
+        # on every trigger, and Windows path handling on the nightly and manual
+        # ones (D-0087). The executable is the first thing rondo ships that runs
+        # outside vitest.
         run: npm run build
 
       - name: Check the page's served files against their manifest
@@ -90,13 +130,15 @@ jobs:
         # clean build on the runner has to reproduce it exactly. Right after the build, on a fresh
         # checkout, so nothing but the lockfile and the tree can have produced `dist/page`.
         #
-        # In all four cells, deliberately. Tailwind's `oxide` and `lightningcss` are native
-        # per-platform binaries and reproducibility was measured on one machine only (D-0059
-        # residuals, "cross-platform build reproducibility ... the implementing change's CI"). A
-        # Windows cell that emits different CSS bytes is that residual observed, and is D-0059's
-        # falsifier for R1; narrowing this step to ubuntu is then a decision to record, not a
-        # quiet edit here. A red here is that residual only once line endings are ruled out:
-        # `.gitattributes` pins the page's js and css to LF, so a CRLF checkout cannot change keys.js's digest.
+        # In every cell the trigger produces, deliberately. Tailwind's `oxide` and
+        # `lightningcss` are native per-platform binaries and reproducibility was measured on one
+        # machine only (D-0059 residuals, "cross-platform build reproducibility ... the
+        # implementing change's CI"). A Windows cell that emits different CSS bytes is that
+        # residual observed, and is D-0059's falsifier for R1 -- which, since D-0087, is a
+        # falsifier the nightly can fire and a pull request cannot. Narrowing this step to ubuntu
+        # is still a decision to record, not a quiet edit here. A red here is that residual only
+        # once line endings are ruled out: `.gitattributes` pins the page's js and css to LF, so a
+        # CRLF checkout cannot change keys.js's digest.
         run: npm run page:check
 
       - name: Type-check
@@ -417,3 +459,83 @@ jobs:
           if bad:
               sys.exit(1)
           print(f"gate: all {len(results)} upstream job(s) succeeded")
+
+  nightly-red-is-an-issue:
+    # The nightly's signal has to land somewhere a person will pass. Until
+    # rondo#311 builds the layer that reaches someone who is not on the page,
+    # this job is the receptacle: it makes a red nightly a visible object in the
+    # repository rather than a row in a tab nobody opened (D-0087 rule 7). When
+    # #311 lands, the route moves there and this job is what it replaces.
+    #
+    # **Not on the pull-request path.** A pull request that goes red already has
+    # a red check on it and an author looking at it; an issue would be noise.
+    # The `if` below is what keeps this to the scheduled and manual runs, and
+    # the matrix expression in `double-green` is what makes those the only runs
+    # the Windows cells are in.
+    name: a red nightly is an issue
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [gate]
+    # Three conditions, and the first is the one that is easy to get wrong.
+    #
+    # `!cancelled()` rather than `always()`: a cancelled run does NOT reach here
+    # as a clean skip. `gate` runs under `always()`, so a cancellation still
+    # runs it, and its allowlist -- any result other than `success`, cancelled
+    # included -- makes it exit 1. `needs.gate.result == 'failure'` is therefore
+    # true for a run somebody stopped, and `always()` here would file an issue
+    # for it. `!cancelled()` is the only thing that tells the two apart, and it
+    # also replaces the default `success()` guard, so a failed `gate` still
+    # reaches this job.
+    #
+    # `== 'failure'` rather than `!= 'success'` for the same reason read from
+    # the other side: a result this workflow has not thought about is not
+    # automatically a red worth waking someone for.
+    #
+    # `!cancelled()` is written inside a folded scalar because a plain YAML
+    # value starting with `!` is a tag, not a string.
+    if: >-
+      !cancelled()
+      && needs.gate.result == 'failure'
+      && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+    # Scoped to this job rather than raised at the top of the file: every other
+    # job in this workflow reads the repository and writes nothing, and the one
+    # job that can file an issue should be the only one holding a token that
+    # can.
+    permissions:
+      issues: write
+    steps:
+      - name: File the red, or add to the one already filed
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          TRIGGER: ${{ github.event_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          title="Nightly CI is red"
+          # Listed rather than searched. `--search` goes through GitHub's search
+          # index, which lags behind writes by seconds to minutes -- long enough
+          # for tonight's red to open a duplicate of the issue last night's red
+          # filed. The plain listing is the REST collection and is consistent
+          # with what was just written.
+          existing=$(
+            gh issue list --repo "$GITHUB_REPOSITORY" --state open --limit 200 \
+              --json number,title \
+              --jq "[.[] | select(.title == \"$title\")] | first | .number // empty"
+          )
+          body=$(printf '%s\n' \
+            "The \`$TRIGGER\` run of \`ci\` failed: $RUN_URL" \
+            "" \
+            "The Windows cells run on this path only (\`D-0087\`), so a red here is" \
+            "attributable to a day of merges rather than to one change -- read which" \
+            "cell failed first, and bisect from the last green nightly." \
+            "" \
+            "Filed by the \`nightly-red-is-an-issue\` job. Close it once the nightly is" \
+            "green again; a red while it is open adds a comment here rather than a" \
+            "second issue.")
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --repo "$GITHUB_REPOSITORY" --body "$body"
+            echo "Commented on the open issue #$existing."
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "$body"
+          fi

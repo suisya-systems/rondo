@@ -1179,8 +1179,9 @@ test("a resolved specifier is a repo-relative posix path on every platform", () 
   // The regression this pins is invisible on Linux and fatal on Windows: an
   // absolute resolution there carries a drive letter, and a drive letter makes
   // every relative import in the tree fail its allowance check at once. The
-  // Windows cell is required (D-0004's neighbours in ci.yml), so this case is
-  // the local half of a guarantee only CI can finish.
+  // Windows cell runs nightly rather than on every pull request (`D-0087`), so
+  // this case is the half of that guarantee a Linux runner can finish before a
+  // merge -- and the half it cannot is now a night away.
   const resolved = resolveRelative("../store/records.js", "src/refrain");
   expect(resolved).toBe("src/store/records.js");
   expect(resolved).not.toMatch(/[\\:]/);
