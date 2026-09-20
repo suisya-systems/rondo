@@ -79,23 +79,36 @@ export function checksHost(ports: ChecksHostPorts): ChecksHost {
   const pass = async (): Promise<void> => {
     while (again) {
       again = false;
-      let due: readonly string[];
+      let due: readonly Due[];
       try {
         due = await scan(ports);
       } catch (error) {
         ports.log(`checks   the published laps could not be scanned: ${describe(error)}`);
         return;
       }
-      for (const iterationId of due) {
+      for (const one of due) {
         // One lap's failure costs that lap: a throw here would end the page's
         // process with it.
         try {
-          const line = await readOne(ports, read, iterationId, said);
-          if (line !== null) {
-            ports.log(`checks   ${iterationId}: ${line}`);
+          const answer = await readOne(ports, read, one, said);
+          if (answer.line !== null) {
+            ports.log(`checks   ${one.iterationId}: ${answer.line}`);
+          }
+          // **A forge that would not answer about one lap ends the pass.** The
+          // reason is usually the forge's and not the lap's -- a rate limit, a
+          // credential, a network -- and asking it again about every other
+          // published lap in the same second is how a poller turns one refusal
+          // into a hundred. The next tick asks again, starting where this one
+          // stopped.
+          //
+          // ponytail: no `Retry-After` is read and no clock is kept; one
+          // refusal costs one pass. Honouring the header is the upgrade if a
+          // minute turns out to be too soon.
+          if (answer.halt) {
+            return;
           }
         } catch (error) {
-          ports.log(`checks   ${iterationId}: ${describe(error)}; read again on the next scan`);
+          ports.log(`checks   ${one.iterationId}: ${describe(error)}; read again on the next scan`);
         }
       }
     }
@@ -122,27 +135,44 @@ export function checksHost(ports: ChecksHostPorts): ChecksHost {
   };
 }
 
+/** One published lap that is still being read, and what its thread already says. */
+interface Due {
+  readonly iterationId: string;
+  /** The answers already written for it: `green`, `red` or `none`. */
+  readonly answered: ReadonlySet<string>;
+}
+
 /**
- * Every published lap with no answer yet whose line still holds, oldest report
- * first.
+ * Every published lap this is still reading, with what its thread already says.
  *
  * **Read off the thread and the ledger, and off nothing else.** Both are rows
  * some other part of rondo already writes, so a restart loses nothing and a
  * publish the command line made while the host runs is found by the next scan.
+ *
+ * **A green or a red closes the reading; a `none` does not.** Those two are the
+ * forge having answered about this commit. A `none` is the forge having nothing
+ * to say yet, and it arrives most often in the seconds after a push, before the
+ * first check is registered -- so closing on it would leave the pull request
+ * this exists for unread. What closes the window in that case is the ledger:
+ * once the line's work has landed, its checks are a later question's.
  */
-async function scan(ports: ChecksHostPorts): Promise<readonly string[]> {
+async function scan(ports: ChecksHostPorts): Promise<readonly Due[]> {
   const read = await ports.record.threadMessages();
   if (read.kind !== "read") {
     throw new Error(read.reason);
   }
-  const answered = new Set<string>();
+  const answers = new Map<string, Set<string>>();
   const published: string[] = [];
   for (const message of read.messages) {
     if (message.messageId.startsWith(ANSWER_PREFIX)) {
-      // The id is `report-checks-<iterationId>-<kind>`; the lap is what is
-      // between the two, and the kind carries no dash.
+      // The id is `report-checks-<iterationId>-<kind>`; the kind carries no
+      // dash, so everything before the last one is the lap -- which may hold
+      // any number of its own.
       const rest = message.messageId.slice(ANSWER_PREFIX.length);
-      answered.add(rest.slice(0, rest.lastIndexOf("-")));
+      const cut = rest.lastIndexOf("-");
+      const at = answers.get(rest.slice(0, cut)) ?? new Set<string>();
+      at.add(rest.slice(cut + 1));
+      answers.set(rest.slice(0, cut), at);
     } else if (message.messageId.startsWith(PUBLISHED_PREFIX)) {
       published.push(message.messageId.slice(PUBLISHED_PREFIX.length));
     }
@@ -155,7 +185,20 @@ async function scan(ports: ChecksHostPorts): Promise<readonly string[]> {
       .filter((line) => line.releasedBy === null)
       .flatMap((line) => line.lapIds),
   );
-  return published.filter((id) => !answered.has(id) && holding.has(id));
+  return published.flatMap((iterationId) => {
+    const answered = answers.get(iterationId) ?? new Set<string>();
+    if (answered.has("green") || answered.has("red") || !holding.has(iterationId)) {
+      return [];
+    }
+    return [{ iterationId, answered }];
+  });
+}
+
+/** What one lap's reading came to: a line for the terminal, and whether to stop. */
+interface Answer {
+  readonly line: string | null;
+  /** The forge would not answer, so this pass asks it nothing more. */
+  readonly halt: boolean;
 }
 
 /**
@@ -163,7 +206,9 @@ async function scan(ports: ChecksHostPorts): Promise<readonly string[]> {
  *
  * **A `pending` and an `undetermined` write nothing**, which is what makes the
  * window close on an answer rather than on a deadline: the next scan asks
- * again, and a forge that is down costs nothing but the call.
+ * again, and a forge that is down costs nothing but the call. A `none` writes
+ * once and keeps the lap due, because "no check yet" and "no check ever" are
+ * the same answer from the forge and only one of them is worth closing on.
  *
  * ponytail: a pull request whose checks never finish is re-read once a minute
  * for as long as its line holds. The ledger's release is the bound, and the
@@ -173,15 +218,16 @@ async function scan(ports: ChecksHostPorts): Promise<readonly string[]> {
 async function readOne(
   ports: ChecksHostPorts,
   read: (request: ChecksRequest) => Promise<ChecksReading>,
-  iterationId: string,
+  due: Due,
   said: Set<string>,
-): Promise<string | null> {
-  const once = (line: string): string | null => {
+): Promise<Answer> {
+  const iterationId = due.iterationId;
+  const once = (line: string): Answer => {
     if (said.has(iterationId)) {
-      return null;
+      return { line: null, halt: false };
     }
     said.add(iterationId);
-    return line;
+    return { line, halt: false };
   };
   const found = await ports.store.read(iterationId);
   if (found.kind !== "read") {
@@ -206,15 +252,24 @@ async function readOne(
     return once("it carries no reading of the commit it pushed, so its checks cannot be named");
   }
   const reading = await read({ host: ports.host, repo, commit });
-  if (reading.kind === "pending" || reading.kind === "undetermined") {
-    return null;
+  if (reading.kind === "pending") {
+    return { line: null, halt: false };
   }
-  return await reportToRequest(
+  if (reading.kind === "undetermined") {
+    // Said once per lap, for `once`'s reason, and the pass stops: the forge is
+    // what did not answer, and the next lap would ask the same thing of it.
+    return { ...once(`the forge did not answer about its checks: ${reading.reason}`), halt: true };
+  }
+  if (reading.kind === "none" && due.answered.has("none")) {
+    return { line: null, halt: false };
+  }
+  const line = await reportToRequest(
     ports,
     iterationId,
     { kind: "checks", commit, reading },
     ports.now(),
   );
+  return { line, halt: false };
 }
 
 function describe(error: unknown): string {

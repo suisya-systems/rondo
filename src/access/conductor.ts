@@ -1022,10 +1022,11 @@ function checksBody(
   }
   // **Said rather than left as a silence**, and said as what it is: the forge
   // offers nothing that tells a repository with no checks apart from one whose
-  // first check has not started, so neither is claimed.
+  // first check has not started, so neither is claimed -- and because neither
+  // is claimed, this line is not the end of the reading.
   return (
     `The forge reported no check of any kind ${on}, which lap '${iterationId}' was published at. ` +
-    "rondo cannot say whether this work is green, and does not read this commit's checks again."
+    "rondo cannot say whether this work is green. If a check reports later, it says so here."
   );
 }
 

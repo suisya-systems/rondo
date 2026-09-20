@@ -572,11 +572,14 @@ export interface ChecksRequest {
  * about a pull request, and a screen that read it as a failure would send a
  * person to look at a check that never ran.
  *
- * **`none` is its own answer too.** A commit with no status and no check run is
- * indistinguishable from one whose first check has not started, and the forge
- * offers nothing that tells them apart -- so it is reported as what rondo can
- * actually see (nobody reported anything) rather than sorted into green or
- * pending, either of which would be a claim about a repository's configuration.
+ * **`none` is its own answer too, and it is not a final one.** A commit with no
+ * status and no check run is indistinguishable from one whose first check has
+ * not started, and the forge offers nothing that tells them apart -- so it is
+ * reported as what rondo can actually see (nobody reported anything) rather
+ * than sorted into green or pending, either of which would be a claim about a
+ * repository's configuration. Because the two cannot be told apart, a `none`
+ * does not close the reading either: `checksHost` says it once and keeps
+ * looking, so a check registered a minute after the push is still read.
  */
 export type ChecksReading =
   /** Every check that reported has passed. `counted` is how many did. */
@@ -602,16 +605,30 @@ export type ChecksReading =
  * an external service posts; a check run is what an app (including the forge's
  * own actions) records. Reading one would report a repository that uses the
  * other as having no checks at all.
+ *
+ * **Every page of both, because one page is a wrong answer and not a partial
+ * one.** Both endpoints answer 30 entries by default, and a repository with
+ * more checks than a page holds would have its failure sit on a page nothing
+ * fetched -- reported as green, on a reading that then closes the window it was
+ * read in. `--paginate --slurp` asks for all of them as an array of pages, and
+ * `joinChecks` checks the forge's own `total_count` against what arrived, so a
+ * short answer is `undetermined` rather than a green.
  */
 export async function readChecks(request: ChecksRequest): Promise<ChecksReading> {
   const host = request.host === null ? [] : ["--hostname", request.host];
   const at = `repos/${request.repo}/commits/${request.commit}`;
-  const status = await runCommand("gh", ["api", ...host, `${at}/status`], CHECKS_READ_TIMEOUT_MS);
+  const read = async (path: string): Promise<CommandOutcome> =>
+    await runCommand(
+      "gh",
+      ["api", ...host, "--paginate", "--slurp", `${at}/${path}?per_page=100`],
+      CHECKS_READ_TIMEOUT_MS,
+    );
+  const status = await read("status");
   const statusFailure = queryFailure(status);
   if (statusFailure !== null) {
     return { kind: "undetermined", reason: statusFailure };
   }
-  const runs = await runCommand("gh", ["api", ...host, `${at}/check-runs`], CHECKS_READ_TIMEOUT_MS);
+  const runs = await read("check-runs");
   const runsFailure = queryFailure(runs);
   if (runsFailure !== null) {
     return { kind: "undetermined", reason: runsFailure };
@@ -682,18 +699,13 @@ interface CheckEntry {
  * checks" are two different facts, and the second one is written into a report.
  */
 function readEntries(status: string, checkRuns: string): readonly CheckEntry[] | string {
-  let statusJson: unknown;
-  let runsJson: unknown;
-  try {
-    statusJson = JSON.parse(status);
-    runsJson = JSON.parse(checkRuns);
-  } catch (error) {
-    return `the forge's answer was not JSON: ${hostFailure(error).text}`;
+  const statuses = every(status, "statuses");
+  if (typeof statuses === "string") {
+    return statuses;
   }
-  const statuses = arrayAt(statusJson, "statuses");
-  const runs = arrayAt(runsJson, "check_runs");
-  if (statuses === null || runs === null) {
-    return "the forge's answer carried no 'statuses' or no 'check_runs' list";
+  const runs = every(checkRuns, "check_runs");
+  if (typeof runs === "string") {
+    return runs;
   }
   return [
     ...statuses.map((one) => ({
@@ -712,6 +724,47 @@ function readEntries(status: string, checkRuns: string): readonly CheckEntry[] |
           : ("pending" as const),
     })),
   ];
+}
+
+/**
+ * Every entry of one kind across every page, or why they could not be read.
+ *
+ * **`--slurp` prints an array of pages**, and one page on its own is an object,
+ * so both shapes are read: a `gh` that answered with a single document is not a
+ * different fact from one that answered with a list of one.
+ *
+ * **The forge's own count is the belt to pagination's braces.** `total_count`
+ * says how many entries of this kind the commit has; fewer than that in hand
+ * means a page is missing, whatever the reason -- a `--paginate` that stopped,
+ * a flag a `gh` did not honour -- and a missing page is exactly where the
+ * failure that makes this reading wrong would be. So it is `undetermined`,
+ * which the host reads again, rather than a green over an entry nobody fetched.
+ */
+function every(printed: string, key: string): readonly unknown[] | string {
+  let json: unknown;
+  try {
+    json = JSON.parse(printed);
+  } catch (error) {
+    return `the forge's answer was not JSON: ${hostFailure(error).text}`;
+  }
+  const entries: unknown[] = [];
+  let counted: number | null = null;
+  for (const page of Array.isArray(json) ? json : [json]) {
+    const list = arrayAt(page, key);
+    if (list === null) {
+      return `the forge's answer carried no '${key}' list`;
+    }
+    entries.push(...list);
+    const total = numberAt(page, "total_count");
+    counted = total === null ? counted : Math.max(counted ?? 0, total);
+  }
+  if (counted !== null && entries.length < counted) {
+    return (
+      `the forge reported ${String(counted)} '${key}' on this commit and answered with ` +
+      `${String(entries.length)}`
+    );
+  }
+  return entries;
 }
 
 function statusState(state: string | null): CheckEntry["state"] {
@@ -750,6 +803,14 @@ function stringAt(json: unknown, key: string): string | null {
   }
   const at = (json as Record<string, unknown>)[key];
   return typeof at === "string" && at !== "" ? at : null;
+}
+
+function numberAt(json: unknown, key: string): number | null {
+  if (typeof json !== "object" || json === null) {
+    return null;
+  }
+  const at = (json as Record<string, unknown>)[key];
+  return typeof at === "number" && Number.isFinite(at) ? at : null;
 }
 
 /** What reading the lap's work needs. Every value comes from the plan. */

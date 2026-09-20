@@ -69,6 +69,28 @@ test("a conclusion this does not know the name of is never green", () => {
   ).toEqual({ kind: "red", failed: ["build"] });
 });
 
+test("a page the forge counted and did not send is undetermined, and never a green", () => {
+  // 31 check runs on the commit, 30 in hand: the failure is on the page that
+  // did not arrive, so this must not report green (Codex round 1, P1).
+  const short = JSON.stringify({
+    total_count: 31,
+    check_runs: Array.from({ length: 30 }, (_, at) => ({
+      name: `ci-${String(at)}`,
+      status: "completed",
+      conclusion: "success",
+    })),
+  });
+  expect(joinChecks(status(), short)).toMatchObject({ kind: "undetermined" });
+});
+
+test("every page is read, so a failure on the second one is still a red", () => {
+  const pages = JSON.stringify([
+    { total_count: 2, check_runs: [{ name: "one", status: "completed", conclusion: "success" }] },
+    { total_count: 2, check_runs: [{ name: "two", status: "completed", conclusion: "failure" }] },
+  ]);
+  expect(joinChecks(status(), pages)).toEqual({ kind: "red", failed: ["two"] });
+});
+
 test("an answer that is not the shape expected is undetermined, and not 'none'", () => {
   expect(joinChecks("not json at all", runs())).toMatchObject({ kind: "undetermined" });
   expect(joinChecks(JSON.stringify({ state: "success" }), runs())).toMatchObject({
@@ -91,6 +113,8 @@ async function hostOver(options: {
   readonly reading: ChecksReading;
   readonly messageIds: readonly string[];
   readonly releasedBy?: "person" | "rondo" | null;
+  /** The laps the ledger's one holding line covers. */
+  readonly lapIds?: readonly string[];
 }): Promise<{ readonly written: readonly Recorded[]; readonly asked: number }> {
   const written: Recorded[] = [];
   let asked = 0;
@@ -123,7 +147,11 @@ async function hostOver(options: {
         ] as never,
       laneLedger: async () =>
         [
-          { lineageId: "lap-1", lapIds: ["lap-1"], releasedBy: options.releasedBy ?? null },
+          {
+            lineageId: "lap-1",
+            lapIds: options.lapIds ?? ["lap-1"],
+            releasedBy: options.releasedBy ?? null,
+          },
         ] as never,
     },
     record: {
@@ -183,6 +211,41 @@ test("a line the ledger has released is out of the window", async () => {
     releasedBy: "rondo",
   });
   expect(over).toEqual({ written: [], asked: 0 });
+});
+
+test("a 'none' said once does not close the reading: a check registered later is still read", async () => {
+  // The forge cannot tell "no check yet" from "no check ever", and a publish is
+  // read seconds after the push, so closing on `none` would leave the pull
+  // request this exists for unread (Codex round 1, P1).
+  const after = await hostOver({
+    reading: { kind: "red", failed: ["build"] },
+    messageIds: ["request-1", "report-published-lap-1", "report-checks-lap-1-none"],
+  });
+  expect(after.asked).toBe(1);
+  expect(after.written[0]?.messageId).toBe("report-checks-lap-1-red");
+});
+
+test("a 'none' is said once and not once a minute", async () => {
+  const again = await hostOver({
+    reading: { kind: "none" },
+    messageIds: ["request-1", "report-published-lap-1", "report-checks-lap-1-none"],
+  });
+  expect(again.asked).toBe(1);
+  expect(again.written).toEqual([]);
+});
+
+test("a forge that will not answer ends the pass rather than asking it once per lap", async () => {
+  const over = await hostOver({
+    reading: { kind: "undetermined", reason: "gh exited 1" },
+    messageIds: [
+      "request-1",
+      "report-published-lap-1",
+      "report-published-lap-2",
+      "report-published-lap-3",
+    ],
+    lapIds: ["lap-1", "lap-2", "lap-3"],
+  });
+  expect(over).toEqual({ written: [], asked: 1 });
 });
 
 test("pending writes nothing, so the next scan asks again", async () => {
