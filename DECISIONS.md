@@ -119,6 +119,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0079 | Composed in the language, not translated into it: every wording set is a whole catalogue and none is another's diff, what a lap and its drafter write for the person is asked for as composed in the person's language, and English is written only where the repository requires it | accepted |
 | D-0080 | Starting rondo is one word with nothing in it to remember: setup writes the command that carries every host fact, the thing the person typed is what speaks when rondo cannot start, and starting runs no setup | accepted |
 | D-0081 | One store and one host, many repositories: a repository is named by the plan a request is drafted from, the forge slug stops being a host fact, and `D-0075` rule 1.1 is withdrawn | accepted |
+| D-0082 | The screen's visual system, written down: weight follows who is blocked rather than which group a row is in, one type scale with a Japanese line and floor, amber and red spent only on meaning, and blue returned to what a person can touch | proposed |
 
 ---
 
@@ -19116,3 +19117,161 @@ Named here so that nothing in this entry is read as built. None of it is in this
 - **Setup run again under one root damaging the first repository's records**: rule 6.2 is wrong that
   the two output files are all that collide.
 - Any measurement in "What was measured" failing to reproduce at rondo `f8ba67a`.
+
+## D-0082 — The screen's visual system, written down: weight follows who is blocked rather than which group a row is in, one type scale with a Japanese line and floor, amber and red spent only on meaning, and blue returned to what a person can touch
+
+**Status:** proposed (2026-09-20, rondo#314). Nothing here is settled until the human gate answers
+the five points in "What this puts to the human gate". Supersedes nothing. Refs `D-0054`, `D-0059`,
+`D-0064`, `D-0073`, `D-0074`, `D-0076`, `D-0079`, `D-0081`, rondo#90, rondo#153, rondo#220,
+rondo#244, rondo#245, rondo#246, rondo#275, rondo#288, rondo#295, rondo#308, rondo#314.
+
+**This entry decides and does not build.** What the building change has to do is named where it comes
+up, sliced in "What the building change owes", and no slice of it is in this commit.
+
+**Numbering.** `D-0082` is the next number after `D-0081` on `main` at `0e75d39`.
+
+**Why an entry is needed.** `D-0059` chose the stack and named the bar -- the tools a developer
+already has open (GitHub's run list, Linear's inbox, Vercel's deployments) -- and then the look was
+built, in passes, under rondo#153, rondo#220, rondo#244, rondo#245 and rondo#246. It works. But the
+whole of it is recorded in doc comments on the class strings that carry it, each citing the pass it
+came from and none citing a decision, so **there is no statement a later reader can check a new
+screen against.** That already shows: rondo#220's comment on `questionGroup` says `data-question`
+"is the whole of what the visual weight rests on", and nothing anywhere styles that attribute
+(measured below). The weight is real, but it lives somewhere else than the sentence that explains it.
+
+**What fires now is `D-0081`'s screen, not the backlog.** The presses added on 2026-09-20 -- raising
+a refused approval's budget (`D-0074`, rondo#275), releasing the files a finished line still holds
+(`D-0073` rule 4.3, rondo#288, rondo#295), and answering which work a request means (`D-0081`,
+rondo#308) -- are all **exceptions**. Each is drawn only when something has stopped. A page whose
+ordinary state is already as loud as its exceptions buries the one row the person came for, and one
+of the three is measurably buried today (rule 1 below).
+
+### What was measured, and how
+
+On **2026-09-20**, at rondo `0e75d39`, by reading `src/access/web.tsx` (7,292 lines) and
+`page/app.css` (287 lines). Line numbers drift; re-measure the claim, not the number.
+
+- **The row is already one shape, in five places.** `ROW` (`web.tsx:891`) is the class of every
+  list row: laps (`lapRow`), asks and scope proposals (`waitingView`), unreadable lines
+  (`attentionView`) and requests (`requestsView`). Nothing was found that draws a row of its own.
+- **Weight is carried by per-element class strings, not by `data-question`.** In `lapRow` a waiting
+  request is `text-[15px] leading-6 font-semibold`, a running one `text-sm leading-6 font-medium`,
+  and an ended one `truncate text-sm leading-6 text-muted-foreground`. `data-question` is set on
+  four sections and **no rule in `page/app.css` matches it**; it is a hook for tests and readers
+  only.
+- **The release press is drawn at the page's quietest weight.** `landing(record).release`
+  (`web.tsx:2116`) is rendered inside `endedView`, so the one press that needs a person to clear a
+  held file sits on a row that is truncated to one line, set in `text-muted-foreground`, and given
+  the `ok` or `muted` glyph. The whole of "waiting on you wins" is decided by which group a row is
+  in, and that row is in the wrong one.
+- **Ten ad-hoc type sizes, and no scale.** `text-[10px]`, `text-[10.5px]`, `text-[11px]`,
+  `text-[11.5px]`, `text-[12px]`, `text-[12.5px]`, `text-[13px]`, `text-[13.5px]`, `text-[14px]`
+  and `text-[15px]` appear as arbitrary values (241 occurrences), beside `text-sm` (23), `text-xs`
+  (3) and `text-base` (1). Four of those sizes differ from a neighbour by half a pixel.
+- **`--ring` and `--run` are the same colour, in both modes.** `#2f6fdb` light and `#5b9bff` dark
+  (`app.css:57` and `:63`, `:79` and `:85`). *A lap is running* and *this element has focus* are
+  drawn in one hue, and `--link` is a third member of the same family.
+- **Both palettes are written out, not inverted**, over 40 tokens, with contrast floors recorded in
+  the stylesheet's own comment (`--faint` at 4.5:1 on ground and card; `--wait` carrying the one
+  filled button's ink). There is **no `[data-theme]` override and no toggle**: the dark palette is a
+  `prefers-color-scheme` block alone.
+- **Nothing in the page is specific to Japanese.** The CJK faces appear only as fallbacks after
+  `Inter Variable` in `--font-sans` and `--font-mono`; no size, line height or floor differs by
+  language, and `D-0079` guarantees that most of what the person reads on a Japanese host is
+  Japanese.
+- **Twenty-two `<details>` folds**, each opened by `page/app.css` when script is off.
+
+### The decision
+
+**1. Weight follows who is blocked, and a press only a person can clear puts its row in *waiting*.**
+The three questions -- waiting, running, ended -- stay the page's spine and keep the weights they
+have. What changes is **membership**: a row carrying an act that nothing but a person can perform is
+a waiting row, whatever the state of the work behind it. The release press (rondo#295) is the case
+that exists; a row is not promoted by being interesting, only by holding such a press.
+
+**2. Amber is spent only on "a person must act", and red only on "this is broken".** Neither may be
+used for emphasis, for a heading, for a hover, or to mark something merely recent. The difference
+between an ordinary screen and an exceptional one is made by **how rare the colour is**, not by how
+loud it is, so no new tier and no new token is added for the 2026-09-20 presses: they are amber
+because a person must act, and they stand out because nothing else on a quiet page is.
+
+**3. Blue means "you can touch this", and stops meaning "this is running".** `--ring` and `--link`
+keep the blue family; `--run` leaves it and is drawn in the neutral family (`--muted-foreground`
+ink on a `--muted` ground), keeping its spinning glyph. Running is the state that needs no one, so
+it is the calm one. This leaves the page exactly three meaning colours -- amber for *you*, red for
+*broken*, green for *finished well* -- and one interaction colour that carries no state at all.
+
+**4. One type scale, six steps, and no arbitrary sizes.** `11 / 12 / 13 / 15 / 18 / 24`px, declared
+as tokens in `page/app.css` and used by name. The ten ad-hoc values collapse onto it; the
+half-pixel steps are not distinctions the bar in `D-0059` asks for. **11px is a floor, not a
+default**: it is for identifiers and ages in the `META` column and nothing a person reads as prose.
+
+**5. Japanese differs by line and by floor, never by size.** The scale in rule 4 is one scale for
+both languages. Under `:lang(ja)` the line height gains one step (`1.6` to `1.75` for prose) and the
+floor rises to 12px, because the 11px step is legible in Latin and is not in kana and kanji. Nothing
+else forks: no second scale, no second palette, no per-language spacing.
+
+**6. Spacing is Tailwind's 4px scale, and arbitrary spacing values are not written.** This ratifies
+what the tree already does; it is stated so a new screen has something to be wrong against.
+
+**7. A fold holds evidence, never the thing the press needs.** `D-0076` rule 4.1 puts raw reasons
+inside a closed fold; rondo's own reason for the fold is **the press**: anything a person must read
+in order to answer is on the page, and a fold holds only what they may want to check afterwards. A
+fold that has to be opened before a button can honestly be pressed is a layout bug, not a
+preference.
+
+**8. Dark is the reader's setting and rondo offers no switch.** Both palettes stay written out with
+the contrast floors already recorded, under `prefers-color-scheme` alone. A toggle would be a
+preference rondo would have to store, name to the person and restore, and `D-0076` rule 3 is what
+says it is not worth their attention.
+
+**9. `data-question` is a marker and not a style hook.** It stays for tests and readers; the stale
+comment claiming the weight rests on it is corrected to say where the weight actually is.
+
+### What this puts to the human gate
+
+| # | Point | Options | Recommendation |
+|---|---|---|---|
+| 1 | Does a row carrying a person-only press move into *waiting*, out of the group its work belongs to? | (a) promote it (rule 1); (b) leave it in *ended* and give it a louder treatment in place | **(a)**. The page's spine is a question about the person, not about the work; (b) keeps a second way of saying *waiting on you* alive and it will drift from the first |
+| 2 | Does `--run` leave the blue family so blue means only "you can touch this"? | (a) `--run` becomes neutral (rule 3); (b) keep blue for running and move `--ring`/`--link` to another hue; (c) leave the collision | **(a)**. Focus and link blue is the convention every tool in `D-0059`'s bar follows, and running is the state nobody has to act on, so it is the one that can afford to go quiet |
+| 3 | Six-step type scale replacing ten ad-hoc sizes, with 11px as a floor for identifiers only? | (a) as rule 4; (b) keep the current sizes and only write down what they are | **(a)**. (b) records an accident; the half-pixel steps carry no distinction and cost a reader one decision each |
+| 4 | Does Japanese get a line-height step and a 12px floor, and nothing else? | (a) as rule 5; (b) no language fork at all; (c) a fuller Japanese treatment (its own sizes, its own spacing) | **(a)**. (b) ships 11px kanji on the host `D-0079` was written for; (c) is two design systems to keep in step for a gain nobody has measured |
+| 5 | How much of this is built now? | (a) slice 1 only (below); (b) slices 1 and 2; (c) all three | **(a)**. Slice 1 is the part the 2026-09-20 presses need and is confined to `page/app.css` and a handful of class strings; slice 2 is a large mechanical diff that changes no behaviour and reviews badly beside a design change |
+
+### What the building change owes
+
+Named here so that nothing in this entry is read as built. None of it is in this commit.
+
+| Slice | What | Where |
+|---|---|---|
+| 1 | Promote a row holding the release press into *waiting*, with the waiting weight and the `wait` glyph (rule 1) | `web.tsx`, `endedView` / `waitingView` / the summary's assembly |
+| 1 | Move `--run` out of the blue family in both palettes; re-check the `run` pill and glyph against the 4.5:1 floors (rule 3) | `page/app.css`, `TONE.run`, `glyph` |
+| 1 | Declare the six type tokens and the `:lang(ja)` line and floor (rules 4 and 5) | `page/app.css` |
+| 1 | Correct the `questionGroup` comment about `data-question` (rule 9) | `web.tsx:1475` |
+| 2 | Replace the 241 arbitrary `text-[Npx]` occurrences with the six tokens (rule 4) | `src/access/**/*.tsx` |
+| 3 | Read all 22 folds against rule 7 and lift anything a press depends on | `src/access/**/*.tsx` |
+
+### Residuals, with who decides
+
+| Residual | Who |
+|---|---|
+| Whether a *waiting* group that mixes gate answers, asks, proposals and releases needs an order inside it | the window, when the group is long enough to feel |
+| What the screen does for a person who is not in front of it (rondo#311) | out of scope here; `D-0076` and its own entry |
+| Whether the 11px floor survives on a high-density display a person actually uses | the window, on evidence |
+| Print, and any medium that is not a screen | not decided; nothing asks for it |
+
+### What would falsify it
+
+- **A person missing a release press after rule 1 ships**: promotion into *waiting* is not what was
+  burying it, and the weight inside the group is the work.
+- **A running lap that a person cannot find on a busy page** once `--run` goes neutral: rule 3 is
+  wrong that running can afford to be quiet, and gate 2 (b) returns.
+- **Amber appearing on a row that nothing is waiting on**, in any screen written after this: rule 2
+  is not enforceable by statement alone and needs a check in the suite.
+- **A second colour invented for the 2026-09-20 presses** by a later pass: rule 2's claim that
+  rarity is enough was wrong.
+- **Japanese prose at 13px reading as cramped after rule 5's line step**: the fork is at the wrong
+  property, and size is in it after all.
+- **A fold found to hold something a press depends on** after slice 3: rule 7 was already being
+  broken while it was being written.
+- Any measurement in "What was measured" failing to reproduce at rondo `0e75d39`.
