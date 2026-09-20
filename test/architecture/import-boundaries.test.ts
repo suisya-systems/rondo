@@ -390,6 +390,7 @@ const ALLOWED_EXTERNALS_BY_MODULE: Readonly<
   // client bundle's, per island, and is not what this emits.
   "src/access/page/render.ts": { "react-dom/server": ["renderToStaticMarkup"] },
   "src/access/page/events.tsx": { react: ["ReactNode"] },
+  "src/access/page/thread.tsx": { react: ["ReactNode"] },
   // **The renderer names one external again.** `raw` marks markup this
   // process already rendered as needing no further escaping, which is how a
   // React face crosses into the server-JSX document without being escaped a

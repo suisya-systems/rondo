@@ -157,13 +157,13 @@ import {
   issueName,
   latestReads,
   type NamedIssue,
-  parseForgeRead,
 } from "./issue-read.js";
 import { markdownHtml } from "./markdown.js";
 import { isModelDrafterName } from "./model-draft.js";
 import { type HeldPlan, heldPlanByDigest, heldPlans } from "./model-drafter.js";
 import { RequestsFace } from "./page/list.js";
 import { facesMarkup } from "./page/render.js";
+import { Raw } from "./page/shell.js";
 import {
   decodedDenials,
   endedHow,
@@ -176,6 +176,10 @@ import {
   spentLine,
 } from "./page-logic/laps.js";
 import { repositoryOf, requestList, rowStateOf } from "./page-logic/list.js";
+import { selectRequest } from "./page-logic/selection.js";
+import { lapEvents } from "./page-logic/thread-events.js";
+import { EmptyCentre } from "./page/empty.js";
+import { ThreadFace, type ThreadItem } from "./page/thread.js";
 import { isLive, type PageView, REVIEW_ROUND_CHOICES, viewHref } from "./page-logic/routes.js";
 import { firstLine, lineOf, replyTarget, type Threads, threadsOf } from "./page-logic/threads.js";
 import { denialLine, LIST_LIMIT } from "./review.js";
@@ -2978,13 +2982,27 @@ async function shownBeforePress(
   waiting: readonly IterationRecord[],
   token: string | null,
   view: PageView,
+  /**
+   * The lap the centre face is about to draw an answering box for, where the
+   * selected request has one at its gate (D-0083 rules 3 and 9).
+   *
+   * **The gate's material is composed for one row and only where it is being
+   * answered.** That was `view.kind === "answer"` while the gate was a screen
+   * of its own; since the box lives in the thread, it is *the request the
+   * centre is showing*. The cost is the same -- one row's readings, its
+   * material and its approval tip -- and the reason is unchanged: a page that
+   * redraws every five seconds must not shell out to `git` for a row nobody
+   * is answering.
+   */
+  answeringLapId: string | null = null,
 ): Promise<ReadonlyMap<string, Shown>> {
   const shown = new Map<string, Shown>();
-  if (view.kind !== "answer") {
+  const wanted = view.kind === "answer" ? view.iterationId : answeringLapId;
+  if (wanted === null) {
     return shown;
   }
   for (const record of waiting) {
-    if (record.id !== view.iterationId || !answerable(record, token)) {
+    if (record.id !== wanted || !answerable(record, token)) {
       continue;
     }
     const readings = await ports.store.readingsFor(record.id);
@@ -3025,80 +3043,6 @@ function issueNameLink(read: ForgeRead) {
   );
 }
 
-/**
- * What rondo read of one issue (D-0078 sections 4.1 and 4.2): the name as a
- * link, one line, and the words in a fold -- the forge's text as it came, or
- * rondo's own reason, closed (D-0076 rule 4.5). Nothing to press.
- */
-function forgeView(wording: Chrome, message: ThreadMessageDraft) {
-  const read = parseForgeRead(message.body);
-  if (read === null) {
-    return (
-      <p
-        class="body px-4 pt-1 pb-3 text-[14px] leading-6 wrap-anywhere whitespace-pre-wrap"
-        lang=""
-      >
-        {message.body}
-      </p>
-    );
-  }
-  if ("failed" in read) {
-    return (
-      <div class="issue-read space-y-2 px-4 pt-1 pb-3" data-issue="not-read">
-        <p class="text-[14px] leading-6">
-          {issueNameLink(read)} {wording.issueNotRead(read.failed.why)} {wording.issueNotReadTail}
-        </p>
-        <details class="group">
-          <summary class="flex cursor-pointer list-none items-center gap-2 text-[12.5px] leading-5 text-muted-foreground select-none [&::-webkit-details-marker]:hidden">
-            {chevron()}
-            {wording.drafterNoDraftWhy}
-          </summary>
-          <p
-            class="mt-1 text-[12.5px] leading-5 wrap-anywhere whitespace-pre-wrap text-muted-foreground"
-            lang="en"
-          >
-            {read.failed.detail}
-          </p>
-        </details>
-      </div>
-    );
-  }
-  const issue = read.read;
-  return (
-    <div class="issue-read space-y-2 px-4 pt-1 pb-3" data-issue="read">
-      <p class="text-[14px] leading-6">
-        {issueNameLink(read)}{" "}
-        <span class="font-medium" lang="">
-          {issue.title}
-        </span>
-      </p>
-      <p class="text-[13px] leading-5 text-muted-foreground">
-        {wording.issueRead(issue.pullRequest, issue.comments.length)}
-      </p>
-      <details class="group">
-        <summary class="flex cursor-pointer list-none items-center gap-2 text-[12.5px] leading-5 text-muted-foreground select-none [&::-webkit-details-marker]:hidden">
-          {chevron()}
-          {wording.issueReadFold}
-        </summary>
-        {/* The forge's words as it returned them: no trim, no reflow (D-0022 rule 4). */}
-        <div class="mt-1 space-y-2 text-[13px] leading-5" lang="">
-          <p class="text-faint">
-            {issue.author} · {issue.openedAt} · {issue.state}
-          </p>
-          <p class="wrap-anywhere whitespace-pre-wrap">{issue.body}</p>
-          {issue.comments.map((c) => (
-            <div class="border-t border-border/60 pt-2">
-              <p class="text-faint">
-                {c.author} · {c.at}
-              </p>
-              <p class="wrap-anywhere whitespace-pre-wrap">{c.body}</p>
-            </div>
-          ))}
-        </div>
-      </details>
-    </div>
-  );
-}
 
 /** Who wrote a message, as a person reads it: their own messages are "you". */
 function whoWrote(wording: Chrome, message: ThreadMessageDraft, actorId: string | null): string {
@@ -3181,457 +3125,9 @@ function basisChip(
   );
 }
 
-/**
- * One message in a thread (D-0061 rule 2): who wrote it and in which voice, how
- * long ago, the words byte for byte with their paragraphs (rondo#90), what it
- * rests on, and -- where it asks and no answer has carried it on (D-0072 rule
- * 3) -- the one mark that it waits on the person.
- *
- * **The voices are told apart three ways, none of them alone**: an initial in a
- * round mark (blue for the drafter), a badge that names the drafter's voice, and
- * a blue wash on its card. **Every card starts at the same left edge** (the S1
- * design pass on #220): leaning the voices to opposite sides made the column
- * zig-zag by 40px with nothing saying why. The id is never printed: the age is
- * the message's link to itself, and `Reply` is how a person points at it --
- * drawn on hover or focus where a pointer can hover (`page/app.css`), and always
- * with script off or on touch.
- */
-/**
- * Whether a message is a model drafter run that drafted nothing (D-0071 rule
- * 1.5): the drafter's voice, a model drafter's name, and no `proposal:` basis --
- * every run that wrote a draft rests its messages on the proposal row it wrote
- * (rule 7.3), so the absence is structural and not read off the words.
- */
-function noDraft(message: ThreadMessageDraft): boolean {
-  return (
-    message.authorKind === "drafter" &&
-    isModelDrafterName(message.authorId) &&
-    !message.bases.some((basis) => basis["form"] === "proposal")
-  );
-}
 
-function messageView(
-  wording: Chrome,
-  threads: Threads,
-  message: ThreadMessageDraft,
-  previous: ThreadMessageDraft | undefined,
-  root: string,
-  nowMs: number,
-  actorId: string | null,
-  forms: boolean,
-) {
-  const waiting = threads.waiting.has(message.messageId);
-  const parent = message.inReplyTo === null ? undefined : threads.byId.get(message.inReplyTo);
-  const drafter = message.authorKind === "drafter";
-  // **The way to point the reply box here**, a navigation `GET` that writes
-  // nothing, quiet in the header. On an ask still waiting it is labelled as
-  // answering, because the box it points then answers on a press.
-  const replyLink = (
-    <a
-      id={`reply-${message.messageId}`}
-      href={viewHref({ kind: "thread", messageId: root, to: message.messageId }, wording.lang)}
-      data-open=""
-      class="reply-link rounded px-1 font-medium text-link hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-    >
-      {waiting ? wording.answerAskAction : wording.replyAction}
-    </a>
-  );
-  return (
-    <li
-      id={message.messageId}
-      data-row=""
-      tabindex={-1}
-      data-voice={message.authorKind}
-      {...(waiting ? { "data-waiting": "" } : {})}
-      class="message grid scroll-mt-28 scroll-mb-40 grid-cols-1 gap-x-3 sm:grid-cols-[1.75rem_minmax(0,1fr)] rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-4 focus-visible:ring-offset-background"
-    >
-      <span
-        aria-hidden="true"
-        class={
-          drafter
-            ? "mt-2 hidden size-7 sm:inline-flex items-center justify-center rounded-full bg-run-wash text-[12px] font-semibold text-run-ink ring-1 ring-run/30"
-            : "mt-2 hidden size-7 sm:inline-flex items-center justify-center rounded-full bg-muted text-[12px] font-semibold text-foreground ring-1 ring-border"
-        }
-      >
-        {whoWrote(wording, message, actorId).slice(0, 1).toUpperCase()}
-      </span>
-      <article
-        class={
-          waiting
-            ? "rounded-lg border border-wait/45 bg-card shadow-[inset_3px_0_0_var(--color-wait)]"
-            : drafter
-              ? "rounded-lg border border-run/25 bg-run-wash/40"
-              : "rounded-lg border border-border bg-card"
-        }
-      >
-        <header class="flex flex-wrap items-center gap-x-2 gap-y-1 px-4 pt-2.5 text-[12.5px] leading-5">
-          <span class="author font-semibold text-foreground">
-            {whoWrote(wording, message, actorId)}
-          </span>
-          {drafter ? (
-            <span class={`voice ${PILL} font-sans ${TONE.run}`}>{wording.drafterVoice}</span>
-          ) : message.authorKind === "forge" ? (
-            <span class={`voice ${PILL} font-sans ${TONE.muted}`}>{wording.issueVoice}</span>
-          ) : message.authorId === actorId ? null : (
-            <span class={`voice ${PILL} font-sans ${TONE.muted}`}>{wording.operatorVoice}</span>
-          )}
-          {waiting ? (
-            // **Which of the two reasons it is still waiting** (D-0072 rule 3):
-            // nobody has been back to it, or the person has and said to stop.
-            // The hold is the same; saying "waiting on you" for the second would
-            // tell a person who wrote "stop this line" that they had not answered.
-            <span class={`${PILL} font-sans ${TONE.wait}`}>
-              {threads.stopped.has(message.messageId)
-                ? wording.askStoppedPill
-                : wording.askWaitingPill}
-            </span>
-          ) : null}
-          {
-            // **What this message answered, where it was said** (D-0072 rule 1):
-            // the words are kept byte for byte either way, so with no mark here
-            // two answers that read alike and did opposite things would be one
-            // entry in the thread.
-            message.answerOutcome === undefined ? null : (
-              <span
-                class={`${PILL} font-sans ${
-                  message.answerOutcome === "stop" ? TONE.wait : TONE.muted
-                }`}
-              >
-                {message.answerOutcome === "stop"
-                  ? wording.answerStoppedPill
-                  : wording.answerCarriedOnPill}
-              </span>
-            )
-          }
-          <a
-            href={`#${encodeURIComponent(message.messageId)}`}
-            class="text-faint tabular-nums hover:text-foreground"
-            title={new Date(message.atMs).toISOString()}
-          >
-            {wording.age(ago(message.atMs, nowMs))}
-          </a>
-          <span class="flex-1" />
-          {forms ? replyLink : null}
-        </header>
-        {/*
-         * Said only where the reply is to neither the message above it nor the
-         * request itself, which is what every reply is read as by default.
-         */}
-        {parent !== undefined &&
-        parent.messageId !== previous?.messageId &&
-        parent.messageId !== root ? (
-          <a
-            href={`#${encodeURIComponent(parent.messageId)}`}
-            class="mx-4 mt-1 flex min-w-0 items-center gap-1.5 text-[12px] leading-5 text-muted-foreground hover:text-foreground"
-          >
-            <svg
-              aria-hidden="true"
-              viewBox="0 0 16 16"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.6"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              class="size-3.5 shrink-0 text-faint"
-            >
-              <path d="M3.5 2.5v5a3 3 0 0 0 3 3h6m-3-3 3 3-3 3" />
-            </svg>
-            <span class="truncate">
-              {wording.inReplyTo(whoWrote(wording, parent, actorId), lineOf(parent))}
-            </span>
-          </a>
-        ) : null}
-        {message.authorKind === "forge" ? (
-          forgeView(wording, message)
-        ) : noDraft(message) ? (
-          // **A drafter run that drafted nothing, said as what happened**
-          // (rondo#238): the row's words are rondo's own about its tools, so
-          // they are kept, folded, and what is shown first is what the person
-          // can do -- set the scope themselves, one press away.
-          <div class="space-y-2 px-4 pt-1 pb-3">
-            <p class="text-[14px] leading-6">{wording.drafterNoDraft}</p>
-            {forms ? (
-              <a
-                href={viewHref(
-                  { kind: "scope", messageId: root, rounds: null, decisionId: null, plan: null },
-                  wording.lang,
-                )}
-                class={`${PRIMARY} h-7 px-3 text-[13px]`}
-              >
-                {wording.scopeAction}
-              </a>
-            ) : null}
-            <details class="group">
-              <summary class="flex cursor-pointer list-none items-center gap-2 text-[12.5px] leading-5 text-muted-foreground select-none [&::-webkit-details-marker]:hidden">
-                {chevron()}
-                {wording.drafterNoDraftWhy}
-              </summary>
-              <p
-                class="body mt-1 text-[12.5px] leading-5 wrap-anywhere whitespace-pre-wrap text-muted-foreground"
-                lang="en"
-              >
-                {message.body}
-              </p>
-            </details>
-          </div>
-        ) : (
-          // The words as written: no trim, no reflow (D-0061 rule 2.2). Their language is unknown (D-0055 rule 8).
-          <p
-            class="body px-4 pt-1 pb-3 text-[14px] leading-6 wrap-anywhere whitespace-pre-wrap"
-            lang=""
-          >
-            {message.body}
-          </p>
-        )}
-        {
-          // **Named and not read yet** (D-0078 section 4.3): said until the
-          // host's read lands as its own message under this one.
-          (threads.unread.get(message.messageId) ?? []).map((ref) => (
-            <p class="issue-pending px-4 pb-3 text-[12.5px] leading-5 text-muted-foreground">
-              <span class="font-medium">{ref.named}</span> {wording.issuePending}
-            </p>
-          ))
-        }
-        {message.bases.length === 0 ? null : (
-          <div class="bases flex flex-wrap items-center gap-1.5 border-t border-border/60 px-4 py-2">
-            <span class="text-[11px] font-medium text-faint">{wording.basesLabel}</span>
-            {message.bases.map((basis) => basisChip(wording, basis, threads, root, actorId))}
-          </div>
-        )}
-      </article>
-    </li>
-  );
-}
 
-/** Every message of the thread `messageId` belongs to, oldest first, or a line saying there is none. */
-function threadView(
-  wording: Chrome,
-  threads: Threads,
-  view: { readonly messageId: string },
-  nowMs: number,
-  actorId: string | null,
-  forms: boolean,
-  /** The way to this request's scope screen, or null where there is none (rondo#233 S3). */
-  scopeTo: (messageId: string) => unknown,
-) {
-  const root = threads.rootOf(view.messageId);
-  if (root === null) {
-    return (
-      <p class="note rounded-lg border border-dashed border-border px-5 py-6 text-[13px]">
-        {wording.noSuchThread}
-      </p>
-    );
-  }
-  const members = threads.messages.filter((message) => threads.rootOf(message.messageId) === root);
-  // **An open ask is pinned above the reports** (rondo#199, pin-only): a stop
-  // still waiting on a person is what the thread is for right now, so it
-  // comes straight after the request; the sort is stable, so each part keeps
-  // the store's order.
-  const rank = (message: ThreadMessageDraft): number =>
-    message.messageId === root ? 0 : threads.waiting.has(message.messageId) ? 1 : 2;
-  const shown = [...members].sort((a, b) => rank(a) - rank(b));
-  const request = threads.byId.get(root);
-  const waitingHere = members.filter((message) => threads.waiting.has(message.messageId)).length;
-  return (
-    <div class="space-y-4">
-      {/*
-       * **The thread names itself** (the S1 design pass on #220): the request's
-       * first words as its title, one state line, and a way back drawn at every
-       * width -- `Esc` is a key hint, and there is none at a phone's width or
-       * with script off. Sticky under the page's bar, so the title stays in
-       * view down a long thread. With script off the thread does not reload
-       * itself (a draft would be lost), so the header says how to see new
-       * messages, where a reader looks for it.
-       */}
-      <header class="thread-head sticky top-12 z-[4] border-b border-border bg-background/95 py-2.5 backdrop-blur-sm">
-        <div class="flex min-w-0 items-center gap-2">
-          <a
-            href={viewHref({ kind: "requests" }, wording.lang)}
-            class="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-            title={wording.backToRequests}
-          >
-            <svg
-              aria-hidden="true"
-              viewBox="0 0 16 16"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.8"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              class="size-4"
-            >
-              <path d="M13 8H3m4-4-4 4 4 4" />
-            </svg>
-            <span class="sr-only">{wording.backToRequests}</span>
-          </a>
-          <h2
-            class="request min-w-0 flex-1 truncate text-[15px] leading-6 font-semibold"
-            title={request?.body}
-            lang=""
-          >
-            {request === undefined ? null : firstLine(request.body)}
-          </h2>
-          {scopeTo(root)}
-          {forms ? (
-            <noscript>
-              <a
-                href={viewHref({ kind: "thread", messageId: root, to: null }, wording.lang)}
-                class="shrink-0 text-[12.5px] font-medium text-link hover:underline"
-                title={wording.threadNoReload}
-              >
-                {wording.reloadThread}
-              </a>
-            </noscript>
-          ) : null}
-        </div>
-        <div class="ml-9 overflow-hidden">
-          <p class={META_LINE}>
-            {waitingHere === 0 ? null : (
-              <span>
-                <span class={`${PILL} font-sans ${TONE.wait}`}>{wording.askWaitingPill}</span>
-              </span>
-            )}
-            <span>
-              {wording.threadSize(
-                members.length,
-                wording.age(ago(Math.max(...members.map((message) => message.atMs)), nowMs)),
-              )}
-            </span>
-            {request === undefined ? null : (
-              <span>{wording.threadStarted(wording.age(ago(request.atMs, nowMs)))}</span>
-            )}
-          </p>
-        </div>
-      </header>
-      <ol data-thread={root} class="space-y-4">
-        {shown.map((message, at) =>
-          messageView(wording, threads, message, shown[at - 1], root, nowMs, actorId, forms),
-        )}
-      </ol>
-    </div>
-  );
-}
 
-/**
- * Every request, the ones with an ask waiting first and then by when they last
- * moved (#220 S1). One row each: the request's first words, whose it is, how
- * big and how recent its thread is, and a pill counting what waits on the
- * person. The row's words are the link into the thread, so opening one is a
- * click or `Enter`, never an id.
- */
-function requestsView(
-  wording: Chrome,
-  threads: Threads,
-  nowMs: number,
-  actorId: string | null,
-  scopeTo: (messageId: string) => unknown,
-  /** The lap that is under a request, newest first, or null where none is. */
-  lapUnder: (messageId: string) => LapUnderRequest | null,
-) {
-  const rows = threads.messages
-    .filter((message) => message.inReplyTo === null)
-    .map((root) => {
-      const members = threads.messages.filter(
-        (message) => threads.rootOf(message.messageId) === root.messageId,
-      );
-      return {
-        root,
-        size: members.length,
-        lastMs: Math.max(...members.map((message) => message.atMs)),
-        waiting: members.filter((message) => threads.waiting.has(message.messageId)).length,
-      };
-    })
-    .sort(
-      (left, right) =>
-        Number(right.waiting > 0) - Number(left.waiting > 0) || right.lastMs - left.lastMs,
-    );
-  return (
-    <section data-question="requests" class="space-y-2">
-      <h2 class="text-sm leading-6 font-semibold text-foreground first-letter:uppercase">
-        {wording.requestsHeading(rows.length)}
-      </h2>
-      {rows.length === 0 ? (
-        <p class="note rounded-lg border border-dashed border-border px-5 py-6 text-[13px] text-muted-foreground">
-          {wording.noRequests}
-        </p>
-      ) : (
-        <ul class="divide-y divide-border rounded-lg border border-border bg-card">
-          {rows.map((row) => {
-            const lap = lapUnder(row.root.messageId);
-            return (
-              <li id={`request-${row.root.messageId}`} data-row="" tabindex={-1} class={ROW}>
-                {glyph(row.waiting > 0 ? "wait" : "message")}
-                <div class="min-w-0">
-                  <a
-                    id={`open-${row.root.messageId}`}
-                    href={viewHref(
-                      { kind: "thread", messageId: row.root.messageId, to: null },
-                      wording.lang,
-                    )}
-                    data-open=""
-                    class="request line-clamp-2 text-sm leading-6 font-medium wrap-anywhere hover:underline"
-                    title={row.root.body}
-                    lang=""
-                  >
-                    {firstLine(row.root.body)}
-                  </a>
-                  {metaLine(
-                    <>
-                      {row.waiting > 0 ? (
-                        <span>
-                          <span class={`${PILL} font-sans ${TONE.wait}`}>
-                            {wording.asksWaiting(row.waiting)}
-                          </span>
-                        </span>
-                      ) : null}
-                      <span>{whoWrote(wording, row.root, actorId)}</span>
-                      <span>
-                        {wording.threadSize(row.size, wording.age(ago(row.lastMs, nowMs)))}
-                      </span>
-                      {/*
-                       * **A request with a lap under it says the lap's state**
-                       * (rondo#244). This list went on offering *Set the scope*
-                       * through a whole lap, which is the one screen a person
-                       * watching a run is most likely to be looking at and the
-                       * one place it said nothing.
-                       *
-                       * **The entrance goes only while the lap is live.** Asking
-                       * for more work on a request whose lap has ended is a real
-                       * act and keeps its way in; starting a second scope beside
-                       * a lap that is still running is the confusion.
-                       */}
-                      {lap === null ? null : (
-                        <span>
-                          {pill(
-                            lap.question === "waiting"
-                              ? "wait"
-                              : lap.question === "running"
-                                ? "run"
-                                : endedTone(lap.record),
-                            wording.statePill(lap.record.status, lap.record.gateOutcome),
-                          )}
-                        </span>
-                      )}
-                      {lap === null ? null : (
-                        <span class="tabular-nums">
-                          {wording.age(ago(lap.record.updatedAtMs, nowMs))}
-                        </span>
-                      )}
-                    </>,
-                  )}
-                  {/* The row's one action, under the metadata and not inside
-                      it (rondo#246). It goes while the lap under this request
-                      is live, for rondo#244's reason. */}
-                  {lap !== null && lap.question !== "ended" ? null : scopeTo(row.root.messageId)}
-                </div>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </section>
-  );
-}
 
 /** A scope id minted for one form (`newScopeId` in `src/access/web-app.ts`). */
 export type MintScopeId = () => string;
@@ -5168,41 +4664,6 @@ async function predecessorLine(
   );
 }
 
-/**
- * The way to the scope screen, drawn on a request and nowhere else.
- *
- * Drawn wherever there is an approver to approve a scope as. **Not hidden for
- * want of a plan** (rondo#238): the screen itself says how a plan comes to be
- * held, which a link that was never drawn could not.
- *
- * **As plain as the act behind it** (rondo#246), in {@link answerLink}'s shape:
- * the row's one action, under the metadata rather than a faint link inside it.
- * The entrances were the quiet things on this page while the execute buttons on
- * the screens they lead to were large and coloured, which is the wrong way
- * round -- what protects a person from a mis-press is reading what the press
- * will do, and that reading is the screen this leads to.
- */
-function scopeLink(wording: Chrome, token: string | null, messageId: string) {
-  if (token === null) {
-    return null;
-  }
-  return (
-    <p class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
-      <a
-        id={`scope-${messageId}`}
-        href={viewHref(
-          { kind: "scope", messageId, rounds: null, decisionId: null, plan: null },
-          wording.lang,
-        )}
-        data-open=""
-        class={`${PRIMARY} h-7 px-3 text-[13px]`}
-        title={wording.scopeHere}
-      >
-        {wording.scopeAction}
-      </a>
-    </p>
-  );
-}
 
 /**
  * The way onto the publish screen, drawn on exactly the rows that screen would
@@ -6153,7 +5614,6 @@ export async function operatorPage(
   // D-0059 rule 3a): the renderer is handed the reading ports and nothing that
   // could write, so whether a button is drawn is decided by the one caller that
   // does hold the writer (`src/access/web-app.ts`) and handed down as a token.
-  const shown = await shownBeforePress(ports, wording, waiting, token, view);
   // **Awaited here** and not inside the tree: the scope screen reads the plan
   // and, in its second state, the approval and what a predecessor spent.
   const scoping =
@@ -6161,7 +5621,6 @@ export async function operatorPage(
       ? await scopeView(ports, wording, view, threads, token, newScopeId, newIterationId, nowMs)
       : null;
   /** The link onto the scope screen, drawn on a request wherever one is listed. */
-  const scopeTo = (messageId: string) => scopeLink(wording, token, messageId);
   // **Which request each lap is under** (rondo#244), off the rows already
   // read: a lap names the request it was started from, so the requests list
   // can say what became of one instead of going on offering the entrance.
@@ -6206,12 +5665,157 @@ export async function operatorPage(
       };
     });
   const requestsList = requestList(listRows, inbox?.sinceMs ?? null, nowMs);
+
+  /*
+   * **Which request the centre is showing** (D-0083 rule 3). There is no
+   * separate decision screen: the address names a request or it does not, and
+   * where it does not the oldest thing waiting is selected, because the
+   * person came to answer.
+   */
+  const selection = selectRequest(
+    view.kind === "thread" ? threads.rootOf(view.messageId) : null,
+    requestsList,
+  );
+  const selectedRoot = selection.kind === "request" ? selection.messageId : null;
+  const selectedLap = selectedRoot === null ? null : lapUnder(selectedRoot);
+  /*
+   * The lap whose gate the centre draws a box for, which is what the framing
+   * below is composed for -- one row, and only the one being answered.
+   */
+  const answeringLap =
+    selectedLap !== null && selectedLap.question === "waiting" ? selectedLap.record.id : null;
+  const shown = await shownBeforePress(ports, wording, waiting, token, view, answeringLap);
+
+  /*
+   * **The centre face** (D-0083 rule 5): the selected request's thread, or
+   * rule 4's empty centre when nothing waits and nothing was named.
+   *
+   * The messages and the event lines are one stream in the order they
+   * happened; the box to answer in and the box to add to the request are
+   * composed by the parts that own them and placed here.
+   */
+  /** The screens the page's rebuild does not touch, which keep their own centre. */
+  const onOwnScreen =
+    view.kind === "scope" ||
+    view.kind === "publish" ||
+    view.kind === "log" ||
+    view.kind === "release" ||
+    view.kind === "reading";
+  const selectedMessages =
+    selectedRoot === null
+      ? []
+      : threads.messages
+          .filter((message) => threads.rootOf(message.messageId) === selectedRoot)
+          .toSorted((left, right) => left.atMs - right.atMs);
+  const selectedReadings =
+    selectedLap === null ? [] : await ports.store.readingsFor(selectedLap.record.id);
+  const threadItems: ThreadItem[] = [
+    ...selectedMessages.map(
+      (message): ThreadItem => ({
+        kind: "message",
+        message: {
+          id: message.messageId,
+          who: message.authorKind === "operator" ? "person" : "rondo",
+          said: message.authorKind === "operator" ? wording.saidByYou : wording.saidByRondo,
+          body: message.body,
+          at: wording.age(ago(message.atMs, nowMs)),
+        },
+      }),
+    ),
+    ...(selectedLap === null
+      ? []
+      : lapEvents(
+          wording,
+          selectedLap.record,
+          selectedReadings.map((reading) => ({
+            drafter: reading.drafter,
+            verdict: reading.verdict,
+            findings: reading.findings,
+            atMs: reading.readAtMs,
+          })),
+          (status) => isTerminal(status as IterationRecord["status"]),
+          (atMs) => wording.age(ago(atMs, nowMs)),
+        ).map((event): ThreadItem => ({ kind: "event", event }))),
+  ];
   /*
    * The week's allowance is the right face's second slice; until it is read
    * from an approval, no figure is drawn -- rule 6 refuses a spent figure
    * without the one it was approved against, and that refusal is the honest
    * state rather than a zero.
    */
+  /*
+   * **The centre, as one of two things** (D-0083 rules 4 and 5): the selected
+   * request's thread, or -- with nothing waiting and nothing named -- the
+   * empty centre, which asks what the person wants rather than showing an
+   * empty thread.
+   */
+  /*
+   * The two boxes a person writes in are still this renderer's
+   * (`composerView`), so they cross the seam as markup: the request box on the
+   * empty centre, and the box to add to a request under every thread. They
+   * are composed by the part that owns them and only placed here.
+   */
+  const askBox = forms
+    ? await composerView(
+        wording,
+        { kind: "requests" },
+        threads,
+        token,
+        newId,
+        ports.actorId,
+        nowMs,
+      )?.toString()
+    : null;
+  const addBox =
+    forms && selectedRoot !== null
+      ? await composerView(
+          wording,
+          { kind: "thread", messageId: selectedRoot, to: null },
+          threads,
+          token,
+          newId,
+          ports.actorId,
+          nowMs,
+        )?.toString()
+      : null;
+  /*
+   * **The box to answer in** (D-0083 rule 9): the gate, whole, inside the
+   * thread rather than on a screen of its own. `shown` holds the framing for
+   * exactly this lap, and `approveView` composes every element the gate had
+   * -- the free-text field, both despite sentences, the withheld plain
+   * approve, the finding quoted -- which
+   * `test/access/gate-elements.test.ts` is the net under.
+   */
+  const gateFraming = answeringLap === null ? undefined : shown.get(answeringLap);
+  const answeringBox =
+    selectedLap === null || gateFraming === undefined
+      ? null
+      : ((await approveView(
+          wording,
+          selectedLap.record,
+          token,
+          gateFraming,
+          newIterationId,
+        )?.toString()) ?? null);
+  const centreContent =
+    selectedRoot === null
+      ? {
+          react: EmptyCentre({
+            wording,
+            composer: askBox === null || askBox === undefined ? null : Raw({ html: askBox }),
+          }),
+        }
+      : {
+          react: ThreadFace({
+            title: firstLine(threads.byId.get(selectedRoot)?.body ?? ""),
+            governance: null,
+            items: threadItems,
+            lastLookedAbove: null,
+            lastLookedSaid: "",
+            answering: answeringBox === null ? null : Raw({ html: answeringBox }),
+            adding: addBox === null || addBox === undefined ? null : Raw({ html: addBox }),
+          }),
+        };
   const listContent = {
     react: RequestsFace({
       wording,
@@ -6520,28 +6124,35 @@ export async function operatorPage(
          * the empty state's right face is the third's (gate point 7).
          */}
         <main>
+          {
+            // **Said on the visible page, whichever face a person is on**
+            // (D-0020 rule 2). With no approver there is no write port and so
+            // no button anywhere; a page that left this to one screen would
+            // have an operator looking for a button that is missing for a
+            // reason rondo knows and did not say. It sits above the faces
+            // because it is true of the whole page and not of one of them.
+            ports.actorId === null ? (
+              <p class="note mx-auto max-w-5xl rounded-md border border-border bg-muted/60 px-3 py-2 text-[13px] leading-5">
+                {wording.noApproverNote}
+              </p>
+            ) : null
+          }
           {raw(
             facesMarkup({
               list: listContent,
               side: null,
-              thread: {
-                rendered: await (
+              /*
+               * **The screens this rebuild does not touch keep their own
+               * centre**: the scope screen, publish, the log, release and the
+               * reading fold are still this renderer's, and they are drawn in
+               * the centre face as they were. Everything else -- the page a
+               * person actually arrives on -- is the thread or the empty
+               * centre above.
+               */
+              thread: onOwnScreen
+                ? {
+                    rendered: await (
                   <div class="mx-auto max-w-5xl space-y-6 px-4 pt-6 pb-12 sm:px-6">
-                    {
-                      // **Said on the visible page and not only in the reading.** With no
-                      // approver there is no write port and so no button anywhere, and a
-                      // page that explained that only inside the fold would leave an
-                      // operator looking for a button that is missing for a reason rondo
-                      // knows and did not say (D-0020 rule 2).
-                      ports.actorId === null ? (
-                        <p class="note rounded-md border border-border bg-muted/60 px-3 py-2 text-[13px] leading-5">
-                          {wording.noApproverNote}
-                        </p>
-                      ) : null
-                    }
-                    {view.kind === "requests"
-                      ? composerView(wording, view, threads, token, newId, ports.actorId, nowMs)
-                      : null}
                     {
                       // **The ledger is what the refresh swaps**, and only on a live
                       // view: htmx `GET`s this view's own address every five seconds and
@@ -6572,11 +6183,7 @@ export async function operatorPage(
                             </p>
                           ) : null
                         }
-                        {view.kind === "requests" ? (
-                          requestsView(wording, threads, nowMs, ports.actorId, scopeTo, lapUnder)
-                        ) : view.kind === "thread" ? (
-                          threadView(wording, threads, view, nowMs, ports.actorId, forms, scopeTo)
-                        ) : view.kind === "scope" ? (
+                        {view.kind === "scope" ? (
                           scoping
                         ) : view.kind === "publish" ? (
                           publishing
@@ -6673,9 +6280,6 @@ export async function operatorPage(
                         }
                       </div>
                     }
-                    {view.kind === "thread"
-                      ? composerView(wording, view, threads, token, newId, ports.actorId, nowMs)
-                      : null}
                     {
                       // **Each view says which of the two it is**, because "redraws every
                       // 5s" on a view that does not would be the page's own copy lying
@@ -6710,16 +6314,10 @@ export async function operatorPage(
                         </span>
                       </p>
                     }
-                    {onThreads && forms && view.kind === "requests" ? (
-                      <noscript>
-                        <p class="note max-w-3xl text-[11.5px] leading-5 text-faint">
-                          {wording.threadNoReload}
-                        </p>
-                      </noscript>
-                    ) : null}
                   </div>
-                ).toString(),
-              },
+                    ).toString(),
+                  }
+                : centreContent,
             }),
           )}
         </main>
