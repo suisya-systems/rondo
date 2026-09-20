@@ -149,10 +149,12 @@ import { markdownHtml } from "./markdown.js";
 import { isModelDrafterName } from "./model-draft.js";
 import { type HeldPlan, heldPlanByDigest, heldPlans } from "./model-drafter.js";
 import { EmptyCentre } from "./page/empty.js";
+import { GovernanceLine } from "./page/governance.js";
 import { RequestsFace } from "./page/list.js";
 import { facesMarkup } from "./page/render.js";
 import { Raw } from "./page/shell.js";
 import { ThreadFace, type ThreadItem, type ThreadLink } from "./page/thread.js";
+import { governanceOf } from "./page-logic/governance.js";
 import {
   decodedDenials,
   endedHow,
@@ -4795,6 +4797,42 @@ export async function operatorPage(
   const selectedReadings =
     selectedLap === null ? [] : await ports.store.readingsFor(selectedLap.record.id);
   /*
+   * **What was agreed for this request** (D-0083 rule 6), read for the one lap
+   * the centre is drawing and for no other: the approval the lap spends, and
+   * what has been spent against it. Both or neither -- rule 6 refuses a spent
+   * figure without the figure it was approved against, and `governanceOf`
+   * takes them as one argument for that reason.
+   */
+  const approvalOf = async (
+    record: IterationRecord,
+  ): Promise<{ payload: ScopePayload; spent: ScopeSpent } | null> => {
+    const tip = await approvalTip(ports.record, record.id);
+    if (tip.kind !== "tip") {
+      return null;
+    }
+    const decided = await ports.record.readScopeDecision(tip.scopeDecisionId);
+    if (decided.kind !== "read") {
+      return null;
+    }
+    const stored = await ports.record.readScope(decided.decision.scopeId);
+    if (stored.kind !== "read") {
+      return null;
+    }
+    return {
+      payload: stored.scope.payload,
+      spent: await ports.record.scopeSpent(tip.scopeDecisionId),
+    };
+  };
+  const selectedGovernance =
+    selectedLap === null || selectedRoot === null
+      ? null
+      : governanceOf(
+          selectedLap.record,
+          repositoryOf(selectedLap.record),
+          threads.byId.get(selectedRoot)?.atMs ?? nowMs,
+          await approvalOf(selectedLap.record),
+        );
+  /*
    * **The two messages whose body is not prose**, rendered here because this
    * renderer still owns them: what rondo read of a named issue (D-0078 section
    * 4) and a drafter run that drafted nothing (rondo#238). They cross the seam
@@ -4817,6 +4855,8 @@ export async function operatorPage(
         ),
     ),
   );
+  /** Each message's moment, for rule 7's line: the items themselves do not carry it. */
+  const messageTimes = new Map(selectedMessages.map((m) => [m.messageId, m.atMs]));
   const threadItems: ThreadItem[] = [
     ...selectedMessages.map((message, at): ThreadItem => {
       const waits = threads.waiting.has(message.messageId);
@@ -4899,6 +4939,26 @@ export async function operatorPage(
         ).map((event): ThreadItem => ({ kind: "event", event }))),
   ];
   /*
+   * **One line, once in the thread** (D-0083 rule 7, D-0061 rule 2.5). The
+   * items are already in the order they happened, so the line sits above the
+   * first one that arrived after the person last looked. There is no line
+   * where they have never looked, and none where everything is older than
+   * the mark: both mean nothing is below it, and a line with nothing under
+   * it says something false.
+   *
+   * **No row carries a *new* mark of its own** (rule 7): the list face draws
+   * the other one, and between them that is two lines on the page.
+   */
+  const lastLookedMs = inbox?.sinceMs ?? null;
+  const marks = threadItems.map((item) =>
+    item.kind === "message"
+      ? { id: item.message.id, atMs: messageTimes.get(item.message.id) ?? 0 }
+      : { id: item.event.id, atMs: item.event.atMs },
+  );
+  const firstUnseen =
+    lastLookedMs === null ? -1 : marks.findIndex((mark) => mark.atMs > lastLookedMs);
+  const lastLookedAbove = firstUnseen <= 0 ? null : (marks[firstUnseen]?.id ?? null);
+  /*
    * The week's allowance is the right face's second slice; until it is read
    * from an approval, no figure is drawn -- rule 6 refuses a spent figure
    * without the one it was approved against, and that refusal is the honest
@@ -4974,10 +5034,20 @@ export async function operatorPage(
       : {
           react: ThreadFace({
             title: firstLine(threads.byId.get(selectedRoot)?.body ?? ""),
-            governance: null,
+            governance:
+              selectedGovernance === null
+                ? null
+                : GovernanceLine({
+                    wording,
+                    governance: selectedGovernance,
+                    askedSaid: wording.age(ago(selectedGovernance.askedAtMs, nowMs)),
+                  }),
             items: threadItems,
-            lastLookedAbove: null,
-            lastLookedSaid: "",
+            lastLookedAbove,
+            lastLookedSaid:
+              lastLookedMs === null
+                ? wording.lastLookedNever
+                : wording.lastLookedHere(wording.age(ago(lastLookedMs, nowMs))),
             answering: answeringBox === null ? null : Raw({ html: answeringBox }),
             adding: addBox === null || addBox === undefined ? null : Raw({ html: addBox }),
           }),

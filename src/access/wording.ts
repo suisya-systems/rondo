@@ -309,6 +309,20 @@ export interface Chrome extends PageWords {
   readonly sendNote: string;
   readonly keySend: string;
   readonly composerNoApprover: string;
+  /**
+   * The governance line, under every thread's title (D-0083 rule 6).
+   *
+   * `govSpent` pairs the two figures rule 6 refuses to separate; where no
+   * approval reads, `weekNoAllowance` stands for the pair instead.
+   * `govDecidedNotRead` names the one item of rule 6's six this line does not
+   * carry, so that five items are not read as six.
+   */
+  readonly govSpent: (spent: string, approved: string) => string;
+  readonly govTries: (at: number, of: number) => string;
+  readonly chainAnswer: string;
+  readonly chainProposal: string;
+  readonly chainMerge: string;
+  readonly govDecidedNotRead: string;
   readonly noSuchThread: string;
   readonly threadsUnreadable: (reason: string) => string;
   /** The line a refused send shows under the draft, which is kept. */
@@ -1219,6 +1233,12 @@ explanation you pressed on and then answers the gate.`,
   keySend: "send",
   composerNoApprover:
     "RONDO_APPROVER is not set, so there is nobody this page could send as: the threads can be read, not written to.",
+  govSpent: (spent, approved) => `$${spent} of $${approved}`,
+  govTries: (at, of) => `try ${String(at)} of ${String(of)}`,
+  chainAnswer: "your answer",
+  chainProposal: "proposal",
+  chainMerge: "merge",
+  govDecidedNotRead: "what rondo decided without asking is not counted here yet",
   noSuchThread: "No request thread holds that message.",
   threadsUnreadable: (reason) => `The request threads could not be read: ${reason}`,
   notSent: (line) => `Not sent, and your words are kept: ${line}`,
@@ -2060,6 +2080,12 @@ const JA: Chrome = Object.freeze({
   keySend: "送信",
   composerNoApprover:
     "RONDO_APPROVER が設定されていないため、このページが誰として送るのかが決まりません。スレッドは読めますが、書き込めません。",
+  govSpent: (spent, approved) => `$${spent} ／ $${approved}`,
+  govTries: (at, of) => `${String(at)} 回目 ／ ${String(of)} 回まで`,
+  chainAnswer: "あなたの答え",
+  chainProposal: "提案",
+  chainMerge: "マージ",
+  govDecidedNotRead: "rondo が聞かずに決めた数はまだここに出ていません",
   noSuchThread: "そのメッセージを含む依頼スレッドはありません。",
   threadsUnreadable: (reason) => `依頼スレッドを読めませんでした: ${reason}`,
   notSent: (line) => `送信されませんでした。書いた文は残しています: ${line}`,

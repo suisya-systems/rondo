@@ -18,6 +18,7 @@ const event = (over: Partial<ThreadEvent> & { id: string }): ThreadEvent => ({
   kind: "other",
   said: "something happened",
   at: "9:12",
+  atMs: 1_000,
   ...over,
 });
 

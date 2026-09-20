@@ -235,3 +235,59 @@
   line-height: 1.5;
   color: var(--color-muted-foreground);
 }
+
+/*
+ * The governance line (D-0083 rule 6): one line under the title, at every
+ * width, permanent. It is not a card and not a fold -- a person answering a
+ * question should not have to go looking for what was agreed.
+ */
+.gov {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 14px;
+  margin-top: 6px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--color-muted-foreground);
+}
+
+.gov-repo {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+
+.gov-chain {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+/* The arrow is drawn, not typed: the chain's order is not a character. */
+.gov-step + .gov-step::before {
+  content: "→";
+  margin-right: 6px;
+  color: var(--color-faint);
+}
+
+.gov-done {
+  color: var(--color-foreground);
+  text-decoration: line-through;
+  text-decoration-color: var(--color-border);
+}
+
+/* The one step the work is stopped on. Amber is D-0082 rule 2's, and it is
+   the same amber the question itself carries. */
+.gov-waiting {
+  font-weight: 600;
+  color: var(--color-wait-ink);
+}
+
+/* rondo will not do this step, whatever else is true (D-0064 rule 3.4). */
+.gov-yours {
+  font-style: italic;
+}
+
+.gov-missing {
+  color: var(--color-faint);
+}

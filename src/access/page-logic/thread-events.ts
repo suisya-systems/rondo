@@ -55,12 +55,19 @@ export function lapEvents(
       kind: "other",
       said: wording.evStarted,
       at: at(record.createdAtMs),
+      atMs: record.createdAtMs,
     },
   ];
   for (const [index, reading] of readings.entries()) {
     const id = `${record.id}:reading:${String(index)}`;
     if (reading.verdict === "unavailable") {
-      events.push({ id, kind: "other", said: wording.evReadingUnavailable, at: at(reading.atMs) });
+      events.push({
+        id,
+        kind: "other",
+        said: wording.evReadingUnavailable,
+        at: at(reading.atMs),
+        atMs: reading.atMs,
+      });
       continue;
     }
     const clear = reading.findings.length === 0;
@@ -77,6 +84,7 @@ export function lapEvents(
           ? wording.evReadingClear
           : wording.evReadingRaised(reading.findings.length),
       at: at(reading.atMs),
+      atMs: reading.atMs,
     });
   }
   if (isTerminal(record.status)) {
@@ -86,6 +94,7 @@ export function lapEvents(
       kind: closed ? "passed" : "other",
       said: closed ? wording.evFinished : wording.evStopped,
       at: at(record.updatedAtMs),
+      atMs: record.updatedAtMs,
     });
   }
   return events;
