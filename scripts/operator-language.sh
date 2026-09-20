@@ -106,9 +106,6 @@ answered=0
 if [ -f "$record" ]; then
   answered=1
   remembered=$(sed -e 's/#.*//' -e 's/[[:space:]]//g' -- "$record" | grep -v '^$' | head -n 1 || true)
-  if [ -n "$remembered" ] && ! valid "$remembered"; then
-    die "'$record' holds '$remembered', which is not an IETF language tag. A tag is a primary subtag and optional hyphenated subtags -- 'ja', 'zh-Hant'. Fix it, or empty the file for English."
-  fi
 fi
 
 # **The languages rondo ships prose for, each named in itself** (D-0079 section
@@ -148,6 +145,14 @@ case "$given" in
     ;;
   '')
     tag=$remembered
+    # **Checked where it is read, and not where it is loaded.** A record edited
+    # into something no host will start on is refused here -- but only here,
+    # because `--language ja` and `--language ask` are the two ways the
+    # operator repairs it, and a refusal before those were looked at would send
+    # them back to the file with the flags that exist for this unusable.
+    if [ -n "$tag" ] && ! valid "$tag"; then
+      die "'$record' holds '$tag', which is not an IETF language tag. A tag is a primary subtag and optional hyphenated subtags -- 'ja', 'zh-Hant'. Fix it, empty the file for English, or run setup with --language ask."
+    fi
     if [ -z "$tag" ] && [ "$answered" -eq 0 ]; then
       tag=$from_environment
       # Asked only where there is somebody to ask, and only where nobody has

@@ -163,4 +163,11 @@ posix("a tag no host would start on is refused rather than recorded", () => {
   // a setup that stops rather than a page that never opens.
   writeFileSync(join(where, "operator-language"), "Japanese please\n");
   expect(() => ask(where, [])).toThrow();
+
+  // And the two ways of answering outright repair it, rather than being
+  // refused on the way to the record they are replacing.
+  expect(ask(where, ["--language", "ask"], "2\n")).toBe("ja");
+  writeFileSync(join(where, "operator-language"), "Japanese please\n");
+  expect(ask(where, ["--language", "en"])).toBe("en");
+  expect(recorded(where)).toBe("en");
 });
