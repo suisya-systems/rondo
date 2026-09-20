@@ -9,6 +9,16 @@
  * The views are the `.tsx` modules under `src/access`; nothing else there carries class strings.
  */
 @import "tailwindcss" source(none);
+/*
+ * The faces are their own file: rule 8's folds are one table, and a reader
+ * should be able to check them against the entry without reading past the
+ * palette. Tailwind inlines the import, so the browser still receives one
+ * stylesheet. It sits here because an `@import` must precede every other
+ * at-rule in a stylesheet.
+ */
+@import "./faces.css";
+@import "./list.css";
+@import "./thread.css";
 @source "../src/access/**/*.tsx";
 
 /*

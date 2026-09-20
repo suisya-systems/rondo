@@ -63,18 +63,14 @@ import {
 } from "../store/records.js";
 import type { ThreadMessagesReadOutcome } from "../store/sqlite.js";
 import {
-  APPROVE_BODY,
   isSwitch,
   LANG_COOKIE,
   LANG_COOKIE_SECONDS,
   type LanguageAsked,
-  MAX_REVIEW_ROUNDS,
-  operatorPage,
-  type PageView,
   resolveLanguage,
-  viewHref,
-  type WebPorts,
-} from "./web.js";
+} from "./page-logic/language.js";
+import { MAX_REVIEW_ROUNDS, type PageView, viewHref } from "./page-logic/routes.js";
+import { APPROVE_BODY, operatorPage, type WebPorts } from "./web.js";
 import type { Chrome } from "./wording.js";
 
 /**
@@ -1347,7 +1343,16 @@ const SERVED: ReadonlyMap<string, { readonly file: URL; readonly type: string }>
       readFileSync(new URL("../../page.manifest.json", import.meta.url), "utf8"),
     ) as Record<string, string>,
   )
-    .filter((name) => /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(name))
+    /*
+     * **A plain file name, or one under `assets/`, and nothing else.** The
+     * bundler emits its output into a directory, so the manifest now holds a
+     * name with a separator in it -- and the property this filter exists for
+     * is unchanged: no request contributes to a path. The key comes from the
+     * manifest, the value is built from the key, and the pattern still admits
+     * no `..`, no leading `/` and no second level, so a manifest entry cannot
+     * name a file outside `dist/page/`.
+     */
+    .filter((name) => /^(?:assets\/)?[A-Za-z0-9][A-Za-z0-9._-]*$/.test(name))
     .map(
       (name) =>
         [

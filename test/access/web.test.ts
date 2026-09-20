@@ -39,16 +39,9 @@ import { inspectLapWork } from "../../src/access/forge.js";
 import type { TranscriptLocation } from "../../src/access/inbox.js";
 import { forgeBody, ISSUE_READER, namedIssues } from "../../src/access/issue-read.js";
 import { draftedPlanRun } from "../../src/access/model-drafter.js";
+import { viewHref } from "../../src/access/page-logic/routes.js";
 import { evidenceOf, READING_REMOTE } from "../../src/access/review.js";
-import { reviseDrafterHost } from "../../src/access/revise-drafter.js";
 import { agentTypeRecordOf, heldAgentTypeLines } from "../../src/access/scope.js";
-import {
-  type LanguageAsked,
-  type PublishReading,
-  operatorPage as renderPage,
-  resolveLanguage,
-  viewHref,
-} from "../../src/access/web.js";
 import {
   AnswerPort,
   newScopeId,
@@ -79,6 +72,25 @@ import {
   agentTypeDigestOf as drafterTypeOf,
   world as drafterWorld,
 } from "./fixtures/drafter.js";
+import {
+  asText,
+  draftRevise,
+  EVIDENCE,
+  fresh,
+  gateWithChecks,
+  modelFindings,
+  newerModelReading,
+  openGate,
+  operatorPage,
+  PLAN,
+  type Pressed,
+  planFor,
+  portsOver,
+  REVISE_ANSWER,
+  reserve,
+  reviseRows,
+  structured,
+} from "./page-world.js";
 
 /**
  * The tests marked with this build a real git repository or write an on-disk
@@ -91,176 +103,6 @@ import {
  * under Windows process and filesystem variance, not a budget.
  */
 const WINDOWS_HEAVY_TIMEOUT_MS = 60_000;
-
-const PLAN: RunPlan = {
-  db: "/srv/continuo.db",
-  workspaceRoot: "/srv/work",
-  baseBranch: "main",
-  prompt: "do the thing",
-  allowedBash: ["npm run:*"],
-  materialLanguage: null,
-  reviewCriterion: null,
-  repository: "/srv/repo",
-  artifactRoot: "/srv/artifacts",
-  stateRoot: "/srv/state",
-  interlockRoot: "/srv/interlock",
-  claudeOrgPath: "/srv/claude-org",
-  endpointRecipient: "external-notify",
-  endpointDestinationDir: "/srv/dropbox",
-  claudeCommand: ["/usr/bin/node", "/opt/claude/cli.js"],
-  endpointDb: null,
-  endpointModule: null,
-  node: null,
-  hookScript: null,
-  python: null,
-  pollIntervalMs: null,
-  turnTimeoutMs: 900_000,
-  gitTimeoutMs: 60_000,
-  identityReadbackTimeoutMs: 30_000,
-  gateOptions: ["approve", "revise"],
-  gateDeadlineAtMs: null,
-  pullRequestBaseBranch: null,
-  forgeRepository: null,
-  invocationCeilingMs: 1_800_000,
-  catalogLayers: [{ layer: "git_url", origin: "o", baseDir: "/srv/catalog", data: {} }],
-  projectName: "rondo",
-  agentTypeInput: {} as RunPlan["agentTypeInput"],
-  parties: {
-    grantor: "rondo",
-    grantee: "unset",
-  } as unknown as RunPlan["parties"],
-  intendedAction: {} as RunPlan["intendedAction"],
-};
-
-function planFor(id: string, materialLanguage: string | null = null): JsonRecord {
-  const validated = runPlan({ ...PLAN, materialLanguage });
-  if (validated.kind !== "planned") {
-    throw new Error(`the fixture plan is not valid: ${validated.reason}`);
-  }
-  const allocation = allocate(id, PLAN.workspaceRoot);
-  if (allocation.kind !== "allocated") {
-    throw new Error(`the fixture id '${id}' does not allocate: ${allocation.reason}`);
-  }
-  const admitted = admittedPlan(validated.plan, allocation.allocation);
-  if (admitted.kind !== "planned") {
-    throw new Error(`the fixture allocation is not valid: ${admitted.reason}`);
-  }
-  return planPayload(admitted.plan);
-}
-
-/**
- * The page as a person's browser reads its text.
- *
- * **One spelling normalised, and only one.** `hono/jsx` escapes `'` as `&#39;`
- * where the hand-written renderer left it alone (D-0059 rule 2), which is the
- * same character to every browser. The catalogue's sentences quote tokens in
- * `'...'`, so the content assertions below are made against the character and
- * not against which of two correct spellings the escaper chose. Every other
- * escape -- `&lt;`, `&quot;`, `&amp;` -- is still asserted as written.
- */
-const operatorPage = async (...args: Parameters<typeof renderPage>): Promise<string> =>
-  (await renderPage(...args)).replaceAll("&#39;", "'");
-
-const fresh = () => {
-  const connection = new DatabaseSync(":memory:");
-  return {
-    connection,
-    store: iterationStore(connection, { maxOccupying: 4, maxLive: 6 }),
-    record: advisoryRecord(connection),
-  };
-};
-
-/** Material that is only its text: no gate question read and no range named. */
-const asText = (...lines: string[]) => ({ lines, why: null, work: null });
-
-/** Every press this surface let through, in order. */
-type Pressed = { iterationId: string; body: string }[];
-
-function portsOver(
-  world: ReturnType<typeof fresh>,
-  actorId: string | null = "ada",
-  pressed: Pressed | null = null,
-  // **The host's statement as a tag, and one step of five** (D-0056 rule 3).
-  // The set a page is rendered in is the fourth argument to `operatorPage`
-  // rather than a member of the ports, because five steps decide it per
-  // request; `null` is a host that said nothing.
-  hostLanguage: string | null = null,
-  // **The approval the lap at the gate was admitted under** (rondo#233 S4), or
-  // null for a lap admitted under none -- which is the real reader's answer for
-  // every row these tests reserve, and the state the gate says *no change from
-  // here* in. The row itself is `test/store/scope-record.test.ts`'s.
-  scopeDecision: string | null = null,
-  // **The dry-run the publish screen is drawn from** (rondo#233 S5), or null
-  // for a host that named no forge repository -- which is every other test
-  // here, and the state the summary draws no publish link in.
-  publishing: PublishReading | null = null,
-): ServedPorts {
-  return {
-    store: world.store,
-    record:
-      scopeDecision === null
-        ? world.record
-        : { ...world.record, scopeDecisionAdmitting: async () => scopeDecision },
-    hostLanguage,
-    now: () => 5_000,
-    // The page draws `inbox`'s lines, so it carries `inbox`'s one outward
-    // port; nothing in these tests runs a lap, so it is never asked (D-0048
-    // rule 6 asks only of `performing` rows).
-    locateTranscript: async () => ({
-      kind: "unknown",
-      reason: "no continuo in this test",
-    }),
-    // Asked only on the log screen, and only after `locateTranscript` named a
-    // directory -- which it never does here unless a test says so.
-    readLog: () => ({ kind: "unread", reason: "no transcript in this test" }),
-    policy: { maxOccupying: 4, maxLive: 6 },
-    actorId,
-    material:
-      pressed === null ? null : async (_wording, record) => asText(`work    rondo/${record.id}`),
-    answer:
-      pressed === null
-        ? null
-        : new AnswerPort(async (iterationId, body) => {
-            pressed.push({ iterationId, body });
-            return await Promise.resolve({ ok: true, note: "answered" });
-          }),
-    // The thread's sends are `test/access/web-app.test.ts`'s door; this page
-    // test draws no send form.
-    say: null,
-    // The scope screen's own door is `test/access/web-app.test.ts`'s too.
-    scope: null,
-    // The revise press's own door is `test/access/web-app.test.ts`'s, as the
-    // approve press's is; what this file tests is the form the page draws for
-    // it (rondo#233 S4). The publish press is the same split (rondo#233 S5):
-    // the door is that file's, the screen is this one's.
-    revise: null,
-    publish: null,
-    release: null,
-    releasable: actorId !== null,
-    publishing,
-  };
-}
-
-/** Put one reserved row at the gate, which is the only state with a button. */
-async function openGate(world: ReturnType<typeof fresh>, id: string): Promise<void> {
-  for (const [from, to] of [
-    ["planned", "admitting"],
-    ["admitting", "admitted"],
-    ["admitted", "performing"],
-    ["performing", "awaiting_human"],
-  ] as const) {
-    const outcome = await world.store.transition(
-      id,
-      from,
-      to,
-      to === "awaiting_human" ? { gateId: `gate-${id}` } : {},
-      2_000,
-    );
-    if (outcome.kind !== "transitioned") {
-      throw new Error(`the fixture did not reach '${to}': ${JSON.stringify(outcome)}`);
-    }
-  }
-}
 
 /**
  * One form post, with headers of our choosing and redirects left alone.
@@ -349,31 +191,6 @@ function tokenIn(html: string): string {
   const found = /name="token" value="([^"]+)"/.exec(html)?.[1];
   expect(found).toBeDefined();
   return found ?? "";
-}
-
-async function reserve(
-  world: ReturnType<typeof fresh>,
-  id: string,
-  request: string,
-  materialLanguage: string | null = null,
-): Promise<void> {
-  const outcome = await world.store.reserve({
-    id,
-    request,
-    plan: planFor(id, materialLanguage),
-    spend: null,
-    scopeSpend: null,
-    claim: ownLane(id),
-    nowMs: 1_000,
-    supersedesIterationId: null,
-    requestMessageId: null,
-    runId: `rondo-${id}`,
-    topicBranch: `rondo/${id}`,
-    workspace: `/srv/work/${id}`,
-  });
-  if (outcome.kind !== "reserved") {
-    throw new Error(`the fixture did not reserve: ${JSON.stringify(outcome)}`);
-  }
 }
 
 const rows = (connection: DatabaseSync, table: string): number =>
@@ -1558,134 +1375,6 @@ test("every view is complete under each of the three answers to the language que
  * 4's reason with the query, the cookie and the header added to it (rule 13).
  */
 
-/** Rule 2's four inputs, defaulted to a host and a browser that said nothing. */
-function askedWith(over: Partial<LanguageAsked> = {}): LanguageAsked {
-  return {
-    query: null,
-    cookie: undefined,
-    host: null,
-    header: undefined,
-    ...over,
-  };
-}
-
-/** The tag one set of inputs resolves to. */
-function resolvedTag(over: Partial<LanguageAsked> = {}): string {
-  return resolveLanguage(askedWith(over)).lang;
-}
-
-test("rule 2 is five steps and the first answer wins, each step losing to the one above", () => {
-  // **Step 5 is the floor**: nobody said anything, so English.
-  expect(resolvedTag()).toBe("en");
-
-  // **Step 4, the browser's list**, which answers exactly when nothing above
-  // it did -- the case the operator was actually answering about.
-  expect(resolvedTag({ header: "ja" })).toBe("ja");
-
-  // **Step 3 beats step 4**: a host that has spoken is not overridden by a
-  // browser-wide default (rule 3). Both directions, so this is the order and
-  // not one lucky pair.
-  expect(resolvedTag({ host: "en", header: "ja" })).toBe("en");
-  expect(resolvedTag({ host: "ja", header: "en" })).toBe("ja");
-
-  // **Step 2 beats step 3**: the operator's own remembered switch outranks the
-  // host's statement about them.
-  expect(resolvedTag({ cookie: "lang=ja", host: "en", header: "en" })).toBe("ja");
-  expect(resolvedTag({ cookie: "lang=en", host: "ja", header: "ja" })).toBe("en");
-
-  // **Step 1 beats everything**, which is what makes rule 4's canonical URL the
-  // whole of the state, so a redraw of a view's own address keeps its language.
-  expect(resolvedTag({ query: "ja", cookie: "lang=en", host: "en", header: "en" })).toBe("ja");
-  expect(resolvedTag({ query: "en", cookie: "lang=ja", host: "ja", header: "ja" })).toBe("en");
-
-  // **A step naming a tag no set resolves to is a step that said nothing**, so
-  // the next one answers rather than English being reached four times over.
-  expect(resolvedTag({ query: "de", host: "ja" })).toBe("ja");
-  expect(resolvedTag({ host: "de", header: "ja" })).toBe("ja");
-  expect(resolvedTag({ query: "de", cookie: "lang=de", host: "de", header: "de" })).toBe("en");
-  // The cookie is read out of a header that carries others beside it.
-  expect(resolvedTag({ cookie: "other=1; lang=ja; third=x", host: "en" })).toBe("ja");
-});
-
-test("a tag is resolved by BCP 47 lookup at every one of rule 2's steps (rule 6)", () => {
-  // `ja-JP` is what a host states and what a browser sends, and it is the
-  // papercut this entry exists to close -- at all four steps, because they all
-  // carry the same kind of thing.
-  expect(resolvedTag({ query: "ja-JP" })).toBe("ja");
-  expect(resolvedTag({ cookie: "lang=ja-JP" })).toBe("ja");
-  expect(resolvedTag({ host: "ja-JP" })).toBe("ja");
-  expect(resolvedTag({ header: "ja-JP" })).toBe("ja");
-  // Case folded, which is all BCP 47 says about comparing two tags.
-  expect(resolvedTag({ query: "JA-jp" })).toBe("ja");
-
-  // **The singleton step, which is the one that is easy to write backwards**
-  // (RFC 4647 section 3.4): truncating `ja-x-private` at its last hyphen leaves
-  // `ja-x`, and a trailing single-character subtag is dropped together with the
-  // subtag that introduced it rather than looked up as a set.
-  expect(resolvedTag({ query: "ja-x-private" })).toBe("ja");
-  // The RFC's own worked example's shape -- `zh-Hant-CN-x-private1-private2`
-  // reaching `zh` -- written against the one set this tree ships, so the
-  // assertion is about the truncation and not about a `zh` set that would have
-  // matched at the first step anyway.
-  expect(resolvedTag({ query: "ja-Hant-CN-x-private1-private2" })).toBe("ja");
-  // English is the last stop and is reachable by name, which is what keeps the
-  // switch from being a one-way door (rule 8).
-  expect(resolvedTag({ query: "en-GB" })).toBe("en");
-  expect(resolvedTag({ query: "en", host: "ja" })).toBe("en");
-  // Truncation stops at the primary subtag rather than wrapping to English via
-  // some shorter match: `de` is a step saying nothing, not a step saying `en`.
-  expect(resolveLanguage(askedWith({ query: "de-CH-1901", host: "ja" })).lang).toBe("ja");
-});
-
-test("Accept-Language is read by q, a q of zero is a refusal, and * says nothing (rule 6)", () => {
-  // Highest weight first, and not the order the list is written in.
-  expect(resolvedTag({ header: "en;q=0.5, ja;q=0.9" })).toBe("ja");
-  expect(resolvedTag({ header: "ja;q=0.1, en;q=0.8" })).toBe("en");
-  // Absent means 1.
-  expect(resolvedTag({ header: "ja, en;q=0.9" })).toBe("ja");
-  // **A tie keeps the order the list was written in**, however the parameter
-  // name is cased: the tokenizer reads `Q=0.5` as 1 and sorts English first,
-  // and a tie broken on its order would be broken by that misreading.
-  expect(resolvedTag({ header: "ja;q=0.5, en;Q=0.5" })).toBe("ja");
-  expect(resolvedTag({ header: "en;Q=0.5, ja;q=0.5" })).toBe("en");
-  // **A q of zero is a refusal and not a low preference**, so `ja` is dropped
-  // before lookup runs rather than tried after unsupported German: this header
-  // must reach the step below rather than the `ja` set.
-  expect(resolvedTag({ header: "de;q=1, ja;q=0" })).toBe("en");
-  expect(resolveLanguage(askedWith({ header: "de;q=1, ja;q=0", host: "en" })).lang).toBe("en");
-  // **Zero has more than one legal spelling**, and each is a refusal: RFC
-  // 9110's `qvalue` allows zero digits after the point, so `q=0.` and `q=0.00`
-  // are the same *do not send me this*. Read as unparseable they would fall
-  // back to the default weight of 1 and make an explicit refusal the strongest
-  // preference in the list, which is this rule failing in the one direction
-  // that matters.
-  for (const zero of ["0", "0.", "0.0", "0.00", "0.000"]) {
-    expect(resolvedTag({ header: `ja;q=${zero}, en;q=0.5` })).toBe("en");
-    expect(resolveLanguage(askedWith({ header: `ja;q=${zero}` })).lang).toBe("en");
-  }
-  // A `1` with the same trailing point is still one, and not a refusal.
-  expect(resolvedTag({ header: "ja;q=1., en;q=0.5" })).toBe("ja");
-  // And the refusal is of that tag only: a second tag still answers.
-  expect(resolvedTag({ header: "ja;q=0, en;q=0.3" })).toBe("en");
-  // **`*` is no preference and is skipped**, so a bare one reaches the step
-  // below rather than picking a set for the operator.
-  expect(resolvedTag({ header: "*" })).toBe("en");
-  expect(resolveLanguage(askedWith({ header: "*", host: "ja" })).lang).toBe("ja");
-  expect(resolvedTag({ header: "*;q=1, ja;q=0.2" })).toBe("ja");
-  // Whitespace and an unparseable weight are not a crash: the header is a
-  // browser's and this page is total about what it is handed.
-  expect(resolvedTag({ header: "  ja ; q=0.9 , en;q=0.3 " })).toBe("ja");
-  // An absent weight really is 1 and not a default below an explicit one, so
-  // the bare tag here outranks the weighted one whatever order they are in.
-  expect(resolvedTag({ header: "  ja ; q=0.9 , en " })).toBe("en");
-  // **A weight that is not a number is a weight that was not given**, and so
-  // the tag is offered at 1 rather than dropped: `q=0` is the only refusal in
-  // this grammar, and a garbled parameter is not the browser withdrawing a
-  // language the operator may well read.
-  expect(resolvedTag({ header: "ja;q=x" })).toBe("ja");
-  expect(resolvedTag({ header: "" })).toBe("en");
-});
-
 /** One `GET`, with headers of our choosing and the redirect left where it is. */
 async function get(
   base: string,
@@ -1732,31 +1421,6 @@ async function get(
 function declaredIn(html: string): string {
   return /<html lang="([^"]*)">/.exec(html)?.[1] ?? "";
 }
-
-test("an ill-formed tag resolves to nothing rather than truncating into a set (rule 9)", () => {
-  // **The truncation is what makes this the wrong way round if the grammar is
-  // not checked first.** `ja-!!` and `ja-` each reach `ja` by cutting at a
-  // hyphen, so a syntax error would resolve -- and, being a language the other
-  // steps would not have answered, would write rule 5's memory on its way past.
-  // Rule 9 says an ill-formed `lang` resolves to nothing and leaves the memory
-  // alone, so the step must say nothing and the next one must answer.
-  for (const bad of ["ja-!!", "ja-", "-ja", "ja_JP", "j", "日本語", "ja ", "%", ""]) {
-    expect(resolvedTag({ query: bad })).toBe("en");
-    expect(resolveLanguage(askedWith({ query: bad, cookie: "lang=en" })).lang).toBe("en");
-    // The one that would have been a silent switch: an English memory must
-    // survive an ill-formed ask that happens to start with a shipped tag.
-    expect(resolveLanguage(askedWith({ query: bad, host: "ja" })).lang).toBe("ja");
-  }
-  // Every step is checked, not just the query: a header or a cookie carrying
-  // rubbish says nothing rather than truncating into a set.
-  expect(resolveLanguage(askedWith({ cookie: "lang=ja-!!", host: "en" })).lang).toBe("en");
-  expect(resolveLanguage(askedWith({ header: "ja-!!", host: "en" })).lang).toBe("en");
-  // And what the grammar admits still resolves, so this is a check and not a
-  // second, narrower lookup.
-  expect(resolvedTag({ query: "ja-JP" })).toBe("ja");
-  expect(resolvedTag({ query: "ja-x-private" })).toBe("ja");
-  expect(resolvedTag({ query: "zh-Hant" })).toBe("en");
-});
 
 test("a cookie that is not a tag is ignored and does not take the server down", async () => {
   // **`decodeURIComponent` throws on `lang=%`**, and `resolveLanguage` runs
@@ -2497,52 +2161,6 @@ test("the composer script keeps a draft and the open folds, and makes no request
 
 // -- The gate reading (#220 S2) --
 
-const EVIDENCE = {
-  baseRef: "origin/main",
-  baseCommit: "a".repeat(40),
-  tipCommit: "b".repeat(40),
-  materialDigest: "sha256:x",
-  commitCount: 2,
-  fileCount: 1,
-};
-
-/** A lap at its gate with the deterministic reading carried by its transition. */
-async function gateWithChecks(world: ReturnType<typeof fresh>): Promise<void> {
-  await reserve(world, "i-0001", "add a retry budget");
-  await openGate(world, "i-0001");
-  const carried = await world.store.transition(
-    "i-0001",
-    "awaiting_human",
-    "awaiting_human",
-    { permissionDenials: '[{"tool_name":"Bash","tool_input":{"command":"rm -rf /srv"}}]' },
-    3_000,
-    {
-      drafter: "rondo/deterministic/2",
-      verdict: "concerns",
-      findings: ["a binary file was not read"],
-      evidence: EVIDENCE,
-      unavailableReason: null,
-    },
-  );
-  expect(carried.kind).toBe("transitioned");
-}
-
-const structured = async () =>
-  await Promise.resolve({
-    lines: ["work    rondo/i-0001", "fence   the whole text"],
-    why: "I could not run the suite.",
-    work: {
-      kind: "read" as const,
-      baseRef: "origin/main",
-      baseCommit: "a".repeat(40),
-      tipCommit: "b".repeat(40),
-      commits: [{ abbreviatedSha: "3f2a1c9", subject: "feat: retry budget" }],
-      files: [{ path: "src/notifier.ts", added: 64, deleted: 12 }],
-      uncommitted: [],
-      checkedOut: "rondo/i-0001",
-    },
-  });
-
 test("the answer view draws both readings side by side from the rows, with the warning by approve (#220 S2)", async () => {
   const world = fresh();
   await gateWithChecks(world);
@@ -2621,176 +2239,6 @@ test("the answer view draws both readings side by side from the rows, with the w
   expect(html).toMatch(/<details id="material-text"[\s\S]*fence {3}the whole text/);
 });
 
-/** The model reading the S4 tests draft from: one blocker and one major, with bases. */
-async function modelFindings(world: ReturnType<typeof fresh>): Promise<void> {
-  const appended = await world.store.appendReading(
-    "i-0001",
-    {
-      drafter: "rondo/model/1/gpt-6-astra",
-      verdict: "concerns",
-      findings: ["the loop never stops", "the backoff is not capped"],
-      graded: [
-        {
-          severity: "blocker",
-          bases: [{ kind: "file", path: "src/notifier.ts", line: 41 }],
-          basisResolved: true,
-        },
-        {
-          severity: "major",
-          bases: [{ kind: "rule", path: "AGENTS.md", line: 12 }],
-          basisResolved: true,
-        },
-      ],
-      evidence: EVIDENCE,
-      unavailableReason: null,
-    },
-    4_000,
-  );
-  expect(appended.kind).toBe("appended");
-}
-
-let reviseIds = 0;
-
-/**
- * One run of the revise drafter over the lap at the gate (D-0077), with the
- * model's answer given: what the resident host writes for the view to read.
- */
-async function draftRevise(
-  world: ReturnType<typeof fresh>,
-  answer: unknown,
-  opts: {
-    readonly admitted?: string | null;
-    readonly during?: () => Promise<void>;
-    /** Stands in for the store's write, to fail it. */
-    readonly write?: (
-      real: ReturnType<typeof fresh>["record"]["recordReviseDraft"],
-    ) => ReturnType<typeof fresh>["record"]["recordReviseDraft"];
-    /** Kicks before the host is let go: one host, several scans. */
-    readonly scans?: number;
-  } = {},
-): Promise<string[]> {
-  const documents: string[] = [];
-  const admitted = opts.admitted === undefined ? "decision-1" : opts.admitted;
-  const host = reviseDrafterHost({
-    store: world.store,
-    record: {
-      ...world.record,
-      scopeDecisionAdmitting: async () => admitted,
-      recordReviseDraft:
-        opts.write?.(world.record.recordReviseDraft.bind(world.record)) ??
-        world.record.recordReviseDraft.bind(world.record),
-    },
-    runDrafter: async (_row, document) => {
-      documents.push(document);
-      await opts.during?.();
-      return answer === null
-        ? { kind: "failed", reason: "claude exited 1" }
-        : {
-            kind: "answered",
-            costUsd: 0.01,
-            finalMessage: typeof answer === "string" ? answer : JSON.stringify(answer),
-          };
-    },
-    now: () => 4_500,
-    // One counter across hosts: two hosts over one store mint distinct ids.
-    mintId: (kind) => {
-      reviseIds += 1;
-      return `${kind}-${String(reviseIds)}`;
-    },
-    language: null,
-    log: () => undefined,
-  });
-  for (let scan = 0; scan < (opts.scans ?? 1); scan += 1) {
-    host.kick();
-    await host.idle();
-  }
-  return documents;
-}
-
-/** The revise drafts written for a lap, as the store holds them. */
-const reviseRows = (world: ReturnType<typeof fresh>) =>
-  world.connection
-    .prepare(
-      "SELECT drafter, payload, snapshot FROM proposal WHERE kind = 'revise_draft' ORDER BY rowid",
-    )
-    .all()
-    .map((row) => ({
-      drafter: String(row["drafter"]),
-      payload: JSON.parse(String(row["payload"])) as JsonRecord,
-      snapshot: JSON.parse(String(row["snapshot"])) as JsonRecord,
-    }));
-
-/** A second model reading of the lap at the gate, with one finding. */
-async function newerModelReading(world: ReturnType<typeof fresh>, finding: string, atMs: number) {
-  const appended = await world.store.appendReading(
-    "i-0001",
-    {
-      drafter: "rondo/model/1/gpt-6-astra",
-      verdict: "concerns",
-      findings: [finding],
-      graded: [{ severity: "major", bases: [], basisResolved: false }],
-      evidence: EVIDENCE,
-      unavailableReason: null,
-    },
-    atMs,
-  );
-  expect(appended.kind).toBe("appended");
-}
-
-test("the revise drafter writes one row per reading, under its own name, and is not run twice over one (D-0077 rules 1.2, 2.2, 5.1)", async () => {
-  const world = fresh();
-  await gateWithChecks(world);
-  await modelFindings(world);
-  const documents = await draftRevise(world, REVISE_ANSWER);
-  expect(documents).toHaveLength(1);
-  // The document holds every finding, numbered, and what the drafter must not do.
-  const doc = documents[0] as string;
-  expect(doc).toContain(
-    "--- finding 1 (blocker)\nthe loop never stops\n  where: src/notifier.ts:41",
-  );
-  expect(doc).toContain("--- finding 2 (major)\nthe backoff is not capped");
-  expect(doc).toContain('"findings" holds exactly 2 entries');
-  expect(doc).toContain("BEGIN THE ATTEMPT'S PROMPT\ndo the thing\n");
-  const [row, ...more] = reviseRows(world);
-  expect(more).toHaveLength(0);
-  expect(row?.drafter).toMatch(/^rondo\/revise-drafter\/1\//);
-  expect(row?.payload).toEqual({
-    kind: "drafted",
-    lead: "Keep the retry budget, but make it end.",
-    changes: [
-      "Stop after the budget's last try.\nSay so in the log.",
-      "Cap the backoff at 30 seconds.",
-    ],
-  });
-  expect((row?.snapshot["reading"] as JsonRecord | undefined)?.["findings"]).toEqual([
-    "the loop never stops",
-    "the backoff is not capped",
-  ]);
-  // A proposal nobody approves: the store refuses a decision naming it.
-  const id = String(
-    world.connection
-      .prepare("SELECT proposal_id FROM proposal WHERE kind = 'revise_draft'")
-      .get()?.["proposal_id"],
-  );
-  const decided = await world.record.recordDecision({
-    decisionId: "d-1",
-    proposalId: id,
-    outcome: "approved",
-    approved: null,
-    predecessor: null,
-    actorId: "ada",
-    recordedBy: "rondo-web",
-    gateId: null,
-    gateTransitionSeq: null,
-    decidedAtMs: 5_000,
-  });
-  expect(decided.kind).toBe("refused");
-
-  // Drafted, so a second scan spends nothing.
-  expect(await draftRevise(world, REVISE_ANSWER)).toHaveLength(0);
-  expect(reviseRows(world)).toHaveLength(1);
-});
-
 test("an unavailable run writes its reason and is not retried; the next reading is drafted as its own (D-0077 rules 2.2, 4.2)", async () => {
   const world = fresh();
   await gateWithChecks(world);
@@ -2816,54 +2264,6 @@ test("an unavailable run writes its reason and is not retried; the next reading 
   );
   expect(html).toContain("- [major] the log is too loud\n  to change: Quieter.");
   expect(html).not.toContain("rondo could not draft what to change");
-});
-
-test("a store fault at the write keeps the draft and writes it on the next scan, without running again (D-0077 rules 2.2, 4.2)", async () => {
-  const world = fresh();
-  await gateWithChecks(world);
-  await modelFindings(world);
-  let faults = 1;
-  const documents = await draftRevise(world, REVISE_ANSWER, {
-    scans: 2,
-    write: (real) => async (proposal, gateId) => {
-      if (faults > 0) {
-        faults -= 1;
-        return { kind: "defect", reason: "database is locked" };
-      }
-      return await real(proposal, gateId);
-    },
-  });
-  // One model call; the first scan's write met the lock, and the second wrote
-  // the same draft -- not an unavailable row about the lock.
-  expect(documents).toHaveLength(1);
-  expect(reviseRows(world).map((r) => r.payload["kind"])).toEqual(["drafted"]);
-});
-
-test("a reading that lands while the draft is written makes that draft stale: nothing is written for it (D-0077 rule 2.3)", async () => {
-  const world = fresh();
-  await gateWithChecks(world);
-  await modelFindings(world);
-  let landed = false;
-  const documents = await draftRevise(
-    world,
-    { lead: null, findings: [{ finding: 1, change: "Fix it." }] },
-    {
-      during: async () => {
-        if (!landed) {
-          landed = true;
-          await newerModelReading(world, "the log is too loud", 6_000);
-        }
-      },
-    },
-  );
-  // The first run was over two findings and is discarded at the write; the
-  // rescan drafts the newer reading, whose one finding the answer addresses.
-  expect(documents).toHaveLength(2);
-  const written = reviseRows(world);
-  expect(written).toHaveLength(1);
-  expect((written[0]?.snapshot["reading"] as JsonRecord | undefined)?.["findings"]).toEqual([
-    "the log is too loud",
-  ]);
 });
 
 test("the revise drafter drafts only where the gate view draws a revise form (D-0077 rule 2.1)", async () => {
@@ -2897,15 +2297,6 @@ test("the revise drafter drafts only where the gate view draws a revise form (D-
   expect(await draftRevise(early, REVISE_ANSWER)).toHaveLength(0);
   expect(reviseRows(early)).toHaveLength(0);
 });
-
-/** A draft that addresses both of {@link modelFindings}' findings, with a lead. */
-const REVISE_ANSWER = {
-  lead: "Keep the retry budget, but make it end.",
-  findings: [
-    { finding: 2, change: "Cap the backoff at 30 seconds." },
-    { finding: 1, change: "Stop after the budget's last try.\nSay so in the log." },
-  ],
-};
 
 test("the gate offers a change beside approve, drafted from the findings and editable (#233 S4)", async () => {
   const world = fresh();
