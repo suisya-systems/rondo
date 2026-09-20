@@ -138,7 +138,7 @@ const ENV = { RONDO_APPROVER: "ada" };
 
 /**
  * Every test here writes on-disk stores -- several, each with a draft's
- * transactions -- which is `test/access/web.test.ts`'s heavy class (#222,
+ * transactions -- which is `test/access/web-scope.test.ts`'s heavy class (#222,
  * #241): on PR #267's Windows node 24 cell this file took 12.3 s for four
  * tests against 0.36 s on Ubuntu, and on a slower Windows runner one of them
  * passed the 10 s default. A floor under Windows filesystem variance, not a

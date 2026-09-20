@@ -14,11 +14,14 @@
  * unavailable run, whose reason the gate shows -- stays with the renderer,
  * because what it is asserting is markup.
  */
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { request as httpRequest } from "node:http";
 import { DatabaseSync } from "node:sqlite";
 import { expect } from "vitest";
 import { reviseDrafterHost } from "../../src/access/revise-drafter.js";
 import { type PublishReading, operatorPage as renderPage } from "../../src/access/web.js";
-import { AnswerPort, type ServedPorts } from "../../src/access/web-app.js";
+import { AnswerPort, type ServedPorts, serveOperatorPage } from "../../src/access/web-app.js";
 import { allocate } from "../../src/refrain/allocator.js";
 import { admittedPlan, planPayload, type RunPlan, runPlan } from "../../src/refrain/plan.js";
 import type { JsonRecord } from "../../src/store/records.js";
@@ -297,9 +300,9 @@ export const reviseRows = (world: ReturnType<typeof fresh>) =>
     )
     .all()
     .map((row) => ({
-      drafter: String(row["drafter"]),
-      payload: JSON.parse(String(row["payload"])) as JsonRecord,
-      snapshot: JSON.parse(String(row["snapshot"])) as JsonRecord,
+      drafter: String(row.drafter),
+      payload: JSON.parse(String(row.payload)) as JsonRecord,
+      snapshot: JSON.parse(String(row.snapshot)) as JsonRecord,
     }));
 
 /** A second model reading of the lap at the gate, with one finding. */
@@ -431,3 +434,229 @@ export const structured = async () =>
       checkedOut: "rondo/i-0001",
     },
   });
+
+// -- What the page's suites drive the served page with (rondo#335) --
+//
+// These were `test/access/web.test.ts`'s own helpers while that file held every
+// view. The file is now one file per screen, and a helper more than one of them
+// reaches for lives here, so that no screen's suite has to import from another
+// screen's suite.
+
+/**
+ * The tests marked with this build a real git repository or write an on-disk
+ * store, and are the heaviest thing in this file on a Windows runner
+ * (rondo#222, #191). A floor under Windows process and filesystem variance,
+ * not a budget.
+ *
+ * **What this file costs per cell, healthy and when it goes wrong, is recorded
+ * in `docs/operations/ci-timing.md` with the run ids.** Read that before
+ * changing this number: it was deliberately not raised on rondo#332, because
+ * the overruns seen there are twenty-fold against a limit that already had
+ * twenty-fold headroom, which is not what a limit set too low looks like.
+ */
+export const WINDOWS_HEAVY_TIMEOUT_MS = 60_000;
+
+/**
+ * One form post, with headers of our choosing and redirects left alone.
+ *
+ * **Shaped like a person's press unless a test says otherwise** (D-0059
+ * section 5): same-origin, a navigation, `Sec-Fetch-User: ?1` and an `Origin`
+ * naming the page -- the headers Chromium sends when a person clicks the
+ * native button. A header given as `undefined` is not sent at all.
+ */
+export function post(
+  base: string,
+  form: Record<string, string>,
+  headers: Record<string, string | undefined> = {},
+): Promise<{ status: number; body: string; location: string | undefined }> {
+  const encoded = new URLSearchParams(form).toString();
+  const sent = Object.fromEntries(
+    Object.entries({
+      origin: base,
+      "sec-fetch-site": "same-origin",
+      "sec-fetch-mode": "navigate",
+      "sec-fetch-user": "?1",
+      ...headers,
+    }).filter((entry): entry is [string, string] => entry[1] !== undefined),
+  );
+  return new Promise((resolve, reject) => {
+    const request = httpRequest(
+      `${base}/`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+          "content-length": String(Buffer.byteLength(encoded)),
+          ...sent,
+        },
+      },
+      (response) => {
+        let body = "";
+        response.setEncoding("utf8");
+        response.on("data", (chunk: string) => {
+          body += chunk;
+        });
+        response.on("end", () => {
+          resolve({
+            status: response.statusCode ?? 0,
+            body,
+            location: response.headers.location,
+          });
+        });
+      },
+    );
+    request.on("error", reject);
+    request.end(encoded);
+  });
+}
+
+/** A server on an ephemeral port, and the base URL it announced. */
+export async function serving(ports: ServedPorts): Promise<{
+  base: string;
+  stop: AbortController;
+  served: Promise<number>;
+}> {
+  let announced = "";
+  const stop = new AbortController();
+  const served = serveOperatorPage(
+    ports,
+    0,
+    (line) => {
+      announced = line;
+    },
+    () => {
+      throw new Error("the server refused to listen");
+    },
+    stop.signal,
+  );
+  // `listen` is asynchronous; the announcement is what says the socket is up.
+  while (announced === "") {
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  const base = /(http:\/\/127\.0\.0\.1:\d+)\//.exec(announced)?.[1] ?? "";
+  expect(base).not.toBe("");
+  return { base, stop, served };
+}
+
+/** The token this process minted, as the page rendered it into its form. */
+export function tokenIn(html: string): string {
+  const found = /name="token" value="([^"]+)"/.exec(html)?.[1];
+  expect(found).toBeDefined();
+  return found ?? "";
+}
+
+export const rows = (connection: DatabaseSync, table: string): number =>
+  Number(
+    (
+      connection.prepare(`SELECT count(*) AS n FROM ${table}`).get() as {
+        n: number;
+      }
+    ).n,
+  );
+
+/**
+ * The files a view loads, resolved from the repository root the way
+ * `src/access/web-app.ts` resolves them.
+ */
+const ROOT = new URL("../../", import.meta.url);
+
+export const bytesOf = (path: string): Buffer => readFileSync(new URL(path, ROOT));
+
+export const digestOf = (bytes: Buffer | string): string =>
+  createHash("sha256").update(bytes).digest("hex");
+
+/** `page/keys.js` with its commentary removed, so a claim is read off code. */
+export const keysCode = (): string =>
+  bytesOf("page/keys.js")
+    .toString("utf8")
+    .split("\n")
+    .filter((line) => !/^\s*\/\//.test(line))
+    .join("\n");
+
+/** Every stored byte of what a press wrote, in the order the rows were made. */
+export function recorded(connection: DatabaseSync): unknown[] {
+  return [
+    connection
+      .prepare(
+        "SELECT kind, drafter, payload, proposal_digest, snapshot, snapshot_digest, " +
+          "iteration_id FROM proposal ORDER BY rowid",
+      )
+      .all(),
+    connection
+      .prepare(
+        "SELECT subject_kind, subject_id, disposition, rule_name FROM operator_attention " +
+          "ORDER BY rowid",
+      )
+      .all(),
+  ];
+}
+
+/** One `GET`, with headers of our choosing and the redirect left where it is. */
+export async function get(
+  base: string,
+  path: string,
+  headers: Record<string, string> = {},
+): Promise<{
+  status: number;
+  location: string | null;
+  cookie: string | null;
+  vary: string | null;
+  body: string;
+}> {
+  // **A navigation unless the caller says otherwise**, over `node:http`:
+  // undici's fetch always sends `sec-fetch-mode: cors`, which is what a redraw
+  // sends, and rule 5's cookie is written only on a navigation.
+  return new Promise((resolve, reject) => {
+    const request = httpRequest(
+      `${base}${path}`,
+      { headers: { "sec-fetch-mode": "navigate", ...headers } },
+      (response) => {
+        let body = "";
+        response.setEncoding("utf8");
+        response.on("data", (chunk: string) => {
+          body += chunk;
+        });
+        response.on("end", () => {
+          const vary = response.headers.vary;
+          resolve({
+            status: response.statusCode ?? 0,
+            location: response.headers.location ?? null,
+            cookie: response.headers["set-cookie"]?.join(", ") ?? null,
+            vary: vary === undefined ? null : String(vary),
+            body,
+          });
+        });
+      },
+    );
+    request.on("error", reject);
+    request.end();
+  });
+}
+
+/** The ids a composer would carry, minted in the shape the server mints them. */
+export const MINTED = {
+  request: "request-00000000-0000-4000-8000-000000000001",
+  reply: "reply-00000000-0000-4000-8000-000000000002",
+} as const;
+export const mint = (kind: "request" | "reply"): string => MINTED[kind];
+
+/** A request message that opens a thread, for the scope screen to draft over. */
+export async function seedScopeRequest(
+  world: ReturnType<typeof fresh>,
+  messageId: string,
+  body: string,
+): Promise<void> {
+  const outcome = await world.record.recordThreadMessage({
+    messageId,
+    body,
+    authorKind: "operator",
+    authorId: "ada",
+    inReplyTo: null,
+    atMs: 1_000,
+    bases: [],
+    asks: false,
+  });
+  if (outcome.kind !== "recorded") {
+    throw new Error(`the scope fixture request did not record: ${JSON.stringify(outcome)}`);
+  }
+}
