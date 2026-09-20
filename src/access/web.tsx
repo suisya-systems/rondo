@@ -2281,6 +2281,22 @@ export async function operatorPage(
       ? null
       : (lapsUnder(selectedRoot).find((lap) => lap.question === "waiting")?.record.id ?? null);
   const shown = await shownBeforePress(ports, wording, waiting, token, answeringLap);
+  /*
+   * **The lap everything about this confirmation is read from** (rule 6, and
+   * Codex round 3): the one at the gate where there is one, and the one the
+   * list speaks with otherwise. The line under the title, the right face's
+   * agreement, its steps and the box in the thread all describe it -- two of
+   * them reading different laps would put one lap's allowance and reach beside
+   * another lap's question, which is exactly the misreading rule 6 exists
+   * against.
+   */
+  // The lap the box is for, which is the one at the gate rather than the one
+  // the list speaks with.
+  const gatedLap =
+    answeringLap === null || selectedRoot === null
+      ? null
+      : (lapsUnder(selectedRoot).find((lap) => lap.record.id === answeringLap)?.record ?? null);
+  const governedLap = gatedLap ?? selectedLap?.record ?? null;
 
   /*
    * **The centre face** (D-0083 rule 5): the selected request's thread, or
@@ -2351,16 +2367,16 @@ export async function operatorPage(
     };
   };
   const selectedGovernance =
-    selectedLap === null || selectedRoot === null
+    governedLap === null || selectedRoot === null
       ? null
       : governanceOf(
-          selectedLap.record,
-          repositoryOf(selectedLap.record),
+          governedLap,
+          repositoryOf(governedLap),
           threads.byId.get(selectedRoot)?.atMs ?? nowMs,
-          await approvalOf(selectedLap.record),
+          await approvalOf(governedLap),
           // A proposal is done when rondo recorded one: the published report
           // it writes into the request's thread (rondo#245).
-          publishedReport(threads, selectedLap.record.id) !== null,
+          publishedReport(threads, governedLap.id) !== null,
           /*
            * **Rule 6's fifth item, read for this request and for no window**
            * (rondo#350). The week's face counts withholdings over seven days
@@ -2567,12 +2583,6 @@ export async function operatorPage(
    * `test/access/gate-elements.test.ts` is the net under.
    */
   const gateFraming = answeringLap === null ? undefined : shown.get(answeringLap);
-  // The lap the box is for, which is the one at the gate rather than the one
-  // the list speaks with.
-  const gatedLap =
-    answeringLap === null || selectedRoot === null
-      ? null
-      : (lapsUnder(selectedRoot).find((lap) => lap.record.id === answeringLap)?.record ?? null);
   const answeringBox =
     gatedLap === null || gateFraming === undefined
       ? null
@@ -2738,7 +2748,7 @@ export async function operatorPage(
    * confirmation that is waiting on the person. With nothing being asked there
    * is no gated lap and the selected one is the subject.
    */
-  const sideLap = gatedLap ?? selectedLap?.record ?? null;
+  const sideLap = governedLap;
   const sideAsking = gatedLap !== null && gateFraming !== undefined;
   const sideReadings =
     gateFraming?.readings ??
