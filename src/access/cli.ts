@@ -136,6 +136,7 @@ import { isModelDrafterName } from "./model-draft.js";
 import { draftedPlanRun, type HeldPlan, heldPlanByDigest, heldPlans } from "./model-drafter.js";
 import { modelReadingLines } from "./model-review.js";
 import { modelReviewPorts, takeModelReading } from "./model-reviewer.js";
+import type { LapMaterialRead, PublishBlock, PublishShown, ReviewBlock } from "./page/contract.js";
 import { type PullRequestText, pullRequestText } from "./pull-request.js";
 import { denialLine, evidenceOf, LIST_LIMIT, READING_REMOTE, uncommittedPaths } from "./review.js";
 import { reviseDrafterHost } from "./revise-drafter.js";
@@ -146,7 +147,6 @@ import {
   heldAgentTypeLines,
   type ScopedAdmission,
 } from "./scope.js";
-import type { LapMaterialRead, PublishBlock, PublishShown, ReviewBlock } from "./web.js";
 import {
   AnswerPort,
   type ClaimRefusal,

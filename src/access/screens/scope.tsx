@@ -16,10 +16,7 @@ import {
 import { ago } from "../inbox.js";
 import { latestReads } from "../issue-read.js";
 import { type HeldPlan, heldPlanByDigest, heldPlans } from "../model-drafter.js";
-import { isLive, type PageView, REVIEW_ROUND_CHOICES, viewHref } from "../page-logic/routes.js";
-import { firstLine, type Threads } from "../page-logic/threads.js";
-import { approvalTip, heldAgentTypeLines, scopeBudgetsFromStore } from "../scope.js";
-import type { WebPorts } from "../web.js";
+import type { MintIterationId, MintScopeId, WebPorts } from "../page/contract.js";
 import {
   basisWord,
   CARD,
@@ -27,14 +24,15 @@ import {
   chevron,
   issueNameLink,
   localTime,
-  type MintIterationId,
-  type MintScopeId,
   money,
   note,
   PILL,
   PRIMARY,
   TONE,
-} from "../web.js";
+} from "../page/vocabulary.js";
+import { isLive, type PageView, REVIEW_ROUND_CHOICES, viewHref } from "../page-logic/routes.js";
+import { firstLine, type Threads } from "../page-logic/threads.js";
+import { approvalTip, heldAgentTypeLines, scopeBudgetsFromStore } from "../scope.js";
 import type { Chrome } from "../wording.js";
 
 /** A locator drawn as a chip: quiet, one line, the whole of it in `title`. */

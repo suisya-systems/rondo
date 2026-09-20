@@ -88,16 +88,7 @@
  */
 
 import { raw } from "hono/html";
-import {
-  type AdvisorySnapshot,
-  BASIS_FORMS,
-  type Basis,
-  type Claim,
-  propose,
-  UNDETERMINED,
-} from "../advisory/proposal.js";
-import type { LapLogReading } from "../continuo/transcript.js";
-import type { HostPolicy } from "../refrain/policy.js";
+import { type AdvisorySnapshot, type Claim, propose, UNDETERMINED } from "../advisory/proposal.js";
 import {
   approvedForPublication,
   type FindingSeverity,
@@ -117,25 +108,45 @@ import {
   type ThreadMessageDraft,
   WAIT_SIDE,
 } from "../store/records.js";
-import type { AdvisoryRecord, IterationStore } from "../store/sqlite.js";
 import { basisLine, gather } from "./advisory.js";
 import type { LapWorkInspection } from "./forge.js";
-import { ago, gatherInbox, type InboxReadPorts, type LiveRow } from "./inbox.js";
-import {
-  type ForgeRead,
-  type IssueComment,
-  issueName,
-  type NamedIssue,
-  parseForgeRead,
-} from "./issue-read.js";
+import { ago, gatherInbox, type LiveRow } from "./inbox.js";
+import { type IssueComment, parseForgeRead } from "./issue-read.js";
 import { isModelDrafterName } from "./model-draft.js";
+import type {
+  LapMaterialRead,
+  MintIterationId,
+  MintMessageId,
+  MintScopeId,
+  WebPorts,
+} from "./page/contract.js";
 import { EmptyCentre } from "./page/empty.js";
 import { EmptySide, type SideWork } from "./page/empty-side.js";
 import { GovernanceLine } from "./page/governance.js";
 import { RequestsFace } from "./page/list.js";
 import { facesMarkup } from "./page/render.js";
 import { Raw } from "./page/shell.js";
-import { ThreadFace, type ThreadItem, type ThreadLink } from "./page/thread.js";
+import { ThreadFace, type ThreadItem } from "./page/thread.js";
+import {
+  basisWord,
+  CARD,
+  CARD_HEADING,
+  chevron,
+  DESPITE,
+  glyph,
+  issueNameLink,
+  localTime,
+  money,
+  note,
+  PILL,
+  PRIMARY,
+  pill,
+  publishedReport,
+  SECONDARY,
+  TONE,
+  type Tone,
+  whoWrote,
+} from "./page/vocabulary.js";
 import { folds } from "./page-logic/event-fold.js";
 import { allowanceOf, governanceOf } from "./page-logic/governance.js";
 import {
@@ -160,268 +171,6 @@ import { scopeView } from "./screens/scope.js";
 import { type Chrome, EN, SHIPPED_SETS } from "./wording.js";
 
 /**
- * Everything the page is handed: the reading half of the two ports, the host's
- * bounds, whose inbox to draw, and a clock.
- *
- * `actorId` is nullable because an inbox is one person's: with `RONDO_APPROVER`
- * unset there is nobody whose last-look mark the "since you last looked"
- * section could be about, and the page says so rather than drawing somebody's.
- */
-export interface WebPorts extends InboxReadPorts {
-  readonly store: Pick<
-    IterationStore,
-    | "read"
-    | "readLive"
-    | "readingsFor"
-    | "occupancy"
-    | "terminalIterations"
-    | "verificationClaimsFor"
-    // D-0073 rule 12: what each line holds, and whether its work landed.
-    | "laneLedger"
-  >;
-  readonly record: InboxReadPorts["record"] &
-    Pick<
-      AdvisoryRecord,
-      | "admissionRefusals"
-      | "threadMessages"
-      // rondo#233 S3: the budgets read a digest's tier back from the held
-      // record (D-0069 section 1), and the scope screen's second state reads
-      // the approval the press wrote and what a predecessor of it spent
-      // (D-0066 rules 1.4 and 3.4).
-      | "heldAgentType"
-      // rondo#238: the plans a person picks from are the ones rondo holds,
-      // setup's among them (D-0075 rule 2.3).
-      | "heldAgentTypeDigests"
-      | "setupPlans"
-      // rondo#238 C2b: the drafted scope, its split, and whether a drafted
-      // plan can start -- the scope's own verdict, read and never acted on.
-      | "scopesFor"
-      | "readProposal"
-      | "openAsksIn"
-      | "lineageOf"
-      | "readScope"
-      | "readScopeDecision"
-      | "scopeDecisionOf"
-      | "scopeSpent"
-      | "scopeSupersededByApproved"
-      // rondo#233 S4: the gate's revise offers the approval this lap was
-      // admitted under, so nobody copies a decision id (D-0070 section 1.2).
-      | "scopeDecisionAdmitting"
-      // D-0074 section 2: and that approval's approved tip, once raised.
-      | "scopeTip"
-      // D-0077 rule 2.2: the revise draft that holds the lap's latest model
-      // reading, which is what the box is filled from.
-      | "reviseDraftFor"
-    >;
-  readonly policy: HostPolicy;
-  readonly actorId: string | null;
-  /**
-   * The tag this host stated about its one operator, or null when it stated
-   * nothing (D-0055 rule 5, D-0056 rules 2 and 3).
-   *
-   * **A tag and no longer a set, which is the whole of what D-0056 rule 3 costs
-   * this interface.** D-0055 resolved the variable at boot and handed the page
-   * the wording; under rule 2 the variable is one *step* of five, and a step
-   * that names a tag no set resolves to has to be a step that said nothing so
-   * that the browser's list answers instead. A `Chrome` cannot say that -- it
-   * is `EN` both for a host that asked for English and for a host that asked
-   * for German -- so what arrives is the tag, and {@link resolveLanguage} does
-   * the lookup once per request beside the other four steps.
-   *
-   * Still read from `RONDO_OPERATOR_LANGUAGE` beside `RONDO_APPROVER`, in the
-   * one place rondo's other deployment facts are read, and still refused there
-   * if it is not a tag (D-0056 rule 9).
-   */
-  readonly hostLanguage: string | null;
-  /**
-   * What the lap actually did, as `rondo answer` lists it (D-0029 rule 2).
-   *
-   * A function for the answer port's reason turned the other way round: the
-   * material is read out of a workspace with `git`, and a page that could spawn
-   * one would have a capability nothing on this surface should hold. So the
-   * caller reads it and this module renders it.
-   *
-   * It is shown **where the button is** and nowhere else, because the button is
-   * where it is needed: a screen that is easier to reach than the terminal must
-   * not also be the screen that asks for less before it writes.
-   */
-  readonly material: LapMaterial | null;
-  /**
-   * What publishing one lap would do, or null when the host named no forge
-   * repository: no repository, no publish screen, and the page says which
-   * (D-0020 rule 2's shape, rondo#233 S5).
-   */
-  readonly publishing: PublishReading | null;
-  /**
-   * Whether the host holds a release press (D-0073 rule 4.3): true exactly
-   * where the release port is not null, so no way to it is drawn where every
-   * press would be refused. Absent is false.
-   */
-  readonly releasable?: boolean;
-  /**
-   * A running lap's log, read at the directory `locateTranscript` named
-   * (rondo#248 item 3). A function for {@link LapMaterial}'s reason: the
-   * renderer opens no file, and what it is handed reads two named files under
-   * a directory rondo composed from the row, never a path from a request.
-   */
-  readonly readLog: (directory: string) => LapLogReading;
-  /**
-   * The operator messages whose named issues the host has not read yet
-   * (D-0078 section 4.3), or absent where no reader runs, and then no message
-   * is said to be waiting on one.
-   */
-  readonly issuesUnread?: (
-    messages: readonly ThreadMessageDraft[],
-  ) => Promise<ReadonlyMap<string, readonly NamedIssue[]>>;
-}
-
-/**
- * The lines `rondo answer` prints about the work itself, for one iteration, in
- * the language this request resolved to (D-0056 rule 12).
- *
- * **The set is an argument and not something the port was built with.** It was
- * a closure over the host's set at `src/access/cli.ts`, which was correct while
- * the page had one language for the life of the process and wrong the moment a
- * request can switch it: the fence block's two standing sentences are prose
- * (D-0055 rule 11), and a page that had switched would have shown them in the
- * host's language inside a document declaring another.
- */
-export type LapMaterial = (wording: Chrome, record: IterationRecord) => Promise<LapMaterialRead>;
-
-/**
- * What {@link LapMaterial} reads, in the two shapes the answer view draws it in
- * (#220 S2).
- *
- * **Structured where the page lays it out, and the lines whole beside it.**
- * `why` and `work` are what the rows are built from -- never text parsed back
- * out of `lines` -- and `lines` is `rondo answer`'s own material, kept in a fold
- * so nothing D-0029 rule 2 asks for leaves the page when the layout does not
- * draw it.
- */
-export interface LapMaterialRead {
-  readonly lines: readonly string[];
-  /** The gate's rationale, the worker's own words; null when it was not read. */
-  readonly why: string | null;
-  /** What `git` reported about the lap's work; null when the row names no range. */
-  readonly work: LapWorkInspection | null;
-}
-
-/**
- * What a publish would do, read at render and again inside the press
- * (rondo#233 S5, D-0059 section 5a's Q1: `publish` is pressed only from a
- * screen that already shows its dry-run result).
- *
- * A function for {@link LapMaterial}'s reason: publishing is read out of a
- * workspace with `git` and out of the forge's own configuration, and a renderer
- * that could spawn either would hold a capability nothing on this surface
- * should hold. The caller reads it and this module renders it.
- */
-export type PublishReading = (record: IterationRecord) => Promise<PublishShown>;
-
-/**
- * Why a publish cannot be planned at all, structured so that each surface says
- * it in its own words.
- *
- * **Declared here, beside the screen that words them, and produced in
- * `src/access/cli.ts`** -- {@link LapMaterialRead}'s split, for a sharper
- * reason: the command line's sentences name flags, and a flag is a terminal,
- * which is the one place D-0059 must never send a person.
- */
-export type PublishBlock =
-  | { readonly why: "notClosed"; readonly status: string }
-  | { readonly why: "notApproved"; readonly outcome: string | null }
-  | { readonly why: "noRun" }
-  | { readonly why: "planField"; readonly field: string }
-  /**
-   * No repository to publish to: the plan names none and the host was told
-   * none either (D-0081 rule 3.2).
-   *
-   * **A fact about this lap, which is why it is a block and not a missing
-   * screen.** Before `D-0081` the repository was the host's and a host without
-   * one offered no publish screen at all ({@link Chrome.publishNotOffered}).
-   * Now one host serves several repositories, so the question is answered per
-   * lap -- and the lap that cannot be published is the one that says so.
-   */
-  | { readonly why: "noRepo" }
-  | { readonly why: "target"; readonly reason: string }
-  | {
-      readonly why: "uncommitted";
-      /** The paths git reported, which is what D-0060 rule 4 refuses over. */
-      readonly paths: readonly string[];
-      /** What the workspace has checked out, when it is not the topic branch. */
-      readonly elsewhere: string | null;
-    };
-
-/**
- * Why the recorded reading does not cover what would be pushed, or null when it
- * does (D-0060 rules 4 and 5).
- *
- * Carried and not acted on: it is the one refusal on this screen a person may
- * overrule, and overruling it is a press of its own.
- */
-export type ReviewBlock =
-  | { readonly why: "noReading" }
-  | {
-      readonly why: "notClear";
-      readonly verdict: string;
-      readonly findings: readonly string[];
-      readonly unavailableReason: string | null;
-    }
-  | { readonly why: "noEvidence" }
-  | { readonly why: "unreadable"; readonly reason: string }
-  | { readonly why: "moved"; readonly readTip: string; readonly nowTip: string };
-
-/** Where the work would go, in the four names the screen says it with. */
-export interface PublishTarget {
-  readonly workspace: string;
-  readonly remote: string;
-  /**
-   * Where a push to that remote actually goes, as git resolved it, with any
-   * credentials in it replaced.
-   *
-   * **Shown because it is digested** (Codex round 1): the press refuses when the
-   * destination has moved since the screen was drawn, and a screen that named
-   * only the remote would be refusing over something it never showed.
-   *
-   * **Redacted, because a page is kept** (Codex round 2): a push URL can carry
-   * a token in its userinfo, and what the digest compares is the unredacted URL
-   * the caller holds, never this.
-   */
-  readonly pushUrls: readonly string[];
-  readonly topicBranch: string;
-  readonly baseBranch: string;
-  /** What the forge is given as the head: the branch, or `owner:branch`. */
-  readonly headRef: string;
-  /** `HOST/OWNER/NAME`, the host that was checked and not one resolved twice. */
-  readonly repo: string;
-  readonly runId: string;
-}
-
-/** What {@link PublishReading} read: the dry-run, or why there is not one. */
-export type PublishShown =
-  | { readonly kind: "refused"; readonly block: PublishBlock }
-  | {
-      readonly kind: "ready";
-      /**
-       * The digest of everything below, which the press carries back.
-       *
-       * **What was shown is what may be published** (D-0042 rules 2 and 3): the
-       * press re-reads the whole dry-run and refuses when the two disagree, so
-       * the screen cannot become a description of a different act while a
-       * person is reading it.
-       */
-      readonly shown: string;
-      readonly target: PublishTarget;
-      readonly title: string;
-      readonly body: string;
-      /** Preflight's own warnings: true, and none of them fatal. */
-      readonly warnings: readonly string[];
-      /** The model's reading, as material beside the rest (D-0065 rule 5.5). */
-      readonly modelReading: readonly string[];
-      readonly review: ReviewBlock | null;
-    };
-
-/**
  * The one word the button carries (D-0041 rule 7).
  *
  * Read from this constant on the way *in* rather than from the posted form: the
@@ -433,145 +182,9 @@ export const APPROVE_BODY = "approve";
 /** How often a live view redraws itself, in seconds: the `<noscript>` refresh and htmx's `every 5s`. */
 const REFRESH_SECONDS = 5;
 
-/**
- * The design vocabulary, as class strings the Tailwind build can read (D-0059
- * sections 1 and 2).
- *
- * **Written out in full and never assembled**, because `page/app.css` compiles
- * only the class names that appear literally under `src/access/**\/*.tsx`: a
- * class built from a template would be served as markup and never as CSS. The
- * tokens they name (`wait`, `run`, `ok`, `fail`, `faint`, ...) are declared in
- * `page/app.css` in both palettes, so nothing here decides a colour for one
- * mode only.
- *
- * **A marker class leads each string where a test or a reader finds an element
- * by it** (`request`, `basis`, `line`, `label`, `value`, `material`). None is a
- * Tailwind utility, so it names the element and styles nothing.
- */
-export const PILL =
-  "inline-flex shrink-0 items-center rounded-full border px-2 py-px font-mono text-meta font-medium leading-4 whitespace-nowrap";
-
-/** One tone per state, which is the whole of what a pill says (section 1, Vercel's row). */
-export const TONE = {
-  wait: "border-wait/40 bg-wait-wash text-wait-ink",
-  run: "border-run/35 bg-run-wash text-run-ink",
-  ok: "border-border text-ok",
-  fail: "border-fail/40 text-fail",
-  muted: "border-border text-muted-foreground",
-  revise: "border-wait/40 text-wait-ink",
-} as const;
-
-export type Tone = keyof typeof TONE;
-
-/**
- * The one filled button shape, at two sizes: the press.
- *
- * **Ink and not amber** (D-0083 rule 10, which says it in those words). It was
- * amber-filled, and amber is the page's one claim that *a person must act*
- * (D-0082 rule 2) -- so every way to another screen was drawn in the colour
- * that was supposed to be rare, and the thread carried four of them above the
- * one press that was actually waiting. The weight a press has is its fill;
- * which colour that fill is is what says whether anything is stopped.
- */
-export const PRIMARY =
-  "inline-flex cursor-pointer items-center gap-1.5 rounded-md bg-foreground font-semibold text-background shadow-xs outline-none hover:bg-foreground/90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card";
-
-/**
- * The press made against a finding: the same shape, outlined in amber
- * (D-0083 rule 10).
- *
- * **Outlined rather than filled, and amber rather than ink**, because the two
- * things it has to say at once are *this is the press* and *you are acting
- * over something that was raised*. A filled amber press said the second by
- * spending the page's scarcest colour on its largest area; the outline says it
- * without making the bar the loudest thing on a screen whose loudest thing
- * should be the question.
- */
-export const DESPITE =
-  "inline-flex cursor-pointer items-center gap-1.5 rounded-md border-2 border-wait bg-wait-wash font-semibold text-wait-ink shadow-xs outline-none hover:bg-wait/15 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card";
-
-/**
- * The same shape, outlined: the gate's second answer beside its first
- * (rondo#233 S4).
- *
- * **Outlined and not filled, and not because it matters less.** Two filled
- * buttons in one bar read as a choice with a default, and D-0065's gate has no
- * recommendation; one filled and one outlined reads as the common answer and
- * the other one, which is what the two are.
- */
-export const SECONDARY =
-  "inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-border bg-background font-semibold text-foreground shadow-xs outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card";
-
 /** A row focusable by `j`/`k` that is not a list item: the answer view's claim groups. */
 const FOCUS_ROW =
   "outline-none focus-visible:bg-accent focus-visible:shadow-[inset_3px_0_0_var(--color-ring)]";
-
-/**
- * A status glyph, drawn by the page rather than fetched (section 1: "a status
- * glyph in a leading column").
- *
- * Inline SVG rather than an icon package, because five shapes are fewer lines
- * than the dependency (D-0059 rule 5's ladder), and `aria-hidden` because the
- * state is also the pill's text beside it: the glyph is for the eye across the
- * room and never the only carrier.
- */
-function glyph(tone: Tone | "alert" | "message") {
-  const color = {
-    wait: "text-wait",
-    run: "text-run",
-    ok: "text-ok",
-    fail: "text-fail",
-    muted: "text-faint",
-    revise: "text-wait",
-    alert: "text-fail",
-    message: "text-faint",
-  }[tone];
-  return (
-    <svg
-      aria-hidden="true"
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="1.6"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      class={`mt-0.5 size-4 shrink-0 ${color}`}
-    >
-      {tone === "wait" ? (
-        <>
-          <circle cx="8" cy="8" r="6.2" />
-          <circle cx="8" cy="8" r="2.4" fill="currentColor" stroke="none" />
-        </>
-      ) : tone === "run" ? (
-        <>
-          <circle cx="8" cy="8" r="6.2" opacity="0.3" />
-          <path d="M8 1.8a6.2 6.2 0 0 1 6.2 6.2" class="origin-center motion-safe:animate-spin" />
-        </>
-      ) : tone === "ok" ? (
-        <>
-          <circle cx="8" cy="8" r="6.2" />
-          <path d="m5.4 8.2 1.8 1.8 3.4-3.6" />
-        </>
-      ) : tone === "fail" ? (
-        <>
-          <circle cx="8" cy="8" r="6.2" />
-          <path d="m5.8 5.8 4.4 4.4m0-4.4-4.4 4.4" />
-        </>
-      ) : tone === "revise" ? (
-        <path d="M13.2 6.4A5.4 5.4 0 1 0 13.4 9M13.6 2.8v3.8H9.8" />
-      ) : tone === "alert" ? (
-        <path d="M8 2.2 14.2 13H1.8L8 2.2Zm0 4.3v2.8m0 2v.1" />
-      ) : tone === "message" ? (
-        <path d="M2.5 4.3c0-1 .8-1.8 1.8-1.8h7.4c1 0 1.8.8 1.8 1.8v5c0 1-.8 1.8-1.8 1.8H7.2L4.4 13.5v-2.4h-.1c-1 0-1.8-.8-1.8-1.8Z" />
-      ) : (
-        <>
-          <circle cx="8" cy="8" r="6.2" />
-          <path d="m3.8 12.2 8.4-8.4" />
-        </>
-      )}
-    </svg>
-  );
-}
 
 /** The tone of any lap by its status: the reading's folds use it for their glyph. */
 
@@ -779,131 +392,9 @@ function fenceView(wording: Chrome, record: IterationRecord) {
   );
 }
 
-/**
- * A row's state as a pill and its age (the page's third design pass on #220):
- * a word a person reads rather than the status enum. The head sentence the
- * terminal prints -- status, age, answer -- stays whole in `title`.
- */
-function stateHead(wording: Chrome, record: IterationRecord, tone: Tone, age: string, raw: string) {
-  return (
-    <span class="head inline-flex items-center gap-2 whitespace-nowrap" title={raw}>
-      <span
-        class={`inline-flex shrink-0 items-center rounded-full border px-2 py-px text-[11.5px] font-medium leading-4 whitespace-nowrap ${TONE[tone]}`}
-      >
-        {wording.statePill(record.status, record.gateOutcome)}
-      </span>
-      <span class="tabular-nums">{age}</span>
-    </span>
-  );
-}
-
-/** A plain note in the views' muted box. */
-export function note(line: string) {
-  return (
-    <p class="note rounded-md border border-border bg-muted/60 px-3 py-2 text-[13px] leading-5">
-      {line}
-    </p>
-  );
-}
-
-/** A view's head: the way back to the summary, and what the view is. */
-export function backHead(wording: Chrome, heading: string) {
-  return (
-    <header class="space-y-2">
-      <div class="flex min-w-0 items-center gap-2">
-        <a
-          href={viewHref({ kind: "summary" }, wording.lang)}
-          data-back=""
-          class="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-          title={wording.keyBack}
-        >
-          <svg
-            aria-hidden="true"
-            viewBox="0 0 16 16"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.8"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            class="size-4"
-          >
-            <path d="M13 8H3m4-4-4 4 4 4" />
-          </svg>
-          <span class="sr-only">{wording.keyBack}</span>
-        </a>
-        <h2 class="min-w-0 flex-1 truncate text-[15px] leading-6 font-semibold">{heading}</h2>
-      </div>
-    </header>
-  );
-}
-
-/**
- * Where a publish's outcome is read back from: the report `reportToRequest`
- * writes into the request thread once all three legs are done (rondo#245).
- *
- * **The thread message is the fact, and rondo holds no other.** It is written
- * after the push, the pull request and the run close have all succeeded and
- * never before, so its presence is the whole of "this was published" --
- * `publishFromPage` deliberately persists nothing about how far a publish that
- * failed had got (`src/access/cli.ts`, the `publishRefusedPullRequestFailed`
- * arm), because that would be a durable record of somebody else's state.
- *
- * **A lap whose row names no request has no report**, because there is no
- * thread to write one into. That row keeps its publish link after a publish,
- * which is the state this page was in for every row before this: nothing is
- * made worse, and nothing here can invent the fact.
- *
- * The id is the one `reportToRequest` mints (`src/access/conductor.ts`), and
- * the URL is read off the sentence it composed rather than stored twice.
- */
-export function publishedReport(
-  threads: Threads,
-  iterationId: string,
-): { url: string | null } | null {
-  const report = threads.byId.get(`report-published-${iterationId}`);
-  if (report === undefined) {
-    return null;
-  }
-  return { url: /https?:\/\/[^\s]+/.exec(report.body)?.[0] ?? null };
-}
-
 /** The inbox section: the same lines `rondo inbox` prints, and no mark moved. */
 
 /** The between-laps section: `rondo between`'s composition, unrecorded. */
-
-/** A card on the answer view: one section of what a press is made over. */
-export const CARD = "min-w-0 rounded-lg border border-border bg-card px-4 py-3";
-
-export const CARD_HEADING = "text-body leading-6 font-semibold";
-
-/** A pill in the row's sans face, as {@link stateHead} draws one. */
-function pill(tone: Tone, text: string, extra = "") {
-  return (
-    <span
-      class={`inline-flex shrink-0 items-center rounded-full border px-2 py-px text-[11.5px] font-medium leading-4 whitespace-nowrap ${TONE[tone]} ${extra}`}
-    >
-      {text}
-    </span>
-  );
-}
-
-/** `open` names the fold that turns it, where one fold sits inside another. */
-export function chevron(open = "group-open:rotate-90") {
-  return (
-    <svg
-      aria-hidden="true"
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="1.6"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      class={`size-3.5 shrink-0 text-faint transition-transform ${open}`}
-    >
-      <path d="m6 3.5 4.5 4.5L6 12.5" />
-    </svg>
-  );
-}
 
 /** A verdict as a tone: raised is amber and never red, because it refuses nothing here. */
 function verdictTone(verdict: string): Tone {
@@ -1964,23 +1455,6 @@ async function shownBeforePress(
   return shown;
 }
 
-/** Where an issue's name links to (D-0076 rule 3.4): its address, when rondo knows it. */
-export function issueHref(read: ForgeRead): string | null {
-  return "read" in read ? read.read.url : /^https?:\/\//.test(read.named) ? read.named : null;
-}
-
-/** An issue's own name, as a link where there is an address for it. */
-export function issueNameLink(read: ForgeRead) {
-  const href = issueHref(read);
-  return href === null ? (
-    <span class="font-medium">{issueName(read)}</span>
-  ) : (
-    <a href={href} class="font-medium text-link hover:underline" title={href}>
-      {issueName(read)}
-    </a>
-  );
-}
-
 /**
  * What rondo read of one issue (D-0078 sections 4.1 and 4.2): the name as a
  * link, one line, and the words in a fold -- the forge's text as it came, or
@@ -2104,97 +1578,6 @@ function noDraftView(wording: Chrome, message: ThreadMessageDraft, root: string,
   );
 }
 
-/** Who wrote a message, as a person reads it: their own messages are "you". */
-function whoWrote(wording: Chrome, message: ThreadMessageDraft, actorId: string | null): string {
-  if (message.authorKind === "operator" && message.authorId === actorId) {
-    return wording.you;
-  }
-  // **A model drafter signs as rondo** (rondo#238, #259): its row name --
-  // `rondo/drafter/1/<model-id>` -- is a version and a model a person would
-  // have to ask about. The row keeps it; the voice badge beside this says it
-  // is the drafter.
-  // **A read of an issue signs as rondo too** (D-0078 section 3.1): rondo read
-  // it; the badge beside this says it is an issue.
-  return (message.authorKind === "drafter" && isModelDrafterName(message.authorId)) ||
-    message.authorKind === "forge"
-    ? "rondo"
-    : message.authorId;
-}
-
-/**
- * One basis of a message, as a chip that goes where it points (#220 S1).
- *
- * **Never an id to copy.** A `message` basis is the words it cites and a link
- * to them; an `iteration` basis links to that lap's section of the reading. The
- * other forms have no view on this page yet, so they are the terminal's own
- * {@link basisLine} and not a link -- a chip that led nowhere would be worse
- * than one that says so by not being blue. A basis that is not a locator is
- * shown as its JSON rather than dropped, so nothing the drafter cited is lost.
- */
-/**
- * One basis as a word that leads where it points: the cited message by its
- * words and an anchor, everything else named and not linked.
- */
-export function basisWord(
-  wording: Chrome,
-  basis: Readonly<Record<string, unknown>>,
-  threads: Threads,
-  root: string | null,
-  actorId: string | null,
-): ThreadLink {
-  const form = basis["form"];
-  let said: string;
-  let href: string | null = null;
-  if (form === "message" && typeof basis["messageId"] === "string") {
-    const cited = threads.byId.get(basis["messageId"]);
-    said =
-      cited === undefined
-        ? basisLine({ form: "message", messageId: basis["messageId"] }, {})
-        : `${whoWrote(wording, cited, actorId)}: ${lineOf(cited)}`;
-    if (cited !== undefined) {
-      href =
-        threads.rootOf(cited.messageId) === root
-          ? `#${encodeURIComponent(cited.messageId)}`
-          : `${viewHref({ kind: "thread", messageId: cited.messageId, to: null }, wording.lang)}#${encodeURIComponent(cited.messageId)}`;
-    }
-  } else if (form === "iteration" && typeof basis["iterationId"] === "string") {
-    // A lap used to point at its section in the reading fold; with the fold
-    // gone (D-0083) there is no page-wide place a lap id leads to, so the
-    // basis is named and not linked.
-    said = basisLine({ form: "iteration", iterationId: basis["iterationId"] }, {});
-  } else if (form === "snapshot") {
-    said = `snapshot ${String(basis["pointer"])}`;
-  } else if ((BASIS_FORMS as readonly unknown[]).includes(form)) {
-    said = basisLine(basis as unknown as Basis, {});
-  } else {
-    said = JSON.stringify(basis);
-  }
-  return { said, href, title: said };
-}
-
-/** A scope id minted for one form (`newScopeId` in `src/access/web-app.ts`). */
-export type MintScopeId = () => string;
-
-/** A lap id minted for one scoped start (`newIterationId` in `src/access/web-app.ts`). */
-export type MintIterationId = () => string;
-
-/** A budget number in a box: whole for a count, two decimals for money. */
-export const money = (value: number) => value.toFixed(2);
-
-/**
- * An expiry as a native `datetime-local` reads and writes it, **in UTC**.
- *
- * A person does not read or type a Unix millisecond, and a page with no script
- * cannot know the browser's zone -- so the one value has one meaning, the label
- * says which (`scopeExpiresLabel` names UTC), and the route parses the same
- * `YYYY-MM-DDTHH:MM` back as UTC. Where `datetime-local` is unsupported the
- * browser degrades to a text box of that shape, which the route reads
- * identically.
- */
-export function localTime(atMs: number): string {
-  return new Date(atMs).toISOString().slice(0, 16);
-}
-
 /**
  * **Where this request can be taken next** (D-0083 rule 6's chain, as
  * addresses): setting its scope, and publishing a lap that is ready.
@@ -2274,9 +1657,6 @@ function threadActs(
 }
 
 /** A pull request body split around the request fold it carries. */
-
-/** A message id minted for one form (`newMessageId` in `src/access/web-app.ts`). */
-export type MintMessageId = (kind: "request" | "reply") => string;
 
 /**
  * The box a person writes into: a new request on `requests`, a reply on

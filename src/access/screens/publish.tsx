@@ -1,8 +1,6 @@
 import type { IterationRecord } from "../../store/records.js";
 import { markdownHtml } from "../markdown.js";
-import type { PageView } from "../page-logic/routes.js";
-import type { Threads } from "../page-logic/threads.js";
-import type { WebPorts } from "../web.js";
+import type { PublishBlock, ReviewBlock, WebPorts } from "../page/contract.js";
 import {
   backHead,
   CARD,
@@ -10,11 +8,11 @@ import {
   chevron,
   note,
   PRIMARY,
-  type PublishBlock,
   publishedReport,
-  type ReviewBlock,
   SECONDARY,
-} from "../web.js";
+} from "../page/vocabulary.js";
+import type { PageView } from "../page-logic/routes.js";
+import type { Threads } from "../page-logic/threads.js";
 import type { Chrome } from "../wording.js";
 
 /** The publish's three legs in the past tense, the pull request as a link. */
