@@ -10,15 +10,18 @@ name), and where this file and that evidence disagree, the evidence wins.
 
 ## 1. rondo is a host, and it now conducts exactly one lap
 
-`src/` holds five layers and four of them do work. `src/continuo/` drives the
+`src/` holds these layers: `src/store/`, `src/refrain/`, `src/continuo/`,
+`src/cadenza/`, `src/advisory/` and `src/access/`. `src/continuo/` drives the
 pinned continuo across a process boundary and decodes its answers (D-0017);
 `src/cadenza/` holds the one module allowed to import the vendored cadenza
 (D-0018); `src/store/` holds the iteration schema, whose partial unique index
-makes "at most one non-terminal iteration" the database's invariant; and
+makes "at most one non-terminal iteration" the database's invariant;
 `src/refrain/` holds the conductor — a total, pure `nextStep` planner beside an
 async interpreter that reaches continuo through **injected ports** and cadenza
-through the one arrow the boundary table grants it (D-0019). `src/access/` holds
-the composition root that wires them.
+through the one arrow the boundary table grants it (D-0019); and `src/advisory/`
+holds the layer that exists to remove reach rather than to add it, the one that
+may never compose a contract (D-0022 rule 1). `src/access/` holds the
+composition root that wires them.
 
 **What that does and does not mean.** The arc runs end to end and stops where it
 is supposed to: it classifies against a contract, admits a run, walks one lap,
@@ -26,7 +29,8 @@ and suspends at a gate a human has yet to answer. It never composes the answer
 (D-0009), never publishes (D-0010) and never closes a gate (D-0013). It now runs
 **one lap at a time and several iterations at once**: an iteration suspended at a
 gate holds no worker, so it stops occupying an execution slot (D-0023). There is
-still no web UI, no MCP surface and no agent-type registry. rondo **does** have an
+a read-only web page now, served on localhost by `rondo web`; there is still no
+MCP surface and no agent-type registry. rondo **does** have an
 allocator now, and single-flight over *executing* laps is what remains of the
 reduction — held there by continuo's single delivery resource rather than by
 rondo's schema (D-0023 rules 8 and 17).
@@ -131,10 +135,19 @@ Consequences for anyone adding code here:
   not patch. D-0001's escalation list is largely spent: three of its four
   requests were carried out at the siblings' gates on 2026-09-05, and the fourth
   was a request to un-decide something.
-- **The seam is `src/continuo/`, and it is the one place under `src/` that starts
-  a process** (D-0017). The decoder is pure; the invoker alone is granted `spawn`;
-  the pin lives in `continuo.pin.json` and is mirrored in `src/continuo/pin.ts`;
-  and `RONDO_CONTINUO_CLI` only *locates* a build someone else made — it can
+- **Two modules under `src/` start a process, and no others**:
+  `src/continuo/invoker.ts`, which drives the pinned continuo (D-0017 rule 3),
+  and `src/access/forge.ts`, which runs `git` and `gh` on the operator's behalf
+  (D-0025 rule 6). Both are granted `spawn` by module and by binding rather than
+  by layer, which is the difference that matters: a layer-wide grant would put a
+  spawn in reach of every command instead of the one an operator has to type
+  `publish` to reach. This file claimed "the one place" until rondo#324, while
+  the boundary table had granted the second site all along — which is why
+  `test/architecture/docs-claims.test.ts` now compares the two sides.
+- **The seam to continuo is `src/continuo/`** (D-0017). The decoder is pure; the
+  invoker alone in that layer is granted `spawn`; the pin lives in
+  `continuo.pin.json` and is mirrored in `src/continuo/pin.ts`; and
+  `RONDO_CONTINUO_CLI` only *locates* a build someone else made — it can
   never stand in for the pin. The end-to-end smoke is mandatory in every CI cell
   and capability-gated locally.
 - When continuo is driven, it is driven as a **subprocess whose revision rondo
@@ -147,13 +160,20 @@ Consequences for anyone adding code here:
   literal `unknown`, or a `-dirty` suffix is a startup refusal. Build the pinned
   checkout with `CONTINUO_REQUIRE_REVISION=1` so an unidentifiable build fails
   at build time.
-- **`--json` is a wire protocol, not types.** rondo drives eleven continuo verbs
-  and, since `continuo D-0092`, **all eleven** carry it — D-0015 recorded ten,
-  and `gate close` was the eleventh. (At the revision pinned today, `gate
-  present`, `deliver` and `ack` carry it too — `continuo D-0097` — and `run show`
-  is a read verb that arrived with it, `continuo D-0096`. rondo drives none of
-  those four. `gate reconcile` is the one verb in the surveyed set still without
-  the flag; it is human-only, so that is not rondo's gap either.)
+- **These are the continuo verbs rondo drives**: `run admit`, `lap perform`,
+  `gate show`, `gate present`, `gate deliver`, `gate ack`, `gate answer`,
+  `run close` and `run show`.
+- **A contract rondo can spell is not a verb rondo uses.**
+  `src/continuo/protocol.ts` declares three contracts beyond that list which no
+  command invokes: `db create` and `gate list`, which only the end-to-end smoke
+  drives, and `gate close`, which nothing drives at all because rondo never
+  closes a gate (D-0013).
+- **`--json` is a wire protocol, not types.** Every verb in that list carries it
+  at the pinned revision: D-0015 recorded ten verbs carrying it, `continuo
+  D-0092` added `gate close`, `continuo D-0097` brought it to the three gate
+  verbs of the walk, and `run show` is a read verb that arrived with it
+  (`continuo D-0096`). `gate reconcile` is the one verb in the surveyed set
+  still without the flag; it is human-only, and rondo does not drive it.
   rondo owns the runtime decoders and converts validated documents into rondo's
   own records. Three things the flag does not reach, all of which rondo's
   callers must handle: parser-level refusals are exit 2 with *prose* rather than
@@ -164,8 +184,8 @@ Consequences for anyone adding code here:
   by `report_kind`. **`gate close` used to reject `--json` at the top
   level**, and D-0015 rule 5 was the workaround; `continuo D-0092` closed that
   gap and **D-0017 replaces rule 5** — the verb answers in
-  `continuo.gate.close/1` and is decoded like every other, with no confirming
-  `gate show` call. Its prose is still never parsed.
+  `continuo.gate.close/1` and rondo's decoder handles it like every other, with
+  no confirming `gate show` call. Its prose is still never parsed.
 - **Relaying continuo's prose is not relaying continuo's bytes** (D-0015 rule
   7). Pass its words through unedited, but escape them to ASCII before printing:
   continuo echoes `--db` verbatim and unconstrained, so a non-ASCII path or gate
@@ -247,6 +267,14 @@ rondo has no behaviour. Two habits keep it worth its runtime:
 - **Widening the allowlist is a decision.** Granting `node:http` to an access
   point is fine and expected. Granting anything at all to `src/refrain/` is the
   boundary Issue #1 drew, and needs a `D-` entry.
+- **`test/architecture/docs-claims.test.ts` is the same habit pointed at the
+  prose** (rondo#324). Where this file or `docs/operations/rondo-cli.md`
+  *enumerates* something the tree also enumerates — the layers under `src/`,
+  the modules that may start a process, the continuo verbs rondo drives, the
+  commands the CLI dispatches — the two lists are compared, so a sentence that
+  went stale is a red gate rather than something a reader discovers. Each list
+  is found by an anchor phrase, and deleting the sentence fails the test too:
+  the cheap way out of a red check must not be removing the claim.
 
 The sweep generates its cases from a directory walk, so its failure mode is
 finding nothing and reporting a clean tree. `PLANTED` inside the file guards

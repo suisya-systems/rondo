@@ -1,13 +1,24 @@
-# The operator's twelve commands
+# The operator's commands
 
 What a person types to get one request through rondo, from asking for it to publishing it -- and,
 in section 7, `abandon`, which is how a request that cannot get there is settled instead, and
 `explain`, which is how a person finds out what the store holds about a row that has stopped, and
 `elevate`, which is how an observation of the operator's own becomes part of the record, and
 `between`, which is what spans every live lap once more than one is open.
-Section 5.1 is `revise`, which is what a person types when the answer to the gate is "not quite".
-Everything here was run on 2026-09-06 against continuo `38c667b5126fdfdc0465e4a422e88b20a8b53044`
-(`continuo.pin.json`), and the transcripts are what actually came back.
+Section 3.1 is `request` and `reply`, which are how the conversation a lap is started from is
+opened and continued. Section 5.1 is `revise`, which is what a person types when the answer to the
+gate is "not quite". Sections 7.6 and 7.7 are `release`, which gives up the paths a finished line
+holds, and `scope` with `decide-scope`, which are how a run of decisions is authorised in advance.
+
+The heading carries no number on purpose. It said "twelve" while the CLI dispatched twenty-one, and
+a count beside a list is a second place the same fact lives. What keeps the list itself honest is
+`test/architecture/docs-claims.test.ts`, which compares the verbs named here against the ones
+`src/access/cli.ts` dispatches, in both directions (rondo#324).
+
+The transcripts in sections 4 to 8 were run on 2026-09-06 against continuo
+`38c667b5126fdfdc0465e4a422e88b20a8b53044` (`continuo.pin.json`), and are what actually came back.
+Sections 3.1, 7.6 and 7.7 carry command forms rather than transcripts: those verbs are covered by
+the suite and have not been walked on real infrastructure, which section 9 says again.
 
 Before this existed, the same walk meant writing a throwaway `tsconfig`, compiling the tree by hand,
 driving the composition root from a hand-written `drive.mjs`, and typing six continuo verbs in order
@@ -451,6 +462,38 @@ so it does not occupy an execution slot and a second `start` is accepted beside 
 may be *executing* (default 1; raising it needs continuo to allow a second concurrent lap first).
 When more than one is open, `answer` needs `--iteration-id ID` to say which one you mean -- it
 refuses and lists them rather than picking.
+
+---
+
+### 3.1 Request and reply -- the conversation a lap is started from
+
+A lap can be started with nothing but a plan and a prompt. What `--message-id` adds is the other
+half: the request as the person wrote it, in a thread that outlives the lap. `request` opens one and
+`reply` continues it. Both write rondo's own rows and drive **no continuo verb**.
+
+```sh
+node bin/rondo.mjs request --actor-id "$RONDO_APPROVER" --message-id m-0001 \
+  --body="append the 2026-09 dogfood line to docs/NOTES.md"
+node bin/rondo.mjs reply --actor-id "$RONDO_APPROVER" --message-id m-0002 --in-reply-to m-0001 \
+  --body="against the dogfood clone, not this repository"
+```
+
+They print `opened request 'm-0001'` and `recorded message 'm-0002' in reply to 'm-0001'`.
+
+- **A message is never edited and never deleted; a correction is a reply.** That is why `reply`
+  needs `--in-reply-to` and has no default for it: an amendment that replaced the words being
+  amended would leave the record saying the person had written something they had not.
+- **Write `--body` with an equals sign.** A request may begin with a dash, and `--body -f` would be
+  read as a flag. The bytes are stored as written -- not trimmed, not reflowed -- for the reason
+  `--prompt-file` is (`D-0025` rule 3).
+- **The author is always the operator.** No verb writes a drafter's message, so nothing here can
+  record a paraphrase as the person's words. `--actor-id` is checked against `RONDO_APPROVER`, as
+  every operator verb is.
+- **A message id is a person's to choose and is spent once**, like `elevate`'s. rondo holds the id
+  and the body, so a second `request` under one id is refused rather than taken as a repeat.
+- **`start --message-id m-0001` ties the lap to the request**, and is refused when the id opens
+  none. An unanswered question in that thread holds the lap: `start` will not run while the
+  conversation is waiting on the person who asked.
 
 ---
 
@@ -1158,6 +1201,64 @@ which is what `D-0037` requires; what it no longer carries is a third copy of on
 
 ---
 
+### 7.6 Release -- give up the paths a finished line holds
+
+A line of work holds the paths it claimed, so that a second lap in the same repository cannot be
+admitted over them (`parallel-admission.md`). `abandon` ends an iteration; `release` ends the
+*claim* and leaves the iteration where it is. It is the verb for a line whose work landed in a form
+rondo cannot see -- a conflict resolved by hand, an edit made on the forge -- and for a line you are
+retiring.
+
+```sh
+node bin/rondo.mjs release --iteration-id cli-lap-001 --actor-id "$RONDO_APPROVER"
+```
+
+On success it says `Released the paths line <id> held. Other work in its repository may now take
+them; this line takes them back only if it is retried.`
+
+- **Every lap of the line must have ended.** Releasing the paths of a line that is still running
+  would admit a second lap over files a worker is editing; the refusal names the reason and writes
+  nothing.
+- **It is recorded as yours.** Whether the work landed is a person's judgement rather than
+  something rondo observed, so the claim row is written with the operator as its author
+  (`D-0073` rule 4.3) and `--actor-id` is checked against `RONDO_APPROVER` for that reason.
+- **It is not `abandon`.** The iteration keeps whatever terminal state it reached; what changes is
+  only what the repository is free to hand to the next lap.
+
+### 7.7 Scope and decide-scope -- authorise a run of decisions in advance
+
+`propose` and `decide` answer one question about one retry. `scope` is the other shape: the
+requests, workspaces and agent types a run of decisions may be taken inside **without asking**, with
+the budgets that bound it (`D-0066`). Both verbs are pre-continuo -- they write rondo's own rows and
+spawn nothing.
+
+```sh
+node bin/rondo.mjs scope --payload-file /abs/scope.json --actor-id "$RONDO_APPROVER" \
+  --plan /abs/plan.json
+node bin/rondo.mjs decide-scope --scope-id scope-0001 --scope-digest <digest from the screen> \
+  --actor-id "$RONDO_APPROVER" --outcome approved
+```
+
+- **`--payload-file` is an absolute path to a JSON object.** `review_rounds`,
+  `severity_threshold`, `outward_acts` and `irreversible_additions` take their defaults when
+  absent, and the defaults are printed with the row rather than left implicit.
+- **Each `--plan` records that plan's agent type on the scope**, so a scope can list an agent type
+  before any lap has run under it. The screen prints each plan's digest, and each listed agent type
+  with the tier and granted keys of the record actually held.
+- **The row is written before it is shown**, digest included. A scope you read on a screen that the
+  ledger does not hold is the fault that order exists to prevent.
+- **A change to a scope is a successor, not an edit.** `--supersedes-scope-id` names the row being
+  replaced, and the screen says what the predecessor's approval had already spent.
+- **`--scope-digest` is copied off the screen**, for `decide`'s reason: the answer names the row
+  that was shown rather than a position in a list that could have been redrawn. One scope takes one
+  answer.
+- **Spending it is somebody else's flag.** `start --scope-decision-id ID` and
+  `retry --iteration-id ID --successor-id ID --scope-decision-id ID` are what admit a lap under an
+  approved scope; both are refused, with the test that refused them and spending nothing, unless
+  every test of the scope passes.
+
+---
+
 ---
 
 ## 8. Inbox -- what is waiting on you, and what changed while you were away
@@ -1280,6 +1381,10 @@ Recorded so that "it works" is not read more broadly than it was tested.
   tests, but no fork has been published through this command yet.
 - After the walk, continuo's run row was still `created` and rondo's row still recorded no publish,
   which is the correct state for work that was approved but not yet submitted.
+- **`request`, `reply`, `release`, `scope` and `decide-scope`: never walked.** They were added to
+  this reference by rondo#324, which found them dispatched by `src/access/cli.ts` and absent from
+  every section here. They are exercised end to end against a real SQLite store by the suite and
+  nowhere else, which is why sections 3.1, 7.6 and 7.7 show command forms and no transcripts.
 - **`propose`, `decide` and `retry`: walked on real infrastructure for `contract_keys` only.** On
   2026-09-12 the whole chain was driven by an operator against the pinned continuo
   ([`lap-6-dogfood.md`](lap-6-dogfood.md)): a lap stopped at `abandoned` and left a proposal of its
