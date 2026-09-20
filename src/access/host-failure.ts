@@ -54,6 +54,13 @@ export type HostSetupCode = (typeof HOST_SETUP_CODES)[number];
  * `EROFS`. Reading only `error.code` would have left the one branch below a
  * dead one, which is what a real read-only database showed.
  *
+ * **Keyed by the primary code, and the lookup masks before it reads.** SQLite
+ * reports *extended* result codes -- `SQLITE_READONLY_DIRECTORY` (1544) for a
+ * journal directory rondo cannot write, `SQLITE_READONLY_DBMOVED` (1032) for a
+ * store moved out from under an open handle -- and each is its primary code in
+ * the low byte. Matching whole values would have read those two as ordinary
+ * failures, which is the same dead branch this entry already cost once.
+ *
  * Three and not five. `SQLITE_BUSY` and `SQLITE_LOCKED` are deliberately
  * absent: a press that lands while rondo's own writer holds the file is
  * contention and not a break, and "go back and try again" is the right thing
@@ -84,7 +91,7 @@ function hostSetupCode(error: unknown): HostSetupCode | null {
   const carried = error as { readonly code?: unknown; readonly errcode?: unknown } | null;
   if (carried?.code === "ERR_SQLITE_ERROR") {
     return typeof carried.errcode === "number"
-      ? (SQLITE_HOST_SETUP[carried.errcode] ?? null)
+      ? (SQLITE_HOST_SETUP[carried.errcode & 0xff] ?? null)
       : null;
   }
   return HOST_SETUP_CODES.find((known) => known === carried?.code) ?? null;

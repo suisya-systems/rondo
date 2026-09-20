@@ -69,13 +69,23 @@ test("node:sqlite's own result codes are read, because the store carries no errn
     text: "unable to open database file",
   });
   expect(hostFailure(sqlite(3, "access permission denied")).kind).toBe("hostSetup");
+  // Extended result codes: the primary code is the low byte, and both of these
+  // are a store only installation repairs.
+  for (const extended of [1544, 1032]) {
+    expect(hostFailure(sqlite(extended, "attempt to write a readonly database"))).toEqual({
+      kind: "hostSetup",
+      code: "EROFS",
+      text: "attempt to write a readonly database",
+    });
+  }
 });
 
 test("a store rondo's own writer is holding stays unknown, because trying again is the answer", () => {
   // SQLITE_BUSY is contention, not a break: the arm it would divert from
   // already says "go back and try again", which is the right thing to tell
   // that person. Same for SQLITE_LOCKED, and for a constraint rondo violated.
-  for (const errcode of [5, 6, 19]) {
+  // 261 is SQLITE_BUSY_SNAPSHOT, which masks to SQLITE_BUSY and stays out too.
+  for (const errcode of [5, 6, 19, 261]) {
     expect(
       hostFailure(
         Object.assign(new Error("database is locked"), {
