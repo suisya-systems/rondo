@@ -262,10 +262,15 @@ export async function publishView(
         </section>
       )}
       {/* **The text a reviewer will read, on the screen that publishes it.**
-          The title is one line and the body is long, so the body is a fold the
-          page always renders shut and `page/app.css` draws open with script
-          off -- the same treatment every other long quotation here gets. The
-          words are the pull request's own, so the block states no language. */}
+          Drawn open, and not a fold (D-0082 rule 7, rondo#317): publish is an
+          outward press nobody can take back, and the body is not evidence to
+          look at afterwards -- it is what the press sends. It was a fold the
+          page always rendered shut, which meant a person could publish without
+          ever seeing what went out, and rule 7's line is that a fold never
+          holds what the press needs. Length is not the test: a long quotation
+          that only records what happened may fold, and this one does not,
+          because it is the thing being decided. The words are the pull
+          request's own, so the block states no language. */}
       <section id="publish-request" class={`${CARD} space-y-2`}>
         <h3 class={CARD_HEADING}>{wording.publishRequestHeading}</h3>
         <p class="text-meta leading-5 font-medium text-muted-foreground">
@@ -274,16 +279,14 @@ export async function publishView(
         <p id="publish-title" class="text-title leading-6 wrap-anywhere" lang="">
           {shown.title}
         </p>
-        <details id="publish-body" class="group">
-          <summary
-            data-row=""
-            class="flex cursor-pointer list-none items-center gap-2 rounded-md py-1 text-meta leading-5 font-medium text-link outline-none select-none hover:underline focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden"
-          >
-            {chevron()}
+        {/* The label the fold's summary carried, now drawn as the title's is
+            above it: the two the press sends are one pair on the screen. */}
+        <div id="publish-body">
+          <p class="text-meta leading-5 font-medium text-muted-foreground">
             {wording.publishBodyLabel}
-          </summary>
+          </p>
           {publishBody(wording, shown.body)}
-        </details>
+        </div>
       </section>
       {shown.modelReading.length === 0 ? null : (
         <section id="publish-model" class={`${CARD} space-y-1`}>
