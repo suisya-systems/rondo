@@ -28,7 +28,7 @@
  * carries the whole of it and the line draws the part that fits on a line.
  */
 import type { IterationRecord, ScopePayload, ScopeSpent } from "../../store/records.js";
-import { isTerminal, SCOPE_OUTWARD_ACTS } from "../../store/records.js";
+import { type IterationStatus, SCOPE_OUTWARD_ACTS } from "../../store/records.js";
 import type { Allowance } from "./week.js";
 
 /** One try's cost, as the right face lists it. */
@@ -36,6 +36,19 @@ export interface TryCost {
   readonly costUsd: number | null;
   readonly running: boolean;
 }
+
+/**
+ * The statuses whose cost is still to come: a lap's cost is read when `lap
+ * perform` returns, so a lap past it -- at a gate, stalled, withdrawing -- with
+ * no cost has none coming, and is not *in progress* however open it is.
+ */
+const COST_TO_COME: readonly IterationStatus[] = [
+  "planned",
+  "classified",
+  "admitting",
+  "admitted",
+  "performing",
+];
 
 /** One step of rule 6's chain, and where the work stands in it. */
 export type ChainStep = "answer" | "proposal" | "merge";
@@ -185,7 +198,7 @@ export function governanceOf(
     approval !== null && approval.payload.outward_acts.includes("open_pull_request");
   const byTry = laps.map((lap) => ({
     costUsd: lap.lapCostUsd,
-    running: lap.lapCostUsd === null && !isTerminal(lap.status),
+    running: lap.lapCostUsd === null && COST_TO_COME.includes(lap.status),
   }));
   return {
     repository,
