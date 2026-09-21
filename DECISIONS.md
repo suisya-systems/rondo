@@ -20474,8 +20474,11 @@ number.
    drafter's prompt is not asked to say "commit" or restate the repository's steps, and nothing
    checks whether it does. A drafter that says them anyway is not wrong, only longer.
 5. **The person sees it where they approve** (`D-0076` rule 1.3.3, as `D-0078` section 4.4 does for
-   issues). The scope screen shows, beside the request, the three asks in the person's language, the
-   rule files the worker is pointed at, and in a fold the exact words the worker is sent.
+   issues). The scope screen shows the three asks beside the request, in the person's language,
+   because they are the same on every lap. The rule files are a plan's, so they are shown beside
+   each plan a start runs on, with the exact words the worker is sent in a fold: the plan the form
+   or the approved start names, and for a drafted split, each plan's template as its snapshot froze
+   it, which is what the start runs.
 6. **A lap is recognised as its plan's with these sections after it.** The drafted-start "already
    started" check (`src/access/drafted-start.ts`) treats a lap's prompt that is its plan's prompt
    plus the definition of done, or, for a lap admitted before this entry, plus the issues alone, as

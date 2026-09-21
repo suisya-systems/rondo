@@ -10,6 +10,7 @@ import { type Chrome, chromeFor, EN } from "../../src/access/wording.js";
 import { allocate } from "../../src/refrain/allocator.js";
 import { admittedPlan, planPayload } from "../../src/refrain/plan.js";
 import { planDigest } from "../../src/store/plan.js";
+import type { JsonRecord } from "../../src/store/records.js";
 import { ownLane } from "../lane-claims.js";
 import {
   planDocument as drafterPlanDocument,
@@ -131,9 +132,9 @@ const DRAFTED_PROMPTS = ["Fix the scope screen cost box.", "Title-case the appro
  * way the host writes one (rondo#238 C2b), in memory; `narrow` adds the
  * person's "keep it under $3" and the drafter's narrowing on it.
  */
-async function draftedRequest(narrow = false) {
+async function draftedRequest(narrow = false, over: JsonRecord = {}) {
   const w = await drafterWorld();
-  const document = drafterPlanDocument();
+  const document = { ...drafterPlanDocument(), ...over };
   await w.say("r1", "Two things, please.", null, 1_000);
   await w.say("r1-plan", JSON.stringify(document), "r1", 1_100);
   if (narrow) {
@@ -220,6 +221,39 @@ test("a drafted request's scope screen is the draft: its plans, its values in th
     // Nothing narrowed, so nothing says it was.
     expect(page).not.toContain(wording.scopeNarrowed(budgets.cost_usd.toFixed(2)));
   }
+});
+
+test("each drafted plan says the rule files its frozen template names, whatever is held since (rondo#377)", async () => {
+  const criterion = (files: readonly string[]) => ({
+    review_criterion: {
+      severities: { blocker: "b", major: "m", minor: "n", nit: "t" },
+      rule_files: files,
+    },
+  });
+  const w = await draftedRequest(false, criterion(["AGENTS.md"]));
+  // A plan pasted after the draft names other files; the drafted plans still
+  // start from the template their snapshot froze (`draftedPlanRun`).
+  await w.say(
+    "r1-plan-2",
+    JSON.stringify({ ...drafterPlanDocument(), ...criterion(["CONTRIBUTING.md"]) }),
+    "r1",
+    1_600,
+  );
+  const page = (
+    await operatorPage(
+      portsOver(w, "ada", []),
+      "t",
+      scopeScreen(null),
+      EN,
+      mint,
+      () => "scope-x",
+      () => "lap-y",
+    )
+  ).replaceAll("&#39;", "'");
+  const cards = page.slice(page.indexOf('id="drafted-plans"'));
+  expect(cards.split('data-rule-files="AGENTS.md"').length - 1).toBe(DRAFTED_PROMPTS.length);
+  expect(cards).toContain(EN.scopeDoneRules(["AGENTS.md"]));
+  expect(cards).not.toContain("CONTRIBUTING.md");
 });
 
 test("a narrowed drafted value says what it was computed as, and links the person's words it rests on (rondo#238 C2b)", async () => {

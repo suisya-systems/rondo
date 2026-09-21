@@ -14,6 +14,18 @@
  * line.
  */
 
+import { readRunPlan } from "../refrain/plan.js";
+import type { JsonRecord } from "../store/records.js";
+
+/**
+ * The rule files a plan document names (`review_criterion.rule_files`), or
+ * none: what {@link definitionOfDone} points a lap run on that plan at.
+ */
+export function planRuleFiles(document: JsonRecord): readonly string[] {
+  const planned = readRunPlan(document);
+  return planned.kind === "planned" ? (planned.plan.reviewCriterion?.ruleFiles ?? []) : [];
+}
+
 /** The line that opens the section. Exported so a lap's prompt can be told from its plan's. */
 export const DONE_OPENING = "\n\n---\nDefinition of done";
 

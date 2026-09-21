@@ -1099,29 +1099,34 @@ test("a fresh store setup finished offers setup's plan, and two setups alike on 
   expect(drawn).not.toContain(EN.scopeNoPlanHeld);
 });
 
-test("the scope screen shows the definition of done beside the request, naming the plan's rule files (rondo#377)", async () => {
+test("the scope screen shows the definition of done beside the request, and each plan's rule files beside the plan (rondo#377)", async () => {
   const world = fresh();
   const requestId = "request-scope-done";
   await seedScopeRequest(world, requestId, "#291 をやってほしい");
-  const drawn = async (wording: Chrome, plan: string | null = null) => {
-    const page = await operatorPage(
-      portsOver(world, "ada", []),
-      "t",
-      { kind: "scope", messageId: requestId, rounds: null, decisionId: null, plan },
-      wording,
-      mint,
-      () => "x",
-      () => "y",
-    );
-    const at = page.indexOf('class="scope-done');
-    expect(at).toBeGreaterThan(page.indexOf('class="request'));
-    return page.slice(at, page.indexOf("</section>", at)).replaceAll("&#39;", "'");
+  const page = async (wording: Chrome, plan: string | null = null) =>
+    (
+      await operatorPage(
+        portsOver(world, "ada", []),
+        "t",
+        { kind: "scope", messageId: requestId, rounds: null, decisionId: null, plan },
+        wording,
+        mint,
+        () => "x",
+        () => "y",
+      )
+    ).replaceAll("&#39;", "'");
+  /** The three asks, beside the request and above everything else. */
+  const head = (drawn: string) => {
+    const at = drawn.indexOf('class="scope-done');
+    expect(at).toBeGreaterThan(drawn.indexOf('class="request'));
+    return drawn.slice(at, drawn.indexOf("</section>", at));
   };
-
-  // No plan names a rule file: the three asks are there, and the worker is told to look.
-  const none = await drawn(EN);
-  for (const ask of EN.scopeDoneAsks) expect(none).toContain(ask);
-  expect(none).toContain(EN.scopeDoneNoRules);
+  /** The plan's part: which rule files, and the words the worker is sent. */
+  const planPart = (drawn: string) => {
+    const at = drawn.indexOf('class="plan-done');
+    expect(at).toBeGreaterThan(-1);
+    return drawn.slice(at, drawn.indexOf("</details>", at));
+  };
 
   const plan = {
     ...scopePlanDocument(),
@@ -1138,23 +1143,22 @@ test("the scope screen shows the definition of done beside the request, naming t
       recordedAtMs: 2_000,
     }),
   ).toEqual({ kind: "recorded" });
-  const en = await drawn(EN);
-  expect(en).toContain(EN.scopeDoneRules(["AGENTS.md"]));
-  // The words the worker is sent, in the fold, are the ones the lap's prompt carries.
-  expect(en).toContain("Commit your work on this lap's branch.");
-  expect(en).toContain("The repository's own rules are in AGENTS.md in your workspace");
+  const en = await page(EN);
+  for (const ask of EN.scopeDoneAsks) expect(head(en)).toContain(ask);
+  expect(planPart(en)).toContain(EN.scopeDoneRules(["AGENTS.md"]));
+  // The words in the fold are the ones the lap's prompt carries.
+  expect(planPart(en)).toContain("Commit your work on this lap's branch.");
+  expect(planPart(en)).toContain("The repository's own rules are in AGENTS.md in your workspace");
   const ja = chromeFor("ja");
-  const inJa = await drawn(ja);
-  expect(inJa).toContain(ja.scopeDoneHeading);
-  for (const ask of ja.scopeDoneAsks) expect(inJa).toContain(ask);
-  expect(inJa).toContain(ja.scopeDoneRules(["AGENTS.md"]));
+  const inJa = await page(ja);
+  expect(head(inJa)).toContain(ja.scopeDoneHeading);
+  for (const ask of ja.scopeDoneAsks) expect(head(inJa)).toContain(ask);
+  expect(planPart(inJa)).toContain(ja.scopeDoneRules(["AGENTS.md"]));
 
-  // A newer setup names other files; the plan the address names is the one
-  // a start runs on, so its files are the ones said, not the newer plan's.
-  const newer = {
-    ...plan,
-    review_criterion: { ...plan.review_criterion, rule_files: ["CONTRIBUTING.md"] },
-  };
+  // A newer setup naming no rule file is the screen's own pick, and says so;
+  // the older plan, named in the address, is what a start then runs, and its
+  // files are the ones said.
+  const newer = { ...plan, review_criterion: { ...plan.review_criterion, rule_files: [] } };
   expect(
     await world.record.recordSetupPlan({
       setupId: "setup-2",
@@ -1163,10 +1167,8 @@ test("the scope screen shows the definition of done beside the request, naming t
       recordedAtMs: 3_000,
     }),
   ).toEqual({ kind: "recorded" });
-  expect(await drawn(EN)).toContain("CONTRIBUTING.md");
-  const named = await drawn(EN, planDigest(plan));
-  expect(named).toContain(EN.scopeDoneRules(["AGENTS.md"]));
-  expect(named).not.toContain("CONTRIBUTING.md");
+  expect(planPart(await page(EN))).toContain(EN.scopeDoneNoRules);
+  expect(planPart(await page(EN, planDigest(plan)))).toContain(EN.scopeDoneRules(["AGENTS.md"]));
 });
 
 test("with two plans held, the screen offers the choice, the first marked, and the address picks the other (rondo#238)", async () => {
