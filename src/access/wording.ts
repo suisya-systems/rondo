@@ -234,6 +234,12 @@ export interface Chrome extends PageWords {
   /** The plain sentence beside the button; `approveNote` stays as its `title`. */
   readonly approvePlain: string;
   /**
+   * The button's face when nothing was raised. **Only the face**: what the press
+   * answers is `APPROVE_BODY`, read on the way in and never off this string, so
+   * the ledger's word does not move with the page's language (D-0041 rule 7).
+   */
+  readonly approveFace: string;
+  /**
    * The button's face, and the sentence beside it, when the model review has a
    * blocker or a major open (rondo#237).
    *
@@ -945,6 +951,12 @@ export interface Chrome extends PageWords {
   readonly reviseDraftArrived: string;
   /** D-0076 rule 4.5: the closed fold holding rondo's own reason, and whom it is for. */
   readonly forMaintainer: string;
+  /**
+   * Where the rest of what a refused press printed is, under that fold: the
+   * host runs as a user service (D-0080), so its output is the journal and not
+   * a terminal anybody is looking at.
+   */
+  readonly hostLog: string;
   /** Why a revise press answered nothing, one sentence each, as the scope screen's are. */
   readonly reviseRefusedNoApprover: string;
   readonly reviseRefusedPress: string;
@@ -1252,6 +1264,7 @@ explanation you pressed on and then answers the gate.`,
   approveNote: (gateId, word) =>
     `answers gate ${gateId} as '${word}', which is what rondo answer does`,
   approvePlain: "Accept this work as it is.",
+  approveFace: "approve",
   approveDespite: "approve despite what was raised",
   approveDespitePlain:
     "Accept this work as it is, with what the model review raised left unanswered.",
@@ -1750,6 +1763,9 @@ explanation you pressed on and then answers the gate.`,
     "A draft arrived after you started writing, and your own words were kept. To see the " +
     "draft instead, empty the box and reload the page.",
   forMaintainer: "For whoever maintains rondo on this machine",
+  hostLog:
+    "The rest of what rondo printed is in the host's log: journalctl --user -u rondo.service " +
+    "(or the terminal, when the host was started by hand with rondo web).",
   reviseRefusedNoApprover:
     "Nothing was answered: RONDO_APPROVER is not set, so there is nobody this page could " +
     "answer as.",
@@ -1769,8 +1785,8 @@ explanation you pressed on and then answers the gate.`,
     "Nothing was answered: this gate is already being answered with other words, and that is " +
     "still running. Wait for it, then reload the gate to see how it stands.",
   reviseRefusedNotSetUp:
-    "Nothing was answered and the gate was not touched: the second lap could not be set up. The " +
-    "terminal running rondo has what it said.",
+    "Nothing was answered and the gate was not touched: the second lap could not be set up. " +
+    "Whoever maintains rondo on this machine can see what it said.",
   reviseRefusedNoContinuo:
     "Nothing was answered: the part of rondo that runs the work will not start.",
   reviseRefusedOutside: (test) =>
@@ -1779,17 +1795,18 @@ explanation you pressed on and then answers the gate.`,
     `says what the choices are.`,
   reviseRefusedWalkFailed:
     "Answering this gate did not finish, and no second lap started. Your words may already have " +
-    "reached it: go back and read how the gate stands before pressing again. The terminal " +
-    "running rondo has what it said.",
+    "reached it: go back and read how the gate stands before pressing again. Whoever maintains " +
+    "rondo on this machine can see what it said.",
   reviseRefusedNotSettled:
     "The gate was answered with your words, and no second lap started: the lap you answered did " +
-    "not finish settling. Nothing was spent. The terminal running rondo has what it said.",
+    "not finish settling. Nothing was spent. Whoever maintains rondo on this machine can see what it said.",
   reviseRefusedAfterGate:
     "The gate was answered with your words, and no second lap started: the approval would not " +
     "take another lap. What you wrote is recorded; a message in the request's thread says what " +
     "the choices are.",
   reviseRefusedNotStarted:
-    "No second lap started. The terminal running rondo has what it said; nothing here is lost.",
+    "No second lap started, and nothing here is lost. " +
+    "Whoever maintains rondo on this machine can see what it said.",
   reviseForked:
     "Asking for a change is not offered here: what you approved for this request was raised " +
     "twice, separately, and rondo will not choose which of the two to spend. Nothing has been " +
@@ -2045,12 +2062,14 @@ explanation you pressed on and then answers the gate.`,
     `The branch is pushed; rondo could not open the pull request. ${detail} Whether one was ` +
     "created before that is not something rondo holds: go and look at the forge before pressing " +
     "again, because a second press cannot open a pull request that is already there. If it " +
-    "exists, the only leg left is closing the run, and the terminal running rondo has the line.",
+    "exists, the only leg left is closing the run, and whoever maintains rondo on this machine " +
+    "can see the line that does it.",
   publishRefusedRunNotClosed:
     "The branch is pushed and the pull request is open; the run did not close. That is the one " +
-    "leg left, and the terminal running rondo has what it said.",
+    "leg left, and whoever maintains rondo on this machine can see what it said.",
   publishRefusedNotStarted:
-    "Nothing was published. The terminal running rondo has what it said; nothing here is lost.",
+    "Nothing was published, and nothing here is lost. " +
+    "Whoever maintains rondo on this machine can see what it said.",
 } satisfies Chrome);
 
 /** The three measurements a basis names, in the Japanese set's words. */
@@ -2127,7 +2146,7 @@ const JA: Chrome = Object.freeze({
   fenceRefusedNothing: "fence は何も拒否しませんでした",
   fenceRefused: (denials) => `fence が拒否したもの: ${denials}`,
 
-  pressNote: "approve を押すと「提示された」として記録される内容と、その対象:",
+  pressNote: "「承認する」を押すと「提示された」として記録される内容と、その対象:",
   approveNote: (gateId, word) =>
     `ゲート ${gateId} に '${word}' と答えます。rondo answer と同じ動作です`,
 
@@ -2218,6 +2237,7 @@ const JA: Chrome = Object.freeze({
     `${String(seconds)}秒ごとに描き直しますが、描き直しは何も書き込みません。ここで書き込むのは送信だけで、` +
     "書いた文をそのまま RONDO_APPROVER の名前でスレッドに記録します。メッセージは何も承認しません。",
   approvePlain: "この作業をこのまま受け入れます。",
+  approveFace: "承認する",
   approveDespite: "指摘を残したまま承認する",
   approveDespitePlain: "モデルレビューが挙げた点に答えないまま、この作業をこのまま受け入れます。",
   undeterminedFold: (count) => `rondo が決められなかった項目 ${String(count)} 件`,
@@ -2654,6 +2674,9 @@ const JA: Chrome = Object.freeze({
     "書き始めた後に下書きが届きましたが、あなたの書いた内容をそのまま残しています。下書きを見るには、" +
     "欄を空にしてからページを再読み込みしてください。",
   forMaintainer: "このマシンで rondo を管理する人向け",
+  hostLog:
+    "rondo が出力したそれ以外の内容はホストのログにあります: journalctl --user -u rondo.service" +
+    "（ホストを rondo web で手動で起動した場合は、そのターミナル）。",
   reviseRefusedNoApprover:
     "何も回答していません。RONDO_APPROVER が未設定なので、このページが誰として回答するか" +
     "決まりません。",
@@ -2674,8 +2697,8 @@ const JA: Chrome = Object.freeze({
     "何も回答していません。ゲートには別の言葉ですでに回答していて、その処理が続いています。" +
     "終わるのを待ってから、ゲートを読み込み直して状態を確認してください。",
   reviseRefusedNotSetUp:
-    "何も回答せず、ゲートにも触れていません。2 周目を用意できませんでした。詳細は rondo を" +
-    "動かしているターミナルに出ています。",
+    "何も回答せず、ゲートにも触れていません。2 周目を用意できませんでした。" +
+    "何が起きたかは、このマシンで rondo を管理する人が確かめられます。",
   reviseRefusedNoContinuo: "何も回答していません。作業を動かす部分が起動しません。",
   reviseRefusedOutside: (test) =>
     `何も回答せず、何も消費していません。2 周目はこの周回が動いた範囲の外で、${test} の判定で` +
@@ -2683,18 +2706,18 @@ const JA: Chrome = Object.freeze({
   reviseRefusedWalkFailed:
     "ゲートへの回答が途中で終わり、2 周目も開始していません。書かれた言葉はすでにゲートに" +
     "届いているかもしれません。もう一度押す前に、戻ってゲートの状態を確認してください。" +
-    "詳細は rondo を動かしているターミナルに出ています。",
+    "何が起きたかは、このマシンで rondo を管理する人が確かめられます。",
   reviseRefusedNotSettled:
     "ゲートには書かれた言葉で回答しましたが、2 周目は開始していません。回答した周回の後始末が" +
-    "終わりませんでした。何も消費していません。詳細は rondo を動かしているターミナルに" +
-    "出ています。",
+    "終わりませんでした。何も消費していません。" +
+    "何が起きたかは、このマシンで rondo を管理する人が確かめられます。",
   reviseRefusedAfterGate:
     "ゲートには書かれた言葉で回答しましたが、2 周目は開始していません。承認がもう 1 周回を" +
     "受け付けませんでした。書かれた内容は記録されています。選択肢は依頼のスレッドに書かれた" +
     "メッセージにあります。",
   reviseRefusedNotStarted:
-    "2 周目は開始していません。詳細は rondo を動かしているターミナルに出ています。ここで" +
-    "書いた内容は失われていません。",
+    "2 周目は開始していません。ここで書いた内容は失われていません。" +
+    "何が起きたかは、このマシンで rondo を管理する人が確かめられます。",
   reviseForked:
     "ここでは変更を依頼できません。この依頼で承認した予算が別々に 2 回引き上げられていて、" +
     "rondo はどちらを使うかを選びません。何も消費していません。今の作業をそのまま承認する" +
@@ -2943,13 +2966,14 @@ const JA: Chrome = Object.freeze({
     `ブランチは push 済みで、プルリクエストは作れませんでした。${detail} その前に作られていたか` +
     "どうかは rondo が持っている情報ではありません。もう一度押す前にフォージ側を見てください。" +
     "すでにあるプルリクエストを 2 回目の押下で作ることはできません。ある場合、残っているのは " +
-    "run を閉じることだけで、その 1 行は rondo を動かしているターミナルに出ています。",
+    "run を閉じることだけで、そのための 1 行は、このマシンで rondo を管理する人が確かめられます。",
   publishRefusedRunNotClosed:
     "ブランチは push 済みで、プルリクエストも作られています。run が閉じていません。残っているのは" +
-    "その 1 つで、詳細は rondo を動かしているターミナルに出ています。",
+    "その 1 つです。" +
+    "何が起きたかは、このマシンで rondo を管理する人が確かめられます。",
   publishRefusedNotStarted:
-    "何も公開していません。詳細は rondo を動かしているターミナルに出ています。ここで見た内容は" +
-    "失われていません。",
+    "何も公開していません。ここで見た内容は失われていません。" +
+    "何が起きたかは、このマシンで rondo を管理する人が確かめられます。",
 } satisfies Chrome);
 
 /**

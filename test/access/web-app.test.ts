@@ -56,7 +56,7 @@ import {
   type ServedPorts,
   serveApp,
 } from "../../src/access/web-app.js";
-import { EN } from "../../src/access/wording.js";
+import { chromeFor, EN } from "../../src/access/wording.js";
 import { advisoryRecord } from "../../src/store/sqlite.js";
 
 const TOKEN = "the-process-token";
@@ -324,6 +324,7 @@ function publishForm(overrides: Record<string, string> = {}): Record<string, str
   return {
     token: TOKEN,
     iteration: "i-0001",
+    request: "req-1",
     shown: SHOWN,
     ...overrides,
   };
@@ -642,7 +643,9 @@ test("(start) a person's native press starts one lap under the scope, once", asy
   const form = startForm();
   const pressed = await send(base, "/start", "POST", pressHeaders(base), form);
   expect(pressed.status).toBe(303);
-  expect(pressed.location).toBe(`/?lang=en#${encodeURIComponent(`lap-${form["iteration"]}`)}`);
+  // Into the request's thread, where the lap it started draws its lines: the
+  // summary carried no anchor for the lap, so this used to land on nothing.
+  expect(pressed.location).toBe("/?thread=req-1&lang=en");
   expect(started).toEqual([
     {
       iterationId: form["iteration"],
@@ -1062,7 +1065,9 @@ test("(publish) a person's native press publishes the lap it was shown, once", a
   const form = publishForm();
   const pressed = await send(base, "/publish", "POST", pressHeaders(base), form);
   expect(pressed.status).toBe(303);
-  expect(pressed.location).toBe("/?lang=en#lap-i-0001");
+  // Into the request's thread, where what the publish did is said; the summary
+  // this used to land on had no anchor for the lap and showed nothing of it.
+  expect(pressed.location).toBe("/?thread=req-1&lang=en");
   expect(published).toEqual([{ iterationId: "i-0001", shown: SHOWN, despiteReview: false }]);
 
   stop.abort();
@@ -1303,6 +1308,69 @@ test("(publish) a port's refusal is said in the press's language, with the way b
 
   stop.abort();
   expect(await closed).toBe(0);
+});
+
+test("a refused revise or publish sends nobody to a terminal, and folds rondo's reason for its maintainer (D-0076 rule 4.2)", async () => {
+  // **The host is a user service** (D-0080): its output is the journal, and
+  // the person pressing is looking at this page and at no terminal. Every
+  // refusal either press used to end on the terminal, in both shipped languages.
+  const note = "RONDO_APPROVER 'ada' is not on the allowlist";
+  const refusals = [
+    ...(
+      [
+        "reviseRefusedNotSetUp",
+        "reviseRefusedWalkFailed",
+        "reviseRefusedNotSettled",
+        "reviseRefusedNotStarted",
+      ] as const
+    ).map((why) => ({
+      path: "/revise",
+      form: reviseForm(),
+      ports: {
+        revise: new RevisePort(async () => await Promise.resolve({ ok: false, why, note })),
+      },
+    })),
+    ...(
+      [
+        "publishRefusedPullRequestFailed",
+        "publishRefusedRunNotClosed",
+        "publishRefusedNotStarted",
+      ] as const
+    ).map((why) => ({
+      path: "/publish",
+      form: publishForm(),
+      ports: {
+        publish: new PublishPort(
+          async () => await Promise.resolve({ ok: false, why, note, detail: "the forge said no" }),
+        ),
+      },
+    })),
+  ];
+  for (const { path, form, ports } of refusals) {
+    const app = createApp({ ...spyPorts([]), ...ports }, TOKEN);
+    const { base, stop, closed } = await served(app);
+    for (const [lang, wording] of [
+      ["en", EN],
+      ["ja", chromeFor("ja")],
+    ] as const) {
+      const refused = await send(base, `${path}?lang=${lang}`, "POST", pressHeaders(base), form);
+      const body = refused.body.replaceAll("&#39;", "'");
+      expect(refused.status).toBe(409);
+      // The person's sentence: the fold below may name the terminal to the
+      // maintainer, the sentence a person reads may not.
+      const line = /<p id="scope-refused">([^<]*)<\/p>/.exec(body)?.[1] ?? "";
+      expect(line, path).not.toBe("");
+      expect(line, path).not.toMatch(/terminal|ターミナル/);
+      // The sentence says who can look; the closed fold is what they look at:
+      // the port's own reason, and where the rest of the host's output is.
+      const fold = body.slice(body.indexOf('<details id="refused-reason">'));
+      expect(fold).toContain(`<summary>${wording.forMaintainer}</summary>`);
+      expect(fold).toContain(`<p lang="en">${note}</p>`);
+      expect(fold).toContain("journalctl --user -u rondo.service");
+    }
+    stop.abort();
+    expect(await closed).toBe(0);
+  }
 });
 
 test("(claim) a press carries what the person verified, trimmed; blank is none, and too long answers nothing", async () => {
@@ -2615,7 +2683,9 @@ test("(start-plan) a person's press starts the drafted plan it names, under the 
   const form = planStartForm();
   const pressed = await send(base, "/start-plan", "POST", pressHeaders(base), form);
   expect(pressed.status).toBe(303);
-  expect(pressed.location).toBe(`/?lang=en#${encodeURIComponent(`lap-${form["iteration"]}`)}`);
+  // Into the request's thread, where the lap it started draws its lines: the
+  // summary carried no anchor for the lap, so this used to land on nothing.
+  expect(pressed.location).toBe("/?thread=req-1&lang=en");
   expect(planStarts).toEqual([
     {
       iterationId: form["iteration"],

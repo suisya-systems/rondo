@@ -1334,7 +1334,7 @@ async function planStart(
         <p class="note flex flex-wrap items-center gap-x-2 text-body leading-5">
           <span>{wording.planStarted}</span>
           <a
-            href={`${viewHref({ kind: "summary" }, wording.lang)}#${encodeURIComponent(`lap-${ready.iterationId}`)}`}
+            href={viewHref({ kind: "thread", messageId: view.messageId, to: null }, wording.lang)}
             class="text-link underline-offset-2 hover:underline"
           >
             {wording.planStartedLink}

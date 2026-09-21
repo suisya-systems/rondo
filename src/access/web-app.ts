@@ -1967,10 +1967,9 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
         started.test ?? null,
       );
     }
-    return c.redirect(
-      `${viewHref({ kind: "summary" }, tagOf(c))}#${encodeURIComponent(`lap-${iterationId}`)}`,
-      303,
-    );
+    // The request's thread, where the lap just started draws its event lines
+    // and where the approve press already lands (D-0083 rules 3, 7).
+    return c.redirect(viewHref({ kind: "thread", messageId: request, to: null }, tagOf(c)), 303);
   });
 
   // **The scoped start** (section 5a's second rondo#233 S3 row): a first
@@ -2020,12 +2019,9 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
         runsOn,
       );
     }
-    // The summary, anchored at the lap just started, which is where the approve
-    // press already lands.
-    return c.redirect(
-      `${viewHref({ kind: "summary" }, tagOf(c))}#${encodeURIComponent(`lap-${iterationId}`)}`,
-      303,
-    );
+    // Into the request's thread, where the lap just started draws its event
+    // lines and where the approve press already lands (D-0083 rules 3, 7).
+    return c.redirect(viewHref({ kind: "thread", messageId: request, to: null }, tagOf(c)), 303);
   });
 
   // **The revise press** (section 5a's rondo#233 S4 row): the gate answered
@@ -2077,6 +2073,7 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
         revised.why ?? "reviseRefusedNotStarted",
         request,
         revised.test ?? null,
+        revised.note,
       );
     }
     // The thread the press was made in, where the new lap's event lines now
@@ -2107,6 +2104,9 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     }
     const form = await c.req.parseBody();
     const iterationId = typeof form["iteration"] === "string" ? form["iteration"] : "";
+    // The lap's request, carried by the form as the gate's presses carry it:
+    // where the press lands, and never what it publishes.
+    const request = typeof form["request"] === "string" ? form["request"] : "";
     const minting = mintPress(c, form["token"]);
     if (!("press" in minting)) {
       return publishRefused(c, minting.status, "publishRefusedPress", iterationId);
@@ -2134,12 +2134,17 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
         published.why ?? "publishRefusedNotStarted",
         iterationId,
         published.detail ?? null,
+        published.note,
       );
     }
-    // The summary, anchored at the lap just published, which is where the
-    // approve press, the scoped start and the revise press all already land.
+    // The request's thread, where what the publish did is now the last thing
+    // said (`reportToRequest`) and where the approve press, the scoped start
+    // and the revise press all already land (D-0083 rules 3, 7).
     return c.redirect(
-      `${viewHref({ kind: "summary" }, tagOf(c))}#${encodeURIComponent(`lap-${iterationId}`)}`,
+      viewHref(
+        request === "" ? { kind: "summary" } : { kind: "thread", messageId: request, to: null },
+        tagOf(c),
+      ),
       303,
     );
   });
@@ -2331,6 +2336,8 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     why: "reviseRefusedNoApprover" | "reviseRefusedPress" | "reviseRefusedForm" | ReviseRefusal,
     requestMessageId: string | null,
     test: string | null = null,
+    /** The port's own reason, for the maintainer fold under the sentence. */
+    note: string | null = null,
   ) {
     const wording = wordingOf(c);
     const line =
@@ -2347,6 +2354,7 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
         wording.lang,
       ),
       wording.gateBack,
+      note,
     );
   }
 
@@ -2396,6 +2404,8 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     why: "publishRefusedNoApprover" | "publishRefusedPress" | "publishRefusedForm" | PublishRefusal,
     iterationId: string | null,
     detail: string | null = null,
+    /** The port's own reason, for the maintainer fold under the sentence. */
+    note: string | null = null,
   ) {
     const wording = wordingOf(c);
     const said = wording[why];
@@ -2411,6 +2421,7 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
         wording.lang,
       ),
       wording.publishBack,
+      note,
     );
   }
 
@@ -2467,6 +2478,12 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     href: string,
     /** What the one link says; the scope screen's two presses name that screen. */
     back: string = wordingOf(c).scopeBack,
+    /**
+     * rondo's own reason, when the press reached a port that gave one: the
+     * sentence above says who can look, and this is what they look at
+     * (D-0076 rule 4.2), closed, with where the rest of the host's output is.
+     */
+    note: string | null = null,
   ) {
     const wording = wordingOf(c);
     return c.html(
@@ -2474,6 +2491,10 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
         `<meta name="viewport" content="width=device-width, initial-scale=1">` +
         `<title>${escapeHtml(title)}</title></head><body>` +
         `<p id="scope-refused">${escapeHtml(line)}</p>` +
+        (note === null || note === ""
+          ? ""
+          : `<details id="refused-reason"><summary>${escapeHtml(wording.forMaintainer)}</summary>` +
+            `<p lang="en">${escapeHtml(note)}</p><p>${escapeHtml(wording.hostLog)}</p></details>`) +
         // The way back to what was typed, as a refused send and a refused
         // claim both already say: with script off this page *is* the response,
         // and the draft only exists in the browser's own history.
