@@ -127,6 +127,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0087 | The Windows cells leave the pull-request path for the nightly schedule and `workflow_dispatch`: the matrix becomes an expression over the trigger, the double-green rule is untouched, and every guarantee only Windows carries is now carried a night later | accepted |
 | D-0088 | The Windows cell's temporary files move to the runner's local disk: `continuo D-1109` is ported because rondo measured continuo-shaped and not cadenza-shaped, and the cell halves without a test, a timeout or a durability claim changing | accepted |
 | D-0089 | A lap's definition of done is rondo's to add, not the drafter's to remember: every lap's prompt carries a fixed definition of done after its request and names the rule files its plan names, which the worker reads in its own workspace | accepted |
+| D-0090 | A request that names an issue in a repository rondo does not work in is not started: the page says so before a scope is drafted, and the person adds that repository from the page with one press, while rondo infers everything else | accepted |
 | D-0091 | A person merges from the page: a merge press per act, drawn only where rondo's own reading is green on the head and nothing waits on the person, through the operator's own `gh`; `D-0025` rule 6's "never merges" gives way for that press alone, and `D-0064` rule 3.4's transition is not taken | accepted |
 | D-0092 | Which answer a gate was given is recorded beside the gate answer, when rondo carries it: `approve` and `revise` stop being told apart by whether a next try exists, and a lap with no record is not called approved | accepted (point 3 pending the owner) |
 
@@ -12621,9 +12622,13 @@ but does not put them to the person:
    on it**; the condition moves merge alone.
    > **Annotation (2026-09-22, from D-0091).** Added after this entry was accepted, and additive, by
    > the answer of rondo's human gate on rondo#380. **A person's per-act approval of a merge can be
-   > the page's merge press** (`D-0091` rule 1). **The transition above is not taken**: whether
-   > rondo#367's reading is "rondo observes CI", which commit a squash merge is read on, and whether
-   > a skipped check is green are left open (`D-0091` section 2). Nothing above is edited.
+   > the page's merge press** (`D-0091` rule 1). **The transition above is not taken yet.** The owner
+   > has answered two of its questions: `skipped` and `neutral` count as green and `pending` does not,
+   > and green is read on the head of the pull request being merged, not on the commit a squash
+   > lands. Left open is whether rondo#367's reading is "rondo observes CI", or the condition is met by
+   > continuo's `ci_observation` evidence once the judgement moves there, which is under way; until
+   > then rondo's own reading is not on an auditable record (`D-0091` section 2). Nothing above is
+   > edited.
 
 5. **Every act taken inside a scope names the scope.** An admission, a redo, an agent-type choice, a
    gate answer, a push: each records the scope it was taken under, so "which scope authorised this"
@@ -21006,19 +21011,24 @@ On **2026-09-22**, at rondo `87e62f0`, by reading. Line numbers drift; re-measur
 ### 2. The transition is not taken
 
 `D-0064` rule 3.4's transition -- merge leaving the irreversible list, so a scope may include it and
-rondo merges without a press -- **is not met by rondo#367's reading, and is left for a later
-decision.** Three gaps stand between them:
+rondo merges without a press -- **is not taken now, and is left for a later decision.** Two of the
+questions between rondo#367's reading and the condition have been answered by the owner, and one is
+still open.
 
-1. **Which reading counts.** Survey G4 names continuo's `ci_observation` as the missing driver.
-   rondo#367 is a reading on rondo's side, through the operator's forge CLI. Whether that is
-   "rondo observes CI" is not settled here.
-2. **Which commit.** The condition says CI green *on the commit it merges*. rondo reads the head; a
-   squash merge lands a different commit on which no check ran, so unless the condition is read as
-   *the head that is merged*, a squash merge can never meet it.
-3. **What green means.** rondo#367 counts `skipped` and `neutral` as not failing (#372's rollup was
-   six successes and one skip). Whether that is green for rule 3.4 is not settled here.
+1. **Answered: what green means.** A check that ended `skipped` or `neutral` counts as green; one still
+   running (`pending`) does not. This is the reading rondo#367 already takes.
+2. **Answered: which commit.** Green is read on **the head of the pull request being merged**; green
+   on the commit a squash merge then lands on the default branch is not required.
+3. **Open: which reading counts.** Whether rondo#367's reading -- rondo's own, through the operator's
+   forge CLI -- is "rondo observes CI", or whether the condition is met by the evidence continuo's
+   `ci_observation` records once the judgement moves there (survey G4).
 
-rule 1's press sidesteps all three because a person approves each merge at the time: the reading is
+**Why it is not taken now.** The judgement and its evidence are moving to continuo's
+`ci_observation`, and that work is under way. Until it lands, rondo's own reading is not on a record
+anybody can audit afterwards: it is a line in a thread, not an observation with its inputs kept. A
+merge rondo makes without a press has to rest on such a record, so the transition waits for it.
+
+rule 1's press does not need it, because a person approves each merge at the time: the reading is
 what the button is drawn on, and the person is the one who decides.
 
 ### 3. How a merge is made
@@ -21048,7 +21058,10 @@ All five were answered through the window on 2026-09-22.
    the head and no P2 to P4 item is open, without using the transition. **Answered: the
    recommendation.**
 2. **Whether rondo#367 meets rule 3.4's transition** (open decision 2). Put with a recommendation:
-   not yet, with the three gaps recorded here. **Answered: the recommendation** (section 2).
+   not yet, with the gaps recorded here. **Answered: the recommendation** (section 2). Two of the
+   gaps -- what green means, and which commit -- were answered by the owner the same day, at the gate
+   of the task that moves the CI judgement to continuo; section 2 records those answers and the one
+   question left open.
 3. **Merge method** (open decision 3). **Answered: the repository's setting** (rule 3.1).
 4. **What a merge does to the rest of rondo** (open decision 4). **Answered: the lane as `D-0073`
    rule 7 already releases it, and the issue by the closing keyword under rondo#376's rule**
@@ -21080,7 +21093,7 @@ All five were answered through the window on 2026-09-22.
 | Entry | What the annotation says | Additive? |
 |---|---|---|
 | `D-0025` rule 6 | "Never merges" no longer holds for the page's merge press, which a person presses per act (this entry, rule 1); the command line still never merges | **not additive** |
-| `D-0064` rule 3.4 | The per-act approval of a merge can be the page's press; the transition is not taken, and its three gaps are this entry's section 2 | additive |
+| `D-0064` rule 3.4 | The per-act approval of a merge can be the page's press; the transition is not taken, with what green means and which commit answered and which reading counts left open (this entry's section 2) | additive |
 | `D-0010` | The merge press runs through the operator's own `gh`; rondo still holds no credential of its own | additive |
 
 ### What would falsify it
