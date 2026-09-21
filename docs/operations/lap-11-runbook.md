@@ -50,15 +50,11 @@ Record these five things as you go. They are what the record sheet (section 8) a
 open a terminal for anything else, that is the runbook being wrong, not you. Count it, and it goes
 in the record as the runbook's failure.
 
-## 0. This lap's request: rondo#291 (**proposed; waiting for the owner's confirmation through the secretary**)
+## 0. This lap's request: rondo#291
 
-**Proposed: [rondo#291](https://github.com/suisya-systems/rondo/issues/291)
+**Chosen: [rondo#291](https://github.com/suisya-systems/rondo/issues/291)
 "Split the wording catalogue into one file per language, so no one writes Japanese while reading
-English"**
-
-This is the runbook author's recommendation. The choice is the owner's, confirmed through the
-secretary before step 1. If another issue is chosen, step 1's body and step 4's expected-file table
-have to be rewritten for it; nothing else in this runbook depends on which issue it is.
+English"** (the owner confirmed it through the secretary)
 
 Why this one, by lap 10's criteria:
 
@@ -594,7 +590,7 @@ table below as well.
 
 Overall:
 
-- Issue walked (confirmed through the secretary):
+- Issue walked: rondo#291
 - Time from **Send** to the gate answered:
 - Decisions you were asked for (scope, gate, a stop, publish), and whether each was an approval or a
   dispute (K2):
