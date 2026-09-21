@@ -843,7 +843,11 @@ test("the dogfood plan's default criterion is one a plan file admits (rondo#205)
   // default to the plan-file reader without paying for a lap.
   const script = readFileSync("scripts/dogfood-env.sh", "utf8");
   expect(script).toContain('"$repo_root/scripts/dogfood-review-criterion.json"');
-  expect(script).toContain("review_criterion: JSON.parse(");
+  expect(script).toContain(
+    'const criterion = JSON.parse(require("node:fs").readFileSync(reviewCriterionFile, "utf8"));',
+  );
+  // An empty `rule_files` is written as the target's AGENTS.md when it has one (rondo#377).
+  expect(script).toContain('{ ...criterion, rule_files: ["AGENTS.md"] }');
   const criterion = JSON.parse(
     readFileSync("scripts/dogfood-review-criterion.json", "utf8"),
   ) as JsonRecord;
@@ -862,6 +866,14 @@ test("the dogfood plan's default criterion is one a plan file admits (rondo#205)
   }
   expect(read.plan.reviewCriterion?.severities.blocker).toContain("what the request asks");
   expect(read.plan.reviewCriterion?.ruleFiles).toEqual([]);
+  // And the filled-in shape is one too.
+  const filled = readRunPlan({
+    ...file,
+    review_criterion: { ...criterion, rule_files: ["AGENTS.md"] },
+  } as JsonRecord);
+  expect(filled.kind === "planned" && filled.plan.reviewCriterion?.ruleFiles).toEqual([
+    "AGENTS.md",
+  ]);
 });
 
 test("a criterion with an empty meaning or a rule path outside the tree is refused by name", () => {

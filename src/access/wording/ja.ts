@@ -184,6 +184,16 @@ export const JA: Chrome = Object.freeze({
   scopeIssueGiven: "作業者に渡す",
   scopeIssueNotGiven: "渡さない: 読めなかった",
   scopeIssuePending: "まだ読んでいない",
+  scopeDoneHeading: "完了の定義 (rondo がどの作業にも付けます)",
+  scopeDoneAsks: [
+    "作業はこの作業のブランチにコミットする。",
+    "報告の前に、リポジトリが定める手順でインストールと検証を回す。",
+    "検証が回せない・通らないときは報告でそう言い、通ったとは言わない。",
+  ],
+  scopeDoneRules: (files) => `手順はリポジトリの ${files.join("、")} に従うよう伝えます。`,
+  scopeDoneNoRules:
+    "このプランはリポジトリの規則ファイルを名指していないので、手順は作業者がリポジトリの文書から探します。",
+  scopeDoneExact: "作業者に送る文面 (英語)",
   inReplyTo: (who, words) => `${who} への返信: ${words}`,
   basesLabel: "根拠",
   replyAction: "返信する",

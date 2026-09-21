@@ -110,6 +110,7 @@ import {
 } from "./conductor.js";
 import { asciiEscape, consoleSeams, legibleAsciiEscape, relayUpstream } from "./console.js";
 import { allowedBashIn } from "./delegation.js";
+import { definitionOfDone } from "./done.js";
 import { draftedStartReadiness } from "./drafted-start.js";
 import { drafterHost } from "./drafter-host.js";
 import {
@@ -5132,9 +5133,10 @@ async function startScoped(
  * report said, and the model reading taken at the gate.
  */
 /**
- * `plan` with D-0078 section 3.4's quoted section after its prompt: every issue
- * the request's thread read, rendered by rondo from the `forge` rows. The
- * drafted or written prompt stays as it is and comes first.
+ * `plan` with what rondo puts after its prompt: the definition of done
+ * (rondo#377, `./done.ts`), then D-0078 section 3.4's quoted section -- every
+ * issue the request's thread read, rendered by rondo from the `forge` rows.
+ * The drafted or written prompt stays as it is and comes first.
  *
  * **A thread that will not read admits nothing**: a lap started without the
  * issues its request named would be the thinner request N-43 warns about,
@@ -5165,7 +5167,10 @@ export async function withNamedIssues(
         "which this request names; nothing was admitted, and it can start once they are read",
     };
   }
-  const prompt = plan.prompt + issuesQuote(threads.messages, requestMessageId);
+  const prompt =
+    plan.prompt +
+    definitionOfDone(plan.reviewCriterion?.ruleFiles ?? []) +
+    issuesQuote(threads.messages, requestMessageId);
   // **Refused whole rather than cut** (section 2.3's rule, at the lap's door):
   // the reader already bounds what one request's reads hold together, so only
   // a prompt that is itself most of the bound reaches this.

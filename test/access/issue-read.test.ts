@@ -11,6 +11,7 @@
 import { expect, test } from "vitest";
 
 import { withNamedIssues } from "../../src/access/cli.js";
+import { definitionOfDone } from "../../src/access/done.js";
 import { drafterHost } from "../../src/access/drafter-host.js";
 import type { CommandOutcome } from "../../src/access/forge.js";
 import {
@@ -281,7 +282,10 @@ test("the prompt ends with rondo's quote of every read, byte for byte, after the
   if (planned.kind !== "planned") throw new Error(planned.reason);
   const quoted = await withNamedIssues(w.record, "r1", planned.plan);
   if ("refusal" in quoted) throw new Error(quoted.refusal);
-  expect(quoted.prompt.startsWith(`Fix #237 and #404.${ISSUES_QUOTE_OPENING}`)).toBe(true);
+  // After the request and its definition of done (rondo#377), which the quote follows.
+  expect(
+    quoted.prompt.startsWith(`Fix #237 and #404.${definitionOfDone([])}${ISSUES_QUOTE_OPENING}`),
+  ).toBe(true);
   expect(quoted.prompt).toContain(
     `Title: ${ISSUE.title}\nOpened by ada at ${ISSUE.created_at}:\n${ISSUE.body}`,
   );

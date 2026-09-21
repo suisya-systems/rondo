@@ -8,7 +8,7 @@ import { recordScopeFromPage, reviseFromPage, startScopedFromPage } from "../../
 import type {} from "../../src/access/inbox.js";
 import { agentTypeRecordOf, heldAgentTypeLines } from "../../src/access/scope.js";
 import { newScopeId, type ScopeFormDraft } from "../../src/access/web-app.js";
-import { chromeFor, EN } from "../../src/access/wording.js";
+import { type Chrome, chromeFor, EN } from "../../src/access/wording.js";
 import { allocate } from "../../src/refrain/allocator.js";
 import {
   admittedPlan,
@@ -1097,6 +1097,64 @@ test("a fresh store setup finished offers setup's plan, and two setups alike on 
     `<input type="hidden" name="plan_digest" value="${planDigest(repaired)}"/>`,
   );
   expect(drawn).not.toContain(EN.scopeNoPlanHeld);
+});
+
+test("the scope screen shows the definition of done beside the request, naming the plan's rule files (rondo#377)", async () => {
+  const world = fresh();
+  const requestId = "request-scope-done";
+  await seedScopeRequest(world, requestId, "#291 をやってほしい");
+  const view = {
+    kind: "scope",
+    messageId: requestId,
+    rounds: null,
+    decisionId: null,
+    plan: null,
+  } as const;
+  const drawn = async (wording: Chrome) => {
+    const page = await operatorPage(
+      portsOver(world, "ada", []),
+      "t",
+      view,
+      wording,
+      mint,
+      () => "x",
+      () => "y",
+    );
+    const at = page.indexOf('class="scope-done');
+    expect(at).toBeGreaterThan(page.indexOf('class="request'));
+    return page.slice(at, page.indexOf("</section>", at)).replaceAll("&#39;", "'");
+  };
+
+  // No plan names a rule file: the three asks are there, and the worker is told to look.
+  const none = await drawn(EN);
+  for (const ask of EN.scopeDoneAsks) expect(none).toContain(ask);
+  expect(none).toContain(EN.scopeDoneNoRules);
+
+  const plan = {
+    ...scopePlanDocument(),
+    review_criterion: {
+      severities: { blocker: "b", major: "m", minor: "n", nit: "t" },
+      rule_files: ["AGENTS.md"],
+    },
+  };
+  expect(
+    await world.record.recordSetupPlan({
+      setupId: "setup-1",
+      plan,
+      recordedBy: "ada",
+      recordedAtMs: 2_000,
+    }),
+  ).toEqual({ kind: "recorded" });
+  const en = await drawn(EN);
+  expect(en).toContain(EN.scopeDoneRules(["AGENTS.md"]));
+  // The words the worker is sent, in the fold, are the ones the lap's prompt carries.
+  expect(en).toContain("Commit your work on this lap's branch.");
+  expect(en).toContain("The repository's own rules are in AGENTS.md in your workspace");
+  const ja = chromeFor("ja");
+  const inJa = await drawn(ja);
+  expect(inJa).toContain(ja.scopeDoneHeading);
+  for (const ask of ja.scopeDoneAsks) expect(inJa).toContain(ask);
+  expect(inJa).toContain(ja.scopeDoneRules(["AGENTS.md"]));
 });
 
 test("with two plans held, the screen offers the choice, the first marked, and the address picks the other (rondo#238)", async () => {

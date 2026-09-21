@@ -90,6 +90,8 @@ options:
       scripts/dogfood-review-criterion.json when that is unset. A plan with no
       criterion gets an `unavailable` model reading on every lap, and an
       in-scope `rondo retry` is never admitted without one (rondo#205).
+      An empty "rule_files" is written as ["AGENTS.md"] when the target's
+      base branch has one: every lap is told to follow it (rondo#377).
   --port N
       the port the page listens on, written into the start command and the
       service setup installs. Default: 7333. The forge repository is not
@@ -637,7 +639,22 @@ node -e '
     // admitted. The meanings live in a JSON file so that a test can hold the
     // default to `runPlan` without paying for a lap; `rondo start` validates
     // an override the same way.
-    review_criterion: JSON.parse(require("node:fs").readFileSync(reviewCriterionFile, "utf8")),
+    //
+    // **Its rule files are the repository own rules** (rondo#377): every lap
+    // is told to read them first and follow their order of work, and the model
+    // reviewer is handed them. A criterion that names none gets the target
+    // AGENTS.md when its base branch has one, so a one-line request still
+    // reaches a worker pointed at how this repository installs and verifies.
+    review_criterion: (() => {
+      const criterion = JSON.parse(require("node:fs").readFileSync(reviewCriterionFile, "utf8"));
+      const hasAgents =
+        require("node:child_process").spawnSync("git", [
+          "-C", target, "cat-file", "-e", `${baseBranch}:AGENTS.md`,
+        ]).status === 0;
+      return Array.isArray(criterion.rule_files) && criterion.rule_files.length === 0 && hasAgents
+        ? { ...criterion, rule_files: ["AGENTS.md"] }
+        : criterion;
+    })(),
 
     // **What the worker of this lap may run** (`continuo D-1110`, D-0039 rule
     // 3). Each entry is a Bash *subject*: continuo renders `Bash(<subject>)`

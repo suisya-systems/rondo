@@ -5,7 +5,9 @@ import {
   DEFAULT_REVIEW_ROUNDS,
   type ScopeBudgets,
 } from "../../advisory/budget.js";
+import { readRunPlan } from "../../refrain/plan.js";
 import { FINDING_SEVERITIES, SCOPE_OUTWARD_ACTS, type StoredScope } from "../../store/records.js";
+import { definitionOfDone } from "../done.js";
 import { draftedStartReadiness } from "../drafted-start.js";
 import {
   type DraftedPlanShown,
@@ -329,6 +331,7 @@ export async function scopeView(
         {request.body}
       </p>
       {scopeIssues(wording, threads, view.messageId)}
+      {scopeDone(wording, await ruleFilesFor(ports, wording, view.messageId, nowMs))}
     </header>
   );
   // **The third state** (D-0074 rule 4.2): raising the approval a waiting lap
@@ -427,6 +430,69 @@ function scopeIssues(wording: Chrome, threads: Threads, requestMessageId: string
       </ul>
     </section>
   );
+}
+
+/**
+ * The definition of done every lap of this request is given after its prompt
+ * (rondo#377), beside the request: the person approves work whose end is
+ * this, so it is on the screen where they approve, as the issues are.
+ */
+function scopeDone(wording: Chrome, ruleFiles: readonly string[]) {
+  return (
+    <section class="scope-done ml-9 space-y-1 text-body leading-5">
+      <h3 class="text-meta font-medium text-muted-foreground">{wording.scopeDoneHeading}</h3>
+      <ul class="space-y-1">
+        {wording.scopeDoneAsks.map((ask) => (
+          <li>{ask}</li>
+        ))}
+      </ul>
+      <p data-rule-files={ruleFiles.join(" ")}>
+        {ruleFiles.length === 0 ? wording.scopeDoneNoRules : wording.scopeDoneRules(ruleFiles)}
+      </p>
+      <details class="group">
+        <summary class="flex cursor-pointer list-none items-center gap-2 text-meta leading-5 text-muted-foreground select-none [&::-webkit-details-marker]:hidden">
+          {chevron()}
+          {wording.scopeDoneExact}
+        </summary>
+        <p
+          class="mt-1 text-meta leading-5 wrap-anywhere whitespace-pre-wrap text-muted-foreground"
+          lang="en"
+        >
+          {definitionOfDone(ruleFiles).trimStart()}
+        </p>
+      </details>
+    </section>
+  );
+}
+
+/**
+ * The rule files the plans rondo holds for this request name (their
+ * `review_criterion.rule_files`), each once: what the definition of done
+ * points the worker at. One repository's plans name the same files, so the
+ * union is what any of them would send.
+ *
+ * ponytail: a union, not per plan -- two held plans naming different files
+ * show both here. Say it per plan when a request is seen with plans in two
+ * repositories.
+ */
+async function ruleFilesFor(
+  ports: WebPorts,
+  wording: Chrome,
+  messageId: string,
+  nowMs: number,
+): Promise<readonly string[]> {
+  const plans = await plansFor(ports, wording, messageId, nowMs);
+  if (!("plans" in plans)) {
+    return [];
+  }
+  return [
+    ...new Set(
+      plans.plans.flatMap((plan) => {
+        const planned = readRunPlan(plan.document);
+        return planned.kind === "planned" ? (planned.plan.reviewCriterion?.ruleFiles ?? []) : [];
+      }),
+    ),
+  ];
 }
 
 /**
