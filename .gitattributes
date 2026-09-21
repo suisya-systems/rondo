@@ -4,3 +4,6 @@
 page/*.js text eol=lf
 page/*.css text eol=lf
 page.manifest.json text eol=lf
+# Shell scripts are read by tests (next-step.test.ts splits dogfood-env.sh on
+# "\n") and run by bash, and neither survives a CRLF checkout.
+*.sh text eol=lf
