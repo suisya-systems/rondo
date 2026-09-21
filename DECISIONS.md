@@ -131,6 +131,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0091 | A person merges from the page: a merge press per act, drawn only where rondo's own reading is green on the head and nothing waits on the person, through the operator's own `gh`; `D-0025` rule 6's "never merges" gives way for that press alone, and `D-0064` rule 3.4's transition is not taken | accepted |
 | D-0092 | Which answer a gate was given is recorded beside the gate answer, when rondo carries it: `approve` and `revise` stop being told apart by whether a next try exists, and a lap with no record is not called approved | accepted (point 3 pending the owner) |
 | D-0093 | The boundary test also asks which role a module plays: every module under `src/` names a row of `D-0064` section 5, a row given to cadenza or continuo is refused, and what already sits in rondo is a named, shrinking list of relocations | accepted |
+| D-0096 | The header's "Requests" link is closed, and a thread's `Esc` goes to the bare address: the link led to the new-request view the list already reaches, and the way back it carried on a thread moves to the logo | accepted |
 
 ---
 
@@ -13438,6 +13439,11 @@ and R3/R4 after `D-0064`); the gate's answers are recorded in "What was put to t
 answer" below. Supersedes `D-0057`. Refs rondo#172, `D-0057`, `D-0054`, `D-0041`, `D-0042`, `D-0007`,
 `D-0055`, `D-0056`, `D-0002`, `D-0006`, `D-0061`, `D-0064`.
 
+> **Annotation (2026-09-22, from D-0096).** Added after this entry was accepted, and additive.
+> R3's `Esc` follows the view's `a[data-back]`. On a thread that was the header's "Requests" link,
+> which `D-0096` removes; the thread's way back is now the logo, to the bare address, as it already
+> was on the new-request view. R3's duties and vocabulary are unchanged.
+
 > **Annotation (2026-09-22, from rondo#379), and not additive.** Added after this entry was
 > accepted, **pending the answer of rondo's human gate** on rondo#379. **R3's client script gains one
 > more duty, in a file of its own: remembering the text size a person chose** (`page/text-size.js`).
@@ -21481,3 +21487,54 @@ re-measure the claim.
   reliance on the press's comparison (`D-0091` rule 1.3) is not holding.
 - **A verdict in the thread that `ci show` for the same pull request does not give**: rondo is
   judging again.
+
+## D-0096 — The header's "Requests" link is closed, and a thread's `Esc` goes to the bare address: the link led to the new-request view the list already reaches, and the way back it carried on a thread moves to the logo
+
+**Status:** accepted (2026-09-22, rondo's owner, through the window, on a screenshot of the running
+page). Supersedes nothing. `D-0059` gains the annotation this entry adds (listed at the end). Refs
+`D-0059`, `D-0083` rules 3 and 4, rondo#220 S1.
+
+**Why an entry is needed.** The link and the thread's `Esc` were placed by rondo#220 S1 ("the way
+into the requests, on every view") and no entry decided either. Closing the link changes where
+`Esc` goes on one view, which a person feels, so it is written down rather than done quietly.
+
+### What was measured
+
+At rondo `223654d`, by reading `src/access/web.tsx` and the page in a browser:
+- The header's "Requests" (`依頼`) led to `/?requests=open`: an empty centre asking what the person
+  wants and "the last 7 days" beside it (`D-0083` rule 4). That is the address of the list's own
+  "write a new request". Named "Requests", it led to a writing view, not a list; the list of
+  requests is the left face on every view (`D-0083` rule 5).
+- `Esc` follows the page's `a[data-back]`. Only on a thread was that the header's link; on the
+  new-request view it is the logo, to the bare address; on the bare address there is none; the
+  scope, pull-request and release views carry their own `←`.
+
+### Decision
+
+1. **The header's "Requests" link is removed**, with its wording. The count of what waits on the
+   person stays where it was, and still leads to the bare address.
+2. **A thread's `Esc` goes to the bare address**, the logo's destination: the logo is the thread's
+   `a[data-back]`. The key hint's "esc back" is drawn there as before, and still left out only on the
+   bare address.
+3. **`/?requests=open` stays**: the list's "write a new request" is its way in.
+
+### What it costs
+
+- **`Esc` may leave the screen as it was.** The bare address opens the oldest request that waits
+  (`D-0083` rule 3); when that is the thread already open, `Esc` lands on the same thread. The owner
+  took this knowingly.
+- **With no approver, the new-request view has no link to it.** "write a new request" is drawn only
+  where a request can be written, so where nothing can be written the view is reached only by its
+  address. It holds nothing to do there.
+
+### Annotations this entry adds
+
+| Entry | What the annotation says | Additive? |
+|---|---|---|
+| `D-0059` | The view's way back that `Esc` follows (R3's `a[data-back]`) is, on a thread, the logo to the bare address; the header's "Requests" link it used to be is removed | additive |
+
+### What would falsify it
+
+- **A person looking for the requests in the header** after this, rather than in the left face.
+- **A person pressing `Esc` on a thread and expecting the list's writing view**, which is where it
+  used to go.

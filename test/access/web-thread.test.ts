@@ -79,6 +79,13 @@ async function seedThread(world: ReturnType<typeof fresh>): Promise<void> {
 const bodiesIn = (html: string): readonly string[] =>
   [...html.matchAll(/<p lang="">([\s\S]*?)<\/p>/g)].map((found) => unescaped(found[1] ?? ""));
 
+/** The page's `<header>`, the chrome every view shares. */
+const headerOf = (html: string): string => /<header\b[\s\S]*?<\/header>/.exec(html)?.[0] ?? "";
+
+/** Every element `Esc` could follow (`keys.js` takes the first `a[data-back]`). */
+const backsIn = (html: string): readonly string[] =>
+  [...html.matchAll(/<a\b[^>]*\bdata-back=""[^>]*>/g)].map((found) => found[0]);
+
 /** One message's `<article>`, by its id. */
 const messageIn = (html: string, id: string): string =>
   /<article id="[^"]*"[\s\S]*?<\/article>/.exec(
@@ -366,6 +373,32 @@ test("D-0072: the page keeps a question waiting until an answer carries it on, a
   expect(messageIn(onward, "ask-b")).not.toContain(">You stopped this line</span>");
 });
 
+test("Esc on a thread goes to the bare address, as the logo does, and the summary has nowhere further back", async () => {
+  const world = fresh();
+  await seedThread(world);
+  const ports = portsOver(world, "ada", []);
+
+  // **A thread's way back is the bare address** (D-0096): the header's
+  // "Requests" link it used to follow is gone, so the logo carries it.
+  const thread = await operatorPage(
+    ports,
+    "t",
+    { kind: "thread", messageId: "request-a", to: null },
+    EN,
+    mint,
+  );
+  expect(backsIn(thread)).toEqual(['<a href="/?lang=en" data-back="">']);
+  // The new-request view already went there, and still does.
+  const opened = await operatorPage(ports, "t", { kind: "requests" }, EN, mint);
+  expect(backsIn(opened)).toEqual(['<a href="/?lang=en" data-back="">']);
+  // On the bare address `Esc` does nothing, and the key hint says so by
+  // leaving "esc back" out; everywhere it goes back, the hint is drawn.
+  const summary = await operatorPage(ports, "t", { kind: "summary" }, EN, mint);
+  expect(backsIn(summary)).toEqual([]);
+  expect(thread).toContain(">back</span>");
+  expect(summary).not.toContain(">back</span>");
+});
+
 test("the summary counts an ask waiting on the person and leads to the reply, and the requests list reads at a glance", async () => {
   const world = fresh();
   await seedThread(world);
@@ -378,8 +411,10 @@ test("the summary counts an ask waiting on the person and leads to the reply, an
   const summary = await operatorPage(ports, "t", { kind: "summary" }, EN, mint);
   expect(messageIn(summary, "ask-b")).toContain("data-waiting");
   expect(summary).toContain("Please look at the flaky test.");
-  // The header's way in, on every view, with the count the redraw renews.
-  expect(summary).toContain('href="/?requests=open&amp;lang=en"');
+  // **No "Requests" link in the header** (D-0096): the way to write a new
+  // request is the list's own link, and the header keeps the count.
+  expect(headerOf(summary)).not.toContain("requests=open");
+  expect(summary).toMatch(/<a class="list-new" href="\/\?requests=open&amp;lang=en">/);
   // One count in the chrome, and it leads to the same page (#220 S1).
   expect(summary).toMatch(
     /<span id="waiting-count" class="empty:hidden"><a href="\/\?lang=en" [^>]*>1 waiting<\/a>/,

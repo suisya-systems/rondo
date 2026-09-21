@@ -3278,9 +3278,10 @@ export async function operatorPage(
             <h1 class="text-title font-semibold tracking-tight">
               {
                 // `data-back` is what `Esc` follows; on the summary there is
-                // nowhere further back to go, so it is absent there, and on a
-                // thread the way back is the requests link beside this.
-                view.kind === "summary" || view.kind === "thread" || view.kind === "scope" ? (
+                // nowhere further back to go, so it is absent there. A thread's
+                // way back is the bare address too (D-0096): the header's
+                // requests link it used to follow is gone.
+                view.kind === "summary" || view.kind === "scope" ? (
                   <a href={here}>rondo</a>
                 ) : (
                   <a href={viewHref({ kind: "summary" }, wording.lang)} data-back="">
@@ -3290,23 +3291,13 @@ export async function operatorPage(
               }
             </h1>
             {/*
-             * **The way into the requests, on every view** (#220 S1), and beside
-             * it the count of everything waiting on the person -- the same number
+             * The count of everything waiting on the person -- the same number
              * as the summary's heading, and a link to that summary. The count is
              * its own element so a redraw can renew it out of band: the header
-             * is not swapped.
+             * is not swapped. The "Requests" link #220 S1 put before it is
+             * closed (D-0096): it led to the new-request view, which the list's
+             * own "write a new request" already reaches.
              */}
-            <span aria-hidden="true" class="text-faint">
-              /
-            </span>
-            <a
-              href={viewHref({ kind: "requests" }, wording.lang)}
-              class={`inline-flex items-center gap-1.5 text-meta hover:text-foreground ${onThreads ? "font-medium text-foreground" : "text-muted-foreground"}`}
-              {...(view.kind === "thread" ? { "data-back": "" } : {})}
-              {...(view.kind === "requests" ? { "aria-current": "page" } : {})}
-            >
-              {wording.requestsNav}
-            </a>
             <span id="waiting-count" class="empty:hidden">
               {waitingCount === 0 ? null : (
                 // **Said as what it counts** (the S1 design pass): a bare `1`

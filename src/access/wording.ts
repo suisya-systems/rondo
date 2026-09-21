@@ -123,8 +123,6 @@ export interface Chrome extends PageWords {
   readonly undeterminedFold: (count: number) => string;
 
   // -- Request threads (D-0061 rule 4, D-0059 section 5a's send) --
-  /** The header's way into the requests, on every view. */
-  readonly requestsNav: string;
   /** How many messages a request's thread holds, and when it last moved. */
   /** The pill on a request, or on a message, that waits for the person's reply. */
   readonly asksWaiting: (count: number) => string;
