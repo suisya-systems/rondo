@@ -42,7 +42,7 @@
  */
 
 import { isLanguageTag } from "../refrain/plan.js";
-import { APPROVED_OUTCOME } from "../store/records.js";
+import { APPROVED_OUTCOME, READING_COVERAGE, type ReadingReach } from "../store/records.js";
 import type { IssueReadFailure } from "./issue-read.js";
 import { PAGE_EN, PAGE_JA, type PageWords } from "./page/words.js";
 
@@ -78,6 +78,11 @@ function agentTypeSourceJa(from: AgentTypeSource): string {
     default:
       return "この範囲が記録するプラン";
   }
+}
+
+/** A finding's severity as the {@link JA} set names it, wherever it names one. */
+function severityJa(severity: string): string {
+  return { blocker: "阻害", major: "重大", minor: "軽微", nit: "細部" }[severity] ?? severity;
 }
 
 function scopeTestEn(test: string): string {
@@ -390,7 +395,8 @@ export interface Chrome extends PageWords {
   readonly whyNotRead: string;
   readonly workHeading: string;
   readonly changedAgainst: (baseRef: string) => string;
-  readonly changedUnreadable: (reason: string) => string;
+  /** The work could not be read; git's own reason goes in the maintainer fold beside it (D-0076 rule 4.5). */
+  readonly changedUnreadable: string;
   readonly changedNoRange: string;
   readonly noCommits: string;
   readonly noFiles: string;
@@ -419,6 +425,12 @@ export interface Chrome extends PageWords {
   readonly checksNone: string;
   readonly checksCounted: (commits: number, files: number) => string;
   readonly whatItRead: string;
+  /**
+   * What a reader reached and what it did not (rondo#69), from the store's
+   * {@link ReadingReach}. The `en` set is the terminal's own lines, joined, so
+   * the page and the terminal still say one thing about one drafter.
+   */
+  readonly readingCovered: (reach: ReadingReach) => string;
   readonly basisNone: string;
   readonly basisUnresolved: string;
   readonly modelPending: string;
@@ -1345,7 +1357,9 @@ explanation you pressed on and then answers the gate.`,
   whyNotRead: "The worker's own account could not be read; it is in the text below if it was.",
   workHeading: "What changed",
   changedAgainst: (baseRef) => `against ${baseRef}`,
-  changedUnreadable: (reason) => `The workspace could not be read: ${reason}`,
+  changedUnreadable:
+    "The workspace could not be read, so what this work changed cannot be shown here. Whoever " +
+    "maintains rondo on this machine can check whether the workspace is still there.",
   changedNoRange: "This run names no branch to compare, so there is nothing to list.",
   noCommits: "No commits on the branch.",
   noFiles: "No files changed.",
@@ -1377,6 +1391,9 @@ explanation you pressed on and then answers the gate.`,
   checksCounted: (commits, files) =>
     `Read ${String(commits)} commit${commits === 1 ? "" : "s"} and ${String(files)} file${files === 1 ? "" : "s"}.`,
   whatItRead: "What it read, and what it did not",
+  // A reach this build does not know says its reach is not recorded, as an
+  // unknown drafter does, rather than guessing at it.
+  readingCovered: (reach) => (READING_COVERAGE[reach] ?? READING_COVERAGE.unrecorded).join(" "),
   basisNone: "no basis given",
   basisUnresolved: "none of these matched the delivered work",
   modelPending: "Not here yet; it may still arrive.",
@@ -2222,7 +2239,9 @@ const JA: Chrome = Object.freeze({
   whyNotRead: "作業者自身の説明は読み取れませんでした。読めていれば下のテキストにあります。",
   workHeading: "変わったもの",
   changedAgainst: (baseRef) => `${baseRef} との比較`,
-  changedUnreadable: (reason) => `作業場所を読み取れませんでした: ${reason}`,
+  changedUnreadable:
+    "作業場所を読み取れなかったため、この作業で何が変わったかをここには出せません。" +
+    "作業場所がまだ残っているかどうかは、このマシンで rondo を管理する人に確かめてもらえます。",
   changedNoRange: "比べる相手のブランチが記録されていないので、変更を一覧にできません。",
   noCommits: "ブランチにコミットはありません。",
   noFiles: "変わったファイルはありません。",
@@ -2255,6 +2274,31 @@ const JA: Chrome = Object.freeze({
   checksCounted: (commits, files) =>
     `コミット ${String(commits)} 件とファイル ${String(files)} 件を読みました。`,
   whatItRead: "読んだものと読んでいないもの",
+  readingCovered: (reach) => {
+    const built =
+      "ビルドもテストも、何かの実行もしていません。rondo は周回の作業を動かせないためです。" +
+      "この周回に求められた検証が実際に行われたかどうかは、確かめてもいなければ、行われたとも言っていません。";
+    switch (reach) {
+      case "model":
+        return (
+          "読んだのは、コミット済みの差分、コミットメッセージ、周回への指示、作業記録に残ったコマンドと" +
+          "その出力、それに渡されたリポジトリの決まりごとです。自分では何も実行していません。" +
+          "材料は渡しましたが、それが理解されたかどうかは確かめようがありません。"
+        );
+      case "history":
+        return (
+          `${built}読んだのはコミット済みの履歴だけで、周回が頼まれたとおりのことをしたかどうかは` +
+          "判断できません。"
+        );
+      case "historyAndStatus":
+        return (
+          `${built}読んだのはコミット済みの履歴と、作業場所に残るコミットされていない変更で、` +
+          "周回が頼まれたとおりのことをしたかどうかは判断できません。"
+        );
+      default:
+        return "この読み手が何を見たかは記録されていないため、どこまで確かめたかはここでは言えません。";
+    }
+  },
   basisNone: "根拠の指定なし",
   basisUnresolved: "どれも渡した作業と一致しませんでした",
   modelPending: "まだ届いていません。これから届くかもしれません。",
@@ -2281,10 +2325,8 @@ const JA: Chrome = Object.freeze({
   gateBack: "ゲートに戻る",
   modelRaised: (blockers, majors) => `モデルレビューの指摘: ${raisedJa(blockers, majors)}。`,
   modelRaisedLink: "読む",
-  severityWord: (severity) =>
-    ({ blocker: "阻害", major: "重大", minor: "軽微", nit: "細部" })[severity] ?? severity,
-  severityCount: (severity, count) =>
-    `${({ blocker: "阻害", major: "重大", minor: "軽微", nit: "細部" })[severity] ?? severity} ${String(count)} 件`,
+  severityWord: severityJa,
+  severityCount: (severity, count) => `${severityJa(severity)} ${String(count)} 件`,
   readingNotTaken: "読み取りを取れなかったため、判断材料はありません。",
   whyNotTaken: "理由",
   checksWorkUnreadable:
@@ -2292,7 +2334,7 @@ const JA: Chrome = Object.freeze({
   checksNotMatched: "照合できず",
   modelNotTaken: "チェックだけが読みました。モデルレビューは取れていません。",
   neitherReadingTaken: "チェックもモデルレビューも、この作業を読めませんでした。",
-  recordsFold: (count) => `approve で記録される内容 (${String(count)} 項目) と記録全文`,
+  recordsFold: (count) => `承認したときに記録される内容 (${String(count)} 項目) と記録全文`,
   denialUnreadable: "どのコマンドだったかを rondo は記録できませんでした。",
   modelMayArrive: "モデルレビューはこれから届くかもしれません。",
   reachYourTurn: "rondo があなたの答えを待っています。",
@@ -2437,7 +2479,7 @@ const JA: Chrome = Object.freeze({
     "この依頼の範囲をすでに承認済みかどうかは、ここからは分かりません。どちらであってもこれは" +
     "新しい下書きで、押せば 2 つめが記録されます。",
   scopeHeldBounds: (digest, tier, granted, from) =>
-    `エージェント種別 ${digest}: tier ${tier}、許可は` +
+    `エージェント種別 ${digest}: モデルの規模は ${tier}、許可は` +
     `${granted.length === 0 ? "なし" : granted.join(", ")}` +
     `（${agentTypeSourceJa(from)}から読み取り）`,
   scopeHeldNone: (digest) =>
@@ -2592,12 +2634,12 @@ const JA: Chrome = Object.freeze({
   revisePlaceholder: "例: パーサーの変更はそのまま、コマンドラインには手を入れないでほしい",
   reviseNote:
     "書かれた言葉はそのままゲートに渡り、2 周目はその言葉で作業をやり直すよう頼まれます。" +
-    "その周回と費用は、この周回が動いた承認の budget に数えられます。周回の名前は rondo が" +
+    "その周回と費用は、この周回が動いた承認の枠に数えられます。周回の名前は rondo が" +
     "付けるので、入力の必要はありません。",
   reviseNoScope:
-    "承認済みの範囲のもとで始めた周回ではないため、2 周目を数える budget がありません。" +
+    "承認済みの範囲のもとで始めた周回ではないため、2 周目を数える枠がありません。" +
     "ここから変更を依頼することはできません。",
-  reviseDraftFinding: (severity, text) => `- [${severity}] ${text}`,
+  reviseDraftFinding: (severity, text) => `- ${severityJa(severity)}: ${text}`,
   reviseDraftBases: (bases) => `  場所: ${bases}`,
   reviseDraftChange: (words) => `  直すこと: ${words}`,
   reviseDrafted:
@@ -2790,7 +2832,7 @@ const JA: Chrome = Object.freeze({
   publishTargetHeading: "何が起きるか",
   publishPushes: (branch, remote) => `ブランチ ${branch} を ${remote} へ push します。`,
   publishOpens: (repo, base) => `${repo} に、${base} 向けのプルリクエストを作ります。`,
-  publishCloses: (runId) => `run ${runId} を completed として閉じます。`,
+  publishCloses: (runId) => `実行 ${runId} を完了として閉じます。`,
   publishPushUrl: (url) => `その push が届くのは ${url} です。`,
   publishWorkspace: (workspace) => `作業は ${workspace} にあります。`,
   publishRequestHeading: "作られるプルリクエスト",

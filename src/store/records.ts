@@ -944,32 +944,61 @@ export function modelReadingDue(readings: readonly LapReading[]): boolean {
  * that its reach is not recorded rather than guessing at it.
  */
 export function readingCoverage(drafter: string): readonly string[] {
+  return READING_COVERAGE[readingReach(drafter)];
+}
+
+/**
+ * What a reader by this drafter reached, as a fact rather than a sentence
+ * (rondo#69), so that each surface says it in its own words: the terminal in
+ * {@link readingCoverage}'s English, the page in the operator's language
+ * (D-0055). The sentences are two; the fact they both say is this one.
+ *
+ * - `model`: the material D-0065 2.5 hands over, and nothing run.
+ * - `unrecorded`: a drafter whose reach this code does not know.
+ * - `history`: rondo's deterministic reader before D-0060, committed history only.
+ * - `historyAndStatus`: the same reader after it, committed history and git status.
+ */
+export type ReadingReach = "model" | "unrecorded" | "history" | "historyAndStatus";
+
+export function readingReach(drafter: string): ReadingReach {
   if (isModelReadingDrafter(drafter)) {
-    // D-0065 2.5, in the deterministic lines' shape and with D-0029 rule 11's
-    // three grades: what was handed over, that nothing ran, and that delivery is
-    // the most that can be said about understanding.
-    return Object.freeze([
-      "It read the committed diff, the commit messages, the prompt, the transcript's commands",
-      "and outputs, and the repository rules it was given, and ran nothing itself.",
-      "The material was delivered; that it was understood is not provable.",
-    ]);
+    return "model";
   }
   if (!isDeterministicReadingDrafter(drafter)) {
-    return Object.freeze([
-      "What this reader looked at is not recorded, so nothing here says what it covered.",
-    ]);
+    return "unrecorded";
   }
-  // Wrapped where a terminal would otherwise wrap it, in the shape the
-  // neighbouring screens use: the caller indents these, and a sentence that ran
-  // past the width would be the one line on the screen that folded.
-  return Object.freeze([
-    "It built nothing, ran nothing and tested nothing: rondo cannot run a lap's work.",
-    "Whether the verification this lap was asked for ran is neither checked nor claimed here.",
-    drafter === DETERMINISTIC_READING_DRAFTER_V1
-      ? "It read committed history only, and it cannot tell whether the lap did what was asked."
-      : "It read committed history and git status, and cannot tell whether the lap did what was asked.",
-  ]);
+  return drafter === DETERMINISTIC_READING_DRAFTER_V1 ? "history" : "historyAndStatus";
 }
+
+// Wrapped where a terminal would otherwise wrap it, in the shape the
+// neighbouring screens use: the caller indents these, and a sentence that ran
+// past the width would be the one line on the screen that folded.
+const DETERMINISTIC_REACH = [
+  "It built nothing, ran nothing and tested nothing: rondo cannot run a lap's work.",
+  "Whether the verification this lap was asked for ran is neither checked nor claimed here.",
+] as const;
+
+export const READING_COVERAGE: Readonly<Record<ReadingReach, readonly string[]>> = Object.freeze({
+  // D-0065 2.5, in the deterministic lines' shape and with D-0029 rule 11's
+  // three grades: what was handed over, that nothing ran, and that delivery is
+  // the most that can be said about understanding.
+  model: Object.freeze([
+    "It read the committed diff, the commit messages, the prompt, the transcript's commands",
+    "and outputs, and the repository rules it was given, and ran nothing itself.",
+    "The material was delivered; that it was understood is not provable.",
+  ]),
+  unrecorded: Object.freeze([
+    "What this reader looked at is not recorded, so nothing here says what it covered.",
+  ]),
+  history: Object.freeze([
+    ...DETERMINISTIC_REACH,
+    "It read committed history only, and it cannot tell whether the lap did what was asked.",
+  ]),
+  historyAndStatus: Object.freeze([
+    ...DETERMINISTIC_REACH,
+    "It read committed history and git status, and cannot tell whether the lap did what was asked.",
+  ]),
+});
 
 /**
  * The five voices a proposal may speak in (D-0022 rule 4's closed union).

@@ -101,7 +101,7 @@ import {
   latestReading,
   MODEL_READING_DRAFTER_PREFIX,
   type NonTerminalStatus,
-  readingCoverage,
+  readingReach,
   reviewedReading,
   type ScopePayload,
   type ScopeSpent,
@@ -413,8 +413,9 @@ const SEVERITY_TONE: Readonly<Record<FindingSeverity, Tone>> = {
 
 /**
  * What a reader looked at and what it did not, beside what it found (rondo#69):
- * the store's own sentences, which are English in every set, so the block says
- * so.
+ * the store's {@link readingReach}, said in the page's language. The terminal
+ * says the same fact in its own English lines (`readingCoverage`), so the two
+ * surfaces still say one thing about one drafter.
  *
  * **Drawn open, and not a fold** (`D-0082` rule 7, rondo#317). It was a quiet
  * `<details>`, which put the one sentence that bounds a verdict behind an open.
@@ -434,8 +435,8 @@ function coverageLine(id: string, wording: Chrome, drafter: string) {
   return (
     <div id={id} class="mt-2">
       <p class="text-meta leading-5 text-faint">{wording.whatItRead}</p>
-      <p class="mt-1 text-meta leading-5 text-muted-foreground" lang="en">
-        {readingCoverage(drafter).join(" ")}
+      <p class="mt-1 text-meta leading-5 text-muted-foreground">
+        {wording.readingCovered(readingReach(drafter))}
       </p>
     </div>
   );
@@ -487,13 +488,12 @@ function changedView(wording: Chrome, record: IterationRecord, work: LapWorkInsp
       {work === null ? (
         <p class="mt-1 text-body leading-5 text-muted-foreground">{wording.changedNoRange}</p>
       ) : work.kind !== "read" ? (
-        // **`wrap-anywhere`, because the reason is git's own line** and carries
-        // an absolute path with no space in it: at 420 it pushed the whole
-        // document sideways, which is the one thing a phone width must not do
-        // (rondo#233 S4's screenshot pass).
-        <p class="mt-1 text-body leading-5 wrap-anywhere text-muted-foreground">
-          {wording.changedUnreadable(work.reason)}
-        </p>
+        // git's own line -- the command and what it wrote to stderr -- is
+        // rondo's reason and not the person's, so it is folded (D-0076 rule 4.5).
+        <>
+          <p class="mt-1 text-body leading-5 text-muted-foreground">{wording.changedUnreadable}</p>
+          {maintainerFold("changed-reason", wording, work.reason)}
+        </>
       ) : (
         <div class="mt-2 space-y-2">
           {work.commits.length === 0 ? (
