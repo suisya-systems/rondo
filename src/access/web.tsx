@@ -1323,7 +1323,7 @@ function approveView(
             // condition the label already turns on.
             class={`${raised === null ? PRIMARY : DESPITE} h-10 w-full justify-center px-6 text-sm sm:h-9 sm:w-auto`}
           >
-            {raised === null ? APPROVE_BODY : wording.approveDespite}
+            {raised === null ? wording.approveFace : wording.approveDespite}
           </button>
           <span
             id={`approve-plain-${record.id}`}

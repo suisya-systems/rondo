@@ -388,6 +388,7 @@ function publishForm(wording: Chrome, record: IterationRecord, token: string, sh
     >
       <input type="hidden" name="token" value={token} />
       <input type="hidden" name="iteration" value={record.id} />
+      <input type="hidden" name="request" value={record.requestMessageId} />
       <input type="hidden" name="shown" value={shown} />
       <button
         type="submit"
@@ -432,6 +433,7 @@ function despiteForm(wording: Chrome, record: IterationRecord, token: string, sh
       >
         <input type="hidden" name="token" value={token} />
         <input type="hidden" name="iteration" value={record.id} />
+        <input type="hidden" name="request" value={record.requestMessageId} />
         <input type="hidden" name="shown" value={shown} />
         {/* The one field that says which of the two presses this is, and the
             port refuses it when the refusal it names is not there. */}

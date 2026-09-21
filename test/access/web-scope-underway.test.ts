@@ -306,7 +306,10 @@ test("an approved drafted scope offers each plan its own start, and says so wher
   const once = await render(ports);
   expect(starts(once)).toBe(0);
   expect(once).toContain(EN.planStarted);
-  expect(once).toContain(`#${encodeURIComponent("lap-lap-plan-0")}`);
+  // The way to the lap is the request's thread, which draws it; an anchor on
+  // the summary named an element nothing drew.
+  expect(once).toContain('href="/?thread=r1&amp;lang=en"');
+  expect(once).not.toContain("#lap-");
   expect(once.replaceAll("&#39;", "'")).toContain(EN.planHeld(["/"]));
   expect(once).toContain(EN.planHeldBy);
   expect(once).toContain("Two things, please.");

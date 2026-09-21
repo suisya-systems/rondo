@@ -113,7 +113,7 @@ test("a ja host reads in Japanese and leaves every token in its own bytes", asyn
 
   // **What the ledger records stays English even here** (rule 4): the claim
   // labels beside the button are the bytes a press stores.
-  expect(summary).toContain("approve を押すと");
+  expect(summary).toContain("「承認する」を押すと");
   expect(summary).toMatch(/<dt class="label[^"]*">request<\/dt>/);
 });
 
@@ -365,6 +365,37 @@ test("every address a ja page composes for itself carries ja (rule 11)", async (
   );
   expect(answered.status).toBe(303);
   expect(answered.location).toBe("/?thread=req-i-0001&lang=ja");
+  expect(pressed).toEqual([{ iterationId: "i-0001", body: "approve" }]);
+
+  stop.abort();
+  expect(await served).toBe(0);
+});
+
+test("the Japanese approve button says 承認する, and the press still answers 'approve' (D-0041 rule 7)", async () => {
+  const world = fresh();
+  await reserve(world, "i-0001", "do the thing", "ja");
+  await openGate(world, "i-0001");
+  const pressed: Pressed = [];
+  const { base, stop, served } = await serving(portsOver(world, "ada", pressed, "ja"));
+
+  const summary = (await get(base, "/?lang=ja")).body;
+  const button =
+    /<button type="submit"[^>]*aria-describedby="approve-plain-[^"]*"[^>]*>([^<]*)</.exec(summary);
+  // **The face is the page's language**: the one English word left on the
+  // Japanese gate was the button a person presses (#369 missed it).
+  expect(button?.[1]).toBe("承認する");
+  // The token is still in front of the person where it is a token: the note
+  // saying what the gate is answered with.
+  expect(summary).toContain("&#39;approve&#39;");
+
+  // **And what is posted is not the face**: the answer is read from the
+  // constant on the way in, so the ledger's word does not move with the page.
+  const answered = await post(
+    base,
+    { token: tokenIn(summary), iteration: "i-0001", request: "req-i-0001" },
+    { origin: base },
+  );
+  expect(answered.status).toBe(303);
   expect(pressed).toEqual([{ iterationId: "i-0001", body: "approve" }]);
 
   stop.abort();
