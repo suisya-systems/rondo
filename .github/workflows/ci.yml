@@ -391,12 +391,49 @@ jobs:
           missing=0
           grep -q "planted-violation.ts imports the external module node:http" planted.log || missing=1
           grep -q "planted-violation.ts imports ../access/local.js" planted.log || missing=1
+          # D-0093: a module nobody gave a role is refused too.
+          grep -q "planted-violation.ts names no role" planted.log || missing=1
           rm -f planted.log
           if [ "$missing" -ne 0 ]; then
-            echo "::error::The suite went red, but not with the two violations the planted module contains. Something else is failing, and this job has proved nothing about the sweep."
+            echo "::error::The suite went red, but not with the three violations the planted module contains. Something else is failing, and this job has proved nothing about the sweep."
             exit 1
           fi
-          echo "The planted violation was caught, with both expected messages (vitest exited $status)."
+          echo "The planted violation was caught, with every expected message (vitest exited $status)."
+
+      # D-0093: a module that keeps every import rule but plays a role D-0064
+      # section 5 gives to continuo. The audit that led to D-0093 found four of
+      # these, and the layer rules passed every one.
+      - name: Plant a module playing continuo's role and require a red suite
+        shell: bash
+        env:
+          RONDO_TEST_SEED: "1"
+        run: |
+          set -uo pipefail
+          test_file=test/architecture/import-boundaries.test.ts
+          echo 'export const planted = 1;' > src/access/planted-placement.ts
+          sed -i 's|^const ROLES_BY_MODULE: .* = {$|&\n  "src/access/planted-placement.ts": ["Worker"],|' "$test_file"
+          if ! grep -q '"src/access/planted-placement.ts": \["Worker"\]' "$test_file"; then
+            echo "::error::The planted role did not apply. ROLES_BY_MODULE has changed shape, so this step is asserting nothing -- re-point the sed at its declaration."
+            exit 1
+          fi
+          set +e
+          npx vitest run "$test_file" 2>&1 | tee planted.log
+          status=${PIPESTATUS[0]}
+          set -e
+          rm -f src/access/planted-placement.ts
+          git checkout -- "$test_file"
+          if [ "$status" -eq 0 ]; then
+            rm -f planted.log
+            echo "::error::The boundary test passed with a module playing continuo's Worker role. The placement check is vacuous."
+            exit 1
+          fi
+          if ! grep -q "planted-placement.ts plays Worker, which D-0064 section 5 assigns to continuo" planted.log; then
+            rm -f planted.log
+            echo "::error::The suite went red, but not on the planted role. Something else is failing, and this step has proved nothing about the placement check."
+            exit 1
+          fi
+          rm -f planted.log
+          echo "The planted role was caught (vitest exited $status)."
 
   review-is-not-vacuous:
     # D-0029 rule 12. The review stage's whole binding force is that a reading

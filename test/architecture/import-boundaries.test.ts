@@ -1187,6 +1187,332 @@ function violationsIn(module: string, source: string): string[] {
   return problems;
 }
 
+// --- which role a module plays (D-0093) ----------------------------------------
+
+/**
+ * The layers above say what a module may reach. They do not say whether the
+ * module is rondo's to write at all, and on 2026-09-22 four pieces of cadenza's
+ * and continuo's work were found in rondo, every one of them inside its layer's
+ * rules: the commands a worker may run, the reading of a pull request's checks,
+ * a lap's spend read off the worker's transcript, and the probe that a worker's
+ * sandbox can come up. So every module also names the role it plays, from
+ * `D-0064` section 5's table, and a role that table gives to cadenza or to
+ * continuo is refused here (D-0093).
+ *
+ * **The rows are pinned, not read.** `D0064_ROLES` is a copy of the table's
+ * first column with the repository its third column names, and a case below
+ * compares the copy with `DECISIONS.md`. Reading the table at test time would
+ * let a reassigned row quietly change what passes; a pinned copy makes the
+ * change a red test, and the diff that turns it green says which modules the
+ * new assignment reaches.
+ */
+const D0064_ROLES: Readonly<
+  Record<string, "operator" | "rondo" | "cadenza" | "continuo" | "nobody">
+> = {
+  "Human (product manager)": "operator",
+  "Secretary: dialogue": "rondo",
+  "Secretary: splitting and handing over": "rondo",
+  "Secretary: relaying a worker's question": "nobody",
+  "Dispatcher: starting workers": "rondo",
+  "Dispatcher: patrolling": "nobody",
+  Worker: "continuo",
+  Reviewer: "rondo",
+  "CI and merge watch, cleanup": "continuo",
+  "Work discovery": "nobody",
+  Curator: "nobody",
+  "Authority and settings": "cadenza",
+  "Record (`state.db`)": "rondo",
+};
+
+/** The repositories whose roles rondo does not play. */
+const FOREIGN_OWNERS: ReadonlySet<string> = new Set(["cadenza", "continuo"]);
+
+/**
+ * Roles rondo plays that are not rows of the table, each held only where its
+ * prefix says. The two seams are how rondo *consumes* the other repositories,
+ * which is not playing their roles -- and is why a seam is allowed only inside
+ * the layer D-0017 and D-0018 drew for it, so an access point cannot call its
+ * own copy of continuo's work a seam.
+ */
+const ROLES_OUTSIDE_D0064: Readonly<Record<string, string>> = {
+  // D-0018: the facade, the one importer of cadenza.
+  "Seam to cadenza": "src/cadenza/",
+  // D-0017: driving continuo's CLI and reading its wire protocol.
+  "Seam to continuo": "src/continuo/",
+  // D-0064 O7 and D-0010: push, pull request and landing, with the operator's gh.
+  Publishing: "src/access/",
+  // The barrel re-exports whatever the roles above export.
+  "The public barrel": "src/index.ts",
+};
+
+const RECORD = "Record (`state.db`)";
+const SPLITTING = "Secretary: splitting and handing over";
+const DIALOGUE = "Secretary: dialogue";
+const DISPATCHER = "Dispatcher: starting workers";
+const HUMAN = "Human (product manager)";
+
+/**
+ * Every module under `src/`, and the roles it plays. A module missing here is
+ * refused: the moment a file is created is the moment its role is decided, and
+ * the diff that adds it says so.
+ */
+const ROLES_BY_MODULE: Readonly<Record<string, readonly string[]>> = {
+  "src/access/advisory.ts": [DIALOGUE],
+  "src/access/checks-host.ts": ["CI and merge watch, cleanup"],
+  "src/access/cli-parse.ts": [HUMAN],
+  "src/access/cli.ts": [HUMAN],
+  "src/access/conductor.ts": [DISPATCHER],
+  "src/access/console.ts": [HUMAN],
+  "src/access/delegation.ts": [RECORD],
+  // D-0089's definition of done is part of the wording a worker runs on (D-0064 O3).
+  "src/access/done.ts": [SPLITTING],
+  "src/access/drafted-start.ts": [SPLITTING],
+  "src/access/drafted-view.ts": [SPLITTING],
+  "src/access/drafter-host.ts": [SPLITTING],
+  "src/access/forge-preflight.ts": ["Publishing"],
+  "src/access/forge.ts": ["Publishing", "CI and merge watch, cleanup"],
+  "src/access/framing.ts": [SPLITTING, "Reviewer"],
+  "src/access/host-failure.ts": [HUMAN],
+  "src/access/inbox.ts": [DIALOGUE],
+  "src/access/issue-read.ts": [SPLITTING],
+  "src/access/local.ts": [HUMAN],
+  "src/access/markdown.ts": ["Publishing"],
+  // D-0091: the merge press, through the operator's gh.
+  "src/access/merge.ts": ["Publishing"],
+  "src/access/model-draft/host.ts": [SPLITTING],
+  "src/access/model-draft/judgement.ts": [SPLITTING],
+  "src/access/model-review/host.ts": ["Reviewer"],
+  "src/access/model-review/judgement.ts": ["Reviewer"],
+  "src/access/page/contract.ts": [HUMAN],
+  "src/access/page/empty-side.tsx": [HUMAN],
+  "src/access/page/empty.tsx": [HUMAN],
+  "src/access/page/events.tsx": [HUMAN],
+  "src/access/page/faces.tsx": [HUMAN],
+  "src/access/page/governance.tsx": [HUMAN],
+  "src/access/page/list.tsx": [HUMAN],
+  "src/access/page-logic/days.ts": [HUMAN],
+  "src/access/page-logic/event-fold.ts": [HUMAN],
+  "src/access/page-logic/governance.ts": [HUMAN],
+  "src/access/page-logic/language.ts": [HUMAN],
+  "src/access/page-logic/laps.ts": [HUMAN],
+  "src/access/page-logic/list.ts": [HUMAN],
+  "src/access/page-logic/result.ts": [HUMAN],
+  "src/access/page-logic/routes.ts": [HUMAN],
+  "src/access/page-logic/selection.ts": [HUMAN],
+  "src/access/page-logic/thread-events.ts": [HUMAN],
+  "src/access/page-logic/threads.ts": [HUMAN],
+  "src/access/page-logic/waits.ts": [HUMAN],
+  "src/access/page-logic/week.ts": [HUMAN],
+  "src/access/page/render.ts": [HUMAN],
+  "src/access/page/result.tsx": [HUMAN],
+  "src/access/page/shell.tsx": [HUMAN],
+  "src/access/page/steps.tsx": [HUMAN],
+  "src/access/page/thread-side.tsx": [HUMAN],
+  "src/access/page/thread.tsx": [HUMAN],
+  "src/access/page/vocabulary.tsx": [HUMAN],
+  "src/access/page/words.ts": [HUMAN],
+  "src/access/pull-request.ts": ["Publishing"],
+  "src/access/reach.ts": ["Dispatcher: patrolling"],
+  "src/access/repository-add.ts": [SPLITTING, "Authority and settings"],
+  "src/access/review.ts": ["Reviewer"],
+  "src/access/revise-draft/host.ts": [SPLITTING],
+  "src/access/revise-draft/judgement.ts": [SPLITTING],
+  "src/access/scope.ts": [SPLITTING],
+  "src/access/screens/publish.tsx": [HUMAN],
+  "src/access/screens/release.tsx": [HUMAN],
+  "src/access/screens/scope.tsx": [HUMAN],
+  "src/access/web-app.ts": [HUMAN],
+  "src/access/web.tsx": [HUMAN],
+  "src/access/wording/en.ts": [HUMAN],
+  "src/access/wording/ja.ts": [HUMAN],
+  "src/access/wording.ts": [HUMAN],
+  "src/advisory/budget.ts": [SPLITTING],
+  "src/advisory/proposal.ts": [DIALOGUE, SPLITTING],
+  "src/cadenza/facade.ts": ["Seam to cadenza"],
+  "src/continuo/invoker.ts": ["Seam to continuo"],
+  "src/continuo/pin.ts": ["Seam to continuo"],
+  "src/continuo/protocol.ts": ["Seam to continuo"],
+  "src/continuo/roles.ts": ["Seam to continuo"],
+  "src/continuo/sandbox.ts": ["Worker"],
+  "src/continuo/transcript.ts": ["Worker"],
+  "src/index.ts": ["The public barrel"],
+  "src/refrain/allocator.ts": [DISPATCHER],
+  "src/refrain/classification.ts": [DISPATCHER],
+  "src/refrain/interpreter.ts": [DISPATCHER],
+  "src/refrain/loop.ts": [DISPATCHER],
+  "src/refrain/plan.ts": [DISPATCHER],
+  "src/refrain/policy.ts": [DISPATCHER],
+  "src/refrain/ports.ts": [DISPATCHER],
+  "src/refrain/revision.ts": [DISPATCHER],
+  "src/store/lanes.ts": [RECORD],
+  "src/store/plan.ts": [RECORD],
+  "src/store/records.ts": [RECORD],
+  "src/store/sqlite.ts": [RECORD],
+};
+
+interface Relocation {
+  readonly module: string;
+  readonly role: string;
+  /** What in the module plays the role, and where it is going. */
+  readonly moving: string;
+  /** The entry that admits it. It has to name the module. */
+  readonly decision: string;
+}
+
+/**
+ * The roles still played in rondo that belong elsewhere, while they move. The
+ * list only shrinks: an entry whose module no longer plays the role is stale and
+ * fails, and a new entry needs a decision that names its module.
+ */
+const RELOCATING: readonly Relocation[] = [
+  {
+    module: "src/access/repository-add.ts",
+    role: "Authority and settings",
+    moving: "the allowed-command table per toolchain (BASH, COMMON_BASH), to cadenza",
+    decision: "D-0093",
+  },
+  {
+    module: "src/access/forge.ts",
+    role: "CI and merge watch, cleanup",
+    moving: "readChecks and joinChecks, to continuo",
+    decision: "D-0093",
+  },
+  {
+    module: "src/access/checks-host.ts",
+    role: "CI and merge watch, cleanup",
+    moving: "the whole module, to continuo",
+    decision: "D-0093",
+  },
+  {
+    module: "src/continuo/transcript.ts",
+    role: "Worker",
+    moving: "the whole module (a lap's spend), to continuo",
+    decision: "D-0093",
+  },
+  {
+    module: "src/continuo/sandbox.ts",
+    role: "Worker",
+    moving: "the whole module (the sandbox probe), to continuo",
+    decision: "D-0093",
+  },
+];
+
+/** What is wrong with `module` playing `roles`, one message per fault. */
+function placementViolationsIn(
+  module: string,
+  roles: readonly string[] | undefined,
+  relocating: readonly Relocation[],
+): string[] {
+  if (roles === undefined || roles.length === 0) {
+    return [`${module} names no role; add it to ROLES_BY_MODULE with a row of D-0064 section 5.`];
+  }
+  const problems: string[] = [];
+  for (const role of roles) {
+    const owner = D0064_ROLES[role];
+    const place = ROLES_OUTSIDE_D0064[role];
+    if (owner === undefined && place === undefined) {
+      problems.push(`${module} plays ${role}, which is not a row of D-0064 section 5.`);
+    } else if (place !== undefined && !module.startsWith(place)) {
+      problems.push(`${module} plays ${role}, which rondo holds only under ${place}.`);
+    } else if (
+      owner !== undefined &&
+      FOREIGN_OWNERS.has(owner) &&
+      !relocating.some((entry) => entry.module === module && entry.role === role)
+    ) {
+      problems.push(
+        `${module} plays ${role}, which D-0064 section 5 assigns to ${owner}; build it there.`,
+      );
+    }
+  }
+  return problems;
+}
+
+/** `D-0064` section 5's rows, read from `DECISIONS.md`: each role and the owner its row names. */
+function d0064RolesInDecisions(): Record<string, string> {
+  const text = readFileSync(join(ROOT, "DECISIONS.md"), "utf8");
+  const entry = text.slice(text.indexOf("\n## D-0064 "));
+  const section = entry.slice(entry.indexOf("\n### 5. "));
+  const rows: Record<string, string> = {};
+  let inTable = false;
+  for (const line of section.split("\n").slice(2)) {
+    if (!line.startsWith("|")) {
+      if (inTable) break;
+      continue;
+    }
+    inTable = true;
+    if (!line.startsWith("| **")) continue;
+    const [, role = "", , holder = ""] = line.split("|").map((cell) => cell.trim());
+    const owner = /^(the operator|rondo|cadenza|continuo|nobody)\b/i.exec(holder)?.[1] ?? holder;
+    rows[role.replaceAll("**", "")] = owner.toLowerCase().replace("the ", "");
+  }
+  return rows;
+}
+
+test("D-0064 section 5's table is the one this file pins", () => {
+  // Red means the table changed. Update D0064_ROLES to match, and read what the
+  // sweep then says: a row that moved to cadenza or continuo refuses every
+  // module in rondo that still plays it.
+  expect(d0064RolesInDecisions()).toEqual(D0064_ROLES);
+});
+
+test("every role this file names outside D-0064 is not also a row of it", () => {
+  expect(Object.keys(ROLES_OUTSIDE_D0064).filter((role) => role in D0064_ROLES)).toEqual([]);
+});
+
+test("ROLES_BY_MODULE names no module the walk does not find", () => {
+  expect(Object.keys(ROLES_BY_MODULE).filter((module) => !MODULES.includes(module))).toEqual([]);
+});
+
+test("every relocation is still under way, and is admitted by a decision naming it", () => {
+  const decisions = readFileSync(join(ROOT, "DECISIONS.md"), "utf8");
+  for (const { module, role, decision } of RELOCATING) {
+    const owner = D0064_ROLES[role];
+    expect(owner !== undefined && FOREIGN_OWNERS.has(owner), `${module}: ${role}`).toBe(true);
+    expect(ROLES_BY_MODULE[module] ?? [], `${module} no longer plays ${role}`).toContain(role);
+    const start = decisions.indexOf(`\n## ${decision} `);
+    expect(start, `${decision} is not in DECISIONS.md`).toBeGreaterThan(-1);
+    const body = decisions.slice(start + 1, decisions.indexOf("\n## ", start + 1));
+    expect(body, `${decision} does not name ${module}`).toContain(`\`${module}\``);
+  }
+});
+
+const PLANTED_PLACEMENTS: ReadonlyArray<
+  readonly [
+    id: string,
+    module: string,
+    roles: readonly string[] | undefined,
+    expected: string | null,
+  ]
+> = [
+  ["a module with no role", "src/access/probe.ts", undefined, "names no role"],
+  ["a role that is no row", "src/access/probe.ts", ["Helper"], "is not a row of D-0064"],
+  [
+    "cadenza's role in rondo",
+    "src/access/probe.ts",
+    ["Authority and settings"],
+    "assigns to cadenza",
+  ],
+  ["continuo's role in rondo", "src/refrain/probe.ts", ["Worker"], "assigns to continuo"],
+  [
+    "a seam outside its layer",
+    "src/access/probe.ts",
+    ["Seam to continuo"],
+    "only under src/continuo/",
+  ],
+  ["another module's relocation", "src/continuo/probe.ts", ["Worker"], "assigns to continuo"],
+  ["a relocation, clean", "src/continuo/sandbox.ts", ["Worker"], null],
+  ["a seam in its layer, clean", "src/continuo/probe.ts", ["Seam to continuo"], null],
+  ["a row rondo holds, clean", "src/access/probe.ts", ["Reviewer", HUMAN], null],
+];
+
+for (const [id, module, roles, expected] of PLANTED_PLACEMENTS) {
+  test(`the placement check judges ${id}`, () => {
+    const problems = placementViolationsIn(module, roles, RELOCATING);
+    if (expected === null) expect(problems).toEqual([]);
+    else expect(problems.join("\n")).toContain(expected);
+  });
+}
+
 // --- what keeps the sweep honest --------------------------------------------
 
 test("the walk still finds every module this file claims to guard", () => {
@@ -1236,7 +1562,10 @@ test("exactly one module owns SQLite, and it is the durable store", () => {
 
 for (const module of MODULES) {
   test(`${module} stays inside its boundary`, () => {
-    expect(violationsIn(module, sourceOf(module))).toEqual([]);
+    expect([
+      ...violationsIn(module, sourceOf(module)),
+      ...placementViolationsIn(module, ROLES_BY_MODULE[module], RELOCATING),
+    ]).toEqual([]);
   });
 }
 

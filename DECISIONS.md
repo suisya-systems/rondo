@@ -130,6 +130,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0090 | A request that names an issue in a repository rondo does not work in is not started: the page says so before a scope is drafted, and the person adds that repository from the page with one press, while rondo infers everything else | accepted |
 | D-0091 | A person merges from the page: a merge press per act, drawn only where rondo's own reading is green on the head and nothing waits on the person, through the operator's own `gh`; `D-0025` rule 6's "never merges" gives way for that press alone, and `D-0064` rule 3.4's transition is not taken | accepted |
 | D-0092 | Which answer a gate was given is recorded beside the gate answer, when rondo carries it: `approve` and `revise` stop being told apart by whether a next try exists, and a lap with no record is not called approved | accepted (point 3 pending the owner) |
+| D-0093 | The boundary test also asks which role a module plays: every module under `src/` names a row of `D-0064` section 5, a row given to cadenza or continuo is refused, and what already sits in rondo is a named, shrinking list of relocations | accepted |
 
 ---
 
@@ -21106,3 +21107,77 @@ All five were answered through the window on 2026-09-22.
   could have met: rule 1 is drawn in the wrong place or on the wrong condition.
 - **A repository whose own setting the fixed order of rule 3.2 overrode** in a way its owner did not
   accept: rule 3.2 moves to a chooser.
+
+## D-0093 — The boundary test also asks which role a module plays: every module under `src/` names a row of `D-0064` section 5, a row given to cadenza or continuo is refused, and what already sits in rondo is a named, shrinking list of relocations
+
+**Status:** accepted (2026-09-22, rondo's owner, through the window). Widens `D-0006`; supersedes
+nothing. Refs `D-0006`, `D-0010`, `D-0017`, `D-0018`, `D-0064` section 5, `D-0089`.
+
+**Why an entry is needed.** A placement audit on 2026-09-22 found four pieces of other
+repositories' work in rondo: the commands a worker is allowed to run (cadenza's *Authority and
+settings*), the reading and joining of a pull request's checks (continuo's *CI and merge watch*), a
+lap's spend read off the worker's transcript and the probe that a worker's sandbox comes up (both
+continuo's *Worker*). Every one of them kept its layer's import rules, because `D-0006` asks which
+layer a module is in and what it may reach, and never whether the module is rondo's to write. The
+owner asked for the definition to be enforced where the work is put, not rediscovered by an audit.
+
+### What was measured, and how
+
+At rondo `49ad9aa` on **2026-09-22**, by reading. `src/` holds 88 modules. Each was given a role by
+the audit's own classification of what stays; five modules play a role `D-0064` section 5 gives to
+another repository:
+
+- `src/access/repository-add.ts`: the allowed-command table per toolchain (`BASH`, `COMMON_BASH`).
+  *Authority and settings*, cadenza.
+- `src/access/forge.ts`: `readChecks` and `joinChecks`. *CI and merge watch, cleanup*, continuo.
+  The rest of the module is publishing with the operator's `gh`, which stays.
+- `src/access/checks-host.ts`: the whole module. *CI and merge watch, cleanup*, continuo.
+- `src/continuo/transcript.ts`: the whole module. *Worker*, continuo.
+- `src/continuo/sandbox.ts`: the whole module. *Worker*, continuo.
+
+### Decision
+
+1. **Every module under `src/` names the roles it plays**, in `ROLES_BY_MODULE` beside the layer
+   tables in `test/architecture/import-boundaries.test.ts`. A module with no entry fails the sweep,
+   so a new file's role is decided in the diff that adds it.
+2. **A role is a row of `D-0064` section 5**, or one of four roles rondo holds that the table does
+   not list, each only where it belongs: the seam to cadenza (`src/cadenza/`, `D-0018`), the seam to
+   continuo (`src/continuo/`, `D-0017`), publishing with the operator's `gh` (`src/access/`,
+   `D-0064` O7, `D-0010`) and the public barrel (`src/index.ts`). A seam consumes another
+   repository's role and does not play it, which is why it is held only in its own layer.
+3. **A row the table gives to cadenza or continuo is refused** in any module, with the owner named
+   in the message. Today those rows are *Authority and settings* (cadenza), *Worker* and *CI and
+   merge watch, cleanup* (continuo).
+4. **The table is pinned, not read.** The test holds a copy of section 5's rows and the repository
+   each row's third column names, and compares it with this file. A change to the table is a red
+   test until the copy is updated, and the sweep then shows which modules the change reaches.
+5. **What already sits in rondo is `RELOCATING`, and it only shrinks.** Each entry names a module, the
+   foreign role it plays, what in it plays that role and where it goes, and the decision admitting
+   it. An entry whose module no longer plays the role fails, so it is removed when the code moves.
+   **A new entry needs a decision that names its module**, checked by the test; this entry admits
+   the five modules listed above and no other.
+6. **The `boundary-is-not-vacuous` job plants one more violation**: a module given a continuo role,
+   which must fail with that role and owner named. The existing planted module must also be refused
+   for naming no role.
+7. **`AGENTS.md` says the same thing to the author before the test does**: read section 5's table
+   before adding code.
+
+### What this gives up
+
+- **The check is over what a module claims, not over what it does.** A module can name a rondo role
+  and still do continuo's work; the test cannot read intent. What it buys is that the question is
+  asked, in the diff, every time a module is added, and that a reviewer reading the diff sees the
+  answer. The review half (`AGENTS.md`) is the other defence.
+- **One more table to keep in step with the tree.** It is the table's point.
+
+### What this does not do
+
+- **It moves nothing.** The five relocations are separate work in cadenza and continuo.
+- **It does not change a layer or an import allowance.**
+
+### What would falsify it
+
+- **Another audit finding a foreign role in a module whose entry names a rondo role.** The claim
+  was misstated, and the review half did not catch it either.
+- **`RELOCATING` growing without a decision naming the new module**, or not shrinking once the code
+  has moved elsewhere.
