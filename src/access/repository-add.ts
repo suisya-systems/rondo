@@ -13,141 +13,11 @@
  * worker CLI, the agent type and the review criterion are the ones setup
  * resolved for this host, and only what is the repository's -- where it is,
  * its branch, its forge repository, its project, and the commands its worker
- * may run -- is new. So the host still resolves no fence root of its own.
+ * may run (cadenza's `allowedCommandsFor`, D-0040, written into the catalog
+ * project's `allowed_bash`, D-0094) -- is new. So the host still resolves no fence root of its own.
  */
 
 import type { JsonRecord } from "../store/records.js";
-
-/**
- * The commands every worker may run whatever the repository builds with: what
- * setup grants beside the npm ones, and for the same reasons
- * (`scripts/dogfood-env.sh`, the `allowed_bash` comment) -- `echo` to report
- * an exit status, and the two exact moves that check a red suite against the
- * commit before the lap's.
- */
-export const COMMON_BASH: readonly string[] = [
-  "echo:*",
-  "git switch --detach HEAD~1",
-  "git switch -",
-];
-
-/** A toolchain rondo recognises in a repository's top-level files. */
-export type Toolchain =
-  | "npm"
-  /** npm with no lockfile, where `npm ci` refuses to run. */
-  | "npm-unlocked"
-  | "pnpm"
-  | "yarn"
-  | "bun"
-  | "go"
-  | "uv"
-  | "poetry"
-  | "pip"
-  | "cargo";
-
-/**
- * Each toolchain's commands, in `allowed_bash`'s subject form (a subject, not
- * a `Bash(...)` rule; `:*` is a prefix). The install lines are exact and skip
- * install scripts where the tool can, for setup's reason: the fence sees the
- * worker's tool calls and not the processes a package's script starts.
- */
-const BASH: Readonly<Record<Toolchain, readonly string[]>> = {
-  npm: ["npm ci --ignore-scripts", "npm run:*", "npm test:*", "node --version", "npm --version"],
-  "npm-unlocked": [
-    "npm install --ignore-scripts",
-    "npm run:*",
-    "npm test:*",
-    "node --version",
-    "npm --version",
-  ],
-  pnpm: [
-    "pnpm install --frozen-lockfile --ignore-scripts",
-    "pnpm run:*",
-    "pnpm test:*",
-    "node --version",
-    "pnpm --version",
-  ],
-  yarn: [
-    "yarn install --frozen-lockfile --ignore-scripts",
-    "yarn install --immutable --mode=skip-build",
-    "yarn run:*",
-    "yarn test:*",
-    "node --version",
-    "yarn --version",
-  ],
-  bun: [
-    "bun install --frozen-lockfile --ignore-scripts",
-    "bun run:*",
-    "bun test:*",
-    "bun --version",
-  ],
-  go: ["go mod download", "go build:*", "go test:*", "go vet:*", "gofmt:*", "go version"],
-  uv: ["uv sync:*", "uv run:*", "uv --version"],
-  poetry: ["poetry install:*", "poetry run:*", "poetry --version"],
-  pip: [
-    "python3 -m venv .venv",
-    ".venv/bin/pip install:*",
-    ".venv/bin/python:*",
-    ".venv/bin/pytest:*",
-    "python3 --version",
-  ],
-  cargo: [
-    "cargo build:*",
-    "cargo test:*",
-    "cargo check:*",
-    "cargo clippy:*",
-    "cargo fmt:*",
-    "cargo --version",
-  ],
-};
-
-/**
- * The toolchains a repository's top-level file names say it builds with:
- * TypeScript and JavaScript by their lockfile, Go, Python by its lockfile,
- * and Rust. A repository may have several, and gets each one's commands.
- *
- * ponytail: the top level only, so a monorepo whose manifests sit in
- * subdirectories reads as none. Walking the tree is the upgrade.
- */
-export function toolchainsOf(files: readonly string[]): readonly Toolchain[] {
-  const has = (name: string) => files.includes(name);
-  const found: Toolchain[] = [];
-  if (has("package.json")) {
-    found.push(
-      has("pnpm-lock.yaml")
-        ? "pnpm"
-        : has("yarn.lock")
-          ? "yarn"
-          : has("bun.lock") || has("bun.lockb")
-            ? "bun"
-            : has("package-lock.json") || has("npm-shrinkwrap.json")
-              ? "npm"
-              : "npm-unlocked",
-    );
-  }
-  if (has("go.mod")) {
-    found.push("go");
-  }
-  if (has("uv.lock")) {
-    found.push("uv");
-  } else if (has("poetry.lock")) {
-    found.push("poetry");
-  } else if (
-    ["pyproject.toml", "setup.py", "Pipfile"].some(has) ||
-    files.some((file) => /^requirements.*\.txt$/.test(file))
-  ) {
-    found.push("pip");
-  }
-  if (has("Cargo.toml")) {
-    found.push("cargo");
-  }
-  return found;
-}
-
-/** The worker's commands for those toolchains: {@link COMMON_BASH} first, each once. */
-export function allowedBashFor(toolchains: readonly Toolchain[]): readonly string[] {
-  return [...new Set([...COMMON_BASH, ...toolchains.flatMap((one) => BASH[one])])];
-}
 
 /** `OWNER/NAME` split, or null when it is not one a path may be made of. */
 export function repositoryParts(
@@ -210,12 +80,15 @@ export function planForRepository(
   },
 ): JsonRecord {
   const project = projectNameOf(added.owner, added.name);
+  // A setup plan recorded before D-0094 still has its own top-level
+  // `allowed_bash`; nothing reads it, and copied forward it would be a second,
+  // stale list beside the catalog project's.
+  const { allowed_bash: _stale, ...rest } = template;
   return {
-    ...template,
+    ...rest,
     repository: added.into,
     base_branch: added.baseBranch,
     prompt: PLACEHOLDER_PROMPT,
-    allowed_bash: [...added.allowedBash],
     forge_repository: added.repo,
     pull_request_base_branch: null,
     // What cadenza reads. setup also writes it out to `origin`; nothing reads
@@ -233,6 +106,10 @@ export function planForRepository(
               source: { kind: "local_path", path: added.into },
               base_branch: added.baseBranch,
               aliases: [],
+              // The one list the worker may run (D-0094): cadenza's
+              // `allowedCommandsFor` over the clone's top-level files, in the
+              // project so it is inside the contract's `config_digest`.
+              allowed_bash: [...added.allowedBash],
             },
           },
         },

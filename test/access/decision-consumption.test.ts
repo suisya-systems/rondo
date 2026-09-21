@@ -56,6 +56,7 @@ const CATALOG_LAYER: CatalogLayer = {
       rondo: {
         source: { kind: "git_url", url: "https://example.invalid/org/rondo.git" },
         base_branch: "main",
+        allowed_bash: ["npm run:*"],
       },
     },
   },
@@ -67,7 +68,6 @@ const PLAN: RunPlan = {
   workspaceRoot: "/srv/rondo/work",
   baseBranch: "main",
   prompt: "teach rondo to count",
-  allowedBash: ["npm run:*"],
   materialLanguage: null,
   reviewCriterion: null,
   repository: "/srv/rondo/repo",
@@ -170,13 +170,14 @@ function harness(classify: EffectOutcome<ClassificationRecord>): Harness {
       model: "claude-fixture",
       requestedModel: "claude-fixture",
       permissionDenials: "",
+      commands: "[]",
       // Null and not zero (`D-0046`): this fixture's seam reports no
       // transcript, and nothing in this file is about what a lap cost. A zero
       // here would be the fixture claiming a lap that spent nothing.
       costUsd: null,
       turns: null,
       durationMs: null,
-      spendSource: "unread",
+      spendSource: "notReported",
     },
   });
   const admission = (plan: AdmittedPlan): EffectOutcome<RunAdmission> => ({

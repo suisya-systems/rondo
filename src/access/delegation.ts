@@ -81,7 +81,16 @@ export interface DelegationRecord {
 
 /** An envelope written, or rondo's reason there is none to pass. */
 export type DelegationRecordOutcome =
-  | { readonly kind: "written"; readonly record: DelegationRecord }
+  | {
+      readonly kind: "written";
+      readonly record: DelegationRecord;
+      /**
+       * The catalog project's `allowed_bash` the envelope records -- the one
+       * list `run admit --allow-bash` is also given (D-0094), handed back so
+       * admission does not resolve the project a second time.
+       */
+      readonly allowedBash: readonly string[];
+    }
   | { readonly kind: "defect"; readonly reason: string };
 
 /**
@@ -104,10 +113,12 @@ export type DelegationRecordOutcome =
  */
 export function writeDelegationRecord(plan: AdmittedPlan): DelegationRecordOutcome {
   let envelope: string;
+  let allowedBash: readonly string[];
   try {
     const project = resolveProject(plan.catalogLayers, plan.projectName);
     const record = agentTypeRecord(plan.agentTypeInput);
     const contract = issueInitialContract(record, project, plan.parties);
+    allowedBash = project.allowedBash;
     envelope = `${JSON.stringify(
       {
         record_schema: DELEGATION_RECORD_SCHEMA,
@@ -133,12 +144,14 @@ export function writeDelegationRecord(plan: AdmittedPlan): DelegationRecordOutco
           config_digest: project.configDigest,
           base_branch: project.baseBranch,
         },
-        // What the lap was declared able to run (`continuo D-1110`). It is on
-        // the run's own record at continuo either way -- `allowed_bash` in the
+        // What the lap was declared able to run (`continuo D-1110`): the
+        // catalog project's `allowed_bash` (D-0094, cadenza D-0041), which the
+        // contract's `config_digest` above already covers. It is on the run's
+        // own record at continuo either way -- `allowed_bash` in the
         // `run_delegation_recorded` payload -- and it is here as well because
         // the envelope is the document that answers "what was this run
         // permitted to do" in one read.
-        allowed_bash: [...plan.allowedBash],
+        allowed_bash: [...allowedBash],
       },
       null,
       2,
@@ -164,6 +177,7 @@ export function writeDelegationRecord(plan: AdmittedPlan): DelegationRecordOutco
     return {
       kind: "written",
       record: { path, recordSchema: DELEGATION_RECORD_SCHEMA, directory },
+      allowedBash,
     };
   } catch (error) {
     return {

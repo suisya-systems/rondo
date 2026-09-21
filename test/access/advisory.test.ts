@@ -524,6 +524,7 @@ const CATALOG_LAYER: CatalogLayer = {
       rondo: {
         source: { kind: "git_url", url: "https://example.invalid/org/rondo.git" },
         base_branch: "main",
+        allowed_bash: ["npm run:*"],
       },
     },
   },
@@ -536,7 +537,6 @@ const PLAN_INPUT: RunPlan = {
   workspaceRoot: WORKSPACE_ROOT,
   baseBranch: "main",
   prompt: "teach rondo to count",
-  allowedBash: ["npm run:*"],
   materialLanguage: null,
   reviewCriterion: null,
   repository: "/srv/rondo/repo",

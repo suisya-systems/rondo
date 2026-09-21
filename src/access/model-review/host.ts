@@ -5,8 +5,8 @@
  * **Three halves, each where it already lives.** `git` and the reviewer process
  * are `../forge.ts`'s, because only that module in this layer may start one;
  * what the document holds and what the answer means are `./judgement.ts`'s,
- * a pure function; the transcript is `src/continuo/transcript.ts`'s two-file
- * read. This file only puts them in order and writes the result, so the order
+ * a pure function; the commands the lap ran are the row's, as `lap perform`
+ * reported them (continuo D-1112). This file only puts them in order and writes the result, so the order
  * is the one thing here a test has to hold.
  *
  * **After `drive()` returned, never inside it** (D-0065 2.6, D-0029 rule 6). The
@@ -24,8 +24,8 @@ import {
   showGate,
   type VerifiedContinuo,
 } from "../../continuo/invoker.js";
+import { decodeLapCommands } from "../../continuo/protocol.js";
 import { reviewerFamilyCheck, reviewerRow } from "../../continuo/roles.js";
-import { readLapCommands } from "../../continuo/transcript.js";
 import { readPlan } from "../../refrain/plan.js";
 import {
   type IterationRecord,
@@ -43,7 +43,38 @@ import {
   modelReadingOf,
   prepareReview,
   type ReviewMaterial,
+  type ReviewTranscript,
 } from "./judgement.js";
+
+/**
+ * The commands the row holds, as the reviewer's transcript (continuo D-1112).
+ *
+ * Each state that is not a list of commands is its own reason, because each
+ * refuses the reading for a different fact: no reading on the row, continuo
+ * unable to say, or a column that does not read.
+ */
+export function transcriptOfRow(lapCommands: string | null): ReviewTranscript {
+  if (lapCommands === null) {
+    return {
+      kind: "unread",
+      reason:
+        "the row holds no commands for the lap (it did not reach its gate, or it was written " +
+        "before rondo recorded them)",
+    };
+  }
+  const decoded = decodeLapCommands(lapCommands);
+  switch (decoded.kind) {
+    case "read":
+      return decoded;
+    case "notReported":
+      return {
+        kind: "unread",
+        reason: "continuo reported that it cannot say which commands the lap ran",
+      };
+    case "unreadable":
+      return { kind: "unread", reason: decoded.reason };
+  }
+}
 
 /**
  * What taking a model reading reaches, as values a test can replace.
@@ -57,7 +88,6 @@ export interface ModelReviewPorts {
   readonly rationale: (record: IterationRecord) => Promise<string | null>;
   readonly gather: typeof gatherReviewMaterialFacts;
   readonly runReviewer: typeof runReviewer;
-  readonly readCommands: typeof readLapCommands;
   readonly now: () => number;
   /**
    * Where the landed reading is reported (D-0061 5.3, rondo#218), or null.
@@ -66,7 +96,7 @@ export interface ModelReviewPorts {
   readonly thread?: RequestThread | null;
 }
 
-/** The ports the command line uses: the real forge, the real transcript, continuo's gate. */
+/** The ports the command line uses: the real forge and continuo's gate. */
 export function modelReviewPorts(
   continuo: VerifiedContinuo,
   store: IterationStore,
@@ -85,7 +115,6 @@ export function modelReviewPorts(
     },
     gather: gatherReviewMaterialFacts,
     runReviewer,
-    readCommands: readLapCommands,
     now: Date.now,
   };
 }
@@ -204,14 +233,7 @@ async function take(ports: ModelReviewPorts, iterationId: string): Promise<reado
               plan.materialLanguage === null
                 ? plan.prompt
                 : `${plan.prompt}\n\n${materialLanguageSentence(plan.materialLanguage)}`,
-            transcript:
-              record.sessionId === null
-                ? { kind: "unread", reason: "the row names no session" }
-                : ports.readCommands({
-                    stateRoot: plan.stateRoot,
-                    runId: plan.runId,
-                    sessionId: record.sessionId,
-                  }),
+            transcript: transcriptOfRow(record.lapCommands),
             rationale: await ports.rationale(record),
             deterministicFindings: deterministic.findings,
             criterion,

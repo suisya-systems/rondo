@@ -43,6 +43,7 @@ import type {
 import type { Allocation } from "../../src/refrain/allocator.js";
 import {
   admittedPlan,
+  allowedBashRefusal,
   PLAN_PAYLOAD_VERSION,
   planPayload,
   type ReviewCriterion,
@@ -91,7 +92,6 @@ const VALID: RunPlan = {
   workspaceRoot: "/srv/rondo/work-root",
   baseBranch: "main",
   prompt: "do the thing",
-  allowedBash: ["npm run:*"],
   materialLanguage: null,
   reviewCriterion: null,
   repository: "/srv/rondo/repo",
@@ -443,10 +443,6 @@ const asVersionZero = (payload: JsonRecord): JsonRecord => {
   delete legacy["payload_version"];
   delete legacy["workspace_root"];
   delete legacy["pull_request_base_branch"];
-  // v0 predates the declaration as well: the key arrived with the v2 rung
-  // (`continuo D-1110`), so a document from before the version key existed
-  // cannot have carried it either.
-  delete legacy["allowed_bash"];
   return legacy as JsonRecord;
 };
 
@@ -476,41 +472,24 @@ test("a v0 payload reads, and the ladder supplies exactly what v0 could not carr
     // Absent means only that an older rondo did not record it, so the value is
     // derived -- the root the workspace actually had, its parent.
     expect(back.plan.workspaceRoot).toBe("/srv/rondo/work");
-    // Absent *means* something here too, and the meaning is a measurement of
-    // what those runs got: no `--allow-bash` was passed before
-    // `continuo D-1110` existed, so nothing reached the rendered allow list.
-    expect(back.plan.allowedBash).toEqual([]);
   }
 });
 
-test("a v1 payload predates the declaration, and climbs to one that declares nothing", () => {
-  // **The rung that matters for a live iteration across the pin move.** A row
-  // written by the rondo of an hour ago declares v1 and has no `allowed_bash`;
-  // refusing it by name would file a running iteration at `stalled` for a key
-  // its writer could not have written.
-  const payload = { ...payloadOf() } as Record<string, unknown>;
-  delete payload["allowed_bash"];
-  // The literal version this rung climbs from, rather than one below the top of
-  // the ladder: the second spelling names *the newest rung* and would silently
-  // stop exercising this one the moment a third was appended -- which is what it
-  // did when D-0053's language rung arrived.
-  payload["payload_version"] = 1;
-  const back = readPlan(payload as JsonRecord);
-  expect(back.kind).toBe("planned");
-  if (back.kind === "planned") {
-    expect(back.plan.allowedBash).toEqual([]);
+test("a payload that still carries the plan's old allowed_bash reads, with the key ignored", () => {
+  // D-0094: the list moved to the catalog project (cadenza D-0041) and the plan
+  // no longer has the field. A row written before that -- at v1, or at the
+  // current version with the key -- must still read rather than file a live
+  // iteration at `stalled`; the key is simply not read.
+  for (const version of [1, PLAN_PAYLOAD_VERSION]) {
+    const payload = { ...payloadOf(), allowed_bash: ["npm run:*"], payload_version: version };
+    const back = readPlan(payload as JsonRecord);
+    expect(back.kind).toBe("planned");
+    if (back.kind === "planned") {
+      expect(back.plan).not.toHaveProperty("allowedBash");
+    }
   }
-
-  // At the current version the field is strict again, which is what the rung
-  // buys: a row rondo wrote today with the key missing is a row rondo cannot
-  // read, rather than one silently read as declaring nothing.
-  const current = { ...payloadOf() } as Record<string, unknown>;
-  delete current["allowed_bash"];
-  const strict = readPlan(current as JsonRecord);
-  expect(strict.kind).toBe("refused");
-  if (strict.kind === "refused") {
-    expect(strict.reason).toContain("allowed_bash");
-  }
+  // And what rondo writes today carries no such key.
+  expect(payloadOf()).not.toHaveProperty("allowed_bash");
 });
 
 test("a v2 payload predates the language ask, and climbs to one that asked for nothing", () => {
@@ -571,49 +550,29 @@ test("the ask survives the round trip, and the payload spells it material_langua
   }
 });
 
-test("a declaration survives the round trip in the plan's own order", () => {
-  // Order is the plan's and is not rondo's to sort: the declaration is a record
-  // of what was asked for, and `admitRun` appends one `--allow-bash` per
-  // subject in this order.
-  const subjects = ["npm ci --ignore-scripts", "npm run:*", "node vendor/pin.mjs:*"];
-  const planned = runPlan(withField({ allowedBash: subjects }));
-  if (planned.kind !== "planned") {
-    throw new Error(planned.reason);
-  }
-  const admitted = admittedPlan(planned.plan, ALLOCATION);
-  if (admitted.kind !== "planned") {
-    throw new Error(admitted.reason);
-  }
-  const back = readPlan(planPayload(admitted.plan));
-  expect(back.kind).toBe("planned");
-  if (back.kind === "planned") {
-    expect(back.plan.allowedBash).toEqual(subjects);
-  }
-});
-
-test("a malformed Bash subject is refused here, where continuo answers one with a stack", () => {
+test("a malformed catalog Bash subject is refused before continuo answers one with a stack", () => {
   // Each rule below is continuo's, read off `LapRunIntent`'s constructor at the
   // pinned revision, and each is restated because `LapRunIntentUsageError` is
   // outside the refusal family continuo answers as a document: `run_cli.ts`
   // says in its own words that it escapes as a stack trace and exit 1. So this
   // is D-0015 exception 2's shape, on a field that arrived after it.
-  expect(refusalFor({ allowedBash: [""] })).toContain("allowedBash[0]");
-  expect(refusalFor({ allowedBash: ["npm run:*", "   "] })).toContain("allowedBash[1]");
-  expect(refusalFor({ allowedBash: ["npm\nrun"] })).toContain("control character");
+  expect(allowedBashRefusal([""]) ?? "").toContain("allowed_bash[0]");
+  expect(allowedBashRefusal(["npm run:*", "   "]) ?? "").toContain("allowed_bash[1]");
+  expect(allowedBashRefusal(["npm\nrun"]) ?? "").toContain("control character");
   // A parenthesis would spell half of somebody else's rule: continuo
   // interpolates the subject into `Bash(<subject>)`, so the spec spelling is
   // the mistake to catch and the message says which spelling to use instead.
-  const wrapped = refusalFor({ allowedBash: ["Bash(npm run:*)"] });
+  const wrapped = allowedBashRefusal(["Bash(npm run:*)"]) ?? "";
   expect(wrapped).toContain("Bash(<subject>)");
   expect(wrapped).toContain("'npm run:*'");
   // "Anything" is not a declaration. `*`, `**`, `:*` and `* *` are all refused;
   // `npm run:*` is not, which is the boundary the test exists to pin.
   for (const anything of ["*", "**", ":*", "* *"]) {
-    expect(refusalFor({ allowedBash: [anything] })).toContain("narrower than");
+    expect(allowedBashRefusal([anything]) ?? "").toContain("narrower than");
   }
-  expect(runPlan(withField({ allowedBash: ["npm run:*"] })).kind).toBe("planned");
-  // And declaring nothing is a plan, which is every lap that does not build.
-  expect(runPlan(withField({ allowedBash: [] })).kind).toBe("planned");
+  expect(allowedBashRefusal(["npm run:*"])).toBeNull();
+  // And declaring nothing passes, which is every lap that does not build.
+  expect(allowedBashRefusal([])).toBeNull();
 });
 
 test("a v0 workspace at a filesystem root derives the root, not the empty string", () => {
@@ -734,7 +693,7 @@ test("a plan file with no version reads, and one that declares v1 is held to v1"
   // version a statement about the bytes rather than a decoration. The literal
   // `1` rather than `PLAN_PAYLOAD_VERSION`: this case is about the rung that
   // introduced `pull_request_base_branch`'s strictness, and the ladder has
-  // grown a rung above it (`allowed_bash`) whose own tolerance would otherwise
+  // grown rungs above it whose own tolerance would otherwise
   // be the thing under test.
   const declared = { ...file, payload_version: 1 };
   const held = readRunPlan(declared as JsonRecord);

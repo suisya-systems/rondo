@@ -1,30 +1,18 @@
 /**
- * Reading what a lap spent off a transcript (`D-0046`).
+ * Reading a running lap's log off its transcript (rondo#248 item 3).
  *
- * The layout under test is continuo's own: `<state root>/<run id>/<session id>/`
- * holding
- * `record.json` and `events-NNN.jsonl`, written here by hand because the
- * question is what rondo does with the bytes rather than what continuo writes.
- * The fixture numbers are the ones lap 5 of the dogfood actually measured
- * (`docs/operations/lap-5-dogfood.md` section 5), so a reader can compare what
- * comes out of this file with what was parsed out of that lap's transcript by
- * hand.
- *
- * **Every case here is a way of getting nothing**, except the two that get
- * something. That ratio is the point: a cost rondo could not read must be three
- * nulls rather than an exception, a zero, or a partially-filled record.
+ * A finished lap's cost and commands arrive on `lap perform`'s own document
+ * (continuo D-1112); what is left here is the page's live log of a lap that has
+ * not answered yet. The layout is continuo's own -- `<state root>/<run id>/
+ * <session id>/` holding `record.json` and `events-NNN.jsonl` -- written by hand
+ * because the question is what rondo does with the bytes.
  */
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test } from "vitest";
 
-import {
-  lapTranscriptDirectory,
-  readLapCommands,
-  readLapLog,
-  readLapSpend,
-} from "../../src/continuo/transcript.js";
+import { lapTranscriptDirectory, readLapLog } from "../../src/continuo/transcript.js";
 
 const SESSION = "59a9bc45-c34a-4a83-b234-2a7f648d3a6f";
 
@@ -39,21 +27,6 @@ const LAP_5 = {
   total_cost_usd: 1.542,
   num_turns: 38,
   duration_ms: 203_324,
-};
-
-/** Three nulls, and the read each of the three reasons for them came from. */
-const UNREAD = { totalCostUsd: null, numTurns: null, durationMs: null, source: "unread" };
-const NO_RESULT_EVENT = {
-  totalCostUsd: null,
-  numTurns: null,
-  durationMs: null,
-  source: "resultEventAbsent",
-};
-const NO_NUMBERS = {
-  totalCostUsd: null,
-  numTurns: null,
-  durationMs: null,
-  source: "resultEvent",
 };
 
 /**
@@ -91,158 +64,8 @@ function sessionDir(options: {
 const transcript = (...events: readonly unknown[]): string =>
   `${events.map((event) => JSON.stringify(event)).join("\n")}\n`;
 
-test("the three numbers come off the terminal result event", () => {
-  const stateRoot = sessionDir({
-    generation: 0,
-    events: {
-      "000": transcript({ type: "system", subtype: "init" }, { type: "assistant" }, LAP_5),
-    },
-  });
-
-  expect(readLapSpend({ stateRoot, runId: RUN, sessionId: SESSION })).toEqual({
-    totalCostUsd: 1.542,
-    numTurns: 38,
-    durationMs: 203_324,
-    source: "resultEvent",
-  });
-});
-
-test("a lap that spent nothing reads as zero and not as unread", () => {
-  // The distinction the nullable columns exist for: a free lap is a fact, and a
-  // reader must be able to tell it from a lap whose transcript rondo never read.
-  const stateRoot = sessionDir({
-    generation: 0,
-    events: { "000": transcript({ ...LAP_5, total_cost_usd: 0, num_turns: 0, duration_ms: 0 }) },
-  });
-
-  expect(readLapSpend({ stateRoot, runId: RUN, sessionId: SESSION })).toEqual({
-    totalCostUsd: 0,
-    numTurns: 0,
-    durationMs: 0,
-    source: "resultEvent",
-  });
-});
-
-test("the generation comes from the record, so a resumed session reads its newest turn", () => {
-  const stateRoot = sessionDir({
-    generation: 1,
-    events: {
-      "000": transcript({ ...LAP_5, total_cost_usd: 9.99 }),
-      "001": transcript(LAP_5),
-    },
-  });
-
-  expect(readLapSpend({ stateRoot, runId: RUN, sessionId: SESSION }).totalCostUsd).toBe(1.542);
-});
-
-test("the last result event wins, as it does for continuo reading the same file", () => {
-  const stateRoot = sessionDir({
-    generation: 0,
-    events: { "000": transcript({ ...LAP_5, total_cost_usd: 9.99 }, LAP_5) },
-  });
-
-  expect(readLapSpend({ stateRoot, runId: RUN, sessionId: SESSION }).totalCostUsd).toBe(1.542);
-});
-
-test("a line that does not parse is skipped rather than refused", () => {
-  // A transcript cut mid-write still holds every event before the cut.
-  const stateRoot = sessionDir({
-    generation: 0,
-    events: { "000": `${JSON.stringify(LAP_5)}\n{"type":"assis` },
-  });
-
-  expect(readLapSpend({ stateRoot, runId: RUN, sessionId: SESSION }).numTurns).toBe(38);
-});
-
-test("a result event that carries none of the three numbers is not an unread transcript", () => {
-  // The fake worker continuo's own tests spawn writes exactly this shape: a
-  // terminal `result` event with an outcome and no accounting. It is the case
-  // rondo#130 is about: three nulls, and a transcript that was read perfectly
-  // well -- so the source has to say `resultEvent` and not `unread`.
-  const stateRoot = sessionDir({
-    generation: 0,
-    events: {
-      "000": transcript({ type: "result", subtype: "success", terminal_reason: "completed" }),
-    },
-  });
-
-  expect(readLapSpend({ stateRoot, runId: RUN, sessionId: SESSION })).toEqual(NO_NUMBERS);
-});
-
-test("a number that is not a number is not coerced", () => {
-  const stateRoot = sessionDir({
-    generation: 0,
-    events: { "000": transcript({ ...LAP_5, total_cost_usd: "1.542", num_turns: null }) },
-  });
-
-  expect(readLapSpend({ stateRoot, runId: RUN, sessionId: SESSION })).toEqual({
-    totalCostUsd: null,
-    numTurns: null,
-    durationMs: 203_324,
-    source: "resultEvent",
-  });
-});
-
-test("a transcript with no result event at all reads as three nulls, and says so", () => {
-  const stateRoot = sessionDir({
-    generation: 0,
-    events: { "000": transcript({ type: "system" }, { type: "assistant" }) },
-  });
-
-  expect(readLapSpend({ stateRoot, runId: RUN, sessionId: SESSION })).toEqual(NO_RESULT_EVENT);
-});
-
-test("every way the files can be missing or unusable reads as an unread transcript", () => {
-  const cases: Readonly<Record<string, string>> = {
-    "no run directory": mkdtempSync(join(tmpdir(), "rondo-transcript-")),
-    "no record": sessionDir({ events: { "000": transcript(LAP_5) } }),
-    "a record that is not JSON": sessionDir({
-      record: "{",
-      events: { "000": transcript(LAP_5) },
-    }),
-    "a record with no generation": sessionDir({
-      record: JSON.stringify({ session_id: SESSION }),
-      events: { "000": transcript(LAP_5) },
-    }),
-    "a generation that is not a number": sessionDir({
-      generation: "0",
-      events: { "000": transcript(LAP_5) },
-    }),
-    "a generation whose transcript is absent": sessionDir({
-      generation: 2,
-      events: { "000": transcript(LAP_5) },
-    }),
-  };
-
-  for (const [name, stateRoot] of Object.entries(cases)) {
-    expect(readLapSpend({ stateRoot, runId: RUN, sessionId: SESSION }), name).toEqual(UNREAD);
-  }
-});
-
-test("an empty transcript was read, so it is not a transcript rondo could not read", () => {
-  // The file opened and holds no `result` event, which is a different fact from
-  // a file that would not open -- the same distinction one line down.
-  const stateRoot = sessionDir({ generation: 0, events: { "000": "" } });
-
-  expect(readLapSpend({ stateRoot, runId: RUN, sessionId: SESSION })).toEqual(NO_RESULT_EVENT);
-});
-
-test("a run id under another run's directory is not this lap's cost", () => {
-  // The run id is part of the path because continuo puts one directory per run
-  // under the flag, so a reader of another run's directory finds nothing here
-  // rather than the wrong lap's bill.
-  const stateRoot = sessionDir({ generation: 0, events: { "000": transcript(LAP_5) } });
-
-  expect(readLapSpend({ stateRoot, runId: "rondo-other", sessionId: SESSION })).toEqual(UNREAD);
-});
-
-test("a generation above 999 is not truncated", () => {
-  // continuo pads to three digits and does not cut above them, so
-  // `events-1000.jsonl` is the name of generation 1000 on both sides.
-  const stateRoot = sessionDir({ generation: 1000, events: { "1000": transcript(LAP_5) } });
-
-  expect(readLapSpend({ stateRoot, runId: RUN, sessionId: SESSION }).numTurns).toBe(38);
-});
+/** The log of the one session a fixture state root holds. */
+const logOf = (stateRoot: string) => readLapLog(join(stateRoot, RUN, SESSION));
 
 test("the directory a screen names is the directory this module reads (D-0048 rule 5)", () => {
   // **One composer, asserted as one.** The screen naming a running lap's
@@ -288,7 +111,7 @@ const toolResult = (id: string, content: unknown, isError?: boolean) => ({
   },
 });
 
-test("commands come out with their outputs, line numbers and the final message (D-0065 1.2.4)", () => {
+test("commands come out with their outputs, line numbers and the final message", () => {
   const stateRoot = sessionDir({
     generation: 0,
     events: {
@@ -308,7 +131,7 @@ test("commands come out with their outputs, line numbers and the final message (
     },
   });
 
-  expect(readLapCommands({ stateRoot, runId: RUN, sessionId: SESSION })).toEqual({
+  expect(logOf(stateRoot)).toMatchObject({
     kind: "read",
     commands: [
       {
@@ -336,7 +159,7 @@ test("a transcript with no result event has no final message, and blank lines ar
     events: { "000": `\n${JSON.stringify(toolUse("t1", "Bash", { command: "ls" }))}\n\n` },
   });
 
-  expect(readLapCommands({ stateRoot, runId: RUN, sessionId: SESSION })).toEqual({
+  expect(logOf(stateRoot)).toMatchObject({
     kind: "read",
     commands: [{ index: 2, command: "ls", output: "", isError: false }],
     finalMessage: null,
@@ -344,14 +167,15 @@ test("a transcript with no result event has no final message, and blank lines ar
 });
 
 test("a line that is not an event makes the transcript unread, not shorter", () => {
-  // A truncated last line and a corrupt middle line: either would otherwise
-  // hand over fewer commands under a coverage line saying they were read.
+  // A corrupt line with a newline after it would otherwise hand over fewer
+  // commands than ran. (A last line with no newline is the one being written;
+  // the #248 case below holds that back instead.)
   for (const events of [
-    `${JSON.stringify(toolUse("t1", "Bash", { command: "ls" }))}\n{"type":"us`,
     `not json\n${JSON.stringify(toolUse("t1", "Bash", { command: "ls" }))}\n`,
+    `${JSON.stringify(toolUse("t1", "Bash", { command: "ls" }))}\n{"type":"us\n`,
   ]) {
     const stateRoot = sessionDir({ generation: 0, events: { "000": events } });
-    const reading = readLapCommands({ stateRoot, runId: RUN, sessionId: SESSION });
+    const reading = logOf(stateRoot);
     expect(reading.kind).toBe("unread");
     expect(reading.kind === "unread" && reading.reason).toContain("is not a JSON event");
   }
@@ -384,19 +208,19 @@ test("a transcript that cannot be read is unread with a reason, never a throw", 
   const noRecord = sessionDir({ events: { "000": transcript(LAP_5) } });
   const noEvents = sessionDir({ generation: 3 });
   for (const stateRoot of [noRecord, noEvents]) {
-    const reading = readLapCommands({ stateRoot, runId: RUN, sessionId: SESSION });
+    const reading = logOf(stateRoot);
     expect(reading.kind).toBe("unread");
     if (reading.kind === "unread") {
       expect(reading.reason).toMatch(/^[\x20-\x7e]+$/);
     }
   }
-  const noEventsReading = readLapCommands({ stateRoot: noEvents, runId: RUN, sessionId: SESSION });
+  const noEventsReading = logOf(noEvents);
   expect(noEventsReading.kind === "unread" && noEventsReading.reason).toContain("events-003.jsonl");
 });
 
 test("two result events in one transcript: the final message is the last one's", () => {
   // A resumed turn writes a second `result` event; the rationale the reviewer is
-  // handed is the lap's last word, as continuo reads it (`readLapSpend` above).
+  // handed is the lap's last word, as continuo reads it.
   const stateRoot = sessionDir({
     generation: 0,
     events: {
@@ -409,7 +233,7 @@ test("two result events in one transcript: the final message is the last one's",
     },
   });
 
-  const reading = readLapCommands({ stateRoot, runId: RUN, sessionId: SESSION });
+  const reading = logOf(stateRoot);
 
   expect(reading.kind === "read" && reading.finalMessage).toBe("second turn: verify is green");
 });

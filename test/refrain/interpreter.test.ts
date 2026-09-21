@@ -317,6 +317,7 @@ function blankRecord(id: string, status: IterationStatus): IterationRecord {
     sessionId: null,
     sessionPath: null,
     permissionDenials: null,
+    lapCommands: null,
     lapCostUsd: null,
     lapTurns: null,
     lapDurationMs: null,
@@ -376,6 +377,7 @@ function successfulAnswers(): Answers {
         sessionId: "session-1",
         sessionPath: "started",
         permissionDenials: "[]",
+        commands: "[]",
         endpointLeaseFailure: null,
         elapsedDeadlineAtMs: null,
         model: MODEL,
@@ -537,7 +539,6 @@ const PLAN: RunPlan = (() => {
     workspaceRoot: "/srv/rondo/work",
     baseBranch: "main",
     prompt: "do the thing",
-    allowedBash: ["npm run:*"],
     materialLanguage: null,
     reviewCriterion: null,
     repository: "/srv/rondo/repo",
@@ -712,10 +713,11 @@ test("a lap whose transcript rondo could not read keeps three nulls, not three z
         model: MODEL,
         requestedModel: MODEL,
         permissionDenials: "[]",
+        commands: "[]",
         costUsd: null,
         turns: null,
         durationMs: null,
-        spendSource: "unread",
+        spendSource: "notReported",
       },
     },
   });
@@ -732,12 +734,11 @@ test("a lap whose transcript rondo could not read keeps three nulls, not three z
 });
 
 test("three nulls are explained by the read that produced them, not by one guess", async () => {
-  // rondo#130. Every one of these rows keeps three nulls, and the reason for
-  // them is a different fact each time. The old line asserted the first for all
-  // three, which on lap 6 was false: the transcript was read and the fake
-  // worker's `result` event simply carries no accounting.
+  // rondo#130, and continuo D-1112. Both rows keep three nulls, for two
+  // different facts: continuo could not say (`spend: null`), or it reported a
+  // spend whose `result` event carried no number.
   const sentences = new Map<LapPerformance["spendSource"], string>();
-  for (const spendSource of ["unread", "resultEventAbsent", "resultEvent"] as const) {
+  for (const spendSource of ["notReported", "resultEvent"] as const) {
     const h = harness({
       performLap: {
         kind: "answered",
@@ -751,6 +752,7 @@ test("three nulls are explained by the read that produced them, not by one guess
           model: MODEL,
           requestedModel: MODEL,
           permissionDenials: "[]",
+          commands: "[]",
           costUsd: null,
           turns: null,
           durationMs: null,
@@ -764,13 +766,13 @@ test("three nulls are explained by the read that produced them, not by one guess
     sentences.set(spendSource, line ?? "");
   }
 
-  // Three reads, three sentences, and no two of them the same.
-  expect(new Set(sentences.values()).size).toBe(3);
-  // A transcript that was read is never reported as one that was not.
+  // Two facts, two sentences.
+  expect(new Set(sentences.values()).size).toBe(2);
   expect(sentences.get("resultEvent")).toContain("was read and carried none of the three");
-  expect(sentences.get("resultEvent")).not.toContain("not readable");
-  expect(sentences.get("resultEventAbsent")).toContain("carries no terminal 'result' event");
-  expect(sentences.get("unread")).toContain("not readable under the state root");
+  expect(sentences.get("resultEvent")).not.toContain("cannot say");
+  expect(sentences.get("notReported")).toContain(
+    "reported no spend for it (the backend cannot say)",
+  );
 });
 
 test("the row at the open gate carries the gate, the session and the walk's name", async () => {
@@ -812,6 +814,7 @@ test("what a lap reported that the row has no column for is not lost", async () 
         sessionId: "session-1",
         sessionPath: "resumed",
         permissionDenials: "[]",
+        commands: "[]",
         endpointLeaseFailure: "outbox-delivery held by another claimant",
         elapsedDeadlineAtMs: 42,
         model: MODEL,
@@ -819,7 +822,7 @@ test("what a lap reported that the row has no column for is not lost", async () 
         costUsd: null,
         turns: null,
         durationMs: null,
-        spendSource: "unread",
+        spendSource: "notReported",
       },
     },
   });
@@ -1413,6 +1416,7 @@ test("a withdrawal keeps what the lap already recorded on the row", async () => 
         sessionId: "session-1",
         sessionPath: "started",
         permissionDenials: "[]",
+        commands: "[]",
         endpointLeaseFailure: "outbox-delivery held by another claimant",
         elapsedDeadlineAtMs: null,
         model: MODEL,
@@ -1420,7 +1424,7 @@ test("a withdrawal keeps what the lap already recorded on the row", async () => 
         costUsd: null,
         turns: null,
         durationMs: null,
-        spendSource: "unread",
+        spendSource: "notReported",
       },
     },
   });
@@ -1507,6 +1511,7 @@ test("abandon settles a row it cannot read, and the lock is genuinely released",
       sessionId: "session-1",
       sessionPath: "started",
       permissionDenials: "[]",
+      commands: "[]",
       endpointLeaseFailure: null,
       elapsedDeadlineAtMs: null,
       model: MODEL,
@@ -1514,7 +1519,7 @@ test("abandon settles a row it cannot read, and the lock is genuinely released",
       costUsd: null,
       turns: null,
       durationMs: null,
-      spendSource: "unread",
+      spendSource: "notReported",
     },
   };
   const second = await admitOnce(h, "i-0002");
@@ -1872,6 +1877,7 @@ test("a lap answering for another run stalls rather than adopting its gate", asy
         sessionId: "session-1",
         sessionPath: "started",
         permissionDenials: "[]",
+        commands: "[]",
         endpointLeaseFailure: null,
         elapsedDeadlineAtMs: null,
         model: MODEL,
@@ -1879,7 +1885,7 @@ test("a lap answering for another run stalls rather than adopting its gate", asy
         costUsd: null,
         turns: null,
         durationMs: null,
-        spendSource: "unread",
+        spendSource: "notReported",
       },
     },
   });
@@ -1904,6 +1910,7 @@ test("a lap that ran on another model stalls, and the open gate is named first",
         sessionId: "session-1",
         sessionPath: "started",
         permissionDenials: "[]",
+        commands: "[]",
         endpointLeaseFailure: null,
         elapsedDeadlineAtMs: null,
         model: "some-other-model",
@@ -1911,7 +1918,7 @@ test("a lap that ran on another model stalls, and the open gate is named first",
         costUsd: null,
         turns: null,
         durationMs: null,
-        spendSource: "unread",
+        spendSource: "notReported",
       },
     },
   });
@@ -1939,6 +1946,7 @@ test("a lap that named no model at all is the same stall, spelled for a reader",
         sessionId: "session-1",
         sessionPath: "started",
         permissionDenials: "[]",
+        commands: "[]",
         endpointLeaseFailure: null,
         elapsedDeadlineAtMs: null,
         model: null,
@@ -1946,7 +1954,7 @@ test("a lap that named no model at all is the same stall, spelled for a reader",
         costUsd: null,
         turns: null,
         durationMs: null,
-        spendSource: "unread",
+        spendSource: "notReported",
       },
     },
   });
@@ -1997,6 +2005,7 @@ test("a reason contained in an earlier one is still recorded", async () => {
         sessionId: "session-1",
         sessionPath: "started",
         permissionDenials: "[]",
+        commands: "[]",
         endpointLeaseFailure: "timeout after 60 seconds",
         elapsedDeadlineAtMs: null,
         model: MODEL,
@@ -2004,7 +2013,7 @@ test("a reason contained in an earlier one is still recorded", async () => {
         costUsd: null,
         turns: null,
         durationMs: null,
-        spendSource: "unread",
+        spendSource: "notReported",
       },
     },
   });

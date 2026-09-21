@@ -137,8 +137,14 @@ export interface LapPerformance {
    */
   readonly permissionDenials: string;
   /**
-   * What the lap spent, as the adapter read it off the worker's own transcript
-   * (`D-0046`).
+   * The commands the lap ran, as the text continuo sent (`continuo D-1112`):
+   * `"null"` when it cannot say, an array's text otherwise. Carried to the row
+   * untouched, for {@link permissionDenials}' reason; the model reviewer reads it.
+   */
+  readonly commands: string;
+  /**
+   * What the lap spent, as continuo reported it with the lap (`D-0046`,
+   * `continuo D-1112`).
    *
    * **Three numbers and not one**, because time and money are separate
    * quantities: a lap can finish well inside the plan's `invocationCeilingMs`
@@ -153,22 +159,19 @@ export interface LapPerformance {
   readonly turns: number | null;
   readonly durationMs: number | null;
   /**
-   * How far the adapter's read of the transcript got, so that three nulls can
-   * be reported as the fact they are (rondo#130).
+   * Whether continuo reported a spend at all, so that three nulls can be
+   * reported as the fact they are (rondo#130).
    *
-   * Three nulls arrive for three different reasons -- the transcript would not
-   * open, it opened and holds no terminal `result` event, or the event was read
-   * and carried no number under any of the three keys -- and a report that
-   * names one of them for all three asserts something rondo did not observe
-   * (`D-0032`). That is what the sentence did: it said the event "was not
-   * readable" for the fake worker's laps, whose event was read perfectly well
-   * and simply carries no accounting.
+   * Three nulls arrive for two different reasons -- continuo answered `spend:
+   * null` (the backend cannot say), or it answered a spend whose `result` event
+   * carried no number under any of the three keys -- and a report that names
+   * one of them for both asserts something rondo did not observe (`D-0032`).
    *
    * The union is spelled here rather than imported, like every other type in
    * this module: `src/refrain -> src/continuo` stays refused, and the adapter
    * names the mapping where it names the other three.
    */
-  readonly spendSource: "unread" | "resultEventAbsent" | "resultEvent";
+  readonly spendSource: "notReported" | "resultEvent";
 }
 
 /** What `gate show` hands back. `outcome` is null exactly while the gate is open. */

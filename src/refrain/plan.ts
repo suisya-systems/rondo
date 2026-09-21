@@ -113,32 +113,6 @@ export interface RunPlan {
   /** The request text. The one field of eight that the one-liner supplies. */
   readonly prompt: string;
   /**
-   * The Bash subjects this lap's worker may run, declared by the plan and
-   * widening the fence of the role the agent type names (`continuo D-1110`).
-   *
-   * **The plan declares them because rondo may not invent them.** D-0039 rule 2
-   * is why: `command.run` is a capability key and says *that* commands may be
-   * run, and deriving *which* from it would be rondo minting a command
-   * vocabulary neither cadenza nor continuo has. So the set arrives as an input
-   * on the plan -- written by whoever knows the target repository's own build --
-   * and rondo carries it to `run admit --allow-bash`, one flag per subject,
-   * without reading a command out of it.
-   *
-   * **A subject, not a permission spec.** continuo renders `Bash(<subject>)`
-   * itself, so a declaration cannot name `Read`, `Edit` or an MCP tool, and the
-   * role document's own `global.forbidden_allow_*` still refuses the render if
-   * the merged list collides with it. `npm run:*` is a subject; `Bash(npm
-   * run:*)` is not, and the parenthesis rule below refuses the second spelling.
-   *
-   * **Empty is the honest default and is not a widening.** A run admitted with
-   * no declaration renders the fence every run before `continuo D-1110`
-   * rendered. What an empty declaration may *not* be is silently paired with a
-   * `command.run` grant: `classifyPlan` refuses that pair before the spawn
-   * (D-0039 rule 3), because a plan that grants the capability and declares
-   * nothing is the disagreement rondo#67 was.
-   */
-  readonly allowedBash: readonly string[];
-  /**
    * The language this lap asks its worker to write material in, as an IETF
    * language tag (`ja`), or null for **rondo asks for nothing** (D-0053 rule 6).
    *
@@ -524,7 +498,6 @@ export function runPlan(input: RunPlan): PlanOutcome {
       workspaceRoot: requireAbsolute("workspaceRoot", input.workspaceRoot),
       baseBranch: requireNotOptionShaped("baseBranch", input.baseBranch),
       prompt: requireNonEmpty("prompt", input.prompt),
-      allowedBash: requireAllowedBash(input.allowedBash),
       materialLanguage: optionalLanguageTag(input.materialLanguage),
       reviewCriterion: optionalReviewCriterion(input.reviewCriterion),
       repository: requireAbsolute("repository", input.repository),
@@ -743,7 +716,14 @@ function requireRulePath(field: string, path: unknown): string {
 }
 
 /**
- * The declared subjects, checked against `LapRunIntent`'s own rules.
+ * The declared subjects, checked against `LapRunIntent`'s own rules: the
+ * catalog project's `allowed_bash` (D-0094), checked by `classifyPlan` before
+ * any process starts. Null when every subject passes, else the first refusal.
+ *
+ * **The list is no longer a field of the plan** (D-0094): cadenza's catalog
+ * project carries it (cadenza D-0041), inside the `config_digest` the contract
+ * is issued against, and the plan's own copy was a second source that could
+ * disagree with the one the contract names.
  *
  * **Restated here for D-0015 exception 2's reason, and that reason is
  * measured rather than assumed**: `LapRunIntentUsageError` -- the error
@@ -764,14 +744,26 @@ function requireRulePath(field: string, path: unknown): string {
  * render anyway). Nothing here judges *which* commands are reasonable: that is
  * the declaration's own content and the plan's author's to write.
  */
+export function allowedBashRefusal(subjects: readonly string[]): string | null {
+  try {
+    requireAllowedBash(subjects);
+    return null;
+  } catch (error) {
+    if (error instanceof PlanRefusal) {
+      return error.message;
+    }
+    throw error;
+  }
+}
+
 function requireAllowedBash(subjects: readonly string[]): readonly string[] {
   const value: unknown = subjects;
   if (!Array.isArray(value)) {
-    return refuse("'allowedBash' is not an array, and a declaration is a list of Bash subjects");
+    return refuse("'allowed_bash' is not an array, and a declaration is a list of Bash subjects");
   }
   return Object.freeze(
     value.map((subject, index) => {
-      const field = `allowedBash[${String(index)}]`;
+      const field = `allowed_bash[${String(index)}]`;
       if (typeof subject !== "string") {
         return refuse(`'${field}' is not a string`);
       }
@@ -966,7 +958,6 @@ export function planPayload(plan: AdmittedPlan): JsonRecord {
     base_branch: plan.baseBranch,
     topic_branch: plan.topicBranch,
     prompt: plan.prompt,
-    allowed_bash: [...plan.allowedBash],
     material_language: plan.materialLanguage,
     review_criterion:
       plan.reviewCriterion === null
@@ -1108,22 +1099,16 @@ const PAYLOAD_UPGRADES: readonly ((payload: JsonRecord) => JsonRecord)[] = [
    */
   (payload) => withWorkspaceRoot(withPullRequestBaseBranch(payload)),
   /**
-   * v1 -> v2: the declaration, which every payload written before it lacks.
+   * v1 -> v2: once the plan's `allowed_bash` declaration, which every payload
+   * written before it lacked and this rung supplied as `[]`.
    *
-   * **Absent means "this plan declared nothing"**, which is the empty list and
-   * which is also what every run admitted before `continuo D-1110` actually
-   * got: no `--allow-bash` was passed, so no entry reached the rendered allow
-   * list. The upgrade is therefore a faithful reading of the older bytes rather
-   * than a default chosen for convenience -- and it is the reading that keeps a
-   * live iteration readable across the pin move, which is what this ladder is
-   * for.
-   *
-   * It is **not** a relaxation of the grant check: a v1 payload whose agent
-   * type grants `command.run` climbs to an empty declaration and is then
-   * refused by `classifyPlan` for the disagreement, which is the correct answer
-   * -- that plan's lap could never have run a command either.
+   * **Now the identity** (D-0094): the list is the catalog project's
+   * `allowed_bash` (cadenza D-0041) and the plan no longer reads the key, so an
+   * older payload that still carries it reads with the key ignored rather
+   * than refused. The rung stays because removing it would renumber every
+   * version above it.
    */
-  (payload) => withAllowedBash(payload),
+  (payload) => payload,
   /**
    * v2 -> v3: the operator's language, which no payload written before it could
    * carry (D-0053 rule 10).
@@ -1319,23 +1304,6 @@ function withWorkspaceRoot(payload: JsonRecord): JsonRecord {
 }
 
 /**
- * A payload from before `allowedBash` existed, given the declaration it had.
- *
- * Absent is the empty list, for the reason the ladder's second entry states: a
- * run admitted before `continuo D-1110` passed no `--allow-bash` and its child
- * got the role's own six git specs. A key that is *present* is left exactly as
- * it is, including a present non-array, which {@link readStringArray} still
- * refuses by name -- the ladder supplies what an older shape omitted and never
- * repairs what a newer one got wrong.
- */
-function withAllowedBash(payload: JsonRecord): JsonRecord {
-  if (payload["allowed_bash"] !== undefined) {
-    return payload;
-  }
-  return { ...payload, allowed_bash: [] };
-}
-
-/**
  * A payload from before the language ask existed, given the ask it made.
  *
  * Absent is null, for the reason the ladder's third entry states: nobody could
@@ -1397,7 +1365,6 @@ export function readRunPlan(payload: JsonRecord): PlanOutcome {
       workspaceRoot: readString(current, "workspace_root"),
       baseBranch: readString(current, "base_branch"),
       prompt: readString(current, "prompt"),
-      allowedBash: readStringArray(current, "allowed_bash"),
       materialLanguage: readNullableString(current, "material_language"),
       reviewCriterion: readReviewCriterion(current),
       repository: readString(current, "repository"),

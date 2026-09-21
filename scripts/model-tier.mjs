@@ -3,7 +3,7 @@
  *
  * It is a script rather than the `node -e` one-liner it used to be because a
  * fenced lap may run `npm run` and may not evaluate an expression (rondo#103).
- * The plan's `allowed_bash` is a list of whole commands, so the one-liner was a
+ * The catalog project's `allowed_bash` is a list of whole commands, so the one-liner was a
  * step the handbook documented that a lap inside the fence could not run -- and
  * the spelling that would have made it runnable, `node -e:*`, is an entrance to
  * anything rather than a vocabulary. A named command needs neither.

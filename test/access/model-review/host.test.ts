@@ -39,7 +39,6 @@ const PLAN: RunPlan = {
   workspaceRoot: "/srv/work",
   baseBranch: "main",
   prompt: "do the thing",
-  allowedBash: ["npm run:*"],
   materialLanguage: null,
   reviewCriterion: null,
   repository: "/srv/repo",
@@ -138,6 +137,7 @@ async function world(
     readonly model?: string;
     readonly reading?: LapReadingDraft | null;
     readonly sessionId?: string | null;
+    readonly lapCommands?: string | null;
     readonly materialLanguage?: RunPlan["materialLanguage"];
     readonly requestMessageId?: string | null;
   } = {},
@@ -183,6 +183,18 @@ async function world(
     {
       model: options.model ?? "claude-opus-5",
       sessionId: options.sessionId === undefined ? "s-1" : options.sessionId,
+      lapCommands:
+        options.lapCommands === undefined
+          ? JSON.stringify([
+              {
+                index: 3,
+                command: "npm run verify",
+                output: "ok",
+                output_omitted_chars: 0,
+                is_error: false,
+              },
+            ])
+          : options.lapCommands,
       gateId: "g-1",
     },
     2_000,
@@ -192,7 +204,6 @@ async function world(
     gather: 0,
     rationale: 0,
     run: [] as string[],
-    commands: 0,
     evidence: [] as ReadingEvidence[],
   };
   const answer = (document: string): ReviewerRun => ({
@@ -227,15 +238,6 @@ async function world(
     runReviewer: async (_row, document) => {
       calls.run.push(document);
       return answer(document);
-    },
-    readCommands: (request) => {
-      calls.commands += 1;
-      expect(request).toEqual({ stateRoot: "/srv/state", runId: "rondo-i-0001", sessionId: "s-1" });
-      return {
-        kind: "read",
-        commands: [{ index: 3, command: "npm run verify", output: "ok", isError: false }],
-        finalMessage: "done",
-      };
     },
     now: () => 3_000,
   };
@@ -322,7 +324,6 @@ test("a lap run under the reviewer's own family is refused without spawning", as
   // Nothing gathered either: no git, no transcript, no continuo (D-0065 rule 3.3).
   expect(calls.gather).toBe(0);
   expect(calls.rationale).toBe(0);
-  expect(calls.commands).toBe(0);
   expect(calls.run).toEqual([]);
   const model = (await store.readingsFor(id)).at(-1);
   expect(model?.verdict).toBe("unavailable");
@@ -421,7 +422,6 @@ test("a lap whose model is not in the tables is refused before anything is gathe
 
   expect(calls.gather).toBe(0);
   expect(calls.rationale).toBe(0);
-  expect(calls.commands).toBe(0);
   expect(calls.run).toEqual([]);
   expect((await store.readingsFor(id)).at(-1)?.unavailableReason).toContain("D-0065 rule 3.3");
 });
@@ -445,17 +445,23 @@ test("a second reading of one iteration hands over the deterministic range again
   ]);
 });
 
-test("a row with no session reads no transcript and records why", async () => {
-  const { store, id, ports, calls } = await world({ sessionId: null });
+test("a row that holds no commands is not reviewed, and says why", async () => {
+  // continuo D-1112: the commands are the row's, as `lap perform` reported them.
+  for (const [lapCommands, reason] of [
+    [null, "the row holds no commands"],
+    ["null", "continuo reported that it cannot say which commands the lap ran"],
+    ["[{}]", "the lap's recorded commands do not read"],
+  ] as const) {
+    const { store, id, ports, calls } = await world({ lapCommands });
 
-  await takeModelReading(ports, id);
+    await takeModelReading(ports, id);
 
-  expect(calls.commands).toBe(0);
-  expect(calls.run).toEqual([]);
-  const model = (await store.readingsFor(id)).at(-1);
-  expect(model?.verdict).toBe("unavailable");
-  expect(model?.unavailableReason).toContain("transcript");
-  expect(model?.unavailableReason).toContain("the row names no session");
+    expect(calls.run, String(lapCommands)).toEqual([]);
+    const model = (await store.readingsFor(id)).at(-1);
+    expect(model?.verdict).toBe("unavailable");
+    expect(model?.unavailableReason).toContain("transcript");
+    expect(model?.unavailableReason).toContain(reason);
+  }
 });
 
 test("a plan with no material language hands the prompt over as written", async () => {

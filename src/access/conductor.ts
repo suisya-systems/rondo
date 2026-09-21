@@ -43,8 +43,7 @@ import {
   startContinuo,
   type VerifiedContinuo,
 } from "../continuo/invoker.js";
-import type { ContinuoResult } from "../continuo/protocol.js";
-import { readLapSpend } from "../continuo/transcript.js";
+import type { ContinuoResult, LapSpend } from "../continuo/protocol.js";
 import { classifyPlan } from "../refrain/classification.js";
 import {
   abandon as abandonIteration,
@@ -77,11 +76,11 @@ import {
 import { type AdvisoryRecord, type IterationStore, LANE_LEDGER_AUTHOR } from "../store/sqlite.js";
 
 import { DETERMINISTIC_DRAFTER, proposeAfterAbandon, type UnpromptedPorts } from "./advisory.js";
+import type { ChecksReading } from "./checks-host.js";
 import { discard, writeDelegationRecord } from "./delegation.js";
 import {
   type ChangedPathsReading,
   type ChangedPathsRequest,
-  type ChecksReading,
   inspectLapWork,
   type LandingReading,
   type LandingRequest,
@@ -214,29 +213,25 @@ function lapRequestOf(plan: AdmittedPlan, modelTier: string): PerformLapRequest 
 }
 
 /**
- * What the lap spent, in the three names {@link LapPerformance} carries.
+ * What the lap spent, in the three names {@link LapPerformance} carries, from
+ * `lap perform`'s own `spend` (`continuo D-1112`).
  *
- * A function rather than a spread of {@link readLapSpend}'s own record, because
- * the transcript's keys are the worker CLI's (`total_cost_usd`, `num_turns`) and
- * the port's are rondo's: naming the mapping is what lets a reader of either
- * side see that no fourth number appeared on the way across.
+ * Named rather than spread because continuo's keys (`total_cost_usd`,
+ * `num_turns`) and the port's are different vocabularies: naming the mapping is
+ * what lets a reader see no fourth number appeared on the way across. A `null`
+ * spend is continuo unable to say, and stays three nulls, never a zero.
  */
-function readLapSpendFields(
-  stateRoot: string,
-  runId: string,
-  sessionId: string,
+function lapSpendFields(
+  spend: LapSpend | null,
 ): Pick<LapPerformance, "costUsd" | "turns" | "durationMs" | "spendSource"> {
-  const spend = readLapSpend({ stateRoot, runId, sessionId });
-  return {
-    costUsd: spend.totalCostUsd,
-    turns: spend.numTurns,
-    durationMs: spend.durationMs,
-    // The fourth value, and it is not a number: which read produced the three
-    // above, so the report can say why they are null instead of guessing
-    // (rondo#130). The two sides spell the union identically and the type is
-    // declared on both, so a value added on one side stops compiling here.
-    spendSource: spend.source,
-  };
+  return spend === null
+    ? { costUsd: null, turns: null, durationMs: null, spendSource: "notReported" }
+    : {
+        costUsd: spend.totalCostUsd,
+        turns: spend.numTurns,
+        durationMs: spend.durationMs,
+        spendSource: "resultEvent",
+      };
 }
 
 /**
@@ -291,11 +286,9 @@ export function conductorPorts(
           baseBranch: plan.baseBranch,
           topicBranch: plan.topicBranch,
           prompt: plan.prompt,
-          // The plan's declaration, passed as the plan wrote it: the port's
-          // signature does not grow a parameter for it, because the plan is
-          // already what crosses and the declaration is a field of the plan
-          // rather than something the conductor decides (D-0039 rule 3).
-          allowedBash: plan.allowedBash,
+          // The catalog project's `allowed_bash`, exactly the list the envelope
+          // above records (D-0094): one resolution, so the two cannot differ.
+          allowedBash: written.allowedBash,
           // The plan's ask, carried the same way: rondo does not decide it and
           // does not read it back (D-0053 rules 6 and 8).
           materialLanguage: plan.materialLanguage,
@@ -358,20 +351,11 @@ export function conductorPorts(
         // continuo's own text, unread here: what it says is a person's to read
         // and the loop's only job is to get it onto the row (#88).
         permissionDenials: payload.permissionDenials,
-        // **Read here, beside the answer that names the session, because this
-        // is the one place every part of the path exists** (`D-0046` rule 2):
-        // the state root and the run id are what this adapter just passed on the
-        // command line, and `payload.sessionId` is what the lap answered with.
-        // It is the same shape as `readLapWork` below -- a read of what the lap
-        // left behind, taken by the composition root and never by the loop --
-        // and it cannot fail the step: an unreadable transcript answers three
-        // nulls.
-        //
-        // The run id is the plan's rather than the payload's on purpose: this
-        // path has to be the one rondo passed, and whether continuo answered
-        // about the same run is a check the interpreter makes afterwards, out
-        // of the same two values.
-        ...readLapSpendFields(plan.stateRoot, plan.runId, payload.sessionId),
+        // What the lap ran and spent, off the same document (continuo
+        // D-1112): continuo reads both from the verified transcript generation,
+        // so rondo no longer computes its state-root layout to find them.
+        commands: payload.commands,
+        ...lapSpendFields(payload.spend),
       }));
     },
     showGate: async (plan, gateId): Promise<EffectOutcome<GateObservation>> =>
@@ -1048,17 +1032,27 @@ function checksBody(
     );
   }
   if (reading.kind === "red") {
-    return (
-      `Lap '${iterationId}' is not green: ${on} the forge reports ` +
-      `${named(reading.failed)} as failed. ${nothingElse}`
-    );
+    // **A cancelled or timed-out check is said as what it came to**
+    // (`continuo D-1113`), each list in its own clause; the page reads the
+    // clauses back (`page-logic/result.ts`). A red written before this named
+    // every one of them as failed, in the first clause's shape.
+    const clauses = [
+      [reading.failed, "failed"],
+      [reading.cancelled, "cancelled"],
+      [reading.timedOut, "timed out"],
+    ] as const;
+    const listed = clauses
+      .filter(([names]) => names.length > 0)
+      .map(([names, as]) => `${named(names)} as ${as}`)
+      .join("; ");
+    return `Lap '${iterationId}' is not green: ${on} the forge reports ${listed}. ${nothingElse}`;
   }
   // **Said rather than left as a silence**, and said as what it is: the forge
   // offers nothing that tells a repository with no checks apart from one whose
   // first check has not started, so neither is claimed -- and because neither
   // is claimed, this line is not the end of the reading.
   return (
-    `The forge reported no check of any kind ${on}, which lap '${iterationId}' was published at. ` +
+    `The forge reported no check of any kind ${on}, the head of the pull request lap '${iterationId}' published. ` +
     "rondo cannot say whether this work is green. If a check reports later, it says so here."
   );
 }

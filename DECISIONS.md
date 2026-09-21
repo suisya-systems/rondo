@@ -7160,6 +7160,12 @@ escalate to continuo about the fence — is both the narrower route and the one 
    met by the shape that arrived — (a) by `allowed_bash` on the `run_delegation_recorded` payload,
    readable through `run show --json`, and (b) by `permission_denials` on what `lap perform`
    answers with. Rule 5 is untouched: rondo still records `continuo_role` and no column is added.
+   > **Annotation (2026-09-22, from D-0094).** Added after this entry was accepted, and additive.
+   > **The declaration's carrier moved again, from the plan to the catalog project**: the list is the
+   > catalog project's `allowed_bash` (cadenza `D-0041`), inside `config_digest`, and the plan's own
+   > `allowed_bash` is removed. The pair refused over is unchanged -- the grant and the declaration, in both
+   > directions, at `classify` -- and is now stated over the project `classifyPlan` resolves from the
+   > plan's layers. Nothing above is edited.
 
 4. **Two properties are required of whatever shape continuo grows, and they are not the
    implementation's to negotiate.**
@@ -8454,6 +8460,17 @@ seam (`D-0015`: `--json` is the wire protocol), because nothing measured here is
 **Status:** accepted (2026-09-12, rondo's human gate). Refs rondo#96, `D-0044` rule 5, `D-0017`,
 `D-0021`, `D-0029`, `D-0032`.
 
+> **Annotation (2026-09-22, from D-0093's relocation, continuo `D-1112`).** Added after this entry was
+> accepted, and **not additive**. **Its first falsifier fired**: at continuo `b7162ae`, `lap perform`'s
+> payload carries `spend` (`total_cost_usd`, `num_turns`, `duration_ms`, or `null` where the backend
+> cannot say). The three numbers are read off that field, and rondo no longer reads them from the
+> transcript. The three columns stay and `null` is still never a zero; rondo#130's source becomes two
+> values, `notReported` (continuo answered `spend: null`) and `resultEvent`. Rule 2's path and rule 4's
+> grant are no longer used for cost: `src/continuo/transcript.ts` keeps the same grant only for a
+> **running** lap's log (`readLapLog`, rondo#258), which `lap perform` cannot carry because it answers
+> when the turn ends, and it stays until continuo's `run show` names a running lap's transcript
+> (continuo#218). Nothing below is edited.
+
 Every lap's terminal `result` event carries `total_cost_usd`, `num_turns` and `duration_ms`. rondo
 kept none of them, so five dogfood records ([`lap-1`](docs/operations/lap-1-dogfood.md) through
 [`lap-5`](docs/operations/lap-5-dogfood.md), each section 5 or 11) parsed them out of
@@ -9173,6 +9190,19 @@ fence block.
    **It is a report and not a control.** rondo does not ask continuo to police the worker's sandbox,
    choose it, or refuse a lap over it; rondo asks to be told. Until such a field exists, rule 1 holds
    and nothing is recorded.
+   > **Annotation (2026-09-22, from D-0093's relocation, continuo `D-1112`).** Added after this entry
+   > was accepted, and additive. **One cause of this failure is now continuo's to catch, and continuo
+   > refuses rather than reports it.** The measured cause of N-16 and N-21 -- the lap started from
+   > inside another sandbox whose seccomp filter refuses `socket(AF_UNIX)` -- was caught by a probe rondo
+   > ran before `start`, `retry` and `revise` (`src/continuo/sandbox.ts`, `fffe957`, taken without an
+   > entry). At continuo `b7162ae`, `lap perform` makes that check itself and answers `LapRefused`, exit 2
+   > (`continuo D-1112`), so rondo's probe is removed. The page says the refusal in the person's own
+   > language (`lapNestedSandbox`), and the terminal adds rondo's English sentence after continuo's line.
+   > continuo gives the refusal no code, so rondo recognises it by continuo's pinned sentence
+   > (`isNestedSandboxRefusal`, `src/continuo/protocol.ts`); a reworded sentence falls back to continuo's
+   > own words. The refusal now comes after the iteration is admitted, so it ends `failed` with a refusal.
+   > **Every other cause is unchanged**: this rule's report is still not a field of `lap perform`, and rule
+   > 1 holds.
 
 8. **Nothing under `src/` changes on this entry**, in `D-0039` rule 6's and `D-0040`'s sense. Rule 3
    is a wording change to `allowanceLines` and rule 5 names lines that already print; both are
@@ -12630,6 +12660,13 @@ but does not put them to the person:
    > continuo's `ci_observation` evidence once the judgement moves there, which is under way; until
    > then rondo's own reading is not on an auditable record (`D-0091` section 2). Nothing above is
    > edited.
+   > **Annotation (2026-09-22, from D-0095).** Added after this entry was accepted, and additive.
+   > **The reading now stands on continuo's evidence.** rondo fetches a pull request's documents with the
+   > operator's `gh`, continuo records them (`ci observe`) and judges them on the pull request's head
+   > (`ci show`, `continuo D-1113`), and the thread's answer is that verdict. The reason `D-0091` gave for
+   > waiting -- a reading on no record anybody can audit -- is answered. **The transition is still not
+   > taken**: taking it is a gate decision, and so is whether a merge reads `ci show` itself. Nothing
+   > above is edited.
 
 5. **Every act taken inside a scope names the scope.** An admission, a redo, an agent-type choice, a
    gate answer, a push: each records the scope it was taken under, so "which scope authorised this"
@@ -12689,6 +12726,12 @@ itself.
 > "Dispatcher: patrolling" row is filled by `D-0068` section 2: a timer in the resident host reads rows
 > against each lap's declared ceiling, reports findings, and acts on nothing. It reads no panes and no
 > liveness. The table and the list above are not edited.
+
+> **Annotation (2026-09-22, from D-0095).** Added after this entry was accepted, and additive. The
+> "CI and merge watch, cleanup" row's CI half is driven: rondo's checks host fetches with the operator's
+> `gh` and feeds continuo's `ci observe`, and the verdict it writes is `ci show`'s (`continuo D-1113`).
+> Merge watch and cleanup (`pr_merged`, `removeWorktree`) are still not driven. The table and the list
+> above are not edited.
 
 ### 6. Existing entries that have to move
 
@@ -13167,6 +13210,15 @@ same date, read only (`JA/`), and the survey `JA/notes/lap-gap-survey-2026-09-13
    4. **the lap's transcript, reduced to the commands it ran and what they returned**, and its final
       message (the gate's `rationale`), located by `D-0048`'s identifier. The rationale is handed as a
       claim to check against the rest, not as a description of the work;
+      > **Annotation (2026-09-22, from D-0093's relocation, continuo `D-1112`).** Added after this
+      > entry was accepted, and additive. **The commands come from `lap perform`, not from the transcript**:
+      > its `commands` (`index`, `command`, `output`, `output_omitted_chars`, `is_error`) are stored on the
+      > iteration row (`lap_commands`, the same three states as `permission_denials`) and read back for the
+      > review. continuo keeps at most 8192 code points of an output, head and tail; where it cut one, the
+      > document carries a marker at the cut saying how much was left out and that no finding may rest on
+      > what could be in the missing middle. The final message is the gate's rationale alone. A row with no
+      > commands -- one written before this change, or a lap continuo could not report -- gets an unavailable
+      > model reading that says which. Nothing above is edited.
    5. **the deterministic reading's findings** for the same lap, including `D-0060`'s uncommitted paths;
    6. **the review criterion** (`D-0029` rule 13: a plan field): what each severity means, and the paths
       of the target repository's rule files (for example `AGENTS.md`), whose content rondo reads at
@@ -20728,6 +20780,12 @@ On **2026-09-22**, at rondo `47ea4bd`, by reading. Line numbers drift; re-measur
    several gets each one's. **A repository matching none is still added**, with only the common
    commands, and the page says under the request that rondo could not tell how it is built, so the
    worker can change and commit its files but cannot run its build or tests.
+   > **Annotation (2026-09-22, from D-0094).** Added after this entry was accepted, and additive.
+   > **The table is cadenza's now** (cadenza `D-0040`, `D-0041`): `COMMON_BASH`, the per-family lists,
+   > `toolchainsOf` and `allowedBashFor` are removed from `src/access/repository-add.ts`, and rondo calls
+   > cadenza's `allowedCommandsFor` through the facade's pass-throughs `allowedCommandsFor` and
+   > `COMMON_BASH`. The result is written into the added plan's catalog project as `allowed_bash`, no
+   > longer onto the plan. What a repository gets is what this rule says. Nothing above is edited.
 
 ### What was put to the human gate, and its answer
 
@@ -20779,6 +20837,9 @@ All seven were answered through the window on 2026-09-22.
   and only one their own request named.
 - **It does not change setup.** `scripts/dogfood-env.sh` still writes its npm list; reading the four
   families there too is a later change, and a small one, since the reckoning is one pure function.
+  > **Annotation (2026-09-22, from D-0094).** No longer holds, and **not additive**: setup computes
+  > `allowed_bash` with cadenza's `allowedCommandsFor` over the target's top-level files and writes it
+  > into every catalog project it writes. Nothing above is edited.
 - **It does not read an enterprise forge's address as a place.** Only `github.com` addresses name a
   place, and an issue linked on another host names none, since the clone is by `OWNER/NAME` and
   would find github.com's repository of that name; `OWNER/NAME` written as such names one on any
@@ -21023,6 +21084,13 @@ still open.
 3. **Open: which reading counts.** Whether rondo#367's reading -- rondo's own, through the operator's
    forge CLI -- is "rondo observes CI", or whether the condition is met by the evidence continuo's
    `ci_observation` records once the judgement moves there (survey G4).
+   > **Annotation (2026-09-22, from D-0095).** Added after this entry was accepted, and additive.
+   > **The judgement has moved.** The thread's checks answer is continuo's `ci show` over what
+   > `ci observe` recorded in the lap's control-plane database, read on the pull request's head
+   > (`continuo D-1113`); rondo only fetches the documents with the operator's `gh`. So the reading this
+   > item asks about now stands on continuo's evidence, and "Why it is not taken now" below is answered.
+   > **The transition is still not taken**: taking it is a gate decision, as is whether the merge button
+   > reads `ci show` directly. Nothing below is edited.
 
 **Why it is not taken now.** The judgement and its evidence are moving to continuo's
 `ci_observation`, and that work is under way. Until it lands, rondo's own reading is not on a record
@@ -21156,6 +21224,16 @@ another repository:
    it. An entry whose module no longer plays the role fails, so it is removed when the code moves.
    **A new entry needs a decision that names its module**, checked by the test; this entry admits
    the five modules listed above and no other.
+   > **Annotation (2026-09-22, from D-0094 and D-0095).** Added after this entry was accepted, and
+   > additive. **Four of the five modules are relocated**, at cadenza `3c6ed28` and continuo `b7162ae`:
+   > `src/access/repository-add.ts` (the allowed-command table, cadenza `D-0040` / `D-0041`, `D-0094`),
+   > `src/access/forge.ts` and `src/access/checks-host.ts` (the checks reading and its fold, `continuo
+   > D-1113`, `D-0095`), and `src/continuo/sandbox.ts` (the probe, deleted; `continuo D-1112`). Their
+   > `RELOCATING` entries are removed, and `forge.ts` and `checks-host.ts` no longer name *CI and merge
+   > watch, cleanup*. **`src/continuo/transcript.ts` stays on the list.** A finished lap's spend and
+   > commands now come from `lap perform` (`continuo D-1112`), and what is left is `readLapLog`, a running
+   > lap's log, which `lap perform` cannot carry; its entry waits on continuo's `run show` naming a
+   > running lap's transcript (continuo#218). Nothing above is edited.
 6. **The `boundary-is-not-vacuous` job plants one more violation**: a module given a continuo role,
    which must fail with that role and owner named. The existing planted module must also be refused
    for naming no role.
@@ -21181,3 +21259,225 @@ another repository:
   was misstated, and the review half did not catch it either.
 - **`RELOCATING` growing without a decision naming the new module**, or not shrinking once the code
   has moved elsewhere.
+
+## D-0094 — What a worker may run has one source, the catalog project's `allowed_bash`: rondo's toolchain table and the plan's own copy are removed, cadenza `D-0040` composes the list and `D-0041` carries it inside `config_digest`, and setup writes it on every project it writes
+
+**Status:** accepted (2026-09-22, rondo's owner, through the window). Carries out the first of
+`D-0093`'s relocations. Supersedes nothing. `D-0039` rule 3 and `D-0090` rule 2.6 and its "What this
+does not do" item on setup gain annotations this entry adds (listed at the end). Refs `D-0039`,
+`D-0047`, `D-0075`, `D-0081`, `D-0090`, `D-0093`, cadenza `D-0040`, cadenza `D-0041`,
+`continuo D-1110`.
+
+**Why an entry is needed.** `D-0093` found cadenza's *Authority and settings* in rondo: the table
+that turns a repository's top-level files into the commands its worker may run
+(`src/access/repository-add.ts`, `D-0090` rule 2.6). cadenza now owns it (`D-0040`) and carries the
+result in its catalog (`D-0041`). Moving the table is not the whole change, because rondo held the
+list in a second place too: `RunPlan.allowedBash`, the plan payload's `allowed_bash`, which setup and
+the page's "add this repository" both wrote and which fed `run admit --allow-bash` and the delegation
+envelope. Two lists for one fact can disagree, and which one is right has to be decided, not left to
+whichever the code happens to read.
+
+### What was measured, and how
+
+On **2026-09-22**, at rondo `7d85b9f` (the pins moved to cadenza `3c6ed28` and continuo `b7162ae`),
+by reading. Line numbers drift; re-measure the claim.
+
+- **Before this change the list lived in three places.** rondo's own table (`COMMON_BASH`, `BASH`,
+  `toolchainsOf`, `allowedBashFor` in `src/access/repository-add.ts`) composed it for an added
+  repository; `scripts/dogfood-env.sh` wrote a hard-coded npm list; both wrote it to the plan's
+  top-level `allowed_bash`, and nowhere in the catalog. The conductor passed `plan.allowedBash` to
+  `run admit --allow-bash` and `writeDelegationRecord` copied it into the envelope.
+- **The plan's list was outside `config_digest`.** A contract's digest covers the resolved catalog
+  project and not the plan, so two plans on one project differing only in what the worker may run
+  composed one contract, and an approval of that contract (`D-0047`) did not say which list it
+  approved.
+- **cadenza `3c6ed28`.** `D-0040` exports `allowedCommandsFor`, `allowedBashFor`, `COMMON_BASH` and
+  `toolchainsOf`. `D-0041` gives the catalog's `[project.<id>]` an `allowed_bash`: **absent and `[]`
+  both grant nothing**, a later layer replaces the whole list, a local layer may set it, and it
+  enters `config_digest` only when it is not empty. `classify()` compares the contract's
+  `config_digest` with the current one, which the caller passes.
+
+### Decision
+
+1. **The catalog project's `allowed_bash` is the one list of what a worker may run.** It is
+   cadenza's `ResolvedProject.allowedBash`, inside `config_digest`, so inside the contract and inside
+   supersession: a changed list is a changed contract. `RunPlan.allowedBash`, `AdmittedPlan.allowedBash`
+   and the plan payload's `allowed_bash` are removed. A plan written before this change that still
+   carries the key reads as before, with the key ignored; the payload ladder's v1 -> v2 rung is kept
+   as the identity rather than deleted, because the payload version is the ladder's length, and no
+   version is bumped.
+2. **One resolution feeds everything that carries the list.** `classifyPlan` resolves the project
+   from the plan's own catalog layers, checks the declaration against the grant (rule 3 below) and
+   passes that project's `configDigest` to cadenza's `classify` as the current one, so the digest
+   compared is the one the list is in. `writeDelegationRecord` resolves the same project, writes the
+   envelope's `allowed_bash` from it and hands the list back, and the conductor passes exactly that
+   list to `run admit --allow-bash`. The envelope and the flags cannot differ. `allowedBashIn` still
+   reads the envelope for the screen.
+3. **The checks that ran on the plan's field run at `classify` on the project's.** The grant and the
+   declaration must agree in both directions (`D-0039` rule 3 as annotated for `continuo D-1110`):
+   `command.run` granted over a project with no `allowed_bash` is refused, and the refusal names the
+   project and cadenza `D-0041`. The subject rules continuo's `LapRunIntent` applies (no parenthesis,
+   no bare wildcard, no control character, no empty subject; `allowedBashRefusal`, `src/refrain/plan.ts`)
+   are checked there too, because cadenza's own validation does not refuse `(` or `*` and continuo
+   answers them with a stack trace. Both still fire before any process starts.
+4. **rondo composes no command vocabulary.** An added repository's list is the facade's
+   `allowedCommandsFor` over its top-level file names (`src/cadenza/facade.ts` passes cadenza's
+   through, and `COMMON_BASH` with it; both are named in the facade's bindings list). The page's
+   "add this repository" writes it into the plan's catalog layer, `catalog_layers[0].data.project[<name>].allowed_bash`,
+   and not into the plan.
+5. **Setup writes `allowed_bash` on every project it writes**, because under `D-0041` a project
+   without one grants nothing. `scripts/dogfood-env.sh` computes it with the same function, over
+   `git ls-tree --name-only <base branch>` of the target, through rondo's built facade, writes it into
+   the TOML layer's `[project.*]` and into the plan's inline catalog project, and prints it. Setup
+   writes one project today; the rule is for every one it ever writes.
+6. **A store set up before this change is not migrated.** Its catalog layers carry no
+   `allowed_bash`, so every lap there is refused at `classify` with rule 3's message. **Setup is run
+   again**; lap 11's `~/rondo-lap-11` is such a store. The page's "unbuilt" notice
+   (`src/access/model-draft/host.ts`) now also covers a held plan whose catalog project has no
+   `allowed_bash`.
+
+**Why the catalog and not the plan.** The plan was the other candidate: it is where the list already
+was, and keeping it there would have moved only the table. It was not taken because a list outside
+`config_digest` is a list no contract and no approval binds, which is the gap the second bullet of
+"What was measured" names, and because a second copy kept for convenience is two values that will one
+day disagree. The catalog is also where cadenza `D-0041` put it, so the layer that composes a
+contract is the layer that says what the worker may run.
+
+### What this gives up
+
+- **A per-plan list.** Two plans on one project now share one list. A plan that needs different
+  commands needs a project of its own, or a later catalog layer, which replaces the whole list.
+- **Hand-curated commands setup used to grant.** For rondo working on itself setup no longer grants
+  `node vendor/pin.mjs:*`, which rondo's `AGENTS.md` asks for before `npm ci`, because cadenza's
+  `allowedCommandsFor` does not infer it from a top-level listing; `npm ci`'s own integrity check
+  still runs. Adding it back belongs in cadenza, or in a local layer, not in a rondo table.
+- **Existing stores.** Rule 6: setup is run again, with no migration.
+
+### What this does not do
+
+- **It does not change what a worker may run by rule.** The four families of `D-0090` rule 2.6 and
+  the commands every worker has are cadenza's now, as `D-0040` wrote them.
+- **It does not change the envelope's shape or `allowedBashIn`.** The envelope still carries
+  `allowed_bash`; only where the value comes from moved.
+
+### Annotations this entry adds
+
+| Entry | What the annotation says | Additive? |
+|---|---|---|
+| `D-0039` rule 3 | The declaration's carrier moved from the plan to the catalog project's `allowed_bash` (cadenza `D-0041`); the two-direction check stays at `classify` | additive |
+| `D-0090` rule 2.6 | The table moved to cadenza `D-0040` / `D-0041`; rondo reaches it through the facade and writes the result into the catalog project | additive |
+| `D-0090` "What this does not do", on setup | Setup now reads the repository with the same function and writes the list on every project | **not additive** |
+
+### What would falsify it
+
+- **A lap whose `run admit --allow-bash` differs from its envelope's `allowed_bash`, or from its
+  catalog project's**: rule 2's single resolution is not holding.
+- **A worker that ran a command its contract's `config_digest` does not cover**: the list escaped the
+  catalog again.
+- **A project setup wrote without `allowed_bash`** whose laps a person expected to run commands:
+  rule 5 is not holding.
+- **A common need for different commands on one project from plan to plan**: the per-plan list this
+  entry gave up was carrying weight, and the answer is a catalog shape, not the plan field back.
+
+## D-0095 — A pull request's checks are judged by continuo: rondo fetches the three documents with the operator's `gh`, hands them to `ci observe`, writes `ci show`'s verdict into the thread, and a reading it cannot make is said as that and never as red; `D-0064` rule 3.4's transition is still not taken
+
+**Status:** accepted (2026-09-22, rondo's owner, through the window). Carries out the CI relocation
+of `D-0093`. Supersedes nothing. `D-0091` section 2 and `D-0064` rule 3.4 and section 5 gain
+annotations this entry adds (listed at the end). Refs `D-0010`, `D-0064`, `D-0091`, `D-0093`,
+`continuo D-1113`, rondo#310, rondo#367, rondo#376, rondo#380.
+
+**Why an entry is needed.** `D-0093` found continuo's *CI and merge watch* in rondo: `readChecks` and
+`joinChecks` (`src/access/forge.ts`) read a commit's checks and folded them into a verdict, and
+`src/access/checks-host.ts` wrote it. continuo now records the forge's documents and folds them
+(`continuo D-1113`, `ci observe` and `ci show`). The move changes what a person reads on the page --
+checks named differently, a reading that can now be "cannot judge", a different commit named -- and
+it changes what `D-0091` section 2 left open, so it is recorded rather than done quietly.
+
+### What was measured, and how
+
+On **2026-09-22**, at rondo `7d85b9f` with continuo `b7162ae`, by reading, and by running
+`ci observe` and `ci show` against a database created by the pinned build. Line numbers drift;
+re-measure the claim.
+
+- **`ci observe --db --repo O/N --pr N --pull-request F --check-runs F --status F --observer NAME`**
+  takes the three documents the caller fetched, reads the head off the pull request's document, and
+  records the observation; `ci show --db --repo --pr` answers the verdict (`continuo.ci.observe/1`,
+  `continuo.ci.show/1`). The verdict is one of `passed`, `failed`, `timed_out`, `cancelled`,
+  `pending`, `no_run` and `indeterminate`, with a verdict and a `detail` per scope.
+- **`D-1113` lists what changes for rondo**: a pull request number is needed; one more GET; `cancelled`
+  and `timed_out` keep their names; a fetch failure or a missing page is exit 2 with nothing written;
+  two checks of one name are one scope; a check the forge no longer lists stops counting; rondo's
+  `none` is `no_run`; green's breakdown is counted from `scopes[].detail`.
+- **`ci observe` needs a database at continuo's schema head at `b7162ae`.** A lap database made
+  before the pin move is one schema behind.
+
+### Decision
+
+1. **The fetch stays rondo's, because the credential does** (`D-0010`). `fetchPullRequestChecks`
+   (`src/access/forge.ts`) makes three GETs with the operator's `gh`: the pull request, then its
+   head's check runs and status, every page (`--paginate --slurp`). It judges nothing.
+   `readChecks` and `joinChecks` are removed.
+2. **continuo records and judges.** The checks host writes the three documents to a temporary
+   directory, runs `ci observe`, removes them, and runs `ci show` (`continuoChecksReader`,
+   `src/access/checks-host.ts`). The database is **the lap's own control-plane database**, the plan's
+   `db`, so the evidence sits beside the run it is about. The observer is `rondo`.
+3. **The pull request is the one the publish report printed.** Its base repository and number are
+   read off the thread's `report-published-<lap>` message, the address `D-0091` rule 1.4 already
+   merges by. A lap with no such address, or whose plan names no database, is said once on the host's
+   terminal and left alone.
+4. **What the verdict comes to in the thread:**
+   1. `passed` is **green**, with the scopes counted and those whose detail is `skipped` or `neutral`
+      counted apart (rondo#376, unchanged in meaning).
+   2. `failed`, `timed_out` and `cancelled` are **red**, and each check is named under what it came
+      to: *failed*, *cancelled*, *timed out*, in the person's language. A red report written before
+      this change still reads, as all failed.
+   3. `pending` writes nothing and the lap is read again next minute.
+   4. `no_run` is **none**, said once, and the lap stays due.
+   5. **Anything else is "cannot judge", never red**: `indeterminate`, a verdict this build has no
+      name for, a fetch that failed, an `observe` or a `show` that did not answer. Nothing is written,
+      so the last answer written stands, and the pass stops at that lap and starts after it next
+      time. `show` is not asked after a failed `observe`, because it would answer the last recorded
+      verdict for a moment nobody read.
+5. **The commit a report names is the head continuo judged** (`ci show`'s `head_sha`), where it used
+   to be the lap's `tipCommit`. The merge button's condition (`D-0091` rule 1.2.2 and 1.3) is
+   unchanged in code. The button is drawn on a green reading that names a commit, as before; the
+   press then requires that commit to equal the commit the lap pushed and the forge's head, so a
+   green on a head the lap did not push is refused at the press as moved and merges nothing. Before
+   this entry the same case read green on the lap's tip and was refused at the same place, by the
+   forge-head comparison.
+
+### What this gives up
+
+- **One more GET per reading**, and continuo started once per host for it.
+- **A reading while the forge is down.** It is said as "cannot judge" on the terminal and leaves the
+  thread as it was, rather than guessing.
+- **Existing lap databases.** One made before the pin move (lap 11's `~/rondo-lap-11`) needs
+  `continuo db migrate` or setup run again; until then every reading there is "cannot judge" and
+  nothing is written. No migration is written here.
+
+### What this does not do
+
+- **It does not take `D-0064` rule 3.4's transition.** The reading now stands on continuo's recorded
+  evidence, which was the reason `D-0091` section 2 gave for waiting; whether that meets the
+  transition, and whether the merge button should read `ci show` directly rather than rondo's latest
+  thread answer, is a gate decision and is not made here.
+- **It does not drive merge watch or cleanup.** continuo's `pr_merged` and `removeWorktree` are still
+  not driven by rondo.
+- **It does not change the merge press** (`D-0091`).
+
+### Annotations this entry adds
+
+| Entry | What the annotation says | Additive? |
+|---|---|---|
+| `D-0091` section 2 | The open question's reading now stands on continuo's `ci observe` / `ci show`; the transition is still not taken, and taking it is a gate decision | additive |
+| `D-0064` rule 3.4 | The same, from the rule's side | additive |
+| `D-0064` section 5 | The CI row's CI half is driven through continuo; merge watch and cleanup stay empty | additive |
+
+### What would falsify it
+
+- **A red on the page for a pull request whose checks did not fail**, from a forge that did not
+  answer: rule 4.5 is not holding.
+- **A merge that goes through on a green continuo judged on a head the lap did not push**: rule 5's
+  reliance on the press's comparison (`D-0091` rule 1.3) is not holding.
+- **A verdict in the thread that `ci show` for the same pull request does not give**: rondo is
+  judging again.

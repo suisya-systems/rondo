@@ -57,6 +57,7 @@ const CATALOG_LAYER: CatalogLayer = {
       rondo: {
         source: { kind: "git_url", url: "https://example.invalid/org/rondo.git" },
         base_branch: "main",
+        allowed_bash: ["npm run:*"],
       },
     },
   },
@@ -68,7 +69,6 @@ const PLAN: RunPlan = {
   workspaceRoot: "/srv/rondo/work",
   baseBranch: "main",
   prompt: "teach rondo to count",
-  allowedBash: ["npm run:*"],
   materialLanguage: null,
   reviewCriterion: null,
   repository: "/srv/rondo/repo",
@@ -171,13 +171,14 @@ const LAP_OPENED_A_GATE: EffectOutcome<LapPerformance> = {
     // `[]` is continuo reporting that nothing was refused, which is a fact and
     // not the absence of one (#88).
     permissionDenials: "[]",
+    commands: "[]",
     // No cost read for this fixture: these cases are about the trigger a
     // stopped lap pulls, and three nulls is what a lap whose transcript rondo
     // did not read records (D-0046 rule 3).
     costUsd: null,
     turns: null,
     durationMs: null,
-    spendSource: "unread",
+    spendSource: "notReported",
   },
 };
 

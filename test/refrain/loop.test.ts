@@ -73,6 +73,7 @@ const recordWith = (status: IterationStatus, attempts = 1): IterationRecord => (
   sessionId: null,
   sessionPath: null,
   permissionDenials: null,
+  lapCommands: null,
   lapCostUsd: null,
   lapTurns: null,
   lapDurationMs: null,

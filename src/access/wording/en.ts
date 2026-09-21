@@ -413,6 +413,11 @@ explanation you pressed on and then answers the gate.`,
     "disabled prints here exactly like one that did not. The worker's own account",
     "at the gate is the only place that has ever reported it (D-0050).",
   ]),
+  lapNestedSandbox:
+    "Stopped before any work started: rondo is running inside another sandbox (another " +
+    "Claude Code session's, most likely), and from there the worker's own sandbox cannot " +
+    "start, so its commands would run unprotected. Start rondo from an ordinary terminal " +
+    "and try again.",
 
   scopeAction: "Set the scope",
   scopeHeading: "The scope for this request",

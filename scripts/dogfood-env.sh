@@ -569,6 +569,24 @@ step "Catalog"
 # that declares it declares, and a path is under itself -- so naming the target
 # exactly admits the target and nothing beside it, which a parent directory
 # would not.
+#
+# **What the worker may run is the project's `allowed_bash`** (rondo D-0094,
+# cadenza D-0041): the one list that reaches `run admit --allow-bash`, the
+# delegation envelope and the contract's `config_digest`. A project without it
+# grants nothing, so every project written here carries it. The list is
+# cadenza's `allowedCommandsFor` over the target's top-level file names at the
+# base branch (cadenza D-0040), the same function the page uses for a
+# repository it adds -- read through rondo's built facade, so setup states no
+# command of its own.
+allowed_bash_json=$(git -C "$target" ls-tree --name-only "$target_base_branch" |
+  node --input-type=module -e '
+    import { readFileSync } from "node:fs";
+    import { pathToFileURL } from "node:url";
+    const { allowedCommandsFor } = await import(pathToFileURL(process.argv[1]).href);
+    const files = readFileSync(0, "utf8").split("\n").filter((name) => name !== "");
+    process.stdout.write(JSON.stringify(allowedCommandsFor(files)));
+  ' "$repo_root/dist/cadenza/facade.js")
+note "the worker may run: $allowed_bash_json"
 cat > "$catalog_origin" <<TOML
 # Written by scripts/dogfood-env.sh. The plan file carries this same content
 # inline as catalog_layers[0].data, which is what cadenza actually reads.
@@ -580,6 +598,7 @@ allowed_local_roots = ["$env_root", "$target"]
 [project.$project_name]
 base_branch = "$target_base_branch"
 aliases = []
+allowed_bash = $allowed_bash_json
 
 [project.$project_name.source]
 kind = "local_path"
@@ -609,7 +628,8 @@ fi
 node -e '
   const [out, envRoot, runId, controlPlane, target, catalogOrigin, interlockRoot,
          claudeOrgPath, claudeBin, nodeBin, prompt, baseBranch,
-         projectName, reviewCriterionFile, forgeRepository] = process.argv.slice(1);
+         projectName, reviewCriterionFile, forgeRepository, allowedBashJson] =
+    process.argv.slice(1);
 
   // The three budgets are stated rather than inherited. `invocation_ceiling_ms`
   // must be strictly greater than their sum; rondo refuses a ceiling that
@@ -655,89 +675,6 @@ node -e '
         ? { ...criterion, rule_files: ["AGENTS.md"] }
         : criterion;
     })(),
-
-    // **What the worker of this lap may run** (`continuo D-1110`, D-0039 rule
-    // 3). Each entry is a Bash *subject*: continuo renders `Bash(<subject>)`
-    // and merges it into the allow list of the role the agent type names, for
-    // this run only. It has to agree with `granted` -- a plan that grants
-    // `command.run` and declares nothing is refused at `classify`, which is
-    // what rondo#67 measured -- so the two are written together here.
-    //
-    // The pair below is the node/npm shape, and `npm ci --ignore-scripts` is
-    // named exactly rather than as `npm ci:*` because the flagless form runs
-    // package lifecycle scripts, which the fence hook cannot observe: it sees
-    // tool calls, not the subprocesses a tool starts. **A target repository
-    // that builds some other way needs a declaration of its own**, which is
-    // the one field of this generated plan a person may have to edit -- rondo
-    // does not decide the command vocabulary of a project (D-0039 rule 2).
-    //
-    // No apostrophes in this comment: the whole program is a single-quoted
-    // shell argument, so one would end the string.
-    // `node vendor/pin.mjs:*` is here because the repository this script
-    // dogfoods is rondo, whose own AGENTS.md puts that check *before*
-    // `npm ci`: npm enforces its integrity hash against its cache, so a
-    // drifted tarball is a loud failure on a cold cache and a silent install
-    // of the previously pinned bytes on a warm one. A worker that may run the
-    // suite and may not run the check is a worker that cannot follow the rules
-    // of the repository it was given.
-    allowed_bash: [
-      "npm ci --ignore-scripts",
-      "npm run:*",
-      // `npm test` runs the `test` script and nothing else, so this spelling adds no
-      // capability `npm run:*` did not already have (rondo#97). `npx:*` is deliberately
-      // absent: it adds none either, only an entrance for running an arbitrary package.
-      "npm test:*",
-      // Without this, `npm run verify; echo "EXIT=$?"` is refused on its second half and the
-      // only permitted shape (`... && echo green`) can report success alone (rondo#87). echo
-      // writes to stdout; a lap that may edit and commit the repository gains nothing else.
-      "echo:*",
-      // A lap that has just seen its verification go red asks one more question:
-      // was it red before I touched anything? Answering it needs the tree at the
-      // base commit, and every spelling of *copying* the tree is either refused or
-      // is the same command that destroys uncommitted work -- rondo#112 watched a
-      // lap try a stash, a mkdir/cp backup, a second worktree and a pathspec
-      // checkout, fail at all four, and then commit a wrong account of the cause.
-      // `git switch` needs no copy: commit the work, switch the whole tree back
-      // one commit, run the same verification there, and switch back.
-      // node_modules is untracked and survives both moves, so the baseline runs
-      // against the install the lap has already paid for.
-      //
-      // **Two exact subjects and no wildcard**, because the destructive case is
-      // a flag rather than a command: `git switch --discard-changes` (or `-f`)
-      // throws away uncommitted work, and no prefix pattern can exclude a flag
-      // that may be typed last. Spelled exactly, the declaration is the two moves
-      // and nothing else -- so what protects the lap is not the habit of leaving
-      // the flag off. Without one, git aborts a switch whose diff would overwrite
-      // a modified file and says to commit first, which is the protection
-      // rondo#112 got by accident from a refusal.
-      //
-      // Neither `git checkout:*` nor `git restore:*` is declared: both have a
-      // pathspec form that overwrites uncommitted work silently, and that shape
-      // is the near-miss rondo#112 recorded.
-      //
-      // `HEAD~1` rather than the name of the base branch, for two reasons. A
-      // branch name would have to be `--detach`ed anyway (the base branch is
-      // checked out in the repository the workspace was cut from, which is the
-      // one thing git will not let a second worktree switch to), and after
-      // `rondo revise` it would be *wrong*: the successor inherits this
-      // declaration while its base becomes the predecessor topic branch, so a
-      // revised lap would silently measure against a tree missing the work it is
-      // revising. `HEAD~1` names what it does -- the commit before the last one
-      // -- whatever the base is, and a lap reads how many commits that leaves out
-      // with the `git log` it already has. Widening it to a deeper baseline is an
-      // edit to this declaration, which is the field of this generated plan a
-      // person may have to write anyway.
-      "git switch --detach HEAD~1",
-      "git switch -",
-      // Still the only two `node` shapes beside `--version`, and `node -e` is
-      // deliberately absent (rondo#103): a subject that runs an expression is
-      // not a vocabulary, it is `npx:*` again under another name. The preflight
-      // that used to need one is `npm run preflight:model-tier` now, which is
-      // already covered by `npm run:*`.
-      "node vendor/pin.mjs:*",
-      "node --version",
-      "npm --version",
-    ],
 
     repository: target,
     artifact_root: `${envRoot}/artifacts`,
@@ -796,6 +733,12 @@ node -e '
               source: { kind: "local_path", path: target },
               base_branch: baseBranch,
               aliases: [],
+              // What the worker may run (D-0094): the list the Catalog step
+              // computed and wrote into the layer file above. It has to agree
+              // with the agent type granting command.run below -- a plan that
+              // grants it over a project declaring nothing is refused at
+              // classify, which is what rondo#67 measured.
+              allowed_bash: JSON.parse(allowedBashJson),
             },
           },
         },
@@ -822,7 +765,8 @@ node -e '
   require("node:fs").writeFileSync(out, `${JSON.stringify(plan, null, 2)}\n`);
 ' "$plan" "$env_root" "$run_id" "$control_plane" "$target" "$catalog_origin" \
   "$interlock_root" "$claude_org_path" "$claude_bin" "$node_bin" "$prompt" \
-  "$target_base_branch" "$project_name" "$review_criterion" "$forge_repo"
+  "$target_base_branch" "$project_name" "$review_criterion" "$forge_repo" \
+  "$allowed_bash_json"
 note "$plan"
 if [ -n "$forge_repo" ]; then
   note "pull requests for this target are opened in $forge_repo"

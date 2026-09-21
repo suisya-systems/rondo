@@ -22,7 +22,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import type { ReviewMaterial } from "../../src/access/model-review/judgement.js";
-import type { TranscriptCommand } from "../../src/continuo/transcript.js";
+import type { LapCommand } from "../../src/continuo/protocol.js";
 import type { ReviewCriterion } from "../../src/refrain/plan.js";
 import { contentDigest } from "../../src/store/plan.js";
 
@@ -41,6 +41,9 @@ const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "fixtures", "plan
 function fixture(name: string): string {
   return readFileSync(join(FIXTURES, name), "utf8").replace(/\r\n/g, "\n");
 }
+
+/** A fixture command: whole outputs, so `outputOmittedChars` is added as 0. */
+type TranscriptCommand = Omit<LapCommand, "outputOmittedChars">;
 
 interface TranscriptFixture {
   readonly installControl: readonly TranscriptCommand[];
@@ -114,8 +117,7 @@ export function plantedMaterial(variant: PlantedVariant): ReviewMaterial {
         ...(variant.p1 ? [] : t.installControl),
         ...t.tests,
         ...(variant.p1 ? t.verifyPlanted : t.verifyControl),
-      ],
-      finalMessage,
+      ].map((c) => ({ ...c, outputOmittedChars: 0 })),
     },
     rationale: finalMessage,
     deterministicFindings: [],

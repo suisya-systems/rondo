@@ -65,7 +65,6 @@ function plan(): RunPlan {
     workspaceRoot: ABS("/srv/rondo/work"),
     baseBranch: "main",
     prompt: "teach rondo to count",
-    allowedBash: ["npm run:*"],
     materialLanguage: null,
     reviewCriterion: null,
     repository,
@@ -102,6 +101,7 @@ function plan(): RunPlan {
             rondo: {
               source: { kind: "local_path", path: repository },
               base_branch: "main",
+              allowed_bash: ["npm run:*"],
               aliases: [],
             },
           },
@@ -170,10 +170,11 @@ async function harness(path = ":memory:", payload: JsonRecord = PAYLOAD) {
       model: "claude-fixture",
       requestedModel: "claude-fixture",
       permissionDenials: "",
+      commands: "[]",
       costUsd: null,
       turns: null,
       durationMs: null,
-      spendSource: "unread",
+      spendSource: "notReported",
     },
   });
   const conductor: ConductorPorts = {
