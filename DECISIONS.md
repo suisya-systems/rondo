@@ -14913,6 +14913,46 @@ the recommended option on both; the answers are recorded in section "What was pu
 and its answer". Refs `D-0019`, `D-0023`, `D-0032`, `D-0033`, `D-0034`, `D-0036`, `D-0038`, `D-0046`, `D-0048`,
 `D-0054`, `D-0061`, `D-0063`, `D-0064`, `D-0065`, `D-0066`, `D-0067`.
 
+> **Annotation (2026-09-21, from rondo#311).** Added after this entry was accepted, and additive.
+> rondo#311 builds the half of this entry that reaches a person who is not looking at the page, and
+> two things about it are worth recording here because a reader of section 2 would otherwise be
+> surprised by them.
+>
+> - **F1's detection is now read by a delivering side, and the patrol is still not built.** The
+>   resident host's minute tick reads laps against their plans' `invocationCeilingMs` and, for one it
+>   has not reached the person about, runs the one notification program setup found. **It writes no
+>   message, drafts no proposal, takes no act and decides nothing**, so it is not section 2's patrol
+>   arriving early. Against "What this does not do", item by item: the patrol function, the F1 raise
+>   on `noAnswer`, the answer's composition, the `patrol` subject kind and the screens are all still
+>   unbuilt; **the tick is the one item on that list that now exists**, and it was built by `D-0071`
+>   for the model drafter rather than here, which is what rondo#311 rides. **The wait reading is
+>   still unbuilt too, and what rondo#311 reads is not it**: section 1, rule 2.1's table is a reason
+>   per line with bases, following a hold to what holds `first`, and what is read here is the page's
+>   own *waiting on you* set -- a lap on `D-0036` rule 5's waiting side, or a question no answer has
+>   carried on -- which is narrower and was already drawn on the screen. What has changed is an
+>   order of arrival: **F1 now reaches a person by this route before the patrol's P3 exists to carry
+>   it**, as a line saying the time the plan allowed has passed and nothing more. The finding itself
+>   is still unwritten anywhere a person can read it back, and building the patrol is what fixes
+>   that.
+> - **`operator_attention` has a second `presented` writer** (`subject_kind` `reach`), which is the
+>   case the schema implementing `D-0036` rule 1 named in advance. The note on the partial unique
+>   index in `src/store/sqlite.ts` says *"If a second writer ever counts a subject it did not just
+>   create, the backfill is that change's and not this one's"*, and this is that writer: it counts
+>   waits it read rather than rows it inserted. **No backfill is needed, and the reason is a fact
+>   rather than optimism**: the index already exists and the kind is new, so there is no row under it
+>   for a new one to collide with. **Its key space is deliberately not the patrol's.** Rule 3.1 gives
+>   the patrol
+>   `patrol` with `<finding>:<episode>` under it, and that row is what gates the *message* the patrol
+>   will write; a tick claiming the same key would silently consume the episode that message is owed
+>   and the finding would never be written down at all. Two deliveries, two ledgers. The episodes
+>   this writer uses are a question's own id and, for a lap, its id and the status it stopped at --
+>   the second of which is rule 3.1's own episode and rests on rule 3.1's own claim that a lap walks
+>   its statuses forward and never re-enters one.
+>
+> Nothing in the entry below is edited. No rule is withdrawn, narrowed or superseded, and section 2's
+> rule 5 in particular is unchanged and is what keeps this delivery to one line per episode with no
+> reminder after it.
+
 **This entry decides and does not build.** Nothing in `src/` changes with it. The earlier entries it
 annotates are listed in section "Annotations this entry adds".
 
