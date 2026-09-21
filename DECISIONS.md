@@ -20643,7 +20643,8 @@ On **2026-09-22**, at rondo `47ea4bd`, by reading. Line numbers drift; re-measur
 1. **The mismatch is noticed before a scope is drafted.** When a request names an issue (an address
    or `OWNER/NAME#N`) in a repository no held plan is for, the drafter does not draft it and the
    page says so in the request's thread, in the person's language, as the request's next step. A
-   bare `#N` keeps `D-0081` rule 3.4.
+   bare `#N` keeps `D-0081` rule 3.4, and in such a request it waits until the repository is added:
+   read in one of the held repositories, it would be the wrong issue, recorded for good.
 2. **Where the named repository is held, the request is drafted there.** Only that repository's
    plans are offered -- to the drafter, on the scope screen, and to a bare `#N`'s read -- so the
    choice of template is not a choice between repositories any more.

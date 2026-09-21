@@ -78,6 +78,19 @@ test("the repository a request's work runs in: the named issue's, or the place t
     repo: "elsewhere/tool",
     named: "elsewhere/tool",
   });
+  // Sentence punctuation is not part of an address, and `.git` names the same one.
+  for (const said of [
+    "Fix owner/a#1 in https://github.com/owner/b.",
+    "Fix owner/a#1 in https://github.com/owner/b/, please",
+    "owner/a#1 を https://github.com/owner/b.git で直して",
+  ]) {
+    expect(work(said, ["owner/a", "owner/b"]), said).toEqual({ kind: "held", repos: ["owner/b"] });
+  }
+  expect(work("Fix owner/a#1 in https://github.com/vercel/next.js", ["owner/a"])).toEqual({
+    kind: "unheld",
+    repo: "vercel/next.js",
+    named: "vercel/next.js",
+  });
   // A path is not a place.
   expect(work("owner/a#1: see src/access and docs/README.md", ["owner/a"])).toEqual({
     kind: "held",
@@ -91,7 +104,9 @@ test("the repository a request's work runs in: the named issue's, or the place t
 
 test("the worker's commands are read off the repository's own files, for TypeScript, Go, Python and Rust", () => {
   expect(toolchainsOf(["package.json", "package-lock.json"])).toEqual(["npm"]);
-  expect(toolchainsOf(["package.json"])).toEqual(["npm"]);
+  expect(toolchainsOf(["package.json"])).toEqual(["npm-unlocked"]);
+  expect(allowedBashFor(["npm-unlocked"])).toContain("npm install --ignore-scripts");
+  expect(allowedBashFor(["npm-unlocked"])).not.toContain("npm ci --ignore-scripts");
   expect(toolchainsOf(["package.json", "pnpm-lock.yaml"])).toEqual(["pnpm"]);
   expect(toolchainsOf(["package.json", "yarn.lock"])).toEqual(["yarn"]);
   expect(toolchainsOf(["package.json", "bun.lockb"])).toEqual(["bun"]);

@@ -1334,16 +1334,22 @@ export async function main(
     const issues = issueReader({
       record,
       read: readIssueFromForge,
+      // **A request naming a repository rondo does not hold waits** (rondo#383,
+      // D-0090): its bare `#N` belongs to that repository, and reading it in
+      // one of the held ones would record the wrong issue for good.
       bareRepository: async (requestMessageId, namedAtMs) =>
-        await bareIssueRepository(
-          {
-            record,
-            held: async (id) => await heldPlans({ store, record, now: Date.now }, id),
-            hostRepo: parsed.repo,
-          },
-          requestMessageId,
-          namedAtMs,
-        ),
+        (await requestRepository({ store, record, now: Date.now }, requestMessageId)).work.kind ===
+        "unheld"
+          ? { disputed: true }
+          : await bareIssueRepository(
+              {
+                record,
+                held: async (id) => await heldPlans({ store, record, now: Date.now }, id),
+                hostRepo: parsed.repo,
+              },
+              requestMessageId,
+              namedAtMs,
+            ),
       now: Date.now,
       mintId: () => newDraftId("forge"),
       log: say,

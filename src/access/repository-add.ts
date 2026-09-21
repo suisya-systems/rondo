@@ -32,7 +32,18 @@ export const COMMON_BASH: readonly string[] = [
 ];
 
 /** A toolchain rondo recognises in a repository's top-level files. */
-export type Toolchain = "npm" | "pnpm" | "yarn" | "bun" | "go" | "uv" | "poetry" | "pip" | "cargo";
+export type Toolchain =
+  | "npm"
+  /** npm with no lockfile, where `npm ci` refuses to run. */
+  | "npm-unlocked"
+  | "pnpm"
+  | "yarn"
+  | "bun"
+  | "go"
+  | "uv"
+  | "poetry"
+  | "pip"
+  | "cargo";
 
 /**
  * Each toolchain's commands, in `allowed_bash`'s subject form (a subject, not
@@ -42,6 +53,13 @@ export type Toolchain = "npm" | "pnpm" | "yarn" | "bun" | "go" | "uv" | "poetry"
  */
 const BASH: Readonly<Record<Toolchain, readonly string[]>> = {
   npm: ["npm ci --ignore-scripts", "npm run:*", "npm test:*", "node --version", "npm --version"],
+  "npm-unlocked": [
+    "npm install --ignore-scripts",
+    "npm run:*",
+    "npm test:*",
+    "node --version",
+    "npm --version",
+  ],
   pnpm: [
     "pnpm install --frozen-lockfile --ignore-scripts",
     "pnpm run:*",
@@ -102,7 +120,9 @@ export function toolchainsOf(files: readonly string[]): readonly Toolchain[] {
           ? "yarn"
           : has("bun.lock") || has("bun.lockb")
             ? "bun"
-            : "npm",
+            : has("package-lock.json") || has("npm-shrinkwrap.json")
+              ? "npm"
+              : "npm-unlocked",
     );
   }
   if (has("go.mod")) {

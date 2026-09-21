@@ -131,7 +131,7 @@ export type WorkRepository =
 // A repository named as the place of the work: its forge address, or
 // `OWNER/NAME` not glued to a path, an issue number or a word.
 const REPOSITORY =
-  /https?:\/\/github\.com\/([\w.-]+)\/([\w.-]+?)(?:\.git)?\/?(?![\w./#-])|(?<![\w&/.:@#-])([\w-][\w.-]*)\/([\w.-]*\w)(?![\w/#-])/g;
+  /https?:\/\/github\.com\/([\w.-]+)\/([\w.-]*\w)\/?(?![\w/#-]|\.\w)|(?<![\w&/.:@#-])([\w-][\w.-]*)\/([\w.-]*\w)(?![\w/#-])/g;
 
 // The top-level directories a request names as a path far more often than as
 // an owner, and a last segment that is a file name.
@@ -202,7 +202,7 @@ export function workRepository(
     [...body.replace(REFERENCE, " ").matchAll(REPOSITORY)].flatMap((m) => {
       const [, urlOwner, urlName, owner, name] = m;
       if (urlOwner !== undefined && urlName !== undefined) {
-        return [`${urlOwner}/${urlName}`];
+        return [`${urlOwner}/${urlName.replace(/\.git$/, "")}`];
       }
       const repo = `${String(owner)}/${String(name)}`;
       if (known.has(repo.toLowerCase())) {
