@@ -21,6 +21,8 @@ function stepSaid(wording: Chrome, name: StepName): string {
       return wording.stepReading;
     case "approval":
       return wording.stepApproval;
+    case "publish":
+      return wording.stepPublish;
     default:
       return wording.stepLanding;
   }

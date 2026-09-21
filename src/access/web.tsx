@@ -126,6 +126,7 @@ import { EmptySide, type SideWork } from "./page/empty-side.js";
 import { GovernanceLine } from "./page/governance.js";
 import { RequestsFace } from "./page/list.js";
 import { facesMarkup } from "./page/render.js";
+import { ResultLine } from "./page/result.js";
 import { Raw } from "./page/shell.js";
 import { ThreadFace, type ThreadItem } from "./page/thread.js";
 import { ThreadSide } from "./page/thread-side.js";
@@ -159,9 +160,10 @@ import {
   saysMore,
 } from "./page-logic/laps.js";
 import { repositoryOf, requestList, rowStateOf } from "./page-logic/list.js";
+import { resultOf } from "./page-logic/result.js";
 import { isLive, type PageView, viewHref } from "./page-logic/routes.js";
 import { selectRequest, walkPosition } from "./page-logic/selection.js";
-import { lapEvents } from "./page-logic/thread-events.js";
+import { lapEvents, resultLap, revisedIn } from "./page-logic/thread-events.js";
 import { firstLine, lineOf, replyTarget, type Threads, threadsOf } from "./page-logic/threads.js";
 import { waitsOnYou } from "./page-logic/waits.js";
 import { finishedAt, stepsOf, WEEK_MS, weekFigures } from "./page-logic/week.js";
@@ -2342,6 +2344,9 @@ export async function operatorPage(
         state: rowStateOf(lap?.record ?? null, turnsHere.has(root.messageId), (record) =>
           isTerminal(record.status),
         ),
+        // What an approved row goes on to say: published or not, and its
+        // checks (rondo#376). Read for every row, since it is a map lookup.
+        published: lap === null ? null : resultOf(threads.byId, lap.record.id),
         atMs: Math.max(...members.map((message) => message.atMs)),
       };
     });
@@ -2594,6 +2599,14 @@ export async function operatorPage(
         (atMs) => wording.age(ago(atMs, nowMs)),
         // Said only where there is more than one to tell apart.
         selectedLaps.length > 1 ? tryAt + 1 : null,
+        // What happened after its gate, which the row does not hold (rondo#376).
+        {
+          revised: revisedIn(
+            lap.record,
+            selectedLaps.map((each) => each.record),
+          ),
+          result: resultOf(threads.byId, lap.record.id),
+        },
       ).map((event): ThreadItem => ({ kind: "event", event })),
     ),
   ]
@@ -2744,6 +2757,15 @@ export async function operatorPage(
                     governance: selectedGovernance,
                     askedSaid: wording.age(ago(selectedGovernance.askedAtMs, nowMs)),
                   }),
+            // **What became of the work, as a state** (rondo#376): approved,
+            // the pull request and its checks, and the merge that is the
+            // person's -- said once, here, for the lap the result belongs to.
+            result: (() => {
+              const lap = resultLap(selectedLaps.map((each) => each.record));
+              return lap === null
+                ? null
+                : ResultLine({ wording, result: resultOf(threads.byId, lap.id) });
+            })(),
             items: folds(wording, threadItems, lastLookedAbove),
             foldOpen: wording.foldOpen,
             lastLookedAbove,
@@ -2875,7 +2897,7 @@ export async function operatorPage(
             // **What remains before this ends** (rule 6), as the five steps
             // rule 4 draws under a running request: one reading of where the
             // work stands, drawn in two places by one component.
-            steps: stepsOf(sideLap, sideReadings),
+            steps: stepsOf(sideLap, sideReadings, publishedReport(threads, sideLap.id) !== null),
             material: sideMaterial === null ? null : Raw({ html: sideMaterial }),
             asking: sideAsking,
           }),

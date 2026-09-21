@@ -371,13 +371,13 @@ export function basisWord(
           ? `#${encodeURIComponent(cited.messageId)}`
           : `${viewHref({ kind: "thread", messageId: cited.messageId, to: null }, wording.lang)}#${encodeURIComponent(cited.messageId)}`;
     }
-  } else if (form === "iteration" && typeof basis["iterationId"] === "string") {
-    // A lap used to point at its section in the reading fold; with the fold
-    // gone (D-0083) there is no page-wide place a lap id leads to, so the
-    // basis is named and not linked.
-    said = basisLine({ form: "iteration", iterationId: basis["iterationId"] }, {});
-  } else if (form === "snapshot") {
-    said = `snapshot ${String(basis["pointer"])}`;
+  } else if (typeof form === "string" && wording.basisKind(form) !== null) {
+    // **Named by what it is, and never by the id the store holds it under**
+    // (D-0076, lap 11's N-52): `proposal draft-24c87431-...` is an identifier
+    // of rondo's, and a person has nothing to do with one. A lap used to point
+    // at its section in the reading fold; with the fold gone (D-0083) none of
+    // these has a place on the page to lead to, so it is named and not linked.
+    said = wording.basisKind(form) ?? "";
   } else if ((BASIS_FORMS as readonly unknown[]).includes(form)) {
     said = basisLine(basis as unknown as Basis, {});
   } else {

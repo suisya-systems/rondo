@@ -18,6 +18,8 @@
  * state is a sentence a person wrote for another person.
  */
 
+import type { ChecksState } from "../page-logic/result.js";
+
 /** Where a request sits on the time axis, said as a heading (D-0083 rule 2). */
 export interface DayWords {
   readonly dayToday: string;
@@ -62,7 +64,29 @@ export interface PageWords extends DayWords {
    * person reads is what happened, not which row it happened to.
    */
   readonly evStarted: string;
+  /**
+   * A lap that closed with no answer recorded on its gate. **It never says the
+   * work was taken in** (rondo#376): `closed` means the gate ended, and a merge
+   * is nothing rondo does or watches.
+   */
   readonly evFinished: string;
+  /**
+   * What the person answered at the gate, said as that answer (rondo#376).
+   *
+   * `evApproved` is an approval, and says whether it has been published yet:
+   * approve, publish and merge are three acts, and a line that read as the
+   * last of them after only the first is what lap 11 measured.
+   * `evAskedChange` is the same gate answered by asking for a change -- the
+   * row alone cannot tell the two apart, the next try built on this one can.
+   * `evClosedUnapproved` is a gate that ended any other way.
+   */
+  readonly evApproved: (published: boolean) => string;
+  readonly evAskedChange: string;
+  readonly evClosedUnapproved: string;
+  /** The line a publish is said as; the pull request is the link after it. */
+  readonly evPublished: string;
+  /** The line a checks answer is said as: the pull request, and what its checks came to. */
+  readonly evChecks: (pullRequest: string, word: string, detail: string | null) => string;
   readonly evStopped: string;
   /**
    * The two ways an attempt can fail, which are not one line (rondo#348).
@@ -131,12 +155,44 @@ export interface PageWords extends DayWords {
    * about has to say that it is not a queue.
    */
   readonly runningNote: string;
-  /** The five steps to a request's end (rule 4), and what each one is. */
+  /**
+   * The steps to a request's end (rule 4), and what each one is.
+   *
+   * `stepPublish` is opening the pull request (rondo#376): approve, publish
+   * and merge are three acts in that order, and the row says each apart.
+   */
   readonly stepWork: string;
   readonly stepChecks: string;
   readonly stepReading: string;
   readonly stepApproval: string;
+  readonly stepPublish: string;
   readonly stepLanding: string;
+  /**
+   * What became of the work after the gate, said as a state (rondo#376).
+   *
+   * **Drawn by the page in the person's language, beside rondo's reports,
+   * which stay English** (`D-0055` rule 4). `pullRequest` names one as a
+   * person does (`#372`); `checksWord` is the one word the colour goes with,
+   * and `checksDetail` the counts behind it, or null where there are none to
+   * say. A skipped check is said as skipped and never as passed.
+   */
+  readonly pullRequest: (number: string | null) => string;
+  readonly checksWord: (checks: ChecksState) => string;
+  readonly checksDetail: (checks: ChecksState) => string | null;
+  /** The strip under the title: what was answered, published and merged. */
+  readonly resultApproved: string;
+  readonly resultNotPublished: string;
+  readonly resultPublished: string;
+  readonly resultChecks: string;
+  readonly resultNotMerged: string;
+  /** The same result as a list row's one sentence. */
+  readonly rowApproved: string;
+  readonly rowPublished: (pullRequest: string, checks: string) => string;
+  /**
+   * What a basis names where it is not a message (D-0076): the kind of thing
+   * it is, and never the identifier the store holds it under (lap 11, N-52).
+   */
+  readonly basisKind: (form: string) => string | null;
   /** Where a step stands: done, the one it is on now, not yet, or the person's. */
   readonly stepDone: string;
   readonly stepNow: string;
@@ -207,7 +263,16 @@ export const PAGE_EN: PageWords = Object.freeze({
   rowStopped: "Stopped",
   rowNotStarted: "Not started yet",
   evStarted: "Work started.",
-  evFinished: "Finished, and the work was taken in.",
+  evFinished: "Finished.",
+  evApproved: (published) =>
+    published
+      ? "You approved the work."
+      : "You approved the work. It is not published yet: no pull request has been opened.",
+  evAskedChange: "You asked for a change. The next try works on it.",
+  evClosedUnapproved: "The confirmation closed without an approval.",
+  evPublished: "Published, and a pull request was opened:",
+  evChecks: (pullRequest, word, detail) =>
+    `The checks on ${pullRequest}: ${word}${detail === null ? "" : ` (${detail})`}.`,
   evStopped: "Stopped.",
   evRefused: (said) => `Stopped, because this was turned down: ${said}`,
   evBroke: "Stopped by a fault in rondo itself. Nothing you asked for was wrong.",
@@ -244,7 +309,48 @@ export const PAGE_EN: PageWords = Object.freeze({
   stepChecks: "Automatic checks",
   stepReading: "Read again",
   stepApproval: "Your approval",
-  stepLanding: "Taken in",
+  stepPublish: "Pull request",
+  stepLanding: "Merge",
+  pullRequest: (number) => (number === null ? "the pull request" : `#${number}`),
+  checksWord: (checks) =>
+    ({ running: "running", green: "green", red: "red", none: "none reported" })[checks.kind],
+  checksDetail: (checks) => {
+    switch (checks.kind) {
+      case "green":
+        return checks.passed !== null && checks.skipped !== null
+          ? checks.skipped === 0
+            ? `all ${String(checks.passed)} passed`
+            : `${String(checks.passed)} passed, ${String(checks.skipped)} skipped`
+          : checks.counted === null
+            ? "none failed"
+            : `${String(checks.counted)} checks, none failed`;
+      case "red":
+        return checks.failed.length === 0
+          ? null
+          : `failed: ${checks.failed.slice(0, 3).join(", ")}${checks.failed.length > 3 ? ` and ${String(checks.failed.length - 3)} more` : ""}`;
+      case "none":
+        return "the forge has reported no check yet";
+      default:
+        return "not finished yet";
+    }
+  },
+  resultApproved: "Approved",
+  resultNotPublished: "Not published yet: no pull request has been opened.",
+  resultPublished: "Pull request opened:",
+  resultChecks: "Checks",
+  resultNotMerged: "Not merged. rondo does not merge; that step is yours.",
+  rowApproved: "Approved, not published yet",
+  rowPublished: (pullRequest, checks) => `Pull request ${pullRequest}, checks ${checks}`,
+  basisKind: (form) =>
+    ({
+      iteration: "the work on this request",
+      gateTransition: "a confirmation",
+      continuoRun: "the run of the work",
+      scope: "the agreed scope",
+      proposal: "rondo's proposal",
+      setup: "the setup",
+      snapshot: "what was recorded at the time",
+    })[form] ?? null,
   stepDone: "done",
   stepNow: "under way",
   stepAhead: "not yet",
@@ -255,7 +361,7 @@ export const PAGE_EN: PageWords = Object.freeze({
   govTriesLabel: "Tries",
   govTouchLabel: "Where it may touch",
   govStepsLabel: "What remains before this ends",
-  govAct: (act) => (act === "open_pull_request" ? "open a proposal" : "push a branch"),
+  govAct: (act) => (act === "open_pull_request" ? "open a pull request" : "push a branch"),
   govActs: (acts) => `rondo may ${acts.join(", ")}`,
   govActsNone: "rondo may put nothing outside this machine.",
   govDecided: (count) =>
@@ -284,7 +390,16 @@ export const PAGE_JA: PageWords = Object.freeze({
   rowStopped: "取りやめました",
   rowNotStarted: "まだ始まっていません",
   evStarted: "作業を始めました。",
-  evFinished: "終わりました。変更は取り込み済みです。",
+  evFinished: "終わりました。",
+  evApproved: (published) =>
+    published
+      ? "承認しました。"
+      : "承認しました。まだ公開していません（プルリクエストはまだありません）。",
+  evAskedChange: "変更を頼みました。次の回でやり直します。",
+  evClosedUnapproved: "承認されないまま、確認が閉じました。",
+  evPublished: "公開しました。プルリクエストを開きました:",
+  evChecks: (pullRequest, word, detail) =>
+    `${pullRequest} のチェック: ${word}${detail === null ? "" : `（${detail}）`}`,
   evStopped: "取りやめました。",
   evRefused: (said) => `断られたため、ここで止まりました: ${said}`,
   evBroke: "rondo 自身の不具合で止まりました。依頼のしかたに問題があったわけではありません。",
@@ -318,7 +433,48 @@ export const PAGE_JA: PageWords = Object.freeze({
   stepChecks: "自動チェック",
   stepReading: "読み直し",
   stepApproval: "あなたの承認",
-  stepLanding: "取り込み",
+  stepPublish: "プルリクエスト",
+  stepLanding: "取り込み（マージ）",
+  pullRequest: (number) => (number === null ? "プルリクエスト" : `#${number}`),
+  checksWord: (checks) =>
+    ({ running: "実行中", green: "緑", red: "赤", none: "報告なし" })[checks.kind],
+  checksDetail: (checks) => {
+    switch (checks.kind) {
+      case "green":
+        return checks.passed !== null && checks.skipped !== null
+          ? checks.skipped === 0
+            ? `${String(checks.passed)} 件すべて通過`
+            : `${String(checks.passed)} 件通過、${String(checks.skipped)} 件スキップ`
+          : checks.counted === null
+            ? "失敗なし"
+            : `${String(checks.counted)} 件、失敗なし`;
+      case "red":
+        return checks.failed.length === 0
+          ? null
+          : `失敗: ${checks.failed.slice(0, 3).join("、")}${checks.failed.length > 3 ? ` ほか ${String(checks.failed.length - 3)} 件` : ""}`;
+      case "none":
+        return "まだチェックが報告されていません";
+      default:
+        return "終わるのを待っています";
+    }
+  },
+  resultApproved: "承認済み",
+  resultNotPublished: "まだ公開していません（プルリクエストはありません）。",
+  resultPublished: "プルリクエストを開きました:",
+  resultChecks: "チェック",
+  resultNotMerged: "取り込み（マージ）はまだです。rondo はマージしません。あなたが行います。",
+  rowApproved: "承認済み・まだ公開していません",
+  rowPublished: (pullRequest, checks) => `プルリクエスト ${pullRequest}・チェック ${checks}`,
+  basisKind: (form) =>
+    ({
+      iteration: "この依頼の作業",
+      gateTransition: "確認の記録",
+      continuoRun: "作業の実行記録",
+      scope: "取り決めた範囲",
+      proposal: "rondo の提案",
+      setup: "セットアップ",
+      snapshot: "その時点の記録",
+    })[form] ?? null,
   stepDone: "済み",
   stepNow: "進行中",
   stepAhead: "まだ",
@@ -329,7 +485,7 @@ export const PAGE_JA: PageWords = Object.freeze({
   govTriesLabel: "やり直し",
   govTouchLabel: "触れてよい範囲",
   govStepsLabel: "終わるまでの手順",
-  govAct: (act) => (act === "open_pull_request" ? "提案を出す" : "ブランチを送る"),
+  govAct: (act) => (act === "open_pull_request" ? "プルリクエストを開く" : "ブランチを送る"),
   govActs: (acts) => `rondo は${acts.join("・")}ことができます`,
   govActsNone: "rondo はこの機械の外へ何も出しません。",
   govDecided: (count) => `聞かずに決めたこと ${String(count)} 件`,

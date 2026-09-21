@@ -2565,3 +2565,29 @@ test("publish prints the latest model reading as material, and nothing when ther
   expect(said).toContain("material for you, not a check");
   expect(publishModelReadingLines([reviewed()])).toEqual([]);
 });
+
+test("a request that names one issue here closes it, and nothing else does (rondo#376)", () => {
+  const forge = { host: "github.com", repo: "suisya-systems/rondo" };
+  const body = (requestWords: string | null) => text({ requestWords, forge }).body;
+  // Lap 11: the request was one line naming #291, the pull request named no
+  // issue, and #291 stayed open after the merge (N-52).
+  expect(body("#291 をやって")).toContain("Closes #291");
+  expect(body("https://github.com/suisya-systems/rondo/issues/291 please")).toContain(
+    "Closes #291",
+  );
+  expect(body("suisya-systems/rondo#291")).toContain("Closes #291");
+  // **Only the person's own words, and only where there is one to close.** No
+  // thread read, or words that name nothing, is the body as it was.
+  expect(body(null)).not.toMatch(/Closes|Refs/);
+  expect(body("tidy the wording")).not.toMatch(/Closes|Refs/);
+  // A pull request the words point at is not an issue.
+  expect(body("like https://github.com/suisya-systems/rondo/pull/372")).not.toMatch(/Closes|Refs/);
+  // Two issues, or one in another repository, are linked and closed by nobody:
+  // rondo cannot tell which of them the work finishes.
+  const two = body("#291 and #300");
+  expect(two).not.toContain("Closes");
+  expect(two).toContain("Refs #291, #300");
+  const elsewhere = body("suisya-systems/cadenza#40");
+  expect(elsewhere).not.toContain("Closes");
+  expect(elsewhere).toContain("Refs suisya-systems/cadenza#40");
+});

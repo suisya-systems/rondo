@@ -36,6 +36,7 @@
  */
 import type { IterationRecord } from "../../store/records.js";
 import type { StepState } from "./governance.js";
+import { approvedAt } from "./thread-events.js";
 
 /**
  * **Why an answer walked at a gate from the page is not in *you answered*.**
@@ -153,8 +154,13 @@ export function finishedAt(
   });
 }
 
-/** The five steps rule 4 puts under a running request, in the order they happen. */
-export type StepName = "work" | "checks" | "reading" | "approval" | "landing";
+/**
+ * The steps rule 4 puts under a running request, in the order they happen.
+ *
+ * `publish` is opening the pull request (rondo#376), between the approval and
+ * the merge: three acts a person could not tell apart on lap 11's screen.
+ */
+export type StepName = "work" | "checks" | "reading" | "approval" | "publish" | "landing";
 
 /**
  * The four rondo can be in the middle of, and then the one that is the
@@ -212,6 +218,12 @@ export interface StepReading {
 export function stepsOf(
   record: IterationRecord,
   readings: readonly StepReading[],
+  /**
+   * Whether the lap has been published (`page-logic/result.ts`). **Done only
+   * on the report that says so**; before it, an approved lap's publish is the
+   * person's, and anything earlier has it still ahead.
+   */
+  published = false,
 ): readonly WorkStep[] {
   const read = readings.filter((reading) => reading.verdict !== "unavailable");
   const atGate = record.status === "awaiting_human";
@@ -231,6 +243,10 @@ export function stepsOf(
         state: done[name] ? "done" : name === waitingAt ? "waiting" : "ahead",
       }),
     ),
+    {
+      name: "publish",
+      state: published ? "done" : approvedAt(record) && closed ? "yours" : "ahead",
+    },
     { name: "landing", state: "yours" },
   ];
 }

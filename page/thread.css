@@ -315,6 +315,57 @@
 }
 
 /*
+ * What became of the work (rondo#376): approved, the pull request, its checks,
+ * and the merge that is the person's. Above the thread and at a step over the
+ * governance line, because lap 11's owner read past the same facts in the
+ * thread and went to the forge for them. Green and red go with a word, never
+ * alone.
+ */
+.result {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  margin-top: 8px;
+  font-size: var(--text-body);
+}
+
+.result li {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 2px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+}
+
+.result-ahead {
+  color: var(--color-muted-foreground);
+}
+
+.result a {
+  color: var(--color-link);
+  font-weight: 600;
+}
+
+.result-checks-green {
+  border-color: var(--color-ok);
+  background: color-mix(in srgb, var(--color-ok) 12%, transparent);
+}
+
+.result-checks-green b {
+  color: var(--color-ok);
+}
+
+.result-checks-red {
+  border-color: var(--color-fail);
+  background: color-mix(in srgb, var(--color-fail) 12%, transparent);
+}
+
+.result-checks-red b {
+  color: var(--color-fail);
+}
+
+/*
  * Rule 3's walk: where this request stands among the ones waiting, and the
  * way on. Right-aligned under the governance line, because it is navigation
  * and not a fact about the request.

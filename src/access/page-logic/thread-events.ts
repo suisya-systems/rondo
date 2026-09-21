@@ -18,9 +18,52 @@
  * The `decided` kind exists in `page/events.tsx` and is drawn the moment
  * there is something true to draw with it.
  */
-import type { IterationRecord } from "../../store/records.js";
+import { APPROVED_OUTCOME, type IterationRecord, planField } from "../../store/records.js";
 import type { ThreadEvent } from "../page/events.js";
 import type { Chrome } from "../wording.js";
+import type { LapResult } from "./result.js";
+
+/**
+ * What happened to a lap after its gate, which its own row does not hold
+ * (rondo#376): whether the next try was built on it -- the one way to tell
+ * *asked for a change* from *approved*, since both close the gate the same --
+ * and what its publish and checks reports say.
+ */
+export interface AfterGate {
+  readonly revised: boolean;
+  readonly result: LapResult | null;
+}
+
+/** Whether the gate was answered yes, in either spelling the row has carried. */
+export function approvedAt(record: IterationRecord): boolean {
+  return record.gateOutcome === APPROVED_OUTCOME || record.gateOutcome === "approve";
+}
+
+/**
+ * Whether another try of the request was built on this one, which is what
+ * *ask for a change* leaves behind: a revision's base branch is its
+ * predecessor's topic branch (`src/refrain/revision.ts`), and the gate it
+ * answered closed exactly as an approval does.
+ */
+export function revisedIn(record: IterationRecord, laps: readonly IterationRecord[]): boolean {
+  const topic = planField(record, "topic_branch");
+  return (
+    topic !== "" &&
+    laps.some((lap) => lap.id !== record.id && planField(lap, "base_branch") === topic)
+  );
+}
+
+/**
+ * The lap a request's result is said by (rondo#376): the newest one that was
+ * approved and not asked to change, or null where none was. Oldest first in,
+ * as the thread holds them.
+ */
+export function resultLap(laps: readonly IterationRecord[]): IterationRecord | null {
+  return (
+    laps.findLast((lap) => lap.status === "closed" && approvedAt(lap) && !revisedIn(lap, laps)) ??
+    null
+  );
+}
 
 /** One reading of a lap, narrowed to what a line is made from. */
 export interface ReadingLine {
@@ -57,9 +100,21 @@ function isChecks(drafter: string): boolean {
 function endedLine(
   wording: Chrome,
   record: IterationRecord,
+  after: AfterGate,
 ): { readonly said: string; readonly aside?: ThreadEvent["aside"]; readonly yours?: true } {
   if (record.status === "closed") {
-    return { said: wording.evFinished };
+    // **What was answered, and nothing it did not do** (rondo#376): `closed`
+    // is the gate ending. It used to read *taken in*, which in Japanese says
+    // merged, over work nobody had even pushed.
+    if (record.gateOutcome === null) {
+      return { said: wording.evFinished };
+    }
+    if (!approvedAt(record)) {
+      return { said: wording.evClosedUnapproved };
+    }
+    return {
+      said: after.revised ? wording.evAskedChange : wording.evApproved(after.result !== null),
+    };
   }
   if (record.status !== "failed" || record.reason === null) {
     return { said: wording.evStopped };
@@ -105,6 +160,7 @@ export function lapEvents(
    * there is nothing to tell apart and the number would be noise.
    */
   tryAt: number | null = null,
+  after: AfterGate = { revised: false, result: null },
 ): readonly ThreadEvent[] {
   const said = (line: string) => (tryAt === null ? line : wording.evOfTry(tryAt, line));
   const events: ThreadEvent[] = [
@@ -151,10 +207,12 @@ export function lapEvents(
     });
   }
   if (isTerminal(record.status)) {
-    const ended = endedLine(wording, record);
+    const ended = endedLine(wording, record, after);
     events.push({
       id: `${record.id}:ended`,
-      kind: record.status === "closed" ? "passed" : "other",
+      // The person's own answer is drawn in ink (D-0082 rule 2); green is for
+      // a check that passed, and an answered gate is not one.
+      kind: record.status === "closed" && record.gateOutcome !== null ? "person" : "other",
       said: said(ended.said),
       at: at(record.updatedAtMs),
       atMs: record.updatedAtMs,
@@ -165,6 +223,40 @@ export function lapEvents(
       ...(ended.aside === undefined ? {} : { aside: ended.aside }),
       ...(ended.yours === undefined ? {} : { yours: ended.yours }),
     });
+  }
+  const result = after.result;
+  if (result !== null) {
+    const pullRequest = wording.pullRequest(result.number);
+    events.push({
+      id: `${record.id}:published`,
+      kind: "other",
+      said: said(wording.evPublished),
+      at: at(result.atMs),
+      atMs: result.atMs,
+      tryAt,
+      ...(result.url === null ? {} : { href: result.url, linkSaid: pullRequest }),
+    });
+    if (result.checksAtMs !== null) {
+      events.push({
+        id: `${record.id}:checks`,
+        kind:
+          result.checks.kind === "green"
+            ? "passed"
+            : result.checks.kind === "red"
+              ? "failed"
+              : "other",
+        said: said(
+          wording.evChecks(
+            pullRequest,
+            wording.checksWord(result.checks),
+            wording.checksDetail(result.checks),
+          ),
+        ),
+        at: at(result.checksAtMs),
+        atMs: result.checksAtMs,
+        tryAt,
+      });
+    }
   }
   return events;
 }

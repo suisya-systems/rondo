@@ -88,12 +88,26 @@ test("the pair is one approval's own, so a raise is not read as a total", () => 
 
 test("a request still working is on its work, and nothing later is claimed", () => {
   const steps = stepsOf(lap({}), []);
-  expect(steps.map((step) => step.state)).toEqual(["waiting", "ahead", "ahead", "ahead", "yours"]);
+  expect(steps.map((step) => step.state)).toEqual([
+    "waiting",
+    "ahead",
+    "ahead",
+    "ahead",
+    "ahead",
+    "yours",
+  ]);
 });
 
 test("a reading moves the step it belongs to, and the checks are not the model's", () => {
   const checked = stepsOf(lap({}), [{ drafter: "rondo/checks", verdict: "clear" }]);
-  expect(checked.map((step) => step.state)).toEqual(["done", "done", "waiting", "ahead", "yours"]);
+  expect(checked.map((step) => step.state)).toEqual([
+    "done",
+    "done",
+    "waiting",
+    "ahead",
+    "ahead",
+    "yours",
+  ]);
   const modelRead = stepsOf(lap({}), [{ drafter: "rondo/model/sonnet", verdict: "clear" }]);
   // The model read it and the checks have not run: what is done is what
   // happened, and the step the work is on is the first that has not.
@@ -101,6 +115,7 @@ test("a reading moves the step it belongs to, and the checks are not the model's
     "done",
     "waiting",
     "done",
+    "ahead",
     "ahead",
     "yours",
   ]);
@@ -116,12 +131,26 @@ test("at a gate the step the work is on is the person's, whatever its readings s
   // on is the person's. What did not happen is still not claimed: a lap that
   // reached a gate with no checks recorded has not passed any.
   const steps = stepsOf(lap({ status: "awaiting_human" }), []);
-  expect(steps.map((step) => step.state)).toEqual(["done", "ahead", "ahead", "waiting", "yours"]);
+  expect(steps.map((step) => step.state)).toEqual([
+    "done",
+    "ahead",
+    "ahead",
+    "waiting",
+    "ahead",
+    "yours",
+  ]);
   const checked = stepsOf(lap({ status: "awaiting_human" }), [
     { drafter: "rondo/checks", verdict: "clear" },
     { drafter: "rondo/model/sonnet", verdict: "clear" },
   ]);
-  expect(checked.map((step) => step.state)).toEqual(["done", "done", "done", "waiting", "yours"]);
+  expect(checked.map((step) => step.state)).toEqual([
+    "done",
+    "done",
+    "done",
+    "waiting",
+    "ahead",
+    "yours",
+  ]);
 });
 
 test("taking the work in is never rondo's, and a closed lap is not evidence it happened", () => {
@@ -142,6 +171,28 @@ test("taking the work in is never rondo's, and a closed lap is not evidence it h
     name: "landing",
     state: "yours",
   });
+});
+
+test("the pull request is its own step, between the approval and the merge (rondo#376)", () => {
+  const publish = (record: Parameters<typeof stepsOf>[0], published = false) =>
+    stepsOf(record, [], published).find((step) => step.name === "publish")?.state;
+  // Approve, publish and merge are three acts, and lap 11's owner could not
+  // tell which had happened. An approved lap's publish is the person's; it is
+  // done only once rondo's report of it is in the thread.
+  const approved = lap({ status: "closed", gateOutcome: "answered_and_forwarded" });
+  expect(publish(approved)).toBe("yours");
+  expect(publish(approved, true)).toBe("done");
+  // A gate that closed without a yes has nothing to publish.
+  expect(publish(lap({ status: "closed", gateOutcome: "withdrawn" }))).toBe("ahead");
+  expect(publish(lap({ status: "awaiting_human" }))).toBe("ahead");
+  expect(stepsOf(approved, []).map((step) => step.name)).toEqual([
+    "work",
+    "checks",
+    "reading",
+    "approval",
+    "publish",
+    "landing",
+  ]);
 });
 
 test("exactly one step is the one the work is on", () => {

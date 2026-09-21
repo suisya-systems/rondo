@@ -87,6 +87,11 @@ export interface ThreadProps {
   /** Rule 6's line, composed by the caller; null where nothing is known to say. */
   readonly governance: ReactNode;
   /**
+   * What became of the work after the approval (rondo#376), composed by the
+   * caller; null where nothing has been approved.
+   */
+  readonly result: ReactNode;
+  /**
    * Where this request stands among the ones waiting, and the way to the next
    * (rule 3's *your turn 1 / 3, next*).
    *
@@ -210,8 +215,10 @@ function Message({ message }: { readonly message: ThreadMessage }) {
         {message.bases.length === 0 ? null : (
           <p className="msg-bases">
             <span className="msg-bases-label">{message.basesLabel}</span>
-            {message.bases.map((basis) => (
-              <Word key={basis.said} link={basis} className="basis" />
+            {/* By place as well as words: two bases of one kind now say the
+                same thing, since neither is named by its id (D-0076). */}
+            {message.bases.map((basis, at) => (
+              <Word key={`${String(at)}:${basis.said}`} link={basis} className="basis" />
             ))}
           </p>
         )}
@@ -223,6 +230,7 @@ function Message({ message }: { readonly message: ThreadMessage }) {
 export function ThreadFace({
   title,
   governance,
+  result,
   walk,
   items,
   foldOpen,
@@ -243,6 +251,7 @@ export function ThreadFace({
          * agreed.
          */}
         {governance}
+        {result}
         {walk === null ? null : (
           <p className="thread-walk">
             <span>{walk.said}</span>

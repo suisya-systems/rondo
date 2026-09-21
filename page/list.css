@@ -132,6 +132,15 @@
   background: var(--color-wait);
 }
 
+/* A published request's checks, where they have said green or red (rondo#376). */
+.list-dot-ok {
+  background: var(--color-ok);
+}
+
+.list-dot-fail {
+  background: var(--color-fail);
+}
+
 /*
  * The repository the work is in (D-0081). It keeps its one line -- a name cut
  * in half is a different name -- and is bounded by the face rather than
