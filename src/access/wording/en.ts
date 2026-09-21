@@ -959,6 +959,9 @@ explanation you pressed on and then answers the gate.`,
   addRepositoryRefusedFailed:
     "Nothing was added: rondo could not copy the repository this time. Pressing again is safe; " +
     "it carries on from where this stopped.",
+  addRepositoryRefusedChanged:
+    "Nothing was added: this request no longer names a repository rondo does not work in. Go " +
+    "back to see where it stands now.",
   addRepositoryRefusedNoSetup:
     "Nothing was added: rondo's setup on this computer has not given it anywhere to put a " +
     "repository. Whoever installed rondo here is the one who can look.",

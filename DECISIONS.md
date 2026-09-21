@@ -20650,7 +20650,10 @@ On **2026-09-22**, at rondo `47ea4bd`, by reading. Line numbers drift; re-measur
 3. **A request may span two repositories when the person says so.** A repository named as the place
    of the work -- its forge address, or `OWNER/NAME` written without an issue number -- decides where
    the work runs: *"owner/a#12 の件を owner/b で直して"* is owner/b's work. Without such words, an
-   issue in one repository and work in another is the mismatch of rule 1, and nothing starts.
+   issue in one repository and work in another is the mismatch of rule 1, and nothing starts. **A
+   wrong reading errs towards asking**: beside a named issue, anything shaped like `OWNER/NAME` that
+   does not read as a path is taken as a place, because work drafted silently in the issue's
+   repository is the failure this entry exists to stop, and a wrong place only asks.
 4. **Where the named repository is not held, the page offers to add it, and the one press is the
    whole of what the person does.** Adding clones it and records its plan exactly as setup records
    one (a `setup_plan` row under the approver's name, `D-0075` rule 2), and the request is then
@@ -20659,6 +20662,8 @@ On **2026-09-22**, at rondo `47ea4bd`, by reading. Line numbers drift; re-measur
    computer's setup cannot reach GitHub as them (whoever installed rondo is who can look), GitHub has
    no such repository or their account cannot see it, or anything else -- with rondo's own reason
    in the fold (`D-0076` rule 4), and the button stays, so pressing again is how it is retried.
+   **The press adds only the repository the request names when it is pressed**: the host reads the
+   request again first, so a stale page or a hand-written post adds nothing else.
 
 ### 2. What rondo infers, and what it asks
 
@@ -20719,6 +20724,9 @@ All six were answered through the window on 2026-09-22.
   The page says so; a lap there relies on the model reading and the person's review.
 - **A top-level read only.** A monorepo whose manifests sit in subdirectories reads as none of the
   four and gets the common commands.
+- **Telling a path from a repository by a word list.** `src/access` and `docs/README.md` read as
+  paths; so does a repository whose name ends like a file (`vercel/next.js`), which is then not read
+  as a place.
 
 ### What this does not do
 

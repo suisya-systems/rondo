@@ -1099,6 +1099,8 @@ export interface Chrome extends PageWords {
   readonly addRepositoryRefusedFailed: string;
   /** Setup never recorded a plan to add one beside. */
   readonly addRepositoryRefusedNoSetup: string;
+  /** The request no longer names that repository, or rondo already works in it. */
+  readonly addRepositoryRefusedChanged: string;
   readonly approveBusy: string;
   readonly startBusy: string;
   readonly reviseBusy: string;

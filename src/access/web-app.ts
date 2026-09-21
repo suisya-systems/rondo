@@ -1067,7 +1067,8 @@ export type AddRepositoryRefusal =
   | "addRepositoryRefusedInstall"
   | "addRepositoryRefusedUnseen"
   | "addRepositoryRefusedFailed"
-  | "addRepositoryRefusedNoSetup";
+  | "addRepositoryRefusedNoSetup"
+  | "addRepositoryRefusedChanged";
 
 /** What adding a repository did: added, or why not with rondo's own reason. */
 export type AddedRepository =

@@ -141,6 +141,7 @@ import {
   unreadIssues,
 } from "./issue-read.js";
 import {
+  type DrafterPorts,
   draftedPlanRun,
   type HeldPlan,
   heldPlanByDigest,
@@ -1478,7 +1479,7 @@ export async function main(
             : new AddRepositoryPort(async (input) => {
                 const added = await addRepositoryFromPage(
                   environment,
-                  record,
+                  { store, record },
                   sender.actorId,
                   input,
                 );
@@ -6916,11 +6917,14 @@ export async function releaseFromPage(
  */
 export async function addRepositoryFromPage(
   environment: Readonly<Record<string, string | undefined>>,
-  record: Pick<AdvisoryRecord, "setupPlans" | "recordSetupPlan">,
+  ports: Pick<DrafterPorts, "store"> & {
+    readonly record: DrafterPorts["record"] & Pick<AdvisoryRecord, "recordSetupPlan">;
+  },
   approver: string,
   input: AddRepositoryInput,
   clone: typeof cloneRepository = cloneRepository,
 ): Promise<AddedRepository> {
+  const { record } = ports;
   const failed = (note: string): AddedRepository => ({
     ok: false,
     why: "addRepositoryRefusedFailed",
@@ -6929,6 +6933,17 @@ export async function addRepositoryFromPage(
   const actor = approvedActor(approver, environment);
   if ("refusal" in actor) {
     return failed(actor.refusal);
+  }
+  // **Only the repository the request names now, and only while rondo holds
+  // none for it** (D-0090 rule 1.4): the form carries a name, and a stale page
+  // or a hand-written post must not add one the request does not ask for.
+  const where = (await requestRepository({ ...ports, now: Date.now }, input.requestMessageId)).work;
+  if (where.kind !== "unheld" || where.repo !== input.repo) {
+    return {
+      ok: false,
+      why: "addRepositoryRefusedChanged",
+      note: `request '${input.requestMessageId}' does not name '${input.repo}' as a repository rondo holds no plan for`,
+    };
   }
   const parts = repositoryParts(input.repo);
   if (parts === null) {

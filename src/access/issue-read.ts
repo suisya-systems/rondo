@@ -133,15 +133,38 @@ export type WorkRepository =
 const REPOSITORY =
   /https?:\/\/github\.com\/([\w.-]+)\/([\w.-]+?)(?:\.git)?\/?(?![\w./#-])|(?<![\w&/.:@#-])([\w-][\w.-]*)\/([\w.-]*\w)(?![\w/#-])/g;
 
+// The top-level directories a request names as a path far more often than as
+// an owner, and a last segment that is a file name.
+const PATH_ROOTS = new Set(
+  "src test tests docs doc lib bin scripts packages apps app cmd internal pkg public config dist build vendor examples page".split(
+    " ",
+  ),
+);
+
+/** Whether a message's body is a JSON object, as a pasted plan is. */
+function isPlanPaste(body: string): boolean {
+  try {
+    return isRecord(JSON.parse(body));
+  } catch {
+    return false;
+  }
+}
+
+/** Whether `OWNER/NAME` reads as a path in a repository rather than as one. */
+function pathLike(owner: string, name: string): boolean {
+  return PATH_ROOTS.has(owner.toLowerCase()) || /\.(?:[a-z]{1,4}|json|toml|yaml)$/i.test(name);
+}
+
 /**
  * Which repository one request's work runs in (rondo#383, D-0090 rules 1-3),
  * from every operator message in its thread and the forge repository of each
  * plan rondo holds for it (null where a plan names none).
  *
  * - **A repository the person named as the place wins** (D-0090 rule 3): *"do
- *   owner/a#12 in owner/b"* is owner/b's work. A forge address always counts;
- *   a bare `OWNER/NAME` counts when a held plan is for it or when it shares an
- *   owner with a named issue, so a path like `src/access` is not read as one.
+ *   owner/a#12 in other/b"* is other/b's work. A forge address always counts;
+ *   a bare `OWNER/NAME` counts when a held plan is for it, or when it does not
+ *   read as a path (`src/access`, `docs/README.md`) and the request also names
+ *   an issue or the owner is a held repository's.
  * - **Otherwise the named issues' repositories are the place** (rule 1): the
  *   person who writes *"do this issue"* expects the work where it lives.
  * - A bare `#N` names no repository and keeps its rule (D-0081 rule 3.4).
@@ -150,7 +173,8 @@ const REPOSITORY =
  * so where one is held an unheld name is `open` -- the drafter's own choice,
  * as before -- rather than an offer to add a repository that may be held.
  * Only `github.com` addresses name a place; an enterprise forge's work is
- * named by `OWNER/NAME`.
+ * named by `OWNER/NAME`. The path test is a word list, so a repository whose
+ * name ends like a file (`vercel/next.js`) is read as a path and not a place.
  */
 export function workRepository(
   bodies: readonly string[],
@@ -163,10 +187,17 @@ export function workRepository(
   const known = new Map(
     held.flatMap((slug) => (slug === null ? [] : [[slug.toLowerCase(), slug] as const])),
   );
+  // A plan pasted into the thread (D-0071 point 1(a)) is a template, not
+  // words about where the work is: its own `forge_repository` would read as one.
+  bodies = bodies.filter((body) => !isPlanPaste(body));
   const issues = bodies
     .flatMap((body) => namedIssues(body))
     .flatMap((ref) => (ref.repo === null ? [] : [{ repo: ref.repo, named: ref.named }]));
-  const owners = new Set(issues.map((issue) => issue.repo.split("/")[0]?.toLowerCase()));
+  const owners = new Set(
+    [...issues.map((issue) => issue.repo), ...known.keys()].map((repo) =>
+      repo.split("/")[0]?.toLowerCase(),
+    ),
+  );
   const places = bodies.flatMap((body) =>
     [...body.replace(REFERENCE, " ").matchAll(REPOSITORY)].flatMap((m) => {
       const [, urlOwner, urlName, owner, name] = m;
@@ -174,7 +205,16 @@ export function workRepository(
         return [`${urlOwner}/${urlName}`];
       }
       const repo = `${String(owner)}/${String(name)}`;
-      return known.has(repo.toLowerCase()) || owners.has(String(owner).toLowerCase()) ? [repo] : [];
+      if (known.has(repo.toLowerCase())) {
+        return [repo];
+      }
+      // Beside a named issue, anything shaped like a repository and not like
+      // a path is a place: work silently drafted in the issue's repository is
+      // the failure this exists to stop, and a wrong guess only asks.
+      return !pathLike(String(owner), String(name)) &&
+        (issues.length > 0 || owners.has(String(owner).toLowerCase()))
+        ? [repo]
+        : [];
     }),
   );
   const wanted = places.length > 0 ? places.map((repo) => ({ repo, named: repo })) : issues;

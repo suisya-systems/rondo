@@ -974,6 +974,9 @@ export const JA: Chrome = Object.freeze({
   addRepositoryRefusedFailed:
     "何も追加していません。今回はリポジトリをコピーできませんでした。もう一度押しても" +
     "大丈夫です。止まったところから続けます。",
+  addRepositoryRefusedChanged:
+    "何も追加していません。この依頼はもう、rondo が作業していないリポジトリを名指ししていません。" +
+    "戻っていまの状態を確かめてください。",
   addRepositoryRefusedNoSetup:
     "何も追加していません。このコンピュータの rondo の設定が、リポジトリを置く場所をまだ" +
     "rondo に渡していません。見られるのは、ここに rondo を入れた人です。",

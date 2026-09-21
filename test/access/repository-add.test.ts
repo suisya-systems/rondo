@@ -55,6 +55,24 @@ test("the repository a request's work runs in: the named issue's, or the place t
     repo: "owner/b",
     named: "owner/b",
   });
+  // Under another owner too: never drafted silently in the issue's repository.
+  expect(work("Fix owner/a#12 in other/b", ["owner/a"])).toEqual({
+    kind: "unheld",
+    repo: "other/b",
+    named: "other/b",
+  });
+  // A place under a held repository's owner needs no issue beside it.
+  expect(work("Make the same change in owner/b", ["owner/a", "owner/b"])).toEqual({
+    kind: "held",
+    repos: ["owner/b"],
+  });
+  // A pasted plan's own forge repository is not the person naming a place.
+  expect(
+    workRepository(
+      ["Do owner/other#12.", JSON.stringify({ forge_repository: "owner/a" })],
+      ["owner/a"],
+    ),
+  ).toEqual({ kind: "unheld", repo: "owner/other", named: "owner/other#12" });
   expect(work("Fix owner/a#3 in https://github.com/elsewhere/tool", ["owner/a"])).toEqual({
     kind: "unheld",
     repo: "elsewhere/tool",
@@ -161,7 +179,7 @@ test("an added repository is setup's plan with the repository's own facts, and t
   const asked: [string, string][] = [];
   const added = await addRepositoryFromPage(
     ENV,
-    w.record,
+    w,
     "ada",
     { requestMessageId: "r1", repo: "owner/other" },
     async (repo, into) => {
@@ -214,7 +232,7 @@ test("a repository whose build rondo cannot tell is added with the common comman
   await w.say("r1", "Do owner/docs#1.", null, 1_000);
   const added = await addRepositoryFromPage(
     ENV,
-    w.record,
+    w,
     "ada",
     { requestMessageId: "r1", repo: "owner/docs" },
     cloned("README.md\nMakefile\n"),
@@ -231,9 +249,18 @@ test("a repository whose build rondo cannot tell is added with the common comman
 test("a clone that fails records nothing and says which of three things went wrong; no setup is its own refusal", async () => {
   const w = await world();
   const input = { requestMessageId: "r1", repo: "owner/other" };
-  expect(
-    await addRepositoryFromPage(ENV, w.record, "ada", input, cloned("go.mod\n")),
-  ).toMatchObject({ ok: false, why: "addRepositoryRefusedNoSetup" });
+  await w.say("r1", "Do owner/other#12.", null, 1_000);
+  // Nothing held: the request names no repository to add, whatever the form says.
+  expect(await addRepositoryFromPage(ENV, w, "ada", input, cloned("go.mod\n"))).toMatchObject({
+    ok: false,
+    why: "addRepositoryRefusedChanged",
+  });
+  // A plan pasted into the thread is held, but setup gave no root to clone under.
+  await w.say("r1-plan", JSON.stringify(setupDocument("owner/a")), "r1", 1_500);
+  expect(await addRepositoryFromPage(ENV, w, "ada", input, cloned("go.mod\n"))).toMatchObject({
+    ok: false,
+    why: "addRepositoryRefusedNoSetup",
+  });
 
   await w.record.recordSetupPlan({
     setupId: "setup-1",
@@ -255,15 +282,28 @@ test("a clone that fails records nothing and says which of three things went wro
     ],
     [ran("", 128, "fatal: unable to access: Could not resolve host"), "addRepositoryRefusedFailed"],
   ] as const) {
-    const answered = await addRepositoryFromPage(ENV, w.record, "ada", input, failing(outcome));
+    const answered = await addRepositoryFromPage(ENV, w, "ada", input, failing(outcome));
     expect(answered, outcome.stderr).toMatchObject({ ok: false, why });
   }
+  // Only the repository the request names: not another, and not a path.
+  for (const repo of ["owner/else", "../escape"]) {
+    expect(
+      await addRepositoryFromPage(ENV, w, "ada", { ...input, repo }, cloned("go.mod\n")),
+      repo,
+    ).toMatchObject({ ok: false, why: "addRepositoryRefusedChanged" });
+  }
   expect(
-    await addRepositoryFromPage(ENV, w.record, "ada", { ...input, repo: "../escape" }, cloned("")),
-  ).toMatchObject({ ok: false, why: "addRepositoryRefusedFailed" });
+    await addRepositoryFromPage(
+      ENV,
+      w,
+      "ada",
+      { requestMessageId: "no-such-request", repo: "owner/other" },
+      cloned("go.mod\n"),
+    ),
+  ).toMatchObject({ ok: false, why: "addRepositoryRefusedChanged" });
   // Not the approver: nothing is recorded as anyone else.
-  expect(
-    await addRepositoryFromPage(ENV, w.record, "mallory", input, cloned("go.mod\n")),
-  ).toMatchObject({ ok: false });
+  expect(await addRepositoryFromPage(ENV, w, "mallory", input, cloned("go.mod\n"))).toMatchObject({
+    ok: false,
+  });
   expect(await w.record.setupPlans()).toHaveLength(1);
 });
