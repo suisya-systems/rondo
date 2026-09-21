@@ -62,3 +62,13 @@
     overflow-y: visible;
   }
 }
+
+/*
+ * The header and the notes under it span what the faces span (rondo#379): at
+ * 2560 the three faces stop at 2,200px, and below 2000 they fill the screen,
+ * so the header's items have the room the faces have rather than a 1,024px
+ * column in the middle of them. The faces' own reading widths do not change.
+ */
+.faces-width {
+  max-width: 2200px;
+}
