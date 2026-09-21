@@ -10,7 +10,11 @@
 import { expect, test } from "vitest";
 
 import { addRepositoryFromPage } from "../../src/access/cli.js";
-import type { CommandOutcome, RepositoryClone } from "../../src/access/forge.js";
+import {
+  type CommandOutcome,
+  type RepositoryClone,
+  sameForgeRepository,
+} from "../../src/access/forge.js";
 import { workRepository } from "../../src/access/issue-read.js";
 import { heldPlans, requestRepository } from "../../src/access/model-draft/host.js";
 import {
@@ -91,6 +95,15 @@ test("the repository a request's work runs in: the named issue's, or the place t
     repo: "vercel/next.js",
     named: "vercel/next.js",
   });
+  // A reply corrects the place: the newest message naming one decides.
+  expect(workRepository(["Do owner/typo#12.", "Sorry, I meant owner/a#12."], ["owner/a"])).toEqual({
+    kind: "held",
+    repos: ["owner/a"],
+  });
+  expect(workRepository(["Do owner/a#12.", "Keep it short."], ["owner/a"])).toEqual({
+    kind: "held",
+    repos: ["owner/a"],
+  });
   // A path is not a place.
   expect(work("owner/a#1: see src/access and docs/README.md", ["owner/a"])).toEqual({
     kind: "held",
@@ -123,6 +136,19 @@ test("the worker's commands are read off the repository's own files, for TypeScr
   expect(both).toEqual(expect.arrayContaining([...COMMON_BASH, "go test:*", "cargo test:*"]));
   expect(new Set(both).size).toBe(both.length);
   expect(allowedBashFor(["npm"])).toContain("npm ci --ignore-scripts");
+});
+
+test("a clone already on disk is used only when its origin is the repository asked for", () => {
+  for (const url of [
+    "https://github.com/owner/other.git",
+    "https://github.com/Owner/Other",
+    "git@github.com:owner/other.git",
+  ]) {
+    expect(sameForgeRepository(url, "owner/other"), url).toBe(true);
+  }
+  for (const url of ["https://github.com/owner/else.git", "", "/srv/other"]) {
+    expect(sameForgeRepository(url, "owner/other"), url).toBe(false);
+  }
 });
 
 test("a repository's name is only ever a directory under setup's root, and a project cadenza accepts", () => {

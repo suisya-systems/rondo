@@ -20645,6 +20645,9 @@ On **2026-09-22**, at rondo `47ea4bd`, by reading. Line numbers drift; re-measur
    page says so in the request's thread, in the person's language, as the request's next step. A
    bare `#N` keeps `D-0081` rule 3.4, and in such a request it waits until the repository is added:
    read in one of the held repositories, it would be the wrong issue, recorded for good.
+   **The newest message in the thread that names a place decides**, so a reply is how a person
+   corrects a wrong name (*"I meant owner/right#12"*); a reply naming a second place replaces the
+   first rather than adding to it.
 2. **Where the named repository is held, the request is drafted there.** Only that repository's
    plans are offered -- to the drafter, on the scope screen, and to a bare `#N`'s read -- so the
    choice of template is not a choice between repositories any more.
@@ -20664,7 +20667,8 @@ On **2026-09-22**, at rondo `47ea4bd`, by reading. Line numbers drift; re-measur
    no such repository or their account cannot see it, or anything else -- with rondo's own reason
    in the fold (`D-0076` rule 4), and the button stays, so pressing again is how it is retried.
    **The press adds only the repository the request names when it is pressed**: the host reads the
-   request again first, so a stale page or a hand-written post adds nothing else.
+   request again first, so a stale page or a hand-written post adds nothing else. A clone already at
+   the path is used only when its origin is that repository.
 
 ### 2. What rondo infers, and what it asks
 

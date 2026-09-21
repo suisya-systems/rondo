@@ -187,19 +187,17 @@ export function workRepository(
   const known = new Map(
     held.flatMap((slug) => (slug === null ? [] : [[slug.toLowerCase(), slug] as const])),
   );
-  // A plan pasted into the thread (D-0071 point 1(a)) is a template, not
-  // words about where the work is: its own `forge_repository` would read as one.
-  bodies = bodies.filter((body) => !isPlanPaste(body));
-  const issues = bodies
-    .flatMap((body) => namedIssues(body))
-    .flatMap((ref) => (ref.repo === null ? [] : [{ repo: ref.repo, named: ref.named }]));
-  const owners = new Set(
-    [...issues.map((issue) => issue.repo), ...known.keys()].map((repo) =>
-      repo.split("/")[0]?.toLowerCase(),
-    ),
-  );
-  const places = bodies.flatMap((body) =>
-    [...body.replace(REFERENCE, " ").matchAll(REPOSITORY)].flatMap((m) => {
+  const heldOwners = [...known.keys()].map((repo) => repo.split("/")[0]);
+  /** What one message names as where the work is: its places, else its issues' repositories. */
+  const namedIn = (body: string): readonly { repo: string; named: string }[] => {
+    const issues = namedIssues(body).flatMap((ref) =>
+      ref.repo === null ? [] : [{ repo: ref.repo, named: ref.named }],
+    );
+    const owners = new Set([
+      ...heldOwners,
+      ...issues.map((issue) => issue.repo.split("/")[0]?.toLowerCase()),
+    ]);
+    const places = [...body.replace(REFERENCE, " ").matchAll(REPOSITORY)].flatMap((m) => {
       const [, urlOwner, urlName, owner, name] = m;
       if (urlOwner !== undefined && urlName !== undefined) {
         return [`${urlOwner}/${urlName.replace(/\.git$/, "")}`];
@@ -215,9 +213,22 @@ export function workRepository(
         (issues.length > 0 || owners.has(String(owner).toLowerCase()))
         ? [repo]
         : [];
-    }),
-  );
-  const wanted = places.length > 0 ? places.map((repo) => ({ repo, named: repo })) : issues;
+    });
+    return places.length > 0 ? places.map((repo) => ({ repo, named: repo })) : issues;
+  };
+  // **The newest message that names a place decides**, so a reply is how a
+  // person corrects one ("I meant owner/right#12"), as the unseen-repository
+  // refusal tells them to. A plan pasted into the thread (D-0071 point 1(a))
+  // is a template, not words about where the work is.
+  //
+  // ponytail: a reply naming a second place replaces the first rather than
+  // adding to it; "also do owner/b" reads as owner/b alone. Several lines
+  // from one request is D-0081's residual, not this reckoning's.
+  const wanted =
+    bodies
+      .filter((body) => !isPlanPaste(body))
+      .map(namedIn)
+      .findLast((named) => named.length > 0) ?? [];
   if (wanted.length === 0) {
     return { kind: "open" };
   }

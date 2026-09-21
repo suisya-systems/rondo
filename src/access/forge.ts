@@ -550,6 +550,12 @@ export async function readIssueFromForge(request: IssueReadRequest): Promise<{
   return { issue, comments };
 }
 
+/** Whether a remote URL (HTTPS or SSH) names `repo` (`OWNER/NAME`), case aside. */
+export function sameForgeRepository(url: string, repo: string): boolean {
+  const m = /[/:]([\w.-]+\/[\w.-]+?)(?:\.git)?\/?$/.exec(url);
+  return m?.[1]?.toLowerCase() === repo.toLowerCase();
+}
+
 /** What cloning a repository for the page did (rondo#383), step by step. */
 export interface RepositoryClone {
   /** The clone, or null when `into` already held a clone to use. */
@@ -573,6 +579,22 @@ export interface RepositoryClone {
 export async function cloneRepository(repo: string, into: string): Promise<RepositoryClone> {
   const top = await runCommand("git", ["-C", into, "rev-parse", "--show-toplevel"]);
   const held = top.status === 0 && top.stdout.trim() === into;
+  if (held) {
+    // **Only a clone of `repo`**: a checkout of something else at this path
+    // would be recorded as `repo`'s plan and the work run in the wrong tree.
+    const origin = await runCommand("git", ["-C", into, "remote", "get-url", "origin"]);
+    if (!sameForgeRepository(origin.stdout.trim(), repo)) {
+      return {
+        clone: {
+          ...origin,
+          status: origin.status === 0 ? 1 : origin.status,
+          stderr: `${into} holds a clone whose origin is '${origin.stdout.trim()}', not ${repo}`,
+        },
+        branch: null,
+        files: null,
+      };
+    }
+  }
   const clone = held ? null : await runCommand("gh", ["repo", "clone", repo, into]);
   if (clone !== null && (clone.spawnError !== null || clone.status !== 0)) {
     return { clone, branch: null, files: null };

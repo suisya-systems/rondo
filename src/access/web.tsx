@@ -1834,10 +1834,7 @@ async function threadActs(
     ports.repositoryFor === undefined
       ? null
       : await ports.repositoryFor(requestMessageId).catch(() => null);
-  const unheld =
-    where?.work.kind === "unheld" && laps.length === 0 && ports.addable === true
-      ? where.work
-      : null;
+  const unheld = where?.work.kind === "unheld" && ports.addable === true ? where.work : null;
   const drafted =
     waitedOn || laps.length > 0 || unheld !== null
       ? null
