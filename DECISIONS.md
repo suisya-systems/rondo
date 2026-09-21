@@ -132,6 +132,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0092 | Which answer a gate was given is recorded beside the gate answer, when rondo carries it: `approve` and `revise` stop being told apart by whether a next try exists, and a lap with no record is not called approved | accepted (point 3 pending the owner) |
 | D-0093 | The boundary test also asks which role a module plays: every module under `src/` names a row of `D-0064` section 5, a row given to cadenza or continuo is refused, and what already sits in rondo is a named, shrinking list of relocations | accepted |
 | D-0096 | The header's "Requests" link is closed, and a thread's `Esc` goes to the bare address: the link led to the new-request view the list already reaches, and the way back it carried on a thread moves to the logo | accepted |
+| D-0097 | rondo proposes which request is worth making: the advisory ranks candidates against a goal the person wrote down, reads its own record as well as the issue list, and brings one recommendation whose open points can be answered in one word; it never starts what it proposes | proposed |
 
 ---
 
@@ -21538,3 +21539,276 @@ At rondo `223654d`, by reading `src/access/web.tsx` and the page in a browser:
 - **A person looking for the requests in the header** after this, rather than in the left face.
 - **A person pressing `Esc` on a thread and expecting the list's writing view**, which is where it
   used to go.
+
+## D-0097 — rondo proposes which request is worth making: the advisory ranks candidates against a goal the person wrote down, reads its own record as well as the issue list, and brings one recommendation whose open points can be answered in one word; it never starts what it proposes
+
+**Status:** proposed (2026-09-22, rondo#320). **Nothing here is decided yet.** Section 1 records what
+is already settled by accepted entries and by the owner's direction; section 2 puts six points to the
+owner, each with options, what each gives up and one recommendation (`D-0064` section 4). The
+answers are left blank in "What was put to the human gate, and its answer" until the owner gives
+them. Supersedes nothing. Refs `D-0032`, `D-0061` rule 6, `D-0063`, `D-0064`, `D-0075`, `D-0081`,
+`D-0082`, `D-0083`, `D-0093`, rondo#250, rondo#298, rondo#319, rondo#320.
+
+**This entry decides and does not build.** Nothing in `src/` changes with it; the building is after
+lap 12.
+
+**Why an entry is needed.** rondo decides how a request is carried out and does not say which request
+is worth making (rondo#320). `D-0061` rule 6 names *finding the next request* as its own entry, and
+`D-0063` gives the advisory a propose-only next-work proposal but "does not decide the next-work
+proposal's shape or trigger". `D-0064` section 5 lists **Work discovery** as an empty role. On
+2026-09-22 the owner named triage (and parallel work, rondo#250) as rondo's next goal after the
+completion definition. This entry is that shape and that trigger.
+
+### What was measured, and how
+
+At rondo `fbebe37` on **2026-09-22**, by reading rondo#320 and its comment, this file, and
+claude-org-ja at `90266e6` (read only; written `JA/`). Line numbers drift; re-measure the claim.
+
+- **A generic triage was overridden on every dispatch, twice.** On 2026-09-20 the organisation's
+  triage tool (`JA/tools/work_discovery_scan.py`, whose criteria are `JA/docs/design/
+  work-discovery-triage.md` section 4: dependencies resolved, then priority, effort and parallelism)
+  kept recommending two large structural issues; the twenty-two changes that landed were chosen by a
+  different rule, *does this violate the completion definition the operator wrote down*
+  (rondo#320). On 2026-09-22 the tool ranked #305 and #204 first; the coordinator deferred both
+  because neither violates the completion definition, and the owner agreed (rondo#320, comment). The
+  tool was not wrong about priority; it did not know the goal.
+- **A label moved the tool, and is not the goal.** After the owner labelled rondo#320
+  `priority:high` (a label new in this repository), the tool ranked it first. An explicit label is
+  one way a person states priority.
+- **The day's most important work did not come from the issue list.** A read-only placement audit
+  (`D-0064` section 5 against the code) produced four moves across three repositories and a guard
+  against repeating them (`D-0093`, `D-0094`, `D-0095`). A triage that reads only open issues would
+  have proposed none of it (rondo#320, comment).
+- **Proposals the owner accepted came with their open points and a recommendation for each**, and
+  were answered in one reply ("推奨"). A proposal that cannot be answered that way is still a draft
+  (rondo#320, comment).
+- **The only goal written down today is `D-0075`'s completion definition** (K1-K4), inside a
+  decision about setup, with its restatement in its own place still open (rondo#298). Nothing in
+  rondo's store holds a goal.
+- **The empty screen is where a person arrives with nothing to ask** (`D-0083` rule 4, rondo#319):
+  its centre asks "what do you want to ask for?" and draws the request box
+  (`src/access/page/empty.tsx`).
+- **Competitors checked on 2026-09-22.** Linear's agent starts an agent's work on an issue that
+  enters triage; GitHub Agentic Workflows has a triage workflow. Neither was found to rank candidates
+  and bring one recommendation while only proposing.
+
+### 1. What is already settled
+
+1. **Triage is the advisory's, and only proposes.** `D-0063` section 1 gives the advisory "propose
+   the next piece of work ... propose-only"; `D-0064` section 5's *Work discovery* row ("proposes
+   the next candidates with one recommendation") names the same. It is not cadenza's or continuo's.
+   The module that builds it names *Work discovery* in `ROLES_BY_MODULE` (`D-0093` rule 1).
+2. **It never starts work it proposed.** A proposed next piece of work binds nothing until a person
+   answers (`D-0063` rule 6.2, `D-0064` rule 4.2); direction stays with the person (`D-0064`: a
+   person asks, and approves a scope). A proposal is not a request and not a scope.
+3. **It ranks by the goal, not by generic priority.** What ranks a candidate is whether it violates
+   a goal the person wrote down. Priority, effort and dependencies do not rank; the measurements
+   above are why.
+4. **It reads more than the issue list** (rondo#320, comment): the residuals of rondo's own
+   decisions, audits of the record against the code, failures rondo saw, work it stopped, and what
+   it decided without asking.
+5. **A proposal is answerable in one word.** Every candidate carries its open points, each with
+   options, what each gives up and one recommendation (`D-0064` rule 4.1), so "as recommended" is a
+   complete answer.
+6. **Every candidate leads back to its material** (`D-0064`'s first kept line; `D-0032` rule 2).
+7. **An explicit label is one of the person's ways of stating priority**, not the goal.
+
+### 2. The points put to the owner
+
+**Point 1. What it reads.**
+
+- **(a) Open issues of the repositories rondo works in** (`D-0081`). Cheapest, and what every
+  competitor reads. Gives up everything that is not an issue, including 2026-09-22's audit.
+- **(b) Issues, and rondo's own record** (recommended): the residuals of its decisions (an entry's
+  "What would falsify it", "Named and not filled", "not yet confirmed by the owner", an unfinished
+  relocation such as `D-0093`'s `RELOCATING`), laps that stopped or failed and were not asked again,
+  requests left unfinished, and what it decided without asking (`D-0064` O8) that a person has not
+  read. **An audit of the record against the code enters as a candidate, not as a source**: triage
+  proposes "check `D-0064` section 5 against `src/`" when it has not been checked since the last
+  change to either, and the audit's findings reach the next triage as issues or residuals. Gives up
+  finding a mismatch nobody has audited for until the person accepts the audit.
+- **(c) (b), and triage runs the audits itself** every time it proposes. Finds the most. Gives up a
+  model reading of the whole tree per proposal (spend nobody asked for), and it is work, which
+  triage does not start.
+
+**Point 2. What it ranks against: where the goal lives, how it is written, and what happens before
+one exists.**
+
+- **2.1 Where it lives.**
+  - **(a) A record in rondo's store, per repository, written and edited on the page**
+    (recommended). Append-only with its date, so a proposal names the goal it was ranked against.
+    Keeps `D-0075` K3 (no terminal) and `D-0081` (one store, many repositories). Gives up review in
+    git: the goal is not beside the code a worker reads.
+  - **(b) A file in each repository** (for example `GOALS.md`). Versioned and reviewed like code,
+    and a worker can read it. Gives up K3: changing the goal is a pull request, so a lap or a
+    terminal.
+  - **(c) A decision entry**, as `D-0075` holds K1-K4 today. Only for a repository that keeps a
+    `DECISIONS.md`, and only through a merged change. Gives up every repository without one.
+- **2.2 How it is written.** **(a) Numbered clauses in the person's words, each saying when it is
+  unmet** (recommended), as K1-K4 are ("unmet if a terminal is ever required"). A candidate names
+  the clause it violates, and a clause that cannot be violated by anything rondo can read is said to
+  be so when it is written. Gives up free prose; the person writes in a form. **(b) Free prose.**
+  Gives up a candidate naming what it violates, so two proposals cannot be compared.
+- **2.3 How it ranks.** **(a) By the clause violated, in the goal's order; within a clause, an
+  explicit priority label first, then the rest in the order they were found** (recommended).
+  Effort, dependencies and parallelism are shown on the candidate as facts and never rank; a blocked
+  candidate says what blocks it. A candidate that violates no clause is not proposed and is counted
+  as withheld with that reason (`D-0064` O8). Gives up proposing good work the goal does not cover;
+  the person widens the goal to get it. **(b) Clause first, then a generic score** (priority, effort,
+  dependencies) for the rest. Gives up the lesson measured twice: the tail is ranked by what gets
+  overridden. **(c) One weighted score over all of them.** Gives up the goal ranking at all.
+- **2.4 Before a goal exists.**
+  - **(a) No ranking; the proposal is to write the goal** (recommended). The empty screen offers a
+    drafted goal, from what the repository and rondo's record already say (for rondo itself, K1-K4
+    as the draft), for the person to edit and keep. Until one is kept, triage lists nothing. Gives
+    up proposals on day one.
+  - **(b) Fall back to labels and the generic ranking.** Proposes on day one. Gives up exactly what
+    rondo#320 measured: a ranking that will be overridden.
+  - **(c) Rank by labels only**, and say no goal is written. Honest, and useful where labels are
+    kept. Gives up every repository without them, and teaches the person that a label is the goal.
+
+**Point 3. What a proposal is.**
+
+- **(a) A request already drafted and waiting for approval.** Closest to how rondo works after a
+  request (`D-0063` drafts a split). Gives up the most direction: the person reviews rondo's choice
+  instead of making one.
+- **(b) A list of candidates the person picks from, with no recommendation.** Gives up `D-0064`
+  rule 4.1: a question without a recommendation hands the person the organisation's work.
+- **(c) One "this next, because", with the few runners-up under it** (recommended). The
+  recommendation names the goal clause it violates, its bases, and its open points each with a
+  recommendation. Answering "as recommended" **writes the request into the request box, drafted,
+  for the person to send**; it is not sent and no scope is drafted until they do (section 1 rule
+  2). A runner-up is taken the same way; any candidate can be put aside (point 4.4, 4.5). Gives up a
+  one-press start: sending stays a second, separate act.
+
+**Point 4. When it proposes, and where it is drawn.** Drafted with a UI design pass against what
+the page draws today. The owner's direction for the page applies: a timid UI is only inconvenient,
+and simplifying at the cost of usability is refused. So the proposal is not tucked behind a press;
+and because nothing in it waits on the person, it carries no amber (`D-0082` rule 2), unlike
+`unheldCard` in `threadActs` (`src/access/web.tsx`), which is amber because it is a person-only step.
+
+- **4.1 When.**
+  - **(a) Always on the empty centre**, read when the page is drawn. Gives up a blank page to a
+    person who wants one.
+  - **(b) Only after something lands** (a merge, a finished request), as a line in that thread.
+    Gives up the front page: a person who opens rondo cold sees nothing, and the line ages out.
+  - **(c) Only when asked**, by a press or by typing "what next?". Gives up the owner's direction
+    above, and a model reading cannot run inside a page load, so asking would mean waiting.
+  - **(d) (a) and (b), from one stored proposal** (recommended). The proposal is a proposal row
+    (`D-0022`'s snapshot, digest and drafter), rewritten when its material changes (a report, a
+    merge, a decision, a residual), never computed on a `GET` (the page's reads write nothing). The
+    empty centre draws the latest row; the thread where a request finished gets one neutral event
+    line saying rondo has a proposal for what next, leading to the front. It is not drawn while
+    something is in *your turn*: `D-0083` rule 3 opens the oldest waiting request, and the person
+    came to answer. Gives up one place: two places name the proposal, so the row carries what it
+    was read from and when.
+- **4.2 Where.** **(a) The centre, directly under the request box** (recommended), above the
+  *since you last looked* digest and the reports `D-0083` rule 4 puts there. It is the face that
+  holds presses, and "put it in the box" belongs beside the box it fills (`D-0082` rule 7). Gives
+  up the empty lower third on a day with a candidate (4.6). **(b) The left face**, under *Write a
+  new request*. Gives up the open points: 440px cannot hold them, and a row there reads as a
+  request thread. **(c) The right face** (`EmptySide`). Gives up presses, which that face holds none
+  of by its own rule, and it falls below the thread at 1280px.
+- **4.3 What is drawn.** A section in ink at the section size, headed *What rondo would ask for
+  next*, with **one candidate in full**: the request in one line, naming its repository (`D-0081`,
+  or the one-word answer turns into a question back); *goes against*, the goal clause quoted and
+  leading to where the goal is written; *why*, one or two sentences with bases to the issue,
+  residual, audit line or stopped lap (as a message's bases row, `src/access/page/thread.tsx`);
+  *open points*, each a point and its recommendation on one line; and one line of what was read and
+  when (*N issues, M residuals, K stopped laps, at ...*). **Up to four runners-up**, one line each
+  (the request and its clause), in a fold under it; opened, each carries its own presses.
+  (Alternatives: all in full, which gives up the centre to a backlog, the thing rondo#320 says is
+  overridden; one only, which gives up seeing what was ranked below and why.)
+- **4.4 What a person presses.** **Put it in the box** (primary): the drafted request, with each open
+  point written out as its recommendation in text the person can edit, is filled into the request
+  box by the server, so it works without script; the box's saved unsent draft does not overwrite it
+  when the address names a proposal. Sending is the box's own press. **Not now** (secondary) puts it
+  aside. This is point 3 (c) on the page; point 3 (a)'s approval press would be a second write kind
+  beside `approve` (`D-0041` rule 7, `D-0059` section 5) and could not be edited before it went.
+- **4.5 How *not now* is remembered.** **(a) On the proposal row** (declined, when, by whom),
+  through one plain form post (recommended). A decline is material for the next reading: a person
+  overruling the ranking is telling rondo about the goal, and `D-0032` rule 10 already counts what
+  was presented. Gives up nothing but a route. **(b) In the browser only.** Gives up the next tab,
+  and rondo never learns it was declined. **(c) No decline; a candidate stands until its material
+  changes.** Gives up the person's say: a refused candidate is shown again every day, the
+  2026-09-20 failure in small. (c) is acceptable as the first slice only.
+- **4.6 With no goal, and with nothing against the goal.** With no goal written, the section says
+  that nothing can be ranked without one and leads to where it is written, with point 2.4's draft;
+  no candidates are listed. With nothing against the goal, one muted sentence says so and what was
+  read and when, and no card is drawn; the lower third stays quiet that day. The *what was read*
+  line is what tells a quiet triage from one that is not running.
+- **4.7 `D-0083` rule 4's quiet lower third.** It says nothing is drawn there; a candidate is
+  something drawn. **(a) Annotate `D-0083` rule 4, not additive** (recommended), as `D-0083` itself
+  annotated `D-0082` rule 1: nothing *waiting on the person* is drawn there; a proposal may sit
+  under the box in ink, and on a day nothing goes against a goal it is one sentence and the third
+  stays empty. **(b) Supersede the paragraph.** Gives up the gate's own answer on rondo#319 and the
+  quiet most days still have.
+
+**Point 5. Who ranks, and what it costs.**
+
+- **(a) A model drafter** (`D-0063` rule 2), because reading "does this violate *they never open a
+  terminal*" is a reading of prose, and its draft is re-readable and not re-derivable (`D-0063` rule
+  5). Its spend is counted in the week's allowance and shown on the proposal (recommended). Gives up
+  a free, reproducible ranking.
+- **(b) The deterministic drafter over labels and keywords.** Free and reproducible. Gives up the
+  goal: a keyword cannot say a candidate violates a clause, which is the generic tool again.
+
+**Point 6. What it must not do.** Beyond section 1 rule 2 (never start what it proposed):
+
+- **(a) It writes nothing outside rondo** (recommended): no label, comment, issue or close on the
+  forge, and no commit. A finding of its own record that deserves an issue is proposed as a
+  candidate, and the person's request opens it. It never edits the goal; it may propose a change to
+  it, as a candidate. It never drops a candidate silently; every candidate not shown is withheld
+  with its rule (`D-0064` O8). Gives up keeping the issue tracker tidy for the person.
+- **(b) As (a), but it may label or comment on issues** it read (for example "violates K3"). Makes
+  the ranking visible where the issues are. Gives up the line that triage does nothing a person did
+  not ask for, on a surface other people read.
+
+### What was put to the human gate, and its answer
+
+1. **What it reads.** (a) issues only; (b) issues and rondo's own record, with audits proposed as
+   candidates (recommended); (c) (b) with triage running audits itself. **Answer:**
+2. **What it ranks against.** 2.1 (a) a store record per repository written on the page
+   (recommended), (b) a file in the repository, (c) a decision entry; 2.2 (a) numbered clauses each
+   saying when it is unmet (recommended), (b) free prose; 2.3 (a) clause, then an explicit label,
+   nothing else ranks (recommended), (b) clause then a generic score, (c) one weighted score; 2.4
+   (a) before a goal, the proposal is to write one, from a draft (recommended), (b) fall back to the
+   generic ranking, (c) labels only. **Answer:**
+3. **What a proposal is.** (a) a drafted request awaiting approval; (b) a list with no
+   recommendation; (c) one recommendation with runners-up, taken into the request box for the person
+   to send (recommended). **Answer:**
+4. **When it proposes, and where it is drawn.** 4.1 (d) a stored proposal, drawn on the empty
+   centre and pointed to by a line in the thread that finished, not while something waits on the
+   person (recommended); 4.2 (a) the centre under the request box (recommended); 4.3 one in full,
+   up to four folded (recommended); 4.4 *put it in the box* and *not now*; 4.5 (a) *not now*
+   recorded on the proposal row (recommended); 4.6 no candidates without a goal, one sentence when
+   nothing goes against it; 4.7 (a) annotate `D-0083` rule 4, not additive (recommended).
+   **Answer:**
+5. **Who ranks.** (a) a model drafter, its spend in the week's allowance (recommended); (b) the
+   deterministic drafter. **Answer:**
+6. **What it must not do.** (a) nothing written outside rondo (recommended); (b) labels and comments
+   on issues allowed. **Answer:**
+
+### What this gives up
+
+- **Proposals before a goal is written**, if point 2.4 (a) is taken.
+- **Good work the goal does not cover** is withheld rather than proposed (point 2.3 (a)); the person
+  widens the goal to see it.
+- **A spend on every proposal** (point 5 (a)).
+- **The empty lower third on a day with a candidate** (point 4.7 (a)).
+
+### What this does not do
+
+- **It does not restate the completion definition** (rondo#298), and does not decide that rondo's
+  own goal is K1-K4; it only uses them as the first draft.
+- **It does not decide parallel work** (rondo#250).
+- **It does not change how a request is carried out** once the person sends it.
+
+### What would falsify it
+
+- **The person overriding the recommendation as often as they overrode the generic tool**: ranking by
+  the goal was not what ranked their work either.
+- **The most important work of a week coming from neither the issues nor rondo's record**: point 1
+  reads the wrong things.
+- **A proposal answered with anything longer than "as recommended" as a rule**, not an exception: its
+  open points were not the ones the person had to decide.
