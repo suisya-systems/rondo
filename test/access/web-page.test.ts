@@ -521,7 +521,10 @@ test("liveness is per view: two views poll and swap, and the answer view updates
     // D-0054 rule 5 refused and R1 did not reopen.
     // htmx's morph extension right after it, which registers with it
     // (D-0059's annotation of 2026-09-21).
+    // The text-size script is first and not deferred (rondo#379): it runs
+    // before the body is drawn, so the chosen size is the first size painted.
     expect(scriptTagsIn(html)).toEqual([
+      '<script src="/text-size.js">',
       '<script src="/htmx.min.js" defer="">',
       '<script src="/idiomorph-ext.min.js" defer="">',
       '<script src="/keys.js" defer="">',
@@ -636,6 +639,7 @@ test("liveness is per view: two views poll and swap, and the answer view updates
   // they largely do: a still view has no `#ledger` and no htmx to swap it, so
   // there is no reading for it to compare and no event to compare it on.
   expect(scriptTagsIn(still)).toEqual([
+    '<script src="/text-size.js">',
     '<script src="/keys.js" defer="">',
     '<script src="/composer.js" defer="">',
     '<script src="/chime.js" defer="">',
@@ -863,4 +867,27 @@ test("a second wait in an already-waiting request changes what the tab compares"
   expect(second).toContain(
     'data-waits="[&quot;ask:ask&quot;,&quot;gate:i-0001:awaiting_human&quot;]"',
   );
+});
+
+test("the header offers three text sizes, script only, outside what the redraw swaps, in the page's language", async () => {
+  const world = fresh();
+  await reserve(world, "i-0001", "do the thing");
+  const ports = portsOver(world, "ada", []);
+  for (const wording of [EN, chromeFor("ja")]) {
+    const html = await operatorPage(ports, "t", { kind: "summary" }, wording, mint);
+    const group = html.match(
+      /<fieldset aria-label="([^"]*)" class="js-only[^"]*">(.*?)<\/fieldset>/,
+    );
+    expect(group?.[1]).toBe(wording.textSizeLabel);
+    const steps = [
+      ...(group?.[2] ?? "").matchAll(/data-text-size-choice="([^"]*)"[^>]*aria-label="([^"]*)"/g),
+    ];
+    expect(steps.map(([, step, name]) => [step, name])).toEqual([
+      ["", wording.textSizes[0]],
+      ["large", wording.textSizes[1]],
+      ["larger", wording.textSizes[2]],
+    ]);
+    // The header is not swapped; only `#ledger` is, and the control is above it.
+    expect(html.indexOf("data-text-size-choice")).toBeLessThan(html.indexOf('id="ledger"'));
+  }
 });

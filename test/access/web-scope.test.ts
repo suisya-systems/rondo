@@ -534,7 +534,11 @@ test("rendering the scope screen writes nothing, however many times or in which 
     null,
   );
   expect(bare).not.toContain("<form");
-  expect(bare).not.toContain("<button");
+  // The header's text-size buttons (rondo#379) are in no form and press
+  // nothing; every other button is.
+  expect(
+    [...bare.matchAll(/<button[^>]*>/g)].filter(([tag]) => !tag.includes("data-text-size-choice")),
+  ).toEqual([]);
   expect(bare).toContain(
     "RONDO_APPROVER is not set, so there is nobody this page could approve a scope as.",
   );

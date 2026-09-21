@@ -3148,6 +3148,12 @@ export async function operatorPage(
         <title>rondo</title>
         <link rel="stylesheet" href="/app.css" />
         {
+          // **Not deferred, and before the body** (rondo#379): it puts the
+          // text size a person chose on the root element before anything is
+          // drawn, so the page does not paint at one size and jump to another.
+        }
+        <script src="/text-size.js" />
+        {
           // `defer` on all of them, in this order: htmx is defined before its
           // morph extension registers with it, and both before the key and
           // composer scripts run; none runs before the document exists. None
@@ -3166,7 +3172,12 @@ export async function operatorPage(
       </head>
       <body class="min-h-screen bg-background font-sans text-foreground antialiased">
         <header class="sticky top-0 z-10 border-b border-border bg-background/90 backdrop-blur-sm">
-          <div class="mx-auto flex h-12 max-w-5xl items-center gap-3 px-4 sm:px-6">
+          {/*
+           * As wide as the faces (`.faces-width`), and **no item wraps**
+           * (rondo#379): in a 1,024px column a larger text size folded
+           * "依頼" and the key hints one character to a line.
+           */}
+          <div class="faces-width mx-auto flex h-12 items-center gap-3 whitespace-nowrap px-4 sm:px-6">
             <h1 class="text-title font-semibold tracking-tight">
               {
                 // `data-back` is what `Esc` follows; on the summary there is
@@ -3282,7 +3293,15 @@ export async function operatorPage(
                 </span>
               )
             }
-            <span class="js-only hidden items-center gap-1.5 text-xs text-muted-foreground sm:flex">
+            {/*
+             * **Where they fit, and only there** (rondo#379). Measured on the
+             * thread with the actor shown: the header's items need about
+             * 1,060px at the default size in English and 1,200px at the
+             * largest, of which the hints are 300 to 335; below `xl` they would
+             * push the switch off the row, so they are left out there, and the
+             * keys still work.
+             */}
+            <span class="js-only hidden items-center gap-1.5 text-xs text-muted-foreground xl:flex">
               {
                 // Each view names only the keys that do something on it,
                 // and the summary has nowhere to go back to.
@@ -3307,6 +3326,33 @@ export async function operatorPage(
                 </>
               )}
             </span>
+            {/*
+             * **The text size, which a person can change** (rondo#379). Three
+             * steps of the one type scale, each an "A" drawn at the step it
+             * sets, so the control reads as what it does in either language;
+             * the step's name is the button's accessible name and its tooltip.
+             * `page/text-size.js` moves the scale and remembers the choice in
+             * this browser, and marks the pressed step (`aria-pressed`). Script
+             * only, because without it a press would do nothing; outside
+             * `#ledger`, so the redraw never draws it back.
+             */}
+            <fieldset
+              aria-label={wording.textSizeLabel}
+              class="js-only inline-flex shrink-0 items-center rounded-md border border-border"
+            >
+              {(["", "large", "larger"] as const).map((step, at) => (
+                <button
+                  type="button"
+                  data-text-size-choice={step}
+                  aria-pressed="false"
+                  aria-label={wording.textSizes[at]}
+                  title={wording.textSizes[at]}
+                  class={`inline-flex h-7 min-w-7 items-center justify-center px-1 font-semibold leading-none text-muted-foreground hover:text-foreground aria-pressed:bg-muted aria-pressed:text-foreground ${["text-id", "text-body", "text-title"][at]}`}
+                >
+                  A
+                </button>
+              ))}
+            </fieldset>
             {
               // **The switch, and it is the first element of this chrome that
               // exists in order to be operated rather than read** (D-0056 rule
@@ -3349,7 +3395,7 @@ export async function operatorPage(
             // reason rondo knows and did not say. It sits above the faces
             // because it is true of the whole page and not of one of them.
             ports.actorId === null ? (
-              <p class="note mx-auto max-w-5xl rounded-md border border-border bg-muted/60 px-3 py-2 text-body leading-5">
+              <p class="note faces-width mx-auto rounded-md border border-border bg-muted/60 px-3 py-2 text-body leading-5">
                 {wording.noApproverNote}
               </p>
             ) : null
@@ -3360,7 +3406,7 @@ export async function operatorPage(
             // redraw that recovers (#220 S1, Codex). Above the faces, because
             // with the threads unreadable there is no centre to put it in.
             threadRead.kind === "unreadable" ? (
-              <p class="note mx-auto max-w-5xl rounded-md border border-fail/40 px-3 py-2 text-body leading-5 text-fail">
+              <p class="note faces-width mx-auto rounded-md border border-fail/40 px-3 py-2 text-body leading-5 text-fail">
                 {wording.threadsUnreadable(threadRead.reason)}
               </p>
             ) : null

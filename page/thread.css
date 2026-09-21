@@ -20,7 +20,7 @@
 
 .ev p {
   grid-column: 2;
-  font-size: 14px;
+  font-size: calc(14px * var(--text-scale));
   line-height: 1.7;
   color: var(--color-muted-foreground);
   /* Rule 1: prose stays at 45 to 90 characters at every width. */
@@ -30,7 +30,7 @@
 .ev time {
   grid-column: 3;
   padding-top: 2px;
-  font-size: 12px;
+  font-size: calc(12px * var(--text-scale));
   color: var(--color-muted-foreground);
   white-space: nowrap;
 }
@@ -90,7 +90,7 @@
   align-items: center;
   gap: 12px;
   margin: 12px 0;
-  font-size: 12px;
+  font-size: calc(12px * var(--text-scale));
   color: var(--color-muted-foreground);
 }
 
@@ -143,13 +143,13 @@
 }
 
 .msg h5 {
-  font-size: 13px;
+  font-size: calc(13px * var(--text-scale));
   font-weight: 700;
 }
 
 .msg h5 time {
   margin-left: 8px;
-  font-size: 12px;
+  font-size: calc(12px * var(--text-scale));
   font-weight: 400;
   color: var(--color-muted-foreground);
 }
@@ -158,7 +158,7 @@
 .msg p {
   margin-top: 4px;
   max-width: 45em;
-  font-size: 16px;
+  font-size: calc(16px * var(--text-scale));
   line-height: 1.65;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -167,7 +167,7 @@
 .msg-back {
   display: inline-block;
   margin-top: 6px;
-  font-size: 13px;
+  font-size: calc(13px * var(--text-scale));
 }
 
 /*
@@ -198,7 +198,7 @@
 .msg-wait {
   padding: 1px 7px;
   border-radius: 999px;
-  font-size: 11.5px;
+  font-size: calc(11.5px * var(--text-scale));
   font-weight: 500;
   color: var(--color-wait-ink);
   background: var(--color-wait-wash);
@@ -207,7 +207,7 @@
 .msg-answered {
   padding: 1px 7px;
   border-radius: 999px;
-  font-size: 11.5px;
+  font-size: calc(11.5px * var(--text-scale));
   font-weight: 500;
   color: var(--color-muted-foreground);
   background: var(--color-muted);
@@ -225,13 +225,13 @@
   align-items: baseline;
   gap: 8px;
   margin-top: 6px;
-  font-size: 12px;
+  font-size: calc(12px * var(--text-scale));
   line-height: 1.5;
   color: var(--color-muted-foreground);
 }
 
 .msg-bases-label {
-  font-size: 11px;
+  font-size: calc(11px * var(--text-scale));
   font-weight: 500;
   color: var(--color-faint);
 }
@@ -250,7 +250,7 @@
 /* A name rondo has been given and has not read yet (D-0078 section 4.3). */
 .msg-pending {
   margin-top: 6px;
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--text-scale));
   line-height: 1.5;
   color: var(--color-muted-foreground);
 }
@@ -266,14 +266,14 @@
   align-items: baseline;
   gap: 4px 14px;
   margin-top: 6px;
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--text-scale));
   line-height: 1.6;
   color: var(--color-muted-foreground);
 }
 
 .gov-repo {
   font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-size: calc(11.5px * var(--text-scale));
 }
 
 .gov-chain {
@@ -375,7 +375,7 @@
   justify-content: flex-end;
   gap: 10px;
   margin-top: 2px;
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--text-scale));
   color: var(--color-muted-foreground);
 }
 
@@ -406,7 +406,7 @@
 .empty-lead {
   margin-top: 10px;
   max-width: 45em;
-  font-size: 15px;
+  font-size: calc(15px * var(--text-scale));
   line-height: 1.7;
   color: var(--color-muted-foreground);
 }
@@ -452,12 +452,12 @@
 
 .ev-fold > summary::marker {
   color: var(--color-muted-foreground);
-  font-size: 12px;
+  font-size: calc(12px * var(--text-scale));
 }
 
 .ev-fold-said {
   grid-column: 2;
-  font-size: 14px;
+  font-size: calc(14px * var(--text-scale));
   line-height: 1.7;
   max-width: 48em;
 }
@@ -465,7 +465,7 @@
 .ev-fold-open {
   grid-column: 3;
   padding-top: 2px;
-  font-size: 12px;
+  font-size: calc(12px * var(--text-scale));
   color: var(--color-link);
   white-space: nowrap;
 }
@@ -473,7 +473,7 @@
 .ev-fold > summary > time {
   grid-column: 4;
   padding-top: 2px;
-  font-size: 12px;
+  font-size: calc(12px * var(--text-scale));
   white-space: nowrap;
 }
 
@@ -498,7 +498,7 @@
 .ev-aside {
   margin: 0 0 6px 42px;
   max-width: 738px;
-  font-size: 12px;
+  font-size: calc(12px * var(--text-scale));
   color: var(--color-muted-foreground);
 }
 

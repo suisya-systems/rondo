@@ -291,3 +291,128 @@ test("a send htmx took, and a form that only reads, are not presses", () => {
   expect(button.attributes.size).toBe(0);
   expect(read.note.hidden).toBe(true);
 });
+
+/**
+ * A tab running `page/text-size.js` (rondo#379): a root element, the header's
+ * three buttons once the document is parsed, and a `localStorage` that holds
+ * `saved` -- or throws on every call when `saved` is `"refused"`.
+ */
+function textSizeTab(saved: string | null | "refused") {
+  const storage = new Map<string, string>();
+  if (saved !== null && saved !== "refused") storage.set("rondo:text-size", saved);
+  const refuse = () => {
+    throw new Error("SecurityError");
+  };
+  const localStorage =
+    saved === "refused"
+      ? { getItem: refuse, setItem: refuse, removeItem: refuse }
+      : {
+          getItem: (key: string) => storage.get(key) ?? null,
+          setItem: (key: string, value: string) => storage.set(key, value),
+          removeItem: (key: string) => storage.delete(key),
+        };
+  class Element {
+    readonly attributes = new Map<string, string>();
+    getAttribute(name: string) {
+      return this.attributes.get(name) ?? null;
+    }
+    setAttribute(name: string, value: string) {
+      this.attributes.set(name, value);
+    }
+    removeAttribute(name: string) {
+      this.attributes.delete(name);
+    }
+    closest(selector: string) {
+      return selector === "[data-text-size-choice]" && this.attributes.has("data-text-size-choice")
+        ? this
+        : null;
+    }
+  }
+  const root = new Element();
+  const buttons = ["", "large", "larger"].map((step) => {
+    const button = new Element();
+    button.setAttribute("data-text-size-choice", step);
+    return button;
+  });
+  let parsed = false;
+  const heard = new Map<string, ((event: unknown) => void)[]>();
+  const listen = (type: string, listener: (event: unknown) => void) => {
+    heard.set(type, [...(heard.get(type) ?? []), listener]);
+  };
+  const fire = (type: string, event: unknown = {}) => {
+    for (const listener of heard.get(type) ?? []) listener(event);
+  };
+  runInNewContext(bytesOf("page/text-size.js").toString("utf8"), {
+    Element,
+    localStorage,
+    window: { addEventListener: listen },
+    document: {
+      documentElement: root,
+      querySelectorAll: (selector: string) =>
+        selector === "[data-text-size-choice]" && parsed ? buttons : [],
+      addEventListener: listen,
+    },
+  });
+  return {
+    root,
+    storage,
+    pressed: () => buttons.map((button) => button.getAttribute("aria-pressed")),
+    parse() {
+      parsed = true;
+      fire("DOMContentLoaded");
+    },
+    press(at: number) {
+      fire("click", { target: buttons[at] });
+    },
+    otherTab(step: string) {
+      storage.set("rondo:text-size", step);
+      fire("storage", { key: "rondo:text-size" });
+    },
+  };
+}
+
+test("the size a person chose is on the root before the body exists, and the pressed step is marked once it does", () => {
+  const tab = textSizeTab("larger");
+  // Before anything is parsed: this is what keeps the first paint at the size.
+  expect(tab.root.getAttribute("data-text-size")).toBe("larger");
+  tab.parse();
+  expect(tab.pressed()).toEqual(["false", "false", "true"]);
+});
+
+test("a press moves the scale and is remembered; the default step leaves no attribute and no key", () => {
+  const tab = textSizeTab(null);
+  tab.parse();
+  expect(tab.root.getAttribute("data-text-size")).toBe(null);
+  expect(tab.pressed()).toEqual(["true", "false", "false"]);
+  tab.press(1);
+  expect(tab.root.getAttribute("data-text-size")).toBe("large");
+  expect(tab.storage.get("rondo:text-size")).toBe("large");
+  expect(tab.pressed()).toEqual(["false", "true", "false"]);
+  tab.press(0);
+  expect(tab.root.getAttribute("data-text-size")).toBe(null);
+  expect(tab.storage.has("rondo:text-size")).toBe(false);
+  expect(tab.pressed()).toEqual(["true", "false", "false"]);
+});
+
+test("a stored value the stylesheet has no step for is the default, not an attribute", () => {
+  const tab = textSizeTab('"><script>');
+  tab.parse();
+  expect(tab.root.getAttribute("data-text-size")).toBe(null);
+  expect(tab.pressed()).toEqual(["true", "false", "false"]);
+});
+
+test("refused storage still lets a press change the size on this page", () => {
+  const tab = textSizeTab("refused");
+  tab.parse();
+  tab.press(2);
+  expect(tab.root.getAttribute("data-text-size")).toBe("larger");
+  expect(tab.pressed()).toEqual(["false", "false", "true"]);
+});
+
+test("a choice made in another tab is followed here", () => {
+  const tab = textSizeTab(null);
+  tab.parse();
+  tab.otherTab("large");
+  expect(tab.root.getAttribute("data-text-size")).toBe("large");
+  expect(tab.pressed()).toEqual(["false", "true", "false"]);
+});

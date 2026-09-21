@@ -350,6 +350,8 @@ explanation you pressed on and then answers the gate.`,
   keyOpen: "open",
   keyBack: "back",
   keyWrite: "write",
+  textSizeLabel: "Text size",
+  textSizes: ["Standard text", "Large text", "Larger text"],
 
   inboxNote: "Reading this does not move your last-look mark: that is what rondo inbox does.",
 
