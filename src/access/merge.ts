@@ -16,7 +16,7 @@
  * moved in between (`--match-head-commit`).
  */
 
-import { isDeterministicReadingDrafter, latestReading } from "../store/records.js";
+import { isDeterministicReadingDrafter, latestReading, planField } from "../store/records.js";
 import type { AdvisoryRecord, IterationStore } from "../store/sqlite.js";
 import { reportToRequest } from "./conductor.js";
 import {
@@ -128,11 +128,22 @@ async function mergeOnce(ports: MergePorts, input: MergeInput): Promise<Merged> 
       `the forge says the pull request is ${before.state}`,
     );
   }
-  if (before.headCommit !== tip) {
+  // **Where it goes is part of what was published** (Codex round 2): a pull
+  // request retargeted on the forge keeps its head and its green, and a press
+  // made over the old destination approves nothing about the new one. The
+  // branch `publish` opened it against is the plan's, as `publishPlanFor`
+  // reads it.
+  const revisionBase = planField(record, "pull_request_base_branch");
+  const opened = revisionBase === "" ? planField(record, "base_branch") : revisionBase;
+  if (before.headCommit !== tip || before.baseBranch !== opened) {
     return refused(
       "mergeRefusedMoved",
-      `the pull request's head is '${before.headCommit}', and rondo read '${tip}' green`,
+      `the pull request is '${before.headCommit}' into '${before.baseBranch}', and rondo read ` +
+        `'${tip}' green into '${opened}'`,
     );
+  }
+  if (before.mergeQueue) {
+    return refused("mergeRefusedQueue", "the base branch merges through a queue");
   }
   const repo = repositoryOf(url);
   const method: MergeMethodReading =

@@ -1155,6 +1155,7 @@ export interface Chrome extends PageWords {
   readonly mergeRefusedMethod: string;
   readonly mergeRefusedForge: string;
   readonly mergeRefusedFailed: (detail: string) => string;
+  readonly mergeRefusedQueue: string;
   readonly mergeRefusedUnconfirmed: string;
 }
 

@@ -20959,7 +20959,10 @@ On **2026-09-22**, at rondo `87e62f0`, by reading. Line numbers drift; re-measur
   `gh pr merge` needs one named when it is not asked interactively. rondo's own repository allows
   squash alone.
 - **`gh pr merge --match-head-commit SHA`** makes the forge refuse a merge whose head is no longer
-  `SHA`.
+  `SHA`. **On a base branch with a merge queue, `gh pr merge` adds the pull request to the queue,
+  or enables auto-merge where required checks have not passed**, even without `--auto`; the
+  GraphQL field `isMergeQueueEnabled` says which branches do (`gh pr view --json` does not offer
+  it).
 - **The lane is already released by landing.** `D-0073` rule 7's reading compares tree entries at
   the fetched default branch with the tip's, which holds under squash (`readLanding`).
 
@@ -20981,10 +20984,13 @@ On **2026-09-22**, at rondo `87e62f0`, by reading. Line numbers drift; re-measur
    5. the host holds an approver the allowlist accepts, as every other press does.
 3. **The press is about the head that was read green.** It carries the commit the button was drawn
    for; the host refuses unless that is the commit rondo read green and the commit the lap pushed,
-   asks the forge whether the pull request is still open on that head, and merges with
+   asks the forge whether the pull request is still open on that head **and into the branch it was
+   published against** (a pull request retargeted on the forge is refused), and merges with
    `--match-head-commit`, so a push after the green reading cannot ride in on it. No
-   `--delete-branch`, no `--auto`, no `--admin`: the branch stays, a merge the forge would not make
-   now is not queued for later, and a branch protection rule is not overridden.
+   `--delete-branch`, no `--auto`, no `--admin`: the branch stays, and a branch protection rule is
+   not overridden. **A base branch that merges through a merge queue is refused before anything is
+   asked of it**, because there `gh pr merge` queues the pull request or turns on auto-merge rather
+   than merging it at the press; such a repository is merged on the forge.
 4. **The pull request is named by the address the forge printed when it opened it**, never by a
    number read against whichever repository the host is told about today.
 5. **Through the operator's own `gh`, as the operator** (`D-0010`): rondo holds no credential of its
@@ -21065,7 +21071,8 @@ All five were answered through the window on 2026-09-22.
 - **It does not take `D-0064` rule 3.4's transition** or let a scope include merge (section 2).
 - **It does not watch the forge for a merge made elsewhere**, or read the pull request's state on
   the rescan.
-- **It does not delete the branch, queue an auto-merge, or override a protection rule.**
+- **It does not delete the branch, queue an auto-merge, or override a protection rule**, and it does
+  not merge through a merge queue.
 - **It does not change the command line**: there is no `rondo merge`.
 
 ### Annotations this entry adds

@@ -1080,8 +1080,8 @@ export const JA: Chrome = Object.freeze({
     "マージしていません。この作業はすでに既定のブランチに入っているので、マージするものが" +
     "残っていません。",
   mergeRefusedMoved:
-    "マージしていません。rondo がチェックを緑と読んだあとで、プルリクエストが変わっています。" +
-    "新しいコミットのチェックが緑になるのを待って、ページを読み込み直してください。",
+    "マージしていません。rondo がチェックを緑と読んだあとで、プルリクエストが変わっています" +
+    "（新しいコミットか、取り込み先のブランチ）。ページを読み込み直し、GitHub で確かめてください。",
   mergeRefusedClosed: "マージしていません。プルリクエストが閉じられています。",
   mergeRefusedMethod: "マージしていません。リポジトリがどのマージ方法も許していません。",
   mergeRefusedForge:
@@ -1089,6 +1089,9 @@ export const JA: Chrome = Object.freeze({
     "もう一度押してください。",
   mergeRefusedFailed: (detail) =>
     `マージしていません。GitHub がマージを断りました。返ってきた理由: ${detail}`,
+  mergeRefusedQueue:
+    "マージしていません。このリポジトリはマージキューを通してマージするので、押した時点では" +
+    "マージされません。GitHub でマージしてください。",
   mergeRefusedUnconfirmed:
     "GitHub はマージを受け付けましたが、マージされたことを rondo は確かめられませんでした" +
     "（リポジトリがマージキューを使っているか、GitHub から返事がありませんでした）。" +

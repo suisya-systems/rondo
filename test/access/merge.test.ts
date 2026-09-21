@@ -41,6 +41,7 @@ const open: PullRequestState = {
   headCommit: TIP,
   baseBranch: "main",
   mergeCommit: null,
+  mergeQueue: false,
 };
 
 async function over(options: Options = {}) {
@@ -60,7 +61,12 @@ async function over(options: Options = {}) {
     read: async (id: string) =>
       ({
         kind: "read",
-        record: { id, requestMessageId: "request-1", runId: "run-1", plan: "{}" },
+        record: {
+          id,
+          requestMessageId: "request-1",
+          runId: "run-1",
+          plan: { base_branch: "main" },
+        },
       }) as never,
     readingsFor: async () =>
       [
@@ -203,6 +209,11 @@ test("nothing is asked of the forge where the button would not be drawn", async 
 test("a pull request that moved, closed or merged on the forge is not merged again", async () => {
   for (const [before, why] of [
     [{ ...open, headCommit: "fff0000" }, "mergeRefusedMoved"],
+    // Retargeted on the forge: the head and its green are the same, the
+    // destination is not the one it was published against.
+    [{ ...open, baseBranch: "release" }, "mergeRefusedMoved"],
+    // A queue merges later, not on this press.
+    [{ ...open, mergeQueue: true }, "mergeRefusedQueue"],
     [{ ...open, state: "CLOSED" }, "mergeRefusedClosed"],
     [{ ...open, state: "MERGED" }, "mergeRefusedMerged"],
     [{ kind: "undetermined", reason: "rate limited" }, "mergeRefusedForge"],

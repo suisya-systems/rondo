@@ -1066,8 +1066,8 @@ explanation you pressed on and then answers the gate.`,
     "Nothing was merged: this work is already on the default branch, so there is nothing left " +
     "to merge.",
   mergeRefusedMoved:
-    "Nothing was merged: the pull request has changed since rondo read its checks green. Its " +
-    "new commits have to go green first; reload the page.",
+    "Nothing was merged: the pull request has changed since rondo read its checks green -- new " +
+    "commits, or another branch to merge into. Reload the page, and look at it on the forge.",
   mergeRefusedClosed: "Nothing was merged: the pull request is closed on the forge.",
   mergeRefusedMethod: "Nothing was merged: the repository allows no way of merging a pull request.",
   mergeRefusedForge:
@@ -1075,6 +1075,9 @@ explanation you pressed on and then answers the gate.`,
     "moment.",
   mergeRefusedFailed: (detail) =>
     `Nothing was merged: the forge refused the merge. It said: ${detail}`,
+  mergeRefusedQueue:
+    "Nothing was merged: this repository merges through a queue, which merges later rather than " +
+    "now. Merge it on the forge.",
   mergeRefusedUnconfirmed:
     "The forge accepted the merge, and rondo could not see it made -- the repository may merge " +
     "through a queue, or the forge did not answer. Look at the pull request on the forge before " +

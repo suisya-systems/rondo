@@ -913,14 +913,33 @@ export type PullRequestState =
       readonly baseBranch: string;
       /** The commit a merge made, or null before one. */
       readonly mergeCommit: string | null;
+      /**
+       * Whether the base branch merges through a queue. There, `gh pr merge`
+       * queues the pull request -- or turns on auto-merge -- rather than
+       * merging it now, so the press refuses before asking (Codex round 2).
+       */
+      readonly mergeQueue: boolean;
     }
   | { readonly kind: "undetermined"; readonly reason: string };
 
-/** Read one pull request's state, head and base: one `GET` (rondo#380). */
+/**
+ * Read one pull request's state, head, base and whether its base merges
+ * through a queue (rondo#380): one GraphQL query, which writes nothing.
+ * `gh pr view --json` does not offer the queue, so the query is spelled here.
+ */
 export async function readPullRequest(at: PullRequestAt): Promise<PullRequestState> {
   const read = await runCommand(
     "gh",
-    ["pr", "view", at.url, "--json", "state,headRefOid,baseRefName,mergeCommit"],
+    [
+      "api",
+      "graphql",
+      "-f",
+      `query=${PULL_REQUEST_QUERY}`,
+      "-f",
+      `url=${at.url}`,
+      "--jq",
+      ".data.resource",
+    ],
     CHECKS_READ_TIMEOUT_MS,
   );
   const failure = queryFailure(read);
@@ -943,14 +962,25 @@ export async function readPullRequest(at: PullRequestAt): Promise<PullRequestSta
     return { kind: "undetermined", reason: "the forge's answer carried no state, head or base" };
   }
   const merged = (json as Record<string, unknown>)["mergeCommit"];
+  const queue = (json as Record<string, unknown>)["isMergeQueueEnabled"];
+  // A forge that did not say is not a "no": merging as if there were no queue
+  // is exactly the act a queue would turn into a later one.
+  if (typeof queue !== "boolean") {
+    return { kind: "undetermined", reason: "the forge did not say whether a merge queue applies" };
+  }
   return {
     kind: "read",
     state,
     headCommit,
     baseBranch,
     mergeCommit: stringAt(merged, "oid"),
+    mergeQueue: queue,
   };
 }
+
+const PULL_REQUEST_QUERY =
+  "query($url: URI!) { resource(url: $url) { ... on PullRequest { " +
+  "state headRefOid baseRefName mergeCommit { oid } isMergeQueueEnabled } } }";
 
 /** How a merge is made; the flag `gh pr merge` takes for each. */
 export type MergeMethod = "squash" | "merge" | "rebase";
