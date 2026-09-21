@@ -6,8 +6,8 @@ whether **rondo is done for now**, judged against the completion definition (`D-
 
 **rondo did the work. The page did not tell the person about it.** A one-line request in Japanese
 was read, quoted from the issue, drafted into a scope, run, caught at the gate when the first try
-delivered nothing, revised, approved, published as a pull request and reported green. Nothing was
-typed after setup. But **K4 fails**: the person had to ask what the page meant at the moments that
+delivered nothing, revised, approved, published as a pull request and reported green. Apart from
+starting the page, nothing was typed after setup. But **K4 fails**: the person had to ask what the page meant at the moments that
 mattered most, including whether the pull request existed, where it was, and whether it was green.
 One sentence on the screen said the opposite of what had happened. And the five-second refresh kept
 taking back what the person was reading, which the owner asked to have fixed at the root.
@@ -94,8 +94,8 @@ All times are JST, 2026-09-21. The source of each row is in the last column.
 
 ### Measure 1: terminal trips -- 0
 
-Setup was run once, before the walk, and the runbook does not count it. After setup, nothing was
-typed. **Trips outside the screen, which the runbook does not count separately but lap 10 did: 1.**
+Setup was run once, before the walk, and the runbook does not count it. Apart from starting the
+page, which the runbook does not count either, nothing was typed after it. **Trips outside the screen, which the runbook does not count separately but lap 10 did: 1.**
 After publish, the owner went to GitHub to find out whether a pull request had been opened, and
 where:
 
