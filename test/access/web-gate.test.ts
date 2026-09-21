@@ -568,7 +568,7 @@ test("the change is offered in the page's language, and the findings stay the re
   );
   const box = drafted.slice(drafted.indexOf('id="answer-bar"'));
   // Quoted, not translated (D-0055 rule 4): the finding and its basis as given.
-  expect(box).toContain("- [blocker] the loop never stops");
+  expect(box).toContain("- 阻害: the loop never stops");
   expect(box).toContain("場所: src/notifier.ts:41");
   expect(box).toContain("直すこと: Cap the backoff at 30 seconds.");
   expect(box).not.toContain("モデルレビューが挙げた点を直してください");

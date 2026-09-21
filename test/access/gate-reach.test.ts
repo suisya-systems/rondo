@@ -21,7 +21,14 @@ import { expect, test } from "vitest";
 import { pageReach } from "../../src/access/cli.js";
 import type { ClaimReach } from "../../src/access/page/contract.js";
 import { chromeFor, EN } from "../../src/access/wording.js";
-import { fresh, gateWithChecks, operatorPage, portsOver, structured } from "./page-world.js";
+import {
+  fresh,
+  gateWithChecks,
+  operatorPage,
+  portsOver,
+  readableWithoutOpening,
+  structured,
+} from "./page-world.js";
 
 const COLLIDED: ClaimReach = {
   kind: "outside",
@@ -43,34 +50,6 @@ async function gatePage(reach: ClaimReach | undefined, lang = EN): Promise<strin
     { kind: "thread", messageId: "req-1", to: null },
     lang,
   );
-}
-
-/**
- * Whether some text can be read without opening anything -- `gate-elements`'
- * own question, asked here for the same reason: a fold is not a drop, and a
- * collision behind one is still a collision the reader has to go looking for.
- */
-function readableWithoutOpening(html: string, text: string): boolean {
-  const at = html.indexOf(text);
-  if (at === -1) {
-    return false;
-  }
-  let depth = 0;
-  const shut: number[] = [];
-  for (const found of html.slice(0, at).matchAll(/<details\b[^>]*>|<\/details>/g)) {
-    if (found[0].startsWith("</")) {
-      depth -= 1;
-      if (shut.at(-1) === depth) {
-        shut.pop();
-      }
-    } else {
-      if (!/\bopen\b/.test(found[0])) {
-        shut.push(depth);
-      }
-      depth += 1;
-    }
-  }
-  return shut.length === 0;
 }
 
 test("a collision the gate found is on the page, unfolded, beside the press", async () => {

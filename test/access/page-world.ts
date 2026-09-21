@@ -420,6 +420,34 @@ export function portsOver(
   };
 }
 
+/**
+ * Whether some text can be read without opening anything -- `gate-elements`'
+ * own question, asked here for the same reason: a fold is not a drop, and a
+ * collision behind one is still a collision the reader has to go looking for.
+ */
+export function readableWithoutOpening(html: string, text: string): boolean {
+  const at = html.indexOf(text);
+  if (at === -1) {
+    return false;
+  }
+  let depth = 0;
+  const shut: number[] = [];
+  for (const found of html.slice(0, at).matchAll(/<details\b[^>]*>|<\/details>/g)) {
+    if (found[0].startsWith("</")) {
+      depth -= 1;
+      if (shut.at(-1) === depth) {
+        shut.pop();
+      }
+    } else {
+      if (!/\bopen\b/.test(found[0])) {
+        shut.push(depth);
+      }
+      depth += 1;
+    }
+  }
+  return shut.length === 0;
+}
+
 export const structured = async () =>
   await Promise.resolve({
     lines: ["work    rondo/i-0001", "fence   the whole text"],

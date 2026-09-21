@@ -476,7 +476,7 @@ test("the scope screen speaks Japanese, and every id, digest and 'rondo' token s
   expect(html).toContain("レビュー回数: 3（誰も選ばなかったときに rondo が使う数）");
   expect(html).toContain("初回周回の費用が最も高かったもの");
   expect(html).toContain("あなたの返信のための 1 日");
-  expect(html).toContain("tier standard、許可はcommand.run");
+  expect(html).toContain("モデルの規模は standard、許可はcommand.run");
   expect(html).toContain("ブランチを push する");
   expect(html).toContain("重大 (major)");
   // Not one English sentence left in the fold, and no D-number in front of
