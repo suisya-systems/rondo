@@ -156,8 +156,11 @@ itself.
 - **Money and the outside world.** Three presses spend money: **Start the work** / **Start this
   plan** (作業を始める / この作業を始める) and **Ask for a change** (変更を依頼する). One press leaves
   this machine: **Publish** (公開する), which pushes a branch to `suisya-systems/rondo` and opens a
-  real pull request under your name. Nothing else costs money or reaches anyone: reading, sending a
-  request, approving a scope, answering a question.
+  real pull request under your name. **There is also one cost with no press: the drafter.** After
+  you send a request or a reply, the host has a model read the thread in the background, and the
+  model drafts a scope or asks a question (step 1). That sends the thread to a model and costs a
+  little, much less than a lap. It publishes nothing. Reading, approving a scope and answering a
+  question cost nothing themselves.
 - **After Publish, rondo reads the pull request's checks through your `gh` (#310, PR #367).** This
   is a read only. It writes one message into the request's thread when the checks come back green
   or red. It does not merge, comment or retry.
@@ -326,7 +329,9 @@ Press once. **That tab will keep loading until the lap stops at its gate** (sect
 
 **Now set up measure 4, the notification test:**
 
-1. **Open a second tab** at `http://127.0.0.1:7333/`. It should show the work running:
+1. **Open a second tab** at `http://127.0.0.1:7333/`. With nothing waiting, it opens on the empty
+   state, because the page picks a request by itself only when that request is waiting on you.
+   **Click the request in the list on the left.** It should show the work running:
    - the list row says *Working on it*;
    - the thread has *Work started.*;
    - with nothing waiting, the right face shows *Work under way* with its five steps.
