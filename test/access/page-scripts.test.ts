@@ -101,7 +101,10 @@ function composerPage() {
   const Idiomorph: {
     defaults: {
       ignoreActiveValue?: boolean;
-      callbacks: { beforeAttributeUpdated?: (name: string, element: unknown) => unknown };
+      callbacks: {
+        beforeAttributeUpdated?: (name: string, element: unknown) => unknown;
+        beforeNodeMorphed?: (old: unknown, next: unknown) => unknown;
+      };
     };
   } = { defaults: { callbacks: {} } };
   runInNewContext(bytesOf("page/composer.js").toString("utf8"), {
@@ -180,4 +183,25 @@ test("a draft that landed under the person's words is said after a merged redraw
   expect(page.box.value).toBe("my own words");
   expect(page.arrived.hidden).toBe(false);
   expect(page.holds.hidden).toBe(true);
+});
+
+test("a box the morph reuses for a different draft takes the server's words, not the last draft's", () => {
+  const { Idiomorph } = composerPage();
+  const { beforeNodeMorphed, beforeAttributeUpdated } = Idiomorph.defaults.callbacks;
+  if (beforeNodeMorphed === undefined || beforeAttributeUpdated === undefined) {
+    throw new Error("the composer did not configure the morph");
+  }
+  const box = new HTMLTextAreaElement();
+  box.dataset = { draft: "claim:i-0001:gate-1" };
+  // The same draft arriving again: the person's words stay.
+  beforeNodeMorphed(box, { dataset: { draft: "claim:i-0001:gate-1" } });
+  expect(beforeAttributeUpdated("value", box)).toBe(false);
+  // **The next gate's claim box, arriving where the last one was** (Codex,
+  // round 2): words typed for one gate must not be shown or sent under the
+  // next, so this once the value is the server's.
+  beforeNodeMorphed(box, { dataset: { draft: "claim:i-0001:gate-2" } });
+  box.dataset = { draft: "claim:i-0001:gate-2" };
+  expect(beforeAttributeUpdated("value", box)).not.toBe(false);
+  // And after that, it is the person's again.
+  expect(beforeAttributeUpdated("value", box)).toBe(false);
 });

@@ -284,12 +284,31 @@ document.addEventListener("htmx:afterSwap", redrawn);
 // box's contents whole, so a draft that landed while the person was typing
 // never reached its `defaultValue` and the note above could not say so. Only
 // the value is left alone, focused or not.
+//
+// **And only while it is still the same draft** (Codex, round 2). The morph
+// may reuse a box for a different one -- another tab answered the gate, and
+// the next gate's claim box arrives where the last one was -- and the words
+// typed for one gate must not be shown, or sent, under the next. So a box whose
+// `data-draft` is about to change is noted, and its value is taken from the
+// server like any other; the redraw's `restore` then puts back what was kept
+// under the new key, if anything was.
+const renamed = new WeakSet();
 if (typeof Idiomorph !== "undefined") {
+  Idiomorph.defaults.callbacks.beforeNodeMorphed = (old, next) => {
+    if (
+      old instanceof HTMLTextAreaElement &&
+      old.dataset.draft !== undefined &&
+      next.dataset?.draft !== old.dataset.draft
+    ) {
+      renamed.add(old);
+    }
+  };
   Idiomorph.defaults.callbacks.beforeAttributeUpdated = (name, element) =>
     !(
       (name === "open" && element instanceof HTMLDetailsElement) ||
       (name === "value" &&
         element instanceof HTMLTextAreaElement &&
-        element.dataset.draft !== undefined)
+        element.dataset.draft !== undefined &&
+        !renamed.delete(element))
     );
 }
