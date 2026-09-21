@@ -104,6 +104,11 @@ test("the repository a request's work runs in: the named issue's, or the place t
     kind: "held",
     repos: ["owner/a"],
   });
+  // An issue on another forge host names no place: cloning by OWNER/NAME would
+  // find github.com's repository of that name, not the one linked.
+  expect(work("Do https://github.example.com/owner/p/issues/12", ["owner/a"])).toEqual({
+    kind: "open",
+  });
   // A path is not a place.
   expect(work("owner/a#1: see src/access and docs/README.md", ["owner/a"])).toEqual({
     kind: "held",
@@ -143,10 +148,19 @@ test("a clone already on disk is used only when its origin is the repository ask
     "https://github.com/owner/other.git",
     "https://github.com/Owner/Other",
     "git@github.com:owner/other.git",
+    "ssh://git@github.com/owner/other.git",
   ]) {
     expect(sameForgeRepository(url, "owner/other"), url).toBe(true);
   }
-  for (const url of ["https://github.com/owner/else.git", "", "/srv/other"]) {
+  for (const url of [
+    "https://github.com/owner/else.git",
+    "",
+    "/srv/other",
+    // The same two names elsewhere are not the repository asked for.
+    "https://other.example/owner/other.git",
+    "/srv/owner/other",
+    "git@other.example:owner/other.git",
+  ]) {
     expect(sameForgeRepository(url, "owner/other"), url).toBe(false);
   }
 });

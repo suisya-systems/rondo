@@ -190,8 +190,13 @@ export function workRepository(
   const heldOwners = [...known.keys()].map((repo) => repo.split("/")[0]);
   /** What one message names as where the work is: its places, else its issues' repositories. */
   const namedIn = (body: string): readonly { repo: string; named: string }[] => {
+    // An issue on another forge host names a repository `gh repo clone OWNER/NAME`
+    // would look for on github.com, so it names no place here (D-0090, "What
+    // this does not do").
     const issues = namedIssues(body).flatMap((ref) =>
-      ref.repo === null ? [] : [{ repo: ref.repo, named: ref.named }],
+      ref.repo === null || (ref.host !== null && !/^(?:www\.)?github\.com$/i.test(ref.host))
+        ? []
+        : [{ repo: ref.repo, named: ref.named }],
     );
     const owners = new Set([
       ...heldOwners,

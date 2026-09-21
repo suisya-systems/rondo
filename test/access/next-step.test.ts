@@ -235,6 +235,19 @@ test("a request naming a repository rondo does not work in says so, and its one 
   // No scope is offered for work in a repository rondo does not hold.
   expect(html).not.toContain('id="scope-req-1"');
 
+  // A page that cannot write still says why nothing is drafted; only the
+  // button needs a writer.
+  for (const [readOnly, token] of [
+    [{ ...ports, addable: false }, "t"],
+    [ports, null],
+  ] as const) {
+    const said = await operatorPage(readOnly, token, threadOf("req-1"));
+    expect(said).toContain(EN.nextStepHeading);
+    expect(said).toContain("rondo does not work in owner/other yet");
+    expect(said).not.toContain('id="add-repository-req-1"');
+    expect(said).not.toContain('action="/add-repository');
+  }
+
   // Added, and rondo could not tell how it builds: said where the work is.
   const unbuilt = {
     ...portsOver(world),

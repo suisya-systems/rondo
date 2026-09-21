@@ -20605,7 +20605,7 @@ number.
 ## D-0090 — A request that names an issue in a repository rondo does not work in is not started: the page says so before a scope is drafted, and the person adds that repository from the page with one press, while rondo infers everything else
 
 **Status:** accepted (2026-09-22, rondo's human gate, on rondo#383). The issue's three open decisions
-and three questions the building change raised were put to the gate through the window, and the
+and four questions the building change raised were put to the gate through the window, and the
 answers are recorded in "What was put to the human gate, and its answer". Supersedes nothing.
 `D-0081` rules 1.2 and 6.2 and its "What this does not do" item on adding from the page, and `D-0075`
 rule 3.1, are changed by the annotations this entry adds (listed at the end). Refs `D-0063`, `D-0064`,
@@ -20666,9 +20666,10 @@ On **2026-09-22**, at rondo `47ea4bd`, by reading. Line numbers drift; re-measur
    computer's setup cannot reach GitHub as them (whoever installed rondo is who can look), GitHub has
    no such repository or their account cannot see it, or anything else -- with rondo's own reason
    in the fold (`D-0076` rule 4), and the button stays, so pressing again is how it is retried.
+   A page that cannot write -- no approver -- still says why nothing is drafted, without the button.
    **The press adds only the repository the request names when it is pressed**: the host reads the
    request again first, so a stale page or a hand-written post adds nothing else. A clone already at
-   the path is used only when its origin is that repository.
+   the path is used only when its origin is that repository on github.com.
 
 ### 2. What rondo infers, and what it asks
 
@@ -20696,7 +20697,7 @@ On **2026-09-22**, at rondo `47ea4bd`, by reading. Line numbers drift; re-measur
 
 ### What was put to the human gate, and its answer
 
-All six were answered through the window on 2026-09-22.
+All seven were answered through the window on 2026-09-22.
 
 1. **Whether the page may add a repository at all** (the issue's open decision 1). **Answered: yes**
    -- the owner's words: *"止まるのは正しい、画面から追加するのが本来の姿だと思う"*.
@@ -20718,6 +20719,11 @@ All six were answered through the window on 2026-09-22.
 6. **What a repository none of the four matches does.** Put with a recommendation (added with the
    common commands only, said on the page) against refusing to add it. **Answered: the
    recommendation.**
+7. **Which message decides where the work is, when a reply names another place.** Put after a review
+   found that a reply correcting a wrong name (*"I meant owner/right#12"*) left the request waiting
+   on the wrong repository, with a recommendation: the newest message in the thread that names a
+   place decides, replacing rather than adding to an earlier one. **Answered: the recommendation**
+   (rule 1.1).
 
 ### What this gives up
 
@@ -20740,7 +20746,9 @@ All six were answered through the window on 2026-09-22.
 - **It does not change setup.** `scripts/dogfood-env.sh` still writes its npm list; reading the four
   families there too is a later change, and a small one, since the reckoning is one pure function.
 - **It does not read an enterprise forge's address as a place.** Only `github.com` addresses name a
-  place; `OWNER/NAME` names one on any forge.
+  place, and an issue linked on another host names none, since the clone is by `OWNER/NAME` and
+  would find github.com's repository of that name; `OWNER/NAME` written as such names one on any
+  forge.
 - **It claims nothing where a held plan names no forge repository.** Such a plan could be for the
   repository named, so a store holding one keeps the drafter's own choice (`D-0081` rule 2.4) rather
   than offering to add a repository that may already be held.

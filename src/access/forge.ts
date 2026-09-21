@@ -550,9 +550,16 @@ export async function readIssueFromForge(request: IssueReadRequest): Promise<{
   return { issue, comments };
 }
 
-/** Whether a remote URL (HTTPS or SSH) names `repo` (`OWNER/NAME`), case aside. */
+/**
+ * Whether a remote URL names `repo` (`OWNER/NAME`) on github.com, case aside:
+ * the HTTPS and SSH spellings `gh repo clone` writes, and nothing on another
+ * host or on this disk that merely ends in the same two names.
+ */
 export function sameForgeRepository(url: string, repo: string): boolean {
-  const m = /[/:]([\w.-]+\/[\w.-]+?)(?:\.git)?\/?$/.exec(url);
+  const m =
+    /^(?:https:\/\/(?:[^@/\s]+@)?github\.com\/|ssh:\/\/git@github\.com\/|git@github\.com:)([\w.-]+\/[\w.-]+?)(?:\.git)?\/?$/i.exec(
+      url,
+    );
   return m?.[1]?.toLowerCase() === repo.toLowerCase();
 }
 
