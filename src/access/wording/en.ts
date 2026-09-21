@@ -158,7 +158,6 @@ explanation you pressed on and then answers the gate.`,
   undeterminedFold: (count) =>
     `${String(count)} ${count === 1 ? "field" : "fields"} rondo could not determine`,
 
-  requestsNav: "Requests",
   asksWaiting: (count) =>
     `${String(count)} ${count === 1 ? "question" : "questions"} waiting on you`,
   askWaitingPill: "Waiting on you",

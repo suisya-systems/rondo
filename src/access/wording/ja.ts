@@ -149,7 +149,6 @@ export const JA: Chrome = Object.freeze({
   approveNote: (gateId, word) =>
     `ゲート ${gateId} に '${word}' と答えます。rondo answer と同じ動作です`,
 
-  requestsNav: "依頼",
   asksWaiting: (count) => `あなたへの質問 ${String(count)}`,
   askWaitingPill: "あなたの回答待ち",
   askStoppedPill: "あなたが止めた線",

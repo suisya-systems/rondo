@@ -345,9 +345,11 @@ test("every address a ja page composes for itself carries ja (rule 11)", async (
   const opened = (await get(base, "/?requests=open&lang=ja")).body;
   const answering = summary;
 
-  // The list's links, the way into a new request, and the poll's own address.
+  const thread = (await get(base, "/?thread=req-i-0001&lang=ja")).body;
+
+  // The list's links, a thread's way back (D-0096), and the poll's own address.
   expect(summary).toContain('href="/?thread=req-i-0001&amp;lang=ja"');
-  expect(summary).toContain('href="/?requests=open&amp;lang=ja"');
+  expect(thread).toContain('<a href="/?lang=ja" data-back="">rondo</a>');
   expect(opened).toContain('href="/?lang=ja"');
   expect(summary).toContain('hx-get="/?lang=ja"');
   expect(opened).toContain('hx-get="/?requests=open&amp;lang=ja"');
