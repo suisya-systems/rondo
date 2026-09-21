@@ -164,3 +164,24 @@ test("setup's last word is the one that opens the page, and no terminal step com
   expect(ready).toContain("$terminal_notes");
   expect(setup).toMatch(/cat >"\$terminal_notes" <<TERMINAL[\s\S]*bin\/rondo\.mjs start/);
 });
+
+test("a scope the person approved themselves is a start to go to, not a scope to set again (Codex)", async () => {
+  const world = fresh();
+  await openRequest(world, "req-1", "add a retry budget");
+  const ports = portsOver(world);
+  // The person's own scope, approved and in force: what the store answers is
+  // all this reads, so the three reads are answered as the store would.
+  const record = Object.assign(Object.create(ports.record), {
+    scopesFor: async () => [{ scopeId: "s-1", authorKind: "operator", authorId: "ada" }],
+    scopeDecisionOf: async () => ({
+      kind: "read",
+      decision: { outcome: "approved", scopeDecisionId: "sd-1" },
+    }),
+    scopeSupersededByApproved: async () => false,
+  }) as typeof ports.record;
+  const html = await operatorPage({ ...ports, record }, "t", threadOf("req-1"));
+  drawnOnceOnTop(html, "scope-req-1");
+  expect(html).toContain(EN.nextStepStart);
+  expect(html).not.toContain(EN.nextStepScope);
+  expect(html).toContain("decision=sd-1");
+});

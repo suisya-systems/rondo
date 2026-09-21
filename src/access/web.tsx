@@ -1760,6 +1760,24 @@ function noDraftView(wording: Chrome, message: ThreadMessageDraft) {
   );
 }
 
+/** The newest approval in force over a scope the person wrote, if any. */
+async function ownApproval(
+  ports: WebPorts,
+  requestMessageId: string,
+): Promise<{ readonly kind: "decided"; readonly scopeDecisionId: string } | null> {
+  for (const scope of (await ports.record.scopesFor(requestMessageId)).toReversed()) {
+    const decided = await ports.record.scopeDecisionOf(scope.scopeId);
+    if (
+      decided.kind === "read" &&
+      decided.decision.outcome === "approved" &&
+      !(await ports.record.scopeSupersededByApproved(scope.scopeId))
+    ) {
+      return { kind: "decided", scopeDecisionId: decided.decision.scopeDecisionId };
+    }
+  }
+  return null;
+}
+
 /**
  * **Where this request can be taken next** (D-0083 rule 6's chain, as
  * addresses): setting its scope, and publishing a lap that is ready.
@@ -1808,8 +1826,13 @@ async function threadActs(
   // The newest try that can be published, and only that one: two next steps
   // read as a choice with no answer.
   const nextPublish = waitedOn ? null : (publishable.at(-1) ?? null);
-  const standing =
+  const drafted =
     waitedOn || laps.length > 0 ? null : await draftedStanding(ports, requestMessageId);
+  // **A scope the person set and approved themselves stands too** (Codex):
+  // `draftedStanding` follows rondo's drafts only, and saying *nothing has
+  // been set* over an approval already given would send them to approve again.
+  const standing =
+    drafted?.kind !== "none" ? drafted : ((await ownApproval(ports, requestMessageId)) ?? drafted);
   const scopeHref = (decisionId: string | null) =>
     viewHref(
       { kind: "scope", messageId: requestMessageId, rounds: null, decisionId, plan: null },
