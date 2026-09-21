@@ -491,6 +491,10 @@ pull request being opened. Record it separately, not as a terminal trip.
     later.
 - **If the budget ran out**, see step 5: **Raise this approval's budget**, not a second **Set the
   scope**.
+- **A refusal that says *"Whoever maintains rondo on this machine can see what it said"*** carries
+  a closed fold, *For whoever maintains rondo on this machine*, with the reason and where the rest of
+  it is. That fold is written for the person who installed rondo. If you open it, or follow it to a
+  terminal, record that under measure 1 or measure 3.
 - **A lap that never comes back** is still the one thing the page has no press for. The page does
   not show lap ids (section 2), and the word does not carry the store, so it takes this:
 
