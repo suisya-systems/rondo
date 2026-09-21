@@ -53,11 +53,30 @@ function buttonTag(html: string, label: string): string {
 
 const threadOf = (messageId: string) => ({ kind: "thread" as const, messageId, to: null });
 
+/** The next step's own shape: the one filled way forward, at the top. */
+const NEXT = `${PRIMARY} mt-3 h-10 justify-center px-6 text-sm`;
+
+/**
+ * The next step is drawn once, above the first message, under its heading:
+ * the owner's review of the first try was that a filled button at the foot of
+ * a long thread, the size of every other, did not stand out (rondo#375).
+ */
+function drawnOnceOnTop(html: string, id: string) {
+  expect(html.split(`id="${id}"`)).toHaveLength(2);
+  const at = html.indexOf(`id="${id}"`);
+  expect(html.lastIndexOf(EN.nextStepHeading, at)).toBeGreaterThan(-1);
+  expect(at).toBeLessThan(html.indexOf('class="msg msg-'));
+}
+
 test("a request with no work yet draws *set the scope* filled: it is the only way forward", async () => {
   const world = fresh();
   await openRequest(world, "req-1", "add a retry budget");
   const html = await operatorPage(portsOver(world), "t", threadOf("req-1"));
-  expect(classOf(html, "scope-req-1")).toBe(`${PRIMARY} h-9 px-4 text-sm`);
+  expect(classOf(html, "scope-req-1")).toBe(NEXT);
+  drawnOnceOnTop(html, "scope-req-1");
+  expect(html).toContain(EN.nextStepScope);
+  // One way to set it, and not a second copy lower down.
+  expect(html.split(`>${EN.scopeAction}</a>`)).toHaveLength(2);
 });
 
 test("a thread with a gate waiting leaves the gate as the press, and the scope outlined", async () => {
@@ -65,6 +84,7 @@ test("a thread with a gate waiting leaves the gate as the press, and the scope o
   await gateWithChecks(world);
   const html = await operatorPage(portsOver(world), "t", threadOf("req-1"));
   expect(classOf(html, "scope-req-1")).toBe(`${SECONDARY} h-7 px-3 text-meta`);
+  expect(html).not.toContain(EN.nextStepHeading);
 });
 
 test("an approved lap's next step is drawn filled and named for what it does: a pull request", async () => {
@@ -82,8 +102,9 @@ test("an approved lap's next step is drawn filled and named for what it does: a 
     "t",
     threadOf("req-1"),
   );
-  expect(classOf(html, "publish-i-0001")).toBe(`${PRIMARY} h-9 px-4 text-sm`);
-  expect(html).toContain(`id="publish-i-0001"`);
+  expect(classOf(html, "publish-i-0001")).toBe(NEXT);
+  drawnOnceOnTop(html, "publish-i-0001");
+  expect(html).toContain(EN.nextStepPublish);
   expect(html).toContain(">Open a pull request</a>");
   // The scope is another scope now, and a second filled way would be a choice.
   expect(classOf(html, "scope-req-1")).toBe(`${SECONDARY} h-7 px-3 text-meta`);

@@ -906,6 +906,17 @@ explanation you pressed on and then answers the gate.`,
     "decided it; the reading stays where it is.",
   publishDespitePlain: "Publishes this work although the reading above does not cover it.",
   scopeBusy: "Recording the scope...",
+  nextStepHeading: "Your next step",
+  nextStepScope:
+    "Nothing has been set for this request yet. Set its scope -- what it may spend and touch -- " +
+    "and the work can start.",
+  nextStepDrafted:
+    "rondo has drafted a scope for this request. Check it and approve it, and the work can start.",
+  nextStepStart: "The scope is approved. Start the work from its screen.",
+  nextStepStartAction: "Go to start the work",
+  nextStepPublish:
+    "The work is approved. Opening a pull request pushes its branch and puts it up for review; " +
+    "nothing is merged.",
   approveBusy: "Recording your approval...",
   startBusy: "Starting the work...",
   reviseBusy: "Asking for the change...",

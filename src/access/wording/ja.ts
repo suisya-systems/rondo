@@ -920,6 +920,16 @@ export const JA: Chrome = Object.freeze({
     "記録します。読み取りはそのまま残ります。",
   publishDespitePlain: "上の読み取りがこの作業を説明していないまま公開します。",
   scopeBusy: "範囲を記録しています…",
+  nextStepHeading: "次にやること",
+  nextStepScope:
+    "この依頼の範囲（使ってよい費用と触ってよい場所）がまだ決まっていません。範囲を決めると、" +
+    "作業を始められます。",
+  nextStepDrafted: "rondo が作業の範囲を提案しました。確認して承認すると、作業を始められます。",
+  nextStepStart: "範囲は承認済みです。範囲の画面から作業を始めてください。",
+  nextStepStartAction: "作業を始める画面へ",
+  nextStepPublish:
+    "作業は承認済みです。プルリクエストを作ると、ブランチを push してレビューに出します。" +
+    "マージはしません。",
   approveBusy: "承認を記録しています…",
   startBusy: "作業を始めています…",
   reviseBusy: "変更を依頼しています…",

@@ -20,7 +20,8 @@
 //    opened before a press is open on the page the press lands on. The ids are
 //    kept in `sessionStorage`; any fold with one of them that arrives shut is
 //    opened again. With script off `page/app.css` draws every fold open.
-// 3. **Show that a press was received** (rondo#375). A press is a native form
+// 3. **Show that a press was received** (rondo#375, D-0059 R3 as its annotation
+//    of 2026-09-22 widens it). A press is a native form
 //    post, and the page it lands on can be a whole lap away; with nothing
 //    changing meanwhile, a person could not tell a press from no press, and
 //    pressed again. So the moment a form posts, its buttons are marked

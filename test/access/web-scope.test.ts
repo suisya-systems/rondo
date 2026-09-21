@@ -1270,7 +1270,12 @@ test("a drafter run that drafted nothing is said as what happened, with the way 
   );
   const card = html.slice(html.indexOf('id="drafter-none"'));
   expect(card).toContain(EN.drafterNoDraft);
-  expect(card).toContain(`href="/?scope=${requestId}&amp;lang=en"`);
+  // The way to set the scope is the thread's next step, drawn once above the
+  // messages (rondo#375), and not a second copy inside this one.
+  expect(html.slice(0, html.indexOf('id="drafter-none"'))).toContain(
+    `href="/?scope=${requestId}&amp;lang=en"`,
+  );
+  expect(card).not.toContain(`href="/?scope=${requestId}&amp;lang=en"`);
   expect(card).toContain("<details");
   expect(card).toContain(EN.drafterNoDraftWhy);
   expect(card.indexOf("<details")).toBeLessThan(card.indexOf("claude exited 1"));

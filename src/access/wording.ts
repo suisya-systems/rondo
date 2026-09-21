@@ -1046,6 +1046,17 @@ export interface Chrome extends PageWords {
    * unhides the note beside it where the wait is long enough to need saying.
    */
   readonly scopeBusy: string;
+  /**
+   * **The person's next step, at the top of the thread** (rondo#375): a
+   * heading that says it is theirs, one line saying what is waiting and what
+   * the press does, and the label of the one way forward.
+   */
+  readonly nextStepHeading: string;
+  readonly nextStepScope: string;
+  readonly nextStepDrafted: string;
+  readonly nextStepStart: string;
+  readonly nextStepStartAction: string;
+  readonly nextStepPublish: string;
   readonly approveBusy: string;
   readonly startBusy: string;
   readonly reviseBusy: string;

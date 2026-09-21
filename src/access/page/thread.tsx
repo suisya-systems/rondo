@@ -141,6 +141,11 @@ export interface ThreadProps {
    * typed address reaches.
    */
   readonly acts: ReactNode;
+  /**
+   * The person's next step, drawn once above the messages (rondo#375), or
+   * null where nothing is theirs to do or something else waits on them.
+   */
+  readonly next: ReactNode;
 }
 
 /** One thing in the thread: something said, or something that happened. */
@@ -239,6 +244,7 @@ export function ThreadFace({
   answering,
   adding,
   acts,
+  next,
 }: ThreadProps) {
   return (
     <div className="thread">
@@ -263,6 +269,7 @@ export function ThreadFace({
           </p>
         )}
       </header>
+      {next}
       {items.map((item) => (
         <div key={idOf(item)}>
           {idOf(item) === lastLookedAbove ? <LastLookedLine said={lastLookedSaid} /> : null}
