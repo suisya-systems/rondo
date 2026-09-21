@@ -20929,7 +20929,7 @@ At rondo `87e62f0` on **2026-09-22**, by reading. Line numbers drift; re-measure
 **Status:** accepted (2026-09-22, rondo's human gate, on rondo#380). The issue's four open decisions
 were put to the gate through the window with a recommendation each, and a fifth question the
 building change raised; the answers are recorded in "What was put to the human gate, and its
-answer". `D-0025` rule 6 and `D-0064` rule 3.4 are changed by the annotations this entry adds
+answer". `D-0025` rule 6, `D-0064` rule 3.4 and `D-0010` gain annotations this entry adds
 (listed at the end). Supersedes nothing. Refs `D-0010`, `D-0025`, `D-0064`, `D-0073`, `D-0076`,
 rondo#310, rondo#367, rondo#375, rondo#376, rondo#380.
 

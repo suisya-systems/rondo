@@ -933,6 +933,10 @@ export async function readPullRequest(at: PullRequestAt): Promise<PullRequestSta
     [
       "api",
       "graphql",
+      // The host the pull request is on, and not whichever one `gh` is set up
+      // for: the query's `url` does not choose the endpoint (Codex round 3).
+      "--hostname",
+      hostOf(at.url),
       "-f",
       `query=${PULL_REQUEST_QUERY}`,
       "-f",
@@ -976,6 +980,15 @@ export async function readPullRequest(at: PullRequestAt): Promise<PullRequestSta
     mergeCommit: stringAt(merged, "oid"),
     mergeQueue: queue,
   };
+}
+
+/** The host part of an address, or the address itself where it will not parse. */
+function hostOf(url: string): string {
+  try {
+    return new URL(url).host;
+  } catch {
+    return url;
+  }
 }
 
 const PULL_REQUEST_QUERY =
